@@ -1,0 +1,18 @@
+[project]
+name = "personal-optimization-ai-service"
+version = "0.1.0"
+description = "FastAPI service for personal optimization insights and recommendations."
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi>=0.115.6",
+  "uvicorn[standard]>=0.34.0",
+  "pydantic>=2.10.4",
+  "pydantic-settings>=2.7.1",
+]
+
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]

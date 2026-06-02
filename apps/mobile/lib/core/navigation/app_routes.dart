@@ -1,0 +1,17 @@
+class AppRoutes {
+  const AppRoutes._();
+
+  static const dashboard = '/dashboard';
+  static const auth = '/auth';
+  static const onboarding = '/onboarding';
+  static const settings = '/settings';
+  static const insights = '/insights';
+  static const quickAction = '/quick-action';
+  static const quickMoodCheckIn = '/quick-mood-check-in';
+  static const alerts = '/alerts';
+  static const notifications = '/notifications';
+  static const dailyCheckIn = '/daily-check-in';
+  static const deepWork = '/deep-work';
+  static const coach = '/coach';
+  static const more = '/more';
+}
