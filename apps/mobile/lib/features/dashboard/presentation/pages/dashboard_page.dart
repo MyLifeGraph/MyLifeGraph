@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -628,19 +629,22 @@ class _ScheduleCardState extends State<_ScheduleCard> {
           const SizedBox(height: AppSpacing.lg),
           SizedBox(
             height: widget.isMobile ? windowHeight : windowHeight - 16,
-            child: PageView.builder(
-              controller: _pageController,
-              itemCount: pageCount,
-              onPageChanged: (index) {
-                setState(() => _pageIndex = index);
-              },
-              itemBuilder: (context, index) {
-                final window = _windowForPage(days, page: index);
-                return _ScheduleWindow(
-                  days: window,
-                  selectedDays: _selectedDays,
-                );
-              },
+            child: ScrollConfiguration(
+              behavior: const _ScheduleDragScrollBehavior(),
+              child: PageView.builder(
+                controller: _pageController,
+                itemCount: pageCount,
+                onPageChanged: (index) {
+                  setState(() => _pageIndex = index);
+                },
+                itemBuilder: (context, index) {
+                  final window = _windowForPage(days, page: index);
+                  return _ScheduleWindow(
+                    days: window,
+                    selectedDays: _selectedDays,
+                  );
+                },
+              ),
             ),
           ),
           const SizedBox(height: AppSpacing.md),
@@ -1359,6 +1363,17 @@ class _DayDropdown extends StatelessWidget {
       ),
     );
   }
+}
+
+class _ScheduleDragScrollBehavior extends MaterialScrollBehavior {
+  const _ScheduleDragScrollBehavior();
+
+  @override
+  Set<PointerDeviceKind> get dragDevices => {
+        ...super.dragDevices,
+        PointerDeviceKind.mouse,
+        PointerDeviceKind.trackpad,
+      };
 }
 
 class _ScheduleWindow extends StatelessWidget {
