@@ -555,10 +555,12 @@ class _ScheduleCardState extends State<_ScheduleCard> {
   Widget build(BuildContext context) {
     final today = DateTime.now();
     final monday = today.subtract(Duration(days: today.weekday - 1));
-    final days = widget.snapshot.energyTrend.asMap().entries.map(
-      (entry) {
-        final value = entry.value;
-        final date = monday.add(Duration(days: entry.key));
+    final trend = widget.snapshot.energyTrend;
+    final days = List.generate(
+      7,
+      (index) {
+        final value = index < trend.length ? trend[index] : 0;
+        final date = monday.add(Duration(days: index));
         return _ScheduleDay(
           DateFormat('E').format(date),
           DateFormat('MMM d').format(date),
@@ -567,7 +569,7 @@ class _ScheduleCardState extends State<_ScheduleCard> {
           value,
         );
       },
-    ).toList();
+    );
     final pageCount = _selectedDays == 7
         ? 1
         : (days.length / _selectedDays).ceil().clamp(1, 99);
@@ -1321,32 +1323,38 @@ class _DayDropdown extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-      decoration: BoxDecoration(
-        color: _DashboardColors.button(context),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(
-          color: _DashboardColors.border(context),
+    return PopupMenuButton<int>(
+      tooltip: 'Select schedule range',
+      initialValue: value,
+      color: _DashboardColors.panel(context),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      onSelected: onChanged,
+      itemBuilder: (context) => const [
+        PopupMenuItem(value: 1, child: Text('1 day')),
+        PopupMenuItem(value: 2, child: Text('2 days')),
+        PopupMenuItem(value: 3, child: Text('3 days')),
+        PopupMenuItem(value: 7, child: Text('7 days')),
+      ],
+      child: Container(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.md,
+          vertical: AppSpacing.sm,
         ),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<int>(
-          value: value,
-          borderRadius: BorderRadius.circular(18),
-          dropdownColor: _DashboardColors.panel(context),
-          icon: const Icon(Icons.keyboard_arrow_down),
-          items: const [
-            DropdownMenuItem(value: 1, child: Text('1 day')),
-            DropdownMenuItem(value: 2, child: Text('2 days')),
-            DropdownMenuItem(value: 3, child: Text('3 days')),
-            DropdownMenuItem(value: 7, child: Text('7 days')),
+        decoration: BoxDecoration(
+          color: _DashboardColors.button(context),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: _DashboardColors.border(context)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              value == 1 ? '1 day' : '$value days',
+              style: Theme.of(context).textTheme.labelLarge,
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            const Icon(Icons.keyboard_arrow_down, size: 20),
           ],
-          onChanged: (next) {
-            if (next != null) {
-              onChanged(next);
-            }
-          },
         ),
       ),
     );
