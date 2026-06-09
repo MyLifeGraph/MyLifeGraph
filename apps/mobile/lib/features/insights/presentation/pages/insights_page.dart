@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../../../core/constants/app_spacing.dart';
-import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/widgets/async_value_view.dart';
 import '../../../dashboard/presentation/providers/dashboard_providers.dart';
 import '../../domain/entities/insight.dart';
@@ -137,21 +135,6 @@ class _InsightsHeader extends StatelessWidget {
 
         final actions = Column(
           children: [
-            Container(
-              width: isCompact ? 56 : 72,
-              height: isCompact ? 56 : 72,
-              decoration: BoxDecoration(
-                color: const Color(0xFF15242A),
-                borderRadius: BorderRadius.circular(isCompact ? 22 : 30),
-                border: Border.all(color: const Color(0xFF2B444C), width: 2),
-              ),
-              child: IconButton(
-                tooltip: 'Settings',
-                onPressed: () => context.go(AppRoutes.settings),
-                icon: Icon(Icons.settings_outlined, size: isCompact ? 24 : 32),
-              ),
-            ),
-            const SizedBox(height: AppSpacing.md),
             FilledButton.icon(
               style: FilledButton.styleFrom(
                 backgroundColor: Theme.of(context).colorScheme.primary,
@@ -175,30 +158,7 @@ class _InsightsHeader extends StatelessWidget {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(child: copy),
-                  const SizedBox(width: AppSpacing.md),
-                  Container(
-                    width: 52,
-                    height: 52,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF15242A),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(
-                        color: const Color(0xFF2B444C),
-                        width: 2,
-                      ),
-                    ),
-                    child: IconButton(
-                      tooltip: 'Settings',
-                      onPressed: () => context.go(AppRoutes.settings),
-                      icon: const Icon(Icons.settings_outlined, size: 22),
-                    ),
-                  ),
-                ],
-              ),
+              copy,
               const SizedBox(height: AppSpacing.md),
               SizedBox(
                 width: double.infinity,
