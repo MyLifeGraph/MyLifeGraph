@@ -1327,8 +1327,7 @@ class _DayDropdown extends StatelessWidget {
         color: _DashboardColors.button(context),
         borderRadius: BorderRadius.circular(999),
         border: Border.all(
-          color: Theme.of(context).colorScheme.primary,
-          width: 2,
+          color: _DashboardColors.border(context),
         ),
       ),
       child: DropdownButtonHideUnderline(

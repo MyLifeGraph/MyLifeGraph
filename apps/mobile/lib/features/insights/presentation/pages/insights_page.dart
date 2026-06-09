@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../../core/constants/app_spacing.dart';
+import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/widgets/async_value_view.dart';
 import '../../../dashboard/presentation/providers/dashboard_providers.dart';
 import '../../domain/entities/insight.dart';
@@ -145,7 +147,7 @@ class _InsightsHeader extends StatelessWidget {
               ),
               child: IconButton(
                 tooltip: 'Settings',
-                onPressed: () {},
+                onPressed: () => context.go(AppRoutes.settings),
                 icon: Icon(Icons.settings_outlined, size: isCompact ? 24 : 32),
               ),
             ),
@@ -191,7 +193,7 @@ class _InsightsHeader extends StatelessWidget {
                     ),
                     child: IconButton(
                       tooltip: 'Settings',
-                      onPressed: () {},
+                      onPressed: () => context.go(AppRoutes.settings),
                       icon: const Icon(Icons.settings_outlined, size: 22),
                     ),
                   ),
@@ -426,21 +428,73 @@ class _SleepTrendCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: AppSpacing.xl),
-          SizedBox(
-            height: isMobile ? 132 : 170,
-            child: CustomPaint(
-              painter: _SleepTrendPainter(
-                accent: const Color(0xFF18AEEA),
-                muted: const Color(0xFF1F2C34),
-                progress: (sleepHours / 8).clamp(0.08, 1),
-              ),
-              child: const SizedBox.expand(),
-            ),
+          _SleepTrendBar(
+            sleepHours: sleepHours,
+            isMobile: isMobile,
           ),
-          Center(
-            child: Text(
-              'Today',
-              style: Theme.of(context).textTheme.bodyMedium,
+          const SizedBox(height: AppSpacing.md),
+          Row(
+            children: [
+              Text(
+                'Goal 8h',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: const Color(0xFFA8B5BE),
+                    ),
+              ),
+              const Spacer(),
+              Text(
+                'Today ${sleepHours.toStringAsFixed(1)}h',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SleepTrendBar extends StatelessWidget {
+  const _SleepTrendBar({
+    required this.sleepHours,
+    required this.isMobile,
+  });
+
+  final double sleepHours;
+  final bool isMobile;
+
+  @override
+  Widget build(BuildContext context) {
+    final progress = (sleepHours / 8).clamp(0.03, 1.0);
+
+    return Container(
+      height: isMobile ? 120 : 150,
+      padding: EdgeInsets.all(isMobile ? AppSpacing.md : AppSpacing.lg),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1F2C34),
+        borderRadius: BorderRadius.circular(42),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Sleep duration',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: const Color(0xFFA8B5BE),
+                ),
+          ),
+          const Spacer(),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(999),
+            child: LinearProgressIndicator(
+              value: progress,
+              minHeight: 12,
+              backgroundColor: const Color(0xFF0D121A),
+              valueColor: AlwaysStoppedAnimation<Color>(
+                Theme.of(context).colorScheme.primary,
+              ),
             ),
           ),
         ],
@@ -635,44 +689,6 @@ class _InsightsPanel extends StatelessWidget {
       ),
       child: child,
     );
-  }
-}
-
-class _SleepTrendPainter extends CustomPainter {
-  const _SleepTrendPainter({
-    required this.accent,
-    required this.muted,
-    required this.progress,
-  });
-
-  final Color accent;
-  final Color muted;
-  final double progress;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final bodyPaint = Paint()
-      ..color = muted
-      ..style = PaintingStyle.fill;
-    final trackRect = RRect.fromRectAndRadius(
-      Rect.fromLTWH(0, 36, size.width, size.height * 0.64),
-      const Radius.circular(72),
-    );
-    canvas.drawRRect(trackRect, bodyPaint);
-
-    final linePaint = Paint()
-      ..color = accent
-      ..strokeWidth = 10
-      ..strokeCap = StrokeCap.round;
-    final y = size.height - 20;
-    canvas.drawLine(Offset(0, y), Offset(size.width * progress, y), linePaint);
-  }
-
-  @override
-  bool shouldRepaint(covariant _SleepTrendPainter oldDelegate) {
-    return accent != oldDelegate.accent ||
-        muted != oldDelegate.muted ||
-        progress != oldDelegate.progress;
   }
 }
 
