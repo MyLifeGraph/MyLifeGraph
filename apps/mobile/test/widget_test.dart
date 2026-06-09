@@ -2,9 +2,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:personal_optimization_app/app.dart';
 import 'package:personal_optimization_app/core/config/app_config.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   testWidgets('renders authentication gate first', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+
     await tester.pumpWidget(
       ProviderScope(
         overrides: [

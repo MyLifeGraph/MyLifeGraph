@@ -22,13 +22,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   return GoRouter(
     initialLocation: AppRoutes.dashboard,
     redirect: (context, state) {
+      final path = state.uri.path;
+      final isAuthRoute = path == AppRoutes.auth;
+
       if (authState.isLoading) {
-        return null;
+        return isAuthRoute ? null : AppRoutes.auth;
       }
 
       final session = authState.valueOrNull;
-      final path = state.uri.path;
-      final isAuthRoute = path == AppRoutes.auth;
       final isOnboardingRoute = path == AppRoutes.onboarding;
       final isEditingOnboarding =
           isOnboardingRoute && state.uri.queryParameters['edit'] == '1';
