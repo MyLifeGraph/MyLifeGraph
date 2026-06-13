@@ -7,26 +7,26 @@ class InsightsRepositoryImpl implements InsightsRepository {
   const InsightsRepositoryImpl({
     required InsightsMockDataSource mockDataSource,
     InsightsSupabaseDataSource? supabaseDataSource,
-    required bool useMockData,
+    required bool allowMockData,
   })  : _mockDataSource = mockDataSource,
         _supabaseDataSource = supabaseDataSource,
-        _useMockData = useMockData;
+        _allowMockData = allowMockData;
 
   final InsightsMockDataSource _mockDataSource;
   final InsightsSupabaseDataSource? _supabaseDataSource;
-  final bool _useMockData;
+  final bool _allowMockData;
 
   @override
   Future<List<Insight>> getInsights() async {
-    if (_useMockData || _supabaseDataSource == null) {
+    if (_allowMockData || _supabaseDataSource == null) {
       return _mockDataSource.getInsights();
     }
 
     try {
       final items = await _supabaseDataSource.getInsights();
-      return items.isEmpty ? _mockDataSource.getInsights() : items;
+      return items;
     } catch (_) {
-      return _mockDataSource.getInsights();
+      return const [];
     }
   }
 }

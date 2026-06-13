@@ -1,6 +1,6 @@
-# Personal Optimization App
+# MyLifeGraph
 
-Mobile-first foundation for an AI-powered personal optimization product.
+Mobile-first foundation for an AI-powered personal coach and life graph product.
 
 ## Structure
 
@@ -43,7 +43,7 @@ Pass mobile config with Dart defines:
 
 ```bash
 flutter run \
-  --dart-define=SUPABASE_URL=... \
+  --dart-define=SUPABASE_URL=https://oscrunlndfrecjilojja.supabase.co \
   --dart-define=SUPABASE_ANON_KEY=... \
   --dart-define=AI_SERVICE_BASE_URL=http://localhost:8000 \
   --dart-define=USE_MOCK_DATA=true

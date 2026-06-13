@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -555,19 +556,37 @@ class _ScheduleCardState extends State<_ScheduleCard> {
   Widget build(BuildContext context) {
     final today = DateTime.now();
     final monday = today.subtract(Duration(days: today.weekday - 1));
-    final days = widget.snapshot.energyTrend.asMap().entries.map(
-      (entry) {
-        final value = entry.value;
-        final date = monday.add(Duration(days: entry.key));
-        return _ScheduleDay(
-          DateFormat('E').format(date),
-          DateFormat('MMM d').format(date),
-          (value / 100).clamp(0.08, 1),
-          (widget.snapshot.recoveryScore / 100).clamp(0.08, 1),
-          value,
-        );
-      },
-    ).toList();
+    final trend = widget.snapshot.energyTrend;
+    final days = widget.snapshot.scheduleDays.isNotEmpty
+        ? widget.snapshot.scheduleDays
+            .map(
+              (day) => _ScheduleDay(
+                day.label,
+                day.dateLabel,
+                day.energy,
+                day.movement,
+                day.activity,
+                day.events
+                    .map((event) => _ScheduleEvent(event.title, event.time))
+                    .toList(),
+              ),
+            )
+            .toList()
+        : List.generate(
+            7,
+            (index) {
+              final value = index < trend.length ? trend[index] : 0;
+              final date = monday.add(Duration(days: index));
+              return _ScheduleDay(
+                DateFormat('E').format(date),
+                DateFormat('MMM d').format(date),
+                (value / 100).clamp(0.08, 1),
+                (widget.snapshot.recoveryScore / 100).clamp(0.08, 1),
+                value,
+                const [],
+              );
+            },
+          );
     final pageCount = _selectedDays == 7
         ? 1
         : (days.length / _selectedDays).ceil().clamp(1, 99);
@@ -626,19 +645,22 @@ class _ScheduleCardState extends State<_ScheduleCard> {
           const SizedBox(height: AppSpacing.lg),
           SizedBox(
             height: widget.isMobile ? windowHeight : windowHeight - 16,
-            child: PageView.builder(
-              controller: _pageController,
-              itemCount: pageCount,
-              onPageChanged: (index) {
-                setState(() => _pageIndex = index);
-              },
-              itemBuilder: (context, index) {
-                final window = _windowForPage(days, page: index);
-                return _ScheduleWindow(
-                  days: window,
-                  selectedDays: _selectedDays,
-                );
-              },
+            child: ScrollConfiguration(
+              behavior: const _ScheduleDragScrollBehavior(),
+              child: PageView.builder(
+                controller: _pageController,
+                itemCount: pageCount,
+                onPageChanged: (index) {
+                  setState(() => _pageIndex = index);
+                },
+                itemBuilder: (context, index) {
+                  final window = _windowForPage(days, page: index);
+                  return _ScheduleWindow(
+                    days: window,
+                    selectedDays: _selectedDays,
+                  );
+                },
+              ),
             ),
           ),
           const SizedBox(height: AppSpacing.md),
@@ -1321,37 +1343,53 @@ class _DayDropdown extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-      decoration: BoxDecoration(
-        color: _DashboardColors.button(context),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(
-          color: Theme.of(context).colorScheme.primary,
-          width: 2,
+    return PopupMenuButton<int>(
+      tooltip: 'Select schedule range',
+      initialValue: value,
+      color: _DashboardColors.panel(context),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      onSelected: onChanged,
+      itemBuilder: (context) => const [
+        PopupMenuItem(value: 1, child: Text('1 day')),
+        PopupMenuItem(value: 2, child: Text('2 days')),
+        PopupMenuItem(value: 3, child: Text('3 days')),
+        PopupMenuItem(value: 7, child: Text('7 days')),
+      ],
+      child: Container(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.md,
+          vertical: AppSpacing.sm,
         ),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<int>(
-          value: value,
-          borderRadius: BorderRadius.circular(18),
-          dropdownColor: _DashboardColors.panel(context),
-          icon: const Icon(Icons.keyboard_arrow_down),
-          items: const [
-            DropdownMenuItem(value: 1, child: Text('1 day')),
-            DropdownMenuItem(value: 2, child: Text('2 days')),
-            DropdownMenuItem(value: 3, child: Text('3 days')),
-            DropdownMenuItem(value: 7, child: Text('7 days')),
+        decoration: BoxDecoration(
+          color: _DashboardColors.button(context),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: _DashboardColors.border(context)),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              value == 1 ? '1 day' : '$value days',
+              style: Theme.of(context).textTheme.labelLarge,
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            const Icon(Icons.keyboard_arrow_down, size: 20),
           ],
-          onChanged: (next) {
-            if (next != null) {
-              onChanged(next);
-            }
-          },
         ),
       ),
     );
   }
+}
+
+class _ScheduleDragScrollBehavior extends MaterialScrollBehavior {
+  const _ScheduleDragScrollBehavior();
+
+  @override
+  Set<PointerDeviceKind> get dragDevices => {
+        ...super.dragDevices,
+        PointerDeviceKind.mouse,
+        PointerDeviceKind.trackpad,
+      };
 }
 
 class _ScheduleWindow extends StatelessWidget {
@@ -1417,14 +1455,8 @@ class _ScheduleDayPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final compact = selectedDays >= 3;
-    final events = day.label == 'Mon'
-        ? const [
-            ('Math', '08:15-09:45'),
-          ]
-        : const [
-            ('Empty 1', '--:--'),
-            ('Empty 2', '--:--'),
-          ];
+    final visibleEvents =
+        day.events.take(selectedDays == 3 ? 2 : day.events.length).toList();
 
     return Container(
       padding: EdgeInsets.all(compact ? AppSpacing.sm : AppSpacing.md),
@@ -1444,16 +1476,23 @@ class _ScheduleDayPanel extends StatelessWidget {
                 ),
           ),
           const SizedBox(height: AppSpacing.sm),
-          for (final event
-              in events.take(selectedDays == 3 ? 2 : events.length))
-            Padding(
-              padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-              child: _ScheduleEventTile(
-                title: event.$1,
-                time: event.$2,
-                compact: compact,
+          if (visibleEvents.isEmpty)
+            _ScheduleEventTile(
+              title: 'No blocks yet',
+              time: '--:--',
+              compact: compact,
+              muted: true,
+            )
+          else
+            for (final event in visibleEvents)
+              Padding(
+                padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                child: _ScheduleEventTile(
+                  title: event.title,
+                  time: event.time,
+                  compact: compact,
+                ),
               ),
-            ),
           const Spacer(),
           Row(
             children: [
@@ -1491,11 +1530,13 @@ class _ScheduleEventTile extends StatelessWidget {
     required this.title,
     required this.time,
     required this.compact,
+    this.muted = false,
   });
 
   final String title;
   final String time;
   final bool compact;
+  final bool muted;
 
   @override
   Widget build(BuildContext context) {
@@ -1513,7 +1554,9 @@ class _ScheduleEventTile extends StatelessWidget {
             title,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.titleSmall,
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  color: muted ? _DashboardColors.mutedText(context) : null,
+                ),
           ),
           const SizedBox(height: AppSpacing.xs),
           Text(
@@ -1677,6 +1720,7 @@ class _ScheduleDay {
     this.energy,
     this.movement,
     this.activity,
+    this.events,
   );
 
   final String label;
@@ -1684,4 +1728,12 @@ class _ScheduleDay {
   final double energy;
   final double movement;
   final int activity;
+  final List<_ScheduleEvent> events;
+}
+
+class _ScheduleEvent {
+  const _ScheduleEvent(this.title, this.time);
+
+  final String title;
+  final String time;
 }

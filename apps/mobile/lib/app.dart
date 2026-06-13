@@ -14,7 +14,7 @@ class PersonalOptimizationApp extends ConsumerWidget {
     final themeMode = ref.watch(appThemeModeProvider);
 
     return MaterialApp.router(
-      title: 'Optimize',
+      title: 'MyLifeGraph',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
       darkTheme: AppTheme.dark,

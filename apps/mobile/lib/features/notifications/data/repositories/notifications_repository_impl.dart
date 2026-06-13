@@ -7,26 +7,26 @@ class NotificationsRepositoryImpl implements NotificationsRepository {
   const NotificationsRepositoryImpl({
     required NotificationsMockDataSource mockDataSource,
     NotificationsSupabaseDataSource? supabaseDataSource,
-    required bool useMockData,
+    required bool allowMockData,
   })  : _mockDataSource = mockDataSource,
         _supabaseDataSource = supabaseDataSource,
-        _useMockData = useMockData;
+        _allowMockData = allowMockData;
 
   final NotificationsMockDataSource _mockDataSource;
   final NotificationsSupabaseDataSource? _supabaseDataSource;
-  final bool _useMockData;
+  final bool _allowMockData;
 
   @override
   Future<List<AppNotification>> getNotifications() async {
-    if (_useMockData || _supabaseDataSource == null) {
+    if (_allowMockData || _supabaseDataSource == null) {
       return _mockDataSource.getNotifications();
     }
 
     try {
       final items = await _supabaseDataSource.getNotifications();
-      return items.isEmpty ? _mockDataSource.getNotifications() : items;
+      return items;
     } catch (_) {
-      return _mockDataSource.getNotifications();
+      return const [];
     }
   }
 }

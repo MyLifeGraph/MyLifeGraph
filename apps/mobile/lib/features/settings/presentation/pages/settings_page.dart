@@ -116,7 +116,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                       icon: Icons.logout_outlined,
                       title: 'Sign out',
                       subtitle: isGuestMode
-                          ? 'Guest mode is active for now'
+                          ? 'Leave guest session'
                           : 'Return to auth screen',
                       onTap: _signOut,
                     ),

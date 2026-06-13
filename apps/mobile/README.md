@@ -1,6 +1,6 @@
-# Personal Optimization App - Mobile
+# MyLifeGraph - Mobile
 
-Flutter client for the AI-powered personal optimization product.
+Flutter client for the AI-powered personal coach and life graph product.
 
 ## Run
 

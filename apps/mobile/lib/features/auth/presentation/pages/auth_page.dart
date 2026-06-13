@@ -108,9 +108,9 @@ class _AuthPageState extends ConsumerState<AuthPage> {
                     ),
                     const SizedBox(height: AppSpacing.md),
                     _AuthActionTile(
-                      icon: Icons.login,
+                      leading: const _GoogleLogo(),
                       title: 'Sign in with Google',
-                      subtitle: 'Uses Supabase OAuth when enabled',
+                      subtitle: 'Continue with your Google account',
                       onTap: isBusy ? null : _signInWithGoogle,
                     ),
                     if (authState.hasError) ...[
@@ -169,12 +169,17 @@ class _AuthPageState extends ConsumerState<AuthPage> {
   }
 
   Future<void> _signInWithGoogle() async {
+    setState(() => _submitting = true);
     try {
       await ref.read(authControllerProvider.notifier).signInWithGoogle();
     } catch (error) {
       _showMessage(
-        'Google OAuth is not enabled in Supabase yet. Enable Google provider first.',
+        'Google sign-in could not start. Check Supabase OAuth settings.',
       );
+    } finally {
+      if (mounted) {
+        setState(() => _submitting = false);
+      }
     }
   }
 
@@ -289,13 +294,15 @@ class _AuthForm extends StatelessWidget {
 
 class _AuthActionTile extends StatelessWidget {
   const _AuthActionTile({
-    required this.icon,
+    this.icon,
+    this.leading,
     required this.title,
     required this.subtitle,
     required this.onTap,
   });
 
-  final IconData icon;
+  final IconData? icon;
+  final Widget? leading;
   final String title;
   final String subtitle;
   final VoidCallback? onTap;
@@ -308,7 +315,12 @@ class _AuthActionTile extends StatelessWidget {
       child: _AuthSurface(
         child: Row(
           children: [
-            Icon(icon, color: Theme.of(context).colorScheme.primary, size: 30),
+            leading ??
+                Icon(
+                  icon,
+                  color: Theme.of(context).colorScheme.primary,
+                  size: 30,
+                ),
             const SizedBox(width: AppSpacing.lg),
             Expanded(
               child: Column(
@@ -331,6 +343,67 @@ class _AuthActionTile extends StatelessWidget {
       ),
     );
   }
+}
+
+class _GoogleLogo extends StatelessWidget {
+  const _GoogleLogo();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 38,
+      height: 38,
+      decoration: BoxDecoration(
+        color: Theme.of(context).brightness == Brightness.light
+            ? Colors.white
+            : const Color(0xFF10171D),
+        shape: BoxShape.circle,
+        border: Border.all(color: _AuthColors.border(context)),
+      ),
+      alignment: Alignment.center,
+      child: CustomPaint(
+        size: const Size(22, 22),
+        painter: _GoogleLogoPainter(),
+      ),
+    );
+  }
+}
+
+class _GoogleLogoPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final stroke = size.width * 0.16;
+    final rect = Offset.zero & size;
+    final paint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = stroke
+      ..strokeCap = StrokeCap.round;
+
+    paint.color = const Color(0xFF4285F4);
+    canvas.drawArc(rect.deflate(stroke / 2), -0.1, 1.35, false, paint);
+    paint.color = const Color(0xFF34A853);
+    canvas.drawArc(rect.deflate(stroke / 2), 1.35, 1.05, false, paint);
+    paint.color = const Color(0xFFFBBC05);
+    canvas.drawArc(rect.deflate(stroke / 2), 2.4, 1.05, false, paint);
+    paint.color = const Color(0xFFEA4335);
+    canvas.drawArc(rect.deflate(stroke / 2), 3.45, 1.45, false, paint);
+
+    final centerY = size.height * 0.52;
+    paint.color = const Color(0xFF4285F4);
+    canvas.drawLine(
+      Offset(size.width * 0.52, centerY),
+      Offset(size.width * 0.92, centerY),
+      paint,
+    );
+    canvas.drawLine(
+      Offset(size.width * 0.92, centerY),
+      Offset(size.width * 0.82, size.height * 0.75),
+      paint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 class _AuthSurface extends StatelessWidget {
