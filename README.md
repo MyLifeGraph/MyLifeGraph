@@ -43,7 +43,7 @@ Pass mobile config with Dart defines:
 
 ```bash
 flutter run \
-  --dart-define=SUPABASE_URL=https://rnylirjfblwgygvgyfzr.supabase.co \
+  --dart-define=SUPABASE_URL=https://oscrunlndfrecjilojja.supabase.co \
   --dart-define=SUPABASE_ANON_KEY=... \
   --dart-define=AI_SERVICE_BASE_URL=http://localhost:8000 \
   --dart-define=USE_MOCK_DATA=true
