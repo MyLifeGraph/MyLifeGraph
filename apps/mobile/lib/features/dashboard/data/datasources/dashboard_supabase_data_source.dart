@@ -23,9 +23,16 @@ class DashboardSupabaseDataSource {
         .eq('userId', userId)
         .order('deadline', ascending: true)
         .limit(8);
+    final scheduleItems = await _client
+        .from(SupabaseTables.scheduleItems)
+        .select()
+        .eq('userId', userId)
+        .order('weekday', ascending: true)
+        .order('startsAt', ascending: true);
 
     final dailyLogs = List<Map<String, dynamic>>.from(logs as List);
     final taskRows = List<Map<String, dynamic>>.from(tasks as List);
+    final scheduleRows = List<Map<String, dynamic>>.from(scheduleItems as List);
     final latest = dailyLogs.isEmpty ? <String, dynamic>{} : dailyLogs.first;
     final trend = dailyLogs.reversed.map((row) => _activityScore(row)).toList()
       ..removeWhere((score) => score == 0);
@@ -37,6 +44,7 @@ class DashboardSupabaseDataSource {
       recoveryScore: _recoveryScore(latest).clamp(0, 100),
       energyTrend: trend.isEmpty ? [0, 0, 0, 0, 0, 0, 0] : trend,
       todayPlan: taskRows.map(_taskToPlanItem).toList(),
+      scheduleDays: _scheduleDays(scheduleRows, trend),
     );
   }
 
@@ -92,5 +100,76 @@ class DashboardSupabaseDataSource {
       type: priority == 'high' ? 'focus' : 'task',
       isCompleted: status == 'DONE' || status == 'COMPLETED',
     );
+  }
+
+  List<ScheduleDay> _scheduleDays(
+    List<Map<String, dynamic>> rows,
+    List<int> trend,
+  ) {
+    final today = DateTime.now();
+    final monday = today.subtract(Duration(days: today.weekday - 1));
+
+    return List.generate(7, (index) {
+      final date = monday.add(Duration(days: index));
+      final weekday = index + 1;
+      final activity = index < trend.length ? trend[index] : 0;
+      final seen = <String>{};
+      final events = rows
+          .where((row) => (row['weekday'] as num?)?.toInt() == weekday)
+          .where((row) {
+            final key = [
+              row['title'],
+              row['startsAt'],
+              row['endsAt'],
+              row['location'],
+            ].join('|');
+            return seen.add(key);
+          })
+          .map(_scheduleEventFromRow)
+          .toList();
+
+      return ScheduleDay(
+        label: _weekdayLabel(weekday),
+        dateLabel: '${_monthLabel(date.month)} ${date.day}',
+        energy: (activity / 100).clamp(0.08, 1),
+        movement: activity == 0 ? 0.08 : (activity / 100).clamp(0.08, 1),
+        activity: activity,
+        events: events,
+      );
+    });
+  }
+
+  ScheduleEvent _scheduleEventFromRow(Map<String, dynamic> row) {
+    final startsAt = '${row['startsAt'] ?? ''}'.trim();
+    final endsAt = '${row['endsAt'] ?? ''}'.trim();
+    final time =
+        startsAt.isEmpty || endsAt.isEmpty ? '--:--' : '$startsAt-$endsAt';
+    return ScheduleEvent(
+      title: '${row['title'] ?? 'Schedule block'}',
+      time: time,
+    );
+  }
+
+  String _weekdayLabel(int weekday) {
+    const labels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    return labels[(weekday - 1).clamp(0, labels.length - 1)];
+  }
+
+  String _monthLabel(int month) {
+    const labels = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    return labels[(month - 1).clamp(0, labels.length - 1)];
   }
 }

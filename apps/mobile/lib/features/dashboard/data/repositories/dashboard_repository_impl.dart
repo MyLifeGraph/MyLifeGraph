@@ -7,25 +7,25 @@ class DashboardRepositoryImpl implements DashboardRepository {
   const DashboardRepositoryImpl({
     required DashboardMockDataSource mockDataSource,
     DashboardSupabaseDataSource? supabaseDataSource,
-    required bool useMockData,
+    required bool allowMockData,
   })  : _mockDataSource = mockDataSource,
         _supabaseDataSource = supabaseDataSource,
-        _useMockData = useMockData;
+        _allowMockData = allowMockData;
 
   final DashboardMockDataSource _mockDataSource;
   final DashboardSupabaseDataSource? _supabaseDataSource;
-  final bool _useMockData;
+  final bool _allowMockData;
 
   @override
   Future<DashboardSnapshot> getSnapshot() async {
-    if (_useMockData || _supabaseDataSource == null) {
+    if (_allowMockData || _supabaseDataSource == null) {
       return _mockDataSource.getSnapshot();
     }
 
     try {
       return await _supabaseDataSource.getSnapshot();
     } catch (_) {
-      return _mockDataSource.getSnapshot();
+      return DashboardSnapshot.empty;
     }
   }
 }

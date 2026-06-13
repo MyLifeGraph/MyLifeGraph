@@ -23,12 +23,18 @@ function Get-DefineValue($name, $fallback) {
     return $fallback
 }
 
+$appEnv = Get-DefineValue "APP_ENV" "development"
+$useMockData = Get-DefineValue "USE_MOCK_DATA" "false"
+$supabaseUrl = Get-DefineValue "SUPABASE_URL" ""
+$supabaseAnonKey = Get-DefineValue "SUPABASE_ANON_KEY" ""
+$aiServiceBaseUrl = Get-DefineValue "AI_SERVICE_BASE_URL" "http://localhost:8000"
+
 & flutter build web --debug --no-wasm-dry-run `
-    --dart-define=APP_ENV=$(Get-DefineValue "APP_ENV" "development") `
-    --dart-define=USE_MOCK_DATA=$(Get-DefineValue "USE_MOCK_DATA" "false") `
-    --dart-define=SUPABASE_URL=$(Get-DefineValue "SUPABASE_URL" "") `
-    --dart-define=SUPABASE_ANON_KEY=$(Get-DefineValue "SUPABASE_ANON_KEY" "") `
-    --dart-define=AI_SERVICE_BASE_URL=$(Get-DefineValue "AI_SERVICE_BASE_URL" "http://localhost:8000")
+    --dart-define=APP_ENV=$appEnv `
+    --dart-define=USE_MOCK_DATA=$useMockData `
+    --dart-define=SUPABASE_URL=$supabaseUrl `
+    --dart-define=SUPABASE_ANON_KEY=$supabaseAnonKey `
+    --dart-define=AI_SERVICE_BASE_URL=$aiServiceBaseUrl
 if ($LASTEXITCODE -ne 0) {
     exit $LASTEXITCODE
 }
