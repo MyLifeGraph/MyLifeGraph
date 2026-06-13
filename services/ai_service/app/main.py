@@ -7,7 +7,7 @@ from app.core.config import settings
 
 def create_app() -> FastAPI:
     app = FastAPI(
-        title="Personal Optimization AI Service",
+        title="MyLifeGraph AI Service",
         version="0.1.0",
         docs_url="/docs" if settings.app_env != "production" else None,
         redoc_url=None,

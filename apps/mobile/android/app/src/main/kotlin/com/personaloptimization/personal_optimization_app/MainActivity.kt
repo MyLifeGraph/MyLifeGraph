@@ -1,4 +1,4 @@
-package com.personaloptimization.personal_optimization_app
+package com.mylifegraph.app
 
 import io.flutter.embedding.android.FlutterActivity
 

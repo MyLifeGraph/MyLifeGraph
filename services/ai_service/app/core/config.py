@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     app_env: str = Field(default="development", alias="APP_ENV")
     api_prefix: str = Field(default="/v1", alias="API_PREFIX")
     allowed_origins_raw: str = Field(
-        default="http://localhost:3000,http://localhost:5173",
+        default="http://127.0.0.1:7357,http://localhost:7357",
         alias="ALLOWED_ORIGINS",
     )
     supabase_url: str = Field(default="", alias="SUPABASE_URL")
