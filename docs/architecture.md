@@ -1,42 +1,117 @@
 # Architecture
 
+This document describes the current repository shape. It intentionally
+distinguishes implemented behavior from planned backend integration.
+
+## High-Level Shape
+
+```text
+Flutter app <-> Supabase Auth/Postgres
+Flutter app <-> FastAPI AI service
+Flutter app <-> local mock data and guest storage
+```
+
+The Flutter app is the main product surface. Supabase is the intended auth and
+persistence backend. The FastAPI service is an independent AI boundary that
+currently returns placeholder recommendations.
+
 ## Mobile App
 
 The Flutter app uses feature-first clean architecture:
 
-- `core` contains cross-cutting concerns such as config, bootstrap, routing, network clients, Supabase access, theme, and reusable widgets.
+- `core` contains config, bootstrap, routing, network clients, Supabase access,
+  theme, and reusable widgets.
 - `features/*/domain` contains entities and repository contracts.
-- `features/*/data` contains mock data sources and repository implementations.
-- `features/*/application` contains service orchestration for use cases that should not live in widgets.
+- `features/*/data` contains mock data sources, Supabase data sources, and
+  repository implementations.
+- `features/*/application` contains orchestration that should not live in
+  widgets.
 - `features/*/presentation` contains pages, widgets, and Riverpod providers.
 
-State management is Riverpod. UI state depends on providers, providers depend on services or repositories, and repositories own data-source selection. This keeps screens independent from Supabase, FastAPI, and future local cache choices.
+State management is Riverpod. Navigation is GoRouter. The shell navigation maps
+to Dashboard, Insights, central quick-action, Notifications, and More/Coach.
 
-Navigation is handled with GoRouter and a shell route. The bottom navigation maps to:
+## Runtime Configuration
 
-- Dashboard
-- Insights
-- Central quick-action `+`
-- Notifications
-- More
+The mobile app reads Dart defines through `AppConfig.fromEnvironment()`:
 
-## Backend
+- `APP_ENV`
+- `USE_MOCK_DATA`
+- `SUPABASE_URL`
+- `SUPABASE_ANON_KEY`
+- `AI_SERVICE_BASE_URL`
 
-Supabase owns authentication, PostgreSQL persistence, and row-level security. The initial schema separates raw behavioral events, daily lifestyle entries, generated skillset profiles, recommendations, and notification preferences.
+Supabase is initialized only when both Supabase values are non-empty. Without
+them, the app can still run through local guest mode and mock data.
 
-The FastAPI service is an independent AI boundary. It currently returns mock recommendations, but it already exposes versioned endpoints and a service class where future model inference, feature extraction, and ranking logic can be added.
+## Data Source Selection
+
+Several features use the same repository pattern:
+
+1. Read app config and auth session from Riverpod providers.
+2. Use mock data when `USE_MOCK_DATA=true`, when the session is guest, or when
+   Supabase is not configured.
+3. Use Supabase data sources only when a real Supabase client and authenticated
+   user are available.
+
+This pattern is visible in Dashboard, Insights, and Notifications.
+
+Some write actions, such as daily check-ins and quick mood check-ins, directly
+require Supabase. Without Supabase configuration they show an in-app message
+instead of writing remote data.
+
+## Authentication
+
+The current auth modes are:
+
+- Local guest session through `shared_preferences`.
+- Supabase email/password auth.
+- Supabase Google OAuth.
+
+Guest sessions can complete onboarding locally. If a user later authenticates
+with Supabase, parts of the guest onboarding/check-in data are migrated into
+Supabase by the auth repository.
+
+## Supabase
+
+Supabase owns the planned production auth, PostgreSQL persistence, and RLS
+surface. Current migrations include:
+
+- A newer snake_case life-graph schema: `profiles`, `behavioral_events`,
+  `lifestyle_entries`, `skillset_profiles`, `recommendations`, and
+  `notification_preferences`.
+- Later RLS and role hardening for app-facing CamelCase tables such as `"User"`,
+  `"DailyLog"`, `"Task"`, and `"Notification"` when those tables already exist.
+
+See `docs/supabase-current-state.md` for the exact current schema caveat.
+
+## FastAPI AI Service
+
+The AI service lives in `services/ai_service`.
+
+Current responsibilities:
+
+- Serve `/v1/health`.
+- Serve `/v1/recommendations/preview`.
+- Keep recommendation generation behind a service boundary.
+
+Current limitation: recommendation content is placeholder data. The endpoint and
+service class are ready for future model inference, feature extraction, and
+ranking logic.
 
 ## Security Posture
 
-- Supabase RLS is enabled on all user-owned tables.
-- User-facing tables scope access with `auth.uid()`.
-- FastAPI service role secrets are kept out of the mobile app.
-- Mobile config uses Dart defines so secrets are not hard-coded in source.
-- Production AI endpoints should validate Supabase JWTs before reading user data.
+- Supabase RLS is enabled and forced where migrations touch tables.
+- User-owned tables scope access by `auth.uid()` or admin role helpers.
+- Supabase service-role secrets are not used by the mobile app.
+- Mobile config uses Dart defines so credentials are not hard-coded in source.
+- Production AI endpoints should validate Supabase JWTs before reading user
+  data or invoking privileged backend workflows.
 
-## Scalability Notes
+## Known Gaps
 
-- Feature modules can be added without changing global app structure.
-- Repository contracts allow switching from mock data to Supabase, REST, cache, or hybrid data sources.
-- AI service can scale separately from mobile and database workloads.
-- PostgreSQL indexes are present for user/time query patterns used by dashboards and recommendation generation.
+- A clean local Supabase reset may not create all CamelCase tables expected by
+  the Flutter app.
+- The repository does not contain real Supabase credentials.
+- The FastAPI service is not yet connected to real Supabase data or ML models.
+- Mock mode is the reliable path for local product exploration today.

@@ -1,4 +1,4 @@
-$mobileRoot = "C:\Users\matze\Documents\New project 2\apps\mobile"
+$mobileRoot = $PSScriptRoot
 $repoRoot = Split-Path -Parent (Split-Path -Parent $mobileRoot)
 $envPath = Join-Path $repoRoot ".env"
 
@@ -24,12 +24,19 @@ function Get-DefineValue($name, $fallback) {
 }
 
 $appEnv = Get-DefineValue "APP_ENV" "development"
-$useMockData = Get-DefineValue "USE_MOCK_DATA" "false"
+$flutterBin = Get-DefineValue "FLUTTER_BIN" "flutter"
+$pythonBin = Get-DefineValue "PYTHON_BIN" "python"
+$useMockData = Get-DefineValue "USE_MOCK_DATA" "true"
 $supabaseUrl = Get-DefineValue "SUPABASE_URL" ""
 $supabaseAnonKey = Get-DefineValue "SUPABASE_ANON_KEY" ""
 $aiServiceBaseUrl = Get-DefineValue "AI_SERVICE_BASE_URL" "http://localhost:8000"
 
-& flutter build web --debug --no-wasm-dry-run `
+& $flutterBin pub get
+if ($LASTEXITCODE -ne 0) {
+    exit $LASTEXITCODE
+}
+
+& $flutterBin build web --debug --no-wasm-dry-run `
     --dart-define=APP_ENV=$appEnv `
     --dart-define=USE_MOCK_DATA=$useMockData `
     --dart-define=SUPABASE_URL=$supabaseUrl `
@@ -39,4 +46,4 @@ if ($LASTEXITCODE -ne 0) {
     exit $LASTEXITCODE
 }
 
-& "C:\Users\matze\miniconda3\python.exe" -m http.server 7357 --bind 127.0.0.1 --directory "build\web"
+& $pythonBin -m http.server 7357 --bind 127.0.0.1 --directory "build\web"
