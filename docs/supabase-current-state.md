@@ -27,31 +27,48 @@ Supabase local auth config allows:
 - `http://127.0.0.1:7357`
 - `http://localhost:7357`
 
-## Tables Referenced By The Flutter App
+## Canonical Tables Referenced By The Flutter App
 
 The app table constants live in
 `apps/mobile/lib/core/supabase/supabase_tables.dart`.
 
 | Table | Current app use |
 | --- | --- |
-| `profiles` | Present in constants and initial migration. |
-| `"User"` | Auth profile rows, roles, onboarding state. |
-| `"DailyLog"` | Dashboard metrics, daily check-in, quick mood check-in. |
-| `"SleepLog"` | Daily check-in and quick mood check-in detail writes. |
-| `"MoodLog"` | Daily check-in and quick mood check-in detail writes. |
-| `"ActivityLog"` | Daily check-in detail writes. |
-| `"Task"` | Dashboard plan items and task completion updates. |
-| `"Notification"` | Notifications list and read updates. |
-| `"ScheduleItem"` | Onboarding timetable and dashboard schedule. |
-| `"AIInsight"` | Insights list. |
-| `"CoachMessage"` | More/coach message history and writes. |
-| `"FocusSession"` | RLS-hardened if present, not central in current UI flow. |
-| `"MemoryEntry"` | Quick mood check-in memory writes. |
-| `behavioral_events` | Optimization event data source boundary. |
-| `lifestyle_entries` | Newer life-graph schema. |
-| `skillset_profiles` | Newer life-graph schema. |
-| `recommendations` | Newer life-graph schema. |
-| `notification_preferences` | Newer life-graph schema. |
+| `profiles` | Auth profile rows, roles, provider, timezone, onboarding state. |
+| `daily_logs` | Dashboard metrics, daily check-in, quick mood check-in. |
+| `behavioral_events` | Granular AI signal stream from check-ins and optimization events. |
+| `tasks` | Dashboard plan items and task completion updates. |
+| `notifications` | Notifications list and read updates. |
+| `schedule_items` | Onboarding timetable and dashboard schedule. |
+| `ai_insights` | Insights list. |
+| `coach_messages` | More/coach message history and writes. |
+| `memory_entries` | Quick mood check-in memory writes. |
+| `focus_sessions` | Focus-session history for future coaching flows. |
+| `goals` | User goals for future coaching flows. |
+| `habits` | User habits for future coaching flows. |
+| `habit_logs` | Habit completions for future coaching flows. |
+| `skillset_profiles` | Generated coaching/skill profile snapshots. |
+| `recommendations` | Generated recommendations and user statuses. |
+| `notification_preferences` | User alert preferences. |
+
+## Legacy Tables
+
+Older remote databases may contain CamelCase app tables:
+
+| Legacy table | Canonical replacement |
+| --- | --- |
+| `"User"` | `profiles` |
+| `"DailyLog"` | `daily_logs` |
+| `"SleepLog"` | `behavioral_events` |
+| `"MoodLog"` | `daily_logs` and `behavioral_events` |
+| `"ActivityLog"` | `daily_logs` and `behavioral_events` |
+| `"Task"` | `tasks` |
+| `"Notification"` | `notifications` |
+| `"ScheduleItem"` | `schedule_items` |
+| `"AIInsight"` | `ai_insights` |
+| `"CoachMessage"` | `coach_messages` |
+| `"FocusSession"` | `focus_sessions` |
+| `"MemoryEntry"` | `memory_entries` |
 
 ## Migration State
 
@@ -77,15 +94,20 @@ for both schema families where tables exist.
 `20260613190000_restrict_security_definer_functions.sql` moves role lookup into
 the `private` schema and revokes public execution for security-definer helpers.
 
+`20260618170000_create_canonical_app_schema.sql` creates the canonical
+snake_case app schema, updates auth/profile helper functions, grants the
+`authenticated` role app-table CRUD privileges, adds RLS policies, and copies
+data from legacy CamelCase tables when they exist.
+
 ## Important Caveat
 
-A clean local Supabase database created only from these migrations may not
-contain every CamelCase table the Flutter app expects. The later migrations use
-`if to_regclass(...) is not null` checks for many app-facing tables, which means
-they harden existing tables but do not create missing ones.
+The canonical Flutter code now targets snake_case tables. Legacy CamelCase
+tables may still exist in the remote Production project, but new product code
+should not add dependencies on them.
 
 Before relying on `USE_MOCK_DATA=false`, confirm that the target Supabase
-project has the expected app-facing tables and policies.
+project has applied the canonical schema migration and has the expected RLS
+policies.
 
 ## What Agents Can Safely Infer
 
@@ -100,13 +122,8 @@ Agents cannot infer the live remote database state from the repo alone.
 Do not claim that remote tables exist unless you have inspected the Supabase
 project with credentials.
 
-## Recommended Next Schema Decision
+## Schema Direction
 
-Before expanding real Supabase mode, decide whether the product should standardize on:
-
-1. The existing app-facing CamelCase tables such as `"DailyLog"` and `"Task"`.
-2. The newer snake_case life-graph tables such as `lifestyle_entries`.
-3. A deliberate migration path from one schema family to the other.
-
-Until that decision is made, keep mock/guest mode as the default local path and
-document Supabase behavior carefully.
+The product should standardize on the snake_case schema. CamelCase tables are
+legacy compatibility only and should be dropped in a later dedicated migration
+after data migration and app verification are complete.

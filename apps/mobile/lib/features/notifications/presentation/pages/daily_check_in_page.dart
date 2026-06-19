@@ -159,7 +159,7 @@ class _DailyCheckInPageState extends ConsumerState<DailyCheckInPage> {
       }
     } catch (_) {
       if (mounted) {
-        _showMessage('Could not save yet. Check RLS policies for DailyLog.');
+        _showMessage('Could not save yet. Check RLS policies for daily logs.');
       }
     } finally {
       if (mounted) {

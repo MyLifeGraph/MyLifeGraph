@@ -75,13 +75,22 @@ Supabase by the auth repository.
 ## Supabase
 
 Supabase owns the planned production auth, PostgreSQL persistence, and RLS
-surface. Current migrations include:
+surface. The canonical application schema is now snake_case and centered on:
 
-- A newer snake_case life-graph schema: `profiles`, `behavioral_events`,
-  `lifestyle_entries`, `skillset_profiles`, `recommendations`, and
-  `notification_preferences`.
-- Later RLS and role hardening for app-facing CamelCase tables such as `"User"`,
-  `"DailyLog"`, `"Task"`, and `"Notification"` when those tables already exist.
+- `profiles` for public user profile, role, provider, timezone, and onboarding
+  state.
+- `daily_logs` for one daily summary row per user/date.
+- `behavioral_events` for granular AI signal history.
+- `tasks`, `schedule_items`, `notifications`, and `coach_messages` for the
+  current product workflows.
+- `memory_entries`, `ai_insights`, `recommendations`, and
+  `skillset_profiles` for AI-generated context and output.
+- `goals`, `habits`, `habit_logs`, and `focus_sessions` for near-term coaching
+  expansion.
+
+Legacy CamelCase tables such as `"User"`, `"DailyLog"`, and `"Task"` may still
+exist in older remote projects. The canonical migration copies data from those
+tables when present, but new Flutter code should target the snake_case tables.
 
 See `docs/supabase-current-state.md` for the exact current schema caveat.
 
@@ -110,8 +119,8 @@ ranking logic.
 
 ## Known Gaps
 
-- A clean local Supabase reset may not create all CamelCase tables expected by
-  the Flutter app.
+- The remote Production project may still contain legacy CamelCase tables until
+  the canonical schema migration has been applied and verified.
 - The repository does not contain real Supabase credentials.
 - The FastAPI service is not yet connected to real Supabase data or ML models.
 - Mock mode is the reliable path for local product exploration today.

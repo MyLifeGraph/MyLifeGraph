@@ -4,13 +4,17 @@ alter table if exists public."User"
   add column if not exists role text not null default 'user';
 
 do $$
+declare
+  user_table regclass;
 begin
-  if to_regclass('public."User"') is not null
+  user_table := to_regclass('public."User"');
+
+  if user_table is not null
      and not exists (
        select 1
        from pg_constraint
        where conname = 'User_role_check'
-         and conrelid = 'public."User"'::regclass
+         and conrelid = user_table
      ) then
     alter table public."User"
       add constraint "User_role_check"
@@ -18,30 +22,41 @@ begin
   end if;
 end $$;
 
-update public."User"
-set role = case
-  when lower(coalesce("authProvider", '')) = 'guest' then 'guest'
-  when role is null then 'user'
-  else role
-end
-where role is null or lower(coalesce("authProvider", '')) = 'guest';
+do $$
+begin
+  if to_regclass('public."User"') is not null then
+    update public."User"
+    set role = case
+      when lower(coalesce("authProvider", '')) = 'guest' then 'guest'
+      when role is null then 'user'
+      else role
+    end
+    where role is null or lower(coalesce("authProvider", '')) = 'guest';
+  end if;
+end $$;
 
 create or replace function public.current_app_role()
 returns text
-language sql
+language plpgsql
 stable
 security definer
 set search_path = public
 as $$
-  select coalesce(
-    (
-      select role
-      from public."User"
-      where id = auth.uid()::text
-      limit 1
-    ),
-    'user'
-  );
+declare
+  result text;
+begin
+  if auth.uid() is null then
+    return 'guest';
+  end if;
+
+  if to_regclass('public."User"') is not null then
+    execute 'select role from public."User" where id = $1 limit 1'
+      into result
+      using auth.uid()::text;
+  end if;
+
+  return coalesce(result, 'user');
+end;
 $$;
 
 create or replace function public.handle_new_auth_user()
@@ -64,33 +79,29 @@ begin
   );
   default_role := case when provider = 'anonymous' then 'guest' else 'user' end;
 
-  insert into public."User" (
-    id,
-    email,
-    name,
-    timezone,
-    "authProvider",
-    "onboardingDone",
-    role,
-    "updatedAt"
-  )
-  values (
-    new.id::text,
-    coalesce(new.email, ''),
-    display_name,
-    'Europe/Berlin',
-    provider,
-    false,
-    default_role,
-    now()
-  )
-  on conflict (id) do update
-  set
-    email = excluded.email,
-    name = coalesce(public."User".name, excluded.name),
-    "authProvider" = excluded."authProvider",
-    role = coalesce(public."User".role, excluded.role),
-    "updatedAt" = now();
+  if to_regclass('public."User"') is not null then
+    execute '
+      insert into public."User" (
+        id,
+        email,
+        name,
+        timezone,
+        "authProvider",
+        "onboardingDone",
+        role,
+        "updatedAt"
+      )
+      values ($1, $2, $3, ''Europe/Berlin'', $4, false, $5, now())
+      on conflict (id) do update
+      set
+        email = excluded.email,
+        name = coalesce(public."User".name, excluded.name),
+        "authProvider" = excluded."authProvider",
+        role = coalesce(public."User".role, excluded.role),
+        "updatedAt" = now()
+    '
+    using new.id::text, coalesce(new.email, ''), display_name, provider, default_role;
+  end if;
 
   return new;
 end;

@@ -68,7 +68,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
       _completedTaskIds.add(id);
       _expandedTaskIds.remove(id);
     });
-    _updateTaskStatus(id, 'DONE');
+    _updateTaskStatus(id, 'done');
   }
 
   void _restoreTask(String id) {
@@ -76,7 +76,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
       _completedTaskIds.remove(id);
       _deletedTaskIds.remove(id);
     });
-    _updateTaskStatus(id, 'TODO');
+    _updateTaskStatus(id, 'todo');
   }
 
   void _deleteTask(String id) {
@@ -85,7 +85,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
       _completedTaskIds.remove(id);
       _expandedTaskIds.remove(id);
     });
-    _updateTaskStatus(id, 'CANCELLED');
+    _updateTaskStatus(id, 'cancelled');
   }
 
   Future<void> _updateTaskStatus(String id, String status) async {
@@ -96,7 +96,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
     try {
       await client.from(SupabaseTables.tasks).update({
         'status': status,
-        'updatedAt': DateTime.now().toIso8601String(),
+        'updated_at': DateTime.now().toIso8601String(),
       }).eq('id', id);
       ref.invalidate(dashboardSnapshotProvider);
     } catch (_) {

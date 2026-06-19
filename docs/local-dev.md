@@ -121,7 +121,7 @@ supabase db reset
 ```
 
 Read `docs/supabase-current-state.md` first. The migrations currently do not
-fully create every app-facing CamelCase table expected by the Flutter app.
+target the old CamelCase app tables; the canonical app schema is snake_case.
 
 ## Verification
 

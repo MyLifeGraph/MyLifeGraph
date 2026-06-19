@@ -21,6 +21,8 @@ venv/
 # Environment
 .env
 *.env.local
+supabase/.branches/
+supabase/.temp/
 
 # IDE
 .idea/

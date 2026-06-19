@@ -151,10 +151,10 @@ class AuthRepository {
 
     final now = DateTime.now().toIso8601String();
     final profile = session.profile;
-    await _safeUserUpdate(profile.id, {
-      if (name != null && name.trim().isNotEmpty) 'name': name.trim(),
-      'onboardingDone': true,
-      'updatedAt': now,
+    await _safeProfileUpdate(profile.id, {
+      if (name != null && name.trim().isNotEmpty) 'display_name': name.trim(),
+      'onboarding_completed_at': now,
+      'updated_at': now,
     });
     await _saveTimetable(profile.id, timetable);
 
@@ -178,7 +178,7 @@ class AuthRepository {
     User user, {
     String? preferredName,
   }) async {
-    final existing = await _selectUser(user.id);
+    final existing = await _selectProfile(user.id);
     if (existing != null) {
       return _profileFromRow(existing, fallbackUser: user);
     }
@@ -194,49 +194,30 @@ class AuthRepository {
     final row = {
       'id': user.id,
       'email': email,
-      'name': name,
+      'display_name': name,
       'timezone': 'Europe/Berlin',
-      'authProvider': provider,
-      'onboardingDone': false,
-      'updatedAt': now,
+      'auth_provider': provider,
+      'updated_at': now,
       'role': AppRole.user.databaseValue,
     };
 
-    try {
-      await _client.from(SupabaseTables.users).insert(row);
-    } on PostgrestException catch (error) {
-      if (!error.message.toLowerCase().contains('role')) {
-        rethrow;
-      }
-      final fallback = Map<String, dynamic>.from(row)..remove('role');
-      await _client.from(SupabaseTables.users).insert(fallback);
-    }
+    await _client.from(SupabaseTables.profiles).upsert(row);
 
-    final inserted = await _selectUser(user.id);
+    final inserted = await _selectProfile(user.id);
     return _profileFromRow(inserted ?? row, fallbackUser: user);
   }
 
-  Future<Map<String, dynamic>?> _selectUser(String id) async {
-    try {
-      final rows = await _client
-          .from(SupabaseTables.users)
-          .select('id,email,name,timezone,authProvider,onboardingDone,role')
-          .eq('id', id)
-          .limit(1);
-      final list = List<Map<String, dynamic>>.from(rows as List);
-      return list.isEmpty ? null : list.first;
-    } on PostgrestException catch (error) {
-      if (!error.message.toLowerCase().contains('role')) {
-        rethrow;
-      }
-      final rows = await _client
-          .from(SupabaseTables.users)
-          .select('id,email,name,timezone,authProvider,onboardingDone')
-          .eq('id', id)
-          .limit(1);
-      final list = List<Map<String, dynamic>>.from(rows as List);
-      return list.isEmpty ? null : list.first;
-    }
+  Future<Map<String, dynamic>?> _selectProfile(String id) async {
+    final rows = await _client
+        .from(SupabaseTables.profiles)
+        .select(
+          'id,email,display_name,timezone,auth_provider,'
+          'onboarding_completed_at,role',
+        )
+        .eq('id', id)
+        .limit(1);
+    final list = List<Map<String, dynamic>>.from(rows as List);
+    return list.isEmpty ? null : list.first;
   }
 
   AppProfile _profileFromRow(
@@ -246,24 +227,19 @@ class AuthRepository {
     return AppProfile(
       id: '${row['id'] ?? fallbackUser?.id ?? ''}',
       email: '${row['email'] ?? fallbackUser?.email ?? ''}',
-      name: '${row['name'] ?? 'New User'}',
+      name: '${row['display_name'] ?? 'New User'}',
       timezone: '${row['timezone'] ?? 'Europe/Berlin'}',
       role: AppRole.fromDatabase(row['role']?.toString()),
-      onboardingDone: row['onboardingDone'] == true,
-      authProvider: '${row['authProvider'] ?? 'email'}',
+      onboardingDone: row['onboarding_completed_at'] != null,
+      authProvider: '${row['auth_provider'] ?? 'email'}',
     );
   }
 
-  Future<void> _safeUserUpdate(String id, Map<String, dynamic> values) async {
-    try {
-      await _client.from(SupabaseTables.users).update(values).eq('id', id);
-    } on PostgrestException catch (error) {
-      if (!error.message.toLowerCase().contains('role')) {
-        rethrow;
-      }
-      final fallback = Map<String, dynamic>.from(values)..remove('role');
-      await _client.from(SupabaseTables.users).update(fallback).eq('id', id);
-    }
+  Future<void> _safeProfileUpdate(
+    String id,
+    Map<String, dynamic> values,
+  ) async {
+    await _client.from(SupabaseTables.profiles).update(values).eq('id', id);
   }
 
   Future<void> _saveTimetable(
@@ -276,17 +252,16 @@ class AuthRepository {
     final now = DateTime.now();
     final rows = timetable.map((draft) {
       return {
-        'id': 'schedule_${now.microsecondsSinceEpoch}_${draft.weekday}',
-        'userId': userId,
+        'user_id': userId,
         'title':
             draft.title.trim().isEmpty ? 'Study block' : draft.title.trim(),
         'location':
             draft.location.trim().isEmpty ? null : draft.location.trim(),
         'weekday': draft.weekday,
-        'startsAt': draft.startsAt,
-        'endsAt': draft.endsAt,
+        'starts_at': draft.startsAt,
+        'ends_at': draft.endsAt,
         'source': 'onboarding',
-        'updatedAt': now.toIso8601String(),
+        'updated_at': now.toIso8601String(),
       };
     }).toList();
     await _client.from(SupabaseTables.scheduleItems).insert(rows);
@@ -322,27 +297,31 @@ class AuthRepository {
       for (final value in values.whereType<Map<String, dynamic>>()) {
         final now =
             DateTime.tryParse('${value['createdAt']}') ?? DateTime.now();
-        final id = 'guest_migrated_daily_${now.microsecondsSinceEpoch}';
-        final date = DateTime(now.year, now.month, now.day).toIso8601String();
+        final date = DateTime(now.year, now.month, now.day);
         final mood = (value['mood'] as num?)?.toInt() ?? 7;
         final energy = (value['energy'] as num?)?.toInt() ?? 6;
         final stress = (value['stress'] as num?)?.toInt() ?? 4;
         final notes = '${value['coachNotes'] ?? ''}'.trim();
 
-        await _client.from(SupabaseTables.dailyLogs).insert({
-          'id': id,
-          'userId': userId,
-          'date': date,
-          'sleepHours': (value['sleepHours'] as num?)?.toDouble() ?? 7,
-          'energyLevel': energy,
-          'mood': _moodEnumValue(mood),
-          'reflection': [
-            'Migrated from guest quick check-in.',
-            'Stress rating: $stress/10.',
-            if (notes.isNotEmpty) notes,
-          ].join(' '),
-          'updatedAt': now.toIso8601String(),
-        });
+        await _client.from(SupabaseTables.dailyLogs).upsert(
+          {
+            'user_id': userId,
+            'entry_date': _dateOnly(date),
+            'sleep_hours': (value['sleepHours'] as num?)?.toDouble() ?? 7,
+            'energy_level': energy,
+            'stress_level': stress,
+            'mood_score': mood,
+            'mood_label': _moodLabel(mood),
+            'reflection': [
+              'Migrated from guest quick check-in.',
+              'Stress rating: $stress/10.',
+              if (notes.isNotEmpty) notes,
+            ].join(' '),
+            'source': 'guest_migration',
+            'updated_at': now.toIso8601String(),
+          },
+          onConflict: 'user_id,entry_date',
+        );
       }
       await prefs.remove(_Prefs.guestQuickCheckIns);
     } catch (_) {
@@ -350,20 +329,26 @@ class AuthRepository {
     }
   }
 
-  String _moodEnumValue(int rating) {
+  String _moodLabel(int rating) {
     if (rating >= 9) {
-      return 'GREAT';
+      return 'great';
     }
     if (rating >= 7) {
-      return 'GOOD';
+      return 'good';
     }
     if (rating >= 5) {
-      return 'NEUTRAL';
+      return 'neutral';
     }
     if (rating >= 3) {
-      return 'BAD';
+      return 'low';
     }
-    return 'VERY_BAD';
+    return 'very_low';
+  }
+
+  String _dateOnly(DateTime date) {
+    final month = date.month.toString().padLeft(2, '0');
+    final day = date.day.toString().padLeft(2, '0');
+    return '${date.year}-$month-$day';
   }
 
   Future<void> _clearGuestActiveFlag() async {

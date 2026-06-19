@@ -14,8 +14,8 @@ class NotificationsSupabaseDataSource {
     final rows = await _client
         .from(SupabaseTables.notifications)
         .select()
-        .eq('userId', userId)
-        .order('createdAt', ascending: false)
+        .eq('user_id', userId)
+        .order('created_at', ascending: false)
         .limit(30);
 
     return List<Map<String, dynamic>>.from(rows as List).map((row) {
@@ -23,8 +23,8 @@ class NotificationsSupabaseDataSource {
         id: row['id'] as String,
         title: row['title'] as String,
         body: row['message'] as String,
-        createdAt: DateTime.tryParse('${row['createdAt']}') ?? DateTime.now(),
-        isRead: row['read'] == true,
+        createdAt: DateTime.tryParse('${row['created_at']}') ?? DateTime.now(),
+        isRead: row['is_read'] == true,
       );
     }).toList();
   }

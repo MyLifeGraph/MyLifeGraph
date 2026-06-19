@@ -14,8 +14,8 @@ class InsightsSupabaseDataSource {
     final rows = await _client
         .from(SupabaseTables.aiInsights)
         .select()
-        .eq('userId', userId)
-        .order('createdAt', ascending: false)
+        .eq('user_id', userId)
+        .order('created_at', ascending: false)
         .limit(20);
 
     return List<Map<String, dynamic>>.from(rows as List).map((row) {

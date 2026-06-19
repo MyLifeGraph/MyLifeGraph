@@ -53,7 +53,7 @@ class _NotificationsPageState extends ConsumerState<NotificationsPage> {
     try {
       await client
           .from(SupabaseTables.notifications)
-          .update({'read': true}).eq('id', id);
+          .update({'is_read': true}).eq('id', id);
       ref.invalidate(notificationsProvider);
     } catch (_) {
       return;

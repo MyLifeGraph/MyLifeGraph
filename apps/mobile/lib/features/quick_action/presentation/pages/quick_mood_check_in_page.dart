@@ -267,7 +267,7 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
     } catch (_) {
       if (mounted) {
         _showMessage(
-          'Could not save DailyLog. Supabase rejected the main row.',
+          'Could not save daily log. Supabase rejected the main row.',
         );
       }
     } finally {

@@ -14,21 +14,21 @@ class DashboardSupabaseDataSource {
     final logs = await _client
         .from(SupabaseTables.dailyLogs)
         .select()
-        .eq('userId', userId)
-        .order('date', ascending: false)
+        .eq('user_id', userId)
+        .order('entry_date', ascending: false)
         .limit(7);
     final tasks = await _client
         .from(SupabaseTables.tasks)
         .select()
-        .eq('userId', userId)
+        .eq('user_id', userId)
         .order('deadline', ascending: true)
         .limit(8);
     final scheduleItems = await _client
         .from(SupabaseTables.scheduleItems)
         .select()
-        .eq('userId', userId)
+        .eq('user_id', userId)
         .order('weekday', ascending: true)
-        .order('startsAt', ascending: true);
+        .order('starts_at', ascending: true);
 
     final dailyLogs = List<Map<String, dynamic>>.from(logs as List);
     final taskRows = List<Map<String, dynamic>>.from(tasks as List);
@@ -40,7 +40,7 @@ class DashboardSupabaseDataSource {
     return DashboardSnapshot(
       optimizationScore: _activityScore(latest).clamp(0, 100),
       streakDays: _streakDays(dailyLogs),
-      focusMinutesToday: (latest['focusMinutes'] as num?)?.round() ?? 0,
+      focusMinutesToday: (latest['focus_minutes'] as num?)?.round() ?? 0,
       recoveryScore: _recoveryScore(latest).clamp(0, 100),
       energyTrend: trend.isEmpty ? [0, 0, 0, 0, 0, 0, 0] : trend,
       todayPlan: taskRows.map(_taskToPlanItem).toList(),
@@ -52,10 +52,10 @@ class DashboardSupabaseDataSource {
     if (row.isEmpty) {
       return 0;
     }
-    final activity = (row['activityLevel'] as num?)?.toDouble() ?? 0;
-    final energy = (row['energyLevel'] as num?)?.toDouble() ?? 0;
-    final sleep = (row['sleepHours'] as num?)?.toDouble() ?? 0;
-    final focus = (row['focusMinutes'] as num?)?.toDouble() ?? 0;
+    final activity = (row['activity_level'] as num?)?.toDouble() ?? 0;
+    final energy = (row['energy_level'] as num?)?.toDouble() ?? 0;
+    final sleep = (row['sleep_hours'] as num?)?.toDouble() ?? 0;
+    final focus = (row['focus_minutes'] as num?)?.toDouble() ?? 0;
     final score =
         activity * 2.4 + energy * 2.4 + sleep * 7 + (focus / 120 * 20);
     return score.round().clamp(0, 100);
@@ -65,8 +65,8 @@ class DashboardSupabaseDataSource {
     if (row.isEmpty) {
       return 0;
     }
-    final sleep = (row['sleepHours'] as num?)?.toDouble() ?? 0;
-    final energy = (row['energyLevel'] as num?)?.toDouble() ?? 0;
+    final sleep = (row['sleep_hours'] as num?)?.toDouble() ?? 0;
+    final energy = (row['energy_level'] as num?)?.toDouble() ?? 0;
     return ((sleep / 8 * 70) + (energy / 10 * 30)).round();
   }
 
@@ -74,7 +74,7 @@ class DashboardSupabaseDataSource {
     var streak = 0;
     var expected = DateTime.now();
     final dates = rows
-        .map((row) => DateTime.tryParse('${row['date']}'))
+        .map((row) => DateTime.tryParse('${row['entry_date']}'))
         .whereType<DateTime>()
         .map((date) => DateTime(date.year, date.month, date.day))
         .toSet();
@@ -89,7 +89,7 @@ class DashboardSupabaseDataSource {
 
   PlanItem _taskToPlanItem(Map<String, dynamic> row) {
     final deadline = DateTime.tryParse('${row['deadline'] ?? ''}');
-    final status = '${row['status']}'.toUpperCase();
+    final status = '${row['status']}'.toLowerCase();
     final priority = '${row['priority']}'.toLowerCase();
     return PlanItem(
       id: row['id'] as String,
@@ -97,8 +97,8 @@ class DashboardSupabaseDataSource {
       time: deadline == null
           ? priority
           : '${deadline.month}/${deadline.day}/${deadline.year}',
-      type: priority == 'high' ? 'focus' : 'task',
-      isCompleted: status == 'DONE' || status == 'COMPLETED',
+      type: priority == 'high' || priority == 'critical' ? 'focus' : 'task',
+      isCompleted: status == 'done' || status == 'completed',
     );
   }
 
@@ -119,8 +119,8 @@ class DashboardSupabaseDataSource {
           .where((row) {
             final key = [
               row['title'],
-              row['startsAt'],
-              row['endsAt'],
+              row['starts_at'],
+              row['ends_at'],
               row['location'],
             ].join('|');
             return seen.add(key);
@@ -140,8 +140,8 @@ class DashboardSupabaseDataSource {
   }
 
   ScheduleEvent _scheduleEventFromRow(Map<String, dynamic> row) {
-    final startsAt = '${row['startsAt'] ?? ''}'.trim();
-    final endsAt = '${row['endsAt'] ?? ''}'.trim();
+    final startsAt = '${row['starts_at'] ?? ''}'.trim();
+    final endsAt = '${row['ends_at'] ?? ''}'.trim();
     final time =
         startsAt.isEmpty || endsAt.isEmpty ? '--:--' : '$startsAt-$endsAt';
     return ScheduleEvent(

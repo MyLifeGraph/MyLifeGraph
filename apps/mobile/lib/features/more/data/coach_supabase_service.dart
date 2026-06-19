@@ -13,14 +13,14 @@ class CoachSupabaseService {
     final rows = await _client
         .from(SupabaseTables.coachMessages)
         .select()
-        .eq('userId', userId)
-        .order('createdAt')
+        .eq('user_id', userId)
+        .order('created_at')
         .limit(40);
 
     return List<Map<String, dynamic>>.from(rows as List).map((row) {
       return CoachChatMessage(
         text: row['content'] as String,
-        isUser: '${row['role']}'.toUpperCase() == 'USER',
+        isUser: '${row['role']}'.toLowerCase() == 'user',
       );
     }).toList();
   }
@@ -31,11 +31,10 @@ class CoachSupabaseService {
   }) async {
     final userId = await AppUserResolver(_client).resolveUserId();
     await _client.from(SupabaseTables.coachMessages).insert({
-      'id': 'coach_${DateTime.now().microsecondsSinceEpoch}',
-      'userId': userId,
-      'role': isUser ? 'USER' : 'ASSISTANT',
+      'user_id': userId,
+      'role': isUser ? 'user' : 'assistant',
       'content': text,
-      'createdAt': DateTime.now().toIso8601String(),
+      'created_at': DateTime.now().toIso8601String(),
     });
   }
 }
