@@ -1,0 +1,15 @@
+LOW_RECOVERY_SLEEP_RULE_ID = "low_recovery_sleep"
+HIGH_STRESS_LOW_ENERGY_RULE_ID = "high_stress_low_energy"
+FOCUS_PROTECTION_RULE_ID = "focus_protection"
+MOVEMENT_NUDGE_RULE_ID = "movement_nudge"
+PLANNING_RESET_RULE_ID = "planning_reset"
+
+DETERMINISTIC_V1_RULE_IDS = frozenset(
+    {
+        LOW_RECOVERY_SLEEP_RULE_ID,
+        HIGH_STRESS_LOW_ENERGY_RULE_ID,
+        FOCUS_PROTECTION_RULE_ID,
+        MOVEMENT_NUDGE_RULE_ID,
+        PLANNING_RESET_RULE_ID,
+    },
+)

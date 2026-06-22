@@ -223,6 +223,17 @@ def test_verifier_rejects_missing_evidence() -> None:
     assert "missing_evidence" in result.errors
 
 
+def test_verifier_rejects_invalid_rule_id() -> None:
+    result = RecommendationVerifier().verify(
+        valid_candidate(rule_id="future_rule"),
+        expected_user_id="user-test-123",
+        current_period_key=PERIOD_KEY,
+    )
+
+    assert not result.accepted
+    assert "invalid_rule_id" in result.errors
+
+
 def test_verifier_rejects_invalid_category() -> None:
     result = RecommendationVerifier().verify(
         valid_candidate(category="nutrition"),
@@ -243,6 +254,61 @@ def test_verifier_rejects_confidence_outside_zero_to_one() -> None:
 
     assert not result.accepted
     assert "invalid_confidence" in result.errors
+
+
+def test_verifier_rejects_fingerprint_mismatch() -> None:
+    result = RecommendationVerifier().verify(
+        valid_candidate(fingerprint="deterministic-v1:wrong:2026-W26:bad"),
+        expected_user_id="user-test-123",
+        current_period_key=PERIOD_KEY,
+    )
+
+    assert not result.accepted
+    assert "fingerprint_mismatch" in result.errors
+
+
+def test_verifier_rejects_missing_fingerprint() -> None:
+    result = RecommendationVerifier().verify(
+        valid_candidate(fingerprint=None),
+        expected_user_id="user-test-123",
+        current_period_key=PERIOD_KEY,
+    )
+
+    assert not result.accepted
+    assert "missing_fingerprint" in result.errors
+
+
+def test_verifier_rejects_missing_title() -> None:
+    result = RecommendationVerifier().verify(
+        valid_candidate(title=" "),
+        expected_user_id="user-test-123",
+        current_period_key=PERIOD_KEY,
+    )
+
+    assert not result.accepted
+    assert "missing_title" in result.errors
+
+
+def test_verifier_rejects_missing_reason() -> None:
+    result = RecommendationVerifier().verify(
+        valid_candidate(reason=" "),
+        expected_user_id="user-test-123",
+        current_period_key=PERIOD_KEY,
+    )
+
+    assert not result.accepted
+    assert "missing_reason" in result.errors
+
+
+def test_verifier_rejects_missing_action_label() -> None:
+    result = RecommendationVerifier().verify(
+        valid_candidate(action_label=" "),
+        expected_user_id="user-test-123",
+        current_period_key=PERIOD_KEY,
+    )
+
+    assert not result.accepted
+    assert "missing_action_label" in result.errors
 
 
 def test_verifier_rejects_duplicate_active_fingerprint() -> None:

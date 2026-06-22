@@ -12,6 +12,13 @@ from app.models.recommendations import (
 )
 from app.models.user_context import EvidenceRef, SignalSummary
 from app.services.recommendation_fingerprint import build_recommendation_fingerprint
+from app.services.recommendation_rules import (
+    FOCUS_PROTECTION_RULE_ID,
+    HIGH_STRESS_LOW_ENERGY_RULE_ID,
+    LOW_RECOVERY_SLEEP_RULE_ID,
+    MOVEMENT_NUDGE_RULE_ID,
+    PLANNING_RESET_RULE_ID,
+)
 
 
 def current_period_key(today: date | None = None) -> str:
@@ -133,7 +140,7 @@ class RecommendationEngine:
         )
         return self._candidate(
             summary=summary,
-            rule_id="low_recovery_sleep",
+            rule_id=LOW_RECOVERY_SLEEP_RULE_ID,
             title="Protect a sleep recovery window",
             reason="Recent sleep logs show repeated short nights.",
             action_label="Plan recovery time",
@@ -187,7 +194,7 @@ class RecommendationEngine:
         )
         return self._candidate(
             summary=summary,
-            rule_id="high_stress_low_energy",
+            rule_id=HIGH_STRESS_LOW_ENERGY_RULE_ID,
             title="Lower the load before adding more",
             reason="Recent check-ins show stress running high while energy is low.",
             action_label="Choose one recovery action",
@@ -244,7 +251,7 @@ class RecommendationEngine:
         priority = "high" if workload_pressure >= 0.8 else "medium"
         return self._candidate(
             summary=summary,
-            rule_id="focus_protection",
+            rule_id=FOCUS_PROTECTION_RULE_ID,
             title="Protect a focus block",
             reason="Recent signals suggest focused time is getting squeezed.",
             action_label="Schedule focus block",
@@ -298,7 +305,7 @@ class RecommendationEngine:
         )
         return self._candidate(
             summary=summary,
-            rule_id="movement_nudge",
+            rule_id=MOVEMENT_NUDGE_RULE_ID,
             title="Add a small movement reset",
             reason="Recent activity signals are below your usual baseline.",
             action_label="Take a short walk",
@@ -356,7 +363,7 @@ class RecommendationEngine:
         )
         return self._candidate(
             summary=summary,
-            rule_id="planning_reset",
+            rule_id=PLANNING_RESET_RULE_ID,
             title="Reset the plan for this week",
             reason=(
                 "Your current workload signals would benefit from a short "

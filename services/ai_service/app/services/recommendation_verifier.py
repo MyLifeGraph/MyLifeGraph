@@ -4,6 +4,8 @@ from app.models.recommendation_candidates import (
     RecommendationCandidate,
     VerifiedRecommendation,
 )
+from app.services.recommendation_fingerprint import build_recommendation_fingerprint
+from app.services.recommendation_rules import DETERMINISTIC_V1_RULE_IDS
 
 
 ALLOWED_CATEGORIES = {"focus", "recovery", "movement", "planning"}
@@ -40,6 +42,8 @@ class RecommendationVerifier:
             errors.append("stale_period_key")
         if not candidate.rule_id.strip():
             errors.append("missing_rule_id")
+        elif candidate.rule_id not in DETERMINISTIC_V1_RULE_IDS:
+            errors.append("invalid_rule_id")
         if candidate.category not in ALLOWED_CATEGORIES:
             errors.append("invalid_category")
         if candidate.priority not in ALLOWED_PRIORITIES:
@@ -56,6 +60,15 @@ class RecommendationVerifier:
             errors.append("missing_action_label")
         if not candidate.fingerprint:
             errors.append("missing_fingerprint")
+        elif candidate.evidence_refs and candidate.rule_id.strip():
+            expected_fingerprint = build_recommendation_fingerprint(
+                rule_id=candidate.rule_id,
+                period_key=candidate.period_key,
+                evidence_refs=candidate.evidence_refs,
+                source_engine_version=candidate.source_engine_version,
+            )
+            if candidate.fingerprint != expected_fingerprint:
+                errors.append("fingerprint_mismatch")
         if candidate.model is not None or candidate.model_metadata:
             errors.append("unsupported_model_metadata")
         if (
