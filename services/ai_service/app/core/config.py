@@ -22,6 +22,10 @@ class Settings(BaseSettings):
         default="",
         alias="SUPABASE_SERVICE_ROLE_KEY",
     )
+    supabase_timeout_seconds: float = Field(
+        default=10,
+        alias="SUPABASE_TIMEOUT_SECONDS",
+    )
 
     @property
     def allowed_origins(self) -> list[str]:

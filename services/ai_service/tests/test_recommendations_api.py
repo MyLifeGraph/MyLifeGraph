@@ -15,9 +15,18 @@ class FakeTokenVerifier:
         return None
 
 
+class FakeRecommendationEngine:
+    async def list_recommendations(self, user_id: str):
+        return expected_empty_response()
+
+    async def generate_recommendations(self, user_id: str, request):
+        return expected_empty_response()
+
+
 def make_app():
     app = create_app()
     app.state.token_verifier = FakeTokenVerifier()
+    app.state.recommendation_engine = FakeRecommendationEngine()
     return app
 
 

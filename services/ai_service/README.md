@@ -8,8 +8,12 @@ FastAPI service boundary for recommendation and future ML workflows.
 - `/v1/health` returns a simple health response.
 - `/v1/recommendations` and `/v1/recommendations/generate` expose the
   authenticated backend v1 recommendation contract.
-- Supabase settings are defined but not yet used for real data access or JWT
-  verification.
+- With backend Supabase settings configured, bearer tokens are verified through
+  Supabase Auth, recent user-scoped app data is loaded from canonical
+  snake_case tables, deterministic recommendations are verified, and accepted
+  results are persisted to `recommendations`.
+- The service does not call LLMs, OpenRouter, local models, vector search, or
+  background jobs.
 
 ## Setup
 
@@ -69,6 +73,12 @@ API_PREFIX=/v1
 ALLOWED_ORIGINS=http://127.0.0.1:7357,http://localhost:7357
 SUPABASE_URL=
 SUPABASE_SERVICE_ROLE_KEY=
+SUPABASE_TIMEOUT_SECONDS=10
 ```
 
-Do not expose the Supabase service-role key to the Flutter app.
+Do not expose the Supabase service-role key to the Flutter app. It belongs only
+in the backend service environment.
+
+JWT verification is isolated in the FastAPI auth dependency. Tests inject fake
+verifiers and repositories, so production or remote Supabase credentials are not
+required for the unit test suite.
