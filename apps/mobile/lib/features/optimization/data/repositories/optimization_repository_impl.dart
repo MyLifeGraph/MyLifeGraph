@@ -1,22 +1,29 @@
+import 'dart:async';
+
 import '../../../../core/config/app_config.dart';
-import '../../../../core/network/api_client.dart';
 import '../../domain/entities/recommendation.dart';
 import '../../domain/entities/skillset_profile.dart';
 import '../../domain/repositories/optimization_repository.dart';
 import '../datasources/optimization_mock_data_source.dart';
+import '../datasources/recommendations_api_data_source.dart';
+
+typedef AccessTokenProvider = FutureOr<String?> Function();
 
 class OptimizationRepositoryImpl implements OptimizationRepository {
   const OptimizationRepositoryImpl({
     required AppConfig config,
     required OptimizationMockDataSource mockDataSource,
-    required ApiClient apiClient,
+    required RecommendationsApiDataSource recommendationsApiDataSource,
+    required AccessTokenProvider accessTokenProvider,
   })  : _config = config,
         _mockDataSource = mockDataSource,
-        _apiClient = apiClient;
+        _recommendationsApiDataSource = recommendationsApiDataSource,
+        _accessTokenProvider = accessTokenProvider;
 
   final AppConfig _config;
   final OptimizationMockDataSource _mockDataSource;
-  final ApiClient _apiClient;
+  final RecommendationsApiDataSource _recommendationsApiDataSource;
+  final AccessTokenProvider _accessTokenProvider;
 
   @override
   Future<SkillsetProfile> getSkillsetProfile() {
@@ -31,11 +38,21 @@ class OptimizationRepositoryImpl implements OptimizationRepository {
 
   @override
   Future<List<Recommendation>> getRecommendations() async {
-    if (_config.useMockData) {
+    if (_config.useMockData || !_config.isSupabaseConfigured) {
       return _mockDataSource.getRecommendations();
     }
 
-    await _apiClient.postJson('/v1/recommendations/preview');
-    return _mockDataSource.getRecommendations();
+    final accessToken = await _accessTokenProvider();
+    if (accessToken == null || accessToken.trim().isEmpty) {
+      return _mockDataSource.getRecommendations();
+    }
+
+    try {
+      return await _recommendationsApiDataSource.getRecommendations(
+        accessToken: accessToken,
+      );
+    } catch (_) {
+      return _mockDataSource.getRecommendations();
+    }
   }
 }

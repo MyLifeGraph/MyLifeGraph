@@ -26,9 +26,15 @@ class ApiClient {
 
   final Dio _dio;
 
-  Future<Map<String, dynamic>> getJson(String path) async {
+  Future<Map<String, dynamic>> getJson(
+    String path, {
+    Map<String, String>? headers,
+  }) async {
     try {
-      final response = await _dio.get<Map<String, dynamic>>(path);
+      final response = await _dio.get<Map<String, dynamic>>(
+        path,
+        options: headers == null ? null : Options(headers: headers),
+      );
       return response.data ?? <String, dynamic>{};
     } on DioException catch (error) {
       throw AppException('Network request failed', cause: error);
@@ -38,11 +44,13 @@ class ApiClient {
   Future<Map<String, dynamic>> postJson(
     String path, {
     Map<String, dynamic>? body,
+    Map<String, String>? headers,
   }) async {
     try {
       final response = await _dio.post<Map<String, dynamic>>(
         path,
         data: body ?? <String, dynamic>{},
+        options: headers == null ? null : Options(headers: headers),
       );
       return response.data ?? <String, dynamic>{};
     } on DioException catch (error) {

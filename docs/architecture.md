@@ -110,6 +110,14 @@ Current responsibilities:
   `tasks`, run the deterministic v1 recommendation engine, and persist verified
   recommendations to `recommendations`.
 
+Flutter reads persisted recommendations through `GET /v1/recommendations` when
+`USE_MOCK_DATA=false`, Supabase is configured, and a real Supabase session
+access token is available. The app attaches that token as a bearer token for the
+FastAPI request. Guest mode, mock mode, missing Supabase configuration, missing
+sessions, and network failures continue to use the local mock recommendation
+fallback. Flutter does not automatically call
+`POST /v1/recommendations/generate`.
+
 Current limitation: JWT verification is isolated behind the FastAPI auth
 dependency and currently calls Supabase Auth's user endpoint with the configured
 backend Supabase credentials. The repository still does not contain production
