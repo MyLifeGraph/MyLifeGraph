@@ -21,7 +21,7 @@ class RecommendationEngine:
             needs_generation=True,
             generated_at=None,
             period_key=current_period_key(),
-            stale_reason="no_current_recommendations",
+            stale_reason="missing",
         )
 
     async def generate_recommendations(
@@ -30,11 +30,9 @@ class RecommendationEngine:
         request: RecommendationGenerateRequest,
     ) -> RecommendationGenerateResponse:
         return RecommendationGenerateResponse(
-            generated=0,
-            reused=0,
             items=[],
             needs_generation=True,
             generated_at=None,
             period_key=current_period_key(),
-            stale_reason="not_implemented_in_pr1",
+            stale_reason="missing",
         )

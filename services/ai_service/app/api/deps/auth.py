@@ -1,6 +1,4 @@
-from typing import Protocol
-
-from fastapi import Depends, Header, HTTPException, status
+from fastapi import Header, HTTPException, Request, status
 from pydantic import BaseModel
 
 
@@ -8,8 +6,9 @@ class Principal(BaseModel):
     user_id: str
 
 
-class TokenVerifier(Protocol):
-    async def verify(self, token: str) -> Principal | None: ...
+class TokenVerifier:
+    async def verify(self, token: str) -> Principal | None:
+        raise NotImplementedError
 
 
 class UnconfiguredTokenVerifier:
@@ -43,10 +42,11 @@ def extract_bearer_token(authorization: str | None) -> str:
 
 
 async def get_current_principal(
+    request: Request,
     authorization: str | None = Header(default=None, alias="Authorization"),
-    verifier: TokenVerifier = Depends(get_token_verifier),
 ) -> Principal:
     token = extract_bearer_token(authorization)
+    verifier = getattr(request.app.state, "token_verifier", get_token_verifier())
     principal = await verifier.verify(token)
     if principal is None:
         raise _unauthorized()

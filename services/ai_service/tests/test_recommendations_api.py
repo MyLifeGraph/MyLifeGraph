@@ -1,120 +1,135 @@
 import asyncio
 from datetime import date
 
-import pytest
-from fastapi import HTTPException
+import httpx
 
-from app.api.deps.auth import Principal, extract_bearer_token
-from app.api.routes.recommendations import (
-    generate_recommendations,
-    list_recommendations,
-)
+from app.api.deps.auth import Principal
 from app.main import create_app
-from app.models.recommendations import RecommendationGenerateRequest
-from app.services.recommendation_engine import (
-    RecommendationEngine,
-    current_period_key,
-)
+from app.services.recommendation_engine import current_period_key
 
 
-def collect_route_methods(app) -> set[tuple[str, tuple[str, ...]]]:
-    route_methods: set[tuple[str, tuple[str, ...]]] = set()
-
-    for route in app.routes:
-        path = getattr(route, "path", None)
-        methods = getattr(route, "methods", None)
-        if path and methods:
-            route_methods.add((path, tuple(sorted(methods))))
-            continue
-
-        include_context = getattr(route, "include_context", None)
-        original_router = getattr(route, "original_router", None)
-        if include_context is None or original_router is None:
-            continue
-
-        prefix = include_context.prefix
-        for nested_route in original_router.routes:
-            nested_path = getattr(nested_route, "path", None)
-            nested_methods = getattr(nested_route, "methods", None)
-            if nested_path and nested_methods:
-                route_methods.add(
-                    (f"{prefix}{nested_path}", tuple(sorted(nested_methods))),
-                )
-
-    return route_methods
+class FakeTokenVerifier:
+    async def verify(self, token: str) -> Principal | None:
+        if token == "valid-test-token":
+            return Principal(user_id="user-test-123")
+        return None
 
 
-def fake_principal() -> Principal:
-    return Principal(user_id="user-test-123")
+def make_app():
+    app = create_app()
+    app.state.token_verifier = FakeTokenVerifier()
+    return app
 
 
-def test_recommendation_routes_are_registered() -> None:
-    route_methods = collect_route_methods(create_app())
+async def request(
+    method: str,
+    url: str,
+    *,
+    headers: dict[str, str] | None = None,
+    json: dict[str, object] | None = None,
+) -> httpx.Response:
+    transport = httpx.ASGITransport(app=make_app())
+    async with httpx.AsyncClient(
+        transport=transport,
+        base_url="http://testserver",
+    ) as client:
+        return await client.request(method, url, headers=headers, json=json)
 
-    assert ("/v1/recommendations", ("GET",)) in route_methods
-    assert ("/v1/recommendations/generate", ("POST",)) in route_methods
+
+def expected_empty_response() -> dict[str, object]:
+    return {
+        "items": [],
+        "needs_generation": True,
+        "generated_at": None,
+        "period_key": current_period_key(date.today()),
+        "stale_reason": "missing",
+    }
 
 
 def test_get_recommendations_without_authorization_returns_401() -> None:
-    with pytest.raises(HTTPException) as exc_info:
-        extract_bearer_token(None)
+    response = asyncio.run(request("GET", "/v1/recommendations"))
 
-    assert exc_info.value.status_code == 401
-    assert exc_info.value.headers == {"WWW-Authenticate": "Bearer"}
+    assert response.status_code == 401
+    assert response.headers["www-authenticate"] == "Bearer"
 
 
 def test_generate_recommendations_without_authorization_returns_401() -> None:
-    with pytest.raises(HTTPException) as exc_info:
-        extract_bearer_token("")
+    response = asyncio.run(request("POST", "/v1/recommendations/generate", json={}))
 
-    assert exc_info.value.status_code == 401
-    assert exc_info.value.headers == {"WWW-Authenticate": "Bearer"}
+    assert response.status_code == 401
+    assert response.headers["www-authenticate"] == "Bearer"
+
+
+def test_malformed_authorization_returns_401() -> None:
+    response = asyncio.run(
+        request(
+            "GET",
+            "/v1/recommendations",
+            headers={"Authorization": "Token valid-test-token"},
+        ),
+    )
+
+    assert response.status_code == 401
+    assert response.headers["www-authenticate"] == "Bearer"
+
+
+def test_invalid_bearer_token_returns_401() -> None:
+    response = asyncio.run(
+        request(
+            "GET",
+            "/v1/recommendations",
+            headers={"Authorization": "Bearer invalid-test-token"},
+        ),
+    )
+
+    assert response.status_code == 401
+    assert response.headers["www-authenticate"] == "Bearer"
 
 
 def test_get_recommendations_with_fake_principal_matches_contract() -> None:
     response = asyncio.run(
-        list_recommendations(
-            principal=fake_principal(),
-            engine=RecommendationEngine(),
+        request(
+            "GET",
+            "/v1/recommendations",
+            headers={"Authorization": "Bearer valid-test-token"},
         ),
     )
 
-    assert response.model_dump(mode="json") == {
-        "items": [],
-        "needs_generation": True,
-        "generated_at": None,
-        "period_key": current_period_key(date.today()),
-        "stale_reason": "no_current_recommendations",
-    }
+    assert response.status_code == 200
+    assert response.json() == expected_empty_response()
 
 
 def test_generate_recommendations_with_fake_principal_matches_contract() -> None:
-    with pytest.raises(ValueError):
-        RecommendationGenerateRequest(
-            window_days=28,
-            force=False,
-            allow_llm_wording=False,
-            user_id="attacker-controlled",
-        )
-
     response = asyncio.run(
-        generate_recommendations(
-            request=RecommendationGenerateRequest(
-                window_days=28,
-                force=False,
-                allow_llm_wording=False,
-            ),
-            principal=fake_principal(),
-            engine=RecommendationEngine(),
+        request(
+            "POST",
+            "/v1/recommendations/generate",
+            headers={"Authorization": "Bearer valid-test-token"},
+            json={
+                "window_days": 28,
+                "force": False,
+                "allow_llm_wording": False,
+            },
         ),
     )
 
-    assert response.model_dump(mode="json") == {
-        "generated": 0,
-        "reused": 0,
-        "items": [],
-        "needs_generation": True,
-        "generated_at": None,
-        "period_key": current_period_key(date.today()),
-        "stale_reason": "not_implemented_in_pr1",
-    }
+    assert response.status_code == 200
+    assert response.json() == expected_empty_response()
+
+
+def test_generate_recommendations_rejects_request_user_id() -> None:
+    response = asyncio.run(
+        request(
+            "POST",
+            "/v1/recommendations/generate",
+            headers={"Authorization": "Bearer valid-test-token"},
+            json={
+                "window_days": 28,
+                "force": False,
+                "allow_llm_wording": False,
+                "user_id": "attacker-controlled",
+            },
+        ),
+    )
+
+    assert response.status_code == 422

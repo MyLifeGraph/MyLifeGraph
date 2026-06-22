@@ -10,8 +10,6 @@ RecommendationStaleReason = Literal[
     "missing",
     "older_than_7_days",
     "period_mismatch",
-    "no_current_recommendations",
-    "not_implemented_in_pr1",
 ]
 
 
@@ -54,11 +52,4 @@ class RecommendationGenerateRequest(BaseModel):
     allow_llm_wording: bool = False
 
 
-class RecommendationGenerateResponse(BaseModel):
-    generated: int
-    reused: int
-    items: list[RecommendationItem] = Field(default_factory=list)
-    needs_generation: bool
-    generated_at: datetime | None
-    period_key: str
-    stale_reason: RecommendationStaleReason | None
+RecommendationGenerateResponse = RecommendationListResponse

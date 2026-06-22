@@ -11,7 +11,7 @@ from app.services.recommendation_engine import RecommendationEngine
 router = APIRouter(prefix="/recommendations", tags=["recommendations"])
 
 
-def get_recommendation_engine() -> RecommendationEngine:
+async def get_recommendation_engine() -> RecommendationEngine:
     return RecommendationEngine()
 
 
