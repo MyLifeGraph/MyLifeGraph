@@ -104,10 +104,17 @@ Current responsibilities:
 - Serve authenticated recommendation contract endpoints at
   `/v1/recommendations` and `/v1/recommendations/generate`.
 - Keep recommendation generation behind a service boundary.
+- Verify bearer tokens through an isolated auth verifier when Supabase backend
+  settings are configured.
+- Load recent user-scoped data from `daily_logs`, `behavioral_events`, and
+  `tasks`, run the deterministic v1 recommendation engine, and persist verified
+  recommendations to `recommendations`.
 
-Current limitation: recommendation endpoints expose the backend v1 API/auth
-contract only. Real Supabase JWT verification, persistence, deterministic
-scoring, feature extraction, and ranking are planned follow-up work.
+Current limitation: JWT verification is isolated behind the FastAPI auth
+dependency and currently calls Supabase Auth's user endpoint with the configured
+backend Supabase credentials. The repository still does not contain production
+credentials, and the live remote database must be inspected directly before
+making claims about deployed data.
 
 ## Security Posture
 
@@ -115,13 +122,15 @@ scoring, feature extraction, and ranking are planned follow-up work.
 - User-owned tables scope access by `auth.uid()` or admin role helpers.
 - Supabase service-role secrets are not used by the mobile app.
 - Mobile config uses Dart defines so credentials are not hard-coded in source.
-- Production AI endpoints should validate Supabase JWTs before reading user
-  data or invoking privileged backend workflows.
+- Production AI endpoints validate Supabase bearer tokens before reading user
+  data or invoking privileged backend workflows when backend Supabase settings
+  are configured.
 
 ## Known Gaps
 
 - The remote Production project may still contain legacy CamelCase tables until
   the canonical schema migration has been applied and verified.
 - The repository does not contain real Supabase credentials.
-- The FastAPI service is not yet connected to real Supabase data or ML models.
+- The FastAPI service is connected to Supabase-backed deterministic
+  recommendations, but no LLM/model provider is connected.
 - Mock mode is the reliable path for local product exploration today.

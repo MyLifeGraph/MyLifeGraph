@@ -119,7 +119,8 @@ curl http://localhost:8000/v1/health
 ```
 
 Recommendation contract endpoints require an authenticated bearer token. PR1
-defines the contract, but real Supabase token verification is not wired yet:
+defined the contract; backend Supabase settings are now required for real
+token verification and recommendation persistence:
 
 ```bash
 curl http://localhost:8000/v1/recommendations \
@@ -132,6 +133,18 @@ curl -X POST http://localhost:8000/v1/recommendations/generate \
   -H 'Content-Type: application/json' \
   -d '{"window_days":28,"force":false,"allow_llm_wording":false}'
 ```
+
+Backend-only Supabase configuration for the AI service:
+
+```env
+SUPABASE_URL=http://127.0.0.1:54321
+SUPABASE_SERVICE_ROLE_KEY=<local service-role key from supabase status>
+SUPABASE_TIMEOUT_SECONDS=10
+```
+
+Keep `SUPABASE_SERVICE_ROLE_KEY` only in the FastAPI service environment. Do
+not add it to Flutter `.env`, docs examples with real values, browser runtime
+configuration, or committed files.
 
 ## Supabase
 

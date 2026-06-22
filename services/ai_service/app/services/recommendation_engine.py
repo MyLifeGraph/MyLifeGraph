@@ -1,5 +1,6 @@
+from collections.abc import Callable
 from dataclasses import replace
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 
 from app.models.recommendation_candidates import (
     DeterministicScores,
@@ -8,9 +9,14 @@ from app.models.recommendation_candidates import (
 from app.models.recommendations import (
     RecommendationGenerateRequest,
     RecommendationGenerateResponse,
+    RecommendationItem,
     RecommendationListResponse,
 )
 from app.models.user_context import EvidenceRef, SignalSummary
+from app.repositories.recommendation_repository import (
+    RecommendationRepository,
+)
+from app.repositories.user_context_repository import UserContextRepository
 from app.services.recommendation_fingerprint import build_recommendation_fingerprint
 from app.services.recommendation_rules import (
     FOCUS_PROTECTION_RULE_ID,
@@ -19,6 +25,7 @@ from app.services.recommendation_rules import (
     MOVEMENT_NUDGE_RULE_ID,
     PLANNING_RESET_RULE_ID,
 )
+from app.services.recommendation_verifier import RecommendationVerifier
 
 
 def current_period_key(today: date | None = None) -> str:
@@ -29,13 +36,31 @@ def current_period_key(today: date | None = None) -> str:
 class RecommendationEngine:
     """Service boundary for recommendation reads and deterministic v1 candidates."""
 
+    def __init__(
+        self,
+        *,
+        user_context_repository: UserContextRepository | None = None,
+        recommendation_repository: RecommendationRepository | None = None,
+        verifier: RecommendationVerifier | None = None,
+        today_provider: Callable[[], date] | None = None,
+        now_provider: Callable[[], datetime] | None = None,
+    ) -> None:
+        self._user_context_repository = user_context_repository
+        self._recommendation_repository = recommendation_repository
+        self._verifier = verifier or RecommendationVerifier()
+        self._today_provider = today_provider or date.today
+        self._now_provider = now_provider or _utc_now
+
     async def list_recommendations(self, user_id: str) -> RecommendationListResponse:
-        return RecommendationListResponse(
-            items=[],
-            needs_generation=True,
-            generated_at=None,
-            period_key=current_period_key(),
-            stale_reason="missing",
+        if self._recommendation_repository is None:
+            raise RuntimeError("Recommendation repository is not configured.")
+        items = await self._recommendation_repository.list_active_recommendations(
+            user_id=user_id,
+        )
+        return _recommendation_response(
+            items=items,
+            current_period_key=current_period_key(self._today_provider()),
+            now=self._now_provider(),
         )
 
     async def generate_recommendations(
@@ -43,12 +68,51 @@ class RecommendationEngine:
         user_id: str,
         request: RecommendationGenerateRequest,
     ) -> RecommendationGenerateResponse:
-        return RecommendationGenerateResponse(
-            items=[],
-            needs_generation=True,
-            generated_at=None,
-            period_key=current_period_key(),
-            stale_reason="missing",
+        if (
+            self._user_context_repository is None
+            or self._recommendation_repository is None
+        ):
+            raise RuntimeError("Recommendation repositories are not configured.")
+
+        today = self._today_provider()
+        period_key = current_period_key(today)
+        fingerprints = (
+            await self._recommendation_repository.list_active_fingerprints_for_user(
+                user_id=user_id,
+            )
+        )
+        summary = await self._user_context_repository.load_recent_context(
+            user_id=user_id,
+            window_days=request.window_days,
+            today=today,
+        )
+        verified = []
+        for candidate in self.generate_candidates(summary):
+            result = self._verifier.verify(
+                candidate,
+                expected_user_id=user_id,
+                current_period_key=period_key,
+                active_fingerprints=fingerprints,
+            )
+            if result.accepted and result.recommendation is not None:
+                verified.append(result.recommendation)
+                fingerprints.add(result.recommendation.fingerprint)
+
+        if verified:
+            await self._recommendation_repository.persist_recommendations(
+                user_id=user_id,
+                recommendations=verified,
+            )
+
+        current_items = (
+            await self._recommendation_repository.list_active_recommendations(
+                user_id=user_id,
+            )
+        )
+        return _recommendation_response(
+            items=current_items,
+            current_period_key=period_key,
+            now=self._now_provider(),
         )
 
     def generate_candidates(
@@ -434,3 +498,51 @@ def _task_recency(summary: SignalSummary, tasks) -> float:
     newest_due_date = max(task.due_date for task in task_list if task.due_date)
     days_old = max((summary.today - newest_due_date).days, 0)
     return _clamp(1 - days_old / 7)
+
+
+def _recommendation_response(
+    *,
+    items: list[RecommendationItem],
+    current_period_key: str,
+    now: datetime,
+) -> RecommendationListResponse:
+    newest_generated_at = max((item.generated_at for item in items), default=None)
+    stale_reason = _stale_reason(
+        items=items,
+        generated_at=newest_generated_at,
+        current_period_key=current_period_key,
+        now=now,
+    )
+    return RecommendationListResponse(
+        items=items,
+        needs_generation=stale_reason is not None,
+        generated_at=newest_generated_at,
+        period_key=current_period_key,
+        stale_reason=stale_reason,
+    )
+
+
+def _stale_reason(
+    *,
+    items: list[RecommendationItem],
+    generated_at: datetime | None,
+    current_period_key: str,
+    now: datetime,
+) -> str | None:
+    if not items or generated_at is None:
+        return "missing"
+    if any(item.metadata.period_key != current_period_key for item in items):
+        return "period_mismatch"
+    if _ensure_aware(now) - _ensure_aware(generated_at) > timedelta(days=7):
+        return "older_than_7_days"
+    return None
+
+
+def _utc_now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def _ensure_aware(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value

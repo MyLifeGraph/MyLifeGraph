@@ -1,6 +1,9 @@
 from fastapi import Header, HTTPException, Request, status
 from pydantic import BaseModel
 
+from app.clients.supabase import SupabaseConfigurationError, SupabaseRestClient
+from app.core.config import settings
+
 
 class Principal(BaseModel):
     user_id: str
@@ -18,7 +21,27 @@ class UnconfiguredTokenVerifier:
         return None
 
 
+class SupabaseTokenVerifier:
+    """Verifies bearer tokens through Supabase Auth's user endpoint."""
+
+    def __init__(self, client: SupabaseRestClient) -> None:
+        self._client = client
+
+    async def verify(self, token: str) -> Principal | None:
+        user = await self._client.get_user_for_token(token)
+        if user is None:
+            return None
+        user_id = user.get("id")
+        if not isinstance(user_id, str) or not user_id.strip():
+            return None
+        return Principal(user_id=user_id)
+
+
 def get_token_verifier() -> TokenVerifier:
+    try:
+        return SupabaseTokenVerifier(SupabaseRestClient.from_settings(settings))
+    except SupabaseConfigurationError:
+        pass
     return UnconfiguredTokenVerifier()
 
 
