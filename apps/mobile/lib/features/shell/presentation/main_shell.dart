@@ -221,54 +221,61 @@ class _QuickActionButtonState extends State<_QuickActionButton> {
         ? const Color(0xFFB6F3E6).withValues(alpha: 0.24)
         : primary.withValues(alpha: 0.08);
 
-    return GestureDetector(
-      onTap: widget.onTap,
-      onTapDown: (_) => setState(() => _isPressed = true),
-      onTapUp: (_) => setState(() => _isPressed = false),
-      onTapCancel: () => setState(() => _isPressed = false),
-      behavior: HitTestBehavior.opaque,
-      child: Container(
-        width: 92,
-        height: 92,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          boxShadow: [
-            BoxShadow(
-              color: haloColor,
-              blurRadius: 22,
-              spreadRadius: 2,
-            ),
-            BoxShadow(
-              color: glowColor,
-              blurRadius: 12,
-              spreadRadius: 0,
-            ),
-          ],
-        ),
-        child: AnimatedScale(
-          duration: const Duration(milliseconds: 90),
-          scale: _isPressed ? 0.94 : 1,
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 90),
-            width: 64,
-            height: 64,
+    return Tooltip(
+      message: 'Add signal',
+      child: Semantics(
+        button: true,
+        label: 'Add signal',
+        child: GestureDetector(
+          onTap: widget.onTap,
+          onTapDown: (_) => setState(() => _isPressed = true),
+          onTapUp: (_) => setState(() => _isPressed = false),
+          onTapCancel: () => setState(() => _isPressed = false),
+          behavior: HitTestBehavior.opaque,
+          child: Container(
+            width: 92,
+            height: 92,
+            alignment: Alignment.center,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: _isPressed
-                  ? Color.lerp(primary, Colors.black, isLight ? 0.08 : 0.16)
-                  : primary,
-              border: Border.all(
-                color: isLight
-                    ? Colors.white.withValues(alpha: 0.72)
-                    : Colors.black.withValues(alpha: 0.22),
-                width: 1.4,
-              ),
+              boxShadow: [
+                BoxShadow(
+                  color: haloColor,
+                  blurRadius: 22,
+                  spreadRadius: 2,
+                ),
+                BoxShadow(
+                  color: glowColor,
+                  blurRadius: 12,
+                  spreadRadius: 0,
+                ),
+              ],
             ),
-            child: Icon(
-              Icons.add,
-              color: isLight ? const Color(0xFF063D35) : Colors.black,
-              size: 34,
+            child: AnimatedScale(
+              duration: const Duration(milliseconds: 90),
+              scale: _isPressed ? 0.94 : 1,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 90),
+                width: 64,
+                height: 64,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: _isPressed
+                      ? Color.lerp(primary, Colors.black, isLight ? 0.08 : 0.16)
+                      : primary,
+                  border: Border.all(
+                    color: isLight
+                        ? Colors.white.withValues(alpha: 0.72)
+                        : Colors.black.withValues(alpha: 0.22),
+                    width: 1.4,
+                  ),
+                ),
+                child: Icon(
+                  Icons.add,
+                  color: isLight ? const Color(0xFF063D35) : Colors.black,
+                  size: 34,
+                ),
+              ),
             ),
           ),
         ),

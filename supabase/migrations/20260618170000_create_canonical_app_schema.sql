@@ -915,7 +915,7 @@ begin
   end loop;
 end $$;
 
-grant usage on schema public to anon, authenticated;
+grant usage on schema public to anon, authenticated, service_role;
 
 grant select, insert, update, delete on table
   public.profiles,
@@ -934,7 +934,7 @@ grant select, insert, update, delete on table
   public.habits,
   public.habit_logs,
   public.focus_sessions
-to authenticated;
+to authenticated, service_role;
 
 do $$
 begin

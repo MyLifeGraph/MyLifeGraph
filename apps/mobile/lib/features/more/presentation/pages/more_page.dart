@@ -289,17 +289,24 @@ class _CoachInput extends StatelessWidget {
           SizedBox(
             width: 58,
             height: 58,
-            child: FilledButton(
-              style: FilledButton.styleFrom(
-                padding: EdgeInsets.zero,
-                backgroundColor: Theme.of(context).colorScheme.primary,
-                foregroundColor: Colors.black,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
+            child: Tooltip(
+              message: 'Send coach message',
+              child: Semantics(
+                button: true,
+                label: 'Send coach message',
+                child: FilledButton(
+                  style: FilledButton.styleFrom(
+                    padding: EdgeInsets.zero,
+                    backgroundColor: Theme.of(context).colorScheme.primary,
+                    foregroundColor: Colors.black,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
+                  onPressed: onSend,
+                  child: const Icon(Icons.send_outlined),
                 ),
               ),
-              onPressed: onSend,
-              child: const Icon(Icons.send_outlined),
             ),
           ),
         ],

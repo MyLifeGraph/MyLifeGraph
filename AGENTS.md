@@ -14,7 +14,8 @@ Read these files before making changes:
 1. `README.md`
 2. `docs/local-dev.md`
 3. `docs/architecture.md`
-4. `docs/supabase-current-state.md` when touching Supabase, auth, data sources,
+4. `docs/verification.md` before running or changing test automation
+5. `docs/supabase-current-state.md` when touching Supabase, auth, data sources,
    or migrations
 
 ## Current State
@@ -51,19 +52,40 @@ tables when they exist. It intentionally does not drop legacy tables.
 - `docs/supabase-current-state.md` - canonical schema, legacy table mapping, and
   migration notes.
 - `docs/local-dev.md` - local runbook for Flutter, Supabase, and FastAPI.
+- `docs/verification.md` - automated checks, local Supabase verification, and
+  current E2E gaps.
 - `README.md` - high-level project overview.
 
 ## Local Supabase Workflow
 
-Supabase CLI and Docker are required for local database testing.
+Supabase CLI and Docker are required for local database testing. Use real Ubuntu
+tool installations; `supabase --version` and `docker --version` must work in the
+Ubuntu shell. The preferred
+agent-safe command is:
 
-From the repo root:
+```bash
+FLUTTER_BIN=/home/gregor/tools/flutter/bin/flutter scripts/verify_supabase_local.sh
+```
+
+This starts the local Supabase stack, redacts CLI key output, reads the local
+anon key from `supabase status -o env`, and runs Flutter tests with
+`USE_MOCK_DATA=false`.
+
+If Node.js, npm, or Supabase CLI are installed through `nvm`, a non-interactive
+agent shell may not inherit that `PATH` even though the commands work in the
+user's interactive Ubuntu shell. In that case, source the real nvm environment
+or pass a narrow `PATH`/`NODE_BIN` override. Do not install replacement Node or
+Supabase binaries into `.tools/`.
+
+For manual local Supabase inspection from the repo root:
 
 ```bash
 supabase start
-supabase db reset
 supabase status
 ```
+
+Use the scripted `RESET_DB=true ... scripts/verify_supabase_local.sh` form when
+you actually intend to run `supabase db reset`.
 
 `supabase db reset` must complete through:
 
@@ -80,7 +102,13 @@ remote project.
 
 Do not run destructive Supabase commands such as `supabase db reset` unless the
 user explicitly asks for that operation or is actively working with you on local
-database reset/debugging.
+database reset/debugging. Use the scripted form when a local reset is intended:
+
+```bash
+RESET_DB=true \
+FLUTTER_BIN=/home/gregor/tools/flutter/bin/flutter \
+scripts/verify_supabase_local.sh
+```
 
 Never paste or commit Supabase keys. For the Flutter app, only the local anon key
 belongs in `.env`. Never use the service role key in the client.
@@ -129,6 +157,11 @@ Manual smoke test after schema or Supabase-client changes:
 - Open notifications.
 - Send a coach message.
 
+The browser smoke path is automated through Playwright in `scripts/e2e_web.sh`.
+The widget tests still cover the faster guest auth, guest onboarding, and guest
+quick mood check-in path. See `docs/verification.md` before changing or
+claiming E2E coverage.
+
 ## Verification Commands
 
 Run these after relevant changes:
@@ -154,17 +187,74 @@ python3 -m compileall services/ai_service/app
 git diff --check
 ```
 
+Or run the standard non-destructive verification bundle:
+
+```bash
+FLUTTER_BIN=/home/gregor/tools/flutter/bin/flutter scripts/verify.sh
+```
+
+`scripts/verify.sh` runs shell syntax checks, Flutter dependency resolution,
+Flutter analysis, Flutter widget tests, Python compile checks, and
+`git diff --check`.
+
 For docs and shell scripts:
 
 ```bash
 bash -n scripts/start_frontend.sh
 ```
 
-If Supabase migrations changed and the CLI is available:
+If Supabase migrations changed and a local reset is intended, use the scripted
+reset form:
 
 ```bash
-supabase db reset
+RESET_DB=true \
+FLUTTER_BIN=/home/gregor/tools/flutter/bin/flutter \
+scripts/verify_supabase_local.sh
 ```
+
+Do not run a raw `supabase db reset` unless the user explicitly asks for that
+operation or you are already debugging the local reset workflow with them.
+
+For the local Supabase-backed preflight workflow:
+
+```bash
+FLUTTER_BIN=/home/gregor/tools/flutter/bin/flutter \
+scripts/verify_supabase_local.sh
+```
+
+For the local Supabase reset workflow:
+
+```bash
+RESET_DB=true \
+FLUTTER_BIN=/home/gregor/tools/flutter/bin/flutter \
+scripts/verify_supabase_local.sh
+```
+
+For browser E2E:
+
+```bash
+npm install
+npx playwright install chromium
+FLUTTER_BIN=/home/gregor/tools/flutter/bin/flutter bash scripts/e2e_web.sh
+```
+
+Browser E2E also requires real Ubuntu Node.js 20+ and npm. Windows `npm`/`npx`
+shims are not sufficient inside this WSL project.
+If the interactive Ubuntu shell has Node/Supabase through nvm but the agent
+shell cannot find them, run with the real nvm bin directory on `PATH` or set
+`NODE_BIN`; keep using the actual installed tools.
+
+For browser E2E with a fresh local database:
+
+```bash
+RESET_DB=true \
+FLUTTER_BIN=/home/gregor/tools/flutter/bin/flutter \
+bash scripts/e2e_web.sh
+```
+
+The E2E script may read the local service-role key from `supabase status -o env`
+for Node-side local test user creation and database assertions. Never pass the
+service-role key into Flutter, browser code, docs examples, or chat output.
 
 ## Documentation Requirement
 
@@ -178,6 +268,8 @@ At minimum:
 - Backend/frontend boundary changes: update `docs/architecture.md`.
 - Local setup or command changes: update `docs/local-dev.md`.
 - Agent workflow or safety changes: update this `AGENTS.md`.
+- Verification workflow changes: update `docs/verification.md` and link any
+  changed commands from `docs/local-dev.md`.
 
 Do not leave future agents to rediscover changed setup steps from terminal
 history.

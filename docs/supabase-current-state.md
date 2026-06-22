@@ -96,8 +96,69 @@ the `private` schema and revokes public execution for security-definer helpers.
 
 `20260618170000_create_canonical_app_schema.sql` creates the canonical
 snake_case app schema, updates auth/profile helper functions, grants the
-`authenticated` role app-table CRUD privileges, adds RLS policies, and copies
-data from legacy CamelCase tables when they exist.
+`authenticated` role app-table CRUD privileges for the Flutter client, grants
+matching app-table privileges to `service_role` for local admin/E2E assertions,
+adds RLS policies, and copies data from legacy CamelCase tables when they exist.
+
+## Local Verification Workflow
+
+For local Supabase-backed testing, the reset should complete through:
+
+```text
+20260618170000_create_canonical_app_schema.sql
+```
+
+Then configure `.env` with:
+
+```env
+USE_MOCK_DATA=false
+SUPABASE_URL=http://127.0.0.1:54321
+SUPABASE_ANON_KEY=<local anon key from supabase status>
+```
+
+Run the standard local checks first:
+
+```bash
+FLUTTER_BIN=/path/to/flutter scripts/verify.sh
+```
+
+This includes Flutter analysis, widget tests, Python compile checks, whitespace
+checks, and the automated guest onboarding/quick-check-in smoke tests.
+
+For local Supabase preflight without resetting the database:
+
+```bash
+FLUTTER_BIN=/path/to/flutter scripts/verify_supabase_local.sh
+```
+
+For local Supabase reset and migration verification:
+
+```bash
+RESET_DB=true FLUTTER_BIN=/path/to/flutter scripts/verify_supabase_local.sh
+```
+
+The reset form was verified locally after adding the script. It applied all
+migrations through `20260618170000_create_canonical_app_schema.sql`; expected
+legacy-table skip notices were emitted for missing CamelCase tables.
+
+Then either run the browser E2E smoke in `scripts/e2e_web.sh` or start the
+frontend with `scripts/start_frontend.sh` and manually verify the
+Supabase-backed path:
+
+- Register or sign in.
+- Complete onboarding.
+- Save a daily check-in.
+- Save a quick mood check-in.
+- Open dashboard.
+- Open notifications.
+- Send a coach message.
+
+This checks that Auth, RLS, grants, and the app's snake_case table mappings work
+together. The repository provides `scripts/e2e_web.sh` for browser automation of
+this Supabase-backed flow. Do not run destructive reset commands against a
+remote database.
+
+See `docs/verification.md` for the current automation boundary.
 
 ## Important Caveat
 

@@ -18,9 +18,13 @@ __pycache__/
 .venv/
 venv/
 
+# Node / E2E
+node_modules/
+
 # Environment
 .env
 *.env.local
+.tools/
 supabase/.branches/
 supabase/.temp/
 

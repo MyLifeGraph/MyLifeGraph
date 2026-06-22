@@ -1,0 +1,13 @@
+{
+  "name": "mylifegraph-workspace",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "verify": "scripts/verify.sh",
+    "verify:supabase": "scripts/verify_supabase_local.sh",
+    "e2e:web": "bash scripts/e2e_web.sh"
+  },
+  "devDependencies": {
+    "playwright": "^1.56.1"
+  }
+}

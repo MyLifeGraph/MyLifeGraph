@@ -104,4 +104,25 @@ flutter test
 flutter build web --debug --no-wasm-dry-run
 ```
 
+From the repository root, prefer the shared verification bundle:
+
+```bash
+FLUTTER_BIN=/path/to/flutter scripts/verify.sh
+```
+
+The widget test suite currently verifies the auth gate, guest onboarding to the
+dashboard, and guest quick mood check-in persistence. These are widget-level
+smoke tests, not browser E2E tests.
+
+Browser E2E lives at the repository root:
+
+```bash
+npm install
+npx playwright install chromium
+FLUTTER_BIN=/path/to/flutter bash scripts/e2e_web.sh
+```
+
+For local Supabase reset E2E, service-role handling, artifacts, and known
+headless browser warnings, use `docs/verification.md` as the source of truth.
+
 Android builds require Android Studio or Android SDK command-line tools.

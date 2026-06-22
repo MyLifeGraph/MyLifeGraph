@@ -10,8 +10,8 @@ way to explore the product today is the Flutter app in mock-data guest mode.
 
 - The Flutter app is the primary user experience.
 - Mock/guest mode is the default local path and does not require Supabase keys.
-- Supabase Auth and persistence are wired in the app, but a fresh local
-  Supabase reset is not yet enough to fully back all app tables.
+- Supabase Auth and persistence are wired in the app. The canonical snake_case
+  migration creates the current app tables for local Supabase-backed testing.
 - The FastAPI service exposes placeholder recommendation endpoints and is ready
   for future model-backed workflows.
 - Repository docs and scripts should be treated as the shared team source of
@@ -34,6 +34,8 @@ Prerequisites:
 
 - Flutter SDK available on `PATH`, or set `FLUTTER_BIN=/path/to/flutter`.
 - Python 3.11+ if you want to run the AI service or static web fallback.
+- Node.js 20+ and npm for browser E2E.
+- Supabase CLI and Docker for local Supabase-backed tests and browser E2E.
 
 From a fresh clone:
 
@@ -127,17 +129,28 @@ Supabase is the intended auth and persistence backend. The current app supports:
 - Supabase-backed reads/writes for selected feature data when credentials and
   expected tables exist.
 
-Important current caveat: the migrations in this repo create the newer
-snake_case life-graph tables, and later harden RLS for app-facing CamelCase
-tables only if those tables already exist. A clean local Supabase database may
-therefore not contain every table the Flutter app expects.
+Important current caveat: the Flutter app targets the canonical snake_case
+schema. A clean local Supabase reset should apply
+`20260618170000_create_canonical_app_schema.sql`, which creates the app-facing
+tables, grants authenticated access, enables RLS, and copies from legacy
+CamelCase tables when they exist. Remote projects still need to be inspected
+directly before relying on `USE_MOCK_DATA=false`.
 
 See `docs/supabase-current-state.md` before changing Supabase schema or relying
 on real remote data.
 
 ## Verification
 
-Flutter app:
+Standard non-destructive checks:
+
+```bash
+FLUTTER_BIN=/path/to/flutter scripts/verify.sh
+```
+
+This runs Flutter dependency resolution, analysis, widget tests, Python compile
+checks, shell syntax checks, and whitespace checks.
+
+Flutter app, if running commands manually:
 
 ```bash
 cd apps/mobile
@@ -154,11 +167,45 @@ uvicorn app.main:app --reload --port 8000
 curl http://localhost:8000/v1/health
 ```
 
+Local Supabase verification:
+
+```bash
+FLUTTER_BIN=/path/to/flutter scripts/verify_supabase_local.sh
+```
+
+Local Supabase reset and migration verification:
+
+```bash
+RESET_DB=true FLUTTER_BIN=/path/to/flutter scripts/verify_supabase_local.sh
+```
+
+`RESET_DB=true` destroys and recreates the local Supabase database only. It must
+not be used against a remote database.
+
+Browser E2E:
+
+```bash
+npm install
+npx playwright install chromium
+FLUTTER_BIN=/path/to/flutter bash scripts/e2e_web.sh
+```
+
+With a fresh local database:
+
+```bash
+RESET_DB=true FLUTTER_BIN=/path/to/flutter bash scripts/e2e_web.sh
+```
+
+Use real Ubuntu-installed `node`, `npm`, `supabase`, and Docker for E2E. If
+those tools are installed through `nvm`, make sure the shell running the command
+has the nvm bin directory on `PATH`.
+
 ## Documentation Map
 
 - `docs/local-dev.md` - Full local setup and troubleshooting.
 - `docs/architecture.md` - Current architecture and data-flow overview.
 - `docs/supabase-current-state.md` - Supabase auth, schema, RLS, and known gaps.
+- `docs/verification.md` - Automated verification scripts and browser E2E.
 - `apps/mobile/README.md` - Flutter app commands and configuration.
 - `services/ai_service/README.md` - FastAPI service setup and endpoints.
 - `AGENTS.md` - Instructions for agents working in this repo.
