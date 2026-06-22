@@ -1,6 +1,11 @@
 from fastapi import APIRouter, Depends
 
-from app.models.recommendations import RecommendationRequest, RecommendationResponse
+from app.api.deps.auth import Principal, get_current_principal
+from app.models.recommendations import (
+    RecommendationGenerateRequest,
+    RecommendationGenerateResponse,
+    RecommendationListResponse,
+)
 from app.services.recommendation_engine import RecommendationEngine
 
 router = APIRouter(prefix="/recommendations", tags=["recommendations"])
@@ -10,9 +15,21 @@ def get_recommendation_engine() -> RecommendationEngine:
     return RecommendationEngine()
 
 
-@router.post("/preview", response_model=list[RecommendationResponse])
-async def preview_recommendations(
-    request: RecommendationRequest | None = None,
+@router.get("", response_model=RecommendationListResponse)
+async def list_recommendations(
+    principal: Principal = Depends(get_current_principal),
     engine: RecommendationEngine = Depends(get_recommendation_engine),
-) -> list[RecommendationResponse]:
-    return await engine.preview(request or RecommendationRequest())
+) -> RecommendationListResponse:
+    return await engine.list_recommendations(user_id=principal.user_id)
+
+
+@router.post("/generate", response_model=RecommendationGenerateResponse)
+async def generate_recommendations(
+    request: RecommendationGenerateRequest,
+    principal: Principal = Depends(get_current_principal),
+    engine: RecommendationEngine = Depends(get_recommendation_engine),
+) -> RecommendationGenerateResponse:
+    return await engine.generate_recommendations(
+        user_id=principal.user_id,
+        request=request,
+    )
