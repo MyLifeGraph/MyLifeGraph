@@ -6,8 +6,10 @@ FastAPI service boundary for recommendation and future ML workflows.
 
 - The service is optional for the default mock-data Flutter preview.
 - `/v1/health` returns a simple health response.
-- `/v1/recommendations/preview` returns placeholder recommendations.
-- Supabase settings are defined but not yet used for real data access.
+- `/v1/recommendations` and `/v1/recommendations/generate` expose the
+  authenticated backend v1 recommendation contract.
+- Supabase settings are defined but not yet used for real data access or JWT
+  verification.
 
 ## Setup
 
@@ -46,9 +48,15 @@ curl http://localhost:8000/v1/health
 ```
 
 ```bash
-curl -X POST http://localhost:8000/v1/recommendations/preview \
+curl http://localhost:8000/v1/recommendations \
+  -H 'Authorization: Bearer <supabase_access_token>'
+```
+
+```bash
+curl -X POST http://localhost:8000/v1/recommendations/generate \
+  -H 'Authorization: Bearer <supabase_access_token>' \
   -H 'Content-Type: application/json' \
-  -d '{}'
+  -d '{"window_days":28,"force":false,"allow_llm_wording":false}'
 ```
 
 ## Environment

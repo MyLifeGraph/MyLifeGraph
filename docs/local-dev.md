@@ -118,12 +118,19 @@ Health check:
 curl http://localhost:8000/v1/health
 ```
 
-Recommendation preview:
+Recommendation contract endpoints require an authenticated bearer token. PR1
+defines the contract, but real Supabase token verification is not wired yet:
 
 ```bash
-curl -X POST http://localhost:8000/v1/recommendations/preview \
+curl http://localhost:8000/v1/recommendations \
+  -H 'Authorization: Bearer <supabase_access_token>'
+```
+
+```bash
+curl -X POST http://localhost:8000/v1/recommendations/generate \
+  -H 'Authorization: Bearer <supabase_access_token>' \
   -H 'Content-Type: application/json' \
-  -d '{}'
+  -d '{"window_days":28,"force":false,"allow_llm_wording":false}'
 ```
 
 ## Supabase

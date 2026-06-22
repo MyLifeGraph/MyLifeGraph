@@ -101,12 +101,13 @@ The AI service lives in `services/ai_service`.
 Current responsibilities:
 
 - Serve `/v1/health`.
-- Serve `/v1/recommendations/preview`.
+- Serve authenticated recommendation contract endpoints at
+  `/v1/recommendations` and `/v1/recommendations/generate`.
 - Keep recommendation generation behind a service boundary.
 
-Current limitation: recommendation content is placeholder data. The endpoint and
-service class are ready for future model inference, feature extraction, and
-ranking logic.
+Current limitation: recommendation endpoints expose the backend v1 API/auth
+contract only. Real Supabase JWT verification, persistence, deterministic
+scoring, feature extraction, and ranking are planned follow-up work.
 
 ## Security Posture
 

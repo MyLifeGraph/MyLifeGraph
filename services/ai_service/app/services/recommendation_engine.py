@@ -1,28 +1,38 @@
-from app.models.recommendations import RecommendationRequest, RecommendationResponse
+from datetime import date
+
+from app.models.recommendations import (
+    RecommendationGenerateRequest,
+    RecommendationGenerateResponse,
+    RecommendationListResponse,
+)
+
+
+def current_period_key(today: date | None = None) -> str:
+    iso_year, iso_week, _ = (today or date.today()).isocalendar()
+    return f"{iso_year}-W{iso_week:02d}"
 
 
 class RecommendationEngine:
     """Placeholder service boundary for future ML-backed recommendations."""
 
-    async def preview(
+    async def list_recommendations(self, user_id: str) -> RecommendationListResponse:
+        return RecommendationListResponse(
+            items=[],
+            needs_generation=True,
+            generated_at=None,
+            period_key=current_period_key(),
+            stale_reason="missing",
+        )
+
+    async def generate_recommendations(
         self,
-        request: RecommendationRequest,
-    ) -> list[RecommendationResponse]:
-        return [
-            RecommendationResponse(
-                id="rec_focus_block",
-                title="Protect a 90-minute focus block",
-                reason="Your strongest mock signal points to morning focus.",
-                action_label="Schedule block",
-                category="focus",
-                confidence=0.88,
-            ),
-            RecommendationResponse(
-                id="rec_recovery",
-                title="Create an earlier wind-down",
-                reason="Recovery signals are weaker after late task switching.",
-                action_label="Plan wind-down",
-                category="recovery",
-                confidence=0.79,
-            ),
-        ]
+        user_id: str,
+        request: RecommendationGenerateRequest,
+    ) -> RecommendationGenerateResponse:
+        return RecommendationGenerateResponse(
+            items=[],
+            needs_generation=True,
+            generated_at=None,
+            period_key=current_period_key(),
+            stale_reason="missing",
+        )
