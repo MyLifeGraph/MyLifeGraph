@@ -50,6 +50,8 @@ The app table constants live in
 | `skillset_profiles` | Generated coaching/skill profile snapshots. |
 | `recommendations` | Generated recommendations and user statuses. |
 | `notification_preferences` | User alert preferences. |
+| `intake_responses` | Raw structured first-run Intake V1 answers. |
+| `user_state_snapshots` | Compact backend-owned user state snapshots. |
 
 ## Legacy Tables
 
@@ -100,12 +102,18 @@ snake_case app schema, updates auth/profile helper functions, grants the
 matching app-table privileges to `service_role` for local admin/E2E assertions,
 adds RLS policies, and copies data from legacy CamelCase tables when they exist.
 
+`20260702092807_intake_v1_backend_foundation.sql` adds
+`intake_responses` and `user_state_snapshots`, indexes them by user/time access
+patterns, grants read access to `authenticated`, grants full access to
+`service_role`, enables and forces RLS, and applies own-or-admin read policies
+plus service-role write policies.
+
 ## Local Verification Workflow
 
 For local Supabase-backed testing, the reset should complete through:
 
 ```text
-20260618170000_create_canonical_app_schema.sql
+20260702092807_intake_v1_backend_foundation.sql
 ```
 
 Then configure `.env` with:
@@ -137,9 +145,9 @@ For local Supabase reset and migration verification:
 RESET_DB=true FLUTTER_BIN=/path/to/flutter scripts/verify_supabase_local.sh
 ```
 
-The reset form was verified locally after adding the script. It applied all
-migrations through `20260618170000_create_canonical_app_schema.sql`; expected
-legacy-table skip notices were emitted for missing CamelCase tables.
+The reset form should apply all migrations through
+`20260702092807_intake_v1_backend_foundation.sql`; expected legacy-table skip
+notices may be emitted for missing CamelCase tables.
 
 Then either run the browser E2E smoke in `scripts/e2e_web.sh` or start the
 frontend with `scripts/start_frontend.sh` and manually verify the
@@ -155,8 +163,10 @@ Supabase-backed path:
 
 This checks that Auth, RLS, grants, and the app's snake_case table mappings work
 together. The repository provides `scripts/e2e_web.sh` for browser automation of
-this Supabase-backed flow. Do not run destructive reset commands against a
-remote database.
+this Supabase-backed flow. The browser smoke still focuses on direct app writes;
+FastAPI Intake V1 has unit coverage and can be manually checked by running the
+AI service with backend Supabase settings before completing onboarding. Do not
+run destructive reset commands against a remote database.
 
 See `docs/verification.md` for the current automation boundary.
 
@@ -189,7 +199,7 @@ The product should standardize on the snake_case schema. CamelCase tables are
 legacy compatibility only and should be dropped in a later dedicated migration
 after data migration and app verification are complete.
 
-The next planned schema additions are documented in `docs/backend-roadmap.md`.
-They are not part of the current migration state yet. In particular,
-`intake_responses` and `user_state_snapshots` are planned for the next
-implementation slice, "Intake V1 without LLM".
+The latest schema additions are `intake_responses` and
+`user_state_snapshots` for the "Intake V1 without LLM" slice. Later additions
+such as background jobs, LLM usage tracking, and calendar sync tables are still
+planned only in `docs/backend-roadmap.md`.

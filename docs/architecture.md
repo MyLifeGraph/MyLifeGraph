@@ -15,8 +15,8 @@ Flutter app <-> local mock data and guest storage
 
 The Flutter app is the main product surface. Supabase is the intended auth and
 persistence backend. The FastAPI service is an independent AI boundary that
-currently serves authenticated deterministic recommendations when backend
-Supabase settings are configured.
+currently serves authenticated Intake V1 and deterministic recommendation
+workflows when backend Supabase settings are configured.
 
 ## Mobile App
 
@@ -90,6 +90,8 @@ surface. The canonical application schema is now snake_case and centered on:
   `skillset_profiles` for AI-generated context and output.
 - `goals`, `habits`, `habit_logs`, and `focus_sessions` for near-term coaching
   expansion.
+- `intake_responses` and `user_state_snapshots` for structured first-run
+  answers and compact backend-owned user state.
 
 Legacy CamelCase tables such as `"User"`, `"DailyLog"`, and `"Task"` may still
 exist in older remote projects. The canonical migration copies data from those
@@ -104,11 +106,15 @@ The AI service lives in `services/ai_service`.
 Current responsibilities:
 
 - Serve `/v1/health`.
+- Serve authenticated Intake V1 at `/v1/intake/complete`.
 - Serve authenticated recommendation contract endpoints at
   `/v1/recommendations` and `/v1/recommendations/generate`.
 - Keep recommendation generation behind a service boundary.
 - Verify bearer tokens through an isolated auth verifier when Supabase backend
   settings are configured.
+- Store structured intake responses, update onboarding state, create initial
+  goals, habits, schedule items, notification preferences, durable memories,
+  and an onboarding `user_state_snapshots` row without LLM calls.
 - Load recent user-scoped data from `daily_logs`, `behavioral_events`, and
   `tasks`, run the deterministic v1 recommendation engine, and persist verified
   recommendations to `recommendations`.
@@ -120,6 +126,14 @@ FastAPI request. Guest mode, mock mode, missing Supabase configuration, missing
 sessions, and network failures continue to use the local mock recommendation
 fallback. Flutter does not automatically call
 `POST /v1/recommendations/generate`.
+
+Flutter onboarding sends the structured Intake V1 payload to
+`POST /v1/intake/complete` only in real backend mode with a Supabase access
+token. Guest and mock paths keep local onboarding state and do not require the
+AI service. If the AI service is unavailable during authenticated local
+onboarding, the app falls back to the previous direct profile/timetable write so
+the user can still enter the app; that fallback does not create
+`intake_responses` or `user_state_snapshots`.
 
 Current limitation: JWT verification is isolated behind the FastAPI auth
 dependency and currently calls Supabase Auth's user endpoint with the configured
@@ -144,6 +158,6 @@ making claims about deployed data.
 - The repository does not contain real Supabase credentials.
 - The FastAPI service is connected to Supabase-backed deterministic
   recommendations, but no LLM/model provider is connected.
-- The app does not yet have a real structured first-run status intake or stored
-  user state snapshots.
+- Intake V1 creates one onboarding snapshot, but there is not yet a recurring
+  signal aggregator for daily or weekly snapshots.
 - Mock mode is the reliable path for local product exploration today.

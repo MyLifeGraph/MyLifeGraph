@@ -6,12 +6,16 @@ FastAPI service boundary for recommendation and future ML workflows.
 
 - The service is optional for the default mock-data Flutter preview.
 - `/v1/health` returns a simple health response.
+- `/v1/intake/complete` exposes the authenticated Intake V1 completion
+  workflow.
 - `/v1/recommendations` and `/v1/recommendations/generate` expose the
   authenticated backend v1 recommendation contract.
 - With backend Supabase settings configured, bearer tokens are verified through
-  Supabase Auth, recent user-scoped app data is loaded from canonical
-  snake_case tables, deterministic recommendations are verified, and accepted
-  results are persisted to `recommendations`.
+  Supabase Auth. Intake writes structured answers, onboarding state, goals,
+  habits, schedule items, notification preferences, memory entries, and an
+  onboarding snapshot. Recommendation endpoints load recent user-scoped app data
+  from canonical snake_case tables, verify deterministic recommendations, and
+  persist accepted results to `recommendations`.
 - The service does not call LLMs, OpenRouter, local models, vector search, or
   background jobs.
 
@@ -52,6 +56,13 @@ curl http://localhost:8000/v1/health
 ```
 
 ```bash
+curl -X POST http://localhost:8000/v1/intake/complete \
+  -H 'Authorization: Bearer <supabase_access_token>' \
+  -H 'Content-Type: application/json' \
+  -d '{"version":"intake-v1","responses":{"primary_focus_areas":["focus"],"goals":["Protect focus time"],"friction_points":["Context switching"],"weekday_shape":"school_or_work","best_energy_window":"morning","coaching_style":"direct","reminder_preference":{"enabled":true,"quiet_hours":{"starts_at":"21:00","ends_at":"07:00"}},"calendar_connection_intent":"not_now"},"metadata":{"client":"curl"}}'
+```
+
+```bash
 curl http://localhost:8000/v1/recommendations \
   -H 'Authorization: Bearer <supabase_access_token>'
 ```
@@ -82,3 +93,9 @@ in the backend service environment.
 JWT verification is isolated in the FastAPI auth dependency. Tests inject fake
 verifiers and repositories, so production or remote Supabase credentials are not
 required for the unit test suite.
+
+Run service tests with:
+
+```bash
+pytest
+```

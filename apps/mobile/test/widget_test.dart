@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -25,13 +27,20 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Your profile'), findsOneWidget);
-    expect(find.text('Your timetable'), findsOneWidget);
+    expect(find.text('Focus areas'), findsOneWidget);
 
     await tester.ensureVisible(find.text('Skip timetable for now'));
     await tester.tap(find.text('Skip timetable for now'));
     await tester.pumpAndSettle();
 
     expect(find.text('Today\'s wellness score'), findsOneWidget);
+    final prefs = await SharedPreferences.getInstance();
+    final rawIntake = prefs.getString('auth_guest_intake_response');
+    expect(rawIntake, isNotNull);
+    final intake = jsonDecode(rawIntake!) as Map<String, dynamic>;
+    final responses = intake['responses'] as Map<String, dynamic>;
+    expect(responses['primary_focus_areas'], contains('focus'));
+    expect(responses['goals'], contains('Build a steadier weekly routine'));
   });
 
   testWidgets('guest can save a quick mood check-in locally', (tester) async {

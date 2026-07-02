@@ -4,13 +4,27 @@ import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../../core/config/app_config.dart';
+import '../../../../core/network/api_client.dart';
 import '../../../../core/supabase/supabase_providers.dart';
 import '../../data/auth_repository.dart';
+import '../../data/intake_api_data_source.dart';
 import '../../domain/app_session.dart';
+import '../../domain/intake_response.dart';
+
+final intakeApiDataSourceProvider = Provider<IntakeApiDataSource>(
+  (ref) => IntakeApiDataSource(ref.watch(apiClientProvider)),
+);
 
 final authRepositoryProvider = Provider<AuthRepository?>((ref) {
   final client = ref.watch(supabaseClientProvider);
-  return client == null ? null : AuthRepository(client);
+  return client == null
+      ? null
+      : AuthRepository(
+          client,
+          config: ref.watch(appConfigProvider),
+          intakeApiDataSource: ref.watch(intakeApiDataSourceProvider),
+        );
 });
 
 final authControllerProvider =
@@ -87,13 +101,22 @@ class AuthController extends StateNotifier<AsyncValue<AppSession?>> {
   Future<void> completeOnboarding({
     required String? name,
     required List<TimetableDraft> timetable,
+    required IntakeResponseDraft intake,
   }) async {
     state = const AsyncValue.loading();
     final repository = _repository;
     state = await AsyncValue.guard(
       () => repository == null
-          ? _completeLocalGuestOnboarding(name: name, timetable: timetable)
-          : repository.completeOnboarding(name: name, timetable: timetable),
+          ? _completeLocalGuestOnboarding(
+              name: name,
+              timetable: timetable,
+              intake: intake,
+            )
+          : repository.completeOnboarding(
+              name: name,
+              timetable: timetable,
+              intake: intake,
+            ),
     );
   }
 
@@ -146,6 +169,7 @@ class AuthController extends StateNotifier<AsyncValue<AppSession?>> {
   Future<AppSession> _completeLocalGuestOnboarding({
     required String? name,
     required List<TimetableDraft> timetable,
+    required IntakeResponseDraft intake,
   }) async {
     final prefs = await SharedPreferences.getInstance();
     final cleanName = name?.trim();
@@ -157,6 +181,10 @@ class AuthController extends StateNotifier<AsyncValue<AppSession?>> {
     await prefs.setString(
       _LocalGuestPrefs.timetable,
       jsonEncode(timetable.map((draft) => draft.toJson()).toList()),
+    );
+    await prefs.setString(
+      _LocalGuestPrefs.intakeResponse,
+      jsonEncode(intake.toJson()),
     );
 
     return AppSession.guest(
@@ -199,4 +227,5 @@ class _LocalGuestPrefs {
   static const name = 'auth_guest_name';
   static const onboardingDone = 'auth_guest_onboarding_done';
   static const timetable = 'auth_guest_timetable';
+  static const intakeResponse = 'auth_guest_intake_response';
 }

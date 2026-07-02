@@ -74,6 +74,55 @@ class SupabaseRestClient:
             raise ValueError(f"Expected list response from Supabase table {table}.")
         return data
 
+    async def upsert(
+        self,
+        table: str,
+        *,
+        rows: list[dict[str, Any]],
+        on_conflict: str | None = None,
+    ) -> list[dict[str, Any]]:
+        if not rows:
+            return []
+        params = {"on_conflict": on_conflict} if on_conflict else None
+        async with httpx.AsyncClient(timeout=self._timeout_seconds) as client:
+            response = await client.post(
+                f"{self._url}/rest/v1/{table}",
+                params=params,
+                json=rows,
+                headers={
+                    **self._rest_headers(),
+                    "Prefer": "resolution=merge-duplicates,return=representation",
+                },
+            )
+        response.raise_for_status()
+        data = response.json()
+        if not isinstance(data, list):
+            raise ValueError(f"Expected list response from Supabase table {table}.")
+        return data
+
+    async def update(
+        self,
+        table: str,
+        *,
+        values: dict[str, Any],
+        params: dict[str, str],
+    ) -> list[dict[str, Any]]:
+        async with httpx.AsyncClient(timeout=self._timeout_seconds) as client:
+            response = await client.patch(
+                f"{self._url}/rest/v1/{table}",
+                params=params,
+                json=values,
+                headers={
+                    **self._rest_headers(),
+                    "Prefer": "return=representation",
+                },
+            )
+        response.raise_for_status()
+        data = response.json()
+        if not isinstance(data, list):
+            raise ValueError(f"Expected list response from Supabase table {table}.")
+        return data
+
     async def get_user_for_token(self, token: str) -> dict[str, Any] | None:
         async with httpx.AsyncClient(timeout=self._timeout_seconds) as client:
             response = await client.get(

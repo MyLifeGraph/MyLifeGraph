@@ -43,11 +43,15 @@ databases may still contain legacy CamelCase tables such as `"User"`,
 - `skillset_profiles`
 - `notification_preferences`
 - `goals`, `habits`, `habit_logs`, `focus_sessions`
+- `intake_responses`, `user_state_snapshots`
 
 The migration
 `supabase/migrations/20260618170000_create_canonical_app_schema.sql` creates the
 canonical schema, applies RLS policies, and copies data from legacy CamelCase
-tables when they exist. It intentionally does not drop legacy tables.
+tables when they exist. It intentionally does not drop legacy tables. The
+migration
+`supabase/migrations/20260702092807_intake_v1_backend_foundation.sql` adds the
+Intake V1 backend tables and RLS policies.
 
 ## Important Docs
 
@@ -63,19 +67,14 @@ tables when they exist. It intentionally does not drop legacy tables.
 
 ## Next Implementation Direction
 
-The next planned product slice is **Intake V1 without LLM**. Read
-`docs/backend-roadmap.md` before implementing it.
+The **Intake V1 without LLM** foundation now exists. Read
+`docs/backend-roadmap.md` before planning the next backend, AI, onboarding, or
+agent workflow.
 
-Do not start with LLM integration, calendar import, weekly planning, vector
-search, or autonomous background agents. First add the structured onboarding
-backend foundation:
-
-- Supabase migration for `intake_responses` and `user_state_snapshots`.
-- Authenticated FastAPI `POST /v1/intake/complete`.
-- User-scoped writes derived from the verified Supabase bearer token.
-- Structured Flutter onboarding that preserves mock and guest mode.
-- Initial deterministic recommendations only after explicit intake completion
-  or a controlled backend workflow.
+Do not jump straight to broad LLM integration, calendar import, weekly planning,
+vector search, or autonomous background agents. The next product slice should
+build on Intake V1 with controlled deterministic recommendation refresh after
+intake and/or a recurring signal aggregator for `user_state_snapshots`.
 
 ## Local Supabase Workflow
 
@@ -111,7 +110,7 @@ you actually intend to run `supabase db reset`.
 `supabase db reset` must complete through:
 
 ```text
-20260618170000_create_canonical_app_schema.sql
+20260702092807_intake_v1_backend_foundation.sql
 ```
 
 Expected local reset notices include skipped legacy CamelCase tables and

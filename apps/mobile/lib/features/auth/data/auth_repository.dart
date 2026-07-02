@@ -5,13 +5,23 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../core/config/app_config.dart';
 import '../../../core/supabase/supabase_tables.dart';
 import '../domain/app_session.dart';
+import '../domain/intake_response.dart';
+import 'intake_api_data_source.dart';
 
 class AuthRepository {
-  AuthRepository(this._client);
+  AuthRepository(
+    this._client, {
+    required AppConfig config,
+    required IntakeApiDataSource intakeApiDataSource,
+  })  : _config = config,
+        _intakeApiDataSource = intakeApiDataSource;
 
   final SupabaseClient _client;
+  final AppConfig _config;
+  final IntakeApiDataSource _intakeApiDataSource;
 
   Stream<AuthState> get authStateChanges => _client.auth.onAuthStateChange;
 
@@ -122,6 +132,7 @@ class AuthRepository {
   Future<AppSession> completeOnboarding({
     required String? name,
     required List<TimetableDraft> timetable,
+    required IntakeResponseDraft intake,
   }) async {
     final session = _cachedSession ?? await currentSession();
     if (session == null) {
@@ -129,26 +140,78 @@ class AuthRepository {
     }
 
     if (session.isGuestSession) {
-      final prefs = await SharedPreferences.getInstance();
-      final cleanName = name?.trim();
-      if (cleanName != null && cleanName.isNotEmpty) {
-        await prefs.setString(_Prefs.guestName, cleanName);
-      }
-      await prefs.setBool(_Prefs.guestOnboardingDone, true);
-      await prefs.setString(
-        _Prefs.guestTimetable,
-        jsonEncode(timetable.map((draft) => draft.toJson()).toList()),
+      return _completeGuestOnboarding(
+        session: session,
+        name: name,
+        timetable: timetable,
+        intake: intake,
       );
-      final updated = AppSession.guest(
-        session.profile.copyWith(
-          name: cleanName?.isNotEmpty == true ? cleanName : null,
-          onboardingDone: true,
-        ),
-      );
-      _cachedSession = updated;
-      return updated;
     }
 
+    if (!_config.useMockData && _config.isSupabaseConfigured) {
+      final accessToken = _client.auth.currentSession?.accessToken;
+      if (accessToken != null && accessToken.trim().isNotEmpty) {
+        try {
+          await _intakeApiDataSource.completeIntake(
+            accessToken: accessToken,
+            intake: intake,
+          );
+          final updated = AppSession.authenticated(
+            session.profile.copyWith(
+              name: name?.trim().isNotEmpty == true ? name!.trim() : null,
+              onboardingDone: true,
+            ),
+          );
+          _cachedSession = updated;
+          return updated;
+        } catch (_) {
+          // Keep onboarding usable when the optional FastAPI boundary is down.
+        }
+      }
+    }
+
+    return _completeAuthenticatedFallback(
+      session: session,
+      name: name,
+      timetable: timetable,
+    );
+  }
+
+  Future<AppSession> _completeGuestOnboarding({
+    required AppSession session,
+    required String? name,
+    required List<TimetableDraft> timetable,
+    required IntakeResponseDraft intake,
+  }) async {
+    final prefs = await SharedPreferences.getInstance();
+    final cleanName = name?.trim();
+    if (cleanName != null && cleanName.isNotEmpty) {
+      await prefs.setString(_Prefs.guestName, cleanName);
+    }
+    await prefs.setBool(_Prefs.guestOnboardingDone, true);
+    await prefs.setString(
+      _Prefs.guestTimetable,
+      jsonEncode(timetable.map((draft) => draft.toJson()).toList()),
+    );
+    await prefs.setString(
+      _Prefs.guestIntakeResponse,
+      jsonEncode(intake.toJson()),
+    );
+    final updated = AppSession.guest(
+      session.profile.copyWith(
+        name: cleanName?.isNotEmpty == true ? cleanName : null,
+        onboardingDone: true,
+      ),
+    );
+    _cachedSession = updated;
+    return updated;
+  }
+
+  Future<AppSession> _completeAuthenticatedFallback({
+    required AppSession session,
+    required String? name,
+    required List<TimetableDraft> timetable,
+  }) async {
     final now = DateTime.now().toIso8601String();
     final profile = session.profile;
     await _safeProfileUpdate(profile.id, {
@@ -364,5 +427,6 @@ class _Prefs {
   static const guestName = 'auth_guest_name';
   static const guestOnboardingDone = 'auth_guest_onboarding_done';
   static const guestTimetable = 'auth_guest_timetable';
+  static const guestIntakeResponse = 'auth_guest_intake_response';
   static const guestQuickCheckIns = 'guest_quick_checkins';
 }

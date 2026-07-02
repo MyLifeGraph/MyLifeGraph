@@ -49,14 +49,20 @@ Already implemented:
 - Flutter reads persisted recommendations through FastAPI in real backend mode
   and falls back to mock data for guest, mock, missing session, or network
   failure.
+- `POST /v1/intake/complete`.
+- Intake V1 without LLM:
+  - `intake_responses` and `user_state_snapshots`.
+  - Authenticated backend intake completion derived from the verified bearer
+    token.
+  - Structured Flutter onboarding with guest/mock preservation.
+  - Initial goals, habits, schedule items, notification preferences, and durable
+    memory entries from explicit structured answers.
 
 Not yet implemented:
 
-- A real first-run status intake.
-- `POST /v1/intake/complete`.
-- Stored user state snapshots.
 - A production background job queue or worker.
 - Explicit recommendation refresh/generate UX.
+- Recommendation generation triggered directly by intake completion.
 - Real coach-response backend.
 - LLM provider integration.
 - Memory extraction beyond current direct writes.
@@ -94,9 +100,10 @@ repositories, and jobs, not as unconstrained autonomous LLM loops.
 | Planning service | Weekly review, user request | Goals, tasks, habits, schedule, snapshots | `tasks`, `schedule_items`, `recommendations`, `coach_messages` | Optional for complex plans |
 | Notification service | Schedule and event changes | Preferences, recommendations, deadlines | `notifications` | None |
 
-The first implementation should add the intake and snapshot foundation. Coach,
-memory extraction, weekly planning, and LLM provider work should wait until the
-user starts with meaningful structured data.
+The intake and snapshot foundation now exists. Next backend work should wire
+controlled recommendation refresh after intake and add a recurring signal
+aggregator before coach, memory extraction, weekly planning, or LLM provider
+work.
 
 ## User Start Flow
 
@@ -167,14 +174,14 @@ The current canonical schema already has useful tables:
 - `notification_preferences`
 - `goals`, `habits`, `habit_logs`, `focus_sessions`
 
-The next backend slice should add only the minimum missing state:
+The Intake V1 backend slice added the minimum missing state:
 
 ### `intake_responses`
 
 Purpose: preserve the user's structured first-run answers and support future
 schema versions without losing original intake context.
 
-Suggested columns:
+Implemented columns:
 
 - `id uuid primary key default gen_random_uuid()`
 - `user_id uuid not null references profiles(id) on delete cascade`
@@ -195,7 +202,7 @@ Access:
 Purpose: store compact user state that recommendation, coach, planning, and
 memory flows can use without reading full history or building huge prompts.
 
-Suggested columns:
+Implemented columns:
 
 - `id uuid primary key default gen_random_uuid()`
 - `user_id uuid not null references profiles(id) on delete cascade`
@@ -250,8 +257,8 @@ Backend behavior:
 9. Create `schedule_items` only for stable routines or fixed commitments.
 10. Create a small number of `memory_entries` for durable preferences and goals.
 11. Create an `onboarding` `user_state_snapshots` row.
-12. Generate first deterministic recommendations or enqueue a follow-up job.
-13. Return the created snapshot summary and recommendation list.
+12. Return the created snapshot summary and an empty recommendation list for
+    now.
 
 No LLM is required for v1 intake. If free text exists, store it as source
 context and use deterministic categories first.
@@ -321,61 +328,32 @@ Use these rules before adding any model provider:
 
 ## Immediate Implementation Plan
 
-The next implementation should be **Intake V1 without LLM**.
+The next implementation should build on **Intake V1 without LLM**.
 
-### Slice 1: Schema And Docs
+### Slice 1: Controlled Recommendation Refresh
 
-- Create a Supabase migration for `intake_responses` and
-  `user_state_snapshots`.
-- Add RLS policies and grants consistent with existing canonical tables.
-- Update `docs/supabase-current-state.md`.
-- Keep calendar, LLM, jobs, and coach-response out of this slice.
-
-### Slice 2: FastAPI Intake Endpoint
-
-- Add `app/models/intake.py`.
-- Add `app/repositories/intake_repository.py`.
-- Add `app/services/intake_service.py`.
-- Add `app/api/routes/intake.py`.
-- Include the route in `app/main.py`.
-- Reuse the existing auth dependency.
-- Write unit/API tests for auth, request validation, user scoping, and created
-  records.
-
-### Slice 3: Flutter Onboarding Integration
-
-- Extend onboarding to collect structured intake answers.
-- In real Supabase mode, submit to `POST /v1/intake/complete`.
-- Preserve guest and mock behavior with local storage/fallback.
-- Do not require calendar connection.
-- After success, route to dashboard and refresh recommendations.
-
-### Slice 4: First Recommendations
-
-- Have intake completion generate first deterministic recommendations or call
-  the existing recommendation engine through a backend service boundary.
-- Add UI state for generated recommendations if needed.
+- Trigger deterministic recommendation generation after explicit intake
+  completion or behind a deliberate refresh action.
+- Reuse existing recommendation verification and persistence.
 - Avoid auto-generating on normal dashboard reads.
+- Add tests that verify intake-derived snapshots can be used without trusting
+  request-provided user IDs.
 
-### Slice 5: E2E
+### Slice 2: Snapshot Aggregator
 
-- Extend browser E2E to cover registration/sign-in, structured intake,
-  dashboard arrival, and persisted Supabase rows.
-- Add FastAPI startup to E2E only when recommendation/intake API behavior is
-  asserted end to end.
+- Add a deterministic service that can create `daily` and `weekly`
+  `user_state_snapshots` from recent check-ins, tasks, goals, habits, schedule
+  items, and memory entries.
+- Keep snapshots compact and avoid reading full user history for every request.
+- Add backend tests for stale/missing data and user scoping.
 
-## Definition Of Done For Intake V1
+### Slice 3: E2E Expansion
 
-- A new authenticated user can complete structured onboarding.
-- The backend stores the raw intake response.
-- The backend creates a compact onboarding snapshot.
-- The backend creates initial goals/preferences from structured answers.
-- Guest/mock mode still works.
-- No service-role key reaches Flutter.
-- No LLM provider is required.
-- Standard verification passes.
-- Local Supabase reset applies the new migration.
-- Docs stay current.
+- Extend browser E2E to cover structured intake fields and persisted
+  Supabase-backed rows when the AI service is part of the test run.
+- Keep the current guest/mock widget smoke fast.
+- Add FastAPI startup to E2E only when backend API behavior is asserted end to
+  end.
 
 ## Out Of Scope For The Next Slice
 

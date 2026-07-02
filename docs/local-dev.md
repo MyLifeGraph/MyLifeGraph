@@ -123,6 +123,13 @@ defined the contract; backend Supabase settings are now required for real
 token verification and recommendation persistence:
 
 ```bash
+curl -X POST http://localhost:8000/v1/intake/complete \
+  -H 'Authorization: Bearer <supabase_access_token>' \
+  -H 'Content-Type: application/json' \
+  -d '{"version":"intake-v1","responses":{"primary_focus_areas":["focus"],"goals":["Protect focus time"],"friction_points":["Context switching"],"weekday_shape":"school_or_work","best_energy_window":"morning","coaching_style":"direct","reminder_preference":{"enabled":true,"quiet_hours":{"starts_at":"21:00","ends_at":"07:00"}},"calendar_connection_intent":"not_now"},"metadata":{"client":"curl"}}'
+```
+
+```bash
 curl http://localhost:8000/v1/recommendations \
   -H 'Authorization: Bearer <supabase_access_token>'
 ```
@@ -162,7 +169,7 @@ Read `docs/supabase-current-state.md` first. `supabase db reset` is a local
 destructive reset and should complete through:
 
 ```text
-20260618170000_create_canonical_app_schema.sql
+20260702092807_intake_v1_backend_foundation.sql
 ```
 
 The canonical app schema is snake_case. Legacy CamelCase tables are only used as
@@ -215,6 +222,7 @@ AI service:
 ```bash
 cd services/ai_service
 python -m compileall app
+pytest
 ```
 
 All standard non-destructive checks from the repository root:

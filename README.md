@@ -11,9 +11,11 @@ way to explore the product today is the Flutter app in mock-data guest mode.
 - The Flutter app is the primary user experience.
 - Mock/guest mode is the default local path and does not require Supabase keys.
 - Supabase Auth and persistence are wired in the app. The canonical snake_case
-  migration creates the current app tables for local Supabase-backed testing.
-- The FastAPI service exposes placeholder recommendation endpoints and is ready
-  for future model-backed workflows.
+  migrations create the current app tables, including Intake V1 tables, for
+  local Supabase-backed testing.
+- The FastAPI service exposes authenticated intake and deterministic
+  recommendation endpoints. It is ready for future model-backed workflows, but
+  no LLM provider is connected.
 - Repository docs and scripts should be treated as the shared team source of
   truth. Do not depend on user-local Codex skills or machine-specific paths.
 
@@ -128,13 +130,14 @@ Supabase is the intended auth and persistence backend. The current app supports:
 - Google OAuth through Supabase Auth when OAuth is configured.
 - Supabase-backed reads/writes for selected feature data when credentials and
   expected tables exist.
+- Structured onboarding submits Intake V1 to FastAPI in real backend mode and
+  preserves local guest/mock behavior.
 
 Important current caveat: the Flutter app targets the canonical snake_case
 schema. A clean local Supabase reset should apply
-`20260618170000_create_canonical_app_schema.sql`, which creates the app-facing
-tables, grants authenticated access, enables RLS, and copies from legacy
-CamelCase tables when they exist. Remote projects still need to be inspected
-directly before relying on `USE_MOCK_DATA=false`.
+`20260702092807_intake_v1_backend_foundation.sql`, which adds the Intake V1
+tables after the canonical app schema. Remote projects still need to be
+inspected directly before relying on `USE_MOCK_DATA=false`.
 
 See `docs/supabase-current-state.md` before changing Supabase schema or relying
 on real remote data.
@@ -165,6 +168,7 @@ AI service:
 cd services/ai_service
 uvicorn app.main:app --reload --port 8000
 curl http://localhost:8000/v1/health
+pytest
 ```
 
 Local Supabase verification:

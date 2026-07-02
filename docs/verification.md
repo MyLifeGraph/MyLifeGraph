@@ -36,12 +36,22 @@ The script runs:
 - `python3 -m compileall services/ai_service/app`
 - `git diff --check`
 
+FastAPI unit tests are run separately:
+
+```bash
+cd services/ai_service
+pytest
+```
+
 Current Flutter widget tests include:
 
 - Auth gate renders.
-- Guest can continue, complete onboarding, and reach the dashboard.
+- Guest can continue, complete structured onboarding, persist the local Intake
+  V1 payload, and reach the dashboard.
 - Guest can complete a quick mood check-in and persist it locally in
   `shared_preferences`.
+- The Intake API data source posts `POST /v1/intake/complete` with bearer auth
+  and the structured payload.
 
 These tests cover the default mock/guest product path. They do not prove real
 Supabase registration, RLS, or browser behavior.
@@ -92,7 +102,7 @@ supabase db reset
 Expected successful reset output applies migrations through:
 
 ```text
-20260618170000_create_canonical_app_schema.sql
+20260702092807_intake_v1_backend_foundation.sql
 ```
 
 Expected notices include skipped legacy CamelCase tables and already-existing
@@ -148,7 +158,10 @@ then queries local Supabase REST with the local service-role key to assert that
 `daily_logs`, `behavioral_events`, and `coach_messages` rows were created. The
 daily and quick check-ins share one `daily_logs` row because that table is unique
 by `(user_id, entry_date)`; the smoke uses `behavioral_events.source` to verify
-that both check-in flows wrote their event signals.
+that both check-in flows wrote their event signals. The browser smoke does not
+yet start FastAPI or assert `intake_responses` and `user_state_snapshots`; those
+are covered by FastAPI unit tests and should be added to E2E when the AI service
+is part of that script.
 
 The coach step uses the page's default prompt, sends it through the visible
 coach send button, and verifies the persisted `coach_messages` row. This keeps
@@ -238,7 +251,7 @@ Still missing for broader product verification:
 - CI wiring for the browser E2E command.
 - Playwright trace artifact collection on failure.
 - Dedicated database assertions for notifications, onboarding schedule items,
-  and memory entries.
+  intake responses, user state snapshots, and memory entries.
 - Coverage for Google OAuth, mobile layout, and authenticated guest-data
   migration.
 
