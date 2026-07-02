@@ -7,6 +7,7 @@ from app.models.user_context import (
     DailyLogSignal,
     SignalSummary,
     TaskSignal,
+    UserStateSnapshotSignal,
 )
 
 
@@ -71,6 +72,15 @@ class SupabaseUserContextRepository:
                 "limit": "50",
             },
         )
+        snapshots = await self._client.select(
+            "user_state_snapshots",
+            params={
+                "select": "id,scope,period_key,summary,signals,generated_at",
+                "user_id": f"eq.{user_id}",
+                "order": "generated_at.desc",
+                "limit": "5",
+            },
+        )
 
         return SignalSummary(
             user_id=user_id,
@@ -81,6 +91,9 @@ class SupabaseUserContextRepository:
                 _behavioral_event_signal(row) for row in behavioral_events
             ],
             tasks=[_task_signal(row) for row in tasks],
+            user_state_snapshots=[
+                _user_state_snapshot_signal(row) for row in snapshots
+            ],
         )
 
 
@@ -117,6 +130,19 @@ def _task_signal(row: dict[str, Any]) -> TaskSignal:
             priority=str(row.get("priority") or "medium"),
             metadata=metadata,
         ),
+    )
+
+
+def _user_state_snapshot_signal(row: dict[str, Any]) -> UserStateSnapshotSignal:
+    summary = row.get("summary")
+    signals = row.get("signals")
+    return UserStateSnapshotSignal(
+        id=str(row["id"]),
+        scope=str(row["scope"]),
+        period_key=str(row["period_key"]),
+        summary=summary if isinstance(summary, dict) else {},
+        signals=signals if isinstance(signals, dict) else {},
+        generated_at=_parse_datetime(str(row["generated_at"])),
     )
 
 

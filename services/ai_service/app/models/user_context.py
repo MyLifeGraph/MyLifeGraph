@@ -1,5 +1,6 @@
 from dataclasses import dataclass, field
 from datetime import date, datetime
+from typing import Any
 
 
 @dataclass(frozen=True)
@@ -52,6 +53,16 @@ class TaskSignal:
 
 
 @dataclass(frozen=True)
+class UserStateSnapshotSignal:
+    id: str
+    scope: str
+    period_key: str
+    summary: dict[str, Any]
+    signals: dict[str, Any]
+    generated_at: datetime
+
+
+@dataclass(frozen=True)
 class SignalSummary:
     user_id: str
     period_key: str
@@ -59,3 +70,4 @@ class SignalSummary:
     daily_logs: list[DailyLogSignal] = field(default_factory=list)
     behavioral_events: list[BehavioralEventSignal] = field(default_factory=list)
     tasks: list[TaskSignal] = field(default_factory=list)
+    user_state_snapshots: list[UserStateSnapshotSignal] = field(default_factory=list)

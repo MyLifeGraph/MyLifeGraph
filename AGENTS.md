@@ -67,14 +67,28 @@ Intake V1 backend tables and RLS policies.
 
 ## Next Implementation Direction
 
-The **Intake V1 without LLM** foundation now exists. Read
+The **Intake V1 without LLM** foundation and controlled deterministic
+recommendation refresh after authenticated intake now exist. Read
 `docs/backend-roadmap.md` before planning the next backend, AI, onboarding, or
 agent workflow.
 
 Do not jump straight to broad LLM integration, calendar import, weekly planning,
 vector search, or autonomous background agents. The next product slice should
-build on Intake V1 with controlled deterministic recommendation refresh after
-intake and/or a recurring signal aggregator for `user_state_snapshots`.
+build on Intake V1 and the post-intake recommendation refresh with a recurring
+signal aggregator for `user_state_snapshots`.
+
+The implemented post-intake refresh is backend-only and best-effort:
+
+- `POST /v1/intake/complete` derives `user_id` from the verified Supabase
+  bearer token.
+- The intake service writes `intake_responses`, onboarding-owned records, and an
+  onboarding `user_state_snapshots` row.
+- It then calls the deterministic recommendation engine with no LLM usage.
+- The recommendation engine reads recent `daily_logs`, `behavioral_events`,
+  `tasks`, and latest `user_state_snapshots`, verifies candidates, dedupes by
+  fingerprint, and persists accepted rows to `recommendations`.
+- Normal dashboard reads through `GET /v1/recommendations` must still not
+  generate recommendations.
 
 ## Local Supabase Workflow
 

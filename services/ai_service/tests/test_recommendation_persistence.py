@@ -58,6 +58,21 @@ class FakeSupabaseClient:
                     "metadata": {},
                 },
             ]
+        if table == "user_state_snapshots":
+            return [
+                {
+                    "id": "snapshot-1",
+                    "scope": "onboarding",
+                    "period_key": "onboarding:2026-06-22",
+                    "summary": {
+                        "primary_focus_areas": ["focus"],
+                        "goals": ["Protect focus time"],
+                        "friction_points": ["Too many context switches"],
+                    },
+                    "signals": {},
+                    "generated_at": NOW.isoformat(),
+                },
+            ]
         if table == "recommendations":
             return []
         raise AssertionError(f"Unexpected table: {table}")
@@ -253,6 +268,7 @@ def test_user_context_repository_scopes_every_read_to_explicit_user_id() -> None
         "daily_logs",
         "behavioral_events",
         "tasks",
+        "user_state_snapshots",
     }
     assert all(
         params["user_id"] == "eq.user-test-123"
@@ -419,7 +435,7 @@ def test_get_returns_needs_generation_true_when_no_current_recommendations() -> 
     assert response.stale_reason == "missing"
 
 
-def test_get_returns_needs_generation_false_when_current_recommendations_exist() -> None:
+def test_get_returns_current_recommendations_without_generation_needed() -> None:
     response = run(
         engine(
             FakeRecommendationRepository([recommendation_item()]),

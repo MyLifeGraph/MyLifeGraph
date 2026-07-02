@@ -116,8 +116,12 @@ Current responsibilities:
   goals, habits, schedule items, notification preferences, durable memories,
   and an onboarding `user_state_snapshots` row without LLM calls.
 - Load recent user-scoped data from `daily_logs`, `behavioral_events`, and
-  `tasks`, run the deterministic v1 recommendation engine, and persist verified
-  recommendations to `recommendations`.
+  `tasks` plus latest `user_state_snapshots`, run the deterministic v1
+  recommendation engine, and persist verified recommendations to
+  `recommendations`.
+- Trigger a best-effort deterministic recommendation refresh after authenticated
+  Intake V1 completion so the first real dashboard can read persisted
+  onboarding-derived recommendations.
 
 Flutter reads persisted recommendations through `GET /v1/recommendations` when
 `USE_MOCK_DATA=false`, Supabase is configured, and a real Supabase session
@@ -126,6 +130,9 @@ FastAPI request. Guest mode, mock mode, missing Supabase configuration, missing
 sessions, and network failures continue to use the local mock recommendation
 fallback. Flutter does not automatically call
 `POST /v1/recommendations/generate`.
+Authenticated Intake V1 completion calls the same backend generation path after
+the onboarding snapshot is written; normal dashboard reads still never generate
+recommendations.
 
 Flutter onboarding sends the structured Intake V1 payload to
 `POST /v1/intake/complete` only in real backend mode with a Supabase access
@@ -158,6 +165,7 @@ making claims about deployed data.
 - The repository does not contain real Supabase credentials.
 - The FastAPI service is connected to Supabase-backed deterministic
   recommendations, but no LLM/model provider is connected.
-- Intake V1 creates one onboarding snapshot, but there is not yet a recurring
-  signal aggregator for daily or weekly snapshots.
+- Intake V1 creates one onboarding snapshot and triggers first deterministic
+  recommendations, but there is not yet a recurring signal aggregator for daily
+  or weekly snapshots.
 - Mock mode is the reliable path for local product exploration today.

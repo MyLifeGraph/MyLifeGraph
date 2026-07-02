@@ -40,8 +40,11 @@ FastAPI unit tests are run separately:
 
 ```bash
 cd services/ai_service
-pytest
+./.venv/bin/python -m pytest
 ```
+
+Use `python -m pytest` from an environment with `services/ai_service`
+requirements installed if the local `.venv` does not exist.
 
 Current Flutter widget tests include:
 
@@ -159,9 +162,9 @@ then queries local Supabase REST with the local service-role key to assert that
 daily and quick check-ins share one `daily_logs` row because that table is unique
 by `(user_id, entry_date)`; the smoke uses `behavioral_events.source` to verify
 that both check-in flows wrote their event signals. The browser smoke does not
-yet start FastAPI or assert `intake_responses` and `user_state_snapshots`; those
-are covered by FastAPI unit tests and should be added to E2E when the AI service
-is part of that script.
+yet start FastAPI or assert `intake_responses`, `user_state_snapshots`, or
+post-intake generated `recommendations`; those are covered by FastAPI unit tests
+and should be added to E2E when the AI service is part of that script.
 
 The coach step uses the page's default prompt, sends it through the visible
 coach send button, and verifies the persisted `coach_messages` row. This keeps

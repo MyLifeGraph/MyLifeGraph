@@ -1,4 +1,4 @@
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 from app.models.recommendation_candidates import (
     DeterministicScores,
@@ -9,6 +9,7 @@ from app.models.user_context import (
     EvidenceRef,
     SignalSummary,
     TaskSignal,
+    UserStateSnapshotSignal,
 )
 from app.services.recommendation_engine import RecommendationEngine, current_period_key
 from app.services.recommendation_fingerprint import build_recommendation_fingerprint
@@ -23,6 +24,7 @@ def summary(
     *,
     daily_logs: list[DailyLogSignal] | None = None,
     tasks: list[TaskSignal] | None = None,
+    user_state_snapshots: list[UserStateSnapshotSignal] | None = None,
 ) -> SignalSummary:
     return SignalSummary(
         user_id="user-test-123",
@@ -30,6 +32,7 @@ def summary(
         today=TODAY,
         daily_logs=daily_logs or [],
         tasks=tasks or [],
+        user_state_snapshots=user_state_snapshots or [],
     )
 
 
@@ -38,6 +41,38 @@ def daily_log(index: int, **kwargs) -> DailyLogSignal:
         id=f"log-{index}",
         entry_date=TODAY - timedelta(days=index),
         **kwargs,
+    )
+
+
+def onboarding_snapshot(**overrides) -> UserStateSnapshotSignal:
+    values = {
+        "id": "snapshot-1",
+        "scope": "onboarding",
+        "period_key": "onboarding:2026-06-22",
+        "summary": {
+            "primary_focus_areas": ["focus", "planning"],
+            "goals": ["Protect focus time"],
+            "friction_points": ["Too many context switches"],
+        },
+        "signals": {},
+        "generated_at": datetime(2026, 6, 22, tzinfo=timezone.utc),
+    }
+    values.update(overrides)
+    return UserStateSnapshotSignal(**values)
+
+
+def test_onboarding_snapshot_creates_initial_recommendations() -> None:
+    candidates = RecommendationEngine().generate_candidates(
+        summary(user_state_snapshots=[onboarding_snapshot()]),
+    )
+
+    rule_ids = {candidate.rule_id for candidate in candidates}
+    assert "focus_protection" in rule_ids
+    assert "planning_reset" in rule_ids
+    assert all(
+        candidate.evidence_refs[0].table == "user_state_snapshots"
+        for candidate in candidates
+        if candidate.rule_id in {"focus_protection", "planning_reset"}
     )
 
 

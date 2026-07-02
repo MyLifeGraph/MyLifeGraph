@@ -122,6 +122,7 @@ class RecommendationEngine:
         candidates = [
             candidate
             for candidate in [
+                *self._onboarding_snapshot_candidates(summary),
                 self._low_recovery_sleep(summary),
                 self._high_stress_low_energy(summary),
                 self._focus_protection(summary),
@@ -139,6 +140,157 @@ class RecommendationEngine:
             ),
             reverse=True,
         )
+
+    def _onboarding_snapshot_candidates(
+        self,
+        summary: SignalSummary,
+    ) -> list[RecommendationCandidate]:
+        snapshot = next(
+            (
+                snapshot
+                for snapshot in summary.user_state_snapshots
+                if snapshot.scope == "onboarding"
+            ),
+            None,
+        )
+        if snapshot is None:
+            return []
+
+        focus_areas = _string_set(snapshot.summary.get("primary_focus_areas"))
+        goals = _string_list(snapshot.summary.get("goals"))
+        friction_points = _string_list(snapshot.summary.get("friction_points"))
+        friction_text = " ".join(friction_points).lower()
+        candidates: list[RecommendationCandidate] = []
+
+        if "focus" in focus_areas or _contains_any(
+            friction_text,
+            {"context", "switch", "interrupt", "distract", "focus"},
+        ):
+            candidates.append(
+                self._candidate(
+                    summary=summary,
+                    rule_id=FOCUS_PROTECTION_RULE_ID,
+                    title="Protect your first focus block",
+                    reason=(
+                        "Your intake points to focus as an early coaching area."
+                    ),
+                    action_label="Schedule focus block",
+                    category="focus",
+                    priority="medium",
+                    evidence_refs=[
+                        EvidenceRef(
+                            table="user_state_snapshots",
+                            id=snapshot.id,
+                            field="summary.primary_focus_areas",
+                        ),
+                    ],
+                    scores=_score(
+                        evidence_count=1 + min(len(friction_points), 3),
+                        severity=0.55,
+                        recency=1,
+                    ),
+                    invalidation_dependencies=[
+                        "user_state_snapshots.summary.primary_focus_areas",
+                        "user_state_snapshots.summary.friction_points",
+                    ],
+                ),
+            )
+
+        if "planning" in focus_areas or _contains_any(
+            friction_text,
+            {"plan", "priorit", "overwhelm", "deadline", "too much"},
+        ):
+            candidates.append(
+                self._candidate(
+                    summary=summary,
+                    rule_id=PLANNING_RESET_RULE_ID,
+                    title="Set a simple first plan",
+                    reason=(
+                        "Your intake suggests a short planning pass would help "
+                        "turn goals into next actions."
+                    ),
+                    action_label="Review priorities",
+                    category="planning",
+                    priority="medium",
+                    evidence_refs=[
+                        EvidenceRef(
+                            table="user_state_snapshots",
+                            id=snapshot.id,
+                            field="summary.goals",
+                        ),
+                    ],
+                    scores=_score(
+                        evidence_count=max(1, min(len(goals), 3)),
+                        severity=0.5,
+                        recency=1,
+                    ),
+                    invalidation_dependencies=[
+                        "user_state_snapshots.summary.goals",
+                        "user_state_snapshots.summary.friction_points",
+                    ],
+                ),
+            )
+
+        if {"sleep", "stress", "energy"} & focus_areas:
+            candidates.append(
+                self._candidate(
+                    summary=summary,
+                    rule_id=LOW_RECOVERY_SLEEP_RULE_ID,
+                    title="Protect a recovery window",
+                    reason=(
+                        "Your intake marked recovery-related signals as a "
+                        "coaching focus."
+                    ),
+                    action_label="Plan recovery time",
+                    category="recovery",
+                    priority="medium",
+                    evidence_refs=[
+                        EvidenceRef(
+                            table="user_state_snapshots",
+                            id=snapshot.id,
+                            field="summary.primary_focus_areas",
+                        ),
+                    ],
+                    scores=_score(
+                        evidence_count=len({"sleep", "stress", "energy"} & focus_areas),
+                        severity=0.5,
+                        recency=1,
+                    ),
+                    invalidation_dependencies=[
+                        "user_state_snapshots.summary.primary_focus_areas",
+                    ],
+                ),
+            )
+
+        if "movement" in focus_areas:
+            candidates.append(
+                self._candidate(
+                    summary=summary,
+                    rule_id=MOVEMENT_NUDGE_RULE_ID,
+                    title="Add a small movement reset",
+                    reason="Your intake marked movement as a coaching focus.",
+                    action_label="Take a short walk",
+                    category="movement",
+                    priority="low",
+                    evidence_refs=[
+                        EvidenceRef(
+                            table="user_state_snapshots",
+                            id=snapshot.id,
+                            field="summary.primary_focus_areas",
+                        ),
+                    ],
+                    scores=_score(
+                        evidence_count=1,
+                        severity=0.4,
+                        recency=1,
+                    ),
+                    invalidation_dependencies=[
+                        "user_state_snapshots.summary.primary_focus_areas",
+                    ],
+                ),
+            )
+
+        return candidates
 
     def _candidate(
         self,
@@ -467,6 +619,20 @@ def _average(values) -> float:
     if not value_list:
         return 0
     return sum(value_list) / len(value_list)
+
+
+def _string_list(value: object) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [item.strip() for item in value if isinstance(item, str) and item.strip()]
+
+
+def _string_set(value: object) -> set[str]:
+    return {item.lower() for item in _string_list(value)}
+
+
+def _contains_any(value: str, needles: set[str]) -> bool:
+    return any(needle in value for needle in needles)
 
 
 def _clamp(value: float) -> float:

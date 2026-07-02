@@ -44,6 +44,34 @@ class FakeIntakeRepository:
         return stored
 
 
+class FakeRecommendationItem:
+    def model_dump(self, *, mode: str):
+        return {
+            "id": "recommendation-123",
+            "title": "Protect your first focus block",
+            "reason": "Your intake points to focus as an early coaching area.",
+            "action_label": "Schedule focus block",
+            "category": "focus",
+            "priority": "medium",
+            "confidence": 0.72,
+            "generated_at": "2026-07-02T00:00:00Z",
+            "metadata": {"source_engine_version": "deterministic-v1"},
+        }
+
+
+class FakeRecommendationResponse:
+    items = [FakeRecommendationItem()]
+
+
+class FakeRecommendationEngine:
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, object]] = []
+
+    async def generate_recommendations(self, *, user_id: str, request):
+        self.calls.append((user_id, request))
+        return FakeRecommendationResponse()
+
+
 def run(coro):
     return asyncio.run(coro)
 
@@ -134,6 +162,44 @@ def test_complete_intake_stores_raw_answers_and_snapshot_summary() -> None:
     assert repository.preference_rows[0]["quiet_hours_end"] == "07:00"
     assert repository.snapshot_rows[0]["scope"] == "onboarding"
     assert repository.snapshot_rows[0]["summary"]["best_energy_window"] == "morning"
-    assert repository.snapshot_rows[0]["signals"]["calendar_connection_intent"] == "later"
+    assert (
+        repository.snapshot_rows[0]["signals"]["calendar_connection_intent"] == "later"
+    )
     assert any(row["type"] == "goal" for row in repository.memory_rows)
-    assert any(row["title"] == "Preferred coaching style" for row in repository.memory_rows)
+    assert any(
+        row["title"] == "Preferred coaching style" for row in repository.memory_rows
+    )
+
+
+def test_complete_intake_triggers_recommendations_from_principal_user_id() -> None:
+    repository = FakeIntakeRepository()
+    recommendation_engine = FakeRecommendationEngine()
+
+    response = run(
+        IntakeService(
+            repository,
+            recommendation_engine=recommendation_engine,
+        ).complete_intake(
+            user_id="principal-user-123",
+            request=request(),
+        ),
+    )
+
+    assert recommendation_engine.calls
+    user_id, generate_request = recommendation_engine.calls[0]
+    assert user_id == "principal-user-123"
+    assert generate_request.window_days == 28
+    assert generate_request.allow_llm_wording is False
+    assert response.recommendations == [
+        {
+            "id": "recommendation-123",
+            "title": "Protect your first focus block",
+            "reason": "Your intake points to focus as an early coaching area.",
+            "action_label": "Schedule focus block",
+            "category": "focus",
+            "priority": "medium",
+            "confidence": 0.72,
+            "generated_at": "2026-07-02T00:00:00Z",
+            "metadata": {"source_engine_version": "deterministic-v1"},
+        },
+    ]

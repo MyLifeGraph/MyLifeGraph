@@ -27,18 +27,19 @@ Use high reasoning. First read:
 6. docs/local-dev.md
 7. docs/verification.md
 
-Goal: implement the next roadmap slice after Intake V1 without LLM.
+Goal: implement the next roadmap slice after Intake V1 and controlled
+post-intake deterministic recommendation refresh, without LLM.
 
 Do not spawn multiple agents by default. Use subagents only if there are clearly
 separable non-overlapping tasks that can run in parallel without blocking the
 main implementation. If the slice is narrow, keep the work in one agent.
 
-Focus on controlled deterministic recommendation refresh and/or a recurring
-snapshot aggregator:
+Focus on a recurring snapshot aggregator:
 
 - Reuse the existing Supabase bearer-token auth dependency.
 - Derive `user_id` from the verified backend principal only.
 - Use existing `intake_responses` and `user_state_snapshots`.
+- Preserve the existing post-intake recommendation refresh behavior.
 - Do not add LLM providers.
 - Do not require calendar connection.
 - Preserve mock and guest mode.
@@ -49,8 +50,8 @@ Preferred implementation sequence:
 
 1. Inspect current FastAPI intake/recommendation services and Flutter
    onboarding/recommendation refresh behavior.
-2. Decide whether the smallest useful slice is post-intake recommendation
-   refresh or a deterministic snapshot aggregator.
+2. Implement the smallest useful deterministic snapshot aggregator slice for
+   `daily` and/or `weekly` `user_state_snapshots`.
 3. Implement the backend service/repository changes with focused tests.
 4. Wire Flutter only where a deliberate user-visible refresh or post-intake
    invalidation is needed.

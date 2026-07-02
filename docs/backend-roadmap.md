@@ -43,9 +43,10 @@ Already implemented:
 - Supabase bearer token verification in FastAPI when backend Supabase settings
   are configured.
 - Deterministic recommendation generation from `daily_logs`,
-  `behavioral_events`, and `tasks`.
+  `behavioral_events`, `tasks`, and latest `user_state_snapshots`.
 - Recommendation verification, dedupe fingerprints, freshness checks, and
   persistence to `recommendations`.
+- Controlled post-intake recommendation refresh from the onboarding snapshot.
 - Flutter reads persisted recommendations through FastAPI in real backend mode
   and falls back to mock data for guest, mock, missing session, or network
   failure.
@@ -55,14 +56,14 @@ Already implemented:
   - Authenticated backend intake completion derived from the verified bearer
     token.
   - Structured Flutter onboarding with guest/mock preservation.
-  - Initial goals, habits, schedule items, notification preferences, and durable
-    memory entries from explicit structured answers.
+  - Initial goals, habits, schedule items, notification preferences, durable
+    memory entries, and first deterministic recommendations from explicit
+    structured answers.
 
 Not yet implemented:
 
 - A production background job queue or worker.
 - Explicit recommendation refresh/generate UX.
-- Recommendation generation triggered directly by intake completion.
 - Real coach-response backend.
 - LLM provider integration.
 - Memory extraction beyond current direct writes.
@@ -100,10 +101,9 @@ repositories, and jobs, not as unconstrained autonomous LLM loops.
 | Planning service | Weekly review, user request | Goals, tasks, habits, schedule, snapshots | `tasks`, `schedule_items`, `recommendations`, `coach_messages` | Optional for complex plans |
 | Notification service | Schedule and event changes | Preferences, recommendations, deadlines | `notifications` | None |
 
-The intake and snapshot foundation now exists. Next backend work should wire
-controlled recommendation refresh after intake and add a recurring signal
-aggregator before coach, memory extraction, weekly planning, or LLM provider
-work.
+The intake foundation and controlled post-intake recommendation refresh now
+exist. Next backend work should add a recurring signal aggregator before coach,
+memory extraction, weekly planning, or LLM provider work.
 
 ## User Start Flow
 
@@ -265,7 +265,8 @@ context and use deterministic categories first.
 
 ## Recommendation Flow
 
-Current recommendation v1 already exists. The target flow after intake is:
+Current recommendation v1 exists and is triggered after authenticated Intake V1
+completion:
 
 1. User completes intake.
 2. Backend creates a user state snapshot.
@@ -275,7 +276,10 @@ Current recommendation v1 already exists. The target flow after intake is:
 6. Accepted recommendations are persisted.
 7. Flutter reads them through `GET /v1/recommendations`.
 
-The explicit generate UX should later call:
+The refresh is best-effort after intake completion: onboarding stays completed
+if recommendation generation fails, and the dashboard can still read any
+previously persisted active recommendations. The explicit generate UX should
+later call:
 
 ```text
 POST /v1/recommendations/generate
@@ -306,8 +310,8 @@ Target behavior:
 5. Store the assistant response in `coach_messages`.
 6. Optionally emit memory candidates, not direct high-confidence memory.
 
-This should come after intake and recommendation refresh, because the coach
-needs structured context to be useful and affordable.
+This should come after the snapshot aggregator, because the coach needs
+structured daily/weekly context to be useful and affordable.
 
 ## LLM Cost Control
 
@@ -328,16 +332,19 @@ Use these rules before adding any model provider:
 
 ## Immediate Implementation Plan
 
-The next implementation should build on **Intake V1 without LLM**.
+The next implementation should build on **Intake V1 without LLM** and the
+controlled post-intake recommendation refresh.
 
 ### Slice 1: Controlled Recommendation Refresh
 
-- Trigger deterministic recommendation generation after explicit intake
-  completion or behind a deliberate refresh action.
-- Reuse existing recommendation verification and persistence.
-- Avoid auto-generating on normal dashboard reads.
-- Add tests that verify intake-derived snapshots can be used without trusting
-  request-provided user IDs.
+- Implemented: authenticated Intake V1 completion creates an onboarding
+  snapshot, then triggers deterministic recommendation generation through the
+  existing verifier, fingerprint, and persistence path.
+- Implemented: the recommendation context loader reads latest
+  `user_state_snapshots` with explicit `user_id` scoping.
+- Implemented: normal dashboard reads still do not auto-generate
+  recommendations.
+- Still open: a deliberate user-visible refresh/generate UX.
 
 ### Slice 2: Snapshot Aggregator
 

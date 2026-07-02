@@ -5,7 +5,10 @@ from app.clients.supabase import SupabaseConfigurationError, SupabaseRestClient
 from app.core.config import settings
 from app.models.intake import IntakeCompleteRequest, IntakeCompleteResponse
 from app.repositories.intake_repository import SupabaseIntakeRepository
+from app.repositories.recommendation_repository import SupabaseRecommendationRepository
+from app.repositories.user_context_repository import SupabaseUserContextRepository
 from app.services.intake_service import IntakeService
+from app.services.recommendation_engine import RecommendationEngine
 
 router = APIRouter(prefix="/intake", tags=["intake"])
 
@@ -21,7 +24,13 @@ async def get_intake_service(request: Request) -> IntakeService:
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Intake persistence is not configured.",
         ) from exc
-    return IntakeService(repository=SupabaseIntakeRepository(client))
+    return IntakeService(
+        repository=SupabaseIntakeRepository(client),
+        recommendation_engine=RecommendationEngine(
+            user_context_repository=SupabaseUserContextRepository(client),
+            recommendation_repository=SupabaseRecommendationRepository(client),
+        ),
+    )
 
 
 @router.post("/complete", response_model=IntakeCompleteResponse)

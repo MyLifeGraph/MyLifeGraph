@@ -48,10 +48,10 @@ The app table constants live in
 | `habits` | User habits for future coaching flows. |
 | `habit_logs` | Habit completions for future coaching flows. |
 | `skillset_profiles` | Generated coaching/skill profile snapshots. |
-| `recommendations` | Generated recommendations and user statuses. |
+| `recommendations` | Generated recommendations and user statuses; FastAPI can create first deterministic rows after authenticated Intake V1. |
 | `notification_preferences` | User alert preferences. |
 | `intake_responses` | Raw structured first-run Intake V1 answers. |
-| `user_state_snapshots` | Compact backend-owned user state snapshots. |
+| `user_state_snapshots` | Compact backend-owned user state snapshots and deterministic recommendation input. |
 
 ## Legacy Tables
 
@@ -106,7 +106,9 @@ adds RLS policies, and copies data from legacy CamelCase tables when they exist.
 `intake_responses` and `user_state_snapshots`, indexes them by user/time access
 patterns, grants read access to `authenticated`, grants full access to
 `service_role`, enables and forces RLS, and applies own-or-admin read policies
-plus service-role write policies.
+plus service-role write policies. The FastAPI recommendation context loader now
+reads latest `user_state_snapshots` through the backend service-role client with
+explicit `user_id` filters.
 
 ## Local Verification Workflow
 
@@ -164,9 +166,10 @@ Supabase-backed path:
 This checks that Auth, RLS, grants, and the app's snake_case table mappings work
 together. The repository provides `scripts/e2e_web.sh` for browser automation of
 this Supabase-backed flow. The browser smoke still focuses on direct app writes;
-FastAPI Intake V1 has unit coverage and can be manually checked by running the
-AI service with backend Supabase settings before completing onboarding. Do not
-run destructive reset commands against a remote database.
+FastAPI Intake V1 and its post-intake deterministic recommendation refresh have
+unit coverage and can be manually checked by running the AI service with backend
+Supabase settings before completing onboarding. Do not run destructive reset
+commands against a remote database.
 
 See `docs/verification.md` for the current automation boundary.
 
@@ -200,6 +203,6 @@ legacy compatibility only and should be dropped in a later dedicated migration
 after data migration and app verification are complete.
 
 The latest schema additions are `intake_responses` and
-`user_state_snapshots` for the "Intake V1 without LLM" slice. Later additions
-such as background jobs, LLM usage tracking, and calendar sync tables are still
-planned only in `docs/backend-roadmap.md`.
+`user_state_snapshots` for the "Intake V1 without LLM" slice. The next backend
+slice should reuse those tables for daily and weekly snapshot aggregation rather
+than adding broad LLM, calendar, or worker infrastructure first.

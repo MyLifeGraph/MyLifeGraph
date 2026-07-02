@@ -120,7 +120,9 @@ curl http://localhost:8000/v1/health
 
 Recommendation contract endpoints require an authenticated bearer token. PR1
 defined the contract; backend Supabase settings are now required for real
-token verification and recommendation persistence:
+token verification and recommendation persistence. In real backend mode,
+successful Intake V1 completion also triggers a best-effort deterministic
+recommendation refresh from the onboarding snapshot:
 
 ```bash
 curl -X POST http://localhost:8000/v1/intake/complete \
@@ -222,7 +224,7 @@ AI service:
 ```bash
 cd services/ai_service
 python -m compileall app
-pytest
+./.venv/bin/python -m pytest
 ```
 
 All standard non-destructive checks from the repository root:

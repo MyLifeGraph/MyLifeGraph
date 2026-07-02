@@ -1,3 +1,4 @@
+import logging
 from datetime import UTC, datetime
 from typing import Any
 
@@ -6,12 +7,22 @@ from app.models.intake import (
     IntakeCompleteResponse,
     SnapshotSummary,
 )
+from app.models.recommendations import RecommendationGenerateRequest
 from app.repositories.intake_repository import IntakeRepository
+from app.services.recommendation_engine import RecommendationEngine
+
+
+logger = logging.getLogger(__name__)
 
 
 class IntakeService:
-    def __init__(self, repository: IntakeRepository) -> None:
+    def __init__(
+        self,
+        repository: IntakeRepository,
+        recommendation_engine: RecommendationEngine | None = None,
+    ) -> None:
         self._repository = repository
+        self._recommendation_engine = recommendation_engine
 
     async def complete_intake(
         self,
@@ -142,14 +153,36 @@ class IntakeService:
                 },
             },
         )
+        recommendations = await self._generate_initial_recommendations(user_id=user_id)
 
         return IntakeCompleteResponse(
             intake_response_id=str(intake_row["id"]),
             snapshot_id=str(snapshot_row["id"]),
             completed_at=completed_at,
             summary=summary,
-            recommendations=[],
+            recommendations=recommendations,
         )
+
+    async def _generate_initial_recommendations(
+        self,
+        *,
+        user_id: str,
+    ) -> list[dict[str, Any]]:
+        if self._recommendation_engine is None:
+            return []
+        try:
+            response = await self._recommendation_engine.generate_recommendations(
+                user_id=user_id,
+                request=RecommendationGenerateRequest(
+                    window_days=28,
+                    force=False,
+                    allow_llm_wording=False,
+                ),
+            )
+        except Exception:
+            logger.exception("Post-intake recommendation refresh failed.")
+            return []
+        return [item.model_dump(mode="json") for item in response.items]
 
 
 def _memory_rows(
