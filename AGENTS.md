@@ -14,8 +14,10 @@ Read these files before making changes:
 1. `README.md`
 2. `docs/local-dev.md`
 3. `docs/architecture.md`
-4. `docs/verification.md` before running or changing test automation
-5. `docs/supabase-current-state.md` when touching Supabase, auth, data sources,
+4. `docs/backend-roadmap.md` before planning backend, AI, onboarding, or agent
+   workflows
+5. `docs/verification.md` before running or changing test automation
+6. `docs/supabase-current-state.md` when touching Supabase, auth, data sources,
    or migrations
 
 ## Current State
@@ -50,12 +52,30 @@ tables when they exist. It intentionally does not drop legacy tables.
 ## Important Docs
 
 - `docs/architecture.md` - system shape and current backend/frontend boundary.
+- `docs/backend-roadmap.md` - target backend flow, product agents, data model
+  direction, LLM cost controls, and the next implementation sequence.
 - `docs/supabase-current-state.md` - canonical schema, legacy table mapping, and
   migration notes.
 - `docs/local-dev.md` - local runbook for Flutter, Supabase, and FastAPI.
 - `docs/verification.md` - automated checks, local Supabase verification, and
   current E2E gaps.
 - `README.md` - high-level project overview.
+
+## Next Implementation Direction
+
+The next planned product slice is **Intake V1 without LLM**. Read
+`docs/backend-roadmap.md` before implementing it.
+
+Do not start with LLM integration, calendar import, weekly planning, vector
+search, or autonomous background agents. First add the structured onboarding
+backend foundation:
+
+- Supabase migration for `intake_responses` and `user_state_snapshots`.
+- Authenticated FastAPI `POST /v1/intake/complete`.
+- User-scoped writes derived from the verified Supabase bearer token.
+- Structured Flutter onboarding that preserves mock and guest mode.
+- Initial deterministic recommendations only after explicit intake completion
+  or a controlled backend workflow.
 
 ## Local Supabase Workflow
 

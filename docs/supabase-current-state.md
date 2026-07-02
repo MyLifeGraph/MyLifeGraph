@@ -188,3 +188,8 @@ project with credentials.
 The product should standardize on the snake_case schema. CamelCase tables are
 legacy compatibility only and should be dropped in a later dedicated migration
 after data migration and app verification are complete.
+
+The next planned schema additions are documented in `docs/backend-roadmap.md`.
+They are not part of the current migration state yet. In particular,
+`intake_responses` and `user_state_snapshots` are planned for the next
+implementation slice, "Intake V1 without LLM".

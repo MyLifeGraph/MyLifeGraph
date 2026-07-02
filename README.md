@@ -204,8 +204,12 @@ has the nvm bin directory on `PATH`.
 
 - `docs/local-dev.md` - Full local setup and troubleshooting.
 - `docs/architecture.md` - Current architecture and data-flow overview.
+- `docs/backend-roadmap.md` - Target backend flow, product agents, data model
+  direction, LLM cost controls, and next implementation sequence.
 - `docs/supabase-current-state.md` - Supabase auth, schema, RLS, and known gaps.
 - `docs/verification.md` - Automated verification scripts and browser E2E.
+- `docs/next-chat-prompt.md` - Ready-to-use prompt for continuing the next
+  implementation slice in a new chat.
 - `apps/mobile/README.md` - Flutter app commands and configuration.
 - `services/ai_service/README.md` - FastAPI service setup and endpoints.
 - `AGENTS.md` - Instructions for agents working in this repo.

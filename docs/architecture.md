@@ -1,7 +1,9 @@
 # Architecture
 
 This document describes the current repository shape. It intentionally
-distinguishes implemented behavior from planned backend integration.
+distinguishes implemented behavior from planned backend integration. For the
+target backend flow, product agents, LLM cost controls, and next implementation
+sequence, see `docs/backend-roadmap.md`.
 
 ## High-Level Shape
 
@@ -142,4 +144,6 @@ making claims about deployed data.
 - The repository does not contain real Supabase credentials.
 - The FastAPI service is connected to Supabase-backed deterministic
   recommendations, but no LLM/model provider is connected.
+- The app does not yet have a real structured first-run status intake or stored
+  user state snapshots.
 - Mock mode is the reliable path for local product exploration today.
