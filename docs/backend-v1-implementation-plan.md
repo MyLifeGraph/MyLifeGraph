@@ -1,8 +1,22 @@
-# Backend v1 Implementation Plan
+# Backend v1 Status And Implementation Plan
 
-This document defines the smallest safe first backend implementation slice for
-MyLifeGraph. It is a planning document only. It does not introduce backend code,
-Flutter code, migrations, dependencies, or runtime behavior by itself.
+This document started as the smallest safe first backend implementation slice
+for MyLifeGraph. Backend v1 is now mostly implemented in the repository:
+
+- FastAPI exposes authenticated recommendation endpoints.
+- Supabase bearer tokens are verified through the backend auth dependency when
+  backend Supabase settings are configured.
+- Recent user-scoped context is loaded from canonical snake_case Supabase
+  tables.
+- Deterministic recommendation candidates are generated, verified, deduped, and
+  persisted to `recommendations`.
+- Flutter reads recommendations from FastAPI in real backend mode and preserves
+  mock/guest fallback behavior.
+
+The remaining v1 product decision is whether and how to expose
+`POST /v1/recommendations/generate` through an explicit user or developer
+workflow. Flutter still must not auto-generate recommendations on dashboard
+load.
 
 ## v1 Goal
 
@@ -398,18 +412,20 @@ Verification commands:
 - Supabase local preflight only when real Supabase integration changes.
 - Browser E2E only when end-to-end app behavior changes.
 
-## PR-Sized Sequence
+## PR-Sized Sequence Status
 
 ### PR 1: Backend API and auth contract
+
+Status: implemented.
 
 - Add the narrow auth dependency.
 - Add recommendation response DTOs with object response shape.
 - Replace preview-oriented route design with v1 endpoint contracts.
 - Use mocked auth/repositories in tests.
-- No real Supabase persistence yet.
-- No Flutter changes.
 
 ### PR 2: Deterministic engine and verifier
+
+Status: implemented.
 
 - Add user-context models.
 - Add deterministic rules.
@@ -419,6 +435,8 @@ Verification commands:
 
 ### PR 3: Supabase repository integration
 
+Status: implemented.
+
 - Add backend Supabase client boundary.
 - Read recent canonical user context.
 - Read and persist `recommendations`.
@@ -427,12 +445,16 @@ Verification commands:
 
 ### PR 4: Flutter read integration
 
+Status: implemented.
+
 - Attach Supabase access token to FastAPI requests in real backend mode.
 - Read from `GET /v1/recommendations`.
 - Preserve mock and guest mode.
 - Do not auto-call generate.
 
 ### PR 5: Optional explicit generate UX
+
+Status: still open.
 
 - Add an explicit refresh/generate action only if approved by product.
 - Keep dashboard/recommendation loads read-only.
@@ -451,9 +473,12 @@ Verification commands:
 | Scope creep | Keep LLM, vector, background, weekly, chat, and memory-write work out of v1. |
 | Future fingerprint indexing | Isolate fingerprint generation so metadata storage can later move to an indexed column. |
 
-## Exact First PR Scope
+## Historical First PR Scope
 
-The first PR should establish only the backend API/auth contract.
+This section is historical context for the initial backend slice. It is no
+longer the next implementation step.
+
+The first PR established only the backend API/auth contract.
 
 In scope:
 
@@ -490,9 +515,9 @@ Possibly touched only if explicitly approved:
 - `services/ai_service/requirements.txt`
 - `services/ai_service/pyproject.toml`
 
-## Exact First PR Verification Commands
+## Historical First PR Verification Commands
 
-For PR 1:
+For the original PR 1:
 
 ```bash
 python3 -m compileall services/ai_service/app
@@ -536,11 +561,11 @@ git diff --check
 
 - Whether `POST /v1/recommendations/generate` is developer-only at first or
   exposed through an explicit user refresh action.
-- Exact numeric thresholds for each deterministic rule.
-- Maximum number of recommendations returned by `GET /v1/recommendations`.
+- Whether the current numeric thresholds for each deterministic rule should be
+  tuned from product use or local data.
+- Whether the current maximum of 20 recommendations returned by
+  `GET /v1/recommendations` should be exposed as configuration or pagination.
 - Whether dismissed recommendations suppress the same fingerprint for only the
   current period or for a longer cooldown.
-- Whether optional `tasks`, `schedule_items`, and `memory_entries` reads are
-  included in v1 or deferred until after the first daily-log/event rules land.
-- Whether JWT validation should start with Supabase Auth user lookup or a local
-  isolated verifier implementation.
+- Whether optional `schedule_items` and `memory_entries` reads are included in a
+  later context expansion. `tasks` are already included in the backend v1 context.

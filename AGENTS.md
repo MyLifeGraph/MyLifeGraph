@@ -21,7 +21,8 @@ Read these files before making changes:
 ## Current State
 
 MyLifeGraph is a Flutter web/mobile app with Supabase for auth and persistence
-and a FastAPI service for future AI/recommendation workflows.
+and a FastAPI service for authenticated deterministic recommendation workflows
+and future AI integrations.
 
 The app now targets a canonical snake_case Supabase schema. Older remote
 databases may still contain legacy CamelCase tables such as `"User"`,
@@ -175,7 +176,7 @@ flutter test
 If Flutter is not on `PATH`, use:
 
 ```bash
-FLUTTER_BIN=/home/gregor/tools/flutter/bin/flutter scripts/start_frontend.sh
+cd apps/mobile
 /home/gregor/tools/flutter/bin/flutter analyze
 /home/gregor/tools/flutter/bin/flutter test
 ```

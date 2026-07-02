@@ -13,7 +13,8 @@ Flutter app <-> local mock data and guest storage
 
 The Flutter app is the main product surface. Supabase is the intended auth and
 persistence backend. The FastAPI service is an independent AI boundary that
-currently returns placeholder recommendations.
+currently serves authenticated deterministic recommendations when backend
+Supabase settings are configured.
 
 ## Mobile App
 
