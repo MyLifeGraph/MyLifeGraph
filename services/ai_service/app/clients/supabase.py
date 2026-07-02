@@ -1,8 +1,12 @@
+from collections.abc import Mapping, Sequence
 from typing import Any
 
 import httpx
 
 from app.core.config import Settings
+
+
+QueryParams = Mapping[str, str] | Sequence[tuple[str, str]]
 
 
 class SupabaseConfigurationError(RuntimeError):
@@ -37,7 +41,7 @@ class SupabaseRestClient:
         self,
         table: str,
         *,
-        params: dict[str, str],
+        params: QueryParams,
     ) -> list[dict[str, Any]]:
         async with httpx.AsyncClient(timeout=self._timeout_seconds) as client:
             response = await client.get(

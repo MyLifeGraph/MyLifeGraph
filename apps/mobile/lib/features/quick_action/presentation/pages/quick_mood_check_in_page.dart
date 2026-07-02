@@ -10,6 +10,7 @@ import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/supabase/supabase_providers.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../../dashboard/presentation/providers/dashboard_providers.dart';
+import '../../../snapshots/presentation/providers/snapshot_providers.dart';
 import '../../data/quick_check_in_supabase_data_source.dart';
 
 class QuickMoodCheckInPage extends ConsumerStatefulWidget {
@@ -259,6 +260,9 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
           coachNotes: _notesController.text,
         ),
       );
+      await ref
+          .read(snapshotRefreshServiceProvider)
+          .refreshDailyAfterUserSignal();
       ref.invalidate(dashboardSnapshotProvider);
       if (mounted) {
         _showMessage('Quick check-in saved.');

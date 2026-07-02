@@ -59,11 +59,24 @@ Already implemented:
   - Initial goals, habits, schedule items, notification preferences, durable
     memory entries, and first deterministic recommendations from explicit
     structured answers.
+- Snapshot Aggregator foundation:
+  - `POST /v1/snapshots/generate`.
+  - Authenticated backend snapshot refresh derived from the verified bearer
+    token.
+  - Deterministic `daily` and `weekly` `user_state_snapshots` from recent
+    check-ins, behavioral events, tasks, goals, habits, schedule items, and
+    memory entries.
+  - Compact summaries with risk flags, next-focus hints, input counts, and
+    evidence references.
+  - Best-effort Flutter daily snapshot refresh after Supabase-backed Daily
+    Check-In and Quick Mood Check-In writes.
 
 Not yet implemented:
 
 - A production background job queue or worker.
 - Explicit recommendation refresh/generate UX.
+- Automatic snapshot refresh triggers after task/habit changes or scheduled
+  jobs.
 - Real coach-response backend.
 - LLM provider integration.
 - Memory extraction beyond current direct writes.
@@ -101,9 +114,10 @@ repositories, and jobs, not as unconstrained autonomous LLM loops.
 | Planning service | Weekly review, user request | Goals, tasks, habits, schedule, snapshots | `tasks`, `schedule_items`, `recommendations`, `coach_messages` | Optional for complex plans |
 | Notification service | Schedule and event changes | Preferences, recommendations, deadlines | `notifications` | None |
 
-The intake foundation and controlled post-intake recommendation refresh now
-exist. Next backend work should add a recurring signal aggregator before coach,
-memory extraction, weekly planning, or LLM provider work.
+The intake foundation, controlled post-intake recommendation refresh, and first
+authenticated snapshot aggregator endpoint now exist. Next backend work should
+wire controlled snapshot triggers before coach, memory extraction, weekly
+planning, or LLM provider work.
 
 ## User Start Flow
 
@@ -218,6 +232,7 @@ Indexes:
 
 - `(user_id, scope, generated_at desc)`
 - `(user_id, period_key)`
+- Unique `(user_id, scope, period_key)` for atomic backend snapshot upserts.
 
 Access:
 
@@ -348,11 +363,16 @@ controlled post-intake recommendation refresh.
 
 ### Slice 2: Snapshot Aggregator
 
-- Add a deterministic service that can create `daily` and `weekly`
-  `user_state_snapshots` from recent check-ins, tasks, goals, habits, schedule
-  items, and memory entries.
-- Keep snapshots compact and avoid reading full user history for every request.
-- Add backend tests for stale/missing data and user scoping.
+- Implemented: authenticated `POST /v1/snapshots/generate` creates or refreshes
+  `daily` and `weekly` `user_state_snapshots` from recent check-ins,
+  behavioral events, tasks, goals, habits, schedule items, and memory entries.
+- Implemented: snapshots stay compact and avoid reading full user history.
+- Implemented: backend tests cover stale/missing-style summary behavior,
+  idempotent period refresh, request `user_id` rejection, and user scoping.
+- Implemented: Supabase-backed Daily Check-In and Quick Mood Check-In trigger
+  daily snapshot refresh best-effort after successful writes.
+- Still open: automatic triggers after task or habit changes, scheduled
+  refresh, and user-visible refresh UX.
 
 ### Slice 3: E2E Expansion
 

@@ -14,10 +14,10 @@ way to explore the product today is the Flutter app in mock-data guest mode.
   migrations create the current app tables, including Intake V1 tables, for
   local Supabase-backed testing.
 - The FastAPI service exposes authenticated intake and deterministic
-  recommendation endpoints. Completing Intake V1 now triggers a controlled
-  deterministic recommendation refresh from the onboarding snapshot. The
-  service is ready for future model-backed workflows, but no LLM provider is
-  connected.
+  recommendation endpoints plus a deterministic snapshot refresh endpoint.
+  Completing Intake V1 now triggers a controlled deterministic recommendation
+  refresh from the onboarding snapshot. Daily and weekly user-state snapshots
+  can be refreshed through the backend without an LLM provider.
 - Repository docs and scripts should be treated as the shared team source of
   truth. Do not depend on user-local Codex skills or machine-specific paths.
 
@@ -135,12 +135,15 @@ Supabase is the intended auth and persistence backend. The current app supports:
 - Structured onboarding submits Intake V1 to FastAPI in real backend mode,
   creates first deterministic recommendations from the onboarding snapshot, and
   preserves local guest/mock behavior.
+- Supabase-backed daily and quick mood check-ins refresh the backend daily
+  `user_state_snapshots` row best-effort after writes; guest/mock check-ins stay
+  local.
 
 Important current caveat: the Flutter app targets the canonical snake_case
 schema. A clean local Supabase reset should apply
-`20260702092807_intake_v1_backend_foundation.sql`, which adds the Intake V1
-tables after the canonical app schema. Remote projects still need to be
-inspected directly before relying on `USE_MOCK_DATA=false`.
+`20260702195915_unique_user_state_snapshot_period.sql`, which adds the
+snapshot-period unique index after the Intake V1 tables. Remote projects still
+need to be inspected directly before relying on `USE_MOCK_DATA=false`.
 
 See `docs/supabase-current-state.md` before changing Supabase schema or relying
 on real remote data.

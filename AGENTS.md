@@ -51,7 +51,10 @@ canonical schema, applies RLS policies, and copies data from legacy CamelCase
 tables when they exist. It intentionally does not drop legacy tables. The
 migration
 `supabase/migrations/20260702092807_intake_v1_backend_foundation.sql` adds the
-Intake V1 backend tables and RLS policies.
+Intake V1 backend tables and RLS policies. The migration
+`supabase/migrations/20260702195915_unique_user_state_snapshot_period.sql`
+deduplicates `user_state_snapshots` by user/scope/period and adds the unique
+index required for atomic backend upserts.
 
 ## Important Docs
 
@@ -67,15 +70,16 @@ Intake V1 backend tables and RLS policies.
 
 ## Next Implementation Direction
 
-The **Intake V1 without LLM** foundation and controlled deterministic
-recommendation refresh after authenticated intake now exist. Read
+The **Intake V1 without LLM** foundation, controlled deterministic
+recommendation refresh after authenticated intake, and the authenticated
+deterministic snapshot aggregator endpoint now exist. Read
 `docs/backend-roadmap.md` before planning the next backend, AI, onboarding, or
 agent workflow.
 
 Do not jump straight to broad LLM integration, calendar import, weekly planning,
 vector search, or autonomous background agents. The next product slice should
-build on Intake V1 and the post-intake recommendation refresh with a recurring
-signal aggregator for `user_state_snapshots`.
+build on the snapshot aggregator by wiring controlled refresh triggers after
+task or habit changes, scheduled refresh, or E2E coverage with the AI service.
 
 The implemented post-intake refresh is backend-only and best-effort:
 
@@ -89,6 +93,12 @@ The implemented post-intake refresh is backend-only and best-effort:
   fingerprint, and persists accepted rows to `recommendations`.
 - Normal dashboard reads through `GET /v1/recommendations` must still not
   generate recommendations.
+- `POST /v1/snapshots/generate` derives `user_id` from the verified Supabase
+  bearer token and creates or refreshes deterministic `daily` and `weekly`
+  `user_state_snapshots`.
+- Supabase-backed Daily Check-In and Quick Mood Check-In now call the daily
+  snapshot refresh best-effort after successful writes. Guest/mock paths must
+  remain local and must not call the AI service.
 
 ## Local Supabase Workflow
 
@@ -124,7 +134,7 @@ you actually intend to run `supabase db reset`.
 `supabase db reset` must complete through:
 
 ```text
-20260702092807_intake_v1_backend_foundation.sql
+20260702195915_unique_user_state_snapshot_period.sql
 ```
 
 Expected local reset notices include skipped legacy CamelCase tables and

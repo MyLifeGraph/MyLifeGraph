@@ -16,7 +16,9 @@ Flutter app <-> local mock data and guest storage
 The Flutter app is the main product surface. Supabase is the intended auth and
 persistence backend. The FastAPI service is an independent AI boundary that
 currently serves authenticated Intake V1 and deterministic recommendation
-workflows when backend Supabase settings are configured.
+workflows when backend Supabase settings are configured. It also owns
+deterministic user-state snapshot aggregation for backend-generated `daily` and
+`weekly` summaries.
 
 ## Mobile App
 
@@ -109,6 +111,8 @@ Current responsibilities:
 - Serve authenticated Intake V1 at `/v1/intake/complete`.
 - Serve authenticated recommendation contract endpoints at
   `/v1/recommendations` and `/v1/recommendations/generate`.
+- Serve authenticated deterministic snapshot refresh at
+  `/v1/snapshots/generate`.
 - Keep recommendation generation behind a service boundary.
 - Verify bearer tokens through an isolated auth verifier when Supabase backend
   settings are configured.
@@ -119,6 +123,9 @@ Current responsibilities:
   `tasks` plus latest `user_state_snapshots`, run the deterministic v1
   recommendation engine, and persist verified recommendations to
   `recommendations`.
+- Create or refresh compact `daily` and `weekly` `user_state_snapshots` from
+  recent `daily_logs`, `behavioral_events`, `tasks`, `goals`, `habits`,
+  `schedule_items`, and `memory_entries` without reading full history.
 - Trigger a best-effort deterministic recommendation refresh after authenticated
   Intake V1 completion so the first real dashboard can read persisted
   onboarding-derived recommendations.
@@ -133,6 +140,19 @@ fallback. Flutter does not automatically call
 Authenticated Intake V1 completion calls the same backend generation path after
 the onboarding snapshot is written; normal dashboard reads still never generate
 recommendations.
+
+Snapshot refresh is a deliberate authenticated backend action through
+`POST /v1/snapshots/generate`. The request can select `daily` or `weekly`
+scope and an optional target date, but the backend always derives `user_id` from
+the verified bearer token. If a snapshot already exists for the same
+`user_id`, `scope`, and `period_key`, the backend updates it instead of
+inserting another row.
+
+Flutter triggers the `daily` snapshot refresh best-effort after successful
+Supabase-backed Daily Check-In and Quick Mood Check-In writes. The trigger is
+guarded by runtime config, Supabase configuration, and a real access token.
+Guest mode, mock mode, missing tokens, and AI-service failures do not block the
+check-in save path.
 
 Flutter onboarding sends the structured Intake V1 payload to
 `POST /v1/intake/complete` only in real backend mode with a Supabase access
@@ -165,7 +185,7 @@ making claims about deployed data.
 - The repository does not contain real Supabase credentials.
 - The FastAPI service is connected to Supabase-backed deterministic
   recommendations, but no LLM/model provider is connected.
-- Intake V1 creates one onboarding snapshot and triggers first deterministic
-  recommendations, but there is not yet a recurring signal aggregator for daily
-  or weekly snapshots.
+- Daily and weekly snapshot aggregation now exists behind an authenticated
+  backend endpoint, and daily check-in flows trigger daily refresh best-effort.
+  There is not yet a background scheduler or task/habit-change trigger.
 - Mock mode is the reliable path for local product exploration today.

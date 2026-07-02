@@ -108,14 +108,20 @@ patterns, grants read access to `authenticated`, grants full access to
 `service_role`, enables and forces RLS, and applies own-or-admin read policies
 plus service-role write policies. The FastAPI recommendation context loader now
 reads latest `user_state_snapshots` through the backend service-role client with
-explicit `user_id` filters.
+explicit `user_id` filters. The FastAPI snapshot aggregator also reuses
+`user_state_snapshots` for deterministic `daily` and `weekly` summaries.
+
+`20260702195915_unique_user_state_snapshot_period.sql` deduplicates existing
+`user_state_snapshots` rows by `(user_id, scope, period_key)`, keeping the most
+recent `generated_at` row, then adds a unique index on those columns. The
+FastAPI snapshot repository relies on that index for atomic upserts.
 
 ## Local Verification Workflow
 
 For local Supabase-backed testing, the reset should complete through:
 
 ```text
-20260702092807_intake_v1_backend_foundation.sql
+20260702195915_unique_user_state_snapshot_period.sql
 ```
 
 Then configure `.env` with:
@@ -148,7 +154,7 @@ RESET_DB=true FLUTTER_BIN=/path/to/flutter scripts/verify_supabase_local.sh
 ```
 
 The reset form should apply all migrations through
-`20260702092807_intake_v1_backend_foundation.sql`; expected legacy-table skip
+`20260702195915_unique_user_state_snapshot_period.sql`; expected legacy-table skip
 notices may be emitted for missing CamelCase tables.
 
 Then either run the browser E2E smoke in `scripts/e2e_web.sh` or start the
@@ -203,6 +209,6 @@ legacy compatibility only and should be dropped in a later dedicated migration
 after data migration and app verification are complete.
 
 The latest schema additions are `intake_responses` and
-`user_state_snapshots` for the "Intake V1 without LLM" slice. The next backend
-slice should reuse those tables for daily and weekly snapshot aggregation rather
-than adding broad LLM, calendar, or worker infrastructure first.
+`user_state_snapshots` for the "Intake V1 without LLM" slice. The backend now
+reuses those tables for authenticated daily and weekly snapshot aggregation
+without adding broad LLM, calendar, or worker infrastructure.

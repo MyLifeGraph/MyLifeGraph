@@ -10,12 +10,15 @@ FastAPI service boundary for recommendation and future ML workflows.
   workflow.
 - `/v1/recommendations` and `/v1/recommendations/generate` expose the
   authenticated backend v1 recommendation contract.
+- `/v1/snapshots/generate` creates or refreshes deterministic `daily` or
+  `weekly` user-state snapshots from recent user-owned signals.
 - With backend Supabase settings configured, bearer tokens are verified through
   Supabase Auth. Intake writes structured answers, onboarding state, goals,
   habits, schedule items, notification preferences, memory entries, and an
   onboarding snapshot. Recommendation endpoints load recent user-scoped app data
   from canonical snake_case tables, verify deterministic recommendations, and
-  persist accepted results to `recommendations`.
+  persist accepted results to `recommendations`. Snapshot generation reuses the
+  existing `user_state_snapshots` table and does not require an LLM provider.
 - The service does not call LLMs, OpenRouter, local models, vector search, or
   background jobs.
 
@@ -73,6 +76,17 @@ curl -X POST http://localhost:8000/v1/recommendations/generate \
   -H 'Content-Type: application/json' \
   -d '{"window_days":28,"force":false,"allow_llm_wording":false}'
 ```
+
+```bash
+curl -X POST http://localhost:8000/v1/snapshots/generate \
+  -H 'Authorization: Bearer <supabase_access_token>' \
+  -H 'Content-Type: application/json' \
+  -d '{"scope":"daily","window_days":7}'
+```
+
+Use `"scope":"weekly"` to refresh the ISO-week snapshot for the target date.
+The backend derives `user_id` from the bearer token and rejects request bodies
+that include `user_id`.
 
 ## Environment
 

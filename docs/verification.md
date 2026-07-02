@@ -46,6 +46,11 @@ cd services/ai_service
 Use `python -m pytest` from an environment with `services/ai_service`
 requirements installed if the local `.venv` does not exist.
 
+FastAPI tests cover authenticated intake, deterministic recommendations, and
+the snapshot aggregator endpoint. Snapshot tests verify principal-derived
+`user_id`, request `user_id` rejection, scoped Supabase reads, and refreshing an
+existing `user_state_snapshots` row for the same period.
+
 Current Flutter widget tests include:
 
 - Auth gate renders.
@@ -55,6 +60,9 @@ Current Flutter widget tests include:
   `shared_preferences`.
 - The Intake API data source posts `POST /v1/intake/complete` with bearer auth
   and the structured payload.
+- The Snapshot refresh service posts `POST /v1/snapshots/generate` with bearer
+  auth in real backend mode, skips guest/mock/missing-token paths, and treats
+  network failures as best-effort.
 
 These tests cover the default mock/guest product path. They do not prove real
 Supabase registration, RLS, or browser behavior.
@@ -105,7 +113,7 @@ supabase db reset
 Expected successful reset output applies migrations through:
 
 ```text
-20260702092807_intake_v1_backend_foundation.sql
+20260702195915_unique_user_state_snapshot_period.sql
 ```
 
 Expected notices include skipped legacy CamelCase tables and already-existing
@@ -162,9 +170,10 @@ then queries local Supabase REST with the local service-role key to assert that
 daily and quick check-ins share one `daily_logs` row because that table is unique
 by `(user_id, entry_date)`; the smoke uses `behavioral_events.source` to verify
 that both check-in flows wrote their event signals. The browser smoke does not
-yet start FastAPI or assert `intake_responses`, `user_state_snapshots`, or
-post-intake generated `recommendations`; those are covered by FastAPI unit tests
-and should be added to E2E when the AI service is part of that script.
+yet start FastAPI or assert `intake_responses`, snapshot refresh through
+`POST /v1/snapshots/generate`, or post-intake generated `recommendations`;
+those are covered by FastAPI unit tests and should be added to E2E when the AI
+service is part of that script.
 
 The coach step uses the page's default prompt, sends it through the visible
 coach send button, and verifies the persisted `coach_messages` row. This keeps
@@ -254,7 +263,7 @@ Still missing for broader product verification:
 - CI wiring for the browser E2E command.
 - Playwright trace artifact collection on failure.
 - Dedicated database assertions for notifications, onboarding schedule items,
-  intake responses, user state snapshots, and memory entries.
+  intake responses, backend-refreshed user state snapshots, and memory entries.
 - Coverage for Google OAuth, mobile layout, and authenticated guest-data
   migration.
 

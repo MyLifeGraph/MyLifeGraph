@@ -143,6 +143,22 @@ curl -X POST http://localhost:8000/v1/recommendations/generate \
   -d '{"window_days":28,"force":false,"allow_llm_wording":false}'
 ```
 
+```bash
+curl -X POST http://localhost:8000/v1/snapshots/generate \
+  -H 'Authorization: Bearer <supabase_access_token>' \
+  -H 'Content-Type: application/json' \
+  -d '{"scope":"daily","window_days":7}'
+```
+
+The snapshot endpoint also accepts `"scope":"weekly"` and an optional
+`"target_date":"YYYY-MM-DD"`. It derives the user from the bearer token and
+uses the backend service-role key only inside FastAPI.
+
+When FastAPI is running and Flutter is in real backend mode, successful Daily
+Check-In and Quick Mood Check-In writes call the daily snapshot endpoint
+best-effort. If FastAPI is down, the check-in save path still succeeds and the
+snapshot refresh is skipped by the client.
+
 Backend-only Supabase configuration for the AI service:
 
 ```env
@@ -171,7 +187,7 @@ Read `docs/supabase-current-state.md` first. `supabase db reset` is a local
 destructive reset and should complete through:
 
 ```text
-20260702092807_intake_v1_backend_foundation.sql
+20260702195915_unique_user_state_snapshot_period.sql
 ```
 
 The canonical app schema is snake_case. Legacy CamelCase tables are only used as

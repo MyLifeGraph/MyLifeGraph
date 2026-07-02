@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 
 import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/supabase/supabase_providers.dart';
+import '../../../snapshots/presentation/providers/snapshot_providers.dart';
 import '../../data/datasources/daily_check_in_supabase_data_source.dart';
 
 class DailyCheckInPage extends ConsumerStatefulWidget {
@@ -154,6 +155,9 @@ class _DailyCheckInPageState extends ConsumerState<DailyCheckInPage> {
     setState(() => _isSaving = true);
     try {
       await DailyCheckInSupabaseDataSource(client).saveDefaultCheckIn();
+      await ref
+          .read(snapshotRefreshServiceProvider)
+          .refreshDailyAfterUserSignal();
       if (mounted) {
         _showMessage('Daily Check-In saved to Supabase.');
       }

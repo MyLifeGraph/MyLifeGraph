@@ -1,11 +1,11 @@
 # Next Chat Prompt
 
-Use this prompt when starting a new implementation chat for the next backend
-slice after Intake V1.
+Use this prompt when starting a new implementation chat after the authenticated
+snapshot aggregator foundation.
 
 Recommended reasoning level: **high**. The next work crosses FastAPI,
-recommendation generation, snapshots, Flutter refresh behavior, Supabase RLS,
-and tests.
+snapshot generation, recommendation refresh behavior, Flutter trigger points,
+Supabase RLS, and tests.
 
 Do not spawn multiple agents by default. Use subagents only when the work is
 clearly separable, the write scopes do not overlap, and parallelism materially
@@ -27,18 +27,23 @@ Use high reasoning. First read:
 6. docs/local-dev.md
 7. docs/verification.md
 
-Goal: implement the next roadmap slice after Intake V1 and controlled
-post-intake deterministic recommendation refresh, without LLM.
+Goal: implement the next roadmap slice after Intake V1, controlled post-intake
+deterministic recommendation refresh, and authenticated snapshot aggregation,
+without LLM.
 
 Do not spawn multiple agents by default. Use subagents only if there are clearly
 separable non-overlapping tasks that can run in parallel without blocking the
 main implementation. If the slice is narrow, keep the work in one agent.
 
-Focus on a recurring snapshot aggregator:
+Focus on the next controlled snapshot refresh trigger or E2E verification:
 
 - Reuse the existing Supabase bearer-token auth dependency.
 - Derive `user_id` from the verified backend principal only.
-- Use existing `intake_responses` and `user_state_snapshots`.
+- Reuse existing `intake_responses` and `user_state_snapshots`.
+- Preserve `POST /v1/snapshots/generate` behavior for deterministic `daily` and
+  `weekly` snapshots.
+- Preserve the existing best-effort daily refresh after Supabase-backed Daily
+  Check-In and Quick Mood Check-In.
 - Preserve the existing post-intake recommendation refresh behavior.
 - Do not add LLM providers.
 - Do not require calendar connection.
@@ -48,13 +53,14 @@ Focus on a recurring snapshot aggregator:
 
 Preferred implementation sequence:
 
-1. Inspect current FastAPI intake/recommendation services and Flutter
-   onboarding/recommendation refresh behavior.
-2. Implement the smallest useful deterministic snapshot aggregator slice for
-   `daily` and/or `weekly` `user_state_snapshots`.
-3. Implement the backend service/repository changes with focused tests.
-4. Wire Flutter only where a deliberate user-visible refresh or post-intake
-   invalidation is needed.
+1. Inspect current FastAPI intake, recommendation, and snapshot services plus
+   Flutter check-in/task write flows.
+2. Choose the smallest controlled trigger: task/habit snapshot refresh,
+   explicit user-visible refresh, scheduled refresh foundation, or E2E with
+   FastAPI.
+3. Implement backend and/or Flutter wiring with focused tests.
+4. Preserve mock and guest mode; do not trigger LLM or recommendation
+   generation on dashboard load.
 5. Run the lowest sufficient verification first, then broaden.
 6. Report any verification that could not be run.
 
