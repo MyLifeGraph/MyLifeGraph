@@ -5,4 +5,6 @@ abstract interface class OptimizationRepository {
   Future<SkillsetProfile> getSkillsetProfile();
 
   Future<List<Recommendation>> getRecommendations();
+
+  Future<List<Recommendation>> refreshRecommendations();
 }

@@ -61,6 +61,9 @@ Current Flutter widget tests include:
 - Guest can open the Habit Completion quick action without requiring Supabase.
 - The Intake API data source posts `POST /v1/intake/complete` with bearer auth
   and the structured payload.
+- The optimization repository keeps normal recommendation reads as `GET` only,
+  and the deliberate refresh path posts `POST /v1/recommendations/generate`
+  with bearer auth, `force=false`, and `allow_llm_wording=false`.
 - The Snapshot refresh service posts `POST /v1/snapshots/generate` with bearer
   auth in real backend mode, skips guest/mock/missing-token paths, and treats
   network failures as best-effort.
@@ -179,17 +182,20 @@ of relying on canvas pixels.
 The browser smoke creates a confirmed local Supabase Auth user through the local
 admin API, signs in through the app, completes onboarding through FastAPI, saves
 a daily check-in, saves a quick mood check-in, logs an intake-created habit
-completion, opens alerts, sends a coach message, and then queries local
-Supabase REST with the local service-role key.
+completion, uses the dashboard refresh action, opens alerts, sends a coach
+message, and then queries local Supabase REST with the local service-role key.
 It asserts FastAPI-created `intake_responses`, onboarding
 `user_state_snapshots`, deterministic post-intake `recommendations`, intake
 `goals` and `habits`, direct app writes to `daily_logs`,
 `behavioral_events`, `habit_logs`, and `coach_messages`, plus
-backend-refreshed daily `user_state_snapshots` after the check-in and habit
-completion flows. The daily and quick check-ins share one `daily_logs` row because
-that table is unique by `(user_id, entry_date)`; the smoke uses
-`behavioral_events.source` to verify that both check-in flows wrote their event
-signals.
+backend-refreshed daily `user_state_snapshots` after the check-in, habit
+completion, and manual recommendation refresh flows. The manual refresh step
+also observes the browser POSTs to `/v1/snapshots/generate` and
+`/v1/recommendations/generate`, verifies their JSON payloads, and confirms
+deterministic recommendation rows are still present. The daily and quick
+check-ins share one `daily_logs` row because that table is unique by
+`(user_id, entry_date)`; the smoke uses `behavioral_events.source` to verify
+that both check-in flows wrote their event signals.
 
 The coach step uses the page's default prompt, sends it through the visible
 coach send button, and verifies the persisted `coach_messages` row. This keeps

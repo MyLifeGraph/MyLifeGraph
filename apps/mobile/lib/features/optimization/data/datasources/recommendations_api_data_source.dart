@@ -15,6 +15,23 @@ class RecommendationsApiDataSource {
     );
     return RecommendationsApiResponse.fromJson(json).recommendations;
   }
+
+  Future<List<Recommendation>> generateRecommendations({
+    required String accessToken,
+    int windowDays = 28,
+    bool force = false,
+  }) async {
+    final json = await _apiClient.postJson(
+      '/v1/recommendations/generate',
+      body: {
+        'window_days': windowDays,
+        'force': force,
+        'allow_llm_wording': false,
+      },
+      headers: {'Authorization': 'Bearer $accessToken'},
+    );
+    return RecommendationsApiResponse.fromJson(json).recommendations;
+  }
 }
 
 class RecommendationsApiResponse {

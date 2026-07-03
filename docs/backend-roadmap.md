@@ -47,6 +47,8 @@ Already implemented:
 - Recommendation verification, dedupe fingerprints, freshness checks, and
   persistence to `recommendations`.
 - Controlled post-intake recommendation refresh from the onboarding snapshot.
+- Deliberate dashboard recommendation refresh/generate UX that calls the
+  deterministic backend generate endpoint with LLM wording disabled.
 - Flutter reads persisted recommendations through FastAPI in real backend mode
   and falls back to mock data for guest, mock, missing session, or network
   failure.
@@ -81,7 +83,6 @@ Already implemented:
 Not yet implemented:
 
 - A production background job queue or worker.
-- Explicit recommendation refresh/generate UX.
 - Automatic snapshot refresh triggers from scheduled jobs.
 - Real coach-response backend.
 - LLM provider integration.
@@ -120,10 +121,10 @@ repositories, and jobs, not as unconstrained autonomous LLM loops.
 | Planning service | Weekly review, user request | Goals, tasks, habits, schedule, snapshots | `tasks`, `schedule_items`, `recommendations`, `coach_messages` | Optional for complex plans |
 | Notification service | Schedule and event changes | Preferences, recommendations, deadlines | `notifications` | None |
 
-The intake foundation, controlled post-intake recommendation refresh, and first
-authenticated snapshot aggregator endpoint now exist. Next backend work should
-wire controlled snapshot triggers before coach, memory extraction, weekly
-planning, or LLM provider work.
+The intake foundation, controlled post-intake recommendation refresh, first
+authenticated snapshot aggregator endpoint, and deliberate dashboard refresh UX
+now exist. Next backend work should wire scheduled refresh or deepen habit
+flows before coach, memory extraction, weekly planning, or LLM provider work.
 
 ## User Start Flow
 
@@ -354,8 +355,9 @@ Use these rules before adding any model provider:
 ## Immediate Implementation Plan
 
 The next implementation should build on **Intake V1 without LLM**, controlled
-post-intake recommendation refresh, authenticated snapshot aggregation, and the
-FastAPI-backed browser E2E coverage.
+post-intake recommendation refresh, authenticated snapshot aggregation,
+deliberate dashboard recommendation refresh, and the FastAPI-backed browser E2E
+coverage.
 
 ### Slice 1: Controlled Recommendation Refresh
 
@@ -366,7 +368,9 @@ FastAPI-backed browser E2E coverage.
   `user_state_snapshots` with explicit `user_id` scoping.
 - Implemented: normal dashboard reads still do not auto-generate
   recommendations.
-- Still open: a deliberate user-visible refresh/generate UX.
+- Implemented: the dashboard exposes a deliberate refresh action that refreshes
+  the daily snapshot best-effort, then calls `POST /v1/recommendations/generate`
+  with `allow_llm_wording=false`, and reloads persisted recommendations.
 
 ### Slice 2: Snapshot Aggregator
 
@@ -383,14 +387,15 @@ FastAPI-backed browser E2E coverage.
 - Implemented: Quick Action habit completion writes to `habit_logs`, updates the
   habit timestamp, and triggers daily snapshot refresh best-effort after a
   successful Supabase write.
-- Still open: scheduled refresh and user-visible refresh UX.
+- Still open: scheduled refresh.
 
 ### Slice 3: E2E Expansion
 
 - Implemented: browser E2E starts FastAPI with local Supabase backend settings.
 - Implemented: the smoke asserts structured Intake V1 persistence, onboarding
   snapshots, deterministic post-intake recommendations, intake-created goals,
-  backend-refreshed daily snapshots after check-ins, and core direct app writes.
+  backend-refreshed daily snapshots after check-ins, deliberate dashboard
+  recommendation refresh, and core direct app writes.
 - Implemented: the guest/mock widget smoke stays fast and separate.
 
 ### Slice 4: Controlled Snapshot Triggers
@@ -399,7 +404,8 @@ FastAPI-backed browser E2E coverage.
   best-effort after a successful Supabase update.
 - Implemented: Quick Action habit completions call the same daily snapshot
   refresh best-effort after a successful Supabase upsert.
-- Next: add scheduled refresh or a deliberate user-visible refresh action.
+- Next: add scheduled refresh or deepen habit flows beyond simple daily
+  completion logging.
 - Preserve guest/mock mode and keep failures best-effort for the user write.
 - Do not introduce a production worker, LLM provider, or dashboard-load
   generation for this slice.

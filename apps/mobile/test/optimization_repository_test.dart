@@ -180,6 +180,94 @@ void main() {
       expect(apiClient.getCalls, ['/v1/recommendations']);
       expect(apiClient.postCalls, isEmpty);
     });
+
+    test('mock mode refresh returns mock recommendations without backend',
+        () async {
+      final apiClient = _FakeApiClient();
+      final repository = _buildRepository(
+        config: _config(useMockData: true, supabaseConfigured: true),
+        apiClient: apiClient,
+        accessTokenProvider: () => 'token',
+      );
+
+      final recommendations = await repository.refreshRecommendations();
+
+      expect(recommendations, [_mockRecommendation]);
+      expect(apiClient.getCalls, isEmpty);
+      expect(apiClient.postCalls, isEmpty);
+    });
+
+    test('missing access token skips recommendation refresh backend call',
+        () async {
+      final apiClient = _FakeApiClient();
+      final repository = _buildRepository(
+        config: _config(useMockData: false, supabaseConfigured: true),
+        apiClient: apiClient,
+        accessTokenProvider: () => '',
+      );
+
+      final recommendations = await repository.refreshRecommendations();
+
+      expect(recommendations, [_mockRecommendation]);
+      expect(apiClient.getCalls, isEmpty);
+      expect(apiClient.postCalls, isEmpty);
+    });
+
+    test('authenticated refresh posts generate request with bearer auth',
+        () async {
+      final apiClient = _FakeApiClient(
+        postResponse: {
+          'items': [
+            {
+              'id': 'rec_backend_planning',
+              'title': 'Reset the week plan',
+              'reason': 'Recent planning friction supports it.',
+              'action_label': 'Review plan',
+              'category': 'planning',
+              'confidence': 0.76,
+            },
+          ],
+          'needs_generation': false,
+        },
+      );
+      final repository = _buildRepository(
+        config: _config(useMockData: false, supabaseConfigured: true),
+        apiClient: apiClient,
+        accessTokenProvider: () => 'access-token-123',
+      );
+
+      final recommendations = await repository.refreshRecommendations();
+
+      expect(apiClient.getCalls, isEmpty);
+      expect(apiClient.postCalls, ['/v1/recommendations/generate']);
+      expect(apiClient.lastBody, {
+        'window_days': 28,
+        'force': false,
+        'allow_llm_wording': false,
+      });
+      expect(apiClient.lastHeaders, {
+        'Authorization': 'Bearer access-token-123',
+      });
+      expect(recommendations, hasLength(1));
+      expect(recommendations.single.id, 'rec_backend_planning');
+      expect(recommendations.single.category, RecommendationCategory.planning);
+    });
+
+    test('refresh network failures fall back to mock recommendations',
+        () async {
+      final apiClient = _FakeApiClient(throwOnPost: true);
+      final repository = _buildRepository(
+        config: _config(useMockData: false, supabaseConfigured: true),
+        apiClient: apiClient,
+        accessTokenProvider: () => 'token',
+      );
+
+      final recommendations = await repository.refreshRecommendations();
+
+      expect(recommendations, [_mockRecommendation]);
+      expect(apiClient.getCalls, isEmpty);
+      expect(apiClient.postCalls, ['/v1/recommendations/generate']);
+    });
   });
 }
 
@@ -230,14 +318,20 @@ class _FakeMockDataSource extends OptimizationMockDataSource {
 class _FakeApiClient extends ApiClient {
   _FakeApiClient({
     Map<String, dynamic>? getResponse,
+    Map<String, dynamic>? postResponse,
     this.throwOnGet = false,
+    this.throwOnPost = false,
   })  : getResponse = getResponse ?? <String, dynamic>{},
+        postResponse = postResponse ?? <String, dynamic>{},
         super(Dio());
 
   final Map<String, dynamic> getResponse;
+  final Map<String, dynamic> postResponse;
   final bool throwOnGet;
+  final bool throwOnPost;
   final List<String> getCalls = [];
   final List<String> postCalls = [];
+  Map<String, dynamic>? lastBody;
   Map<String, String>? lastHeaders;
 
   @override
@@ -260,6 +354,11 @@ class _FakeApiClient extends ApiClient {
     Map<String, String>? headers,
   }) async {
     postCalls.add(path);
-    return <String, dynamic>{};
+    lastBody = body;
+    lastHeaders = headers;
+    if (throwOnPost) {
+      throw Exception('network failed');
+    }
+    return postResponse;
   }
 }

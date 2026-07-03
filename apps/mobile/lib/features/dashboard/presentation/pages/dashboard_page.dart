@@ -27,6 +27,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
   final Set<String> _completedTaskIds = {};
   final Set<String> _deletedTaskIds = {};
   bool _isCompletedHistoryExpanded = true;
+  bool _isRefreshingRecommendations = false;
 
   @override
   Widget build(BuildContext context) {
@@ -43,6 +44,8 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
         completedTaskIds: _completedTaskIds,
         deletedTaskIds: _deletedTaskIds,
         isCompletedHistoryExpanded: _isCompletedHistoryExpanded,
+        isRefreshingRecommendations: _isRefreshingRecommendations,
+        onRefreshRecommendations: _refreshRecommendations,
         onToggleTask: _toggleTask,
         onCompleteTask: _completeTask,
         onRestoreTask: _restoreTask,
@@ -107,6 +110,34 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
       return;
     }
   }
+
+  Future<void> _refreshRecommendations() async {
+    if (_isRefreshingRecommendations) {
+      return;
+    }
+
+    setState(() => _isRefreshingRecommendations = true);
+    try {
+      await ref
+          .read(snapshotRefreshServiceProvider)
+          .refreshDailyAfterUserSignal();
+      await ref
+          .read(optimizationServiceProvider)
+          .refreshActionableRecommendations();
+      ref.invalidate(recommendationsProvider);
+      ref.invalidate(dashboardSnapshotProvider);
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Recommendations refreshed.')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isRefreshingRecommendations = false);
+      }
+    }
+  }
 }
 
 class _DashboardHome extends StatelessWidget {
@@ -117,6 +148,8 @@ class _DashboardHome extends StatelessWidget {
     required this.completedTaskIds,
     required this.deletedTaskIds,
     required this.isCompletedHistoryExpanded,
+    required this.isRefreshingRecommendations,
+    required this.onRefreshRecommendations,
     required this.onToggleTask,
     required this.onCompleteTask,
     required this.onRestoreTask,
@@ -130,6 +163,8 @@ class _DashboardHome extends StatelessWidget {
   final Set<String> completedTaskIds;
   final Set<String> deletedTaskIds;
   final bool isCompletedHistoryExpanded;
+  final bool isRefreshingRecommendations;
+  final VoidCallback onRefreshRecommendations;
   final ValueChanged<String> onToggleTask;
   final ValueChanged<String> onCompleteTask;
   final ValueChanged<String> onRestoreTask;
@@ -165,7 +200,11 @@ class _DashboardHome extends StatelessWidget {
                 ),
                 sliver: SliverList.list(
                   children: [
-                    _DashboardHeader(isMobile: isMobile),
+                    _DashboardHeader(
+                      isMobile: isMobile,
+                      isRefreshingRecommendations: isRefreshingRecommendations,
+                      onRefreshRecommendations: onRefreshRecommendations,
+                    ),
                     SizedBox(height: isMobile ? AppSpacing.md : AppSpacing.lg),
                     _WellnessScoreCard(
                       snapshot: snapshot,
@@ -261,9 +300,15 @@ class _DashboardHome extends StatelessWidget {
 }
 
 class _DashboardHeader extends StatelessWidget {
-  const _DashboardHeader({required this.isMobile});
+  const _DashboardHeader({
+    required this.isMobile,
+    required this.isRefreshingRecommendations,
+    required this.onRefreshRecommendations,
+  });
 
   final bool isMobile;
+  final bool isRefreshingRecommendations;
+  final VoidCallback onRefreshRecommendations;
 
   @override
   Widget build(BuildContext context) {
@@ -287,8 +332,8 @@ class _DashboardHeader extends StatelessWidget {
             ],
           ),
         ),
-        Stack(
-          clipBehavior: Clip.none,
+        Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
             Container(
               width: 48,
@@ -299,22 +344,49 @@ class _DashboardHeader extends StatelessWidget {
                 border: Border.all(color: _DashboardColors.border(context)),
               ),
               child: IconButton(
-                tooltip: 'Settings',
-                onPressed: () => context.go(AppRoutes.settings),
-                icon: const Icon(Icons.settings_outlined),
+                tooltip: 'Refresh recommendations',
+                onPressed: isRefreshingRecommendations
+                    ? null
+                    : onRefreshRecommendations,
+                icon: isRefreshingRecommendations
+                    ? const SizedBox.square(
+                        dimension: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.refresh),
               ),
             ),
-            Positioned(
-              right: 4,
-              top: 4,
-              child: Container(
-                width: 9,
-                height: 9,
-                decoration: const BoxDecoration(
-                  color: Color(0xFFFF8F3D),
-                  shape: BoxShape.circle,
+            const SizedBox(width: AppSpacing.sm),
+            Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    color: _DashboardColors.iconTile(context),
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(color: _DashboardColors.border(context)),
+                  ),
+                  child: IconButton(
+                    tooltip: 'Settings',
+                    onPressed: () => context.go(AppRoutes.settings),
+                    icon: const Icon(Icons.settings_outlined),
+                  ),
                 ),
-              ),
+                Positioned(
+                  right: 4,
+                  top: 4,
+                  child: Container(
+                    width: 9,
+                    height: 9,
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFFF8F3D),
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ],
         ),

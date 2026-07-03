@@ -129,6 +129,9 @@ Current responsibilities:
 - Trigger a best-effort deterministic recommendation refresh after authenticated
   Intake V1 completion so the first real dashboard can read persisted
   onboarding-derived recommendations.
+- Support a deliberate dashboard recommendation refresh action that first
+  refreshes the daily snapshot best-effort, then calls the deterministic
+  recommendation generate endpoint with LLM wording disabled.
 
 Flutter reads persisted recommendations through `GET /v1/recommendations` when
 `USE_MOCK_DATA=false`, Supabase is configured, and a real Supabase session
@@ -139,7 +142,11 @@ fallback. Flutter does not automatically call
 `POST /v1/recommendations/generate`.
 Authenticated Intake V1 completion calls the same backend generation path after
 the onboarding snapshot is written; normal dashboard reads still never generate
-recommendations.
+recommendations. The dashboard refresh icon is the explicit user-visible path:
+it calls `POST /v1/recommendations/generate` with `allow_llm_wording=false`
+after a best-effort daily snapshot refresh, then reloads persisted
+recommendations. Guest mode, mock mode, missing sessions, and network failures
+continue to fall back to local mock recommendation behavior.
 
 Snapshot refresh is a deliberate authenticated backend action through
 `POST /v1/snapshots/generate`. The request can select `daily` or `weekly`

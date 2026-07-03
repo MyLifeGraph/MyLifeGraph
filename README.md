@@ -17,7 +17,8 @@ way to explore the product today is the Flutter app in mock-data guest mode.
   recommendation endpoints plus a deterministic snapshot refresh endpoint.
   Completing Intake V1 now triggers a controlled deterministic recommendation
   refresh from the onboarding snapshot. Daily and weekly user-state snapshots
-  can be refreshed through the backend without an LLM provider.
+  can be refreshed through the backend without an LLM provider, and the
+  dashboard includes a deliberate deterministic recommendation refresh action.
 - Repository docs and scripts should be treated as the shared team source of
   truth. Do not depend on user-local Codex skills or machine-specific paths.
 
@@ -135,6 +136,9 @@ Supabase is the intended auth and persistence backend. The current app supports:
 - Structured onboarding submits Intake V1 to FastAPI in real backend mode,
   creates first deterministic recommendations from the onboarding snapshot, and
   preserves local guest/mock behavior.
+- The dashboard refresh action first refreshes the daily snapshot best-effort,
+  then calls the deterministic recommendation generator with LLM wording
+  disabled. Normal dashboard reads still do not generate recommendations.
 - Supabase-backed daily and quick mood check-ins refresh the backend daily
   `user_state_snapshots` row best-effort after writes, and dashboard task
   status changes plus Quick Action habit completions use the same refresh path

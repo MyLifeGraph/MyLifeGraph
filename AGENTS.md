@@ -72,16 +72,18 @@ index required for atomic backend upserts.
 
 The **Intake V1 without LLM** foundation, controlled deterministic
 recommendation refresh after authenticated intake, and the authenticated
-deterministic snapshot aggregator endpoint now exist. Read
+deterministic snapshot aggregator endpoint now exist. A deliberate dashboard
+refresh action now calls the deterministic recommendation generate endpoint
+without LLM wording. Read
 `docs/backend-roadmap.md` before planning the next backend, AI, onboarding, or
 agent workflow.
 
 Do not jump straight to broad LLM integration, calendar import, weekly planning,
 vector search, or autonomous background agents. The next product slice should
-build on the snapshot aggregator by adding scheduled refresh, by adding a
-deliberate user-visible refresh action, or by expanding the habit flow beyond
-simple daily completion logging. FastAPI-backed browser E2E coverage for Intake
-V1, post-intake recommendations, and daily snapshot refresh now exists.
+build on the snapshot aggregator by adding scheduled refresh or by expanding the
+habit flow beyond simple daily completion logging. FastAPI-backed browser E2E
+coverage for Intake V1, post-intake recommendations, daily snapshot refresh,
+and deliberate dashboard recommendation refresh now exists.
 
 The implemented post-intake refresh is backend-only and best-effort:
 
@@ -95,6 +97,9 @@ The implemented post-intake refresh is backend-only and best-effort:
   fingerprint, and persists accepted rows to `recommendations`.
 - Normal dashboard reads through `GET /v1/recommendations` must still not
   generate recommendations.
+- The dashboard refresh action is deliberate and calls
+  `POST /v1/recommendations/generate` with LLM wording disabled after a
+  best-effort daily snapshot refresh. Guest/mock paths must remain local.
 - `POST /v1/snapshots/generate` derives `user_id` from the verified Supabase
   bearer token and creates or refreshes deterministic `daily` and `weekly`
   `user_state_snapshots`.

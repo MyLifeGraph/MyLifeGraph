@@ -202,6 +202,72 @@ try {
     'daily snapshot refreshed after habit completion',
   );
 
+  const recommendationsBeforeManualRefresh =
+    await activeDeterministicRecommendations(user.id);
+  const dailySnapshotBeforeRecommendationRefresh =
+    await latestDailySnapshotGeneratedAt(user.id);
+  await page.goto(appRoute('/dashboard'), { waitUntil: 'domcontentloaded' });
+  await waitForFlutterShell(page);
+  await enableFlutterSemantics(page);
+  await expectText(page, "Today's wellness score");
+  const [manualSnapshotResponse, manualRecommendationResponse] =
+    await Promise.all([
+      waitForAiPost(page, '/v1/snapshots/generate', 'manual snapshot refresh'),
+      waitForAiPost(
+        page,
+        '/v1/recommendations/generate',
+        'manual recommendation refresh',
+      ),
+      clickByText(page, 'Refresh recommendations'),
+    ]);
+  assertJsonPayload(
+    manualSnapshotResponse.request(),
+    {
+      scope: 'daily',
+      window_days: 7,
+    },
+    'manual snapshot refresh payload',
+  );
+  assertJsonPayload(
+    manualRecommendationResponse.request(),
+    {
+      window_days: 28,
+      force: false,
+      allow_llm_wording: false,
+    },
+    'manual recommendation refresh payload',
+  );
+  await expectText(page, 'Recommendations refreshed.');
+  await waitForRows(
+    `user_state_snapshots?select=id,scope,generated_at,signals,metadata&user_id=eq.${user.id}&scope=eq.daily`,
+    (rows) =>
+      rows.some(
+        (row) =>
+          row.metadata?.source === 'snapshot-aggregator-v1' &&
+          Date.parse(row.generated_at) >
+            dailySnapshotBeforeRecommendationRefresh,
+      ),
+    'daily snapshot refreshed by manual recommendation refresh',
+  );
+  await waitForRows(
+    `recommendations?select=id,title,category,status,metadata&user_id=eq.${user.id}&status=in.(new,accepted)`,
+    (rows) =>
+      rows.length >= recommendationsBeforeManualRefresh.length &&
+      rows.some(
+        (row) =>
+          row.category === 'focus' &&
+          row.metadata?.model === null &&
+          row.metadata?.source_engine_version === 'deterministic-v1',
+      ) &&
+      rows.some(
+        (row) =>
+          row.category === 'planning' &&
+          row.metadata?.model === null &&
+          row.metadata?.source_engine_version === 'deterministic-v1',
+      ),
+    'deterministic recommendations after manual refresh',
+  );
+
   await page.goto(appRoute('/alerts'), { waitUntil: 'domcontentloaded' });
   await waitForFlutterShell(page);
   await enableFlutterSemantics(page);
@@ -499,6 +565,44 @@ async function waitForRows(path, predicate, description) {
 
   throw new Error(
     `Timed out verifying ${description}. Rows: ${JSON.stringify(lastRows)}`,
+  );
+}
+
+async function waitForAiPost(page, path, description) {
+  const response = await page.waitForResponse(
+    (candidate) =>
+      candidate.url() === `${aiServiceBaseUrl}${path}` &&
+      candidate.request().method() === 'POST',
+    { timeout: 45000 },
+  );
+
+  if (!response.ok()) {
+    throw new Error(
+      `Unexpected ${description} response: ${response.status()} ${await response.text()}`,
+    );
+  }
+
+  return response;
+}
+
+function assertJsonPayload(request, expected, description) {
+  const payload = request.postData() ? JSON.parse(request.postData()) : {};
+  const expectedKeys = Object.keys(expected).sort();
+  const payloadKeys = Object.keys(payload).sort();
+  const keysMatch =
+    JSON.stringify(payloadKeys) === JSON.stringify(expectedKeys);
+  const valuesMatch = expectedKeys.every((key) => payload[key] === expected[key]);
+  if (!keysMatch || !valuesMatch) {
+    throw new Error(
+      `Unexpected ${description}. Expected ${JSON.stringify(expected)}, got ${JSON.stringify(payload)}`,
+    );
+  }
+}
+
+async function activeDeterministicRecommendations(userId) {
+  return fetchRows(
+    `recommendations?select=id,category,status,metadata&user_id=eq.${userId}&status=in.(new,accepted)`,
+    'active deterministic recommendations',
   );
 }
 

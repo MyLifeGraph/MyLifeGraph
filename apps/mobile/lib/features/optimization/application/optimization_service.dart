@@ -14,4 +14,8 @@ class OptimizationService {
   Future<List<Recommendation>> loadActionableRecommendations() {
     return _repository.getRecommendations();
   }
+
+  Future<List<Recommendation>> refreshActionableRecommendations() {
+    return _repository.refreshRecommendations();
+  }
 }

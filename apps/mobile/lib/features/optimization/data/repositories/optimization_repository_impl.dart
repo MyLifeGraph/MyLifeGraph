@@ -55,4 +55,24 @@ class OptimizationRepositoryImpl implements OptimizationRepository {
       return _mockDataSource.getRecommendations();
     }
   }
+
+  @override
+  Future<List<Recommendation>> refreshRecommendations() async {
+    if (_config.useMockData || !_config.isSupabaseConfigured) {
+      return _mockDataSource.getRecommendations();
+    }
+
+    final accessToken = await _accessTokenProvider();
+    if (accessToken == null || accessToken.trim().isEmpty) {
+      return _mockDataSource.getRecommendations();
+    }
+
+    try {
+      return await _recommendationsApiDataSource.generateRecommendations(
+        accessToken: accessToken,
+      );
+    } catch (_) {
+      return _mockDataSource.getRecommendations();
+    }
+  }
 }
