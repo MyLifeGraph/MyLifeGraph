@@ -70,6 +70,10 @@ Already implemented:
     evidence references.
   - Best-effort Flutter daily snapshot refresh after Supabase-backed Daily
     Check-In and Quick Mood Check-In writes.
+- Browser E2E starts FastAPI with local Supabase backend settings and verifies
+  authenticated Intake V1 persistence, deterministic post-intake
+  recommendations, backend daily snapshot refresh after check-ins, and core
+  Supabase-backed app writes.
 
 Not yet implemented:
 
@@ -347,8 +351,9 @@ Use these rules before adding any model provider:
 
 ## Immediate Implementation Plan
 
-The next implementation should build on **Intake V1 without LLM** and the
-controlled post-intake recommendation refresh.
+The next implementation should build on **Intake V1 without LLM**, controlled
+post-intake recommendation refresh, authenticated snapshot aggregation, and the
+FastAPI-backed browser E2E coverage.
 
 ### Slice 1: Controlled Recommendation Refresh
 
@@ -376,11 +381,18 @@ controlled post-intake recommendation refresh.
 
 ### Slice 3: E2E Expansion
 
-- Extend browser E2E to cover structured intake fields and persisted
-  Supabase-backed rows when the AI service is part of the test run.
-- Keep the current guest/mock widget smoke fast.
-- Add FastAPI startup to E2E only when backend API behavior is asserted end to
-  end.
+- Implemented: browser E2E starts FastAPI with local Supabase backend settings.
+- Implemented: the smoke asserts structured Intake V1 persistence, onboarding
+  snapshots, deterministic post-intake recommendations, intake-created goals,
+  backend-refreshed daily snapshots after check-ins, and core direct app writes.
+- Implemented: the guest/mock widget smoke stays fast and separate.
+
+### Slice 4: Controlled Snapshot Triggers
+
+- Next: add a small controlled refresh trigger after task or habit changes.
+- Preserve guest/mock mode and keep failures best-effort for the user write.
+- Do not introduce a production worker, LLM provider, or dashboard-load
+  generation for this slice.
 
 ## Out Of Scope For The Next Slice
 

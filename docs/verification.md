@@ -138,6 +138,13 @@ For a fresh local database before the browser run:
 RESET_DB=true FLUTTER_BIN=/path/to/flutter bash scripts/e2e_web.sh
 ```
 
+If an existing local database is behind the repository migrations, apply pending
+local migrations before running the smoke:
+
+```bash
+HOME=.tools/supabase-home SUPABASE_TELEMETRY_DISABLED=1 supabase migration up --local
+```
+
 Use real Ubuntu-installed Node.js, npm, Supabase CLI, and Docker. If these tools
 are installed through nvm, non-interactive agent shells may need an explicit
 `PATH` or `NODE_BIN` override even when `node --version` works in the user's
@@ -149,8 +156,11 @@ The script:
 2. Starts the local Supabase stack and optionally runs `supabase db reset`.
 3. Reads `API_URL`, `ANON_KEY`, and `SERVICE_ROLE_KEY` from
    `supabase status -o env` without printing key values.
-4. Starts Flutter Web on `127.0.0.1:7357` with `USE_MOCK_DATA=false`.
-5. Runs `e2e/web/smoke.mjs` with Playwright.
+4. Starts the FastAPI AI service on `127.0.0.1:8000` by default with backend
+   local Supabase settings.
+5. Starts Flutter Web on `127.0.0.1:7357` with `USE_MOCK_DATA=false` and
+   `AI_SERVICE_BASE_URL` pointing at the local FastAPI service.
+6. Runs `e2e/web/smoke.mjs` with Playwright.
 
 The script waits for the Flutter log line containing `is being served at` before
 starting Playwright. A plain `curl` response from `/` is not enough, because
@@ -163,17 +173,17 @@ enabled, which gives Playwright stable text fields, buttons, and labels instead
 of relying on canvas pixels.
 
 The browser smoke creates a confirmed local Supabase Auth user through the local
-admin API, signs in through the app, completes onboarding, saves a daily
-check-in, saves a quick mood check-in, opens alerts, sends a coach message, and
-then queries local Supabase REST with the local service-role key to assert that
-`daily_logs`, `behavioral_events`, and `coach_messages` rows were created. The
-daily and quick check-ins share one `daily_logs` row because that table is unique
-by `(user_id, entry_date)`; the smoke uses `behavioral_events.source` to verify
-that both check-in flows wrote their event signals. The browser smoke does not
-yet start FastAPI or assert `intake_responses`, snapshot refresh through
-`POST /v1/snapshots/generate`, or post-intake generated `recommendations`;
-those are covered by FastAPI unit tests and should be added to E2E when the AI
-service is part of that script.
+admin API, signs in through the app, completes onboarding through FastAPI, saves
+a daily check-in, saves a quick mood check-in, opens alerts, sends a coach
+message, and then queries local Supabase REST with the local service-role key.
+It asserts FastAPI-created `intake_responses`, onboarding
+`user_state_snapshots`, deterministic post-intake `recommendations`, intake
+`goals`, direct app writes to `daily_logs`, `behavioral_events`, and
+`coach_messages`, plus backend-refreshed daily `user_state_snapshots` after the
+check-in flows. The daily and quick check-ins share one `daily_logs` row because
+that table is unique by `(user_id, entry_date)`; the smoke uses
+`behavioral_events.source` to verify that both check-in flows wrote their event
+signals.
 
 The coach step uses the page's default prompt, sends it through the visible
 coach send button, and verifies the persisted `coach_messages` row. This keeps
@@ -185,8 +195,8 @@ the `flutter run -d web-server` development server, which does not provide a
 production-style rewrite layer for every app path.
 
 The service-role key is used only in the Node-side E2E process for local setup
-and assertions. It must never be passed into Flutter or browser runtime
-configuration.
+and assertions and in the FastAPI process for backend persistence. It must never
+be passed into Flutter or browser runtime configuration.
 
 The canonical schema grants app-table privileges to `service_role` so these
 local REST assertions can query rows after RLS-protected browser writes.
@@ -200,13 +210,31 @@ HEADED=true
 HOST=127.0.0.1
 PORT=7357
 APP_URL=http://127.0.0.1:7357
+AI_SERVICE_HOST=127.0.0.1
+AI_SERVICE_PORT=8001
+AI_SERVICE_BASE_URL=http://127.0.0.1:8001
+AI_SERVICE_PYTHON=/path/to/python
+AI_SERVICE_START=false
 E2E_RUN_ID=manual-001
 ```
+
+By default, `scripts/e2e_web.sh` starts FastAPI from the current checkout and
+does not reuse an arbitrary service that is already listening on the same port.
+If the port is occupied, stop that service or set `AI_SERVICE_PORT` to a free
+port. Use `AI_SERVICE_START=false` only when you intentionally want to reuse a
+compatible FastAPI process that is already running with the same local Supabase
+project settings.
 
 Flutter Web logs for the E2E run are written to:
 
 ```text
 .tools/e2e/flutter-web.log
+```
+
+FastAPI logs for the E2E run are written to:
+
+```text
+.tools/e2e/ai-service.log
 ```
 
 On browser failure, Playwright saves a screenshot named:
@@ -241,7 +269,7 @@ availability messages instead of key values:
 
 ```text
 Local anon key: available
-Local service role key: available for Node-side assertions
+Local service role key: available for backend and Node-side assertions
 ```
 
 If command output includes a key unexpectedly, redact it before sharing logs.
@@ -253,17 +281,15 @@ real Ubuntu Node.js 20+ installation, `npm`, Playwright browser installation,
 Docker access, and a real Ubuntu `supabase` CLI on `PATH`.
 
 Known harmless local E2E output includes Chromium WebGL performance warnings.
-If the FastAPI AI service is not running, the browser can also log
-`ERR_CONNECTION_REFUSED` for `AI_SERVICE_BASE_URL`; this is acceptable as long
-as `scripts/e2e_web.sh` exits successfully and prints the browser smoke pass
-message.
+The FastAPI AI service must be healthy for the browser smoke to pass.
 
 Still missing for broader product verification:
 
 - CI wiring for the browser E2E command.
 - Playwright trace artifact collection on failure.
 - Dedicated database assertions for notifications, onboarding schedule items,
-  intake responses, backend-refreshed user state snapshots, and memory entries.
+  notification preferences, and memory entries beyond the current snapshot input
+  counts.
 - Coverage for Google OAuth, mobile layout, and authenticated guest-data
   migration.
 

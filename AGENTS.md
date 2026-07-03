@@ -79,7 +79,9 @@ agent workflow.
 Do not jump straight to broad LLM integration, calendar import, weekly planning,
 vector search, or autonomous background agents. The next product slice should
 build on the snapshot aggregator by wiring controlled refresh triggers after
-task or habit changes, scheduled refresh, or E2E coverage with the AI service.
+task or habit changes, or by adding scheduled refresh. FastAPI-backed browser
+E2E coverage for Intake V1, post-intake recommendations, and daily snapshot
+refresh now exists.
 
 The implemented post-intake refresh is backend-only and best-effort:
 
@@ -296,9 +298,16 @@ FLUTTER_BIN=/home/gregor/tools/flutter/bin/flutter \
 bash scripts/e2e_web.sh
 ```
 
+If browser E2E fails because the local database is behind repository migrations,
+prefer applying pending local migrations with
+`HOME=.tools/supabase-home SUPABASE_TELEMETRY_DISABLED=1 supabase migration up --local`
+before using `RESET_DB=true`. Use reset only when a fresh local database is
+intended.
+
 The E2E script may read the local service-role key from `supabase status -o env`
-for Node-side local test user creation and database assertions. Never pass the
-service-role key into Flutter, browser code, docs examples, or chat output.
+for FastAPI backend settings plus Node-side local test user creation and
+database assertions. Never pass the service-role key into Flutter, browser code,
+docs examples, or chat output.
 
 ## Documentation Requirement
 

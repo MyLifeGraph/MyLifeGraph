@@ -1,7 +1,7 @@
 # Next Chat Prompt
 
-Use this prompt when starting a new implementation chat after the authenticated
-snapshot aggregator foundation.
+Use this prompt when starting a new implementation chat after the
+FastAPI-backed browser E2E expansion.
 
 Recommended reasoning level: **high**. The next work crosses FastAPI,
 snapshot generation, recommendation refresh behavior, Flutter trigger points,
@@ -28,14 +28,15 @@ Use high reasoning. First read:
 7. docs/verification.md
 
 Goal: implement the next roadmap slice after Intake V1, controlled post-intake
-deterministic recommendation refresh, and authenticated snapshot aggregation,
-without LLM.
+deterministic recommendation refresh, authenticated snapshot aggregation, and
+FastAPI-backed browser E2E coverage, without LLM.
 
 Do not spawn multiple agents by default. Use subagents only if there are clearly
 separable non-overlapping tasks that can run in parallel without blocking the
 main implementation. If the slice is narrow, keep the work in one agent.
 
-Focus on the next controlled snapshot refresh trigger or E2E verification:
+Focus on the next controlled snapshot refresh trigger after task or habit
+changes:
 
 - Reuse the existing Supabase bearer-token auth dependency.
 - Derive `user_id` from the verified backend principal only.
@@ -45,6 +46,7 @@ Focus on the next controlled snapshot refresh trigger or E2E verification:
 - Preserve the existing best-effort daily refresh after Supabase-backed Daily
   Check-In and Quick Mood Check-In.
 - Preserve the existing post-intake recommendation refresh behavior.
+- Preserve the FastAPI-backed browser E2E coverage in `scripts/e2e_web.sh`.
 - Do not add LLM providers.
 - Do not require calendar connection.
 - Preserve mock and guest mode.
@@ -54,10 +56,9 @@ Focus on the next controlled snapshot refresh trigger or E2E verification:
 Preferred implementation sequence:
 
 1. Inspect current FastAPI intake, recommendation, and snapshot services plus
-   Flutter check-in/task write flows.
-2. Choose the smallest controlled trigger: task/habit snapshot refresh,
-   explicit user-visible refresh, scheduled refresh foundation, or E2E with
-   FastAPI.
+   Flutter task/habit write flows.
+2. Choose the smallest controlled trigger: task completion/update, habit
+   creation/update, or habit log completion.
 3. Implement backend and/or Flutter wiring with focused tests.
 4. Preserve mock and guest mode; do not trigger LLM or recommendation
    generation on dashboard load.

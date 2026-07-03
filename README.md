@@ -200,6 +200,10 @@ npx playwright install chromium
 FLUTTER_BIN=/path/to/flutter bash scripts/e2e_web.sh
 ```
 
+The browser E2E script starts local Supabase, starts FastAPI with local backend
+Supabase settings, runs Flutter Web, and asserts authenticated intake,
+deterministic recommendations, backend snapshot refresh, and core app writes.
+
 With a fresh local database:
 
 ```bash

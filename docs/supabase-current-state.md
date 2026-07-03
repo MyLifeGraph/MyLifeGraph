@@ -169,13 +169,13 @@ Supabase-backed path:
 - Open notifications.
 - Send a coach message.
 
-This checks that Auth, RLS, grants, and the app's snake_case table mappings work
-together. The repository provides `scripts/e2e_web.sh` for browser automation of
-this Supabase-backed flow. The browser smoke still focuses on direct app writes;
-FastAPI Intake V1 and its post-intake deterministic recommendation refresh have
-unit coverage and can be manually checked by running the AI service with backend
-Supabase settings before completing onboarding. Do not run destructive reset
-commands against a remote database.
+This checks that Auth, RLS, grants, FastAPI backend workflows, and the app's
+snake_case table mappings work together. The repository provides
+`scripts/e2e_web.sh` for browser automation of this Supabase-backed flow. The
+browser smoke starts the AI service with backend local Supabase settings and
+asserts Intake V1 rows, onboarding and daily `user_state_snapshots`,
+post-intake deterministic `recommendations`, and direct app writes. Do not run
+destructive reset commands against a remote database.
 
 See `docs/verification.md` for the current automation boundary.
 

@@ -279,14 +279,30 @@ Browser E2E with a fresh local database:
 RESET_DB=true FLUTTER_BIN=/path/to/flutter bash scripts/e2e_web.sh
 ```
 
-The E2E script starts local Supabase, starts Flutter Web on
-`http://127.0.0.1:7357`, creates a confirmed local test user through the local
-Supabase admin API, signs in through the app, completes onboarding, saves
-check-ins, opens alerts, sends a coach message, and asserts local database rows
-were created.
+The E2E script starts local Supabase, starts the FastAPI AI service with the
+local Supabase backend settings, starts Flutter Web on `http://127.0.0.1:7357`,
+creates a confirmed local test user through the local Supabase admin API, signs
+in through the app, completes onboarding, saves check-ins, opens alerts, sends a
+coach message, and asserts local database rows were created.
 
-The local service-role key is used only inside the Node E2E process for local
-test setup and assertions. It is not passed to Flutter.
+By default the script starts FastAPI on `http://127.0.0.1:8000`. Useful AI
+service overrides:
+
+```bash
+AI_SERVICE_PORT=8001
+AI_SERVICE_BASE_URL=http://127.0.0.1:8001
+AI_SERVICE_PYTHON=/path/to/python
+AI_SERVICE_START=false
+```
+
+By default the script always starts FastAPI from the current checkout. It does
+not reuse an already-running service on the same port; stop that service or set
+`AI_SERVICE_PORT` to a free port. Use `AI_SERVICE_START=false` only when you
+intentionally want to reuse a compatible FastAPI process that is already running
+with local `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` settings.
+
+The local service-role key is used only inside FastAPI and the Node E2E process
+for local test setup and assertions. It is not passed to Flutter.
 This automated browser smoke covers the manual Supabase-backed smoke path for
 the listed screens. Keep manual testing for flows not listed in
 `docs/verification.md`.
@@ -311,8 +327,14 @@ the listed screens. Keep manual testing for flows not listed in
 - If `scripts/e2e_web.sh` says Playwright is missing, run `npm install`.
 - If Playwright cannot find a browser, run `npx playwright install chromium` or
   set `CHROME_BIN=/path/to/chrome`.
+- If E2E database assertions say `intake_responses` or
+  `user_state_snapshots` are missing, apply pending local migrations with
+  `HOME=.tools/supabase-home SUPABASE_TELEMETRY_DISABLED=1 supabase migration up --local`
+  or run the fresh local DB flow with `RESET_DB=true`.
+- If the AI service exits early during E2E, inspect
+  `.tools/e2e/ai-service.log` and confirm `services/ai_service` dependencies are
+  installed. If the log says the address is already in use, stop the stale
+  service or set `AI_SERVICE_PORT` to a free port.
 - If Flutter Web exits early during E2E, inspect `.tools/e2e/flutter-web.log`.
 - Chromium WebGL performance warnings during E2E are expected in headless/local
-  runs. A browser `ERR_CONNECTION_REFUSED` for the AI service can also appear
-  when `AI_SERVICE_BASE_URL` points at `localhost:8000` and the FastAPI service
-  is not running; treat the script exit code and DB assertions as authoritative.
+  runs.

@@ -2,6 +2,7 @@ import { chromium } from 'playwright';
 
 const required = [
   'APP_URL',
+  'AI_SERVICE_BASE_URL',
   'SUPABASE_URL',
   'SUPABASE_ANON_KEY',
   'SUPABASE_SERVICE_ROLE_KEY',
@@ -14,6 +15,7 @@ for (const name of required) {
 }
 
 const appUrl = process.env.APP_URL.replace(/\/$/, '');
+const aiServiceBaseUrl = process.env.AI_SERVICE_BASE_URL.replace(/\/$/, '');
 const supabaseUrl = process.env.SUPABASE_URL.replace(/\/$/, '');
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const headed = process.env.HEADED === 'true';
@@ -30,6 +32,7 @@ const browser = await chromium.launch({
 
 let page;
 try {
+  await assertAiServiceHealthy();
   const user = await createConfirmedUser();
   page = await browser.newPage({
     viewport: { width: 1280, height: 960 },
@@ -58,6 +61,58 @@ try {
   await clickByText(page, 'Skip timetable for now');
 
   await expectText(page, "Today's wellness score");
+  await waitForRows(
+    `intake_responses?select=id,version,responses,metadata&user_id=eq.${user.id}`,
+    (rows) =>
+      rows.some(
+        (row) =>
+          row.version === 'intake-v1' &&
+          row.metadata?.source === 'onboarding' &&
+          Array.isArray(row.responses?.primary_focus_areas) &&
+          row.responses.primary_focus_areas.includes('focus') &&
+          Array.isArray(row.responses?.goals) &&
+          row.responses.goals.length > 0,
+      ),
+    'FastAPI intake_responses row from onboarding',
+  );
+  await waitForRows(
+    `user_state_snapshots?select=id,scope,period_key,summary,signals,metadata&user_id=eq.${user.id}&scope=eq.onboarding`,
+    (rows) =>
+      rows.some(
+        (row) =>
+          row.summary?.coaching_style === 'direct' &&
+          Array.isArray(row.summary?.primary_focus_areas) &&
+          row.summary.primary_focus_areas.includes('planning') &&
+          row.metadata?.source === 'intake-v1',
+      ),
+    'onboarding user_state_snapshots row',
+  );
+  await waitForRows(
+    `recommendations?select=id,title,category,status,metadata&user_id=eq.${user.id}&status=in.(new,accepted)`,
+    (rows) =>
+      rows.some(
+        (row) =>
+          row.category === 'focus' &&
+          row.metadata?.model === null &&
+          row.metadata?.source_engine_version === 'deterministic-v1',
+      ) &&
+      rows.some(
+        (row) =>
+          row.category === 'planning' &&
+          row.metadata?.model === null &&
+          row.metadata?.source_engine_version === 'deterministic-v1',
+      ),
+    'deterministic recommendations generated after intake',
+  );
+  await waitForRows(
+    `goals?select=id,title,status,metadata&user_id=eq.${user.id}`,
+    (rows) =>
+      rows.some(
+        (row) =>
+          row.status === 'active' && row.metadata?.source === 'intake-v1',
+      ),
+    'goal row generated from intake',
+  );
 
   await page.goto(appRoute('/daily-check-in'), { waitUntil: 'domcontentloaded' });
   await waitForFlutterShell(page);
@@ -68,6 +123,17 @@ try {
     `daily_logs?select=id,source&user_id=eq.${user.id}&source=eq.daily_check_in`,
     (rows) => rows.length > 0,
     'daily_check_in daily_logs row',
+  );
+  await waitForRows(
+    `user_state_snapshots?select=id,scope,period_key,summary,signals,metadata&user_id=eq.${user.id}&scope=eq.daily`,
+    (rows) =>
+      rows.some(
+        (row) =>
+          row.metadata?.source === 'snapshot-aggregator-v1' &&
+          row.signals?.input_counts?.daily_logs >= 1 &&
+          row.signals?.input_counts?.behavioral_events >= 7,
+      ),
+    'daily snapshot refreshed after daily check-in',
   );
 
   await page.goto(appRoute('/quick-mood-check-in'), {
@@ -81,6 +147,18 @@ try {
   await fillLastTextbox(page, `E2E quick mood note ${runId}`);
   await clickByText(page, 'Save');
   await expectText(page, "Today's wellness score");
+  await waitForRows(
+    `user_state_snapshots?select=id,scope,period_key,summary,signals,metadata&user_id=eq.${user.id}&scope=eq.daily`,
+    (rows) =>
+      rows.some(
+        (row) =>
+          row.metadata?.source === 'snapshot-aggregator-v1' &&
+          row.signals?.input_counts?.daily_logs >= 1 &&
+          row.signals?.input_counts?.behavioral_events >= 11 &&
+          row.signals?.input_counts?.memory_entries >= 4,
+      ),
+    'daily snapshot refreshed after quick mood check-in',
+  );
 
   await page.goto(appRoute('/alerts'), { waitUntil: 'domcontentloaded' });
   await waitForFlutterShell(page);
@@ -131,6 +209,15 @@ try {
   throw error;
 } finally {
   await browser.close();
+}
+
+async function assertAiServiceHealthy() {
+  const response = await fetch(`${aiServiceBaseUrl}/v1/health`);
+  if (!response.ok) {
+    throw new Error(
+      `AI service is not healthy: ${response.status} ${await response.text()}`,
+    );
+  }
 }
 
 async function createConfirmedUser() {
@@ -211,8 +298,7 @@ async function fillByLabelOrPlaceholder(page, label, value, fallbackIndex) {
 
   for (const locator of candidates) {
     try {
-      await fillFocusedLocator(page, locator);
-      await page.keyboard.insertText(value);
+      await fillLocatorWithValue(page, locator, value);
       return;
     } catch (_) {
       // Try the next accessible representation.
@@ -221,12 +307,28 @@ async function fillByLabelOrPlaceholder(page, label, value, fallbackIndex) {
 
   const textboxes = page.getByRole('textbox');
   if ((await textboxes.count()) > fallbackIndex) {
-    await fillFocusedLocator(page, textboxes.nth(fallbackIndex));
-    await page.keyboard.insertText(value);
+    await fillLocatorWithValue(page, textboxes.nth(fallbackIndex), value);
     return;
   }
 
   throw new Error(`Could not fill field: ${label}`);
+}
+
+async function fillLocatorWithValue(page, locator, value) {
+  try {
+    await fillFocusedLocator(page, locator);
+    await page.keyboard.type(value, { delay: 2 });
+    if (await activeElementHasValue(page, value)) {
+      return;
+    }
+  } catch (_) {
+    // Try a directly fillable input next.
+  }
+
+  await locator.fill(value, { timeout: 2500 });
+  if (!(await locatorHasValue(page, locator, value))) {
+    throw new Error('Focused element did not receive text input');
+  }
 }
 
 async function fillFocusedLocator(page, locator) {
@@ -241,8 +343,25 @@ async function fillLastTextbox(page, value) {
   if (count === 0) {
     throw new Error('No textbox found');
   }
-  await fillFocusedLocator(page, textboxes.nth(count - 1));
-  await page.keyboard.insertText(value);
+  await fillLocatorWithValue(page, textboxes.nth(count - 1), value);
+}
+
+async function locatorHasValue(page, locator, value) {
+  try {
+    return (await locator.inputValue({ timeout: 500 })) === value;
+  } catch (_) {
+    return activeElementHasValue(page, value);
+  }
+}
+
+async function activeElementHasValue(page, value) {
+  return page.evaluate((expected) => {
+    const element = document.activeElement;
+    if (!element || !('value' in element)) {
+      return false;
+    }
+    return element.value === expected;
+  }, value);
 }
 
 async function clickByText(page, text, options = {}) {
@@ -325,7 +444,7 @@ async function assertRows(path, predicate, description) {
 }
 
 async function waitForRows(path, predicate, description) {
-  const deadline = Date.now() + 15000;
+  const deadline = Date.now() + 30000;
   let lastRows = [];
 
   while (Date.now() < deadline) {
