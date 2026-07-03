@@ -58,11 +58,15 @@ Current Flutter widget tests include:
   V1 payload, and reach the dashboard.
 - Guest can complete a quick mood check-in and persist it locally in
   `shared_preferences`.
+- Guest can open the Habit Completion quick action without requiring Supabase.
 - The Intake API data source posts `POST /v1/intake/complete` with bearer auth
   and the structured payload.
 - The Snapshot refresh service posts `POST /v1/snapshots/generate` with bearer
   auth in real backend mode, skips guest/mock/missing-token paths, and treats
   network failures as best-effort.
+- Task and habit snapshot refresh service entrypoints route through the same
+  authenticated daily snapshot refresh behavior. The active dashboard task
+  status and Quick Action habit completion writes use those entrypoints.
 
 These tests cover the default mock/guest product path. They do not prove real
 Supabase registration, RLS, or browser behavior.
@@ -174,13 +178,15 @@ of relying on canvas pixels.
 
 The browser smoke creates a confirmed local Supabase Auth user through the local
 admin API, signs in through the app, completes onboarding through FastAPI, saves
-a daily check-in, saves a quick mood check-in, opens alerts, sends a coach
-message, and then queries local Supabase REST with the local service-role key.
+a daily check-in, saves a quick mood check-in, logs an intake-created habit
+completion, opens alerts, sends a coach message, and then queries local
+Supabase REST with the local service-role key.
 It asserts FastAPI-created `intake_responses`, onboarding
 `user_state_snapshots`, deterministic post-intake `recommendations`, intake
-`goals`, direct app writes to `daily_logs`, `behavioral_events`, and
-`coach_messages`, plus backend-refreshed daily `user_state_snapshots` after the
-check-in flows. The daily and quick check-ins share one `daily_logs` row because
+`goals` and `habits`, direct app writes to `daily_logs`,
+`behavioral_events`, `habit_logs`, and `coach_messages`, plus
+backend-refreshed daily `user_state_snapshots` after the check-in and habit
+completion flows. The daily and quick check-ins share one `daily_logs` row because
 that table is unique by `(user_id, entry_date)`; the smoke uses
 `behavioral_events.source` to verify that both check-in flows wrote their event
 signals.

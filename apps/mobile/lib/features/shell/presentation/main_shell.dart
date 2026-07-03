@@ -26,6 +26,8 @@ class MainShell extends StatelessWidget {
     final effectivePath = switch (currentPath) {
       final path when path.startsWith(AppRoutes.settings) =>
         AppRoutes.dashboard,
+      final path when path.startsWith(AppRoutes.habitCompletion) =>
+        AppRoutes.quickAction,
       final path when path.startsWith(AppRoutes.dailyCheckIn) =>
         AppRoutes.alerts,
       final path when path.startsWith(AppRoutes.deepWork) => AppRoutes.alerts,

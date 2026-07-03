@@ -78,6 +78,32 @@ void main() {
     });
   });
 
+  test('task changes refresh the daily snapshot', () async {
+    final apiClient = _FakeApiClient();
+    final service = _buildService(
+      config: _config(useMockData: false, supabaseConfigured: true),
+      apiClient: apiClient,
+      accessTokenProvider: () => 'access-token-123',
+    );
+
+    await service.refreshDailyAfterTaskChange();
+
+    expect(apiClient.postCalls, ['/v1/snapshots/generate']);
+  });
+
+  test('habit changes refresh the daily snapshot', () async {
+    final apiClient = _FakeApiClient();
+    final service = _buildService(
+      config: _config(useMockData: false, supabaseConfigured: true),
+      apiClient: apiClient,
+      accessTokenProvider: () => 'access-token-123',
+    );
+
+    await service.refreshDailyAfterHabitChange();
+
+    expect(apiClient.postCalls, ['/v1/snapshots/generate']);
+  });
+
   test('snapshot refresh failures are best-effort', () async {
     final apiClient = _FakeApiClient(throwOnPost: true);
     final service = _buildService(

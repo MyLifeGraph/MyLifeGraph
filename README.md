@@ -136,8 +136,9 @@ Supabase is the intended auth and persistence backend. The current app supports:
   creates first deterministic recommendations from the onboarding snapshot, and
   preserves local guest/mock behavior.
 - Supabase-backed daily and quick mood check-ins refresh the backend daily
-  `user_state_snapshots` row best-effort after writes; guest/mock check-ins stay
-  local.
+  `user_state_snapshots` row best-effort after writes, and dashboard task
+  status changes plus Quick Action habit completions use the same refresh path
+  after successful Supabase updates; guest/mock paths stay local.
 
 Important current caveat: the Flutter app targets the canonical snake_case
 schema. A clean local Supabase reset should apply

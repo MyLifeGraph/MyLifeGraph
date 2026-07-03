@@ -24,6 +24,7 @@ const artifactDir = process.env.E2E_ARTIFACT_DIR ?? '.tools/e2e';
 const email = `e2e-${runId}@example.test`;
 const password = `E2e-${runId}-password`;
 const coachPrompt = 'Plan my day based on my current energy and deadlines';
+const habitTitle = `E2E hydration habit ${runId}`;
 
 const browser = await chromium.launch({
   headless: !headed,
@@ -58,6 +59,8 @@ try {
 
   await expectText(page, 'Your profile');
   await expectText(page, 'Your timetable');
+  await scrollFlutterPage(page, 2600);
+  await fillByLabelOrPlaceholder(page, 'Existing habits', habitTitle, 4);
   await clickByText(page, 'Skip timetable for now');
 
   await expectText(page, "Today's wellness score");
@@ -113,6 +116,18 @@ try {
       ),
     'goal row generated from intake',
   );
+  await waitForRows(
+    `habits?select=id,title,frequency,active,metadata&user_id=eq.${user.id}`,
+    (rows) =>
+      rows.some(
+        (row) =>
+          row.title === habitTitle &&
+          row.frequency === 'daily' &&
+          row.active === true &&
+          row.metadata?.source === 'intake-v1',
+      ),
+    'habit row generated from intake',
+  );
 
   await page.goto(appRoute('/daily-check-in'), { waitUntil: 'domcontentloaded' });
   await waitForFlutterShell(page);
@@ -158,6 +173,33 @@ try {
           row.signals?.input_counts?.memory_entries >= 4,
       ),
     'daily snapshot refreshed after quick mood check-in',
+  );
+
+  const dailySnapshotBeforeHabit = await latestDailySnapshotGeneratedAt(user.id);
+  await page.goto(appRoute('/quick-action'), { waitUntil: 'domcontentloaded' });
+  await waitForFlutterShell(page);
+  await enableFlutterSemantics(page);
+  await clickByText(page, 'Habit completion');
+  await expectText(page, 'Habit completion');
+  await clickByText(page, 'Log');
+  await waitForRows(
+    `habit_logs?select=id,habit_id,entry_date,value,habits(title)&user_id=eq.${user.id}`,
+    (rows) =>
+      rows.some(
+        (row) => row.value === 1 && row.habits?.title === habitTitle,
+      ),
+    'habit_logs row from Quick Action habit completion',
+  );
+  await waitForRows(
+    `user_state_snapshots?select=id,scope,generated_at,signals,metadata&user_id=eq.${user.id}&scope=eq.daily`,
+    (rows) =>
+      rows.some(
+        (row) =>
+          row.metadata?.source === 'snapshot-aggregator-v1' &&
+          row.signals?.input_counts?.habits >= 1 &&
+          Date.parse(row.generated_at) > dailySnapshotBeforeHabit,
+      ),
+    'daily snapshot refreshed after habit completion',
   );
 
   await page.goto(appRoute('/alerts'), { waitUntil: 'domcontentloaded' });
@@ -458,6 +500,17 @@ async function waitForRows(path, predicate, description) {
   throw new Error(
     `Timed out verifying ${description}. Rows: ${JSON.stringify(lastRows)}`,
   );
+}
+
+async function latestDailySnapshotGeneratedAt(userId) {
+  const rows = await fetchRows(
+    `user_state_snapshots?select=generated_at&user_id=eq.${userId}&scope=eq.daily&order=generated_at.desc&limit=1`,
+    'latest daily snapshot timestamp',
+  );
+  if (rows.length === 0) {
+    return 0;
+  }
+  return Date.parse(rows[0].generated_at);
 }
 
 async function fetchRows(path, description) {

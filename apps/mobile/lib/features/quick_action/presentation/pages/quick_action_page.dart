@@ -26,10 +26,11 @@ class QuickActionPage extends StatelessWidget {
           title: 'Lifestyle entry',
           subtitle: 'Sleep, movement, nutrition',
         ),
-        const _ActionTile(
+        _ActionTile(
           icon: Icons.task_alt_outlined,
           title: 'Habit completion',
           subtitle: 'Track consistency signals',
+          onTap: () => context.go(AppRoutes.habitCompletion),
         ),
         const _ActionTile(
           icon: Icons.note_alt_outlined,

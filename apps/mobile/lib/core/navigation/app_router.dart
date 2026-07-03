@@ -10,6 +10,7 @@ import '../../features/more/presentation/pages/more_page.dart';
 import '../../features/notifications/presentation/pages/daily_check_in_page.dart';
 import '../../features/notifications/presentation/pages/deep_work_page.dart';
 import '../../features/notifications/presentation/pages/notifications_page.dart';
+import '../../features/quick_action/presentation/pages/habit_completion_page.dart';
 import '../../features/quick_action/presentation/pages/quick_mood_check_in_page.dart';
 import '../../features/quick_action/presentation/pages/quick_action_page.dart';
 import '../../features/settings/presentation/pages/settings_page.dart';
@@ -87,6 +88,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: AppRoutes.quickAction,
             builder: (context, state) => const QuickActionPage(),
+          ),
+          GoRoute(
+            path: AppRoutes.habitCompletion,
+            builder: (context, state) => const HabitCompletionPage(),
           ),
           GoRoute(
             path: AppRoutes.alerts,

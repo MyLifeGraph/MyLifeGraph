@@ -69,7 +69,10 @@ Already implemented:
   - Compact summaries with risk flags, next-focus hints, input counts, and
     evidence references.
   - Best-effort Flutter daily snapshot refresh after Supabase-backed Daily
-    Check-In and Quick Mood Check-In writes.
+    Check-In, Quick Mood Check-In, dashboard task status writes, and Quick
+    Action habit completion writes.
+  - Snapshot refresh service entrypoints for task and habit changes are wired to
+    the active dashboard task and Quick Action habit completion paths.
 - Browser E2E starts FastAPI with local Supabase backend settings and verifies
   authenticated Intake V1 persistence, deterministic post-intake
   recommendations, backend daily snapshot refresh after check-ins, and core
@@ -79,8 +82,7 @@ Not yet implemented:
 
 - A production background job queue or worker.
 - Explicit recommendation refresh/generate UX.
-- Automatic snapshot refresh triggers after task/habit changes or scheduled
-  jobs.
+- Automatic snapshot refresh triggers from scheduled jobs.
 - Real coach-response backend.
 - LLM provider integration.
 - Memory extraction beyond current direct writes.
@@ -376,8 +378,12 @@ FastAPI-backed browser E2E coverage.
   idempotent period refresh, request `user_id` rejection, and user scoping.
 - Implemented: Supabase-backed Daily Check-In and Quick Mood Check-In trigger
   daily snapshot refresh best-effort after successful writes.
-- Still open: automatic triggers after task or habit changes, scheduled
-  refresh, and user-visible refresh UX.
+- Implemented: dashboard task status changes trigger daily snapshot refresh
+  best-effort after successful Supabase writes.
+- Implemented: Quick Action habit completion writes to `habit_logs`, updates the
+  habit timestamp, and triggers daily snapshot refresh best-effort after a
+  successful Supabase write.
+- Still open: scheduled refresh and user-visible refresh UX.
 
 ### Slice 3: E2E Expansion
 
@@ -389,7 +395,11 @@ FastAPI-backed browser E2E coverage.
 
 ### Slice 4: Controlled Snapshot Triggers
 
-- Next: add a small controlled refresh trigger after task or habit changes.
+- Implemented: dashboard task status changes call the daily snapshot refresh
+  best-effort after a successful Supabase update.
+- Implemented: Quick Action habit completions call the same daily snapshot
+  refresh best-effort after a successful Supabase upsert.
+- Next: add scheduled refresh or a deliberate user-visible refresh action.
 - Preserve guest/mock mode and keep failures best-effort for the user write.
 - Do not introduce a production worker, LLM provider, or dashboard-load
   generation for this slice.

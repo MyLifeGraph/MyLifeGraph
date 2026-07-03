@@ -11,6 +11,7 @@ import '../../../../core/supabase/supabase_tables.dart';
 import '../../../../core/widgets/async_value_view.dart';
 import '../../../optimization/domain/entities/recommendation.dart';
 import '../../../optimization/presentation/providers/optimization_providers.dart';
+import '../../../snapshots/presentation/providers/snapshot_providers.dart';
 import '../../domain/entities/dashboard_snapshot.dart';
 import '../providers/dashboard_providers.dart';
 
@@ -98,6 +99,9 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
         'status': status,
         'updated_at': DateTime.now().toIso8601String(),
       }).eq('id', id);
+      await ref
+          .read(snapshotRefreshServiceProvider)
+          .refreshDailyAfterTaskChange();
       ref.invalidate(dashboardSnapshotProvider);
     } catch (_) {
       return;

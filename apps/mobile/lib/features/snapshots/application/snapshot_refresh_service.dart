@@ -16,6 +16,10 @@ class SnapshotRefreshService {
   final SnapshotApiDataSource _apiDataSource;
   final SnapshotAccessTokenProvider _accessTokenProvider;
 
+  Future<void> refreshDailyAfterTaskChange() => refreshDailyAfterUserSignal();
+
+  Future<void> refreshDailyAfterHabitChange() => refreshDailyAfterUserSignal();
+
   Future<void> refreshDailyAfterUserSignal() async {
     if (_config.useMockData || !_config.isSupabaseConfigured) {
       return;

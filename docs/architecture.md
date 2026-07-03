@@ -149,10 +149,10 @@ the verified bearer token. If a snapshot already exists for the same
 inserting another row.
 
 Flutter triggers the `daily` snapshot refresh best-effort after successful
-Supabase-backed Daily Check-In and Quick Mood Check-In writes. The trigger is
-guarded by runtime config, Supabase configuration, and a real access token.
-Guest mode, mock mode, missing tokens, and AI-service failures do not block the
-check-in save path.
+Supabase-backed Daily Check-In, Quick Mood Check-In, dashboard task status, and
+Quick Action habit completion writes. The trigger is guarded by runtime config,
+Supabase configuration, and a real access token. Guest mode, mock mode, missing
+tokens, and AI-service failures do not block the original user write path.
 
 Flutter onboarding sends the structured Intake V1 payload to
 `POST /v1/intake/complete` only in real backend mode with a Supabase access
@@ -186,6 +186,7 @@ making claims about deployed data.
 - The FastAPI service is connected to Supabase-backed deterministic
   recommendations, but no LLM/model provider is connected.
 - Daily and weekly snapshot aggregation now exists behind an authenticated
-  backend endpoint, and daily check-in flows trigger daily refresh best-effort.
-  There is not yet a background scheduler or task/habit-change trigger.
+  backend endpoint, and daily check-in, dashboard task status, and habit
+  completion flows trigger daily refresh best-effort. There is not yet a
+  background scheduler.
 - Mock mode is the reliable path for local product exploration today.

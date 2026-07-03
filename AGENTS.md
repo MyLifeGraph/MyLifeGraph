@@ -78,10 +78,10 @@ agent workflow.
 
 Do not jump straight to broad LLM integration, calendar import, weekly planning,
 vector search, or autonomous background agents. The next product slice should
-build on the snapshot aggregator by wiring controlled refresh triggers after
-task or habit changes, or by adding scheduled refresh. FastAPI-backed browser
-E2E coverage for Intake V1, post-intake recommendations, and daily snapshot
-refresh now exists.
+build on the snapshot aggregator by adding scheduled refresh, by adding a
+deliberate user-visible refresh action, or by expanding the habit flow beyond
+simple daily completion logging. FastAPI-backed browser E2E coverage for Intake
+V1, post-intake recommendations, and daily snapshot refresh now exists.
 
 The implemented post-intake refresh is backend-only and best-effort:
 
@@ -98,9 +98,10 @@ The implemented post-intake refresh is backend-only and best-effort:
 - `POST /v1/snapshots/generate` derives `user_id` from the verified Supabase
   bearer token and creates or refreshes deterministic `daily` and `weekly`
   `user_state_snapshots`.
-- Supabase-backed Daily Check-In and Quick Mood Check-In now call the daily
-  snapshot refresh best-effort after successful writes. Guest/mock paths must
-  remain local and must not call the AI service.
+- Supabase-backed Daily Check-In, Quick Mood Check-In, dashboard task status
+  changes, and Quick Action habit completions now call the daily snapshot
+  refresh best-effort after successful writes. Guest/mock paths must remain
+  local and must not call the AI service.
 
 ## Local Supabase Workflow
 
