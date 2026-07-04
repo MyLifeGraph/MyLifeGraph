@@ -25,6 +25,7 @@ const email = `e2e-${runId}@example.test`;
 const password = `E2e-${runId}-password`;
 const coachPrompt = 'Plan my day based on my current energy and deadlines';
 const habitTitle = `E2E hydration habit ${runId}`;
+const managedHabitTitle = `E2E managed habit ${runId}`;
 
 const browser = await chromium.launch({
   headless: !headed,
@@ -125,8 +126,37 @@ try {
           row.frequency === 'daily' &&
           row.active === true &&
           row.metadata?.source === 'intake-v1',
-      ),
+    ),
     'habit row generated from intake',
+  );
+
+  await page.goto(appRoute('/quick-action'), { waitUntil: 'domcontentloaded' });
+  await waitForFlutterShell(page);
+  await enableFlutterSemantics(page);
+  await clickByText(page, 'Habit management');
+  await expectText(page, 'Habit management');
+  await clickByText(page, 'Add habit');
+  await fillByLabelOrPlaceholder(page, 'Title', managedHabitTitle, 0);
+  await fillByLabelOrPlaceholder(
+    page,
+    'Description',
+    'Created through browser smoke',
+    1,
+  );
+  await fillByLabelOrPlaceholder(page, 'Target', '1', 2);
+  await clickByText(page, 'Save');
+  await expectText(page, 'Habit added.');
+  await waitForRows(
+    `habits?select=id,title,frequency,active,metadata&user_id=eq.${user.id}`,
+    (rows) =>
+      rows.some(
+        (row) =>
+          row.title === managedHabitTitle &&
+          row.frequency === 'daily' &&
+          row.active === true &&
+          row.metadata?.source === 'flutter-habit-management-v1',
+      ),
+    'habit row created from Habit management',
   );
 
   await page.goto(appRoute('/daily-check-in'), { waitUntil: 'domcontentloaded' });
@@ -186,7 +216,7 @@ try {
     `habit_logs?select=id,habit_id,entry_date,value,habits(title)&user_id=eq.${user.id}`,
     (rows) =>
       rows.some(
-        (row) => row.value === 1 && row.habits?.title === habitTitle,
+        (row) => row.value === 1 && row.habits?.title === managedHabitTitle,
       ),
     'habit_logs row from Quick Action habit completion',
   );

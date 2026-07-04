@@ -96,6 +96,26 @@ void main() {
     expect(find.text('Habit completion'), findsOneWidget);
     expect(find.text('No active habits found.'), findsOneWidget);
   });
+
+  testWidgets('guest can open habit management without Supabase',
+      (tester) async {
+    await _pumpTestApp(tester);
+
+    await tester.ensureVisible(find.text('Continue as guest'));
+    await tester.tap(find.text('Continue as guest'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Skip timetable for now'));
+    await tester.tap(find.text('Skip timetable for now'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(Icons.add).last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Habit management'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Habit management'), findsOneWidget);
+    expect(find.text('Supabase is not configured.'), findsOneWidget);
+  });
 }
 
 Future<void> _pumpTestApp(WidgetTester tester) async {

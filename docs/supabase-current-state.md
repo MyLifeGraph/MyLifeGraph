@@ -45,8 +45,8 @@ The app table constants live in
 | `memory_entries` | Quick mood check-in memory writes. |
 | `focus_sessions` | Focus-session history for future coaching flows. |
 | `goals` | User goals for future coaching flows. |
-| `habits` | User habits created from Intake V1 and read by Quick Action habit completion. |
-| `habit_logs` | Daily habit completion writes from Quick Action habit completion. |
+| `habits` | User habits created from Intake V1 and managed from Quick Action, including create, edit, pause, restore, and 7-day progress reads. |
+| `habit_logs` | Daily habit completion writes and 7-day completion progress for Quick Action habit flows. |
 | `skillset_profiles` | Generated coaching/skill profile snapshots. |
 | `recommendations` | Generated recommendations and user statuses; FastAPI can create first deterministic rows after authenticated Intake V1. |
 | `notification_preferences` | User alert preferences. |

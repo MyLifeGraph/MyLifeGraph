@@ -113,6 +113,8 @@ Current responsibilities:
   `/v1/recommendations` and `/v1/recommendations/generate`.
 - Serve authenticated deterministic snapshot refresh at
   `/v1/snapshots/generate`.
+- Serve scheduler-triggered deterministic daily refresh at
+  `/v1/scheduled/daily-refresh` with a backend-only scheduled refresh token.
 - Keep recommendation generation behind a service boundary.
 - Verify bearer tokens through an isolated auth verifier when Supabase backend
   settings are configured.
@@ -132,6 +134,10 @@ Current responsibilities:
 - Support a deliberate dashboard recommendation refresh action that first
   refreshes the daily snapshot best-effort, then calls the deterministic
   recommendation generate endpoint with LLM wording disabled.
+- Support a bounded scheduler-triggered refresh pass that finds onboarded
+  non-guest profiles, refreshes their deterministic daily snapshots, and can
+  optionally run deterministic recommendation generation with LLM wording
+  disabled.
 
 Flutter reads persisted recommendations through `GET /v1/recommendations` when
 `USE_MOCK_DATA=false`, Supabase is configured, and a real Supabase session
@@ -157,9 +163,19 @@ inserting another row.
 
 Flutter triggers the `daily` snapshot refresh best-effort after successful
 Supabase-backed Daily Check-In, Quick Mood Check-In, dashboard task status, and
-Quick Action habit completion writes. The trigger is guarded by runtime config,
-Supabase configuration, and a real access token. Guest mode, mock mode, missing
-tokens, and AI-service failures do not block the original user write path.
+Quick Action habit writes. The habit flow now includes creating habits, editing
+their frequency and target, pausing or restoring them, viewing 7-day completion
+progress, and logging daily completions. The trigger is guarded by runtime
+config, Supabase configuration, and a real access token. Guest mode, mock mode,
+missing tokens, and AI-service failures do not block the original user write
+path.
+
+Scheduled refresh is backend-only. `POST /v1/scheduled/daily-refresh` requires
+`X-Scheduled-Refresh-Token`, lists onboarded non-guest profiles through the
+backend Supabase service-role client, prioritizes profiles missing the target
+date's daily snapshot, then fills the batch with the oldest existing daily
+snapshots. It refreshes `user_state_snapshots` with an idempotent upsert and is
+a scheduler/cron entrypoint, not a Flutter or browser runtime endpoint.
 
 Flutter onboarding sends the structured Intake V1 payload to
 `POST /v1/intake/complete` only in real backend mode with a Supabase access
@@ -194,6 +210,7 @@ making claims about deployed data.
   recommendations, but no LLM/model provider is connected.
 - Daily and weekly snapshot aggregation now exists behind an authenticated
   backend endpoint, and daily check-in, dashboard task status, and habit
-  completion flows trigger daily refresh best-effort. There is not yet a
-  background scheduler.
+  management/completion flows trigger daily refresh best-effort. There is not
+  yet a production background worker, but a scheduler-triggered daily refresh
+  endpoint exists for cron-style invocation.
 - Mock mode is the reliable path for local product exploration today.

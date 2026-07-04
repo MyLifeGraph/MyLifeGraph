@@ -74,16 +74,20 @@ The **Intake V1 without LLM** foundation, controlled deterministic
 recommendation refresh after authenticated intake, and the authenticated
 deterministic snapshot aggregator endpoint now exist. A deliberate dashboard
 refresh action now calls the deterministic recommendation generate endpoint
-without LLM wording. Read
+without LLM wording. Quick Action habit management now supports creating,
+editing, pausing, restoring, 7-day progress reads, and daily completions against
+the existing habit tables. A backend-only scheduled daily refresh endpoint now
+refreshes onboarded non-guest profiles for cron-style runs. Read
 `docs/backend-roadmap.md` before planning the next backend, AI, onboarding, or
 agent workflow.
 
 Do not jump straight to broad LLM integration, calendar import, weekly planning,
 vector search, or autonomous background agents. The next product slice should
-build on the snapshot aggregator by adding scheduled refresh or by expanding the
-habit flow beyond simple daily completion logging. FastAPI-backed browser E2E
+build on the scheduled refresh foundation by wiring deployed cron/job execution
+or by defining scheduled recommendation cadence. FastAPI-backed browser E2E
 coverage for Intake V1, post-intake recommendations, daily snapshot refresh,
-and deliberate dashboard recommendation refresh now exists.
+deliberate dashboard recommendation refresh, and Supabase-backed habit
+management now exists.
 
 The implemented post-intake refresh is backend-only and best-effort:
 
@@ -103,10 +107,14 @@ The implemented post-intake refresh is backend-only and best-effort:
 - `POST /v1/snapshots/generate` derives `user_id` from the verified Supabase
   bearer token and creates or refreshes deterministic `daily` and `weekly`
   `user_state_snapshots`.
+- `POST /v1/scheduled/daily-refresh` is backend-only, uses
+  `X-Scheduled-Refresh-Token`, lists onboarded non-guest profiles, and refreshes
+  deterministic daily snapshots without LLM usage. If recommendation refresh is
+  explicitly included, LLM wording remains disabled.
 - Supabase-backed Daily Check-In, Quick Mood Check-In, dashboard task status
-  changes, and Quick Action habit completions now call the daily snapshot
-  refresh best-effort after successful writes. Guest/mock paths must remain
-  local and must not call the AI service.
+  changes, Quick Action habit management writes, and Quick Action habit
+  completions now call the daily snapshot refresh best-effort after successful
+  writes. Guest/mock paths must remain local and must not call the AI service.
 
 ## Local Supabase Workflow
 

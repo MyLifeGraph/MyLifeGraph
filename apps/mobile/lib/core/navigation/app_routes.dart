@@ -9,6 +9,7 @@ class AppRoutes {
   static const quickAction = '/quick-action';
   static const quickMoodCheckIn = '/quick-mood-check-in';
   static const habitCompletion = '/habit-completion';
+  static const habitManagement = '/habits';
   static const alerts = '/alerts';
   static const notifications = '/notifications';
   static const dailyCheckIn = '/daily-check-in';

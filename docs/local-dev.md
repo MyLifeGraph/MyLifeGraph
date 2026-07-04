@@ -165,11 +165,27 @@ Backend-only Supabase configuration for the AI service:
 SUPABASE_URL=http://127.0.0.1:54321
 SUPABASE_SERVICE_ROLE_KEY=<local service-role key from supabase status>
 SUPABASE_TIMEOUT_SECONDS=10
+SCHEDULED_REFRESH_TOKEN=<local scheduler token>
 ```
 
 Keep `SUPABASE_SERVICE_ROLE_KEY` only in the FastAPI service environment. Do
 not add it to Flutter `.env`, docs examples with real values, browser runtime
-configuration, or committed files.
+configuration, or committed files. Keep `SCHEDULED_REFRESH_TOKEN` backend-only
+for local cron/scheduler tests.
+
+The scheduler-triggered daily refresh endpoint is intentionally not a Flutter
+client endpoint:
+
+```bash
+curl -X POST http://localhost:8000/v1/scheduled/daily-refresh \
+  -H 'X-Scheduled-Refresh-Token: <local scheduler token>' \
+  -H 'Content-Type: application/json' \
+  -d '{"window_days":7,"limit":100,"include_recommendations":false}'
+```
+
+It refreshes deterministic daily snapshots for onboarded non-guest profiles.
+When `include_recommendations=true`, it also runs the deterministic
+recommendation generator with LLM wording disabled.
 
 ## Supabase
 
@@ -202,7 +218,8 @@ For local Supabase-backed app testing:
    `SUPABASE_ANON_KEY=<local anon key>`.
 5. Start the frontend with `scripts/start_frontend.sh`.
 6. Smoke test registration or sign-in, onboarding, daily check-in, quick mood
-   check-in, dashboard, notifications, and coach message send.
+   check-in, habit management, habit completion, dashboard, notifications, and
+   coach message send.
 
 Do not infer remote Supabase state from local migrations. Verify the remote
 project through the Supabase dashboard, CLI, or connector before using it for

@@ -32,6 +32,12 @@ class QuickActionPage extends StatelessWidget {
           subtitle: 'Track consistency signals',
           onTap: () => context.go(AppRoutes.habitCompletion),
         ),
+        _ActionTile(
+          icon: Icons.repeat_on_outlined,
+          title: 'Habit management',
+          subtitle: 'Create, edit, and pause targets',
+          onTap: () => context.go(AppRoutes.habitManagement),
+        ),
         const _ActionTile(
           icon: Icons.note_alt_outlined,
           title: 'Reflection note',

@@ -28,6 +28,8 @@ class MainShell extends StatelessWidget {
         AppRoutes.dashboard,
       final path when path.startsWith(AppRoutes.habitCompletion) =>
         AppRoutes.quickAction,
+      final path when path.startsWith(AppRoutes.habitManagement) =>
+        AppRoutes.quickAction,
       final path when path.startsWith(AppRoutes.dailyCheckIn) =>
         AppRoutes.alerts,
       final path when path.startsWith(AppRoutes.deepWork) => AppRoutes.alerts,

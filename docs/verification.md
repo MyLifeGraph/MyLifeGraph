@@ -49,7 +49,10 @@ requirements installed if the local `.venv` does not exist.
 FastAPI tests cover authenticated intake, deterministic recommendations, and
 the snapshot aggregator endpoint. Snapshot tests verify principal-derived
 `user_id`, request `user_id` rejection, scoped Supabase reads, and refreshing an
-existing `user_state_snapshots` row for the same period.
+existing `user_state_snapshots` row for the same period. Scheduled refresh tests
+cover the backend-only token guard, onboarded non-guest profile selection,
+per-user failure isolation, deterministic daily snapshot refresh, and optional
+deterministic recommendation refresh without LLM wording.
 
 Current Flutter widget tests include:
 
@@ -59,6 +62,7 @@ Current Flutter widget tests include:
 - Guest can complete a quick mood check-in and persist it locally in
   `shared_preferences`.
 - Guest can open the Habit Completion quick action without requiring Supabase.
+- Guest can open Habit Management without requiring Supabase.
 - The Intake API data source posts `POST /v1/intake/complete` with bearer auth
   and the structured payload.
 - The optimization repository keeps normal recommendation reads as `GET` only,
@@ -69,7 +73,8 @@ Current Flutter widget tests include:
   network failures as best-effort.
 - Task and habit snapshot refresh service entrypoints route through the same
   authenticated daily snapshot refresh behavior. The active dashboard task
-  status and Quick Action habit completion writes use those entrypoints.
+  status, Quick Action habit management writes, and Quick Action habit
+  completion writes use those entrypoints.
 
 These tests cover the default mock/guest product path. They do not prove real
 Supabase registration, RLS, or browser behavior.
@@ -180,14 +185,15 @@ enabled, which gives Playwright stable text fields, buttons, and labels instead
 of relying on canvas pixels.
 
 The browser smoke creates a confirmed local Supabase Auth user through the local
-admin API, signs in through the app, completes onboarding through FastAPI, saves
-a daily check-in, saves a quick mood check-in, logs an intake-created habit
-completion, uses the dashboard refresh action, opens alerts, sends a coach
-message, and then queries local Supabase REST with the local service-role key.
+admin API, signs in through the app, completes onboarding through FastAPI,
+creates a habit through Habit Management, saves a daily check-in, saves a quick
+mood check-in, logs the managed habit completion, uses the dashboard refresh
+action, opens alerts, sends a coach message, and then queries local Supabase
+REST with the local service-role key.
 It asserts FastAPI-created `intake_responses`, onboarding
 `user_state_snapshots`, deterministic post-intake `recommendations`, intake
-`goals` and `habits`, direct app writes to `daily_logs`,
-`behavioral_events`, `habit_logs`, and `coach_messages`, plus
+`goals` and `habits`, Flutter-created managed `habits`, direct app writes to
+`daily_logs`, `behavioral_events`, `habit_logs`, and `coach_messages`, plus
 backend-refreshed daily `user_state_snapshots` after the check-in, habit
 completion, and manual recommendation refresh flows. The manual refresh step
 also observes the browser POSTs to `/v1/snapshots/generate` and

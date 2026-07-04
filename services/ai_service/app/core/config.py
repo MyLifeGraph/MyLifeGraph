@@ -26,6 +26,10 @@ class Settings(BaseSettings):
         default=10,
         alias="SUPABASE_TIMEOUT_SECONDS",
     )
+    scheduled_refresh_token: str = Field(
+        default="",
+        alias="SCHEDULED_REFRESH_TOKEN",
+    )
 
     @property
     def allowed_origins(self) -> list[str]:

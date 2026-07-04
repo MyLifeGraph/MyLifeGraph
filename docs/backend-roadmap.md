@@ -72,9 +72,26 @@ Already implemented:
     evidence references.
   - Best-effort Flutter daily snapshot refresh after Supabase-backed Daily
     Check-In, Quick Mood Check-In, dashboard task status writes, and Quick
-    Action habit completion writes.
+    Action habit management/completion writes.
   - Snapshot refresh service entrypoints for task and habit changes are wired to
-    the active dashboard task and Quick Action habit completion paths.
+    the active dashboard task and Quick Action habit paths.
+- Quick Action habit management:
+  - Authenticated Supabase users can create, edit, pause, restore, and inspect
+    7-day progress for habits.
+  - The flow uses the existing `habits` and `habit_logs` tables and does not
+    add schema, workers, or LLM usage.
+  - Successful habit writes trigger the same best-effort daily snapshot refresh
+    as habit completions.
+- Scheduled refresh foundation:
+  - `POST /v1/scheduled/daily-refresh`.
+  - Protected by backend-only `X-Scheduled-Refresh-Token`.
+  - Lists onboarded non-guest profiles, prioritizes users missing the target
+    date's daily snapshot, then fills the batch with the oldest existing daily
+    snapshots.
+  - Refreshes deterministic daily snapshots with the existing idempotent
+    snapshot upsert.
+  - Can optionally run deterministic recommendation generation with LLM wording
+    disabled.
 - Browser E2E starts FastAPI with local Supabase backend settings and verifies
   authenticated Intake V1 persistence, deterministic post-intake
   recommendations, backend daily snapshot refresh after check-ins, and core
@@ -83,7 +100,7 @@ Already implemented:
 Not yet implemented:
 
 - A production background job queue or worker.
-- Automatic snapshot refresh triggers from scheduled jobs.
+- Deployed cron wiring for the scheduler-triggered refresh endpoint.
 - Real coach-response backend.
 - LLM provider integration.
 - Memory extraction beyond current direct writes.
@@ -122,9 +139,11 @@ repositories, and jobs, not as unconstrained autonomous LLM loops.
 | Notification service | Schedule and event changes | Preferences, recommendations, deadlines | `notifications` | None |
 
 The intake foundation, controlled post-intake recommendation refresh, first
-authenticated snapshot aggregator endpoint, and deliberate dashboard refresh UX
-now exist. Next backend work should wire scheduled refresh or deepen habit
-flows before coach, memory extraction, weekly planning, or LLM provider work.
+authenticated snapshot aggregator endpoint, deliberate dashboard refresh UX,
+first real habit management flow, and scheduler-triggered daily refresh endpoint
+now exist. Next backend work should wire deployed cron/job execution or deepen
+scheduled recommendation policy before coach, memory extraction, weekly
+planning, or LLM provider work.
 
 ## User Start Flow
 
@@ -387,7 +406,11 @@ coverage.
 - Implemented: Quick Action habit completion writes to `habit_logs`, updates the
   habit timestamp, and triggers daily snapshot refresh best-effort after a
   successful Supabase write.
-- Still open: scheduled refresh.
+- Implemented: Quick Action habit management can create, edit, pause, restore,
+  and inspect 7-day progress for habits against the existing habit tables.
+- Implemented: scheduler-triggered daily snapshot refresh endpoint for onboarded
+  non-guest profiles.
+- Still open: deployed cron/job wiring.
 
 ### Slice 3: E2E Expansion
 
@@ -404,8 +427,13 @@ coverage.
   best-effort after a successful Supabase update.
 - Implemented: Quick Action habit completions call the same daily snapshot
   refresh best-effort after a successful Supabase upsert.
-- Next: add scheduled refresh or deepen habit flows beyond simple daily
-  completion logging.
+- Implemented: Quick Action habit management calls the same daily snapshot
+  refresh best-effort after successful create, edit, pause, or restore writes.
+- Implemented: `POST /v1/scheduled/daily-refresh` refreshes deterministic daily
+  snapshots for onboarded non-guest profiles and can optionally run
+  deterministic recommendation generation without LLM wording.
+- Next: wire deployed cron/job execution and decide scheduled recommendation
+  cadence.
 - Preserve guest/mock mode and keep failures best-effort for the user write.
 - Do not introduce a production worker, LLM provider, or dashboard-load
   generation for this slice.

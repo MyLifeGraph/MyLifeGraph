@@ -88,6 +88,19 @@ Use `"scope":"weekly"` to refresh the ISO-week snapshot for the target date.
 The backend derives `user_id` from the bearer token and rejects request bodies
 that include `user_id`.
 
+Scheduler-triggered daily refresh uses a backend-only token and never belongs
+in Flutter or browser runtime configuration:
+
+```bash
+curl -X POST http://localhost:8000/v1/scheduled/daily-refresh \
+  -H 'X-Scheduled-Refresh-Token: <scheduled_refresh_token>' \
+  -H 'Content-Type: application/json' \
+  -d '{"window_days":7,"limit":100,"include_recommendations":false}'
+```
+
+Set `include_recommendations` to `true` only for a deliberate deterministic
+recommendation refresh pass. LLM wording remains disabled.
+
 ## Environment
 
 The service reads `.env` from `services/ai_service`:
@@ -99,10 +112,12 @@ ALLOWED_ORIGINS=http://127.0.0.1:7357,http://localhost:7357
 SUPABASE_URL=
 SUPABASE_SERVICE_ROLE_KEY=
 SUPABASE_TIMEOUT_SECONDS=10
+SCHEDULED_REFRESH_TOKEN=
 ```
 
 Do not expose the Supabase service-role key to the Flutter app. It belongs only
-in the backend service environment.
+in the backend service environment. Keep `SCHEDULED_REFRESH_TOKEN` backend-only
+as well; it authorizes scheduler-triggered refresh runs.
 
 JWT verification is isolated in the FastAPI auth dependency. Tests inject fake
 verifiers and repositories, so production or remote Supabase credentials are not

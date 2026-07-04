@@ -17,8 +17,10 @@ way to explore the product today is the Flutter app in mock-data guest mode.
   recommendation endpoints plus a deterministic snapshot refresh endpoint.
   Completing Intake V1 now triggers a controlled deterministic recommendation
   refresh from the onboarding snapshot. Daily and weekly user-state snapshots
-  can be refreshed through the backend without an LLM provider, and the
-  dashboard includes a deliberate deterministic recommendation refresh action.
+  can be refreshed through the backend without an LLM provider, the dashboard
+  includes a deliberate deterministic recommendation refresh action, and a
+  backend-only scheduled daily refresh endpoint can refresh onboarded non-guest
+  profiles for cron-style runs.
 - Repository docs and scripts should be treated as the shared team source of
   truth. Do not depend on user-local Codex skills or machine-specific paths.
 
@@ -141,8 +143,11 @@ Supabase is the intended auth and persistence backend. The current app supports:
   disabled. Normal dashboard reads still do not generate recommendations.
 - Supabase-backed daily and quick mood check-ins refresh the backend daily
   `user_state_snapshots` row best-effort after writes, and dashboard task
-  status changes plus Quick Action habit completions use the same refresh path
-  after successful Supabase updates; guest/mock paths stay local.
+  status changes plus Quick Action habit creation, edits, active-state changes,
+  and completions use the same refresh path after successful Supabase updates;
+  guest/mock paths stay local.
+- `POST /v1/scheduled/daily-refresh` is a backend-only scheduler endpoint
+  protected by `X-Scheduled-Refresh-Token`; it must not be called from Flutter.
 
 Important current caveat: the Flutter app targets the canonical snake_case
 schema. A clean local Supabase reset should apply
