@@ -65,6 +65,12 @@ Some write actions, such as daily check-ins and quick mood check-ins, directly
 require Supabase. Without Supabase configuration they show an in-app message
 instead of writing remote data.
 
+Insights also uses this boundary for deterministic correlation analysis. In
+mock or guest mode it renders local time series. In real Supabase mode it reads
+recent `daily_logs`, `tasks`, `schedule_items`, `habits`, and `habit_logs`,
+derives daily metric values, and computes 7/14/30-day correlations in Flutter.
+This path does not call FastAPI or an LLM.
+
 ## Authentication
 
 The current auth modes are:

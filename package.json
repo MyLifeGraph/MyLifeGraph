@@ -5,7 +5,8 @@
   "scripts": {
     "verify": "scripts/verify.sh",
     "verify:supabase": "scripts/verify_supabase_local.sh",
-    "e2e:web": "bash scripts/e2e_web.sh"
+    "e2e:web": "bash scripts/e2e_web.sh",
+    "seed:demo": "bash scripts/seed_demo_data.sh"
   },
   "devDependencies": {
     "playwright": "^1.56.1"

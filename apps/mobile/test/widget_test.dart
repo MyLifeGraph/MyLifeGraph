@@ -116,6 +116,35 @@ void main() {
     expect(find.text('Habit management'), findsOneWidget);
     expect(find.text('Supabase is not configured.'), findsOneWidget);
   });
+
+  testWidgets('guest can inspect correlation insights', (tester) async {
+    await _pumpTestApp(tester);
+
+    await tester.ensureVisible(find.text('Continue as guest'));
+    await tester.tap(find.text('Continue as guest'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Skip timetable for now'));
+    await tester.tap(find.text('Skip timetable for now'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Insights'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Compare'), findsOneWidget);
+    expect(find.text('3M'), findsOneWidget);
+    expect(find.text('All'), findsOneWidget);
+    expect(find.text('Trend overlay'), findsOneWidget);
+    expect(find.text('0-100 normalized'), findsOneWidget);
+
+    await tester.drag(
+      find.byType(CustomScrollView).last,
+      const Offset(0, -900),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Top patterns'), findsOneWidget);
+    expect(find.text('Correlation matrix'), findsOneWidget);
+  });
 }
 
 Future<void> _pumpTestApp(WidgetTester tester) async {

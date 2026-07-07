@@ -6,8 +6,10 @@ import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../data/datasources/insights_mock_data_source.dart';
 import '../../data/datasources/insights_supabase_data_source.dart';
 import '../../data/repositories/insights_repository_impl.dart';
+import '../../domain/entities/correlation.dart';
 import '../../domain/entities/insight.dart';
 import '../../domain/repositories/insights_repository.dart';
+import '../../domain/services/correlation_analyzer.dart';
 
 final insightsMockDataSourceProvider = Provider<InsightsMockDataSource>(
   (_) => const InsightsMockDataSource(),
@@ -35,3 +37,21 @@ final insightsRepositoryProvider = Provider<InsightsRepository>(
 final insightsProvider = FutureProvider<List<Insight>>(
   (ref) => ref.watch(insightsRepositoryProvider).getInsights(),
 );
+
+final insightsWindowDaysProvider = StateProvider<int>((_) => 14);
+
+final correlationAnalyzerProvider = Provider<CorrelationAnalyzer>(
+  (_) => const CorrelationAnalyzer(),
+);
+
+final correlationReportProvider =
+    FutureProvider<CorrelationReport>((ref) async {
+  final windowDays = ref.watch(insightsWindowDaysProvider);
+  final points = await ref
+      .watch(insightsRepositoryProvider)
+      .getCorrelationDataPoints(windowDays: windowDays);
+  return ref.watch(correlationAnalyzerProvider).analyze(
+        windowDays: windowDays,
+        points: points,
+      );
+});

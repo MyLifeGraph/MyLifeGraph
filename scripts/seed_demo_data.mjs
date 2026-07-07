@@ -1,0 +1,872 @@
+import crypto from 'node:crypto';
+
+const supabaseUrl = process.env.SUPABASE_URL?.replace(/\/$/, '');
+const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const demoPassword = process.env.DEMO_PASSWORD || 'DemoPass123!';
+
+if (!supabaseUrl) {
+  throw new Error('SUPABASE_URL is required');
+}
+if (!serviceRoleKey) {
+  throw new Error('SUPABASE_SERVICE_ROLE_KEY is required');
+}
+
+assertLocalSupabaseUrl(supabaseUrl);
+
+const scenarios = [
+  {
+    key: 'student',
+    email: 'student@example.test',
+    displayName: 'Maya Student Demo',
+    timezone: 'Europe/Berlin',
+    archetype: 'Focused Student',
+    overallScore: 78,
+    focusAreas: ['focus', 'energy', 'planning'],
+    weekdayShape: 'school_or_work',
+    bestEnergyWindow: 'morning',
+    coachingStyle: 'direct',
+    quietHoursStart: '21:30',
+    quietHoursEnd: '07:00',
+    baseline: {
+      sleep: 7.1,
+      steps: 7600,
+      activity: 6,
+      screen: 4.8,
+      focus: 115,
+      mood: 7,
+      energy: 7,
+      stress: 5,
+    },
+    goals: [
+      ['Protect study focus', 'Keep the first serious study block before messages and social apps.'],
+      ['Stabilize school-night sleep', 'Avoid short nights before math-heavy mornings.'],
+      ['Plan exams earlier', 'Move exam preparation into smaller weekday blocks.'],
+    ],
+    habits: [
+      ['Morning review', 'Review the top three school priorities before class.', [1, 1, 1, 0, 1, 1, 1]],
+      ['Phone away study block', 'Keep the phone out of reach during the first focus block.', [1, 0, 1, 1, 1, 0, 1]],
+      ['Evening shutdown', 'Close school work and screens before quiet hours.', [0, 1, 1, 0, 1, 1, 0]],
+    ],
+    schedule: [
+      ['Math', 'Room 204', 1, '08:15', '09:45'],
+      ['Study block', 'Library', 1, '10:15', '11:45'],
+      ['Physics lab', 'Lab 2', 3, '13:00', '15:00'],
+      ['Exam prep', 'Home desk', 4, '17:00', '18:00'],
+      ['Recovery walk', 'Outside', 5, '16:00', '16:30'],
+    ],
+    tasks: [
+      ['Finish math problem set', 'Submit the remaining proofs and review weak steps.', 'todo', 'high', 1],
+      ['Draft history outline', 'Turn the topic list into a two-page outline.', 'in_progress', 'medium', 2],
+      ['Prepare physics lab notes', 'Bring one question for the lab session.', 'todo', 'medium', 3],
+      ['Review flashcards', 'Twenty-minute spaced repetition block.', 'done', 'low', -1],
+    ],
+    recommendations: [
+      ['Protect the first study block', 'Your strongest focus signal is before late morning classes.', 'Schedule block', 'focus', 0.86, 'high'],
+      ['Move exam prep earlier', 'Stress rises when review starts after 18:00.', 'Plan prep', 'planning', 0.78, 'medium'],
+      ['Shorten late screen sessions', 'Recovery drops after heavy evening screen time.', 'Create wind-down', 'recovery', 0.73, 'medium'],
+    ],
+    insights: [
+      ['Morning focus is reliable', 'Focus minutes are highest when the first study block starts before 10:30.', 'focus', 0.84],
+      ['Late starts increase stress', 'Stress scores rise after days with missed evening shutdown.', 'stress', 0.72],
+    ],
+    notifications: [
+      ['Focus window approaching', 'Your best study window starts in 20 minutes.', 'reminder', 'high', 0],
+      ['Exam prep check', 'Split the next exam task into a smaller block today.', 'coaching', 'medium', 1],
+    ],
+    memories: [
+      ['goal', 'Primary goal', 'Maya wants protected morning study time.'],
+      ['preference', 'Coaching tone', 'Maya prefers direct coaching and concrete next steps.'],
+      ['recurring_problem', 'Friction pattern', 'Late screen-heavy evenings reduce recovery before school days.'],
+    ],
+  },
+  {
+    key: 'worker',
+    email: 'worker@example.test',
+    displayName: 'Jon Worker Demo',
+    timezone: 'Europe/Berlin',
+    archetype: 'Busy Operator',
+    overallScore: 72,
+    focusAreas: ['focus', 'stress', 'planning'],
+    weekdayShape: 'split_day',
+    bestEnergyWindow: 'afternoon',
+    coachingStyle: 'analytical',
+    quietHoursStart: '22:00',
+    quietHoursEnd: '06:30',
+    baseline: {
+      sleep: 6.4,
+      steps: 6200,
+      activity: 5,
+      screen: 7.1,
+      focus: 82,
+      mood: 6,
+      energy: 6,
+      stress: 7,
+    },
+    goals: [
+      ['Make room for deep work', 'Protect non-meeting time before deadline-heavy afternoons.'],
+      ['Lower meeting recovery cost', 'Add transition buffers after intense calls.'],
+      ['Keep tasks visible', 'Review the top three work commitments daily.'],
+    ],
+    habits: [
+      ['Calendar triage', 'Review meetings and choose the real top three tasks.', [1, 1, 0, 1, 1, 1, 0]],
+      ['Post-meeting reset', 'Take a short reset after high-context meetings.', [0, 1, 0, 1, 0, 1, 1]],
+      ['Inbox shutdown', 'Stop reactive email checks before dinner.', [1, 0, 1, 0, 1, 0, 0]],
+    ],
+    schedule: [
+      ['Team standup', 'Remote', 1, '09:00', '09:30'],
+      ['Client sync', 'Remote', 2, '11:00', '12:00'],
+      ['Deep work hold', 'Office', 3, '14:00', '15:30'],
+      ['Project review', 'Remote', 4, '16:00', '17:00'],
+      ['Admin sweep', 'Office', 5, '11:30', '12:00'],
+    ],
+    tasks: [
+      ['Prepare stakeholder update', 'Create a concise summary and risk section.', 'todo', 'critical', 1],
+      ['Review Q3 roadmap', 'Mark the decisions needed before planning.', 'in_progress', 'high', 2],
+      ['Clean up inbox commitments', 'Turn open email promises into tasks.', 'todo', 'medium', 0],
+      ['Send client recap', 'Capture decisions and owners from the last sync.', 'done', 'medium', -1],
+    ],
+    recommendations: [
+      ['Hold one meeting-free block', 'Focus drops on days with meetings across every work segment.', 'Protect calendar', 'focus', 0.81, 'high'],
+      ['Add transition buffers', 'Stress stays elevated after back-to-back calls.', 'Add reset', 'recovery', 0.76, 'medium'],
+      ['Convert email promises into tasks', 'Untracked commitments are driving the highest-risk deadlines.', 'Create tasks', 'planning', 0.82, 'high'],
+    ],
+    insights: [
+      ['Meetings fragment focus', 'Focus minutes fall when meetings occupy both morning and afternoon.', 'planning', 0.79],
+      ['Resets reduce stress', 'Short reset blocks correlate with lower evening stress.', 'recovery', 0.69],
+    ],
+    notifications: [
+      ['Deadline risk', 'Stakeholder update is still open and due soon.', 'deadline', 'critical', 0],
+      ['Deep work hold', 'You have a 90-minute window available this afternoon.', 'reminder', 'medium', 0],
+    ],
+    memories: [
+      ['goal', 'Primary goal', 'Jon wants fewer reactive days and more protected project work.'],
+      ['pattern', 'Meeting pattern', 'Back-to-back calls usually reduce follow-through on planned work.'],
+      ['preference', 'Coaching tone', 'Jon prefers analytical coaching with explicit tradeoffs.'],
+    ],
+  },
+  {
+    key: 'recovery',
+    email: 'recovery@example.test',
+    displayName: 'Lea Recovery Demo',
+    timezone: 'Europe/Berlin',
+    archetype: 'Recovery Builder',
+    overallScore: 68,
+    focusAreas: ['energy', 'sleep', 'movement', 'stress'],
+    weekdayShape: 'flexible',
+    bestEnergyWindow: 'early_morning',
+    coachingStyle: 'gentle',
+    quietHoursStart: '20:45',
+    quietHoursEnd: '07:30',
+    baseline: {
+      sleep: 7.8,
+      steps: 5200,
+      activity: 4,
+      screen: 3.6,
+      focus: 54,
+      mood: 6,
+      energy: 5,
+      stress: 4,
+    },
+    goals: [
+      ['Rebuild consistent energy', 'Keep daily expectations realistic while energy stabilizes.'],
+      ['Move gently every day', 'Use short walks rather than intense workouts.'],
+      ['Protect evening recovery', 'Keep the last hour of the day quiet and predictable.'],
+    ],
+    habits: [
+      ['Morning light', 'Get outdoor light before the first work block.', [1, 1, 1, 1, 0, 1, 1]],
+      ['Gentle walk', 'Ten to twenty minutes of easy movement.', [1, 0, 1, 1, 1, 1, 0]],
+      ['Recovery shutdown', 'Start the low-stimulation evening routine.', [1, 1, 1, 0, 1, 1, 1]],
+    ],
+    schedule: [
+      ['Morning reset', 'Outside', 1, '08:00', '08:20'],
+      ['Admin block', 'Home', 2, '10:00', '11:00'],
+      ['Gentle movement', 'Park', 3, '15:30', '16:00'],
+      ['Quiet evening', 'Home', 4, '20:45', '21:30'],
+      ['Weekly review', 'Home', 7, '18:00', '18:30'],
+    ],
+    tasks: [
+      ['Plan low-energy day fallback', 'Write the minimum viable plan for tired mornings.', 'todo', 'medium', 1],
+      ['Prepare recovery routine', 'Put evening routine items in one visible place.', 'in_progress', 'medium', 2],
+      ['Book light movement slot', 'Choose a walk window before the day fills up.', 'todo', 'low', 0],
+      ['Reflect on energy pattern', 'Note what helped energy feel steadier.', 'done', 'low', -1],
+    ],
+    recommendations: [
+      ['Keep tomorrow smaller', 'Energy is improving, but high-load days still reduce recovery.', 'Trim plan', 'recovery', 0.83, 'high'],
+      ['Use a gentle walk reset', 'Movement consistency is better than intensity for this scenario.', 'Add walk', 'movement', 0.77, 'medium'],
+      ['Plan a minimum viable day', 'A fallback plan reduces stress on lower-energy mornings.', 'Create fallback', 'planning', 0.74, 'medium'],
+    ],
+    insights: [
+      ['Shutdown protects energy', 'Recovery scores are higher after low-stimulation evenings.', 'sleep', 0.81],
+      ['Small walks are enough', 'Gentle movement days have steadier mood without higher stress.', 'movement', 0.75],
+    ],
+    notifications: [
+      ['Recovery window', 'Start the quiet evening routine in about 30 minutes.', 'reminder', 'medium', 0],
+      ['Gentle movement cue', 'A short walk is enough today.', 'coaching', 'low', 0],
+    ],
+    memories: [
+      ['goal', 'Primary goal', 'Lea wants steady energy without overloading the day.'],
+      ['preference', 'Coaching tone', 'Lea prefers gentle coaching and small next actions.'],
+      ['habit', 'Recovery habit', 'Evening shutdown is a strong support signal.'],
+    ],
+  },
+];
+
+await main();
+
+async function main() {
+  const users = await listAdminUsers();
+  const seeded = [];
+
+  for (const scenario of scenarios) {
+    const user = await ensureDemoUser(scenario, users);
+    await clearScenarioRows(user.id);
+    await seedScenario(user.id, scenario);
+    seeded.push(`${scenario.email} (${scenario.displayName})`);
+  }
+
+  console.log('');
+  console.log('Demo data seeded for local Supabase.');
+  console.log(`Password for all demo users: ${demoPassword}`);
+  for (const item of seeded) {
+    console.log(`- ${item}`);
+  }
+}
+
+function assertLocalSupabaseUrl(value) {
+  const parsed = new URL(value);
+  const isLocalHost =
+    parsed.hostname === '127.0.0.1' || parsed.hostname === 'localhost';
+  if (parsed.protocol !== 'http:' || !isLocalHost || parsed.port !== '54321') {
+    throw new Error(
+      `Refusing to seed non-local Supabase URL: ${value}. Expected http://127.0.0.1:54321 or http://localhost:54321.`,
+    );
+  }
+}
+
+async function ensureDemoUser(scenario, users) {
+  const existing = users.find(
+    (user) => user.email?.toLowerCase() === scenario.email.toLowerCase(),
+  );
+  if (existing) {
+    await updateAdminUser(existing.id, scenario);
+    return existing;
+  }
+
+  const created = await createAdminUser(scenario);
+  users.push(created);
+  return created;
+}
+
+async function listAdminUsers() {
+  const allUsers = [];
+  for (let page = 1; page <= 20; page += 1) {
+    const response = await adminRequest(
+      `/auth/v1/admin/users?page=${page}&per_page=100`,
+      { method: 'GET' },
+      'list local auth users',
+    );
+    const users = Array.isArray(response) ? response : response.users || [];
+    allUsers.push(...users);
+    if (users.length < 100) {
+      break;
+    }
+  }
+  return allUsers;
+}
+
+async function createAdminUser(scenario) {
+  return adminRequest(
+    '/auth/v1/admin/users',
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        email: scenario.email,
+        password: demoPassword,
+        email_confirm: true,
+        user_metadata: {
+          display_name: scenario.displayName,
+          demo_scenario: scenario.key,
+        },
+      }),
+    },
+    `create demo user ${scenario.email}`,
+  );
+}
+
+async function updateAdminUser(userId, scenario) {
+  await adminRequest(
+    `/auth/v1/admin/users/${userId}`,
+    {
+      method: 'PUT',
+      body: JSON.stringify({
+        password: demoPassword,
+        email_confirm: true,
+        user_metadata: {
+          display_name: scenario.displayName,
+          demo_scenario: scenario.key,
+        },
+      }),
+    },
+    `update demo user ${scenario.email}`,
+  );
+}
+
+async function adminRequest(path, options, description) {
+  return request(
+    `${supabaseUrl}${path}`,
+    {
+      ...options,
+      headers: {
+        apikey: serviceRoleKey,
+        Authorization: `Bearer ${serviceRoleKey}`,
+        'Content-Type': 'application/json',
+        ...(options.headers || {}),
+      },
+    },
+    description,
+  );
+}
+
+async function clearScenarioRows(userId) {
+  const tables = [
+    'habit_logs',
+    'focus_sessions',
+    'recommendations',
+    'user_state_snapshots',
+    'intake_responses',
+    'behavioral_events',
+    'daily_logs',
+    'tasks',
+    'schedule_items',
+    'notifications',
+    'coach_messages',
+    'memory_entries',
+    'ai_insights',
+    'skillset_profiles',
+    'goals',
+    'habits',
+  ];
+
+  for (const table of tables) {
+    await restRequest(
+      `${table}?user_id=eq.${encodeURIComponent(userId)}`,
+      {
+        method: 'DELETE',
+        headers: { Prefer: 'return=minimal' },
+      },
+      `clear ${table}`,
+    );
+  }
+}
+
+async function seedScenario(userId, scenario) {
+  const now = new Date();
+  const today = dateOnly(now);
+  const weekKey = isoWeekKey(now);
+  const metadata = { source: 'demo_seed_v1', scenario: scenario.key };
+
+  await upsertRows(
+    'profiles',
+    [
+      {
+        id: userId,
+        email: scenario.email,
+        display_name: scenario.displayName,
+        timezone: scenario.timezone,
+        role: 'user',
+        auth_provider: 'email',
+        onboarding_completed_at: now.toISOString(),
+        updated_at: now.toISOString(),
+      },
+    ],
+    'id',
+  );
+
+  await upsertRows(
+    'notification_preferences',
+    [
+      {
+        user_id: userId,
+        focus_prompts_enabled: true,
+        recovery_prompts_enabled: true,
+        weekly_summary_enabled: true,
+        quiet_hours_start: scenario.quietHoursStart,
+        quiet_hours_end: scenario.quietHoursEnd,
+        updated_at: now.toISOString(),
+      },
+    ],
+    'user_id',
+  );
+
+  await insertRows('intake_responses', [
+    {
+      user_id: userId,
+      version: 'intake-v1',
+      responses: {
+        primary_focus_areas: scenario.focusAreas,
+        goals: scenario.goals.map(([title]) => title),
+        friction_points: scenario.memories
+          .filter(([type]) => type === 'recurring_problem' || type === 'pattern')
+          .map(([, title]) => title),
+        weekday_shape: scenario.weekdayShape,
+        best_energy_window: scenario.bestEnergyWindow,
+        coaching_style: scenario.coachingStyle,
+        reminder_preference: {
+          enabled: true,
+          quiet_hours: {
+            starts_at: scenario.quietHoursStart,
+            ends_at: scenario.quietHoursEnd,
+          },
+        },
+        existing_habits: scenario.habits.map(([title]) => title),
+        fixed_commitments: scenario.schedule.map(
+          ([title, location, weekday, startsAt, endsAt]) => ({
+            title,
+            location,
+            weekday,
+            starts_at: startsAt,
+            ends_at: endsAt,
+          }),
+        ),
+        calendar_connection_intent: 'later',
+      },
+      metadata,
+      completed_at: now.toISOString(),
+    },
+  ]);
+
+  await insertRows(
+    'goals',
+    scenario.goals.map(([title, description], index) => ({
+      user_id: userId,
+      title,
+      description,
+      status: 'active',
+      progress: [35, 20, 10][index] ?? 0,
+      due_date: dateOnly(addDays(now, 21 + index * 7)),
+      metadata,
+    })),
+  );
+
+  const dailyLogs = buildDailyLogs(userId, scenario, now, metadata);
+  await insertRows('daily_logs', dailyLogs);
+  await insertRows(
+    'behavioral_events',
+    buildBehavioralEvents(userId, scenario, dailyLogs, metadata),
+  );
+
+  await insertRows(
+    'tasks',
+    scenario.tasks.map(([title, description, status, priority, offsetDays]) => ({
+      user_id: userId,
+      title,
+      description,
+      status,
+      priority,
+      deadline: atHour(addDays(now, offsetDays), 16, 0),
+      source: 'demo_seed',
+      metadata,
+    })),
+  );
+
+  await insertRows(
+    'schedule_items',
+    scenario.schedule.map(([title, location, weekday, startsAt, endsAt], index) => ({
+      user_id: userId,
+      title,
+      location,
+      weekday,
+      starts_at: startsAt,
+      ends_at: endsAt,
+      color: ['#1f9d8a', '#3266cc', '#b86b00', '#6f51d9'][index % 4],
+      source: 'demo_seed',
+      notes: `Demo ${scenario.key} schedule block`,
+      metadata,
+    })),
+  );
+
+  const habitRows = scenario.habits.map(([title, description], index) => ({
+    id: crypto.randomUUID(),
+    user_id: userId,
+    title,
+    description,
+    frequency: 'daily',
+    target: 1,
+    active: index !== 2 || scenario.key !== 'worker',
+    metadata,
+    updated_at: addDays(now, -index).toISOString(),
+  }));
+  await insertRows('habits', habitRows);
+  await insertRows(
+    'habit_logs',
+    buildHabitLogs(userId, scenario, habitRows, now),
+  );
+
+  await insertRows(
+    'notifications',
+    scenario.notifications.map(([title, message, type, priority, offsetDays], index) => ({
+      user_id: userId,
+      title,
+      message,
+      type,
+      priority,
+      is_read: index > 0,
+      action_url: null,
+      due_at: atHour(addDays(now, offsetDays), 15 + index, 0),
+      metadata,
+      created_at: addDays(now, -index).toISOString(),
+    })),
+  );
+
+  await insertRows(
+    'memory_entries',
+    scenario.memories.map(([type, title, content], index) => ({
+      user_id: userId,
+      type,
+      title,
+      content,
+      strength: 0.78 - index * 0.08,
+      evidence: [{ source: 'demo_seed', scenario: scenario.key }],
+      metadata,
+      last_seen_at: addDays(now, -index).toISOString(),
+    })),
+  );
+
+  await insertRows(
+    'ai_insights',
+    scenario.insights.map(([title, description, category, confidence], index) => ({
+      user_id: userId,
+      title,
+      description,
+      category,
+      priority: index === 0 ? 'high' : 'medium',
+      recommendation: scenario.recommendations[index]?.[0] ?? null,
+      confidence,
+      source: 'demo_seed',
+      metadata,
+      created_at: addDays(now, -index).toISOString(),
+    })),
+  );
+
+  await insertRows(
+    'recommendations',
+    scenario.recommendations.map(
+      ([title, reason, actionLabel, category, confidence, priority], index) => ({
+        user_id: userId,
+        title,
+        reason,
+        action_label: actionLabel,
+        category,
+        confidence,
+        status: index === 2 ? 'accepted' : 'new',
+        priority,
+        metadata: {
+          ...metadata,
+          model: null,
+          source_engine_version: 'demo-seed-v1',
+        },
+        generated_at: addDays(now, -index).toISOString(),
+        updated_at: addDays(now, -index).toISOString(),
+      }),
+    ),
+  );
+
+  await insertRows('skillset_profiles', [
+    {
+      user_id: userId,
+      overall_score: scenario.overallScore,
+      archetype: scenario.archetype,
+      scores: [
+        { name: 'Focus', score: scenario.baseline.focus > 90 ? 84 : 68 },
+        { name: 'Recovery', score: Math.round(scenario.baseline.sleep * 10) },
+        { name: 'Planning', score: scenario.key === 'worker' ? 74 : 81 },
+        { name: 'Movement', score: scenario.baseline.activity * 10 },
+      ],
+      generated_at: now.toISOString(),
+    },
+  ]);
+
+  await insertRows('coach_messages', [
+    {
+      user_id: userId,
+      role: 'user',
+      content: 'What should I pay attention to today?',
+      metadata,
+      created_at: addDays(now, -1).toISOString(),
+    },
+    {
+      user_id: userId,
+      role: 'assistant',
+      content: scenario.recommendations[0][1],
+      metadata,
+      created_at: addDays(now, -1).toISOString(),
+    },
+  ]);
+
+  await upsertRows(
+    'user_state_snapshots',
+    [
+      {
+        user_id: userId,
+        scope: 'onboarding',
+        period_key: 'intake-v1',
+        summary: {
+          primary_focus_areas: scenario.focusAreas,
+          goals: scenario.goals.map(([title]) => title),
+          coaching_style: scenario.coachingStyle,
+          best_energy_window: scenario.bestEnergyWindow,
+        },
+        signals: {
+          input_counts: {
+            goals: scenario.goals.length,
+            habits: scenario.habits.length,
+            schedule_items: scenario.schedule.length,
+          },
+        },
+        source: 'demo_seed',
+        metadata,
+        generated_at: now.toISOString(),
+      },
+      {
+        user_id: userId,
+        scope: 'daily',
+        period_key: today,
+        summary: {
+          focus_hint: scenario.recommendations[0][0],
+          recovery_hint: scenario.recommendations[1][0],
+          risk_flags: scenario.baseline.stress >= 7 ? ['deadline_pressure'] : [],
+        },
+        signals: {
+          input_counts: {
+            daily_logs: dailyLogs.length,
+            behavioral_events: dailyLogs.length * 5,
+            tasks: scenario.tasks.length,
+            habits: scenario.habits.length,
+          },
+        },
+        source: 'demo_seed',
+        metadata,
+        generated_at: now.toISOString(),
+      },
+      {
+        user_id: userId,
+        scope: 'weekly',
+        period_key: weekKey,
+        summary: {
+          weekly_theme: scenario.goals[0][0],
+          next_focus: scenario.recommendations[0][0],
+        },
+        signals: {
+          input_counts: {
+            daily_logs: dailyLogs.length,
+            recommendations: scenario.recommendations.length,
+          },
+        },
+        source: 'demo_seed',
+        metadata,
+        generated_at: now.toISOString(),
+      },
+    ],
+    'user_id,scope,period_key',
+  );
+}
+
+function buildDailyLogs(userId, scenario, now, metadata) {
+  const wave = [-1, 0, 1, 0, 2, -1, 1];
+  return Array.from({ length: 21 }, (_, index) => {
+    const offset = index - 20;
+    const date = addDays(now, offset);
+    const variation = wave[index % wave.length];
+    const sleep = clampNumber(scenario.baseline.sleep + variation * 0.25, 4.5, 9.5);
+    const energy = clampInt(scenario.baseline.energy + variation, 1, 10);
+    const stress = clampInt(
+      scenario.baseline.stress + (index % 5 === 0 ? 1 : 0) - (variation > 0 ? 1 : 0),
+      1,
+      10,
+    );
+    const mood = clampInt(scenario.baseline.mood + Math.sign(variation), 1, 10);
+    const focus = clampInt(
+      scenario.baseline.focus + variation * 12 - (stress > 7 ? 16 : 0),
+      10,
+      240,
+    );
+    const activity = clampInt(scenario.baseline.activity + Math.sign(variation), 0, 10);
+
+    return {
+      user_id: userId,
+      entry_date: dateOnly(date),
+      sleep_hours: Number(sleep.toFixed(1)),
+      steps: scenario.baseline.steps + variation * 450 + (index % 3) * 180,
+      activity_level: activity,
+      screen_time_hours: Number(
+        clampNumber(scenario.baseline.screen - variation * 0.2, 1.5, 9).toFixed(1),
+      ),
+      focus_minutes: focus,
+      mood_score: mood,
+      mood_label: moodLabel(mood),
+      energy_level: energy,
+      stress_level: stress,
+      nutrition_notes: index % 4 === 0 ? 'Regular meals, lighter evening.' : null,
+      day_focus: scenario.goals[index % scenario.goals.length][0],
+      reflection: `Demo ${scenario.key} signal day ${index + 1}.`,
+      source: 'demo_seed',
+      metadata,
+      created_at: atHour(date, 20, 0),
+      updated_at: atHour(date, 20, 15),
+    };
+  });
+}
+
+function buildBehavioralEvents(userId, scenario, dailyLogs, metadata) {
+  return dailyLogs.flatMap((log, index) => {
+    const date = new Date(`${log.entry_date}T12:00:00.000Z`);
+    const base = [
+      ['mood_score', log.mood_score, 'score'],
+      ['energy_level', log.energy_level, 'score'],
+      ['stress_level', log.stress_level, 'score'],
+      ['focus_minutes', log.focus_minutes, 'minutes'],
+      ['activity_level', log.activity_level, 'score'],
+    ];
+    return base.map(([eventType, value, unit], eventIndex) => ({
+      user_id: userId,
+      event_type: eventType,
+      value,
+      unit,
+      occurred_at: atHour(date, 9 + eventIndex * 2, 0),
+      source: 'demo_seed',
+      metadata: { ...metadata, entry_date: log.entry_date, day_index: index },
+    }));
+  });
+}
+
+function buildHabitLogs(userId, scenario, habits, now) {
+  return habits.flatMap((habit, habitIndex) => {
+    const pattern = scenario.habits[habitIndex][2];
+    return pattern
+      .map((value, patternIndex) => {
+        if (value <= 0) {
+          return null;
+        }
+        return {
+          user_id: userId,
+          habit_id: habit.id,
+          entry_date: dateOnly(addDays(now, patternIndex - 6)),
+          value,
+          notes: 'Demo completion',
+        };
+      })
+      .filter(Boolean);
+  });
+}
+
+async function insertRows(table, rows) {
+  if (rows.length === 0) {
+    return;
+  }
+  await restRequest(
+    table,
+    {
+      method: 'POST',
+      body: JSON.stringify(rows),
+      headers: { Prefer: 'return=minimal' },
+    },
+    `insert ${table}`,
+  );
+}
+
+async function upsertRows(table, rows, conflictColumns) {
+  if (rows.length === 0) {
+    return;
+  }
+  await restRequest(
+    `${table}?on_conflict=${encodeURIComponent(conflictColumns)}`,
+    {
+      method: 'POST',
+      body: JSON.stringify(rows),
+      headers: {
+        Prefer: 'resolution=merge-duplicates,return=minimal',
+      },
+    },
+    `upsert ${table}`,
+  );
+}
+
+async function restRequest(path, options, description) {
+  return request(
+    `${supabaseUrl}/rest/v1/${path}`,
+    {
+      ...options,
+      headers: {
+        apikey: serviceRoleKey,
+        Authorization: `Bearer ${serviceRoleKey}`,
+        'Content-Type': 'application/json',
+        ...(options.headers || {}),
+      },
+    },
+    description,
+  );
+}
+
+async function request(url, options, description) {
+  const response = await fetch(url, options);
+  if (!response.ok) {
+    throw new Error(
+      `Could not ${description}: ${response.status} ${await response.text()}`,
+    );
+  }
+
+  const contentType = response.headers.get('content-type') || '';
+  if (contentType.includes('application/json')) {
+    return response.json();
+  }
+  return null;
+}
+
+function addDays(baseDate, offset) {
+  const date = new Date(baseDate);
+  date.setUTCDate(date.getUTCDate() + offset);
+  return date;
+}
+
+function dateOnly(date) {
+  return date.toISOString().slice(0, 10);
+}
+
+function atHour(date, hour, minute) {
+  const copy = new Date(date);
+  copy.setUTCHours(hour, minute, 0, 0);
+  return copy.toISOString();
+}
+
+function isoWeekKey(date) {
+  const copy = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+  const day = copy.getUTCDay() || 7;
+  copy.setUTCDate(copy.getUTCDate() + 4 - day);
+  const yearStart = new Date(Date.UTC(copy.getUTCFullYear(), 0, 1));
+  const week = Math.ceil(((copy - yearStart) / 86400000 + 1) / 7);
+  return `${copy.getUTCFullYear()}-W${String(week).padStart(2, '0')}`;
+}
+
+function clampInt(value, min, max) {
+  return Math.max(min, Math.min(max, Math.round(value)));
+}
+
+function clampNumber(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function moodLabel(score) {
+  if (score >= 9) {
+    return 'great';
+  }
+  if (score >= 7) {
+    return 'good';
+  }
+  if (score >= 5) {
+    return 'neutral';
+  }
+  if (score >= 3) {
+    return 'low';
+  }
+  return 'very_low';
+}

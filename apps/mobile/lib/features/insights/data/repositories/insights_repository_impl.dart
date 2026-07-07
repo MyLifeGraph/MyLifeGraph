@@ -1,3 +1,4 @@
+import '../../domain/entities/correlation.dart';
 import '../../domain/entities/insight.dart';
 import '../../domain/repositories/insights_repository.dart';
 import '../datasources/insights_mock_data_source.dart';
@@ -25,6 +26,26 @@ class InsightsRepositoryImpl implements InsightsRepository {
     try {
       final items = await _supabaseDataSource.getInsights();
       return items;
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  @override
+  Future<List<CorrelationDataPoint>> getCorrelationDataPoints({
+    required int windowDays,
+  }) async {
+    if (_allowMockData) {
+      return _mockDataSource.getCorrelationDataPoints(windowDays: windowDays);
+    }
+    if (_supabaseDataSource == null) {
+      return const [];
+    }
+
+    try {
+      return await _supabaseDataSource.getCorrelationDataPoints(
+        windowDays: windowDays,
+      );
     } catch (_) {
       return const [];
     }

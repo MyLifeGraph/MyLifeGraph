@@ -15,9 +15,35 @@ Use the lowest level that covers the change.
 | Local Supabase reset | `RESET_DB=true FLUTTER_BIN=/path/to/flutter scripts/verify_supabase_local.sh` | Recreates local DB, applies migrations, then runs tests. | Yes, local DB only |
 | Browser E2E | `FLUTTER_BIN=/path/to/flutter bash scripts/e2e_web.sh` | Starts local Supabase, starts Flutter Web, drives Playwright, and checks DB writes. | No |
 | Browser E2E with reset | `RESET_DB=true FLUTTER_BIN=/path/to/flutter bash scripts/e2e_web.sh` | Recreates local DB, then runs browser E2E. | Yes, local DB only |
+| Demo seed | `npm run seed:demo` | Starts local Supabase and seeds repeatable demo users/data for manual exploration. | No |
 
 Do not run destructive Supabase commands against a remote database. These
 scripts are for the local Supabase stack from `supabase/config.toml`.
+
+## Demo Seed
+
+Manual product exploration can use local seeded accounts instead of hardcoded
+mock data:
+
+```bash
+npm run seed:demo
+```
+
+This runs `scripts/seed_demo_data.sh`, which starts local Supabase, reads the
+local service-role key from `supabase status -o env`, and invokes
+`scripts/seed_demo_data.mjs`. The Node script rejects any API URL outside
+`http://127.0.0.1:54321` and `http://localhost:54321`.
+
+The seed is idempotent for the demo accounts. It keeps the local Auth users,
+updates their password and metadata, clears their app rows, and recreates the
+scenario data. The default local-only password is `DemoPass123!` for:
+
+- `student@example.test`
+- `worker@example.test`
+- `recovery@example.test`
+
+Override it with `DEMO_PASSWORD` when needed. Do not use this workflow for a
+remote Supabase project.
 
 ## Standard Verification
 
@@ -75,6 +101,13 @@ Current Flutter widget tests include:
   authenticated daily snapshot refresh behavior. The active dashboard task
   status, Quick Action habit management writes, and Quick Action habit
   completion writes use those entrypoints.
+- Guest can inspect the deterministic Insights correlation surface without
+  requiring Supabase.
+- The correlation analyzer covers positive, negative, missing, low-variation,
+  and weak-relationship ranking behavior.
+- The Insights repository keeps mock correlation data scoped to mock/guest mode
+  and does not substitute demo correlations for empty or failing real Supabase
+  reads.
 
 These tests cover the default mock/guest product path. They do not prove real
 Supabase registration, RLS, or browser behavior.

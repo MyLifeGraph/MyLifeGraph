@@ -133,6 +133,7 @@ repositories, and jobs, not as unconstrained autonomous LLM loops.
 | Signal aggregator | Intake, daily check-in, task/habit changes, scheduled jobs | `daily_logs`, `behavioral_events`, `tasks`, `goals`, `habits`, `schedule_items`, `memory_entries` | `user_state_snapshots`, optional `ai_insights` | None by default |
 | Recommendation service | Intake complete, explicit refresh, scheduled refresh | `user_state_snapshots`, `daily_logs`, `behavioral_events`, `tasks`, existing `recommendations` | `recommendations` | Optional wording only later |
 | Recommendation verifier | Every generated recommendation | Candidate metadata, active recommendations | Accept/reject result | None |
+| Daily briefing service | Evening shutdown, morning calibration, explicit refresh, scheduled jobs | `user_state_snapshots`, `recommendations`, recent check-ins, goals, tasks, habits, feedback | `daily_briefings` or derived briefing payload, optional recommendation status updates | None for v1 |
 | Coach service | User sends coach message | Recent messages, snapshots, selected memory | `coach_messages`, optional memory candidates | Yes, budgeted |
 | Memory service | Check-ins, coach conversations, weekly review | Raw notes/messages, existing memory | `memory_entries` | Optional extraction only |
 | Planning service | Weekly review, user request | Goals, tasks, habits, schedule, snapshots | `tasks`, `schedule_items`, `recommendations`, `coach_messages` | Optional for complex plans |
@@ -140,10 +141,14 @@ repositories, and jobs, not as unconstrained autonomous LLM loops.
 
 The intake foundation, controlled post-intake recommendation refresh, first
 authenticated snapshot aggregator endpoint, deliberate dashboard refresh UX,
-first real habit management flow, and scheduler-triggered daily refresh endpoint
-now exist. Next backend work should wire deployed cron/job execution or deepen
-scheduled recommendation policy before coach, memory extraction, weekly
-planning, or LLM provider work.
+first real habit management flow, scheduler-triggered daily refresh endpoint,
+and deterministic Insights correlation exploration now exist. The next product
+work should build the Daily Briefing / Daily Decision Loop foundation before
+coach, memory extraction, weekly planning, calendar import, or LLM provider
+work. Deployed cron/job execution remains useful, but it should precompute a
+defined daily state or briefing contract rather than exist as infrastructure in
+search of a product output. See `docs/daily-briefing-implementation-plan.md`
+for the current product contract and phase sequence.
 
 ## User Start Flow
 
@@ -376,9 +381,58 @@ Use these rules before adding any model provider:
 The next implementation should build on **Intake V1 without LLM**, controlled
 post-intake recommendation refresh, authenticated snapshot aggregation,
 deliberate dashboard recommendation refresh, and the FastAPI-backed browser E2E
-coverage.
+coverage. The current product priority is the **Daily Briefing / Daily Decision
+Loop**: collect the few missing daily signals, derive explainable daily state,
+and rank a small number of next actions without LLM usage.
 
-### Slice 1: Controlled Recommendation Refresh
+### Slice 0: Daily Briefing Product Contract
+
+- Current direction: `docs/daily-briefing-implementation-plan.md` defines the
+  daily capture cadence, stress taxonomy, Daily Mode, briefing service shape,
+  feedback loop, and staged implementation plan.
+- Next: keep this contract as the product source of truth when changing
+  check-ins, snapshots, recommendation ranking, or the dashboard top surface.
+- Do not add `daily_briefings` immediately unless the implementation needs a
+  persisted row. Phase 1 should validate the missing signals using existing
+  `daily_logs.metadata` and `behavioral_events.metadata`.
+
+### Slice 1: Lightweight Daily Capture And Stress Taxonomy
+
+- Next: extend the daily/evening check-in path with stress source,
+  controllability, intensity label, and optional "make tomorrow gentler"
+  intent.
+- Store those fields in metadata first, while keeping existing numeric
+  `stress_level`, energy, mood, and focus fields compatible with current
+  analytics.
+- Preserve guest/mock mode and Supabase-backed writes.
+- Add tests covering private/emotional low-control stress separately from
+  workload or avoidable-pressure stress.
+
+### Slice 2: Daily State Enhancement
+
+- Next: extend deterministic snapshot aggregation to summarize the new stress
+  taxonomy.
+- Add risk flags for private/emotional stress, avoidable pressure, low-control
+  stress, overload, and recovery risk.
+- Add a deterministic Daily Mode classifier with modes `push`, `steady`,
+  `recover`, and `plan`.
+- Recovery/private-emotional modes must reduce load and avoid aggressive
+  productivity recommendations.
+
+### Slice 3: Daily Briefing Service And Dashboard Repositioning
+
+- Next after the capture and snapshot signals are proven: add a FastAPI-owned
+  briefing service that reads current snapshots and recommendations, ranks one
+  primary action plus limited secondary actions, and returns a daily mode,
+  reason, capacity/risk note, and evidence references.
+- `GET /v1/briefings/today` should read only and report stale/missing state.
+- `POST /v1/briefings/generate` should be deliberate and authenticated.
+- Only add a `daily_briefings` table when persistence is needed for scheduled
+  preparation, E2E assertions, stale detection, or immediate morning display.
+- The dashboard should become decision-first: daily mode, top action, reason,
+  and capacity/risk note above secondary metrics.
+
+### Completed Slice: Controlled Recommendation Refresh
 
 - Implemented: authenticated Intake V1 completion creates an onboarding
   snapshot, then triggers deterministic recommendation generation through the
@@ -391,7 +445,7 @@ coverage.
   the daily snapshot best-effort, then calls `POST /v1/recommendations/generate`
   with `allow_llm_wording=false`, and reloads persisted recommendations.
 
-### Slice 2: Snapshot Aggregator
+### Completed Slice: Snapshot Aggregator
 
 - Implemented: authenticated `POST /v1/snapshots/generate` creates or refreshes
   `daily` and `weekly` `user_state_snapshots` from recent check-ins,
@@ -410,9 +464,11 @@ coverage.
   and inspect 7-day progress for habits against the existing habit tables.
 - Implemented: scheduler-triggered daily snapshot refresh endpoint for onboarded
   non-guest profiles.
-- Still open: deployed cron/job wiring.
+- Still open: deployed cron/job wiring, but it should now be evaluated against
+  the Daily Briefing cadence and not treated as the next product slice by
+  itself.
 
-### Slice 3: E2E Expansion
+### Completed Slice: E2E Expansion
 
 - Implemented: browser E2E starts FastAPI with local Supabase backend settings.
 - Implemented: the smoke asserts structured Intake V1 persistence, onboarding
@@ -421,7 +477,7 @@ coverage.
   recommendation refresh, and core direct app writes.
 - Implemented: the guest/mock widget smoke stays fast and separate.
 
-### Slice 4: Controlled Snapshot Triggers
+### Completed Slice: Controlled Snapshot Triggers
 
 - Implemented: dashboard task status changes call the daily snapshot refresh
   best-effort after a successful Supabase update.
@@ -432,8 +488,9 @@ coverage.
 - Implemented: `POST /v1/scheduled/daily-refresh` refreshes deterministic daily
   snapshots for onboarded non-guest profiles and can optionally run
   deterministic recommendation generation without LLM wording.
-- Next: wire deployed cron/job execution and decide scheduled recommendation
-  cadence.
+- Next: use the Daily Briefing contract to decide whether scheduled refresh
+  should generate only daily snapshots, recommendations, persisted briefings, or
+  a combination.
 - Preserve guest/mock mode and keep failures best-effort for the user write.
 - Do not introduce a production worker, LLM provider, or dashboard-load
   generation for this slice.

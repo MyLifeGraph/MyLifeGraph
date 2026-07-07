@@ -16,8 +16,11 @@ Read these files before making changes:
 3. `docs/architecture.md`
 4. `docs/backend-roadmap.md` before planning backend, AI, onboarding, or agent
    workflows
-5. `docs/verification.md` before running or changing test automation
-6. `docs/supabase-current-state.md` when touching Supabase, auth, data sources,
+5. `docs/daily-briefing-implementation-plan.md` before planning the next
+   product slice, daily check-in changes, recommendation ranking, or dashboard
+   decision-loop work
+6. `docs/verification.md` before running or changing test automation
+7. `docs/supabase-current-state.md` when touching Supabase, auth, data sources,
    or migrations
 
 ## Current State
@@ -61,6 +64,9 @@ index required for atomic backend upserts.
 - `docs/architecture.md` - system shape and current backend/frontend boundary.
 - `docs/backend-roadmap.md` - target backend flow, product agents, data model
   direction, LLM cost controls, and the next implementation sequence.
+- `docs/daily-briefing-implementation-plan.md` - current product direction for
+  the daily decision loop, lightweight capture cadence, stress taxonomy, Daily
+  Mode, briefing service, and next implementation phases.
 - `docs/supabase-current-state.md` - canonical schema, legacy table mapping, and
   migration notes.
 - `docs/local-dev.md` - local runbook for Flutter, Supabase, and FastAPI.
@@ -77,16 +83,24 @@ refresh action now calls the deterministic recommendation generate endpoint
 without LLM wording. Quick Action habit management now supports creating,
 editing, pausing, restoring, 7-day progress reads, and daily completions against
 the existing habit tables. A backend-only scheduled daily refresh endpoint now
-refreshes onboarded non-guest profiles for cron-style runs. Read
-`docs/backend-roadmap.md` before planning the next backend, AI, onboarding, or
-agent workflow.
+refreshes onboarded non-guest profiles for cron-style runs. Insights now
+includes deterministic correlation exploration from Supabase-backed or mock
+time series without LLM usage. Read `docs/backend-roadmap.md` and
+`docs/daily-briefing-implementation-plan.md` before planning the next backend,
+AI, onboarding, dashboard, or agent workflow.
 
 Do not jump straight to broad LLM integration, calendar import, weekly planning,
 vector search, or autonomous background agents. The next product slice should
-build on the scheduled refresh foundation by wiring deployed cron/job execution
-or by defining scheduled recommendation cadence. FastAPI-backed browser E2E
-coverage for Intake V1, post-intake recommendations, daily snapshot refresh,
-deliberate dashboard recommendation refresh, and Supabase-backed habit
+build the **Daily Briefing / Daily Decision Loop** foundation before broadening
+infrastructure: capture richer daily signals with a lightweight evening-first
+cadence, especially stress source and controllability; persist those signals in
+existing metadata first; extend deterministic snapshots with stress taxonomy
+summaries and Daily Mode (`push`, `steady`, `recover`, `plan`); then rank a
+small number of next actions for the dashboard. Deployed cron/job execution
+remains useful, but its product purpose is to precompute daily snapshots and
+eventual briefings after the briefing contract is defined. FastAPI-backed
+browser E2E coverage for Intake V1, post-intake recommendations, daily snapshot
+refresh, deliberate dashboard recommendation refresh, and Supabase-backed habit
 management now exists.
 
 The implemented post-intake refresh is backend-only and best-effort:

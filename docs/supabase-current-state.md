@@ -177,6 +177,12 @@ asserts Intake V1 rows, onboarding and daily `user_state_snapshots`,
 post-intake deterministic `recommendations`, and direct app writes. Do not run
 destructive reset commands against a remote database.
 
+For manual local product exploration, `npm run seed:demo` creates repeatable
+local-only Auth users and app rows for student, worker, and recovery scenarios.
+The seed script uses the local Supabase service-role key from
+`supabase status -o env`, refuses non-local API URLs, and does not change the
+schema.
+
 See `docs/verification.md` for the current automation boundary.
 
 ## Important Caveat

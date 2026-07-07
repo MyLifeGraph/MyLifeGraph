@@ -21,6 +21,10 @@ way to explore the product today is the Flutter app in mock-data guest mode.
   includes a deliberate deterministic recommendation refresh action, and a
   backend-only scheduled daily refresh endpoint can refresh onboarded non-guest
   profiles for cron-style runs.
+- Insights includes deterministic correlation exploration for sleep, workload,
+  stress, energy, mood, screen time, activity, steps, habits, recovery, and
+  focus. It computes 7/14/30-day relationships in Flutter from existing
+  Supabase rows or local mock time series, without LLM usage.
 - Repository docs and scripts should be treated as the shared team source of
   truth. Do not depend on user-local Codex skills or machine-specific paths.
 
@@ -157,6 +161,17 @@ need to be inspected directly before relying on `USE_MOCK_DATA=false`.
 
 See `docs/supabase-current-state.md` before changing Supabase schema or relying
 on real remote data.
+
+For local product exploration with real Supabase-backed dashboards, seed three
+local demo accounts:
+
+```bash
+npm run seed:demo
+```
+
+The script starts local Supabase if needed, refuses non-local Supabase URLs, and
+creates repeatable student, worker, and recovery scenarios. All demo accounts
+use the local-only password `DemoPass123!`.
 
 ## Verification
 

@@ -225,6 +225,63 @@ Do not infer remote Supabase state from local migrations. Verify the remote
 project through the Supabase dashboard, CLI, or connector before using it for
 real data.
 
+## Demo Data
+
+For local Supabase-backed product exploration, seed repeatable demo accounts:
+
+```bash
+npm run seed:demo
+```
+
+Equivalent direct command:
+
+```bash
+bash scripts/seed_demo_data.sh
+```
+
+The script:
+
+- starts the local Supabase stack if needed;
+- reads the local service-role key from `supabase status -o env` without
+  printing it;
+- refuses to run unless the API URL is `http://127.0.0.1:54321` or
+  `http://localhost:54321`;
+- creates or updates three confirmed local Auth users;
+- replaces their demo app rows in `daily_logs`, `behavioral_events`, `tasks`,
+  `schedule_items`, `habits`, `habit_logs`, `notifications`, `ai_insights`,
+  `memory_entries`, `recommendations`, `coach_messages`,
+  `intake_responses`, and `user_state_snapshots`.
+
+Demo logins:
+
+| Scenario | Email | Password |
+| --- | --- | --- |
+| Student focus | `student@example.test` | `DemoPass123!` |
+| Busy worker | `worker@example.test` | `DemoPass123!` |
+| Recovery builder | `recovery@example.test` | `DemoPass123!` |
+
+Override the local demo password for a fresh seed run with:
+
+```bash
+DEMO_PASSWORD='AnotherLocalPassword123!' npm run seed:demo
+```
+
+After seeding, start Flutter in real local mode:
+
+```bash
+USE_MOCK_DATA=false \
+SUPABASE_URL=http://127.0.0.1:54321 \
+SUPABASE_ANON_KEY=<local anon key from supabase status> \
+FLUTTER_BIN=/path/to/flutter \
+scripts/start_frontend.sh
+```
+
+Open `http://127.0.0.1:7357`, sign in with one of the demo accounts, and compare
+Dashboard, Alerts, Insights, Habits, and Coach persistence across scenarios.
+Seeded recommendations are visible through the FastAPI recommendation endpoint
+when the AI service is running with the same local Supabase project settings;
+without FastAPI, the app falls back to local mock recommendations.
+
 Automated local preflight without resetting the database:
 
 ```bash
