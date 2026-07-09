@@ -97,7 +97,7 @@ class AuthRepository {
   Future<void> signInWithGoogle() async {
     await _client.auth.signInWithOAuth(
       OAuthProvider.google,
-      redirectTo: kIsWeb ? Uri.base.origin : null,
+      redirectTo: kIsWeb ? webOAuthRedirectTo(Uri.base) : null,
     );
   }
 
@@ -381,3 +381,6 @@ class _Prefs {
   static const guestTimetable = 'auth_guest_timetable';
   static const guestQuickCheckIns = 'guest_quick_checkins';
 }
+
+@visibleForTesting
+String webOAuthRedirectTo(Uri baseUri) => '${baseUri.origin}/';

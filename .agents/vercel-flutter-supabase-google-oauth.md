@@ -200,3 +200,42 @@ https://my-life-graph.vercel.app/#/auth
 
 Click **Sign in with Google**. The app should leave Vercel and navigate to
 Google Accounts.
+
+## Redirects To Localhost After Google
+
+If Google account selection succeeds but the final redirect goes to
+`localhost:3000`, the likely cause is Supabase Auth URL Configuration rather
+than Vercel:
+
+- Supabase `Site URL` may still be `http://localhost:3000`.
+- The `redirectTo` value passed by Flutter may not exactly match the Redirect
+  URLs allow list.
+
+The Flutter app should pass the current browser origin with a trailing slash:
+
+```dart
+redirectTo: kIsWeb ? webOAuthRedirectTo(Uri.base) : null
+```
+
+Expected values:
+
+```text
+https://my-life-graph.vercel.app/
+http://127.0.0.1:7357/
+http://localhost:7357/
+```
+
+For the remote Supabase project, configure Auth URL settings like this:
+
+```text
+Site URL:
+https://my-life-graph.vercel.app/
+
+Redirect URLs:
+https://my-life-graph.vercel.app/
+https://my-life-graph.vercel.app/**
+http://127.0.0.1:7357/
+http://127.0.0.1:7357/**
+http://localhost:7357/
+http://localhost:7357/**
+```
