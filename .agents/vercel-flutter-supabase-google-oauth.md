@@ -113,7 +113,7 @@ Supabase config detected for Flutter build.
 The live production bundle contained:
 
 ```text
-https://oscrunlndfrecjilojja.supabase.co
+https://<project-ref>.supabase.co
 /auth/v1
 provider=google
 ```
@@ -121,7 +121,7 @@ provider=google
 Direct Supabase OAuth authorize check returned `302 Found` to Google:
 
 ```text
-https://oscrunlndfrecjilojja.supabase.co/auth/v1/authorize?provider=google&redirect_to=https%3A%2F%2Fmy-life-graph.vercel.app
+https://<project-ref>.supabase.co/auth/v1/authorize?provider=google&redirect_to=https%3A%2F%2Fmy-life-graph.vercel.app
 ```
 
 Browser verification on:
@@ -139,26 +139,17 @@ https://accounts.google.com/...
 with:
 
 ```text
-redirect_uri=https://oscrunlndfrecjilojja.supabase.co/auth/v1/callback
+redirect_uri=https://<project-ref>.supabase.co/auth/v1/callback
 ```
 
 ## Important Notes
 
-- The working Supabase project ref observed in local `.env`, Vercel output, and
-  live JS is:
+- The working Supabase project ref should be read from local `.env`, Vercel env,
+  or the live JS bundle. Do not rely on a pasted value when debugging OAuth.
 
-```text
-oscrunlndfrecjilojja
-```
-
-- A similar-looking ref was mentioned during debugging:
-
-```text
-oscrunlndfrecjlolija
-```
-
-Treat the local `.env` / Vercel env value as the source of truth unless the user
-explicitly confirms a project migration.
+- During the original debugging session, two similar-looking project refs were
+  mentioned. Treat local `.env` / Vercel env values as the source of truth
+  unless the user explicitly confirms a project migration.
 
 - Do not put service-role or secret Supabase keys in Flutter Web. Only use the
   public anon/publishable key.
