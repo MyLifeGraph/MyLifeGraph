@@ -24,10 +24,19 @@ fi
 
 cd apps/mobile
 
+RESOLVED_SUPABASE_URL="${SUPABASE_URL:-${VITE_SUPABASE_URL:-${NEXT_PUBLIC_SUPABASE_URL:-}}}"
+RESOLVED_SUPABASE_ANON_KEY="${SUPABASE_ANON_KEY:-${SUPABASE_PUBLISHABLE_KEY:-${VITE_SUPABASE_ANON_KEY:-${NEXT_PUBLIC_SUPABASE_ANON_KEY:-${NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:-}}}}}"
+
+if [ -n "${RESOLVED_SUPABASE_URL}" ] && [ -n "${RESOLVED_SUPABASE_ANON_KEY}" ]; then
+  echo "Supabase config detected for Flutter build."
+else
+  echo "Supabase config missing for Flutter build; auth providers will be disabled."
+fi
+
 "${FLUTTER_BIN}" pub get
 "${FLUTTER_BIN}" build web --release --no-wasm-dry-run --base-href=/ \
   --dart-define=APP_ENV="${APP_ENV:-production}" \
   --dart-define=USE_MOCK_DATA="${USE_MOCK_DATA:-true}" \
-  --dart-define=SUPABASE_URL="${SUPABASE_URL:-}" \
-  --dart-define=SUPABASE_ANON_KEY="${SUPABASE_ANON_KEY:-}" \
+  --dart-define=SUPABASE_URL="${RESOLVED_SUPABASE_URL}" \
+  --dart-define=SUPABASE_ANON_KEY="${RESOLVED_SUPABASE_ANON_KEY}" \
   --dart-define=AI_SERVICE_BASE_URL="${AI_SERVICE_BASE_URL:-}"

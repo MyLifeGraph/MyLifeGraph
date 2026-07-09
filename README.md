@@ -120,6 +120,11 @@ SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_ANON_KEY=your-anon-key
 ```
 
+For compatibility with common Vercel frontend settings, the build script also
+accepts `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` and
+`NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY`, then maps them to
+Flutter `--dart-define` values at build time.
+
 ## AI Service
 
 The AI service is optional for the default mock-data app preview.
