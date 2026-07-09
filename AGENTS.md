@@ -13,6 +13,7 @@ Read these files before making changes:
 3. `docs/architecture.md`
 4. `docs/supabase-current-state.md` when touching Supabase, auth, data sources,
    or migrations
+5. `.agents/IMPORTANT-SECURITY-PRE-PUSH.md` before any commit or push
 
 ## Running The Project
 
@@ -43,6 +44,13 @@ Important values:
 - `USE_MOCK_DATA=true` for the reliable local path.
 - `SUPABASE_URL` and `SUPABASE_ANON_KEY` enable the Flutter Supabase client.
 - `AI_SERVICE_BASE_URL=http://localhost:8000` points to the FastAPI service.
+
+## Security Before Push
+
+This repository is public. Before every commit or push, read and follow
+`.agents/IMPORTANT-SECURITY-PRE-PUSH.md`. Report the security-check result in
+the final response. Do not push if exact local `.env` values or real secret
+values appear in tracked files or the staged/last commit diff.
 
 ## Supabase Rules
 
