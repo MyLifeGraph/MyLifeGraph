@@ -97,6 +97,29 @@ scripts/start_frontend.sh
 
 Never commit real Supabase keys.
 
+## Vercel Deployment
+
+The repository includes `vercel.json` for the Flutter web app. Vercel should use
+the repository root as the project root; the file-based configuration then runs
+`scripts/vercel_build.sh` and serves `apps/mobile/build/web`.
+
+The Vercel build script installs Flutter into the Vercel cache when Flutter is
+not already available. By default, deployments build in production mock-data
+mode so the app can load without Supabase secrets:
+
+```env
+USE_MOCK_DATA=true
+APP_ENV=production
+```
+
+Optional production Supabase values can be added later in Vercel Project
+Settings as environment variables:
+
+```env
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_ANON_KEY=your-anon-key
+```
+
 ## AI Service
 
 The AI service is optional for the default mock-data app preview.
