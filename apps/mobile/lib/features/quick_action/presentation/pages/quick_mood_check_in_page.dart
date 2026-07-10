@@ -1,17 +1,13 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/navigation/app_routes.dart';
-import '../../../../core/supabase/supabase_providers.dart';
-import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../../dashboard/presentation/providers/dashboard_providers.dart';
 import '../../../snapshots/presentation/providers/snapshot_providers.dart';
-import '../../data/quick_check_in_supabase_data_source.dart';
+import '../../domain/quick_check_in.dart';
+import '../providers/quick_check_in_providers.dart';
 
 class QuickMoodCheckInPage extends ConsumerStatefulWidget {
   const QuickMoodCheckInPage({super.key});
@@ -23,12 +19,13 @@ class QuickMoodCheckInPage extends ConsumerStatefulWidget {
 
 class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
   final TextEditingController _notesController = TextEditingController();
+  late QuickCheckInDraft _draft;
   int _stepIndex = 0;
-  int _mood = 7;
-  int _energy = 6;
-  double _sleepHours = 7;
-  int _stress = 4;
+  bool _isLoadingDraft = true;
+  bool _loadedSavedDraft = false;
   bool _isSaving = false;
+  String? _loadError;
+  String? _saveError;
 
   static const _steps = [
     _QuickStepSpec(
@@ -41,7 +38,7 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
     _QuickStepSpec(
       label: 'ENERGY',
       title: 'How much energy do you have?',
-      subtitle: 'This helps the coach adjust reminders and workload.',
+      subtitle: 'This helps today\'s plan reflect your available capacity.',
       unit: '',
       kind: _QuickStepKind.rating,
     ),
@@ -60,13 +57,20 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
       kind: _QuickStepKind.rating,
     ),
     _QuickStepSpec(
-      label: 'COACH NOTES',
+      label: 'OPTIONAL CONTEXT',
       title: 'Anything else?',
-      subtitle: 'Add context your future AI coach should remember.',
+      subtitle: 'Add optional context for today. It stays with this check-in.',
       unit: '',
       kind: _QuickStepKind.notes,
     ),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    _draft = QuickCheckInDraft.empty(DateTime.now());
+    Future<void>.microtask(_loadToday);
+  }
 
   @override
   void dispose() {
@@ -101,18 +105,29 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
                       progress: progress,
                       step: step,
                       canGoBack: _stepIndex > 0,
+                      canContinue: _canContinue,
                       isLastStep: _stepIndex == _steps.length - 1,
+                      isLoadingDraft: _isLoadingDraft,
                       isSaving: _isSaving,
+                      statusMessage: _loadedSavedDraft
+                          ? 'Today\'s saved check-in is loaded. Saving updates it.'
+                          : _loadError,
+                      errorMessage: _saveError,
                       compact: compact,
                       ultraCompact: ultraCompact,
                       onClose: () => context.go(AppRoutes.quickAction),
                       onBack: _previousStep,
                       onNext: _nextStep,
-                      child: _buildStepContent(
-                        step,
-                        compact: compact,
-                        ultraCompact: ultraCompact,
-                      ),
+                      child: _isLoadingDraft
+                          ? const Padding(
+                              padding: EdgeInsets.all(AppSpacing.xl),
+                              child: Center(child: CircularProgressIndicator()),
+                            )
+                          : _buildStepContent(
+                              step,
+                              compact: compact,
+                              ultraCompact: ultraCompact,
+                            ),
                     ),
                   ),
                 ),
@@ -134,15 +149,18 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
           value: _currentRating,
           unit: step.unit,
           helperText: _helperTextForStep(step),
+          semanticLabel: step.label.toLowerCase(),
           compact: compact,
           ultraCompact: ultraCompact,
           onChanged: _setCurrentRating,
         ),
       _QuickStepKind.sleep => _SleepStep(
-          value: _sleepHours,
+          value: _draft.sleepHours,
           compact: compact,
           ultraCompact: ultraCompact,
-          onChanged: (value) => setState(() => _sleepHours = value),
+          onChanged: (value) => setState(
+            () => _draft = _draft.copyWith(sleepHours: value),
+          ),
         ),
       _QuickStepKind.notes => _NotesStep(
           controller: _notesController,
@@ -152,12 +170,12 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
     };
   }
 
-  int get _currentRating {
+  int? get _currentRating {
     return switch (_stepIndex) {
-      0 => _mood,
-      1 => _energy,
-      3 => _stress,
-      _ => _mood,
+      0 => _draft.mood,
+      1 => _draft.energy,
+      3 => _draft.stress,
+      _ => null,
     };
   }
 
@@ -165,36 +183,32 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
     setState(() {
       switch (_stepIndex) {
         case 0:
-          _mood = value;
+          _draft = _draft.copyWith(mood: value);
         case 1:
-          _energy = value;
+          _draft = _draft.copyWith(energy: value);
         case 3:
-          _stress = value;
+          _draft = _draft.copyWith(stress: value);
       }
     });
   }
 
   String _helperTextForStep(_QuickStepSpec step) {
     if (step.label == 'MOOD') {
-      return '${_moodLabel(_mood)} will be saved as today\'s mood signal.';
+      final mood = _draft.mood;
+      return mood == null
+          ? 'Choose today\'s mood before continuing.'
+          : '${quickCheckInMoodLabel(mood)} will be saved as today\'s mood signal.';
     }
     if (step.label == 'ENERGY') {
-      return '${_energyLabel(_energy)} energy will tune workload nudges.';
+      final energy = _draft.energy;
+      return energy == null
+          ? 'Choose today\'s energy before continuing.'
+          : '${_energyLabel(energy)} energy will be saved for today.';
     }
-    return '${_stressLabel(_stress)} stress will tune reminder intensity.';
-  }
-
-  String _moodLabel(int value) {
-    if (value >= 8) {
-      return 'Great';
-    }
-    if (value >= 6) {
-      return 'Good';
-    }
-    if (value >= 4) {
-      return 'Neutral';
-    }
-    return 'Heavy';
+    final stress = _draft.stress;
+    return stress == null
+        ? 'Choose today\'s stress before continuing.'
+        : '${_stressLabel(stress)} stress will be saved for today.';
   }
 
   String _energyLabel(int value) {
@@ -225,6 +239,9 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
   }
 
   Future<void> _nextStep() async {
+    if (!_canContinue) {
+      return;
+    }
     if (_stepIndex < _steps.length - 1) {
       setState(() => _stepIndex++);
       return;
@@ -233,46 +250,41 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
   }
 
   Future<void> _save() async {
-    final session = ref.read(authControllerProvider).valueOrNull;
-    if (session?.isGuestSession == true) {
-      await _saveGuestDraft();
-      if (mounted) {
-        _showMessage('Guest check-in saved locally.');
-        context.go(AppRoutes.dashboard);
-      }
+    if (_isSaving || !_draft.isComplete) {
       return;
     }
 
-    final client = ref.read(supabaseClientProvider);
-    if (client == null) {
-      _showMessage('Supabase is not configured.');
-      return;
-    }
-
-    setState(() => _isSaving = true);
+    final draft = _draft.copyWith(contextNote: _notesController.text);
+    setState(() {
+      _draft = draft;
+      _isSaving = true;
+      _saveError = null;
+    });
     try {
-      await QuickCheckInSupabaseDataSource(client).save(
-        QuickCheckInDraft(
-          mood: _mood,
-          energy: _energy,
-          sleepHours: _sleepHours,
-          stress: _stress,
-          coachNotes: _notesController.text,
-        ),
-      );
-      await ref
-          .read(snapshotRefreshServiceProvider)
-          .refreshDailyAfterUserSignal();
+      final store = ref.read(quickCheckInStoreProvider);
+      await store.save(draft);
+      if (store.target == QuickCheckInSaveTarget.supabase) {
+        await ref
+            .read(snapshotRefreshServiceProvider)
+            .refreshDailyAfterUserSignal();
+      }
+      ref.invalidate(latestQuickCheckInProvider);
       ref.invalidate(dashboardSnapshotProvider);
       if (mounted) {
-        _showMessage('Quick check-in saved.');
+        _showMessage(
+          store.target == QuickCheckInSaveTarget.guest
+              ? 'Check-in saved locally.'
+              : 'Check-in saved.',
+        );
         context.go(AppRoutes.dashboard);
       }
-    } catch (_) {
+    } catch (error) {
       if (mounted) {
-        _showMessage(
-          'Could not save daily log. Supabase rejected the main row.',
-        );
+        final message = error is QuickCheckInUnavailableException
+            ? error.message
+            : 'Could not save. Your choices are still here. Try again.';
+        setState(() => _saveError = message);
+        _showMessage(message);
       }
     } finally {
       if (mounted) {
@@ -281,19 +293,49 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
     }
   }
 
-  Future<void> _saveGuestDraft() async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString('guest_quick_checkins');
-    final values = raw == null ? <dynamic>[] : jsonDecode(raw) as List<dynamic>;
-    values.add({
-      'createdAt': DateTime.now().toIso8601String(),
-      'mood': _mood,
-      'energy': _energy,
-      'sleepHours': _sleepHours,
-      'stress': _stress,
-      'coachNotes': _notesController.text.trim(),
-    });
-    await prefs.setString('guest_quick_checkins', jsonEncode(values));
+  bool get _canContinue {
+    if (_isLoadingDraft) {
+      return false;
+    }
+    return switch (_stepIndex) {
+      0 => _draft.mood != null,
+      1 => _draft.energy != null,
+      2 => _draft.sleepHours != null,
+      3 => _draft.stress != null,
+      _ => true,
+    };
+  }
+
+  Future<void> _loadToday() async {
+    try {
+      final saved = await ref
+          .read(quickCheckInStoreProvider)
+          .loadToday(_draft.capturedAt);
+      if (saved != null && mounted) {
+        setState(() {
+          _draft = _draft.copyWith(
+            mood: saved.mood,
+            energy: saved.energy,
+            sleepHours: saved.sleepHours,
+            stress: saved.stress,
+            contextNote: saved.contextNote,
+          );
+          _notesController.text = saved.contextNote;
+          _loadedSavedDraft = true;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _loadError =
+              'Today\'s saved check-in could not be loaded. New choices can still be saved.';
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoadingDraft = false);
+      }
+    }
   }
 
   void _showMessage(String message) {
@@ -309,8 +351,12 @@ class _QuickCheckInShell extends StatelessWidget {
     required this.step,
     required this.child,
     required this.canGoBack,
+    required this.canContinue,
     required this.isLastStep,
+    required this.isLoadingDraft,
     required this.isSaving,
+    required this.statusMessage,
+    required this.errorMessage,
     required this.compact,
     required this.ultraCompact,
     required this.onClose,
@@ -322,8 +368,12 @@ class _QuickCheckInShell extends StatelessWidget {
   final _QuickStepSpec step;
   final Widget child;
   final bool canGoBack;
+  final bool canContinue;
   final bool isLastStep;
+  final bool isLoadingDraft;
   final bool isSaving;
+  final String? statusMessage;
+  final String? errorMessage;
   final bool compact;
   final bool ultraCompact;
   final VoidCallback onClose;
@@ -436,6 +486,20 @@ class _QuickCheckInShell extends StatelessWidget {
                     ),
                   ],
                 ),
+                if (statusMessage != null) ...[
+                  SizedBox(height: compact ? AppSpacing.sm : AppSpacing.md),
+                  _InlineStatusMessage(
+                    message: statusMessage!,
+                    isError: false,
+                  ),
+                ],
+                if (errorMessage != null) ...[
+                  SizedBox(height: compact ? AppSpacing.sm : AppSpacing.md),
+                  _InlineStatusMessage(
+                    message: errorMessage!,
+                    isError: true,
+                  ),
+                ],
               ],
             ),
           ),
@@ -467,8 +531,10 @@ class _QuickCheckInShell extends StatelessWidget {
                 const SizedBox(width: AppSpacing.md),
                 Expanded(
                   child: FilledButton.icon(
-                    onPressed: isSaving ? null : onNext,
-                    icon: isSaving
+                    onPressed: isSaving || isLoadingDraft || !canContinue
+                        ? null
+                        : onNext,
+                    icon: isSaving || isLoadingDraft
                         ? const SizedBox(
                             width: 18,
                             height: 18,
@@ -480,7 +546,11 @@ class _QuickCheckInShell extends StatelessWidget {
                                 : Icons.arrow_forward,
                           ),
                     label: Text(
-                      isSaving ? 'Saving...' : (isLastStep ? 'Save' : 'Next'),
+                      isSaving
+                          ? 'Saving...'
+                          : isLoadingDraft
+                              ? 'Loading...'
+                              : (isLastStep ? 'Save' : 'Next'),
                     ),
                     style: FilledButton.styleFrom(
                       padding: EdgeInsets.symmetric(
@@ -506,14 +576,16 @@ class _RatingStep extends StatelessWidget {
     required this.value,
     required this.unit,
     required this.helperText,
+    required this.semanticLabel,
     required this.compact,
     required this.ultraCompact,
     required this.onChanged,
   });
 
-  final int value;
+  final int? value;
   final String unit;
   final String helperText;
+  final String semanticLabel;
   final bool compact;
   final bool ultraCompact;
   final ValueChanged<int> onChanged;
@@ -531,16 +603,18 @@ class _RatingStep extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 _CurrentRatingCard(
-                  value: '$value$unit',
+                  value: value == null ? 'Not set' : '$value$unit',
                   compact: compact,
                   ultraCompact: ultraCompact,
                 ),
                 SizedBox(height: ultraCompact ? AppSpacing.xs : AppSpacing.sm),
                 Slider(
-                  value: value.toDouble(),
+                  value: (value ?? 5).toDouble(),
                   min: 1,
                   max: 10,
                   divisions: 9,
+                  semanticFormatterCallback: (next) =>
+                      '$semanticLabel ${next.round()} of 10',
                   onChanged: (next) => onChanged(next.round()),
                 ),
                 SizedBox(height: ultraCompact ? AppSpacing.xs : AppSpacing.xs),
@@ -557,6 +631,7 @@ class _RatingStep extends StatelessWidget {
                     return _RatingButton(
                       rating: rating,
                       isSelected: rating == value,
+                      semanticLabel: '$semanticLabel $rating of 10',
                       onTap: () => onChanged(rating),
                     );
                   }),
@@ -612,7 +687,7 @@ class _SleepStep extends StatelessWidget {
     required this.onChanged,
   });
 
-  final double value;
+  final double? value;
   final bool compact;
   final bool ultraCompact;
   final ValueChanged<double> onChanged;
@@ -622,21 +697,52 @@ class _SleepStep extends StatelessWidget {
     return Column(
       children: [
         _CurrentRatingCard(
-          value: '${value.round()} h',
+          value: value == null ? 'Not set' : '${_formatHours(value!)} h',
           compact: compact,
           ultraCompact: ultraCompact,
         ),
         SizedBox(height: compact ? AppSpacing.md : AppSpacing.xl),
-        Slider(
-          value: value,
-          min: 0,
-          max: 12,
-          divisions: 24,
-          onChanged: onChanged,
+        Semantics(
+          label: 'Sleep hours',
+          value: value == null ? 'Not set' : _formatHours(value!),
+          child: Slider(
+            value: value ?? 7,
+            min: 0,
+            max: 12,
+            divisions: 24,
+            semanticFormatterCallback: (next) => '${_formatHours(next)} hours',
+            onChanged: onChanged,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        Wrap(
+          alignment: WrapAlignment.center,
+          spacing: AppSpacing.sm,
+          runSpacing: AppSpacing.sm,
+          children: const [4.0, 5.5, 7.0, 8.5, 10.0].map((hours) {
+            final label = '${_formatHoursStatic(hours)} h';
+            return SizedBox(
+              width: 72,
+              height: 44,
+              child: OutlinedButton(
+                onPressed: () => onChanged(hours),
+                child: Text(label),
+              ),
+            );
+          }).toList(),
         ),
       ],
     );
   }
+
+  String _formatHours(double hours) {
+    return _formatHoursStatic(hours);
+  }
+
+  static String _formatHoursStatic(double hours) =>
+      hours == hours.roundToDouble()
+          ? hours.toInt().toString()
+          : hours.toStringAsFixed(1);
 }
 
 class _NotesStep extends StatelessWidget {
@@ -656,7 +762,7 @@ class _NotesStep extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'What should your coach know?',
+          'What affected today?',
           style: Theme.of(context).textTheme.titleLarge?.copyWith(
                 fontSize: compact ? 17 : null,
               ),
@@ -671,6 +777,7 @@ class _NotesStep extends StatelessWidget {
             maxLines: null,
             textAlignVertical: TextAlignVertical.top,
             decoration: InputDecoration(
+              labelText: 'Context note (optional)',
               hintText:
                   'I felt distracted after lunch, but the morning class went well...',
               border: OutlineInputBorder(
@@ -735,39 +842,83 @@ class _RatingButton extends StatelessWidget {
   const _RatingButton({
     required this.rating,
     required this.isSelected,
+    required this.semanticLabel,
     required this.onTap,
   });
 
   final int rating;
   final bool isSelected;
+  final String semanticLabel;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onTap: onTap,
-      child: Container(
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          color: isSelected
-              ? Theme.of(context).colorScheme.primary
-              : const Color(0xFF0C1218),
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(
-            color: isSelected
-                ? Theme.of(context).colorScheme.primary
-                : const Color(0xFF303B47),
-            width: 1.5,
+    return Semantics(
+      button: true,
+      selected: isSelected,
+      label: semanticLabel,
+      child: ExcludeSemantics(
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onTap,
+          child: Container(
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: isSelected
+                  ? Theme.of(context).colorScheme.primary
+                  : const Color(0xFF0C1218),
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(
+                color: isSelected
+                    ? Theme.of(context).colorScheme.primary
+                    : const Color(0xFF303B47),
+                width: 1.5,
+              ),
+            ),
+            child: Text(
+              '$rating',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: isSelected ? Colors.black : const Color(0xFFA8B5BE),
+                  ),
+            ),
           ),
         ),
-        child: Text(
-          '$rating',
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                color: isSelected ? Colors.black : const Color(0xFFA8B5BE),
-              ),
-        ),
       ),
+    );
+  }
+}
+
+class _InlineStatusMessage extends StatelessWidget {
+  const _InlineStatusMessage({
+    required this.message,
+    required this.isError,
+  });
+
+  final String message;
+  final bool isError;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = isError
+        ? Theme.of(context).colorScheme.error
+        : Theme.of(context).colorScheme.primary;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(
+          isError ? Icons.error_outline : Icons.check_circle_outline,
+          size: 18,
+          color: color,
+        ),
+        const SizedBox(width: AppSpacing.sm),
+        Expanded(
+          child: Text(
+            message,
+            style:
+                Theme.of(context).textTheme.bodyMedium?.copyWith(color: color),
+          ),
+        ),
+      ],
     );
   }
 }

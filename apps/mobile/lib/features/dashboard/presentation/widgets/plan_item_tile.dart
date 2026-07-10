@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/constants/app_spacing.dart';
 import '../../domain/entities/dashboard_snapshot.dart';
+import 'package:intl/intl.dart';
 
 class PlanItemTile extends StatelessWidget {
   const PlanItemTile({required this.item, super.key});
@@ -28,7 +29,11 @@ class PlanItemTile extends StatelessWidget {
             children: [
               Text(item.title, style: Theme.of(context).textTheme.labelLarge),
               Text(
-                '${item.time} · ${item.type}',
+                [
+                  item.priority,
+                  if (item.deadline != null)
+                    'Due ${DateFormat.yMMMd().format(item.deadline!)}',
+                ].join(' · '),
                 style: Theme.of(context).textTheme.bodyMedium,
               ),
             ],

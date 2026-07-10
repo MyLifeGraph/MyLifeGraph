@@ -18,15 +18,17 @@ class NotificationsRepositoryImpl implements NotificationsRepository {
 
   @override
   Future<List<AppNotification>> getNotifications() async {
-    if (_allowMockData || _supabaseDataSource == null) {
+    if (_allowMockData) {
       return _mockDataSource.getNotifications();
     }
 
-    try {
-      final items = await _supabaseDataSource.getNotifications();
-      return items;
-    } catch (_) {
-      return const [];
+    final supabaseDataSource = _supabaseDataSource;
+    if (supabaseDataSource == null) {
+      throw StateError(
+        'Authenticated notifications require a Supabase data source.',
+      );
     }
+
+    return supabaseDataSource.getNotifications();
   }
 }

@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import '../../../../core/config/app_config.dart';
-import '../../domain/entities/recommendation.dart';
+import '../../domain/entities/recommendation_feed.dart';
 import '../../domain/entities/skillset_profile.dart';
 import '../../domain/repositories/optimization_repository.dart';
 import '../datasources/optimization_mock_data_source.dart';
@@ -15,64 +15,90 @@ class OptimizationRepositoryImpl implements OptimizationRepository {
     required OptimizationMockDataSource mockDataSource,
     required RecommendationsApiDataSource recommendationsApiDataSource,
     required AccessTokenProvider accessTokenProvider,
+    required bool allowDemoData,
   })  : _config = config,
         _mockDataSource = mockDataSource,
         _recommendationsApiDataSource = recommendationsApiDataSource,
-        _accessTokenProvider = accessTokenProvider;
+        _accessTokenProvider = accessTokenProvider,
+        _allowDemoData = allowDemoData;
 
   final AppConfig _config;
   final OptimizationMockDataSource _mockDataSource;
   final RecommendationsApiDataSource _recommendationsApiDataSource;
   final AccessTokenProvider _accessTokenProvider;
+  final bool _allowDemoData;
+
+  bool get _usesDemoData => _config.useMockData || _allowDemoData;
 
   @override
-  Future<SkillsetProfile> getSkillsetProfile() {
-    if (_config.useMockData) {
+  Future<SkillsetProfile> getSkillsetProfile() async {
+    if (_usesDemoData) {
       return _mockDataSource.getSkillsetProfile();
     }
 
-    // The endpoint contract is intentionally isolated here. The UI and domain
-    // layers do not need to know whether data came from Supabase or FastAPI.
-    return _mockDataSource.getSkillsetProfile();
+    throw UnsupportedError(
+      'A real skillset profile data source is not implemented.',
+    );
   }
 
   @override
-  Future<List<Recommendation>> getRecommendations() async {
-    if (_config.useMockData || !_config.isSupabaseConfigured) {
-      return _mockDataSource.getRecommendations();
+  Future<RecommendationFeed> getRecommendations() async {
+    if (_usesDemoData) {
+      return RecommendationFeed.demo(
+        await _mockDataSource.getRecommendations(),
+      );
+    }
+
+    final accessToken = await _requireRealAccessToken();
+    return _recommendationsApiDataSource.getRecommendations(
+      accessToken: accessToken,
+    );
+  }
+
+  @override
+  Future<RecommendationFeed> refreshRecommendations() async {
+    if (_usesDemoData) {
+      return RecommendationFeed.demo(
+        await _mockDataSource.getRecommendations(),
+      );
+    }
+
+    final accessToken = await _requireRealAccessToken();
+    return _recommendationsApiDataSource.generateRecommendations(
+      accessToken: accessToken,
+    );
+  }
+
+  Future<String> _requireRealAccessToken() async {
+    if (!_config.isSupabaseConfigured) {
+      throw const RecommendationAccessException(
+        RecommendationAccessFailure.configuration,
+        'Authenticated recommendations require Supabase configuration.',
+      );
     }
 
     final accessToken = await _accessTokenProvider();
     if (accessToken == null || accessToken.trim().isEmpty) {
-      return _mockDataSource.getRecommendations();
-    }
-
-    try {
-      return await _recommendationsApiDataSource.getRecommendations(
-        accessToken: accessToken,
+      throw const RecommendationAccessException(
+        RecommendationAccessFailure.session,
+        'Authenticated recommendations require an active access token.',
       );
-    } catch (_) {
-      return _mockDataSource.getRecommendations();
     }
+    return accessToken.trim();
   }
+}
+
+enum RecommendationAccessFailure {
+  configuration,
+  session,
+}
+
+class RecommendationAccessException implements Exception {
+  const RecommendationAccessException(this.failure, this.message);
+
+  final RecommendationAccessFailure failure;
+  final String message;
 
   @override
-  Future<List<Recommendation>> refreshRecommendations() async {
-    if (_config.useMockData || !_config.isSupabaseConfigured) {
-      return _mockDataSource.getRecommendations();
-    }
-
-    final accessToken = await _accessTokenProvider();
-    if (accessToken == null || accessToken.trim().isEmpty) {
-      return _mockDataSource.getRecommendations();
-    }
-
-    try {
-      return await _recommendationsApiDataSource.generateRecommendations(
-        accessToken: accessToken,
-      );
-    } catch (_) {
-      return _mockDataSource.getRecommendations();
-    }
-  }
+  String toString() => 'RecommendationAccessException: $message';
 }

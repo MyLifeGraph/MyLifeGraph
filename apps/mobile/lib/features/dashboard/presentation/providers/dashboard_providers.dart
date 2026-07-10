@@ -1,8 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../../core/config/app_config.dart';
+import '../../../../core/capabilities/app_surface_capabilities.dart';
 import '../../../../core/supabase/supabase_providers.dart';
-import '../../../auth/presentation/providers/auth_providers.dart';
+import '../../../quick_action/presentation/providers/quick_check_in_providers.dart';
 import '../../data/datasources/dashboard_mock_data_source.dart';
 import '../../data/datasources/dashboard_supabase_data_source.dart';
 import '../../data/repositories/dashboard_repository_impl.dart';
@@ -10,19 +10,15 @@ import '../../domain/entities/dashboard_snapshot.dart';
 import '../../domain/repositories/dashboard_repository.dart';
 
 final dashboardMockDataSourceProvider = Provider<DashboardMockDataSource>(
-  (_) => const DashboardMockDataSource(),
+  (ref) => DashboardMockDataSource(
+    quickCheckInStore: ref.watch(quickCheckInStoreProvider),
+  ),
 );
 
 final dashboardRepositoryProvider = Provider<DashboardRepository>(
   (ref) {
     final client = ref.watch(supabaseClientProvider);
-    final config = ref.watch(appConfigProvider);
-    final session = ref.watch(authControllerProvider).valueOrNull;
-    final allowMockData = session == null
-        ? config.useMockData
-        : session.isGuestSession ||
-            session.profile.authProvider == 'guest' ||
-            session.profile.email == 'demo@personal-coach.local';
+    final allowMockData = ref.watch(appSurfaceCapabilitiesProvider).isLocalDemo;
     return DashboardRepositoryImpl(
       mockDataSource: ref.watch(dashboardMockDataSourceProvider),
       supabaseDataSource:

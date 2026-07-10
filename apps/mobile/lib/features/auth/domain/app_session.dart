@@ -68,39 +68,3 @@ class AppSession {
   bool get isAuthenticated => !isGuestSession;
   bool get requiresOnboarding => !profile.onboardingDone;
 }
-
-class TimetableDraft {
-  const TimetableDraft({
-    required this.title,
-    required this.location,
-    required this.weekday,
-    required this.startsAt,
-    required this.endsAt,
-  });
-
-  final String title;
-  final String location;
-  final int weekday;
-  final String startsAt;
-  final String endsAt;
-
-  Map<String, dynamic> toJson() {
-    return {
-      'title': title,
-      'location': location,
-      'weekday': weekday,
-      'startsAt': startsAt,
-      'endsAt': endsAt,
-    };
-  }
-
-  static TimetableDraft fromJson(Map<String, dynamic> json) {
-    return TimetableDraft(
-      title: '${json['title'] ?? ''}',
-      location: '${json['location'] ?? ''}',
-      weekday: (json['weekday'] as num?)?.toInt() ?? 1,
-      startsAt: '${json['startsAt'] ?? '08:15'}',
-      endsAt: '${json['endsAt'] ?? '09:45'}',
-    );
-  }
-}

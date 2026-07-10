@@ -1,125 +1,100 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 
+import '../../../../core/capabilities/app_surface_capabilities.dart';
 import '../../../../core/constants/app_spacing.dart';
-import '../../../../core/navigation/app_routes.dart';
-import '../../../../core/supabase/supabase_providers.dart';
-import '../../../../core/supabase/supabase_tables.dart';
-import '../../../../core/widgets/async_value_view.dart';
 import '../../domain/entities/app_notification.dart';
+import '../../domain/entities/notification_action_target.dart';
 import '../providers/notifications_providers.dart';
 
-enum _AlertTarget {
-  dailyCheckIn,
-  deepWork,
-}
-
-class NotificationsPage extends ConsumerStatefulWidget {
+class NotificationsPage extends ConsumerWidget {
   const NotificationsPage({super.key});
 
   @override
-  ConsumerState<NotificationsPage> createState() => _NotificationsPageState();
+  Widget build(BuildContext context, WidgetRef ref) {
+    final notifications = ref.watch(notificationsProvider);
+    final capabilities = ref.watch(appSurfaceCapabilitiesProvider);
+    final resolver = NotificationActionTargetResolver(
+      canUseSyncedHabits: capabilities.canUseSyncedHabits,
+    );
+
+    return notifications.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (error, stackTrace) => _NotificationsError(
+        onRetry: () => ref.invalidate(notificationsProvider),
+      ),
+      data: (items) {
+        final alerts = items
+            .map(
+              (notification) => _AlertItem(
+                notification: notification,
+                target: resolver.resolve(notification.actionUrl),
+              ),
+            )
+            .toList();
+        return _NotificationsHome(
+          alerts: alerts,
+          useDemoData: capabilities.isLocalDemo,
+          onOpen: (target) => context.go(target.location),
+        );
+      },
+    );
+  }
 }
 
-class _NotificationsPageState extends ConsumerState<NotificationsPage> {
-  final Set<String> _doneIds = {};
+class _NotificationsError extends StatelessWidget {
+  const _NotificationsError({required this.onRetry});
+
+  final VoidCallback onRetry;
 
   @override
   Widget build(BuildContext context) {
-    final notifications = ref.watch(notificationsProvider);
-
-    return AsyncValueView(
-      value: notifications,
-      data: (items) => _AlertsHome(
-        alerts: _alertsFromNotifications(items),
-        doneIds: _doneIds,
-        onOpen: _openAlert,
-        onDone: (id) {
-          setState(() {
-            _doneIds.add(id);
-          });
-          _markAlertRead(id);
-        },
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.cloud_off_outlined, size: 36),
+            const SizedBox(height: AppSpacing.md),
+            Text(
+              'Could not load notifications.',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: AppSpacing.md),
+            OutlinedButton.icon(
+              onPressed: onRetry,
+              icon: const Icon(Icons.refresh),
+              label: const Text('Retry'),
+            ),
+          ],
+        ),
       ),
-    );
-  }
-
-  Future<void> _markAlertRead(String id) async {
-    final client = ref.read(supabaseClientProvider);
-    if (client == null) {
-      return;
-    }
-    try {
-      await client
-          .from(SupabaseTables.notifications)
-          .update({'is_read': true}).eq('id', id);
-      ref.invalidate(notificationsProvider);
-    } catch (_) {
-      return;
-    }
-  }
-
-  List<_AlertItem> _alertsFromNotifications(List<AppNotification> items) {
-    return items.map((notification) {
-      final target = notification.id.contains('focus')
-          ? _AlertTarget.deepWork
-          : _AlertTarget.dailyCheckIn;
-
-      return _AlertItem(
-        id: notification.id,
-        title: switch (notification.id) {
-          'focus_window' => 'Deadline approaching',
-          'recovery_check' => 'Sleep debt warning',
-          _ => notification.title,
-        },
-        body: switch (notification.id) {
-          'focus_window' =>
-            'Prepare product review is due soon. Plan one protected deep-work session before the deadline pressure peaks.',
-          'recovery_check' =>
-            'Your latest sleep entry is below your usual recovery range. Keep today\'s plan lighter if possible.',
-          _ => notification.body,
-        },
-        priority: notification.isRead ? 'medium' : 'high',
-        accent: target == _AlertTarget.deepWork
-            ? const Color(0xFFFFA42E)
-            : const Color(0xFF20B9FF),
-        icon: target == _AlertTarget.deepWork
-            ? Icons.error_outline
-            : Icons.health_and_safety_outlined,
-        target: target,
-      );
-    }).toList();
-  }
-
-  void _openAlert(_AlertItem alert) {
-    context.go(
-      alert.target == _AlertTarget.deepWork
-          ? AppRoutes.deepWork
-          : AppRoutes.dailyCheckIn,
     );
   }
 }
 
-class _AlertsHome extends StatelessWidget {
-  const _AlertsHome({
+class _NotificationsHome extends StatelessWidget {
+  const _NotificationsHome({
     required this.alerts,
-    required this.doneIds,
+    required this.useDemoData,
     required this.onOpen,
-    required this.onDone,
   });
 
   final List<_AlertItem> alerts;
-  final Set<String> doneIds;
-  final ValueChanged<_AlertItem> onOpen;
-  final ValueChanged<String> onDone;
+  final bool useDemoData;
+  final ValueChanged<NotificationActionTarget> onOpen;
 
   @override
   Widget build(BuildContext context) {
     final unreadCount =
-        alerts.where((alert) => !doneIds.contains(alert.id)).length;
-    final deadlineCount =
-        alerts.where((alert) => alert.target == _AlertTarget.deepWork).length;
+        alerts.where((alert) => !alert.notification.isRead).length;
+    final readCount = alerts.length - unreadCount;
+    final actionableCount =
+        alerts.where((alert) => alert.target != null).length;
 
     return SafeArea(
       child: CustomScrollView(
@@ -133,24 +108,28 @@ class _AlertsHome extends StatelessWidget {
             ),
             sliver: SliverList.list(
               children: [
-                const _AlertsHeader(),
+                _NotificationsHeader(useDemoData: useDemoData),
                 const SizedBox(height: AppSpacing.xl),
-                _AlertSummaryGrid(
+                _NotificationSummaryGrid(
                   unreadCount: unreadCount,
-                  deadlineCount: deadlineCount,
+                  readCount: readCount,
+                  actionableCount: actionableCount,
                 ),
                 const SizedBox(height: AppSpacing.xl),
-                ...alerts.map(
-                  (alert) => Padding(
-                    padding: const EdgeInsets.only(bottom: AppSpacing.md),
-                    child: _AlertCard(
-                      alert: alert,
-                      isDone: doneIds.contains(alert.id),
-                      onOpen: () => onOpen(alert),
-                      onDone: () => onDone(alert.id),
+                if (alerts.isEmpty)
+                  const _EmptyNotifications()
+                else
+                  ...alerts.map(
+                    (alert) => Padding(
+                      padding: const EdgeInsets.only(bottom: AppSpacing.md),
+                      child: _NotificationCard(
+                        alert: alert,
+                        onOpen: alert.target == null
+                            ? null
+                            : () => onOpen(alert.target!),
+                      ),
                     ),
                   ),
-                ),
               ],
             ),
           ),
@@ -160,8 +139,10 @@ class _AlertsHome extends StatelessWidget {
   }
 }
 
-class _AlertsHeader extends StatelessWidget {
-  const _AlertsHeader();
+class _NotificationsHeader extends StatelessWidget {
+  const _NotificationsHeader({required this.useDemoData});
+
+  final bool useDemoData;
 
   @override
   Widget build(BuildContext context) {
@@ -169,93 +150,96 @@ class _AlertsHeader extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'REMINDER AGENT',
-                style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                      color: Theme.of(context).colorScheme.primary,
-                      fontSize: 13,
-                      letterSpacing: 4,
-                    ),
-              ),
-              const SizedBox(height: AppSpacing.lg),
-              Text(
-                'Alerts',
-                style: Theme.of(context).textTheme.headlineLarge?.copyWith(
-                      fontSize: 52,
-                      height: 1,
-                    ),
-              ),
-              const SizedBox(height: AppSpacing.lg),
-              Text(
-                'Timetable-aware nudges for deadlines, recovery, screen time, sleep, and low-energy days.',
-                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                      color: const Color(0xFFA8B5BE),
-                      height: 1.55,
-                    ),
-              ),
-            ],
+          child: Text(
+            'Notifications',
+            style: Theme.of(context).textTheme.headlineMedium,
           ),
+        ),
+        Container(
+          key: const ValueKey('notifications-data-origin'),
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.md,
+            vertical: AppSpacing.sm,
+          ),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surfaceContainerHighest,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Text(useDemoData ? 'Demo data' : 'Account data'),
         ),
       ],
     );
   }
 }
 
-class _AlertSummaryGrid extends StatelessWidget {
-  const _AlertSummaryGrid({
+class _NotificationSummaryGrid extends StatelessWidget {
+  const _NotificationSummaryGrid({
     required this.unreadCount,
-    required this.deadlineCount,
+    required this.readCount,
+    required this.actionableCount,
   });
 
   final int unreadCount;
-  final int deadlineCount;
+  final int readCount;
+  final int actionableCount;
 
   @override
   Widget build(BuildContext context) {
     final metrics = [
-      _AlertMetric(
-        icon: Icons.notifications_none,
+      _NotificationMetric(
+        key: const ValueKey('notifications-unread-count'),
+        icon: Icons.mark_email_unread_outlined,
         value: '$unreadCount',
         label: 'Unread',
         color: Theme.of(context).colorScheme.primary,
       ),
-      _AlertMetric(
-        icon: Icons.event_busy_outlined,
-        value: '$deadlineCount',
-        label: 'Deadlines',
-        color: const Color(0xFFFFA42E),
+      _NotificationMetric(
+        key: const ValueKey('notifications-read-count'),
+        icon: Icons.drafts_outlined,
+        value: '$readCount',
+        label: 'Read',
+        color: const Color(0xFF8EA7FF),
       ),
-      const _AlertMetric(
-        icon: Icons.health_and_safety_outlined,
-        value: 'On',
-        label: 'Coaching',
-        color: Color(0xFF20B9FF),
+      _NotificationMetric(
+        key: const ValueKey('notifications-action-count'),
+        icon: Icons.arrow_forward,
+        value: '$actionableCount',
+        label: 'Actions',
+        color: const Color(0xFFFFA42E),
       ),
     ];
 
-    return GridView.count(
-      crossAxisCount: 3,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      crossAxisSpacing: AppSpacing.sm,
-      childAspectRatio: 0.82,
-      children:
-          metrics.map((metric) => _AlertMetricCard(metric: metric)).toList(),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final childAspectRatio = switch (constraints.maxWidth) {
+          >= 1100 => 3.2,
+          >= 720 => 2.0,
+          _ => 0.82,
+        };
+        return GridView.count(
+          crossAxisCount: 3,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          crossAxisSpacing: AppSpacing.sm,
+          childAspectRatio: childAspectRatio,
+          children: metrics
+              .map((metric) => _NotificationMetricCard(metric: metric))
+              .toList(),
+        );
+      },
     );
   }
 }
 
-class _AlertMetricCard extends StatelessWidget {
-  const _AlertMetricCard({required this.metric});
+class _NotificationMetricCard extends StatelessWidget {
+  const _NotificationMetricCard({required this.metric});
 
-  final _AlertMetric metric;
+  final _NotificationMetric metric;
 
   @override
   Widget build(BuildContext context) {
-    return _AlertsPanel(
+    return _NotificationsPanel(
+      key: metric.key,
       padding: const EdgeInsets.all(AppSpacing.md),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -278,79 +262,97 @@ class _AlertMetricCard extends StatelessWidget {
   }
 }
 
-class _AlertCard extends StatelessWidget {
-  const _AlertCard({
-    required this.alert,
-    required this.isDone,
-    required this.onOpen,
-    required this.onDone,
-  });
-
-  final _AlertItem alert;
-  final bool isDone;
-  final VoidCallback onOpen;
-  final VoidCallback onDone;
+class _EmptyNotifications extends StatelessWidget {
+  const _EmptyNotifications();
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedOpacity(
-      opacity: isDone ? 0.45 : 1,
-      duration: const Duration(milliseconds: 180),
-      child: _AlertsPanel(
+    return const _NotificationsPanel(
+      padding: EdgeInsets.all(AppSpacing.lg),
+      child: Text('No notifications yet.'),
+    );
+  }
+}
+
+class _NotificationCard extends StatelessWidget {
+  const _NotificationCard({required this.alert, required this.onOpen});
+
+  final _AlertItem alert;
+  final VoidCallback? onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final notification = alert.notification;
+    final accent = _accentForPriority(notification.priority);
+
+    return Opacity(
+      opacity: notification.isRead ? 0.68 : 1,
+      child: _NotificationsPanel(
+        key: ValueKey('notification-${notification.id}'),
         padding: const EdgeInsets.all(AppSpacing.md),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Container(
-              width: 56,
-              height: 56,
+              width: 48,
+              height: 48,
               decoration: BoxDecoration(
-                color: alert.accent.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(12),
+                color: accent.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(8),
               ),
-              child: Icon(alert.icon, color: alert.accent, size: 30),
+              child: Icon(
+                _iconForType(notification.type),
+                color: accent,
+                size: 26,
+              ),
             ),
             const SizedBox(width: AppSpacing.md),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  Text(
+                    notification.title,
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
                   Wrap(
                     spacing: AppSpacing.sm,
                     runSpacing: AppSpacing.sm,
-                    crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
-                      Text(
-                        alert.title,
-                        style: Theme.of(context).textTheme.titleLarge,
+                      _NotificationBadge(label: notification.type),
+                      _NotificationBadge(label: notification.priority),
+                      _NotificationBadge(
+                        key: ValueKey(
+                          'notification-read-state-${notification.id}',
+                        ),
+                        label: notification.isRead ? 'Read' : 'Unread',
                       ),
-                      _PriorityBadge(priority: alert.priority),
                     ],
                   ),
                   const SizedBox(height: AppSpacing.md),
                   Text(
-                    alert.body,
+                    notification.body,
                     style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                          color: const Color(0xFFA8B5BE),
-                          height: 1.55,
+                          height: 1.45,
                         ),
                   ),
-                  const SizedBox(height: AppSpacing.lg),
-                  Wrap(
-                    spacing: AppSpacing.sm,
-                    runSpacing: AppSpacing.sm,
-                    children: [
-                      FilledButton(
-                        onPressed: onOpen,
-                        child: const Text('Open'),
-                      ),
-                      OutlinedButton.icon(
-                        onPressed: isDone ? null : onDone,
-                        icon: const Icon(Icons.check),
-                        label: Text(isDone ? 'Done' : 'Done'),
-                      ),
-                    ],
+                  const SizedBox(height: AppSpacing.sm),
+                  Text(
+                    DateFormat('MMM d, HH:mm').format(
+                      notification.createdAt.toLocal(),
+                    ),
+                    style: Theme.of(context).textTheme.bodySmall,
                   ),
+                  if (onOpen != null) ...[
+                    const SizedBox(height: AppSpacing.md),
+                    FilledButton.icon(
+                      key: ValueKey('notification-open-${notification.id}'),
+                      onPressed: onOpen,
+                      icon: const Icon(Icons.arrow_forward),
+                      label: const Text('Open'),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -359,33 +361,53 @@ class _AlertCard extends StatelessWidget {
       ),
     );
   }
+
+  IconData _iconForType(String type) {
+    return switch (type.toLowerCase()) {
+      'deadline' => Icons.event_busy_outlined,
+      'warning' => Icons.warning_amber_outlined,
+      'summary' => Icons.summarize_outlined,
+      'reminder' => Icons.notifications_none,
+      _ => Icons.info_outline,
+    };
+  }
+
+  Color _accentForPriority(String priority) {
+    return switch (priority.toLowerCase()) {
+      'critical' => const Color(0xFFFF6B6B),
+      'high' => const Color(0xFFFFA42E),
+      'low' => const Color(0xFF5BE7C4),
+      _ => const Color(0xFF20B9FF),
+    };
+  }
 }
 
-class _PriorityBadge extends StatelessWidget {
-  const _PriorityBadge({required this.priority});
+class _NotificationBadge extends StatelessWidget {
+  const _NotificationBadge({required this.label, super.key});
 
-  final String priority;
+  final String label;
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.md,
+        horizontal: AppSpacing.sm,
         vertical: AppSpacing.xs,
       ),
       decoration: BoxDecoration(
-        color: const Color(0xFF242B34),
-        borderRadius: BorderRadius.circular(10),
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(8),
       ),
-      child: Text(priority, style: Theme.of(context).textTheme.labelLarge),
+      child: Text(label, style: Theme.of(context).textTheme.labelMedium),
     );
   }
 }
 
-class _AlertsPanel extends StatelessWidget {
-  const _AlertsPanel({
+class _NotificationsPanel extends StatelessWidget {
+  const _NotificationsPanel({
     required this.child,
     required this.padding,
+    super.key,
   });
 
   final Widget child;
@@ -396,23 +418,27 @@ class _AlertsPanel extends StatelessWidget {
     return Container(
       padding: padding,
       decoration: BoxDecoration(
-        color: const Color(0xFF122329),
-        borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: const Color(0xFF2A424A), width: 2),
+        color: Theme.of(context).colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: Theme.of(context).colorScheme.outlineVariant,
+        ),
       ),
       child: child,
     );
   }
 }
 
-class _AlertMetric {
-  const _AlertMetric({
+class _NotificationMetric {
+  const _NotificationMetric({
+    required this.key,
     required this.icon,
     required this.value,
     required this.label,
     required this.color,
   });
 
+  final Key key;
   final IconData icon;
   final String value;
   final String label;
@@ -420,21 +446,8 @@ class _AlertMetric {
 }
 
 class _AlertItem {
-  const _AlertItem({
-    required this.id,
-    required this.title,
-    required this.body,
-    required this.priority,
-    required this.accent,
-    required this.icon,
-    required this.target,
-  });
+  const _AlertItem({required this.notification, required this.target});
 
-  final String id;
-  final String title;
-  final String body;
-  final String priority;
-  final Color accent;
-  final IconData icon;
-  final _AlertTarget target;
+  final AppNotification notification;
+  final NotificationActionTarget? target;
 }

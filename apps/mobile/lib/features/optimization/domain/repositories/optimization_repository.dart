@@ -1,10 +1,10 @@
-import '../entities/recommendation.dart';
+import '../entities/recommendation_feed.dart';
 import '../entities/skillset_profile.dart';
 
 abstract interface class OptimizationRepository {
   Future<SkillsetProfile> getSkillsetProfile();
 
-  Future<List<Recommendation>> getRecommendations();
+  Future<RecommendationFeed> getRecommendations();
 
-  Future<List<Recommendation>> refreshRecommendations();
+  Future<RecommendationFeed> refreshRecommendations();
 }

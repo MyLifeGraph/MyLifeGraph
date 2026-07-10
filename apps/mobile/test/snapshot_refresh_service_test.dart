@@ -49,6 +49,20 @@ void main() {
     expect(apiClient.postCalls, isEmpty);
   });
 
+  test('local guest skips refresh even with a leftover token', () async {
+    final apiClient = _FakeApiClient();
+    final service = _buildService(
+      config: _config(useMockData: false, supabaseConfigured: true),
+      apiClient: apiClient,
+      accessTokenProvider: () => 'leftover-access-token',
+      allowRemoteRefresh: false,
+    );
+
+    await service.refreshDailyAfterUserSignal();
+
+    expect(apiClient.postCalls, isEmpty);
+  });
+
   test('missing access token skips snapshot refresh', () async {
     final apiClient = _FakeApiClient();
     final service = _buildService(
@@ -122,11 +136,13 @@ SnapshotRefreshService _buildService({
   required AppConfig config,
   required _FakeApiClient apiClient,
   required SnapshotAccessTokenProvider accessTokenProvider,
+  bool allowRemoteRefresh = true,
 }) {
   return SnapshotRefreshService(
     config: config,
     apiDataSource: SnapshotApiDataSource(apiClient),
     accessTokenProvider: accessTokenProvider,
+    allowRemoteRefresh: allowRemoteRefresh,
   );
 }
 

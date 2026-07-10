@@ -18,14 +18,15 @@ class DashboardRepositoryImpl implements DashboardRepository {
 
   @override
   Future<DashboardSnapshot> getSnapshot() async {
-    if (_allowMockData || _supabaseDataSource == null) {
+    if (_allowMockData) {
       return _mockDataSource.getSnapshot();
     }
-
-    try {
-      return await _supabaseDataSource.getSnapshot();
-    } catch (_) {
-      return DashboardSnapshot.empty;
+    final supabaseDataSource = _supabaseDataSource;
+    if (supabaseDataSource == null) {
+      throw const DashboardUnavailableException(
+        'Supabase is not configured for this account.',
+      );
     }
+    return supabaseDataSource.getSnapshot();
   }
 }

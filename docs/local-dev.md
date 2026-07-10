@@ -64,6 +64,15 @@ AI_SERVICE_BASE_URL=http://localhost:8000
 The Bash and PowerShell start scripts pass these values into Flutter as Dart
 defines.
 
+`USE_MOCK_DATA=true` is a deliberate whole-product local/demo boundary even if
+the browser still has a Supabase auth session. Setup, daily capture, Dashboard,
+Recommendations, Insights, and Notifications stay local, synced habits are
+hidden, and snapshot refresh is skipped. Set it to `false` to exercise real
+authenticated Supabase/FastAPI sources.
+In mock/demo mode, auth boot also skips remote profile reads/creation and guest
+check-in migration, then restores the locally applied Setup name and completion
+state across reloads.
+
 ## Frontend Script
 
 Default Flutter web-server mode:
@@ -121,15 +130,38 @@ curl http://localhost:8000/v1/health
 Recommendation contract endpoints require an authenticated bearer token. PR1
 defined the contract; backend Supabase settings are now required for real
 token verification and recommendation persistence. In real backend mode,
-successful Intake V1 completion also triggers a best-effort deterministic
-recommendation refresh from the onboarding snapshot:
+successful Intake V1 completion or edit also triggers a best-effort deterministic
+recommendation refresh from the constant onboarding snapshot. Read the newest
+Setup row with:
+
+```bash
+curl http://localhost:8000/v1/intake/setup \
+  -H 'Authorization: Bearer <supabase_access_token>'
+```
+
+The normal result is the latest applied revision. If the newest row is pending,
+the response includes that exact payload and request id so the client can retry
+the same save; it must not be edited into a different request.
+
+For a first save, use `base_revision=0` and keep the same `request_id` when
+retrying after a timeout:
 
 ```bash
 curl -X POST http://localhost:8000/v1/intake/complete \
   -H 'Authorization: Bearer <supabase_access_token>' \
   -H 'Content-Type: application/json' \
-  -d '{"version":"intake-v1","responses":{"primary_focus_areas":["focus"],"goals":["Protect focus time"],"friction_points":["Context switching"],"weekday_shape":"school_or_work","best_energy_window":"morning","coaching_style":"direct","reminder_preference":{"enabled":true,"quiet_hours":{"starts_at":"21:00","ends_at":"07:00"}},"calendar_connection_intent":"not_now"},"metadata":{"client":"curl"}}'
+  -d '{"version":"intake-v1","request_id":"11111111-1111-4111-8111-111111111111","base_revision":0,"responses":{"primary_focus_areas":["focus"],"goals":[{"key":"22222222-2222-4222-8222-222222222222","title":"Protect focus time","status":"active"}],"friction_points":[],"weekday_shape":"school_or_work","best_energy_window":"morning","coaching_style":"direct","reminder_preference":{"enabled":true,"quiet_hours":{"starts_at":"21:00","ends_at":"07:00"}},"routines":[{"key":"33333333-3333-4333-8333-333333333333","title":"Walk after lunch","status":"candidate","cadence_confirmed":false,"frequency":null,"target":null}],"fixed_commitments":[],"calendar_connection_intent":"not_now"},"metadata":{"client":"curl"}}'
 ```
+
+For an edit, load Setup first, send its `revision` as the next request's
+`base_revision`, and use a new request id. Candidate routines must not include
+frequency/target values until cadence is explicitly confirmed.
+
+The Flutter save state distinguishes known rejection from an unknown result.
+Client validation and HTTP 4xx responses leave the draft editable; 409 also
+offers `Reload saved setup`. A timeout, transport failure, 5xx, or invalid
+success envelope locks the exact submitted draft and request id for unchanged
+retry or explicit reload.
 
 ```bash
 curl http://localhost:8000/v1/recommendations \
@@ -154,10 +186,11 @@ The snapshot endpoint also accepts `"scope":"weekly"` and an optional
 `"target_date":"YYYY-MM-DD"`. It derives the user from the bearer token and
 uses the backend service-role key only inside FastAPI.
 
-When FastAPI is running and Flutter is in real backend mode, successful Daily
-Check-In and Quick Mood Check-In writes call the daily snapshot endpoint
-best-effort. If FastAPI is down, the check-in save path still succeeds and the
-snapshot refresh is skipped by the client.
+When FastAPI is running and Flutter is in real backend mode, a successful
+canonical daily check-in calls the daily snapshot endpoint best-effort. Both
+`/daily-check-in` and `/quick-mood-check-in` enter the same typed capture flow.
+If FastAPI is down, the check-in save path still succeeds and the snapshot
+refresh is skipped by the client.
 
 Backend-only Supabase configuration for the AI service:
 
@@ -203,8 +236,17 @@ Read `docs/supabase-current-state.md` first. `supabase db reset` is a local
 destructive reset and should complete through:
 
 ```text
-20260702195915_unique_user_state_snapshot_period.sql
+20260710180000_atomic_intake_v1_setup_apply.sql
 ```
+
+The latest migration installs the service-role-only
+`apply_intake_v1_setup_revision` RPC. It serializes apply per user with a
+transaction advisory lock and atomically commits preferences, Setup-owned
+goals/habits/schedule/memory reconciliation, the canonical onboarding snapshot,
+applied intake state, and profile projection. During schedule reconciliation it
+removes only the exact unmarked legacy onboarding placeholder `Math`,
+`Room 204`, Monday `08:15`-`09:45`; other manual or unmarked onboarding rows are
+preserved.
 
 The canonical app schema is snake_case. Legacy CamelCase tables are only used as
 optional migration sources when they already exist.
@@ -217,9 +259,10 @@ For local Supabase-backed app testing:
 4. Set `USE_MOCK_DATA=false`, `SUPABASE_URL=http://127.0.0.1:54321`, and
    `SUPABASE_ANON_KEY=<local anon key>`.
 5. Start the frontend with `scripts/start_frontend.sh`.
-6. Smoke test registration or sign-in, onboarding, daily check-in, quick mood
-   check-in, habit management, habit completion, dashboard, notifications, and
-   coach message send.
+6. Smoke test registration or sign-in, required-only Setup, Setup re-entry/edit/
+   review, the canonical daily check-in, habit management, habit completion, the
+   source-aware dashboard, Notifications, and Coach/Deep Work compatibility
+   redirects.
 
 Do not infer remote Supabase state from local migrations. Verify the remote
 project through the Supabase dashboard, CLI, or connector before using it for
@@ -247,6 +290,9 @@ The script:
 - refuses to run unless the API URL is `http://127.0.0.1:54321` or
   `http://localhost:54321`;
 - creates or updates three confirmed local Auth users;
+- writes one typed applied Setup revision per user with a stable request UUID
+  and intentionally empty optional Setup-owned collections, while leaving
+  separately seeded `demo_seed` objects non-Setup-owned;
 - replaces their demo app rows in `daily_logs`, `behavioral_events`, `tasks`,
   `schedule_items`, `habits`, `habit_logs`, `notifications`, `ai_insights`,
   `memory_entries`, `recommendations`, `coach_messages`,
@@ -277,10 +323,12 @@ scripts/start_frontend.sh
 ```
 
 Open `http://127.0.0.1:7357`, sign in with one of the demo accounts, and compare
-Dashboard, Alerts, Insights, Habits, and Coach persistence across scenarios.
+Dashboard, Notifications, Insights, and Habits across scenarios. Coach and Deep
+Work remain gated until their backend/action contracts are implemented.
 Seeded recommendations are visible through the FastAPI recommendation endpoint
 when the AI service is running with the same local Supabase project settings;
-without FastAPI, the app falls back to local mock recommendations.
+without FastAPI, an authenticated account shows a recoverable recommendation
+error and never substitutes local mock recommendations.
 
 Automated local preflight without resetting the database:
 
@@ -356,8 +404,9 @@ RESET_DB=true FLUTTER_BIN=/path/to/flutter bash scripts/e2e_web.sh
 The E2E script starts local Supabase, starts the FastAPI AI service with the
 local Supabase backend settings, starts Flutter Web on `http://127.0.0.1:7357`,
 creates a confirmed local test user through the local Supabase admin API, signs
-in through the app, completes onboarding, saves check-ins, opens alerts, sends a
-coach message, and asserts local database rows were created.
+in through the app, completes required-only Setup, exercises retry/edit/review
+and ownership-safe reconciliation, saves check-ins, opens Notifications, and
+asserts exact local database identities and values.
 
 By default the script starts FastAPI on `http://127.0.0.1:8000`. Useful AI
 service overrides:

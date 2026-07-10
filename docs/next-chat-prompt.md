@@ -1,16 +1,11 @@
 # Next Chat Prompt
 
-Use this prompt when starting a new implementation chat after the Daily
-Briefing / Daily Decision Loop roadmap consolidation.
+Use this prompt when starting a new implementation chat after Phase 0C,
+First-Run And Setup Integrity.
 
-Recommended reasoning level: **high**. The next work crosses Flutter check-in
-UX, Supabase metadata writes, deterministic snapshot generation, recommendation
-ranking, guest/mock behavior, and tests.
-
-Do not spawn multiple agents by default. Use subagents only when the work is
-clearly separable, the write scopes do not overlap, and parallelism materially
-reduces risk or time. For a narrow continuation, one main agent should usually
-inspect, implement, verify, and update docs end to end.
+Recommended reasoning level: **high**. This work crosses the canonical Flutter
+capture draft, guest persistence, Supabase daily rows/events, time-of-day
+semantics, and sensitive stress context.
 
 Prompt:
 
@@ -28,71 +23,107 @@ Use high reasoning. First read:
 7. docs/local-dev.md
 8. docs/verification.md
 
-Goal: implement the next roadmap slice after Intake V1, controlled post-intake
-deterministic recommendation refresh, authenticated snapshot aggregation, and
-FastAPI-backed browser E2E coverage, without LLM. The current product priority
-is the Daily Briefing / Daily Decision Loop: lightweight daily capture,
-explainable daily state, Daily Mode, and a small number of ranked next actions.
+Goal: implement Phase 1, Lightweight Evening And Morning Capture. Phase 0A,
+0B, and 0C are complete: daily values are exact and retry-safe; demo and real
+sources never mix; unsupported surfaces are gated; and Setup is progressive,
+prefilled, revision-safe, ownership-scoped, and reviewable. Preserve all of
+that. Guest Setup intentionally remains local when the user later authenticates;
+do not add an automatic Setup migration while implementing Phase 1. Canonical
+guest check-ins keep their existing best-effort auth migration.
+Authenticated Setup apply is already atomic and per-user serialized through the
+service-role-only database RPC. Mock/demo auth boot must remain free of remote
+profile/data bootstrap and keep local Setup across reload. Preserve the existing
+save-state split: 4xx stays editable, 409 offers reload, and ambiguous failures
+require exact unchanged retry or reload. Setup-owned habits remain editable only
+through Settings Setup and completable through Habit Completion.
 
-Do not spawn multiple agents by default. Use subagents only if there are clearly
-separable non-overlapping tasks that can run in parallel without blocking the
-main implementation. If the slice is narrow, keep the work in one agent.
+Start by walking these journeys for guest and authenticated accounts:
 
-Focus on the smallest useful Daily Briefing foundation slice:
+1. Complete Evening Shutdown with only required answers in under 90 seconds.
+2. Leave every optional note, blocker, and gentle-tomorrow field blank.
+3. Record high workload/mostly-controllable stress and high private-emotional/
+   hardly-controllable stress as distinct structured states.
+4. Retry after a failed or timed-out save without losing the draft or creating
+   another daily row/event set.
+5. Re-open the same day's evening capture, see exact saved values prefilled,
+   edit them, and replace the current state intentionally.
+6. Complete a 10-to-20-second Morning Calibration with sleep, current energy,
+   and normal/constrained/flexible day shape, including when no prior evening
+   shutdown exists.
 
-- Extend the daily/evening check-in path with stress source, stress
-  controllability, stress intensity label, and optional gentle-tomorrow intent.
-- Persist those fields in existing `daily_logs.metadata.stress` and mirror them
-  into relevant `behavioral_events.metadata`; do not add schema columns unless
-  the implementation genuinely needs them.
-- Preserve the existing numeric `stress_level`, energy, mood, focus, and
-  check-in behavior.
-- Extend deterministic snapshot aggregation to summarize the new stress
-  taxonomy and emit risk flags such as private/emotional stress,
-  avoidable-pressure stress, low-control stress, overload, and recovery risk.
-- Add or prepare a deterministic Daily Mode classifier with modes `push`,
-  `steady`, `recover`, and `plan`.
-- Private/emotional and low-control stress should reduce load and avoid
-  aggressive productivity recommendations.
+Inspect at minimum:
 
-- Reuse the existing Supabase bearer-token auth dependency.
-- Derive `user_id` from the verified backend principal only.
-- Reuse existing `intake_responses` and `user_state_snapshots`.
-- Preserve `POST /v1/snapshots/generate` behavior for deterministic `daily` and
-  `weekly` snapshots.
-- Preserve the existing best-effort daily refresh after Supabase-backed Daily
-  Check-In, Quick Mood Check-In, dashboard task writes, and habit writes.
-- Preserve the existing post-intake recommendation refresh behavior.
-- Preserve the FastAPI-backed browser E2E coverage in `scripts/e2e_web.sh`.
-- Do not build the full `daily_briefings` table/service until the missing
-  capture and snapshot signals are in place.
-- Deployed cron/job execution is still useful later, but should be evaluated
-  against the Daily Briefing cadence, not treated as a standalone next slice.
-- Do not add LLM providers.
-- Do not require calendar connection.
-- Preserve mock and guest mode.
-- Keep service-role credentials backend-only.
-- Update docs in the same change.
+- the typed quick-check-in draft/domain model and guest/Supabase stores
+- `quick_mood_check_in_page.dart` and Quick Action routing/providers
+- `daily_logs` and `behavioral_events` payload mapping
+- Dashboard reads of the latest check-in
+- snapshot refresh triggers after successful real writes
+- relevant migrations/RLS, backend snapshot inputs, Flutter tests, and
+  `e2e/web/smoke.mjs`
 
-Preferred implementation sequence:
+Required product contract:
 
-1. Inspect current Flutter Daily Check-In and Quick Mood Check-In flows,
-   Supabase data sources, FastAPI snapshot aggregation, and recommendation
-   rules.
-2. Add the stress taxonomy to the smallest appropriate check-in/evening capture
-   path, keeping the UI under a lightweight daily-capture burden.
-3. Persist the new fields in metadata for guest/mock and Supabase-backed paths.
-4. Extend snapshot aggregation with the new stress summaries and risk flags.
-5. Add focused tests for private/emotional low-control stress, avoidable
-   pressure, and no-regression guest/mock behavior.
-6. Preserve mock and guest mode; do not trigger LLM or recommendation
-   generation on dashboard load.
-7. Run the lowest sufficient verification first, then broaden.
-8. Report any verification that could not be run.
+- Evening Shutdown captures mood, energy, stress intensity, stress source,
+  stress controllability, a rough focus band, main friction, and one likely
+  priority for tomorrow. Reflection, a specific blocker, and `make tomorrow
+  gentler` are optional.
+- Morning Calibration captures sleep quality or hours, current energy, and day
+  shape only. It must not repeat the full evening form.
+- Stress source is one of `workload`, `avoidable_pressure`,
+  `private_emotional`, `physical_recovery`, or `external_environment`.
+- Stress controllability is one of `hardly_controllable`,
+  `partly_controllable`, or `mostly_controllable`.
+- Persist structured Phase-1 fields in `daily_logs.metadata` and mirror the
+  relevant values into linked `behavioral_events.metadata` first. Keep existing
+  numeric mood/energy/stress/sleep compatibility.
+- Use one explicit merge contract for evening and morning writes to the same
+  `(user_id, entry_date)` row. Morning calibration must not erase evening
+  context, and an evening edit must not erase morning fields accidentally.
+- Store only explicit answers. Blank optional values remain absent/null and do
+  not become fallback text, memory entries, tasks, recommendations, or schedule
+  items.
+- Guest/demo writes stay local and change subsequent guest reads. They never
+  call Supabase, FastAPI, recommendation generation, or snapshot refresh.
+- Authenticated write failures retain the exact draft and expose retry. The UI
+  must not claim success before persistence; retry remains idempotent.
+- Sensitive stress detail stays out of notification copy and is not promoted to
+  durable coaching memory in this slice.
+- First results remain current-state observations. Do not claim a learned
+  baseline, diagnosis, causation, or Daily Mode.
 
-Do not implement the full Daily Briefing service, coach LLM, calendar import,
-weekly planning, vector search, or background workers in this slice unless the
-user explicitly changes scope.
+Implementation guidance:
+
+1. Write the current read/write matrix for the canonical daily row, four linked
+   events, guest JSON, Dashboard mapper, and snapshot trigger before editing.
+2. Define typed Evening Shutdown and Morning Calibration drafts plus an explicit
+   same-day merge policy. Avoid parallel legacy forms.
+3. Add the stress taxonomy, focus band, friction, tomorrow priority, optional
+   reflection/blocker, gentle-tomorrow intent, capture kind, and capture time to
+   bounded metadata with strict validation.
+4. Extend the existing guest and Supabase stores. Preserve the stable capture
+   identity, one daily row, and replacement/deduplication guarantees.
+5. Build progressive evening UI and a separate short morning route/state. Reuse
+   shared controls where useful without merging the two experiences into one
+   long questionnaire.
+6. Keep successful authenticated snapshot refresh best-effort. Do not add an
+   LLM call or generate recommendations on normal read/save.
+7. Add value-level tests for both capture kinds, optional blanks, every stress
+   category/controllability enum, same-day merge in both orders, prefill/edit,
+   failed save/retry, guest locality, and authenticated error behavior.
+8. Extend Playwright E2E with distinctive evening and morning values and exact
+   database assertions for one daily row, linked event metadata, merge
+   preservation, and same-day retry deduplication.
+9. Run focused tests, full Flutter/Python suites, `scripts/verify.sh`, local
+   Supabase verification if schema changes, and browser E2E. Update all docs.
+
+Prefer metadata over new columns for Phase 1 unless query/index requirements
+make a migration demonstrably necessary. If schema changes, include migration,
+RLS/grants verification, Supabase docs, local reset verification, and browser
+assertions.
+
+Do not implement Daily Mode, briefing persistence/ranking, Habit V1 cadence,
+focus sessions, Coach/LLM, calendar import, wearables, weekly review, vector
+search, notifications, or background workers in this slice.
 
 Do not commit unless explicitly asked.
 ```

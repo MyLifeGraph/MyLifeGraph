@@ -11,68 +11,83 @@ class DashboardSupabaseDataSource {
 
   Future<DashboardSnapshot> getSnapshot() async {
     final userId = await AppUserResolver(_client).resolveUserId();
-    final logs = await _client
-        .from(SupabaseTables.dailyLogs)
-        .select()
-        .eq('user_id', userId)
-        .order('entry_date', ascending: false)
-        .limit(7);
-    final tasks = await _client
-        .from(SupabaseTables.tasks)
-        .select()
-        .eq('user_id', userId)
-        .order('deadline', ascending: true)
-        .limit(8);
-    final scheduleItems = await _client
-        .from(SupabaseTables.scheduleItems)
-        .select()
-        .eq('user_id', userId)
-        .order('weekday', ascending: true)
-        .order('starts_at', ascending: true);
+    final results = await Future.wait([
+      _client
+          .from(SupabaseTables.dailyLogs)
+          .select(
+            'entry_date,mood_score,energy_level,sleep_hours,stress_level,'
+            'focus_minutes,steps,activity_level,screen_time_hours',
+          )
+          .eq('user_id', userId)
+          .order('entry_date', ascending: false)
+          .limit(60),
+      _client
+          .from(SupabaseTables.tasks)
+          .select('id,title,deadline,priority,status')
+          .eq('user_id', userId)
+          .order('deadline', ascending: true)
+          .limit(8),
+      _client
+          .from(SupabaseTables.scheduleItems)
+          .select('title,weekday,starts_at,ends_at,location')
+          .eq('user_id', userId)
+          .order('weekday', ascending: true)
+          .order('starts_at', ascending: true),
+    ]);
 
-    final dailyLogs = List<Map<String, dynamic>>.from(logs as List);
-    final taskRows = List<Map<String, dynamic>>.from(tasks as List);
-    final scheduleRows = List<Map<String, dynamic>>.from(scheduleItems as List);
-    final latest = dailyLogs.isEmpty ? <String, dynamic>{} : dailyLogs.first;
-    final trend = dailyLogs.reversed.map((row) => _activityScore(row)).toList()
-      ..removeWhere((score) => score == 0);
+    return const DashboardSnapshotMapper().map(
+      dailyLogs: List<Map<String, dynamic>>.from(results[0] as List),
+      taskRows: List<Map<String, dynamic>>.from(results[1] as List),
+      scheduleRows: List<Map<String, dynamic>>.from(results[2] as List),
+      loadedAt: DateTime.now(),
+    );
+  }
+}
 
+class DashboardSnapshotMapper {
+  const DashboardSnapshotMapper();
+
+  DashboardSnapshot map({
+    required List<Map<String, dynamic>> dailyLogs,
+    required List<Map<String, dynamic>> taskRows,
+    required List<Map<String, dynamic>> scheduleRows,
+    required DateTime loadedAt,
+  }) {
     return DashboardSnapshot(
-      optimizationScore: _activityScore(latest).clamp(0, 100),
-      streakDays: _streakDays(dailyLogs),
-      focusMinutesToday: (latest['focus_minutes'] as num?)?.round() ?? 0,
-      recoveryScore: _recoveryScore(latest).clamp(0, 100),
-      energyTrend: trend.isEmpty ? [0, 0, 0, 0, 0, 0, 0] : trend,
-      todayPlan: taskRows.map(_taskToPlanItem).toList(),
-      scheduleDays: _scheduleDays(scheduleRows, trend),
+      origin: DashboardOrigin.account,
+      loadedAt: loadedAt,
+      latestCheckIn:
+          dailyLogs.isEmpty ? null : _checkInFromRow(dailyLogs.first),
+      checkInStreakDays: _streakDays(dailyLogs, loadedAt),
+      todayPlan: taskRows
+          .where((row) => _isVisibleTaskStatus('${row['status']}'))
+          .map(_taskToPlanItem)
+          .toList(),
+      scheduleDays: _scheduleDays(scheduleRows, loadedAt),
     );
   }
 
-  int _activityScore(Map<String, dynamic> row) {
-    if (row.isEmpty) {
-      return 0;
+  DashboardCheckIn? _checkInFromRow(Map<String, dynamic> row) {
+    final entryDate = DateTime.tryParse('${row['entry_date'] ?? ''}');
+    if (entryDate == null) {
+      return null;
     }
-    final activity = (row['activity_level'] as num?)?.toDouble() ?? 0;
-    final energy = (row['energy_level'] as num?)?.toDouble() ?? 0;
-    final sleep = (row['sleep_hours'] as num?)?.toDouble() ?? 0;
-    final focus = (row['focus_minutes'] as num?)?.toDouble() ?? 0;
-    final score =
-        activity * 2.4 + energy * 2.4 + sleep * 7 + (focus / 120 * 20);
-    return score.round().clamp(0, 100);
+    return DashboardCheckIn(
+      entryDate: entryDate,
+      mood: (row['mood_score'] as num?)?.toInt(),
+      energy: (row['energy_level'] as num?)?.toInt(),
+      sleepHours: (row['sleep_hours'] as num?)?.toDouble(),
+      stress: (row['stress_level'] as num?)?.toInt(),
+      focusMinutes: (row['focus_minutes'] as num?)?.toInt(),
+      steps: (row['steps'] as num?)?.toInt(),
+      activityLevel: (row['activity_level'] as num?)?.toInt(),
+      screenTimeHours: (row['screen_time_hours'] as num?)?.toDouble(),
+    );
   }
 
-  int _recoveryScore(Map<String, dynamic> row) {
-    if (row.isEmpty) {
-      return 0;
-    }
-    final sleep = (row['sleep_hours'] as num?)?.toDouble() ?? 0;
-    final energy = (row['energy_level'] as num?)?.toDouble() ?? 0;
-    return ((sleep / 8 * 70) + (energy / 10 * 30)).round();
-  }
-
-  int _streakDays(List<Map<String, dynamic>> rows) {
+  int _streakDays(List<Map<String, dynamic>> rows, DateTime loadedAt) {
     var streak = 0;
-    var expected = DateTime.now();
+    var expected = loadedAt;
     final dates = rows
         .map((row) => DateTime.tryParse('${row['entry_date']}'))
         .whereType<DateTime>()
@@ -88,31 +103,33 @@ class DashboardSupabaseDataSource {
   }
 
   PlanItem _taskToPlanItem(Map<String, dynamic> row) {
-    final deadline = DateTime.tryParse('${row['deadline'] ?? ''}');
     final status = '${row['status']}'.toLowerCase();
-    final priority = '${row['priority']}'.toLowerCase();
+    final priority = '${row['priority'] ?? 'normal'}'.trim().toLowerCase();
     return PlanItem(
-      id: row['id'] as String,
-      title: '${row['title']}',
-      time: deadline == null
-          ? priority
-          : '${deadline.month}/${deadline.day}/${deadline.year}',
-      type: priority == 'high' || priority == 'critical' ? 'focus' : 'task',
+      id: '${row['id']}',
+      title: '${row['title'] ?? 'Untitled task'}',
+      deadline: DateTime.tryParse('${row['deadline'] ?? ''}'),
+      priority: priority.isEmpty ? 'normal' : priority,
       isCompleted: status == 'done' || status == 'completed',
     );
   }
 
+  bool _isVisibleTaskStatus(String status) {
+    return switch (status.toLowerCase()) {
+      'cancelled' || 'archived' => false,
+      _ => true,
+    };
+  }
+
   List<ScheduleDay> _scheduleDays(
     List<Map<String, dynamic>> rows,
-    List<int> trend,
+    DateTime loadedAt,
   ) {
-    final today = DateTime.now();
-    final monday = today.subtract(Duration(days: today.weekday - 1));
+    final monday = loadedAt.subtract(Duration(days: loadedAt.weekday - 1));
 
     return List.generate(7, (index) {
       final date = monday.add(Duration(days: index));
       final weekday = index + 1;
-      final activity = index < trend.length ? trend[index] : 0;
       final seen = <String>{};
       final events = rows
           .where((row) => (row['weekday'] as num?)?.toInt() == weekday)
@@ -131,9 +148,6 @@ class DashboardSupabaseDataSource {
       return ScheduleDay(
         label: _weekdayLabel(weekday),
         dateLabel: '${_monthLabel(date.month)} ${date.day}',
-        energy: (activity / 100).clamp(0.08, 1),
-        movement: activity == 0 ? 0.08 : (activity / 100).clamp(0.08, 1),
-        activity: activity,
         events: events,
       );
     });
@@ -142,8 +156,11 @@ class DashboardSupabaseDataSource {
   ScheduleEvent _scheduleEventFromRow(Map<String, dynamic> row) {
     final startsAt = '${row['starts_at'] ?? ''}'.trim();
     final endsAt = '${row['ends_at'] ?? ''}'.trim();
-    final time =
-        startsAt.isEmpty || endsAt.isEmpty ? '--:--' : '$startsAt-$endsAt';
+    final time = startsAt.isEmpty
+        ? 'Time not set'
+        : endsAt.isEmpty
+            ? startsAt
+            : '$startsAt-$endsAt';
     return ScheduleEvent(
       title: '${row['title'] ?? 'Schedule block'}',
       time: time,

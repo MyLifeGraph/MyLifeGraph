@@ -13,18 +13,25 @@ way to explore the product today is the Flutter app in mock-data guest mode.
 - Supabase Auth and persistence are wired in the app. The canonical snake_case
   migrations create the current app tables, including Intake V1 tables, for
   local Supabase-backed testing.
-- The FastAPI service exposes authenticated intake and deterministic
-  recommendation endpoints plus a deterministic snapshot refresh endpoint.
-  Completing Intake V1 now triggers a controlled deterministic recommendation
-  refresh from the onboarding snapshot. Daily and weekly user-state snapshots
-  can be refreshed through the backend without an LLM provider, the dashboard
-  includes a deliberate deterministic recommendation refresh action, and a
-  backend-only scheduled daily refresh endpoint can refresh onboarded non-guest
-  profiles for cron-style runs.
+- The FastAPI service exposes authenticated typed Setup read/completion/edit,
+  deterministic recommendation endpoints, and deterministic snapshot refresh.
+  Applying Intake V1 triggers a controlled recommendation refresh from the
+  constant onboarding snapshot. Daily and weekly user-state snapshots can be
+  refreshed without an LLM provider, the dashboard includes a deliberate
+  deterministic recommendation refresh action, and a backend-only scheduled
+  endpoint can refresh onboarded non-guest profiles for cron-style runs.
 - Insights includes deterministic correlation exploration for sleep, workload,
   stress, energy, mood, screen time, activity, steps, habits, recovery, and
   focus. It computes 7/14/30-day relationships in Flutter from existing
   Supabase rows or local mock time series, without LLM usage.
+- Phase 0A, Honest Capture; Phase 0B, Source And Surface Truth; and Phase 0C,
+  First-Run And Setup Integrity, are implemented. Daily capture persists exact
+  selections; demo data stays local and labeled; real failures never become mock
+  content; and setup is progressive, prefilled, retry-safe, and reviewable
+  without invented or duplicate commitments. Authenticated Setup materializes
+  through one service-role-only, per-user-serialized database transaction.
+  Phase 1, Lightweight Evening And Morning Capture, is next. See
+  `docs/daily-briefing-implementation-plan.md` for the operating loop and roadmap.
 - Repository docs and scripts should be treated as the shared team source of
   truth. Do not depend on user-local Codex skills or machine-specific paths.
 
@@ -101,6 +108,12 @@ Useful examples:
 USE_MOCK_DATA=true scripts/start_frontend.sh
 ```
 
+`USE_MOCK_DATA=true` is an explicit local-demo boundary for product data
+surfaces, including when a Supabase authentication session happens to exist.
+Mock/demo auth boot avoids remote profile/data reads and restores the locally
+applied Setup across reloads. Use `USE_MOCK_DATA=false` for authenticated
+Supabase/FastAPI data.
+
 ```bash
 USE_MOCK_DATA=false \
 SUPABASE_URL=https://your-project.supabase.co \
@@ -139,13 +152,30 @@ Supabase is the intended auth and persistence backend. The current app supports:
 - Google OAuth through Supabase Auth when OAuth is configured.
 - Supabase-backed reads/writes for selected feature data when credentials and
   expected tables exist.
-- Structured onboarding submits Intake V1 to FastAPI in real backend mode,
-  creates first deterministic recommendations from the onboarding snapshot, and
-  preserves local guest/mock behavior.
+- In real mode, structured Setup reads authenticated state through
+  `GET /v1/intake/setup` and saves initial completion or edits through
+  `POST /v1/intake/complete` using a stable request id and optimistic base
+  revision. Guest or mock Setup follows the same typed semantics locally and
+  never calls Supabase or FastAPI.
+- Guest Setup is intentionally not copied into an account automatically. A
+  newly authenticated account loads its own backend Setup; canonical guest
+  check-ins are the only guest product data migrated best-effort today, and only
+  for a real non-demo account with `USE_MOCK_DATA=false`.
+- Blank optional Setup answers create no goals, habits, schedule items, or
+  memories. Named routines remain candidates until cadence is confirmed;
+  setup-owned records use deterministic identities and can be reviewed, edited,
+  archived, paused, or removed without reconciling manual rows.
+- Setup-owned habits are edited, paused, or archived through Settings Setup;
+  active Setup habits still appear in Habit Completion. Generic Habit Management
+  edits only manually managed habits.
+- A rejected 4xx Setup save keeps the draft editable; 409 also prompts a server
+  reload. Timeouts, 5xx failures, and invalid success envelopes have an unknown
+  durable result, so the exact submitted draft is locked for unchanged retry or
+  explicit reload.
 - The dashboard refresh action first refreshes the daily snapshot best-effort,
   then calls the deterministic recommendation generator with LLM wording
   disabled. Normal dashboard reads still do not generate recommendations.
-- Supabase-backed daily and quick mood check-ins refresh the backend daily
+- The canonical Supabase-backed daily check-in refreshes the backend daily
   `user_state_snapshots` row best-effort after writes, and dashboard task
   status changes plus Quick Action habit creation, edits, active-state changes,
   and completions use the same refresh path after successful Supabase updates;
@@ -155,9 +185,11 @@ Supabase is the intended auth and persistence backend. The current app supports:
 
 Important current caveat: the Flutter app targets the canonical snake_case
 schema. A clean local Supabase reset should apply
-`20260702195915_unique_user_state_snapshot_period.sql`, which adds the
-snapshot-period unique index after the Intake V1 tables. Remote projects still
-need to be inspected directly before relying on `USE_MOCK_DATA=false`.
+`20260710180000_atomic_intake_v1_setup_apply.sql`, after the Phase 0C Intake
+request/revision and profile-projection migrations. The latest migration adds a
+service-role-only, transactionally locked RPC for atomic Setup materialization.
+Remote projects still need to be inspected directly before relying on
+`USE_MOCK_DATA=false`.
 
 See `docs/supabase-current-state.md` before changing Supabase schema or relying
 on real remote data.
@@ -170,8 +202,11 @@ npm run seed:demo
 ```
 
 The script starts local Supabase if needed, refuses non-local Supabase URLs, and
-creates repeatable student, worker, and recovery scenarios. All demo accounts
-use the local-only password `DemoPass123!`.
+creates repeatable student, worker, and recovery scenarios. Its typed Setup
+rows include valid applied revisions with intentionally empty Setup-owned
+optional collections; separately seeded scenario goals, habits, and commitments
+remain `demo_seed` data. All demo accounts use the local-only password
+`DemoPass123!`.
 
 ## Verification
 
@@ -226,7 +261,8 @@ FLUTTER_BIN=/path/to/flutter bash scripts/e2e_web.sh
 ```
 
 The browser E2E script starts local Supabase, starts FastAPI with local backend
-Supabase settings, runs Flutter Web, and asserts authenticated intake,
+Supabase settings, runs Flutter Web, and covers authenticated required-only
+Setup, revision-safe retry/edit/review semantics and ownership assertions,
 deterministic recommendations, backend snapshot refresh, and core app writes.
 
 With a fresh local database:

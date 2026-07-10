@@ -36,15 +36,17 @@ class RecommendationCard extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.md),
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              FilledButton(
-                onPressed: () {},
-                child: Text(recommendation.actionLabel),
-              ),
-              const Spacer(),
-              Text(
-                '${(recommendation.confidence * 100).round()}%',
-                style: Theme.of(context).textTheme.labelLarge,
+              Icon(Icons.arrow_forward, size: 18, color: color),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Text(
+                  recommendation.actionLabel,
+                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                        color: color,
+                      ),
+                ),
               ),
             ],
           ),

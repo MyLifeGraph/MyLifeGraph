@@ -9,11 +9,12 @@ class HabitCompletionSupabaseDataSource {
   final SupabaseClient _client;
 
   Future<List<HabitCompletionOption>> fetchActiveHabits() async {
-    return fetchHabits(activeOnly: true);
+    return fetchHabits(activeOnly: true, excludeSetupManaged: false);
   }
 
   Future<List<HabitCompletionOption>> fetchHabits({
     bool activeOnly = false,
+    bool excludeSetupManaged = false,
   }) async {
     final userId = await AppUserResolver(_client).resolveUserId();
     final now = DateTime.now();
@@ -22,7 +23,9 @@ class HabitCompletionSupabaseDataSource {
 
     var query = _client
         .from(SupabaseTables.habits)
-        .select('id,title,description,frequency,target,active,updated_at')
+        .select(
+          'id,title,description,frequency,target,active,metadata,updated_at',
+        )
         .eq('user_id', userId);
     if (activeOnly) {
       query = query.eq('active', true);
@@ -49,7 +52,12 @@ class HabitCompletionSupabaseDataSource {
       completionDatesByHabit.putIfAbsent(habitId, () => {}).add(entryDate);
     }
 
-    return List<Map<String, dynamic>>.from(habitRows as List).map((row) {
+    return List<Map<String, dynamic>>.from(habitRows as List).where((row) {
+      return isHabitVisibleForFetch(
+        row['metadata'],
+        excludeSetupManaged: excludeSetupManaged,
+      );
+    }).map((row) {
       final id = row['id'] as String;
       final completionDates = completionDatesByHabit[id] ?? const <String>{};
       return HabitCompletionOption(
@@ -184,6 +192,21 @@ class HabitCompletionSupabaseDataSource {
     }
     return fallback;
   }
+}
+
+bool isHabitVisibleForFetch(
+  Object? metadata, {
+  required bool excludeSetupManaged,
+}) {
+  if (metadata is! Map) {
+    return true;
+  }
+  final setupState =
+      metadata['setup_state']?.toString() ?? metadata['status']?.toString();
+  if (setupState == 'candidate' || setupState == 'archived') {
+    return false;
+  }
+  return !excludeSetupManaged || metadata['managed_by']?.toString() != 'setup';
 }
 
 class HabitCompletionOption {

@@ -36,7 +36,11 @@ local service-role key from `supabase status -o env`, and invokes
 
 The seed is idempotent for the demo accounts. It keeps the local Auth users,
 updates their password and metadata, clears their app rows, and recreates the
-scenario data. The default local-only password is `DemoPass123!` for:
+scenario data. Each Intake row is a valid applied revision with a stable request
+id and intentionally empty optional Setup-owned collections. Separately seeded
+goals, habits, and schedule rows retain `demo_seed` ownership and are not
+presented as Setup materialization. The default local-only password is
+`DemoPass123!` for:
 
 - `student@example.test`
 - `worker@example.test`
@@ -72,10 +76,21 @@ cd services/ai_service
 Use `python -m pytest` from an environment with `services/ai_service`
 requirements installed if the local `.venv` does not exist.
 
-FastAPI tests cover authenticated intake, deterministic recommendations, and
-the snapshot aggregator endpoint. Snapshot tests verify principal-derived
-`user_id`, request `user_id` rejection, scoped Supabase reads, and refreshing an
-existing `user_state_snapshots` row for the same period. Scheduled refresh tests
+FastAPI tests cover authenticated Setup/Intake, deterministic recommendations,
+and the snapshot aggregator endpoint. Setup coverage includes principal-derived
+identity for both `GET /v1/intake/setup` and `POST /v1/intake/complete`, strict
+structured item/cadence validation, zero materialized optional rows for blank
+answers, idempotent request replay, stale base-revision conflicts, recovery from
+partial repository failure, stable identities across edit, intentional removal,
+preservation of non-Setup rows, stale-worker checks, and monotonic profile
+projection through `profiles.setup_revision`. Atomic-apply coverage verifies one
+service-role RPC for the complete projection, same-request worker convergence,
+per-user serialization against a later revision, full rollback on ownership
+collision, idempotent profile repair, and the exact-only legacy
+`Math`/`Room 204`/Monday `08:15`-`09:45` cleanup. Snapshot tests verify
+principal-derived `user_id`, request `user_id` rejection, scoped Supabase reads,
+and refreshing an existing `user_state_snapshots` row for the same period.
+Scheduled refresh tests
 cover the backend-only token guard, onboarded non-guest profile selection,
 per-user failure isolation, deterministic daily snapshot refresh, and optional
 deterministic recommendation refresh without LLM wording.
@@ -83,17 +98,48 @@ deterministic recommendation refresh without LLM wording.
 Current Flutter widget tests include:
 
 - Auth gate renders.
-- Guest can continue, complete structured onboarding, persist the local Intake
-  V1 payload, and reach the dashboard.
-- Guest can complete a quick mood check-in and persist it locally in
-  `shared_preferences`.
-- Guest can open the Habit Completion quick action without requiring Supabase.
-- Guest can open Habit Management without requiring Supabase.
-- The Intake API data source posts `POST /v1/intake/complete` with bearer auth
-  and the structured payload.
+- Guest can complete required-only progressive Setup, persist exact empty
+  optionals, and reach the dashboard without an invented goal, friction,
+  routine, note, or commitment.
+- Typed Setup model/data-source tests cover stable item keys, candidate versus
+  confirmed cadence, `request_id`/`base_revision` request JSON, authenticated
+  setup reads, and invalid response/error propagation.
+- Setup widget/repository coverage exercises guest and authenticated prefill,
+  loading/error/retry, retained drafts and request ids, edit without duplicate
+  records, ambiguous-failure retry locking, review lifecycle actions, and the
+  real Settings Setup entry.
+- Auth repository tests prove mock/demo authenticated boot skips remote profile
+  access and guest migration, restores local Setup name/completion across reload,
+  and never leaks a remote onboarding marker into local-demo state.
+- Setup save-state tests keep validation and HTTP 4xx failures editable, make
+  409 suggest reload, and lock timeout/5xx/malformed results to exact retry or
+  explicit reload.
+- Guest can select distinctive mood, energy, sleep, stress, and context values,
+  persist the exact typed check-in locally, and read the saved summary on return.
+- Check-in mapper tests assert the exact `daily_logs` payload and four linked
+  `behavioral_events`, including source, units, metadata, and nulling of
+  uncollected legacy placeholder fields.
+- Guest-store tests cover exact JSON, one-entry-per-day retry deduplication, and
+  recovery from corrupted local JSON.
+- Check-in widget tests cover required explicit selections, draft retention after
+  failure, stable retry, and suppression of a duplicate in-flight save.
+- Guest sees only locally functional Quick Actions; Supabase-only Habit
+  Completion and Habit Management are hidden and their direct routes redirect.
+- The Intake API data source gets `GET /v1/intake/setup` and posts
+  `POST /v1/intake/complete` with bearer auth and the structured revisioned
+  payload; authenticated failure does not invoke the old direct-write fallback.
 - The optimization repository keeps normal recommendation reads as `GET` only,
   and the deliberate refresh path posts `POST /v1/recommendations/generate`
   with bearer auth, `force=false`, and `allow_llm_wording=false`.
+- Recommendation repository/provider tests prove that only explicit guest/demo
+  sessions receive demo feeds, even with a leftover token. Real missing-config,
+  missing-token, network, and malformed-response paths throw and never consult
+  mock data; current/missing/stale feed metadata is preserved.
+- Dashboard mapper/widget tests assert exact raw values, honest empty/error
+  states, local source labels, and the absence of former proxy metrics.
+- Capability, Settings, and notification tests cover the gated Coach/Deep Work/
+  guest-Habit routes, persistent local-demo label, strict `action_url` allowlist,
+  original notification fields/read state, and separate real empty/error states.
 - The Snapshot refresh service posts `POST /v1/snapshots/generate` with bearer
   auth in real backend mode, skips guest/mock/missing-token paths, and treats
   network failures as best-effort.
@@ -108,6 +154,12 @@ Current Flutter widget tests include:
 - The Insights repository keeps mock correlation data scoped to mock/guest mode
   and does not substitute demo correlations for empty or failing real Supabase
   reads.
+- Source-boundary provider tests keep Setup, canonical check-in, Dashboard, and
+  Insights on local/demo sources when `USE_MOCK_DATA=true`, even if an
+  authenticated Supabase session exists.
+- Habit visibility tests exclude every Setup-managed habit from generic Habit
+  Management while keeping active Setup habits in Habit Completion and hiding
+  candidate/archived states.
 
 These tests cover the default mock/guest product path. They do not prove real
 Supabase registration, RLS, or browser behavior.
@@ -158,7 +210,7 @@ supabase db reset
 Expected successful reset output applies migrations through:
 
 ```text
-20260702195915_unique_user_state_snapshot_period.sql
+20260710180000_atomic_intake_v1_setup_apply.sql
 ```
 
 Expected notices include skipped legacy CamelCase tables and already-existing
@@ -218,27 +270,37 @@ enabled, which gives Playwright stable text fields, buttons, and labels instead
 of relying on canvas pixels.
 
 The browser smoke creates a confirmed local Supabase Auth user through the local
-admin API, signs in through the app, completes onboarding through FastAPI,
-creates a habit through Habit Management, saves a daily check-in, saves a quick
-mood check-in, logs the managed habit completion, uses the dashboard refresh
-action, opens alerts, sends a coach message, and then queries local Supabase
-REST with the local service-role key.
-It asserts FastAPI-created `intake_responses`, onboarding
-`user_state_snapshots`, deterministic post-intake `recommendations`, intake
-`goals` and `habits`, Flutter-created managed `habits`, direct app writes to
-`daily_logs`, `behavioral_events`, `habit_logs`, and `coach_messages`, plus
-backend-refreshed daily `user_state_snapshots` after the check-in, habit
-completion, and manual recommendation refresh flows. The manual refresh step
-also observes the browser POSTs to `/v1/snapshots/generate` and
-`/v1/recommendations/generate`, verifies their JSON payloads, and confirms
-deterministic recommendation rows are still present. The daily and quick
-check-ins share one `daily_logs` row because that table is unique by
-`(user_id, entry_date)`; the smoke uses `behavioral_events.source` to verify
-that both check-in flows wrote their event signals.
+admin API and walks the Phase 0C Setup journeys before continuing through the
+existing product smoke. It covers required-only completion with zero optional
+owned records; one explicit goal, routine candidate, and fixed commitment;
+retry after a response is lost; prefilled edit with stable identity; cadence
+confirmation; and review actions that archive/pause/remove Setup-owned rows.
+Node-side fixtures include manual rows, and database assertions require those
+rows to survive reconciliation unchanged.
 
-The coach step uses the page's default prompt, sends it through the visible
-coach send button, and verifies the persisted `coach_messages` row. This keeps
-the assertion tied to persistence rather than canvas-rendered chat text.
+The Setup assertions inspect exact `request_id`, base/revision, applied state,
+stable materialized ids, server ownership metadata, record counts, and the
+constant onboarding snapshot identity. A named unconfirmed routine must remain
+only in `intake_responses`; it must not appear as an active daily habit. Replaying
+one request must return the same result without another revision or owned row,
+while a real edit advances the revision and preserves stable record ids. After
+the UI journeys, two simultaneous authenticated POSTs with the same new request
+id must both return the same applied revision, produce exactly one
+`intake_responses` row, and advance `profiles.setup_revision` only once. This
+exercises the migrated advisory-lock RPC against real local PostgreSQL rather
+than only the in-memory concurrency tests.
+
+The smoke then creates a habit through Habit Management, follows
+`/daily-check-in` into the canonical lightweight capture, saves distinctive
+check-in values twice for the same day, logs the managed habit completion, uses
+the dashboard refresh action, opens Notifications, and verifies the gated Coach
+and Deep Work compatibility redirects. It still asserts deterministic
+post-intake recommendations, exact `daily_logs` and linked behavioral events,
+`habit_logs`, and backend-refreshed daily snapshots. Mood `2`, energy `9`, sleep
+`5.5`, stress `8`, the trimmed note, and exactly four same-day
+`quick_check_in` events remain value-level checks. Manual refresh requests to
+`/v1/snapshots/generate` and `/v1/recommendations/generate` are observed and
+their deterministic payloads asserted.
 
 `e2e/web/smoke.mjs` navigates Flutter routes through root hash URLs such as
 `/#/auth` and `/#/daily-check-in`. This avoids direct deep-link requests against
@@ -338,10 +400,11 @@ Still missing for broader product verification:
 
 - CI wiring for the browser E2E command.
 - Playwright trace artifact collection on failure.
-- Dedicated database assertions for notifications, onboarding schedule items,
-  notification preferences, and memory entries beyond the current snapshot input
-  counts.
-- Coverage for Google OAuth, mobile layout, and authenticated guest-data
+- Dedicated database assertions for notifications, notification preferences,
+  and non-Setup memory behavior beyond the current Setup ownership/snapshot
+  checks.
+- Coverage for Google OAuth, mobile layout, and best-effort authenticated guest
+  check-in migration. Guest Setup intentionally has no automatic account
   migration.
 
 When changing E2E flows, keep `e2e/web/smoke.mjs`, `scripts/e2e_web.sh`, and

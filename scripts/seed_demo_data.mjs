@@ -364,6 +364,18 @@ async function seedScenario(userId, scenario) {
   const today = dateOnly(now);
   const weekKey = isoWeekKey(now);
   const metadata = { source: 'demo_seed_v1', scenario: scenario.key };
+  const intakeRequestId = deterministicUuid(
+    `demo-seed:intake-request:${userId}:intake-v1`,
+  );
+  const intakeResponseId = deterministicUuid(
+    `demo-seed:intake-response:${userId}:intake-v1`,
+  );
+  const onboardingSnapshotId = deterministicUuid(
+    `demo-seed:onboarding-snapshot:${userId}:intake-v1`,
+  );
+  const setupFrictionPoints = scenario.memories
+    .filter(([type]) => type === 'recurring_problem' || type === 'pattern')
+    .map(([, title]) => title);
 
   await upsertRows(
     'profiles',
@@ -376,6 +388,7 @@ async function seedScenario(userId, scenario) {
         role: 'user',
         auth_provider: 'email',
         onboarding_completed_at: now.toISOString(),
+        setup_revision: 1,
         updated_at: now.toISOString(),
       },
     ],
@@ -400,14 +413,18 @@ async function seedScenario(userId, scenario) {
 
   await insertRows('intake_responses', [
     {
+      id: intakeResponseId,
       user_id: userId,
       version: 'intake-v1',
+      request_id: intakeRequestId,
+      base_revision: 0,
+      revision: 1,
+      state: 'applied',
       responses: {
+        display_name: scenario.displayName,
         primary_focus_areas: scenario.focusAreas,
-        goals: scenario.goals.map(([title]) => title),
-        friction_points: scenario.memories
-          .filter(([type]) => type === 'recurring_problem' || type === 'pattern')
-          .map(([, title]) => title),
+        goals: [],
+        friction_points: setupFrictionPoints,
         weekday_shape: scenario.weekdayShape,
         best_energy_window: scenario.bestEnergyWindow,
         coaching_style: scenario.coachingStyle,
@@ -418,20 +435,17 @@ async function seedScenario(userId, scenario) {
             ends_at: scenario.quietHoursEnd,
           },
         },
-        existing_habits: scenario.habits.map(([title]) => title),
-        fixed_commitments: scenario.schedule.map(
-          ([title, location, weekday, startsAt, endsAt]) => ({
-            title,
-            location,
-            weekday,
-            starts_at: startsAt,
-            ends_at: endsAt,
-          }),
-        ),
+        routines: [],
+        fixed_commitments: [],
         calendar_connection_intent: 'later',
       },
-      metadata,
+      metadata: {
+        source: 'onboarding',
+        request_metadata: metadata,
+        snapshot_id: onboardingSnapshotId,
+      },
       completed_at: now.toISOString(),
+      updated_at: now.toISOString(),
     },
   ]);
 
@@ -607,24 +621,36 @@ async function seedScenario(userId, scenario) {
     'user_state_snapshots',
     [
       {
+        id: onboardingSnapshotId,
         user_id: userId,
         scope: 'onboarding',
-        period_key: 'intake-v1',
+        period_key: 'setup:intake-v1',
         summary: {
           primary_focus_areas: scenario.focusAreas,
-          goals: scenario.goals.map(([title]) => title),
+          goals: [],
+          friction_points: setupFrictionPoints,
           coaching_style: scenario.coachingStyle,
           best_energy_window: scenario.bestEnergyWindow,
+          reminder_enabled: true,
+          fixed_commitment_count: 0,
+          existing_habit_count: 0,
+          routine_candidate_count: 0,
+          active_habit_count: 0,
         },
         signals: {
-          input_counts: {
-            goals: scenario.goals.length,
-            habits: scenario.habits.length,
-            schedule_items: scenario.schedule.length,
-          },
+          focus_areas: scenario.focusAreas,
+          friction_points: setupFrictionPoints,
+          routine_candidates: [],
+          calendar_connection_intent: 'later',
         },
-        source: 'demo_seed',
-        metadata,
+        source: 'backend',
+        metadata: {
+          source: 'intake-v1',
+          managed_by: 'setup',
+          intake_response_id: intakeResponseId,
+          request_id: intakeRequestId,
+          revision: 1,
+        },
         generated_at: now.toISOString(),
       },
       {
@@ -820,6 +846,20 @@ async function request(url, options, description) {
     return response.json();
   }
   return null;
+}
+
+function deterministicUuid(seed) {
+  const bytes = crypto.createHash('sha256').update(seed).digest().subarray(0, 16);
+  bytes[6] = (bytes[6] & 0x0f) | 0x50;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = bytes.toString('hex');
+  return [
+    hex.slice(0, 8),
+    hex.slice(8, 12),
+    hex.slice(12, 16),
+    hex.slice(16, 20),
+    hex.slice(20),
+  ].join('-');
 }
 
 function addDays(baseDate, offset) {

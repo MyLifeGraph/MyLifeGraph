@@ -127,6 +127,21 @@ class SupabaseRestClient:
             raise ValueError(f"Expected list response from Supabase table {table}.")
         return data
 
+    async def rpc(
+        self,
+        function: str,
+        *,
+        params: dict[str, Any],
+    ) -> Any:
+        async with httpx.AsyncClient(timeout=self._timeout_seconds) as client:
+            response = await client.post(
+                f"{self._url}/rest/v1/rpc/{function}",
+                json=params,
+                headers=self._rest_headers(),
+            )
+        response.raise_for_status()
+        return response.json()
+
     async def get_user_for_token(self, token: str) -> dict[str, Any] | None:
         async with httpx.AsyncClient(timeout=self._timeout_seconds) as client:
             response = await client.get(

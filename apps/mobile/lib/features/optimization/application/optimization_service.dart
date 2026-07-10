@@ -1,4 +1,4 @@
-import '../domain/entities/recommendation.dart';
+import '../domain/entities/recommendation_feed.dart';
 import '../domain/entities/skillset_profile.dart';
 import '../domain/repositories/optimization_repository.dart';
 
@@ -11,11 +11,11 @@ class OptimizationService {
     return _repository.getSkillsetProfile();
   }
 
-  Future<List<Recommendation>> loadActionableRecommendations() {
+  Future<RecommendationFeed> loadActionableRecommendations() {
     return _repository.getRecommendations();
   }
 
-  Future<List<Recommendation>> refreshActionableRecommendations() {
+  Future<RecommendationFeed> refreshActionableRecommendations() {
     return _repository.refreshRecommendations();
   }
 }

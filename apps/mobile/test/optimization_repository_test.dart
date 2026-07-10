@@ -6,128 +6,195 @@ import 'package:my_life_graph/features/optimization/data/datasources/optimizatio
 import 'package:my_life_graph/features/optimization/data/datasources/recommendations_api_data_source.dart';
 import 'package:my_life_graph/features/optimization/data/repositories/optimization_repository_impl.dart';
 import 'package:my_life_graph/features/optimization/domain/entities/recommendation.dart';
+import 'package:my_life_graph/features/optimization/domain/entities/recommendation_feed.dart';
 
 void main() {
   group('OptimizationRepositoryImpl.getRecommendations', () {
-    test('mock mode returns mock recommendations and does not call backend',
+    test('mock mode returns a labeled demo feed without backend calls',
         () async {
       final apiClient = _FakeApiClient();
       final repository = _buildRepository(
         config: _config(useMockData: true, supabaseConfigured: true),
         apiClient: apiClient,
-        accessTokenProvider: () => 'token',
+        accessTokenProvider: () => 'leftover-real-token',
       );
 
-      final recommendations = await repository.getRecommendations();
+      final feed = await repository.getRecommendations();
 
-      expect(recommendations, [_mockRecommendation]);
+      expect(feed.items, [_mockRecommendation]);
+      expect(feed.provenance, RecommendationProvenance.demo);
+      expect(feed.freshness, RecommendationFreshness.notApplicable);
+      expect(feed.needsGeneration, isFalse);
+      expect(feed.generatedAt, isNull);
+      expect(feed.periodKey, isNull);
       expect(apiClient.getCalls, isEmpty);
       expect(apiClient.postCalls, isEmpty);
     });
 
-    test('missing Supabase config falls back safely and does not call backend',
+    test('explicit guest mode never uses a leftover real access token',
         () async {
       final apiClient = _FakeApiClient();
+      final repository = _buildRepository(
+        config: _config(useMockData: false, supabaseConfigured: true),
+        apiClient: apiClient,
+        accessTokenProvider: () => 'leftover-real-token',
+        allowDemoData: true,
+      );
+
+      final feed = await repository.getRecommendations();
+
+      expect(feed.provenance, RecommendationProvenance.demo);
+      expect(apiClient.getCalls, isEmpty);
+      expect(apiClient.postCalls, isEmpty);
+    });
+
+    test('missing Supabase config is a real configuration error', () async {
+      final apiClient = _FakeApiClient();
+      final mockDataSource = _FakeMockDataSource();
       final repository = _buildRepository(
         config: _config(useMockData: false),
         apiClient: apiClient,
         accessTokenProvider: () => 'token',
+        mockDataSource: mockDataSource,
       );
 
-      final recommendations = await repository.getRecommendations();
-
-      expect(recommendations, [_mockRecommendation]);
+      await expectLater(
+        repository.getRecommendations(),
+        throwsA(
+          isA<RecommendationAccessException>().having(
+            (error) => error.failure,
+            'failure',
+            RecommendationAccessFailure.configuration,
+          ),
+        ),
+      );
+      expect(mockDataSource.recommendationCalls, 0);
       expect(apiClient.getCalls, isEmpty);
-      expect(apiClient.postCalls, isEmpty);
     });
 
-    test('missing access token falls back safely and does not call backend',
-        () async {
+    test('missing access token is a real session error', () async {
       final apiClient = _FakeApiClient();
+      final mockDataSource = _FakeMockDataSource();
       final repository = _buildRepository(
         config: _config(useMockData: false, supabaseConfigured: true),
         apiClient: apiClient,
         accessTokenProvider: () => null,
+        mockDataSource: mockDataSource,
       );
 
-      final recommendations = await repository.getRecommendations();
-
-      expect(recommendations, [_mockRecommendation]);
+      await expectLater(
+        repository.getRecommendations(),
+        throwsA(
+          isA<RecommendationAccessException>().having(
+            (error) => error.failure,
+            'failure',
+            RecommendationAccessFailure.session,
+          ),
+        ),
+      );
+      expect(mockDataSource.recommendationCalls, 0);
       expect(apiClient.getCalls, isEmpty);
-      expect(apiClient.postCalls, isEmpty);
     });
 
-    test('authenticated real mode calls GET with bearer auth and maps items',
+    test('authenticated mode maps the complete backend feed contract',
         () async {
       final apiClient = _FakeApiClient(
-        getResponse: {
-          'items': [
-            {
-              'id': 'rec_backend_focus',
-              'title': 'Protect a morning focus block',
-              'reason': 'Recent focus evidence supports it.',
-              'action_label': 'Schedule focus block',
-              'category': 'focus',
-              'priority': 'medium',
-              'confidence': 0.82,
-              'generated_at': '2026-06-22T10:15:00Z',
-              'metadata': {'period_key': '2026-W26'},
-            },
-          ],
-          'needs_generation': false,
-          'generated_at': '2026-06-22T10:15:00Z',
-          'period_key': '2026-W26',
-          'stale_reason': null,
-        },
+        getResponse: _response(
+          items: [_item()],
+          generatedAt: '2026-06-22T10:15:00Z',
+        ),
       );
       final repository = _buildRepository(
         config: _config(useMockData: false, supabaseConfigured: true),
         apiClient: apiClient,
-        accessTokenProvider: () => 'access-token-123',
+        accessTokenProvider: () => ' access-token-123 ',
       );
 
-      final recommendations = await repository.getRecommendations();
+      final feed = await repository.getRecommendations();
 
       expect(apiClient.getCalls, ['/v1/recommendations']);
       expect(apiClient.postCalls, isEmpty);
       expect(apiClient.lastHeaders, {
         'Authorization': 'Bearer access-token-123',
       });
-      expect(recommendations, hasLength(1));
-      expect(recommendations.single.id, 'rec_backend_focus');
-      expect(recommendations.single.title, 'Protect a morning focus block');
+      expect(feed.provenance, RecommendationProvenance.authenticatedBackend);
+      expect(feed.freshness, RecommendationFreshness.current);
+      expect(feed.needsGeneration, isFalse);
+      expect(feed.generatedAt, DateTime.parse('2026-06-22T10:15:00Z'));
+      expect(feed.periodKey, '2026-W26');
+      expect(feed.items, hasLength(1));
+      expect(feed.items.single.id, 'rec_backend_focus');
+      expect(feed.items.single.title, 'Protect a morning focus block');
       expect(
-        recommendations.single.reason,
+        feed.items.single.reason,
         'Recent focus evidence supports it.',
       );
-      expect(recommendations.single.actionLabel, 'Schedule focus block');
-      expect(recommendations.single.category, RecommendationCategory.focus);
-      expect(recommendations.single.confidence, 0.82);
+      expect(feed.items.single.actionLabel, 'Schedule focus block');
+      expect(feed.items.single.category, RecommendationCategory.focus);
+      expect(feed.items.single.confidence, 0.82);
     });
 
-    test('unknown backend categories are skipped without crashing', () async {
+    test(
+        'missing recommendations envelope is rejected instead of becoming empty',
+        () async {
+      final repository = _buildRepository(
+        config: _config(useMockData: false, supabaseConfigured: true),
+        apiClient: _FakeApiClient(getResponse: const {}),
+        accessTokenProvider: () => 'token',
+      );
+
+      await expectLater(
+        repository.getRecommendations(),
+        throwsA(isA<FormatException>()),
+      );
+    });
+
+    test('unknown backend categories reject the feed instead of dropping items',
+        () async {
+      final repository = _buildRepository(
+        config: _config(useMockData: false, supabaseConfigured: true),
+        apiClient: _FakeApiClient(
+          getResponse: _response(
+            items: [_item(category: 'nutrition')],
+            generatedAt: '2026-06-22T10:15:00Z',
+          ),
+        ),
+        accessTokenProvider: () => 'token',
+      );
+
+      await expectLater(
+        repository.getRecommendations(),
+        throwsA(isA<FormatException>()),
+      );
+    });
+
+    test('freshness and needs_generation must agree', () async {
+      final repository = _buildRepository(
+        config: _config(useMockData: false, supabaseConfigured: true),
+        apiClient: _FakeApiClient(
+          getResponse: _response(
+            items: const [],
+            needsGeneration: false,
+            staleReason: 'missing',
+          ),
+        ),
+        accessTokenProvider: () => 'token',
+      );
+
+      await expectLater(
+        repository.getRecommendations(),
+        throwsA(isA<FormatException>()),
+      );
+    });
+
+    test('stale empty response remains an authenticated missing feed',
+        () async {
       final apiClient = _FakeApiClient(
-        getResponse: {
-          'items': [
-            {
-              'id': 'rec_unknown',
-              'title': 'Unsupported item',
-              'reason': 'The backend category is outside v1.',
-              'action_label': 'Ignore',
-              'category': 'nutrition',
-              'confidence': 0.7,
-            },
-            {
-              'id': 'rec_planning',
-              'title': 'Reset the plan',
-              'reason': 'Planning friction is present.',
-              'action_label': 'Review plan',
-              'category': 'planning',
-              'confidence': 1,
-            },
-          ],
-          'needs_generation': false,
-        },
+        getResponse: _response(
+          items: const [],
+          needsGeneration: true,
+          staleReason: 'missing',
+        ),
       );
       final repository = _buildRepository(
         config: _config(useMockData: false, supabaseConfigured: true),
@@ -135,100 +202,126 @@ void main() {
         accessTokenProvider: () => 'token',
       );
 
-      final recommendations = await repository.getRecommendations();
+      final feed = await repository.getRecommendations();
 
-      expect(recommendations, hasLength(1));
-      expect(recommendations.single.id, 'rec_planning');
-      expect(recommendations.single.category, RecommendationCategory.planning);
-      expect(recommendations.single.confidence, 1.0);
-    });
-
-    test('stale empty responses do not trigger automatic generation', () async {
-      final apiClient = _FakeApiClient(
-        getResponse: {
-          'items': [],
-          'needs_generation': true,
-          'generated_at': null,
-          'period_key': '2026-W26',
-          'stale_reason': 'missing',
-        },
-      );
-      final repository = _buildRepository(
-        config: _config(useMockData: false, supabaseConfigured: true),
-        apiClient: apiClient,
-        accessTokenProvider: () => 'token',
-      );
-
-      final recommendations = await repository.getRecommendations();
-
-      expect(recommendations, isEmpty);
+      expect(feed.items, isEmpty);
+      expect(feed.provenance, RecommendationProvenance.authenticatedBackend);
+      expect(feed.freshness, RecommendationFreshness.missing);
+      expect(feed.needsGeneration, isTrue);
+      expect(feed.generatedAt, isNull);
       expect(apiClient.getCalls, ['/v1/recommendations']);
       expect(apiClient.postCalls, isEmpty);
     });
 
-    test('network failures fall back to mock recommendations', () async {
+    for (final staleCase in const [
+      (
+        backendValue: 'older_than_7_days',
+        freshness: RecommendationFreshness.olderThanSevenDays,
+      ),
+      (
+        backendValue: 'period_mismatch',
+        freshness: RecommendationFreshness.periodMismatch,
+      ),
+    ]) {
+      test('maps authenticated ${staleCase.backendValue} freshness', () async {
+        final repository = _buildRepository(
+          config: _config(useMockData: false, supabaseConfigured: true),
+          apiClient: _FakeApiClient(
+            getResponse: _response(
+              items: [_item()],
+              needsGeneration: true,
+              generatedAt: '2026-06-14T10:15:00Z',
+              staleReason: staleCase.backendValue,
+            ),
+          ),
+          accessTokenProvider: () => 'token',
+        );
+
+        final feed = await repository.getRecommendations();
+
+        expect(feed.items, hasLength(1));
+        expect(feed.provenance, RecommendationProvenance.authenticatedBackend);
+        expect(feed.freshness, staleCase.freshness);
+        expect(feed.needsGeneration, isTrue);
+      });
+    }
+
+    test('network failures propagate and never read mock recommendations',
+        () async {
       final apiClient = _FakeApiClient(throwOnGet: true);
+      final mockDataSource = _FakeMockDataSource();
       final repository = _buildRepository(
         config: _config(useMockData: false, supabaseConfigured: true),
         apiClient: apiClient,
         accessTokenProvider: () => 'token',
+        mockDataSource: mockDataSource,
       );
 
-      final recommendations = await repository.getRecommendations();
-
-      expect(recommendations, [_mockRecommendation]);
+      await expectLater(
+        repository.getRecommendations(),
+        throwsA(isA<Exception>()),
+      );
+      expect(mockDataSource.recommendationCalls, 0);
       expect(apiClient.getCalls, ['/v1/recommendations']);
       expect(apiClient.postCalls, isEmpty);
     });
+  });
 
-    test('mock mode refresh returns mock recommendations without backend',
-        () async {
-      final apiClient = _FakeApiClient();
-      final repository = _buildRepository(
-        config: _config(useMockData: true, supabaseConfigured: true),
-        apiClient: apiClient,
-        accessTokenProvider: () => 'token',
-      );
-
-      final recommendations = await repository.refreshRecommendations();
-
-      expect(recommendations, [_mockRecommendation]);
-      expect(apiClient.getCalls, isEmpty);
-      expect(apiClient.postCalls, isEmpty);
-    });
-
-    test('missing access token skips recommendation refresh backend call',
-        () async {
+  group('OptimizationRepositoryImpl.refreshRecommendations', () {
+    test('demo refresh stays local and remains labeled demo', () async {
       final apiClient = _FakeApiClient();
       final repository = _buildRepository(
         config: _config(useMockData: false, supabaseConfigured: true),
         apiClient: apiClient,
-        accessTokenProvider: () => '',
+        accessTokenProvider: () => 'leftover-real-token',
+        allowDemoData: true,
       );
 
-      final recommendations = await repository.refreshRecommendations();
+      final feed = await repository.refreshRecommendations();
 
-      expect(recommendations, [_mockRecommendation]);
+      expect(feed.items, [_mockRecommendation]);
+      expect(feed.provenance, RecommendationProvenance.demo);
       expect(apiClient.getCalls, isEmpty);
       expect(apiClient.postCalls, isEmpty);
     });
 
-    test('authenticated refresh posts generate request with bearer auth',
+    test('missing access token blocks real refresh without mock fallback',
+        () async {
+      final mockDataSource = _FakeMockDataSource();
+      final repository = _buildRepository(
+        config: _config(useMockData: false, supabaseConfigured: true),
+        apiClient: _FakeApiClient(),
+        accessTokenProvider: () => '',
+        mockDataSource: mockDataSource,
+      );
+
+      await expectLater(
+        repository.refreshRecommendations(),
+        throwsA(
+          isA<RecommendationAccessException>().having(
+            (error) => error.failure,
+            'failure',
+            RecommendationAccessFailure.session,
+          ),
+        ),
+      );
+      expect(mockDataSource.recommendationCalls, 0);
+    });
+
+    test('authenticated refresh posts and returns the generated feed',
         () async {
       final apiClient = _FakeApiClient(
-        postResponse: {
-          'items': [
-            {
-              'id': 'rec_backend_planning',
-              'title': 'Reset the week plan',
-              'reason': 'Recent planning friction supports it.',
-              'action_label': 'Review plan',
-              'category': 'planning',
-              'confidence': 0.76,
-            },
+        postResponse: _response(
+          items: [
+            _item(
+              id: 'rec_backend_planning',
+              category: 'planning',
+              title: 'Reset the week plan',
+              actionLabel: 'Review plan',
+            ),
           ],
-          'needs_generation': false,
-        },
+          generatedAt: '2026-06-22T11:15:00Z',
+        ),
       );
       final repository = _buildRepository(
         config: _config(useMockData: false, supabaseConfigured: true),
@@ -236,7 +329,7 @@ void main() {
         accessTokenProvider: () => 'access-token-123',
       );
 
-      final recommendations = await repository.refreshRecommendations();
+      final feed = await repository.refreshRecommendations();
 
       expect(apiClient.getCalls, isEmpty);
       expect(apiClient.postCalls, ['/v1/recommendations/generate']);
@@ -248,26 +341,43 @@ void main() {
       expect(apiClient.lastHeaders, {
         'Authorization': 'Bearer access-token-123',
       });
-      expect(recommendations, hasLength(1));
-      expect(recommendations.single.id, 'rec_backend_planning');
-      expect(recommendations.single.category, RecommendationCategory.planning);
+      expect(feed.provenance, RecommendationProvenance.authenticatedBackend);
+      expect(feed.freshness, RecommendationFreshness.current);
+      expect(feed.items.single.id, 'rec_backend_planning');
+      expect(feed.items.single.category, RecommendationCategory.planning);
     });
 
-    test('refresh network failures fall back to mock recommendations',
-        () async {
+    test('refresh network failures propagate without mock fallback', () async {
       final apiClient = _FakeApiClient(throwOnPost: true);
+      final mockDataSource = _FakeMockDataSource();
       final repository = _buildRepository(
         config: _config(useMockData: false, supabaseConfigured: true),
         apiClient: apiClient,
         accessTokenProvider: () => 'token',
+        mockDataSource: mockDataSource,
       );
 
-      final recommendations = await repository.refreshRecommendations();
-
-      expect(recommendations, [_mockRecommendation]);
+      await expectLater(
+        repository.refreshRecommendations(),
+        throwsA(isA<Exception>()),
+      );
+      expect(mockDataSource.recommendationCalls, 0);
       expect(apiClient.getCalls, isEmpty);
       expect(apiClient.postCalls, ['/v1/recommendations/generate']);
     });
+  });
+
+  test('real skillset profile never returns the demo profile', () async {
+    final repository = _buildRepository(
+      config: _config(useMockData: false, supabaseConfigured: true),
+      apiClient: _FakeApiClient(),
+      accessTokenProvider: () => 'token',
+    );
+
+    await expectLater(
+      repository.getSkillsetProfile(),
+      throwsA(isA<UnsupportedError>()),
+    );
   });
 }
 
@@ -275,12 +385,15 @@ OptimizationRepositoryImpl _buildRepository({
   required AppConfig config,
   required _FakeApiClient apiClient,
   required AccessTokenProvider accessTokenProvider,
+  bool allowDemoData = false,
+  _FakeMockDataSource? mockDataSource,
 }) {
   return OptimizationRepositoryImpl(
     config: config,
-    mockDataSource: const _FakeMockDataSource(),
+    mockDataSource: mockDataSource ?? _FakeMockDataSource(),
     recommendationsApiDataSource: RecommendationsApiDataSource(apiClient),
     accessTokenProvider: accessTokenProvider,
+    allowDemoData: allowDemoData,
   );
 }
 
@@ -297,6 +410,40 @@ AppConfig _config({
   );
 }
 
+Map<String, dynamic> _response({
+  required List<Map<String, dynamic>> items,
+  bool needsGeneration = false,
+  String? generatedAt,
+  String periodKey = '2026-W26',
+  String? staleReason,
+}) {
+  return {
+    'items': items,
+    'needs_generation': needsGeneration,
+    'generated_at': generatedAt,
+    'period_key': periodKey,
+    'stale_reason': staleReason,
+  };
+}
+
+Map<String, dynamic> _item({
+  String id = 'rec_backend_focus',
+  String title = 'Protect a morning focus block',
+  String reason = 'Recent focus evidence supports it.',
+  String actionLabel = 'Schedule focus block',
+  String category = 'focus',
+  double confidence = 0.82,
+}) {
+  return {
+    'id': id,
+    'title': title,
+    'reason': reason,
+    'action_label': actionLabel,
+    'category': category,
+    'confidence': confidence,
+  };
+}
+
 const _mockRecommendation = Recommendation(
   id: 'mock_rec',
   title: 'Mock recommendation',
@@ -307,10 +454,11 @@ const _mockRecommendation = Recommendation(
 );
 
 class _FakeMockDataSource extends OptimizationMockDataSource {
-  const _FakeMockDataSource();
+  int recommendationCalls = 0;
 
   @override
   Future<List<Recommendation>> getRecommendations() async {
+    recommendationCalls++;
     return const [_mockRecommendation];
   }
 }

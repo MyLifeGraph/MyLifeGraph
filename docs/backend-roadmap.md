@@ -11,6 +11,13 @@ MyLifeGraph should become a personal coaching app that can start with a small
 guided intake, learn from daily use, and produce useful recommendations without
 calling an LLM for every screen load.
 
+The product should not compete as a complete task manager, habit tracker,
+journal, wearable dashboard, and chat assistant at the same time. Its primary
+job is to turn current capacity, goals, commitments, habits, and recent behavior
+into one realistic next action, then learn from the outcome. The detailed user
+operating loop, product object model, habit contract, and maturity gates live in
+`docs/daily-briefing-implementation-plan.md`.
+
 The backend direction is:
 
 ```text
@@ -34,8 +41,16 @@ Already implemented:
 
 - Supabase Auth and canonical snake_case app tables.
 - Flutter mock and guest mode.
-- Flutter Supabase-backed auth, onboarding, dashboard, notifications, check-ins,
-  and coach-message persistence.
+- Flutter Supabase-backed auth, onboarding, dashboard, notifications, and
+  check-ins. The unimplemented Coach surface is gated from production routing.
+- Honest Capture:
+  - One canonical lightweight check-in implementation serves both current routes.
+  - Mood, energy, sleep, and stress require explicit selection and flow through a
+    typed draft to local guest or Supabase persistence.
+  - Supabase writes link four current signals to the daily log and replace them
+    on same-day save; guest storage also keeps one entry per calendar day.
+  - Failed writes retain the draft, in-flight duplicate submits are ignored, and
+    exact values are covered by mapper, widget, guest, and browser assertions.
 - FastAPI `/v1/health`.
 - FastAPI authenticated recommendation endpoints:
   - `GET /v1/recommendations`
@@ -49,18 +64,30 @@ Already implemented:
 - Controlled post-intake recommendation refresh from the onboarding snapshot.
 - Deliberate dashboard recommendation refresh/generate UX that calls the
   deterministic backend generate endpoint with LLM wording disabled.
-- Flutter reads persisted recommendations through FastAPI in real backend mode
-  and falls back to mock data for guest, mock, missing session, or network
-  failure.
-- `POST /v1/intake/complete`.
-- Intake V1 without LLM:
-  - `intake_responses` and `user_state_snapshots`.
-  - Authenticated backend intake completion derived from the verified bearer
-    token.
-  - Structured Flutter onboarding with guest/mock preservation.
-  - Initial goals, habits, schedule items, notification preferences, durable
-    memory entries, and first deterministic recommendations from explicit
-    structured answers.
+- Flutter reads persisted recommendations through FastAPI in real backend mode.
+  Only explicit guest/mock sessions receive labeled demo data; missing real
+  session/config, network errors, and invalid responses remain errors.
+- Intake V1 and First-Run/Setup integrity without LLM:
+  - Authenticated `GET /v1/intake/setup` plus completion/edit through
+    `POST /v1/intake/complete`, both derived from the verified bearer token.
+  - Progressive explicit Flutter Setup with typed guest and authenticated
+    prefill, loading, error, retry, and review states.
+  - Request-id replay, optimistic base revisions, pending/applied intake rows,
+    deterministic UUIDv5 materialized record ids, and convergent reconciliation.
+  - A backfilled monotonic `profiles.setup_revision` guard prevents an older
+    worker from projecting stale profile fields over a newer applied revision.
+  - A service-role-only PostgreSQL RPC uses a per-user transaction advisory lock
+    and atomically applies preferences, owned records, onboarding snapshot,
+    intake state, and profile projection.
+  - Optional blanks create no owned row. Named routines remain response-only
+    candidates until cadence confirmation; manual/other-source rows are never
+    archived or removed by Setup, apart from one exact known legacy
+    `Math`/`Room 204`/Monday `08:15`-`09:45` placeholder.
+  - Durable goal archive, habit pause/archive, fixed-commitment removal, one
+    constant-period onboarding snapshot upsert, and first deterministic
+    recommendations from explicit structured answers.
+  - Setup-owned habits are managed through Settings Setup but remain available
+    in Habit Completion when active; generic Habit Management excludes them.
 - Snapshot Aggregator foundation:
   - `POST /v1/snapshots/generate`.
   - Authenticated backend snapshot refresh derived from the verified bearer
@@ -70,8 +97,8 @@ Already implemented:
     memory entries.
   - Compact summaries with risk flags, next-focus hints, input counts, and
     evidence references.
-  - Best-effort Flutter daily snapshot refresh after Supabase-backed Daily
-    Check-In, Quick Mood Check-In, dashboard task status writes, and Quick
+  - Best-effort Flutter daily snapshot refresh after the canonical
+    Supabase-backed daily check-in, dashboard task status writes, and Quick
     Action habit management/completion writes.
   - Snapshot refresh service entrypoints for task and habit changes are wired to
     the active dashboard task and Quick Action habit paths.
@@ -93,12 +120,18 @@ Already implemented:
   - Can optionally run deterministic recommendation generation with LLM wording
     disabled.
 - Browser E2E starts FastAPI with local Supabase backend settings and verifies
-  authenticated Intake V1 persistence, deterministic post-intake
-  recommendations, backend daily snapshot refresh after check-ins, and core
-  Supabase-backed app writes.
+  authenticated required-only Setup, retry/edit/review identity and ownership,
+  deterministic post-intake recommendations, backend daily snapshot refresh
+  after check-ins, and core Supabase-backed app writes.
 
 Not yet implemented:
 
+- A coherent Today action surface connecting tasks, habits, focus sessions,
+  recommendations, and feedback.
+- Cadence-aware Habit V1 semantics. Current completion progress is a seven-day
+  completion count; it does not yet model scheduled opportunities, intentional
+  skip, weekly-target streaks, or undo.
+- Evening stress source/controllability and returning-morning calibration.
 - A production background job queue or worker.
 - Deployed cron wiring for the scheduler-triggered refresh endpoint.
 - Real coach-response backend.
@@ -121,6 +154,15 @@ Not yet implemented:
 - Calendar import is optional. It improves coaching quality, but it must not be
   required to start using the product.
 - New backend work should preserve mock and guest mode.
+- Guest/demo, real-backend, derived, integrated, and model-generated data must
+  have distinct provenance. Never silently replace failed real-user reads with
+  personalized-looking demo data.
+- Every personalized output should carry freshness, evidence or reason, and a
+  data-quality state where history is required.
+- Every production-visible primary action must execute a real command, persist
+  correctly, and expose stale/error/rollback behavior.
+- Recommendations may propose tasks, habits, focus sessions, or schedule changes,
+  but must not create user-owned commitments without confirmation.
 
 ## Target Backend Services
 
@@ -153,15 +195,51 @@ for the current product contract and phase sequence.
 ## User Start Flow
 
 The user should not start with an empty dashboard and should not be forced to
-connect a calendar. The intended first-run flow is:
+connect a calendar. The required intake path should stay under three minutes;
+detail can be added progressively. The intended first-run flow is:
 
 1. Register, sign in, or continue as guest.
-2. Complete a guided 5-minute intake.
-3. Pick 1 to 3 goal areas.
-4. Add optional habits or routines.
+2. Complete a short guided intake using explicit answers only.
+3. Pick current focus areas and describe the typical day.
+4. Optionally add up to three named goals, routines, or fixed commitments.
 5. Set basic reminder preferences.
 6. Optionally connect a calendar later.
-7. Land on the dashboard with first recommendations or first next actions.
+7. Land on an intake-based starting briefing or one missing calibration question.
+
+The app must not create fallback goals, habits, or timetable blocks for blank
+answers. Existing routines collected during intake should remain candidates
+until the user confirms their cadence. First-day output must say that it is based
+on intake/current calibration and must not imply a learned personal baseline.
+
+## User Operating Loop
+
+The complete acceptance path is defined in
+`docs/daily-briefing-implementation-plan.md`. Backend and Flutter work should
+support this sequence:
+
+```text
+first intake
+  -> conservative starting briefing
+  -> short morning calibration
+  -> one executable primary action
+  -> passive task/habit/focus feedback during the day
+  -> evening shutdown and provisional tomorrow preview
+  -> returning-morning correction
+  -> weekly review only after enough real outcomes exist
+```
+
+Capability should mature with evidence:
+
+- Start: use only explicit intake and current calibration.
+- First week: use recency, action outcomes, and simple workload/recovery flags.
+- Two-plus weeks: show only emerging patterns with sample size and confidence.
+- One-plus month: introduce personal baselines, weekly adaptation, and stronger
+  ranking.
+- Later: integrations reduce capture effort; controlled Coach explains or stages
+  changes after the deterministic loop is useful.
+
+No stage may claim causation, diagnosis, or a stable learned baseline before the
+required evidence exists.
 
 ### Intake Questions
 
@@ -171,8 +249,6 @@ Required fields:
 
 - Primary focus areas: `focus`, `energy`, `sleep`, `stress`, `planning`,
   `movement`.
-- Top 1 to 3 goals.
-- Current friction points.
 - Typical weekday shape.
 - Best energy window.
 - Desired coaching style: direct, gentle, analytical, accountability-focused.
@@ -180,7 +256,9 @@ Required fields:
 
 Optional fields:
 
-- Existing habits.
+- Top 1 to 3 goals.
+- Current friction points.
+- Existing named routines, initially as candidates.
 - Known fixed commitments.
 - Free-form context note.
 - Calendar connection intent.
@@ -219,28 +297,49 @@ The current canonical schema already has useful tables:
 - `notification_preferences`
 - `goals`, `habits`, `habit_logs`, `focus_sessions`
 
-The Intake V1 backend slice added the minimum missing state:
+`profiles.setup_revision` stores the latest Setup revision projected onto the
+profile. It starts at zero, is backfilled from applied `intake-v1` history, and
+may advance only monotonically.
+
+Migration `20260710180000_atomic_intake_v1_setup_apply.sql` defines
+`apply_intake_v1_setup_revision`. Execute is restricted to `service_role`. The
+function locks by user with `pg_advisory_xact_lock`, validates the claimed
+canonical intake row and ownership metadata, and applies every Setup projection
+inside one transaction. Recommendation generation remains a separate
+best-effort post-commit step.
+
+The Intake V1 foundation and Phase 0C revision contract provide the Setup state:
 
 ### `intake_responses`
 
-Purpose: preserve the user's structured first-run answers and support future
-schema versions without losing original intake context.
+Purpose: preserve typed Setup revisions, make retries/edit concurrency explicit,
+and support future schema versions without losing applied intake history.
 
 Implemented columns:
 
 - `id uuid primary key default gen_random_uuid()`
 - `user_id uuid not null references profiles(id) on delete cascade`
 - `version text not null default 'intake-v1'`
+- `request_id uuid not null`
+- `base_revision int not null`
+- `revision int not null`
+- `state text not null check (state in ('pending', 'applied'))`
 - `responses jsonb not null`
 - `completed_at timestamptz not null default now()`
 - `metadata jsonb not null default '{}'::jsonb`
 - `created_at timestamptz not null default now()`
+- `updated_at timestamptz not null default now()`
+
+Unique indexes:
+
+- `(user_id, version, request_id)` for idempotent request replay.
+- `(user_id, version, revision)` for one ordered revision per user/version.
 
 Access:
 
 - User can read own rows.
 - User should not update old intake history directly.
-- Backend service-role can insert after token verification.
+- Backend service-role can insert and update after token verification.
 
 ### `user_state_snapshots`
 
@@ -275,36 +374,66 @@ Access:
 Do not add these in the first slice unless the implementation genuinely needs
 them:
 
+- `daily_briefings` in Phase 4, after capture, Daily Mode, and executable action
+  contracts are proven and persistence is needed for morning availability,
+  stale detection, scheduling, or E2E assertions.
+- `decision_feedback` in Phase 6, after the briefing action contract is stable
+  and ranking needs append-only outcome history across recommendations and
+  action types.
 - `backend_jobs` for durable idempotent jobs and retries.
 - `llm_usage_events` for per-user budget tracking.
 - `calendar_connections` and `calendar_events` for provider sync.
 - `memory_candidates` if memory extraction needs review before promotion to
   `memory_entries`.
 
-## Intake Completion Flow
+## Setup Read And Completion Flow
 
-Target endpoint:
+Endpoints:
 
 ```text
+GET /v1/intake/setup
 POST /v1/intake/complete
 Authorization: Bearer <supabase_access_token>
 ```
 
-Backend behavior:
+`GET` returns the newest `intake-v1` typed row and derives the user from the
+bearer principal. Normally this is the latest applied revision, including stable
+setup item keys and review lifecycle. If the newest revision is `pending`, the
+endpoint exposes that exact payload and request id so the client can resume the
+same operation rather than edit or create another revision.
+
+`POST` handles both initial completion and later edits:
 
 1. Verify the bearer token through the existing FastAPI auth dependency.
 2. Derive `user_id` from the verified principal.
-3. Validate the intake payload with strict Pydantic models.
-4. Insert one `intake_responses` row.
-5. Upsert `profiles.onboarding_completed_at`.
-6. Upsert initial `notification_preferences`.
-7. Create `goals` from selected goals.
-8. Create `habits` only for explicit user-selected habits.
-9. Create `schedule_items` only for stable routines or fixed commitments.
-10. Create a small number of `memory_entries` for durable preferences and goals.
-11. Create an `onboarding` `user_state_snapshots` row.
-12. Return the created snapshot summary and an empty recommendation list for
-    now.
+3. Validate `request_id`, `base_revision`, and the typed intake payload with
+   strict Pydantic models.
+4. Replay an already-applied matching request id, or reject a stale/conflicting
+   base revision instead of appending another completion.
+5. Persist the next revision as `pending` and derive stable UUIDv5 ids for every
+   setup item from user, item kind, and stable item key.
+6. Build materialization only from the claimed row's canonical stored responses:
+   explicit active goals, cadence-confirmed active/paused habits, active fixed
+   commitments, preferences, and bounded durable memories. Candidate routines
+   remain only in `responses`.
+7. Call the service-role-only atomic Setup RPC. Its transaction-scoped per-user
+   advisory lock serializes competing workers. In that transaction it upserts
+   preferences; reconciles only server-owned Setup goals, habits, schedule rows,
+   and memories; upserts `(user, onboarding, setup:intake-v1)`; marks the intake
+   applied; and advances the profile revision, completion time, and explicit
+   display name.
+8. Preserve all manual/other-source rows. The only narrow legacy cleanup is an
+   omitted, unmarked onboarding row exactly matching `Math`, `Room 204`, Monday
+   `08:15`-`09:45`; other unmarked onboarding rows are not claimed by Setup. An
+   applied replay is side-effect free except that the newest applied revision
+   may repair a missing profile projection.
+9. Run the existing best-effort deterministic recommendation refresh and return
+   the applied revision, snapshot summary, and accepted current recommendations.
+
+Flutter keeps all 4xx failures editable; 409 additionally recommends reloading
+the newest server state. Network/transport errors, 5xx responses, and invalid
+success envelopes are ambiguous, so the exact submitted request is locked for
+unchanged retry or explicit reload.
 
 No LLM is required for v1 intake. If free text exists, store it as source
 context and use deterministic categories first.
@@ -324,8 +453,8 @@ completion:
 
 The refresh is best-effort after intake completion: onboarding stays completed
 if recommendation generation fails, and the dashboard can still read any
-previously persisted active recommendations. The explicit generate UX should
-later call:
+previously persisted active recommendations. The existing explicit generate UX
+calls:
 
 ```text
 POST /v1/recommendations/generate
@@ -378,59 +507,131 @@ Use these rules before adding any model provider:
 
 ## Immediate Implementation Plan
 
-The next implementation should build on **Intake V1 without LLM**, controlled
-post-intake recommendation refresh, authenticated snapshot aggregation,
-deliberate dashboard recommendation refresh, and the FastAPI-backed browser E2E
-coverage. The current product priority is the **Daily Briefing / Daily Decision
-Loop**: collect the few missing daily signals, derive explainable daily state,
-and rank a small number of next actions without LLM usage.
+The next implementation should build on completed Phase 0 product integrity,
+including retry-safe typed Setup, controlled post-intake recommendation refresh,
+authenticated snapshot aggregation, deliberate dashboard refresh, and the
+FastAPI-backed browser E2E path. The immediate slice is **Phase 1: Lightweight
+Daily Capture And Stress Taxonomy**: add honest evening context and a short
+morning calibration before deriving Daily Mode or ranking briefing actions.
 
-### Slice 0: Daily Briefing Product Contract
+### Completed Slice 0A: Honest Capture
 
-- Current direction: `docs/daily-briefing-implementation-plan.md` defines the
-  daily capture cadence, stress taxonomy, Daily Mode, briefing service shape,
-  feedback loop, and staged implementation plan.
-- Next: keep this contract as the product source of truth when changing
-  check-ins, snapshots, recommendation ranking, or the dashboard top surface.
-- Do not add `daily_briefings` immediately unless the implementation needs a
-  persisted row. Phase 1 should validate the missing signals using existing
-  `daily_logs.metadata` and `behavioral_events.metadata`.
+- Implemented: `/daily-check-in` redirects to the canonical lightweight capture
+  flow; the fixed page and `saveDefaultCheckIn()` data source are removed.
+- Implemented: mood, energy, sleep, and stress begin unset and require explicit
+  user selection. An optional context note remains attached to the check-in and
+  is not silently promoted to durable memory.
+- Implemented: uncollected legacy placeholder fields are cleared rather than
+  surviving the canonical upsert as apparently measured data.
+- Implemented: one typed draft drives guest and Supabase stores. Guest saves are
+  readable on return and replace the same local day; later auth migration reuses
+  the canonical Supabase writer.
+- Implemented: Supabase upserts the daily log, links exactly four behavioral
+  events through `daily_log_id`, and replaces same-day current-state events.
+- Implemented: failed writes preserve the draft, retry reuses the stable capture
+  id, and in-flight duplicate submits are ignored.
+- Implemented: non-functional Lifestyle Entry and Reflection Note tiles were
+  removed from Quick Action.
+- Implemented: mapper, guest-store, widget, and browser smoke assertions use
+  distinctive values instead of checking row existence or defaults only.
+
+### Completed Slice 0B: Source And Surface Truth
+
+- Implemented: recommendation reads and refreshes use a typed feed with explicit
+  demo/authenticated provenance, generation state, period, timestamp, and
+  current/missing/stale semantics. Real configuration, auth, network, and format
+  failures propagate and never consult mock recommendations.
+- Implemented: refresh failure keeps the existing feed visible; successful
+  deliberate refresh still uses deterministic generation with LLM wording off.
+- Implemented: dashboard snapshots carry explicit origin and direct nullable
+  stored values. Proxy wellness/recovery scores, fake steps/sleep/screen-time/
+  hydration metrics, activity charts, and recommendation-derived task copy are
+  removed.
+- Implemented: dashboard tasks initialize from persisted status and roll back
+  optimistic status changes when a write fails. Schedule UI renders only real
+  commitments.
+- Implemented: local guest sessions are persistently labeled `Local demo`, stay
+  off snapshot/recommendation APIs, read their local canonical check-in, and do
+  not expose Supabase-only Habit controls.
+- Implemented: Coach and Deep Work previews are removed from productive routes,
+  Settings is reduced to durable behavior, and compatibility links redirect to
+  working surfaces.
+- Implemented: Notifications preserve original fields and source read state,
+  distinguish empty from error, and expose Open only for a strict allowlist of
+  implemented internal `action_url` targets.
+- Verified with mapper, repository, provider, widget, route-capability,
+  notification-target, and browser smoke coverage.
+
+### Completed Slice 0C: First-Run And Setup Integrity
+
+- Implemented: explicit required selections stay short while goals, routines,
+  context, calendar intent, and timetable detail are progressive and optional.
+- Implemented: blank optional answers remain blank and create no fallback goal,
+  habit, schedule item, friction, or memory row.
+- Implemented: named routines are typed candidates in the intake response until
+  cadence is explicitly confirmed; candidates do not become active daily habits.
+- Implemented: guest and authenticated Setup re-entry use a typed prefilled read
+  model with loading, error, retained draft, and retry states.
+- Implemented: `request_id`, `base_revision`, pending/applied revisions,
+  deterministic UUIDv5 ids, and ownership-scoped reconciliation make completion,
+  replay, and edit converge without duplicates or changes to manual rows.
+- Implemented: a per-user advisory-locked, service-role-only database RPC commits
+  the full Setup projection atomically; an exact legacy placeholder cleanup does
+  not broaden ownership of other unmarked onboarding rows.
+- Implemented: Settings links to durable review/edit actions for Setup goals,
+  activated habits, and fixed commitments, including archive, pause, restore,
+  and removal behavior. Setup-owned habits remain completable through Habit
+  Completion but are excluded from generic Habit Management edits.
+- Implemented: mock/demo auth boot remains local across reload, while 4xx,
+  conflict/reload, and ambiguous exact-retry states preserve honest save status.
 
 ### Slice 1: Lightweight Daily Capture And Stress Taxonomy
 
-- Next: extend the daily/evening check-in path with stress source,
-  controllability, intensity label, and optional "make tomorrow gentler"
-  intent.
-- Store those fields in metadata first, while keeping existing numeric
-  `stress_level`, energy, mood, and focus fields compatible with current
-  analytics.
-- Preserve guest/mock mode and Supabase-backed writes.
-- Add tests covering private/emotional low-control stress separately from
-  workload or avoidable-pressure stress.
+- Refactor the honest functional capture path into Evening Shutdown with stress
+  source, controllability, intensity label, main friction, and optional
+  `make tomorrow gentler` intent.
+- Add a 10-to-20-second Morning Calibration for sleep, energy, and day shape.
+- Store new fields in `daily_logs.metadata` and relevant
+  `behavioral_events.metadata` first while keeping numeric fields compatible.
+- Preserve explicitly labeled guest/demo behavior and Supabase-backed writes.
+- Add tests for private/emotional low-control stress, avoidable pressure, blank
+  optional fields, and exact persisted values.
 
-### Slice 2: Daily State Enhancement
+### Slice 2: Explainable Daily State
 
-- Next: extend deterministic snapshot aggregation to summarize the new stress
-  taxonomy.
-- Add risk flags for private/emotional stress, avoidable pressure, low-control
-  stress, overload, and recovery risk.
-- Add a deterministic Daily Mode classifier with modes `push`, `steady`,
-  `recover`, and `plan`.
-- Recovery/private-emotional modes must reduce load and avoid aggressive
-  productivity recommendations.
+- Extend deterministic snapshot aggregation with stress taxonomy, freshness,
+  data quality, and risk summaries.
+- Add a deterministic Daily Mode classifier with `push`, `steady`, `recover`,
+  and `plan`.
+- Recovery/private-emotional/low-control states must reduce load and avoid
+  aggressive productivity recommendations.
+- Insufficient history must produce a conservative intake/current-state result,
+  not a learned-baseline claim.
 
-### Slice 3: Daily Briefing Service And Dashboard Repositioning
+### Slice 3: Executable Action And Habit Contracts
 
-- Next after the capture and snapshot signals are proven: add a FastAPI-owned
-  briefing service that reads current snapshots and recommendations, ranks one
-  primary action plus limited secondary actions, and returns a daily mode,
-  reason, capacity/risk note, and evidence references.
-- `GET /v1/briefings/today` should read only and report stale/missing state.
-- `POST /v1/briefings/generate` should be deliberate and authenticated.
-- Only add a `daily_briefings` table when persistence is needed for scheduled
-  preparation, E2E assertions, stale detection, or immediate morning display.
-- The dashboard should become decision-first: daily mode, top action, reason,
-  and capacity/risk note above secondary metrics.
+- Add reliable action targets for task, habit, focus, and bounded planning
+  commands before a briefing ranks them.
+- Implement coherent task create/edit/outcome behavior where needed by Today.
+- Correct Habit V1 cadence and progress semantics, add intentional skip and undo,
+  and distinguish scheduled opportunities from misses.
+- Add a structured habit-log outcome with migration/RLS/docs/E2E if metadata and
+  the existing value field cannot represent the contract honestly.
+- Implement a real linked focus-session lifecycle or keep the preview out of
+  production navigation.
+
+### Slice 4: Daily Briefing Service And Today Dashboard
+
+- After capture, state, and executable targets are proven, add a FastAPI-owned
+  briefing service that ranks one primary action plus at most two support actions.
+- `GET /v1/briefings/today` reads only and reports stale/missing state.
+- `POST /v1/briefings/generate` is deliberate and authenticated.
+- Include mode, reason, time/capacity note, provenance, freshness, evidence refs,
+  and executable action targets.
+- Add `daily_briefings` persistence only when needed for morning availability,
+  scheduling, stale detection, or E2E assertions.
+- Reposition the dashboard to Daily Mode, primary action, reason, and capacity
+  above secondary metrics, with start/done/later/replace/too-much feedback.
 
 ### Completed Slice: Controlled Recommendation Refresh
 
@@ -453,8 +654,8 @@ and rank a small number of next actions without LLM usage.
 - Implemented: snapshots stay compact and avoid reading full user history.
 - Implemented: backend tests cover stale/missing-style summary behavior,
   idempotent period refresh, request `user_id` rejection, and user scoping.
-- Implemented: Supabase-backed Daily Check-In and Quick Mood Check-In trigger
-  daily snapshot refresh best-effort after successful writes.
+- Implemented: the canonical Supabase-backed daily check-in triggers daily
+  snapshot refresh best-effort after a successful write.
 - Implemented: dashboard task status changes trigger daily snapshot refresh
   best-effort after successful Supabase writes.
 - Implemented: Quick Action habit completion writes to `habit_logs`, updates the
@@ -471,10 +672,12 @@ and rank a small number of next actions without LLM usage.
 ### Completed Slice: E2E Expansion
 
 - Implemented: browser E2E starts FastAPI with local Supabase backend settings.
-- Implemented: the smoke asserts structured Intake V1 persistence, onboarding
-  snapshots, deterministic post-intake recommendations, intake-created goals,
-  backend-refreshed daily snapshots after check-ins, deliberate dashboard
-  recommendation refresh, and core direct app writes.
+- Implemented: the smoke covers revisioned Setup completion/replay/edit,
+  concurrent same-request convergence, candidate cadence, exact ownership
+  metadata and stable ids, preservation of manual rows, onboarding snapshots,
+  deterministic post-intake recommendations, backend-refreshed daily snapshots
+  after check-ins, deliberate dashboard recommendation refresh, and core direct
+  app writes.
 - Implemented: the guest/mock widget smoke stays fast and separate.
 
 ### Completed Slice: Controlled Snapshot Triggers
@@ -497,6 +700,12 @@ and rank a small number of next actions without LLM usage.
 
 ## Out Of Scope For The Next Slice
 
+- The full Daily Briefing service or `daily_briefings` migration.
+- Daily Mode and recommendation ranking changes before capture truth is fixed.
+- Broad Habit V1 cadence/progress redesign beyond the implemented Setup
+  candidate-versus-confirmed distinction.
+- Daily Mode or briefing persistence before Phase 1 stress capture exists.
+- Implementing the preview Coach or Deep Work UI merely to keep it visible.
 - OpenAI/OpenRouter/local LLM integration.
 - Real coach assistant replies.
 - Calendar provider connection.

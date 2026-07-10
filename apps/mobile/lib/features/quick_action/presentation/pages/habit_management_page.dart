@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/config/app_config.dart';
+import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/supabase/supabase_providers.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_page.dart';
@@ -50,6 +52,19 @@ class _HabitManagementPageState extends ConsumerState<HabitManagementPage> {
         ),
       ],
       children: [
+        AppCard(
+          padding: EdgeInsets.zero,
+          child: ListTile(
+            leading: const Icon(Icons.tune_outlined),
+            title: const Text('Setup routines are managed in Setup'),
+            subtitle: const Text(
+              'Review or pause setup-owned routines there. Active routines '
+              'still appear in Habit Completion.',
+            ),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => context.go('${AppRoutes.onboarding}?edit=1'),
+          ),
+        ),
         if (_isLoading)
           const AppCard(
             child: Center(
@@ -138,7 +153,7 @@ class _HabitManagementPageState extends ConsumerState<HabitManagementPage> {
     try {
       final habits = await HabitCompletionSupabaseDataSource(
         client,
-      ).fetchHabits();
+      ).fetchHabits(excludeSetupManaged: true);
       if (mounted) {
         setState(() {
           _habits = habits;

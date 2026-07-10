@@ -1,14 +1,12 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../capabilities/app_surface_capabilities.dart';
 import '../../features/auth/presentation/pages/auth_page.dart';
 import '../../features/auth/presentation/pages/onboarding_page.dart';
 import '../../features/auth/presentation/providers/auth_providers.dart';
 import '../../features/dashboard/presentation/pages/dashboard_page.dart';
 import '../../features/insights/presentation/pages/insights_page.dart';
-import '../../features/more/presentation/pages/more_page.dart';
-import '../../features/notifications/presentation/pages/daily_check_in_page.dart';
-import '../../features/notifications/presentation/pages/deep_work_page.dart';
 import '../../features/notifications/presentation/pages/notifications_page.dart';
 import '../../features/quick_action/presentation/pages/habit_completion_page.dart';
 import '../../features/quick_action/presentation/pages/habit_management_page.dart';
@@ -20,6 +18,7 @@ import 'app_routes.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   final authState = ref.watch(authControllerProvider);
+  final capabilities = ref.watch(appSurfaceCapabilitiesProvider);
 
   return GoRouter(
     initialLocation: AppRoutes.dashboard,
@@ -62,7 +61,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: AppRoutes.onboarding,
-        builder: (context, state) => const OnboardingPage(),
+        builder: (context, state) => OnboardingPage(
+          editing: state.uri.queryParameters['edit'] == '1',
+        ),
       ),
       GoRoute(
         path: AppRoutes.quickMoodCheckIn,
@@ -92,10 +93,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: AppRoutes.habitCompletion,
+            redirect: (context, state) =>
+                capabilities.canUseSyncedHabits ? null : AppRoutes.quickAction,
             builder: (context, state) => const HabitCompletionPage(),
           ),
           GoRoute(
             path: AppRoutes.habitManagement,
+            redirect: (context, state) =>
+                capabilities.canUseSyncedHabits ? null : AppRoutes.quickAction,
             builder: (context, state) => const HabitManagementPage(),
           ),
           GoRoute(
@@ -108,19 +113,19 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: AppRoutes.dailyCheckIn,
-            builder: (context, state) => const DailyCheckInPage(),
+            redirect: (context, state) => AppRoutes.quickMoodCheckIn,
           ),
           GoRoute(
             path: AppRoutes.deepWork,
-            builder: (context, state) => const DeepWorkPage(),
+            redirect: (context, state) => AppRoutes.alerts,
           ),
           GoRoute(
             path: AppRoutes.coach,
-            builder: (context, state) => const MorePage(),
+            redirect: (context, state) => AppRoutes.dashboard,
           ),
           GoRoute(
             path: AppRoutes.more,
-            redirect: (context, state) => AppRoutes.coach,
+            redirect: (context, state) => AppRoutes.dashboard,
           ),
         ],
       ),

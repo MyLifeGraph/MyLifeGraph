@@ -1,22 +1,23 @@
 import '../../../../core/network/api_client.dart';
 import '../../domain/entities/recommendation.dart';
+import '../../domain/entities/recommendation_feed.dart';
 
 class RecommendationsApiDataSource {
   const RecommendationsApiDataSource(this._apiClient);
 
   final ApiClient _apiClient;
 
-  Future<List<Recommendation>> getRecommendations({
+  Future<RecommendationFeed> getRecommendations({
     required String accessToken,
   }) async {
     final json = await _apiClient.getJson(
       '/v1/recommendations',
       headers: {'Authorization': 'Bearer $accessToken'},
     );
-    return RecommendationsApiResponse.fromJson(json).recommendations;
+    return RecommendationsApiResponse.fromJson(json).feed;
   }
 
-  Future<List<Recommendation>> generateRecommendations({
+  Future<RecommendationFeed> generateRecommendations({
     required String accessToken,
     int windowDays = 28,
     bool force = false,
@@ -30,46 +31,90 @@ class RecommendationsApiDataSource {
       },
       headers: {'Authorization': 'Bearer $accessToken'},
     );
-    return RecommendationsApiResponse.fromJson(json).recommendations;
+    return RecommendationsApiResponse.fromJson(json).feed;
   }
 }
 
 class RecommendationsApiResponse {
-  const RecommendationsApiResponse({required this.recommendations});
+  const RecommendationsApiResponse({required this.feed});
 
   factory RecommendationsApiResponse.fromJson(Map<String, dynamic> json) {
     final rawItems = json['items'];
     if (rawItems is! List) {
-      return const RecommendationsApiResponse(recommendations: []);
+      throw const FormatException(
+        'Recommendation response must contain an items list.',
+      );
     }
 
+    final needsGeneration = json['needs_generation'];
+    if (needsGeneration is! bool) {
+      throw const FormatException(
+        'Recommendation response must contain needs_generation.',
+      );
+    }
+
+    final periodKey = _readRequiredString(json['period_key'], 'period_key');
+    final freshness = _parseFreshness(json['stale_reason']);
+    if (needsGeneration != freshness.needsRefresh) {
+      throw const FormatException(
+        'Recommendation freshness does not match needs_generation.',
+      );
+    }
+
+    final generatedAt = _readOptionalDateTime(
+      json['generated_at'],
+      'generated_at',
+    );
+    final items = rawItems.map((rawItem) {
+      if (rawItem is! Map<String, dynamic>) {
+        throw const FormatException(
+          'Recommendation items must be JSON objects.',
+        );
+      }
+      return RecommendationApiItem.fromJson(rawItem);
+    }).toList(growable: false);
+
     return RecommendationsApiResponse(
-      recommendations: rawItems
-          .whereType<Map<String, dynamic>>()
-          .map(RecommendationApiItem.fromJson)
-          .nonNulls
-          .toList(growable: false),
+      feed: RecommendationFeed(
+        items: List.unmodifiable(items),
+        provenance: RecommendationProvenance.authenticatedBackend,
+        freshness: freshness,
+        needsGeneration: needsGeneration,
+        generatedAt: generatedAt,
+        periodKey: periodKey,
+      ),
     );
   }
 
-  final List<Recommendation> recommendations;
+  final RecommendationFeed feed;
 }
 
 class RecommendationApiItem {
   const RecommendationApiItem._();
 
-  static Recommendation? fromJson(Map<String, dynamic> json) {
+  static Recommendation fromJson(Map<String, dynamic> json) {
     final category = _parseCategory(json['category']);
     if (category == null) {
-      return null;
+      throw FormatException(
+        'Unsupported recommendation category: ${json['category']}.',
+      );
     }
 
-    final id = _readString(json['id']);
-    final title = _readString(json['title']);
-    final reason = _readString(json['reason']);
-    final actionLabel = _readString(json['action_label']);
-    if (id == null || title == null || reason == null || actionLabel == null) {
-      return null;
+    final id = _readRequiredString(json['id'], 'items[].id');
+    final title = _readRequiredString(json['title'], 'items[].title');
+    final reason = _readRequiredString(json['reason'], 'items[].reason');
+    final actionLabel = _readRequiredString(
+      json['action_label'],
+      'items[].action_label',
+    );
+    final confidence = _readRequiredDouble(
+      json['confidence'],
+      'items[].confidence',
+    );
+    if (confidence < 0 || confidence > 1) {
+      throw const FormatException(
+        'Recommendation confidence must be between 0 and 1.',
+      );
     }
 
     return Recommendation(
@@ -78,7 +123,7 @@ class RecommendationApiItem {
       reason: reason,
       actionLabel: actionLabel,
       category: category,
-      confidence: _readDouble(json['confidence']) ?? 0,
+      confidence: confidence,
     );
   }
 
@@ -91,19 +136,47 @@ class RecommendationApiItem {
       _ => null,
     };
   }
+}
 
-  static String? _readString(Object? value) {
-    if (value is! String || value.trim().isEmpty) {
-      return null;
-    }
-    return value;
+String _readRequiredString(Object? value, String field) {
+  if (value is! String || value.trim().isEmpty) {
+    throw FormatException('Recommendation response has an invalid $field.');
   }
+  return value.trim();
+}
 
-  static double? _readDouble(Object? value) {
-    return switch (value) {
-      int() => value.toDouble(),
-      double() => value,
-      _ => null,
-    };
+double _readRequiredDouble(Object? value, String field) {
+  return switch (value) {
+    int() => value.toDouble(),
+    double() => value,
+    _ => throw FormatException(
+        'Recommendation response has an invalid $field.',
+      ),
+  };
+}
+
+DateTime? _readOptionalDateTime(Object? value, String field) {
+  if (value == null) {
+    return null;
   }
+  if (value is! String) {
+    throw FormatException('Recommendation response has an invalid $field.');
+  }
+  final parsed = DateTime.tryParse(value);
+  if (parsed == null) {
+    throw FormatException('Recommendation response has an invalid $field.');
+  }
+  return parsed;
+}
+
+RecommendationFreshness _parseFreshness(Object? value) {
+  return switch (value) {
+    null => RecommendationFreshness.current,
+    'missing' => RecommendationFreshness.missing,
+    'older_than_7_days' => RecommendationFreshness.olderThanSevenDays,
+    'period_mismatch' => RecommendationFreshness.periodMismatch,
+    _ => throw FormatException(
+        'Unsupported recommendation stale_reason: $value.',
+      ),
+  };
 }

@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/capabilities/app_surface_capabilities.dart';
 import '../../../core/navigation/app_routes.dart';
 
-class MainShell extends StatelessWidget {
+class MainShell extends ConsumerWidget {
   const MainShell({
     required this.currentPath,
     required this.child,
@@ -18,20 +20,21 @@ class MainShell extends StatelessWidget {
     AppRoutes.insights,
     AppRoutes.quickAction,
     AppRoutes.alerts,
-    AppRoutes.coach,
+    AppRoutes.settings,
   ];
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final capabilities = ref.watch(appSurfaceCapabilitiesProvider);
     final effectivePath = switch (currentPath) {
-      final path when path.startsWith(AppRoutes.settings) =>
-        AppRoutes.dashboard,
       final path when path.startsWith(AppRoutes.habitCompletion) =>
         AppRoutes.quickAction,
       final path when path.startsWith(AppRoutes.habitManagement) =>
         AppRoutes.quickAction,
+      final path when path.startsWith(AppRoutes.quickMoodCheckIn) =>
+        AppRoutes.quickAction,
       final path when path.startsWith(AppRoutes.dailyCheckIn) =>
-        AppRoutes.alerts,
+        AppRoutes.quickAction,
       final path when path.startsWith(AppRoutes.deepWork) => AppRoutes.alerts,
       _ => currentPath,
     };
@@ -42,7 +45,23 @@ class MainShell extends StatelessWidget {
 
     return Scaffold(
       extendBody: true,
-      body: child,
+      body: capabilities.isLocalDemo
+          ? Column(
+              children: [
+                const SafeArea(
+                  bottom: false,
+                  child: _LocalDemoBanner(),
+                ),
+                Expanded(
+                  child: MediaQuery.removePadding(
+                    context: context,
+                    removeTop: true,
+                    child: child,
+                  ),
+                ),
+              ],
+            )
+          : child,
       floatingActionButton: _QuickActionButton(
         onTap: () => context.go(AppRoutes.quickAction),
       ),
@@ -120,9 +139,9 @@ class _FloatingBottomNav extends StatelessWidget {
                   onTap: () => onDestinationSelected(3),
                 ),
                 _FloatingNavItem(
-                  icon: Icons.smart_toy_outlined,
-                  selectedIcon: Icons.smart_toy,
-                  label: 'Coach',
+                  icon: Icons.settings_outlined,
+                  selectedIcon: Icons.settings,
+                  label: 'Settings',
                   isSelected: selectedIndex == 4,
                   onTap: () => onDestinationSelected(4),
                 ),
@@ -130,6 +149,38 @@ class _FloatingBottomNav extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _LocalDemoBanner extends StatelessWidget {
+  const _LocalDemoBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Container(
+      width: double.infinity,
+      height: 28,
+      color: colors.surfaceContainerHighest,
+      alignment: Alignment.center,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            Icons.cloud_off_outlined,
+            size: 14,
+            color: colors.onSurfaceVariant,
+          ),
+          const SizedBox(width: 6),
+          Text(
+            'Local demo',
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                  color: colors.onSurfaceVariant,
+                ),
+          ),
+        ],
       ),
     );
   }

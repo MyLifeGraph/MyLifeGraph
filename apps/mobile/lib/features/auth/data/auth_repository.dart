@@ -1,27 +1,26 @@
 import 'dart:async';
-import 'dart:convert';
-
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../../../core/config/app_config.dart';
 import '../../../core/supabase/supabase_tables.dart';
+import '../../quick_action/data/guest_quick_check_in_data_source.dart';
+import '../../quick_action/data/quick_check_in_supabase_data_source.dart';
+import 'guest_setup_data_source.dart';
 import '../domain/app_session.dart';
 import '../domain/intake_response.dart';
-import 'intake_api_data_source.dart';
 
 class AuthRepository {
   AuthRepository(
     this._client, {
-    required AppConfig config,
-    required IntakeApiDataSource intakeApiDataSource,
-  })  : _config = config,
-        _intakeApiDataSource = intakeApiDataSource;
+    required bool useMockData,
+    GuestSetupDataSource guestSetupDataSource = const GuestSetupDataSource(),
+  })  : _useMockData = useMockData,
+        _guestSetupDataSource = guestSetupDataSource;
 
   final SupabaseClient _client;
-  final AppConfig _config;
-  final IntakeApiDataSource _intakeApiDataSource;
+  final bool _useMockData;
+  final GuestSetupDataSource _guestSetupDataSource;
 
   Stream<AuthState> get authStateChanges => _client.auth.onAuthStateChange;
 
@@ -30,9 +29,7 @@ class AuthRepository {
   Future<AppSession?> currentSession() async {
     final user = _client.auth.currentUser;
     if (user != null) {
-      final profile = await ensureProfileForAuthUser(user);
-      await _migrateGuestTimetable(profile.id);
-      await _migrateGuestCheckIns(profile.id);
+      final profile = await _resolveAuthenticatedProfile(user);
       _cachedSession = AppSession.authenticated(profile);
       return _cachedSession;
     }
@@ -69,9 +66,7 @@ class AuthRepository {
     if (user == null) {
       throw const AuthException('Login did not return a user session.');
     }
-    final profile = await ensureProfileForAuthUser(user);
-    await _migrateGuestTimetable(profile.id);
-    await _migrateGuestCheckIns(profile.id);
+    final profile = await _resolveAuthenticatedProfile(user);
     await _clearGuestActiveFlag();
     final session = AppSession.authenticated(profile);
     _cachedSession = session;
@@ -95,9 +90,10 @@ class AuthRepository {
       return null;
     }
 
-    final profile = await ensureProfileForAuthUser(user, preferredName: name);
-    await _migrateGuestTimetable(profile.id);
-    await _migrateGuestCheckIns(profile.id);
+    final profile = await _resolveAuthenticatedProfile(
+      user,
+      preferredName: name,
+    );
     await _clearGuestActiveFlag();
     final session = AppSession.authenticated(profile);
     _cachedSession = session;
@@ -127,108 +123,6 @@ class AuthRepository {
     );
     _cachedSession = session;
     return session;
-  }
-
-  Future<AppSession> completeOnboarding({
-    required String? name,
-    required List<TimetableDraft> timetable,
-    required IntakeResponseDraft intake,
-  }) async {
-    final session = _cachedSession ?? await currentSession();
-    if (session == null) {
-      throw StateError('No active session.');
-    }
-
-    if (session.isGuestSession) {
-      return _completeGuestOnboarding(
-        session: session,
-        name: name,
-        timetable: timetable,
-        intake: intake,
-      );
-    }
-
-    if (!_config.useMockData && _config.isSupabaseConfigured) {
-      final accessToken = _client.auth.currentSession?.accessToken;
-      if (accessToken != null && accessToken.trim().isNotEmpty) {
-        try {
-          await _intakeApiDataSource.completeIntake(
-            accessToken: accessToken,
-            intake: intake,
-          );
-          final updated = AppSession.authenticated(
-            session.profile.copyWith(
-              name: name?.trim().isNotEmpty == true ? name!.trim() : null,
-              onboardingDone: true,
-            ),
-          );
-          _cachedSession = updated;
-          return updated;
-        } catch (_) {
-          // Keep onboarding usable when the optional FastAPI boundary is down.
-        }
-      }
-    }
-
-    return _completeAuthenticatedFallback(
-      session: session,
-      name: name,
-      timetable: timetable,
-    );
-  }
-
-  Future<AppSession> _completeGuestOnboarding({
-    required AppSession session,
-    required String? name,
-    required List<TimetableDraft> timetable,
-    required IntakeResponseDraft intake,
-  }) async {
-    final prefs = await SharedPreferences.getInstance();
-    final cleanName = name?.trim();
-    if (cleanName != null && cleanName.isNotEmpty) {
-      await prefs.setString(_Prefs.guestName, cleanName);
-    }
-    await prefs.setBool(_Prefs.guestOnboardingDone, true);
-    await prefs.setString(
-      _Prefs.guestTimetable,
-      jsonEncode(timetable.map((draft) => draft.toJson()).toList()),
-    );
-    await prefs.setString(
-      _Prefs.guestIntakeResponse,
-      jsonEncode(intake.toJson()),
-    );
-    final updated = AppSession.guest(
-      session.profile.copyWith(
-        name: cleanName?.isNotEmpty == true ? cleanName : null,
-        onboardingDone: true,
-      ),
-    );
-    _cachedSession = updated;
-    return updated;
-  }
-
-  Future<AppSession> _completeAuthenticatedFallback({
-    required AppSession session,
-    required String? name,
-    required List<TimetableDraft> timetable,
-  }) async {
-    final now = DateTime.now().toIso8601String();
-    final profile = session.profile;
-    await _safeProfileUpdate(profile.id, {
-      if (name != null && name.trim().isNotEmpty) 'display_name': name.trim(),
-      'onboarding_completed_at': now,
-      'updated_at': now,
-    });
-    await _saveTimetable(profile.id, timetable);
-
-    final updated = AppSession.authenticated(
-      profile.copyWith(
-        name: name?.trim().isNotEmpty == true ? name!.trim() : null,
-        onboardingDone: true,
-      ),
-    );
-    _cachedSession = updated;
-    return updated;
   }
 
   Future<void> signOut() async {
@@ -298,54 +192,47 @@ class AuthRepository {
     );
   }
 
-  Future<void> _safeProfileUpdate(
-    String id,
-    Map<String, dynamic> values,
-  ) async {
-    await _client.from(SupabaseTables.profiles).update(values).eq('id', id);
-  }
-
-  Future<void> _saveTimetable(
-    String userId,
-    List<TimetableDraft> timetable,
-  ) async {
-    if (timetable.isEmpty) {
-      return;
+  Future<AppProfile> _resolveAuthenticatedProfile(
+    User user, {
+    String? preferredName,
+  }) async {
+    final authProvider = user.appMetadata['provider']?.toString() ?? 'email';
+    if (!shouldReadRemoteProfileForAuthIdentity(
+      useMockData: _useMockData,
+      email: user.email,
+      authProvider: authProvider,
+    )) {
+      final localProfile = localDemoProfileFromAuthUser(
+        user,
+        preferredName: preferredName,
+      );
+      try {
+        return await overlayLocalDemoSetup(
+          profile: localProfile,
+          dataSource: _guestSetupDataSource,
+        );
+      } catch (_) {
+        return localProfile;
+      }
     }
-    final now = DateTime.now();
-    final rows = timetable.map((draft) {
-      return {
-        'user_id': userId,
-        'title':
-            draft.title.trim().isEmpty ? 'Study block' : draft.title.trim(),
-        'location':
-            draft.location.trim().isEmpty ? null : draft.location.trim(),
-        'weekday': draft.weekday,
-        'starts_at': draft.startsAt,
-        'ends_at': draft.endsAt,
-        'source': 'onboarding',
-        'updated_at': now.toIso8601String(),
-      };
-    }).toList();
-    await _client.from(SupabaseTables.scheduleItems).insert(rows);
-  }
-
-  Future<void> _migrateGuestTimetable(String userId) async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_Prefs.guestTimetable);
-    if (raw == null || raw.isEmpty) {
-      return;
+    final profile = await ensureProfileForAuthUser(
+      user,
+      preferredName: preferredName,
+    );
+    if (shouldMigrateGuestCheckIns(
+      useMockData: _useMockData,
+      profile: profile,
+    )) {
+      await _migrateGuestCheckIns(profile.id);
+      return profile;
     }
     try {
-      final values = jsonDecode(raw) as List<dynamic>;
-      final drafts = values
-          .whereType<Map<String, dynamic>>()
-          .map(TimetableDraft.fromJson)
-          .toList();
-      await _saveTimetable(userId, drafts);
-      await prefs.remove(_Prefs.guestTimetable);
+      return await overlayLocalDemoSetup(
+        profile: profile,
+        dataSource: _guestSetupDataSource,
+      );
     } catch (_) {
-      return;
+      return profile;
     }
   }
 
@@ -356,62 +243,15 @@ class AuthRepository {
       return;
     }
     try {
-      final values = jsonDecode(raw) as List<dynamic>;
-      for (final value in values.whereType<Map<String, dynamic>>()) {
-        final now =
-            DateTime.tryParse('${value['createdAt']}') ?? DateTime.now();
-        final date = DateTime(now.year, now.month, now.day);
-        final mood = (value['mood'] as num?)?.toInt() ?? 7;
-        final energy = (value['energy'] as num?)?.toInt() ?? 6;
-        final stress = (value['stress'] as num?)?.toInt() ?? 4;
-        final notes = '${value['coachNotes'] ?? ''}'.trim();
-
-        await _client.from(SupabaseTables.dailyLogs).upsert(
-          {
-            'user_id': userId,
-            'entry_date': _dateOnly(date),
-            'sleep_hours': (value['sleepHours'] as num?)?.toDouble() ?? 7,
-            'energy_level': energy,
-            'stress_level': stress,
-            'mood_score': mood,
-            'mood_label': _moodLabel(mood),
-            'reflection': [
-              'Migrated from guest quick check-in.',
-              'Stress rating: $stress/10.',
-              if (notes.isNotEmpty) notes,
-            ].join(' '),
-            'source': 'guest_migration',
-            'updated_at': now.toIso8601String(),
-          },
-          onConflict: 'user_id,entry_date',
-        );
+      final drafts = await GuestQuickCheckInDataSource().readAll();
+      final remote = QuickCheckInSupabaseDataSource(_client);
+      for (final draft in drafts) {
+        await remote.saveForUser(userId: userId, draft: draft);
       }
       await prefs.remove(_Prefs.guestQuickCheckIns);
     } catch (_) {
       return;
     }
-  }
-
-  String _moodLabel(int rating) {
-    if (rating >= 9) {
-      return 'great';
-    }
-    if (rating >= 7) {
-      return 'good';
-    }
-    if (rating >= 5) {
-      return 'neutral';
-    }
-    if (rating >= 3) {
-      return 'low';
-    }
-    return 'very_low';
-  }
-
-  String _dateOnly(DateTime date) {
-    final month = date.month.toString().padLeft(2, '0');
-    final day = date.day.toString().padLeft(2, '0');
-    return '${date.year}-$month-$day';
   }
 
   Future<void> _clearGuestActiveFlag() async {
@@ -420,13 +260,117 @@ class AuthRepository {
   }
 }
 
+bool usesLocalDemoAuthData({
+  required bool useMockData,
+  required AppProfile profile,
+}) {
+  return useMockData ||
+      profile.role == AppRole.guest ||
+      profile.authProvider == 'guest' ||
+      profile.email.toLowerCase() == 'demo@personal-coach.local';
+}
+
+bool usesLocalDemoAuthIdentity({
+  required bool useMockData,
+  required String? email,
+  required String? authProvider,
+}) {
+  return useMockData ||
+      authProvider == 'guest' ||
+      email?.toLowerCase() == 'demo@personal-coach.local';
+}
+
+bool shouldReadRemoteProfileForAuthIdentity({
+  required bool useMockData,
+  required String? email,
+  required String? authProvider,
+}) {
+  return !usesLocalDemoAuthIdentity(
+    useMockData: useMockData,
+    email: email,
+    authProvider: authProvider,
+  );
+}
+
+AppProfile localDemoProfileFromAuthUser(
+  User user, {
+  String? preferredName,
+}) {
+  final email = user.email ?? '';
+  final preferred = preferredName?.trim();
+  final metadataName = user.userMetadata?['display_name']?.toString().trim();
+  final fullName = user.userMetadata?['full_name']?.toString().trim();
+  final fallbackName =
+      email.contains('@') ? email.split('@').first : 'Demo User';
+  final name = preferred?.isNotEmpty == true
+      ? preferred!
+      : metadataName?.isNotEmpty == true
+          ? metadataName!
+          : fullName?.isNotEmpty == true
+              ? fullName!
+              : fallbackName;
+  return AppProfile(
+    id: user.id,
+    email: email,
+    name: name,
+    timezone: 'Europe/Berlin',
+    role: AppRole.user,
+    onboardingDone: false,
+    authProvider: user.appMetadata['provider']?.toString() ?? 'email',
+  );
+}
+
+bool shouldMigrateGuestCheckIns({
+  required bool useMockData,
+  required AppProfile profile,
+}) {
+  return !usesLocalDemoAuthData(
+    useMockData: useMockData,
+    profile: profile,
+  );
+}
+
+Future<AppProfile> overlayLocalDemoSetup({
+  required AppProfile profile,
+  required GuestSetupDataSource dataSource,
+}) async {
+  final preferences = await SharedPreferences.getInstance();
+  final storedName =
+      preferences.getString(GuestSetupDataSource.guestNameKey)?.trim();
+  final storedOnboardingDone =
+      preferences.getBool(GuestSetupDataSource.guestOnboardingDoneKey) ?? false;
+  IntakeSetupReadState? setup;
+  try {
+    setup = await dataSource.read();
+  } catch (_) {
+    return profile.copyWith(
+      name: storedName?.isNotEmpty == true ? storedName : null,
+      onboardingDone: storedOnboardingDone,
+    );
+  }
+  final responses = setup.responses;
+  if (!setup.exists || setup.status != 'applied' || responses == null) {
+    return profile.copyWith(
+      name: storedName?.isNotEmpty == true ? storedName : null,
+      onboardingDone: storedOnboardingDone,
+    );
+  }
+  final displayName = responses.displayName?.trim();
+  return profile.copyWith(
+    name: displayName?.isNotEmpty == true
+        ? displayName
+        : storedName?.isNotEmpty == true
+            ? storedName
+            : null,
+    onboardingDone: true,
+  );
+}
+
 class _Prefs {
   const _Prefs._();
 
   static const guestActive = 'auth_guest_active';
   static const guestName = 'auth_guest_name';
   static const guestOnboardingDone = 'auth_guest_onboarding_done';
-  static const guestTimetable = 'auth_guest_timetable';
-  static const guestIntakeResponse = 'auth_guest_intake_response';
   static const guestQuickCheckIns = 'guest_quick_checkins';
 }

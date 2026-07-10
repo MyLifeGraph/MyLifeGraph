@@ -17,15 +17,24 @@ for (const name of required) {
 const appUrl = process.env.APP_URL.replace(/\/$/, '');
 const aiServiceBaseUrl = process.env.AI_SERVICE_BASE_URL.replace(/\/$/, '');
 const supabaseUrl = process.env.SUPABASE_URL.replace(/\/$/, '');
+const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const headed = process.env.HEADED === 'true';
 const runId = process.env.E2E_RUN_ID ?? `${Date.now()}`;
 const artifactDir = process.env.E2E_ARTIFACT_DIR ?? '.tools/e2e';
 const email = `e2e-${runId}@example.test`;
 const password = `E2e-${runId}-password`;
-const coachPrompt = 'Plan my day based on my current energy and deadlines';
-const habitTitle = `E2E hydration habit ${runId}`;
+const setupGoalTitle = `E2E protect focus ${runId}`;
+const editedSetupGoalTitle = `E2E protect focus deeply ${runId}`;
+const setupRoutineTitle = `E2E lunch walk candidate ${runId}`;
+const setupCommitmentTitle = `E2E project lab ${runId}`;
+const editedSetupCommitmentTitle = `E2E project studio ${runId}`;
+const manualGoalTitle = `E2E manual goal ${runId}`;
+const manualHabitTitle = `E2E manual paused habit ${runId}`;
+const manualScheduleTitle = `E2E manual schedule ${runId}`;
+const legacyExplicitScheduleTitle = `E2E legacy explicit schedule ${runId}`;
 const managedHabitTitle = `E2E managed habit ${runId}`;
+const checkInNote = `E2E exact check-in note ${runId}`;
 
 const browser = await chromium.launch({
   headless: !headed,
@@ -58,39 +67,63 @@ try {
   await fillByLabelOrPlaceholder(page, 'Password', password, 1);
   await clickByText(page, 'Login', { match: 'last' });
 
-  await expectText(page, 'Your profile');
-  await expectText(page, 'Your timetable');
-  await scrollFlutterPage(page, 2600);
-  await fillByLabelOrPlaceholder(page, 'Existing habits', habitTitle, 4);
-  await clickByText(page, 'Skip timetable for now');
+  await expectText(page, 'Required setup');
+  await clickChoiceChip(page, 'Focus');
+  await clickChoiceChip(page, 'Planning');
+  await selectDropdownOption(
+    page,
+    'Typical weekday required',
+    'School or work blocks',
+  );
+  await selectDropdownOption(page, 'Best energy window required', 'Morning');
+  await selectDropdownOption(page, 'Coaching style required', 'Direct');
+  await clickChoiceChip(page, 'No reminders');
+  await clickByText(page, 'Save setup');
 
-  await expectText(page, "Today's wellness score");
+  await page.waitForURL('**/#/dashboard');
+  await expectText(page, 'Latest check-in');
   await waitForRows(
-    `intake_responses?select=id,version,responses,metadata&user_id=eq.${user.id}`,
+    `intake_responses?select=id,request_id,base_revision,revision,state,version,responses,metadata&user_id=eq.${user.id}&order=revision.asc`,
     (rows) =>
-      rows.some(
-        (row) =>
-          row.version === 'intake-v1' &&
-          row.metadata?.source === 'onboarding' &&
-          Array.isArray(row.responses?.primary_focus_areas) &&
-          row.responses.primary_focus_areas.includes('focus') &&
-          Array.isArray(row.responses?.goals) &&
-          row.responses.goals.length > 0,
-      ),
-    'FastAPI intake_responses row from onboarding',
+      rows.length === 1 &&
+      rows[0].version === 'intake-v1' &&
+      rows[0].state === 'applied' &&
+      rows[0].base_revision === 0 &&
+      rows[0].revision === 1 &&
+      typeof rows[0].request_id === 'string' &&
+      rows[0].metadata?.source === 'onboarding' &&
+      arraysEqual(rows[0].responses?.primary_focus_areas, [
+        'focus',
+        'planning',
+      ]) &&
+      arraysEqual(rows[0].responses?.goals, []) &&
+      arraysEqual(rows[0].responses?.friction_points, []) &&
+      arraysEqual(rows[0].responses?.routines, []) &&
+      arraysEqual(rows[0].responses?.fixed_commitments, []) &&
+      !Object.hasOwn(rows[0].responses ?? {}, 'calendar_connection_intent'),
+    'applied revision 1 with exact empty optional setup answers',
   );
   await waitForRows(
     `user_state_snapshots?select=id,scope,period_key,summary,signals,metadata&user_id=eq.${user.id}&scope=eq.onboarding`,
     (rows) =>
-      rows.some(
-        (row) =>
-          row.summary?.coaching_style === 'direct' &&
-          Array.isArray(row.summary?.primary_focus_areas) &&
-          row.summary.primary_focus_areas.includes('planning') &&
-          row.metadata?.source === 'intake-v1',
-      ),
-    'onboarding user_state_snapshots row',
+      rows.length === 1 &&
+      rows[0].period_key === 'setup:intake-v1' &&
+      rows[0].summary?.coaching_style === 'direct' &&
+      arraysEqual(rows[0].summary?.goals, []) &&
+      arraysEqual(rows[0].summary?.friction_points, []) &&
+      rows[0].metadata?.source === 'intake-v1' &&
+      rows[0].metadata?.revision === 1,
+    'constant onboarding setup snapshot after revision 1',
   );
+  await waitForRows(
+    `profiles?select=id,onboarding_completed_at,setup_revision&id=eq.${user.id}`,
+    (rows) =>
+      rows.length === 1 &&
+      rows[0].onboarding_completed_at != null &&
+      rows[0].setup_revision === 1,
+    'profile projection at setup revision 1',
+  );
+  await assertNoSetupOwnedRows(user.id, 'revision 1 empty optionals');
   await waitForRows(
     `recommendations?select=id,title,category,status,metadata&user_id=eq.${user.id}&status=in.(new,accepted)`,
     (rows) =>
@@ -108,26 +141,426 @@ try {
       ),
     'deterministic recommendations generated after intake',
   );
+
+  await page.goto(appRoute('/settings'), { waitUntil: 'domcontentloaded' });
+  await waitForFlutterShell(page);
+  await enableFlutterSemantics(page);
+  await clickByText(page, 'Setup and commitments');
+  await expectText(page, 'Review your setup');
+  await expectText(page, 'School or work blocks');
+  await expectText(page, 'Morning');
+  await expectText(page, 'Direct');
+  await expectText(page, 'No reminders');
+
+  const [legacyDefaultSchedule, legacyExplicitSchedule] = await insertRows(
+    'schedule_items',
+    [
+      {
+        user_id: user.id,
+        title: 'Math',
+        location: 'Room 204',
+        weekday: 1,
+        starts_at: '08:15',
+        ends_at: '09:45',
+        source: 'onboarding',
+        metadata: {},
+      },
+      {
+        user_id: user.id,
+        title: legacyExplicitScheduleTitle,
+        location: 'Room E2E legacy',
+        weekday: 2,
+        starts_at: '10:00',
+        ends_at: '11:00',
+        source: 'onboarding',
+        metadata: {},
+      },
+    ],
+  );
+
+  await toggleSetupSection(page, 'Goals and friction', 'Add goal');
+  await clickByText(page, 'Add goal');
+  await fillByLabelOrPlaceholder(page, 'Goal title', setupGoalTitle, 1);
+  await scrollFlutterPage(page, 700);
+  await toggleSetupSection(page, 'Routines', 'Add routine candidate');
+  await scrollFlutterPage(page, 700);
+  await clickByText(page, 'Add routine candidate');
+  await fillByLabelOrPlaceholder(page, 'Routine name', setupRoutineTitle, 3);
+  await scrollFlutterPage(page, 700);
+  await toggleSetupSection(
+    page,
+    'Fixed commitments',
+    'Add fixed commitment',
+  );
+  await scrollFlutterPage(page, 700);
+  await clickByText(page, 'Add fixed commitment');
+  await fillByLabelOrPlaceholder(page, 'Title', setupCommitmentTitle, 4);
+  await fillByLabelOrPlaceholder(page, 'Location optional', 'Room E2E', 5);
+  await selectDropdownOption(page, 'Weekday', 'Monday');
+  await fillByLabelOrPlaceholder(page, 'Starts (HH:mm)', '14:15', -2);
+  await fillByLabelOrPlaceholder(page, 'Ends (HH:mm)', '15:45', -1);
+  await scrollFlutterPage(page, 1800);
+
+  let lostSavePayload;
+  const intakeCompleteUrl = `${aiServiceBaseUrl}/v1/intake/complete`;
+  const loseAppliedResponse = async (route) => {
+    if (route.request().method() !== 'POST') {
+      await route.continue();
+      return;
+    }
+    lostSavePayload = route.request().postDataJSON();
+    const committedResponse = await route.fetch();
+    if (!committedResponse.ok()) {
+      throw new Error(
+        `Setup response-loss precondition failed: ${committedResponse.status()} ${await committedResponse.text()}`,
+      );
+    }
+    await route.abort('failed');
+  };
+  await page.route(intakeCompleteUrl, loseAppliedResponse);
+  await clickByText(page, 'Save setup');
+  await expectText(page, 'Setup was not saved. Your draft is still here.');
+  await page.unroute(intakeCompleteUrl, loseAppliedResponse);
+  await expectText(page, setupGoalTitle);
+  await expectText(page, setupRoutineTitle);
+  await expectText(page, setupCommitmentTitle);
   await waitForRows(
+    `intake_responses?select=id,request_id,base_revision,revision,state,responses,metadata&user_id=eq.${user.id}&order=revision.asc`,
+    (rows) =>
+      rows.length === 2 &&
+      rows[1].state === 'applied' &&
+      rows[1].base_revision === 1 &&
+      rows[1].revision === 2 &&
+      rows[1].request_id === lostSavePayload?.request_id &&
+      rows[1].responses?.goals?.[0]?.title === setupGoalTitle &&
+      rows[1].responses?.routines?.[0]?.title === setupRoutineTitle &&
+      rows[1].responses?.routines?.[0]?.status === 'candidate' &&
+      rows[1].responses?.routines?.[0]?.cadence_confirmed === false &&
+      !Object.hasOwn(rows[1].responses?.routines?.[0] ?? {}, 'frequency') &&
+      !Object.hasOwn(rows[1].responses?.routines?.[0] ?? {}, 'target') &&
+      rows[1].responses?.fixed_commitments?.[0]?.title ===
+        setupCommitmentTitle,
+    'server-committed revision 2 after lost browser response',
+  );
+
+  const retryResponsePromise = waitForAiPost(
+    page,
+    '/v1/intake/complete',
+    'idempotent setup retry',
+  );
+  await clickByText(page, 'Retry exact setup save');
+  const retryResponse = await retryResponsePromise;
+  const retryPayload = retryResponse.request().postDataJSON();
+  if (
+    retryPayload.request_id !== lostSavePayload?.request_id ||
+    retryPayload.base_revision !== 1
+  ) {
+    throw new Error(
+      `Setup retry changed idempotency identity. First ${JSON.stringify(lostSavePayload)}, retry ${JSON.stringify(retryPayload)}`,
+    );
+  }
+  await page.waitForURL('**/#/settings');
+  await expectText(page, 'Settings');
+
+  const revision2Rows = await fetchRows(
+    `intake_responses?select=id,request_id,base_revision,revision,state,responses,metadata&user_id=eq.${user.id}&order=revision.asc`,
+    'setup revisions after retry',
+  );
+  if (
+    revision2Rows.length !== 2 ||
+    revision2Rows.filter((row) => row.request_id === retryPayload.request_id)
+      .length !== 1
+  ) {
+    throw new Error(
+      `Retry duplicated its intake revision: ${JSON.stringify(revision2Rows)}`,
+    );
+  }
+  const revision2 = revision2Rows.find((row) => row.revision === 2);
+  const goalKey = revision2?.responses?.goals?.[0]?.key;
+  const routineKey = revision2?.responses?.routines?.[0]?.key;
+  const commitmentKey = revision2?.responses?.fixed_commitments?.[0]?.key;
+  if (!goalKey || !routineKey || !commitmentKey) {
+    throw new Error(`Revision 2 lost setup keys: ${JSON.stringify(revision2)}`);
+  }
+  const setupGoalsAtRevision2 = await fetchRows(
+    `goals?select=id,title,status,metadata&user_id=eq.${user.id}`,
+    'setup goal at revision 2',
+  );
+  const setupGoalAtRevision2 = setupGoalsAtRevision2.find(
+    (row) => row.metadata?.managed_by === 'setup',
+  );
+  if (
+    !setupGoalAtRevision2 ||
+    setupGoalAtRevision2.title !== setupGoalTitle ||
+    setupGoalAtRevision2.status !== 'active' ||
+    setupGoalAtRevision2.metadata?.source !== 'intake-v1' ||
+    setupGoalAtRevision2.metadata?.setup_state !== 'active' ||
+    setupGoalAtRevision2.metadata?.setup_item_id !== goalKey ||
+    setupGoalAtRevision2.metadata?.revision !== 2
+  ) {
+    throw new Error(
+      `Unexpected revision 2 setup goal: ${JSON.stringify(setupGoalsAtRevision2)}`,
+    );
+  }
+  const setupSchedulesAtRevision2 = await fetchRows(
+    `schedule_items?select=id,title,location,weekday,starts_at,ends_at,source,metadata&user_id=eq.${user.id}`,
+    'setup commitment at revision 2',
+  );
+  const setupScheduleAtRevision2 = setupSchedulesAtRevision2.find(
+    (row) => row.metadata?.managed_by === 'setup',
+  );
+  if (
+    !setupScheduleAtRevision2 ||
+    setupScheduleAtRevision2.title !== setupCommitmentTitle ||
+    setupScheduleAtRevision2.location !== 'Room E2E' ||
+    setupScheduleAtRevision2.weekday !== 1 ||
+    !String(setupScheduleAtRevision2.starts_at).startsWith('14:15') ||
+    !String(setupScheduleAtRevision2.ends_at).startsWith('15:45') ||
+    setupScheduleAtRevision2.source !== 'onboarding' ||
+    setupScheduleAtRevision2.metadata?.source !== 'intake-v1' ||
+    setupScheduleAtRevision2.metadata?.setup_state !== 'active' ||
+    setupScheduleAtRevision2.metadata?.setup_item_id !== commitmentKey ||
+    setupScheduleAtRevision2.metadata?.revision !== 2
+  ) {
+    throw new Error(
+      `Unexpected revision 2 setup commitment: ${JSON.stringify(setupSchedulesAtRevision2)}`,
+    );
+  }
+  if (
+    setupSchedulesAtRevision2.some(
+      (row) => row.id === legacyDefaultSchedule.id,
+    ) ||
+    !setupSchedulesAtRevision2.some(
+      (row) =>
+        row.id === legacyExplicitSchedule.id &&
+        row.title === legacyExplicitScheduleTitle &&
+        row.source === 'onboarding',
+    )
+  ) {
+    throw new Error(
+      `Legacy default cleanup changed the wrong schedules: ${JSON.stringify(setupSchedulesAtRevision2)}`,
+    );
+  }
+  await assertRows(
+    `habits?select=id,title,active,metadata&user_id=eq.${user.id}`,
+    (rows) => !rows.some((row) => row.metadata?.managed_by === 'setup'),
+    'no habit row for a routine candidate',
+  );
+
+  await clickByText(page, 'Setup and commitments');
+  await expectText(page, 'Review your setup');
+  await expectText(page, setupGoalTitle);
+  await scrollFlutterPage(page, 700);
+  await expectText(page, setupRoutineTitle);
+  await scrollFlutterPage(page, 1400);
+  await expectText(page, setupCommitmentTitle);
+  await scrollFlutterPage(page, -2800);
+  await fillByLabelOrPlaceholder(page, 'Goal title', editedSetupGoalTitle, 1);
+  await scrollFlutterPage(page, 700);
+  await selectDropdownOption(
+    page,
+    'Cadence (required before activation)',
+    'Weekly',
+  );
+  await fillByLabelOrPlaceholder(page, 'Weekly target (1–7)', '3', 4);
+  await selectDropdownOption(page, 'Routine status', 'Active');
+  await scrollFlutterPage(page, 1000);
+  await fillByLabelOrPlaceholder(
+    page,
+    'Title',
+    editedSetupCommitmentTitle,
+    0,
+  );
+  await scrollFlutterPage(page, 1400);
+  await clickByText(page, 'Save setup');
+  await page.waitForURL('**/#/settings');
+  await expectText(page, 'Settings');
+
+  await waitForRows(
+    `intake_responses?select=id,request_id,base_revision,revision,state,responses&user_id=eq.${user.id}&order=revision.asc`,
+    (rows) =>
+      rows.length === 3 &&
+      rows[2].state === 'applied' &&
+      rows[2].base_revision === 2 &&
+      rows[2].revision === 3 &&
+      rows[2].responses?.goals?.[0]?.key === goalKey &&
+      rows[2].responses?.goals?.[0]?.title === editedSetupGoalTitle &&
+      rows[2].responses?.routines?.[0]?.key === routineKey &&
+      rows[2].responses?.routines?.[0]?.status === 'active' &&
+      rows[2].responses?.routines?.[0]?.cadence_confirmed === true &&
+      rows[2].responses?.routines?.[0]?.frequency === 'weekly' &&
+      rows[2].responses?.routines?.[0]?.target === 3 &&
+      rows[2].responses?.fixed_commitments?.[0]?.key === commitmentKey &&
+      rows[2].responses?.fixed_commitments?.[0]?.title ===
+        editedSetupCommitmentTitle,
+    'applied setup revision 3 with stable keys and confirmed routine',
+  );
+  const setupGoalsAtRevision3 = await fetchRows(
+    `goals?select=id,title,status,metadata&user_id=eq.${user.id}`,
+    'setup goal after revision 3 edit',
+  );
+  const setupGoalAtRevision3 = setupGoalsAtRevision3.find(
+    (row) => row.metadata?.managed_by === 'setup',
+  );
+  const setupSchedulesAtRevision3 = await fetchRows(
+    `schedule_items?select=id,title,source,metadata&user_id=eq.${user.id}`,
+    'setup commitment after revision 3 edit',
+  );
+  const setupScheduleAtRevision3 = setupSchedulesAtRevision3.find(
+    (row) => row.metadata?.managed_by === 'setup',
+  );
+  if (
+    setupGoalAtRevision3?.id !== setupGoalAtRevision2.id ||
+    setupGoalAtRevision3?.title !== editedSetupGoalTitle ||
+    setupScheduleAtRevision3?.id !== setupScheduleAtRevision2.id ||
+    setupScheduleAtRevision3?.title !== editedSetupCommitmentTitle
+  ) {
+    throw new Error(
+      `Setup edit replaced stable DB identity. Goals ${JSON.stringify(setupGoalsAtRevision3)}, schedules ${JSON.stringify(setupSchedulesAtRevision3)}`,
+    );
+  }
+  const setupHabitsAtRevision3 = await fetchRows(
+    `habits?select=id,title,frequency,target,active,metadata&user_id=eq.${user.id}`,
+    'active setup habit at revision 3',
+  );
+  const setupHabitAtRevision3 = setupHabitsAtRevision3.find(
+    (row) => row.metadata?.managed_by === 'setup',
+  );
+  if (
+    !setupHabitAtRevision3 ||
+    setupHabitAtRevision3.title !== setupRoutineTitle ||
+    setupHabitAtRevision3.frequency !== 'weekly' ||
+    setupHabitAtRevision3.target !== 3 ||
+    setupHabitAtRevision3.active !== true ||
+    setupHabitAtRevision3.metadata?.setup_item_id !== routineKey ||
+    setupHabitAtRevision3.metadata?.revision !== 3
+  ) {
+    throw new Error(
+      `Unexpected activated setup habit: ${JSON.stringify(setupHabitsAtRevision3)}`,
+    );
+  }
+
+  const [manualGoal] = await insertRows('goals', [
+    {
+      user_id: user.id,
+      title: manualGoalTitle,
+      status: 'active',
+      metadata: { source: 'manual-e2e' },
+    },
+  ]);
+  const [manualHabit] = await insertRows('habits', [
+    {
+      user_id: user.id,
+      title: manualHabitTitle,
+      frequency: 'daily',
+      target: 1,
+      active: false,
+      metadata: { source: 'manual-e2e' },
+    },
+  ]);
+  const [manualSchedule] = await insertRows('schedule_items', [
+    {
+      user_id: user.id,
+      title: manualScheduleTitle,
+      weekday: 5,
+      starts_at: '17:00',
+      ends_at: '18:00',
+      source: 'manual',
+      metadata: { source: 'manual-e2e' },
+    },
+  ]);
+
+  await clickByText(page, 'Setup and commitments');
+  await expectText(page, 'Review your setup');
+  await expectText(page, editedSetupGoalTitle);
+  await scrollFlutterPage(page, 700);
+  await expectText(page, setupRoutineTitle);
+  await scrollFlutterPage(page, 1400);
+  await expectText(page, editedSetupCommitmentTitle);
+  await scrollFlutterPage(page, -2800);
+  await selectDropdownOption(page, 'Goal status', 'Archived');
+  await scrollFlutterPage(page, 700);
+  await selectDropdownOption(page, 'Routine status', 'Archived');
+  await scrollFlutterPage(page, 1200);
+  await selectDropdownOption(page, 'Commitment status', 'Archived');
+  await scrollFlutterPage(page, 1600);
+  await clickByText(page, 'Save setup');
+  await page.waitForURL('**/#/settings');
+  await expectText(page, 'Settings');
+
+  await waitForRows(
+    `intake_responses?select=id,base_revision,revision,state,responses&user_id=eq.${user.id}&order=revision.asc`,
+    (rows) =>
+      rows.length === 4 &&
+      rows[3].state === 'applied' &&
+      rows[3].base_revision === 3 &&
+      rows[3].revision === 4 &&
+      rows[3].responses?.goals?.[0]?.status === 'archived' &&
+      rows[3].responses?.routines?.[0]?.status === 'archived' &&
+      rows[3].responses?.fixed_commitments?.[0]?.status === 'archived',
+    'applied revision 4 archives setup-owned records',
+  );
+  await assertRows(
     `goals?select=id,title,status,metadata&user_id=eq.${user.id}`,
     (rows) =>
       rows.some(
         (row) =>
-          row.status === 'active' && row.metadata?.source === 'intake-v1',
+          row.id === setupGoalAtRevision2.id &&
+          row.status === 'archived' &&
+          row.metadata?.setup_state === 'archived' &&
+          row.metadata?.revision === 4,
+      ) &&
+      rows.some(
+        (row) =>
+          row.id === manualGoal.id &&
+          row.title === manualGoalTitle &&
+          row.status === 'active' &&
+          row.metadata?.source === 'manual-e2e',
       ),
-    'goal row generated from intake',
+    'archived setup goal and preserved manual goal',
   );
-  await waitForRows(
-    `habits?select=id,title,frequency,active,metadata&user_id=eq.${user.id}`,
+  await assertRows(
+    `habits?select=id,title,frequency,target,active,metadata&user_id=eq.${user.id}`,
     (rows) =>
       rows.some(
         (row) =>
-          row.title === habitTitle &&
-          row.frequency === 'daily' &&
-          row.active === true &&
-          row.metadata?.source === 'intake-v1',
-    ),
-    'habit row generated from intake',
+          row.id === setupHabitAtRevision3.id &&
+          row.active === false &&
+          row.metadata?.setup_state === 'archived' &&
+          row.metadata?.revision === 4,
+      ) &&
+      rows.some(
+        (row) =>
+          row.id === manualHabit.id &&
+          row.title === manualHabitTitle &&
+          row.active === false &&
+          row.metadata?.source === 'manual-e2e',
+      ),
+    'archived setup habit and preserved manual habit',
+  );
+  await assertRows(
+    `schedule_items?select=id,title,source,metadata&user_id=eq.${user.id}`,
+    (rows) =>
+      !rows.some((row) => row.id === setupScheduleAtRevision2.id) &&
+      rows.some(
+        (row) =>
+          row.id === legacyExplicitSchedule.id &&
+          row.title === legacyExplicitScheduleTitle &&
+          row.source === 'onboarding',
+      ) &&
+      rows.some(
+        (row) =>
+          row.id === manualSchedule.id &&
+          row.title === manualScheduleTitle &&
+          row.source === 'manual' &&
+          row.metadata?.source === 'manual-e2e',
+      ),
+    'removed setup commitment and preserved manual and explicit legacy schedules',
+  );
+  await waitForRows(
+    `profiles?select=id,setup_revision&id=eq.${user.id}`,
+    (rows) => rows.length === 1 && rows[0].setup_revision === 4,
+    'profile projection at setup revision 4',
   );
 
   await page.goto(appRoute('/quick-action'), { waitUntil: 'domcontentloaded' });
@@ -162,12 +595,49 @@ try {
   await page.goto(appRoute('/daily-check-in'), { waitUntil: 'domcontentloaded' });
   await waitForFlutterShell(page);
   await enableFlutterSemantics(page);
-  await scrollFlutterPage(page, 4200);
-  await clickByText(page, 'Save check-in');
+  await page.waitForURL('**/#/quick-mood-check-in');
+  await clickByRoleName(page, 'button', 'mood 2 of 10');
+  await clickByText(page, 'Next');
+  await clickByRoleName(page, 'button', 'energy 9 of 10');
+  await clickByText(page, 'Next');
+  await clickByRoleName(page, 'button', '5.5 h');
+  await clickByText(page, 'Next');
+  await clickByRoleName(page, 'button', 'stress 8 of 10');
+  await clickByText(page, 'Next');
+  await fillByLabelOrPlaceholder(
+    page,
+    'Context note (optional)',
+    `  ${checkInNote}  `,
+    0,
+  );
+  await clickByText(page, 'Save');
+  await expectText(page, 'Latest check-in');
   await waitForRows(
-    `daily_logs?select=id,source&user_id=eq.${user.id}&source=eq.daily_check_in`,
-    (rows) => rows.length > 0,
-    'daily_check_in daily_logs row',
+    `daily_logs?select=id,source,sleep_hours,energy_level,stress_level,mood_score,mood_label,steps,activity_level,screen_time_hours,focus_minutes,nutrition_notes,day_focus,reflection,metadata&user_id=eq.${user.id}&source=eq.quick_check_in`,
+    (rows) =>
+      rows.some(
+        (row) =>
+          row.sleep_hours === 5.5 &&
+          row.energy_level === 9 &&
+          row.stress_level === 8 &&
+          row.mood_score === 2 &&
+          row.mood_label === 'very_low' &&
+          row.steps === null &&
+          row.activity_level === null &&
+          row.screen_time_hours === null &&
+          row.focus_minutes === null &&
+          row.nutrition_notes === null &&
+          row.day_focus === null &&
+          row.reflection === checkInNote &&
+          row.metadata?.capture_version === 'daily-check-in-v1' &&
+          row.metadata?.context_note === checkInNote,
+      ),
+    'exact quick_check_in daily_logs row',
+  );
+  await waitForRows(
+    `behavioral_events?select=daily_log_id,event_type,value,unit,source,metadata&user_id=eq.${user.id}&source=eq.quick_check_in`,
+    hasExactCheckInEvents,
+    'four exact linked behavioral events from check-in',
   );
   await waitForRows(
     `user_state_snapshots?select=id,scope,period_key,summary,signals,metadata&user_id=eq.${user.id}&scope=eq.daily`,
@@ -176,33 +646,27 @@ try {
         (row) =>
           row.metadata?.source === 'snapshot-aggregator-v1' &&
           row.signals?.input_counts?.daily_logs >= 1 &&
-          row.signals?.input_counts?.behavioral_events >= 7,
+          row.signals?.input_counts?.behavioral_events >= 4,
       ),
     'daily snapshot refreshed after daily check-in',
   );
 
+  // Saving the same day again must replace, not append, its four current signals.
   await page.goto(appRoute('/quick-mood-check-in'), {
     waitUntil: 'domcontentloaded',
   });
   await waitForFlutterShell(page);
   await enableFlutterSemantics(page);
+  await expectText(page, "Today's saved check-in is loaded. Saving updates it.");
   for (let index = 0; index < 4; index += 1) {
     await clickByText(page, 'Next');
   }
-  await fillLastTextbox(page, `E2E quick mood note ${runId}`);
   await clickByText(page, 'Save');
-  await expectText(page, "Today's wellness score");
+  await expectText(page, 'Latest check-in');
   await waitForRows(
-    `user_state_snapshots?select=id,scope,period_key,summary,signals,metadata&user_id=eq.${user.id}&scope=eq.daily`,
-    (rows) =>
-      rows.some(
-        (row) =>
-          row.metadata?.source === 'snapshot-aggregator-v1' &&
-          row.signals?.input_counts?.daily_logs >= 1 &&
-          row.signals?.input_counts?.behavioral_events >= 11 &&
-          row.signals?.input_counts?.memory_entries >= 4,
-      ),
-    'daily snapshot refreshed after quick mood check-in',
+    `behavioral_events?select=daily_log_id,event_type,value,unit,source,metadata&user_id=eq.${user.id}&source=eq.quick_check_in`,
+    hasExactCheckInEvents,
+    'deduplicated behavioral events after same-day save',
   );
 
   const dailySnapshotBeforeHabit = await latestDailySnapshotGeneratedAt(user.id);
@@ -239,7 +703,7 @@ try {
   await page.goto(appRoute('/dashboard'), { waitUntil: 'domcontentloaded' });
   await waitForFlutterShell(page);
   await enableFlutterSemantics(page);
-  await expectText(page, "Today's wellness score");
+  await expectText(page, 'Latest check-in');
   const [manualSnapshotResponse, manualRecommendationResponse] =
     await Promise.all([
       waitForAiPost(page, '/v1/snapshots/generate', 'manual snapshot refresh'),
@@ -267,7 +731,7 @@ try {
     },
     'manual recommendation refresh payload',
   );
-  await expectText(page, 'Recommendations refreshed.');
+  await expectText(page, 'Recommendations checked.');
   await waitForRows(
     `user_state_snapshots?select=id,scope,generated_at,signals,metadata&user_id=eq.${user.id}&scope=eq.daily`,
     (rows) =>
@@ -301,37 +765,42 @@ try {
   await page.goto(appRoute('/alerts'), { waitUntil: 'domcontentloaded' });
   await waitForFlutterShell(page);
   await enableFlutterSemantics(page);
-  await expectText(page, 'Alerts');
+  await expectText(page, 'Notifications');
 
   await page.goto(appRoute('/coach'), { waitUntil: 'domcontentloaded' });
   await waitForFlutterShell(page);
   await enableFlutterSemantics(page);
-  await clickSendButton(page);
-  await waitForRows(
-    `coach_messages?select=id,content&user_id=eq.${user.id}`,
-    (rows) => rows.some((row) => row.content === coachPrompt),
-    'coach_messages row for browser prompt',
-  );
+  await page.waitForURL('**/#/dashboard');
+  await expectText(page, 'Latest check-in');
+
+  await page.goto(appRoute('/deep-work'), { waitUntil: 'domcontentloaded' });
+  await waitForFlutterShell(page);
+  await enableFlutterSemantics(page);
+  await page.waitForURL('**/#/alerts');
+  await expectText(page, 'Notifications');
 
   await assertRows(
-    `daily_logs?select=id,source&user_id=eq.${user.id}`,
-    (rows) => rows.some((row) => row.source === 'quick_check_in'),
-    'daily_logs row updated by quick check-in',
-  );
-
-  await assertRows(
-    `behavioral_events?select=id,source&user_id=eq.${user.id}`,
+    `daily_logs?select=id,source,sleep_hours,energy_level,stress_level,mood_score,reflection&user_id=eq.${user.id}`,
     (rows) =>
-      rows.some((row) => row.source === 'daily_check_in') &&
-      rows.some((row) => row.source === 'quick_check_in'),
-    'behavioral_events rows for daily and quick check-ins',
+      rows.some(
+        (row) =>
+          row.source === 'quick_check_in' &&
+          row.sleep_hours === 5.5 &&
+          row.energy_level === 9 &&
+          row.stress_level === 8 &&
+          row.mood_score === 2 &&
+          row.reflection === checkInNote,
+      ),
+    'daily_logs row with exact check-in values',
   );
 
   await assertRows(
-    `coach_messages?select=id,content&user_id=eq.${user.id}`,
-    (rows) => rows.some((row) => row.content === coachPrompt),
-    'coach_messages row for browser prompt',
+    `behavioral_events?select=daily_log_id,event_type,value,unit,source,metadata&user_id=eq.${user.id}&source=eq.quick_check_in`,
+    hasExactCheckInEvents,
+    'exact deduplicated behavioral events for check-in',
   );
+
+  await assertConcurrentSetupReplay(user.id);
 
   console.log(`E2E browser smoke passed for ${email}`);
 } catch (error) {
@@ -385,6 +854,93 @@ async function createConfirmedUser() {
   return response.json();
 }
 
+async function assertConcurrentSetupReplay(userId) {
+  const revisions = await fetchRows(
+    `intake_responses?select=request_id,revision,state,responses&user_id=eq.${userId}&version=eq.intake-v1&order=revision.asc`,
+    'setup revisions before concurrent replay',
+  );
+  const latest = revisions.at(-1);
+  if (revisions.length !== 4 || latest?.revision !== 4 || latest.state !== 'applied') {
+    throw new Error(
+      `Concurrent replay requires applied revision 4: ${JSON.stringify(revisions)}`,
+    );
+  }
+
+  const tokenResponse = await fetch(
+    `${supabaseUrl}/auth/v1/token?grant_type=password`,
+    {
+      method: 'POST',
+      headers: {
+        apikey: supabaseAnonKey,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ email, password }),
+    },
+  );
+  if (!tokenResponse.ok) {
+    throw new Error(
+      `Could not sign in for concurrent setup replay: ${tokenResponse.status} ${await tokenResponse.text()}`,
+    );
+  }
+  const accessToken = (await tokenResponse.json()).access_token;
+  if (typeof accessToken !== 'string' || accessToken.length === 0) {
+    throw new Error('Concurrent setup replay sign-in returned no access token.');
+  }
+
+  const requestId = crypto.randomUUID();
+  const payload = {
+    version: 'intake-v1',
+    request_id: requestId,
+    base_revision: 4,
+    responses: latest.responses,
+    metadata: { client: 'e2e-concurrency', source: 'setup-review' },
+  };
+  const post = () =>
+    fetch(`${aiServiceBaseUrl}/v1/intake/complete`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+  const concurrentResponses = await Promise.all([post(), post()]);
+  const responseBodies = await Promise.all(
+    concurrentResponses.map(async (response) => ({
+      status: response.status,
+      body: await response.json(),
+    })),
+  );
+  if (
+    responseBodies.some(
+      ({ status, body }) =>
+        status !== 200 ||
+        body.revision !== 5 ||
+        body.request_id !== requestId ||
+        body.status !== 'applied',
+    )
+  ) {
+    throw new Error(
+      `Concurrent setup replay did not converge: ${JSON.stringify(responseBodies)}`,
+    );
+  }
+
+  await waitForRows(
+    `intake_responses?select=request_id,revision,state&user_id=eq.${userId}&version=eq.intake-v1&order=revision.asc`,
+    (rows) =>
+      rows.length === 5 &&
+      rows.filter((row) => row.request_id === requestId).length === 1 &&
+      rows[4].revision === 5 &&
+      rows[4].state === 'applied',
+    'one canonical revision after concurrent same-request workers',
+  );
+  await waitForRows(
+    `profiles?select=id,setup_revision&id=eq.${userId}`,
+    (rows) => rows.length === 1 && rows[0].setup_revision === 5,
+    'profile projection after concurrent same-request workers',
+  );
+}
+
 function appRoute(path) {
   return `${appUrl}/#${path}`;
 }
@@ -427,11 +983,179 @@ async function scrollFlutterPage(page, deltaY) {
   }
 }
 
-async function fillByLabelOrPlaceholder(page, label, value, fallbackIndex) {
+async function clickChoiceChip(page, label) {
+  const labelPattern = new RegExp(escapeRegExp(label), 'i');
   const candidates = [
-    page.getByLabel(label),
-    page.getByPlaceholder(label),
-    page.getByRole('textbox', { name: label }),
+    page.getByRole('button', { name: labelPattern }).first(),
+    page.getByRole('checkbox', { name: labelPattern }).first(),
+    page.getByLabel(labelPattern).first(),
+    page.getByText(label, { exact: true }).first(),
+  ];
+
+  let lastError;
+  for (const candidate of candidates) {
+    try {
+      await candidate.click({ timeout: 5000 });
+      await page.waitForTimeout(200);
+      return;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw new Error(`Could not select choice ${label}: ${lastError}`);
+}
+
+async function toggleSetupSection(page, title, expandedControl) {
+  const titlePattern = new RegExp(`^${escapeRegExp(title)}`, 'i');
+  const candidates = [
+    page.getByRole('button', { name: titlePattern }).first(),
+    page.getByLabel(titlePattern).first(),
+    page.getByText(title, { exact: true }).first(),
+  ];
+
+  let lastError;
+  for (const candidate of candidates) {
+    try {
+      await candidate.click({ timeout: 5000 });
+      await page.waitForTimeout(250);
+      await page.getByText(expandedControl, { exact: true }).first().waitFor({
+        state: 'visible',
+        timeout: 1500,
+      });
+      return;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw new Error(`Could not toggle setup section ${title}: ${lastError}`);
+}
+
+async function selectDropdownOption(page, label, option) {
+  const labelPattern = new RegExp(
+    `^${escapeRegExp(label)}(?:$|\\s)`,
+    'i',
+  );
+  const candidates = [
+    page.getByRole('button', { name: labelPattern }).first(),
+    page.getByLabel(labelPattern).first(),
+  ];
+
+  let opened = false;
+  for (const candidate of candidates) {
+    try {
+      await candidate.click({ timeout: 2500 });
+      opened = true;
+      break;
+    } catch (_) {
+      // Try the next accessible DropdownButton representation.
+    }
+  }
+
+  if (!opened) {
+    const labelNode = page.getByText(label, { exact: true }).first();
+    try {
+      await labelNode.waitFor({ state: 'visible', timeout: 2500 });
+      const followingButton = labelNode.locator(
+        'xpath=following::*[@role="button"][1]',
+      );
+      await followingButton.click({ timeout: 2500 });
+      opened = true;
+    } catch (_) {
+      const box = await labelNode.boundingBox();
+      if (box) {
+        await page.mouse.click(box.x + 24, box.y + box.height + 18);
+        opened = true;
+      }
+    }
+  }
+
+  if (!opened) {
+    throw new Error(`Could not open dropdown: ${label}`);
+  }
+
+  const optionPattern = new RegExp(`^${escapeRegExp(option)}$`, 'i');
+  const optionCandidates = [
+    page.getByRole('menuitem', { name: optionPattern }).last(),
+    page.getByRole('option', { name: optionPattern }).last(),
+    page.getByLabel(optionPattern).last(),
+    page.getByText(option, { exact: true }).last(),
+  ];
+  for (const candidate of optionCandidates) {
+    try {
+      await candidate.click({ timeout: 1000 });
+      await page.waitForTimeout(150);
+      await page.keyboard.press('Escape');
+      return;
+    } catch (_) {
+      // Flutter's open DropdownButton menu may remain canvas-only in semantics.
+    }
+  }
+
+  const options = dropdownOptions(label);
+  const optionIndex = options.indexOf(option);
+  if (optionIndex < 0) {
+    throw new Error(`No keyboard option map for ${label}: ${option}`);
+  }
+  await page.keyboard.press('Home');
+  for (let index = 0; index < optionIndex; index += 1) {
+    await page.keyboard.press('ArrowDown');
+  }
+  await page.keyboard.press('Enter');
+  await page.waitForTimeout(200);
+  await page.keyboard.press('Escape');
+}
+
+function dropdownOptions(label) {
+  const values = {
+    'Typical weekday required': [
+      'Not set',
+      'School or work blocks',
+      'Flexible schedule',
+      'Split day',
+      'Shift based',
+    ],
+    'Best energy window required': [
+      'Not set',
+      'Early morning',
+      'Morning',
+      'Afternoon',
+      'Evening',
+      'It varies',
+    ],
+    'Coaching style required': [
+      'Not set',
+      'Direct',
+      'Gentle',
+      'Analytical',
+      'Accountability',
+    ],
+    Weekday: [
+      'Not set',
+      'Monday',
+      'Tuesday',
+      'Wednesday',
+      'Thursday',
+      'Friday',
+      'Saturday',
+      'Sunday',
+    ],
+    'Cadence (required before activation)': ['Not set', 'Daily', 'Weekly'],
+    'Goal status': ['Active', 'Paused', 'Archived'],
+    'Routine status': ['Candidate', 'Active', 'Paused', 'Archived'],
+    'Commitment status': ['Active', 'Archived'],
+  }[label];
+  return values ?? [];
+}
+
+async function fillByLabelOrPlaceholder(page, label, value, fallbackIndex) {
+  const labelPattern = new RegExp(
+    `^${escapeRegExp(label)}(?:$|\\s)`,
+    'i',
+  );
+  const candidates = [
+    page.getByLabel(labelPattern),
+    page.getByPlaceholder(label, { exact: true }),
+    page.getByRole('textbox', { name: labelPattern }),
   ];
 
   for (const locator of candidates) {
@@ -444,12 +1168,45 @@ async function fillByLabelOrPlaceholder(page, label, value, fallbackIndex) {
   }
 
   const textboxes = page.getByRole('textbox');
-  if ((await textboxes.count()) > fallbackIndex) {
-    await fillLocatorWithValue(page, textboxes.nth(fallbackIndex), value);
+  const textboxCount = await textboxes.count();
+  const resolvedIndex =
+    fallbackIndex < 0 ? textboxCount + fallbackIndex : fallbackIndex;
+  if (resolvedIndex >= 0 && textboxCount > resolvedIndex) {
+    await fillLocatorWithValue(page, textboxes.nth(resolvedIndex), value);
     return;
   }
 
   throw new Error(`Could not fill field: ${label}`);
+}
+
+async function expectFieldValue(page, label, value, fallbackIndex) {
+  const candidates = [
+    page.getByLabel(label),
+    page.getByPlaceholder(label),
+    page.getByRole('textbox', { name: label }),
+  ];
+
+  for (const locator of candidates) {
+    try {
+      await locator.click({ timeout: 1500 });
+      if (await locatorHasValue(page, locator, value)) {
+        return;
+      }
+    } catch (_) {
+      // Try the next accessible representation.
+    }
+  }
+
+  const textboxes = page.getByRole('textbox');
+  if ((await textboxes.count()) > fallbackIndex) {
+    const fallback = textboxes.nth(fallbackIndex);
+    await fallback.click({ timeout: 2500 });
+    if (await locatorHasValue(page, fallback, value)) {
+      return;
+    }
+  }
+
+  throw new Error(`Field ${label} did not retain exact value ${value}`);
 }
 
 async function fillLocatorWithValue(page, locator, value) {
@@ -475,13 +1232,13 @@ async function fillFocusedLocator(page, locator) {
   await page.keyboard.press('Backspace');
 }
 
-async function fillLastTextbox(page, value) {
-  const textboxes = page.getByRole('textbox');
-  const count = await textboxes.count();
-  if (count === 0) {
-    throw new Error('No textbox found');
+async function clickByRoleName(page, role, name) {
+  const locator = page.getByRole(role, { name, exact: true }).first();
+  try {
+    await locator.click({ timeout: 5000 });
+  } catch (_) {
+    await locator.click({ timeout: 2500, force: true });
   }
-  await fillLocatorWithValue(page, textboxes.nth(count - 1), value);
 }
 
 async function locatorHasValue(page, locator, value) {
@@ -540,36 +1297,19 @@ async function clickByText(page, text, options = {}) {
   }
 }
 
-async function clickSendButton(page) {
-  const candidates = [
-    page.getByRole('button', { name: /send coach message/i }),
-    page.getByRole('button', { name: /send/i }),
-    page.locator('[aria-label*="send" i]').first(),
-  ];
-
-  for (const locator of candidates) {
-    try {
-      await locator.click({ timeout: 2500 });
-      return;
-    } catch (_) {
-      try {
-        await locator.click({ timeout: 2500, force: true });
-        return;
-      } catch (_) {
-        // Try next candidate.
-      }
-    }
-  }
-
-  await page.keyboard.press('Tab');
-  await page.keyboard.press('Enter');
-}
-
 async function expectText(page, text) {
-  await page.getByText(text).first().waitFor({
-    state: 'visible',
-    timeout: 15000,
-  });
+  try {
+    await page.getByText(text).first().waitFor({
+      state: 'visible',
+      timeout: 7500,
+    });
+  } catch (_) {
+    // Flutter can merge a card's descendant text into one semantics label.
+    await page.getByLabel(text, { exact: false }).first().waitFor({
+      state: 'visible',
+      timeout: 7500,
+    });
+  }
 }
 
 async function assertRows(path, predicate, description) {
@@ -629,6 +1369,45 @@ function assertJsonPayload(request, expected, description) {
   }
 }
 
+function arraysEqual(actual, expected) {
+  return (
+    Array.isArray(actual) &&
+    JSON.stringify(actual) === JSON.stringify(expected)
+  );
+}
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function hasExactCheckInEvents(rows) {
+  if (
+    rows.length !== 4 ||
+    rows.some((row) => !row.daily_log_id) ||
+    new Set(rows.map((row) => row.daily_log_id)).size !== 1
+  ) {
+    return false;
+  }
+  const actual = rows
+    .map((row) => `${row.event_type}:${Number(row.value)}:${row.unit}`)
+    .sort();
+  const expected = [
+    'energy:9:score_0_10',
+    'mood:2:score_0_10',
+    'sleep:5.5:hours',
+    'stress:8:score_0_10',
+  ].sort();
+  return (
+    JSON.stringify(actual) === JSON.stringify(expected) &&
+    rows.every(
+      (row) =>
+        row.source === 'quick_check_in' &&
+        row.metadata?.capture_version === 'daily-check-in-v1' &&
+        row.metadata?.capture_id,
+    )
+  );
+}
+
 async function activeDeterministicRecommendations(userId) {
   return fetchRows(
     `recommendations?select=id,category,status,metadata&user_id=eq.${userId}&status=in.(new,accepted)`,
@@ -645,6 +1424,61 @@ async function latestDailySnapshotGeneratedAt(userId) {
     return 0;
   }
   return Date.parse(rows[0].generated_at);
+}
+
+async function assertNoSetupOwnedRows(userId, context) {
+  const [goals, habits, scheduleItems] = await Promise.all([
+    fetchRows(
+      `goals?select=id,metadata&user_id=eq.${userId}`,
+      `${context} goals`,
+    ),
+    fetchRows(
+      `habits?select=id,metadata&user_id=eq.${userId}`,
+      `${context} habits`,
+    ),
+    fetchRows(
+      `schedule_items?select=id,source,metadata&user_id=eq.${userId}`,
+      `${context} schedule items`,
+    ),
+  ]);
+  const setupOwned = [
+    ...goals.filter(isSetupOwned),
+    ...habits.filter(isSetupOwned),
+    ...scheduleItems.filter(
+      (row) => isSetupOwned(row) || row.source === 'onboarding',
+    ),
+  ];
+  if (setupOwned.length !== 0) {
+    throw new Error(
+      `${context} unexpectedly materialized setup-owned rows: ${JSON.stringify(setupOwned)}`,
+    );
+  }
+}
+
+function isSetupOwned(row) {
+  return (
+    row.metadata?.managed_by === 'setup' ||
+    row.metadata?.source === 'intake-v1'
+  );
+}
+
+async function insertRows(table, rows) {
+  const response = await fetch(`${supabaseUrl}/rest/v1/${table}`, {
+    method: 'POST',
+    headers: {
+      apikey: serviceRoleKey,
+      Authorization: `Bearer ${serviceRoleKey}`,
+      'Content-Type': 'application/json',
+      Prefer: 'return=representation',
+    },
+    body: JSON.stringify(rows),
+  });
+  if (!response.ok) {
+    throw new Error(
+      `Could not insert ${table} rows: ${response.status} ${await response.text()}`,
+    );
+  }
+  return response.json();
 }
 
 async function fetchRows(path, description) {

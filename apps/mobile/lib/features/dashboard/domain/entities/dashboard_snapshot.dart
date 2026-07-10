@@ -1,64 +1,96 @@
+enum DashboardOrigin { localDemo, account }
+
 class DashboardSnapshot {
   const DashboardSnapshot({
-    required this.optimizationScore,
-    required this.streakDays,
-    required this.focusMinutesToday,
-    required this.recoveryScore,
-    required this.energyTrend,
+    required this.origin,
+    required this.loadedAt,
+    required this.latestCheckIn,
+    required this.checkInStreakDays,
     required this.todayPlan,
     required this.scheduleDays,
   });
 
-  static const empty = DashboardSnapshot(
-    optimizationScore: 0,
-    streakDays: 0,
-    focusMinutesToday: 0,
-    recoveryScore: 0,
-    energyTrend: [],
-    todayPlan: [],
-    scheduleDays: [],
-  );
+  factory DashboardSnapshot.empty({
+    required DashboardOrigin origin,
+    required DateTime loadedAt,
+  }) {
+    return DashboardSnapshot(
+      origin: origin,
+      loadedAt: loadedAt,
+      latestCheckIn: null,
+      checkInStreakDays: 0,
+      todayPlan: const [],
+      scheduleDays: const [],
+    );
+  }
 
-  final int optimizationScore;
-  final int streakDays;
-  final int focusMinutesToday;
-  final int recoveryScore;
-  final List<int> energyTrend;
+  final DashboardOrigin origin;
+  final DateTime loadedAt;
+  final DashboardCheckIn? latestCheckIn;
+  final int checkInStreakDays;
   final List<PlanItem> todayPlan;
   final List<ScheduleDay> scheduleDays;
+}
+
+class DashboardCheckIn {
+  const DashboardCheckIn({
+    required this.entryDate,
+    this.mood,
+    this.energy,
+    this.sleepHours,
+    this.stress,
+    this.focusMinutes,
+    this.steps,
+    this.activityLevel,
+    this.screenTimeHours,
+  });
+
+  final DateTime entryDate;
+  final int? mood;
+  final int? energy;
+  final double? sleepHours;
+  final int? stress;
+  final int? focusMinutes;
+  final int? steps;
+  final int? activityLevel;
+  final double? screenTimeHours;
+
+  bool get hasAnySignal =>
+      mood != null ||
+      energy != null ||
+      sleepHours != null ||
+      stress != null ||
+      focusMinutes != null ||
+      steps != null ||
+      activityLevel != null ||
+      screenTimeHours != null;
 }
 
 class PlanItem {
   const PlanItem({
     required this.id,
     required this.title,
-    required this.time,
-    required this.type,
+    required this.priority,
     required this.isCompleted,
+    this.deadline,
   });
 
   final String id;
   final String title;
-  final String time;
-  final String type;
+  final String priority;
   final bool isCompleted;
+  final DateTime? deadline;
 }
 
 class ScheduleDay {
   const ScheduleDay({
     required this.label,
     required this.dateLabel,
-    required this.energy,
-    required this.movement,
-    required this.activity,
     required this.events,
   });
 
   final String label;
   final String dateLabel;
-  final double energy;
-  final double movement;
-  final int activity;
   final List<ScheduleEvent> events;
 }
 
@@ -70,4 +102,13 @@ class ScheduleEvent {
 
   final String title;
   final String time;
+}
+
+class DashboardUnavailableException implements Exception {
+  const DashboardUnavailableException(this.message);
+
+  final String message;
+
+  @override
+  String toString() => message;
 }

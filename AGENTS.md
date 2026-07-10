@@ -57,7 +57,19 @@ migration
 Intake V1 backend tables and RLS policies. The migration
 `supabase/migrations/20260702195915_unique_user_state_snapshot_period.sql`
 deduplicates `user_state_snapshots` by user/scope/period and adds the unique
-index required for atomic backend upserts.
+index required for atomic backend upserts. The migration
+`supabase/migrations/20260710120000_phase_0c_intake_request_revisions.sql`
+adds the request identity, base/revision, pending/applied state, and uniqueness
+constraints used by retry-safe Setup completion and editing. The migration
+`supabase/migrations/20260710153000_profile_setup_revision_guard.sql` adds and
+backfills `profiles.setup_revision`; FastAPI advances that projection only to a
+newer applied Setup revision so a stale worker cannot overwrite a newer profile
+projection. The migration
+`supabase/migrations/20260710180000_atomic_intake_v1_setup_apply.sql` adds the
+service-role-only `apply_intake_v1_setup_revision` RPC. It serializes Setup apply
+per user with a transaction-scoped advisory lock and atomically reconciles
+preferences, Setup-owned records, the canonical onboarding snapshot, the intake
+state, and the profile projection.
 
 ## Important Docs
 
@@ -92,23 +104,75 @@ AI, onboarding, dashboard, or agent workflow.
 Do not jump straight to broad LLM integration, calendar import, weekly planning,
 vector search, or autonomous background agents. The next product slice should
 build the **Daily Briefing / Daily Decision Loop** foundation before broadening
-infrastructure: capture richer daily signals with a lightweight evening-first
-cadence, especially stress source and controllability; persist those signals in
-existing metadata first; extend deterministic snapshots with stress taxonomy
-summaries and Daily Mode (`push`, `steady`, `recover`, `plan`); then rank a
-small number of next actions for the dashboard. Deployed cron/job execution
-remains useful, but its product purpose is to precompute daily snapshots and
-eventual briefings after the briefing contract is defined. FastAPI-backed
-browser E2E coverage for Intake V1, post-intake recommendations, daily snapshot
+infrastructure, starting with product integrity. Phase 0A, Honest Capture, is
+implemented: `/daily-check-in` redirects to the canonical lightweight flow;
+measurements require explicit selection; a typed draft drives guest and Supabase
+persistence; same-day guest rows and linked behavioral events are deduplicated;
+failed writes retain the draft; guest saves are readable on return; and
+value-level widget/data-source/browser assertions cover distinctive values.
+
+Phase 0B, Source And Surface Truth, is implemented. Explicit guest/demo mode is
+labeled and stays local; authenticated dashboard, notification, and
+recommendation failures no longer become mock content; recommendation feeds
+preserve empty/stale/fresh/error semantics; the dashboard shows direct nullable
+check-in values instead of proxy scores; notification actions use a strict
+internal allowlist; Coach and Deep Work previews are gated; Settings contains
+only durable behavior; and guest users no longer see Supabase-only habit
+actions. `USE_MOCK_DATA=true` deliberately makes product data surfaces local/
+demo even if a Supabase auth session exists; real authenticated sources are used
+only with `USE_MOCK_DATA=false`. Mock/demo auth boot does not read or create a
+remote profile, and it restores locally applied Setup across reloads.
+
+Phase 0C, First-Run And Setup Integrity, is implemented. Setup now uses explicit
+required selections and progressive optional detail; blank optional answers
+create no owned records. Guest and authenticated re-entry load a typed saved
+setup with loading, error, and retry states. Authenticated saves use
+`request_id` plus `base_revision`, converge safely across retries and edits,
+and never fall back to direct partial profile/timetable completion. Named
+routines remain candidates in the intake response until cadence is explicitly
+confirmed. Setup-owned goals, active habits, and fixed commitments have durable
+review/edit/archive, pause, and removal paths without touching manual rows.
+Setup apply is one database transaction behind a service-role-only RPC. Client
+validation and HTTP 4xx failures leave the draft editable, a 409 suggests
+reloading server state, and an ambiguous network/5xx/invalid-response result
+locks the exact submitted draft for unchanged retry or reload. Setup-owned
+habits are edited only through Settings Setup, but active ones remain available
+for daily completion in Habit Completion.
+
+The immediate next slice is Phase 1, Lightweight Evening And Morning Capture.
+Extend the canonical typed capture flow with evening stress source,
+controllability, friction, and gentle-tomorrow intent, then add a very short
+morning calibration for sleep, current energy, and day shape. Do not add Daily
+Mode, briefing persistence, broad Habit V1 cadence, Coach/LLM, calendar import,
+or autonomous workers in that slice.
+
+FastAPI-backed browser E2E coverage for revisioned Setup ownership/retry/edit,
+concurrent same-request convergence, post-intake recommendations, daily snapshot
 refresh, deliberate dashboard recommendation refresh, and Supabase-backed habit
 management now exists.
 
 The implemented post-intake refresh is backend-only and best-effort:
 
-- `POST /v1/intake/complete` derives `user_id` from the verified Supabase
-  bearer token.
-- The intake service writes `intake_responses`, onboarding-owned records, and an
-  onboarding `user_state_snapshots` row.
+- `GET /v1/intake/setup` derives `user_id` from the verified Supabase bearer
+  token and returns the newest `intake-v1` Setup row: the latest pending row for
+  an exact retry/resume, otherwise the latest applied revision.
+- `POST /v1/intake/complete` derives `user_id` from the verified bearer token
+  and acts as both initial completion and revision-checked edit.
+- The intake service writes pending/applied `intake_responses` revisions,
+  then calls the service-role-only atomic Setup apply RPC. The RPC takes a
+  per-user transaction advisory lock; reconciles notification preferences and
+  Setup-owned goals, habits, schedule items, and memories; upserts the canonical
+  `setup:intake-v1` onboarding snapshot; marks the intake applied; and projects
+  `profiles.setup_revision`, completion time, and explicit display name in the
+  same transaction.
+- Applied Setup advances `profiles.setup_revision` monotonically; an older
+  worker or replay cannot project stale profile fields over a newer revision.
+- Retries reuse `request_id`; edits send `base_revision`. Blank optional values
+  materialize nothing, and reconciliation archives/removes only setup-owned
+  records while preserving rows from manual or other sources.
+- One exact legacy placeholder is removed during reconciliation when omitted:
+  unmarked onboarding `Math`, `Room 204`, Monday `08:15`-`09:45`. Other manual
+  or unmarked onboarding rows remain preserved.
 - It then calls the deterministic recommendation engine with no LLM usage.
 - The recommendation engine reads recent `daily_logs`, `behavioral_events`,
   `tasks`, and latest `user_state_snapshots`, verifies candidates, dedupes by
@@ -125,8 +189,8 @@ The implemented post-intake refresh is backend-only and best-effort:
   `X-Scheduled-Refresh-Token`, lists onboarded non-guest profiles, and refreshes
   deterministic daily snapshots without LLM usage. If recommendation refresh is
   explicitly included, LLM wording remains disabled.
-- Supabase-backed Daily Check-In, Quick Mood Check-In, dashboard task status
-  changes, Quick Action habit management writes, and Quick Action habit
+- The canonical Supabase-backed daily check-in, dashboard task status changes,
+  Quick Action habit management writes, and Quick Action habit
   completions now call the daily snapshot refresh best-effort after successful
   writes. Guest/mock paths must remain local and must not call the AI service.
 
@@ -164,7 +228,7 @@ you actually intend to run `supabase db reset`.
 `supabase db reset` must complete through:
 
 ```text
-20260702195915_unique_user_state_snapshot_period.sql
+20260710180000_atomic_intake_v1_setup_apply.sql
 ```
 
 Expected local reset notices include skipped legacy CamelCase tables and
@@ -224,16 +288,15 @@ http://127.0.0.1:7357
 Manual smoke test after schema or Supabase-client changes:
 
 - Register or sign in.
-- Complete onboarding.
-- Save a daily check-in.
-- Save a quick mood check-in.
+- Complete required-only setup, then re-enter it from Settings.
+- Add, edit, and review one setup-owned commitment without changing a manual row.
+- Save the canonical daily check-in through either current route.
 - Open dashboard.
 - Open notifications.
-- Send a coach message.
 
 The browser smoke path is automated through Playwright in `scripts/e2e_web.sh`.
 The widget tests still cover the faster guest auth, guest onboarding, and guest
-quick mood check-in path. See `docs/verification.md` before changing or
+canonical check-in path. See `docs/verification.md` before changing or
 claiming E2E coverage.
 
 ## Verification Commands

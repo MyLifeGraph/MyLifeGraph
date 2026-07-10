@@ -8,20 +8,25 @@ class SnapshotRefreshService {
     required AppConfig config,
     required SnapshotApiDataSource apiDataSource,
     required SnapshotAccessTokenProvider accessTokenProvider,
+    required bool allowRemoteRefresh,
   })  : _config = config,
         _apiDataSource = apiDataSource,
-        _accessTokenProvider = accessTokenProvider;
+        _accessTokenProvider = accessTokenProvider,
+        _allowRemoteRefresh = allowRemoteRefresh;
 
   final AppConfig _config;
   final SnapshotApiDataSource _apiDataSource;
   final SnapshotAccessTokenProvider _accessTokenProvider;
+  final bool _allowRemoteRefresh;
 
   Future<void> refreshDailyAfterTaskChange() => refreshDailyAfterUserSignal();
 
   Future<void> refreshDailyAfterHabitChange() => refreshDailyAfterUserSignal();
 
   Future<void> refreshDailyAfterUserSignal() async {
-    if (_config.useMockData || !_config.isSupabaseConfigured) {
+    if (!_allowRemoteRefresh ||
+        _config.useMockData ||
+        !_config.isSupabaseConfigured) {
       return;
     }
 
