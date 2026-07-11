@@ -115,7 +115,7 @@ class _MorningCalibrationPageState
             ),
           ),
           Text(
-            'This calibration records current state only. It does not assign a Daily Mode or generate recommendations.',
+            'This calibration records current state only. It does not generate recommendations or create or change a plan.',
             style: Theme.of(context).textTheme.bodySmall,
           ),
         ],

@@ -186,6 +186,24 @@ The snapshot endpoint also accepts `"scope":"weekly"` and an optional
 `"target_date":"YYYY-MM-DD"`. It derives the user from the bearer token and
 uses the backend service-role key only inside FastAPI.
 
+Daily and weekly responses add `summary.daily_state` and
+`signals.daily_state` under `explainable-daily-state-v1`. `window_days` remains
+the statistics window; the Daily State parser always loads a separate fixed
+seven-day lookback. Evening is current on the target date or previous date,
+while Morning is current only on the target date. The resulting quality is
+`missing`, `partial`, `current`, or `stale`, and recovery safeguards precede
+`plan`, `push`, and the conservative `steady` fallback.
+
+V2 capture metadata is trusted only after strict identity, enum, numeric,
+timestamp, and projection checks. A malformed V2 row never falls back to its
+projected numeric columns. Numeric legacy fallback is available only when the
+row has no V2 marker. The source remains `snapshot-aggregator-v1`; metadata
+records `daily_state_contract_version=explainable-daily-state-v1` and
+`state_lookback_days=7`. Top-level `summary.risk_flags` aliases the current
+Daily State codes, while the older statistics-window flags remain separately in
+`summary.window_risk_flags`. `recommended_next_focus` is derived recovery-first
+from the mode.
+
 When FastAPI is running and Flutter is in real backend mode, a successful daily
 capture calls the daily snapshot endpoint best-effort with the capture's
 explicit local `target_date`. `/daily-check-in` redirects to the canonical
@@ -193,7 +211,7 @@ Evening Shutdown at `/quick-mood-check-in`; the separate short
 `/morning-calibration` route captures sleep, current energy, and day shape. If
 FastAPI is down, the durable Supabase capture still succeeds and the snapshot
 refresh is skipped by the client. Normal capture does not generate
-recommendations.
+recommendations or create or change a plan. Guest/mock capture remains local.
 
 Evening and Morning writes merge into one `(user_id, entry_date)` `daily_logs`
 row. Phase 1 stores its bounded structured state under
@@ -439,8 +457,13 @@ merge, Evening re-entry/edit, one `daily_logs` row, nested
 `daily-capture-v2` metadata, absent blank optionals, four deduplicated linked
 current events, Morning-over-Evening numeric energy precedence, capture-scoped
 snapshot refresh with `target_date`, and no recommendation-generate request
-during normal capture. It then continues through habit completion, deliberate
-dashboard recommendation refresh, Notifications, and compatibility redirects.
+during normal capture. The same responses and persisted row are checked for
+Phase 2 partial/current quality, recovery-first classification, exact stress/
+sleep/energy/day-shape context, source-risk replacement after an Evening edit,
+stable same-period snapshot identity, field-level evidence, deterministic
+provenance, and capture free-text exclusion. It then continues through habit
+completion, deliberate dashboard recommendation refresh, Notifications, and
+compatibility redirects.
 
 The Phase 0C portion remains part of the same smoke: it verifies revisioned
 Setup ownership and retry/edit behavior, the service-role-only atomic apply RPC,

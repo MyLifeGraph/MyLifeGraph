@@ -17,22 +17,24 @@ way to explore the product today is the Flutter app in mock-data guest mode.
   deterministic recommendation endpoints, and deterministic snapshot refresh.
   Applying Intake V1 triggers a controlled recommendation refresh from the
   constant onboarding snapshot. Daily and weekly user-state snapshots can be
-  refreshed without an LLM provider, the dashboard includes a deliberate
-  deterministic recommendation refresh action, and a backend-only scheduled
-  endpoint can refresh onboarded non-guest profiles for cron-style runs.
+  refreshed without an LLM provider and now include an explainable
+  deterministic Daily State with freshness, quality, risks, reasons, and a
+  recovery-first Daily Mode. The dashboard includes a deliberate deterministic
+  recommendation refresh action, and a backend-only scheduled endpoint can
+  refresh onboarded non-guest profiles for cron-style runs.
 - Insights includes deterministic correlation exploration for sleep, workload,
   stress, energy, mood, screen time, activity, steps, habits, recovery, and
   focus. It computes 7/14/30-day relationships in Flutter from existing
   Supabase rows or local mock time series, without LLM usage.
 - Phase 0A, Honest Capture; Phase 0B, Source And Surface Truth; Phase 0C,
-  First-Run And Setup Integrity; and Phase 1, Lightweight Evening And Morning
-  Capture, are implemented. Evening and Morning are separate typed flows that
-  merge into one same-day row without erasing each other, preserve exact
-  numeric compatibility, and remain local in guest/demo mode. Setup remains
+  First-Run And Setup Integrity; Phase 1, Lightweight Evening And Morning
+  Capture; and Phase 2, Explainable Daily State, are implemented. Evening and
+  Morning merge without erasing each other, remain local in guest/demo mode,
+  and feed a strict backend-only state parser for real accounts. Setup remains
   progressive, revision-safe, reviewable, and atomically materialized through
-  its unchanged service-role-only RPC. Phase 2, Explainable Daily State, is
-  next. See `docs/daily-briefing-implementation-plan.md` for the operating loop
-  and roadmap.
+  its unchanged service-role-only RPC. Phase 3, Executable Action And Habit
+  Contracts, is next. See `docs/daily-briefing-implementation-plan.md` for the
+  operating loop and roadmap.
 - Repository docs and scripts should be treated as the shared team source of
   truth. Do not depend on user-local Codex skills or machine-specific paths.
 
@@ -191,9 +193,18 @@ Supabase is the intended auth and persistence backend. The current app supports:
   `target_date`. Dashboard task status changes plus Quick Action habit creation,
   edits, active-state changes, and completions use the same refresh path after
   successful Supabase updates; guest/mock paths stay local.
+- The additive `summary.daily_state` contract is
+  `explainable-daily-state-v1`. It uses strict V2 parsing, a fixed seven-day
+  state lookback separate from the requested statistics window, explicit
+  `missing`/`partial`/`current`/`stale` quality, and recovery-first
+  `push`/`steady`/`recover`/`plan` classification. It carries bounded evidence
+  and provenance but excludes tomorrow-priority, reflection, and blocker text.
 - Phase 1 does not assign Daily Mode, rank briefing actions, generate
-  recommendations on capture save, or call an LLM. Dashboard capture cards show
-  only direct nullable source values and persisted structured context.
+  recommendations on capture save, or call an LLM. Phase 2 assigns Daily Mode
+  only inside persisted backend snapshots; it still does not rank actions,
+  mutate a plan, generate recommendations, or expose a Today UI. Dashboard
+  capture cards show only direct nullable source values and persisted structured
+  context.
 - `POST /v1/scheduled/daily-refresh` is a backend-only scheduler endpoint
   protected by `X-Scheduled-Refresh-Token`; it must not be called from Flutter.
 

@@ -94,7 +94,18 @@ Phase 1 capture-date boundary. The snapshot repository reads `metadata` from
 `daily_logs` and `behavioral_events`, widens the UTC event query safely, prefers
 the explicit event `metadata.entry_date` for local-day filtering, excludes the
 following local day, and retains a UTC fallback for legacy events without that
-metadata.
+metadata. Phase 2 tests cover every capture taxonomy code; strict V2 identity,
+enum, numeric, timestamp, and projection validation; unknown future metadata;
+legacy-only fallback; separate seven-day state versus requested statistics
+windows; Evening target/previous-day and Morning target-day freshness;
+`missing`, `partial`, `current`, and `stale` quality; all four modes and
+recovery-first conflict precedence; exact field-level evidence; deterministic
+provenance; capture free-text exclusion; and stable daily/weekly same-period
+recomputation. Recommendation tests prove that adding a Phase 2 daily snapshot
+does not change deterministic candidate ranking. Aggregator assertions also
+keep `summary.risk_flags` as the current Daily State alias, preserve older
+window flags under `summary.window_risk_flags`, and derive
+`recommended_next_focus` recovery-first from mode.
 Scheduled refresh tests
 cover the backend-only token guard, onboarded non-guest profile selection,
 per-user failure isolation, deterministic daily snapshot refresh, and optional
@@ -345,6 +356,17 @@ also observed to make no browser request to
 `POST /v1/recommendations/generate` and to leave Setup revisions/profile
 projection plus unrelated task, goal, habit, schedule, memory, notification,
 and recommendation identities unchanged.
+
+The browser also inspects each Phase 2 snapshot response. Evening-only
+private/emotional, hardly-controllable stress must produce partial `recover`
+state with exact source risks. Adding target-day Morning sleep `5.5`, energy
+`4`, and constrained day shape must produce current `recover` state. Editing
+Evening to workload/mostly-controllable must keep the same snapshot id, add
+workload risks, remove stale private/low-control risks, retain recovery because
+of current compound signals, and persist exactly one target-period row. The
+assertions require `explainable-daily-state-v1`, deterministic/no-baseline
+provenance, field-level evidence for the daily log, and absence of both original
+and edited priority text from summary and signals.
 
 After the Phase 1 assertions, the smoke logs the managed habit completion, uses
 the deliberate dashboard recommendation refresh, opens Notifications, and

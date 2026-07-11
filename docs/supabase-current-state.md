@@ -57,7 +57,7 @@ The app table constants live in
 | `recommendations` | Generated recommendations and user statuses; FastAPI can create first deterministic rows after authenticated Intake V1. |
 | `notification_preferences` | User alert preferences. |
 | `intake_responses` | Typed Setup history with request identity, optimistic revision, pending/applied state, and structured lifecycle items. |
-| `user_state_snapshots` | Compact backend-owned user state snapshots and deterministic recommendation input. |
+| `user_state_snapshots` | Compact backend-owned onboarding/daily/weekly state; daily and weekly summaries add the explainable Phase 2 Daily State contract while remaining deterministic recommendation context. |
 
 Phase 1 canonical capture upserts one `daily_logs` row per user/date with source
 `quick_check_in`. `metadata.capture_version=daily-capture-v2` contains separate
@@ -90,6 +90,33 @@ Dashboard reads keep direct nullable numeric values and persisted capture
 presence/context only. Phase 1 does not add Daily Mode, briefing ranking,
 recommendation generation on save, or LLM usage. It also does not change the
 Phase 0C revision tables, profile guard, or atomic Setup RPC.
+
+Phase 2 also requires no migration. FastAPI extends existing daily and weekly
+snapshot JSON additively under `summary.daily_state` and
+`signals.daily_state`, with contract version `explainable-daily-state-v1`.
+`summary.daily_state` contains target date, `push|steady|recover|plan` mode,
+`missing|partial|current|stale` quality, per-kind freshness, bounded structured
+context, current risk/reason codes, readable explanations, load guidance, and
+deterministic provenance. `signals.daily_state` contains generated time,
+provenance rows, field-level risk/reason evidence, and bounded quality-issue
+codes. Capture free text is excluded.
+
+Daily State always uses a fixed seven-day lookback even when the caller requests
+a different statistics window. Evening is current from the target date or
+previous date; Morning is current only from the target date. Strict V2 parsing
+does not fall back to projected columns after a malformed or unsupported V2
+marker. Legacy numeric rows are accepted conservatively only when no V2 marker
+exists. Missing, partial, or stale evidence cannot produce `push`, and recovery
+rules precede planning/productivity rules.
+
+The persisted source marker remains `snapshot-aggregator-v1`. Metadata adds
+`daily_state_contract_version` and `state_lookback_days`; existing
+`window_days` remains the statistics window. Top-level `summary.risk_flags`
+aliases the current Daily State risk codes. The previous window-aggregate flags
+remain additive under `summary.window_risk_flags`, and
+`recommended_next_focus` is derived recovery-first from Daily Mode. The unique
+`(user_id, scope, period_key)` index continues to make recomputation an atomic
+same-row replacement rather than append-only history.
 
 Phase 0B did not require a migration. Flutter now treats missing or failing real
 Dashboard/Notifications/Recommendation sources as empty or error according to
@@ -308,5 +335,6 @@ reuses `intake_responses` and `user_state_snapshots` for authenticated Setup and
 deterministic daily/weekly aggregation without adding broad LLM, calendar, or
 worker infrastructure. Phase 1 changes only typed metadata and client/backend
 mapping over existing `daily_logs` and `behavioral_events`; the Setup RPC and
-schema grants remain unchanged. Phase 2 Explainable Daily State is the next
-consumer of that structured capture data.
+schema grants remain unchanged. Phase 2 consumes that structured capture data
+inside existing snapshot JSON without changing tables, indexes, grants, RLS, or
+the Setup RPC. Phase 3 executable action and habit contracts are next.

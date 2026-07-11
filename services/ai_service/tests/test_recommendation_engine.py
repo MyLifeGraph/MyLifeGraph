@@ -61,6 +61,24 @@ def onboarding_snapshot(**overrides) -> UserStateSnapshotSignal:
     return UserStateSnapshotSignal(**values)
 
 
+def daily_state_snapshot() -> UserStateSnapshotSignal:
+    return UserStateSnapshotSignal(
+        id="daily-state-snapshot",
+        scope="daily",
+        period_key=TODAY.isoformat(),
+        summary={
+            "daily_state": {
+                "contract_version": "explainable-daily-state-v1",
+                "mode": "recover",
+                "data_quality": "current",
+                "risk_flags": ["low_sleep"],
+            },
+        },
+        signals={"daily_state": {"engine": "deterministic"}},
+        generated_at=datetime(2026, 6, 22, 8, tzinfo=timezone.utc),
+    )
+
+
 def test_onboarding_snapshot_creates_initial_recommendations() -> None:
     candidates = RecommendationEngine().generate_candidates(
         summary(user_state_snapshots=[onboarding_snapshot()]),
@@ -74,6 +92,20 @@ def test_onboarding_snapshot_creates_initial_recommendations() -> None:
         for candidate in candidates
         if candidate.rule_id in {"focus_protection", "planning_reset"}
     )
+
+
+def test_daily_state_snapshot_does_not_change_recommendation_ranking() -> None:
+    engine = RecommendationEngine()
+    onboarding_only = engine.generate_candidates(
+        summary(user_state_snapshots=[onboarding_snapshot()]),
+    )
+    with_daily_state = engine.generate_candidates(
+        summary(
+            user_state_snapshots=[daily_state_snapshot(), onboarding_snapshot()],
+        ),
+    )
+
+    assert with_daily_state == onboarding_only
 
 
 def test_low_focus_signal_creates_focus_recommendation() -> None:

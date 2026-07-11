@@ -115,6 +115,16 @@ Already implemented:
     memory entries.
   - Compact summaries with risk flags, next-focus hints, input counts, and
     evidence references.
+  - Additive `summary.daily_state` and `signals.daily_state` under
+    `explainable-daily-state-v1`, with a strict V2-only parser, legacy fallback
+    only when no V2 marker exists, and a fixed seven-day state lookback separate
+    from the statistics window.
+  - Explicit Evening/Morning freshness plus `missing`, `partial`, `current`, and
+    `stale` quality. Evening may be current from the target date or previous
+    date; Morning is current only from the target date.
+  - Recovery-first `push`, `steady`, `recover`, and `plan` classification with
+    bounded risks, reasons, field-level evidence, deterministic provenance, no
+    learned-baseline claim, and no persisted capture free text.
   - Best-effort Flutter daily snapshot refresh after the canonical
     Supabase-backed daily check-in, dashboard task status writes, and Quick
     Action habit management/completion writes.
@@ -140,7 +150,8 @@ Already implemented:
 - Browser E2E starts FastAPI with local Supabase backend settings and verifies
   authenticated required-only Setup, retry/edit/review identity and ownership,
   deterministic post-intake recommendations, backend daily snapshot refresh
-  after check-ins, and core Supabase-backed app writes.
+  after check-ins, exact Phase 2 state recomputation, and core Supabase-backed
+  app writes.
 
 Not yet implemented:
 
@@ -149,8 +160,8 @@ Not yet implemented:
 - Cadence-aware Habit V1 semantics. Current completion progress is a seven-day
   completion count; it does not yet model scheduled opportunities, intentional
   skip, weekly-target streaks, or undo.
-- Explainable Phase 2 snapshot state: capture freshness and quality, structured
-  stress risk flags, and a conservative deterministic Daily Mode.
+- Coherent executable task, habit, focus-session, and bounded planning command
+  contracts that a future briefing can safely target.
 - A production background job queue or worker.
 - Deployed cron wiring for the scheduler-triggered refresh endpoint.
 - Real coach-response backend.
@@ -526,14 +537,15 @@ Use these rules before adding any model provider:
 
 ## Immediate Implementation Plan
 
-The next implementation should build on completed Phase 0 product integrity and
-Phase 1 capture, including retry-safe typed Setup, controlled post-intake
-recommendation refresh, authenticated snapshot aggregation, deliberate
-dashboard refresh, and the FastAPI-backed browser E2E path. The immediate slice
-is **Phase 2: Explainable Daily State**: interpret the now-persisted
-Evening/Morning metadata, freshness, and data quality deterministically before
-ranking briefing actions. Phase 1 itself remains capture-only and contains no
-Daily Mode, ranking, briefing persistence, or LLM call.
+The next implementation should build on completed Phase 0 product integrity,
+Phase 1 capture, and Phase 2 explainable state, including retry-safe typed
+Setup, controlled post-intake recommendation refresh, authenticated snapshot
+aggregation, deliberate dashboard refresh, and the FastAPI-backed browser E2E
+path. The immediate slice is **Phase 3: Executable Action And Habit
+Contracts**: make task, habit, focus-session, and bounded planning targets real,
+durable, and recoverable before a briefing ranks them. Phase 2 remains
+state-only and contains no action ranking, briefing persistence, Today UI, or
+LLM call.
 
 ### Completed Slice 0A: Honest Capture
 
@@ -626,18 +638,32 @@ Daily Mode, ranking, briefing persistence, or LLM call.
   band, stress source/controllability, and day shape. It does not infer Daily
   Mode, ranking, causation, or a learned baseline.
 
-### Next Slice 2: Explainable Daily State
+### Completed Slice 2: Explainable Daily State
 
-- Extend deterministic snapshot aggregation with stress taxonomy, freshness,
-  data quality, and risk summaries.
-- Add a deterministic Daily Mode classifier with `push`, `steady`, `recover`,
-  and `plan`.
-- Recovery/private-emotional/low-control states must reduce load and avoid
-  aggressive productivity recommendations.
-- Insufficient history must produce a conservative intake/current-state result,
-  not a learned-baseline claim.
+- Implemented `summary.daily_state` and `signals.daily_state` under
+  `explainable-daily-state-v1` without schema changes.
+- Implemented a strict V2 parser that validates capture identity, enums,
+  numbers, timestamps, and numeric projections. Legacy numeric rows are read
+  only when no V2 marker exists; malformed V2 never regains trust through
+  projected columns.
+- Implemented a fixed seven-day state lookback independent of the requested
+  statistical window. Evening target-day or previous-day capture and Morning
+  target-day capture form the current-state cadence.
+- Implemented explicit `missing`, `partial`, `current`, and `stale` quality;
+  bounded taxonomy, recovery, capacity, workload, and calibration risks;
+  machine-stable reasons with field-level evidence; and deterministic
+  provenance without capture free text or learned-baseline claims.
+- Implemented recovery-first `push`, `steady`, `recover`, and `plan`
+  classification. Missing, partial, and stale inputs remain conservative, and
+  low-control/private-emotional/physical-recovery safeguards prevent push.
+- Preserved `snapshot-aggregator-v1`, same-period atomic upsert, recommendation
+  ranking, guest/mock locality, best-effort Flutter refresh, and the Phase 0C
+  Setup contract. Metadata records the Daily State contract and lookback;
+  top-level `summary.risk_flags` aliases current Daily State risks,
+  `summary.window_risk_flags` retains window-aggregate flags, and
+  `recommended_next_focus` is derived recovery-first from mode.
 
-### Slice 3: Executable Action And Habit Contracts
+### Next Slice 3: Executable Action And Habit Contracts
 
 - Add reliable action targets for task, habit, focus, and bounded planning
   commands before a briefing ranks them.
@@ -681,8 +707,11 @@ Daily Mode, ranking, briefing persistence, or LLM call.
   `daily` and `weekly` `user_state_snapshots` from recent check-ins,
   behavioral events, tasks, goals, habits, schedule items, and memory entries.
 - Implemented: snapshots stay compact and avoid reading full user history.
-- Implemented: backend tests cover stale/missing-style summary behavior,
-  idempotent period refresh, request `user_id` rejection, and user scoping.
+- Implemented: backend tests cover the strict capture parser, every taxonomy
+  code, malformed/future metadata, current/stale/local-day boundaries, all four
+  modes and precedence conflicts, sensitive-text exclusion, exact evidence,
+  fixed state lookback, idempotent daily/weekly refresh, request `user_id`
+  rejection, and user scoping.
 - Implemented: the canonical Supabase-backed daily check-in triggers daily
   snapshot refresh best-effort after a successful write.
 - Implemented: dashboard task status changes trigger daily snapshot refresh
@@ -705,8 +734,9 @@ Daily Mode, ranking, briefing persistence, or LLM call.
   concurrent same-request convergence, candidate cadence, exact ownership
   metadata and stable ids, preservation of manual rows, onboarding snapshots,
   deterministic post-intake recommendations, backend-refreshed daily snapshots
-  after check-ins, deliberate dashboard recommendation refresh, and core direct
-  app writes.
+  after check-ins, exact Phase 2 partial/current/recovery state and stale-risk
+  removal after edit, deliberate dashboard recommendation refresh, and core
+  direct app writes.
 - Implemented: the guest/mock widget smoke stays fast and separate.
 
 ### Completed Slice: Controlled Snapshot Triggers
@@ -730,11 +760,12 @@ Daily Mode, ranking, briefing persistence, or LLM call.
 ## Out Of Scope For The Next Slice
 
 - The full Daily Briefing service or `daily_briefings` migration.
-- Briefing action ranking, recommendation-ranking redesign, or executable Today
-  actions. Phase 2 may classify only the deterministic explainable Daily Mode.
-- Broad Habit V1 cadence/progress redesign beyond the implemented Setup
-  candidate-versus-confirmed distinction.
-- Briefing persistence before Phase 2 state/freshness rules are proven.
+- Briefing action ranking, recommendation-ranking redesign, or the
+  decision-first Today dashboard. Phase 3 establishes executable targets; it
+  does not choose or editorialize them.
+- Briefing persistence before Phase 3 action contracts are proven.
+- Changing the Phase 2 mode, freshness, evidence, or recommendation behavior as
+  a side effect of action-contract work.
 - Implementing the preview Coach or Deep Work UI merely to keep it visible.
 - OpenAI/OpenRouter/local LLM integration.
 - Real coach assistant replies.

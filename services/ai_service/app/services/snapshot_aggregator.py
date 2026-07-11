@@ -9,6 +9,12 @@ from app.models.snapshots import (
     SnapshotScope,
 )
 from app.repositories.snapshot_repository import SnapshotInputRows, SnapshotRepository
+from app.services.snapshot_daily_state import (
+    DAILY_STATE_CONTRACT_VERSION,
+    DAILY_STATE_LOOKBACK_DAYS,
+    DailyStateResult,
+    build_snapshot_daily_state,
+)
 
 
 class SnapshotAggregator:
@@ -33,25 +39,39 @@ class SnapshotAggregator:
     ) -> SnapshotGenerateResponse:
         target_date = request.target_date or self._today_provider()
         period_key = _period_key(scope=request.scope, target_date=target_date)
-        inputs = await self._repository.load_snapshot_inputs(
+        load_window_days = max(request.window_days, DAILY_STATE_LOOKBACK_DAYS)
+        loaded_inputs = await self._repository.load_snapshot_inputs(
             user_id=user_id,
             target_date=target_date,
-            window_days=request.window_days,
+            window_days=load_window_days,
         )
         inputs = _filter_window(
-            inputs=inputs,
+            inputs=loaded_inputs,
             target_date=target_date,
             window_days=request.window_days,
         )
+        state_inputs = _filter_window(
+            inputs=loaded_inputs,
+            target_date=target_date,
+            window_days=DAILY_STATE_LOOKBACK_DAYS,
+        )
         generated_at = self._now_provider()
+        daily_state = build_snapshot_daily_state(
+            daily_logs=state_inputs.daily_logs,
+            tasks=state_inputs.tasks,
+            goals=state_inputs.goals,
+            target_date=target_date,
+            generated_at=generated_at,
+        )
         summary = _build_summary(
             scope=request.scope,
             period_key=period_key,
             target_date=target_date,
             window_days=request.window_days,
             inputs=inputs,
+            daily_state=daily_state,
         )
-        signals = _build_signals(inputs)
+        signals = _build_signals(inputs, daily_state=daily_state)
         row = await self._repository.persist_user_state_snapshot(
             user_id=user_id,
             scope=request.scope,
@@ -66,7 +86,9 @@ class SnapshotAggregator:
                 "generated_at": generated_at.isoformat(),
                 "metadata": {
                     "source": "snapshot-aggregator-v1",
+                    "daily_state_contract_version": DAILY_STATE_CONTRACT_VERSION,
                     "window_days": request.window_days,
+                    "state_lookback_days": DAILY_STATE_LOOKBACK_DAYS,
                     "target_date": target_date.isoformat(),
                 },
             },
@@ -88,6 +110,7 @@ def _build_summary(
     target_date: date,
     window_days: int,
     inputs: SnapshotInputRows,
+    daily_state: DailyStateResult,
 ) -> dict[str, Any]:
     start_date = target_date - timedelta(days=window_days - 1)
     logs = inputs.daily_logs
@@ -100,7 +123,12 @@ def _build_summary(
     average_stress = _average(_numeric(row.get("stress_level")) for row in logs)
     average_sleep = _average(_numeric(row.get("sleep_hours")) for row in logs)
     average_mood = _average(_numeric(row.get("mood_score")) for row in logs)
-    total_focus = sum(_integer(row.get("focus_minutes")) or 0 for row in logs)
+    focus_values = [
+        value
+        for row in logs
+        if (value := _integer(row.get("focus_minutes"))) is not None
+    ]
+    total_focus = sum(focus_values)
     total_steps = sum(_integer(row.get("steps")) or 0 for row in logs)
     average_activity = _average(
         _numeric(row.get("activity_level")) for row in logs
@@ -140,9 +168,9 @@ def _build_summary(
         average_stress=average_stress,
         average_sleep=average_sleep,
         total_focus=total_focus,
+        focus_is_measured=bool(focus_values),
         overdue_task_count=len(overdue_tasks),
     )
-
     return {
         "scope": scope,
         "period_key": period_key,
@@ -169,7 +197,10 @@ def _build_summary(
         },
         "sleep": {"average_hours": _round_or_none(average_sleep)},
         "mood": {"average_score": _round_or_none(average_mood)},
-        "focus": {"total_minutes": total_focus},
+        "focus": {
+            "total_minutes": total_focus,
+            "measured_days": len(focus_values),
+        },
         "movement": {
             "total_steps": total_steps,
             "average_activity_level": _round_or_none(average_activity),
@@ -190,8 +221,13 @@ def _build_summary(
             "count": len(inputs.memory_entries),
             "top_types": _top_values(inputs.memory_entries, "type", limit=3),
         },
-        "risk_flags": risk_flags,
-        "recommended_next_focus": _next_focus(risk_flags),
+        "risk_flags": list(daily_state.risk_codes),
+        "window_risk_flags": risk_flags,
+        "recommended_next_focus": _next_focus(
+            mode=daily_state.mode,
+            data_quality=str(daily_state.summary["data_quality"]),
+        ),
+        "daily_state": daily_state.summary,
     }
 
 
@@ -221,7 +257,13 @@ def _filter_window(
     )
 
 
-def _build_signals(inputs: SnapshotInputRows) -> dict[str, Any]:
+def _build_signals(
+    inputs: SnapshotInputRows,
+    *,
+    daily_state: DailyStateResult,
+) -> dict[str, Any]:
+    evidence_refs = _evidence_refs(inputs)
+    evidence_refs.extend(_daily_state_evidence_refs(daily_state.signals))
     return {
         "source": "snapshot_aggregator_v1",
         "input_counts": {
@@ -236,7 +278,8 @@ def _build_signals(inputs: SnapshotInputRows) -> dict[str, Any]:
         "event_type_counts": _count_values(inputs.behavioral_events, "event_type"),
         "task_status_counts": _count_values(inputs.tasks, "status"),
         "goal_status_counts": _count_values(inputs.goals, "status"),
-        "evidence_refs": _evidence_refs(inputs),
+        "evidence_refs": _dedupe_evidence_refs(evidence_refs)[:60],
+        "daily_state": daily_state.signals,
     }
 
 
@@ -254,6 +297,7 @@ def _risk_flags(
     average_stress: float | None,
     average_sleep: float | None,
     total_focus: int,
+    focus_is_measured: bool,
     overdue_task_count: int,
 ) -> list[str]:
     flags: list[str] = []
@@ -267,22 +311,68 @@ def _risk_flags(
         flags.append("low_energy")
     if overdue_task_count > 0:
         flags.append("overdue_tasks")
-    if total_focus < 30:
+    if focus_is_measured and total_focus < 30:
         flags.append("low_focus_time")
     return flags
 
 
-def _next_focus(risk_flags: list[str]) -> str:
-    flag_set = set(risk_flags)
-    if "overdue_tasks" in flag_set:
-        return "planning"
-    if flag_set & {"low_sleep", "high_stress", "low_energy"}:
+def _next_focus(*, mode: str, data_quality: str) -> str:
+    if mode == "recover":
         return "recovery"
-    if "low_focus_time" in flag_set:
+    if mode == "plan":
+        return "planning"
+    if mode == "push":
         return "focus"
-    if "no_recent_check_in" in flag_set:
+    if data_quality in {"missing", "stale"}:
         return "consistency"
     return "maintain"
+
+
+def _daily_state_evidence_refs(signals: dict[str, Any]) -> list[dict[str, str]]:
+    refs: list[dict[str, str]] = []
+    provenance = signals.get("provenance")
+    if isinstance(provenance, list):
+        for item in provenance:
+            if not isinstance(item, dict):
+                continue
+            table = item.get("table")
+            row_id = item.get("id")
+            if isinstance(table, str) and isinstance(row_id, str):
+                refs.append({"table": table, "id": row_id})
+    for key in ("risk_evidence", "reason_evidence"):
+        groups = signals.get(key)
+        if not isinstance(groups, dict):
+            continue
+        for values in groups.values():
+            if not isinstance(values, list):
+                continue
+            refs.extend(
+                {
+                    "table": str(item["table"]),
+                    "id": str(item["id"]),
+                    "field": str(item["field"]),
+                }
+                for item in values
+                if isinstance(item, dict)
+                and item.get("table") is not None
+                and item.get("id") is not None
+                and item.get("field") is not None
+            )
+    return refs
+
+
+def _dedupe_evidence_refs(
+    refs: list[dict[str, str]],
+) -> list[dict[str, str]]:
+    seen: set[tuple[tuple[str, str], ...]] = set()
+    result: list[dict[str, str]] = []
+    for ref in refs:
+        key = tuple(sorted(ref.items()))
+        if key in seen:
+            continue
+        seen.add(key)
+        result.append(ref)
+    return result
 
 
 def _evidence_refs(inputs: SnapshotInputRows) -> list[dict[str, str]]:

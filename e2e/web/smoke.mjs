@@ -745,6 +745,26 @@ try {
     'Evening Shutdown row after retry',
   );
   const dailyLogId = eveningOnlyRows[0].id;
+  const eveningDailyState = await assertPhaseTwoDailyStateResponse(
+    eveningRetrySnapshotResponse,
+    {
+      mode: 'recover',
+      dataQuality: 'partial',
+      eveningFreshness: 'current',
+      morningFreshness: 'missing',
+      stressIntensity: 8,
+      stressSource: 'private_emotional',
+      stressControllability: 'hardly_controllable',
+      expectedRisks: [
+        'private_emotional_stress',
+        'low_controllability',
+        'high_stress',
+      ],
+      forbiddenRisks: ['workload_pressure'],
+      evidenceDailyLogId: dailyLogId,
+      forbiddenTexts: [eveningTomorrowPriority],
+    },
+  );
   await waitForRows(
     `behavioral_events?select=id,daily_log_id,event_type,value,unit,source,metadata&daily_log_id=eq.${dailyLogId}&source=eq.quick_check_in`,
     (rows) =>
@@ -765,7 +785,12 @@ try {
   await waitForFlutterShell(page);
   await enableFlutterSemantics(page);
   await clickByRoleName(page, 'button', 'morning sleep 5.5 h');
-  await clickByRoleName(page, 'button', 'morning energy 4 of 10');
+  await clickByRoleNameUntilText(
+    page,
+    'button',
+    'morning energy 4 of 10',
+    '4 / 10',
+  );
   await clickByRoleName(page, 'button', 'day shape constrained');
   const morningSnapshotPromise = waitForAiPost(
     page,
@@ -783,6 +808,35 @@ try {
     },
     'Morning Calibration snapshot refresh payload',
   );
+  const morningDailyState = await assertPhaseTwoDailyStateResponse(
+    morningSnapshotResponse,
+    {
+      mode: 'recover',
+      dataQuality: 'current',
+      eveningFreshness: 'current',
+      morningFreshness: 'current',
+      stressIntensity: 8,
+      stressSource: 'private_emotional',
+      stressControllability: 'hardly_controllable',
+      sleepHours: 5.5,
+      currentEnergy: 4,
+      dayShape: 'constrained',
+      expectedRisks: [
+        'private_emotional_stress',
+        'low_controllability',
+        'low_sleep',
+        'constrained_capacity',
+      ],
+      forbiddenRisks: ['workload_pressure'],
+      evidenceDailyLogId: dailyLogId,
+      forbiddenTexts: [eveningTomorrowPriority],
+    },
+  );
+  if (morningDailyState.snapshotId !== eveningDailyState.snapshotId) {
+    throw new Error(
+      `Morning refresh replaced the daily snapshot identity: ${JSON.stringify({ eveningDailyState, morningDailyState })}`,
+    );
+  }
   await expectText(page, 'Latest check-in');
 
   await waitForRows(
@@ -872,6 +926,41 @@ try {
     },
     'Evening edit snapshot refresh payload',
   );
+  const editedDailyState = await assertPhaseTwoDailyStateResponse(
+    eveningEditSnapshotResponse,
+    {
+      mode: 'recover',
+      dataQuality: 'current',
+      eveningFreshness: 'current',
+      morningFreshness: 'current',
+      stressIntensity: 8,
+      stressSource: 'workload',
+      stressControllability: 'mostly_controllable',
+      sleepHours: 5.5,
+      currentEnergy: 4,
+      dayShape: 'constrained',
+      expectedRisks: [
+        'workload_pressure',
+        'high_stress',
+        'low_sleep',
+        'constrained_capacity',
+      ],
+      forbiddenRisks: [
+        'private_emotional_stress',
+        'low_controllability',
+      ],
+      evidenceDailyLogId: dailyLogId,
+      forbiddenTexts: [
+        eveningTomorrowPriority,
+        editedEveningTomorrowPriority,
+      ],
+    },
+  );
+  if (editedDailyState.snapshotId !== eveningDailyState.snapshotId) {
+    throw new Error(
+      `Evening edit replaced the daily snapshot identity: ${JSON.stringify({ eveningDailyState, editedDailyState })}`,
+    );
+  }
   await expectText(page, 'Latest check-in');
   await expectText(page, 'Morning energy');
   await expectText(page, '4/10');
@@ -957,6 +1046,25 @@ try {
     (rows) =>
       rows.length === 1 &&
       rows[0].metadata?.source === 'snapshot-aggregator-v1' &&
+      rows[0].metadata?.daily_state_contract_version ===
+        'explainable-daily-state-v1' &&
+      rows[0].summary?.daily_state?.mode === 'recover' &&
+      rows[0].summary?.daily_state?.data_quality === 'current' &&
+      rows[0].summary?.daily_state?.context?.stress?.source === 'workload' &&
+      rows[0].summary?.daily_state?.context?.stress?.controllability ===
+        'mostly_controllable' &&
+      rows[0].summary?.daily_state?.context?.sleep_hours === 5.5 &&
+      rows[0].summary?.daily_state?.context?.current_energy === 4 &&
+      rows[0].summary?.daily_state?.context?.day_shape === 'constrained' &&
+      rows[0].summary?.daily_state?.risk_flags?.includes('low_sleep') &&
+      rows[0].summary?.daily_state?.risk_flags?.includes(
+        'workload_pressure',
+      ) &&
+      !rows[0].summary?.daily_state?.risk_flags?.includes(
+        'private_emotional_stress',
+      ) &&
+      !JSON.stringify(rows[0]).includes(eveningTomorrowPriority) &&
+      !JSON.stringify(rows[0]).includes(editedEveningTomorrowPriority) &&
       rows[0].signals?.input_counts?.daily_logs >= 1 &&
       rows[0].signals?.input_counts?.behavioral_events >= 4,
     'one daily snapshot refreshed from merged Phase 1 capture',
@@ -1544,6 +1652,20 @@ async function clickByRoleName(page, role, name) {
   }
 }
 
+async function clickByRoleNameUntilText(page, role, name, expectedText) {
+  let lastError;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    await clickByRoleName(page, role, name);
+    try {
+      await expectText(page, expectedText);
+      return;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError;
+}
+
 async function locatorHasValue(page, locator, value) {
   try {
     return (await locator.inputValue({ timeout: 500 })) === value;
@@ -1656,6 +1778,91 @@ async function waitForAiPost(page, path, description) {
   }
 
   return response;
+}
+
+async function assertPhaseTwoDailyStateResponse(response, expected) {
+  const payload = await response.json();
+  const state = payload?.summary?.daily_state;
+  const stateSignals = payload?.signals?.daily_state;
+  if (!state || !stateSignals) {
+    throw new Error(
+      `Snapshot response has no Phase 2 daily state: ${JSON.stringify(payload)}`,
+    );
+  }
+  const exactValues = {
+    mode: state.mode,
+    dataQuality: state.data_quality,
+    eveningFreshness: state.freshness?.evening?.state,
+    morningFreshness: state.freshness?.morning?.state,
+    stressIntensity: state.context?.stress?.intensity,
+    stressSource: state.context?.stress?.source,
+    stressControllability: state.context?.stress?.controllability,
+    sleepHours: state.context?.sleep_hours,
+    currentEnergy: state.context?.current_energy,
+    dayShape: state.context?.day_shape,
+  };
+  for (const [key, expectedValue] of Object.entries(expected)) {
+    if (
+      key in exactValues &&
+      expectedValue !== undefined &&
+      exactValues[key] !== expectedValue
+    ) {
+      throw new Error(
+        `Unexpected Phase 2 ${key}. Expected ${JSON.stringify(expectedValue)}, got ${JSON.stringify(exactValues[key])}. State: ${JSON.stringify(state)}`,
+      );
+    }
+  }
+  const riskCodes = new Set(state.risk_flags ?? []);
+  for (const code of expected.expectedRisks ?? []) {
+    if (!riskCodes.has(code)) {
+      throw new Error(
+        `Missing Phase 2 risk ${code}: ${JSON.stringify(state)}`,
+      );
+    }
+  }
+  for (const code of expected.forbiddenRisks ?? []) {
+    if (riskCodes.has(code)) {
+      throw new Error(
+        `Stale Phase 2 risk ${code} survived recomputation: ${JSON.stringify(state)}`,
+      );
+    }
+  }
+  if (
+    state.contract_version !== 'explainable-daily-state-v1' ||
+    stateSignals.contract_version !== 'explainable-daily-state-v1' ||
+    state.provenance?.kind !== 'deterministic' ||
+    state.provenance?.baseline !== 'none'
+  ) {
+    throw new Error(
+      `Unexpected Phase 2 provenance: ${JSON.stringify({ state, stateSignals })}`,
+    );
+  }
+  const evidenceRows = [
+    ...Object.values(stateSignals.risk_evidence ?? {}).flat(),
+    ...Object.values(stateSignals.reason_evidence ?? {}).flat(),
+  ];
+  if (
+    expected.evidenceDailyLogId &&
+    !evidenceRows.some(
+      (ref) =>
+        ref?.table === 'daily_logs' &&
+        ref?.id === expected.evidenceDailyLogId &&
+        typeof ref?.field === 'string',
+    )
+  ) {
+    throw new Error(
+      `Phase 2 evidence does not reference daily log ${expected.evidenceDailyLogId}: ${JSON.stringify(stateSignals)}`,
+    );
+  }
+  const serialized = JSON.stringify({ state, stateSignals });
+  for (const text of expected.forbiddenTexts ?? []) {
+    if (text && serialized.includes(text)) {
+      throw new Error(
+        `Sensitive capture text leaked into Phase 2 state: ${JSON.stringify(text)}`,
+      );
+    }
+  }
+  return { snapshotId: payload.snapshot_id, state, stateSignals };
 }
 
 function assertJsonPayload(request, expected, description) {

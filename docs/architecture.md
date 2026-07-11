@@ -100,7 +100,7 @@ The current capture contract is:
   omitted from metadata when blank or false.
 - Morning requires sleep hours, current energy, and `normal`, `constrained`, or
   `flexible` day shape. It does not repeat Evening questions and explicitly
-  states that it does not assign Daily Mode or generate recommendations.
+  states that it does not generate recommendations or create or change a plan.
 - Same-day merge replaces only the submitted `metadata.captures.evening` or
   `.morning` object, preserving the other capture and unrelated metadata.
   Numeric compatibility projects mood and stress from Evening, sleep from
@@ -264,6 +264,18 @@ Current responsibilities:
 - Create or refresh compact `daily` and `weekly` `user_state_snapshots` from
   recent `daily_logs`, `behavioral_events`, `tasks`, `goals`, `habits`,
   `schedule_items`, and `memory_entries` without reading full history.
+- Add `summary.daily_state` and `signals.daily_state` under the
+  `explainable-daily-state-v1` contract. The parser trusts V2 capture metadata
+  only after strict identity, type, enum, numeric, timestamp, and projection
+  checks. Legacy numeric fallback applies only when no V2 marker exists.
+- Compute Daily State from a fixed seven-day lookback independent of the
+  requested statistics window. Evening on the target date or previous date is
+  current; Morning is current only on the target date. Quality is explicit as
+  `missing`, `partial`, `current`, or `stale`.
+- Classify `push`, `steady`, `recover`, or `plan` with recovery safeguards before
+  planning or push rules. Persist machine-stable risks/reasons, field-level
+  evidence, deterministic provenance, and no learned-baseline claim. Capture
+  free text is excluded from summary, signals, and snapshot metadata.
 - Load capture metadata with daily rows and events. Event queries use a broadened
   UTC read window, then prefer the explicit local `metadata.entry_date` during
   in-memory filtering and fall back to `occurred_at` for legacy events.
@@ -300,7 +312,12 @@ Snapshot refresh is a deliberate authenticated backend action through
 scope and an optional target date, but the backend always derives `user_id` from
 the verified bearer token. If a snapshot already exists for the same
 `user_id`, `scope`, and `period_key`, the backend updates it instead of
-inserting another row.
+inserting another row. The existing `snapshot-aggregator-v1` source marker stays
+stable; metadata records `daily_state_contract_version` and the fixed state
+lookback separately from `window_days`. Top-level `summary.risk_flags` aliases
+the current Daily State codes; the older statistics-window flags remain under
+`summary.window_risk_flags`. `recommended_next_focus` is derived recovery-first
+from Daily Mode rather than letting overdue work override recovery.
 
 Flutter triggers the `daily` snapshot refresh best-effort after successful
 Supabase-backed Evening or Morning capture, dashboard task status, and Quick
@@ -358,10 +375,11 @@ making claims about deployed data.
 - Notifications are currently a read-only inbox. Original `type`, `priority`,
   read state, and supported `action_url` are shown; there is no mark-read command
   until the repository has a durable write contract.
-- Phase 1 capture is complete, but snapshots do not yet interpret its stress
-  taxonomy, freshness, or day shape into an explainable data-quality state and
-  deterministic Daily Mode. That is the Phase 2 boundary; capture itself does
-  not rank actions, generate a briefing, or call an LLM.
+- Phase 2 snapshot interpretation is complete, but the product still lacks the
+  Phase 3 executable task, habit, focus-session, and bounded planning contracts
+  that a future briefing can safely target. Daily Mode remains backend snapshot
+  state; the current Dashboard does not rank actions, generate a briefing, or
+  call an LLM.
 - The remote Production project may still contain legacy CamelCase tables until
   the canonical schema migration has been applied and verified.
 - The repository does not contain real Supabase credentials.

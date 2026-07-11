@@ -82,6 +82,14 @@ synced habits, and snapshot refresh behavior. Mock/demo auth boot skips remote
 profile access and overlays the locally applied Setup name/completion state, so
 local Setup survives a browser reload.
 
+For authenticated real accounts, successful Evening/Morning writes refresh the
+backend Daily State best-effort. That snapshot may classify a deterministic
+Daily Mode, but the current Flutter surface does not display a Today plan or
+generate recommendations. Morning Calibration therefore describes only what it
+does locally: it records current state and does not generate recommendations or
+create or change a plan. Guest/mock capture remains local and makes no snapshot
+request.
+
 ## Auth Modes
 
 - Guest mode works without Supabase and stores session plus typed, revisioned
@@ -144,8 +152,9 @@ states; route capability gates; durable Settings Setup entry; and strict
 notification action routing. Browser E2E additionally covers authenticated
 Setup revisions,
 identity/ownership-safe reconciliation, exact Phase 1 capture metadata and
-deduplicated linked signals, authenticated target-date refreshes, and
-compatibility redirects.
+deduplicated linked signals, authenticated target-date refreshes, exact Phase 2
+Daily State response/persistence and same-period recomputation, and compatibility
+redirects.
 
 Browser E2E lives at the repository root:
 

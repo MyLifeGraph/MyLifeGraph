@@ -127,7 +127,18 @@ same contract while reading legacy V1 entries, authenticated capture refreshes
 the explicit local snapshot date, and Dashboard mapping remains direct and
 nullable. Phase 1 deliberately does not assign Daily Mode, rank actions,
 persist a briefing, generate recommendations on save, or call an LLM. The next
-gap is Phase 2's explainable deterministic daily state.
+gap was Phase 2's explainable deterministic daily state.
+
+Phase 2 now interprets that context inside backend-owned snapshots. Its
+additive `explainable-daily-state-v1` contract uses strict V2 parsing, a fixed
+seven-day state lookback independent of the statistics window, cadence-aware
+Evening/Morning freshness, explicit `missing`/`partial`/`current`/`stale`
+quality, and recovery-first `push`/`steady`/`recover`/`plan` classification.
+Risks and reasons carry field-level evidence and deterministic provenance;
+capture free text and learned-baseline claims stay out. It does not rank an
+action, persist a briefing, change the Dashboard into Today, or call an LLM.
+The next gap is Phase 3's executable task, habit, focus, and bounded planning
+contracts.
 
 ### Current Surface Disposition
 
@@ -136,7 +147,7 @@ gap is Phase 2's explainable deterministic daily state.
 | Auth and guest entry | Yes | Local demo is labeled; mock/demo auth skips remote profile/data bootstrap and reloads local Setup, while canonical guest check-ins migrate best-effort only into a real non-demo account |
 | Onboarding / Setup | Yes, Phase 0C complete | Progressive explicit input, typed prefill, atomic revision-safe save, differentiated retry/reload, and durable review are implemented |
 | Dashboard | Yes | Direct source values are honest; evolve the sections into the decision-first Today surface after action contracts exist |
-| Canonical daily capture | Yes, Phase 1 complete | Evening and Morning are separate typed flows over one ownership-merged daily entry; next interpret freshness and stress context in Phase 2 snapshots |
+| Canonical daily capture | Yes, Phase 1 complete | Evening and Morning are separate typed flows over one ownership-merged daily entry; Phase 2 now interprets their freshness and stress context only inside backend snapshots |
 | Legacy large Daily Check-In | Retired | `/daily-check-in` redirects to the canonical lightweight flow; do not recreate a competing form |
 | Habit management/completion | Yes, authenticated only | Setup-owned habits are edited in Settings Setup and completed in Habit Completion; next correct cadence/progress, add skip/undo, and bring execution into Today |
 | Insights correlations | Yes, as advanced exploration | Default to cautious actionable insight with evidence and confidence |
@@ -169,8 +180,8 @@ This section is the product acceptance path. New work should be evaluated by
 walking through it from the user's perspective, not only by verifying tables or
 endpoints. It spans later phases and is not a claim that every listed output is
 implemented today. Phase 1 ends at truthful Evening/Morning persistence and
-snapshot refresh; Daily Mode begins in Phase 2, while ranked actions and
-provisional/final briefings remain later phases.
+snapshot refresh; Phase 2 adds backend snapshot Daily Mode, while ranked
+actions and provisional/final briefings remain later phases.
 
 ### First Open
 
@@ -362,8 +373,9 @@ Optional fields:
 Current Phase 1 output:
 
 - Persisted current-state context and the user's explicit likely priority.
-- No provisional plan or Daily Mode is generated yet. A rough next-day preview
-  becomes valid only after Phase 2 state and the later briefing service exist.
+- No provisional plan is generated. For authenticated real accounts, Phase 2
+  now classifies an explainable backend Daily State best-effort after the
+  write; the capture surface does not present that state as a briefing.
 
 ### Morning Calibration
 
@@ -385,9 +397,13 @@ Required fields:
 - Current energy.
 - Day shape: normal, constrained, or flexible.
 
-Target output after Phase 2 and briefing work:
+Current Phase 2 output for authenticated real accounts:
 
-- Final daily mode.
+- Refreshed explainable backend Daily State and Daily Mode, best-effort.
+- No ranked top action, capacity estimate, or plan mutation.
+
+Target output after later briefing work:
+
 - Ranked top action.
 - Adjusted capacity estimate.
 
@@ -743,8 +759,9 @@ The implemented Evening Shutdown quick action supports:
   false optionals are omitted rather than replaced with fallback content.
 - Prefill and same-kind replacement without erasing a saved Morning
   Calibration.
-- A current-state explanation that does not claim a learned baseline, Daily
-  Mode, ranked plan, diagnosis, or causation.
+- Capture copy that does not claim a learned baseline, ranked plan, diagnosis,
+  or causation. An authenticated real save may refresh the separate Phase 2
+  backend Daily State best-effort.
 
 Reasoning:
 
@@ -759,15 +776,16 @@ The implemented short Morning Calibration surface supports:
 
 - Required sleep hours in half-hour steps, current energy, and day shape.
 - Prefill and same-kind replacement without erasing saved Evening context.
-- Honest current-state copy stating that capture does not assign Daily Mode or
-  generate recommendations.
+- Honest current-state copy stating that capture does not generate
+  recommendations or create or change a plan. Authenticated real saves may
+  refresh the separate backend Daily State; guest/mock saves remain local.
 
 Reasoning:
 
 - Morning readiness can invalidate the evening plan.
 - The user should never need to re-plan the whole day from scratch.
-- Final Daily Mode and top-action selection begin only after Phase 2 state and
-  later briefing ranking are implemented.
+- Daily Mode now exists in Phase 2 backend snapshots; top-action selection
+  begins only after executable Phase 3 targets and later briefing ranking exist.
 
 ### Dashboard Repositioning
 
@@ -883,6 +901,66 @@ Reasoning:
   invented values.
 - Events are a dynamic maximum of four deterministic current-state rows, not an
   append-only history of repeated same-day retries.
+
+Phase 2 also reuses the existing `user_state_snapshots` JSONB columns. Its
+abbreviated persisted shape is:
+
+```json
+{
+  "summary": {
+    "daily_state": {
+      "contract_version": "explainable-daily-state-v1",
+      "target_date": "2026-07-11",
+      "mode": "recover",
+      "data_quality": "current",
+      "freshness": {
+        "evening": {"state": "current", "age_days": 1},
+        "morning": {"state": "current", "age_days": 0}
+      },
+      "risk_flags": ["private_emotional_stress", "low_sleep"],
+      "reason_codes": ["recover_private_emotional_stress"],
+      "provenance": {
+        "kind": "deterministic",
+        "basis": "explicit_capture",
+        "baseline": "none"
+      }
+    },
+    "risk_flags": ["private_emotional_stress", "low_sleep"],
+    "window_risk_flags": []
+  },
+  "signals": {
+    "daily_state": {
+      "contract_version": "explainable-daily-state-v1",
+      "risk_evidence": {
+        "private_emotional_stress": [{
+          "table": "daily_logs",
+          "id": "daily-log-id",
+          "field": "metadata.captures.evening.stress_source"
+        }]
+      },
+      "reason_evidence": {
+        "recover_private_emotional_stress": [{
+          "table": "daily_logs",
+          "id": "daily-log-id",
+          "field": "metadata.captures.evening.stress_source"
+        }]
+      },
+      "quality_issues": []
+    }
+  },
+  "metadata": {
+    "source": "snapshot-aggregator-v1",
+    "daily_state_contract_version": "explainable-daily-state-v1",
+    "state_lookback_days": 7,
+    "window_days": 7
+  }
+}
+```
+
+The state lookback stays fixed at seven days even when `window_days` changes.
+Top-level `summary.risk_flags` is a compatibility alias for current Daily State
+risks; statistics-window risks remain separate in `summary.window_risk_flags`.
+No capture free text appears in this snapshot contract.
 
 Add dedicated columns later only if the fields become stable and heavily
 queried:
@@ -1000,22 +1078,35 @@ Evaluation:
 - Can the user skip optional detail without invented fallback values?
 - Are guest/mock and Supabase-backed writes covered?
 
-### Phase 2: Explainable Daily State (Next)
+### Phase 2: Explainable Daily State (Complete)
 
 Goal:
 
 - Make snapshots represent current state and explain a conservative Daily Mode.
 
-Work:
+Implemented:
 
-- Extend snapshot aggregation with stress taxonomy summaries and capture
-  freshness.
-- Add risk flags for private/emotional stress, avoidable pressure, low-control
-  stress, overload, and recovery risk.
-- Add deterministic `push`, `steady`, `recover`, and `plan` classification.
-- Add data-quality state so missing history produces a conservative result rather
-  than a confident score.
-- Make recovery and low-control stress override aggressive productivity output.
+- Added `summary.daily_state` and `signals.daily_state` under
+  `explainable-daily-state-v1` without changing schema or capture ownership.
+- Added strict V2 parsing for capture identity, types, enums, bounded numbers,
+  timestamps, and numeric projections. Legacy numeric fallback is accepted only
+  when no V2 marker exists; malformed V2 does not regain trust through columns.
+- Added a fixed seven-day state lookback independent of the requested
+  statistics window. Evening is current from the target date or previous date;
+  Morning only from the target date.
+- Added `missing`, `partial`, `current`, and `stale` quality plus bounded stress,
+  recovery, workload, planning, capacity, and calibration risk flags.
+- Added deterministic, recovery-first `push`, `steady`, `recover`, and `plan`
+  classification with machine-stable reasons, user-readable non-clinical copy,
+  field-level evidence, provenance, and no learned-baseline claim.
+- Excluded tomorrow-priority, reflection, and blocker text from snapshot
+  summary, signals, evidence, quality issues, and metadata.
+- Preserved same-period upsert identity, `snapshot-aggregator-v1`, guest/mock
+  locality, best-effort refresh, recommendation ranking, and no-LLM behavior.
+  Snapshot metadata records the contract/lookback; top-level
+  `summary.risk_flags` aliases current Daily State risks,
+  `summary.window_risk_flags` retains window risks, and
+  `recommended_next_focus` is recovery-first from mode.
 
 Evaluation:
 
@@ -1025,7 +1116,7 @@ Evaluation:
 - Does high private/emotional stress reliably reduce load?
 - Can state be recomputed idempotently for the same user and period?
 
-### Phase 3: Executable Tasks, Habits, And Focus
+### Phase 3: Executable Tasks, Habits, And Focus (Next)
 
 Goal:
 
@@ -1258,27 +1349,29 @@ streak length are not sufficient success measures.
 
 ## Current Recommendation
 
-**Phase 0A, Phase 0B, Phase 0C, and Phase 1 are complete.** Real and demo source
-states remain distinct; Setup is progressive, revision-safe, reviewable, and
-atomically reconciled by its unchanged advisory-locked service-role RPC; and
-Evening/Morning now provide exact typed daily context without erasing each
-other. Blank optionals create no fallback content, Guest V2 remains compatible
-with V1 reads and migration, numeric projections remain honest, and linked
-events converge to a deterministic maximum of four current signals. Phase 1
-does not contain Daily Mode, briefing ranking or persistence, save-time
-recommendation generation, or an LLM.
+**Phase 0A, Phase 0B, Phase 0C, Phase 1, and Phase 2 are complete.** Real and
+demo source states remain distinct; Setup is revision-safe and atomically
+reconciled; Evening/Morning provide exact ownership-merged context; and the
+backend now turns trusted current capture state into freshness, quality,
+recovery-first Daily Mode, bounded risks/reasons, evidence, and provenance.
+Malformed V2 never becomes trusted legacy input, free text remains excluded,
+and same-period refresh converges without duplicate snapshots. Phase 2 does not
+rank actions, persist a briefing, expose a Today UI, generate recommendations,
+or call an LLM.
 
-The next implementation should be **Phase 2: Explainable Daily State**:
+The next implementation should be **Phase 3: Executable Tasks, Habits, And
+Focus**:
 
-1. Parse the persisted Evening/Morning capture metadata in deterministic
-   snapshot aggregation without changing its ownership or numeric projection.
-2. Add explicit capture freshness and data-quality states for missing,
-   partial, current, and stale inputs.
-3. Add bounded risk flags for private/emotional stress, physical recovery,
-   avoidable pressure, workload, and low controllability with evidence refs.
-4. Classify `push`, `steady`, `recover`, or `plan` conservatively and expose the
-   strongest deterministic reasons without claiming causation, diagnosis, or a
-   learned baseline.
+1. Define stable action targets and commands for tasks, habits, focus sessions,
+   and bounded planning before any briefing ranks them.
+2. Complete task create/edit/complete/postpone/cancel and recoverable outcome
+   behavior where the Today loop needs it.
+3. Implement honest Habit V1 cadence, scheduled opportunities, intentional
+   skip, progress, streak, and undo semantics; add schema only if an explicit
+   outcome cannot be represented safely otherwise.
+4. Implement a real focus-session lifecycle linked to an action, or keep the
+   preview gated.
 
-Phase 2 may define explainable Daily Mode, but it must not rank briefing
-actions, add `daily_briefings` persistence, redesign Habit V1, or call an LLM.
+Phase 3 must preserve the Phase 2 Daily State contract and still must not add
+briefing ranking, `daily_briefings`, the decision-first Today dashboard, Coach,
+calendar import, or an LLM.

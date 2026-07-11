@@ -243,8 +243,21 @@ def test_generate_daily_snapshot_builds_compact_summary_and_persists_by_principa
     assert row["user_id"] == "principal-user-123"
     assert row["summary"]["sleep"]["average_hours"] == 5.88
     assert row["summary"]["tasks"]["overdue"] == 1
-    assert row["summary"]["recommended_next_focus"] == "planning"
+    assert row["summary"]["recommended_next_focus"] == "recovery"
+    assert row["summary"]["daily_state"]["mode"] == "recover"
+    assert row["summary"]["daily_state"]["data_quality"] == "partial"
+    assert row["summary"]["daily_state"]["provenance"] == {
+        "kind": "deterministic",
+        "basis": "legacy_numeric",
+        "baseline": "none",
+        "history_claim": "current_state_only",
+    }
+    assert row["metadata"]["daily_state_contract_version"] == (
+        "explainable-daily-state-v1"
+    )
+    assert row["metadata"]["state_lookback_days"] == 7
     assert row["signals"]["input_counts"]["daily_logs"] == 2
+    assert row["signals"]["daily_state"]["engine"] == "deterministic"
     assert {"table": "daily_logs", "id": "log-1"} in row["signals"]["evidence_refs"]
 
 
@@ -265,6 +278,32 @@ def test_generate_weekly_snapshot_uses_iso_week_period_key():
     assert response.period_key == "2026-W27"
     assert repository.persist_calls[0]["period_key"] == "2026-W27"
     assert repository.persist_calls[0]["row"]["summary"]["window"]["days"] == 14
+
+
+def test_daily_and_weekly_snapshots_share_target_date_daily_state() -> None:
+    repository = FakeSnapshotRepository()
+    aggregator = SnapshotAggregator(
+        repository=repository,
+        today_provider=lambda: TODAY,
+        now_provider=lambda: NOW,
+    )
+
+    daily = run(
+        aggregator.generate_snapshot(
+            user_id="principal-user-123",
+            request=SnapshotGenerateRequest(scope="daily", target_date=TODAY),
+        ),
+    )
+    weekly = run(
+        aggregator.generate_snapshot(
+            user_id="principal-user-123",
+            request=SnapshotGenerateRequest(scope="weekly", target_date=TODAY),
+        ),
+    )
+
+    assert weekly.summary["daily_state"] == daily.summary["daily_state"]
+    assert weekly.signals["daily_state"] == daily.signals["daily_state"]
+    assert weekly.summary["daily_state"]["target_date"] == TODAY.isoformat()
 
 
 def test_generate_snapshot_ignores_logs_outside_target_window():
@@ -356,6 +395,52 @@ def test_snapshot_event_window_prefers_local_entry_date_with_utc_fallback():
         "utc_fallback": 1,
         "invalid_metadata_fallback": 1,
     }
+
+
+def test_daily_state_uses_fixed_seven_day_lookback_without_widening_aggregates():
+    inputs = sample_inputs()
+    repository = FakeSnapshotRepository(inputs)
+
+    response = run(
+        SnapshotAggregator(
+            repository=repository,
+            today_provider=lambda: TODAY,
+            now_provider=lambda: NOW,
+        ).generate_snapshot(
+            user_id="principal-user-123",
+            request=SnapshotGenerateRequest(target_date=TODAY, window_days=1),
+        ),
+    )
+
+    assert repository.load_calls[0]["window_days"] == 7
+    assert response.summary["window"]["days"] == 1
+    assert response.summary["check_ins"]["count"] == 1
+    assert response.signals["input_counts"]["daily_logs"] == 1
+    assert response.summary["daily_state"]["target_date"] == "2026-07-02"
+
+
+def test_unmeasured_focus_does_not_create_a_low_focus_risk() -> None:
+    inputs = sample_inputs()
+    for row in inputs.daily_logs:
+        row["focus_minutes"] = None
+    repository = FakeSnapshotRepository(inputs)
+
+    response = run(
+        SnapshotAggregator(
+            repository=repository,
+            today_provider=lambda: TODAY,
+            now_provider=lambda: NOW,
+        ).generate_snapshot(
+            user_id="principal-user-123",
+            request=SnapshotGenerateRequest(),
+        ),
+    )
+
+    assert response.summary["focus"] == {
+        "total_minutes": 0,
+        "measured_days": 0,
+    }
+    assert "low_focus_time" not in response.summary["window_risk_flags"]
 
 
 def test_snapshot_repository_scopes_every_read_to_explicit_user_id():

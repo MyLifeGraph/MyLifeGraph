@@ -13,7 +13,10 @@ FastAPI service boundary for recommendation and future ML workflows.
 - `/v1/recommendations` and `/v1/recommendations/generate` expose the
   authenticated backend v1 recommendation contract.
 - `/v1/snapshots/generate` creates or refreshes deterministic `daily` or
-  `weekly` user-state snapshots from recent user-owned signals.
+  `weekly` user-state snapshots from recent user-owned signals. Their additive
+  `summary.daily_state` uses the `explainable-daily-state-v1` contract for
+  capture freshness, data quality, bounded risks/reasons, evidence, provenance,
+  and recovery-first Daily Mode classification.
 - With backend Supabase settings configured, bearer tokens are verified through
   Supabase Auth. Setup uses idempotent request ids, optimistic revisions,
   pending/applied state, deterministic UUIDv5 record ids, and server ownership
@@ -28,8 +31,9 @@ FastAPI service boundary for recommendation and future ML workflows.
   applied intake state, and profile projection commit atomically. Recommendation
   endpoints load recent user-scoped app data from canonical snake_case tables,
   verify deterministic recommendations, and persist accepted results to
-  `recommendations`. Snapshot
-  generation reuses `user_state_snapshots` and does not require an LLM provider.
+  `recommendations`. Snapshot generation reuses `user_state_snapshots`, keeps
+  recommendation rules unchanged, excludes capture free text from Daily State,
+  and does not require an LLM provider.
 - The service does not call LLMs, OpenRouter, local models, vector search, or
   background jobs.
 
@@ -114,6 +118,24 @@ The backend derives `user_id` from the bearer token and rejects request bodies
 that include `user_id`. Phase 1 capture supplies its explicit local
 `target_date`; snapshot event reads include metadata, use a widened UTC window,
 and prefer `metadata.entry_date` when assigning an event to that local day.
+
+`window_days` controls the existing statistical summary window. Explainable
+Daily State independently loads a fixed seven-day state window. It treats an
+Evening capture on the target date or previous date as current and a Morning
+capture only on the target date as current. Complete current Evening plus
+Morning yields `current`; one usable current branch or current legacy numeric
+input yields `partial`; older usable input yields `stale`; and no trusted input
+yields `missing`. V2 rows are parsed strictly and never fall back to projected
+numbers when their V2 marker or branch is malformed. Legacy numeric fallback is
+used only when no V2 marker exists.
+
+The source marker remains `snapshot-aggregator-v1`. Snapshot metadata adds
+`daily_state_contract_version=explainable-daily-state-v1` and
+`state_lookback_days=7`. The result stays additive under `summary.daily_state`
+and `signals.daily_state`; no schema migration is required. Top-level
+`summary.risk_flags` aliases the current Daily State codes,
+`summary.window_risk_flags` retains statistics-window flags, and
+`recommended_next_focus` follows recovery-first mode precedence.
 
 Scheduler-triggered daily refresh uses a backend-only token and never belongs
 in Flutter or browser runtime configuration:

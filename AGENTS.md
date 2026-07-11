@@ -155,16 +155,34 @@ does not add Daily Mode, briefing ranking or persistence, recommendation
 generation on save, an LLM, calendar import, or autonomous workers. The Phase
 0C Setup service-role RPC and its retry/revision contract are unchanged.
 
-The immediate next slice is Phase 2, Explainable Daily State. Extend the
-deterministic snapshot contract with capture freshness, data quality, explicit
-stress-taxonomy risk flags, and a conservative explainable state classification
-before building briefing ranking or a decision-first Today surface. Read the
-phase contract before changing snapshot or dashboard semantics.
+Phase 2, Explainable Daily State, is implemented. Daily and weekly snapshots
+add `summary.daily_state` under the `explainable-daily-state-v1` contract. A
+strict parser trusts Phase 1 V2 capture metadata only when its identity, enum,
+numeric, timestamp, and numeric-projection invariants hold; legacy numeric
+fallback is allowed only when no V2 marker exists. Daily State uses a fixed
+seven-day state lookback independent of the requested statistics window.
+Evening is current on the target date or previous date, Morning only on the
+target date. The result exposes `missing`, `partial`, `current`, or `stale`
+quality; recovery-first `push`, `steady`, `recover`, or `plan` classification;
+bounded risks and reasons with field-level evidence; and deterministic
+provenance without persisting capture free text. The existing
+`snapshot-aggregator-v1` source marker remains stable, while snapshot metadata
+records the Daily State contract version and lookback. Top-level
+`summary.risk_flags` aliases the current Daily State codes, older
+statistics-window flags live under `summary.window_risk_flags`, and
+`recommended_next_focus` is derived recovery-first from the mode. Phase 2 adds
+no schema, Today UI, recommendation ranking, briefing persistence, or LLM
+usage.
+
+The immediate next slice is Phase 3, Executable Action And Habit Contracts.
+Make task, habit, focus, and bounded planning targets reliable before a future
+briefing ranks them. Read the phase contract before changing task, habit,
+focus-session, snapshot-consumer, or dashboard semantics.
 
 FastAPI-backed browser E2E coverage for revisioned Setup ownership/retry/edit,
-concurrent same-request convergence, post-intake recommendations, daily snapshot
-refresh, deliberate dashboard recommendation refresh, and Supabase-backed habit
-management now exists.
+concurrent same-request convergence, post-intake recommendations, exact Phase 2
+Daily State recomputation, daily snapshot refresh, deliberate dashboard
+recommendation refresh, and Supabase-backed habit management now exists.
 
 The implemented post-intake refresh is backend-only and best-effort:
 
