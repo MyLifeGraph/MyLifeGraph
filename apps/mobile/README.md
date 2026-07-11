@@ -77,16 +77,16 @@ Supabase is only initialized when both `SUPABASE_URL` and
 
 `USE_MOCK_DATA=true` forces product data surfaces to local/demo sources even
 when an authenticated Supabase session exists. Use `false` for real Setup,
-check-in, Dashboard, Recommendations, Insights, Notifications, synced habits,
-and snapshot refresh behavior. Mock/demo auth boot skips remote profile access
-and overlays the locally applied Setup name/completion state, so local Setup
-survives a browser reload.
+Evening/Morning capture, Dashboard, Recommendations, Insights, Notifications,
+synced habits, and snapshot refresh behavior. Mock/demo auth boot skips remote
+profile access and overlays the locally applied Setup name/completion state, so
+local Setup survives a browser reload.
 
 ## Auth Modes
 
 - Guest mode works without Supabase and stores session plus typed, revisioned
   Setup state locally. It never calls FastAPI or Supabase, and guest Setup is not
-  copied automatically into an account later. Canonical guest check-ins are
+  copied automatically into an account later. Canonical guest captures are
   migrated best-effort only when real, non-demo authentication succeeds with
   `USE_MOCK_DATA=false`.
 - Email/password auth requires Supabase configuration.
@@ -115,9 +115,10 @@ from generic Habit Management.
 - `/dashboard`
 - `/insights`
 - `/quick-action`
-- `/quick-mood-check-in` (canonical daily capture implementation)
+- `/quick-mood-check-in` (typed Evening Shutdown)
+- `/morning-calibration` (short typed Morning Calibration)
 - `/alerts`
-- `/daily-check-in` (redirects to the canonical capture implementation)
+- `/daily-check-in` (redirects to Evening Shutdown)
 - `/deep-work` (compatibility redirect to `/alerts`; preview is gated)
 - `/coach` (compatibility redirect to `/dashboard`; preview is gated)
 - `/settings`
@@ -137,12 +138,14 @@ FLUTTER_BIN=/path/to/flutter scripts/verify.sh
 ```
 
 The widget test suite covers the auth gate; required-only guest Setup; typed
-prefill, edit, retry, and review behavior; exact canonical check-in
-persistence/readback; source-aware dashboard/recommendation states; route
-capability gates; durable Settings Setup entry; and strict notification action
-routing. Browser E2E additionally covers authenticated Setup revisions,
-identity/ownership-safe reconciliation, exact Supabase rows, linked signals,
-authenticated refreshes, and compatibility redirects.
+prefill, edit, retry, and review behavior; exact same-day Evening/Morning
+merge, persistence, retry, and readback; source-aware dashboard/recommendation
+states; route capability gates; durable Settings Setup entry; and strict
+notification action routing. Browser E2E additionally covers authenticated
+Setup revisions,
+identity/ownership-safe reconciliation, exact Phase 1 capture metadata and
+deduplicated linked signals, authenticated target-date refreshes, and
+compatibility redirects.
 
 Browser E2E lives at the repository root:
 

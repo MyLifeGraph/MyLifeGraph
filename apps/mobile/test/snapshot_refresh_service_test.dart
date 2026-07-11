@@ -23,6 +23,23 @@ void main() {
     });
   });
 
+  test('capture refresh sends the explicit local entry date', () async {
+    final apiClient = _FakeApiClient();
+    final service = _buildService(
+      config: _config(useMockData: false, supabaseConfigured: true),
+      apiClient: apiClient,
+      accessTokenProvider: () => 'access-token-123',
+    );
+
+    await service.refreshDailyAfterUserSignal(targetDate: '2026-07-10');
+
+    expect(apiClient.lastBody, {
+      'scope': 'daily',
+      'window_days': 7,
+      'target_date': '2026-07-10',
+    });
+  });
+
   test('mock mode skips snapshot refresh', () async {
     final apiClient = _FakeApiClient();
     final service = _buildService(

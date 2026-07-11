@@ -65,12 +65,12 @@ The Bash and PowerShell start scripts pass these values into Flutter as Dart
 defines.
 
 `USE_MOCK_DATA=true` is a deliberate whole-product local/demo boundary even if
-the browser still has a Supabase auth session. Setup, daily capture, Dashboard,
-Recommendations, Insights, and Notifications stay local, synced habits are
-hidden, and snapshot refresh is skipped. Set it to `false` to exercise real
-authenticated Supabase/FastAPI sources.
+the browser still has a Supabase auth session. Setup, Evening Shutdown, Morning
+Calibration, Dashboard, Recommendations, Insights, and Notifications stay
+local, synced habits are hidden, and snapshot refresh is skipped. Set it to
+`false` to exercise real authenticated Supabase/FastAPI sources.
 In mock/demo mode, auth boot also skips remote profile reads/creation and guest
-check-in migration, then restores the locally applied Setup name and completion
+capture migration, then restores the locally applied Setup name and completion
 state across reloads.
 
 ## Frontend Script
@@ -186,11 +186,24 @@ The snapshot endpoint also accepts `"scope":"weekly"` and an optional
 `"target_date":"YYYY-MM-DD"`. It derives the user from the bearer token and
 uses the backend service-role key only inside FastAPI.
 
-When FastAPI is running and Flutter is in real backend mode, a successful
-canonical daily check-in calls the daily snapshot endpoint best-effort. Both
-`/daily-check-in` and `/quick-mood-check-in` enter the same typed capture flow.
-If FastAPI is down, the check-in save path still succeeds and the snapshot
-refresh is skipped by the client.
+When FastAPI is running and Flutter is in real backend mode, a successful daily
+capture calls the daily snapshot endpoint best-effort with the capture's
+explicit local `target_date`. `/daily-check-in` redirects to the canonical
+Evening Shutdown at `/quick-mood-check-in`; the separate short
+`/morning-calibration` route captures sleep, current energy, and day shape. If
+FastAPI is down, the durable Supabase capture still succeeds and the snapshot
+refresh is skipped by the client. Normal capture does not generate
+recommendations.
+
+Evening and Morning writes merge into one `(user_id, entry_date)` `daily_logs`
+row. Phase 1 stores its bounded structured state under
+`metadata.capture_version=daily-capture-v2` and
+`metadata.captures.evening|morning`. Direct numeric columns remain compatible:
+Morning energy takes precedence when present, while mood and stress come from
+Evening and sleep comes from Morning. The writer reconciles the linked current
+mood, energy, stress, and sleep events without duplicates and mirrors relevant
+capture metadata onto those events. Blank Evening reflection, blocker, and
+gentle-tomorrow answers stay absent and do not create other product records.
 
 Backend-only Supabase configuration for the AI service:
 
@@ -260,9 +273,10 @@ For local Supabase-backed app testing:
    `SUPABASE_ANON_KEY=<local anon key>`.
 5. Start the frontend with `scripts/start_frontend.sh`.
 6. Smoke test registration or sign-in, required-only Setup, Setup re-entry/edit/
-   review, the canonical daily check-in, habit management, habit completion, the
-   source-aware dashboard, Notifications, and Coach/Deep Work compatibility
-   redirects.
+   review, required-only Evening Shutdown, Morning Calibration on the same local
+   date, Evening re-entry/edit without losing Morning state, habit management,
+   habit completion, the source-aware dashboard, Notifications, and Coach/Deep
+   Work compatibility redirects.
 
 Do not infer remote Supabase state from local migrations. Verify the remote
 project through the Supabase dashboard, CLI, or connector before using it for
@@ -371,7 +385,17 @@ All standard non-destructive checks from the repository root:
 FLUTTER_BIN=/path/to/flutter scripts/verify.sh
 ```
 
-Local Supabase preflight and reset workflow:
+Non-destructive local Supabase preflight:
+
+```bash
+FLUTTER_BIN=/path/to/flutter scripts/verify_supabase_local.sh
+```
+
+The command starts or reuses the repository's local Supabase stack, reads the
+local anon key without printing it, and does not reset the database.
+
+Local Supabase reset workflow, only when a fresh local database is explicitly
+intended:
 
 ```bash
 RESET_DB=true \
@@ -379,10 +403,9 @@ FLUTTER_BIN=/path/to/flutter \
 scripts/verify_supabase_local.sh
 ```
 
-`RESET_DB=true` is required intentionally because `supabase db reset` destroys
-and recreates the local database. The script still requires the Supabase CLI and
-Docker to be available to the same shell that runs it. It reads the local anon
-key from `supabase status` without printing the key.
+`RESET_DB=true` destroys and recreates the local database. The script requires
+the Supabase CLI and Docker to be available to the same shell that runs it. It
+reads the local anon key from `supabase status` without printing the key.
 
 For details on what each script verifies and what is still not automated, read
 `docs/verification.md`.
@@ -395,6 +418,10 @@ npx playwright install chromium
 FLUTTER_BIN=/path/to/flutter bash scripts/e2e_web.sh
 ```
 
+This is the normal non-reset path. It writes only its uniquely named test data
+to the local stack and skips `supabase db reset` unless `RESET_DB=true` is
+explicitly supplied.
+
 Browser E2E with a fresh local database:
 
 ```bash
@@ -405,8 +432,22 @@ The E2E script starts local Supabase, starts the FastAPI AI service with the
 local Supabase backend settings, starts Flutter Web on `http://127.0.0.1:7357`,
 creates a confirmed local test user through the local Supabase admin API, signs
 in through the app, completes required-only Setup, exercises retry/edit/review
-and ownership-safe reconciliation, saves check-ins, opens Notifications, and
-asserts exact local database identities and values.
+and ownership-safe reconciliation, then walks Phase 1 Evening Shutdown and
+Morning Calibration. Its implemented assertions cover a committed
+`daily_logs` response loss followed by exact retry, same-day Evening/Morning
+merge, Evening re-entry/edit, one `daily_logs` row, nested
+`daily-capture-v2` metadata, absent blank optionals, four deduplicated linked
+current events, Morning-over-Evening numeric energy precedence, capture-scoped
+snapshot refresh with `target_date`, and no recommendation-generate request
+during normal capture. It then continues through habit completion, deliberate
+dashboard recommendation refresh, Notifications, and compatibility redirects.
+
+The Phase 0C portion remains part of the same smoke: it verifies revisioned
+Setup ownership and retry/edit behavior, the service-role-only atomic apply RPC,
+manual-row preservation, profile projection, and concurrent same-request
+convergence before and after the capture journey. This describes the coverage
+implemented by `e2e/web/smoke.mjs`; use the command above to establish the
+result for the current checkout and local environment.
 
 By default the script starts FastAPI on `http://127.0.0.1:8000`. Useful AI
 service overrides:

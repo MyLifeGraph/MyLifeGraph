@@ -19,7 +19,7 @@ final quickCheckInStoreProvider = Provider<QuickCheckInStore>((ref) {
 });
 
 final latestQuickCheckInProvider =
-    FutureProvider.autoDispose<QuickCheckInDraft?>((ref) {
+    FutureProvider.autoDispose<DailyCaptureEntry?>((ref) {
   return ref.watch(quickCheckInStoreProvider).loadToday(DateTime.now());
 });
 
@@ -30,10 +30,17 @@ class _UnavailableQuickCheckInStore implements QuickCheckInStore {
   QuickCheckInSaveTarget get target => QuickCheckInSaveTarget.supabase;
 
   @override
-  Future<QuickCheckInDraft?> loadToday(DateTime today) async => null;
+  Future<DailyCaptureEntry?> loadToday(DateTime today) async => null;
 
   @override
-  Future<void> save(QuickCheckInDraft draft) {
+  Future<void> saveEvening(EveningShutdownDraft draft) {
+    throw const QuickCheckInUnavailableException(
+      'Supabase is not configured for this account.',
+    );
+  }
+
+  @override
+  Future<void> saveMorning(MorningCalibrationDraft draft) {
     throw const QuickCheckInUnavailableException(
       'Supabase is not configured for this account.',
     );

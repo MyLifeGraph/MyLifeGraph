@@ -51,6 +51,24 @@ Already implemented:
     on same-day save; guest storage also keeps one entry per calendar day.
   - Failed writes retain the draft, in-flight duplicate submits are ignored, and
     exact values are covered by mapper, widget, guest, and browser assertions.
+- Lightweight Evening And Morning Capture:
+  - `EveningShutdownDraft` and `MorningCalibrationDraft` merge into one typed
+    `DailyCaptureEntry` per local date without one capture erasing the other.
+  - Evening stores exact stress intensity/source/controllability, focus band,
+    friction, tomorrow priority, and only explicitly supplied optional detail;
+    Morning stores sleep hours, current energy, and day shape only.
+  - `daily_logs.metadata.captures` owns the two structured states. Numeric
+    projections retain existing consumers: Morning energy takes precedence,
+    Evening owns mood/stress, and Morning owns sleep.
+  - Supabase rebuilds a dynamic maximum of four deterministically identified
+    current-state events linked to the daily row. Guest V2 storage keeps the
+    same merge semantics and retains V1 read/auth-migration compatibility.
+  - Successful real captures request the daily snapshot for their explicit
+    local `target_date`; backend event filtering prefers metadata entry date in
+    a broadened UTC read window. Guest/mock remains entirely local.
+  - Dashboard capture state stays direct and nullable. Phase 1 adds no Daily
+    Mode, action ranking, briefing persistence, recommendation generation on
+    save, or LLM usage.
 - FastAPI `/v1/health`.
 - FastAPI authenticated recommendation endpoints:
   - `GET /v1/recommendations`
@@ -131,7 +149,8 @@ Not yet implemented:
 - Cadence-aware Habit V1 semantics. Current completion progress is a seven-day
   completion count; it does not yet model scheduled opportunities, intentional
   skip, weekly-target streaks, or undo.
-- Evening stress source/controllability and returning-morning calibration.
+- Explainable Phase 2 snapshot state: capture freshness and quality, structured
+  stress risk flags, and a conservative deterministic Daily Mode.
 - A production background job queue or worker.
 - Deployed cron wiring for the scheduler-triggered refresh endpoint.
 - Real coach-response backend.
@@ -507,12 +526,14 @@ Use these rules before adding any model provider:
 
 ## Immediate Implementation Plan
 
-The next implementation should build on completed Phase 0 product integrity,
-including retry-safe typed Setup, controlled post-intake recommendation refresh,
-authenticated snapshot aggregation, deliberate dashboard refresh, and the
-FastAPI-backed browser E2E path. The immediate slice is **Phase 1: Lightweight
-Daily Capture And Stress Taxonomy**: add honest evening context and a short
-morning calibration before deriving Daily Mode or ranking briefing actions.
+The next implementation should build on completed Phase 0 product integrity and
+Phase 1 capture, including retry-safe typed Setup, controlled post-intake
+recommendation refresh, authenticated snapshot aggregation, deliberate
+dashboard refresh, and the FastAPI-backed browser E2E path. The immediate slice
+is **Phase 2: Explainable Daily State**: interpret the now-persisted
+Evening/Morning metadata, freshness, and data quality deterministically before
+ranking briefing actions. Phase 1 itself remains capture-only and contains no
+Daily Mode, ranking, briefing persistence, or LLM call.
 
 ### Completed Slice 0A: Honest Capture
 
@@ -526,8 +547,9 @@ morning calibration before deriving Daily Mode or ranking briefing actions.
 - Implemented: one typed draft drives guest and Supabase stores. Guest saves are
   readable on return and replace the same local day; later auth migration reuses
   the canonical Supabase writer.
-- Implemented: Supabase upserts the daily log, links exactly four behavioral
-  events through `daily_log_id`, and replaces same-day current-state events.
+- Implemented: Supabase upserts the daily log and replaces same-day
+  current-state events linked through `daily_log_id`. The original complete V1
+  form wrote four; Phase 1 generalizes this to a dynamic maximum of four.
 - Implemented: failed writes preserve the draft, retry reuses the stable capture
   id, and in-flight duplicate submits are ignored.
 - Implemented: non-functional Lifestyle Entry and Reflection Note tiles were
@@ -585,19 +607,26 @@ morning calibration before deriving Daily Mode or ranking briefing actions.
 - Implemented: mock/demo auth boot remains local across reload, while 4xx,
   conflict/reload, and ambiguous exact-retry states preserve honest save status.
 
-### Slice 1: Lightweight Daily Capture And Stress Taxonomy
+### Completed Slice 1: Lightweight Daily Capture And Stress Taxonomy
 
-- Refactor the honest functional capture path into Evening Shutdown with stress
-  source, controllability, intensity label, main friction, and optional
-  `make tomorrow gentler` intent.
-- Add a 10-to-20-second Morning Calibration for sleep, energy, and day shape.
-- Store new fields in `daily_logs.metadata` and relevant
-  `behavioral_events.metadata` first while keeping numeric fields compatible.
-- Preserve explicitly labeled guest/demo behavior and Supabase-backed writes.
-- Add tests for private/emotional low-control stress, avoidable pressure, blank
-  optional fields, and exact persisted values.
+- Implemented separate typed Evening Shutdown and Morning Calibration flows.
+- Implemented one same-day ownership merge under
+  `daily_logs.metadata.captures`: replacing Evening preserves Morning and vice
+  versa, while unrelated metadata survives the mapper.
+- Implemented exact numeric projection with Morning energy precedence, Evening
+  mood/stress ownership, Morning sleep ownership, and no fabricated focus
+  minutes or optional text.
+- Implemented a dynamic maximum of four deterministic mood/energy/stress/sleep
+  events with capture-kind metadata and linkage to the single daily row.
+- Implemented guest V2 JSON with legacy V1 read and best-effort authenticated
+  migration compatibility; guest/mock paths remain off Supabase and FastAPI.
+- Implemented capture-date snapshot refresh plus backend metadata-date filtering
+  over a timezone-tolerant UTC read window.
+- Implemented direct nullable Dashboard mapping for capture presence, focus
+  band, stress source/controllability, and day shape. It does not infer Daily
+  Mode, ranking, causation, or a learned baseline.
 
-### Slice 2: Explainable Daily State
+### Next Slice 2: Explainable Daily State
 
 - Extend deterministic snapshot aggregation with stress taxonomy, freshness,
   data quality, and risk summaries.
@@ -701,10 +730,11 @@ morning calibration before deriving Daily Mode or ranking briefing actions.
 ## Out Of Scope For The Next Slice
 
 - The full Daily Briefing service or `daily_briefings` migration.
-- Daily Mode and recommendation ranking changes before capture truth is fixed.
+- Briefing action ranking, recommendation-ranking redesign, or executable Today
+  actions. Phase 2 may classify only the deterministic explainable Daily Mode.
 - Broad Habit V1 cadence/progress redesign beyond the implemented Setup
   candidate-versus-confirmed distinction.
-- Daily Mode or briefing persistence before Phase 1 stress capture exists.
+- Briefing persistence before Phase 2 state/freshness rules are proven.
 - Implementing the preview Coach or Deep Work UI merely to keep it visible.
 - OpenAI/OpenRouter/local LLM integration.
 - Real coach assistant replies.

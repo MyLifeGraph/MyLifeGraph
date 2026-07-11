@@ -24,14 +24,15 @@ way to explore the product today is the Flutter app in mock-data guest mode.
   stress, energy, mood, screen time, activity, steps, habits, recovery, and
   focus. It computes 7/14/30-day relationships in Flutter from existing
   Supabase rows or local mock time series, without LLM usage.
-- Phase 0A, Honest Capture; Phase 0B, Source And Surface Truth; and Phase 0C,
-  First-Run And Setup Integrity, are implemented. Daily capture persists exact
-  selections; demo data stays local and labeled; real failures never become mock
-  content; and setup is progressive, prefilled, retry-safe, and reviewable
-  without invented or duplicate commitments. Authenticated Setup materializes
-  through one service-role-only, per-user-serialized database transaction.
-  Phase 1, Lightweight Evening And Morning Capture, is next. See
-  `docs/daily-briefing-implementation-plan.md` for the operating loop and roadmap.
+- Phase 0A, Honest Capture; Phase 0B, Source And Surface Truth; Phase 0C,
+  First-Run And Setup Integrity; and Phase 1, Lightweight Evening And Morning
+  Capture, are implemented. Evening and Morning are separate typed flows that
+  merge into one same-day row without erasing each other, preserve exact
+  numeric compatibility, and remain local in guest/demo mode. Setup remains
+  progressive, revision-safe, reviewable, and atomically materialized through
+  its unchanged service-role-only RPC. Phase 2, Explainable Daily State, is
+  next. See `docs/daily-briefing-implementation-plan.md` for the operating loop
+  and roadmap.
 - Repository docs and scripts should be treated as the shared team source of
   truth. Do not depend on user-local Codex skills or machine-specific paths.
 
@@ -172,14 +173,27 @@ Supabase is the intended auth and persistence backend. The current app supports:
   reload. Timeouts, 5xx failures, and invalid success envelopes have an unknown
   durable result, so the exact submitted draft is locked for unchanged retry or
   explicit reload.
+- Evening Shutdown captures explicit mood, energy, stress intensity/source/
+  controllability, focus band, main friction, tomorrow priority, and optional
+  reflection, blocker, and gentle-tomorrow intent. Morning Calibration is a
+  separate short flow for sleep hours, current energy, and day shape.
+- Both captures merge under `daily_logs.metadata.captures` for the same user and
+  date. Morning energy owns the compatible `energy_level` projection when
+  present; Evening owns mood and stress, and Morning owns sleep. Linked
+  `behavioral_events` are a dynamic, deterministically identified set of at
+  most mood, energy, stress, and sleep events. Guest storage uses the same V2
+  daily model while retaining V1 read/migration compatibility.
 - The dashboard refresh action first refreshes the daily snapshot best-effort,
   then calls the deterministic recommendation generator with LLM wording
   disabled. Normal dashboard reads still do not generate recommendations.
-- The canonical Supabase-backed daily check-in refreshes the backend daily
-  `user_state_snapshots` row best-effort after writes, and dashboard task
-  status changes plus Quick Action habit creation, edits, active-state changes,
-  and completions use the same refresh path after successful Supabase updates;
-  guest/mock paths stay local.
+- Supabase-backed Evening and Morning saves refresh the backend daily
+  `user_state_snapshots` row best-effort for their explicit local
+  `target_date`. Dashboard task status changes plus Quick Action habit creation,
+  edits, active-state changes, and completions use the same refresh path after
+  successful Supabase updates; guest/mock paths stay local.
+- Phase 1 does not assign Daily Mode, rank briefing actions, generate
+  recommendations on capture save, or call an LLM. Dashboard capture cards show
+  only direct nullable source values and persisted structured context.
 - `POST /v1/scheduled/daily-refresh` is a backend-only scheduler endpoint
   protected by `X-Scheduled-Refresh-Token`; it must not be called from Flutter.
 
@@ -261,9 +275,11 @@ FLUTTER_BIN=/path/to/flutter bash scripts/e2e_web.sh
 ```
 
 The browser E2E script starts local Supabase, starts FastAPI with local backend
-Supabase settings, runs Flutter Web, and covers authenticated required-only
-Setup, revision-safe retry/edit/review semantics and ownership assertions,
-deterministic recommendations, backend snapshot refresh, and core app writes.
+Supabase settings, and runs Flutter Web. Its smoke path includes authenticated
+Setup ownership/revision assertions, Evening/Morning merge assertions,
+deterministic linked-event checks, snapshot refresh, recommendations, and core
+app writes. Run the command before claiming the current checkout passes that
+path.
 
 With a fresh local database:
 

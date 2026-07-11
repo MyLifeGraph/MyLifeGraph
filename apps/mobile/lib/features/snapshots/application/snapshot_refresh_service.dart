@@ -23,7 +23,7 @@ class SnapshotRefreshService {
 
   Future<void> refreshDailyAfterHabitChange() => refreshDailyAfterUserSignal();
 
-  Future<void> refreshDailyAfterUserSignal() async {
+  Future<void> refreshDailyAfterUserSignal({String? targetDate}) async {
     if (!_allowRemoteRefresh ||
         _config.useMockData ||
         !_config.isSupabaseConfigured) {
@@ -36,7 +36,10 @@ class SnapshotRefreshService {
     }
 
     try {
-      await _apiDataSource.generateDailySnapshot(accessToken: accessToken);
+      await _apiDataSource.generateDailySnapshot(
+        accessToken: accessToken,
+        targetDate: targetDate,
+      );
     } catch (_) {
       return;
     }

@@ -43,6 +43,12 @@ class DashboardCheckIn {
     this.steps,
     this.activityLevel,
     this.screenTimeHours,
+    this.hasEveningCapture = false,
+    this.hasMorningCapture = false,
+    this.focusBand,
+    this.stressSource,
+    this.stressControllability,
+    this.dayShape,
   });
 
   final DateTime entryDate;
@@ -54,6 +60,12 @@ class DashboardCheckIn {
   final int? steps;
   final int? activityLevel;
   final double? screenTimeHours;
+  final bool hasEveningCapture;
+  final bool hasMorningCapture;
+  final String? focusBand;
+  final String? stressSource;
+  final String? stressControllability;
+  final String? dayShape;
 
   bool get hasAnySignal =>
       mood != null ||
@@ -63,7 +75,9 @@ class DashboardCheckIn {
       focusMinutes != null ||
       steps != null ||
       activityLevel != null ||
-      screenTimeHours != null;
+      screenTimeHours != null ||
+      focusBand != null ||
+      dayShape != null;
 }
 
 class PlanItem {

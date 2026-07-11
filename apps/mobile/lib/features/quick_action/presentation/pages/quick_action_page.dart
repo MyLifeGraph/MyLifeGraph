@@ -9,6 +9,7 @@ import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_page.dart';
 import '../../domain/quick_check_in.dart';
 import '../providers/quick_check_in_providers.dart';
+import '../widgets/daily_capture_controls.dart';
 
 class QuickActionPage extends ConsumerWidget {
   const QuickActionPage({super.key});
@@ -24,10 +25,16 @@ class QuickActionPage extends ConsumerWidget {
       subtitle: 'Capture the context your future recommendations need',
       children: [
         _ActionTile(
-          icon: Icons.mood_outlined,
-          title: 'Daily check-in',
-          subtitle: 'Mood, energy, sleep, and stress',
+          icon: Icons.nights_stay_outlined,
+          title: 'Evening Shutdown',
+          subtitle: 'Close today with stress context and tomorrow priority',
           onTap: () => context.go(AppRoutes.quickMoodCheckIn),
+        ),
+        _ActionTile(
+          icon: Icons.wb_sunny_outlined,
+          title: 'Morning Calibration',
+          subtitle: 'Sleep, current energy, and day shape',
+          onTap: () => context.go(AppRoutes.morningCalibration),
         ),
         ...latestCheckIn.when(
           data: (draft) => draft == null
@@ -70,15 +77,18 @@ class _SavedCheckInSummary extends StatelessWidget {
     required this.isLocal,
   });
 
-  final QuickCheckInDraft draft;
+  final DailyCaptureEntry draft;
   final bool isLocal;
 
   @override
   Widget build(BuildContext context) {
-    final sleepHours = draft.sleepHours!;
-    final sleep = sleepHours == sleepHours.roundToDouble()
-        ? sleepHours.toInt().toString()
-        : sleepHours.toStringAsFixed(1);
+    final signals = <String>[
+      if (draft.mood != null) 'Mood ${draft.mood}',
+      if (draft.energy != null) 'Energy ${draft.energy}',
+      if (draft.sleepHours != null)
+        'Sleep ${formatCaptureHours(draft.sleepHours!)} h',
+      if (draft.stress != null) 'Stress ${draft.stress}',
+    ];
     return AppCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -89,7 +99,7 @@ class _SavedCheckInSummary extends StatelessWidget {
               const SizedBox(width: AppSpacing.sm),
               Expanded(
                 child: Text(
-                  'Today\'s saved check-in',
+                  'Today\'s saved captures',
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
               ),
@@ -102,16 +112,75 @@ class _SavedCheckInSummary extends StatelessWidget {
             ],
           ),
           const SizedBox(height: AppSpacing.sm),
-          Text(
-            'Mood ${draft.mood} | Energy ${draft.energy} | '
-            'Sleep $sleep h | Stress ${draft.stress}',
-            style: Theme.of(context).textTheme.bodyMedium,
+          const SizedBox(height: AppSpacing.sm),
+          Wrap(
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.sm,
+            children: [
+              _CaptureStatus(
+                label: 'Evening',
+                saved: draft.evening != null,
+              ),
+              _CaptureStatus(
+                label: 'Morning',
+                saved: draft.morning != null,
+              ),
+            ],
           ),
+          if (signals.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              signals.join(' | '),
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+          ],
+          if (draft.morning?.dayShape != null) ...[
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              'Day shape: ${_readableCode(draft.morning!.dayShape!.code)}',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ],
+          if (draft.evening?.stressSource != null) ...[
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              'Stress: ${_readableCode(draft.evening!.stressSource!.code)} · '
+              '${_readableCode(draft.evening!.stressControllability!.code)}',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ],
         ],
       ),
     );
   }
 }
+
+class _CaptureStatus extends StatelessWidget {
+  const _CaptureStatus({required this.label, required this.saved});
+
+  final String label;
+  final bool saved;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.sm,
+        vertical: AppSpacing.xs,
+      ),
+      decoration: BoxDecoration(
+        color: Theme.of(context)
+            .colorScheme
+            .primary
+            .withValues(alpha: saved ? 0.16 : 0.06),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text('$label ${saved ? 'saved' : 'not saved'}'),
+    );
+  }
+}
+
+String _readableCode(String value) => value.replaceAll('_', ' ');
 
 class _SavedCheckInError extends StatelessWidget {
   const _SavedCheckInError({required this.onRetry});

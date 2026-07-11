@@ -10,6 +10,7 @@ import '../../features/insights/presentation/pages/insights_page.dart';
 import '../../features/notifications/presentation/pages/notifications_page.dart';
 import '../../features/quick_action/presentation/pages/habit_completion_page.dart';
 import '../../features/quick_action/presentation/pages/habit_management_page.dart';
+import '../../features/quick_action/presentation/pages/morning_calibration_page.dart';
 import '../../features/quick_action/presentation/pages/quick_mood_check_in_page.dart';
 import '../../features/quick_action/presentation/pages/quick_action_page.dart';
 import '../../features/settings/presentation/pages/settings_page.dart';
@@ -68,6 +69,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.quickMoodCheckIn,
         builder: (context, state) => const QuickMoodCheckInPage(),
+      ),
+      GoRoute(
+        path: AppRoutes.morningCalibration,
+        builder: (context, state) => const MorningCalibrationPage(),
       ),
       ShellRoute(
         builder: (context, state, child) => MainShell(

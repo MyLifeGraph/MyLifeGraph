@@ -34,7 +34,9 @@ const manualHabitTitle = `E2E manual paused habit ${runId}`;
 const manualScheduleTitle = `E2E manual schedule ${runId}`;
 const legacyExplicitScheduleTitle = `E2E legacy explicit schedule ${runId}`;
 const managedHabitTitle = `E2E managed habit ${runId}`;
-const checkInNote = `E2E exact check-in note ${runId}`;
+const eveningTomorrowPriority = `E2E protect a calm morning ${runId}`;
+const editedEveningTomorrowPriority =
+  `E2E finish the smallest useful draft ${runId}`;
 
 const browser = await chromium.launch({
   headless: !headed,
@@ -592,81 +594,372 @@ try {
     'habit row created from Habit management',
   );
 
+  const captureSideEffectsBefore = await captureSideEffectIds(user.id);
+  const captureSnapshotRequests = [];
+  const captureRecommendationGenerateRequests = [];
+  const captureRequestObserver = (request) => {
+    if (request.method() !== 'POST') {
+      return;
+    }
+    if (request.url() === `${aiServiceBaseUrl}/v1/snapshots/generate`) {
+      captureSnapshotRequests.push(request);
+    }
+    if (request.url() === `${aiServiceBaseUrl}/v1/recommendations/generate`) {
+      captureRecommendationGenerateRequests.push(request);
+    }
+  };
+  page.on('request', captureRequestObserver);
+
+  let lostDailyLogPayload;
+  let lostDailyLogResponseCount = 0;
+  const loseCommittedDailyLogResponse = async (route) => {
+    const request = route.request();
+    if (request.method() !== 'POST' || lostDailyLogResponseCount > 0) {
+      await route.continue();
+      return;
+    }
+    lostDailyLogPayload = request.postDataJSON();
+    const committedResponse = await route.fetch();
+    if (!committedResponse.ok()) {
+      throw new Error(
+        `Evening response-loss precondition failed: ${committedResponse.status()} ${await committedResponse.text()}`,
+      );
+    }
+    lostDailyLogResponseCount += 1;
+    await route.abort('failed');
+  };
+  await page.route(
+    '**/rest/v1/daily_logs**',
+    loseCommittedDailyLogResponse,
+  );
+
   await page.goto(appRoute('/daily-check-in'), { waitUntil: 'domcontentloaded' });
   await waitForFlutterShell(page);
   await enableFlutterSemantics(page);
   await page.waitForURL('**/#/quick-mood-check-in');
-  await clickByRoleName(page, 'button', 'mood 2 of 10');
+  await clickByRoleName(page, 'button', 'evening mood 2 of 10');
   await clickByText(page, 'Next');
-  await clickByRoleName(page, 'button', 'energy 9 of 10');
+  await clickByRoleName(page, 'button', 'evening energy 9 of 10');
   await clickByText(page, 'Next');
-  await clickByRoleName(page, 'button', '5.5 h');
+  await clickByRoleName(page, 'button', 'evening stress 8 of 10');
   await clickByText(page, 'Next');
-  await clickByRoleName(page, 'button', 'stress 8 of 10');
+  await clickByRoleName(page, 'button', 'stress source private_emotional');
+  await clickByText(page, 'Next');
+  await clickByRoleName(
+    page,
+    'button',
+    'stress controllability hardly_controllable',
+  );
+  await clickByText(page, 'Next');
+  await clickByRoleName(page, 'button', 'focus band 30_to_60_minutes');
+  await clickByText(page, 'Next');
+  await clickByRoleName(page, 'button', 'main friction emotional_load');
   await clickByText(page, 'Next');
   await fillByLabelOrPlaceholder(
     page,
-    'Context note (optional)',
-    `  ${checkInNote}  `,
+    'Tomorrow priority',
+    `  ${eveningTomorrowPriority}  `,
     0,
   );
-  await clickByText(page, 'Save');
-  await expectText(page, 'Latest check-in');
-  await waitForRows(
-    `daily_logs?select=id,source,sleep_hours,energy_level,stress_level,mood_score,mood_label,steps,activity_level,screen_time_hours,focus_minutes,nutrition_notes,day_focus,reflection,metadata&user_id=eq.${user.id}&source=eq.quick_check_in`,
-    (rows) =>
-      rows.some(
-        (row) =>
-          row.sleep_hours === 5.5 &&
-          row.energy_level === 9 &&
-          row.stress_level === 8 &&
-          row.mood_score === 2 &&
-          row.mood_label === 'very_low' &&
-          row.steps === null &&
-          row.activity_level === null &&
-          row.screen_time_hours === null &&
-          row.focus_minutes === null &&
-          row.nutrition_notes === null &&
-          row.day_focus === null &&
-          row.reflection === checkInNote &&
-          row.metadata?.capture_version === 'daily-check-in-v1' &&
-          row.metadata?.context_note === checkInNote,
-      ),
-    'exact quick_check_in daily_logs row',
+  await clickByText(page, 'Next');
+  await clickByText(page, 'Save evening shutdown');
+  await expectText(
+    page,
+    'Could not save. Your exact Evening Shutdown is still here. Try again.',
   );
-  await waitForRows(
-    `behavioral_events?select=daily_log_id,event_type,value,unit,source,metadata&user_id=eq.${user.id}&source=eq.quick_check_in`,
-    hasExactCheckInEvents,
-    'four exact linked behavioral events from check-in',
-  );
-  await waitForRows(
-    `user_state_snapshots?select=id,scope,period_key,summary,signals,metadata&user_id=eq.${user.id}&scope=eq.daily`,
-    (rows) =>
-      rows.some(
-        (row) =>
-          row.metadata?.source === 'snapshot-aggregator-v1' &&
-          row.signals?.input_counts?.daily_logs >= 1 &&
-          row.signals?.input_counts?.behavioral_events >= 4,
-      ),
-    'daily snapshot refreshed after daily check-in',
+  await page.unroute(
+    '**/rest/v1/daily_logs**',
+    loseCommittedDailyLogResponse,
   );
 
-  // Saving the same day again must replace, not append, its four current signals.
+  if (lostDailyLogResponseCount !== 1 || !lostDailyLogPayload) {
+    throw new Error('The committed daily_logs response loss was not exercised.');
+  }
+  const lostDailyLogRow = Array.isArray(lostDailyLogPayload)
+    ? lostDailyLogPayload[0]
+    : lostDailyLogPayload;
+  const captureEntryDate = lostDailyLogRow?.entry_date;
+  const eveningCaptureId =
+    lostDailyLogRow?.metadata?.captures?.evening?.capture_id;
+  if (!captureEntryDate || !eveningCaptureId) {
+    throw new Error(
+      `Lost daily_logs payload had no Phase 1 identity: ${JSON.stringify(lostDailyLogPayload)}`,
+    );
+  }
+
+  const dailyCaptureSelect =
+    'id,entry_date,source,sleep_hours,energy_level,stress_level,mood_score,' +
+    'mood_label,steps,activity_level,screen_time_hours,focus_minutes,' +
+    'nutrition_notes,day_focus,reflection,metadata';
+  const dailyCapturePath =
+    `daily_logs?select=${dailyCaptureSelect}&user_id=eq.${user.id}` +
+    `&entry_date=eq.${captureEntryDate}`;
+  await waitForRows(
+    dailyCapturePath,
+    (rows) =>
+      rows.length === 1 &&
+      hasExactPhaseOneDailyRow(rows[0], {
+        entryDate: captureEntryDate,
+        eveningCaptureId,
+        stressSource: 'private_emotional',
+        stressControllability: 'hardly_controllable',
+        tomorrowPriority: eveningTomorrowPriority,
+        expectMorning: false,
+      }),
+    'one committed required-only Evening Shutdown row after lost response',
+  );
+
+  const eveningRetrySnapshotPromise = waitForAiPost(
+    page,
+    '/v1/snapshots/generate',
+    'Evening retry snapshot refresh',
+  );
+  await clickByText(page, 'Save evening shutdown');
+  const eveningRetrySnapshotResponse = await eveningRetrySnapshotPromise;
+  assertJsonPayload(
+    eveningRetrySnapshotResponse.request(),
+    {
+      scope: 'daily',
+      window_days: 7,
+      target_date: captureEntryDate,
+    },
+    'Evening retry snapshot refresh payload',
+  );
+  await expectText(page, 'Latest check-in');
+  await waitForRows(
+    dailyCapturePath,
+    (rows) =>
+      rows.length === 1 &&
+      hasExactPhaseOneDailyRow(rows[0], {
+        entryDate: captureEntryDate,
+        eveningCaptureId,
+        stressSource: 'private_emotional',
+        stressControllability: 'hardly_controllable',
+        tomorrowPriority: eveningTomorrowPriority,
+        expectMorning: false,
+      }),
+    'one Evening Shutdown row after exact retry',
+  );
+  const eveningOnlyRows = await fetchRows(
+    dailyCapturePath,
+    'Evening Shutdown row after retry',
+  );
+  const dailyLogId = eveningOnlyRows[0].id;
+  await waitForRows(
+    `behavioral_events?select=id,daily_log_id,event_type,value,unit,source,metadata&daily_log_id=eq.${dailyLogId}&source=eq.quick_check_in`,
+    (rows) =>
+      hasExactEveningOnlyEvents(rows, {
+        dailyLogId,
+        entryDate: captureEntryDate,
+        eveningCaptureId,
+        stressSource: 'private_emotional',
+        stressControllability: 'hardly_controllable',
+        tomorrowPriority: eveningTomorrowPriority,
+      }),
+    'three deduplicated current events after Evening retry',
+  );
+
+  await page.goto(appRoute('/morning-calibration'), {
+    waitUntil: 'domcontentloaded',
+  });
+  await waitForFlutterShell(page);
+  await enableFlutterSemantics(page);
+  await clickByRoleName(page, 'button', 'morning sleep 5.5 h');
+  await clickByRoleName(page, 'button', 'morning energy 4 of 10');
+  await clickByRoleName(page, 'button', 'day shape constrained');
+  const morningSnapshotPromise = waitForAiPost(
+    page,
+    '/v1/snapshots/generate',
+    'Morning Calibration snapshot refresh',
+  );
+  await clickByText(page, 'Save morning calibration');
+  const morningSnapshotResponse = await morningSnapshotPromise;
+  assertJsonPayload(
+    morningSnapshotResponse.request(),
+    {
+      scope: 'daily',
+      window_days: 7,
+      target_date: captureEntryDate,
+    },
+    'Morning Calibration snapshot refresh payload',
+  );
+  await expectText(page, 'Latest check-in');
+
+  await waitForRows(
+    dailyCapturePath,
+    (rows) =>
+      rows.length === 1 &&
+      hasExactPhaseOneDailyRow(rows[0], {
+        entryDate: captureEntryDate,
+        eveningCaptureId,
+        stressSource: 'private_emotional',
+        stressControllability: 'hardly_controllable',
+        tomorrowPriority: eveningTomorrowPriority,
+        expectMorning: true,
+      }),
+    'one merged Evening and Morning daily row',
+  );
+  let mergedCaptureRows = await fetchRows(
+    dailyCapturePath,
+    'merged Evening and Morning daily row',
+  );
+  const morningCaptureId =
+    mergedCaptureRows[0].metadata?.captures?.morning?.capture_id;
+  if (!morningCaptureId) {
+    throw new Error(
+      `Merged daily row has no Morning capture id: ${JSON.stringify(mergedCaptureRows)}`,
+    );
+  }
+  await waitForRows(
+    `behavioral_events?select=id,daily_log_id,event_type,value,unit,source,metadata&daily_log_id=eq.${dailyLogId}&source=eq.quick_check_in`,
+    (rows) =>
+      hasExactPhaseOneEvents(rows, {
+        dailyLogId,
+        entryDate: captureEntryDate,
+        eveningCaptureId,
+        morningCaptureId,
+        stressSource: 'private_emotional',
+        stressControllability: 'hardly_controllable',
+        tomorrowPriority: eveningTomorrowPriority,
+      }),
+    'four exact merged current events after Morning Calibration',
+  );
+
   await page.goto(appRoute('/quick-mood-check-in'), {
     waitUntil: 'domcontentloaded',
   });
   await waitForFlutterShell(page);
   await enableFlutterSemantics(page);
-  await expectText(page, "Today's saved check-in is loaded. Saving updates it.");
-  for (let index = 0; index < 4; index += 1) {
+  await expectText(
+    page,
+    "Today's Evening Shutdown is loaded. Saving replaces only its evening state.",
+  );
+  for (let index = 0; index < 3; index += 1) {
     await clickByText(page, 'Next');
   }
-  await clickByText(page, 'Save');
+  await clickByRoleName(page, 'button', 'stress source workload');
+  await clickByText(page, 'Next');
+  await clickByRoleName(
+    page,
+    'button',
+    'stress controllability mostly_controllable',
+  );
+  await clickByText(page, 'Next');
+  await clickByText(page, 'Next');
+  await clickByText(page, 'Next');
+  await fillByLabelOrPlaceholder(
+    page,
+    'Tomorrow priority',
+    editedEveningTomorrowPriority,
+    0,
+  );
+  await clickByText(page, 'Next');
+  await expectFieldValue(page, 'Reflection (optional)', '', 0);
+  await expectFieldValue(page, 'Specific blocker (optional)', '', 1);
+  const eveningEditSnapshotPromise = waitForAiPost(
+    page,
+    '/v1/snapshots/generate',
+    'Evening edit snapshot refresh',
+  );
+  await clickByText(page, 'Save evening shutdown');
+  const eveningEditSnapshotResponse = await eveningEditSnapshotPromise;
+  assertJsonPayload(
+    eveningEditSnapshotResponse.request(),
+    {
+      scope: 'daily',
+      window_days: 7,
+      target_date: captureEntryDate,
+    },
+    'Evening edit snapshot refresh payload',
+  );
   await expectText(page, 'Latest check-in');
+  await expectText(page, 'Morning energy');
+  await expectText(page, '4/10');
+  await expectText(page, '5.5 h');
+
   await waitForRows(
-    `behavioral_events?select=daily_log_id,event_type,value,unit,source,metadata&user_id=eq.${user.id}&source=eq.quick_check_in`,
-    hasExactCheckInEvents,
-    'deduplicated behavioral events after same-day save',
+    dailyCapturePath,
+    (rows) =>
+      rows.length === 1 &&
+      hasExactPhaseOneDailyRow(rows[0], {
+        entryDate: captureEntryDate,
+        eveningCaptureId,
+        morningCaptureId,
+        stressSource: 'workload',
+        stressControllability: 'mostly_controllable',
+        tomorrowPriority: editedEveningTomorrowPriority,
+        expectMorning: true,
+      }),
+    'one merged daily row after Evening edit',
+  );
+  mergedCaptureRows = await fetchRows(
+    dailyCapturePath,
+    'merged daily row after Evening edit',
+  );
+  if (
+    mergedCaptureRows[0].metadata?.captures?.morning?.capture_id !==
+    morningCaptureId
+  ) {
+    throw new Error(
+      `Evening edit replaced the Morning capture: ${JSON.stringify(mergedCaptureRows)}`,
+    );
+  }
+  await waitForRows(
+    `behavioral_events?select=id,daily_log_id,event_type,value,unit,source,metadata&daily_log_id=eq.${dailyLogId}&source=eq.quick_check_in`,
+    (rows) =>
+      hasExactPhaseOneEvents(rows, {
+        dailyLogId,
+        entryDate: captureEntryDate,
+        eveningCaptureId,
+        morningCaptureId,
+        stressSource: 'workload',
+        stressControllability: 'mostly_controllable',
+        tomorrowPriority: editedEveningTomorrowPriority,
+      }),
+    'four deduplicated current events after Evening edit',
+  );
+
+  page.off('request', captureRequestObserver);
+  if (captureSnapshotRequests.length !== 3) {
+    throw new Error(
+      `Expected three successful capture snapshot refreshes, got ${captureSnapshotRequests.length}.`,
+    );
+  }
+  if (captureRecommendationGenerateRequests.length !== 0) {
+    throw new Error(
+      `Normal capture generated recommendations: ${captureRecommendationGenerateRequests.map((request) => request.url()).join(', ')}`,
+    );
+  }
+  const captureSideEffectsAfter = await captureSideEffectIds(user.id);
+  if (
+    JSON.stringify(captureSideEffectsAfter) !==
+    JSON.stringify(captureSideEffectsBefore)
+  ) {
+    throw new Error(
+      `Blank capture optionals materialized unrelated rows. Before ${JSON.stringify(captureSideEffectsBefore)}, after ${JSON.stringify(captureSideEffectsAfter)}`,
+    );
+  }
+  await assertRows(
+    `intake_responses?select=id,revision,state&user_id=eq.${user.id}&version=eq.intake-v1&order=revision.asc`,
+    (rows) =>
+      rows.length === 4 &&
+      rows[3].revision === 4 &&
+      rows[3].state === 'applied',
+    'unchanged Setup revisions after Phase 1 capture',
+  );
+  await assertRows(
+    `profiles?select=id,setup_revision&id=eq.${user.id}`,
+    (rows) => rows.length === 1 && rows[0].setup_revision === 4,
+    'unchanged Setup projection after Phase 1 capture',
+  );
+  await waitForRows(
+    `user_state_snapshots?select=id,scope,period_key,summary,signals,metadata&user_id=eq.${user.id}&scope=eq.daily&period_key=eq.${captureEntryDate}`,
+    (rows) =>
+      rows.length === 1 &&
+      rows[0].metadata?.source === 'snapshot-aggregator-v1' &&
+      rows[0].signals?.input_counts?.daily_logs >= 1 &&
+      rows[0].signals?.input_counts?.behavioral_events >= 4,
+    'one daily snapshot refreshed from merged Phase 1 capture',
   );
 
   const dailySnapshotBeforeHabit = await latestDailySnapshotGeneratedAt(user.id);
@@ -780,24 +1073,34 @@ try {
   await expectText(page, 'Notifications');
 
   await assertRows(
-    `daily_logs?select=id,source,sleep_hours,energy_level,stress_level,mood_score,reflection&user_id=eq.${user.id}`,
+    dailyCapturePath,
     (rows) =>
-      rows.some(
-        (row) =>
-          row.source === 'quick_check_in' &&
-          row.sleep_hours === 5.5 &&
-          row.energy_level === 9 &&
-          row.stress_level === 8 &&
-          row.mood_score === 2 &&
-          row.reflection === checkInNote,
-      ),
-    'daily_logs row with exact check-in values',
+      rows.length === 1 &&
+      hasExactPhaseOneDailyRow(rows[0], {
+        entryDate: captureEntryDate,
+        eveningCaptureId,
+        morningCaptureId,
+        stressSource: 'workload',
+        stressControllability: 'mostly_controllable',
+        tomorrowPriority: editedEveningTomorrowPriority,
+        expectMorning: true,
+      }),
+    'one final daily_logs row with exact merged Phase 1 values',
   );
 
   await assertRows(
-    `behavioral_events?select=daily_log_id,event_type,value,unit,source,metadata&user_id=eq.${user.id}&source=eq.quick_check_in`,
-    hasExactCheckInEvents,
-    'exact deduplicated behavioral events for check-in',
+    `behavioral_events?select=id,daily_log_id,event_type,value,unit,source,metadata&daily_log_id=eq.${dailyLogId}&source=eq.quick_check_in`,
+    (rows) =>
+      hasExactPhaseOneEvents(rows, {
+        dailyLogId,
+        entryDate: captureEntryDate,
+        eveningCaptureId,
+        morningCaptureId,
+        stressSource: 'workload',
+        stressControllability: 'mostly_controllable',
+        tomorrowPriority: editedEveningTomorrowPriority,
+      }),
+    'four exact final linked current events for Phase 1 capture',
   );
 
   await assertConcurrentSetupReplay(user.id);
@@ -1380,31 +1683,184 @@ function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-function hasExactCheckInEvents(rows) {
+function hasExactPhaseOneDailyRow(row, expected) {
+  const captures = row.metadata?.captures;
+  const evening = captures?.evening;
+  const morning = captures?.morning;
+  const captureKeys =
+    captures && typeof captures === 'object'
+      ? Object.keys(captures).sort()
+      : [];
+  const expectedCaptureKeys = expected.expectMorning
+    ? ['evening', 'morning']
+    : ['evening'];
+  const hasExpectedMorning = expected.expectMorning
+    ? morning?.capture_kind === 'morning' &&
+      morning?.entry_date === expected.entryDate &&
+      (!expected.morningCaptureId ||
+        morning?.capture_id === expected.morningCaptureId) &&
+      isIsoTimestamp(morning?.captured_at) &&
+      morning?.sleep_hours === 5.5 &&
+      morning?.current_energy === 4 &&
+      morning?.day_shape === 'constrained'
+    : morning === undefined;
+
+  return (
+    Boolean(row.id) &&
+    row.entry_date === expected.entryDate &&
+    row.source === 'quick_check_in' &&
+    row.sleep_hours === (expected.expectMorning ? 5.5 : null) &&
+    row.energy_level === (expected.expectMorning ? 4 : 9) &&
+    row.stress_level === 8 &&
+    row.mood_score === 2 &&
+    row.mood_label === 'very_low' &&
+    row.steps === null &&
+    row.activity_level === null &&
+    row.screen_time_hours === null &&
+    row.focus_minutes === null &&
+    row.nutrition_notes === null &&
+    row.day_focus === null &&
+    row.reflection === null &&
+    row.metadata?.capture_version === 'daily-capture-v2' &&
+    !Object.hasOwn(row.metadata ?? {}, 'context_note') &&
+    arraysEqual(captureKeys, expectedCaptureKeys) &&
+    evening?.capture_kind === 'evening' &&
+    evening?.entry_date === expected.entryDate &&
+    evening?.capture_id === expected.eveningCaptureId &&
+    isIsoTimestamp(evening?.captured_at) &&
+    evening?.mood === 2 &&
+    evening?.energy === 9 &&
+    evening?.stress_intensity === 8 &&
+    evening?.stress_intensity_label === 'high' &&
+    evening?.stress_source === expected.stressSource &&
+    evening?.stress_controllability === expected.stressControllability &&
+    evening?.focus_band === '30_to_60_minutes' &&
+    evening?.main_friction === 'emotional_load' &&
+    evening?.tomorrow_priority === expected.tomorrowPriority &&
+    !Object.hasOwn(evening ?? {}, 'reflection_note') &&
+    !Object.hasOwn(evening ?? {}, 'specific_blocker') &&
+    !Object.hasOwn(evening ?? {}, 'gentle_tomorrow') &&
+    hasExpectedMorning
+  );
+}
+
+function hasExactEveningOnlyEvents(rows, expected) {
+  return hasExactCaptureEvents(rows, expected, {
+    energy: 9,
+    eventTypes: ['energy', 'mood', 'stress'],
+    expectMorning: false,
+  });
+}
+
+function hasExactPhaseOneEvents(rows, expected) {
+  return hasExactCaptureEvents(rows, expected, {
+    energy: 4,
+    eventTypes: ['energy', 'mood', 'sleep', 'stress'],
+    expectMorning: true,
+  });
+}
+
+function hasExactCaptureEvents(rows, expected, contract) {
   if (
-    rows.length !== 4 ||
-    rows.some((row) => !row.daily_log_id) ||
+    rows.length !== contract.eventTypes.length ||
+    rows.some(
+      (row) =>
+        !row.id ||
+        row.daily_log_id !== expected.dailyLogId ||
+        row.source !== 'quick_check_in' ||
+        row.metadata?.capture_version !== 'daily-capture-v2' ||
+        row.metadata?.entry_date !== expected.entryDate ||
+        !isIsoTimestamp(row.metadata?.captured_at),
+    ) ||
+    new Set(rows.map((row) => row.id)).size !== contract.eventTypes.length ||
     new Set(rows.map((row) => row.daily_log_id)).size !== 1
   ) {
     return false;
   }
-  const actual = rows
-    .map((row) => `${row.event_type}:${Number(row.value)}:${row.unit}`)
-    .sort();
-  const expected = [
-    'energy:9:score_0_10',
+
+  const expectedSignals = [
+    `energy:${contract.energy}:score_0_10`,
     'mood:2:score_0_10',
-    'sleep:5.5:hours',
+    ...(contract.expectMorning ? ['sleep:5.5:hours'] : []),
     'stress:8:score_0_10',
   ].sort();
-  return (
-    JSON.stringify(actual) === JSON.stringify(expected) &&
-    rows.every(
-      (row) =>
-        row.source === 'quick_check_in' &&
-        row.metadata?.capture_version === 'daily-check-in-v1' &&
-        row.metadata?.capture_id,
-    )
+  const actualSignals = rows
+    .map((row) => `${row.event_type}:${Number(row.value)}:${row.unit}`)
+    .sort();
+  if (!arraysEqual(actualSignals, expectedSignals)) {
+    return false;
+  }
+
+  const byType = Object.fromEntries(rows.map((row) => [row.event_type, row]));
+  const eveningTypes = contract.expectMorning
+    ? ['mood', 'stress']
+    : ['mood', 'energy', 'stress'];
+  if (
+    eveningTypes.some((type) => {
+      const metadata = byType[type]?.metadata;
+      return (
+        metadata?.capture_kind !== 'evening' ||
+        metadata?.capture_id !== expected.eveningCaptureId ||
+        metadata?.focus_band !== '30_to_60_minutes' ||
+        metadata?.main_friction !== 'emotional_load' ||
+        metadata?.tomorrow_priority !== expected.tomorrowPriority ||
+        Object.hasOwn(metadata ?? {}, 'gentle_tomorrow')
+      );
+    })
+  ) {
+    return false;
+  }
+
+  const stressMetadata = byType.stress?.metadata;
+  if (
+    stressMetadata?.stress_intensity_label !== 'high' ||
+    stressMetadata?.stress_source !== expected.stressSource ||
+    stressMetadata?.stress_controllability !==
+      expected.stressControllability
+  ) {
+    return false;
+  }
+
+  if (!contract.expectMorning) {
+    return true;
+  }
+  return ['energy', 'sleep'].every((type) => {
+    const metadata = byType[type]?.metadata;
+    return (
+      metadata?.capture_kind === 'morning' &&
+      metadata?.capture_id === expected.morningCaptureId &&
+      metadata?.day_shape === 'constrained'
+    );
+  });
+}
+
+function isIsoTimestamp(value) {
+  return typeof value === 'string' && Number.isFinite(Date.parse(value));
+}
+
+async function captureSideEffectIds(userId) {
+  const tables = [
+    'tasks',
+    'goals',
+    'habits',
+    'schedule_items',
+    'memory_entries',
+    'notifications',
+    'recommendations',
+  ];
+  const rowsByTable = await Promise.all(
+    tables.map((table) =>
+      fetchRows(
+        `${table}?select=id&user_id=eq.${userId}`,
+        `${table} rows around Phase 1 capture`,
+      ),
+    ),
+  );
+  return Object.fromEntries(
+    tables.map((table, index) => [
+      table,
+      rowsByTable[index].map((row) => row.id).sort(),
+    ]),
   );
 }
 

@@ -247,7 +247,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('guest can save the canonical daily check-in locally',
+  testWidgets('guest can merge evening and morning captures locally',
       (tester) async {
     await _pumpTestApp(tester);
 
@@ -257,34 +257,46 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Add signal'), findsOneWidget);
 
-    await tester.tap(find.text('Daily check-in'));
+    await tester.tap(find.text('Evening Shutdown'));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.bySemanticsLabel('mood 2 of 10'));
-    await tester.pump();
-    await tester.tap(find.text('Next'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.bySemanticsLabel('energy 9 of 10'));
-    await tester.pump();
-    await tester.tap(find.text('Next'));
-    await tester.pumpAndSettle();
-
-    final sleepSlider = tester.widget<Slider>(find.byType(Slider));
-    sleepSlider.onChanged!(5.5);
-    await tester.pump();
-    await tester.tap(find.text('Next'));
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.bySemanticsLabel('stress 8 of 10'));
-    await tester.pump();
-    await tester.tap(find.text('Next'));
-    await tester.pumpAndSettle();
-
+    for (final label in [
+      'evening mood 2 of 10',
+      'evening energy 9 of 10',
+      'evening stress 8 of 10',
+      'stress source private_emotional',
+      'stress controllability hardly_controllable',
+      'focus band 30_to_60_minutes',
+      'main friction emotional_load',
+    ]) {
+      await tester.tap(find.bySemanticsLabel(label));
+      await tester.pump();
+      await tester.tap(find.text('Next'));
+      await tester.pumpAndSettle();
+    }
     await tester.enterText(
-      find.byType(EditableText).last,
-      '  Automated guest exact values  ',
+      _textFieldWithLabel('Tomorrow priority'),
+      'Protect the guest morning',
     );
-    await tester.tap(find.text('Save'));
+    await tester.pump();
+    await tester.tap(find.text('Next'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Save evening shutdown'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Latest check-in'), findsOneWidget);
+    await tester.tap(find.byIcon(Icons.add).last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Morning Calibration'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.bySemanticsLabel('morning sleep 5.5 h'));
+    await tester.tap(find.bySemanticsLabel('morning energy 4 of 10'));
+    final constrainedDay = find.bySemanticsLabel('day shape constrained');
+    await tester.ensureVisible(constrainedDay);
+    await tester.tap(constrainedDay);
+    await tester.pump();
+    await tester.ensureVisible(find.text('Save morning calibration'));
+    await tester.tap(find.text('Save morning calibration'));
     await tester.pumpAndSettle();
 
     expect(find.text('Latest check-in'), findsOneWidget);
@@ -293,20 +305,27 @@ void main() {
       prefs.getString('guest_quick_checkins')!,
     ) as List<dynamic>;
     expect(raw, hasLength(1));
-    expect(raw.single, containsPair('mood', 2));
-    expect(raw.single, containsPair('energy', 9));
-    expect(raw.single, containsPair('sleepHours', 5.5));
-    expect(raw.single, containsPair('stress', 8));
-    expect(
-      raw.single,
-      containsPair('contextNote', 'Automated guest exact values'),
-    );
+    final captures = (raw.single as Map<String, dynamic>)['captures'] as Map;
+    final evening = captures['evening'] as Map;
+    final morning = captures['morning'] as Map;
+    expect(evening['mood'], 2);
+    expect(evening['energy'], 9);
+    expect(evening['stress_intensity'], 8);
+    expect(evening['stress_source'], 'private_emotional');
+    expect(evening['stress_controllability'], 'hardly_controllable');
+    expect(evening['tomorrow_priority'], 'Protect the guest morning');
+    expect(evening.containsKey('reflection_note'), isFalse);
+    expect(evening.containsKey('specific_blocker'), isFalse);
+    expect(evening.containsKey('gentle_tomorrow'), isFalse);
+    expect(morning['sleep_hours'], 5.5);
+    expect(morning['current_energy'], 4);
+    expect(morning['day_shape'], 'constrained');
 
     await tester.tap(find.byIcon(Icons.add).last);
     await tester.pumpAndSettle();
-    expect(find.text('Today\'s saved check-in'), findsOneWidget);
+    expect(find.text('Today\'s saved captures'), findsOneWidget);
     expect(
-      find.text('Mood 2 | Energy 9 | Sleep 5.5 h | Stress 8'),
+      find.text('Mood 2 | Energy 4 | Sleep 5.5 h | Stress 8'),
       findsOneWidget,
     );
     expect(find.text('Local'), findsOneWidget);
@@ -322,7 +341,8 @@ void main() {
     await tester.tap(find.byIcon(Icons.add).last);
     await tester.pumpAndSettle();
 
-    expect(find.text('Daily check-in'), findsOneWidget);
+    expect(find.text('Evening Shutdown'), findsOneWidget);
+    expect(find.text('Morning Calibration'), findsOneWidget);
     expect(find.text('Habit completion'), findsNothing);
     expect(find.text('Habit management'), findsNothing);
   });
@@ -508,3 +528,8 @@ Future<void> _selectLabeledDropdown<T>(
   await tester.tap(find.text(value).last);
   await tester.pumpAndSettle();
 }
+
+Finder _textFieldWithLabel(String label) => find.byWidgetPredicate(
+      (widget) => widget is TextField && widget.decoration?.labelText == label,
+      description: 'TextField with label $label',
+    );

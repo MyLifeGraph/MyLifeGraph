@@ -139,12 +139,27 @@ locks the exact submitted draft for unchanged retry or reload. Setup-owned
 habits are edited only through Settings Setup, but active ones remain available
 for daily completion in Habit Completion.
 
-The immediate next slice is Phase 1, Lightweight Evening And Morning Capture.
-Extend the canonical typed capture flow with evening stress source,
-controllability, friction, and gentle-tomorrow intent, then add a very short
-morning calibration for sleep, current energy, and day shape. Do not add Daily
-Mode, briefing persistence, broad Habit V1 cadence, Coach/LLM, calendar import,
-or autonomous workers in that slice.
+Phase 1, Lightweight Evening And Morning Capture, is implemented. Evening
+Shutdown and Morning Calibration are separate typed flows over one
+`DailyCaptureEntry`. Their same-day merge replaces only the submitted capture
+kind under `daily_logs.metadata.captures`, preserves the other kind, and
+projects compatible numeric columns with Morning energy taking precedence over
+Evening energy. Supabase writes rebuild a dynamic set of at most four
+deterministically identified current-state events; guest storage uses V2 daily
+JSON while continuing to read and migrate V1 guest check-ins. Real capture
+writes refresh the explicit local `target_date` snapshot best-effort, while the
+backend prefers event `metadata.entry_date` over UTC timestamps when filtering
+the broadened read window. Dashboard reads remain direct and nullable, expose
+only persisted capture context, and never synthesize a mode or score. Phase 1
+does not add Daily Mode, briefing ranking or persistence, recommendation
+generation on save, an LLM, calendar import, or autonomous workers. The Phase
+0C Setup service-role RPC and its retry/revision contract are unchanged.
+
+The immediate next slice is Phase 2, Explainable Daily State. Extend the
+deterministic snapshot contract with capture freshness, data quality, explicit
+stress-taxonomy risk flags, and a conservative explainable state classification
+before building briefing ranking or a decision-first Today surface. Read the
+phase contract before changing snapshot or dashboard semantics.
 
 FastAPI-backed browser E2E coverage for revisioned Setup ownership/retry/edit,
 concurrent same-request convergence, post-intake recommendations, daily snapshot
@@ -189,10 +204,11 @@ The implemented post-intake refresh is backend-only and best-effort:
   `X-Scheduled-Refresh-Token`, lists onboarded non-guest profiles, and refreshes
   deterministic daily snapshots without LLM usage. If recommendation refresh is
   explicitly included, LLM wording remains disabled.
-- The canonical Supabase-backed daily check-in, dashboard task status changes,
-  Quick Action habit management writes, and Quick Action habit
-  completions now call the daily snapshot refresh best-effort after successful
-  writes. Guest/mock paths must remain local and must not call the AI service.
+- The canonical Supabase-backed Evening Shutdown and Morning Calibration,
+  dashboard task status changes, Quick Action habit management writes, and
+  Quick Action habit completions call the daily snapshot refresh best-effort
+  after successful writes. Capture refreshes include their explicit local
+  `target_date`. Guest/mock paths remain local and must not call the AI service.
 
 ## Local Supabase Workflow
 
@@ -290,7 +306,8 @@ Manual smoke test after schema or Supabase-client changes:
 - Register or sign in.
 - Complete required-only setup, then re-enter it from Settings.
 - Add, edit, and review one setup-owned commitment without changing a manual row.
-- Save the canonical daily check-in through either current route.
+- Save Evening Shutdown through either current route, then save Morning
+  Calibration and confirm that both states remain present.
 - Open dashboard.
 - Open notifications.
 

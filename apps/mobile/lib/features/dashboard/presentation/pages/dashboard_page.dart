@@ -51,7 +51,8 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
         showCompletedTasks: _showCompletedTasks,
         isRefreshingRecommendations: _isRefreshingRecommendations,
         recommendationRefreshError: _recommendationRefreshError,
-        onAddCheckIn: () => context.go(AppRoutes.dailyCheckIn),
+        onAddEvening: () => context.go(AppRoutes.dailyCheckIn),
+        onAddMorning: () => context.go(AppRoutes.morningCalibration),
         onRetryRecommendations: () {
           setState(() => _recommendationRefreshError = null);
           ref.invalidate(recommendationFeedProvider);
@@ -188,7 +189,8 @@ class _DashboardHome extends StatelessWidget {
     required this.showCompletedTasks,
     required this.isRefreshingRecommendations,
     required this.recommendationRefreshError,
-    required this.onAddCheckIn,
+    required this.onAddEvening,
+    required this.onAddMorning,
     required this.onRetryRecommendations,
     required this.onRefreshRecommendations,
     required this.onCompleteTask,
@@ -206,7 +208,8 @@ class _DashboardHome extends StatelessWidget {
   final bool showCompletedTasks;
   final bool isRefreshingRecommendations;
   final String? recommendationRefreshError;
-  final VoidCallback onAddCheckIn;
+  final VoidCallback onAddEvening;
+  final VoidCallback onAddMorning;
   final VoidCallback onRetryRecommendations;
   final VoidCallback onRefreshRecommendations;
   final ValueChanged<String> onCompleteTask;
@@ -252,7 +255,8 @@ class _DashboardHome extends StatelessWidget {
                           const SizedBox(height: AppSpacing.lg),
                           _LatestCheckInCard(
                             snapshot: snapshot,
-                            onAddCheckIn: onAddCheckIn,
+                            onAddEvening: onAddEvening,
+                            onAddMorning: onAddMorning,
                           ),
                           const SizedBox(height: AppSpacing.xl),
                           _RecommendationsSection(
@@ -334,11 +338,13 @@ class _DashboardHeader extends StatelessWidget {
 class _LatestCheckInCard extends StatelessWidget {
   const _LatestCheckInCard({
     required this.snapshot,
-    required this.onAddCheckIn,
+    required this.onAddEvening,
+    required this.onAddMorning,
   });
 
   final DashboardSnapshot snapshot;
-  final VoidCallback onAddCheckIn;
+  final VoidCallback onAddEvening;
+  final VoidCallback onAddMorning;
 
   @override
   Widget build(BuildContext context) {
@@ -381,10 +387,21 @@ class _LatestCheckInCard extends StatelessWidget {
           ),
           if (metrics.isEmpty) ...[
             const SizedBox(height: AppSpacing.lg),
-            FilledButton.icon(
-              onPressed: onAddCheckIn,
-              icon: const Icon(Icons.add_chart_outlined),
-              label: const Text('Add check-in'),
+            Wrap(
+              spacing: AppSpacing.sm,
+              runSpacing: AppSpacing.sm,
+              children: [
+                FilledButton.icon(
+                  onPressed: onAddMorning,
+                  icon: const Icon(Icons.wb_sunny_outlined),
+                  label: const Text('Morning Calibration'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: onAddEvening,
+                  icon: const Icon(Icons.nights_stay_outlined),
+                  label: const Text('Evening Shutdown'),
+                ),
+              ],
             ),
           ] else ...[
             const SizedBox(height: AppSpacing.lg),
@@ -395,11 +412,39 @@ class _LatestCheckInCard extends StatelessWidget {
                   metrics.map((metric) => _SignalTile(metric: metric)).toList(),
             ),
             const SizedBox(height: AppSpacing.md),
-            TextButton.icon(
-              onPressed: onAddCheckIn,
-              icon: const Icon(Icons.edit_outlined),
-              label: const Text('Update today\'s check-in'),
+            Wrap(
+              spacing: AppSpacing.sm,
+              runSpacing: AppSpacing.sm,
+              children: [
+                TextButton.icon(
+                  onPressed: onAddMorning,
+                  icon: const Icon(Icons.wb_sunny_outlined),
+                  label: Text(
+                    checkIn?.hasMorningCapture == true
+                        ? 'Edit Morning Calibration'
+                        : 'Add Morning Calibration',
+                  ),
+                ),
+                TextButton.icon(
+                  onPressed: onAddEvening,
+                  icon: const Icon(Icons.nights_stay_outlined),
+                  label: Text(
+                    checkIn?.hasEveningCapture == true
+                        ? 'Edit Evening Shutdown'
+                        : 'Add Evening Shutdown',
+                  ),
+                ),
+              ],
             ),
+            if (checkIn?.stressSource != null &&
+                checkIn?.stressControllability != null) ...[
+              const SizedBox(height: AppSpacing.xs),
+              Text(
+                'Stress context: ${_readableCaptureCode(checkIn!.stressSource!)} · '
+                '${_readableCaptureCode(checkIn.stressControllability!)}',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
           ],
         ],
       ),
@@ -411,7 +456,11 @@ class _LatestCheckInCard extends StatelessWidget {
       if (checkIn.mood != null)
         _SignalMetric('Mood', '${checkIn.mood}/10', Icons.mood_outlined),
       if (checkIn.energy != null)
-        _SignalMetric('Energy', '${checkIn.energy}/10', Icons.bolt_outlined),
+        _SignalMetric(
+          checkIn.hasMorningCapture ? 'Morning energy' : 'Evening energy',
+          '${checkIn.energy}/10',
+          Icons.bolt_outlined,
+        ),
       if (checkIn.sleepHours != null)
         _SignalMetric(
           'Sleep',
@@ -429,6 +478,18 @@ class _LatestCheckInCard extends StatelessWidget {
           'Focus',
           '${checkIn.focusMinutes} min',
           Icons.timer_outlined,
+        ),
+      if (checkIn.focusBand != null)
+        _SignalMetric(
+          'Focus band',
+          _readableCaptureCode(checkIn.focusBand!),
+          Icons.timer_outlined,
+        ),
+      if (checkIn.dayShape != null)
+        _SignalMetric(
+          'Day shape',
+          _readableCaptureCode(checkIn.dayShape!),
+          Icons.calendar_today_outlined,
         ),
       if (checkIn.steps != null)
         _SignalMetric(
@@ -499,6 +560,10 @@ class _SignalTile extends StatelessWidget {
     );
   }
 }
+
+String _readableCaptureCode(String value) => value
+    .replaceAll('_', ' ')
+    .replaceFirstMapped(RegExp(r'^[a-z]'), (match) => match[0]!.toUpperCase());
 
 class _RecommendationsSection extends StatelessWidget {
   const _RecommendationsSection({

@@ -49,13 +49,13 @@ class SupabaseSnapshotRepository:
         window_days: int,
     ) -> SnapshotInputRows:
         start_date = target_date - timedelta(days=window_days - 1)
-        start_datetime = datetime.combine(
-            start_date,
+        event_start_datetime = datetime.combine(
+            start_date - timedelta(days=1),
             time.min,
             tzinfo=timezone.utc,
         )
-        end_datetime = datetime.combine(
-            target_date + timedelta(days=1),
+        event_end_datetime = datetime.combine(
+            target_date + timedelta(days=2),
             time.min,
             tzinfo=timezone.utc,
         )
@@ -66,7 +66,7 @@ class SupabaseSnapshotRepository:
                     "select",
                     "id,entry_date,sleep_hours,steps,activity_level,"
                     "focus_minutes,mood_score,energy_level,stress_level,"
-                    "source,updated_at",
+                    "source,metadata,updated_at",
                 ),
                 ("user_id", f"eq.{user_id}"),
                 ("entry_date", f"gte.{start_date.isoformat()}"),
@@ -78,10 +78,13 @@ class SupabaseSnapshotRepository:
         behavioral_events = await self._client.select(
             "behavioral_events",
             params=[
-                ("select", "id,event_type,value,unit,occurred_at,source"),
+                (
+                    "select",
+                    "id,event_type,value,unit,occurred_at,source,metadata",
+                ),
                 ("user_id", f"eq.{user_id}"),
-                ("occurred_at", f"gte.{start_datetime.isoformat()}"),
-                ("occurred_at", f"lt.{end_datetime.isoformat()}"),
+                ("occurred_at", f"gte.{event_start_datetime.isoformat()}"),
+                ("occurred_at", f"lt.{event_end_datetime.isoformat()}"),
                 ("order", "occurred_at.desc"),
                 ("limit", "200"),
             ],

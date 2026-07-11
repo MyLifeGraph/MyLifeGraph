@@ -219,5 +219,5 @@ class _NoopSnapshotRefreshService extends SnapshotRefreshService {
         );
 
   @override
-  Future<void> refreshDailyAfterUserSignal() async {}
+  Future<void> refreshDailyAfterUserSignal({String? targetDate}) async {}
 }

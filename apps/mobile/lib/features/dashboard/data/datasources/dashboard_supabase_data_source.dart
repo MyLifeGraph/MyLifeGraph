@@ -16,7 +16,7 @@ class DashboardSupabaseDataSource {
           .from(SupabaseTables.dailyLogs)
           .select(
             'entry_date,mood_score,energy_level,sleep_hours,stress_level,'
-            'focus_minutes,steps,activity_level,screen_time_hours',
+            'focus_minutes,steps,activity_level,screen_time_hours,metadata',
           )
           .eq('user_id', userId)
           .order('entry_date', ascending: false)
@@ -72,6 +72,10 @@ class DashboardSnapshotMapper {
     if (entryDate == null) {
       return null;
     }
+    final metadata = _stringMap(row['metadata']);
+    final captures = _stringMap(metadata?['captures']);
+    final evening = _stringMap(captures?['evening']);
+    final morning = _stringMap(captures?['morning']);
     return DashboardCheckIn(
       entryDate: entryDate,
       mood: (row['mood_score'] as num?)?.toInt(),
@@ -82,7 +86,26 @@ class DashboardSnapshotMapper {
       steps: (row['steps'] as num?)?.toInt(),
       activityLevel: (row['activity_level'] as num?)?.toInt(),
       screenTimeHours: (row['screen_time_hours'] as num?)?.toDouble(),
+      hasEveningCapture: evening != null,
+      hasMorningCapture: morning != null,
+      focusBand: _optionalString(evening?['focus_band']),
+      stressSource: _optionalString(evening?['stress_source']),
+      stressControllability:
+          _optionalString(evening?['stress_controllability']),
+      dayShape: _optionalString(morning?['day_shape']),
     );
+  }
+
+  Map<String, dynamic>? _stringMap(Object? value) {
+    if (value is! Map) {
+      return null;
+    }
+    return Map<String, dynamic>.from(value);
+  }
+
+  String? _optionalString(Object? value) {
+    final text = value?.toString().trim();
+    return text == null || text.isEmpty ? null : text;
   }
 
   int _streakDays(List<Map<String, dynamic>> rows, DateTime loadedAt) {

@@ -16,11 +16,17 @@ class DashboardMockDataSource {
       latestCheckIn: draft == null
           ? null
           : DashboardCheckIn(
-              entryDate: draft.capturedAt,
+              entryDate: DateTime.parse(draft.entryDate),
               mood: draft.mood,
               energy: draft.energy,
               sleepHours: draft.sleepHours,
               stress: draft.stress,
+              hasEveningCapture: draft.evening != null,
+              hasMorningCapture: draft.morning != null,
+              focusBand: draft.evening?.focusBand?.code,
+              stressSource: draft.evening?.stressSource?.code,
+              stressControllability: draft.evening?.stressControllability?.code,
+              dayShape: draft.morning?.dayShape?.code,
             ),
       checkInStreakDays: draft == null ? 0 : 1,
       todayPlan: const [],

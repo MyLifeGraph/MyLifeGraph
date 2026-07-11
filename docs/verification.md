@@ -89,7 +89,12 @@ per-user serialization against a later revision, full rollback on ownership
 collision, idempotent profile repair, and the exact-only legacy
 `Math`/`Room 204`/Monday `08:15`-`09:45` cleanup. Snapshot tests verify
 principal-derived `user_id`, request `user_id` rejection, scoped Supabase reads,
-and refreshing an existing `user_state_snapshots` row for the same period.
+refreshing an existing `user_state_snapshots` row for the same period, and the
+Phase 1 capture-date boundary. The snapshot repository reads `metadata` from
+`daily_logs` and `behavioral_events`, widens the UTC event query safely, prefers
+the explicit event `metadata.entry_date` for local-day filtering, excludes the
+following local day, and retains a UTC fallback for legacy events without that
+metadata.
 Scheduled refresh tests
 cover the backend-only token guard, onboarded non-guest profile selection,
 per-user failure isolation, deterministic daily snapshot refresh, and optional
@@ -114,15 +119,29 @@ Current Flutter widget tests include:
 - Setup save-state tests keep validation and HTTP 4xx failures editable, make
   409 suggest reload, and lock timeout/5xx/malformed results to exact retry or
   explicit reload.
-- Guest can select distinctive mood, energy, sleep, stress, and context values,
-  persist the exact typed check-in locally, and read the saved summary on return.
-- Check-in mapper tests assert the exact `daily_logs` payload and four linked
-  `behavioral_events`, including source, units, metadata, and nulling of
-  uncollected legacy placeholder fields.
-- Guest-store tests cover exact JSON, one-entry-per-day retry deduplication, and
+- Capture-domain tests cover every bounded stress source, controllability,
+  focus-band, friction, and day-shape value; rating, half-hour sleep, date, and
+  text boundaries; omission of blank Evening optionals; and explicit inclusion
+  of supplied reflection, blocker, and gentle-tomorrow values.
+- Same-day merge tests cover Evening-then-Morning and Morning-then-Evening,
+  replacing one branch without erasing the other, Morning-over-Evening energy
+  precedence, removal of deliberately cleared optionals, preservation of
+  foreign top-level metadata, and legacy V1 calendar-date compatibility.
+- Capture payload tests assert one merged `daily_logs` row with
+  `capture_version=daily-capture-v2`, nested `captures.evening|morning`, direct
+  nullable compatibility values, and only explicitly available current
+  `behavioral_events`. Event identities remain stable across exact retry and
+  event metadata mirrors capture kind/date plus the relevant stress, friction,
+  focus, priority, and day-shape context.
+- Guest-store tests cover typed Evening/Morning JSON, both-order same-day merge,
+  exact retry deduplication, V1 guest rows with an explicit local date, and
   recovery from corrupted local JSON.
-- Check-in widget tests cover required explicit selections, draft retention after
-  failure, stable retry, and suppression of a duplicate in-flight save.
+- Evening widget tests cover required explicit selections, exact typed draft
+  retention after failure, stable retry identity, prefilled re-entry with blank
+  optionals still blank, and suppression of a duplicate in-flight write.
+- The guest app smoke completes distinctive required-only Evening Shutdown and
+  Morning Calibration, persists one local merged day, reads Morning energy over
+  Evening energy, and shows the exact saved summary on return.
 - Guest sees only locally functional Quick Actions; Supabase-only Habit
   Completion and Habit Management are hidden and their direct routes redirect.
 - The Intake API data source gets `GET /v1/intake/setup` and posts
@@ -135,14 +154,16 @@ Current Flutter widget tests include:
   sessions receive demo feeds, even with a leftover token. Real missing-config,
   missing-token, network, and malformed-response paths throw and never consult
   mock data; current/missing/stale feed metadata is preserved.
-- Dashboard mapper/widget tests assert exact raw values, honest empty/error
-  states, local source labels, and the absence of former proxy metrics.
+- Dashboard mapper/widget tests assert exact raw values, Phase 1 capture
+  provenance and structured context, Morning energy precedence, honest
+  empty/error states, local source labels, and the absence of former proxy
+  metrics.
 - Capability, Settings, and notification tests cover the gated Coach/Deep Work/
   guest-Habit routes, persistent local-demo label, strict `action_url` allowlist,
   original notification fields/read state, and separate real empty/error states.
 - The Snapshot refresh service posts `POST /v1/snapshots/generate` with bearer
-  auth in real backend mode, skips guest/mock/missing-token paths, and treats
-  network failures as best-effort.
+  auth in real backend mode, includes an explicit capture `target_date`, skips
+  guest/mock/missing-token paths, and treats network failures as best-effort.
 - Task and habit snapshot refresh service entrypoints route through the same
   authenticated daily snapshot refresh behavior. The active dashboard task
   status, Quick Action habit management writes, and Quick Action habit
@@ -154,8 +175,8 @@ Current Flutter widget tests include:
 - The Insights repository keeps mock correlation data scoped to mock/guest mode
   and does not substitute demo correlations for empty or failing real Supabase
   reads.
-- Source-boundary provider tests keep Setup, canonical check-in, Dashboard, and
-  Insights on local/demo sources when `USE_MOCK_DATA=true`, even if an
+- Source-boundary provider tests keep Setup, Evening/Morning capture, Dashboard,
+  and Insights on local/demo sources when `USE_MOCK_DATA=true`, even if an
   authenticated Supabase session exists.
 - Habit visibility tests exclude every Setup-managed habit from generic Habit
   Management while keeping active Setup habits in Habit Completion and hiding
@@ -229,6 +250,11 @@ npx playwright install chromium
 FLUTTER_BIN=/path/to/flutter bash scripts/e2e_web.sh
 ```
 
+This is the normal non-destructive database path: the script starts or reuses
+the repository's local Supabase stack and skips `supabase db reset`. The smoke
+still writes a uniquely named local Auth user and its test rows. Do not set
+`RESET_DB=true` unless recreating the local database is explicitly intended.
+
 For a fresh local database before the browser run:
 
 ```bash
@@ -290,22 +316,47 @@ id must both return the same applied revision, produce exactly one
 exercises the migrated advisory-lock RPC against real local PostgreSQL rather
 than only the in-memory concurrency tests.
 
-The smoke then creates a habit through Habit Management, follows
-`/daily-check-in` into the canonical lightweight capture, saves distinctive
-check-in values twice for the same day, logs the managed habit completion, uses
-the dashboard refresh action, opens Notifications, and verifies the gated Coach
-and Deep Work compatibility redirects. It still asserts deterministic
-post-intake recommendations, exact `daily_logs` and linked behavioral events,
-`habit_logs`, and backend-refreshed daily snapshots. Mood `2`, energy `9`, sleep
-`5.5`, stress `8`, the trimmed note, and exactly four same-day
-`quick_check_in` events remain value-level checks. Manual refresh requests to
-`/v1/snapshots/generate` and `/v1/recommendations/generate` are observed and
-their deterministic payloads asserted.
+The smoke then creates a habit through Habit Management and follows
+`/daily-check-in` into the canonical Evening Shutdown at
+`/quick-mood-check-in`. It records distinctive mood `2`, Evening energy `9`,
+stress `8`, private/emotional hardly-controllable stress, a focus band,
+friction, and tomorrow priority while leaving reflection, specific blocker, and
+gentle-tomorrow blank. Playwright lets the first `daily_logs` upsert commit but
+drops its browser response, verifies that the exact draft remains available,
+then retries without creating another daily row or event set.
+
+The same browser user then completes `/morning-calibration` with sleep `5.5`,
+Morning energy `4`, and constrained day shape. Database assertions require
+exactly one `(user_id, entry_date)` row with
+`metadata.capture_version=daily-capture-v2`, both nested capture branches,
+absent blank optional keys, mood/stress from Evening, sleep from Morning, and
+Morning energy taking precedence in `energy_level`. The smoke reopens Evening,
+checks its saved state, edits stress to workload/mostly-controllable and the
+priority, and requires the exact Morning capture identity and values to remain.
+
+Linked current-event assertions require three explicit events after
+Evening-only and exactly four after Morning merge and Evening edit. All final
+events share the daily-log id, have unique deterministic ids, carry the correct
+numeric value/unit, and mirror their relevant `capture_kind`, `entry_date`,
+capture id/time, stress taxonomy, focus/friction/priority, or day-shape
+metadata. Capture success sends `POST /v1/snapshots/generate` with the explicit
+local `target_date`; the committed-response failure does not. Normal capture is
+also observed to make no browser request to
+`POST /v1/recommendations/generate` and to leave Setup revisions/profile
+projection plus unrelated task, goal, habit, schedule, memory, notification,
+and recommendation identities unchanged.
+
+After the Phase 1 assertions, the smoke logs the managed habit completion, uses
+the deliberate dashboard recommendation refresh, opens Notifications, and
+verifies the gated Coach and Deep Work compatibility redirects. It continues to
+assert `habit_logs`, one backend-refreshed daily snapshot for the capture date,
+deterministic post-intake recommendations, and the explicit payloads of manual
+`/v1/snapshots/generate` and `/v1/recommendations/generate` requests.
 
 `e2e/web/smoke.mjs` navigates Flutter routes through root hash URLs such as
-`/#/auth` and `/#/daily-check-in`. This avoids direct deep-link requests against
-the `flutter run -d web-server` development server, which does not provide a
-production-style rewrite layer for every app path.
+`/#/auth`, `/#/daily-check-in`, and `/#/morning-calibration`. This avoids direct
+deep-link requests against the `flutter run -d web-server` development server,
+which does not provide a production-style rewrite layer for every app path.
 
 The service-role key is used only in the Node-side E2E process for local setup
 and assertions and in the FastAPI process for backend persistence. It must never

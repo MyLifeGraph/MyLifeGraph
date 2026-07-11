@@ -111,7 +111,9 @@ curl -X POST http://localhost:8000/v1/snapshots/generate \
 
 Use `"scope":"weekly"` to refresh the ISO-week snapshot for the target date.
 The backend derives `user_id` from the bearer token and rejects request bodies
-that include `user_id`.
+that include `user_id`. Phase 1 capture supplies its explicit local
+`target_date`; snapshot event reads include metadata, use a widened UTC window,
+and prefer `metadata.entry_date` when assigning an event to that local day.
 
 Scheduler-triggered daily refresh uses a backend-only token and never belongs
 in Flutter or browser runtime configuration:

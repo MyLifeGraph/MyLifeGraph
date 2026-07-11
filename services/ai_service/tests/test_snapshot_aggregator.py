@@ -1,4 +1,5 @@
 import asyncio
+from dataclasses import replace
 from datetime import date, datetime, timezone
 
 import httpx
@@ -304,6 +305,59 @@ def test_generate_snapshot_ignores_logs_outside_target_window():
     assert response.signals["event_type_counts"] == {"quick_mood_check_in": 1}
 
 
+def test_snapshot_event_window_prefers_local_entry_date_with_utc_fallback():
+    inputs = replace(
+        sample_inputs(),
+        behavioral_events=[
+            {
+                "id": "local-morning",
+                "event_type": "local_morning",
+                "occurred_at": "2026-07-01T22:30:00+00:00",
+                "source": "quick_check_in",
+                "metadata": {"entry_date": "2026-07-02"},
+            },
+            {
+                "id": "next-local-day",
+                "event_type": "next_local_day",
+                "occurred_at": "2026-07-02T22:30:00+00:00",
+                "source": "quick_check_in",
+                "metadata": {"entry_date": "2026-07-03"},
+            },
+            {
+                "id": "utc-fallback",
+                "event_type": "utc_fallback",
+                "occurred_at": "2026-07-02T09:00:00+00:00",
+                "source": "legacy",
+            },
+            {
+                "id": "invalid-metadata-fallback",
+                "event_type": "invalid_metadata_fallback",
+                "occurred_at": "2026-07-02T10:00:00+00:00",
+                "source": "legacy",
+                "metadata": {"entry_date": "not-a-date"},
+            },
+        ],
+    )
+    repository = FakeSnapshotRepository(inputs)
+
+    response = run(
+        SnapshotAggregator(
+            repository=repository,
+            today_provider=lambda: TODAY,
+            now_provider=lambda: NOW,
+        ).generate_snapshot(
+            user_id="principal-user-123",
+            request=SnapshotGenerateRequest(target_date=TODAY, window_days=1),
+        ),
+    )
+
+    assert response.signals["event_type_counts"] == {
+        "local_morning": 1,
+        "utc_fallback": 1,
+        "invalid_metadata_fallback": 1,
+    }
+
+
 def test_snapshot_repository_scopes_every_read_to_explicit_user_id():
     client = FakeSupabaseClient()
     repository = SupabaseSnapshotRepository(client)
@@ -331,7 +385,7 @@ def test_snapshot_repository_scopes_every_read_to_explicit_user_id():
     )
 
 
-def test_snapshot_repository_applies_upper_bounds_before_limiting_window_reads():
+def test_snapshot_repository_reads_metadata_and_widens_event_utc_bounds():
     client = FakeSupabaseClient()
     repository = SupabaseSnapshotRepository(client)
 
@@ -350,9 +404,11 @@ def test_snapshot_repository_applies_upper_bounds_before_limiting_window_reads()
         "lte.2026-07-02",
     ]
     assert _param_values(event_params, "occurred_at") == [
-        "gte.2026-06-26T00:00:00+00:00",
-        "lt.2026-07-03T00:00:00+00:00",
+        "gte.2026-06-25T00:00:00+00:00",
+        "lt.2026-07-04T00:00:00+00:00",
     ]
+    assert "metadata" in _param_values(daily_params, "select")[0].split(",")
+    assert "metadata" in _param_values(event_params, "select")[0].split(",")
     assert _param_values(daily_params, "limit") == ["7"]
     assert _param_values(event_params, "limit") == ["200"]
 

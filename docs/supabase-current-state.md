@@ -41,8 +41,8 @@ The app table constants live in
 | Table | Current app use |
 | --- | --- |
 | `profiles` | Auth profile rows, roles, provider, timezone, onboarding state, and monotonic `setup_revision` projection guard. |
-| `daily_logs` | Canonical daily check-in and direct nullable Dashboard signals; the Dashboard does not synthesize proxy scores. |
-| `behavioral_events` | Granular AI signal stream; the canonical check-in writes four events linked to its `daily_logs` row. |
+| `daily_logs` | One canonical daily row whose V2 metadata owns separate Evening/Morning captures plus direct nullable numeric Dashboard projections; the Dashboard does not synthesize proxy scores. |
+| `behavioral_events` | Granular AI signal stream; canonical capture writes a dynamic deterministic maximum of four current events linked to its `daily_logs` row. |
 | `tasks` | Dashboard plan items and task completion updates. |
 | `notifications` | Read-only Notifications inbox; original type, priority, read state, and allowlisted internal `action_url` targets. |
 | `schedule_items` | Setup-owned confirmed fixed commitments plus preserved manual/other-source dashboard schedule rows. |
@@ -59,13 +59,37 @@ The app table constants live in
 | `intake_responses` | Typed Setup history with request identity, optimistic revision, pending/applied state, and structured lifecycle items. |
 | `user_state_snapshots` | Compact backend-owned user state snapshots and deterministic recommendation input. |
 
-The canonical check-in upserts one `daily_logs` row per user/date with source
-`quick_check_in`. It then replaces exactly four same-source events for that
-`daily_log_id`: mood, energy, stress, and sleep. Repeated same-day saves therefore
-represent the current daily state without append-only event duplication. This
-uses existing columns and policies; no schema migration was required. The same
-upsert nulls the legacy fixed steps, activity, screen-time, focus, nutrition, and
-day-focus values that the canonical form does not collect.
+Phase 1 canonical capture upserts one `daily_logs` row per user/date with source
+`quick_check_in`. `metadata.capture_version=daily-capture-v2` contains separate
+owned `captures.evening` and `captures.morning` objects. Saving one kind replaces
+only that object, preserving the other capture and unrelated metadata. Numeric
+projection keeps existing consumers compatible: Morning energy takes
+precedence, Evening owns mood and stress, and Morning owns sleep. Rough focus is
+kept as a structured band and does not fabricate `focus_minutes`.
+
+After each write Flutter removes the existing `quick_check_in` events linked to
+that `daily_log_id` and upserts the explicit current signals with deterministic
+ids derived from the daily row and event kind. The resulting set is dynamic and
+contains at most mood, energy, stress, and sleep; an Evening-only or
+Morning-only day therefore does not create unanswered events. Event metadata
+mirrors the relevant capture kind, id, local entry date, capture time, and
+bounded context. Repeated same-day saves converge without append-only signal
+history. Existing columns, grants, and RLS policies are sufficient, so Phase 1
+adds no schema migration.
+
+Guest capture stores the same ownership model as V2 JSON in
+`shared_preferences`, still reads V1 guest JSON, and keeps the existing
+best-effort check-in migration into a real non-demo account. Guest Setup remains
+separate and is still not migrated automatically. Real capture saves request a
+best-effort daily snapshot for their explicit local `target_date`. FastAPI loads
+daily/event metadata, widens the UTC event query by one calendar day on both
+sides, prefers `metadata.entry_date` when filtering, and falls back to
+`occurred_at` for legacy events.
+
+Dashboard reads keep direct nullable numeric values and persisted capture
+presence/context only. Phase 1 does not add Daily Mode, briefing ranking,
+recommendation generation on save, or LLM usage. It also does not change the
+Phase 0C revision tables, profile guard, or atomic Setup RPC.
 
 Phase 0B did not require a migration. Flutter now treats missing or failing real
 Dashboard/Notifications/Recommendation sources as empty or error according to
@@ -225,7 +249,8 @@ Supabase-backed path:
 - Register or sign in.
 - Complete required-only Setup, re-enter it, and save an edit.
 - Review/archive or remove one Setup-owned item and preserve a manual row.
-- Save the canonical daily check-in through either current route.
+- Save Evening Shutdown through either current route, then save Morning
+  Calibration and confirm that the same daily row retains both captures.
 - Open dashboard.
 - Open notifications.
 
@@ -281,4 +306,7 @@ The latest schema addition is the Phase 0C service-role-only atomic Setup apply
 RPC layered on the revision contract and monotonic profile guard. The backend
 reuses `intake_responses` and `user_state_snapshots` for authenticated Setup and
 deterministic daily/weekly aggregation without adding broad LLM, calendar, or
-worker infrastructure.
+worker infrastructure. Phase 1 changes only typed metadata and client/backend
+mapping over existing `daily_logs` and `behavioral_events`; the Setup RPC and
+schema grants remain unchanged. Phase 2 Explainable Daily State is the next
+consumer of that structured capture data.

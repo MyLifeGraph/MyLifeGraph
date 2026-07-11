@@ -23,6 +23,17 @@ void main() {
             'steps': 1111,
             'activity_level': 3,
             'screen_time_hours': 6.25,
+            'metadata': {
+              'capture_version': 'daily-capture-v2',
+              'captures': {
+                'evening': {
+                  'focus_band': '30_to_60_minutes',
+                  'stress_source': 'private_emotional',
+                  'stress_controllability': 'hardly_controllable',
+                },
+                'morning': {'day_shape': 'constrained'},
+              },
+            },
           },
         ],
         taskRows: [
@@ -69,6 +80,15 @@ void main() {
       expect(snapshot.latestCheckIn?.steps, 1111);
       expect(snapshot.latestCheckIn?.activityLevel, 3);
       expect(snapshot.latestCheckIn?.screenTimeHours, 6.25);
+      expect(snapshot.latestCheckIn?.hasEveningCapture, isTrue);
+      expect(snapshot.latestCheckIn?.hasMorningCapture, isTrue);
+      expect(snapshot.latestCheckIn?.focusBand, '30_to_60_minutes');
+      expect(snapshot.latestCheckIn?.stressSource, 'private_emotional');
+      expect(
+        snapshot.latestCheckIn?.stressControllability,
+        'hardly_controllable',
+      );
+      expect(snapshot.latestCheckIn?.dayShape, 'constrained');
       expect(snapshot.todayPlan.single.priority, 'high');
       expect(snapshot.todayPlan.single.isCompleted, isTrue);
       expect(snapshot.scheduleDays[4].events.single.title, 'Exact commitment');
@@ -92,16 +112,32 @@ void main() {
 
   test('local dashboard reads exact guest check-in values', () async {
     final capturedAt = DateTime.now();
+    final entryDate = dailyCaptureEntryDate(capturedAt);
     final source = DashboardMockDataSource(
-      quickCheckInStore: _MemoryCheckInStore(
-        QuickCheckInDraft(
-          captureId: 'local-dashboard',
-          capturedAt: capturedAt,
-          mood: 2,
-          energy: 9,
-          sleepHours: 5.5,
-          stress: 8,
-          contextNote: '',
+      quickCheckInStore: _MemoryCaptureStore(
+        DailyCaptureEntry(
+          entryDate: entryDate,
+          evening: EveningShutdownDraft(
+            captureId: 'local-evening',
+            entryDate: entryDate,
+            capturedAt: capturedAt,
+            mood: 2,
+            energy: 9,
+            stress: 8,
+            stressSource: StressSource.privateEmotional,
+            stressControllability: StressControllability.hardlyControllable,
+            focusBand: FocusBand.thirtyToSixtyMinutes,
+            mainFriction: MainFriction.emotionalLoad,
+            tomorrowPriority: 'Protect tomorrow',
+          ),
+          morning: MorningCalibrationDraft(
+            captureId: 'local-morning',
+            entryDate: entryDate,
+            capturedAt: capturedAt,
+            sleepHours: 5.5,
+            energy: 4,
+            dayShape: DayShape.constrained,
+          ),
         ),
       ),
     );
@@ -110,9 +146,11 @@ void main() {
 
     expect(snapshot.origin, DashboardOrigin.localDemo);
     expect(snapshot.latestCheckIn?.mood, 2);
-    expect(snapshot.latestCheckIn?.energy, 9);
+    expect(snapshot.latestCheckIn?.energy, 4);
     expect(snapshot.latestCheckIn?.sleepHours, 5.5);
     expect(snapshot.latestCheckIn?.stress, 8);
+    expect(snapshot.latestCheckIn?.focusBand, '30_to_60_minutes');
+    expect(snapshot.latestCheckIn?.dayShape, 'constrained');
     expect(snapshot.todayPlan, isEmpty);
   });
 
@@ -129,17 +167,20 @@ void main() {
   });
 }
 
-class _MemoryCheckInStore implements QuickCheckInStore {
-  const _MemoryCheckInStore(this.value);
+class _MemoryCaptureStore implements QuickCheckInStore {
+  const _MemoryCaptureStore(this.value);
 
-  final QuickCheckInDraft value;
+  final DailyCaptureEntry value;
 
   @override
   QuickCheckInSaveTarget get target => QuickCheckInSaveTarget.guest;
 
   @override
-  Future<QuickCheckInDraft?> loadToday(DateTime today) async => value;
+  Future<DailyCaptureEntry?> loadToday(DateTime today) async => value;
 
   @override
-  Future<void> save(QuickCheckInDraft draft) async {}
+  Future<void> saveEvening(EveningShutdownDraft draft) async {}
+
+  @override
+  Future<void> saveMorning(MorningCalibrationDraft draft) async {}
 }

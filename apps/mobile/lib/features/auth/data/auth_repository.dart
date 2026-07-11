@@ -243,10 +243,10 @@ class AuthRepository {
       return;
     }
     try {
-      final drafts = await GuestQuickCheckInDataSource().readAll();
+      final entries = await GuestQuickCheckInDataSource().readAll();
       final remote = QuickCheckInSupabaseDataSource(_client);
-      for (final draft in drafts) {
-        await remote.saveForUser(userId: userId, draft: draft);
+      for (final entry in entries) {
+        await remote.mergeEntryForUser(userId: userId, entry: entry);
       }
       await prefs.remove(_Prefs.guestQuickCheckIns);
     } catch (_) {

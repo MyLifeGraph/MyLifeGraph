@@ -78,46 +78,62 @@ remote profile reads/creation and guest check-in migration in this mode, then
 overlays the locally applied Setup name and completion state so reload remains
 local and consistent.
 
-The canonical daily check-in selects its store from the authenticated session.
-Guest/demo sessions write one typed local entry per day through
-`shared_preferences`; real sessions upsert the same selected values to Supabase.
-Other remote-only writes still show an in-app message when Supabase is not
-configured.
+Canonical daily capture selects its store from the authenticated session.
+Guest/demo sessions merge one typed local daily entry through
+`shared_preferences`; real sessions merge the same Evening or Morning capture
+into Supabase. Other remote-only writes still show an in-app message when
+Supabase is not configured.
 
 ## Canonical Daily Capture
 
-`/quick-mood-check-in` is the single implementation for current daily capture;
-the legacy `/daily-check-in` route redirects to it. The removed legacy page and
-data source previously displayed and persisted fixed example values.
+`/quick-mood-check-in` is the Evening Shutdown implementation, and the legacy
+`/daily-check-in` route redirects to it. `/morning-calibration` is a separate,
+short Morning Calibration instead of another full daily form.
 
 The current capture contract is:
 
-- Mood, energy, sleep hours, and stress have no measured default. The user must
-  select each value before continuing; the context note is optional.
-- One typed `QuickCheckInDraft` carries the selected values and a stable capture
-  id through retry.
-- Guest saves replace the same local calendar day's entry and can be read back
-  in Quick Action and when reopening the flow.
-- Supabase saves upsert the `(user_id, entry_date)` `daily_logs` row and replace
-  exactly four `behavioral_events` linked through `daily_log_id`. This prevents
-  repeated same-day saves from appending duplicate current-state signals.
+- Typed `EveningShutdownDraft` and `MorningCalibrationDraft` values have stable
+  capture ids through retry. `DailyCaptureEntry` is the one same-day aggregate.
+- Evening requires mood, energy, stress intensity, the fixed stress source and
+  controllability taxonomies, focus band, main friction, and tomorrow priority.
+  Reflection, a specific blocker, and gentle-tomorrow intent are optional and
+  omitted from metadata when blank or false.
+- Morning requires sleep hours, current energy, and `normal`, `constrained`, or
+  `flexible` day shape. It does not repeat Evening questions and explicitly
+  states that it does not assign Daily Mode or generate recommendations.
+- Same-day merge replaces only the submitted `metadata.captures.evening` or
+  `.morning` object, preserving the other capture and unrelated metadata.
+  Numeric compatibility projects mood and stress from Evening, sleep from
+  Morning, and energy from Morning when present or Evening otherwise.
+- Guest saves use a versioned V2 daily JSON object and remain readable on
+  return. Legacy V1 guest JSON remains readable and is preserved during the
+  existing best-effort guest-to-real-account check-in migration.
+- Supabase saves upsert the `(user_id, entry_date)` `daily_logs` row and rebuild
+  a dynamic set of at most four current `behavioral_events`. Mood, energy,
+  stress, and sleep receive deterministic ids derived from the daily row and
+  event kind, are linked through `daily_log_id`, and mirror relevant structured
+  capture metadata.
 - The upsert clears legacy placeholder-only steps, activity, screen-time, focus,
   nutrition, and day-focus values because the canonical form does not collect
-  them. A future real source for those signals needs an explicit merge contract.
-- The optional context note remains check-in context. It is no longer promoted
-  automatically to a durable `memory_entries` pattern.
+  them. Rough focus stays a structured band and is not converted into invented
+  `focus_minutes`.
+- Optional notes remain check-in context. They are not promoted to durable
+  `memory_entries`, tasks, recommendations, schedule rows, or notification copy.
 - A failed write keeps the draft and exposes retry; an in-flight save ignores a
-  second submit. Successful real-account writes still refresh the daily snapshot
-  best-effort.
+  second submit. Successful real-account writes refresh the daily snapshot for
+  the capture's explicit local `target_date` best-effort; guest/mock writes do
+  not call Supabase or FastAPI.
 
 ## Dashboard Source Contract
 
 `DashboardSnapshot` carries an explicit `localDemo` or `account` origin, load
 time, nullable latest check-in, true check-in streak, task rows, and schedule
 entries. The Supabase mapper preserves stored mood, energy, sleep, stress,
-focus, steps, activity, and screen-time values exactly. The UI shows only fields
+focus, steps, activity, and screen-time values exactly and reads only persisted
+Evening/Morning flags, focus band, stress context, and day shape from metadata.
+The guest mapper uses the same merged daily object. The UI shows only fields
 that exist and labels the latest row by its real date; missing values do not
-become zero.
+become zero, a mode, or a derived readiness score.
 
 The former wellness/optimization/recovery score, fake steps, derived sleep,
 invented screen time, hydration estimate, and schedule activity bars are
@@ -248,6 +264,9 @@ Current responsibilities:
 - Create or refresh compact `daily` and `weekly` `user_state_snapshots` from
   recent `daily_logs`, `behavioral_events`, `tasks`, `goals`, `habits`,
   `schedule_items`, and `memory_entries` without reading full history.
+- Load capture metadata with daily rows and events. Event queries use a broadened
+  UTC read window, then prefer the explicit local `metadata.entry_date` during
+  in-memory filtering and fall back to `occurred_at` for legacy events.
 - Trigger a best-effort deterministic recommendation refresh after authenticated
   Intake V1 completion so the first real dashboard can read persisted
   onboarding-derived recommendations.
@@ -284,8 +303,9 @@ the verified bearer token. If a snapshot already exists for the same
 inserting another row.
 
 Flutter triggers the `daily` snapshot refresh best-effort after successful
-Supabase-backed canonical daily check-in, dashboard task status, and
-Quick Action habit writes. The habit flow now includes creating habits, editing
+Supabase-backed Evening or Morning capture, dashboard task status, and Quick
+Action habit writes. Capture calls send their explicit local entry date as the
+snapshot `target_date`. The habit flow now includes creating habits, editing
 their frequency and target, pausing or restoring them, viewing 7-day completion
 progress, and logging daily completions. Generic management excludes
 Setup-owned habits, whose definition/lifecycle remains owned by Settings Setup;
@@ -338,9 +358,10 @@ making claims about deployed data.
 - Notifications are currently a read-only inbox. Original `type`, `priority`,
   read state, and supported `action_url` are shown; there is no mark-read command
   until the repository has a durable write contract.
-- Evening capture still lacks stress source, controllability, friction, and
-  gentle-tomorrow intent, and there is no short returning-morning calibration.
-  Those are the Phase 1 capture targets before Daily Mode work.
+- Phase 1 capture is complete, but snapshots do not yet interpret its stress
+  taxonomy, freshness, or day shape into an explainable data-quality state and
+  deterministic Daily Mode. That is the Phase 2 boundary; capture itself does
+  not rank actions, generate a briefing, or call an LLM.
 - The remote Production project may still contain legacy CamelCase tables until
   the canonical schema migration has been applied and verified.
 - The repository does not contain real Supabase credentials.

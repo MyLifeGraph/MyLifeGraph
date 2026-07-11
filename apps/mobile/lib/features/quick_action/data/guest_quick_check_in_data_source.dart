@@ -18,9 +18,9 @@ class GuestQuickCheckInDataSource implements QuickCheckInStore {
   QuickCheckInSaveTarget get target => QuickCheckInSaveTarget.guest;
 
   @override
-  Future<QuickCheckInDraft?> loadToday(DateTime today) async {
+  Future<DailyCaptureEntry?> loadToday(DateTime today) async {
     final values = await readAll();
-    final date = _dateOnly(today);
+    final date = dailyCaptureEntryDate(today);
     for (final value in values.reversed) {
       if (value.entryDate == date) {
         return value;
@@ -29,7 +29,7 @@ class GuestQuickCheckInDataSource implements QuickCheckInStore {
     return null;
   }
 
-  Future<List<QuickCheckInDraft>> readAll() async {
+  Future<List<DailyCaptureEntry>> readAll() async {
     final prefs = await _preferencesLoader();
     final raw = prefs.getString(storageKey);
     if (raw == null || raw.isEmpty) {
@@ -45,28 +45,48 @@ class GuestQuickCheckInDataSource implements QuickCheckInStore {
       if (value is! Map<String, dynamic>) {
         throw const FormatException('Guest check-in entry is invalid.');
       }
-      return QuickCheckInDraft.fromJson(value);
+      return DailyCaptureEntry.fromGuestJson(value);
     }).toList();
   }
 
   @override
-  Future<void> save(QuickCheckInDraft draft) async {
+  Future<void> saveEvening(EveningShutdownDraft draft) async {
     draft.validate();
-    final normalized = draft.normalized();
-    List<QuickCheckInDraft> values;
+    final existing = await _loadEntryForMerge(draft.entryDate);
+    await saveEntry(
+      (existing ?? DailyCaptureEntry(entryDate: draft.entryDate))
+          .mergeEvening(draft),
+    );
+  }
+
+  @override
+  Future<void> saveMorning(MorningCalibrationDraft draft) async {
+    draft.validate();
+    final existing = await _loadEntryForMerge(draft.entryDate);
+    await saveEntry(
+      (existing ?? DailyCaptureEntry(entryDate: draft.entryDate))
+          .mergeMorning(draft),
+    );
+  }
+
+  Future<void> saveEntry(DailyCaptureEntry entry) async {
+    if (!entry.hasAnyCapture) {
+      throw const FormatException('A daily capture entry cannot be empty.');
+    }
+    List<DailyCaptureEntry> values;
     try {
       values = await readAll();
     } on FormatException {
       values = [];
     }
-    values.removeWhere((value) => value.entryDate == normalized.entryDate);
-    values.add(normalized);
-    values.sort((left, right) => left.capturedAt.compareTo(right.capturedAt));
+    values.removeWhere((value) => value.entryDate == entry.entryDate);
+    values.add(entry);
+    values.sort((left, right) => left.entryDate.compareTo(right.entryDate));
 
     final prefs = await _preferencesLoader();
     final didSave = await prefs.setString(
       storageKey,
-      jsonEncode(values.map((value) => value.toJson()).toList()),
+      jsonEncode(values.map((value) => value.toGuestJson()).toList()),
     );
     if (!didSave) {
       throw const QuickCheckInUnavailableException(
@@ -75,9 +95,17 @@ class GuestQuickCheckInDataSource implements QuickCheckInStore {
     }
   }
 
-  String _dateOnly(DateTime date) {
-    final month = date.month.toString().padLeft(2, '0');
-    final day = date.day.toString().padLeft(2, '0');
-    return '${date.year}-$month-$day';
+  Future<DailyCaptureEntry?> _loadEntryForMerge(String entryDate) async {
+    try {
+      final values = await readAll();
+      for (final value in values.reversed) {
+        if (value.entryDate == entryDate) {
+          return value;
+        }
+      }
+      return null;
+    } on FormatException {
+      return null;
+    }
   }
 }

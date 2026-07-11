@@ -1,18 +1,18 @@
 # Next Chat Prompt
 
-Use this prompt when starting a new implementation chat after Phase 0C,
-First-Run And Setup Integrity.
+Use this prompt when starting a new implementation chat after Phase 1,
+Lightweight Evening And Morning Capture.
 
-Recommended reasoning level: **high**. This work crosses the canonical Flutter
-capture draft, guest persistence, Supabase daily rows/events, time-of-day
-semantics, and sensitive stress context.
+Recommended reasoning level: **high**. This work turns explicit sensitive daily
+context into deterministic state, freshness, and risk summaries. It must stay
+explainable and must not become briefing ranking or pseudo-clinical advice.
 
 Prompt:
 
 ```text
 We are in /home/gregor/projects/ai-personal-coach.
 
-Use high reasoning. First read:
+Use high reasoning. First read completely:
 
 1. AGENTS.md
 2. README.md
@@ -23,107 +23,147 @@ Use high reasoning. First read:
 7. docs/local-dev.md
 8. docs/verification.md
 
-Goal: implement Phase 1, Lightweight Evening And Morning Capture. Phase 0A,
-0B, and 0C are complete: daily values are exact and retry-safe; demo and real
-sources never mix; unsupported surfaces are gated; and Setup is progressive,
-prefilled, revision-safe, ownership-scoped, and reviewable. Preserve all of
-that. Guest Setup intentionally remains local when the user later authenticates;
-do not add an automatic Setup migration while implementing Phase 1. Canonical
-guest check-ins keep their existing best-effort auth migration.
-Authenticated Setup apply is already atomic and per-user serialized through the
-service-role-only database RPC. Mock/demo auth boot must remain free of remote
-profile/data bootstrap and keep local Setup across reload. Preserve the existing
-save-state split: 4xx stays editable, 409 offers reload, and ambiguous failures
-require exact unchanged retry or reload. Setup-owned habits remain editable only
-through Settings Setup and completable through Habit Completion.
+Goal: implement Phase 2, Explainable Daily State. Phase 0A, 0B, 0C, and Phase
+1 are implemented. Preserve their contracts. In particular, do not change the
+Phase-0C request/base-revision/pending/applied Setup contract or the
+service-role-only `apply_intake_v1_setup_revision` RPC. Guest Setup remains
+local and is not automatically migrated.
 
-Start by walking these journeys for guest and authenticated accounts:
+Phase 1 now has separate typed Evening Shutdown and Morning Calibration flows
+over one `DailyCaptureEntry`. Same-day writes replace only their owned
+`daily_logs.metadata.captures.evening` or `.morning` object. Numeric projection
+uses Morning energy when present, otherwise Evening energy; Evening owns mood
+and stress; Morning owns sleep. Supabase rebuilds a dynamic deterministic set of
+at most four linked mood/energy/stress/sleep events. Guest JSON V2 retains V1
+read and best-effort check-in migration compatibility. Capture snapshot refresh
+sends its local `target_date`, and backend event filtering prefers
+`metadata.entry_date` over the UTC timestamp inside a broadened read window.
+Dashboard reads remain direct and nullable.
 
-1. Complete Evening Shutdown with only required answers in under 90 seconds.
-2. Leave every optional note, blocker, and gentle-tomorrow field blank.
-3. Record high workload/mostly-controllable stress and high private-emotional/
-   hardly-controllable stress as distinct structured states.
-4. Retry after a failed or timed-out save without losing the draft or creating
-   another daily row/event set.
-5. Re-open the same day's evening capture, see exact saved values prefilled,
-   edit them, and replace the current state intentionally.
-6. Complete a 10-to-20-second Morning Calibration with sleep, current energy,
-   and normal/constrained/flexible day shape, including when no prior evening
-   shutdown exists.
+Phase 1 itself contains no Daily Mode, briefing/action ranking, briefing
+persistence, save-time recommendation generation, or LLM usage. Phase 2 is the
+first slice allowed to classify a deterministic explainable Daily Mode inside
+the snapshot contract. Do not turn that classification into ranked actions or a
+new Today dashboard in this slice.
+
+Start by walking these cases against daily and weekly snapshot generation:
+
+1. Current Morning only: sleep, energy, and constrained day shape, with no
+   Evening capture.
+2. Current Evening only: high workload stress that is mostly controllable.
+3. High private/emotional stress that is hardly controllable, followed by a
+   low-energy constrained Morning.
+4. High avoidable pressure with unclear priorities but otherwise adequate
+   recovery.
+5. Missing capture, partial legacy V1 signals, stale Evening, stale Morning, and
+   conflicting recovery/productivity signals.
+6. Re-generating the same user/scope/period after a same-day edit without
+   duplicate snapshots or stale evidence.
+7. Guest/mock mode remaining local and making no snapshot, recommendation, or
+   LLM request.
 
 Inspect at minimum:
 
-- the typed quick-check-in draft/domain model and guest/Supabase stores
-- `quick_mood_check_in_page.dart` and Quick Action routing/providers
-- `daily_logs` and `behavioral_events` payload mapping
-- Dashboard reads of the latest check-in
-- snapshot refresh triggers after successful real writes
-- relevant migrations/RLS, backend snapshot inputs, Flutter tests, and
-  `e2e/web/smoke.mjs`
+- `DailyCaptureEntry`, its V2 metadata shape, numeric projection, and V1 mapper
+- `SupabaseSnapshotRepository` input selection and local-date event filtering
+- `SnapshotAggregator` summary, signals, risk flags, evidence refs, period
+  upsert, and current tests
+- recommendation context consumers, to ensure Phase 2 does not silently change
+  recommendation ranking
+- scheduled refresh and authenticated capture refresh triggers
+- Dashboard source-truth mapping; do not replace it with an unproven Today UI
+- Flutter snapshot API tests, FastAPI tests, and `e2e/web/smoke.mjs`
 
 Required product contract:
 
-- Evening Shutdown captures mood, energy, stress intensity, stress source,
-  stress controllability, a rough focus band, main friction, and one likely
-  priority for tomorrow. Reflection, a specific blocker, and `make tomorrow
-  gentler` are optional.
-- Morning Calibration captures sleep quality or hours, current energy, and day
-  shape only. It must not repeat the full evening form.
-- Stress source is one of `workload`, `avoidable_pressure`,
-  `private_emotional`, `physical_recovery`, or `external_environment`.
-- Stress controllability is one of `hardly_controllable`,
-  `partly_controllable`, or `mostly_controllable`.
-- Persist structured Phase-1 fields in `daily_logs.metadata` and mirror the
-  relevant values into linked `behavioral_events.metadata` first. Keep existing
-  numeric mood/energy/stress/sleep compatibility.
-- Use one explicit merge contract for evening and morning writes to the same
-  `(user_id, entry_date)` row. Morning calibration must not erase evening
-  context, and an evening edit must not erase morning fields accidentally.
-- Store only explicit answers. Blank optional values remain absent/null and do
-  not become fallback text, memory entries, tasks, recommendations, or schedule
-  items.
-- Guest/demo writes stay local and change subsequent guest reads. They never
-  call Supabase, FastAPI, recommendation generation, or snapshot refresh.
-- Authenticated write failures retain the exact draft and expose retry. The UI
-  must not claim success before persistence; retry remains idempotent.
-- Sensitive stress detail stays out of notification copy and is not promoted to
-  durable coaching memory in this slice.
-- First results remain current-state observations. Do not claim a learned
-  baseline, diagnosis, causation, or Daily Mode.
+- Parse only explicit Phase-1 metadata. Validate object/type/enum boundaries and
+  ignore or downgrade malformed optional context; never invent a stress source,
+  controllability, day shape, focus band, note, or numeric value.
+- Preserve numeric compatibility and the existing Evening/Morning ownership
+  merge. Phase 2 reads capture state; it does not rewrite `daily_logs` or
+  `behavioral_events`.
+- Add an explicit data-quality state for at least `missing`, `partial`,
+  `current`, and `stale`. Define deterministic, documented freshness thresholds
+  from capture `entry_date`/`captured_at`, target date, and capture presence.
+- Summarize the latest explicit stress intensity, source, controllability,
+  focus band, day shape, current energy, and sleep without exposing optional
+  sensitive free text in generic summaries or notification-ready fields.
+- Add bounded deterministic risk flags for private/emotional stress, physical
+  recovery, avoidable pressure, workload pressure, low controllability,
+  constrained capacity, low sleep, low energy, and stale/missing calibration.
+  Emit a flag only when its required explicit evidence exists.
+- Add deterministic `push`, `steady`, `recover`, and `plan` classification with
+  ordered rules. Private/emotional or physical-recovery stress, low
+  controllability, poor sleep, and low energy must prevent aggressive `push`.
+  Avoidable pressure or unclear priorities may support `plan`. Insufficient or
+  stale data must choose a conservative result and expose low data quality; it
+  must not imply a learned baseline.
+- Include concise machine-stable reason codes plus user-readable explanations,
+  evidence refs, source/provenance, target date, generated time, and freshness.
+  Do not claim diagnosis, causation, optimization, or clinical advice.
+- Keep daily/weekly snapshot upsert idempotent by
+  `(user_id, scope, period_key)`. Derive `user_id` only from the verified bearer
+  principal or the existing backend scheduler selection.
+- Normal dashboard and recommendation reads remain read-only. Phase 2 must not
+  call recommendation generation on capture save or dashboard load.
+- Guest/demo stays local. Do not send guest capture or sensitive context to
+  FastAPI, Supabase, notifications, memory entries, tasks, recommendations, or
+  schedule items.
 
 Implementation guidance:
 
-1. Write the current read/write matrix for the canonical daily row, four linked
-   events, guest JSON, Dashboard mapper, and snapshot trigger before editing.
-2. Define typed Evening Shutdown and Morning Calibration drafts plus an explicit
-   same-day merge policy. Avoid parallel legacy forms.
-3. Add the stress taxonomy, focus band, friction, tomorrow priority, optional
-   reflection/blocker, gentle-tomorrow intent, capture kind, and capture time to
-   bounded metadata with strict validation.
-4. Extend the existing guest and Supabase stores. Preserve the stable capture
-   identity, one daily row, and replacement/deduplication guarantees.
-5. Build progressive evening UI and a separate short morning route/state. Reuse
-   shared controls where useful without merging the two experiences into one
-   long questionnaire.
-6. Keep successful authenticated snapshot refresh best-effort. Do not add an
-   LLM call or generate recommendations on normal read/save.
-7. Add value-level tests for both capture kinds, optional blanks, every stress
-   category/controllability enum, same-day merge in both orders, prefill/edit,
-   failed save/retry, guest locality, and authenticated error behavior.
-8. Extend Playwright E2E with distinctive evening and morning values and exact
-   database assertions for one daily row, linked event metadata, merge
-   preservation, and same-day retry deduplication.
-9. Run focused tests, full Flutter/Python suites, `scripts/verify.sh`, local
-   Supabase verification if schema changes, and browser E2E. Update all docs.
+1. Write the snapshot input/output and precedence matrix before editing:
+   current/stale/missing Evening and Morning, legacy numeric fallback, risk
+   flags, data quality, mode, reasons, and evidence.
+2. Add typed internal snapshot-state helpers instead of spreading raw JSON
+   lookups across rules. Keep parsing and classification pure and unit-testable.
+3. Extend existing `user_state_snapshots.summary` and `.signals`; do not add a
+   new table or columns unless a query/index requirement makes it demonstrably
+   necessary.
+4. Keep Phase-1 capture metadata immutable. Unknown future metadata keys should
+   not crash aggregation, while invalid known values must not become trusted
+   evidence.
+5. Use deterministic rule precedence and expose it in tests. Recovery and
+   low-control safeguards override productivity-oriented classification.
+6. Keep recommendation rules unchanged in this slice. If they read the new
+   snapshot fields, they may persist them as context only; do not change ranking
+   or wording behavior.
+7. Keep the existing best-effort refresh boundary: the original Supabase write
+   succeeds even when snapshot refresh fails.
+8. Extend browser E2E with exact database assertions for the Phase-2 daily
+   snapshot after distinctive Evening/Morning inputs. Do not claim the browser
+   path passed unless it was actually run successfully in the current checkout.
+9. Update architecture, roadmap, Supabase-state, verification, and continuation
+   docs to match the implemented contract.
 
-Prefer metadata over new columns for Phase 1 unless query/index requirements
-make a migration demonstrably necessary. If schema changes, include migration,
-RLS/grants verification, Supabase docs, local reset verification, and browser
-assertions.
+Focused tests must cover:
 
-Do not implement Daily Mode, briefing persistence/ranking, Habit V1 cadence,
-focus sessions, Coach/LLM, calendar import, wearables, weekly review, vector
-search, notifications, or background workers in this slice.
+- every stress source and controllability code during state parsing
+- missing, partial, current, and stale data quality
+- all four modes and their ordered precedence
+- private/emotional plus hardly-controllable stress forcing a lower-load result
+- physical recovery and poor sleep preventing `push`
+- avoidable pressure supporting `plan` without blame-oriented copy
+- Morning-only, Evening-only, merged, and legacy V1 numeric input
+- malformed/unknown metadata without invented fallback values
+- metadata entry-date filtering around UTC/local-day boundaries
+- daily and weekly period upsert idempotency and explicit user scoping
+- guest/mock locality and authenticated refresh failure remaining best-effort
+
+Run focused tests while implementing, then at minimum:
+
+- Flutter analyze and the complete Flutter test suite
+- the complete FastAPI test suite
+- `scripts/verify.sh`
+- non-destructive local Supabase verification if schema/client integration is
+  affected
+- Browser E2E
+- `git diff --check`
+
+Do not implement briefing/action ranking, `daily_briefings` persistence, the
+decision-first Today dashboard, broad Habit V1 cadence, Coach/LLM, calendar
+import, notifications, weekly review, vector search, wearables, or autonomous
+workers in Phase 2.
 
 Do not commit unless explicitly asked.
 ```

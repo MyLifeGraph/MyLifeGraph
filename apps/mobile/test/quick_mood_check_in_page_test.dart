@@ -1,53 +1,110 @@
 import 'dart:async';
 
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:my_life_graph/core/config/app_config.dart';
+import 'package:my_life_graph/core/network/api_client.dart';
 import 'package:my_life_graph/features/quick_action/domain/quick_check_in.dart';
 import 'package:my_life_graph/features/quick_action/presentation/pages/quick_mood_check_in_page.dart';
 import 'package:my_life_graph/features/quick_action/presentation/providers/quick_check_in_providers.dart';
+import 'package:my_life_graph/features/snapshots/application/snapshot_refresh_service.dart';
+import 'package:my_life_graph/features/snapshots/data/snapshot_api_data_source.dart';
+import 'package:my_life_graph/features/snapshots/presentation/providers/snapshot_providers.dart';
 
 void main() {
-  testWidgets('failed save retains exact draft and retry succeeds',
+  testWidgets('authenticated evening failure retains exact draft for retry',
       (tester) async {
-    final store = _FailOnceQuickCheckInStore();
-    await _pumpPage(tester, store);
+    final store = _FailOnceCaptureStore();
+    final snapshotRefresh = _RecordingSnapshotRefreshService();
+    await _pumpEveningPage(tester, store, snapshotRefresh: snapshotRefresh);
 
-    expect(_nextButton(tester).onPressed, isNull);
-    await _completeDraft(tester);
-
-    await tester.tap(find.text('Save'));
+    await _completeEveningDraft(tester);
+    await tester.tap(find.text('Save evening shutdown'));
     await tester.pumpAndSettle();
 
     expect(
-      find.text('Could not save. Your choices are still here. Try again.'),
+      find.text(
+        'Could not save. Your exact Evening Shutdown is still here. Try again.',
+      ),
       findsWidgets,
     );
-    expect(store.attempts, hasLength(1));
-    expect(store.attempts.single.mood, 2);
-    expect(store.attempts.single.energy, 9);
-    expect(store.attempts.single.sleepHours, 5.5);
-    expect(store.attempts.single.stress, 8);
-    expect(store.attempts.single.contextNote, 'Exact retry note');
+    expect(store.eveningAttempts, hasLength(1));
+    final first = store.eveningAttempts.single;
+    expect(first.mood, 2);
+    expect(first.energy, 9);
+    expect(first.stress, 8);
+    expect(first.stressSource, StressSource.privateEmotional);
+    expect(
+      first.stressControllability,
+      StressControllability.hardlyControllable,
+    );
+    expect(first.focusBand, FocusBand.thirtyToSixtyMinutes);
+    expect(first.mainFriction, MainFriction.emotionalLoad);
+    expect(first.tomorrowPriority, 'Protect the exact priority');
+    expect(first.reflectionNote, 'Exact retry reflection');
+    expect(first.specificBlocker, 'Exact retry blocker');
+    expect(first.makeTomorrowGentler, isTrue);
+    expect(snapshotRefresh.targetDates, isEmpty);
 
-    await tester.tap(find.text('Save'));
+    await tester.tap(find.text('Save evening shutdown'));
     await tester.pumpAndSettle();
 
     expect(find.text('Dashboard destination'), findsOneWidget);
-    expect(store.attempts, hasLength(2));
-    expect(store.attempts[1].captureId, store.attempts[0].captureId);
-    expect(store.attempts[1].toJson(), store.attempts[0].toJson());
+    expect(store.eveningAttempts, hasLength(2));
+    expect(store.eveningAttempts[1].captureId, first.captureId);
+    expect(
+      store.eveningAttempts[1].toMetadataJson(),
+      first.toMetadataJson(),
+    );
+    expect(snapshotRefresh.targetDates, [first.entryDate]);
   });
 
-  testWidgets('saving state prevents a duplicate in-flight write',
+  testWidgets('evening re-entry is prefilled and blank optionals stay blank',
       (tester) async {
-    final store = _PendingQuickCheckInStore();
-    await _pumpPage(tester, store);
-    await _completeDraft(tester);
+    final saved = _eveningDraft(
+      reflectionNote: '',
+      specificBlocker: '',
+      makeTomorrowGentler: false,
+    );
+    final store = _RecordingCaptureStore(
+      initial: DailyCaptureEntry(entryDate: saved.entryDate, evening: saved),
+    );
+    await _pumpEveningPage(tester, store);
 
-    await tester.tap(find.text('Save'));
-    await tester.tap(find.text('Save'));
+    expect(
+      find.text(
+        'Today\'s Evening Shutdown is loaded. Saving replaces only its evening state.',
+      ),
+      findsOneWidget,
+    );
+    for (var step = 0; step < 8; step++) {
+      await tester.tap(find.text('Next'));
+      await tester.pumpAndSettle();
+    }
+    expect(
+      _textFieldWithLabel('Reflection (optional)'),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('Save evening shutdown'));
+    await tester.pumpAndSettle();
+
+    final written = store.eveningAttempts.single.toMetadataJson();
+    expect(written, isNot(contains('reflection_note')));
+    expect(written, isNot(contains('specific_blocker')));
+    expect(written, isNot(contains('gentle_tomorrow')));
+  });
+
+  testWidgets('saving state prevents a duplicate in-flight evening write',
+      (tester) async {
+    final store = _PendingCaptureStore();
+    await _pumpEveningPage(tester, store);
+    await _completeEveningDraft(tester, includeOptionals: false);
+
+    await tester.tap(find.text('Save evening shutdown'));
+    await tester.tap(find.text('Save evening shutdown'));
     await tester.pump();
 
     expect(store.calls, 1);
@@ -57,10 +114,11 @@ void main() {
   });
 }
 
-Future<void> _pumpPage(
+Future<void> _pumpEveningPage(
   WidgetTester tester,
-  QuickCheckInStore store,
-) async {
+  QuickCheckInStore store, {
+  SnapshotRefreshService? snapshotRefresh,
+}) async {
   final router = GoRouter(
     initialLocation: '/quick-mood-check-in',
     routes: [
@@ -70,9 +128,7 @@ Future<void> _pumpPage(
       ),
       GoRoute(
         path: '/dashboard',
-        builder: (_, __) => const Scaffold(
-          body: Text('Dashboard destination'),
-        ),
+        builder: (_, __) => const Scaffold(body: Text('Dashboard destination')),
       ),
       GoRoute(
         path: '/quick-action',
@@ -81,7 +137,7 @@ Future<void> _pumpPage(
     ],
   );
   addTearDown(router.dispose);
-  tester.view.physicalSize = const Size(1200, 1000);
+  tester.view.physicalSize = const Size(1200, 1200);
   tester.view.devicePixelRatio = 1;
   addTearDown(() {
     tester.view.resetPhysicalSize();
@@ -90,75 +146,159 @@ Future<void> _pumpPage(
 
   await tester.pumpWidget(
     ProviderScope(
-      overrides: [quickCheckInStoreProvider.overrideWithValue(store)],
+      overrides: [
+        quickCheckInStoreProvider.overrideWithValue(store),
+        if (snapshotRefresh != null)
+          snapshotRefreshServiceProvider.overrideWithValue(snapshotRefresh),
+      ],
       child: MaterialApp.router(routerConfig: router),
     ),
   );
   await tester.pumpAndSettle();
 }
 
-Future<void> _completeDraft(WidgetTester tester) async {
-  await tester.tap(find.bySemanticsLabel('mood 2 of 10'));
+Future<void> _completeEveningDraft(
+  WidgetTester tester, {
+  bool includeOptionals = true,
+}) async {
+  await _chooseAndContinue(tester, 'evening mood 2 of 10');
+  await _chooseAndContinue(tester, 'evening energy 9 of 10');
+  await _chooseAndContinue(tester, 'evening stress 8 of 10');
+  await _chooseAndContinue(tester, 'stress source private_emotional');
+  await _chooseAndContinue(
+    tester,
+    'stress controllability hardly_controllable',
+  );
+  await _chooseAndContinue(tester, 'focus band 30_to_60_minutes');
+  await _chooseAndContinue(tester, 'main friction emotional_load');
+
+  await tester.enterText(
+    _textFieldWithLabel('Tomorrow priority'),
+    'Protect the exact priority',
+  );
   await tester.pump();
   await tester.tap(find.text('Next'));
   await tester.pumpAndSettle();
 
-  await tester.tap(find.bySemanticsLabel('energy 9 of 10'));
-  await tester.pump();
-  await tester.tap(find.text('Next'));
-  await tester.pumpAndSettle();
-
-  final sleepSlider = tester.widget<Slider>(find.byType(Slider));
-  sleepSlider.onChanged!(5.5);
-  await tester.pump();
-  await tester.tap(find.text('Next'));
-  await tester.pumpAndSettle();
-
-  await tester.tap(find.bySemanticsLabel('stress 8 of 10'));
-  await tester.pump();
-  await tester.tap(find.text('Next'));
-  await tester.pumpAndSettle();
-
-  await tester.enterText(find.byType(TextField), 'Exact retry note');
+  if (includeOptionals) {
+    await tester.enterText(
+      _textFieldWithLabel('Reflection (optional)'),
+      'Exact retry reflection',
+    );
+    await tester.enterText(
+      _textFieldWithLabel('Specific blocker (optional)'),
+      'Exact retry blocker',
+    );
+    await tester.tap(find.bySemanticsLabel('make tomorrow gentler'));
+    await tester.pump();
+  }
 }
 
-FilledButton _nextButton(WidgetTester tester) {
-  return tester.widget<FilledButton>(find.byType(FilledButton));
+Future<void> _chooseAndContinue(
+  WidgetTester tester,
+  String semanticLabel,
+) async {
+  await tester.tap(find.bySemanticsLabel(semanticLabel));
+  await tester.pump();
+  await tester.tap(find.text('Next'));
+  await tester.pumpAndSettle();
 }
 
-class _FailOnceQuickCheckInStore implements QuickCheckInStore {
-  final List<QuickCheckInDraft> attempts = [];
+EveningShutdownDraft _eveningDraft({
+  String reflectionNote = 'Saved reflection',
+  String specificBlocker = 'Saved blocker',
+  bool makeTomorrowGentler = true,
+}) {
+  final now = DateTime.now();
+  return EveningShutdownDraft(
+    captureId: 'saved-evening',
+    entryDate: dailyCaptureEntryDate(now),
+    capturedAt: now,
+    mood: 2,
+    energy: 9,
+    stress: 8,
+    stressSource: StressSource.privateEmotional,
+    stressControllability: StressControllability.hardlyControllable,
+    focusBand: FocusBand.thirtyToSixtyMinutes,
+    mainFriction: MainFriction.emotionalLoad,
+    tomorrowPriority: 'Protect the exact priority',
+    reflectionNote: reflectionNote,
+    specificBlocker: specificBlocker,
+    makeTomorrowGentler: makeTomorrowGentler,
+  );
+}
+
+Finder _textFieldWithLabel(String label) => find.byWidgetPredicate(
+      (widget) => widget is TextField && widget.decoration?.labelText == label,
+      description: 'TextField with label $label',
+    );
+
+class _RecordingCaptureStore implements QuickCheckInStore {
+  _RecordingCaptureStore({this.initial});
+
+  final DailyCaptureEntry? initial;
+  final List<EveningShutdownDraft> eveningAttempts = [];
 
   @override
   QuickCheckInSaveTarget get target => QuickCheckInSaveTarget.guest;
 
   @override
-  Future<QuickCheckInDraft?> loadToday(DateTime today) async => null;
+  Future<DailyCaptureEntry?> loadToday(DateTime today) async => initial;
 
   @override
-  Future<void> save(QuickCheckInDraft draft) async {
-    attempts.add(draft.normalized());
-    if (attempts.length == 1) {
+  Future<void> saveEvening(EveningShutdownDraft draft) async {
+    eveningAttempts.add(draft.normalized());
+  }
+
+  @override
+  Future<void> saveMorning(MorningCalibrationDraft draft) async {}
+}
+
+class _FailOnceCaptureStore extends _RecordingCaptureStore {
+  @override
+  QuickCheckInSaveTarget get target => QuickCheckInSaveTarget.supabase;
+
+  @override
+  Future<void> saveEvening(EveningShutdownDraft draft) async {
+    await super.saveEvening(draft);
+    if (eveningAttempts.length == 1) {
       throw StateError('planned failure');
     }
   }
 }
 
-class _PendingQuickCheckInStore implements QuickCheckInStore {
-  final Completer<void> _completer = Completer<void>();
+class _PendingCaptureStore extends _RecordingCaptureStore {
+  final _completer = Completer<void>();
   int calls = 0;
 
   @override
-  QuickCheckInSaveTarget get target => QuickCheckInSaveTarget.guest;
-
-  @override
-  Future<QuickCheckInDraft?> loadToday(DateTime today) async => null;
-
-  @override
-  Future<void> save(QuickCheckInDraft draft) {
+  Future<void> saveEvening(EveningShutdownDraft draft) {
     calls++;
     return _completer.future;
   }
 
   void complete() => _completer.complete();
+}
+
+class _RecordingSnapshotRefreshService extends SnapshotRefreshService {
+  _RecordingSnapshotRefreshService()
+      : super(
+          config: const AppConfig(
+            environment: 'test',
+            supabaseUrl: '',
+            supabaseAnonKey: '',
+            aiServiceBaseUrl: 'http://localhost:8000',
+            useMockData: false,
+          ),
+          apiDataSource: SnapshotApiDataSource(ApiClient(Dio())),
+          accessTokenProvider: () => null,
+          allowRemoteRefresh: false,
+        );
+
+  final List<String?> targetDates = [];
+
+  @override
+  Future<void> refreshDailyAfterUserSignal({String? targetDate}) async {
+    targetDates.add(targetDate);
+  }
 }

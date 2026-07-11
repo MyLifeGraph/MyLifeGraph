@@ -211,7 +211,7 @@ def _filter_window(
         behavioral_events=[
             row
             for row in inputs.behavioral_events
-            if _is_date_in_window(row.get("occurred_at"), start_date, target_date)
+            if _is_event_in_window(row, start_date, target_date)
         ],
         tasks=inputs.tasks,
         goals=inputs.goals,
@@ -376,6 +376,22 @@ def _optional_date(value: Any) -> date | None:
 def _is_date_in_window(value: Any, start_date: date, target_date: date) -> bool:
     parsed = _optional_date(value)
     return parsed is not None and start_date <= parsed <= target_date
+
+
+def _is_event_in_window(
+    row: dict[str, Any],
+    start_date: date,
+    target_date: date,
+) -> bool:
+    metadata = row.get("metadata")
+    if isinstance(metadata, dict) and metadata.get("entry_date") is not None:
+        try:
+            entry_date = _optional_date(metadata["entry_date"])
+        except (TypeError, ValueError):
+            entry_date = None
+        if entry_date is not None:
+            return start_date <= entry_date <= target_date
+    return _is_date_in_window(row.get("occurred_at"), start_date, target_date)
 
 
 def _numeric(value: Any) -> float | None:

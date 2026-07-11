@@ -116,8 +116,18 @@ confirmed, supports typed local/authenticated prefill and retry, and reconciles
 reviewable Setup-owned commitments in one per-user-serialized database
 transaction without touching manual rows. Mock/demo auth boot remains local
 across reload, and save errors distinguish editable rejection, conflict/reload,
-and ambiguous exact retry. The next gap is the lightweight evening/morning
-context required by Phase 1.
+and ambiguous exact retry.
+
+Phase 1 now supplies the missing daily context. A typed Evening Shutdown and a
+separate short Morning Calibration merge by ownership into one local-date
+`DailyCaptureEntry`, persist structured state under
+`daily_logs.metadata.captures`, retain numeric compatibility, and rebuild at
+most four deterministic current-state events. Guest V2 storage preserves the
+same contract while reading legacy V1 entries, authenticated capture refreshes
+the explicit local snapshot date, and Dashboard mapping remains direct and
+nullable. Phase 1 deliberately does not assign Daily Mode, rank actions,
+persist a briefing, generate recommendations on save, or call an LLM. The next
+gap is Phase 2's explainable deterministic daily state.
 
 ### Current Surface Disposition
 
@@ -126,7 +136,7 @@ context required by Phase 1.
 | Auth and guest entry | Yes | Local demo is labeled; mock/demo auth skips remote profile/data bootstrap and reloads local Setup, while canonical guest check-ins migrate best-effort only into a real non-demo account |
 | Onboarding / Setup | Yes, Phase 0C complete | Progressive explicit input, typed prefill, atomic revision-safe save, differentiated retry/reload, and durable review are implemented |
 | Dashboard | Yes | Direct source values are honest; evolve the sections into the decision-first Today surface after action contracts exist |
-| Canonical daily check-in | Yes, Honest Capture foundation complete | Extend this one typed flow with evening/morning context in Phase 1 |
+| Canonical daily capture | Yes, Phase 1 complete | Evening and Morning are separate typed flows over one ownership-merged daily entry; next interpret freshness and stress context in Phase 2 snapshots |
 | Legacy large Daily Check-In | Retired | `/daily-check-in` redirects to the canonical lightweight flow; do not recreate a competing form |
 | Habit management/completion | Yes, authenticated only | Setup-owned habits are edited in Settings Setup and completed in Habit Completion; next correct cadence/progress, add skip/undo, and bring execution into Today |
 | Insights correlations | Yes, as advanced exploration | Default to cautious actionable insight with evidence and confidence |
@@ -157,7 +167,10 @@ context required by Phase 1.
 
 This section is the product acceptance path. New work should be evaluated by
 walking through it from the user's perspective, not only by verifying tables or
-endpoints.
+endpoints. It spans later phases and is not a claim that every listed output is
+implemented today. Phase 1 ends at truthful Evening/Morning persistence and
+snapshot refresh; Daily Mode begins in Phase 2, while ranked actions and
+provisional/final briefings remain later phases.
 
 ### First Open
 
@@ -188,7 +201,7 @@ additional habits, free text, and integrations remain progressive setup.
 
 What the user does:
 
-1. Gives current energy, sleep quality or duration, and day shape in 10 to 20
+1. Gives current energy, sleep duration, and day shape in 10 to 20
    seconds.
 2. Reviews today's mode, estimated capacity, primary action, reason, and at most
    two support actions.
@@ -346,16 +359,17 @@ Optional fields:
 - "Make tomorrow gentler" preference.
 - Specific blocker.
 
-Output:
+Current Phase 1 output:
 
-- A rough next-day preview, clearly labeled as provisional.
-- Example: "Tomorrow looks like a steady day. Keep one focus block and one
-  small goal action. If sleep is poor, downgrade the second focus block."
+- Persisted current-state context and the user's explicit likely priority.
+- No provisional plan or Daily Mode is generated yet. A rough next-day preview
+  becomes valid only after Phase 2 state and the later briefing service exist.
 
 ### Morning Calibration
 
-Goal: adjust the provisional evening plan based on sleep, current energy, and
-day shape.
+Current goal: record sleep, current energy, and day shape without repeating the
+Evening form. Adjusting a provisional plan begins only after explainable state
+and briefing generation exist.
 
 Reasoning:
 
@@ -367,11 +381,11 @@ Target effort: 10 to 20 seconds.
 
 Required fields:
 
-- Sleep quality or sleep hours.
+- Sleep hours in half-hour steps.
 - Current energy.
 - Day shape: normal, constrained, or flexible.
 
-Output:
+Target output after Phase 2 and briefing work:
 
 - Final daily mode.
 - Ranked top action.
@@ -721,42 +735,39 @@ screens where the user expects feedback.
 
 ### Evening Shutdown Flow
 
-Build or refactor a quick action for closing the day.
+The implemented Evening Shutdown quick action supports:
 
-Must support:
-
-- Energy.
-- Mood.
-- Stress intensity.
-- Stress source.
-- Stress controllability.
-- Focus band.
-- Main friction chip.
-- Tomorrow priority selection.
-- Optional reflection.
-- Provisional tomorrow preview.
+- Required energy, mood, stress intensity, stress source, stress
+  controllability, focus band, main friction, and a short tomorrow priority.
+- Optional reflection, specific blocker, and gentle-tomorrow intent; blank or
+  false optionals are omitted rather than replaced with fallback content.
+- Prefill and same-kind replacement without erasing a saved Morning
+  Calibration.
+- A current-state explanation that does not claim a learned baseline, Daily
+  Mode, ranked plan, diagnosis, or causation.
 
 Reasoning:
 
 - This is the main daily data capture moment.
 - It should feel like confirming reality, not filling a form.
+- A provisional tomorrow plan remains a later briefing concern; Phase 1 stores
+  the explicit priority and context but does not rank or generate actions.
 
 ### Morning Calibration Flow
 
-Add a short morning calibration surface.
+The implemented short Morning Calibration surface supports:
 
-Must support:
-
-- Sleep quality or hours.
-- Current energy.
-- Day shape.
-- Final daily mode.
-- Top action.
+- Required sleep hours in half-hour steps, current energy, and day shape.
+- Prefill and same-kind replacement without erasing saved Evening context.
+- Honest current-state copy stating that capture does not assign Daily Mode or
+  generate recommendations.
 
 Reasoning:
 
 - Morning readiness can invalidate the evening plan.
 - The user should never need to re-plan the whole day from scratch.
+- Final Daily Mode and top-action selection begin only after Phase 2 state and
+  later briefing ranking are implemented.
 
 ### Dashboard Repositioning
 
@@ -831,18 +842,34 @@ Reasoning:
 
 ## Data Model Changes
 
-Phase 1 can reuse existing tables by storing the new stress fields in
-`daily_logs.metadata` and mirrored `behavioral_events.metadata`.
+Phase 1 reuses existing tables. It stores the two owned capture objects in
+`daily_logs.metadata.captures` and mirrors event-relevant fields into
+`behavioral_events.metadata`.
 
-Suggested metadata shape:
+Implemented metadata shape, abbreviated:
 
 ```json
 {
-  "stress": {
-    "intensity_label": "high",
-    "source": "private_emotional",
-    "controllability": "hardly_controllable",
-    "gentle_tomorrow": true
+  "capture_version": "daily-capture-v2",
+  "captures": {
+    "evening": {
+      "capture_kind": "evening",
+      "entry_date": "2026-07-10",
+      "stress_intensity": 9,
+      "stress_intensity_label": "high",
+      "stress_source": "private_emotional",
+      "stress_controllability": "hardly_controllable",
+      "focus_band": "30_to_60_minutes",
+      "main_friction": "emotional_load",
+      "tomorrow_priority": "Keep the morning light"
+    },
+    "morning": {
+      "capture_kind": "morning",
+      "entry_date": "2026-07-10",
+      "sleep_hours": 5.5,
+      "current_energy": 3,
+      "day_shape": "constrained"
+    }
   }
 }
 ```
@@ -851,6 +878,11 @@ Reasoning:
 
 - This avoids premature schema churn while validating the product model.
 - `daily_logs.stress_level` remains available for existing analytics.
+- Morning energy takes precedence in `energy_level`; Evening owns mood and
+  stress, Morning owns sleep, and absent fields stay null rather than becoming
+  invented values.
+- Events are a dynamic maximum of four deterministic current-state rows, not an
+  append-only history of repeated same-day retries.
 
 Add dedicated columns later only if the fields become stable and heavily
 queried:
@@ -936,22 +968,29 @@ Evaluation:
 - Can a developer explain the object and action contracts without reading UI
   implementation details?
 
-### Phase 1: Lightweight Evening And Morning Capture
+### Phase 1: Lightweight Evening And Morning Capture (Complete)
 
 Goal:
 
 - Capture the minimum signals needed for good daily decisions with low friction.
 
-Work:
+Implemented:
 
-- Refactor the functional check-in path into Evening Shutdown with stress source,
-  controllability, intensity label, friction, and optional gentle-tomorrow intent.
-- Add Morning Calibration for sleep, energy, and day shape.
-- Persist the new fields in `daily_logs.metadata` and relevant
-  `behavioral_events.metadata` first.
-- Preserve existing numeric stress, energy, mood, sleep, and focus compatibility.
-- Ensure guest capture changes subsequent guest state instead of disappearing
-  behind a fixed demo snapshot.
+- Separate typed Evening Shutdown and Morning Calibration flows with retained
+  drafts, prefill, recoverable save errors, and stable retry identity.
+- Same-day merge ownership: a submitted capture replaces only its own
+  `metadata.captures` object and preserves the other kind.
+- Numeric projection keeps Morning energy over Evening energy, Evening mood and
+  stress, Morning sleep, and nullable unmeasured focus minutes.
+- Supabase replaces the linked source-owned event set with a dynamic maximum of
+  four deterministic mood/energy/stress/sleep ids and mirrored bounded metadata.
+- Guest storage writes V2 daily JSON, reads V1 JSON, changes later guest reads,
+  and retains the existing best-effort migration into a real non-demo account.
+- Authenticated writes refresh the exact local `target_date`; backend event
+  filtering prefers `metadata.entry_date` after a broadened UTC read and falls
+  back to the timestamp for legacy rows.
+- Dashboard reads direct nullable numeric and structured capture values. No
+  Daily Mode, action ranking, recommendation generation, or LLM was added.
 
 Evaluation:
 
@@ -961,7 +1000,7 @@ Evaluation:
 - Can the user skip optional detail without invented fallback values?
 - Are guest/mock and Supabase-backed writes covered?
 
-### Phase 2: Explainable Daily State
+### Phase 2: Explainable Daily State (Next)
 
 Goal:
 
@@ -1219,27 +1258,27 @@ streak length are not sufficient success measures.
 
 ## Current Recommendation
 
-**Phase 0A, Phase 0B, and Phase 0C are complete.** Capture uses one typed
-exact-value flow with reliable retry/deduplication; real and demo source states
-remain distinct; and Setup is progressive, prefilled, revision-safe, and
-reviewable. Blank optionals create nothing, candidate routines require cadence,
-and advisory-locked atomic ownership reconciliation preserves manual records.
-Mock/demo reload remains local; rejected saves remain editable, conflicts offer
-reload, and ambiguous results preserve an exact retry. Phase 0C does not leave a
-transactional Setup-apply gap.
+**Phase 0A, Phase 0B, Phase 0C, and Phase 1 are complete.** Real and demo source
+states remain distinct; Setup is progressive, revision-safe, reviewable, and
+atomically reconciled by its unchanged advisory-locked service-role RPC; and
+Evening/Morning now provide exact typed daily context without erasing each
+other. Blank optionals create no fallback content, Guest V2 remains compatible
+with V1 reads and migration, numeric projections remain honest, and linked
+events converge to a deterministic maximum of four current signals. Phase 1
+does not contain Daily Mode, briefing ranking or persistence, save-time
+recommendation generation, or an LLM.
 
-The next implementation should be **Phase 1: Lightweight Evening And Morning
-Capture**, not Daily Mode or briefing persistence:
+The next implementation should be **Phase 2: Explainable Daily State**:
 
-1. Extend the canonical typed flow into a 60-to-90-second Evening Shutdown with
-   mood, energy, stress intensity/source/controllability, friction, and optional
-   gentle-tomorrow intent.
-2. Add a 10-to-20-second Morning Calibration for sleep, current energy, and day
-   shape without duplicating the evening form.
-3. Persist the new structured fields in `daily_logs.metadata` and mirrored
-   behavioral-event metadata while retaining existing numeric compatibility.
-4. Preserve exact values, draft retry behavior, explicit local-demo semantics,
-   and authenticated empty/error behavior with widget, repository, and browser
-   assertions.
+1. Parse the persisted Evening/Morning capture metadata in deterministic
+   snapshot aggregation without changing its ownership or numeric projection.
+2. Add explicit capture freshness and data-quality states for missing,
+   partial, current, and stale inputs.
+3. Add bounded risk flags for private/emotional stress, physical recovery,
+   avoidable pressure, workload, and low controllability with evidence refs.
+4. Classify `push`, `steady`, `recover`, or `plan` conservatively and expose the
+   strongest deterministic reasons without claiming causation, diagnosis, or a
+   learned baseline.
 
-Only after that capture contract is proven should Phase 2 classify Daily Mode.
+Phase 2 may define explainable Daily Mode, but it must not rank briefing
+actions, add `daily_briefings` persistence, redesign Habit V1, or call an LLM.
