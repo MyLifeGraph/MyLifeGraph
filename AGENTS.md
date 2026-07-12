@@ -116,14 +116,19 @@ focus-session summaries while preserving Phase 2 Daily State unchanged. A
 backend-only scheduled endpoint refreshes onboarded non-guest profiles for
 cron-style runs. Phase 4 now persists one strict deterministic briefing per
 profile-local date behind read-only GET and deliberate idempotent POST routes.
+Phase 5 now consumes that contract in a decision-first Today Dashboard: normal
+load is GET-only, missing/stale/error truth stays visible, stale actions are
+disabled until deliberate adjustment, and validated primary/support targets
+dispatch through the existing Phase 3 handlers. Guest/mock remains local and
+never fabricates a personalized briefing.
 Read `docs/backend-roadmap.md`,
 `docs/daily-briefing-implementation-plan.md`, and the Phase 3 contract before
 planning the next backend, briefing, dashboard, or agent workflow.
 
 Do not jump straight to broad LLM integration, calendar import, weekly planning,
-vector search, or autonomous background agents. The next product slice should
-consume the Daily Briefing in the **Decision-First Today Dashboard** before
-broadening infrastructure. Phase 0A, Honest Capture, is
+vector search, or autonomous background agents. The next product slice is Phase
+6's bounded decision-feedback history and useful default Insight; it must learn
+deterministically without erasing original briefing evidence. Phase 0A, Honest Capture, is
 implemented: `/daily-check-in` redirects to the canonical lightweight flow;
 measurements require explicit selection; a typed draft drives guest and Supabase
 persistence; same-day guest rows and linked behavioral events are deduplicated;
@@ -218,11 +223,13 @@ habit/focus counts and evidence from fully paginated, stably ordered 1,000-row
 action-fact pages, and `explainable-daily-state-v1` remains unchanged.
 Guest/mock sessions expose none of these remote commands.
 
-The immediate next slice is Phase 5, Decision-First Today Dashboard. It should
-consume the persisted Phase 4 briefing without generation on normal load,
-surface the strict executable primary action, and preserve missing/stale/error
-truth. Do not fold Phase 6 adaptive feedback, Coach, calendar import, or LLM
-work into this UI slice.
+Phase 5, Decision-First Today Dashboard, is implemented. It consumes the
+persisted Phase 4 briefing without generation on normal load, puts mode,
+capacity, freshness, and one strict primary action above secondary metrics,
+dispatches validated actions through Phase 3, and preserves
+missing/stale/error/demo truth. The immediate next slice is Phase 6 feedback and
+useful Insights; do not fold Coach, calendar import, broad automation, or LLM
+work into it.
 
 FastAPI-backed browser E2E coverage for revisioned Setup ownership/retry/edit,
 concurrent same-request convergence, post-intake recommendations, exact Phase 2
@@ -234,7 +241,9 @@ committed-response-loss reconciliation for habit/task create, habit
 outcome/undo, task completion/undo, and focus start/finish. Negative writes
 cover lifecycle/range/cadence constraints and every terminal focus update,
 including `updated_at`. Phase 4 adds exact read-only/generate, persisted action,
-and idempotent daily-identity assertions. The combined browser journey passed
+and idempotent daily-identity assertions. Phase 5 adds GET-only Dashboard load,
+honest briefing state, deliberate `force=true` adjustment, and real primary
+action dispatch assertions. The combined browser journey passed
 non-destructively in the 2026-07-12 implementation checkout; later changes must
 still establish their own current-checkout pass before claiming E2E.
 

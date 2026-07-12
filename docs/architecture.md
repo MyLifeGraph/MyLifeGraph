@@ -141,10 +141,14 @@ invented screen time, hydration estimate, and schedule activity bars are
 removed. Tasks retain their own description, deadline, priority, status, and
 optional estimate; recommendation reasons are no longer copied into unrelated
 task descriptions. Authenticated users can execute typed task commands from the
-existing task section, while a small unranked `Today execution` section links to
-today's habits and focus. This is not the later decision-first Today redesign.
+existing task section. The decision-first Today area now reads the persisted
+`daily-briefing-v1` contract through FastAPI, shows mode, data quality,
+freshness, capacity note, one primary action, and at most two support actions
+above source metrics, then dispatches current targets through the exhaustive
+Phase 3 action dispatcher. Normal load is GET-only; generation is explicit.
 A local guest dashboard reads the locally saved canonical check-in and otherwise
-shows a real empty state instead of a static fake plan.
+shows a real empty state instead of a static fake plan. It labels briefing
+generation unavailable instead of inventing a personalized local decision.
 
 Insights also uses this boundary for deterministic correlation analysis. In
 mock or guest mode it renders local time series. In real Supabase mode it reads
@@ -455,8 +459,11 @@ making claims about deployed data.
   reports missing/current/stale state; deliberate
   `POST /v1/briefings/generate` refreshes the daily snapshot when generation is
   needed and upserts the same daily identity. `review_plan` remains explicitly
-  unavailable. The current Dashboard still exposes unranked execution links;
-  consuming the briefing in a decision-first Today surface is Phase 5.
+  unavailable. Phase 5 consumes this strict contract in Flutter: a normal
+  Dashboard read never posts, stale actions are disabled until deliberate
+  `force=true` adjustment, and current primary/support actions reuse Phase 3
+  handlers. Feedback-history persistence and adaptive score input remain Phase
+  6 rather than hidden client-side learning.
 - The remote Production project may still contain legacy CamelCase tables until
   the canonical schema migration has been applied and verified.
 - The repository does not contain real Supabase credentials.

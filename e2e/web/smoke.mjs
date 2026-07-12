@@ -1314,6 +1314,7 @@ try {
   await page.goto(appRoute('/dashboard'), { waitUntil: 'domcontentloaded' });
   await waitForFlutterShell(page);
   await enableFlutterSemantics(page);
+  await scrollFlutterPage(page, 1600);
   await clickByText(page, 'Add task');
   await fillByLabelOrPlaceholder(page, 'Task title', phase3TaskTitle, 0);
   await fillByLabelOrPlaceholder(
@@ -1375,6 +1376,7 @@ try {
     throw new Error(`Task did not use a client-stable UUID: ${phase3TaskId}`);
   }
 
+  await scrollFlutterPage(page, 1600);
   await clickByRoleName(
     page,
     'button',
@@ -1410,6 +1412,7 @@ try {
     'task edit preserves identity and replaces typed fields',
   );
 
+  await scrollFlutterPage(page, 1600);
   await clickByRoleName(
     page,
     'button',
@@ -1456,6 +1459,7 @@ try {
     '**/rest/v1/tasks**',
     loseCommittedTaskTransitionResponse,
   );
+  await scrollFlutterPage(page, 1600);
   await clickByRoleName(
     page,
     'button',
@@ -1515,6 +1519,7 @@ try {
     'task completion undo restores todo',
   );
 
+  await scrollFlutterPage(page, 1600);
   await clickByRoleName(
     page,
     'button',
@@ -1535,6 +1540,7 @@ try {
   await page.reload({ waitUntil: 'domcontentloaded' });
   await waitForFlutterShell(page);
   await enableFlutterSemantics(page);
+  await scrollFlutterPage(page, 1600);
   await clickByText(page, 'Cancelled (1)');
   await clickByRoleName(
     page,
@@ -1566,6 +1572,7 @@ try {
     'tasks_lifecycle_shape_check',
   );
 
+  await scrollFlutterPage(page, 1600);
   await clickByRoleName(
     page,
     'button',
@@ -1869,16 +1876,64 @@ try {
     'Phase 3 execution leaves the Setup revision unchanged',
   );
 
-  await assertDeterministicDailyBriefing(user.id);
+  const phaseFourBriefing = await assertDeterministicDailyBriefing(user.id);
 
   const recommendationsBeforeManualRefresh =
     await activeDeterministicRecommendations(user.id);
   const dailySnapshotBeforeRecommendationRefresh =
     await latestDailySnapshotGeneratedAt(user.id);
+  const dashboardBriefingPosts = [];
+  const dashboardBriefingObserver = (request) => {
+    if (
+      request.method() === 'POST' &&
+      request.url() === `${aiServiceBaseUrl}/v1/briefings/generate`
+    ) {
+      dashboardBriefingPosts.push(request);
+    }
+  };
+  page.on('request', dashboardBriefingObserver);
   await page.goto(appRoute('/dashboard'), { waitUntil: 'domcontentloaded' });
   await waitForFlutterShell(page);
   await enableFlutterSemantics(page);
+  await expectText(page, "Today's decision");
+  await expectText(page, phaseFourBriefing.briefing.primary_action.title);
+  await expectText(page, 'Current');
   await expectText(page, 'Latest check-in');
+  await page.waitForTimeout(500);
+  page.off('request', dashboardBriefingObserver);
+  if (dashboardBriefingPosts.length !== 0) {
+    throw new Error(
+      `Normal Today load generated a briefing: ${dashboardBriefingPosts.map((request) => request.url()).join(', ')}`,
+    );
+  }
+
+  await assertBriefingPrimaryActionDispatch(
+    page,
+    phaseFourBriefing.briefing.primary_action.target,
+  );
+  const adjustResponsePromise = waitForAiPost(
+    page,
+    '/v1/briefings/generate',
+    'deliberate Today adjustment',
+  );
+  await clickByText(page, 'Adjust today');
+  const adjustResponse = await adjustResponsePromise;
+  assertJsonPayload(
+    adjustResponse.request(),
+    { force: true },
+    'deliberate Today adjustment payload',
+  );
+  const adjustedBriefing = await adjustResponse.json();
+  if (
+    adjustedBriefing?.briefing?.id !== phaseFourBriefing.briefing.id ||
+    adjustedBriefing?.freshness !== 'current'
+  ) {
+    throw new Error(
+      `Today adjustment did not preserve current daily identity: ${JSON.stringify(adjustedBriefing)}`,
+    );
+  }
+  await expectText(page, 'Today adjusted.');
+  await expectText(page, adjustedBriefing.briefing.primary_action.title);
   const [manualSnapshotResponse, manualRecommendationResponse] =
     await Promise.all([
       waitForAiPost(page, '/v1/snapshots/generate', 'manual snapshot refresh'),
@@ -2974,6 +3029,60 @@ async function assertDeterministicDailyBriefing(userId) {
     `daily_briefings?select=id&user_id=eq.${userId}`,
     (rows) => rows.length === 1 && rows[0].id === briefing.id,
     'idempotent briefing generation preserves one daily identity',
+  );
+  return generated;
+}
+
+async function assertBriefingPrimaryActionDispatch(page, target) {
+  if (target.command === 'open_task') {
+    await clickByText(page, 'Open task');
+    await expectText(page, 'Edit task');
+    await page.keyboard.press('Escape');
+    await expectText(page, "Today's decision");
+    return;
+  }
+  if (target.command === 'log_habit') {
+    await clickByText(page, 'Mark habit done');
+    await expectText(page, 'Habit completed.');
+    await waitForRows(
+      `habit_logs?select=habit_id,entry_date,status&habit_id=eq.${target.target_id}&entry_date=eq.${target.metadata.entry_date}`,
+      (rows) =>
+        rows.length === 1 &&
+        rows[0].status === target.metadata.habit_outcome,
+      'Today primary habit action persisted its exact outcome',
+    );
+    await expectText(page, 'Stale');
+    return;
+  }
+  if (target.command === 'open_capture') {
+    await clickByText(page, 'Open calibration');
+    await page.waitForURL(`**/#${target.metadata.route}`);
+    await page.goto(appRoute('/dashboard'), { waitUntil: 'domcontentloaded' });
+    await waitForFlutterShell(page);
+    await enableFlutterSemantics(page);
+    await expectText(page, "Today's decision");
+    return;
+  }
+  if (target.command === 'complete_task') {
+    await clickByText(page, 'Complete task');
+    await expectText(page, 'Task completed.');
+    await assertRows(
+      `tasks?select=id,status&id=eq.${target.target_id}`,
+      (rows) => rows.length === 1 && rows[0].status === 'done',
+      'Today primary task completion persisted',
+    );
+    return;
+  }
+  if (target.command === 'start_focus') {
+    await clickByText(page, 'Start focus');
+    await page.waitForURL('**/#/deep-work**');
+    await page.goto(appRoute('/dashboard'), { waitUntil: 'domcontentloaded' });
+    await waitForFlutterShell(page);
+    await enableFlutterSemantics(page);
+    return;
+  }
+  throw new Error(
+    `Today returned an unsupported primary command: ${JSON.stringify(target)}`,
   );
 }
 

@@ -28,7 +28,7 @@ way to explore the product today is the Flutter app in mock-data guest mode.
   stress, energy, mood, screen time, activity, steps, habits, recovery, and
   focus. It computes 7/14/30-day relationships in Flutter from existing
   Supabase rows or local mock time series, without LLM usage.
-- Phase 0A through Phase 4 are implemented. Evening and Morning merge without
+- Phase 0A through Phase 5 are implemented. Evening and Morning merge without
   erasing each other and feed a strict backend-only state parser; Setup remains
   progressive, revision-safe, reviewable, and atomically materialized. Phase 3
   adds durable task commands, cadence-aware Habit V1 outcomes, linked focus
@@ -38,7 +38,11 @@ way to explore the product today is the Flutter app in mock-data guest mode.
   actions remain unavailable to guest/demo sessions. Phase 4 adds persisted,
   deterministic `daily-briefing-v1` output behind read-only
   `GET /v1/briefings/today` and deliberate `POST /v1/briefings/generate`.
-  Phase 5's decision-first Today redesign is next. See
+  Phase 5 adds a strict Flutter parser/repository boundary and consumes that
+  briefing above metrics in Today without generation on normal load. Current,
+  missing, stale, error, and local-demo states remain distinct; stale targets
+  require deliberate adjustment, and current targets use the existing action
+  dispatcher. Phase 6 feedback history and useful default Insights are next. See
   `docs/phase-3-executable-actions-contract.md` and
   `docs/daily-briefing-implementation-plan.md`.
 - Repository docs and scripts should be treated as the shared team source of
@@ -239,7 +243,9 @@ Supabase is the intended auth and persistence backend. The current app supports:
   only inside persisted backend snapshots. Phase 3 exposes unranked execution
   controls but still does not rank actions, persist a briefing, mutate a plan,
   or call an LLM. Dashboard capture cards continue to show direct nullable
-  source values and persisted structured context.
+  source values and persisted structured context. Phase 4 owns deterministic
+  briefing selection; Phase 5 only reads or deliberately refreshes that persisted
+  decision and does not adapt ranking from feedback yet.
 - `POST /v1/scheduled/daily-refresh` is a backend-only scheduler endpoint
   protected by `X-Scheduled-Refresh-Token`; it must not be called from Flutter.
 

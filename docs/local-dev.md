@@ -257,6 +257,12 @@ curl -X POST http://localhost:8000/v1/briefings/generate \
 or stale output refreshes the daily snapshot and upserts the same
 `(user_id, briefing_date)` identity. `force=true` deliberately recomputes it.
 
+In authenticated real mode, Dashboard consumes this contract above metrics.
+Normal page load calls GET only. Missing state offers explicit generation;
+`Adjust today` sends `{"force":true}`; stale actions remain visible but disabled
+until that succeeds. Guest/mock shows an explicit local-demo boundary and never
+calls either privileged briefing endpoint or fabricates a personalized plan.
+
 When FastAPI is running and Flutter is in real backend mode, a successful daily
 capture calls the daily snapshot endpoint best-effort with the capture's
 explicit local `target_date`. `/daily-check-in` redirects to the canonical
@@ -371,7 +377,8 @@ For local Supabase-backed app testing:
    date, Evening re-entry/edit without losing Morning state, task
    create/edit/postpone/undo/complete/restore/cancel/restore, manual and
    Setup-owned habit complete/skip/undo, focus start/finish/abandon with an owned
-   target, the source-aware Dashboard, Notifications, real Deep Work, and the
+   target, the decision-first Today briefing with deliberate adjustment,
+   Notifications, real Deep Work, and the
    gated Coach compatibility redirect.
 
 Do not infer remote Supabase state from local migrations. Verify the remote

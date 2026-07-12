@@ -4,13 +4,21 @@ import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../../core/constants/app_spacing.dart';
+import '../../../../core/capabilities/app_surface_capabilities.dart';
 import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/supabase/supabase_providers.dart';
 import '../../../../core/utils/client_uuid.dart';
 import '../../../../core/utils/local_date.dart';
 import '../../../../core/widgets/app_card.dart';
+import '../../../actions/application/executable_action_dispatcher.dart';
+import '../../../actions/domain/executable_action_target.dart';
+import '../../../briefings/domain/daily_briefing.dart';
+import '../../../briefings/presentation/providers/briefing_providers.dart';
+import '../../../briefings/presentation/widgets/today_briefing_section.dart';
 import '../../../optimization/domain/entities/recommendation_feed.dart';
 import '../../../optimization/presentation/providers/optimization_providers.dart';
+import '../../../quick_action/data/habit_completion_supabase_data_source.dart';
+import '../../../quick_action/domain/habit_v1.dart';
 import '../../../snapshots/presentation/providers/snapshot_providers.dart';
 import '../../../tasks/data/task_supabase_data_source.dart';
 import '../../../tasks/domain/executable_task.dart';
@@ -34,11 +42,16 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
   bool _showCancelledTasks = false;
   bool _isRefreshingRecommendations = false;
   String? _recommendationRefreshError;
+  bool _isGeneratingBriefing = false;
+  String? _briefingGenerationError;
+  final Set<String> _executingBriefingActionIds = {};
 
   @override
   Widget build(BuildContext context) {
     final snapshot = ref.watch(dashboardSnapshotProvider);
     final recommendations = ref.watch(recommendationFeedProvider);
+    final briefing = ref.watch(todayBriefingProvider);
+    final capabilities = ref.watch(appSurfaceCapabilitiesProvider);
 
     return snapshot.when(
       loading: () => const Center(child: CircularProgressIndicator()),
@@ -48,6 +61,10 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
       data: (data) => _DashboardHome(
         snapshot: data,
         recommendations: recommendations,
+        briefing: briefing,
+        isGeneratingBriefing: _isGeneratingBriefing,
+        briefingGenerationError: _briefingGenerationError,
+        executingBriefingActionIds: _executingBriefingActionIds,
         completedTaskIds: _completedTaskIds,
         restoredTaskIds: _restoredTaskIds,
         deletedTaskIds: _deletedTaskIds,
@@ -65,6 +82,13 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
           ref.invalidate(recommendationFeedProvider);
         },
         onRefreshRecommendations: _refreshRecommendations,
+        onRetryBriefing: () => ref.invalidate(todayBriefingProvider),
+        onGenerateBriefing: _generateBriefing,
+        onExecuteBriefingAction: (target) => _executeBriefingAction(
+          target,
+          snapshot: data,
+          canUseSyncedExecution: capabilities.canUseSyncedExecution,
+        ),
         onAddTask: () => _openTaskEditor(),
         onEditTask: (task) => _openTaskEditor(task: task),
         onCompleteTask: _completeTask,
@@ -99,6 +123,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
           .refreshDailyAfterUserSignal(
             targetDate: localDateKey(DateTime.now()),
           );
+      ref.invalidate(todayBriefingProvider);
       await ref
           .read(optimizationServiceProvider)
           .refreshActionableRecommendations();
@@ -126,6 +151,157 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
     } finally {
       if (mounted) {
         setState(() => _isRefreshingRecommendations = false);
+      }
+    }
+  }
+
+  Future<void> _generateBriefing({required bool force}) async {
+    if (_isGeneratingBriefing) {
+      return;
+    }
+    setState(() {
+      _isGeneratingBriefing = true;
+      _briefingGenerationError = null;
+    });
+    try {
+      await ref.read(briefingRepositoryProvider).generateToday(force: force);
+      ref.invalidate(todayBriefingProvider);
+      if (mounted) {
+        _showTaskMessage(
+          force ? 'Today adjusted.' : 'Today briefing generated.',
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _briefingGenerationError =
+              'Today could not be adjusted. The existing briefing was kept.';
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isGeneratingBriefing = false);
+      }
+    }
+  }
+
+  Future<void> _executeBriefingAction(
+    ExecutableActionTarget target, {
+    required DashboardSnapshot snapshot,
+    required bool canUseSyncedExecution,
+  }) async {
+    if (_executingBriefingActionIds.contains(target.id)) {
+      return;
+    }
+    setState(() => _executingBriefingActionIds.add(target.id));
+    try {
+      final dispatcher = ExecutableActionDispatcher(
+        openTask: ({
+          required actionId,
+          required taskId,
+          estimatedMinutes,
+          source,
+        }) async {
+          final matches = snapshot.todayPlan.where((task) => task.id == taskId);
+          if (matches.isEmpty) {
+            throw StateError('The briefing task is no longer available.');
+          }
+          await _openTaskEditor(task: matches.first);
+        },
+        completeTask: ({
+          required actionId,
+          required taskId,
+          source,
+        }) async {
+          final matches = snapshot.todayPlan.where((task) => task.id == taskId);
+          if (matches.isEmpty) {
+            throw StateError('The briefing task is no longer available.');
+          }
+          await _completeTask(matches.first);
+        },
+        logHabit: ({
+          required actionId,
+          required habitId,
+          entryDate,
+          outcome,
+          source,
+        }) async {
+          final parsedDate = DateTime.tryParse(entryDate ?? '');
+          final selectedOutcome = outcome ?? HabitOutcome.completed;
+          if (parsedDate == null) {
+            throw StateError('The briefing habit date is invalid.');
+          }
+          final client = ref.read(supabaseClientProvider);
+          if (client == null) {
+            throw StateError('Synced habits are unavailable.');
+          }
+          await HabitCompletionSupabaseDataSource(client).setTodayOutcome(
+            habitId: habitId,
+            outcome: selectedOutcome,
+            targetDate: parsedDate,
+          );
+          await ref
+              .read(snapshotRefreshServiceProvider)
+              .refreshDailyAfterHabitChange(
+                targetDate: habitDateKey(parsedDate),
+              );
+          ref.invalidate(dashboardSnapshotProvider);
+          ref.invalidate(todayBriefingProvider);
+          if (mounted) {
+            _showTaskMessage(
+              selectedOutcome == HabitOutcome.completed
+                  ? 'Habit completed.'
+                  : 'Habit intentionally skipped.',
+            );
+          }
+        },
+        startFocus: ({
+          required actionId,
+          targetId,
+          targetKind,
+          plannedMinutes,
+          source,
+        }) async {
+          final query = <String, String>{
+            if (targetKind != null) 'target_kind': targetKind.code,
+            if (targetId != null) 'target_id': targetId,
+          };
+          final suffix = query.isEmpty
+              ? ''
+              : '?${query.entries.map((entry) => '${entry.key}=${Uri.encodeQueryComponent(entry.value)}').join('&')}';
+          if (mounted) {
+            context.go('${AppRoutes.deepWork}$suffix');
+          }
+        },
+        openCapture: ({
+          required actionId,
+          required route,
+          entryDate,
+          source,
+        }) async {
+          if (mounted) {
+            context.go(route.path);
+          }
+        },
+      );
+      final result = await dispatcher.dispatch(
+        target,
+        canUseSyncedExecution: canUseSyncedExecution,
+      );
+      if (result is ExecutableActionUnavailable && mounted) {
+        _showTaskMessage(result.reason);
+      }
+    } catch (error) {
+      if (mounted) {
+        _showTaskMessage(
+          error is BriefingContractException
+              ? error.message
+              : 'This briefing action is no longer available. Adjust today and retry.',
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _executingBriefingActionIds.remove(target.id));
       }
     }
   }
@@ -363,6 +539,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
         .read(snapshotRefreshServiceProvider)
         .refreshDailyAfterTaskChange(targetDate: localDateKey(DateTime.now()));
     ref.invalidate(dashboardSnapshotProvider);
+    ref.invalidate(todayBriefingProvider);
   }
 
   void _showTaskMessage(String message) {
@@ -390,6 +567,10 @@ class _DashboardHome extends StatelessWidget {
   const _DashboardHome({
     required this.snapshot,
     required this.recommendations,
+    required this.briefing,
+    required this.isGeneratingBriefing,
+    required this.briefingGenerationError,
+    required this.executingBriefingActionIds,
     required this.completedTaskIds,
     required this.restoredTaskIds,
     required this.deletedTaskIds,
@@ -404,6 +585,9 @@ class _DashboardHome extends StatelessWidget {
     required this.onOpenFocus,
     required this.onRetryRecommendations,
     required this.onRefreshRecommendations,
+    required this.onRetryBriefing,
+    required this.onGenerateBriefing,
+    required this.onExecuteBriefingAction,
     required this.onAddTask,
     required this.onEditTask,
     required this.onCompleteTask,
@@ -417,6 +601,10 @@ class _DashboardHome extends StatelessWidget {
 
   final DashboardSnapshot snapshot;
   final AsyncValue<RecommendationFeed> recommendations;
+  final AsyncValue<BriefingFeed> briefing;
+  final bool isGeneratingBriefing;
+  final String? briefingGenerationError;
+  final Set<String> executingBriefingActionIds;
   final Set<String> completedTaskIds;
   final Set<String> restoredTaskIds;
   final Set<String> deletedTaskIds;
@@ -431,6 +619,9 @@ class _DashboardHome extends StatelessWidget {
   final VoidCallback onOpenFocus;
   final VoidCallback onRetryRecommendations;
   final VoidCallback onRefreshRecommendations;
+  final VoidCallback onRetryBriefing;
+  final GenerateBriefingCallback onGenerateBriefing;
+  final ExecuteBriefingActionCallback onExecuteBriefingAction;
   final VoidCallback onAddTask;
   final ValueChanged<PlanItem> onEditTask;
   final ValueChanged<PlanItem> onCompleteTask;
@@ -483,6 +674,16 @@ class _DashboardHome extends StatelessWidget {
                         children: [
                           _DashboardHeader(snapshot: snapshot),
                           const SizedBox(height: AppSpacing.lg),
+                          TodayBriefingSection(
+                            value: briefing,
+                            isGenerating: isGeneratingBriefing,
+                            generationError: briefingGenerationError,
+                            executingActionIds: executingBriefingActionIds,
+                            onRetryRead: onRetryBriefing,
+                            onGenerate: onGenerateBriefing,
+                            onExecute: onExecuteBriefingAction,
+                          ),
+                          const SizedBox(height: AppSpacing.xl),
                           _LatestCheckInCard(
                             snapshot: snapshot,
                             onAddEvening: onAddEvening,

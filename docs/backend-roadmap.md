@@ -186,12 +186,13 @@ Already implemented:
   authenticated required-only Setup, retry/edit/review identity and ownership,
   deterministic post-intake recommendations, backend daily snapshot refresh
   after check-ins, exact Phase 2 state recomputation, core Supabase-backed app
-  writes, and Phase 4 read-only/generate/idempotent briefing persistence.
+  writes, Phase 4 read-only/generate/idempotent briefing persistence, and Phase
+  5 GET-only Today load, deliberate adjustment, and primary action dispatch.
 
 Not yet implemented:
 
-- A decision-first Today surface connecting a ranked briefing to tasks, habits,
-  focus sessions, recommendations, and feedback; that remains Phase 5.
+- Append-only briefing/recommendation feedback history and its bounded,
+  deterministic ranking input; that remains Phase 6.
 - A bounded planning execution surface; Phase 3 returns `review_plan` as
   explicitly unavailable rather than a no-op.
 - A production background job queue or worker.
@@ -247,9 +248,10 @@ The intake foundation, controlled post-intake recommendation refresh, first
 authenticated snapshot aggregator endpoint, deliberate dashboard refresh UX,
 the Phase 3 task/habit/focus execution contracts, scheduler-triggered daily
 refresh endpoint, and deterministic Insights correlation exploration now
-exist. Phase 4's deterministic Daily Briefing service now supplies the backend
-decision contract. The next product work is the Phase 5 decision-first Today
-surface, before any coach, memory extraction, weekly planning, calendar import,
+exist. Phase 4's deterministic Daily Briefing service supplies the backend
+decision contract, and Phase 5 now consumes it in the decision-first Today
+surface. The next product work is Phase 6 feedback history and useful default
+Insights, before any coach, memory extraction, weekly planning, calendar import,
 or LLM provider work. Deployed cron/job
 execution remains useful, but it should precompute a defined daily state or
 briefing contract rather than exist as infrastructure in search of a product
@@ -589,10 +591,11 @@ Use these rules before adding any model provider:
 
 The next implementation should build on completed Phase 0 product integrity,
 Phase 1 capture, Phase 2 explainable state, Phase 3 executable action targets,
-and Phase 4's persisted deterministic briefing contract. The immediate slice is
-**Phase 5: Decision-First Today Dashboard**: consume the briefing without
-generating on normal load, expose its executable primary action, and preserve
-missing/stale/error truth. Feedback adaptation and LLM usage remain later work.
+Phase 4's persisted deterministic briefing contract, and Phase 5's decision-first
+Today consumer. The immediate slice is **Phase 6: Feedback And Useful
+Insights**: persist bounded append-only feedback, use it deterministically in
+ranking without erasing original evidence, and make the default Insight one
+cautious observation plus optional experiment. LLM usage remains later work.
 
 ### Completed Slice 0A: Honest Capture
 
@@ -758,6 +761,21 @@ missing/stale/error truth. Feedback adaptation and LLM usage remain later work.
 - Kept the decision-first Today/Dashboard redesign and feedback controls in
   Phase 5; Phase 4 proves the backend briefing contract first.
 
+### Completed Slice 5: Decision-First Today Dashboard
+
+- Added strict Flutter `daily-briefing-v1` parsing, authenticated repository and
+  provider boundaries, with no privileged API calls in guest/mock mode.
+- Normal Dashboard load calls read-only GET only and preserves loading,
+  missing, current, stale, error, and local-demo truth.
+- Places Daily Mode, data quality, capacity note, reason, primary action, and at
+  most two support actions above direct nullable check-in metrics.
+- Disables stale actions until deliberate `Adjust today`, whose POST sends only
+  `force=true`; missing state offers deliberate first generation.
+- Dispatches current targets through the existing exhaustive Phase 3 handler
+  boundary and keeps `review_plan` explicitly unavailable.
+- Adds model/repository/widget tests and browser assertions for read-only load,
+  persisted identity, deliberate adjustment, and real action dispatch.
+
 ### Completed Slice: Controlled Recommendation Refresh
 
 - Implemented: authenticated Intake V1 completion creates an onboarding
@@ -843,9 +861,8 @@ missing/stale/error truth. Feedback adaptation and LLM usage remain later work.
 
 ## Out Of Scope For The Next Slice
 
-- The Phase 5 decision-first Today/Dashboard redesign and
-  start/done/later/replace/too-much feedback controls.
-- The Phase 6 append-only decision-feedback loop and adaptive ranking.
+- Hidden or opaque feedback adaptation, mutation of original briefing reasons,
+  or an unbounded personalization score.
 - Changing the Phase 2 mode, freshness, evidence, or recovery-first rules as a
   side effect of briefing work.
 - Changing Phase 3 task, habit, focus, action-target, or snapshot-refresh

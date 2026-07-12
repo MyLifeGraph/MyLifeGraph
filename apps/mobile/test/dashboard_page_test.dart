@@ -2,8 +2,11 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:my_life_graph/core/capabilities/app_surface_capabilities.dart';
 import 'package:my_life_graph/core/config/app_config.dart';
 import 'package:my_life_graph/core/network/api_client.dart';
+import 'package:my_life_graph/features/briefings/domain/daily_briefing.dart';
+import 'package:my_life_graph/features/briefings/presentation/providers/briefing_providers.dart';
 import 'package:my_life_graph/features/dashboard/domain/entities/dashboard_snapshot.dart';
 import 'package:my_life_graph/features/dashboard/presentation/pages/dashboard_page.dart';
 import 'package:my_life_graph/features/dashboard/presentation/providers/dashboard_providers.dart';
@@ -169,7 +172,18 @@ Future<void> _pumpDashboard(
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
+        appSurfaceCapabilitiesProvider.overrideWithValue(
+          const AppSurfaceCapabilities(
+            isLocalDemo: true,
+            canUseSyncedHabits: false,
+          ),
+        ),
         dashboardSnapshotProvider.overrideWith((ref) => snapshot),
+        todayBriefingProvider.overrideWith(
+          (ref) => Future.value(
+            BriefingFeed.localDemo(now: DateTime(2026, 7, 12)),
+          ),
+        ),
         recommendationFeedProvider.overrideWith((ref) => feed),
         if (optimizationService != null)
           optimizationServiceProvider.overrideWithValue(optimizationService),

@@ -126,6 +126,11 @@ the briefing date; current generation is idempotent; changed snapshots mark a
 briefing stale; recovery/missing-data rules precede overdue pressure; completed
 or unscheduled habits are excluded; and every returned action passes the strict
 `executable-action-v1` model with at most two support actions and no LLM use.
+Phase 5 Flutter tests prove strict response/nested-action parsing, unknown-field
+and freshness-shape rejection, bearer GET versus deliberate force POST,
+guest/mock locality, current/missing/stale/error rendering, stale execution
+disabling, and primary action dispatch. Dashboard tests keep direct source
+metrics and recommendation failure truth intact below the new decision surface.
 Scheduled refresh tests
 cover the backend-only token guard, onboarded non-guest profile selection,
 per-user failure isolation, deterministic daily snapshot refresh, and optional
@@ -379,6 +384,10 @@ read-only and missing, deliberate POST persists exactly one owner/local-date
 row, response and JSONB action payloads match, every returned target is an
 implemented strict command, and a repeated `force=false` request preserves the
 same id and timestamps.
+It then opens Dashboard and proves Phase 5 normal load issues no briefing POST,
+renders the exact persisted primary title, dispatches the returned real command,
+and sends exactly `{"force":true}` only after `Adjust today`, preserving the
+same daily briefing identity.
 
 The Setup assertions inspect exact `request_id`, base/revision, applied state,
 stable materialized ids, server ownership metadata, record counts, and the
@@ -559,7 +568,7 @@ The repository now contains browser E2E automation, but it still depends on a
 real Ubuntu Node.js 20+ installation, `npm`, Playwright browser installation,
 Docker access, and a real Ubuntu `supabase` CLI on `PATH`.
 
-The combined Phase 3/4 browser journey passed non-destructively in the
+The combined Phase 3/4/5 browser journey passed non-destructively in the
 2026-07-12 implementation checkout. Future changes must establish their own
 current-checkout result with the browser command above; use the `RESET_DB=true`
 form when proving the full migration chain from a fresh database. The journey

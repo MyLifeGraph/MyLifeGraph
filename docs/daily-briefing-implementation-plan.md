@@ -159,7 +159,7 @@ Phase 4's deterministic briefing service.
 | --- | --- | --- |
 | Auth and guest entry | Yes | Local demo is labeled; mock/demo auth skips remote profile/data bootstrap and reloads local Setup, while canonical guest check-ins migrate best-effort only into a real non-demo account |
 | Onboarding / Setup | Yes, Phase 0C complete | Progressive explicit input, typed prefill, atomic revision-safe save, differentiated retry/reload, and durable review are implemented |
-| Dashboard | Yes | Direct source values remain honest; tasks now expose real commands and unranked Today execution links, while the decision-first Today redesign waits for the Phase 4 briefing contract and remains Phase 5 |
+| Dashboard | Yes, Phase 5 core complete | Persisted Daily Mode and strict primary/support actions appear above direct source metrics; GET-only normal load, explicit adjustment, stale disabling, error truth, and local-demo boundaries are implemented. Feedback history remains Phase 6. |
 | Canonical daily capture | Yes, Phase 1 complete | Evening and Morning are separate typed flows over one ownership-merged daily entry; Phase 2 now interprets their freshness and stress context only inside backend snapshots |
 | Legacy large Daily Check-In | Retired | `/daily-check-in` redirects to the canonical lightweight flow; do not recreate a competing form |
 | Habit management/completion | Yes, authenticated only | Habit V1 cadence, progress, streaks, explicit completion/skip, and undo are implemented; manual lifecycle stays in Habit Management, Setup-owned lifecycle stays in Settings Setup, and daily execution is available from Today Habits |
@@ -1241,8 +1241,8 @@ Implemented:
 - Includes mode, capacity note, reason, provenance, evidence refs, freshness, and action
   targets.
 - Keeps LLM usage disabled and numeric capacity null until a validated policy exists.
-- Keeps normal Dashboard reads generation-free; the decision-first Today
-  redesign and feedback controls remain Phase 5.
+- Keeps normal Dashboard reads generation-free; Phase 5 consumes the result
+  without changing Phase 2 or Phase 3 semantics.
 
 Evaluation:
 
@@ -1252,18 +1252,20 @@ Evaluation:
 - Does insufficient data yield a conservative useful briefing?
 - Can browser E2E assert the briefing after capture and state refresh?
 
-### Phase 5: Decision-First Today Dashboard
+### Phase 5: Decision-First Today Dashboard (Implemented)
 
 Goal:
 
 - Make the first screen the daily operating cockpit.
 
-Work:
+Implemented:
 
 - Show Daily Mode, primary action, reason, time/capacity note, and freshness above
   secondary metrics.
-- Add start, done, later, replace, too much, and does-not-fit controls.
-- Show fixed commitments and only today's relevant tasks and habits.
+- Dispatch current primary/support actions through the existing strict Phase 3
+  handlers; outcome and preference feedback history remains Phase 6.
+- Keep fixed commitments, tasks, habits, and direct nullable check-in truth below
+  the ranked decision surface.
 - Add `adjust today` for material state or schedule changes.
 - Keep advanced metrics and history below the execution surface.
 - Preserve deliberate refresh without generating on normal dashboard reads.
@@ -1273,7 +1275,7 @@ Evaluation:
 - Does the first viewport answer what to do now and why?
 - Can the user begin the primary action in at most two interactions?
 - Are no more than three decision items emphasized?
-- Does feedback work without another long form?
+- Does action execution reuse durable command contracts without a parallel path?
 - Does mobile and desktop layout preserve readable, non-overlapping actions?
 
 ### Phase 6: Feedback And Useful Insights
@@ -1447,7 +1449,14 @@ validates Daily State only on deliberate generation, ranks strict executable
 targets recovery-first, and carries freshness, provenance, bounded evidence,
 and no-LLM attribution.
 
-The next implementation should be **Phase 5: Decision-First Today Dashboard**.
-It should consume the persisted briefing without generation on normal load,
-place the primary executable action above secondary metrics, preserve
-missing/stale/error states, and keep adaptive feedback ranking in Phase 6.
+Phase 5 is implemented. Flutter strictly parses the persisted briefing, keeps
+normal Dashboard load read-only, places the primary executable action above
+secondary metrics, preserves missing/stale/error/demo truth, disables stale
+targets until deliberate adjustment, and reuses the Phase 3 dispatcher.
+
+The next implementation should be **Phase 6: Feedback And Useful Insights**.
+It should persist bounded append-only outcome/preference feedback, apply recent
+context-matched feedback deterministically without erasing original evidence,
+and replace the default analytics-heavy Insights entry with one cautious,
+actionable observation. Coach, calendar, broad automation, and LLM work remain
+later phases.
