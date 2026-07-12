@@ -9,10 +9,12 @@ class AppSurfaceCapabilities {
   const AppSurfaceCapabilities({
     required this.isLocalDemo,
     required this.canUseSyncedHabits,
+    this.canUseSyncedExecution = false,
   });
 
   final bool isLocalDemo;
   final bool canUseSyncedHabits;
+  final bool canUseSyncedExecution;
 
   factory AppSurfaceCapabilities.forSession({
     required AppSession? session,
@@ -24,10 +26,12 @@ class AppSurfaceCapabilities {
         session?.profile.authProvider == 'guest' ||
         session?.profile.email.toLowerCase() == 'demo@personal-coach.local';
 
+    final canUseSyncedExecution =
+        !isLocalDemo && session?.isAuthenticated == true && hasSupabaseClient;
     return AppSurfaceCapabilities(
       isLocalDemo: isLocalDemo,
-      canUseSyncedHabits:
-          !isLocalDemo && session?.isAuthenticated == true && hasSupabaseClient,
+      canUseSyncedHabits: canUseSyncedExecution,
+      canUseSyncedExecution: canUseSyncedExecution,
     );
   }
 }

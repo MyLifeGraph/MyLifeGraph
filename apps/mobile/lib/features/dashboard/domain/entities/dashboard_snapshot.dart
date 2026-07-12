@@ -86,14 +86,20 @@ class PlanItem {
     required this.title,
     required this.priority,
     required this.isCompleted,
+    required this.status,
     this.deadline,
+    this.description,
+    this.estimatedMinutes,
   });
 
   final String id;
   final String title;
   final String priority;
   final bool isCompleted;
+  final String status;
   final DateTime? deadline;
+  final String? description;
+  final int? estimatedMinutes;
 }
 
 class ScheduleDay {

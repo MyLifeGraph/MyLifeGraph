@@ -89,8 +89,22 @@ void main() {
         'hardly_controllable',
       );
       expect(snapshot.latestCheckIn?.dayShape, 'constrained');
-      expect(snapshot.todayPlan.single.priority, 'high');
-      expect(snapshot.todayPlan.single.isCompleted, isTrue);
+      expect(snapshot.todayPlan, hasLength(2));
+      final completedTask = snapshot.todayPlan.firstWhere(
+        (task) => task.id == 'task-1',
+      );
+      final cancelledTask = snapshot.todayPlan.firstWhere(
+        (task) => task.id == 'task-cancelled',
+      );
+      expect(completedTask.priority, 'high');
+      expect(completedTask.isCompleted, isTrue);
+      expect(completedTask.status, 'done');
+      expect(cancelledTask.isCompleted, isFalse);
+      expect(cancelledTask.status, 'cancelled');
+      expect(
+        snapshot.todayPlan.any((task) => task.id == 'task-archived'),
+        isFalse,
+      );
       expect(snapshot.scheduleDays[4].events.single.title, 'Exact commitment');
       expect(snapshot.scheduleDays[4].events.single.time, '10:00-11:30');
     });

@@ -11,6 +11,7 @@ import '../../../../core/widgets/app_page.dart';
 import '../../../dashboard/presentation/providers/dashboard_providers.dart';
 import '../../../snapshots/presentation/providers/snapshot_providers.dart';
 import '../../data/habit_completion_supabase_data_source.dart';
+import '../../domain/habit_v1.dart';
 
 class HabitCompletionPage extends ConsumerStatefulWidget {
   const HabitCompletionPage({super.key});
@@ -21,7 +22,7 @@ class HabitCompletionPage extends ConsumerStatefulWidget {
 }
 
 class _HabitCompletionPageState extends ConsumerState<HabitCompletionPage> {
-  List<HabitCompletionOption> _habits = const [];
+  List<HabitV1> _habits = const [];
   final Set<String> _savingHabitIds = {};
   bool _isLoading = true;
 
@@ -33,9 +34,10 @@ class _HabitCompletionPageState extends ConsumerState<HabitCompletionPage> {
 
   @override
   Widget build(BuildContext context) {
+    final today = habitDateOnly(DateTime.now());
     return AppPage(
-      title: 'Habit completion',
-      subtitle: 'Track today\'s consistency signals',
+      title: 'Today habits',
+      subtitle: 'Complete, intentionally skip, or undo today\'s opportunities',
       actions: [
         IconButton(
           tooltip: 'Refresh',
@@ -65,18 +67,23 @@ class _HabitCompletionPageState extends ConsumerState<HabitCompletionPage> {
                 Icon(Icons.check_circle_outline),
                 SizedBox(width: AppSpacing.md),
                 Expanded(
-                  child: Text('No active habits found.'),
+                  child: Text('No active habit is scheduled for today.'),
                 ),
               ],
             ),
           )
         else
           ..._habits.map(
-            (habit) => _HabitTile(
+            (habit) => HabitOutcomeTile(
               habit: habit,
+              today: today,
               isSaving: _savingHabitIds.contains(habit.id),
-              onComplete:
-                  habit.completedToday ? null : () => _completeHabit(habit.id),
+              onComplete: () => _setOutcome(
+                habit,
+                HabitOutcome.completed,
+              ),
+              onSkip: () => _setOutcome(habit, HabitOutcome.skipped),
+              onUndo: () => _undoOutcome(habit),
             ),
           ),
       ],
@@ -113,47 +120,90 @@ class _HabitCompletionPageState extends ConsumerState<HabitCompletionPage> {
     } catch (_) {
       if (mounted) {
         setState(() => _isLoading = false);
-        _showMessage('Could not load habits.');
+        _showMessage('Could not load today\'s habits.');
       }
     }
   }
 
-  Future<void> _completeHabit(String habitId) async {
+  Future<void> _setOutcome(HabitV1 habit, HabitOutcome outcome) async {
+    final targetDate = habitDateOnly(DateTime.now());
     final config = ref.read(appConfigProvider);
     final client = ref.read(supabaseClientProvider);
     if (config.useMockData || client == null) {
       _showMessage('Supabase is not configured.');
       return;
     }
+    if (_savingHabitIds.contains(habit.id)) {
+      return;
+    }
 
-    setState(() => _savingHabitIds.add(habitId));
+    setState(() => _savingHabitIds.add(habit.id));
     try {
-      await HabitCompletionSupabaseDataSource(
-        client,
-      ).completeHabit(habitId: habitId);
+      await HabitCompletionSupabaseDataSource(client).setTodayOutcome(
+        habitId: habit.id,
+        outcome: outcome,
+        targetDate: targetDate,
+      );
       await ref
           .read(snapshotRefreshServiceProvider)
-          .refreshDailyAfterHabitChange();
+          .refreshDailyAfterHabitChange(
+            targetDate: habitDateKey(targetDate),
+          );
       ref.invalidate(dashboardSnapshotProvider);
-
+      await _loadHabits();
       if (mounted) {
-        setState(() {
-          _habits = _habits
-              .map(
-                (habit) =>
-                    habit.id == habitId ? _withTodayLogged(habit) : habit,
-              )
-              .toList();
-        });
-        _showMessage('Habit completed.');
+        _showMessage(
+          outcome == HabitOutcome.completed
+              ? 'Habit completed.'
+              : 'Habit intentionally skipped.',
+        );
       }
     } catch (_) {
       if (mounted) {
-        _showMessage('Could not save habit completion.');
+        _showMessage('Could not save the habit outcome.');
       }
     } finally {
       if (mounted) {
-        setState(() => _savingHabitIds.remove(habitId));
+        setState(() => _savingHabitIds.remove(habit.id));
+      }
+    }
+  }
+
+  Future<void> _undoOutcome(HabitV1 habit) async {
+    final targetDate = habitDateOnly(DateTime.now());
+    final config = ref.read(appConfigProvider);
+    final client = ref.read(supabaseClientProvider);
+    if (config.useMockData || client == null) {
+      _showMessage('Supabase is not configured.');
+      return;
+    }
+    if (_savingHabitIds.contains(habit.id)) {
+      return;
+    }
+
+    setState(() => _savingHabitIds.add(habit.id));
+    try {
+      await HabitCompletionSupabaseDataSource(client).undoTodayOutcome(
+        habitId: habit.id,
+        targetDate: targetDate,
+      );
+      await ref
+          .read(snapshotRefreshServiceProvider)
+          .refreshDailyAfterHabitChange(
+            targetDate: habitDateKey(targetDate),
+          );
+      ref.invalidate(dashboardSnapshotProvider);
+      await _loadHabits();
+      if (mounted) {
+        _showMessage('Habit outcome undone.');
+      }
+    } catch (_) {
+      if (mounted) {
+        _showMessage('Could not undo the habit outcome.');
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _savingHabitIds.remove(habit.id));
       }
     }
   }
@@ -163,157 +213,169 @@ class _HabitCompletionPageState extends ConsumerState<HabitCompletionPage> {
       SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
     );
   }
-
-  HabitCompletionOption _withTodayLogged(HabitCompletionOption habit) {
-    if (habit.completedToday) {
-      return habit;
-    }
-
-    final now = DateTime.now();
-    final updatedCompletionDates = {
-      ...habit.recentCompletionDates,
-      _dateOnly(now),
-    };
-
-    return HabitCompletionOption(
-      id: habit.id,
-      title: habit.title,
-      frequency: habit.frequency,
-      target: habit.target,
-      active: habit.active,
-      completedToday: true,
-      completionsLast7Days: updatedCompletionDates.length,
-      currentStreakDays: _currentStreakDays(updatedCompletionDates, now),
-      recentCompletionDates: updatedCompletionDates,
-      description: habit.description,
-    );
-  }
-
-  int _currentStreakDays(Set<String> completionDates, DateTime today) {
-    var streak = 0;
-    for (var offset = 0; offset < 7; offset++) {
-      final date = _dateOnly(today.subtract(Duration(days: offset)));
-      if (!completionDates.contains(date)) {
-        break;
-      }
-      streak += 1;
-    }
-    return streak;
-  }
-
-  String _dateOnly(DateTime date) {
-    final month = date.month.toString().padLeft(2, '0');
-    final day = date.day.toString().padLeft(2, '0');
-    return '${date.year}-$month-$day';
-  }
 }
 
-class _HabitTile extends StatelessWidget {
-  const _HabitTile({
+class HabitOutcomeTile extends StatelessWidget {
+  const HabitOutcomeTile({
+    super.key,
     required this.habit,
+    required this.today,
     required this.isSaving,
     required this.onComplete,
+    required this.onSkip,
+    required this.onUndo,
   });
 
-  final HabitCompletionOption habit;
+  final HabitV1 habit;
+  final DateTime today;
   final bool isSaving;
-  final VoidCallback? onComplete;
+  final VoidCallback onComplete;
+  final VoidCallback onSkip;
+  final VoidCallback onUndo;
 
   @override
   Widget build(BuildContext context) {
-    final completed = habit.completedToday;
-    final progress = (habit.completionsLast7Days / 7).clamp(0.0, 1.0);
+    final outcome = habit.outcomeOn(today);
+    final progress = habit.progressAt(today);
+    final completed = outcome == HabitOutcome.completed;
+    final skipped = outcome == HabitOutcome.skipped;
     return AppCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(
-                completed ? Icons.check_circle : Icons.radio_button_unchecked,
-                color: completed ? Theme.of(context).colorScheme.primary : null,
-              ),
-              const SizedBox(width: AppSpacing.md),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      habit.title,
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                    if (habit.description != null &&
-                        habit.description!.trim().isNotEmpty) ...[
+      child: Semantics(
+        container: true,
+        explicitChildNodes: true,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  completed
+                      ? Icons.check_circle
+                      : skipped
+                          ? Icons.fast_forward_outlined
+                          : Icons.radio_button_unchecked,
+                  color: outcome == null
+                      ? null
+                      : Theme.of(context).colorScheme.primary,
+                ),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        habit.title,
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      if (habit.description != null) ...[
+                        const SizedBox(height: AppSpacing.xs),
+                        Text(
+                          habit.description!,
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                      ],
                       const SizedBox(height: AppSpacing.xs),
                       Text(
-                        habit.description!,
-                        style: Theme.of(context).textTheme.bodyMedium,
+                        [
+                          habit.cadence.label,
+                          if (habit.isSetupManaged) 'Managed in Setup',
+                        ].join(' · '),
+                        style: Theme.of(context).textTheme.bodySmall,
                       ),
                     ],
-                    const SizedBox(height: AppSpacing.xs),
-                    Text(
-                      '${habit.frequency} target: ${habit.target}',
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                  ],
+                  ),
                 ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.md),
+            ExcludeSemantics(
+              child: LinearProgressIndicator(
+                value: progress.ratio,
+                minHeight: 8,
+                borderRadius: BorderRadius.circular(8),
               ),
-              const SizedBox(width: AppSpacing.md),
-              FilledButton.icon(
-                onPressed: isSaving ? null : onComplete,
-                icon: isSaving
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : Icon(completed ? Icons.done : Icons.add_task),
-                label: Text(completed ? 'Done' : 'Log'),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.md),
-          Row(
-            children: [
-              Expanded(
-                child: LinearProgressIndicator(
-                  value: progress,
-                  minHeight: 8,
-                  borderRadius: BorderRadius.circular(8),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Wrap(
+              spacing: AppSpacing.md,
+              runSpacing: AppSpacing.xs,
+              children: [
+                Text(
+                  '${progress.label} completed opportunities',
+                  style: Theme.of(context).textTheme.labelMedium,
                 ),
-              ),
-              const SizedBox(width: AppSpacing.md),
-              Text(
-                '${habit.completionsLast7Days}/7 days',
-                style: Theme.of(context).textTheme.labelMedium,
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Row(
-            children: [
-              Icon(
-                Icons.local_fire_department_outlined,
-                size: 18,
-                color: Theme.of(context).colorScheme.primary,
-              ),
-              const SizedBox(width: AppSpacing.xs),
-              Text(
-                '${habit.currentStreakDays} day streak',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-              const Spacer(),
-              Text(
-                completed ? 'Logged today' : 'Open today',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: completed
-                          ? Theme.of(context).colorScheme.primary
-                          : null,
+                if (progress.skipped > 0)
+                  Text(
+                    '${progress.skipped} skipped',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                if (progress.missed > 0)
+                  Text(
+                    '${progress.missed} missed',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                Text(
+                  '${progress.streak} streak',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.md),
+            if (isSaving)
+              const Align(
+                alignment: Alignment.centerRight,
+                child: SizedBox.square(
+                  dimension: 24,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+              )
+            else if (outcome != null)
+              Align(
+                alignment: Alignment.centerRight,
+                child: Semantics(
+                  label: 'Undo habit ${habit.title}',
+                  button: true,
+                  child: ExcludeSemantics(
+                    child: OutlinedButton.icon(
+                      onPressed: onUndo,
+                      icon: const Icon(Icons.undo),
+                      label: Text(
+                        skipped ? 'Undo skip' : 'Undo completion',
+                      ),
                     ),
+                  ),
+                ),
+              )
+            else
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  Semantics(
+                    label: 'Skip habit ${habit.title}',
+                    button: true,
+                    child: ExcludeSemantics(
+                      child: TextButton(
+                        onPressed: onSkip,
+                        child: const Text('Skip today'),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  Semantics(
+                    label: 'Complete habit ${habit.title}',
+                    button: true,
+                    child: ExcludeSemantics(
+                      child: FilledButton.icon(
+                        onPressed: onComplete,
+                        icon: const Icon(Icons.check),
+                        label: const Text('Complete today'),
+                      ),
+                    ),
+                  ),
+                ],
               ),
-            ],
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

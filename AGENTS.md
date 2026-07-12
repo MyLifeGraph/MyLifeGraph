@@ -22,6 +22,8 @@ Read these files before making changes:
 6. `docs/verification.md` before running or changing test automation
 7. `docs/supabase-current-state.md` when touching Supabase, auth, data sources,
    or migrations
+8. `docs/phase-3-executable-actions-contract.md` before changing executable
+   actions or consuming them in a briefing
 
 ## Current State
 
@@ -70,6 +72,14 @@ service-role-only `apply_intake_v1_setup_revision` RPC. It serializes Setup appl
 per user with a transaction-scoped advisory lock and atomically reconciles
 preferences, Setup-owned records, the canonical onboarding snapshot, the intake
 state, and the profile projection.
+The migration
+`supabase/migrations/20260711120000_phase_3_executable_action_schema.sql` adds
+task estimates and terminal timestamps, explicit habit outcomes, and the linked
+focus-session lifecycle. It preserves existing table RLS/grants while adding
+exact task/focus lifecycle and duration checks, locked active/cadence-aware
+habit-outcome validation, locked focus-target validation, restricted target
+deletion, full terminal-history immutability, deterministic UTC-date backfill
+for legacy focus rows, and the one-active-focus-session invariant.
 
 ## Important Docs
 
@@ -84,6 +94,8 @@ state, and the profile projection.
 - `docs/local-dev.md` - local runbook for Flutter, Supabase, and FastAPI.
 - `docs/verification.md` - automated checks, local Supabase verification, and
   current E2E gaps.
+- `docs/phase-3-executable-actions-contract.md` - implemented task, habit,
+  focus, and ranking-independent action-target contract.
 - `README.md` - high-level project overview.
 
 ## Next Implementation Direction
@@ -91,15 +103,15 @@ state, and the profile projection.
 The **Intake V1 without LLM** foundation, controlled deterministic
 recommendation refresh after authenticated intake, and the authenticated
 deterministic snapshot aggregator endpoint now exist. A deliberate dashboard
-refresh action now calls the deterministic recommendation generate endpoint
-without LLM wording. Quick Action habit management now supports creating,
-editing, pausing, restoring, 7-day progress reads, and daily completions against
-the existing habit tables. A backend-only scheduled daily refresh endpoint now
-refreshes onboarded non-guest profiles for cron-style runs. Insights now
-includes deterministic correlation exploration from Supabase-backed or mock
-time series without LLM usage. Read `docs/backend-roadmap.md` and
-`docs/daily-briefing-implementation-plan.md` before planning the next backend,
-AI, onboarding, dashboard, or agent workflow.
+refresh action calls the deterministic recommendation generate endpoint without
+LLM wording. Phase 3 executable tasks, cadence-aware habits, linked focus
+sessions, and the strict `executable-action-v1` envelope are implemented for
+authenticated real accounts. Snapshots now include additive habit-outcome and
+focus-session summaries while preserving Phase 2 Daily State unchanged. A
+backend-only scheduled endpoint refreshes onboarded non-guest profiles for
+cron-style runs. Read `docs/backend-roadmap.md`,
+`docs/daily-briefing-implementation-plan.md`, and the Phase 3 contract before
+planning the next backend, briefing, dashboard, or agent workflow.
 
 Do not jump straight to broad LLM integration, calendar import, weekly planning,
 vector search, or autonomous background agents. The next product slice should
@@ -116,9 +128,10 @@ labeled and stays local; authenticated dashboard, notification, and
 recommendation failures no longer become mock content; recommendation feeds
 preserve empty/stale/fresh/error semantics; the dashboard shows direct nullable
 check-in values instead of proxy scores; notification actions use a strict
-internal allowlist; Coach and Deep Work previews are gated; Settings contains
-only durable behavior; and guest users no longer see Supabase-only habit
-actions. `USE_MOCK_DATA=true` deliberately makes product data surfaces local/
+internal allowlist; Coach and the former Deep Work preview were gated; Settings
+contains only durable behavior; and guest users no longer see Supabase-only
+habit actions. Phase 3 later replaced the Deep Work preview with a real synced
+focus flow. `USE_MOCK_DATA=true` deliberately makes product data surfaces local/
 demo even if a Supabase auth session exists; real authenticated sources are used
 only with `USE_MOCK_DATA=false`. Mock/demo auth boot does not read or create a
 remote profile, and it restores locally applied Setup across reloads.
@@ -174,15 +187,47 @@ statistics-window flags live under `summary.window_risk_flags`, and
 no schema, Today UI, recommendation ranking, briefing persistence, or LLM
 usage.
 
-The immediate next slice is Phase 3, Executable Action And Habit Contracts.
-Make task, habit, focus, and bounded planning targets reliable before a future
-briefing ranks them. Read the phase contract before changing task, habit,
-focus-session, snapshot-consumer, or dashboard semantics.
+Phase 3, Executable Action And Habit Contracts, is implemented. Authenticated
+real accounts can create/edit/complete/postpone/cancel/restore tasks with
+estimates and recoverable UI; manage daily, selected-weekday, and weekly-target
+habits with explicit completed/skipped outcomes and undo; and start, finish, or
+abandon at most one active focus session linked to an owned task or habit.
+Setup-owned habit definitions remain owned by Settings Setup while their active
+rows remain executable. Habit reads paginate history starting 370 calendar days
+before today, and local `started_on` plus calendar-date arithmetic keep progress
+stable across DST changes. Every task update, including undo, and every manual
+habit definition/lifecycle update reconciles an ambiguous committed response
+only by exact owner-scoped timestamp/requested-field readback. Habit outcome
+and undo capture one target date before awaiting the write, reconcile the exact
+row or its absence, and refresh that same date. Focus finish/abandon uses exact
+terminal readback. Terminal focus history rejects every update and linked
+targets cannot be deleted out from under it. The strict Flutter/FastAPI
+`executable-action-v1` parsers reject the same unknown, explicit-null, coerced,
+and mismatched shapes; unsupported commands remain explicit, and `review_plan`
+stays unavailable. New focus rows persist the local start `entry_date`; the
+migration backfills missing legacy values from the UTC date of `started_at`,
+which is also the shared Flutter/FastAPI fallback. Snapshots add bounded
+habit/focus counts and evidence from fully paginated, stably ordered 1,000-row
+action-fact pages, and `explainable-daily-state-v1` remains unchanged.
+Guest/mock sessions expose none of these remote commands.
+
+The immediate next slice is Phase 4, Deterministic Briefing Service. It should
+rank one primary action and at most two support actions from current state and
+the proven Phase 3 targets, remain deterministic/no-LLM, keep `GET` read-only,
+and use deliberate authenticated generation. Do not fold the Phase 5
+decision-first Today redesign into this backend slice.
 
 FastAPI-backed browser E2E coverage for revisioned Setup ownership/retry/edit,
 concurrent same-request convergence, post-intake recommendations, exact Phase 2
 Daily State recomputation, daily snapshot refresh, deliberate dashboard
 recommendation refresh, and Supabase-backed habit management now exists.
+Phase 3 adds focused Flutter/FastAPI tests, but its task/habit/focus database
+journeys are also encoded as exact Playwright/database assertions, including
+committed-response-loss reconciliation for habit/task create, habit
+outcome/undo, task completion/undo, and focus start/finish. Negative writes
+cover lifecycle/range/cadence constraints and every terminal focus update,
+including `updated_at`. A successful current-checkout browser run is still
+required before E2E may be claimed.
 
 The implemented post-intake refresh is backend-only and best-effort:
 
@@ -222,11 +267,11 @@ The implemented post-intake refresh is backend-only and best-effort:
   `X-Scheduled-Refresh-Token`, lists onboarded non-guest profiles, and refreshes
   deterministic daily snapshots without LLM usage. If recommendation refresh is
   explicitly included, LLM wording remains disabled.
-- The canonical Supabase-backed Evening Shutdown and Morning Calibration,
-  dashboard task status changes, Quick Action habit management writes, and
-  Quick Action habit completions call the daily snapshot refresh best-effort
-  after successful writes. Capture refreshes include their explicit local
-  `target_date`. Guest/mock paths remain local and must not call the AI service.
+- The canonical Supabase-backed Evening Shutdown and Morning Calibration plus
+  authenticated task, habit, and focus writes call daily snapshot refresh
+  best-effort after the durable write. Capture refreshes include their explicit
+  local `target_date`. Refresh failure never rolls back the original action;
+  guest/mock paths remain local and must not call the AI service.
 
 ## Local Supabase Workflow
 
@@ -262,11 +307,18 @@ you actually intend to run `supabase db reset`.
 `supabase db reset` must complete through:
 
 ```text
-20260710180000_atomic_intake_v1_setup_apply.sql
+20260711120000_phase_3_executable_action_schema.sql
 ```
 
 Expected local reset notices include skipped legacy CamelCase tables and
 already-existing canonical tables. Those notices are normal. Errors are not.
+The Phase 3 migration normalizes every positive legacy value to completion and
+intentionally errors when a legacy `habit_logs` row has no status and
+`value <= 0`; inspect and resolve that row's real meaning rather than
+fabricating an intentional skip. Use
+`HOME=.tools/supabase-home SUPABASE_TELEMETRY_DISABLED=1 supabase migration up --local`
+for a non-destructive pending local migration, and the scripted
+`RESET_DB=true` flow only when proving the full chain on a fresh local database.
 
 Do not assume the live remote database state from migrations alone. Inspect it
 through the Supabase dashboard, CLI, or connector before making claims about the
@@ -326,6 +378,11 @@ Manual smoke test after schema or Supabase-client changes:
 - Add, edit, and review one setup-owned commitment without changing a manual row.
 - Save Evening Shutdown through either current route, then save Morning
   Calibration and confirm that both states remain present.
+- Create/edit/postpone/complete/undo/cancel/restore one task.
+- Create daily, weekday, and weekly-target habits; complete, skip, and undo an
+  outcome while preserving Setup ownership.
+- Start and finish or abandon a linked focus session without completing its
+  target automatically.
 - Open dashboard.
 - Open notifications.
 

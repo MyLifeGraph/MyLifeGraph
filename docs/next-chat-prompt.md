@@ -1,11 +1,11 @@
 # Next Chat Prompt
 
-Use this prompt when starting a new implementation chat after Phase 2,
-Explainable Daily State.
+Use this prompt when starting the Phase 4 implementation chat after Phase 3,
+Executable Tasks, Habits, And Focus.
 
-Recommended reasoning level: **high**. This work makes future briefing targets
-actually executable and recoverable. It must not jump ahead to action ranking,
-a Today redesign, or an LLM.
+Recommended reasoning level: **high**. This work makes a deterministic editorial
+decision from already trusted state and executable targets. It must not fold the
+later Today redesign, feedback loop, or an LLM into the service contract.
 
 Prompt:
 
@@ -19,150 +19,177 @@ Use high reasoning. First read completely:
 3. docs/architecture.md
 4. docs/backend-roadmap.md
 5. docs/daily-briefing-implementation-plan.md
-6. docs/supabase-current-state.md
-7. docs/local-dev.md
-8. docs/verification.md
+6. docs/phase-3-executable-actions-contract.md
+7. docs/supabase-current-state.md
+8. docs/local-dev.md
+9. docs/verification.md
 
-Goal: implement Phase 3, Executable Tasks, Habits, And Focus. Phase 0A, 0B,
-0C, Phase 1, and Phase 2 are implemented. Preserve all of their contracts.
+Goal: implement Phase 4, Deterministic Briefing Service. Phase 0A, 0B, 0C,
+Phase 1, Phase 2, and Phase 3 are implemented. Preserve all of their contracts.
 
-Phase 2 adds `summary.daily_state` and `signals.daily_state` under
-`explainable-daily-state-v1` without schema changes. Its strict parser trusts
-Phase 1 V2 captures only after identity, enum, numeric, timestamp, and projection
-validation; legacy numeric fallback applies only when no V2 marker exists. It
-uses a fixed seven-day state lookback separate from the requested statistics
-window. Evening from the target date or previous date and Morning from the
-target date define current cadence. Quality is missing, partial, current, or
-stale. Daily Mode is recovery-first push, steady, recover, or plan with bounded
-risks, reasons, evidence, provenance, and no capture free text or learned
-baseline. The source marker remains snapshot-aggregator-v1; metadata carries
-the Daily State contract and lookback. Top-level summary.risk_flags aliases the
-current Daily State codes, summary.window_risk_flags retains window aggregate
-flags, and recommended_next_focus is recovery-first from mode.
+Phase 2 owns `summary.daily_state` and `signals.daily_state` under
+`explainable-daily-state-v1`. It uses strict Phase 1 V2 parsing, a fixed
+seven-day state lookback, explicit Evening/Morning freshness,
+missing/partial/current/stale quality, and recovery-first
+push/steady/recover/plan classification. Risks, reasons, evidence, and
+provenance are deterministic; capture free text and learned-baseline claims are
+excluded. The source marker remains `snapshot-aggregator-v1`.
 
-Do not change Phase 2 classification, freshness, evidence, recommendation
-ranking, or its no-LLM/no-Today boundary as a side effect of Phase 3. Guest/mock
-remains local. Phase 0C Setup request/base-revision/pending/applied semantics and
-the service-role-only atomic Setup RPC remain unchanged.
+Phase 3 now provides:
 
-Start by auditing the existing executable paths end to end:
+- owner-scoped task create/edit/complete/postpone/cancel/restore/undo with
+  validated estimates, stable create identity, retained failure state, and
+  exact persisted reconciliation after an ambiguous response from every update
+  including undo, plus best-effort snapshot refresh;
+- Habit V1 daily, selected-ISO-weekday, and weekly-target cadence; explicit
+  completed/skipped outcomes; derived open/missed state; cadence-aware progress
+  and streaks; same-day undo; and separate manual versus Setup-owned lifecycle
+  authority. Writes lock/revalidate current eligibility; reads paginate history
+  beginning 370 calendar days before today; and `started_on` calendar math is
+  DST-safe. Manual definition/lifecycle response loss requires exact readback;
+  outcome/undo fixes one target date, proves the exact row or absence, and
+  refreshes that date;
+- a real one-active-session focus lifecycle with optional owned task or active
+  habit linkage, measured finish/abandon duration, and no implicit target
+  completion. Target validation locks the selected row, terminal response loss
+  is reconciled exactly, every terminal-row update is rejected, target deletion
+  is restricted, and refresh uses the persisted local start date with the same
+  deterministic UTC legacy fallback in Flutter and FastAPI;
+- parser-equivalent strict Flutter and FastAPI `executable-action-v1` targets.
+  Explicit-null metadata fields, unsupported or mismatched commands fail
+  explicitly, and `review_plan` remains unavailable;
+- additive habit/focus snapshot summaries that do not change the Phase 2 Daily
+  State result and are loaded through complete, stably ordered 1,000-row action
+  windows; and
+- migration `20260711120000_phase_3_executable_action_schema.sql`, which must be
+  present in the local schema before exercising Phase 3 or Phase 4 candidates.
 
-1. Task status currently supports done/todo/cancelled from Dashboard but lacks a
-   complete create/edit/postpone/cancel/undo contract and reliable estimates.
-2. Habit Management currently creates/edits/pauses/restores manual habits;
-   Habit Completion writes one daily value. Its seven-day count is not honest
-   cadence-aware progress and has no intentional skip or undo.
-3. Setup-owned active habits remain completable but their definition/lifecycle
-   stays owned by Settings Setup. Generic Habit Management must not claim them.
-4. Deep Work remains gated because no real focus-session lifecycle exists.
-5. A future briefing needs typed action targets and commands whose handlers are
-   real, durable, user-scoped, and recoverable.
+Do not change Phase 2 classification/freshness/evidence or Phase 3 task, habit,
+focus, action-target, ownership, and refresh semantics as a side effect of
+briefing work. Guest/mock remains local. Phase 0C Setup revisions and its
+service-role-only atomic RPC remain unchanged. Normal Dashboard reads and
+ordinary captures/actions must not generate recommendations or briefings.
 
-Inspect at minimum:
+Before editing, inspect the current snapshot, recommendation, executable-action,
+auth, repository, router, migration, and E2E paths. If the current checkout has
+not yet completed Phase 3 verification, establish the relevant focused checks
+first. The browser source contains Phase 3 task/habit/focus response-loss cases
+for habit/task create, habit outcome/undo, task completion/undo, and focus
+start/finish, plus negative database assertions including terminal-focus
+`updated_at`. Do not claim a current E2E pass unless the command succeeds in
+this checkout.
 
-- task domain/entity, Dashboard task mapper and status write path
-- `habits`, `habit_logs`, their Supabase data sources, Setup ownership filters,
-  current progress math, and Quick Action pages
-- `focus_sessions` schema and any gated Deep Work implementation
-- route/capability allowlists and notification action targets
-- snapshot refresh entrypoints after successful task/habit writes
-- current migrations, RLS/grants, Supabase-state docs, widget tests, and
-  `e2e/web/smoke.mjs`
+Write the Phase 4 briefing contract and deterministic ranking matrix before
+implementation. Decide at minimum:
 
-Write the Phase 3 object and command matrix before editing. At minimum decide:
+- stable briefing contract version and one daily identity per user/local date;
+- current, stale, missing, and error read states;
+- one primary action and at most two ordered support actions;
+- mode, bounded reason, capacity/time note, freshness, provenance, evidence
+  references, and data-quality representation;
+- candidate eligibility for open tasks, today's relevant habits, focus setup,
+  implemented capture actions, and existing valid recommendations; the reserved
+  recovery kind is not executable without a compatible command;
+- recovery-first ranking and exclusion of terminal/unavailable targets;
+- deterministic tie-breaking and idempotent regeneration;
+- exact `executable-action-v1` validation before returning an action;
+- insufficient-data behavior that remains conservative and useful;
+- GET read-only versus deliberate POST generation behavior;
+- whether `daily_briefings` persistence is genuinely required for stable daily
+  identity, morning availability, scheduling, stale detection, or exact E2E.
 
-- task commands: create, edit, complete, postpone, cancel, restore/undo
-- task status/deadline/estimate validation and failed-write rollback
-- habit cadence: daily, selected weekdays, or x-times-per-week
-- habit daily outcome: completed, intentionally skipped, or still open
-- habit progress/streak rules based on scheduled opportunities, not seven
-  calendar days
-- undo semantics for completion and skip
-- Setup-owned versus manually managed habit ownership
-- focus-session start, stop/finish, abandon, duration, and optional linked target
-- stable action-target id, kind, command, target id, and bounded metadata
-- unsupported command behavior: explicit unavailable/error, never enabled no-op
+Required API/product contract:
 
-Required product contract:
-
-- Every visible action must persist what its label promises and show rollback,
-  retry, confirmation, or undo appropriate to its risk.
-- Derive user identity from the authenticated Supabase session or verified
-  backend principal. Never trust a request-provided user_id.
-- Preserve manual rows and Setup ownership. Setup-owned habit definition and
-  lifecycle remain in Settings Setup; active rows may be completed or skipped
-  through the daily execution contract.
-- Daily/scheduled habit progress is completed elapsed opportunities divided by
-  elapsed scheduled opportunities. Weekly-target progress is completed divided
-  by target for the current week. An intentional skip is neither completion nor
-  a fabricated success.
-- Recover mode or an explicit day pause may reduce streak pressure later, but
-  Phase 3 must not fabricate completion or silently rewrite Phase 2 state.
-- Do not encode skip through an undocumented `habit_logs.value` sentinel. If the
-  current schema cannot represent explicit outcome safely, add the smallest
-  migration with checks, indexes if needed, grants/RLS verification, repository
-  coverage, local reset verification, and current documentation.
-- Focus sessions must have a real lifecycle and timestamps. Finishing a focus
-  session must not automatically complete a linked task or habit without an
-  explicit user confirmation.
-- Successful real task/habit/focus writes refresh the daily snapshot
-  best-effort where the existing contract calls for it. Refresh failure must not
-  roll back the durable original write. Guest/mock paths make no remote call.
-- Keep recommendations read-only on normal Dashboard load. Phase 3 must not
-  generate or rank recommendations, generate a briefing, or call an LLM.
+- `GET /v1/briefings/today` derives the user from the verified bearer token and
+  reads only. It never generates a briefing or recommendation and must report
+  missing/stale/error honestly.
+- `POST /v1/briefings/generate` derives the same principal, is deliberate and
+  authenticated, and deterministically creates or replaces the user's target
+  date briefing without duplicates.
+- Return exactly one primary action when a safe executable candidate exists and
+  no more than two support actions. Never pad with invented commitments.
+- Every action target must pass the Phase 3 strict parser and correspond to a
+  currently available owner-scoped command. No generic fallback route or
+  enabled no-op is allowed.
+- Recovery risk and low-quality/stale evidence constrain ambition before
+  urgency or productivity ranking. The briefing may explain Phase 2 state but
+  must not recalculate or rewrite it.
+- Recommendations remain candidates, not silently created tasks, habits, or
+  schedule items. User-owned commitments require confirmation.
+- LLM wording remains disabled. Do not add a provider abstraction merely for
+  future use.
+- Guest/mock behavior stays explicitly local/demo and makes no privileged
+  FastAPI/Supabase command unless a separate honest local briefing contract is
+  deliberately implemented.
+- Persistence, if added, must use the smallest canonical migration with RLS,
+  grants, unique daily identity, repository tests, local reset verification,
+  Supabase docs, and exact browser assertions.
 
 Implementation guidance:
 
-1. Prefer typed domain commands/results over page-local maps and booleans.
-2. Keep persistence and ownership validation in data/repository boundaries, not
-   in visual widgets.
-3. Reuse existing canonical snake_case tables. Add schema only for a real
-   contract gap, especially explicit habit outcome or focus linkage.
-4. Make optimistic UI reversible. A failed write restores the persisted state
-   and exposes a recoverable error.
-5. Keep action targets independent of briefing ranking. Phase 3 proves that a
-   command can execute; a later phase decides which action is primary.
-6. Keep unknown future command values unsupported instead of mapping them to a
-   generic route or no-op.
-7. Preserve the gated Coach and keep Deep Work gated unless the real focus
-   lifecycle is complete end to end.
-8. Extend browser E2E with exact database assertions for the implemented task,
-   habit, and focus outcomes, including undo and ownership preservation. Do not
-   claim E2E passed unless it was run successfully in the current checkout.
+1. Prefer strict Pydantic/domain models and an explicit deterministic ranking
+   service over page-local maps or a generic agent loop.
+2. Reuse compact snapshots and bounded current records. Do not read or send full
+   user history.
+3. Keep candidate loading, eligibility, scoring, tie-breaking, verification,
+   and persistence as inspectable stages.
+4. Make provenance and evidence reference the source snapshot/records without
+   persisting sensitive capture free text.
+5. Preserve recommendation read/generate endpoints and fingerprints unless a
+   narrowly demonstrated integration change is needed.
+6. Do not redesign Dashboard as Today in this phase. A minimal client/repository
+   integration may prove the API contract, but Phase 5 owns the decision-first
+   screen and feedback controls.
+7. Keep scheduled briefing generation out unless the persisted contract and
+   idempotency are already proven; deployed cron wiring is not the product goal.
 
 Focused tests must cover:
 
-- every task command, validation boundary, rollback, retry, and undo
-- daily, selected-weekday, and weekly-target habit opportunities
-- completion, intentional skip, still-open, pause/archive, and undo semantics
-- week-boundary and timezone/date behavior without dividing by a fixed seven
-- Setup-owned habit visibility and lifecycle ownership
-- idempotent same-day habit outcome writes and no duplicate log rows
-- focus start/finish/abandon, invalid transitions, duration, and linked-target
-  ownership
-- supported and unsupported typed action commands
-- principal/user scoping and RLS/grant behavior for any changed schema
-- best-effort snapshot refresh after durable real writes
-- guest/mock locality with no Supabase, snapshot, recommendation, or LLM call
-- preservation of the Phase 2 Daily State and recommendation candidate behavior
+- strict briefing request/response parsing and unknown-field rejection;
+- principal-derived identity and request `user_id` rejection;
+- GET read-only behavior with current/stale/missing/error states;
+- deliberate POST generation, same-user/local-date idempotency, and user
+  scoping;
+- candidate eligibility across tasks, scheduled habits, focus, and capture;
+  recovery constraints plus terminal/unavailable exclusion;
+- all Daily Modes, insufficient/stale evidence, recovery-first precedence, and
+  deterministic tie-breaking;
+- one primary plus at most two support actions with no fabricated padding;
+- exact valid `executable-action-v1` envelopes and explicit unsupported
+  `review_plan` behavior, preserving Flutter/FastAPI parser parity;
+- provenance, freshness, evidence refs, sensitive-text exclusion, and bounded
+  payload size;
+- preservation of Phase 2 Daily State and Phase 3 response reconciliation,
+  locked habit eligibility, immutable focus history, local start-date snapshot,
+  pagination/DST, and action-dispatch semantics;
+- no recommendation or briefing generation on normal Dashboard reads or
+  ordinary capture/task/habit/focus writes;
+- guest/mock locality and no LLM call;
+- migration/RLS/grants/unique-identity behavior if persistence is added; and
+- browser evidence for read-only GET, deliberate POST, exact ranked targets,
+  user scoping, freshness, and idempotency.
 
 Run focused tests while implementing, then at minimum:
 
-- Flutter analyze and the complete Flutter test suite
-- the complete FastAPI test suite if backend code is touched
-- `scripts/verify.sh`
-- non-destructive local Supabase verification for client/schema integration
-- a local reset only if a migration was intentionally added
-- Browser E2E
-- `git diff --check`
+- Flutter analyze and the complete Flutter test suite if Flutter is touched;
+- the complete FastAPI test suite;
+- `FLUTTER_BIN=/path/to/flutter scripts/verify.sh`;
+- non-destructive local Supabase verification;
+- `HOME=.tools/supabase-home SUPABASE_TELEMETRY_DISABLED=1 supabase migration up --local`
+  when a migration is pending;
+- `RESET_DB=true FLUTTER_BIN=/path/to/flutter scripts/verify_supabase_local.sh`
+  only when proving an intentionally added migration from a fresh local DB;
+- Browser E2E for the current checkout; and
+- `git diff --check`.
 
 Update architecture, roadmap, Supabase-state, local-dev, verification, agent,
-and continuation docs in the same change.
+service, and continuation docs in the same change.
 
-Do not implement briefing/action ranking, `daily_briefings`, the decision-first
-Today dashboard, recommendation-ranking redesign, Coach/LLM, calendar import,
-notifications expansion, weekly review, vector search, wearables, autonomous
-workers, or remote production database changes in Phase 3.
+Do not implement the Phase 5 decision-first Today/Dashboard redesign or its
+start/done/later/replace/too-much feedback, Phase 6 decision-feedback learning,
+bounded planning, Coach/LLM, calendar import, notification expansion, weekly
+review, vector search, wearables, autonomous workers, deployed cron, or remote
+production database changes in Phase 4.
 
 Do not commit unless explicitly asked.
 ```

@@ -1,3 +1,4 @@
+import re
 from collections import Counter
 from collections.abc import Callable, Iterable
 from datetime import UTC, date, datetime, timedelta
@@ -161,6 +162,8 @@ def _build_summary(
     active_habits = [
         row for row in inputs.habits if bool(row.get("active", True)) is True
     ]
+    habit_outcome_counts = _habit_outcome_counts(inputs.habit_logs)
+    focus_session_summary = _focus_session_summary(inputs.focus_sessions)
 
     risk_flags = _risk_flags(
         days_since_latest=days_since_latest,
@@ -215,7 +218,11 @@ def _build_summary(
             "active": len(active_goals),
             "completed": len(completed_goals),
         },
-        "habits": {"active": len(active_habits)},
+        "habits": {
+            "active": len(active_habits),
+            "outcome_counts": habit_outcome_counts,
+        },
+        "focus_sessions": focus_session_summary,
         "schedule": {"fixed_commitment_count": len(inputs.schedule_items)},
         "memories": {
             "count": len(inputs.memory_entries),
@@ -252,6 +259,16 @@ def _filter_window(
         tasks=inputs.tasks,
         goals=inputs.goals,
         habits=inputs.habits,
+        habit_logs=[
+            row
+            for row in inputs.habit_logs
+            if _is_date_in_window(row.get("entry_date"), start_date, target_date)
+        ],
+        focus_sessions=[
+            row
+            for row in inputs.focus_sessions
+            if _is_focus_session_in_window(row, start_date, target_date)
+        ],
         schedule_items=inputs.schedule_items,
         memory_entries=inputs.memory_entries,
     )
@@ -272,12 +289,18 @@ def _build_signals(
             "tasks": len(inputs.tasks),
             "goals": len(inputs.goals),
             "habits": len(inputs.habits),
+            "habit_logs": len(inputs.habit_logs),
+            "focus_sessions": len(inputs.focus_sessions),
             "schedule_items": len(inputs.schedule_items),
             "memory_entries": len(inputs.memory_entries),
         },
         "event_type_counts": _count_values(inputs.behavioral_events, "event_type"),
         "task_status_counts": _count_values(inputs.tasks, "status"),
         "goal_status_counts": _count_values(inputs.goals, "status"),
+        "habit_outcome_counts": _habit_outcome_counts(inputs.habit_logs),
+        "focus_session_status_counts": _focus_session_status_counts(
+            inputs.focus_sessions,
+        ),
         "evidence_refs": _dedupe_evidence_refs(evidence_refs)[:60],
         "daily_state": daily_state.signals,
     }
@@ -383,6 +406,8 @@ def _evidence_refs(inputs: SnapshotInputRows) -> list[dict[str, str]]:
         ("tasks", inputs.tasks),
         ("goals", inputs.goals),
         ("habits", inputs.habits),
+        ("habit_logs", inputs.habit_logs),
+        ("focus_sessions", inputs.focus_sessions),
         ("schedule_items", inputs.schedule_items),
         ("memory_entries", inputs.memory_entries),
     ]:
@@ -391,7 +416,68 @@ def _evidence_refs(inputs: SnapshotInputRows) -> list[dict[str, str]]:
             for row in rows[:5]
             if row.get("id") is not None
         )
-    return refs[:30]
+    return refs
+
+
+def _habit_outcome_counts(rows: list[dict[str, Any]]) -> dict[str, int]:
+    counts = Counter(_habit_outcome(row) for row in rows)
+    return {
+        "completed": counts["completed"],
+        "skipped": counts["skipped"],
+        "unknown": counts["unknown"],
+    }
+
+
+def _habit_outcome(row: dict[str, Any]) -> str:
+    status = str(row.get("status") or "").strip().lower()
+    if status in {"completed", "skipped"}:
+        return status
+    return "unknown"
+
+
+def _focus_session_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    status_counts = _focus_session_status_counts(rows)
+    actual_minutes = 0
+    completed_minutes = 0
+    abandoned_minutes = 0
+    planned_minutes = 0
+    for row in rows:
+        status = _focus_session_status(row)
+        actual = _nonnegative_integer(row.get("actual_minutes"))
+        planned = _nonnegative_integer(row.get("planned_minutes"))
+        actual_minutes += actual or 0
+        planned_minutes += planned or 0
+        if status == "completed":
+            completed_minutes += actual or 0
+        elif status == "abandoned":
+            abandoned_minutes += actual or 0
+    return {
+        "count": len(rows),
+        "status_counts": status_counts,
+        "planned_minutes": planned_minutes,
+        "actual_minutes": actual_minutes,
+        "completed_minutes": completed_minutes,
+        "abandoned_minutes": abandoned_minutes,
+    }
+
+
+def _focus_session_status_counts(
+    rows: list[dict[str, Any]],
+) -> dict[str, int]:
+    counts = Counter(_focus_session_status(row) for row in rows)
+    return {
+        "active": counts["active"],
+        "completed": counts["completed"],
+        "abandoned": counts["abandoned"],
+        "unknown": counts["unknown"],
+    }
+
+
+def _focus_session_status(row: dict[str, Any]) -> str:
+    status = str(row.get("status") or "").strip().lower()
+    if status in {"active", "completed", "abandoned"}:
+        return status
+    return "unknown"
 
 
 def _count_values(rows: list[dict[str, Any]], key: str) -> dict[str, int]:
@@ -459,7 +545,10 @@ def _optional_date(value: Any) -> date | None:
     if not raw:
         return None
     if "T" in raw or " " in raw:
-        return datetime.fromisoformat(raw.replace("Z", "+00:00")).date()
+        parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        if parsed.tzinfo is not None:
+            parsed = parsed.astimezone(UTC)
+        return parsed.date()
     return date.fromisoformat(raw)
 
 
@@ -475,13 +564,32 @@ def _is_event_in_window(
 ) -> bool:
     metadata = row.get("metadata")
     if isinstance(metadata, dict) and metadata.get("entry_date") is not None:
-        try:
-            entry_date = _optional_date(metadata["entry_date"])
-        except (TypeError, ValueError):
-            entry_date = None
+        entry_date = _strict_calendar_date(metadata["entry_date"])
         if entry_date is not None:
             return start_date <= entry_date <= target_date
     return _is_date_in_window(row.get("occurred_at"), start_date, target_date)
+
+
+def _is_focus_session_in_window(
+    row: dict[str, Any],
+    start_date: date,
+    target_date: date,
+) -> bool:
+    metadata = row.get("metadata")
+    if isinstance(metadata, dict) and metadata.get("entry_date") is not None:
+        entry_date = _strict_calendar_date(metadata["entry_date"])
+        if entry_date is not None:
+            return start_date <= entry_date <= target_date
+    return _is_date_in_window(row.get("started_at"), start_date, target_date)
+
+
+def _strict_calendar_date(value: Any) -> date | None:
+    if not isinstance(value, str) or re.fullmatch(r"\d{4}-\d{2}-\d{2}", value) is None:
+        return None
+    try:
+        return date.fromisoformat(value)
+    except ValueError:
+        return None
 
 
 def _numeric(value: Any) -> float | None:
@@ -494,6 +602,13 @@ def _integer(value: Any) -> int | None:
     if value is None:
         return None
     return int(value)
+
+
+def _nonnegative_integer(value: Any) -> int | None:
+    parsed = _integer(value)
+    if parsed is None or parsed < 0:
+        return None
+    return parsed
 
 
 def _utc_now() -> datetime:

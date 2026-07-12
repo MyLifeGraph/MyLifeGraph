@@ -43,21 +43,21 @@ The app table constants live in
 | `profiles` | Auth profile rows, roles, provider, timezone, onboarding state, and monotonic `setup_revision` projection guard. |
 | `daily_logs` | One canonical daily row whose V2 metadata owns separate Evening/Morning captures plus direct nullable numeric Dashboard projections; the Dashboard does not synthesize proxy scores. |
 | `behavioral_events` | Granular AI signal stream; canonical capture writes a dynamic deterministic maximum of four current events linked to its `daily_logs` row. |
-| `tasks` | Dashboard plan items and task completion updates. |
+| `tasks` | Owner-scoped executable tasks with create/edit/complete/postpone/cancel/restore/undo, optional 5-480 minute estimates, and explicit completion/cancellation timestamps. |
 | `notifications` | Read-only Notifications inbox; original type, priority, read state, and allowlisted internal `action_url` targets. |
 | `schedule_items` | Setup-owned confirmed fixed commitments plus preserved manual/other-source dashboard schedule rows. |
 | `ai_insights` | Insights list. |
 | `coach_messages` | Reserved persisted history; the canned Coach preview is gated from production navigation. |
 | `memory_entries` | Durable onboarding and future reviewed coach memory. Check-in notes are not promoted automatically. |
-| `focus_sessions` | Focus-session history for future coaching flows. |
+| `focus_sessions` | Real one-active-session Deep Work lifecycle with bounded planned/measured duration, fully immutable terminal history, persisted local start date, and at most one owned task or active-habit target whose deletion is restricted. |
 | `goals` | User goals, including deterministically identified Setup-owned rows with archive lifecycle. |
-| `habits` | Cadence-confirmed Setup routines and manually managed habits; Setup owns edits/lifecycle for its rows, while Habit Completion can log active rows and unconfirmed candidates remain only in `intake_responses`. |
-| `habit_logs` | Daily habit completion writes and 7-day completion progress for Quick Action habit flows. |
+| `habits` | Habit V1 daily, selected-ISO-weekday, or weekly-target cadence plus active/paused/archived manual lifecycle; Setup owns definition/lifecycle for its rows while active rows share execution. |
+| `habit_logs` | One explicit `completed` or `skipped` outcome per habit/local date, with checked 1/0 compatibility value; open and missed opportunities are derived and progress/streaks are cadence-aware. |
 | `skillset_profiles` | Generated coaching/skill profile snapshots. |
 | `recommendations` | Generated recommendations and user statuses; FastAPI can create first deterministic rows after authenticated Intake V1. |
 | `notification_preferences` | User alert preferences. |
 | `intake_responses` | Typed Setup history with request identity, optimistic revision, pending/applied state, and structured lifecycle items. |
-| `user_state_snapshots` | Compact backend-owned onboarding/daily/weekly state; daily and weekly summaries add the explainable Phase 2 Daily State contract while remaining deterministic recommendation context. |
+| `user_state_snapshots` | Compact backend-owned onboarding/daily/weekly state; daily and weekly summaries add Phase 2 Daily State plus Phase 3 explicit habit-outcome/focus facts while remaining deterministic recommendation context. |
 
 Phase 1 canonical capture upserts one `daily_logs` row per user/date with source
 `quick_check_in`. `metadata.capture_version=daily-capture-v2` contains separate
@@ -117,6 +117,53 @@ remain additive under `summary.window_risk_flags`, and
 `recommended_next_focus` is derived recovery-first from Daily Mode. The unique
 `(user_id, scope, period_key)` index continues to make recomputation an atomic
 same-row replacement rather than append-only history.
+
+Phase 3 adds executable storage contracts through
+`20260711120000_phase_3_executable_action_schema.sql`. Tasks gain an optional
+bounded estimate plus `completed_at` and `cancelled_at`; a lifecycle check ties
+each terminal status to exactly its owned timestamp. `habit_logs.status` is
+authoritative (`completed|skipped`), while a check keeps the legacy `value`
+projection at 1 or 0. A `FOR NO KEY UPDATE` trigger locks the same-user habit and
+requires current active lifecycle, executable Setup state, and (for weekday
+cadence) a scheduled ISO weekday on `entry_date`. Open means no row exists for
+that local date; missed is derived from an elapsed scheduled opportunity.
+
+Focus sessions gain `active|completed|abandoned` status, optional `task_id` or
+`habit_id`, and `updated_at`. Planned duration is constrained to 5–240 minutes;
+terminal rows carry an end timestamp and exact whole elapsed minutes.
+Constraints, a same-user/available-target trigger that locks the selected
+target row, an all-update terminal immutability trigger, and a partial unique
+index enforce at most one active session per user and at most one owned target.
+Every update to a terminal row is rejected, including `updated_at`. The
+task/habit FKs use `ON DELETE RESTRICT`, preserving historical attribution.
+Historical duplicate open sessions are reconciled deterministically during
+migration. Missing legacy `metadata.entry_date` values are backfilled from the
+UTC calendar date of `started_at`. Existing RLS and table grants remain
+unchanged.
+
+The Flutter Habit V1 reader paginates 500 habit rows and 1,000 log rows per
+request for outcomes beginning 370 calendar days before today. New manual habits
+persist local `metadata.started_on`; date-component iteration and UTC-normalized
+calendar-day differences avoid 23/25-hour DST shifts. Every task update,
+including undo, and each manual habit definition/lifecycle update reconciles an
+ambiguous committed response only by exact owner-scoped
+timestamp/requested-field readback. Habit outcome/undo captures one target date
+before awaiting persistence, proves the exact row or absence, and refreshes
+that same date. Focus finish/abandon uses exact terminal readback.
+
+The snapshot aggregator now reads explicit `habit_logs` and `focus_sessions`
+and adds bounded action summaries, counts, minutes, and evidence. These facts do
+not change `summary.daily_state`, `signals.daily_state`, the
+`explainable-daily-state-v1` classifier, or `snapshot-aggregator-v1`. Successful
+real task, habit, and focus writes request snapshot refresh best-effort; they do
+not generate recommendations or call an LLM. Focus start persists
+`metadata.entry_date`; all focus transitions refresh the persisted start day.
+Backend filtering prefers that local date over the deterministic UTC
+`started_at` fallback shared with Flutter after a widened read. Habit-log and
+focus-session inputs paginate in stable 1,000-row pages through the complete
+requested window. See
+`docs/phase-3-executable-actions-contract.md` for command, validation, and
+failure semantics.
 
 Phase 0B did not require a migration. Flutter now treats missing or failing real
 Dashboard/Notifications/Recommendation sources as empty or error according to
@@ -228,12 +275,31 @@ Ownership collisions or any failed assertion roll back the whole apply. An
 applied replay is idempotent apart from a guarded repair of the newest profile
 projection.
 
+`20260711120000_phase_3_executable_action_schema.sql` adds task estimates and
+terminal timestamps; explicit habit-log outcomes and update timestamps; and
+focus status, targets, and update timestamps. It backfills documented legacy
+task terminals, positive habit completions, and focus lifecycle fields,
+including missing focus entry dates from the UTC date of `started_at`. It
+reconciles duplicate legacy active focus rows deterministically, then enforces
+task estimate/lifecycle bounds, habit status/value consistency plus active-owner
+and selected-weekday locking, focus duration/lifecycle shape, one target, one
+active session, locked target ownership/availability, rejection of every
+terminal-row update, and restricted target deletion. Hardened private
+security-definer helpers have fixed search paths and no callable grant for app
+roles. Existing table RLS and grants remain unchanged.
+
+The migration safely normalizes positive legacy habit values to completion. It
+intentionally stops with a check violation if a legacy habit log has
+`status is null` and `value <= 0`, because such a row does not prove an
+intentional skip. Inspect and resolve its meaning before applying the migration;
+do not coerce it into `skipped` merely to make migration pass.
+
 ## Local Verification Workflow
 
 For local Supabase-backed testing, the reset should complete through:
 
 ```text
-20260710180000_atomic_intake_v1_setup_apply.sql
+20260711120000_phase_3_executable_action_schema.sql
 ```
 
 Then configure `.env` with:
@@ -259,6 +325,15 @@ For local Supabase preflight without resetting the database:
 FLUTTER_BIN=/path/to/flutter scripts/verify_supabase_local.sh
 ```
 
+If the existing local database is behind, apply pending migrations without
+destroying its data:
+
+```bash
+HOME=.tools/supabase-home \
+SUPABASE_TELEMETRY_DISABLED=1 \
+supabase migration up --local
+```
+
 For local Supabase reset and migration verification:
 
 ```bash
@@ -266,8 +341,10 @@ RESET_DB=true FLUTTER_BIN=/path/to/flutter scripts/verify_supabase_local.sh
 ```
 
 The reset form should apply all migrations through
-`20260710180000_atomic_intake_v1_setup_apply.sql`; expected legacy-table
-skip notices may be emitted for missing CamelCase tables.
+`20260711120000_phase_3_executable_action_schema.sql`; expected legacy-table
+skip notices may be emitted for missing CamelCase tables. Use reset when proving
+the full migration/backfill/constraint chain from a fresh local database, not
+merely because one non-destructive migration is pending.
 
 Then either run the browser E2E smoke in `scripts/e2e_web.sh` or start the
 frontend with `scripts/start_frontend.sh` and manually verify the
@@ -278,7 +355,14 @@ Supabase-backed path:
 - Review/archive or remove one Setup-owned item and preserve a manual row.
 - Save Evening Shutdown through either current route, then save Morning
   Calibration and confirm that the same daily row retains both captures.
-- Open dashboard.
+- From Dashboard, create/edit/postpone/undo/complete/restore/cancel/restore a
+  task and confirm estimates and terminal timestamps remain coherent.
+- Complete, skip, and undo one manual habit and one active Setup-owned habit;
+  confirm there is at most one outcome row per habit/local date.
+- Start, finish, and abandon Deep Work with an owned task or active-habit link;
+  confirm the target itself is not completed implicitly.
+- Open Dashboard and confirm its execution links remain unranked; Phase 4
+  briefing output does not exist yet.
 - Open notifications.
 
 This checks that Auth, RLS, grants, FastAPI backend workflows, and the app's
@@ -287,8 +371,16 @@ snake_case table mappings work together. The repository provides
 browser smoke starts the AI service with backend local Supabase settings and
 asserts revisioned Intake V1 rows, ownership-scoped Setup reconciliation,
 onboarding and daily `user_state_snapshots`, post-intake deterministic
-`recommendations`, and direct app writes. Do not run destructive reset commands
-against a remote database.
+`recommendations`, exact Phase 2 recomputation, and direct app writes. Phase 3
+browser completion additionally requires exact task transition/undo rows,
+manual and Setup habit completion/skip/undo without duplicates, and focus
+start/finish/abandon with owned linkage and no implicit target mutation. The
+source injects committed response loss for habit/task create, habit
+outcome/undo, task completion/undo, and focus start/finish. Negative
+task/focus/habit lifecycle, duration, active-target, and weekday-cadence writes
+include terminal-focus `updated_at` mutation. Run the smoke successfully before
+claiming coverage passed; this document does not claim such a run. Do not run
+destructive reset commands against a remote database.
 
 For manual local product exploration, `npm run seed:demo` creates repeatable
 local-only Auth users and app rows for student, worker, and recovery scenarios.
@@ -329,12 +421,15 @@ The product should standardize on the snake_case schema. CamelCase tables are
 legacy compatibility only and should be dropped in a later dedicated migration
 after data migration and app verification are complete.
 
-The latest schema addition is the Phase 0C service-role-only atomic Setup apply
-RPC layered on the revision contract and monotonic profile guard. The backend
-reuses `intake_responses` and `user_state_snapshots` for authenticated Setup and
-deterministic daily/weekly aggregation without adding broad LLM, calendar, or
-worker infrastructure. Phase 1 changes only typed metadata and client/backend
-mapping over existing `daily_logs` and `behavioral_events`; the Setup RPC and
-schema grants remain unchanged. Phase 2 consumes that structured capture data
-inside existing snapshot JSON without changing tables, indexes, grants, RLS, or
-the Setup RPC. Phase 3 executable action and habit contracts are next.
+The latest schema addition is the Phase 3 executable-action migration over the
+existing task, habit-log, and focus-session tables. It preserves table RLS and
+grants while adding explicit fields, checks, ownership/transition triggers, and
+the one-active-focus index required by the runtime contract. Locked habit
+eligibility, immutable focus history, and restricted target FKs protect the
+contract against stale/concurrent client state. The earlier Phase
+0C service-role-only atomic Setup RPC, revision contract, and monotonic profile
+guard remain unchanged. Phase 1 changes only typed capture metadata and
+client/backend mapping; Phase 2 consumes that data inside existing snapshot
+JSON; and Phase 3 adds action facts without changing Phase 2 classification.
+Phase 4 should add a deterministic briefing service next and introduce
+`daily_briefings` only if its persistence requirements justify a schema change.

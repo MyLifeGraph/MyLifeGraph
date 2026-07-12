@@ -190,6 +190,52 @@ def test_overdue_or_high_workload_creates_planning_recommendation() -> None:
     )
 
 
+def test_terminal_tasks_do_not_create_planning_pressure() -> None:
+    terminal_tasks = [
+        TaskSignal(
+            id=f"task-{status}",
+            due_date=TODAY - timedelta(days=2),
+            status=status,
+            workload_score=5,
+        )
+        for status in ("done", "cancelled", "archived")
+    ]
+
+    candidates = RecommendationEngine().generate_candidates(
+        summary(tasks=terminal_tasks),
+    )
+
+    assert not any(candidate.rule_id == "planning_reset" for candidate in candidates)
+    assert all(not task.is_overdue(TODAY) for task in terminal_tasks)
+
+
+def test_terminal_tasks_do_not_inflate_focus_priority() -> None:
+    candidates = RecommendationEngine().generate_candidates(
+        summary(
+            daily_logs=[
+                daily_log(0, focus_minutes=20),
+                daily_log(1, focus_minutes=35),
+            ],
+            tasks=[
+                TaskSignal(
+                    id="task-cancelled",
+                    status="cancelled",
+                    workload_score=10,
+                ),
+                TaskSignal(
+                    id="task-archived",
+                    status="archived",
+                    workload_score=10,
+                ),
+            ],
+        ),
+    )
+
+    focus = next(candidate for candidate in candidates if candidate.category == "focus")
+    assert focus.priority == "medium"
+    assert all(ref.table == "daily_logs" for ref in focus.evidence_refs)
+
+
 def test_sparse_evidence_rejects_candidate_or_lowers_confidence() -> None:
     sparse_candidates = RecommendationEngine().generate_candidates(
         summary(daily_logs=[daily_log(0, sleep_hours=5.5)]),

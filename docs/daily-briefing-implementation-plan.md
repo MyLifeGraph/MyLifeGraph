@@ -85,6 +85,9 @@ The repository already contains most of the foundation needed for this slice:
 - A backend-only scheduled daily refresh endpoint for cron-style execution.
 - Flutter dashboard, canonical lightweight daily check-in, habit management,
   recommendation refresh, insights, and mock/guest paths.
+- Phase 3 owner-scoped task commands, typed Habit V1 execution, a real focus
+  lifecycle, and strict `executable-action-v1` targets. The complete command and
+  recovery matrix lives in `docs/phase-3-executable-actions-contract.md`.
 
 The gap is not broad AI integration. The gap is turning these primitives into a
 coherent daily product loop:
@@ -106,8 +109,9 @@ boundary for these primitives:
   errors instead of becoming mock content.
 - The dashboard renders direct stored check-in fields, tasks, and commitments;
   proxy score and metric-gallery placeholders are removed.
-- Coach and Deep Work previews, fake Settings controls, and Supabase-only guest
-  habit actions are gated.
+- Coach and the former placeholder Deep Work preview, fake Settings controls,
+  and Supabase-only guest habit actions were gated. Phase 3 later restored only
+  Deep Work through a real authenticated focus-session lifecycle.
 - Notification actions come only from a validated implemented-route allowlist.
 
 Phase 0C now closes the remaining product-integrity gap. First-run Setup stores
@@ -137,8 +141,17 @@ quality, and recovery-first `push`/`steady`/`recover`/`plan` classification.
 Risks and reasons carry field-level evidence and deterministic provenance;
 capture free text and learned-baseline claims stay out. It does not rank an
 action, persist a briefing, change the Dashboard into Today, or call an LLM.
-The next gap is Phase 3's executable task, habit, focus, and bounded planning
-contracts.
+
+Phase 3 now closes the execution-contract gap. Tasks have recoverable typed
+commands, Habit V1 distinguishes cadence and explicit outcomes, Deep Work owns
+a real one-active-session focus lifecycle, and Flutter/FastAPI validate the same
+strict action envelope. Response-loss reconciliation, database-locked habit
+eligibility, immutable linked focus history, paginated/DST-safe habit progress,
+complete paginated backend action windows, and start-day focus snapshot
+attribution harden those contracts. Habit and focus facts are additive snapshot
+inputs but do not change the Phase 2 Daily State result. Phase 3 does not rank actions,
+persist a briefing, redesign Dashboard as Today, or call an LLM. The next gap is
+Phase 4's deterministic briefing service.
 
 ### Current Surface Disposition
 
@@ -146,13 +159,13 @@ contracts.
 | --- | --- | --- |
 | Auth and guest entry | Yes | Local demo is labeled; mock/demo auth skips remote profile/data bootstrap and reloads local Setup, while canonical guest check-ins migrate best-effort only into a real non-demo account |
 | Onboarding / Setup | Yes, Phase 0C complete | Progressive explicit input, typed prefill, atomic revision-safe save, differentiated retry/reload, and durable review are implemented |
-| Dashboard | Yes | Direct source values are honest; evolve the sections into the decision-first Today surface after action contracts exist |
+| Dashboard | Yes | Direct source values remain honest; tasks now expose real commands and unranked Today execution links, while the decision-first Today redesign waits for the Phase 4 briefing contract and remains Phase 5 |
 | Canonical daily capture | Yes, Phase 1 complete | Evening and Morning are separate typed flows over one ownership-merged daily entry; Phase 2 now interprets their freshness and stress context only inside backend snapshots |
 | Legacy large Daily Check-In | Retired | `/daily-check-in` redirects to the canonical lightweight flow; do not recreate a competing form |
-| Habit management/completion | Yes, authenticated only | Setup-owned habits are edited in Settings Setup and completed in Habit Completion; next correct cadence/progress, add skip/undo, and bring execution into Today |
+| Habit management/completion | Yes, authenticated only | Habit V1 cadence, progress, streaks, explicit completion/skip, and undo are implemented; manual lifecycle stays in Habit Management, Setup-owned lifecycle stays in Settings Setup, and daily execution is available from Today Habits |
 | Insights correlations | Yes, as advanced exploration | Default to cautious actionable insight with evidence and confidence |
 | Notifications | Read-only inbox | Structured internal actions are allowlisted; add preferences and durable read writes only with real contracts |
-| Deep Work | Gated | Implement a real focus-session lifecycle before restoring the route |
+| Deep Work | Yes, authenticated real-data mode | One active session, optional owned task/habit linkage, measured finish/abandon duration, and no implicit target completion are implemented; guest/mock redirects to Quick Action |
 | Coach | Gated | Restore only after a controlled authenticated backend exists |
 | Settings | Honest minimum plus durable Setup | Read-only profile, Setup re-entry/review, session theme, and sign-out remain; add other controls only when durable |
 
@@ -509,17 +522,21 @@ streak pressure.
 
 ### Habit V1 Scope
 
-The first coherent habit version should support binary completion with flexible
+The implemented coherent habit version supports binary completion with flexible
 cadence:
 
-- `daily` or specific weekdays.
-- `x times per week` with a weekly target.
-- Optional linked goal.
-- Optional minimum version, for example `walk for 10 minutes`.
-- Optional preferred execution window.
-- Active, paused, and archived lifecycle.
-- Daily outcome: completed, intentionally skipped, or still open.
-- Undo for an accidental completion or skip.
+- `daily` or specific ISO weekdays.
+- `x times per week` with a weekly target from 1 to 7.
+- Active, paused, and archived lifecycle for manual habits.
+- Setup-owned definition/lifecycle changes through Settings Setup while active
+  Setup habits share daily execution.
+- Daily outcome: completed, intentionally skipped, or open; a past scheduled
+  open opportunity is derived as missed.
+- Same-day undo for an accidental completion or skip.
+
+Optional linked goals, minimum versions, and preferred execution windows remain
+future extensions; Phase 3 does not imply that those fields are already part of
+the validated Habit V1 contract.
 
 Do not expose quantity targets such as glasses, pages, repetitions, or minutes
 until `habit_logs` and progress calculations support them end to end. The current
@@ -555,24 +572,37 @@ multi-completion tracking.
 
 ### Habit Data Direction
 
-Use existing `habits.metadata` for early cadence details while the contract is
-validated, for example:
+Phase 3 stores validated cadence details in `habits.metadata` under
+`contract_version: habit-v1`, for example:
 
 ```json
 {
-  "scheduled_weekdays": [1, 3, 5],
-  "minimum_version": "Walk for 10 minutes",
-  "preferred_window": "afternoon",
-  "linked_goal_id": "uuid-or-null",
-  "streak_enabled": true
+  "contract_version": "habit-v1",
+  "cadence": "weekdays",
+  "scheduled_weekdays": [1, 3, 5]
 }
 ```
 
-Before supporting intentional skip in production, add an explicit log outcome
-through a dedicated `status` column or another structured representation. Do
-not overload an undocumented `habit_logs.value` sentinel. Any schema change must
-include migration, RLS/grants verification, Supabase docs, repository tests, and
-browser E2E coverage.
+The compatibility `habits.frequency` projection remains `daily` for daily and
+selected-weekday cadence and `weekly` for weekly-target cadence. The Phase 3
+migration adds authoritative `habit_logs.status` with only `completed` or
+`skipped`; `value` remains a checked compatibility projection of 1 or 0. Open
+means no same-day row exists, and miss is derived from an elapsed scheduled
+opportunity without a row. Positive legacy values normalize to completion; the
+migration refuses ambiguous legacy rows with a missing status and `value <= 0`
+instead of inventing a skip. Existing RLS/grants remain in force and ownership
+is additionally guarded at the database boundary. The write trigger locks the
+habit row and revalidates active lifecycle, Setup state, and selected weekday,
+so a concurrent pause/archive/cadence edit cannot admit a stale outcome.
+
+Flutter paginates habits in 500-row pages and outcomes beginning 370 calendar
+days before today in 1,000-row pages. New manual rows persist local
+`metadata.started_on`; progress/streak iteration uses calendar-date components,
+not fixed 24-hour durations, so DST transitions do not shift opportunities.
+Manual definition/lifecycle updates reconcile committed response loss only by
+exact owner-scoped mutation readback. Outcome/undo captures its local target
+date before awaiting persistence, proves the exact row or absence after loss,
+and refreshes that same date.
 
 ## Cross-Cutting Trust And Attention Contract
 
@@ -623,25 +653,36 @@ sensitive and daily capture is easy to abandon after one bad interaction.
 Add a FastAPI-owned service that turns snapshots and recommendations into one
 ranked daily briefing.
 
-The briefing should use a typed action contract rather than display-only labels:
+The briefing must wrap the implemented Phase 3 action envelope rather than
+invent another command shape or return display-only labels:
 
 ```text
-DailyAction
-- id: stable action id within the briefing
-- kind: task | habit | focus | planning | recovery
+BriefingAction
+- target: ExecutableActionTarget (`executable-action-v1`)
 - title: user-visible action
-- command: open_task | complete_task | log_habit | start_focus | review_plan |
-  open_capture
-- target_id: nullable id of the linked task, habit, recommendation, or focus setup
-- estimated_minutes: nullable positive integer
 - reason: one concise evidence-backed explanation
 - recommendation_id: nullable source recommendation
-- metadata: bounded structured command context
+
+ExecutableActionTarget
+- contract_version: executable-action-v1
+- id: stable command/target identity
+- kind: task | habit | focus | planning | recovery | capture
+- command: open_task | complete_task | log_habit | start_focus |
+  review_plan | open_capture
+- target_id: nullable target governed by the command matrix
+- estimated_minutes: nullable integer from 1 to 480
+- metadata: bounded command-specific scalar context; allowed fields are
+  entry_date, focus_minutes, habit_outcome, route, source, and target_kind
 ```
 
-The Flutter layer should map supported `command` values to real handlers. An
-unknown or unavailable command is an explicit unsupported/error state, never an
-enabled no-op button.
+Flutter and FastAPI already reject unknown fields and incompatible kind,
+command, target, route, estimate, or metadata combinations. Their parsers also
+agree on unknown top-level fields, null/non-object metadata, explicit-null
+metadata fields, numeric coercion, exact ISO dates, focus duration/linkage, and
+command-specific metadata. A briefing must run the same strict validation
+before returning an action. `review_plan` is explicitly unavailable, and the
+reserved `recovery` kind has no executable command yet; neither may become an
+enabled no-op.
 
 Suggested endpoints:
 
@@ -662,7 +703,9 @@ Reasoning:
 
 ### Persistence
 
-Add a dedicated table when the first backend briefing slice is implemented:
+Add a dedicated table only when the first backend briefing slice demonstrates a
+need for stable daily identity, morning availability, scheduling, stale
+detection, or exact E2E persistence assertions:
 
 ```text
 daily_briefings
@@ -784,8 +827,8 @@ Reasoning:
 
 - Morning readiness can invalidate the evening plan.
 - The user should never need to re-plan the whole day from scratch.
-- Daily Mode now exists in Phase 2 backend snapshots; top-action selection
-  begins only after executable Phase 3 targets and later briefing ranking exist.
+- Daily Mode now exists in Phase 2 backend snapshots and executable targets in
+  Phase 3; top-action selection begins with the Phase 4 briefing service.
 
 ### Dashboard Repositioning
 
@@ -1116,26 +1159,54 @@ Evaluation:
 - Does high private/emotional stress reliably reduce load?
 - Can state be recomputed idempotently for the same user and period?
 
-### Phase 3: Executable Tasks, Habits, And Focus (Next)
+### Phase 3: Executable Tasks, Habits, And Focus (Complete)
 
 Goal:
 
 - Give a future briefing reliable actions it can point to.
 
-Work:
+Implemented:
 
-- Add coherent task create/edit/complete/postpone/cancel behavior with estimates
-  where capacity planning needs them.
-- Implement Habit V1 cadence, correct daily/weekly progress, intentional skip,
-  pause, and undo according to the Habit Product Contract.
-- Add any required habit-log outcome migration with RLS, repository, and E2E
-  coverage.
-- Make daily habit completion available from a Today-oriented surface, not only a
-  separate management flow.
-- Implement a real focus-session lifecycle linked to an action, or keep the focus
-  preview out of production navigation.
-- Define action targets and commands that a briefing can invoke without no-op
-  buttons.
+- Added owner-scoped task create/edit/complete/postpone/cancel/restore/undo with
+  bounded fields, stable create ids, retained drafts, confirmation, and
+  best-effort snapshot refresh after a successful durable write. Every update,
+  including direct undo, reconciles an ambiguous committed response only by
+  exact mutation timestamp plus all requested persisted fields.
+- Added Habit V1 daily, selected-ISO-weekday, and weekly-target cadence;
+  cadence-aware progress/streaks; explicit completed/skipped outcomes; derived
+  open/missed states; and same-day undo. Manual lifecycle and Setup-owned
+  definition authority remain separate while both share execution. Reads are
+  paginated from 370 calendar days before today, and `started_on` plus
+  calendar-date arithmetic make opportunity math DST-safe. Manual
+  edit/lifecycle updates use exact response-loss readback; outcome/undo captures
+  one target date, proves the exact row or absence, and refreshes that date.
+- Added `habit_logs.status` plus checked compatibility values and ownership
+  enforcement. A locked trigger rechecks active lifecycle and selected-weekday
+  cadence. The migration deliberately rejects ambiguous legacy non-positive rows
+  rather than fabricating skip intent.
+- Added a Today Habits execution surface and a real authenticated `/deep-work`
+  flow with one active session, optional owned task/habit link, measured
+  finish/abandon duration, locked target validation, exact response-loss
+  reconciliation, rejection of every terminal-row update, `ON DELETE RESTRICT`
+  target attribution, and no implicit linked-target completion. New rows persist
+  their local start date; the migration backfills legacy gaps from `started_at`
+  UTC, matching the Flutter/FastAPI fallback and refresh date.
+- Added parser-equivalent strict Flutter and FastAPI `executable-action-v1`
+  validation, including explicit-null metadata-field rejection, and typed
+  Flutter dispatch. `review_plan` remains explicitly unavailable until bounded
+  planning exists.
+- Added explicit habit-outcome and focus-session snapshot summaries while
+  paginating complete backend action windows in stably ordered 1,000-row pages,
+  keeping the Phase 2 Daily State output unchanged, and leaving recommendation
+  generation outside ordinary action writes.
+
+The browser E2E source injects response loss for habit/task create, habit
+outcome/undo, task completion/undo, and focus start/finish. Its negative writes
+include terminal-focus `updated_at` mutation. These are source assertions, not
+a claim that the current checkout's full browser run passed.
+
+The complete object/command/validation/recovery contract is in
+`docs/phase-3-executable-actions-contract.md`.
 
 Evaluation:
 
@@ -1144,8 +1215,13 @@ Evaluation:
 - Are scheduled opportunities, skips, misses, and completions distinct?
 - Can accidental task/habit outcomes be undone?
 - Do failed writes rollback optimistic UI or show a recoverable error?
+- Do ambiguous committed transitions succeed only after exact persisted
+  reconciliation, and do divergent writes remain errors?
+- Before claiming full Phase 3 browser completion, has the local Supabase E2E
+  run succeeded for exact rows, response-loss cases, and negative database
+  writes? Source coverage alone is not a pass.
 
-### Phase 4: Deterministic Briefing Service
+### Phase 4: Deterministic Briefing Service (Next)
 
 Goal:
 
@@ -1159,10 +1235,14 @@ Work:
   deliberate `POST /v1/briefings/generate` routes.
 - Refresh or validate daily state before generation.
 - Rank one primary action and at most two support actions by goal relevance,
-  urgency, energy fit, time fit, recovery risk, feedback, and evidence recency.
+  urgency, energy fit, time fit, recovery risk, current outcome state, and
+  evidence recency. Decision feedback is not yet available and remains a later
+  phase input.
 - Include mode, capacity, reason, provenance, evidence refs, freshness, and action
   targets.
 - Keep LLM wording disabled.
+- Keep normal Dashboard reads generation-free; the decision-first Today
+  redesign and feedback controls remain Phase 5.
 
 Evaluation:
 
@@ -1349,29 +1429,34 @@ streak length are not sufficient success measures.
 
 ## Current Recommendation
 
-**Phase 0A, Phase 0B, Phase 0C, Phase 1, and Phase 2 are complete.** Real and
-demo source states remain distinct; Setup is revision-safe and atomically
-reconciled; Evening/Morning provide exact ownership-merged context; and the
-backend now turns trusted current capture state into freshness, quality,
+**Phase 0A, Phase 0B, Phase 0C, Phase 1, Phase 2, and Phase 3 are complete.**
+Real and demo source states remain distinct; Setup is revision-safe and
+atomically reconciled; Evening/Morning provide exact ownership-merged context;
+and the backend turns trusted current capture state into freshness, quality,
 recovery-first Daily Mode, bounded risks/reasons, evidence, and provenance.
-Malformed V2 never becomes trusted legacy input, free text remains excluded,
-and same-period refresh converges without duplicate snapshots. Phase 2 does not
-rank actions, persist a briefing, expose a Today UI, generate recommendations,
-or call an LLM.
+Tasks, Habit V1, focus sessions, and strict executable action targets now have
+durable and recoverable contracts, including exact ambiguous-write readback,
+locked eligibility, immutable focus history, parser parity, and DST-safe local
+dates. Explicit habit/focus facts enrich snapshot summaries without changing
+the Phase 2 classifier. Ordinary writes do not rank actions, generate
+recommendations, persist a briefing, or call an LLM.
 
-The next implementation should be **Phase 3: Executable Tasks, Habits, And
-Focus**:
+The next implementation should be **Phase 4: Deterministic Briefing Service**:
 
-1. Define stable action targets and commands for tasks, habits, focus sessions,
-   and bounded planning before any briefing ranks them.
-2. Complete task create/edit/complete/postpone/cancel and recoverable outcome
-   behavior where the Today loop needs it.
-3. Implement honest Habit V1 cadence, scheduled opportunities, intentional
-   skip, progress, streak, and undo semantics; add schema only if an explicit
-   outcome cannot be represented safely otherwise.
-4. Implement a real focus-session lifecycle linked to an action, or keep the
-   preview gated.
+1. Define one strict briefing response contract with daily identity, state,
+   freshness, provenance, evidence, capacity/reason copy, one primary action,
+   and at most two support actions.
+2. Add authenticated read-only `GET /v1/briefings/today` and deliberate
+   `POST /v1/briefings/generate`, deriving user identity from the bearer token.
+3. Rank only currently valid Phase 3 executable targets using deterministic,
+   recovery-first rules; insufficient or stale inputs must remain conservative
+   and useful.
+4. Persist `daily_briefings` only if stable daily identity, morning readiness,
+   scheduling, stale detection, or exact E2E evidence requires it.
+5. Add focused model/service/repository/route tests and browser assertions for
+   read-only versus deliberate generation, user scoping, idempotency,
+   freshness, and exact action targets.
 
-Phase 3 must preserve the Phase 2 Daily State contract and still must not add
-briefing ranking, `daily_briefings`, the decision-first Today dashboard, Coach,
-calendar import, or an LLM.
+Phase 4 must preserve the Phase 2 Daily State and Phase 3 execution contracts.
+It must not add the Phase 5 decision-first Today redesign or feedback controls,
+normal-load generation, Coach, calendar import, broad workers, or an LLM.

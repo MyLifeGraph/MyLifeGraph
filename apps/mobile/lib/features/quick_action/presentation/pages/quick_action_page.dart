@@ -65,6 +65,12 @@ class QuickActionPage extends ConsumerWidget {
             subtitle: 'Create, edit, and pause targets',
             onTap: () => context.go(AppRoutes.habitManagement),
           ),
+          _ActionTile(
+            icon: Icons.timer_outlined,
+            title: 'Focus session',
+            subtitle: 'Start a real timed block linked to a task or habit',
+            onTap: () => context.go(AppRoutes.deepWork),
+          ),
         ],
       ],
     );

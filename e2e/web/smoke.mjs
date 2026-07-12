@@ -34,6 +34,9 @@ const manualHabitTitle = `E2E manual paused habit ${runId}`;
 const manualScheduleTitle = `E2E manual schedule ${runId}`;
 const legacyExplicitScheduleTitle = `E2E legacy explicit schedule ${runId}`;
 const managedHabitTitle = `E2E managed habit ${runId}`;
+const setupExecutionHabitTitle = `E2E setup execution habit ${runId}`;
+const phase3TaskTitle = `E2E executable task ${runId}`;
+const phase3EditedTaskTitle = `E2E executable task edited ${runId}`;
 const eveningTomorrowPriority = `E2E protect a calm morning ${runId}`;
 const editedEveningTomorrowPriority =
   `E2E finish the smallest useful draft ${runId}`;
@@ -574,25 +577,92 @@ try {
   await fillByLabelOrPlaceholder(page, 'Title', managedHabitTitle, 0);
   await fillByLabelOrPlaceholder(
     page,
-    'Description',
+    'Description optional',
     'Created through browser smoke',
     1,
   );
-  await fillByLabelOrPlaceholder(page, 'Target', '1', 2);
-  await clickByText(page, 'Save');
+  let lostHabitCreateResponseCount = 0;
+  const loseCommittedHabitCreateResponse = async (route) => {
+    const request = route.request();
+    if (request.method() !== 'POST' || lostHabitCreateResponseCount > 0) {
+      await route.continue();
+      return;
+    }
+    const committedResponse = await route.fetch();
+    if (!committedResponse.ok()) {
+      throw new Error(
+        `Habit response-loss precondition failed: ${committedResponse.status()} ${await committedResponse.text()}`,
+      );
+    }
+    lostHabitCreateResponseCount += 1;
+    await route.abort('failed');
+  };
+  await page.route(
+    '**/rest/v1/habits**',
+    loseCommittedHabitCreateResponse,
+  );
+  await clickByText(page, 'Save habit');
+  await expectText(page, 'Could not add habit. Your draft is retained.');
+  await clickByText(page, 'Retry');
   await expectText(page, 'Habit added.');
+  await page.unroute(
+    '**/rest/v1/habits**',
+    loseCommittedHabitCreateResponse,
+  );
+  if (lostHabitCreateResponseCount !== 1) {
+    throw new Error('Habit response-loss path was not exercised exactly once.');
+  }
   await waitForRows(
-    `habits?select=id,title,frequency,active,metadata&user_id=eq.${user.id}`,
+    `habits?select=id,title,frequency,target,active,metadata&user_id=eq.${user.id}`,
     (rows) =>
       rows.some(
         (row) =>
           row.title === managedHabitTitle &&
           row.frequency === 'daily' &&
+          row.target === 1 &&
           row.active === true &&
-          row.metadata?.source === 'flutter-habit-management-v1',
+          row.metadata?.source === 'flutter-habit-management-v1' &&
+          row.metadata?.contract_version === 'habit-v1' &&
+          row.metadata?.cadence === 'daily' &&
+          row.metadata?.lifecycle === 'active',
       ),
     'habit row created from Habit management',
   );
+  const managedHabitRows = await fetchRows(
+    `habits?select=id,title,frequency,target,active,metadata&user_id=eq.${user.id}&title=eq.${encodeURIComponent(managedHabitTitle)}`,
+    'managed Phase 3 habit identity',
+  );
+  if (managedHabitRows.length !== 1) {
+    throw new Error(
+      `Expected one managed Phase 3 habit: ${JSON.stringify(managedHabitRows)}`,
+    );
+  }
+  const managedHabit = managedHabitRows[0];
+  const [setupExecutionHabit] = await insertRows('habits', [
+    {
+      user_id: user.id,
+      title: setupExecutionHabitTitle,
+      frequency: 'daily',
+      target: 1,
+      active: true,
+      metadata: {
+        source: 'intake-v1',
+        managed_by: 'setup',
+        setup_state: 'active',
+        setup_item_id: crypto.randomUUID(),
+        revision: 4,
+        contract_version: 'habit-v1',
+        cadence: 'daily',
+      },
+    },
+  ]);
+  const setupExecutionHabitDefinition = JSON.stringify({
+    title: setupExecutionHabit.title,
+    frequency: setupExecutionHabit.frequency,
+    target: setupExecutionHabit.target,
+    active: setupExecutionHabit.active,
+    metadata: setupExecutionHabit.metadata,
+  });
 
   const captureSideEffectsBefore = await captureSideEffectIds(user.id);
   const captureSnapshotRequests = [];
@@ -1070,31 +1140,733 @@ try {
     'one daily snapshot refreshed from merged Phase 1 capture',
   );
 
-  const dailySnapshotBeforeHabit = await latestDailySnapshotGeneratedAt(user.id);
-  await page.goto(appRoute('/quick-action'), { waitUntil: 'domcontentloaded' });
+  const dailySnapshotBeforeActions =
+    await latestDailySnapshotGeneratedAt(user.id);
+  const actionRecommendationRequests = [];
+  const actionRequestObserver = (request) => {
+    if (
+      request.method() === 'POST' &&
+      request.url() === `${aiServiceBaseUrl}/v1/recommendations/generate`
+    ) {
+      actionRecommendationRequests.push(request);
+    }
+  };
+  page.on('request', actionRequestObserver);
+
+  await page.goto(appRoute('/habit-completion'), {
+    waitUntil: 'domcontentloaded',
+  });
   await waitForFlutterShell(page);
   await enableFlutterSemantics(page);
-  await clickByText(page, 'Habit completion');
-  await expectText(page, 'Habit completion');
-  await clickByText(page, 'Log');
+  await expectText(page, 'Today habits');
+  let lostHabitOutcomeResponseCount = 0;
+  const loseCommittedHabitOutcomeResponse = async (route) => {
+    const request = route.request();
+    if (request.method() !== 'POST' || lostHabitOutcomeResponseCount > 0) {
+      await route.continue();
+      return;
+    }
+    const committedResponse = await route.fetch();
+    if (!committedResponse.ok()) {
+      throw new Error(
+        `Habit outcome response-loss precondition failed: ${committedResponse.status()} ${await committedResponse.text()}`,
+      );
+    }
+    lostHabitOutcomeResponseCount += 1;
+    await route.abort('failed');
+  };
+  await page.route(
+    '**/rest/v1/habit_logs**',
+    loseCommittedHabitOutcomeResponse,
+  );
+  await clickByRoleName(
+    page,
+    'button',
+    `Complete habit ${managedHabitTitle}`,
+  );
+  await expectText(page, 'Habit completed.');
+  await page.unroute(
+    '**/rest/v1/habit_logs**',
+    loseCommittedHabitOutcomeResponse,
+  );
+  if (lostHabitOutcomeResponseCount !== 1) {
+    throw new Error(
+      'Habit outcome response-loss path was not exercised exactly once.',
+    );
+  }
   await waitForRows(
-    `habit_logs?select=id,habit_id,entry_date,value,habits(title)&user_id=eq.${user.id}`,
+    `habit_logs?select=id,habit_id,entry_date,status,value,updated_at&user_id=eq.${user.id}&habit_id=eq.${managedHabit.id}`,
     (rows) =>
-      rows.some(
-        (row) => row.value === 1 && row.habits?.title === managedHabitTitle,
-      ),
-    'habit_logs row from Quick Action habit completion',
+      rows.length === 1 &&
+      rows[0].entry_date === captureEntryDate &&
+      rows[0].status === 'completed' &&
+      rows[0].value === 1 &&
+      isIsoTimestamp(rows[0].updated_at),
+    'one explicit completed Habit V1 outcome',
+  );
+  let lostHabitUndoResponseCount = 0;
+  const loseCommittedHabitUndoResponse = async (route) => {
+    const request = route.request();
+    if (request.method() !== 'DELETE' || lostHabitUndoResponseCount > 0) {
+      await route.continue();
+      return;
+    }
+    const committedResponse = await route.fetch();
+    if (!committedResponse.ok()) {
+      throw new Error(
+        `Habit undo response-loss precondition failed: ${committedResponse.status()} ${await committedResponse.text()}`,
+      );
+    }
+    lostHabitUndoResponseCount += 1;
+    await route.abort('failed');
+  };
+  await page.route(
+    '**/rest/v1/habit_logs**',
+    loseCommittedHabitUndoResponse,
+  );
+  await clickByRoleName(
+    page,
+    'button',
+    `Undo habit ${managedHabitTitle}`,
+  );
+  await expectText(page, 'Habit outcome undone.');
+  await page.unroute(
+    '**/rest/v1/habit_logs**',
+    loseCommittedHabitUndoResponse,
+  );
+  if (lostHabitUndoResponseCount !== 1) {
+    throw new Error(
+      'Habit undo response-loss path was not exercised exactly once.',
+    );
+  }
+  await waitForRows(
+    `habit_logs?select=id&user_id=eq.${user.id}&habit_id=eq.${managedHabit.id}`,
+    (rows) => rows.length === 0,
+    'Habit V1 completion undo restores open state',
+  );
+  await clickByRoleName(
+    page,
+    'button',
+    `Skip habit ${managedHabitTitle}`,
   );
   await waitForRows(
-    `user_state_snapshots?select=id,scope,generated_at,signals,metadata&user_id=eq.${user.id}&scope=eq.daily`,
+    `habit_logs?select=id,habit_id,entry_date,status,value&user_id=eq.${user.id}&habit_id=eq.${managedHabit.id}`,
+    (rows) =>
+      rows.length === 1 &&
+      rows[0].entry_date === captureEntryDate &&
+      rows[0].status === 'skipped' &&
+      rows[0].value === 0,
+    'one explicit intentionally skipped Habit V1 outcome',
+  );
+  await clickByRoleName(
+    page,
+    'button',
+    `Undo habit ${managedHabitTitle}`,
+  );
+  await waitForRows(
+    `habit_logs?select=id&user_id=eq.${user.id}&habit_id=eq.${managedHabit.id}`,
+    (rows) => rows.length === 0,
+    'Habit V1 skip undo restores open state',
+  );
+
+  await clickByRoleName(
+    page,
+    'button',
+    `Complete habit ${setupExecutionHabitTitle}`,
+  );
+  await waitForRows(
+    `habit_logs?select=id,habit_id,entry_date,status,value&user_id=eq.${user.id}&habit_id=eq.${setupExecutionHabit.id}`,
+    (rows) =>
+      rows.length === 1 &&
+      rows[0].status === 'completed' &&
+      rows[0].value === 1,
+    'active Setup-owned habit is executable',
+  );
+  const setupExecutionHabitAfterOutcome = await fetchRows(
+    `habits?select=id,title,frequency,target,active,metadata&id=eq.${setupExecutionHabit.id}`,
+    'Setup-owned habit definition after daily execution',
+  );
+  if (
+    setupExecutionHabitAfterOutcome.length !== 1 ||
+    JSON.stringify({
+      title: setupExecutionHabitAfterOutcome[0].title,
+      frequency: setupExecutionHabitAfterOutcome[0].frequency,
+      target: setupExecutionHabitAfterOutcome[0].target,
+      active: setupExecutionHabitAfterOutcome[0].active,
+      metadata: setupExecutionHabitAfterOutcome[0].metadata,
+    }) !== setupExecutionHabitDefinition
+  ) {
+    throw new Error(
+      `Daily execution changed a Setup-owned definition: ${JSON.stringify(setupExecutionHabitAfterOutcome)}`,
+    );
+  }
+  await clickByRoleName(
+    page,
+    'button',
+    `Undo habit ${setupExecutionHabitTitle}`,
+  );
+  await waitForRows(
+    `habit_logs?select=id&user_id=eq.${user.id}&habit_id=eq.${setupExecutionHabit.id}`,
+    (rows) => rows.length === 0,
+    'Setup-owned habit outcome undo restores open state',
+  );
+
+  await page.goto(appRoute('/dashboard'), { waitUntil: 'domcontentloaded' });
+  await waitForFlutterShell(page);
+  await enableFlutterSemantics(page);
+  await clickByText(page, 'Add task');
+  await fillByLabelOrPlaceholder(page, 'Task title', phase3TaskTitle, 0);
+  await fillByLabelOrPlaceholder(
+    page,
+    'Task description optional',
+    'Distinctive Phase 3 browser task',
+    1,
+  );
+  await selectDropdownOption(page, 'Task priority', 'High');
+  await fillByLabelOrPlaceholder(
+    page,
+    'Estimate minutes optional (5–480)',
+    '35',
+    2,
+  );
+  let lostTaskCreateResponseCount = 0;
+  const loseCommittedTaskCreateResponse = async (route) => {
+    const request = route.request();
+    if (request.method() !== 'POST' || lostTaskCreateResponseCount > 0) {
+      await route.continue();
+      return;
+    }
+    const committedResponse = await route.fetch();
+    if (!committedResponse.ok()) {
+      throw new Error(
+        `Task response-loss precondition failed: ${committedResponse.status()} ${await committedResponse.text()}`,
+      );
+    }
+    lostTaskCreateResponseCount += 1;
+    await route.abort('failed');
+  };
+  await page.route('**/rest/v1/tasks**', loseCommittedTaskCreateResponse);
+  await clickByText(page, 'Save task');
+  await expectText(page, 'Task could not be added. Your draft is retained.');
+  await clickByText(page, 'Retry');
+  await clickByText(page, 'Save task');
+  await expectText(page, 'Task added.');
+  await page.unroute('**/rest/v1/tasks**', loseCommittedTaskCreateResponse);
+  if (lostTaskCreateResponseCount !== 1) {
+    throw new Error('Task response-loss path was not exercised exactly once.');
+  }
+  const phase3TaskRows = await waitForRows(
+    `tasks?select=id,title,description,status,priority,deadline,estimated_minutes,completed_at,cancelled_at,source,metadata&user_id=eq.${user.id}&title=eq.${encodeURIComponent(phase3TaskTitle)}`,
+    (rows) =>
+      rows.length === 1 &&
+      rows[0].description === 'Distinctive Phase 3 browser task' &&
+      rows[0].status === 'todo' &&
+      rows[0].priority === 'high' &&
+      rows[0].deadline === null &&
+      rows[0].estimated_minutes === 35 &&
+      rows[0].completed_at === null &&
+      rows[0].cancelled_at === null &&
+      rows[0].source === 'flutter-task-v1' &&
+      rows[0].metadata?.contract_version === 'executable-task-v1',
+    'typed task created from Dashboard',
+  );
+  const phase3TaskId = phase3TaskRows[0].id;
+  if (!isUuid(phase3TaskId)) {
+    throw new Error(`Task did not use a client-stable UUID: ${phase3TaskId}`);
+  }
+
+  await clickByRoleName(
+    page,
+    'button',
+    `Task actions for ${phase3TaskTitle}`,
+  );
+  await clickByRoleName(page, 'menuitem', 'Edit task');
+  await fillByLabelOrPlaceholder(page, 'Task title', phase3EditedTaskTitle, 0);
+  await fillByLabelOrPlaceholder(
+    page,
+    'Task description optional',
+    'Edited without replacing identity',
+    1,
+  );
+  await selectDropdownOption(page, 'Task priority', 'Critical');
+  await fillByLabelOrPlaceholder(
+    page,
+    'Estimate minutes optional (5–480)',
+    '50',
+    2,
+  );
+  await clickByText(page, 'Save task');
+  await expectText(page, 'Task updated.');
+  await waitForRows(
+    `tasks?select=id,title,description,status,priority,deadline,estimated_minutes&user_id=eq.${user.id}&id=eq.${phase3TaskId}`,
+    (rows) =>
+      rows.length === 1 &&
+      rows[0].id === phase3TaskId &&
+      rows[0].title === phase3EditedTaskTitle &&
+      rows[0].description === 'Edited without replacing identity' &&
+      rows[0].status === 'todo' &&
+      rows[0].priority === 'critical' &&
+      rows[0].estimated_minutes === 50,
+    'task edit preserves identity and replaces typed fields',
+  );
+
+  await clickByRoleName(
+    page,
+    'button',
+    `Task actions for ${phase3EditedTaskTitle}`,
+  );
+  await clickByRoleName(page, 'menuitem', 'Postpone task');
+  await clickByText(page, 'OK');
+  const postponedRows = await waitForRows(
+    `tasks?select=id,status,deadline&user_id=eq.${user.id}&id=eq.${phase3TaskId}`,
+    (rows) =>
+      rows.length === 1 &&
+      rows[0].status === 'todo' &&
+      isIsoTimestamp(rows[0].deadline),
+    'task postpone updates the existing deadline',
+  );
+  const postponedDeadline = postponedRows[0].deadline;
+  await clickByText(page, 'Undo', { match: 'last' });
+  await waitForRows(
+    `tasks?select=id,status,deadline&user_id=eq.${user.id}&id=eq.${phase3TaskId}`,
+    (rows) =>
+      rows.length === 1 &&
+      rows[0].status === 'todo' &&
+      rows[0].deadline === null,
+    `task postpone undo restores null deadline from ${postponedDeadline}`,
+  );
+
+  let lostTaskTransitionResponseCount = 0;
+  const loseCommittedTaskTransitionResponse = async (route) => {
+    const request = route.request();
+    if (request.method() !== 'PATCH' || lostTaskTransitionResponseCount > 0) {
+      await route.continue();
+      return;
+    }
+    const committedResponse = await route.fetch();
+    if (!committedResponse.ok()) {
+      throw new Error(
+        `Task transition response-loss precondition failed: ${committedResponse.status()} ${await committedResponse.text()}`,
+      );
+    }
+    lostTaskTransitionResponseCount += 1;
+    await route.abort('failed');
+  };
+  await page.route(
+    '**/rest/v1/tasks**',
+    loseCommittedTaskTransitionResponse,
+  );
+  await clickByRoleName(
+    page,
+    'button',
+    `Complete task ${phase3EditedTaskTitle}`,
+  );
+  await expectText(page, 'Task completed.');
+  await page.unroute(
+    '**/rest/v1/tasks**',
+    loseCommittedTaskTransitionResponse,
+  );
+  if (lostTaskTransitionResponseCount !== 1) {
+    throw new Error(
+      'Task transition response-loss path was not exercised exactly once.',
+    );
+  }
+  await waitForRows(
+    `tasks?select=id,status,completed_at,cancelled_at&user_id=eq.${user.id}&id=eq.${phase3TaskId}`,
+    (rows) =>
+      rows.length === 1 &&
+      rows[0].status === 'done' &&
+      isIsoTimestamp(rows[0].completed_at) &&
+      rows[0].cancelled_at === null,
+    'task completion writes terminal state and timestamp',
+  );
+  let lostTaskUndoResponseCount = 0;
+  const loseCommittedTaskUndoResponse = async (route) => {
+    const request = route.request();
+    if (request.method() !== 'PATCH' || lostTaskUndoResponseCount > 0) {
+      await route.continue();
+      return;
+    }
+    const committedResponse = await route.fetch();
+    if (!committedResponse.ok()) {
+      throw new Error(
+        `Task undo response-loss precondition failed: ${committedResponse.status()} ${await committedResponse.text()}`,
+      );
+    }
+    lostTaskUndoResponseCount += 1;
+    await route.abort('failed');
+  };
+  await page.route('**/rest/v1/tasks**', loseCommittedTaskUndoResponse);
+  await clickByText(page, 'Undo', { match: 'last' });
+  await expectText(page, 'Task change undone.');
+  await page.unroute('**/rest/v1/tasks**', loseCommittedTaskUndoResponse);
+  if (lostTaskUndoResponseCount !== 1) {
+    throw new Error(
+      'Task undo response-loss path was not exercised exactly once.',
+    );
+  }
+  await waitForRows(
+    `tasks?select=id,status,completed_at,cancelled_at&user_id=eq.${user.id}&id=eq.${phase3TaskId}`,
+    (rows) =>
+      rows.length === 1 &&
+      rows[0].status === 'todo' &&
+      rows[0].completed_at === null &&
+      rows[0].cancelled_at === null,
+    'task completion undo restores todo',
+  );
+
+  await clickByRoleName(
+    page,
+    'button',
+    `Task actions for ${phase3EditedTaskTitle}`,
+  );
+  await clickByRoleName(page, 'menuitem', 'Cancel task');
+  await clickByText(page, 'Cancel task', { match: 'last' });
+  await waitForRows(
+    `tasks?select=id,status,completed_at,cancelled_at&user_id=eq.${user.id}&id=eq.${phase3TaskId}`,
+    (rows) =>
+      rows.length === 1 &&
+      rows[0].status === 'cancelled' &&
+      rows[0].completed_at === null &&
+      isIsoTimestamp(rows[0].cancelled_at),
+    'task cancellation preserves row and writes terminal timestamp',
+  );
+
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await waitForFlutterShell(page);
+  await enableFlutterSemantics(page);
+  await clickByText(page, 'Cancelled (1)');
+  await clickByRoleName(
+    page,
+    'button',
+    `Restore task ${phase3EditedTaskTitle}`,
+  );
+  await waitForRows(
+    `tasks?select=id,status,completed_at,cancelled_at&user_id=eq.${user.id}&id=eq.${phase3TaskId}`,
+    (rows) =>
+      rows.length === 1 &&
+      rows[0].status === 'todo' &&
+      rows[0].completed_at === null &&
+      rows[0].cancelled_at === null,
+    'durable cancelled-task restore returns the task to todo',
+  );
+  await assertInsertRejected(
+    'tasks',
+    [
+      {
+        id: crypto.randomUUID(),
+        user_id: user.id,
+        title: 'Invalid terminal task shape',
+        status: 'done',
+        priority: 'low',
+        source: 'e2e-negative-check',
+      },
+    ],
+    'task terminal state without its timestamp',
+    'tasks_lifecycle_shape_check',
+  );
+
+  await clickByRoleName(
+    page,
+    'button',
+    `Focus on ${phase3EditedTaskTitle}`,
+  );
+  await page.waitForURL('**/#/deep-work?target_kind=task&target_id=*');
+  await expectText(page, 'Focus session');
+  let lostFocusStartResponseCount = 0;
+  const loseCommittedFocusStartResponse = async (route) => {
+    const request = route.request();
+    if (request.method() !== 'POST' || lostFocusStartResponseCount > 0) {
+      await route.continue();
+      return;
+    }
+    const committedResponse = await route.fetch();
+    if (!committedResponse.ok()) {
+      throw new Error(
+        `Focus response-loss precondition failed: ${committedResponse.status()} ${await committedResponse.text()}`,
+      );
+    }
+    lostFocusStartResponseCount += 1;
+    await route.abort('failed');
+  };
+  await page.route(
+    '**/rest/v1/focus_sessions**',
+    loseCommittedFocusStartResponse,
+  );
+  await clickByText(page, 'Start focus session');
+  await expectText(page, 'Focus session started.');
+  await page.unroute(
+    '**/rest/v1/focus_sessions**',
+    loseCommittedFocusStartResponse,
+  );
+  if (lostFocusStartResponseCount !== 1) {
+    throw new Error('Focus response-loss path was not exercised exactly once.');
+  }
+  const activeFocusRows = await waitForRows(
+    `focus_sessions?select=id,status,started_at,ended_at,planned_minutes,actual_minutes,task_id,habit_id,metadata,updated_at&user_id=eq.${user.id}&status=eq.active`,
+    (rows) =>
+      rows.length === 1 &&
+      rows[0].planned_minutes === 25 &&
+      rows[0].task_id === phase3TaskId &&
+      rows[0].habit_id === null &&
+      rows[0].ended_at === null &&
+      rows[0].actual_minutes === null &&
+      rows[0].metadata?.contract_version === 'focus-session-v1' &&
+      rows[0].metadata?.action_target?.contract_version ===
+        'executable-action-v1' &&
+      rows[0].metadata?.action_target?.kind === 'focus' &&
+      rows[0].metadata?.action_target?.command === 'start_focus' &&
+      rows[0].metadata?.action_target?.target_id === phase3TaskId &&
+      rows[0].metadata?.action_target?.metadata?.target_kind === 'task' &&
+      rows[0].metadata?.action_target?.metadata?.focus_minutes === 25,
+    'one task-linked active focus session',
+  );
+  const completedFocusId = activeFocusRows[0].id;
+  await assertInsertRejected(
+    'focus_sessions',
+    [
+      {
+        id: crypto.randomUUID(),
+        user_id: user.id,
+        status: 'active',
+        started_at: new Date().toISOString(),
+        planned_minutes: 25,
+        metadata: { source: 'e2e-negative-check' },
+      },
+    ],
+    'second active focus session',
+    'focus_sessions_one_active_per_user_idx',
+  );
+  let lostFocusFinishResponseCount = 0;
+  const loseCommittedFocusFinishResponse = async (route) => {
+    const request = route.request();
+    if (request.method() !== 'PATCH' || lostFocusFinishResponseCount > 0) {
+      await route.continue();
+      return;
+    }
+    const committedResponse = await route.fetch();
+    if (!committedResponse.ok()) {
+      throw new Error(
+        `Focus finish response-loss precondition failed: ${committedResponse.status()} ${await committedResponse.text()}`,
+      );
+    }
+    lostFocusFinishResponseCount += 1;
+    await route.abort('failed');
+  };
+  await page.route(
+    '**/rest/v1/focus_sessions**',
+    loseCommittedFocusFinishResponse,
+  );
+  await clickByText(page, 'Finish focus session');
+  await expectText(
+    page,
+    'Focus session finished. Linked tasks and habits were not completed automatically.',
+  );
+  await page.unroute(
+    '**/rest/v1/focus_sessions**',
+    loseCommittedFocusFinishResponse,
+  );
+  if (lostFocusFinishResponseCount !== 1) {
+    throw new Error(
+      'Focus finish response-loss path was not exercised exactly once.',
+    );
+  }
+  await waitForRows(
+    `focus_sessions?select=id,status,started_at,ended_at,planned_minutes,actual_minutes,task_id,habit_id&user_id=eq.${user.id}&id=eq.${completedFocusId}`,
+    (rows) =>
+      rows.length === 1 &&
+      rows[0].status === 'completed' &&
+      isIsoTimestamp(rows[0].ended_at) &&
+      Number.isInteger(rows[0].actual_minutes) &&
+      rows[0].actual_minutes >= 0 &&
+      rows[0].task_id === phase3TaskId,
+    'focus finish records measured duration',
+  );
+  await assertRows(
+    `tasks?select=id,status&user_id=eq.${user.id}&id=eq.${phase3TaskId}`,
+    (rows) => rows.length === 1 && rows[0].status === 'todo',
+    'focus finish does not complete its linked task',
+  );
+  await assertPatchRejected(
+    `focus_sessions?id=eq.${completedFocusId}`,
+    {
+      ended_at: new Date(
+        Date.parse(activeFocusRows[0].started_at) + 60_000,
+      ).toISOString(),
+      actual_minutes: 1,
+    },
+    'terminal focus lifecycle mutation',
+    'A terminal focus session is immutable.',
+  );
+  await assertPatchRejected(
+    `focus_sessions?id=eq.${completedFocusId}`,
+    {
+      metadata: {
+        source: 'e2e-negative-check',
+        entry_date: '2099-01-01',
+      },
+    },
+    'terminal focus snapshot-date mutation',
+    'A terminal focus session is immutable.',
+  );
+  await assertPatchRejected(
+    `focus_sessions?id=eq.${completedFocusId}`,
+    { updated_at: new Date().toISOString() },
+    'terminal focus audit-timestamp mutation',
+    'A terminal focus session is immutable.',
+  );
+
+  await expectText(page, 'Independent focus block');
+  await clickByText(page, 'Start focus session');
+  const secondFocusRows = await waitForRows(
+    `focus_sessions?select=id,status,task_id,habit_id&user_id=eq.${user.id}&status=eq.active`,
+    (rows) =>
+      rows.length === 1 &&
+      rows[0].task_id === null &&
+      rows[0].habit_id === null,
+    'one independent active focus session after prior finish',
+  );
+  await clickByText(page, 'Abandon');
+  await clickByText(page, 'Abandon session');
+  await waitForRows(
+    `focus_sessions?select=id,status,ended_at,actual_minutes&user_id=eq.${user.id}&id=eq.${secondFocusRows[0].id}`,
+    (rows) =>
+      rows.length === 1 &&
+      rows[0].status === 'abandoned' &&
+      isIsoTimestamp(rows[0].ended_at) &&
+      Number.isInteger(rows[0].actual_minutes) &&
+      rows[0].actual_minutes >= 0,
+    'focus abandon records terminal lifecycle',
+  );
+  await assertRows(
+    `focus_sessions?select=id&user_id=eq.${user.id}&status=eq.active`,
+    (rows) => rows.length === 0,
+    'no active focus session after abandon',
+  );
+  await assertInsertRejected(
+    'focus_sessions',
+    [
+      {
+        id: crypto.randomUUID(),
+        user_id: user.id,
+        status: 'active',
+        started_at: new Date().toISOString(),
+        planned_minutes: 4,
+        metadata: { source: 'e2e-negative-check' },
+      },
+    ],
+    'focus duration below the contract minimum',
+    'focus_sessions_planned_minutes_check',
+  );
+
+  const inactiveHabitId = crypto.randomUUID();
+  await insertRows('habits', [
+    {
+      id: inactiveHabitId,
+      user_id: user.id,
+      title: 'Inactive negative-check habit',
+      frequency: 'daily',
+      target: 1,
+      active: false,
+      metadata: {
+        source: 'e2e-negative-check',
+        lifecycle: 'paused',
+      },
+    },
+  ]);
+  await assertInsertRejected(
+    'habit_logs',
+    [
+      {
+        id: crypto.randomUUID(),
+        user_id: user.id,
+        habit_id: inactiveHabitId,
+        entry_date: captureEntryDate,
+        status: 'completed',
+        value: 1,
+      },
+    ],
+    'outcome for an inactive habit',
+    'Habit log target is unavailable for this user and date.',
+  );
+  await deleteRows(
+    `habits?id=eq.${inactiveHabitId}`,
+    'inactive negative-check habit',
+  );
+
+  const currentIsoWeekday = ((new Date(
+    `${captureEntryDate}T12:00:00Z`,
+  ).getUTCDay() + 6) % 7) + 1;
+  const otherIsoWeekday = currentIsoWeekday === 7 ? 1 : currentIsoWeekday + 1;
+  const unscheduledHabitId = crypto.randomUUID();
+  await insertRows('habits', [
+    {
+      id: unscheduledHabitId,
+      user_id: user.id,
+      title: 'Unscheduled negative-check habit',
+      frequency: 'daily',
+      target: 1,
+      active: true,
+      metadata: {
+        source: 'e2e-negative-check',
+        contract_version: 'habit-v1',
+        cadence: 'weekdays',
+        scheduled_weekdays: [otherIsoWeekday],
+        lifecycle: 'active',
+      },
+    },
+  ]);
+  await assertInsertRejected(
+    'habit_logs',
+    [
+      {
+        id: crypto.randomUUID(),
+        user_id: user.id,
+        habit_id: unscheduledHabitId,
+        entry_date: captureEntryDate,
+        status: 'completed',
+        value: 1,
+      },
+    ],
+    'outcome outside the selected-weekday cadence',
+    'Habit log target is unavailable for this user and date.',
+  );
+  await deleteRows(
+    `habits?id=eq.${unscheduledHabitId}`,
+    'unscheduled negative-check habit',
+  );
+
+  await waitForRows(
+    `user_state_snapshots?select=id,scope,generated_at,summary,signals,metadata&user_id=eq.${user.id}&scope=eq.daily`,
     (rows) =>
       rows.some(
         (row) =>
           row.metadata?.source === 'snapshot-aggregator-v1' &&
-          row.signals?.input_counts?.habits >= 1 &&
-          Date.parse(row.generated_at) > dailySnapshotBeforeHabit,
+          row.metadata?.daily_state_contract_version ===
+            'explainable-daily-state-v1' &&
+          row.summary?.daily_state?.mode === 'recover' &&
+          row.summary?.daily_state?.data_quality === 'current' &&
+          row.summary?.daily_state?.risk_flags?.includes('low_sleep') &&
+          row.summary?.daily_state?.risk_flags?.includes(
+            'workload_pressure',
+          ) &&
+          row.signals?.input_counts?.focus_sessions >= 2 &&
+          row.summary?.focus_sessions?.status_counts?.completed >= 1 &&
+          row.summary?.focus_sessions?.status_counts?.abandoned >= 1 &&
+          Date.parse(row.generated_at) > dailySnapshotBeforeActions,
       ),
-    'daily snapshot refreshed after habit completion',
+    'daily snapshot refresh includes neutral Phase 3 execution inputs',
+  );
+  page.off('request', actionRequestObserver);
+  if (actionRecommendationRequests.length !== 0) {
+    throw new Error(
+      `Phase 3 action writes generated recommendations: ${actionRecommendationRequests.map((request) => request.url()).join(', ')}`,
+    );
+  }
+  await assertRows(
+    `profiles?select=id,setup_revision&id=eq.${user.id}`,
+    (rows) => rows.length === 1 && rows[0].setup_revision === 4,
+    'Phase 3 execution leaves the Setup revision unchanged',
   );
 
   const recommendationsBeforeManualRefresh =
@@ -1120,6 +1892,7 @@ try {
     {
       scope: 'daily',
       window_days: 7,
+      target_date: captureEntryDate,
     },
     'manual snapshot refresh payload',
   );
@@ -1177,8 +1950,8 @@ try {
   await page.goto(appRoute('/deep-work'), { waitUntil: 'domcontentloaded' });
   await waitForFlutterShell(page);
   await enableFlutterSemantics(page);
-  await page.waitForURL('**/#/alerts');
-  await expectText(page, 'Notifications');
+  await page.waitForURL('**/#/deep-work');
+  await expectText(page, 'Focus session');
 
   await assertRows(
     dailyCapturePath,
@@ -1450,7 +2223,6 @@ async function selectDropdownOption(page, label, option) {
     page.getByRole('button', { name: labelPattern }).first(),
     page.getByLabel(labelPattern).first(),
   ];
-
   let opened = false;
   for (const candidate of candidates) {
     try {
@@ -1472,10 +2244,14 @@ async function selectDropdownOption(page, label, option) {
       await followingButton.click({ timeout: 2500 });
       opened = true;
     } catch (_) {
-      const box = await labelNode.boundingBox();
-      if (box) {
-        await page.mouse.click(box.x + 24, box.y + box.height + 18);
-        opened = true;
+      try {
+        const box = await labelNode.boundingBox({ timeout: 2500 });
+        if (box) {
+          await page.mouse.click(box.x + 24, box.y + box.height + 18);
+          opened = true;
+        }
+      } catch (_) {
+        // The label may be visual-only while the selected value is semantic.
       }
     }
   }
@@ -1495,7 +2271,6 @@ async function selectDropdownOption(page, label, option) {
     try {
       await candidate.click({ timeout: 1000 });
       await page.waitForTimeout(150);
-      await page.keyboard.press('Escape');
       return;
     } catch (_) {
       // Flutter's open DropdownButton menu may remain canvas-only in semantics.
@@ -1513,7 +2288,6 @@ async function selectDropdownOption(page, label, option) {
   }
   await page.keyboard.press('Enter');
   await page.waitForTimeout(200);
-  await page.keyboard.press('Escape');
 }
 
 function dropdownOptions(label) {
@@ -1554,6 +2328,7 @@ function dropdownOptions(label) {
     'Goal status': ['Active', 'Paused', 'Archived'],
     'Routine status': ['Candidate', 'Active', 'Paused', 'Archived'],
     'Commitment status': ['Active', 'Archived'],
+    'Task priority': ['Low', 'Medium', 'High', 'Critical'],
   }[label];
   return values ?? [];
 }
@@ -1753,7 +2528,7 @@ async function waitForRows(path, predicate, description) {
   while (Date.now() < deadline) {
     lastRows = await fetchRows(path, description);
     if (predicate(lastRows)) {
-      return;
+      return lastRows;
     }
     await new Promise((resolve) => setTimeout(resolve, 500));
   }
@@ -2045,6 +2820,15 @@ function isIsoTimestamp(value) {
   return typeof value === 'string' && Number.isFinite(Date.parse(value));
 }
 
+function isUuid(value) {
+  return (
+    typeof value === 'string' &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+      value,
+    )
+  );
+}
+
 async function captureSideEffectIds(userId) {
   const tables = [
     'tasks',
@@ -2142,6 +2926,83 @@ async function insertRows(table, rows) {
     );
   }
   return response.json();
+}
+
+async function assertInsertRejected(
+  table,
+  rows,
+  description,
+  expectedMarker,
+) {
+  const response = await fetch(`${supabaseUrl}/rest/v1/${table}`, {
+    method: 'POST',
+    headers: {
+      apikey: serviceRoleKey,
+      Authorization: `Bearer ${serviceRoleKey}`,
+      'Content-Type': 'application/json',
+      Prefer: 'return=representation',
+    },
+    body: JSON.stringify(rows),
+  });
+  const body = await response.text();
+  if (response.ok) {
+    const ids = rows.map((row) => row.id).filter(Boolean);
+    if (ids.length > 0) {
+      await deleteRows(
+        `${table}?id=in.(${ids.join(',')})`,
+        `unexpected accepted ${description}`,
+      );
+    }
+    throw new Error(`Database unexpectedly accepted ${description}.`);
+  }
+  if (!body.includes(expectedMarker)) {
+    throw new Error(
+      `Database rejected ${description} for the wrong reason: ${response.status} ${body}`,
+    );
+  }
+}
+
+async function assertPatchRejected(
+  path,
+  values,
+  description,
+  expectedMarker,
+) {
+  const response = await fetch(`${supabaseUrl}/rest/v1/${path}`, {
+    method: 'PATCH',
+    headers: {
+      apikey: serviceRoleKey,
+      Authorization: `Bearer ${serviceRoleKey}`,
+      'Content-Type': 'application/json',
+      Prefer: 'return=representation',
+    },
+    body: JSON.stringify(values),
+  });
+  const body = await response.text();
+  if (response.ok) {
+    throw new Error(`Database unexpectedly accepted ${description}.`);
+  }
+  if (!body.includes(expectedMarker)) {
+    throw new Error(
+      `Database rejected ${description} for the wrong reason: ${response.status} ${body}`,
+    );
+  }
+}
+
+async function deleteRows(path, description) {
+  const response = await fetch(`${supabaseUrl}/rest/v1/${path}`, {
+    method: 'DELETE',
+    headers: {
+      apikey: serviceRoleKey,
+      Authorization: `Bearer ${serviceRoleKey}`,
+      Prefer: 'return=minimal',
+    },
+  });
+  if (!response.ok) {
+    throw new Error(
+      `Could not delete ${description}: ${response.status} ${await response.text()}`,
+    );
+  }
 }
 
 async function fetchRows(path, description) {

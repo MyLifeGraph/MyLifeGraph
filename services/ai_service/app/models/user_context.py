@@ -3,6 +3,9 @@ from datetime import date, datetime
 from typing import Any
 
 
+TERMINAL_TASK_STATUSES = frozenset({"done", "cancelled", "archived"})
+
+
 @dataclass(frozen=True)
 class EvidenceRef:
     table: str
@@ -44,9 +47,13 @@ class TaskSignal:
     status: str = "open"
     workload_score: float = 1.0
 
+    @property
+    def is_active(self) -> bool:
+        return self.status.strip().lower() not in TERMINAL_TASK_STATUSES
+
     def is_overdue(self, today: date) -> bool:
         return (
-            self.status != "done"
+            self.is_active
             and self.due_date is not None
             and self.due_date < today
         )

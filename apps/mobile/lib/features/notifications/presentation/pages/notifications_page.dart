@@ -18,6 +18,7 @@ class NotificationsPage extends ConsumerWidget {
     final capabilities = ref.watch(appSurfaceCapabilitiesProvider);
     final resolver = NotificationActionTargetResolver(
       canUseSyncedHabits: capabilities.canUseSyncedHabits,
+      canUseFocusSessions: capabilities.canUseSyncedExecution,
     );
 
     return notifications.when(

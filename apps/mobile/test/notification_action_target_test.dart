@@ -73,5 +73,18 @@ void main() {
         NotificationActionTarget.habitManagement,
       );
     });
+
+    test('focus target requires the real focus-session capability', () {
+      const withFocus = NotificationActionTargetResolver(
+        canUseSyncedHabits: true,
+        canUseFocusSessions: true,
+      );
+
+      expect(withoutHabits.resolve('/deep-work'), isNull);
+      expect(
+        withFocus.resolve('/deep-work'),
+        NotificationActionTarget.focusSession,
+      );
+    });
   });
 }

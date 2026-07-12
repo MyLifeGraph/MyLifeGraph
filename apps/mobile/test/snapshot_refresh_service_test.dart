@@ -117,9 +117,10 @@ void main() {
       accessTokenProvider: () => 'access-token-123',
     );
 
-    await service.refreshDailyAfterTaskChange();
+    await service.refreshDailyAfterTaskChange(targetDate: '2026-07-11');
 
     expect(apiClient.postCalls, ['/v1/snapshots/generate']);
+    expect(apiClient.lastBody?['target_date'], '2026-07-11');
   });
 
   test('habit changes refresh the daily snapshot', () async {
@@ -130,9 +131,24 @@ void main() {
       accessTokenProvider: () => 'access-token-123',
     );
 
-    await service.refreshDailyAfterHabitChange();
+    await service.refreshDailyAfterHabitChange(targetDate: '2026-07-11');
 
     expect(apiClient.postCalls, ['/v1/snapshots/generate']);
+    expect(apiClient.lastBody?['target_date'], '2026-07-11');
+  });
+
+  test('focus changes refresh the daily snapshot', () async {
+    final apiClient = _FakeApiClient();
+    final service = _buildService(
+      config: _config(useMockData: false, supabaseConfigured: true),
+      apiClient: apiClient,
+      accessTokenProvider: () => 'access-token-123',
+    );
+
+    await service.refreshDailyAfterFocusChange(targetDate: '2026-07-11');
+
+    expect(apiClient.postCalls, ['/v1/snapshots/generate']);
+    expect(apiClient.lastBody?['target_date'], '2026-07-11');
   });
 
   test('snapshot refresh failures are best-effort', () async {

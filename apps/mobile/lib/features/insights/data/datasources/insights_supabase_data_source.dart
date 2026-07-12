@@ -2,6 +2,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../../core/supabase/app_user_resolver.dart';
 import '../../../../core/supabase/supabase_tables.dart';
+import '../../../quick_action/domain/habit_v1.dart';
 import '../../domain/entities/correlation.dart';
 import '../../domain/entities/insight.dart';
 
@@ -42,7 +43,7 @@ class InsightsSupabaseDataSource {
     final useAllTime = windowDays < 0;
     final requestedDays = useAllTime ? 1 : windowDays;
     final requestedStartDate =
-        _dateOnly(today.subtract(Duration(days: requestedDays - 1)));
+        _dateOnly(habitAddCalendarDays(today, -(requestedDays - 1)));
     final endDate = _dateOnly(today);
 
     final dailyRows = useAllTime
@@ -67,9 +68,10 @@ class InsightsSupabaseDataSource {
     final effectiveStartDate = useAllTime
         ? '${typedDailyRows.first['entry_date']}'
         : requestedStartDate;
-    final effectiveWindowDays = DateTime.parse(endDate)
-            .difference(DateTime.parse(effectiveStartDate))
-            .inDays +
+    final effectiveWindowDays = habitCalendarDayDifference(
+          DateTime.parse(endDate),
+          DateTime.parse(effectiveStartDate),
+        ) +
         1;
 
     final taskRows = useAllTime
@@ -90,17 +92,17 @@ class InsightsSupabaseDataSource {
         .eq('user_id', userId);
     final habitRows = await _client
         .from(SupabaseTables.habits)
-        .select('id,active')
+        .select('id,frequency,target,active,metadata,created_at')
         .eq('user_id', userId);
     final habitLogRows = useAllTime
         ? await _client
             .from(SupabaseTables.habitLogs)
-            .select('habit_id,entry_date,value')
+            .select('habit_id,entry_date,value,status')
             .eq('user_id', userId)
             .lte('entry_date', endDate)
         : await _client
             .from(SupabaseTables.habitLogs)
-            .select('habit_id,entry_date,value')
+            .select('habit_id,entry_date,value,status')
             .eq('user_id', userId)
             .gte('entry_date', effectiveStartDate)
             .lte('entry_date', endDate);
@@ -170,7 +172,7 @@ class InsightsSupabaseDataSource {
 
     final workload = <String, double>{};
     for (var offset = 0; offset < windowDays; offset++) {
-      final date = startDate.add(Duration(days: offset));
+      final date = habitAddCalendarDays(startDate, offset);
       final scheduleLoad = (scheduleCountByWeekday[date.weekday] ?? 0) * 8.0;
       workload[_dateOnly(date)] = scheduleLoad.clamp(0, 45);
     }
@@ -206,39 +208,91 @@ class InsightsSupabaseDataSource {
     required DateTime startDate,
     required int windowDays,
   }) {
-    final activeHabitIds = habitRows
-        .where((row) => row['active'] != false)
-        .map((row) => row['id'])
-        .whereType<String>()
-        .toSet();
-    if (activeHabitIds.isEmpty) {
+    final scheduledHabits =
+        <String, ({HabitCadence cadence, DateTime created})>{};
+    for (final row in habitRows) {
+      final id = row['id'];
+      final started = _habitStartedDate(row);
+      if (id is! String || started == null || row['active'] == false) {
+        continue;
+      }
+      final metadata = row['metadata'];
+      if (metadata is Map &&
+          const ['candidate', 'archived'].contains(metadata['setup_state'])) {
+        continue;
+      }
+      final cadence = HabitCadence.fromPersistence(
+        frequency: row['frequency'],
+        target: row['target'],
+        metadata: metadata,
+      );
+      if (cadence.kind != HabitCadenceKind.weeklyTarget) {
+        scheduledHabits[id] = (cadence: cadence, created: started);
+      }
+    }
+    if (scheduledHabits.isEmpty) {
       return const {};
     }
 
-    final completionsByDate = <String, double>{};
-    for (var offset = 0; offset < windowDays; offset++) {
-      completionsByDate[_dateOnly(startDate.add(Duration(days: offset)))] = 0;
-    }
-
+    final completedHabitIdsByDate = <String, Set<String>>{};
     for (final row in habitLogRows) {
       final entryDate = row['entry_date'] as String?;
       final habitId = row['habit_id'] as String?;
+      final completed = row['status'] == HabitOutcome.completed.code ||
+          row['status'] == null && (row['value'] as num? ?? 0) > 0;
       if (entryDate == null ||
           habitId == null ||
-          !activeHabitIds.contains(habitId) ||
-          !completionsByDate.containsKey(entryDate)) {
+          !completed ||
+          !scheduledHabits.containsKey(habitId)) {
         continue;
       }
-      final value = (row['value'] as num?)?.toDouble() ?? 0;
-      completionsByDate[entryDate] =
-          (completionsByDate[entryDate] ?? 0) + value.clamp(0, 1);
+      completedHabitIdsByDate.putIfAbsent(entryDate, () => {}).add(habitId);
     }
-    return completionsByDate.map(
-      (date, completions) => MapEntry(
-        date,
-        (completions / activeHabitIds.length * 100).clamp(0, 100),
-      ),
-    );
+
+    final ratesByDate = <String, double>{};
+    for (var offset = 0; offset < windowDays; offset++) {
+      final date = habitAddCalendarDays(startDate, offset);
+      final dateKey = _dateOnly(date);
+      final opportunities = scheduledHabits.entries
+          .where((entry) {
+            return !DateTime(
+                  entry.value.created.year,
+                  entry.value.created.month,
+                  entry.value.created.day,
+                ).isAfter(date) &&
+                entry.value.cadence.isScheduledOn(date);
+          })
+          .map((entry) => entry.key)
+          .toSet();
+      if (opportunities.isEmpty) {
+        continue;
+      }
+      final completed = completedHabitIdsByDate[dateKey]
+              ?.where(opportunities.contains)
+              .length ??
+          0;
+      ratesByDate[dateKey] =
+          (completed / opportunities.length * 100).clamp(0, 100);
+    }
+    return ratesByDate;
+  }
+
+  DateTime? _habitStartedDate(Map<String, dynamic> row) {
+    final metadata = row['metadata'];
+    final startedOn = metadata is Map ? metadata['started_on'] : null;
+    if (startedOn is String &&
+        RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(startedOn)) {
+      final parsed = DateTime.tryParse(startedOn);
+      if (parsed != null && _dateOnly(parsed) == startedOn) {
+        return DateTime(parsed.year, parsed.month, parsed.day);
+      }
+    }
+    final created = DateTime.tryParse(row['created_at']?.toString() ?? '');
+    if (created == null) {
+      return null;
+    }
+    final local = created.toLocal();
+    return DateTime(local.year, local.month, local.day);
   }
 
   void _addNumeric(Map<String, double> values, String key, Object? raw) {

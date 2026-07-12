@@ -19,22 +19,26 @@ way to explore the product today is the Flutter app in mock-data guest mode.
   constant onboarding snapshot. Daily and weekly user-state snapshots can be
   refreshed without an LLM provider and now include an explainable
   deterministic Daily State with freshness, quality, risks, reasons, and a
-  recovery-first Daily Mode. The dashboard includes a deliberate deterministic
-  recommendation refresh action, and a backend-only scheduled endpoint can
-  refresh onboarded non-guest profiles for cron-style runs.
+  recovery-first Daily Mode. Snapshots also include additive explicit habit
+  outcomes and focus-session counts/minutes without changing the Phase 2
+  classifier. The dashboard includes a deliberate deterministic recommendation
+  refresh action, and a backend-only scheduled endpoint can refresh onboarded
+  non-guest profiles for cron-style runs.
 - Insights includes deterministic correlation exploration for sleep, workload,
   stress, energy, mood, screen time, activity, steps, habits, recovery, and
   focus. It computes 7/14/30-day relationships in Flutter from existing
   Supabase rows or local mock time series, without LLM usage.
-- Phase 0A, Honest Capture; Phase 0B, Source And Surface Truth; Phase 0C,
-  First-Run And Setup Integrity; Phase 1, Lightweight Evening And Morning
-  Capture; and Phase 2, Explainable Daily State, are implemented. Evening and
-  Morning merge without erasing each other, remain local in guest/demo mode,
-  and feed a strict backend-only state parser for real accounts. Setup remains
-  progressive, revision-safe, reviewable, and atomically materialized through
-  its unchanged service-role-only RPC. Phase 3, Executable Action And Habit
-  Contracts, is next. See `docs/daily-briefing-implementation-plan.md` for the
-  operating loop and roadmap.
+- Phase 0A through Phase 3 are implemented. Evening and Morning merge without
+  erasing each other and feed a strict backend-only state parser; Setup remains
+  progressive, revision-safe, reviewable, and atomically materialized. Phase 3
+  adds durable task commands, cadence-aware Habit V1 outcomes, linked focus
+  sessions, and parser-equivalent strict Flutter/FastAPI
+  `executable-action-v1` models. Ambiguous committed task/focus transitions are
+  reconciled by exact persisted state rather than repeated blindly. These remote
+  actions remain unavailable to guest/demo sessions. Phase 4,
+  Deterministic Briefing Service, is next; the decision-first Today redesign is
+  a later phase. See `docs/phase-3-executable-actions-contract.md` and
+  `docs/daily-briefing-implementation-plan.md`.
 - Repository docs and scripts should be treated as the shared team source of
   truth. Do not depend on user-local Codex skills or machine-specific paths.
 
@@ -169,8 +173,8 @@ Supabase is the intended auth and persistence backend. The current app supports:
   setup-owned records use deterministic identities and can be reviewed, edited,
   archived, paused, or removed without reconciling manual rows.
 - Setup-owned habits are edited, paused, or archived through Settings Setup;
-  active Setup habits still appear in Habit Completion. Generic Habit Management
-  edits only manually managed habits.
+  active Setup habits still appear in Today Habits for completion, intentional
+  skip, and undo. Generic Habit Management edits only manually managed habits.
 - A rejected 4xx Setup save keeps the draft editable; 409 also prompts a server
   reload. Timeouts, 5xx failures, and invalid success envelopes have an unknown
   durable result, so the exact submitted draft is locked for unchanged retry or
@@ -190,9 +194,38 @@ Supabase is the intended auth and persistence backend. The current app supports:
   disabled. Normal dashboard reads still do not generate recommendations.
 - Supabase-backed Evening and Morning saves refresh the backend daily
   `user_state_snapshots` row best-effort for their explicit local
-  `target_date`. Dashboard task status changes plus Quick Action habit creation,
-  edits, active-state changes, and completions use the same refresh path after
-  successful Supabase updates; guest/mock paths stay local.
+  `target_date`. Durable task, habit, and focus writes use the same refresh path
+  after successful Supabase updates; refresh failure cannot roll back the
+  original write, and guest/mock paths stay local.
+- Dashboard tasks support create/edit, validated `5..480` minute estimates,
+  complete, postpone, cancel, restore, and direct undo. Habit V1 supports daily,
+  selected-ISO-weekday, and `1..7`-times-per-week cadence, active/paused/archived
+  lifecycle for manual habits, explicit `completed|skipped` daily outcomes, and
+  cadence-aware progress/streaks. `/deep-work` is now a real authenticated focus
+  flow with one active session per user, optional owned task/habit linkage, and
+  finish/abandon transitions that never complete the target implicitly.
+- Every task update, including direct undo, and every manual habit
+  edit/lifecycle update accepts a committed response loss only when an
+  owner-scoped readback matches the exact mutation timestamp and requested
+  fields. Habit outcome/undo fixes its target date before awaiting the write,
+  reconciles the exact row or its absence, and refreshes that same date. Focus
+  finish/abandon uses exact terminal readback. Every update to a terminal focus
+  row is rejected; linked task/habit deletion is restricted; and snapshot
+  refresh remains attributed to the persisted local focus start `entry_date`,
+  even when the session ends later. The migration backfills missing legacy
+  dates from `started_at` in UTC, which is also the Flutter/FastAPI fallback.
+- Habit outcomes are revalidated under a database lock against the current
+  active lifecycle and selected-weekday cadence. Paginated habit/outcome reads,
+  local `started_on`, and calendar-date arithmetic avoid silent truncation and
+  DST-dependent progress shifts. FastAPI also paginates complete habit-log and
+  focus-session snapshot windows instead of treating server-capped pages as
+  complete counts, using stable 1,000-row pages. Focus target validation locks
+  the selected task or habit row before the session write.
+- The strict `executable-action-v1` envelope is implemented in Flutter and
+  FastAPI for future briefing output. Both parsers reject the same unknown
+  fields, explicit-null metadata fields, coercions, invalid dates, duration
+  bounds, metadata leakage, and command/kind/target mismatches. `review_plan`
+  is explicitly unavailable until its own bounded surface exists.
 - The additive `summary.daily_state` contract is
   `explainable-daily-state-v1`. It uses strict V2 parsing, a fixed seven-day
   state lookback separate from the requested statistics window, explicit
@@ -201,18 +234,19 @@ Supabase is the intended auth and persistence backend. The current app supports:
   and provenance but excludes tomorrow-priority, reflection, and blocker text.
 - Phase 1 does not assign Daily Mode, rank briefing actions, generate
   recommendations on capture save, or call an LLM. Phase 2 assigns Daily Mode
-  only inside persisted backend snapshots; it still does not rank actions,
-  mutate a plan, generate recommendations, or expose a Today UI. Dashboard
-  capture cards show only direct nullable source values and persisted structured
-  context.
+  only inside persisted backend snapshots. Phase 3 exposes unranked execution
+  controls but still does not rank actions, persist a briefing, mutate a plan,
+  or call an LLM. Dashboard capture cards continue to show direct nullable
+  source values and persisted structured context.
 - `POST /v1/scheduled/daily-refresh` is a backend-only scheduler endpoint
   protected by `X-Scheduled-Refresh-Token`; it must not be called from Flutter.
 
 Important current caveat: the Flutter app targets the canonical snake_case
 schema. A clean local Supabase reset should apply
-`20260710180000_atomic_intake_v1_setup_apply.sql`, after the Phase 0C Intake
-request/revision and profile-projection migrations. The latest migration adds a
-service-role-only, transactionally locked RPC for atomic Setup materialization.
+`20260711120000_phase_3_executable_action_schema.sql`, after the Phase 0C
+Setup migrations. The Phase 3 migration adds task estimates/terminal times,
+locked cadence-aware habit outcomes, immutable linked focus history, and
+restricted target deletion without replacing existing RLS or table grants.
 Remote projects still need to be inspected directly before relying on
 `USE_MOCK_DATA=false`.
 
@@ -291,6 +325,11 @@ Setup ownership/revision assertions, Evening/Morning merge assertions,
 deterministic linked-event checks, snapshot refresh, recommendations, and core
 app writes. Run the command before claiming the current checkout passes that
 path.
+The smoke now contains Phase 3 task transition/undo, habit skip/undo, focus,
+committed-response-loss reconciliation for habit/task create, habit
+outcome/undo, task completion/undo, and focus start/finish, plus negative
+database assertions including terminal-focus `updated_at` mutation. Do not
+describe them as passed until the command succeeds in the current checkout.
 
 With a fresh local database:
 
@@ -310,6 +349,8 @@ has the nvm bin directory on `PATH`.
   direction, LLM cost controls, and next implementation sequence.
 - `docs/supabase-current-state.md` - Supabase auth, schema, RLS, and known gaps.
 - `docs/verification.md` - Automated verification scripts and browser E2E.
+- `docs/phase-3-executable-actions-contract.md` - Implemented executable task,
+  habit, focus, and action-target contract.
 - `docs/next-chat-prompt.md` - Ready-to-use prompt for continuing the next
   implementation slice in a new chat.
 - `apps/mobile/README.md` - Flutter app commands and configuration.

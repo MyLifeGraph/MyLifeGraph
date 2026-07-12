@@ -6,11 +6,14 @@ import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/config/app_config.dart';
 import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/supabase/supabase_providers.dart';
+import '../../../../core/utils/client_uuid.dart';
+import '../../../../core/utils/local_date.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_page.dart';
 import '../../../dashboard/presentation/providers/dashboard_providers.dart';
 import '../../../snapshots/presentation/providers/snapshot_providers.dart';
 import '../../data/habit_completion_supabase_data_source.dart';
+import '../../domain/habit_v1.dart';
 
 class HabitManagementPage extends ConsumerStatefulWidget {
   const HabitManagementPage({super.key});
@@ -21,7 +24,7 @@ class HabitManagementPage extends ConsumerStatefulWidget {
 }
 
 class _HabitManagementPageState extends ConsumerState<HabitManagementPage> {
-  List<HabitCompletionOption> _habits = const [];
+  List<HabitV1> _habits = const [];
   bool _isLoading = true;
   bool _isSaving = false;
 
@@ -33,12 +36,12 @@ class _HabitManagementPageState extends ConsumerState<HabitManagementPage> {
 
   @override
   Widget build(BuildContext context) {
-    final activeHabits = _habits.where((habit) => habit.active).toList();
-    final pausedHabits = _habits.where((habit) => !habit.active).toList();
-
+    final active = _byLifecycle(HabitLifecycle.active);
+    final paused = _byLifecycle(HabitLifecycle.paused);
+    final archived = _byLifecycle(HabitLifecycle.archived);
     return AppPage(
       title: 'Habit management',
-      subtitle: 'Create and adjust consistency targets',
+      subtitle: 'Set an honest daily, weekday, or weekly cadence',
       actions: [
         IconButton(
           tooltip: 'Refresh',
@@ -58,8 +61,8 @@ class _HabitManagementPageState extends ConsumerState<HabitManagementPage> {
             leading: const Icon(Icons.tune_outlined),
             title: const Text('Setup routines are managed in Setup'),
             subtitle: const Text(
-              'Review or pause setup-owned routines there. Active routines '
-              'still appear in Habit Completion.',
+              'Their definition and lifecycle stay there. Active Setup '
+              'routines can still be completed or skipped in Today Habits.',
             ),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => context.go('${AppRoutes.onboarding}?edit=1'),
@@ -80,55 +83,51 @@ class _HabitManagementPageState extends ConsumerState<HabitManagementPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'No habits yet.',
+                  'No manual habits yet.',
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
                 const SizedBox(height: AppSpacing.sm),
-                Text(
-                  _canUseSupabase
-                      ? 'Add your first habit to start tracking consistency.'
-                      : 'Supabase is not configured.',
-                  style: Theme.of(context).textTheme.bodyMedium,
+                const Text('Add one important recurring behavior.'),
+                const SizedBox(height: AppSpacing.md),
+                FilledButton.icon(
+                  onPressed: _canUseSupabase && !_isSaving
+                      ? () => _openEditor()
+                      : null,
+                  icon: const Icon(Icons.add),
+                  label: const Text('Add habit'),
                 ),
-                if (_canUseSupabase) ...[
-                  const SizedBox(height: AppSpacing.md),
-                  FilledButton.icon(
-                    onPressed: _isSaving ? null : () => _openEditor(),
-                    icon: const Icon(Icons.add),
-                    label: const Text('Add habit'),
-                  ),
-                ],
               ],
             ),
           )
         else ...[
-          _SectionHeader(title: 'Active', count: activeHabits.length),
-          if (activeHabits.isEmpty)
-            const AppCard(child: Text('No active habits.'))
-          else
-            ...activeHabits.map(
-              (habit) => _HabitManagementTile(
-                habit: habit,
-                onEdit: () => _openEditor(habit: habit),
-                onToggleActive: () => _setHabitActive(habit, active: false),
-              ),
-            ),
-          const SizedBox(height: AppSpacing.sm),
-          _SectionHeader(title: 'Paused', count: pausedHabits.length),
-          if (pausedHabits.isEmpty)
-            const AppCard(child: Text('No paused habits.'))
-          else
-            ...pausedHabits.map(
-              (habit) => _HabitManagementTile(
-                habit: habit,
-                onEdit: () => _openEditor(habit: habit),
-                onToggleActive: () => _setHabitActive(habit, active: true),
-              ),
-            ),
+          _HabitSection(
+            title: 'Active',
+            habits: active,
+            isSaving: _isSaving,
+            onEdit: (habit) => _openEditor(habit: habit),
+            onLifecycle: _setLifecycle,
+          ),
+          _HabitSection(
+            title: 'Paused',
+            habits: paused,
+            isSaving: _isSaving,
+            onEdit: (habit) => _openEditor(habit: habit),
+            onLifecycle: _setLifecycle,
+          ),
+          _HabitSection(
+            title: 'Archived',
+            habits: archived,
+            isSaving: _isSaving,
+            onEdit: (habit) => _openEditor(habit: habit),
+            onLifecycle: _setLifecycle,
+          ),
         ],
       ],
     );
   }
+
+  List<HabitV1> _byLifecycle(HabitLifecycle lifecycle) =>
+      _habits.where((habit) => habit.lifecycle == lifecycle).toList();
 
   bool get _canUseSupabase {
     final config = ref.read(appConfigProvider);
@@ -148,7 +147,6 @@ class _HabitManagementPageState extends ConsumerState<HabitManagementPage> {
       }
       return;
     }
-
     setState(() => _isLoading = true);
     try {
       final habits = await HabitCompletionSupabaseDataSource(
@@ -168,7 +166,7 @@ class _HabitManagementPageState extends ConsumerState<HabitManagementPage> {
     }
   }
 
-  Future<void> _openEditor({HabitCompletionOption? habit}) async {
+  Future<void> _openEditor({HabitV1? habit}) async {
     final result = await showModalBottomSheet<_HabitEditorResult>(
       context: context,
       isScrollControlled: true,
@@ -177,7 +175,21 @@ class _HabitManagementPageState extends ConsumerState<HabitManagementPage> {
     if (result == null) {
       return;
     }
+    await _saveEditorResult(
+      habit: habit,
+      result: result,
+      requestId: newClientUuid(),
+    );
+  }
 
+  Future<void> _saveEditorResult({
+    required HabitV1? habit,
+    required _HabitEditorResult result,
+    required String requestId,
+  }) async {
+    if (_isSaving) {
+      return;
+    }
     final config = ref.read(appConfigProvider);
     final client = ref.read(supabaseClientProvider);
     if (config.useMockData || client == null) {
@@ -190,32 +202,43 @@ class _HabitManagementPageState extends ConsumerState<HabitManagementPage> {
       final dataSource = HabitCompletionSupabaseDataSource(client);
       if (habit == null) {
         await dataSource.createHabit(
+          habitId: requestId,
           title: result.title,
           description: result.description,
-          frequency: result.frequency,
-          target: result.target,
+          cadence: result.cadence,
         );
       } else {
         await dataSource.updateHabit(
-          habitId: habit.id,
+          habit: habit,
           title: result.title,
           description: result.description,
-          frequency: result.frequency,
-          target: result.target,
+          cadence: result.cadence,
         );
       }
-      await ref
-          .read(snapshotRefreshServiceProvider)
-          .refreshDailyAfterHabitChange();
-      ref.invalidate(dashboardSnapshotProvider);
-      await _loadHabits();
+      await _afterDurableWrite();
       if (mounted) {
         _showMessage(habit == null ? 'Habit added.' : 'Habit updated.');
       }
-    } catch (_) {
+    } catch (error) {
       if (mounted) {
-        _showMessage(
-          habit == null ? 'Could not add habit.' : 'Could not update habit.',
+        final message = error is HabitCommandException
+            ? error.message
+            : habit == null
+                ? 'Could not add habit.'
+                : 'Could not update habit.';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('$message Your draft is retained.'),
+            behavior: SnackBarBehavior.floating,
+            action: SnackBarAction(
+              label: 'Retry',
+              onPressed: () => _saveEditorResult(
+                habit: habit,
+                result: result,
+                requestId: requestId,
+              ),
+            ),
+          ),
         );
       }
     } finally {
@@ -225,30 +248,58 @@ class _HabitManagementPageState extends ConsumerState<HabitManagementPage> {
     }
   }
 
-  Future<void> _setHabitActive(
-    HabitCompletionOption habit, {
-    required bool active,
-  }) async {
-    final config = ref.read(appConfigProvider);
+  Future<void> _setLifecycle(
+    HabitV1 habit,
+    HabitLifecycle lifecycle,
+  ) async {
+    if (_isSaving) {
+      return;
+    }
+    if (lifecycle == HabitLifecycle.archived) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Archive habit?'),
+          content: Text(
+            '${habit.title} will leave today\'s execution list. Its history '
+            'is preserved.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Keep habit'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Archive habit'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true) {
+        return;
+      }
+    }
     final client = ref.read(supabaseClientProvider);
-    if (config.useMockData || client == null) {
+    if (client == null) {
       _showMessage('Supabase is not configured.');
       return;
     }
-
     setState(() => _isSaving = true);
     try {
-      await HabitCompletionSupabaseDataSource(client).setHabitActive(
-        habitId: habit.id,
-        active: active,
+      await HabitCompletionSupabaseDataSource(client).setHabitLifecycle(
+        habit: habit,
+        lifecycle: lifecycle,
       );
-      await ref
-          .read(snapshotRefreshServiceProvider)
-          .refreshDailyAfterHabitChange();
-      ref.invalidate(dashboardSnapshotProvider);
-      await _loadHabits();
+      await _afterDurableWrite();
       if (mounted) {
-        _showMessage(active ? 'Habit restored.' : 'Habit paused.');
+        _showMessage(
+          switch (lifecycle) {
+            HabitLifecycle.active => 'Habit restored.',
+            HabitLifecycle.paused => 'Habit paused.',
+            HabitLifecycle.archived => 'Habit archived.',
+          },
+        );
       }
     } catch (_) {
       if (mounted) {
@@ -261,6 +312,14 @@ class _HabitManagementPageState extends ConsumerState<HabitManagementPage> {
     }
   }
 
+  Future<void> _afterDurableWrite() async {
+    await ref
+        .read(snapshotRefreshServiceProvider)
+        .refreshDailyAfterHabitChange(targetDate: localDateKey(DateTime.now()));
+    ref.invalidate(dashboardSnapshotProvider);
+    await _loadHabits();
+  }
+
   void _showMessage(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
@@ -268,23 +327,45 @@ class _HabitManagementPageState extends ConsumerState<HabitManagementPage> {
   }
 }
 
-class _SectionHeader extends StatelessWidget {
-  const _SectionHeader({required this.title, required this.count});
+class _HabitSection extends StatelessWidget {
+  const _HabitSection({
+    required this.title,
+    required this.habits,
+    required this.isSaving,
+    required this.onEdit,
+    required this.onLifecycle,
+  });
 
   final String title;
-  final int count;
+  final List<HabitV1> habits;
+  final bool isSaving;
+  final ValueChanged<HabitV1> onEdit;
+  final void Function(HabitV1, HabitLifecycle) onLifecycle;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(top: AppSpacing.sm),
-      child: Row(
-        children: [
-          Text(title, style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(width: AppSpacing.sm),
-          Text('$count', style: Theme.of(context).textTheme.bodySmall),
-        ],
-      ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(top: AppSpacing.sm),
+          child: Text(
+            '$title (${habits.length})',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+        ),
+        if (habits.isEmpty)
+          AppCard(child: Text('No ${title.toLowerCase()} habits.'))
+        else
+          ...habits.map(
+            (habit) => _HabitManagementTile(
+              habit: habit,
+              isSaving: isSaving,
+              onEdit: () => onEdit(habit),
+              onLifecycle: (lifecycle) => onLifecycle(habit, lifecycle),
+            ),
+          ),
+      ],
     );
   }
 }
@@ -292,22 +373,31 @@ class _SectionHeader extends StatelessWidget {
 class _HabitManagementTile extends StatelessWidget {
   const _HabitManagementTile({
     required this.habit,
+    required this.isSaving,
     required this.onEdit,
-    required this.onToggleActive,
+    required this.onLifecycle,
   });
 
-  final HabitCompletionOption habit;
+  final HabitV1 habit;
+  final bool isSaving;
   final VoidCallback onEdit;
-  final VoidCallback onToggleActive;
+  final ValueChanged<HabitLifecycle> onLifecycle;
 
   @override
   Widget build(BuildContext context) {
+    final progress = habit.progressAt(DateTime.now());
     return AppCard(
       child: Row(
         children: [
           Icon(
-            habit.active ? Icons.repeat : Icons.pause_circle_outline,
-            color: habit.active ? Theme.of(context).colorScheme.primary : null,
+            habit.lifecycle == HabitLifecycle.active
+                ? Icons.repeat
+                : habit.lifecycle == HabitLifecycle.paused
+                    ? Icons.pause_circle_outline
+                    : Icons.archive_outlined,
+            color: habit.lifecycle == HabitLifecycle.active
+                ? Theme.of(context).colorScheme.primary
+                : null,
           ),
           const SizedBox(width: AppSpacing.md),
           Expanded(
@@ -318,53 +408,54 @@ class _HabitManagementTile extends StatelessWidget {
                   habit.title,
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
-                if (habit.description != null &&
-                    habit.description!.trim().isNotEmpty) ...[
+                if (habit.description != null) ...[
                   const SizedBox(height: AppSpacing.xs),
-                  Text(
-                    habit.description!,
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
+                  Text(habit.description!),
                 ],
                 const SizedBox(height: AppSpacing.xs),
                 Text(
-                  '${habit.frequency} target: ${habit.target} · ${habit.completionsLast7Days}/7 days',
+                  '${habit.cadence.label} · ${progress.label} current progress',
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
               ],
             ),
           ),
           PopupMenuButton<_HabitMenuAction>(
-            tooltip: 'Habit actions',
+            tooltip: 'Habit actions for ${habit.title}',
+            enabled: !isSaving,
             onSelected: (action) {
               switch (action) {
                 case _HabitMenuAction.edit:
                   onEdit();
-                case _HabitMenuAction.toggleActive:
-                  onToggleActive();
+                case _HabitMenuAction.pause:
+                  onLifecycle(HabitLifecycle.paused);
+                case _HabitMenuAction.restore:
+                  onLifecycle(HabitLifecycle.active);
+                case _HabitMenuAction.archive:
+                  onLifecycle(HabitLifecycle.archived);
               }
             },
             itemBuilder: (context) => [
-              const PopupMenuItem(
-                value: _HabitMenuAction.edit,
-                child: ListTile(
-                  leading: Icon(Icons.edit_outlined),
-                  title: Text('Edit'),
-                  contentPadding: EdgeInsets.zero,
+              if (habit.lifecycle != HabitLifecycle.archived)
+                const PopupMenuItem(
+                  value: _HabitMenuAction.edit,
+                  child: Text('Edit'),
                 ),
-              ),
-              PopupMenuItem(
-                value: _HabitMenuAction.toggleActive,
-                child: ListTile(
-                  leading: Icon(
-                    habit.active
-                        ? Icons.pause_circle_outline
-                        : Icons.play_circle_outline,
-                  ),
-                  title: Text(habit.active ? 'Pause' : 'Restore'),
-                  contentPadding: EdgeInsets.zero,
+              if (habit.lifecycle == HabitLifecycle.active)
+                const PopupMenuItem(
+                  value: _HabitMenuAction.pause,
+                  child: Text('Pause'),
                 ),
-              ),
+              if (habit.lifecycle != HabitLifecycle.active)
+                const PopupMenuItem(
+                  value: _HabitMenuAction.restore,
+                  child: Text('Restore'),
+                ),
+              if (habit.lifecycle != HabitLifecycle.archived)
+                const PopupMenuItem(
+                  value: _HabitMenuAction.archive,
+                  child: Text('Archive'),
+                ),
             ],
           ),
         ],
@@ -373,12 +464,12 @@ class _HabitManagementTile extends StatelessWidget {
   }
 }
 
-enum _HabitMenuAction { edit, toggleActive }
+enum _HabitMenuAction { edit, pause, restore, archive }
 
 class _HabitEditorSheet extends StatefulWidget {
   const _HabitEditorSheet({this.habit});
 
-  final HabitCompletionOption? habit;
+  final HabitV1? habit;
 
   @override
   State<_HabitEditorSheet> createState() => _HabitEditorSheetState();
@@ -387,8 +478,9 @@ class _HabitEditorSheet extends StatefulWidget {
 class _HabitEditorSheetState extends State<_HabitEditorSheet> {
   late final TextEditingController _titleController;
   late final TextEditingController _descriptionController;
-  late final TextEditingController _targetController;
-  late String _frequency;
+  late final TextEditingController _weeklyTargetController;
+  late HabitCadenceKind _cadenceKind;
+  late Set<int> _weekdays;
 
   @override
   void initState() {
@@ -398,17 +490,18 @@ class _HabitEditorSheetState extends State<_HabitEditorSheet> {
     _descriptionController = TextEditingController(
       text: habit?.description ?? '',
     );
-    _targetController = TextEditingController(
-      text: (habit?.target ?? 1).toString(),
+    _weeklyTargetController = TextEditingController(
+      text: (habit?.cadence.weeklyTarget ?? 3).toString(),
     );
-    _frequency = habit?.frequency == 'weekly' ? 'weekly' : 'daily';
+    _cadenceKind = habit?.cadence.kind ?? HabitCadenceKind.daily;
+    _weekdays = habit?.cadence.scheduledWeekdays.toSet() ?? {1, 3, 5};
   }
 
   @override
   void dispose() {
     _titleController.dispose();
     _descriptionController.dispose();
-    _targetController.dispose();
+    _weeklyTargetController.dispose();
     super.dispose();
   }
 
@@ -416,7 +509,7 @@ class _HabitEditorSheetState extends State<_HabitEditorSheet> {
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
     return SafeArea(
-      child: Padding(
+      child: SingleChildScrollView(
         padding: EdgeInsets.fromLTRB(
           AppSpacing.lg,
           AppSpacing.lg,
@@ -436,39 +529,85 @@ class _HabitEditorSheetState extends State<_HabitEditorSheet> {
               controller: _titleController,
               autofocus: true,
               textInputAction: TextInputAction.next,
+              maxLength: 160,
               decoration: const InputDecoration(labelText: 'Title'),
             ),
-            const SizedBox(height: AppSpacing.md),
+            const SizedBox(height: AppSpacing.sm),
             TextField(
               controller: _descriptionController,
               textInputAction: TextInputAction.next,
-              decoration: const InputDecoration(labelText: 'Description'),
+              maxLength: 2000,
+              decoration: const InputDecoration(
+                labelText: 'Description optional',
+              ),
             ),
-            const SizedBox(height: AppSpacing.md),
-            SegmentedButton<String>(
-              segments: const [
-                ButtonSegment(
-                  value: 'daily',
-                  label: Text('Daily'),
-                  icon: Icon(Icons.today_outlined),
+            const SizedBox(height: AppSpacing.sm),
+            DropdownButtonFormField<HabitCadenceKind>(
+              initialValue: _cadenceKind,
+              decoration: const InputDecoration(labelText: 'Cadence'),
+              items: const [
+                DropdownMenuItem(
+                  value: HabitCadenceKind.daily,
+                  child: Text('Daily'),
                 ),
-                ButtonSegment(
-                  value: 'weekly',
-                  label: Text('Weekly'),
-                  icon: Icon(Icons.calendar_view_week_outlined),
+                DropdownMenuItem(
+                  value: HabitCadenceKind.weekdays,
+                  child: Text('Selected weekdays'),
+                ),
+                DropdownMenuItem(
+                  value: HabitCadenceKind.weeklyTarget,
+                  child: Text('Times per week'),
                 ),
               ],
-              selected: {_frequency},
-              onSelectionChanged: (selected) {
-                setState(() => _frequency = selected.single);
+              onChanged: (value) {
+                if (value != null) {
+                  setState(() => _cadenceKind = value);
+                }
               },
             ),
-            const SizedBox(height: AppSpacing.md),
-            TextField(
-              controller: _targetController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: 'Target'),
-            ),
+            if (_cadenceKind == HabitCadenceKind.weekdays) ...[
+              const SizedBox(height: AppSpacing.md),
+              const Text('Scheduled weekdays'),
+              const SizedBox(height: AppSpacing.sm),
+              Wrap(
+                spacing: AppSpacing.sm,
+                children: List.generate(7, (index) {
+                  final weekday = index + 1;
+                  const labels = [
+                    'Mon',
+                    'Tue',
+                    'Wed',
+                    'Thu',
+                    'Fri',
+                    'Sat',
+                    'Sun',
+                  ];
+                  return FilterChip(
+                    label: Text(labels[index]),
+                    selected: _weekdays.contains(weekday),
+                    onSelected: (selected) {
+                      setState(() {
+                        if (selected) {
+                          _weekdays.add(weekday);
+                        } else {
+                          _weekdays.remove(weekday);
+                        }
+                      });
+                    },
+                  );
+                }),
+              ),
+            ],
+            if (_cadenceKind == HabitCadenceKind.weeklyTarget) ...[
+              const SizedBox(height: AppSpacing.md),
+              TextField(
+                controller: _weeklyTargetController,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'Weekly target (1–7)',
+                ),
+              ),
+            ],
             const SizedBox(height: AppSpacing.lg),
             Row(
               children: [
@@ -480,7 +619,7 @@ class _HabitEditorSheetState extends State<_HabitEditorSheet> {
                 FilledButton.icon(
                   onPressed: _submit,
                   icon: const Icon(Icons.check),
-                  label: const Text('Save'),
+                  label: const Text('Save habit'),
                 ),
               ],
             ),
@@ -491,26 +630,33 @@ class _HabitEditorSheetState extends State<_HabitEditorSheet> {
   }
 
   void _submit() {
-    final title = _titleController.text.trim();
-    final parsedTarget = int.tryParse(_targetController.text.trim());
-    if (title.isEmpty || parsedTarget == null || parsedTarget <= 0) {
+    try {
+      final cadence = switch (_cadenceKind) {
+        HabitCadenceKind.daily => HabitCadence.daily(),
+        HabitCadenceKind.weekdays => HabitCadence.weekdays(_weekdays),
+        HabitCadenceKind.weeklyTarget => HabitCadence.weeklyTarget(
+            int.tryParse(_weeklyTargetController.text.trim()) ?? 0,
+          ),
+      };
+      final title = _titleController.text.trim();
+      if (title.isEmpty) {
+        throw const HabitContractException('Enter a habit title.');
+      }
+      Navigator.of(context).pop(
+        _HabitEditorResult(
+          title: title,
+          description: _descriptionController.text.trim(),
+          cadence: cadence,
+        ),
+      );
+    } on HabitContractException catch (error) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Enter a title and a positive target.'),
+        SnackBar(
+          content: Text(error.message),
           behavior: SnackBarBehavior.floating,
         ),
       );
-      return;
     }
-
-    Navigator.of(context).pop(
-      _HabitEditorResult(
-        title: title,
-        description: _descriptionController.text.trim(),
-        frequency: _frequency,
-        target: parsedTarget,
-      ),
-    );
   }
 }
 
@@ -518,12 +664,10 @@ class _HabitEditorResult {
   const _HabitEditorResult({
     required this.title,
     required this.description,
-    required this.frequency,
-    required this.target,
+    required this.cadence,
   });
 
   final String title;
   final String description;
-  final String frequency;
-  final int target;
+  final HabitCadence cadence;
 }

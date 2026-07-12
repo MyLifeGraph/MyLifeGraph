@@ -452,7 +452,7 @@ class RecommendationEngine:
             sum(
                 task.workload_score
                 for task in summary.tasks
-                if task.status != "done"
+                if task.is_active
             )
             / 10,
         )
@@ -540,7 +540,7 @@ class RecommendationEngine:
             task for task in summary.tasks if task.is_overdue(summary.today)
         ]
         active_workload = sum(
-            task.workload_score for task in summary.tasks if task.status != "done"
+            task.workload_score for task in summary.tasks if task.is_active
         )
         planning_events = [
             event
@@ -561,7 +561,7 @@ class RecommendationEngine:
             evidence_refs = [
                 EvidenceRef(table="tasks", id=task.id, field="workload_score")
                 for task in summary.tasks
-                if task.status != "done"
+                if task.is_active
             ]
         severity = max(
             _clamp(len(overdue_tasks) / 3),

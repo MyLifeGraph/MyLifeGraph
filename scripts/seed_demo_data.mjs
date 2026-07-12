@@ -478,6 +478,8 @@ async function seedScenario(userId, scenario) {
       status,
       priority,
       deadline: atHour(addDays(now, offsetDays), 16, 0),
+      completed_at: status === 'done' ? now.toISOString() : null,
+      cancelled_at: status === 'cancelled' ? now.toISOString() : null,
       source: 'demo_seed',
       metadata,
     })),
@@ -506,7 +508,7 @@ async function seedScenario(userId, scenario) {
     description,
     frequency: 'daily',
     target: 1,
-    active: index !== 2 || scenario.key !== 'worker',
+    active: true,
     metadata,
     updated_at: addDays(now, -index).toISOString(),
   }));
@@ -515,6 +517,20 @@ async function seedScenario(userId, scenario) {
     'habit_logs',
     buildHabitLogs(userId, scenario, habitRows, now),
   );
+  if (scenario.key === 'worker') {
+    await restRequest(
+      `habits?id=eq.${habitRows[2].id}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({
+          active: false,
+          updated_at: now.toISOString(),
+        }),
+        headers: { Prefer: 'return=minimal' },
+      },
+      'pause demo habit after inserting its history',
+    );
+  }
 
   await insertRows(
     'notifications',
@@ -617,9 +633,7 @@ async function seedScenario(userId, scenario) {
     },
   ]);
 
-  await upsertRows(
-    'user_state_snapshots',
-    [
+  const snapshotRows = [
       {
         id: onboardingSnapshotId,
         user_id: userId,
@@ -692,7 +706,15 @@ async function seedScenario(userId, scenario) {
         metadata,
         generated_at: now.toISOString(),
       },
-    ],
+    ];
+  await upsertRows(
+    'user_state_snapshots',
+    [snapshotRows[0]],
+    'user_id,scope,period_key',
+  );
+  await upsertRows(
+    'user_state_snapshots',
+    snapshotRows.slice(1),
     'user_id,scope,period_key',
   );
 }

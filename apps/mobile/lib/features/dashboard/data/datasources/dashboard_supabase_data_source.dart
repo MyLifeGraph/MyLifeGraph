@@ -23,10 +23,13 @@ class DashboardSupabaseDataSource {
           .limit(60),
       _client
           .from(SupabaseTables.tasks)
-          .select('id,title,deadline,priority,status')
+          .select(
+            'id,title,description,deadline,priority,status,estimated_minutes',
+          )
           .eq('user_id', userId)
-          .order('deadline', ascending: true)
-          .limit(8),
+          .order('deadline', ascending: true, nullsFirst: true)
+          .order('updated_at', ascending: false)
+          .limit(100),
       _client
           .from(SupabaseTables.scheduleItems)
           .select('title,weekday,starts_at,ends_at,location')
@@ -131,15 +134,18 @@ class DashboardSnapshotMapper {
     return PlanItem(
       id: '${row['id']}',
       title: '${row['title'] ?? 'Untitled task'}',
-      deadline: DateTime.tryParse('${row['deadline'] ?? ''}'),
+      deadline: DateTime.tryParse('${row['deadline'] ?? ''}')?.toLocal(),
       priority: priority.isEmpty ? 'normal' : priority,
       isCompleted: status == 'done' || status == 'completed',
+      status: status,
+      description: _optionalString(row['description']),
+      estimatedMinutes: (row['estimated_minutes'] as num?)?.toInt(),
     );
   }
 
   bool _isVisibleTaskStatus(String status) {
     return switch (status.toLowerCase()) {
-      'cancelled' || 'archived' => false,
+      'archived' => false,
       _ => true,
     };
   }

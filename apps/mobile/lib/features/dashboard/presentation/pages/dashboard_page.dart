@@ -6,11 +6,14 @@ import 'package:intl/intl.dart';
 import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/supabase/supabase_providers.dart';
-import '../../../../core/supabase/supabase_tables.dart';
+import '../../../../core/utils/client_uuid.dart';
+import '../../../../core/utils/local_date.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../optimization/domain/entities/recommendation_feed.dart';
 import '../../../optimization/presentation/providers/optimization_providers.dart';
 import '../../../snapshots/presentation/providers/snapshot_providers.dart';
+import '../../../tasks/data/task_supabase_data_source.dart';
+import '../../../tasks/domain/executable_task.dart';
 import '../../domain/entities/dashboard_snapshot.dart';
 import '../providers/dashboard_providers.dart';
 import '../widgets/recommendation_card.dart';
@@ -28,6 +31,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
   final Set<String> _deletedTaskIds = {};
   final Set<String> _updatingTaskIds = {};
   bool _showCompletedTasks = false;
+  bool _showCancelledTasks = false;
   bool _isRefreshingRecommendations = false;
   String? _recommendationRefreshError;
 
@@ -49,20 +53,32 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
         deletedTaskIds: _deletedTaskIds,
         updatingTaskIds: _updatingTaskIds,
         showCompletedTasks: _showCompletedTasks,
+        showCancelledTasks: _showCancelledTasks,
         isRefreshingRecommendations: _isRefreshingRecommendations,
         recommendationRefreshError: _recommendationRefreshError,
         onAddEvening: () => context.go(AppRoutes.dailyCheckIn),
         onAddMorning: () => context.go(AppRoutes.morningCalibration),
+        onOpenTodayHabits: () => context.go(AppRoutes.habitCompletion),
+        onOpenFocus: () => context.go(AppRoutes.deepWork),
         onRetryRecommendations: () {
           setState(() => _recommendationRefreshError = null);
           ref.invalidate(recommendationFeedProvider);
         },
         onRefreshRecommendations: _refreshRecommendations,
-        onCompleteTask: (id) => _changeTaskStatus(id, 'done'),
-        onRestoreTask: (id) => _changeTaskStatus(id, 'todo'),
-        onDeleteTask: (id) => _changeTaskStatus(id, 'cancelled'),
+        onAddTask: () => _openTaskEditor(),
+        onEditTask: (task) => _openTaskEditor(task: task),
+        onCompleteTask: _completeTask,
+        onRestoreTask: _restoreTask,
+        onCancelTask: _cancelTask,
+        onPostponeTask: _postponeTask,
+        onStartFocus: (task) => context.go(
+          '${AppRoutes.deepWork}?target_kind=task&target_id=${task.id}',
+        ),
         onToggleCompletedTasks: () {
           setState(() => _showCompletedTasks = !_showCompletedTasks);
+        },
+        onToggleCancelledTasks: () {
+          setState(() => _showCancelledTasks = !_showCancelledTasks);
         },
       ),
     );
@@ -80,7 +96,9 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
     try {
       await ref
           .read(snapshotRefreshServiceProvider)
-          .refreshDailyAfterUserSignal();
+          .refreshDailyAfterUserSignal(
+            targetDate: localDateKey(DateTime.now()),
+          );
       await ref
           .read(optimizationServiceProvider)
           .refreshActionableRecommendations();
@@ -112,49 +130,245 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
     }
   }
 
-  Future<void> _changeTaskStatus(String id, String status) async {
+  Future<void> _completeTask(PlanItem task) async {
+    await _mutateTaskWithUndo(
+      task: task,
+      successStatus: 'done',
+      successMessage: 'Task completed.',
+      mutation: (source) => source.completeTask(task.id),
+    );
+  }
+
+  Future<void> _restoreTask(PlanItem task) async {
+    await _mutateTask(
+      task.id,
+      () async {
+        await _taskSource().restoreTask(task.id);
+      },
+      successStatus: 'todo',
+      successMessage: 'Task restored.',
+    );
+  }
+
+  Future<void> _cancelTask(PlanItem task) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Cancel task?'),
+        content: Text('${task.title} will be hidden but kept in task history.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Keep task'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Cancel task'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) {
+      return;
+    }
+    await _mutateTaskWithUndo(
+      task: task,
+      successStatus: 'cancelled',
+      successMessage: 'Task cancelled.',
+      mutation: (source) => source.cancelTask(task.id),
+    );
+  }
+
+  Future<void> _postponeTask(PlanItem task) async {
+    final now = DateTime.now();
+    final initial = (task.deadline ?? now).add(const Duration(days: 1));
+    final selected = await showDatePicker(
+      context: context,
+      initialDate: DateTime(initial.year, initial.month, initial.day),
+      firstDate:
+          DateTime(now.year, now.month, now.day).add(const Duration(days: 1)),
+      lastDate: DateTime(now.year + 5, 12, 31),
+      helpText: 'Postpone task deadline',
+    );
+    if (selected == null || !mounted) {
+      return;
+    }
+    final deadline = DateTime(
+      selected.year,
+      selected.month,
+      selected.day,
+      17,
+    );
+    await _mutateTaskWithUndo(
+      task: task,
+      successStatus: 'todo',
+      successMessage: 'Task postponed.',
+      mutation: (source) => source.postponeTask(
+        taskId: task.id,
+        newDeadline: deadline,
+      ),
+    );
+  }
+
+  Future<void> _openTaskEditor({
+    PlanItem? task,
+    ExecutableTaskDraft? retainedDraft,
+    String? requestId,
+  }) async {
+    final draft = await showModalBottomSheet<ExecutableTaskDraft>(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => _TaskEditorSheet(
+        task: task,
+        retainedDraft: retainedDraft,
+      ),
+    );
+    if (draft == null || !mounted) {
+      return;
+    }
+    final id = requestId ?? newClientUuid();
+    setState(() => _updatingTaskIds.add(task?.id ?? id));
+    try {
+      final source = _taskSource();
+      if (task == null) {
+        await source.createTask(taskId: id, draft: draft);
+      } else {
+        await source.editTask(taskId: task.id, draft: draft);
+      }
+      await _afterTaskWrite();
+      if (mounted) {
+        _showTaskMessage(task == null ? 'Task added.' : 'Task updated.');
+      }
+    } catch (error) {
+      if (mounted) {
+        final message = error is TaskCommandException
+            ? error.message
+            : task == null
+                ? 'Task could not be added.'
+                : 'Task could not be updated.';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('$message Your draft is retained.'),
+            action: SnackBarAction(
+              label: 'Retry',
+              onPressed: () => _openTaskEditor(
+                task: task,
+                retainedDraft: draft,
+                requestId: id,
+              ),
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _updatingTaskIds.remove(task?.id ?? id));
+      }
+    }
+  }
+
+  Future<void> _mutateTaskWithUndo({
+    required PlanItem task,
+    required String successStatus,
+    required String successMessage,
+    required Future<TaskUndoToken> Function(TaskSupabaseDataSource) mutation,
+  }) async {
+    TaskUndoToken? undo;
+    await _mutateTask(
+      task.id,
+      () async {
+        undo = await mutation(_taskSource());
+      },
+      successStatus: successStatus,
+      successMessage: successMessage,
+      onSuccess: () {
+        final token = undo;
+        if (token == null) {
+          return;
+        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(successMessage),
+            action: SnackBarAction(
+              label: 'Undo',
+              onPressed: () => _undoTask(token),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> _undoTask(TaskUndoToken token) async {
+    await _mutateTask(
+      token.taskId,
+      () async {
+        await _taskSource().undo(token);
+      },
+      successStatus: token.status.code,
+      successMessage: 'Task change undone.',
+    );
+  }
+
+  Future<void> _mutateTask(
+    String id,
+    Future<void> Function() mutation, {
+    required String successStatus,
+    required String successMessage,
+    VoidCallback? onSuccess,
+  }) async {
     if (_updatingTaskIds.contains(id)) {
       return;
     }
-
-    setState(() {
-      _updatingTaskIds.add(id);
-      _applyLocalTaskStatus(id, status);
-    });
-
-    final client = ref.read(supabaseClientProvider);
-    if (client == null) {
-      if (mounted) {
-        setState(() {
-          _updatingTaskIds.remove(id);
-          _clearLocalTaskStatus(id);
-        });
-      }
-      return;
-    }
-
+    setState(() => _updatingTaskIds.add(id));
     try {
-      await client.from(SupabaseTables.tasks).update({
-        'status': status,
-        'updated_at': DateTime.now().toIso8601String(),
-      }).eq('id', id);
-      await ref
-          .read(snapshotRefreshServiceProvider)
-          .refreshDailyAfterTaskChange();
-      ref.invalidate(dashboardSnapshotProvider);
-    } catch (_) {
+      await mutation();
+      if (mounted) {
+        setState(() => _applyLocalTaskStatus(id, successStatus));
+      }
+      await _afterTaskWrite();
+      if (mounted) {
+        if (onSuccess != null) {
+          onSuccess();
+        } else {
+          _showTaskMessage(successMessage);
+        }
+      }
+    } catch (error) {
       if (!mounted) {
         return;
       }
-      setState(() => _clearLocalTaskStatus(id));
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Task update could not be saved.')),
+      _showTaskMessage(
+        error is TaskCommandException
+            ? error.message
+            : 'Task update could not be saved.',
       );
     } finally {
       if (mounted) {
         setState(() => _updatingTaskIds.remove(id));
       }
     }
+  }
+
+  TaskSupabaseDataSource _taskSource() {
+    final client = ref.read(supabaseClientProvider);
+    if (client == null) {
+      throw const TaskCommandException('Synced tasks are unavailable.');
+    }
+    return TaskSupabaseDataSource(client);
+  }
+
+  Future<void> _afterTaskWrite() async {
+    await ref
+        .read(snapshotRefreshServiceProvider)
+        .refreshDailyAfterTaskChange(targetDate: localDateKey(DateTime.now()));
+    ref.invalidate(dashboardSnapshotProvider);
+  }
+
+  void _showTaskMessage(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
+    );
   }
 
   void _applyLocalTaskStatus(String id, String status) {
@@ -170,12 +384,6 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
         _deletedTaskIds.add(id);
     }
   }
-
-  void _clearLocalTaskStatus(String id) {
-    _completedTaskIds.remove(id);
-    _restoredTaskIds.remove(id);
-    _deletedTaskIds.remove(id);
-  }
 }
 
 class _DashboardHome extends StatelessWidget {
@@ -187,16 +395,24 @@ class _DashboardHome extends StatelessWidget {
     required this.deletedTaskIds,
     required this.updatingTaskIds,
     required this.showCompletedTasks,
+    required this.showCancelledTasks,
     required this.isRefreshingRecommendations,
     required this.recommendationRefreshError,
     required this.onAddEvening,
     required this.onAddMorning,
+    required this.onOpenTodayHabits,
+    required this.onOpenFocus,
     required this.onRetryRecommendations,
     required this.onRefreshRecommendations,
+    required this.onAddTask,
+    required this.onEditTask,
     required this.onCompleteTask,
     required this.onRestoreTask,
-    required this.onDeleteTask,
+    required this.onCancelTask,
+    required this.onPostponeTask,
+    required this.onStartFocus,
     required this.onToggleCompletedTasks,
+    required this.onToggleCancelledTasks,
   });
 
   final DashboardSnapshot snapshot;
@@ -206,23 +422,37 @@ class _DashboardHome extends StatelessWidget {
   final Set<String> deletedTaskIds;
   final Set<String> updatingTaskIds;
   final bool showCompletedTasks;
+  final bool showCancelledTasks;
   final bool isRefreshingRecommendations;
   final String? recommendationRefreshError;
   final VoidCallback onAddEvening;
   final VoidCallback onAddMorning;
+  final VoidCallback onOpenTodayHabits;
+  final VoidCallback onOpenFocus;
   final VoidCallback onRetryRecommendations;
   final VoidCallback onRefreshRecommendations;
-  final ValueChanged<String> onCompleteTask;
-  final ValueChanged<String> onRestoreTask;
-  final ValueChanged<String> onDeleteTask;
+  final VoidCallback onAddTask;
+  final ValueChanged<PlanItem> onEditTask;
+  final ValueChanged<PlanItem> onCompleteTask;
+  final ValueChanged<PlanItem> onRestoreTask;
+  final ValueChanged<PlanItem> onCancelTask;
+  final ValueChanged<PlanItem> onPostponeTask;
+  final ValueChanged<PlanItem> onStartFocus;
   final VoidCallback onToggleCompletedTasks;
+  final VoidCallback onToggleCancelledTasks;
 
   @override
   Widget build(BuildContext context) {
     final activeTasks = snapshot.todayPlan.where((item) {
       final completed = completedTaskIds.contains(item.id) ||
           (item.isCompleted && !restoredTaskIds.contains(item.id));
-      return !completed && !deletedTaskIds.contains(item.id);
+      final cancelled = deletedTaskIds.contains(item.id) ||
+          (item.status == 'cancelled' && !restoredTaskIds.contains(item.id));
+      return !completed && !cancelled;
+    }).toList();
+    final cancelledTasks = snapshot.todayPlan.where((item) {
+      return deletedTaskIds.contains(item.id) ||
+          (item.status == 'cancelled' && !restoredTaskIds.contains(item.id));
     }).toList();
     final completedTasks = snapshot.todayPlan.where((item) {
       final completed = completedTaskIds.contains(item.id) ||
@@ -272,13 +502,29 @@ class _DashboardHome extends StatelessWidget {
                           _TasksSection(
                             activeTasks: activeTasks,
                             completedTasks: completedTasks,
+                            cancelledTasks: cancelledTasks,
+                            canExecute:
+                                snapshot.origin == DashboardOrigin.account,
                             updatingTaskIds: updatingTaskIds,
                             showCompletedTasks: showCompletedTasks,
+                            showCancelledTasks: showCancelledTasks,
+                            onAdd: onAddTask,
+                            onEdit: onEditTask,
                             onComplete: onCompleteTask,
                             onRestore: onRestoreTask,
-                            onDelete: onDeleteTask,
+                            onCancel: onCancelTask,
+                            onPostpone: onPostponeTask,
+                            onStartFocus: onStartFocus,
                             onToggleCompleted: onToggleCompletedTasks,
+                            onToggleCancelled: onToggleCancelledTasks,
                           ),
+                          if (snapshot.origin == DashboardOrigin.account) ...[
+                            const SizedBox(height: AppSpacing.xl),
+                            _TodayExecutionSection(
+                              onOpenHabits: onOpenTodayHabits,
+                              onOpenFocus: onOpenFocus,
+                            ),
+                          ],
                           const SizedBox(height: AppSpacing.xl),
                           _ScheduleSection(days: snapshot.scheduleDays),
                         ],
@@ -697,31 +943,54 @@ class _TasksSection extends StatelessWidget {
   const _TasksSection({
     required this.activeTasks,
     required this.completedTasks,
+    required this.cancelledTasks,
+    required this.canExecute,
     required this.updatingTaskIds,
     required this.showCompletedTasks,
+    required this.showCancelledTasks,
+    required this.onAdd,
+    required this.onEdit,
     required this.onComplete,
     required this.onRestore,
-    required this.onDelete,
+    required this.onCancel,
+    required this.onPostpone,
+    required this.onStartFocus,
     required this.onToggleCompleted,
+    required this.onToggleCancelled,
   });
 
   final List<PlanItem> activeTasks;
   final List<PlanItem> completedTasks;
+  final List<PlanItem> cancelledTasks;
+  final bool canExecute;
   final Set<String> updatingTaskIds;
   final bool showCompletedTasks;
-  final ValueChanged<String> onComplete;
-  final ValueChanged<String> onRestore;
-  final ValueChanged<String> onDelete;
+  final bool showCancelledTasks;
+  final VoidCallback onAdd;
+  final ValueChanged<PlanItem> onEdit;
+  final ValueChanged<PlanItem> onComplete;
+  final ValueChanged<PlanItem> onRestore;
+  final ValueChanged<PlanItem> onCancel;
+  final ValueChanged<PlanItem> onPostpone;
+  final ValueChanged<PlanItem> onStartFocus;
   final VoidCallback onToggleCompleted;
+  final VoidCallback onToggleCancelled;
 
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const _SectionTitle(
+        _SectionTitle(
           title: 'Tasks',
-          subtitle: 'Open items from your task list.',
+          subtitle: 'Finite actions with durable estimates and deadlines.',
+          trailing: canExecute
+              ? FilledButton.icon(
+                  onPressed: onAdd,
+                  icon: const Icon(Icons.add, size: 18),
+                  label: const Text('Add task'),
+                )
+              : null,
         ),
         const SizedBox(height: AppSpacing.md),
         if (activeTasks.isEmpty)
@@ -736,8 +1005,11 @@ class _TasksSection extends StatelessWidget {
               child: _TaskCard(
                 task: task,
                 isUpdating: updatingTaskIds.contains(task.id),
-                onComplete: () => onComplete(task.id),
-                onDelete: () => onDelete(task.id),
+                onEdit: canExecute ? () => onEdit(task) : null,
+                onComplete: canExecute ? () => onComplete(task) : null,
+                onCancel: canExecute ? () => onCancel(task) : null,
+                onPostpone: canExecute ? () => onPostpone(task) : null,
+                onStartFocus: canExecute ? () => onStartFocus(task) : null,
               ),
             ),
           ),
@@ -758,8 +1030,30 @@ class _TasksSection extends StatelessWidget {
                   task: task,
                   isUpdating: updatingTaskIds.contains(task.id),
                   isCompleted: true,
-                  onRestore: () => onRestore(task.id),
-                  onDelete: () => onDelete(task.id),
+                  onRestore: canExecute ? () => onRestore(task) : null,
+                  onEdit: canExecute ? () => onEdit(task) : null,
+                ),
+              ),
+            ),
+        ],
+        if (cancelledTasks.isNotEmpty) ...[
+          const SizedBox(height: AppSpacing.sm),
+          TextButton.icon(
+            onPressed: onToggleCancelled,
+            icon: Icon(
+              showCancelledTasks ? Icons.expand_less : Icons.expand_more,
+            ),
+            label: Text('Cancelled (${cancelledTasks.length})'),
+          ),
+          if (showCancelledTasks)
+            ...cancelledTasks.map(
+              (task) => Padding(
+                padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                child: _TaskCard(
+                  task: task,
+                  isUpdating: updatingTaskIds.contains(task.id),
+                  isCancelled: true,
+                  onRestore: canExecute ? () => onRestore(task) : null,
                 ),
               ),
             ),
@@ -774,29 +1068,43 @@ class _TaskCard extends StatelessWidget {
     required this.task,
     required this.isUpdating,
     this.isCompleted = false,
+    this.isCancelled = false,
     this.onComplete,
     this.onRestore,
-    this.onDelete,
+    this.onEdit,
+    this.onCancel,
+    this.onPostpone,
+    this.onStartFocus,
   });
 
   final PlanItem task;
   final bool isUpdating;
   final bool isCompleted;
+  final bool isCancelled;
   final VoidCallback? onComplete;
   final VoidCallback? onRestore;
-  final VoidCallback? onDelete;
+  final VoidCallback? onEdit;
+  final VoidCallback? onCancel;
+  final VoidCallback? onPostpone;
+  final VoidCallback? onStartFocus;
 
   @override
   Widget build(BuildContext context) {
     final due = task.deadline == null
         ? null
         : 'Due ${DateFormat.yMMMd().format(task.deadline!)}';
+    final estimate =
+        task.estimatedMinutes == null ? null : '${task.estimatedMinutes} min';
     return AppCard(
       child: Row(
         children: [
           Icon(
-            isCompleted ? Icons.check_circle : Icons.radio_button_unchecked,
-            color: isCompleted
+            isCompleted
+                ? Icons.check_circle
+                : isCancelled
+                    ? Icons.cancel_outlined
+                    : Icons.radio_button_unchecked,
+            color: isCompleted || isCancelled
                 ? Theme.of(context).colorScheme.primary
                 : Theme.of(context).colorScheme.onSurfaceVariant,
           ),
@@ -808,15 +1116,29 @@ class _TaskCard extends StatelessWidget {
                 Text(
                   task.title,
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        decoration:
-                            isCompleted ? TextDecoration.lineThrough : null,
+                        decoration: isCompleted || isCancelled
+                            ? TextDecoration.lineThrough
+                            : null,
                       ),
                 ),
                 const SizedBox(height: AppSpacing.xs),
                 Text(
-                  [task.priority, if (due != null) due].join(' · '),
+                  [
+                    task.priority,
+                    if (estimate != null) estimate,
+                    if (due != null) due,
+                  ].join(' · '),
                   style: Theme.of(context).textTheme.bodyMedium,
                 ),
+                if (task.description != null) ...[
+                  const SizedBox(height: AppSpacing.xs),
+                  Text(
+                    task.description!,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ],
               ],
             ),
           ),
@@ -831,25 +1153,309 @@ class _TaskCard extends StatelessWidget {
           else ...[
             if (onComplete != null)
               IconButton(
-                tooltip: 'Complete task',
+                tooltip: 'Complete task ${task.title}',
                 onPressed: onComplete,
                 icon: const Icon(Icons.check),
               ),
+            if (onStartFocus != null)
+              IconButton(
+                tooltip: 'Focus on ${task.title}',
+                onPressed: onStartFocus,
+                icon: const Icon(Icons.timer_outlined),
+              ),
             if (onRestore != null)
               IconButton(
-                tooltip: 'Restore task',
+                tooltip: 'Restore task ${task.title}',
                 onPressed: onRestore,
                 icon: const Icon(Icons.undo),
               ),
-            if (onDelete != null)
-              IconButton(
-                tooltip: 'Remove task',
-                onPressed: onDelete,
-                icon: const Icon(Icons.delete_outline),
+            if (onEdit != null || onPostpone != null || onCancel != null)
+              PopupMenuButton<_TaskMenuAction>(
+                tooltip: 'Task actions for ${task.title}',
+                onSelected: (action) {
+                  switch (action) {
+                    case _TaskMenuAction.edit:
+                      onEdit?.call();
+                    case _TaskMenuAction.postpone:
+                      onPostpone?.call();
+                    case _TaskMenuAction.cancel:
+                      onCancel?.call();
+                  }
+                },
+                itemBuilder: (context) => [
+                  if (onEdit != null)
+                    const PopupMenuItem(
+                      value: _TaskMenuAction.edit,
+                      child: Text('Edit task'),
+                    ),
+                  if (onPostpone != null)
+                    const PopupMenuItem(
+                      value: _TaskMenuAction.postpone,
+                      child: Text('Postpone task'),
+                    ),
+                  if (onCancel != null)
+                    const PopupMenuItem(
+                      value: _TaskMenuAction.cancel,
+                      child: Text('Cancel task'),
+                    ),
+                ],
               ),
           ],
         ],
       ),
+    );
+  }
+}
+
+enum _TaskMenuAction { edit, postpone, cancel }
+
+class _TodayExecutionSection extends StatelessWidget {
+  const _TodayExecutionSection({
+    required this.onOpenHabits,
+    required this.onOpenFocus,
+  });
+
+  final VoidCallback onOpenHabits;
+  final VoidCallback onOpenFocus;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _SectionTitle(
+          title: 'Today execution',
+          subtitle:
+              'Ungraded actions you can execute now; no briefing ranking.',
+        ),
+        const SizedBox(height: AppSpacing.md),
+        Wrap(
+          spacing: AppSpacing.md,
+          runSpacing: AppSpacing.md,
+          children: [
+            OutlinedButton.icon(
+              onPressed: onOpenHabits,
+              icon: const Icon(Icons.task_alt_outlined),
+              label: const Text('Complete or skip today habits'),
+            ),
+            OutlinedButton.icon(
+              onPressed: onOpenFocus,
+              icon: const Icon(Icons.timer_outlined),
+              label: const Text('Start a focus session'),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _TaskEditorSheet extends StatefulWidget {
+  const _TaskEditorSheet({this.task, this.retainedDraft});
+
+  final PlanItem? task;
+  final ExecutableTaskDraft? retainedDraft;
+
+  @override
+  State<_TaskEditorSheet> createState() => _TaskEditorSheetState();
+}
+
+class _TaskEditorSheetState extends State<_TaskEditorSheet> {
+  late final TextEditingController _titleController;
+  late final TextEditingController _descriptionController;
+  late final TextEditingController _estimateController;
+  late ExecutableTaskPriority _priority;
+  DateTime? _deadline;
+
+  @override
+  void initState() {
+    super.initState();
+    final task = widget.task;
+    final retained = widget.retainedDraft;
+    _titleController = TextEditingController(
+      text: retained?.title ?? task?.title ?? '',
+    );
+    _descriptionController = TextEditingController(
+      text: retained?.description ?? task?.description ?? '',
+    );
+    _estimateController = TextEditingController(
+      text:
+          (retained?.estimatedMinutes ?? task?.estimatedMinutes)?.toString() ??
+              '',
+    );
+    _priority = retained?.priority ??
+        ExecutableTaskPriority.fromCode(task?.priority) ??
+        ExecutableTaskPriority.medium;
+    _deadline = retained?.deadline ?? task?.deadline;
+  }
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _descriptionController.dispose();
+    _estimateController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottomInset = MediaQuery.viewInsetsOf(context).bottom;
+    return SafeArea(
+      child: SingleChildScrollView(
+        padding: EdgeInsets.fromLTRB(
+          AppSpacing.lg,
+          AppSpacing.lg,
+          AppSpacing.lg,
+          AppSpacing.lg + bottomInset,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              widget.task == null ? 'Add task' : 'Edit task',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: AppSpacing.md),
+            TextField(
+              controller: _titleController,
+              autofocus: true,
+              maxLength: 160,
+              textInputAction: TextInputAction.next,
+              decoration: const InputDecoration(labelText: 'Task title'),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            TextField(
+              controller: _descriptionController,
+              maxLength: 2000,
+              minLines: 2,
+              maxLines: 4,
+              decoration: const InputDecoration(
+                labelText: 'Task description optional',
+              ),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            DropdownButtonFormField<ExecutableTaskPriority>(
+              initialValue: _priority,
+              decoration: const InputDecoration(labelText: 'Task priority'),
+              items: ExecutableTaskPriority.values
+                  .map(
+                    (priority) => DropdownMenuItem(
+                      value: priority,
+                      child: Text(
+                        priority.code.replaceFirstMapped(
+                          RegExp(r'^[a-z]'),
+                          (match) => match[0]!.toUpperCase(),
+                        ),
+                      ),
+                    ),
+                  )
+                  .toList(),
+              onChanged: (value) {
+                if (value != null) {
+                  setState(() => _priority = value);
+                }
+              },
+            ),
+            const SizedBox(height: AppSpacing.md),
+            TextField(
+              controller: _estimateController,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'Estimate minutes optional (5–480)',
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: _pickDeadline,
+                    icon: const Icon(Icons.event_outlined),
+                    label: Text(
+                      _deadline == null
+                          ? 'Set deadline'
+                          : 'Deadline ${DateFormat.yMMMd().format(_deadline!)}',
+                    ),
+                  ),
+                ),
+                if (_deadline != null) ...[
+                  const SizedBox(width: AppSpacing.sm),
+                  IconButton(
+                    tooltip: 'Clear deadline',
+                    onPressed: () => setState(() => _deadline = null),
+                    icon: const Icon(Icons.clear),
+                  ),
+                ],
+              ],
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            Row(
+              children: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Cancel'),
+                ),
+                const Spacer(),
+                FilledButton.icon(
+                  onPressed: _submit,
+                  icon: const Icon(Icons.check),
+                  label: const Text('Save task'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickDeadline() async {
+    final now = DateTime.now();
+    final initial = _deadline ?? now;
+    final selected = await showDatePicker(
+      context: context,
+      initialDate: DateTime(initial.year, initial.month, initial.day),
+      firstDate: DateTime(now.year - 1, 1, 1),
+      lastDate: DateTime(now.year + 5, 12, 31),
+      helpText: 'Task deadline',
+    );
+    if (selected != null && mounted) {
+      setState(() {
+        _deadline = DateTime(
+          selected.year,
+          selected.month,
+          selected.day,
+          17,
+        );
+      });
+    }
+  }
+
+  void _submit() {
+    final estimateText = _estimateController.text.trim();
+    final estimate = estimateText.isEmpty ? null : int.tryParse(estimateText);
+    if (estimateText.isNotEmpty && estimate == null) {
+      _showValidation('Estimate must be a whole number.');
+      return;
+    }
+    try {
+      final draft = ExecutableTaskDraft(
+        title: _titleController.text,
+        description: _descriptionController.text,
+        priority: _priority,
+        deadline: _deadline,
+        estimatedMinutes: estimate,
+      );
+      Navigator.of(context).pop(draft);
+    } on TaskCommandException catch (error) {
+      _showValidation(error.message);
+    }
+  }
+
+  void _showValidation(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
     );
   }
 }

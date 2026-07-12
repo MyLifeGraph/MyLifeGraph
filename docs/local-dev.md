@@ -67,8 +67,9 @@ defines.
 `USE_MOCK_DATA=true` is a deliberate whole-product local/demo boundary even if
 the browser still has a Supabase auth session. Setup, Evening Shutdown, Morning
 Calibration, Dashboard, Recommendations, Insights, and Notifications stay
-local, synced habits are hidden, and snapshot refresh is skipped. Set it to
-`false` to exercise real authenticated Supabase/FastAPI sources.
+local; synced task, habit, and focus commands are unavailable; and snapshot
+refresh is skipped. Set it to `false` to exercise real authenticated
+Supabase/FastAPI sources.
 In mock/demo mode, auth boot also skips remote profile reads/creation and guest
 capture migration, then restores the locally applied Setup name and completion
 state across reloads.
@@ -204,6 +205,40 @@ Daily State codes, while the older statistics-window flags remain separately in
 `summary.window_risk_flags`. `recommended_next_focus` is derived recovery-first
 from the mode.
 
+Phase 3 adds neutral execution facts to snapshot responses. Explicit
+completed/skipped habit outcomes appear under
+`summary.habits.outcome_counts` and `signals.habit_outcome_counts`; focus status
+counts and planned/actual minutes appear under `summary.focus_sessions`, with
+signal status counts under `signals.focus_session_status_counts`. Input counts
+and bounded evidence references include both tables. Those additions do not
+alter `summary.daily_state` or `signals.daily_state`. FastAPI paginates both
+action-fact tables in stably ordered 1,000-row pages until the window is
+complete.
+Every successful or exactly reconciled real task, habit, or focus write requests
+a daily snapshot refresh best-effort. Habit outcome/undo captures one target
+date before awaiting persistence, uses that date for exact reconciliation, and
+refreshes the same date. New focus rows persist the local start
+`metadata.entry_date`; legacy/invalid metadata uses the UTC calendar date of
+persisted `started_at` in both Flutter and FastAPI. Finish/abandon does not
+retarget a new session to its terminal day. Refresh failure does not roll back
+the durable write, and ordinary action writes do not generate recommendations.
+
+Authenticated real-data mode exposes owner-scoped task
+create/edit/complete/postpone/cancel/restore/undo, Habit V1 daily execution at
+`/habit-completion`, manual habit lifecycle at `/habits`, and the real
+one-active-session focus flow at `/deep-work`. Focus may link one owned task or
+active habit and never completes that target implicitly. Guest/mock users do
+not receive these synced commands. Every task update including undo and every
+manual habit definition/lifecycle update reconciles committed response loss
+only by exact owner-scoped requested-field/timestamp readback. Habit
+outcome/undo proves the exact row or its absence; focus finish/abandon proves
+the exact terminal result. Habit reads paginate history beginning 370 calendar
+days before today and use `started_on` with DST-safe calendar arithmetic. The
+ranking-independent action envelope has strict Flutter/FastAPI parser parity,
+including explicit-null metadata-field rejection, and is documented in
+`docs/phase-3-executable-actions-contract.md`; a deterministic briefing service
+is Phase 4 and no briefing endpoints exist yet.
+
 When FastAPI is running and Flutter is in real backend mode, a successful daily
 capture calls the daily snapshot endpoint best-effort with the capture's
 explicit local `target_date`. `/daily-check-in` redirects to the canonical
@@ -256,21 +291,35 @@ recommendation generator with LLM wording disabled.
 Supabase is optional for mock mode. To work on local Supabase you need the real
 Supabase CLI and Docker available in the Ubuntu shell.
 
-Manual commands:
+Start or reuse the local stack, then apply pending migrations without deleting
+local data:
 
 ```bash
 supabase start
-supabase db reset
+HOME=.tools/supabase-home \
+SUPABASE_TELEMETRY_DISABLED=1 \
+supabase migration up --local
 ```
 
-Read `docs/supabase-current-state.md` first. `supabase db reset` is a local
-destructive reset and should complete through:
+Read `docs/supabase-current-state.md` first. The Phase 3 runtime requires the
+local schema to include:
 
 ```text
-20260710180000_atomic_intake_v1_setup_apply.sql
+20260711120000_phase_3_executable_action_schema.sql
 ```
 
-The latest migration installs the service-role-only
+That migration adds bounded task fields, explicit habit outcomes, and the real
+focus lifecycle. Its checks/triggers enforce exact task/focus shapes, lock and
+revalidate active selected-weekday habit eligibility and selected focus targets,
+reject every update to a terminal focus row, restrict linked-target deletion,
+and permit one active focus session. It backfills a missing legacy focus
+`metadata.entry_date` from the UTC date of `started_at`, normalizes positive
+legacy habit values to completion, and rejects ambiguous legacy rows with
+missing status and `value <= 0`; inspect and resolve those rows rather than
+fabricating an intentional skip. Existing table RLS/grants remain.
+
+The earlier `20260710180000_atomic_intake_v1_setup_apply.sql` migration installs
+the service-role-only
 `apply_intake_v1_setup_revision` RPC. It serializes apply per user with a
 transaction advisory lock and atomically commits preferences, Setup-owned
 goals/habits/schedule/memory reconciliation, the canonical onboarding snapshot,
@@ -280,21 +329,32 @@ removes only the exact unmarked legacy onboarding placeholder `Math`,
 preserved.
 
 The canonical app schema is snake_case. Legacy CamelCase tables are only used as
-optional migration sources when they already exist.
+optional migration sources when they already exist. A fresh reset is required
+when verifying the complete migration chain and its backfills/constraints from
+an empty local database; use the guarded repository script:
+
+```bash
+RESET_DB=true \
+FLUTTER_BIN=/path/to/flutter \
+scripts/verify_supabase_local.sh
+```
 
 For local Supabase-backed app testing:
 
 1. Run `supabase start`.
-2. Run `supabase db reset`.
+2. Apply pending migrations with the non-reset command above, or use the
+   `RESET_DB=true` verification flow when a fresh local database is intended.
 3. Run `supabase status` and copy the local anon key into `.env`.
 4. Set `USE_MOCK_DATA=false`, `SUPABASE_URL=http://127.0.0.1:54321`, and
    `SUPABASE_ANON_KEY=<local anon key>`.
 5. Start the frontend with `scripts/start_frontend.sh`.
 6. Smoke test registration or sign-in, required-only Setup, Setup re-entry/edit/
    review, required-only Evening Shutdown, Morning Calibration on the same local
-   date, Evening re-entry/edit without losing Morning state, habit management,
-   habit completion, the source-aware dashboard, Notifications, and Coach/Deep
-   Work compatibility redirects.
+   date, Evening re-entry/edit without losing Morning state, task
+   create/edit/postpone/undo/complete/restore/cancel/restore, manual and
+   Setup-owned habit complete/skip/undo, focus start/finish/abandon with an owned
+   target, the source-aware Dashboard, Notifications, real Deep Work, and the
+   gated Coach compatibility redirect.
 
 Do not infer remote Supabase state from local migrations. Verify the remote
 project through the Supabase dashboard, CLI, or connector before using it for
@@ -356,7 +416,8 @@ scripts/start_frontend.sh
 
 Open `http://127.0.0.1:7357`, sign in with one of the demo accounts, and compare
 Dashboard, Notifications, Insights, and Habits across scenarios. Coach and Deep
-Work remain gated until their backend/action contracts are implemented.
+Work no longer share the same status: Coach remains gated, while authenticated
+real-data mode exposes the Phase 3 Deep Work lifecycle.
 Seeded recommendations are visible through the FastAPI recommendation endpoint
 when the AI service is running with the same local Supabase project settings;
 without FastAPI, an authenticated account shows a recoverable recommendation
@@ -462,15 +523,28 @@ Phase 2 partial/current quality, recovery-first classification, exact stress/
 sleep/energy/day-shape context, source-risk replacement after an Evening edit,
 stable same-period snapshot identity, field-level evidence, deterministic
 provenance, and capture free-text exclusion. It then continues through habit
-completion, deliberate dashboard recommendation refresh, Notifications, and
-compatibility redirects.
+execution, deliberate dashboard recommendation refresh, Notifications, and
+implemented compatibility routes.
+
+The Phase 3 portion contains exact assertions for a typed task's create/edit,
+postpone/undo, complete/restore, cancel/restore, stable identity, terminal
+timestamps, and estimate; manual and Setup-owned habit completion/skip/undo
+without duplicate outcomes or definition mutation; and linked plus independent
+focus start/finish/abandon with no implicit task completion. Committed responses
+are deliberately lost for task/habit create, habit outcome/undo, task
+completion/undo, and focus start/finish. Negative writes check task lifecycle,
+duplicate active focus, terminal focus immutability including `updated_at` and
+snapshot-date metadata, focus duration, inactive habit, and unscheduled weekday
+rejection. It also checks that the refreshed snapshot contains neutral action
+facts and that ordinary action writes did not call recommendation generation.
 
 The Phase 0C portion remains part of the same smoke: it verifies revisioned
 Setup ownership and retry/edit behavior, the service-role-only atomic apply RPC,
 manual-row preservation, profile projection, and concurrent same-request
 convergence before and after the capture journey. This describes the coverage
 implemented by `e2e/web/smoke.mjs`; use the command above to establish the
-result for the current checkout and local environment.
+result for the current checkout and local environment. Its presence is not a
+claim that the current checkout has completed a full Phase 3 E2E run.
 
 By default the script starts FastAPI on `http://127.0.0.1:8000`. Useful AI
 service overrides:
@@ -514,10 +588,15 @@ the listed screens. Keep manual testing for flows not listed in
 - If `scripts/e2e_web.sh` says Playwright is missing, run `npm install`.
 - If Playwright cannot find a browser, run `npx playwright install chromium` or
   set `CHROME_BIN=/path/to/chrome`.
-- If E2E database assertions say `intake_responses` or
-  `user_state_snapshots` are missing, apply pending local migrations with
+- If E2E database assertions say `intake_responses`, `user_state_snapshots`,
+  `habit_logs.status`, `focus_sessions.status`, or the Phase 3 task fields are
+  missing, apply pending local migrations with
   `HOME=.tools/supabase-home SUPABASE_TELEMETRY_DISABLED=1 supabase migration up --local`
   or run the fresh local DB flow with `RESET_DB=true`.
+- If the Phase 3 migration refuses a legacy habit log with missing status and
+  `value <= 0`, inspect that local row and decide its real outcome before
+  retrying. The migration deliberately will not reinterpret it as a skip;
+  positive legacy values are safely normalized to completion.
 - If the AI service exits early during E2E, inspect
   `.tools/e2e/ai-service.log` and confirm `services/ai_service` dependencies are
   installed. If the log says the address is already in use, stop the stale

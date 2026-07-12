@@ -12,6 +12,8 @@ class SnapshotInputRows:
     tasks: list[dict[str, Any]]
     goals: list[dict[str, Any]]
     habits: list[dict[str, Any]]
+    habit_logs: list[dict[str, Any]]
+    focus_sessions: list[dict[str, Any]]
     schedule_items: list[dict[str, Any]]
     memory_entries: list[dict[str, Any]]
 
@@ -55,6 +57,16 @@ class SupabaseSnapshotRepository:
             tzinfo=timezone.utc,
         )
         event_end_datetime = datetime.combine(
+            target_date + timedelta(days=2),
+            time.min,
+            tzinfo=timezone.utc,
+        )
+        focus_start_datetime = datetime.combine(
+            start_date - timedelta(days=1),
+            time.min,
+            tzinfo=timezone.utc,
+        )
+        focus_end_datetime = datetime.combine(
             target_date + timedelta(days=2),
             time.min,
             tzinfo=timezone.utc,
@@ -110,11 +122,38 @@ class SupabaseSnapshotRepository:
         habits = await self._client.select(
             "habits",
             params={
-                "select": "id,title,frequency,active,updated_at",
+                "select": "id,title,frequency,target,active,metadata,updated_at",
                 "user_id": f"eq.{user_id}",
                 "order": "updated_at.desc",
                 "limit": "50",
             },
+        )
+        habit_logs = await self._select_all_pages(
+            "habit_logs",
+            params=[
+                (
+                    "select",
+                    "id,habit_id,entry_date,status,value,created_at",
+                ),
+                ("user_id", f"eq.{user_id}"),
+                ("entry_date", f"gte.{start_date.isoformat()}"),
+                ("entry_date", f"lte.{target_date.isoformat()}"),
+                ("order", "entry_date.desc,created_at.desc,id.asc"),
+            ],
+        )
+        focus_sessions = await self._select_all_pages(
+            "focus_sessions",
+            params=[
+                (
+                    "select",
+                    "id,status,started_at,ended_at,planned_minutes,"
+                    "actual_minutes,task_id,habit_id,metadata,created_at,updated_at",
+                ),
+                ("user_id", f"eq.{user_id}"),
+                ("started_at", f"gte.{focus_start_datetime.isoformat()}"),
+                ("started_at", f"lt.{focus_end_datetime.isoformat()}"),
+                ("order", "started_at.desc,id.asc"),
+            ],
         )
         schedule_items = await self._client.select(
             "schedule_items",
@@ -141,9 +180,34 @@ class SupabaseSnapshotRepository:
             tasks=tasks,
             goals=goals,
             habits=habits,
+            habit_logs=habit_logs,
+            focus_sessions=focus_sessions,
             schedule_items=schedule_items,
             memory_entries=memory_entries,
         )
+
+    async def _select_all_pages(
+        self,
+        table: str,
+        *,
+        params: list[tuple[str, str]],
+        page_size: int = 1000,
+    ) -> list[dict[str, Any]]:
+        rows: list[dict[str, Any]] = []
+        offset = 0
+        while True:
+            page = await self._client.select(
+                table,
+                params=[
+                    *params,
+                    ("limit", str(page_size)),
+                    ("offset", str(offset)),
+                ],
+            )
+            rows.extend(page)
+            if len(page) < page_size:
+                return rows
+            offset += len(page)
 
     async def persist_user_state_snapshot(
         self,

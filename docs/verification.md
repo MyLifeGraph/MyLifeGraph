@@ -106,6 +106,20 @@ does not change deterministic candidate ranking. Aggregator assertions also
 keep `summary.risk_flags` as the current Daily State alias, preserve older
 window flags under `summary.window_risk_flags`, and derive
 `recommended_next_focus` recovery-first from mode.
+Phase 3 backend tests validate strict `executable-action-v1` parsing and reject
+unknown/coerced top-level and metadata fields, null/non-object metadata,
+explicit-null metadata fields, invalid calendar dates,
+kind/command/target/linkage mismatch, focus duration bounds, unsupported routes,
+and command-specific metadata leakage in parity with Flutter. Snapshot tests
+cover explicit completed/skipped habit outcomes plus focus
+status/planned/actual-minute summaries, input counts, and evidence; focus local
+`metadata.entry_date` wins over `started_at` after a broadened UTC read, with
+deterministic UTC legacy fallback. Repository tests load more than 1,000 rows
+from both action tables and assert stable offsets through the final page. They
+also assert byte-for-byte-equivalent Phase 2 Daily State semantics for the same
+capture inputs. Recommendation tests exclude terminal
+done/cancelled/archived tasks from overdue, workload, and focus-pressure
+candidates.
 Scheduled refresh tests
 cover the backend-only token guard, onboarded non-guest profile selection,
 per-user failure isolation, deterministic daily snapshot refresh, and optional
@@ -169,16 +183,17 @@ Current Flutter widget tests include:
   provenance and structured context, Morning energy precedence, honest
   empty/error states, local source labels, and the absence of former proxy
   metrics.
-- Capability, Settings, and notification tests cover the gated Coach/Deep Work/
-  guest-Habit routes, persistent local-demo label, strict `action_url` allowlist,
-  original notification fields/read state, and separate real empty/error states.
+- Capability, Settings, and notification tests cover gated Coach, real synced
+  Deep Work versus guest/mock redirect, unavailable guest/mock execution,
+  persistent local-demo label, the strict `action_url` allowlist, original
+  notification fields/read state, and separate real empty/error states.
 - The Snapshot refresh service posts `POST /v1/snapshots/generate` with bearer
   auth in real backend mode, includes an explicit capture `target_date`, skips
   guest/mock/missing-token paths, and treats network failures as best-effort.
-- Task and habit snapshot refresh service entrypoints route through the same
-  authenticated daily snapshot refresh behavior. The active dashboard task
-  status, Quick Action habit management writes, and Quick Action habit
-  completion writes use those entrypoints.
+- Task, habit, and focus snapshot-refresh entrypoints route through the same
+  authenticated daily behavior and preserve an explicit `target_date`. The
+  focus page is implemented to pass its persisted start `entry_date` or legacy
+  `started_at` date after start/finish/abandon.
 - Guest can inspect the deterministic Insights correlation surface without
   requiring Supabase.
 - The correlation analyzer covers positive, negative, missing, low-variation,
@@ -192,6 +207,23 @@ Current Flutter widget tests include:
 - Habit visibility tests exclude every Setup-managed habit from generic Habit
   Management while keeping active Setup habits in Habit Completion and hiding
   candidate/archived states.
+- Executable task tests cover title/description/estimate validation, typed
+  persistence mapping, owner-scoped create/edit/complete/postpone/cancel/
+  restore transitions, stable create identity, undo data, retained failures,
+  exact lifecycle shapes, and snapshot refresh boundaries.
+- Habit V1 tests cover daily, selected ISO weekday, and weekly-target cadence;
+  compatibility projections; completed/skipped/open/missed opportunity math;
+  current ISO-week progress; completion streaks; same-day upsert/undo; manual
+  lifecycle; Setup-owned execution authority; local `started_on`; and
+  Europe/Berlin spring/fall DST calendar arithmetic.
+- Focus tests cover planned-duration bounds, one optional owned target, active
+  session parsing, measured whole-minute finish/abandon, terminal transitions,
+  no implicit target completion, recent history, and snapshot refresh.
+- Executable action-target tests cover every supported kind/command matrix,
+  strict top-level/metadata shapes and scalar types, exact ids/dates/durations,
+  task/habit/focus/capture routing, explicit `review_plan` unavailability, and
+  unsupported-command behavior. Dispatcher tests prove one typed handler per
+  command, unavailable-before-handler behavior, and failure propagation.
 
 These tests cover the default mock/guest product path. They do not prove real
 Supabase registration, RLS, or browser behavior.
@@ -242,11 +274,31 @@ supabase db reset
 Expected successful reset output applies migrations through:
 
 ```text
-20260710180000_atomic_intake_v1_setup_apply.sql
+20260711120000_phase_3_executable_action_schema.sql
 ```
 
 Expected notices include skipped legacy CamelCase tables and already-existing
 canonical objects. Those notices are normal. Errors are not normal.
+
+The Phase 3 migration backfills and constrains task, habit-log, and focus rows,
+including missing focus `metadata.entry_date` from the UTC date of `started_at`.
+It normalizes positive legacy habit values to completion and deliberately fails
+if a legacy habit log has no status and `value <= 0`, because that row cannot be
+interpreted honestly as completion or intentional skip. Inspect and resolve
+such local data before retrying. The reset also installs exact task lifecycle,
+locked active/weekday habit eligibility, bounded focus lifecycle, locked target
+validation, one-active, all-update terminal immutability, and restrict-delete
+target constraints/triggers. Existing local stacks may apply pending migrations
+non-destructively with:
+
+```bash
+HOME=.tools/supabase-home \
+SUPABASE_TELEMETRY_DISABLED=1 \
+supabase migration up --local
+```
+
+Use the reset form to prove the complete migration chain from an empty local
+database; do not use it merely because a non-destructive migration is pending.
 
 The reset destroys and recreates the local Supabase database. It must not be
 used for a remote project.
@@ -368,12 +420,40 @@ assertions require `explainable-daily-state-v1`, deterministic/no-baseline
 provenance, field-level evidence for the daily log, and absence of both original
 and edited priority text from summary and signals.
 
-After the Phase 1 assertions, the smoke logs the managed habit completion, uses
-the deliberate dashboard recommendation refresh, opens Notifications, and
-verifies the gated Coach and Deep Work compatibility redirects. It continues to
-assert `habit_logs`, one backend-refreshed daily snapshot for the capture date,
-deterministic post-intake recommendations, and the explicit payloads of manual
-`/v1/snapshots/generate` and `/v1/recommendations/generate` requests.
+After the Phase 1/2 assertions, the Phase 3 browser journey completes, undoes,
+skips, and undoes a manual habit; completes and undoes an active Setup-owned
+habit without mutating its definition; and asserts one explicit outcome row at
+most per habit/local date. It creates and edits one typed task without changing
+identity, postpones and undoes the deadline, completes/restores, and
+cancels/restores while checking exact status, estimate, and terminal timestamp
+rows. Habit and task creates deliberately lose one committed HTTP response, then
+prove that retained drafts and stable request ids converge on one row. Habit
+outcome and undo each lose a committed response; reconciliation must prove the
+exact row or its absence for the target date captured before the write, and
+refresh that same date.
+
+The journey then starts and finishes a task-linked focus session, proves that
+the task was not completed implicitly, and starts/abandons an independent
+session. Database assertions cover one active session at a time, terminal
+timestamps, measured whole elapsed minutes, target linkage, and no remaining
+active row. Focus start also loses one committed response and must reconcile the
+same active session before refreshing its persisted start date. Task completion,
+task undo, and focus finish each lose a committed transition response and must
+accept the exact stored result without a second transition. Negative database
+checks reject a task terminal without its timestamp, a second active focus
+session, terminal-focus lifecycle, `entry_date`, and `updated_at` rewrites, an
+out-of-range focus duration, and outcomes for an inactive or unscheduled
+selected-weekday habit. A refreshed daily snapshot must contain the explicit
+habit/focus input counts and neutral summaries while preserving the Phase 2
+Daily State, and observed task/habit/focus writes must make no
+recommendation-generate request.
+The smoke then uses deliberate recommendation refresh, opens
+Notifications, verifies real Deep Work and the gated Coach route, and checks the
+explicit payloads of manual snapshot/recommendation requests.
+
+These assertions are present in `e2e/web/smoke.mjs`; run one of the commands in
+this section to establish pass/fail for the current checkout. Documentation of
+the path is not evidence that a current full browser run passed.
 
 `e2e/web/smoke.mjs` navigates Flutter routes through root hash URLs such as
 `/#/auth`, `/#/daily-check-in`, and `/#/morning-calibration`. This avoids direct
@@ -465,6 +545,20 @@ If command output includes a key unexpectedly, redact it before sharing logs.
 The repository now contains browser E2E automation, but it still depends on a
 real Ubuntu Node.js 20+ installation, `npm`, Playwright browser installation,
 Docker access, and a real Ubuntu `supabase` CLI on `PATH`.
+
+The Phase 3 browser assertions are source coverage, not a recorded pass for the
+current checkout. Establish that result with the browser command above; use the
+`RESET_DB=true` form when proving the new migration from a fresh database. The
+journey includes committed-response-loss for habit/task create, habit
+outcome/undo, task completion/undo, and focus start/finish, plus negative
+lifecycle/range/active-target/weekday-cadence checks and terminal-focus
+`updated_at` mutation. It does not yet construct a second authenticated
+principal for an explicit cross-user target attempt or directly exercise
+restrict-delete FKs. It also does not seed more than one habit/log page to prove
+the browser pagination boundary or carry a focus session across local midnight
+to assert the refresh date in-browser. Backend repository tests separately
+cover more than 1,000 habit-log and focus-session rows. Do not infer the other
+paths merely from the same-user UI journey.
 
 Known harmless local E2E output includes Chromium WebGL performance warnings.
 The FastAPI AI service must be healthy for the browser smoke to pass.

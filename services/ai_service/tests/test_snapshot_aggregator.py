@@ -92,6 +92,26 @@ class FakeSupabaseClient:
         return [{"id": "upserted-snapshot", **rows[0]}]
 
 
+class FakePagedSnapshotClient(FakeSupabaseClient):
+    def __init__(self) -> None:
+        super().__init__()
+        self.rows_by_table = {
+            "habit_logs": [{"id": f"habit-log-{index}"} for index in range(1005)],
+            "focus_sessions": [
+                {"id": f"focus-session-{index}"} for index in range(1002)
+            ],
+        }
+
+    async def select(self, table: str, *, params):
+        self.select_calls.append((table, params))
+        rows = self.rows_by_table.get(table, [])
+        offsets = _param_values(params, "offset")
+        limits = _param_values(params, "limit")
+        offset = int(offsets[-1]) if offsets else 0
+        limit = int(limits[-1]) if limits else len(rows)
+        return rows[offset : offset + limit]
+
+
 class FakeTokenVerifier:
     async def verify(self, token: str) -> Principal | None:
         if token == "valid-test-token":
@@ -180,6 +200,48 @@ def sample_inputs() -> SnapshotInputRows:
         habits=[
             {"id": "habit-1", "title": "Walk", "frequency": "daily", "active": True},
         ],
+        habit_logs=[
+            {
+                "id": "habit-log-1",
+                "habit_id": "habit-1",
+                "entry_date": "2026-07-02",
+                "status": "completed",
+                "value": 1,
+            },
+            {
+                "id": "habit-log-2",
+                "habit_id": "habit-1",
+                "entry_date": "2026-07-01",
+                "status": "skipped",
+                "value": 0,
+            },
+        ],
+        focus_sessions=[
+            {
+                "id": "focus-1",
+                "status": "completed",
+                "started_at": "2026-07-02T08:00:00+00:00",
+                "ended_at": "2026-07-02T08:50:00+00:00",
+                "planned_minutes": 50,
+                "actual_minutes": 50,
+            },
+            {
+                "id": "focus-2",
+                "status": "active",
+                "started_at": "2026-07-02T11:45:00+00:00",
+                "ended_at": None,
+                "planned_minutes": 25,
+                "actual_minutes": None,
+            },
+            {
+                "id": "focus-3",
+                "status": "abandoned",
+                "started_at": "2026-07-01T15:00:00+00:00",
+                "ended_at": "2026-07-01T15:05:00+00:00",
+                "planned_minutes": 25,
+                "actual_minutes": 5,
+            },
+        ],
         schedule_items=[
             {"id": "schedule-1", "title": "Math", "weekday": 4},
         ],
@@ -243,6 +305,23 @@ def test_generate_daily_snapshot_builds_compact_summary_and_persists_by_principa
     assert row["user_id"] == "principal-user-123"
     assert row["summary"]["sleep"]["average_hours"] == 5.88
     assert row["summary"]["tasks"]["overdue"] == 1
+    assert row["summary"]["habits"] == {
+        "active": 1,
+        "outcome_counts": {"completed": 1, "skipped": 1, "unknown": 0},
+    }
+    assert row["summary"]["focus_sessions"] == {
+        "count": 3,
+        "status_counts": {
+            "active": 1,
+            "completed": 1,
+            "abandoned": 1,
+            "unknown": 0,
+        },
+        "planned_minutes": 100,
+        "actual_minutes": 55,
+        "completed_minutes": 50,
+        "abandoned_minutes": 5,
+    }
     assert row["summary"]["recommended_next_focus"] == "recovery"
     assert row["summary"]["daily_state"]["mode"] == "recover"
     assert row["summary"]["daily_state"]["data_quality"] == "partial"
@@ -257,8 +336,80 @@ def test_generate_daily_snapshot_builds_compact_summary_and_persists_by_principa
     )
     assert row["metadata"]["state_lookback_days"] == 7
     assert row["signals"]["input_counts"]["daily_logs"] == 2
+    assert row["signals"]["input_counts"]["habit_logs"] == 2
+    assert row["signals"]["input_counts"]["focus_sessions"] == 3
+    assert row["signals"]["habit_outcome_counts"] == {
+        "completed": 1,
+        "skipped": 1,
+        "unknown": 0,
+    }
+    assert row["signals"]["focus_session_status_counts"] == {
+        "active": 1,
+        "completed": 1,
+        "abandoned": 1,
+        "unknown": 0,
+    }
     assert row["signals"]["daily_state"]["engine"] == "deterministic"
     assert {"table": "daily_logs", "id": "log-1"} in row["signals"]["evidence_refs"]
+    assert {"table": "habit_logs", "id": "habit-log-1"} in row["signals"][
+        "evidence_refs"
+    ]
+    assert {"table": "focus_sessions", "id": "focus-1"} in row["signals"][
+        "evidence_refs"
+    ]
+
+
+def test_snapshot_keeps_unknown_action_rows_neutral() -> None:
+    inputs = replace(
+        sample_inputs(),
+        habit_logs=[
+            {
+                "id": "legacy-zero",
+                "habit_id": "habit-1",
+                "entry_date": "2026-07-02",
+                "value": 0,
+            },
+        ],
+        focus_sessions=[
+            {
+                "id": "future-status",
+                "status": "paused",
+                "started_at": "2026-07-02T09:00:00+00:00",
+                "planned_minutes": -25,
+                "actual_minutes": -5,
+            },
+        ],
+    )
+
+    response = run(
+        SnapshotAggregator(
+            repository=FakeSnapshotRepository(inputs),
+            today_provider=lambda: TODAY,
+            now_provider=lambda: NOW,
+        ).generate_snapshot(
+            user_id="principal-user-123",
+            request=SnapshotGenerateRequest(),
+        ),
+    )
+
+    assert response.summary["habits"]["outcome_counts"] == {
+        "completed": 0,
+        "skipped": 0,
+        "unknown": 1,
+    }
+    assert response.summary["focus_sessions"] == {
+        "count": 1,
+        "status_counts": {
+            "active": 0,
+            "completed": 0,
+            "abandoned": 0,
+            "unknown": 1,
+        },
+        "planned_minutes": 0,
+        "actual_minutes": 0,
+        "completed_minutes": 0,
+        "abandoned_minutes": 0,
+    }
 
 
 def test_generate_weekly_snapshot_uses_iso_week_period_key():
@@ -306,6 +457,39 @@ def test_daily_and_weekly_snapshots_share_target_date_daily_state() -> None:
     assert weekly.summary["daily_state"]["target_date"] == TODAY.isoformat()
 
 
+def test_action_outcomes_do_not_change_phase_two_daily_state() -> None:
+    inputs = sample_inputs()
+    with_actions = run(
+        SnapshotAggregator(
+            repository=FakeSnapshotRepository(inputs),
+            today_provider=lambda: TODAY,
+            now_provider=lambda: NOW,
+        ).generate_snapshot(
+            user_id="principal-user-123",
+            request=SnapshotGenerateRequest(),
+        ),
+    )
+    without_actions = run(
+        SnapshotAggregator(
+            repository=FakeSnapshotRepository(
+                replace(inputs, habit_logs=[], focus_sessions=[]),
+            ),
+            today_provider=lambda: TODAY,
+            now_provider=lambda: NOW,
+        ).generate_snapshot(
+            user_id="principal-user-123",
+            request=SnapshotGenerateRequest(),
+        ),
+    )
+
+    assert with_actions.summary["daily_state"] == without_actions.summary[
+        "daily_state"
+    ]
+    assert with_actions.signals["daily_state"] == without_actions.signals[
+        "daily_state"
+    ]
+
+
 def test_generate_snapshot_ignores_logs_outside_target_window():
     inputs = sample_inputs()
     inputs.daily_logs.append(
@@ -326,6 +510,24 @@ def test_generate_snapshot_ignores_logs_outside_target_window():
             "source": "app",
         },
     )
+    inputs.habit_logs.append(
+        {
+            "id": "future-habit-log",
+            "habit_id": "habit-1",
+            "entry_date": "2026-07-03",
+            "status": "completed",
+            "value": 1,
+        },
+    )
+    inputs.focus_sessions.append(
+        {
+            "id": "future-focus",
+            "status": "completed",
+            "started_at": "2026-07-03T09:00:00+00:00",
+            "planned_minutes": 90,
+            "actual_minutes": 90,
+        },
+    )
     repository = FakeSnapshotRepository(inputs)
 
     response = run(
@@ -342,6 +544,8 @@ def test_generate_snapshot_ignores_logs_outside_target_window():
     assert response.summary["focus"]["total_minutes"] == 45
     assert response.signals["input_counts"]["daily_logs"] == 2
     assert response.signals["event_type_counts"] == {"quick_mood_check_in": 1}
+    assert response.signals["input_counts"]["habit_logs"] == 2
+    assert response.signals["input_counts"]["focus_sessions"] == 3
 
 
 def test_snapshot_event_window_prefers_local_entry_date_with_utc_fallback():
@@ -394,6 +598,79 @@ def test_snapshot_event_window_prefers_local_entry_date_with_utc_fallback():
         "local_morning": 1,
         "utc_fallback": 1,
         "invalid_metadata_fallback": 1,
+    }
+
+
+def test_snapshot_focus_window_prefers_local_entry_date_with_utc_fallback():
+    inputs = replace(
+        sample_inputs(),
+        focus_sessions=[
+            {
+                "id": "local-morning-focus",
+                "status": "completed",
+                "started_at": "2026-07-01T22:30:00+00:00",
+                "planned_minutes": 25,
+                "actual_minutes": 20,
+                "metadata": {"entry_date": "2026-07-02"},
+            },
+            {
+                "id": "next-local-day-focus",
+                "status": "completed",
+                "started_at": "2026-07-02T22:30:00+00:00",
+                "planned_minutes": 25,
+                "actual_minutes": 20,
+                "metadata": {"entry_date": "2026-07-03"},
+            },
+            {
+                "id": "utc-focus-fallback",
+                "status": "active",
+                "started_at": "2026-07-02T09:00:00+00:00",
+                "planned_minutes": 25,
+                "actual_minutes": None,
+            },
+            {
+                "id": "invalid-focus-metadata-fallback",
+                "status": "abandoned",
+                "started_at": "2026-07-02T10:00:00+00:00",
+                "planned_minutes": 25,
+                "actual_minutes": 5,
+                "metadata": {"entry_date": "not-a-date"},
+            },
+            {
+                "id": "offset-crosses-utc-day",
+                "status": "completed",
+                "started_at": "2026-07-02T00:30:00+02:00",
+                "planned_minutes": 25,
+                "actual_minutes": 20,
+            },
+            {
+                "id": "timestamp-shaped-entry-date-must-fallback",
+                "status": "completed",
+                "started_at": "2026-07-01T10:00:00+00:00",
+                "planned_minutes": 25,
+                "actual_minutes": 20,
+                "metadata": {"entry_date": "2026-07-02T00:00:00Z"},
+            },
+        ],
+    )
+
+    response = run(
+        SnapshotAggregator(
+            repository=FakeSnapshotRepository(inputs),
+            today_provider=lambda: TODAY,
+            now_provider=lambda: NOW,
+        ).generate_snapshot(
+            user_id="principal-user-123",
+            request=SnapshotGenerateRequest(target_date=TODAY, window_days=1),
+        ),
+    )
+
+    assert response.signals["input_counts"]["focus_sessions"] == 3
+    assert response.signals["focus_session_status_counts"] == {
+        "active": 1,
+        "completed": 1,
+        "abandoned": 1,
+        "unknown": 0,
     }
 
 
@@ -461,6 +738,8 @@ def test_snapshot_repository_scopes_every_read_to_explicit_user_id():
         "tasks",
         "goals",
         "habits",
+        "habit_logs",
+        "focus_sessions",
         "schedule_items",
         "memory_entries",
     }
@@ -484,6 +763,8 @@ def test_snapshot_repository_reads_metadata_and_widens_event_utc_bounds():
 
     daily_params = _params_for_table(client, "daily_logs")
     event_params = _params_for_table(client, "behavioral_events")
+    habit_log_params = _params_for_table(client, "habit_logs")
+    focus_params = _params_for_table(client, "focus_sessions")
     assert _param_values(daily_params, "entry_date") == [
         "gte.2026-06-26",
         "lte.2026-07-02",
@@ -492,10 +773,47 @@ def test_snapshot_repository_reads_metadata_and_widens_event_utc_bounds():
         "gte.2026-06-25T00:00:00+00:00",
         "lt.2026-07-04T00:00:00+00:00",
     ]
+    assert _param_values(habit_log_params, "entry_date") == [
+        "gte.2026-06-26",
+        "lte.2026-07-02",
+    ]
+    assert _param_values(focus_params, "started_at") == [
+        "gte.2026-06-25T00:00:00+00:00",
+        "lt.2026-07-04T00:00:00+00:00",
+    ]
+    assert "status" in _param_values(habit_log_params, "select")[0].split(",")
+    assert "status" in _param_values(focus_params, "select")[0].split(",")
+    assert "metadata" in _param_values(focus_params, "select")[0].split(",")
     assert "metadata" in _param_values(daily_params, "select")[0].split(",")
     assert "metadata" in _param_values(event_params, "select")[0].split(",")
     assert _param_values(daily_params, "limit") == ["7"]
     assert _param_values(event_params, "limit") == ["200"]
+
+
+def test_snapshot_repository_paginates_complete_action_fact_windows():
+    client = FakePagedSnapshotClient()
+    repository = SupabaseSnapshotRepository(client)
+
+    inputs = run(
+        repository.load_snapshot_inputs(
+            user_id="user-test-123",
+            target_date=TODAY,
+            window_days=7,
+        ),
+    )
+
+    assert len(inputs.habit_logs) == 1005
+    assert len(inputs.focus_sessions) == 1002
+    assert [
+        _param_values(params, "offset")[-1]
+        for table, params in client.select_calls
+        if table == "habit_logs"
+    ] == ["0", "1000"]
+    assert [
+        _param_values(params, "offset")[-1]
+        for table, params in client.select_calls
+        if table == "focus_sessions"
+    ] == ["0", "1000"]
 
 
 def test_snapshot_repository_upserts_existing_period_snapshot_atomically():

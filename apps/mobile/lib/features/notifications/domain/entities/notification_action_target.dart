@@ -4,7 +4,8 @@ enum NotificationActionTarget {
   quickAction('/quick-action'),
   dailyCheckIn('/quick-mood-check-in'),
   habitCompletion('/habit-completion'),
-  habitManagement('/habits');
+  habitManagement('/habits'),
+  focusSession('/deep-work');
 
   const NotificationActionTarget(this.location);
 
@@ -12,9 +13,13 @@ enum NotificationActionTarget {
 }
 
 class NotificationActionTargetResolver {
-  const NotificationActionTargetResolver({required this.canUseSyncedHabits});
+  const NotificationActionTargetResolver({
+    required this.canUseSyncedHabits,
+    this.canUseFocusSessions = false,
+  });
 
   final bool canUseSyncedHabits;
+  final bool canUseFocusSessions;
 
   NotificationActionTarget? resolve(String? actionUrl) {
     if (actionUrl == null ||
@@ -45,6 +50,8 @@ class NotificationActionTargetResolver {
         NotificationActionTarget.habitCompletion,
       '/habits' when canUseSyncedHabits =>
         NotificationActionTarget.habitManagement,
+      '/deep-work' when canUseFocusSessions =>
+        NotificationActionTarget.focusSession,
       _ => null,
     };
   }

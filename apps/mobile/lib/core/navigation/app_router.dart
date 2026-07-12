@@ -6,6 +6,8 @@ import '../../features/auth/presentation/pages/auth_page.dart';
 import '../../features/auth/presentation/pages/onboarding_page.dart';
 import '../../features/auth/presentation/providers/auth_providers.dart';
 import '../../features/dashboard/presentation/pages/dashboard_page.dart';
+import '../../features/focus/domain/focus_session.dart';
+import '../../features/focus/presentation/pages/focus_session_page.dart';
 import '../../features/insights/presentation/pages/insights_page.dart';
 import '../../features/notifications/presentation/pages/notifications_page.dart';
 import '../../features/quick_action/presentation/pages/habit_completion_page.dart';
@@ -122,7 +124,15 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: AppRoutes.deepWork,
-            redirect: (context, state) => AppRoutes.alerts,
+            redirect: (context, state) => capabilities.canUseSyncedExecution
+                ? null
+                : AppRoutes.quickAction,
+            builder: (context, state) => FocusSessionPage(
+              initialTargetKind: FocusTargetKind.fromCode(
+                state.uri.queryParameters['target_kind'],
+              ),
+              initialTargetId: state.uri.queryParameters['target_id'],
+            ),
           ),
           GoRoute(
             path: AppRoutes.coach,
