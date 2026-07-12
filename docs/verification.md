@@ -120,6 +120,12 @@ also assert byte-for-byte-equivalent Phase 2 Daily State semantics for the same
 capture inputs. Recommendation tests exclude terminal
 done/cancelled/archived tasks from overdue, workload, and focus-pressure
 candidates.
+Phase 4 briefing tests prove that normal GET is read-only; authenticated routes
+derive identity only from the bearer principal; local profile timezone selects
+the briefing date; current generation is idempotent; changed snapshots mark a
+briefing stale; recovery/missing-data rules precede overdue pressure; completed
+or unscheduled habits are excluded; and every returned action passes the strict
+`executable-action-v1` model with at most two support actions and no LLM use.
 Scheduled refresh tests
 cover the backend-only token guard, onboarded non-guest profile selection,
 per-user failure isolation, deterministic daily snapshot refresh, and optional
@@ -274,7 +280,7 @@ supabase db reset
 Expected successful reset output applies migrations through:
 
 ```text
-20260711120000_phase_3_executable_action_schema.sql
+20260712064836_phase_4_daily_briefings.sql
 ```
 
 Expected notices include skipped legacy CamelCase tables and already-existing
@@ -366,6 +372,13 @@ retry after a response is lost; prefilled edit with stable identity; cadence
 confirmation; and review actions that archive/pause/remove Setup-owned rows.
 Node-side fixtures include manual rows, and database assertions require those
 rows to survive reconciliation unchanged.
+
+After the Phase 3 action journeys, the smoke also exercises Phase 4 directly
+through authenticated FastAPI calls. It proves that the first briefing GET is
+read-only and missing, deliberate POST persists exactly one owner/local-date
+row, response and JSONB action payloads match, every returned target is an
+implemented strict command, and a repeated `force=false` request preserves the
+same id and timestamps.
 
 The Setup assertions inspect exact `request_id`, base/revision, applied state,
 stable materialized ids, server ownership metadata, record counts, and the
@@ -546,10 +559,11 @@ The repository now contains browser E2E automation, but it still depends on a
 real Ubuntu Node.js 20+ installation, `npm`, Playwright browser installation,
 Docker access, and a real Ubuntu `supabase` CLI on `PATH`.
 
-The Phase 3 browser assertions are source coverage, not a recorded pass for the
-current checkout. Establish that result with the browser command above; use the
-`RESET_DB=true` form when proving the new migration from a fresh database. The
-journey includes committed-response-loss for habit/task create, habit
+The combined Phase 3/4 browser journey passed non-destructively in the
+2026-07-12 implementation checkout. Future changes must establish their own
+current-checkout result with the browser command above; use the `RESET_DB=true`
+form when proving the full migration chain from a fresh database. The journey
+includes committed-response-loss for habit/task create, habit
 outcome/undo, task completion/undo, and focus start/finish, plus negative
 lifecycle/range/active-target/weekday-cadence checks and terminal-focus
 `updated_at` mutation. It does not yet construct a second authenticated

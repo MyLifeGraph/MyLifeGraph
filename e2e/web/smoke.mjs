@@ -1869,6 +1869,8 @@ try {
     'Phase 3 execution leaves the Setup revision unchanged',
   );
 
+  await assertDeterministicDailyBriefing(user.id);
+
   const recommendationsBeforeManualRefresh =
     await activeDeterministicRecommendations(user.id);
   const dailySnapshotBeforeRecommendationRefresh =
@@ -2871,6 +2873,199 @@ async function latestDailySnapshotGeneratedAt(userId) {
     return 0;
   }
   return Date.parse(rows[0].generated_at);
+}
+
+async function assertDeterministicDailyBriefing(userId) {
+  const accessToken = await signInAccessToken('Phase 4 briefing');
+  const rowsBefore = await fetchRows(
+    `daily_briefings?select=id&user_id=eq.${userId}`,
+    'daily briefings before read-only GET',
+  );
+  if (rowsBefore.length !== 0) {
+    throw new Error(
+      `Phase 4 precondition expected no briefing rows: ${JSON.stringify(rowsBefore)}`,
+    );
+  }
+
+  const missing = await briefingRequest(
+    '/v1/briefings/today',
+    accessToken,
+  );
+  if (
+    missing.contract_version !== 'daily-briefing-v1' ||
+    missing.freshness !== 'missing' ||
+    missing.needs_generation !== true ||
+    missing.briefing !== null
+  ) {
+    throw new Error(
+      `Read-only briefing GET did not report missing truth: ${JSON.stringify(missing)}`,
+    );
+  }
+  await assertRows(
+    `daily_briefings?select=id&user_id=eq.${userId}`,
+    (rows) => rows.length === 0,
+    'read-only briefing GET creates no row',
+  );
+
+  const generated = await briefingRequest(
+    '/v1/briefings/generate',
+    accessToken,
+    { force: false },
+  );
+  const briefing = generated.briefing;
+  if (
+    generated.contract_version !== 'daily-briefing-v1' ||
+    generated.freshness !== 'current' ||
+    generated.needs_generation !== false ||
+    briefing?.mode !== 'recover' ||
+    briefing?.provenance?.engine !== 'deterministic' ||
+    briefing?.provenance?.llm_used !== false ||
+    briefing?.capacity_minutes !== null ||
+    !isExecutableBriefingAction(briefing?.primary_action) ||
+    !Array.isArray(briefing?.support_actions) ||
+    briefing.support_actions.length > 2 ||
+    !briefing.support_actions.every(isExecutableBriefingAction)
+  ) {
+    throw new Error(
+      `Generated Phase 4 briefing violates its contract: ${JSON.stringify(generated)}`,
+    );
+  }
+
+  const persisted = await fetchRows(
+    `daily_briefings?select=id,briefing_date,mode,capacity_minutes,primary_action,support_actions,evidence_refs,provenance,data_quality,metadata,generated_at,updated_at&user_id=eq.${userId}`,
+    'persisted deterministic daily briefing',
+  );
+  if (
+    persisted.length !== 1 ||
+    persisted[0].id !== briefing.id ||
+    persisted[0].briefing_date !== generated.briefing_date ||
+    persisted[0].mode !== briefing.mode ||
+    persisted[0].capacity_minutes !== null ||
+    persisted[0].metadata?.contract_version !== 'daily-briefing-v1' ||
+    persisted[0].metadata?.ranking_version !==
+      'deterministic-briefing-ranker-v1' ||
+    persisted[0].provenance?.source_snapshot_id !==
+      briefing.provenance.source_snapshot_id ||
+    stableJson(persisted[0].primary_action) !==
+      stableJson(briefing.primary_action) ||
+    stableJson(persisted[0].support_actions) !==
+      stableJson(briefing.support_actions)
+  ) {
+    throw new Error(
+      `Persisted Phase 4 briefing does not match its response: ${JSON.stringify(persisted)}`,
+    );
+  }
+
+  const repeated = await briefingRequest(
+    '/v1/briefings/generate',
+    accessToken,
+    { force: false },
+  );
+  if (
+    repeated.briefing?.id !== briefing.id ||
+    repeated.briefing?.generated_at !== briefing.generated_at ||
+    repeated.briefing?.updated_at !== briefing.updated_at
+  ) {
+    throw new Error(
+      `Idempotent Phase 4 generation changed the current row: ${JSON.stringify(repeated)}`,
+    );
+  }
+  await assertRows(
+    `daily_briefings?select=id&user_id=eq.${userId}`,
+    (rows) => rows.length === 1 && rows[0].id === briefing.id,
+    'idempotent briefing generation preserves one daily identity',
+  );
+}
+
+async function signInAccessToken(context) {
+  const response = await fetch(
+    `${supabaseUrl}/auth/v1/token?grant_type=password`,
+    {
+      method: 'POST',
+      headers: {
+        apikey: supabaseAnonKey,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ email, password }),
+    },
+  );
+  if (!response.ok) {
+    throw new Error(
+      `${context} sign-in failed: ${response.status} ${await response.text()}`,
+    );
+  }
+  const accessToken = (await response.json()).access_token;
+  if (typeof accessToken !== 'string' || accessToken.length === 0) {
+    throw new Error(`${context} sign-in returned no access token.`);
+  }
+  return accessToken;
+}
+
+async function briefingRequest(path, accessToken, body) {
+  const response = await fetch(`${aiServiceBaseUrl}${path}`, {
+    method: body === undefined ? 'GET' : 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
+    },
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+  });
+  if (!response.ok) {
+    throw new Error(
+      `Briefing request ${path} failed: ${response.status} ${await response.text()}`,
+    );
+  }
+  return response.json();
+}
+
+function isExecutableBriefingAction(action) {
+  const target = action?.target;
+  if (
+    typeof action?.title !== 'string' ||
+    action.title.length === 0 ||
+    typeof action?.reason !== 'string' ||
+    action.reason.length === 0 ||
+    target?.contract_version !== 'executable-action-v1' ||
+    typeof target?.id !== 'string' ||
+    target.id.length === 0 ||
+    target?.metadata?.source !== 'daily-briefing-v1'
+  ) {
+    return false;
+  }
+  if (target.command === 'open_task') {
+    return target.kind === 'task' && typeof target.target_id === 'string';
+  }
+  if (target.command === 'log_habit') {
+    return (
+      target.kind === 'habit' &&
+      typeof target.target_id === 'string' &&
+      target.metadata?.habit_outcome === 'completed' &&
+      /^\d{4}-\d{2}-\d{2}$/.test(target.metadata?.entry_date ?? '')
+    );
+  }
+  if (target.command === 'open_capture') {
+    return (
+      target.kind === 'capture' &&
+      target.target_id === undefined &&
+      ['/morning-calibration', '/quick-mood-check-in'].includes(
+        target.metadata?.route,
+      )
+    );
+  }
+  return false;
+}
+
+function stableJson(value) {
+  if (Array.isArray(value)) {
+    return `[${value.map(stableJson).join(',')}]`;
+  }
+  if (value !== null && typeof value === 'object') {
+    return `{${Object.keys(value)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${stableJson(value[key])}`)
+      .join(',')}}`;
+  }
+  return JSON.stringify(value);
 }
 
 async function assertNoSetupOwnedRows(userId, context) {

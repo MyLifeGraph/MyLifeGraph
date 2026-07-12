@@ -28,16 +28,18 @@ way to explore the product today is the Flutter app in mock-data guest mode.
   stress, energy, mood, screen time, activity, steps, habits, recovery, and
   focus. It computes 7/14/30-day relationships in Flutter from existing
   Supabase rows or local mock time series, without LLM usage.
-- Phase 0A through Phase 3 are implemented. Evening and Morning merge without
+- Phase 0A through Phase 4 are implemented. Evening and Morning merge without
   erasing each other and feed a strict backend-only state parser; Setup remains
   progressive, revision-safe, reviewable, and atomically materialized. Phase 3
   adds durable task commands, cadence-aware Habit V1 outcomes, linked focus
   sessions, and parser-equivalent strict Flutter/FastAPI
   `executable-action-v1` models. Ambiguous committed task/focus transitions are
   reconciled by exact persisted state rather than repeated blindly. These remote
-  actions remain unavailable to guest/demo sessions. Phase 4,
-  Deterministic Briefing Service, is next; the decision-first Today redesign is
-  a later phase. See `docs/phase-3-executable-actions-contract.md` and
+  actions remain unavailable to guest/demo sessions. Phase 4 adds persisted,
+  deterministic `daily-briefing-v1` output behind read-only
+  `GET /v1/briefings/today` and deliberate `POST /v1/briefings/generate`.
+  Phase 5's decision-first Today redesign is next. See
+  `docs/phase-3-executable-actions-contract.md` and
   `docs/daily-briefing-implementation-plan.md`.
 - Repository docs and scripts should be treated as the shared team source of
   truth. Do not depend on user-local Codex skills or machine-specific paths.
@@ -243,10 +245,11 @@ Supabase is the intended auth and persistence backend. The current app supports:
 
 Important current caveat: the Flutter app targets the canonical snake_case
 schema. A clean local Supabase reset should apply
-`20260711120000_phase_3_executable_action_schema.sql`, after the Phase 0C
-Setup migrations. The Phase 3 migration adds task estimates/terminal times,
+`20260712064836_phase_4_daily_briefings.sql`, after the Phase 3 executable
+action migration. Phase 3 adds task estimates/terminal times,
 locked cadence-aware habit outcomes, immutable linked focus history, and
 restricted target deletion without replacing existing RLS or table grants.
+Phase 4 adds the persisted owner-scoped daily briefing identity and policies.
 Remote projects still need to be inspected directly before relying on
 `USE_MOCK_DATA=false`.
 

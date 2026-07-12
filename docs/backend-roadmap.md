@@ -171,16 +171,25 @@ Already implemented:
     snapshot upsert.
   - Can optionally run deterministic recommendation generation with LLM wording
     disabled.
+- Phase 4 deterministic briefing service:
+  - Persists one `daily_briefings` row per user and profile-local date under the
+    strict `daily-briefing-v1` contract.
+  - `GET /v1/briefings/today` remains read-only and distinguishes missing,
+    current, and stale output by comparing source snapshot identity and time.
+  - Deliberate `POST /v1/briefings/generate` derives the user from the bearer
+    principal, refreshes Daily State when needed, and is idempotent unless
+    `force=true` is requested.
+  - Recovery-first deterministic ranking chooses one executable primary action
+    and at most two support actions from open tasks, due habits, and conservative
+    capture fallback. Every target passes `executable-action-v1`; no LLM is used.
 - Browser E2E starts FastAPI with local Supabase backend settings and verifies
   authenticated required-only Setup, retry/edit/review identity and ownership,
   deterministic post-intake recommendations, backend daily snapshot refresh
-  after check-ins, exact Phase 2 state recomputation, and core Supabase-backed
-  app writes.
+  after check-ins, exact Phase 2 state recomputation, core Supabase-backed app
+  writes, and Phase 4 read-only/generate/idempotent briefing persistence.
 
 Not yet implemented:
 
-- The Phase 4 deterministic briefing service, persisted daily briefing identity,
-  and deliberate read/generate endpoints.
 - A decision-first Today surface connecting a ranked briefing to tasks, habits,
   focus sessions, recommendations, and feedback; that remains Phase 5.
 - A bounded planning execution surface; Phase 3 returns `review_plan` as
@@ -228,7 +237,7 @@ repositories, and jobs, not as unconstrained autonomous LLM loops.
 | Signal aggregator | Intake, daily check-in, task/habit/focus changes, scheduled jobs | `daily_logs`, `behavioral_events`, `tasks`, `goals`, `habits`, `habit_logs`, `focus_sessions`, `schedule_items`, `memory_entries` | `user_state_snapshots`, optional `ai_insights` | None by default |
 | Recommendation service | Intake complete, explicit refresh, scheduled refresh | `user_state_snapshots`, `daily_logs`, `behavioral_events`, `tasks`, existing `recommendations` | `recommendations` | Optional wording only later |
 | Recommendation verifier | Every generated recommendation | Candidate metadata, active recommendations | Accept/reject result | None |
-| Daily briefing service | Evening shutdown, morning calibration, explicit refresh, scheduled jobs | `user_state_snapshots`, `recommendations`, recent check-ins, goals, tasks, habits, feedback | `daily_briefings` or derived briefing payload, optional recommendation status updates | None for v1 |
+| Daily briefing service | Explicit refresh today; scheduled generation remains later | `user_state_snapshots`, `recommendations`, goals, tasks, habits, habit outcomes | `daily_briefings` | None for v1 |
 | Coach service | User sends coach message | Recent messages, snapshots, selected memory | `coach_messages`, optional memory candidates | Yes, budgeted |
 | Memory service | Check-ins, coach conversations, weekly review | Raw notes/messages, existing memory | `memory_entries` | Optional extraction only |
 | Planning service | Weekly review, user request | Goals, tasks, habits, schedule, snapshots | `tasks`, `schedule_items`, `recommendations`, `coach_messages` | Optional for complex plans |
@@ -238,9 +247,10 @@ The intake foundation, controlled post-intake recommendation refresh, first
 authenticated snapshot aggregator endpoint, deliberate dashboard refresh UX,
 the Phase 3 task/habit/focus execution contracts, scheduler-triggered daily
 refresh endpoint, and deterministic Insights correlation exploration now
-exist. The next product work is Phase 4's deterministic Daily Briefing service,
-before the Phase 5 decision-first Today surface or any coach, memory extraction,
-weekly planning, calendar import, or LLM provider work. Deployed cron/job
+exist. Phase 4's deterministic Daily Briefing service now supplies the backend
+decision contract. The next product work is the Phase 5 decision-first Today
+surface, before any coach, memory extraction, weekly planning, calendar import,
+or LLM provider work. Deployed cron/job
 execution remains useful, but it should precompute a defined daily state or
 briefing contract rather than exist as infrastructure in search of a product
 output. See `docs/daily-briefing-implementation-plan.md` for the current product
@@ -443,12 +453,10 @@ Access:
 
 ### Later Tables
 
-Do not add these in the first slice unless the implementation genuinely needs
-them:
+`daily_briefings` is now implemented in Phase 4 after capture, Daily Mode, and
+executable action contracts proved the required persistence boundary. Do not
+add these remaining tables until their owning phase needs them:
 
-- `daily_briefings` in Phase 4, after capture, Daily Mode, and executable action
-  contracts are proven and persistence is needed for morning availability,
-  stale detection, scheduling, or E2E assertions.
 - `decision_feedback` in Phase 6, after the briefing action contract is stable
   and ranking needs append-only outcome history across recommendations and
   action types.
@@ -580,13 +588,11 @@ Use these rules before adding any model provider:
 ## Immediate Implementation Plan
 
 The next implementation should build on completed Phase 0 product integrity,
-Phase 1 capture, Phase 2 explainable state, and Phase 3 executable task, habit,
-focus, and action-target contracts. The immediate slice is **Phase 4:
-Deterministic Briefing Service**: rank the already executable targets into one
-primary action plus at most two support actions through explicit authenticated
-read/generate endpoints. Phase 4 must preserve the Phase 2 Daily State
-classifier and Phase 3 command semantics, remain deterministic, and add neither
-the Phase 5 Today redesign nor an LLM call.
+Phase 1 capture, Phase 2 explainable state, Phase 3 executable action targets,
+and Phase 4's persisted deterministic briefing contract. The immediate slice is
+**Phase 5: Decision-First Today Dashboard**: consume the briefing without
+generating on normal load, expose its executable primary action, and preserve
+missing/stale/error truth. Feedback adaptation and LLM usage remain later work.
 
 ### Completed Slice 0A: Honest Capture
 
@@ -736,20 +742,20 @@ the Phase 5 Today redesign nor an LLM call.
   read/generate boundaries. See
   `docs/phase-3-executable-actions-contract.md` for the complete matrix.
 
-### Next Slice 4: Deterministic Briefing Service
+### Completed Slice 4: Deterministic Briefing Service
 
-- Add a FastAPI-owned deterministic service that ranks one executable primary
+- Implemented a FastAPI-owned deterministic service that ranks one executable primary
   action plus at most two support actions from Phase 2 state, Phase 3 action
   contracts, existing recommendations, and current owned records.
-- `GET /v1/briefings/today` must read only and distinguish current, stale,
+- `GET /v1/briefings/today` reads only and distinguishes current, stale,
   missing, and error states. Normal Dashboard load must not generate a briefing.
-- `POST /v1/briefings/generate` must be deliberate, authenticated, idempotent for
+- `POST /v1/briefings/generate` is deliberate, authenticated, idempotent for
   its user/local date, and use no LLM.
-- Include mode, bounded reason, time/capacity note, provenance, freshness,
+- Includes mode, bounded reason, time/capacity note, provenance, freshness,
   evidence references, and strictly validated `executable-action-v1` targets.
-- Add `daily_briefings` persistence only when morning availability, stable daily
-  identity, scheduling, stale detection, or exact E2E assertions require it.
-- Keep the decision-first Today/Dashboard redesign and feedback controls in
+- Added `daily_briefings` persistence for stable local-date identity, stale
+  detection, morning availability, and exact database assertions.
+- Kept the decision-first Today/Dashboard redesign and feedback controls in
   Phase 5; Phase 4 proves the backend briefing contract first.
 
 ### Completed Slice: Controlled Recommendation Refresh

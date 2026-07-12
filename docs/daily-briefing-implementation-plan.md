@@ -1221,27 +1221,27 @@ Evaluation:
   run succeeded for exact rows, response-loss cases, and negative database
   writes? Source coverage alone is not a pass.
 
-### Phase 4: Deterministic Briefing Service (Next)
+### Phase 4: Deterministic Briefing Service (Implemented)
 
 Goal:
 
 - Produce one daily editorial decision from state and executable candidates.
 
-Work:
+Implemented:
 
-- Add `daily_briefings` persistence if needed for morning availability, stale
+- Added `daily_briefings` persistence for morning availability, stale
   detection, scheduling, and E2E assertions.
-- Add repository, models, and authenticated `GET /v1/briefings/today` plus
+- Added repository, strict models, and authenticated `GET /v1/briefings/today` plus
   deliberate `POST /v1/briefings/generate` routes.
-- Refresh or validate daily state before generation.
-- Rank one primary action and at most two support actions by goal relevance,
+- Refreshes or validates daily state before generation.
+- Ranks one primary action and at most two support actions by goal relevance,
   urgency, energy fit, time fit, recovery risk, current outcome state, and
   evidence recency. Decision feedback is not yet available and remains a later
   phase input.
-- Include mode, capacity, reason, provenance, evidence refs, freshness, and action
+- Includes mode, capacity note, reason, provenance, evidence refs, freshness, and action
   targets.
-- Keep LLM wording disabled.
-- Keep normal Dashboard reads generation-free; the decision-first Today
+- Keeps LLM usage disabled and numeric capacity null until a validated policy exists.
+- Keeps normal Dashboard reads generation-free; the decision-first Today
   redesign and feedback controls remain Phase 5.
 
 Evaluation:
@@ -1441,22 +1441,13 @@ dates. Explicit habit/focus facts enrich snapshot summaries without changing
 the Phase 2 classifier. Ordinary writes do not rank actions, generate
 recommendations, persist a briefing, or call an LLM.
 
-The next implementation should be **Phase 4: Deterministic Briefing Service**:
+Phase 4 is implemented behind the strict `daily-briefing-v1` contract. It
+persists one stable row per user/local date, keeps GET read-only, refreshes or
+validates Daily State only on deliberate generation, ranks strict executable
+targets recovery-first, and carries freshness, provenance, bounded evidence,
+and no-LLM attribution.
 
-1. Define one strict briefing response contract with daily identity, state,
-   freshness, provenance, evidence, capacity/reason copy, one primary action,
-   and at most two support actions.
-2. Add authenticated read-only `GET /v1/briefings/today` and deliberate
-   `POST /v1/briefings/generate`, deriving user identity from the bearer token.
-3. Rank only currently valid Phase 3 executable targets using deterministic,
-   recovery-first rules; insufficient or stale inputs must remain conservative
-   and useful.
-4. Persist `daily_briefings` only if stable daily identity, morning readiness,
-   scheduling, stale detection, or exact E2E evidence requires it.
-5. Add focused model/service/repository/route tests and browser assertions for
-   read-only versus deliberate generation, user scoping, idempotency,
-   freshness, and exact action targets.
-
-Phase 4 must preserve the Phase 2 Daily State and Phase 3 execution contracts.
-It must not add the Phase 5 decision-first Today redesign or feedback controls,
-normal-load generation, Coach, calendar import, broad workers, or an LLM.
+The next implementation should be **Phase 5: Decision-First Today Dashboard**.
+It should consume the persisted briefing without generation on normal load,
+place the primary executable action above secondary metrics, preserve
+missing/stale/error states, and keep adaptive feedback ranking in Phase 6.

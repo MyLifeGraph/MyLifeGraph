@@ -1,7 +1,14 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import health, intake, recommendations, scheduled, snapshots
+from app.api.routes import (
+    briefings,
+    health,
+    intake,
+    recommendations,
+    scheduled,
+    snapshots,
+)
 from app.core.config import settings
 
 
@@ -25,6 +32,7 @@ def create_app() -> FastAPI:
     app.include_router(intake.router, prefix=settings.api_prefix)
     app.include_router(recommendations.router, prefix=settings.api_prefix)
     app.include_router(snapshots.router, prefix=settings.api_prefix)
+    app.include_router(briefings.router, prefix=settings.api_prefix)
     app.include_router(scheduled.router, prefix=settings.api_prefix)
 
     return app

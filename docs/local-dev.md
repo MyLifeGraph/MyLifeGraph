@@ -236,8 +236,26 @@ the exact terminal result. Habit reads paginate history beginning 370 calendar
 days before today and use `started_on` with DST-safe calendar arithmetic. The
 ranking-independent action envelope has strict Flutter/FastAPI parser parity,
 including explicit-null metadata-field rejection, and is documented in
-`docs/phase-3-executable-actions-contract.md`; a deterministic briefing service
-is Phase 4 and no briefing endpoints exist yet.
+`docs/phase-3-executable-actions-contract.md`. Phase 4 wraps only these strict
+targets in persisted deterministic briefings. Read without side effects using:
+
+```bash
+curl http://localhost:8000/v1/briefings/today \
+  -H 'Authorization: Bearer <supabase_access_token>'
+```
+
+Deliberately generate or refresh today's profile-local briefing using:
+
+```bash
+curl -X POST http://localhost:8000/v1/briefings/generate \
+  -H 'Authorization: Bearer <supabase_access_token>' \
+  -H 'Content-Type: application/json' \
+  -d '{"force":false}'
+```
+
+`force=false` returns an already-current persisted briefing unchanged. Missing
+or stale output refreshes the daily snapshot and upserts the same
+`(user_id, briefing_date)` identity. `force=true` deliberately recomputes it.
 
 When FastAPI is running and Flutter is in real backend mode, a successful daily
 capture calls the daily snapshot endpoint best-effort with the capture's

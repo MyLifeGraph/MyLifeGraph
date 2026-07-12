@@ -280,6 +280,8 @@ surface. The canonical application schema is now snake_case and centered on:
   habit-outcome, and focus workflows.
 - `intake_responses` and `user_state_snapshots` for revisioned typed Setup
   history and compact backend-owned user state.
+- `daily_briefings` for one persisted deterministic decision per user/local
+  date; authenticated users may read their row, while FastAPI owns writes.
 
 Legacy CamelCase tables such as `"User"`, `"DailyLog"`, and `"Task"` may still
 exist in older remote projects. The canonical migration copies data from those
@@ -448,11 +450,13 @@ making claims about deployed data.
 - Notifications are currently a read-only inbox. Original `type`, `priority`,
   read state, and supported `action_url` are shown; there is no mark-read command
   until the repository has a durable write contract.
-- Phase 3 executable targets are complete, but `review_plan` remains explicitly
-  unavailable and there is no Phase 4 deterministic briefing service. Daily Mode
-  remains backend snapshot state; the current Dashboard exposes only unranked
-  execution links and does not choose a primary action, persist a briefing, or
-  call an LLM.
+- Phase 4 persists one deterministic daily briefing per user/local date and
+  ranks only strict Phase 3 targets. `GET /v1/briefings/today` is read-only and
+  reports missing/current/stale state; deliberate
+  `POST /v1/briefings/generate` refreshes the daily snapshot when generation is
+  needed and upserts the same daily identity. `review_plan` remains explicitly
+  unavailable. The current Dashboard still exposes unranked execution links;
+  consuming the briefing in a decision-first Today surface is Phase 5.
 - The remote Production project may still contain legacy CamelCase tables until
   the canonical schema migration has been applied and verified.
 - The repository does not contain real Supabase credentials.

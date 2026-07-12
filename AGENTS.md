@@ -49,6 +49,7 @@ databases may still contain legacy CamelCase tables such as `"User"`,
 - `notification_preferences`
 - `goals`, `habits`, `habit_logs`, `focus_sessions`
 - `intake_responses`, `user_state_snapshots`
+- `daily_briefings`
 
 The migration
 `supabase/migrations/20260618170000_create_canonical_app_schema.sql` creates the
@@ -80,6 +81,10 @@ exact task/focus lifecycle and duration checks, locked active/cadence-aware
 habit-outcome validation, locked focus-target validation, restricted target
 deletion, full terminal-history immutability, deterministic UTC-date backfill
 for legacy focus rows, and the one-active-focus-session invariant.
+The migration
+`supabase/migrations/20260712064836_phase_4_daily_briefings.sql` adds the
+owner-scoped persisted daily briefing identity, bounded JSON checks, explicit
+Data API grants, and forced RLS policies used by the backend-only generator.
 
 ## Important Docs
 
@@ -109,14 +114,16 @@ sessions, and the strict `executable-action-v1` envelope are implemented for
 authenticated real accounts. Snapshots now include additive habit-outcome and
 focus-session summaries while preserving Phase 2 Daily State unchanged. A
 backend-only scheduled endpoint refreshes onboarded non-guest profiles for
-cron-style runs. Read `docs/backend-roadmap.md`,
+cron-style runs. Phase 4 now persists one strict deterministic briefing per
+profile-local date behind read-only GET and deliberate idempotent POST routes.
+Read `docs/backend-roadmap.md`,
 `docs/daily-briefing-implementation-plan.md`, and the Phase 3 contract before
 planning the next backend, briefing, dashboard, or agent workflow.
 
 Do not jump straight to broad LLM integration, calendar import, weekly planning,
 vector search, or autonomous background agents. The next product slice should
-build the **Daily Briefing / Daily Decision Loop** foundation before broadening
-infrastructure, starting with product integrity. Phase 0A, Honest Capture, is
+consume the Daily Briefing in the **Decision-First Today Dashboard** before
+broadening infrastructure. Phase 0A, Honest Capture, is
 implemented: `/daily-check-in` redirects to the canonical lightweight flow;
 measurements require explicit selection; a typed draft drives guest and Supabase
 persistence; same-day guest rows and linked behavioral events are deduplicated;
@@ -211,11 +218,11 @@ habit/focus counts and evidence from fully paginated, stably ordered 1,000-row
 action-fact pages, and `explainable-daily-state-v1` remains unchanged.
 Guest/mock sessions expose none of these remote commands.
 
-The immediate next slice is Phase 4, Deterministic Briefing Service. It should
-rank one primary action and at most two support actions from current state and
-the proven Phase 3 targets, remain deterministic/no-LLM, keep `GET` read-only,
-and use deliberate authenticated generation. Do not fold the Phase 5
-decision-first Today redesign into this backend slice.
+The immediate next slice is Phase 5, Decision-First Today Dashboard. It should
+consume the persisted Phase 4 briefing without generation on normal load,
+surface the strict executable primary action, and preserve missing/stale/error
+truth. Do not fold Phase 6 adaptive feedback, Coach, calendar import, or LLM
+work into this UI slice.
 
 FastAPI-backed browser E2E coverage for revisioned Setup ownership/retry/edit,
 concurrent same-request convergence, post-intake recommendations, exact Phase 2
@@ -226,8 +233,10 @@ journeys are also encoded as exact Playwright/database assertions, including
 committed-response-loss reconciliation for habit/task create, habit
 outcome/undo, task completion/undo, and focus start/finish. Negative writes
 cover lifecycle/range/cadence constraints and every terminal focus update,
-including `updated_at`. A successful current-checkout browser run is still
-required before E2E may be claimed.
+including `updated_at`. Phase 4 adds exact read-only/generate, persisted action,
+and idempotent daily-identity assertions. The combined browser journey passed
+non-destructively in the 2026-07-12 implementation checkout; later changes must
+still establish their own current-checkout pass before claiming E2E.
 
 The implemented post-intake refresh is backend-only and best-effort:
 
@@ -307,7 +316,7 @@ you actually intend to run `supabase db reset`.
 `supabase db reset` must complete through:
 
 ```text
-20260711120000_phase_3_executable_action_schema.sql
+20260712064836_phase_4_daily_briefings.sql
 ```
 
 Expected local reset notices include skipped legacy CamelCase tables and
