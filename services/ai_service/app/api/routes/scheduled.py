@@ -5,12 +5,14 @@ from fastapi import APIRouter, Header, HTTPException, Request, status
 from app.clients.supabase import SupabaseConfigurationError, SupabaseRestClient
 from app.core.config import settings
 from app.models.scheduled import ScheduledRefreshRequest, ScheduledRefreshResponse
+from app.repositories.briefing_repository import SupabaseBriefingRepository
 from app.repositories.recommendation_repository import SupabaseRecommendationRepository
 from app.repositories.scheduled_refresh_repository import (
     SupabaseScheduledRefreshRepository,
 )
 from app.repositories.snapshot_repository import SupabaseSnapshotRepository
 from app.repositories.user_context_repository import SupabaseUserContextRepository
+from app.services.briefing_service import BriefingService
 from app.services.recommendation_engine import RecommendationEngine
 from app.services.scheduled_refresh import ScheduledRefreshService
 from app.services.snapshot_aggregator import SnapshotAggregator
@@ -44,10 +46,14 @@ async def get_scheduled_refresh_service(request: Request) -> ScheduledRefreshSer
             detail="Scheduled refresh persistence is not configured.",
         ) from exc
 
+    snapshot_aggregator = SnapshotAggregator(
+        repository=SupabaseSnapshotRepository(client),
+    )
     return ScheduledRefreshService(
         repository=SupabaseScheduledRefreshRepository(client),
-        snapshot_aggregator=SnapshotAggregator(
-            repository=SupabaseSnapshotRepository(client),
+        briefing_service=BriefingService(
+            repository=SupabaseBriefingRepository(client),
+            snapshot_aggregator=snapshot_aggregator,
         ),
         recommendation_engine=RecommendationEngine(
             user_context_repository=SupabaseUserContextRepository(client),

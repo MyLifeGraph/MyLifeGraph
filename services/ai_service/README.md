@@ -48,10 +48,17 @@ FastAPI service boundary for recommendation and future ML workflows.
   and does not require an LLM provider.
 - Recommendation context ignores terminal done/cancelled/archived tasks for
   overdue, workload, and focus-pressure candidates.
-- The next slice is Phase 4's deterministic briefing service. No briefing
-  read/generate endpoint or `daily_briefings` persistence is implemented yet.
-- The service does not call LLMs, OpenRouter, local models, vector search, or
-  background jobs.
+- `GET /v1/briefings/today` reads one persisted `daily-briefing-v1` decision;
+  deliberate `POST /v1/briefings/generate` refreshes its exact profile-local
+  date. Normal reads remain generation-free.
+- Phase 7 extends the protected scheduled boundary to prepare daily snapshots
+  and briefings for onboarded non-guest profiles. One UTC run instant determines
+  each profile-local date; current pairs are write-free, while missing or stale
+  state converges on the existing daily identities with isolated per-user stage
+  results.
+- The service does not call LLMs, OpenRouter, local models, or vector search.
+  The repository contains no deployed cron, background worker, or Phase 7
+  notification sender.
 
 ## Setup
 
@@ -165,8 +172,28 @@ request the persisted target date's refresh best-effort. Habit outcome/undo
 captures one stable target date, while focus transitions use the persisted
 start date. The service does not generate recommendations during these writes.
 
-Scheduler-triggered daily refresh uses a backend-only token and never belongs
-in Flutter or browser runtime configuration:
+Read today's persisted briefing without side effects:
+
+```bash
+curl http://localhost:8000/v1/briefings/today \
+  -H 'Authorization: Bearer <supabase_access_token>'
+```
+
+Deliberately generate or refresh it:
+
+```bash
+curl -X POST http://localhost:8000/v1/briefings/generate \
+  -H 'Authorization: Bearer <supabase_access_token>' \
+  -H 'Content-Type: application/json' \
+  -d '{"force":false}'
+```
+
+`force=false` returns a current row unchanged and prepares missing or stale
+state. `force=true` deliberately recomputes the same `(user_id, briefing_date)`
+identity. Dashboard normal load uses GET only.
+
+Scheduler-triggered daily preparation uses a backend-only token and never
+belongs in Flutter or browser runtime configuration:
 
 ```bash
 curl -X POST http://localhost:8000/v1/scheduled/daily-refresh \
@@ -175,8 +202,28 @@ curl -X POST http://localhost:8000/v1/scheduled/daily-refresh \
   -d '{"window_days":7,"limit":100,"include_recommendations":false}'
 ```
 
-Set `include_recommendations` to `true` only for a deliberate deterministic
-recommendation refresh pass. LLM wording remains disabled.
+The endpoint captures one UTC `run_at`, derives each eligible profile's local
+`briefing_date`, and reports per-user snapshot, briefing, and failure-stage
+outcomes. It generates a missing snapshot, reuses an existing snapshot when only
+the briefing is missing, refreshes a stale briefing against its exact source,
+and performs no write for a current pair. `target_date` is available only as an
+explicit backfill override.
+
+A privileged operational retry can be narrowed to at most 20 eligible profiles:
+
+```bash
+curl -X POST http://localhost:8000/v1/scheduled/daily-refresh \
+  -H 'X-Scheduled-Refresh-Token: <scheduled_refresh_token>' \
+  -H 'Content-Type: application/json' \
+  -d '{"profile_ids":["11111111-1111-4111-8111-111111111111"],"window_days":7,"limit":1,"include_recommendations":false}'
+```
+
+The filter never bypasses onboarding or guest exclusion. Failures are isolated
+per profile and identify `profile_date`, `snapshot`, `briefing`, or optional
+`recommendations` as the stage. Recommendation generation is off by default;
+explicit `include_recommendations=true` remains deterministic and forces LLM
+wording off. Scheduled snapshot/briefing preparation never calls an LLM. This is
+an invocable backend endpoint, not evidence of deployed cron or notifications.
 
 ## Environment
 
@@ -225,7 +272,10 @@ stale revision conflicts, convergent retry/edit identities, lifecycle removal,
 and preservation of non-Setup-owned rows. Phase 3 tests cover strict executable
 action parser parity, explicit habit/focus snapshot summaries and local-date
 filtering, preservation of Phase 2 Daily State behavior, and terminal-task
-exclusion from recommendation pressure. A documented test suite is not a claim
+exclusion from recommendation pressure. Phase 4 through Phase 7 coverage adds
+strict persisted briefings, profile-local scheduled dates, missing/stale/current
+write behavior, bounded targeted retry, per-user failure isolation, and default
+no-recommendation/no-LLM preparation. A documented test suite is not a claim
 that it passed for the current checkout; run it to establish the result.
 
 Run service tests with:

@@ -8,11 +8,15 @@ from app.models.briefings import (
     BriefingGenerateRequest,
     BriefingReadResponse,
 )
+from app.models.snapshots import SnapshotGenerateResponse
 from app.repositories.briefing_repository import (
     BriefingContext,
     _daily_briefing,
 )
-from app.services.briefing_service import BriefingService
+from app.services.briefing_service import (
+    BriefingPreparationError,
+    BriefingService,
+)
 
 
 NOW = datetime(2026, 7, 12, 8, 0, tzinfo=UTC)
@@ -25,9 +29,11 @@ class FakeBriefingRepository:
         self.briefing = None
         self.persist_calls = []
         self.timezone = "Europe/Berlin"
+        self.timezone_calls = 0
 
     async def get_profile_timezone(self, *, user_id: str) -> str:
         assert user_id == "user-123"
+        self.timezone_calls += 1
         return self.timezone
 
     async def get_daily_snapshot(self, *, user_id: str, briefing_date: date):
@@ -72,6 +78,87 @@ class FakeSnapshotAggregator:
     async def generate_snapshot(self, *, user_id: str, request):
         self.calls.append((user_id, request))
         return None
+
+
+class MissingSnapshotRepository(FakeBriefingRepository):
+    def __init__(self, context: BriefingContext) -> None:
+        super().__init__(context)
+        self.snapshot_available = False
+
+    async def get_daily_snapshot(self, *, user_id: str, briefing_date: date):
+        assert user_id == "user-123"
+        assert briefing_date == TODAY
+        return self.context.snapshot if self.snapshot_available else None
+
+
+class MaterializingSnapshotAggregator(FakeSnapshotAggregator):
+    def __init__(self, repository: MissingSnapshotRepository) -> None:
+        super().__init__(repository)
+        self.repository = repository
+
+    async def generate_snapshot(self, *, user_id: str, request):
+        await super().generate_snapshot(user_id=user_id, request=request)
+        self.repository.snapshot_available = True
+        return SnapshotGenerateResponse(
+            snapshot_id=str(self.repository.context.snapshot["id"]),
+            scope=request.scope,
+            period_key=TODAY.isoformat(),
+            generated_at=NOW,
+            summary={},
+            signals={},
+        )
+
+
+class FailingSnapshotAggregator(FakeSnapshotAggregator):
+    async def generate_snapshot(self, *, user_id: str, request):
+        self.calls.append((user_id, request))
+        raise OSError("snapshot unavailable")
+
+
+class FailingPersistRepository(FakeBriefingRepository):
+    async def persist_daily_briefing(
+        self,
+        *,
+        user_id: str,
+        briefing_date: date,
+        row,
+    ):
+        raise LookupError("briefing persistence unavailable")
+
+
+class ChangingSnapshotRepository(FakeBriefingRepository):
+    def __init__(
+        self,
+        context: BriefingContext,
+        *,
+        keep_changing: bool = False,
+    ) -> None:
+        super().__init__(context)
+        self.keep_changing = keep_changing
+        self.change_count = 0
+
+    async def persist_daily_briefing(
+        self,
+        *,
+        user_id: str,
+        briefing_date: date,
+        row,
+    ):
+        briefing = await super().persist_daily_briefing(
+            user_id=user_id,
+            briefing_date=briefing_date,
+            row=row,
+        )
+        if self.change_count > 0 and not self.keep_changing:
+            return briefing
+        self.change_count += 1
+        self.context = context(
+            snapshot_row=snapshot(
+                snapshot_id=f"snapshot-concurrent-{self.change_count}",
+                generated_at=NOW.replace(hour=8 + self.change_count),
+            ),
+        )
+        return briefing
 
 
 def snapshot(
@@ -157,6 +244,220 @@ def test_get_today_is_read_only_and_reports_missing() -> None:
     assert response.briefing is None
     assert aggregator.calls == []
     assert repository.persist_calls == []
+
+
+def test_prepare_for_date_leaves_a_current_briefing_unchanged() -> None:
+    service, repository, aggregator = service_for(context())
+    initial = run(
+        service.generate_today(
+            user_id="user-123",
+            request=BriefingGenerateRequest(),
+        ),
+    )
+    repository.persist_calls.clear()
+    aggregator.calls.clear()
+    repository.timezone_calls = 0
+
+    prepared = run(
+        service.prepare_for_date(
+            user_id="user-123",
+            briefing_date=TODAY,
+        ),
+    )
+
+    assert prepared.response.freshness == "current"
+    assert prepared.response.briefing is not None
+    assert initial.briefing is not None
+    assert prepared.response.briefing.id == initial.briefing.id
+    assert prepared.snapshot_status == "reused"
+    assert prepared.briefing_status == "unchanged"
+    assert aggregator.calls == []
+    assert repository.persist_calls == []
+    assert repository.timezone_calls == 0
+
+
+def test_prepare_for_date_generates_one_missing_snapshot() -> None:
+    repository = MissingSnapshotRepository(context())
+    aggregator = MaterializingSnapshotAggregator(repository)
+    service = BriefingService(
+        repository=repository,
+        snapshot_aggregator=aggregator,
+        now_provider=lambda: NOW,
+    )
+
+    prepared = run(
+        service.prepare_for_date(
+            user_id="user-123",
+            briefing_date=TODAY,
+            window_days=14,
+        ),
+    )
+
+    assert prepared.snapshot_status == "generated"
+    assert prepared.briefing_status == "generated"
+    assert prepared.response.freshness == "current"
+    assert len(aggregator.calls) == 1
+    user_id, request = aggregator.calls[0]
+    assert user_id == "user-123"
+    assert request.scope == "daily"
+    assert request.target_date == TODAY
+    assert request.window_days == 14
+    assert len(repository.persist_calls) == 1
+
+
+def test_prepare_for_date_reuses_snapshot_when_briefing_is_missing() -> None:
+    service, repository, aggregator = service_for(context())
+
+    prepared = run(
+        service.prepare_for_date(
+            user_id="user-123",
+            briefing_date=TODAY,
+        ),
+    )
+
+    assert prepared.snapshot_status == "reused"
+    assert prepared.briefing_status == "generated"
+    assert prepared.response.freshness == "current"
+    assert aggregator.calls == []
+    assert len(repository.persist_calls) == 1
+
+
+def test_prepare_for_date_reuses_snapshot_when_briefing_is_stale() -> None:
+    service, repository, aggregator = service_for(context())
+    run(
+        service.generate_today(
+            user_id="user-123",
+            request=BriefingGenerateRequest(),
+        ),
+    )
+    repository.context = context(
+        snapshot_row=snapshot(
+            snapshot_id="snapshot-refreshed",
+            generated_at=NOW.replace(hour=9),
+        ),
+    )
+    repository.persist_calls.clear()
+    aggregator.calls.clear()
+
+    prepared = run(
+        service.prepare_for_date(
+            user_id="user-123",
+            briefing_date=TODAY,
+        ),
+    )
+
+    assert prepared.snapshot_status == "reused"
+    assert prepared.briefing_status == "refreshed"
+    assert prepared.response.freshness == "current"
+    assert prepared.response.briefing is not None
+    assert (
+        prepared.response.briefing.provenance.source_snapshot_id
+        == "snapshot-refreshed"
+    )
+    assert aggregator.calls == []
+    assert len(repository.persist_calls) == 1
+
+
+def test_prepare_for_date_retries_one_post_persist_snapshot_race() -> None:
+    repository = ChangingSnapshotRepository(context())
+    aggregator = FakeSnapshotAggregator(repository)
+    service = BriefingService(
+        repository=repository,
+        snapshot_aggregator=aggregator,
+        now_provider=lambda: NOW,
+    )
+
+    prepared = run(
+        service.prepare_for_date(
+            user_id="user-123",
+            briefing_date=TODAY,
+        ),
+    )
+
+    assert prepared.response.freshness == "current"
+    assert prepared.response.briefing is not None
+    assert (
+        prepared.response.briefing.provenance.source_snapshot_id
+        == "snapshot-concurrent-1"
+    )
+    assert len(repository.persist_calls) == 2
+    assert repository.change_count == 1
+    assert aggregator.calls == []
+
+
+def test_prepare_for_date_bounds_post_persist_convergence() -> None:
+    repository = ChangingSnapshotRepository(context(), keep_changing=True)
+    aggregator = FakeSnapshotAggregator(repository)
+    service = BriefingService(
+        repository=repository,
+        snapshot_aggregator=aggregator,
+        now_provider=lambda: NOW,
+    )
+
+    with pytest.raises(BriefingPreparationError) as error:
+        run(
+            service.prepare_for_date(
+                user_id="user-123",
+                briefing_date=TODAY,
+            ),
+        )
+
+    assert error.value.stage == "briefing"
+    assert error.value.error_type == "RuntimeError"
+    assert len(repository.persist_calls) == 2
+    assert repository.change_count == 2
+    assert aggregator.calls == []
+
+
+def test_prepare_for_date_reports_snapshot_stage_errors() -> None:
+    repository = MissingSnapshotRepository(context())
+    aggregator = FailingSnapshotAggregator(repository)
+    service = BriefingService(
+        repository=repository,
+        snapshot_aggregator=aggregator,
+        now_provider=lambda: NOW,
+    )
+
+    with pytest.raises(BriefingPreparationError) as error:
+        run(
+            service.prepare_for_date(
+                user_id="user-123",
+                briefing_date=TODAY,
+            ),
+        )
+
+    assert error.value.stage == "snapshot"
+    assert error.value.error_type == "OSError"
+    assert error.value.snapshot_status is None
+    assert error.value.snapshot_id is None
+    assert isinstance(error.value.__cause__, OSError)
+    assert len(aggregator.calls) == 1
+    assert repository.persist_calls == []
+
+
+def test_prepare_for_date_reports_briefing_stage_errors() -> None:
+    repository = FailingPersistRepository(context())
+    aggregator = FakeSnapshotAggregator(repository)
+    service = BriefingService(
+        repository=repository,
+        snapshot_aggregator=aggregator,
+        now_provider=lambda: NOW,
+    )
+
+    with pytest.raises(BriefingPreparationError) as error:
+        run(
+            service.prepare_for_date(
+                user_id="user-123",
+                briefing_date=TODAY,
+            ),
+        )
+
+    assert error.value.stage == "briefing"
+    assert error.value.error_type == "LookupError"
+    assert error.value.snapshot_status == "reused"
+    assert error.value.snapshot_id == "snapshot-1"
+    assert isinstance(error.value.__cause__, LookupError)
+    assert aggregator.calls == []
 
 
 def test_generate_refreshes_snapshot_and_persists_one_strict_action() -> None:
@@ -467,6 +768,41 @@ def test_profile_timezone_determines_briefing_date() -> None:
     response = run(service.get_today(user_id="user-123"))
 
     assert response.briefing_date == TODAY
+
+
+def test_generate_today_resolves_the_briefing_date_once() -> None:
+    before_local_midnight = datetime(2026, 7, 12, 21, 59, tzinfo=UTC)
+    after_local_midnight = datetime(2026, 7, 12, 22, 1, tzinfo=UTC)
+    now_calls = []
+
+    def advancing_now() -> datetime:
+        value = before_local_midnight if not now_calls else after_local_midnight
+        now_calls.append(value)
+        return value
+
+    repository = FakeBriefingRepository(context())
+    aggregator = FakeSnapshotAggregator(repository)
+    service = BriefingService(
+        repository=repository,
+        snapshot_aggregator=aggregator,
+        now_provider=advancing_now,
+    )
+
+    response = run(
+        service.generate_today(
+            user_id="user-123",
+            request=BriefingGenerateRequest(),
+        ),
+    )
+
+    assert response.briefing_date == TODAY
+    assert response.briefing is not None
+    assert response.briefing.briefing_date == TODAY
+    assert repository.timezone_calls == 1
+    assert len(now_calls) == 2
+    assert len(aggregator.calls) == 1
+    assert aggregator.calls[0][1].target_date == TODAY
+    assert repository.persist_calls[0]["briefing_date"] == TODAY.isoformat()
 
 
 def test_repeated_recent_feedback_changes_ranking_with_bounded_provenance() -> None:

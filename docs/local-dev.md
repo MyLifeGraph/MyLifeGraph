@@ -309,10 +309,10 @@ SCHEDULED_REFRESH_TOKEN=<local scheduler token>
 Keep `SUPABASE_SERVICE_ROLE_KEY` only in the FastAPI service environment. Do
 not add it to Flutter `.env`, docs examples with real values, browser runtime
 configuration, or committed files. Keep `SCHEDULED_REFRESH_TOKEN` backend-only
-for local cron/scheduler tests.
+for local scheduler invocations and tests.
 
-The scheduler-triggered daily refresh endpoint is intentionally not a Flutter
-client endpoint:
+The scheduler-triggered daily preparation endpoint is intentionally not a
+Flutter client endpoint:
 
 ```bash
 curl -X POST http://localhost:8000/v1/scheduled/daily-refresh \
@@ -321,9 +321,36 @@ curl -X POST http://localhost:8000/v1/scheduled/daily-refresh \
   -d '{"window_days":7,"limit":100,"include_recommendations":false}'
 ```
 
-It refreshes deterministic daily snapshots for onboarded non-guest profiles.
-When `include_recommendations=true`, it also runs the deterministic
-recommendation generator with LLM wording disabled.
+The backend captures one UTC `run_at`, resolves one local `briefing_date` from
+each eligible profile's IANA timezone, and prepares the exact-date daily snapshot
+and persisted briefing. Missing snapshots are generated; existing snapshots are
+reused when only the briefing is missing; stale briefings are refreshed against
+the matching snapshot; and current snapshot/briefing pairs are skipped without
+changing ids or timestamps. `target_date` is optional and should be used only as
+an explicit backfill override.
+
+For a bounded operational retry, a token holder can restrict the request to at
+most 20 UUIDs:
+
+```bash
+curl -X POST http://localhost:8000/v1/scheduled/daily-refresh \
+  -H 'X-Scheduled-Refresh-Token: <local scheduler token>' \
+  -H 'Content-Type: application/json' \
+  -d '{"profile_ids":["11111111-1111-4111-8111-111111111111"],"window_days":7,"limit":1,"include_recommendations":false}'
+```
+
+`profile_ids` narrows selection only; it does not bypass the onboarded non-guest
+eligibility checks. The response carries the batch `run_at` plus per-user local
+date, selection reason, snapshot and briefing ids/statuses, and a sanitized
+failure stage. Snapshot, briefing, timezone, or optional recommendation failure
+for one profile does not stop other selected profiles.
+
+Recommendation refresh is off by default. Explicit
+`include_recommendations=true` runs only the deterministic recommendation path
+and keeps LLM wording disabled. Scheduled snapshot/briefing preparation never
+calls an LLM, normal Dashboard loads remain read-only GETs, and Phase 7 sends no
+notifications. This repository does not contain deployed cron wiring; the
+endpoint and local commands alone are not a production scheduling claim.
 
 ## Supabase
 
@@ -578,13 +605,24 @@ snapshot-date metadata, focus duration, inactive habit, and unscheduled weekday
 rejection. It also checks that the refreshed snapshot contains neutral action
 facts and that ordinary action writes did not call recommendation generation.
 
+The briefing portion first proves that authenticated GET is read-only while the
+daily briefing is missing. It then invokes the protected Phase 7 scheduler with
+`profile_ids` restricted to the smoke's unique test user. Database and response
+assertions require the profile-local date, exact source snapshot and briefing
+ids, deterministic no-LLM provenance, and one persisted daily identity. An
+immediate identical retry must select no current work and preserve both rows and
+their timestamps. Dashboard subsequently reads that prepared briefing with GET
+only; it still does not generate during normal load. The E2E script supplies a
+local scheduler token to FastAPI and the Node assertion process only, never to
+Flutter.
+
 The Phase 0C portion remains part of the same smoke: it verifies revisioned
 Setup ownership and retry/edit behavior, the service-role-only atomic apply RPC,
 manual-row preservation, profile projection, and concurrent same-request
 convergence before and after the capture journey. This describes the coverage
-implemented by `e2e/web/smoke.mjs`; use the command above to establish the
-result for the current checkout and local environment. Its presence is not a
-claim that the current checkout has completed a full Phase 3 E2E run.
+implemented by `e2e/web/smoke.mjs`. The combined Phase 3 through Phase 7 path
+passed non-destructively in the 2026-07-12 Phase 7 implementation checkout; use
+the command above to establish the result again after later changes.
 
 By default the script starts FastAPI on `http://127.0.0.1:8000`. Useful AI
 service overrides:
@@ -594,13 +632,16 @@ AI_SERVICE_PORT=8001
 AI_SERVICE_BASE_URL=http://127.0.0.1:8001
 AI_SERVICE_PYTHON=/path/to/python
 AI_SERVICE_START=false
+SCHEDULED_REFRESH_TOKEN=<token configured in the reused FastAPI process>
 ```
 
 By default the script always starts FastAPI from the current checkout. It does
 not reuse an already-running service on the same port; stop that service or set
 `AI_SERVICE_PORT` to a free port. Use `AI_SERVICE_START=false` only when you
 intentionally want to reuse a compatible FastAPI process that is already running
-with local `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` settings.
+with local `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` settings. Because the
+smoke exercises Phase 7, a reused process must also use the same
+`SCHEDULED_REFRESH_TOKEN` supplied to the script.
 
 The local service-role key is used only inside FastAPI and the Node E2E process
 for local test setup and assertions. It is not passed to Flutter.

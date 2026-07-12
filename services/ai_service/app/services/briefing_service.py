@@ -31,6 +31,31 @@ class _Candidate:
     feedback_applied_count: int = 0
 
 
+@dataclass(frozen=True)
+class BriefingPreparationResult:
+    """Observable outcome for one idempotent scheduled preparation."""
+
+    response: BriefingReadResponse
+    snapshot_status: Literal["generated", "reused"]
+    briefing_status: Literal["generated", "refreshed", "unchanged"]
+
+
+class BriefingPreparationError(RuntimeError):
+    def __init__(
+        self,
+        *,
+        stage: Literal["snapshot", "briefing"],
+        cause: Exception,
+        snapshot_status: Literal["generated", "reused"] | None = None,
+        snapshot_id: str | None = None,
+    ) -> None:
+        super().__init__(f"Scheduled {stage} preparation failed.")
+        self.stage = stage
+        self.error_type = cause.__class__.__name__
+        self.snapshot_status = snapshot_status
+        self.snapshot_id = snapshot_id
+
+
 class BriefingService:
     """Build one deterministic daily decision from current executable facts."""
 
@@ -46,7 +71,18 @@ class BriefingService:
         self._now_provider = now_provider or _utc_now
 
     async def get_today(self, *, user_id: str) -> BriefingReadResponse:
-        briefing_date = await self._briefing_date(user_id=user_id)
+        briefing_date = await self.resolve_briefing_date(user_id=user_id)
+        return await self.get_for_date(
+            user_id=user_id,
+            briefing_date=briefing_date,
+        )
+
+    async def get_for_date(
+        self,
+        *,
+        user_id: str,
+        briefing_date: date,
+    ) -> BriefingReadResponse:
         briefing = await self._repository.get_daily_briefing(
             user_id=user_id,
             briefing_date=briefing_date,
@@ -76,11 +112,14 @@ class BriefingService:
         user_id: str,
         request: BriefingGenerateRequest,
     ) -> BriefingReadResponse:
+        briefing_date = await self.resolve_briefing_date(user_id=user_id)
         if not request.force:
-            current = await self.get_today(user_id=user_id)
+            current = await self.get_for_date(
+                user_id=user_id,
+                briefing_date=briefing_date,
+            )
             if current.freshness == "current":
                 return current
-        briefing_date = await self._briefing_date(user_id=user_id)
         await self._snapshot_aggregator.generate_snapshot(
             user_id=user_id,
             request=SnapshotGenerateRequest(
@@ -89,6 +128,112 @@ class BriefingService:
                 window_days=7,
             ),
         )
+        return await self._persist_for_date(
+            user_id=user_id,
+            briefing_date=briefing_date,
+        )
+
+    async def prepare_for_date(
+        self,
+        *,
+        user_id: str,
+        briefing_date: date,
+        window_days: int = 7,
+    ) -> BriefingPreparationResult:
+        """Prepare one date without rewriting an already-current decision.
+
+        Scheduled preparation reuses an existing daily snapshot. It creates a
+        snapshot only when that local period is missing, then creates or
+        refreshes the briefing against the exact persisted snapshot. This makes
+        an immediate retry write-free while still repairing a partial prior run.
+        """
+
+        try:
+            current = await self.get_for_date(
+                user_id=user_id,
+                briefing_date=briefing_date,
+            )
+        except Exception as exc:
+            raise BriefingPreparationError(stage="briefing", cause=exc) from exc
+        if current.freshness == "current":
+            return BriefingPreparationResult(
+                response=current,
+                snapshot_status="reused",
+                briefing_status="unchanged",
+            )
+
+        try:
+            snapshot = await self._repository.get_daily_snapshot(
+                user_id=user_id,
+                briefing_date=briefing_date,
+            )
+        except Exception as exc:
+            raise BriefingPreparationError(stage="snapshot", cause=exc) from exc
+        snapshot_status: Literal["generated", "reused"] = "reused"
+        raw_snapshot_id = snapshot.get("id") if snapshot is not None else None
+        snapshot_id = (
+            str(raw_snapshot_id)
+            if isinstance(raw_snapshot_id, str) and raw_snapshot_id
+            else None
+        )
+        if snapshot is None:
+            try:
+                generated_snapshot = await self._snapshot_aggregator.generate_snapshot(
+                    user_id=user_id,
+                    request=SnapshotGenerateRequest(
+                        scope="daily",
+                        target_date=briefing_date,
+                        window_days=window_days,
+                    ),
+                )
+                snapshot_id = generated_snapshot.snapshot_id
+            except Exception as exc:
+                raise BriefingPreparationError(stage="snapshot", cause=exc) from exc
+            snapshot_status = "generated"
+
+        try:
+            await self._persist_for_date(
+                user_id=user_id,
+                briefing_date=briefing_date,
+            )
+            verified = await self.get_for_date(
+                user_id=user_id,
+                briefing_date=briefing_date,
+            )
+            if verified.freshness != "current":
+                await self._persist_for_date(
+                    user_id=user_id,
+                    briefing_date=briefing_date,
+                )
+                verified = await self.get_for_date(
+                    user_id=user_id,
+                    briefing_date=briefing_date,
+                )
+            if verified.freshness != "current":
+                raise RuntimeError(
+                    "Briefing did not converge on the current daily snapshot.",
+                )
+        except Exception as exc:
+            raise BriefingPreparationError(
+                stage="briefing",
+                cause=exc,
+                snapshot_status=snapshot_status,
+                snapshot_id=snapshot_id,
+            ) from exc
+        return BriefingPreparationResult(
+            response=verified,
+            snapshot_status=snapshot_status,
+            briefing_status=(
+                "generated" if current.freshness == "missing" else "refreshed"
+            ),
+        )
+
+    async def _persist_for_date(
+        self,
+        *,
+        user_id: str,
+        briefing_date: date,
+    ) -> BriefingReadResponse:
         context = await self._repository.load_context(
             user_id=user_id,
             briefing_date=briefing_date,
@@ -111,7 +256,7 @@ class BriefingService:
             briefing=briefing,
         )
 
-    async def _briefing_date(self, *, user_id: str) -> date:
+    async def resolve_briefing_date(self, *, user_id: str) -> date:
         timezone_name = await self._repository.get_profile_timezone(user_id=user_id)
         try:
             timezone = ZoneInfo(timezone_name)

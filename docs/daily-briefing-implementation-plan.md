@@ -1202,8 +1202,9 @@ Implemented:
 
 The browser E2E source injects response loss for habit/task create, habit
 outcome/undo, task completion/undo, and focus start/finish. Its negative writes
-include terminal-focus `updated_at` mutation. These are source assertions, not
-a claim that the current checkout's full browser run passed.
+include terminal-focus `updated_at` mutation. The combined Phase 3 through Phase
+7 journey passed non-destructively in the 2026-07-12 Phase 7 implementation
+checkout; later changes require a new pass.
 
 The complete object/command/validation/recovery contract is in
 `docs/phase-3-executable-actions-contract.md`.
@@ -1300,33 +1301,52 @@ Evaluation:
 - Does every default insight suggest a bounded user choice rather than claim
   causation?
 
-### Phase 7: Scheduled Daily Preparation
+### Phase 7: Scheduled Daily Preparation (Minimal Backend Implemented)
 
 Goal:
 
 - Make the app prepared when the user opens it without hiding generation.
 
-Work:
+Implemented backend contract:
 
-- Wire deployed cron/job execution to the existing scheduled refresh foundation.
-- Generate daily snapshots and persisted briefings for onboarded non-guest
-  profiles.
-- Define refresh policy for Evening Shutdown, Morning Calibration, material
-  daytime changes, and stale periods.
-- Isolate failures per user and keep all scheduled generation deterministic.
-- Respect each user's timezone when selecting the briefing date.
-- Add only opt-in briefing-ready or explicit check-in reminders, with quiet
-  hours, snooze, frequency caps, and deep links to the exact action.
-- Keep sensitive state out of notification copy and suppress pressure-oriented
-  reminders in recover or paused-day state.
+- Extended the existing token-protected `POST /v1/scheduled/daily-refresh`
+  boundary; no unrelated worker or user-facing generation path was added.
+- Captures one timezone-aware run instant and resolves every onboarded non-guest
+  profile to its stored-IANA-timezone local briefing date. An explicit
+  `target_date` remains a deterministic operator/test override, and an invalid
+  timezone fails only that profile.
+- Selects missing daily snapshots, missing daily briefings, and briefings stale
+  against their source snapshot id or generation timestamp. Current pairs are
+  normally omitted; optional deterministic recommendation retry may select a
+  current pair while reusing its briefing unchanged.
+- Generates a missing snapshot exactly once, reuses an existing snapshot, and
+  creates or refreshes the stable `(user_id, briefing_date)` briefing. One
+  bounded post-persist convergence retry handles a concurrent snapshot change.
+- Isolates failures per user, caps concurrent preparation, and returns bounded
+  profile-date, snapshot, briefing, or recommendation stage results. A bounded
+  `profile_ids` UUID list can target an eligible subset without bypassing
+  onboarding or non-guest checks.
+- Keeps scheduled work deterministic and no-LLM. Normal Dashboard load remains
+  GET-only, ordinary capture/action writes do not generate briefings, and user
+  adjustment remains deliberate.
+
+Deliberately not claimed:
+
+- No deployed cron/job has been configured or inspected; the repository now
+  provides the protected callable backend boundary only.
+- No briefing-ready or check-in notification is created or sent. Quiet hours,
+  opt-in, snooze, frequency caps, sensitive-copy policy, and deep links remain
+  requirements for any later notification slice.
 
 Evaluation:
 
-- Is a fresh morning briefing normally available without manual refresh?
+- Does an invoked scheduled run prepare a fresh profile-local morning briefing
+  without a user-triggered POST?
 - Are stale or failed briefings visibly distinguishable?
 - Are retries idempotent and free of LLM calls?
-- Do notifications arrive in the correct local window, open the intended action,
-  and remain silent for disabled categories, demo state, and quiet hours?
+- Before any notification work is claimed, does it honor opt-in, the correct
+  local window, exact deep links, disabled/demo state, quiet hours, and
+  sensitive-copy restrictions?
 
 ### Phase 8: Weekly Review And Habit Adaptation
 
@@ -1460,5 +1480,15 @@ provenance, and unchanged original reasons/evidence. Insights now defaults to
 one cautious observation with evidence window, confidence/data-quality state,
 and optional bounded experiment; analytics remain advanced exploration.
 
-The next implementation should be **Phase 7: Scheduled Daily Preparation**.
-Coach, calendar, broad autonomous changes, and LLM work remain later phases.
+The minimal Phase 7 backend is implemented. The protected scheduled boundary
+pins one run instant, selects eligible profiles by local date and
+missing/stale/current state, prepares deterministic snapshots and persisted
+briefings idempotently, supports bounded `profile_ids`, and isolates per-user
+failures. It does not make Dashboard reads generate, send notifications, add a
+worker, or prove deployed cron wiring.
+
+The next implementation should be **Phase 8: Bounded Weekly Review And Habit
+Adaptation**. It should summarize explicit weekly facts, propose at most one or
+two changes, and require confirmation before applying them. Coach, calendar,
+broad autonomous changes, notification delivery, deployed scheduling, and LLM
+work remain separate later concerns.

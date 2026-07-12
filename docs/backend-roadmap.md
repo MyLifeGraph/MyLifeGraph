@@ -161,16 +161,28 @@ Already implemented:
   - Migration `20260711120000_phase_3_executable_action_schema.sql` adds the
     necessary task, habit-log, and focus columns/checks/triggers while preserving
     existing RLS and table grants.
-- Scheduled refresh foundation:
+- Phase 7 scheduled daily preparation backend:
   - `POST /v1/scheduled/daily-refresh`.
   - Protected by backend-only `X-Scheduled-Refresh-Token`.
-  - Lists onboarded non-guest profiles, prioritizes users missing the target
-    date's daily snapshot, then fills the batch with the oldest existing daily
-    snapshots.
-  - Refreshes deterministic daily snapshots with the existing idempotent
-    snapshot upsert.
-  - Can optionally run deterministic recommendation generation with LLM wording
-    disabled.
+  - Pins one timezone-aware `run_at`, resolves each onboarded non-guest
+    profile's IANA timezone to its local briefing date, and keeps an explicit
+    `target_date` as a deterministic operator override.
+  - Selects only missing snapshots, missing briefings, or briefings stale
+    against snapshot id/time provenance. Current snapshot/briefing pairs are
+    write-free; when optional recommendation retry is requested, the current
+    briefing is still reused unchanged.
+  - Creates a missing daily snapshot exactly once, reuses an existing snapshot,
+    and generates or refreshes the same `(user_id, briefing_date)` briefing.
+    One bounded post-write check repairs a concurrent snapshot change or
+    reports a briefing-stage failure.
+  - Supports a bounded `profile_ids` UUID filter that still intersects
+    onboarded non-guest eligibility, bounded batch size and concurrency, and
+    per-user `profile_date|snapshot|briefing|recommendations` failure results.
+  - Optional recommendation refresh remains deterministic with LLM wording
+    disabled. Normal Dashboard GET, capture, task, habit, and focus paths do not
+    invoke scheduled preparation or gain hidden generation.
+  - No notification is sent, no production worker is added, and repository
+    implementation does not claim that a deployed cron/job invokes the endpoint.
 - Phase 4 deterministic briefing service:
   - Persists one `daily_briefings` row per user and profile-local date under the
     strict `daily-briefing-v1` contract.
@@ -249,7 +261,7 @@ repositories, and jobs, not as unconstrained autonomous LLM loops.
 | Signal aggregator | Intake, daily check-in, task/habit/focus changes, scheduled jobs | `daily_logs`, `behavioral_events`, `tasks`, `goals`, `habits`, `habit_logs`, `focus_sessions`, `schedule_items`, `memory_entries` | `user_state_snapshots`, optional `ai_insights` | None by default |
 | Recommendation service | Intake complete, explicit refresh, scheduled refresh | `user_state_snapshots`, `daily_logs`, `behavioral_events`, `tasks`, existing `recommendations` | `recommendations` | Optional wording only later |
 | Recommendation verifier | Every generated recommendation | Candidate metadata, active recommendations | Accept/reject result | None |
-| Daily briefing service | Explicit refresh today; scheduled generation remains later | `user_state_snapshots`, `recommendations`, goals, tasks, habits, habit outcomes, `decision_feedback` | `daily_briefings` | None for v1 |
+| Daily briefing service | Explicit refresh today; protected scheduled daily preparation | `user_state_snapshots`, `recommendations`, goals, tasks, habits, habit outcomes, `decision_feedback` | `daily_briefings` | None for v1 |
 | Coach service | User sends coach message | Recent messages, snapshots, selected memory | `coach_messages`, optional memory candidates | Yes, budgeted |
 | Memory service | Check-ins, coach conversations, weekly review | Raw notes/messages, existing memory | `memory_entries` | Optional extraction only |
 | Planning service | Weekly review, user request | Goals, tasks, habits, schedule, snapshots | `tasks`, `schedule_items`, `recommendations`, `coach_messages` | Optional for complex plans |
@@ -260,14 +272,15 @@ authenticated snapshot aggregator endpoint, deliberate dashboard refresh UX,
 the Phase 3 task/habit/focus execution contracts, scheduler-triggered daily
 refresh endpoint, and deterministic Insights correlation exploration now
 exist. Phase 4's deterministic Daily Briefing service supplies the backend
-decision contract, Phase 5 consumes it in the decision-first Today surface, and
-Phase 6 closes the bounded feedback/Insight loop. The next product work is Phase
-7 scheduled daily preparation, before any coach, memory extraction, weekly planning, calendar import,
-or LLM provider work. Deployed cron/job
-execution remains useful, but it should precompute a defined daily state or
-briefing contract rather than exist as infrastructure in search of a product
-output. See `docs/daily-briefing-implementation-plan.md` for the current product
-contract and phase sequence, and
+decision contract, Phase 5 consumes it in the decision-first Today surface,
+Phase 6 closes the bounded feedback/Insight loop, and the minimal Phase 7
+backend prepares timezone-pinned daily snapshots and briefings through the
+existing protected endpoint. The next product work is Phase 8's bounded weekly
+review and user-confirmed habit adaptation, before Coach, calendar import, or
+LLM provider work. Deployed cron/job wiring and notification delivery remain
+unimplemented and must not be inferred from the callable endpoint. See
+`docs/daily-briefing-implementation-plan.md` for the current product contract
+and phase sequence, and
 `docs/phase-3-executable-actions-contract.md` for the completed action contract.
 
 ## User Start Flow
@@ -599,10 +612,12 @@ Use these rules before adding any model provider:
 The next implementation should build on completed Phase 0 product integrity,
 Phase 1 capture, Phase 2 explainable state, Phase 3 executable action targets,
 Phase 4's persisted deterministic briefing contract, Phase 5's decision-first
-Today consumer, and Phase 6's bounded feedback/Insight loop. The immediate slice
-is **Phase 7: Scheduled Daily Preparation**: use the existing protected
-scheduled boundary to prepare deterministic snapshots and briefings by
-profile-local date without hiding generation or adding an LLM.
+Today consumer, Phase 6's bounded feedback/Insight loop, and the minimal Phase 7
+scheduled preparation backend. The immediate slice is **Phase 8: Bounded Weekly
+Review And Habit Adaptation**: summarize a small, explicit evidence window,
+separate completed, skipped, missed, carried, and recovery-day facts, propose at
+most one or two changes, and require confirmation before changing a user-owned
+goal, habit, task, or schedule record.
 
 ### Completed Slice 0A: Honest Capture
 
@@ -783,6 +798,28 @@ profile-local date without hiding generation or adding an LLM.
 - Adds model/repository/widget tests and browser assertions for read-only load,
   persisted identity, deliberate adjustment, and real action dispatch.
 
+### Completed Slice 7: Scheduled Daily Preparation Backend
+
+- Extended `POST /v1/scheduled/daily-refresh` rather than adding a worker or a
+  second privileged boundary. The endpoint remains protected by the backend-only
+  scheduled refresh token.
+- Captures one aware run instant and resolves each eligible profile's local date
+  from its stored IANA timezone. Invalid timezones fail only that profile; an
+  explicit target date remains a deterministic operator/test override.
+- Selects missing daily snapshots, missing briefings, and snapshot-provenance-
+  stale briefings. Current pairs are normally skipped; optional deterministic
+  recommendation retry can select them while leaving the briefing unchanged.
+- Reuses existing snapshots, generates a missing snapshot once, upserts one
+  stable daily briefing identity, and performs one bounded convergence retry if
+  the source snapshot changes during persistence.
+- Supports bounded UUID `profile_ids` targeting without bypassing onboarded
+  non-guest eligibility. Per-user result envelopes expose selection reason,
+  local date, snapshot/briefing status and ids, and a bounded failure stage while
+  allowing the rest of the batch to continue.
+- Preserves deterministic no-LLM output, GET-only Dashboard load, deliberate
+  user adjustment, and ordinary-write boundaries. It sends no notifications,
+  installs no production worker, and does not establish deployed cron wiring.
+
 ### Completed Slice: Controlled Recommendation Refresh
 
 - Implemented: authenticated Intake V1 completion creates an onboarding
@@ -820,11 +857,12 @@ profile-local date without hiding generation or adding an LLM.
   archive, and inspect cadence-aware progress and streaks for manual habits;
   active Setup-owned habits remain executable without transferring definition
   ownership out of Settings Setup.
-- Implemented: scheduler-triggered daily snapshot refresh endpoint for onboarded
-  non-guest profiles.
-- Still open: deployed cron/job wiring, but it should now be evaluated against
-  the Daily Briefing cadence and not treated as the next product slice by
-  itself.
+- Implemented: scheduler-triggered timezone-pinned daily snapshot and briefing
+  preparation for onboarded non-guest profiles, with bounded targeting,
+  idempotent current/missing/stale behavior, and per-user failure isolation.
+- Still open: deployed cron/job wiring and all notification delivery. Their
+  absence does not imply Dashboard-load generation or a hidden background
+  process.
 
 ### Completed Slice: E2E Expansion
 
@@ -837,14 +875,17 @@ profile-local date without hiding generation or adding an LLM.
   removal after edit, deliberate dashboard recommendation refresh, and core
   direct app writes.
 - Implemented: the guest/mock widget smoke stays fast and separate.
-- Expected before claiming Phase 3 browser completion: exact database assertions
-  for task create/edit/postpone/undo/complete/restore/cancel/restore; manual and
-  Setup-owned habit complete/skip/undo without duplicate logs; and focus
-  start/finish/abandon with owned linkage and no target mutation. Those
-  assertions plus committed-response-loss for habit/task create, habit
+- Implemented: exact database assertions cover task
+  create/edit/postpone/undo/complete/restore/cancel/restore; manual and Setup-owned
+  habit complete/skip/undo without duplicate logs; and focus start/finish/abandon
+  with owned linkage and no target mutation. Those assertions plus
+  committed-response-loss for habit/task create, habit
   outcome/undo, task completion/undo, and focus start/finish are encoded in the
   smoke. Negative lifecycle/range/cadence writes include terminal-focus
-  `updated_at`; the current full browser run must succeed before any pass claim.
+  `updated_at`. The Phase 7 run also proves targeted scheduled preparation and a
+  write-free retry. The combined Phase 3 through Phase 7 journey passed
+  non-destructively in the 2026-07-12 Phase 7 implementation checkout; later
+  changes require a new pass.
 
 ### Completed Slice: Controlled Snapshot Triggers
 
@@ -856,12 +897,12 @@ profile-local date without hiding generation or adding an LLM.
 - Implemented: focus start/finish/abandon writes call the same daily snapshot
   refresh best-effort for persisted `metadata.entry_date`, with `started_at`
   UTC-date fallback for legacy/invalid rows.
-- Implemented: `POST /v1/scheduled/daily-refresh` refreshes deterministic daily
-  snapshots for onboarded non-guest profiles and can optionally run
-  deterministic recommendation generation without LLM wording.
-- Next: use the Daily Briefing contract to decide whether scheduled refresh
-  should generate only daily snapshots, recommendations, persisted briefings, or
-  a combination.
+- Implemented: `POST /v1/scheduled/daily-refresh` prepares deterministic daily
+  snapshots and persisted briefings for each selected profile-local date and can
+  optionally retry deterministic recommendations without LLM wording.
+- Current snapshot/briefing pairs stay write-free unless optional recommendation
+  retry explicitly selects them; missing/stale pairs converge on the existing
+  daily identities with no Dashboard-load generation.
 - Preserve guest/mock mode and keep failures best-effort for the user write.
 - Do not introduce a production worker, LLM provider, or dashboard-load
   generation for this slice.
@@ -881,7 +922,8 @@ profile-local date without hiding generation or adding an LLM.
 - OpenAI/OpenRouter/local LLM integration.
 - Real coach assistant replies.
 - Calendar provider connection.
-- Weekly planning or review.
+- Autonomous weekly plan rewrites or applying review proposals without explicit
+  confirmation.
 - Vector search.
 - Background workers unless implementation cannot stay simple without them.
 - Remote production database claims without direct inspection.

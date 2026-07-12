@@ -14,7 +14,8 @@ way to explore the product today is the Flutter app in mock-data guest mode.
   migrations create the current app tables, including Intake V1 tables, for
   local Supabase-backed testing.
 - The FastAPI service exposes authenticated typed Setup read/completion/edit,
-  deterministic recommendation endpoints, and deterministic snapshot refresh.
+  deterministic recommendation and briefing endpoints, and deterministic
+  snapshot refresh.
   Applying Intake V1 triggers a controlled recommendation refresh from the
   constant onboarding snapshot. Daily and weekly user-state snapshots can be
   refreshed without an LLM provider and now include an explainable
@@ -22,13 +23,15 @@ way to explore the product today is the Flutter app in mock-data guest mode.
   recovery-first Daily Mode. Snapshots also include additive explicit habit
   outcomes and focus-session counts/minutes without changing the Phase 2
   classifier. The dashboard includes a deliberate deterministic recommendation
-  refresh action, and a backend-only scheduled endpoint can refresh onboarded
-  non-guest profiles for cron-style runs.
+  refresh action. A protected backend-only scheduler captures one UTC run
+  instant, resolves each onboarded non-guest profile's local date, and prepares
+  missing daily snapshots plus missing or snapshot-stale persisted briefings
+  without an LLM.
 - Insights includes deterministic correlation exploration for sleep, workload,
   stress, energy, mood, screen time, activity, steps, habits, recovery, and
   focus. It computes 7/14/30-day relationships in Flutter from existing
   Supabase rows or local mock time series, without LLM usage.
-- Phase 0A through Phase 6 are implemented. Evening and Morning merge without
+- Phase 0A through Phase 7 are implemented. Evening and Morning merge without
   erasing each other and feed a strict backend-only state parser; Setup remains
   progressive, revision-safe, reviewable, and atomically materialized. Phase 3
   adds durable task commands, cadence-aware Habit V1 outcomes, linked focus
@@ -45,7 +48,11 @@ way to explore the product today is the Flutter app in mock-data guest mode.
   dispatcher. Phase 6 adds retry-safe owner-scoped feedback, bounded 28-day
   context-matched ranking effects with explicit provenance, deletable history,
   and one cautious default Insight before advanced correlation exploration.
-  Phase 7 scheduled daily preparation is next. See
+  Phase 7 adds bounded scheduled daily preparation: missing prerequisites are
+  generated, stale briefings are refreshed against their exact source snapshot,
+  and current snapshot/briefing pairs remain write-free. Each user failure is
+  isolated and reports its stage. The repository does not configure a deployed
+  cron or create notifications. See
   `docs/phase-3-executable-actions-contract.md` and
   `docs/daily-briefing-implementation-plan.md`.
 - Repository docs and scripts should be treated as the shared team source of
@@ -231,10 +238,10 @@ Supabase is the intended auth and persistence backend. The current app supports:
   complete counts, using stable 1,000-row pages. Focus target validation locks
   the selected task or habit row before the session write.
 - The strict `executable-action-v1` envelope is implemented in Flutter and
-  FastAPI for future briefing output. Both parsers reject the same unknown
-  fields, explicit-null metadata fields, coercions, invalid dates, duration
-  bounds, metadata leakage, and command/kind/target mismatches. `review_plan`
-  is explicitly unavailable until its own bounded surface exists.
+  FastAPI and is consumed by persisted briefings. Both parsers reject the same
+  unknown fields, explicit-null metadata fields, coercions, invalid dates,
+  duration bounds, metadata leakage, and command/kind/target mismatches.
+  `review_plan` is explicitly unavailable until its own bounded surface exists.
 - The additive `summary.daily_state` contract is
   `explainable-daily-state-v1`. It uses strict V2 parsing, a fixed seven-day
   state lookback separate from the requested statistics window, explicit
@@ -252,6 +259,14 @@ Supabase is the intended auth and persistence backend. The current app supports:
   source evidence or Daily State classifier.
 - `POST /v1/scheduled/daily-refresh` is a backend-only scheduler endpoint
   protected by `X-Scheduled-Refresh-Token`; it must not be called from Flutter.
+  One UTC run instant determines each profile-local `briefing_date`. Missing
+  snapshots or briefings are created, stale briefings are refreshed, and current
+  pairs are skipped without changing their identities or timestamps. A bounded
+  `profile_ids` list can target at most 20 eligible profiles for an operational
+  retry without broadening access to guests or incomplete profiles. Results
+  expose per-user snapshot, briefing, and failure-stage status. Recommendation
+  refresh is off by default, and every scheduler path remains no-LLM. Normal
+  Dashboard loads continue to read briefings with GET only.
 
 Important current caveat: the Flutter app targets the canonical snake_case
 schema. A clean local Supabase reset should apply
@@ -335,9 +350,12 @@ FLUTTER_BIN=/path/to/flutter bash scripts/e2e_web.sh
 The browser E2E script starts local Supabase, starts FastAPI with local backend
 Supabase settings, and runs Flutter Web. Its smoke path includes authenticated
 Setup ownership/revision assertions, Evening/Morning merge assertions,
-deterministic linked-event checks, snapshot refresh, recommendations, and core
-app writes. Run the command before claiming the current checkout passes that
-path.
+deterministic linked-event checks, snapshot refresh, recommendations, core app
+writes, and a token-protected Phase 7 preparation targeted only to its unique
+test profile. The scheduler assertion verifies profile-local date, persisted
+snapshot/briefing identities, no-LLM provenance, and a write-free retry; its
+token is passed to FastAPI and the Node assertion process, never Flutter. Run
+the command before claiming the current checkout passes that path.
 The smoke now contains Phase 3 task transition/undo, habit skip/undo, focus,
 committed-response-loss reconciliation for habit/task create, habit
 outcome/undo, task completion/undo, and focus start/finish, plus negative

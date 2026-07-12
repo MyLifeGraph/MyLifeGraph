@@ -16,9 +16,9 @@ Flutter app <-> local mock data and guest storage
 The Flutter app is the main product surface. Supabase is the intended auth and
 persistence backend. The FastAPI service is an independent AI boundary that
 currently serves authenticated Intake V1 and deterministic recommendation
-workflows when backend Supabase settings are configured. It also owns
-deterministic user-state snapshot aggregation for backend-generated `daily` and
-`weekly` summaries.
+and daily-briefing workflows when backend Supabase settings are configured. It
+also owns deterministic user-state snapshot aggregation plus the protected
+scheduled preparation boundary for backend-generated daily state and briefings.
 
 ## Mobile App
 
@@ -308,7 +308,7 @@ Current responsibilities:
   `/v1/recommendations` and `/v1/recommendations/generate`.
 - Serve authenticated deterministic snapshot refresh at
   `/v1/snapshots/generate`.
-- Serve scheduler-triggered deterministic daily refresh at
+- Serve scheduler-triggered deterministic daily preparation at
   `/v1/scheduled/daily-refresh` with a backend-only scheduled refresh token.
 - Keep recommendation generation behind a service boundary.
 - Verify bearer tokens through an isolated auth verifier when Supabase backend
@@ -327,9 +327,10 @@ Current responsibilities:
   recent `daily_logs`, `behavioral_events`, `tasks`, `goals`, `habits`, explicit
   `habit_logs`, `focus_sessions`, `schedule_items`, and `memory_entries` without
   reading full history.
-- Parse the same strict `executable-action-v1` envelope as Flutter so a later
-  briefing cannot return unknown commands, mismatched target kinds, nested
-  metadata, or unsafe routes. No endpoint ranks or returns a briefing yet.
+- Parse the same strict `executable-action-v1` envelope as Flutter so persisted
+  briefings cannot return unknown commands, mismatched target kinds, nested
+  metadata, or unsafe routes. `GET /v1/briefings/today` reads that decision and
+  deliberate `POST /v1/briefings/generate` ranks or refreshes it.
 - Add `summary.daily_state` and `signals.daily_state` under the
   `explainable-daily-state-v1` contract. The parser trusts V2 capture metadata
   only after strict identity, type, enum, numeric, timestamp, and projection
@@ -351,10 +352,12 @@ Current responsibilities:
 - Support a deliberate dashboard recommendation refresh action that first
   refreshes the daily snapshot best-effort, then calls the deterministic
   recommendation generate endpoint with LLM wording disabled.
-- Support a bounded scheduler-triggered refresh pass that finds onboarded
-  non-guest profiles, refreshes their deterministic daily snapshots, and can
-  optionally run deterministic recommendation generation with LLM wording
-  disabled.
+- Support a bounded scheduler-triggered preparation pass that finds onboarded
+  non-guest profiles, pins one local date per profile from one UTC run instant,
+  and prepares deterministic daily snapshots plus persisted briefings. Current
+  pairs are write-free; missing prerequisites and stale briefings converge on
+  their existing daily identities. Recommendations remain disabled by default,
+  and explicit opt-in still forces LLM wording off.
 
 Flutter reads persisted recommendations through `GET /v1/recommendations` when
 `USE_MOCK_DATA=false`, Supabase is configured, and a real Supabase session
@@ -386,8 +389,8 @@ the current Daily State codes; the older statistics-window flags remain under
 from Daily Mode rather than letting overdue work override recovery.
 Phase 3 adds `summary.habits.outcome_counts`,
 `summary.focus_sessions`, matching signal counts/status counts, and bounded
-evidence references. These action facts are additive inputs for future briefing
-work. The repository paginates habit-log and focus-session windows in stable
+evidence references. These action facts are additive inputs for briefing
+selection. The repository paginates habit-log and focus-session windows in stable
 1,000-row pages, so server response caps cannot silently truncate counts or
 minutes. Tests require `summary.daily_state` and `signals.daily_state` to remain
 byte-for-byte equivalent when action rows are added or removed.
@@ -405,12 +408,32 @@ trigger is guarded by runtime config, Supabase configuration, a real session,
 and an access token. Guest/mock/missing-token paths and AI-service failures do
 not block or roll back the original write.
 
-Scheduled refresh is backend-only. `POST /v1/scheduled/daily-refresh` requires
-`X-Scheduled-Refresh-Token`, lists onboarded non-guest profiles through the
-backend Supabase service-role client, prioritizes profiles missing the target
-date's daily snapshot, then fills the batch with the oldest existing daily
-snapshots. It refreshes `user_state_snapshots` with an idempotent upsert and is
-a scheduler/cron entrypoint, not a Flutter or browser runtime endpoint.
+Scheduled preparation is backend-only. `POST /v1/scheduled/daily-refresh`
+requires `X-Scheduled-Refresh-Token` and captures one aware UTC instant for the
+run. The service-role repository lists only onboarded non-guest profiles and
+derives each profile's `briefing_date` with its IANA timezone. A request may
+optionally supply `target_date` as an explicit backfill override.
+
+Selection compares the exact local-date snapshot with the briefing's source
+snapshot id and generation time. A missing snapshot is generated once; an
+existing snapshot is reused when only its briefing is missing; a stale briefing
+is updated against the exact snapshot; and an already-current pair performs no
+write. Unique `(user_id, scope, period_key)` and `(user_id, briefing_date)`
+identities make retries converge. A token holder may narrow an operational retry
+with at most 20 `profile_ids`; those ids are still intersected with eligible
+profiles and never bypass onboarding or guest exclusion. Per-user results expose
+the local date, selection reason, snapshot/briefing ids and statuses, and a
+sanitized failing stage (`profile_date`, `snapshot`, `briefing`, or
+`recommendations`). One user's failure does not stop the rest of the bounded
+batch.
+
+Recommendation generation is disabled by default. Explicit
+`include_recommendations=true` remains deterministic and forces LLM wording off;
+snapshot and briefing preparation never call an LLM. This endpoint is not a
+Flutter or browser runtime endpoint, and normal Dashboard load remains GET-only.
+The repository contains no deployed cron manifest, background worker, or Phase 7
+notification sender, so endpoint availability must not be described as deployed
+scheduling or notification delivery.
 
 Flutter Setup sends the structured Intake V1 payload to
 `POST /v1/intake/complete` only in real backend mode with a Supabase access
@@ -455,7 +478,8 @@ making claims about deployed data.
   theme, the durable Setup entry, and sign-out.
 - Notifications are currently a read-only inbox. Original `type`, `priority`,
   read state, and supported `action_url` are shown; there is no mark-read command
-  until the repository has a durable write contract.
+  until the repository has a durable write contract. Phase 7 does not send
+  briefing-ready or check-in notifications.
 - Phase 4 persists one deterministic daily briefing per user/local date and
   ranks only strict Phase 3 targets. `GET /v1/briefings/today` is read-only and
   reports missing/current/stale state; deliberate
@@ -476,14 +500,16 @@ making claims about deployed data.
   recommendations, but no LLM/model provider is connected.
 - Daily and weekly snapshot aggregation exists behind an authenticated backend
   endpoint, and daily capture plus task/habit/focus writes trigger daily refresh
-  best-effort. There is not yet a production background worker, but a
-  scheduler-triggered daily refresh endpoint exists for cron-style invocation.
+  best-effort. The protected scheduled endpoint can prepare profile-local daily
+  snapshots and briefings, but there is no deployed cron configuration or
+  production background worker in this repository.
 - Focused Flutter/FastAPI tests cover Phase 3 contracts, parser parity, DST-safe
   calendar math, and focus local-day filtering. The browser smoke contains exact
   task/habit/focus rows; response-loss paths for habit/task create, habit
   outcome/undo, task completion/undo, and focus start/finish; and negative
   database lifecycle/range/cadence assertions including terminal-focus
-  `updated_at`. A successful current-checkout browser run is still required
-  before Phase 3 E2E may be claimed.
+  `updated_at`. The combined Phase 3 through Phase 7 journey passed
+  non-destructively in the 2026-07-12 Phase 7 implementation checkout; later
+  changes still need their own pass.
 - Explicit local demo mode remains the no-credentials exploration path and is
   labeled throughout the shell.

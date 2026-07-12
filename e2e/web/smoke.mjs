@@ -6,6 +6,7 @@ const required = [
   'SUPABASE_URL',
   'SUPABASE_ANON_KEY',
   'SUPABASE_SERVICE_ROLE_KEY',
+  'SCHEDULED_REFRESH_TOKEN',
 ];
 
 for (const name of required) {
@@ -19,6 +20,7 @@ const aiServiceBaseUrl = process.env.AI_SERVICE_BASE_URL.replace(/\/$/, '');
 const supabaseUrl = process.env.SUPABASE_URL.replace(/\/$/, '');
 const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const scheduledRefreshToken = process.env.SCHEDULED_REFRESH_TOKEN;
 const headed = process.env.HEADED === 'true';
 const runId = process.env.E2E_RUN_ID ?? `${Date.now()}`;
 const artifactDir = process.env.E2E_ARTIFACT_DIR ?? '.tools/e2e';
@@ -2956,6 +2958,21 @@ function isIsoTimestamp(value) {
   return typeof value === 'string' && Number.isFinite(Date.parse(value));
 }
 
+function isoDateInTimeZone(value, timeZone) {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    })
+      .formatToParts(new Date(value))
+      .filter((part) => part.type !== 'literal')
+      .map((part) => [part.type, part.value]),
+  );
+  return `${parts.year}-${parts.month}-${parts.day}`;
+}
+
 function isUuid(value) {
   return (
     typeof value === 'string' &&
@@ -3041,11 +3058,86 @@ async function assertDeterministicDailyBriefing(userId) {
     'read-only briefing GET creates no row',
   );
 
-  const generated = await briefingRequest(
-    '/v1/briefings/generate',
-    accessToken,
-    { force: false },
+  const profileRows = await fetchRows(
+    `profiles?select=timezone&id=eq.${userId}`,
+    'profile timezone for scheduled preparation',
   );
+  if (
+    profileRows.length !== 1 ||
+    typeof profileRows[0].timezone !== 'string'
+  ) {
+    throw new Error(
+      `Scheduled preparation profile timezone is unavailable: ${JSON.stringify(profileRows)}`,
+    );
+  }
+
+  const snapshotPath =
+    `user_state_snapshots?select=id,period_key,generated_at&user_id=eq.${userId}` +
+    `&scope=eq.daily&period_key=eq.${missing.briefing_date}`;
+  const snapshotsBeforePreparation = await fetchRows(
+    snapshotPath,
+    'daily snapshot before scheduled preparation',
+  );
+  if (snapshotsBeforePreparation.length > 1) {
+    throw new Error(
+      `Scheduled preparation found duplicate source snapshots: ${JSON.stringify(snapshotsBeforePreparation)}`,
+    );
+  }
+
+  const scheduledPayload = {
+    profile_ids: [userId],
+    window_days: 7,
+    limit: 1,
+    include_recommendations: false,
+  };
+  const scheduled = await scheduledRefreshRequest(scheduledPayload);
+  const scheduledResult = scheduled.results?.[0];
+  const scheduledRunAtIsValid = isIsoTimestamp(scheduled.run_at);
+  const expectedBriefingDate = scheduledRunAtIsValid
+    ? isoDateInTimeZone(scheduled.run_at, profileRows[0].timezone)
+    : null;
+  if (
+    !scheduledRunAtIsValid ||
+    scheduled.target_date !== null ||
+    scheduled.processed !== 1 ||
+    scheduled.succeeded !== 1 ||
+    scheduled.failed !== 0 ||
+    scheduled.results?.length !== 1 ||
+    scheduledResult?.user_id !== userId ||
+    scheduledResult?.status !== 'succeeded' ||
+    scheduledResult?.briefing_date !== expectedBriefingDate ||
+    scheduledResult?.briefing_date !== missing.briefing_date ||
+    scheduledResult?.period_key !== missing.briefing_date ||
+    !['missing_snapshot', 'missing_briefing'].includes(
+      scheduledResult?.selection_reason,
+    ) ||
+    !['generated', 'reused'].includes(scheduledResult?.snapshot_status) ||
+    scheduledResult?.briefing_status !== 'generated' ||
+    typeof scheduledResult?.snapshot_id !== 'string' ||
+    typeof scheduledResult?.briefing_id !== 'string' ||
+    scheduledResult?.recommendation_count !== null ||
+    scheduledResult?.failed_stage !== null ||
+    scheduledResult?.error !== null
+  ) {
+    throw new Error(
+      `Scheduled daily preparation violated its bounded result contract: ${JSON.stringify(scheduled)}`,
+    );
+  }
+  if (
+    (snapshotsBeforePreparation.length === 0 &&
+      (scheduledResult.selection_reason !== 'missing_snapshot' ||
+        scheduledResult.snapshot_status !== 'generated')) ||
+    (snapshotsBeforePreparation.length === 1 &&
+      (scheduledResult.selection_reason !== 'missing_briefing' ||
+        scheduledResult.snapshot_status !== 'reused' ||
+        scheduledResult.snapshot_id !== snapshotsBeforePreparation[0].id))
+  ) {
+    throw new Error(
+      `Scheduled preparation did not generate or reuse the exact snapshot prerequisite: ${JSON.stringify({ snapshotsBeforePreparation, scheduledResult })}`,
+    );
+  }
+
+  const generated = await briefingRequest('/v1/briefings/today', accessToken);
   const briefing = generated.briefing;
   if (
     generated.contract_version !== 'daily-briefing-v1' ||
@@ -3068,6 +3160,25 @@ async function assertDeterministicDailyBriefing(userId) {
     );
   }
 
+  const snapshotsAfterPreparation = await fetchRows(
+    snapshotPath,
+    'daily snapshot after scheduled preparation',
+  );
+  if (
+    snapshotsAfterPreparation.length !== 1 ||
+    snapshotsAfterPreparation[0].id !== scheduledResult.snapshot_id ||
+    (snapshotsBeforePreparation.length === 1 &&
+      snapshotsAfterPreparation[0].generated_at !==
+        snapshotsBeforePreparation[0].generated_at) ||
+    scheduledResult.briefing_id !== briefing.id ||
+    generated.briefing_date !== missing.briefing_date ||
+    briefing.briefing_date !== missing.briefing_date
+  ) {
+    throw new Error(
+      `Scheduled preparation did not preserve the exact local snapshot/briefing identity: ${JSON.stringify({ scheduledResult, snapshotsBeforePreparation, snapshotsAfterPreparation, generated })}`,
+    );
+  }
+
   const persisted = await fetchRows(
     `daily_briefings?select=id,briefing_date,mode,capacity_minutes,primary_action,support_actions,evidence_refs,provenance,data_quality,metadata,generated_at,updated_at&user_id=eq.${userId}`,
     'persisted deterministic daily briefing',
@@ -3081,8 +3192,13 @@ async function assertDeterministicDailyBriefing(userId) {
     persisted[0].metadata?.contract_version !== 'daily-briefing-v1' ||
     persisted[0].metadata?.ranking_version !==
       'deterministic-briefing-ranker-v2' ||
+    persisted[0].provenance?.engine !== 'deterministic' ||
+    persisted[0].provenance?.llm_used !== false ||
     persisted[0].provenance?.source_snapshot_id !==
       briefing.provenance.source_snapshot_id ||
+    persisted[0].provenance?.source_snapshot_id !== scheduledResult.snapshot_id ||
+    Date.parse(persisted[0].provenance?.source_snapshot_generated_at) !==
+      Date.parse(snapshotsAfterPreparation[0].generated_at) ||
     stableJson(persisted[0].primary_action) !==
       stableJson(briefing.primary_action) ||
     stableJson(persisted[0].support_actions) !==
@@ -3093,12 +3209,15 @@ async function assertDeterministicDailyBriefing(userId) {
     );
   }
 
-  const repeated = await briefingRequest(
-    '/v1/briefings/generate',
-    accessToken,
-    { force: false },
-  );
+  const repeatedScheduled = await scheduledRefreshRequest(scheduledPayload);
+  const repeated = await briefingRequest('/v1/briefings/today', accessToken);
   if (
+    !isIsoTimestamp(repeatedScheduled.run_at) ||
+    repeatedScheduled.target_date !== null ||
+    repeatedScheduled.processed !== 0 ||
+    repeatedScheduled.succeeded !== 0 ||
+    repeatedScheduled.failed !== 0 ||
+    repeatedScheduled.results?.length !== 0 ||
     repeated.briefing?.id !== briefing.id ||
     repeated.briefing?.generated_at !== briefing.generated_at ||
     repeated.briefing?.updated_at !== briefing.updated_at
@@ -3107,10 +3226,22 @@ async function assertDeterministicDailyBriefing(userId) {
       `Idempotent Phase 4 generation changed the current row: ${JSON.stringify(repeated)}`,
     );
   }
+  const snapshotsAfterRetry = await fetchRows(
+    snapshotPath,
+    'daily snapshot after scheduled retry',
+  );
   await assertRows(
-    `daily_briefings?select=id&user_id=eq.${userId}`,
-    (rows) => rows.length === 1 && rows[0].id === briefing.id,
-    'idempotent briefing generation preserves one daily identity',
+    `daily_briefings?select=id,generated_at,updated_at&user_id=eq.${userId}`,
+    (rows) =>
+      rows.length === 1 &&
+      rows[0].id === briefing.id &&
+      rows[0].generated_at === persisted[0].generated_at &&
+      rows[0].updated_at === persisted[0].updated_at &&
+      snapshotsAfterRetry.length === 1 &&
+      snapshotsAfterRetry[0].id === snapshotsAfterPreparation[0].id &&
+      snapshotsAfterRetry[0].generated_at ===
+        snapshotsAfterPreparation[0].generated_at,
+    'idempotent scheduled preparation preserves snapshot and briefing identity',
   );
   return generated;
 }
@@ -3204,6 +3335,26 @@ async function briefingRequest(path, accessToken, body) {
   if (!response.ok) {
     throw new Error(
       `Briefing request ${path} failed: ${response.status} ${await response.text()}`,
+    );
+  }
+  return response.json();
+}
+
+async function scheduledRefreshRequest(body) {
+  const response = await fetch(
+    `${aiServiceBaseUrl}/v1/scheduled/daily-refresh`,
+    {
+      method: 'POST',
+      headers: {
+        'X-Scheduled-Refresh-Token': scheduledRefreshToken,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    },
+  );
+  if (!response.ok) {
+    throw new Error(
+      `Scheduled refresh failed: ${response.status} ${await response.text()}`,
     );
   }
   return response.json();

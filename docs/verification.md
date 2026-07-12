@@ -137,10 +137,21 @@ isolation, 28-day context matching, decay/caps, unchanged original reasons, and
 explicit feedback-ranking provenance. Insights tests prove insufficient versus
 emerging/stronger observation labels, visible evidence windows, optional
 bounded experiments, and non-causal copy.
-Scheduled refresh tests
-cover the backend-only token guard, onboarded non-guest profile selection,
-per-user failure isolation, deterministic daily snapshot refresh, and optional
-deterministic recommendation refresh without LLM wording.
+Phase 7 scheduled-preparation tests cover the backend-only token guard and
+strict bounded request, including the maximum-20 `profile_ids` operational
+filter and explicit `target_date` backfill override. Repository tests prove
+that the filter still intersects onboarded
+non-guest profiles; one captured timezone-aware UTC run instant resolves exact
+profile-local dates; missing snapshots, missing briefings, stale snapshot
+provenance, current pairs, and invalid timezones remain distinct; and a current
+pair is selected only when an explicit recommendation pass still needs retry.
+Service tests prove pinned local dates across different timezones, write-free
+current briefing preparation, generated/reused snapshot and
+generated/refreshed/unchanged briefing results, sanitized snapshot/briefing/
+recommendation/profile-date failure stages, continuation after one user's
+failure, and optional deterministic recommendation refresh with LLM wording
+disabled. The default scheduled path does not generate recommendations or call
+an LLM.
 
 Current Flutter widget tests include:
 
@@ -291,7 +302,7 @@ supabase db reset
 Expected successful reset output applies migrations through:
 
 ```text
-20260712064836_phase_4_daily_briefings.sql
+20260712190000_phase_6_decision_feedback.sql
 ```
 
 Expected notices include skipped legacy CamelCase tables and already-existing
@@ -360,10 +371,11 @@ The script:
 3. Reads `API_URL`, `ANON_KEY`, and `SERVICE_ROLE_KEY` from
    `supabase status -o env` without printing key values.
 4. Starts the FastAPI AI service on `127.0.0.1:8000` by default with backend
-   local Supabase settings.
+   local Supabase settings plus a run-scoped scheduled-refresh token.
 5. Starts Flutter Web on `127.0.0.1:7357` with `USE_MOCK_DATA=false` and
    `AI_SERVICE_BASE_URL` pointing at the local FastAPI service.
-6. Runs `e2e/web/smoke.mjs` with Playwright.
+6. Passes the same token only to the Node assertion process and runs
+   `e2e/web/smoke.mjs` with Playwright. The token is never passed to Flutter.
 
 The script waits for the Flutter log line containing `is being served at` before
 starting Playwright. A plain `curl` response from `/` is not enough, because
@@ -399,6 +411,17 @@ database row and ranking provenance after adjustment, opens history, deletes the
 entry, and proves a subsequent generation returns to zero feedback influence.
 It also proves Insights begins with one cautious observation and keeps the
 correlation controls inside explicit advanced exploration.
+
+The Phase 7 portion calls the protected scheduler only with the uniquely named
+E2E profile through the bounded `profile_ids` filter; it does not run an
+unscoped batch against unrelated local accounts. It compares the scheduler's
+captured UTC `run_at` with the profile timezone, requires the exact local
+briefing date, and accepts only a missing snapshot or missing briefing as the
+first preparation reason. Database assertions prove one exact daily snapshot
+and one exact briefing identity, deterministic/no-LLM provenance, and exact
+source-snapshot id and timestamp linkage. A repeated scheduled request must
+process zero users and leave both rows and timestamps unchanged. The subsequent
+Dashboard path remains GET-only; the E2E scheduler token stays outside Flutter.
 
 The Setup assertions inspect exact `request_id`, base/revision, applied state,
 stable materialized ids, server ownership metadata, record counts, and the
@@ -497,6 +520,10 @@ The service-role key is used only in the Node-side E2E process for local setup
 and assertions and in the FastAPI process for backend persistence. It must never
 be passed into Flutter or browser runtime configuration.
 
+The E2E script generates a local scheduled-refresh token unless an override is
+provided. It passes that token only to FastAPI and the Node assertion process,
+does not print it, and never exposes it through Flutter configuration.
+
 The canonical schema grants app-table privileges to `service_role` so these
 local REST assertions can query rows after RLS-protected browser writes.
 
@@ -514,6 +541,7 @@ AI_SERVICE_PORT=8001
 AI_SERVICE_BASE_URL=http://127.0.0.1:8001
 AI_SERVICE_PYTHON=/path/to/python
 AI_SERVICE_START=false
+SCHEDULED_REFRESH_TOKEN=local-e2e-override
 E2E_RUN_ID=manual-001
 ```
 
@@ -522,7 +550,7 @@ does not reuse an arbitrary service that is already listening on the same port.
 If the port is occupied, stop that service or set `AI_SERVICE_PORT` to a free
 port. Use `AI_SERVICE_START=false` only when you intentionally want to reuse a
 compatible FastAPI process that is already running with the same local Supabase
-project settings.
+project settings and scheduled-refresh token.
 
 Flutter Web logs for the E2E run are written to:
 
@@ -579,8 +607,8 @@ The repository now contains browser E2E automation, but it still depends on a
 real Ubuntu Node.js 20+ installation, `npm`, Playwright browser installation,
 Docker access, and a real Ubuntu `supabase` CLI on `PATH`.
 
-The combined Phase 3/4/5/6 browser journey passed non-destructively in the
-2026-07-12 implementation checkout. Future changes must establish their own
+The combined Phase 3/4/5/6/7 browser journey passed non-destructively in the
+2026-07-12 Phase 7 implementation checkout. Future changes must establish their own
 current-checkout result with the browser command above; use the `RESET_DB=true`
 form when proving the full migration chain from a fresh database. The journey
 includes committed-response-loss for habit/task create, habit
@@ -594,6 +622,12 @@ to assert the refresh date in-browser. Backend repository tests separately
 cover more than 1,000 habit-log and focus-session rows. Do not infer the other
 paths merely from the same-user UI journey.
 
+Phase 7 targeted scheduled-preparation assertions passed as part of that
+non-destructive 2026-07-12 browser run. They verify only the local test stack and
+uniquely named E2E profile. They do not establish remote database state,
+deployed cron execution, production token configuration, or notification
+delivery.
+
 Known harmless local E2E output includes Chromium WebGL performance warnings.
 The FastAPI AI service must be healthy for the browser smoke to pass.
 
@@ -601,6 +635,8 @@ Still missing for broader product verification:
 
 - CI wiring for the browser E2E command.
 - Playwright trace artifact collection on failure.
+- Deployed scheduler/cron wiring and monitoring; the repository verifies the
+  protected preparation endpoint, not any production invocation platform.
 - Dedicated database assertions for notifications, notification preferences,
   and non-Setup memory behavior beyond the current Setup ownership/snapshot
   checks.

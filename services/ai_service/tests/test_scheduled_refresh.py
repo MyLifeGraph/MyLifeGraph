@@ -1,232 +1,568 @@
 import asyncio
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
+from types import SimpleNamespace
+from uuid import UUID
 
 import httpx
+import pytest
 
 from app.api.routes import scheduled
 from app.main import create_app
 from app.models.recommendations import RecommendationListResponse
 from app.models.scheduled import ScheduledRefreshRequest
-from app.models.snapshots import SnapshotGenerateRequest, SnapshotGenerateResponse
-from app.repositories.scheduled_refresh_repository import SupabaseScheduledRefreshRepository
+from app.repositories.scheduled_refresh_repository import (
+    ScheduledRefreshTarget,
+    SupabaseScheduledRefreshRepository,
+)
+from app.services.briefing_service import BriefingPreparationError
 from app.services.scheduled_refresh import ScheduledRefreshService
 
 
-TODAY = date(2026, 7, 4)
-NOW = datetime(2026, 7, 4, 9, tzinfo=timezone.utc)
+RUN_AT = datetime(2026, 7, 12, 1, 30, tzinfo=UTC)
+TODAY = date(2026, 7, 12)
+LOS_ANGELES_TODAY = date(2026, 7, 11)
+USER_1 = "11111111-1111-4111-8111-111111111111"
+USER_2 = "22222222-2222-4222-8222-222222222222"
+USER_3 = "33333333-3333-4333-8333-333333333333"
+USER_4 = "44444444-4444-4444-8444-444444444444"
+USER_5 = "55555555-5555-4555-8555-555555555555"
+GUEST_USER = "66666666-6666-4666-8666-666666666666"
+INCOMPLETE_USER = "77777777-7777-4777-8777-777777777777"
 
 
 class FakeScheduledRefreshRepository:
-    def __init__(self, user_ids: list[str]) -> None:
-        self.user_ids = user_ids
+    def __init__(self, targets: list[ScheduledRefreshTarget]) -> None:
+        self.targets = targets
         self.calls: list[dict[str, object]] = []
 
-    async def list_daily_refresh_user_ids(
+    async def list_daily_refresh_targets(
         self,
         *,
         limit: int,
-        target_date: date,
-    ) -> list[str]:
-        self.calls.append({"limit": limit, "target_date": target_date})
-        return self.user_ids[:limit]
+        run_at: datetime,
+        target_date: date | None,
+        profile_ids: list[str],
+        include_current: bool,
+    ) -> list[ScheduledRefreshTarget]:
+        self.calls.append(
+            {
+                "limit": limit,
+                "run_at": run_at,
+                "target_date": target_date,
+                "profile_ids": profile_ids,
+                "include_current": include_current,
+            },
+        )
+        return self.targets[:limit]
 
 
-class FakeSnapshotAggregator:
-    def __init__(self, failing_user_id: str | None = None) -> None:
-        self.failing_user_id = failing_user_id
-        self.calls: list[tuple[str, SnapshotGenerateRequest]] = []
+class FakeBriefingService:
+    def __init__(
+        self,
+        *,
+        outcomes: dict[str, tuple[str, str]] | None = None,
+        failures: dict[str, str] | None = None,
+    ) -> None:
+        self.outcomes = outcomes or {}
+        self.failures = failures or {}
+        self.calls: list[dict[str, object]] = []
 
-    async def generate_snapshot(
+    async def prepare_for_date(
         self,
         *,
         user_id: str,
-        request: SnapshotGenerateRequest,
-    ) -> SnapshotGenerateResponse:
-        self.calls.append((user_id, request))
-        if user_id == self.failing_user_id:
-            raise RuntimeError("snapshot failed")
-        return SnapshotGenerateResponse(
-            snapshot_id=f"snapshot-{user_id}",
-            scope=request.scope,
-            period_key=request.target_date.isoformat() if request.target_date else "today",
-            generated_at=NOW,
-            summary={"user_id": user_id},
-            signals={"input_counts": {"daily_logs": 1}},
+        briefing_date: date,
+        window_days: int,
+    ):
+        self.calls.append(
+            {
+                "user_id": user_id,
+                "briefing_date": briefing_date,
+                "window_days": window_days,
+            },
+        )
+        failure_stage = self.failures.get(user_id)
+        if failure_stage in {"snapshot", "briefing"}:
+            raise BriefingPreparationError(
+                stage=failure_stage,
+                cause=RuntimeError(f"{failure_stage} failed"),
+            )
+        if failure_stage == "generic":
+            raise RuntimeError("briefing failed")
+
+        snapshot_status, briefing_status = self.outcomes.get(
+            user_id,
+            ("generated", "generated"),
+        )
+        briefing = SimpleNamespace(
+            id=f"briefing-{user_id}",
+            provenance=SimpleNamespace(source_snapshot_id=f"snapshot-{user_id}"),
+        )
+        return SimpleNamespace(
+            response=SimpleNamespace(briefing=briefing),
+            snapshot_status=snapshot_status,
+            briefing_status=briefing_status,
         )
 
 
 class FakeRecommendationEngine:
-    def __init__(self) -> None:
+    def __init__(self, *, failing_users: set[str] | None = None) -> None:
+        self.failing_users = failing_users or set()
         self.calls: list[tuple[str, object]] = []
 
     async def generate_recommendations(self, *, user_id: str, request):
         self.calls.append((user_id, request))
+        if user_id in self.failing_users:
+            raise RuntimeError("recommendation refresh failed")
         return RecommendationListResponse(
             items=[],
             needs_generation=False,
-            generated_at=NOW,
-            period_key="2026-W27",
+            generated_at=RUN_AT,
+            period_key="2026-W28",
             stale_reason=None,
         )
 
 
 class FakeSupabaseClient:
-    def __init__(self) -> None:
-        self.select_calls = []
+    def __init__(
+        self,
+        *,
+        profiles: list[dict[str, object]],
+        snapshots: list[dict[str, object]] | None = None,
+        briefings: list[dict[str, object]] | None = None,
+    ) -> None:
+        self.profiles = profiles
+        self.snapshots = snapshots or []
+        self.briefings = briefings or []
+        self.select_calls: list[tuple[str, object]] = []
 
     async def select(self, table: str, *, params):
         self.select_calls.append((table, params))
         if table == "profiles":
-            if params.get("offset") != "0":
-                return []
-            return [
-                {"id": "missing-daily-1"},
-                {"id": "has-daily-1"},
-                {"id": ""},
-                {"id": None},
-                {"id": "missing-daily-2"},
+            rows = [
+                row
+                for row in self.profiles
+                if row.get("onboarding_completed_at") is not None
+                and row.get("role") != "guest"
             ]
-        if table == "user_state_snapshots" and params.get("user_id"):
-            return [{"user_id": "has-daily-1"}]
+            if raw_ids := params.get("id"):
+                selected_ids = _in_values(raw_ids)
+                rows = [row for row in rows if row.get("id") in selected_ids]
+            offset = int(params.get("offset", "0"))
+            limit = int(params.get("limit", str(len(rows))))
+            return [dict(row) for row in rows[offset : offset + limit]]
         if table == "user_state_snapshots":
+            user_ids = _in_values(params["user_id"])
+            period_keys = _in_values(params["period_key"])
             return [
-                {"user_id": "has-daily-1"},
-                {"user_id": "oldest-daily-1"},
-                {"user_id": "oldest-daily-2"},
+                dict(row)
+                for row in self.snapshots
+                if row.get("user_id") in user_ids
+                and row.get("period_key") in period_keys
+                and row.get("scope", "daily") == "daily"
+            ]
+        if table == "daily_briefings":
+            user_ids = _in_values(params["user_id"])
+            briefing_dates = _in_values(params["briefing_date"])
+            return [
+                dict(row)
+                for row in self.briefings
+                if row.get("user_id") in user_ids
+                and row.get("briefing_date") in briefing_dates
             ]
         return []
+
+
+def _profile(
+    user_id: str,
+    *,
+    timezone_name: str = "UTC",
+    role: str = "user",
+    onboarded: bool = True,
+) -> dict[str, object]:
+    return {
+        "id": user_id,
+        "timezone": timezone_name,
+        "role": role,
+        "onboarding_completed_at": RUN_AT.isoformat() if onboarded else None,
+        "created_at": RUN_AT.isoformat(),
+    }
+
+
+def _snapshot(
+    user_id: str,
+    target_date: date,
+    *,
+    snapshot_id: str | None = None,
+    generated_at: str = "2026-07-12T00:15:00Z",
+) -> dict[str, object]:
+    return {
+        "id": snapshot_id or f"snapshot-{user_id}",
+        "user_id": user_id,
+        "scope": "daily",
+        "period_key": target_date.isoformat(),
+        "generated_at": generated_at,
+    }
+
+
+def _briefing(
+    user_id: str,
+    briefing_date: date,
+    *,
+    source_snapshot_id: str | None = None,
+    source_snapshot_generated_at: str = "2026-07-12T00:15:00+00:00",
+) -> dict[str, object]:
+    return {
+        "id": f"briefing-{user_id}",
+        "user_id": user_id,
+        "briefing_date": briefing_date.isoformat(),
+        "generated_at": "2026-07-12T00:20:00Z",
+        "provenance": {
+            "source_snapshot_id": source_snapshot_id or f"snapshot-{user_id}",
+            "source_snapshot_generated_at": source_snapshot_generated_at,
+        },
+    }
+
+
+def _in_values(value: str) -> set[str]:
+    assert value.startswith("in.(") and value.endswith(")")
+    contents = value[4:-1]
+    return set(contents.split(",")) if contents else set()
 
 
 def run(coro):
     return asyncio.run(coro)
 
 
-def test_scheduled_refresh_service_refreshes_each_listed_user() -> None:
-    repository = FakeScheduledRefreshRepository(["user-1", "user-2"])
-    snapshot_aggregator = FakeSnapshotAggregator()
-    service = ScheduledRefreshService(
-        repository=repository,
-        snapshot_aggregator=snapshot_aggregator,
-        today_provider=lambda: TODAY,
-    )
-
-    response = run(
-        service.refresh_daily(
-            ScheduledRefreshRequest(target_date=TODAY, window_days=7, limit=10),
+def test_scheduled_service_uses_pinned_local_dates_and_reports_stage_results() -> None:
+    targets = [
+        ScheduledRefreshTarget(
+            user_id=USER_1,
+            briefing_date=TODAY,
+            selection_reason="missing_snapshot",
         ),
+        ScheduledRefreshTarget(
+            user_id=USER_2,
+            briefing_date=LOS_ANGELES_TODAY,
+            selection_reason="stale_briefing",
+        ),
+    ]
+    repository = FakeScheduledRefreshRepository(targets)
+    briefing_service = FakeBriefingService(
+        outcomes={USER_2: ("reused", "refreshed")},
     )
-
-    assert repository.calls == [{"limit": 10, "target_date": TODAY}]
-    assert response.processed == 2
-    assert response.succeeded == 2
-    assert response.failed == 0
-    assert [call[0] for call in snapshot_aggregator.calls] == ["user-1", "user-2"]
-    assert all(call[1].scope == "daily" for call in snapshot_aggregator.calls)
-    assert all(call[1].target_date == TODAY for call in snapshot_aggregator.calls)
-
-
-def test_scheduled_refresh_service_uses_resolved_today_for_snapshots() -> None:
-    snapshot_aggregator = FakeSnapshotAggregator()
-    service = ScheduledRefreshService(
-        repository=FakeScheduledRefreshRepository(["user-1"]),
-        snapshot_aggregator=snapshot_aggregator,
-        today_provider=lambda: TODAY,
-    )
-
-    response = run(service.refresh_daily(ScheduledRefreshRequest()))
-
-    assert response.target_date == TODAY
-    assert snapshot_aggregator.calls[0][1].target_date == TODAY
-
-
-def test_scheduled_refresh_service_continues_after_user_failure() -> None:
-    service = ScheduledRefreshService(
-        repository=FakeScheduledRefreshRepository(["user-1", "user-2"]),
-        snapshot_aggregator=FakeSnapshotAggregator(failing_user_id="user-1"),
-        today_provider=lambda: TODAY,
-    )
-
-    response = run(service.refresh_daily(ScheduledRefreshRequest()))
-
-    assert response.processed == 2
-    assert response.succeeded == 1
-    assert response.failed == 1
-    failed = next(result for result in response.results if result.status == "failed")
-    assert failed.user_id == "user-1"
-    assert failed.error == "RuntimeError"
-
-
-def test_scheduled_refresh_service_can_refresh_recommendations_without_llm_wording() -> None:
     recommendation_engine = FakeRecommendationEngine()
     service = ScheduledRefreshService(
-        repository=FakeScheduledRefreshRepository(["user-1"]),
-        snapshot_aggregator=FakeSnapshotAggregator(),
+        repository=repository,
+        briefing_service=briefing_service,
         recommendation_engine=recommendation_engine,
-        today_provider=lambda: TODAY,
+        now_provider=lambda: RUN_AT,
     )
 
     response = run(
         service.refresh_daily(
             ScheduledRefreshRequest(
-                include_recommendations=True,
-                recommendation_window_days=21,
+                window_days=9,
+                limit=10,
+                profile_ids=[UUID(USER_1), UUID(USER_2)],
             ),
         ),
     )
 
+    assert repository.calls == [
+        {
+            "limit": 10,
+            "run_at": RUN_AT,
+            "target_date": None,
+            "profile_ids": [USER_1, USER_2],
+            "include_current": False,
+        },
+    ]
+    assert response.run_at == RUN_AT
+    assert response.target_date is None
+    assert response.processed == 2
+    assert response.succeeded == 2
+    assert response.failed == 0
+    assert {
+        call["user_id"]: (call["briefing_date"], call["window_days"])
+        for call in briefing_service.calls
+    } == {
+        USER_1: (TODAY, 9),
+        USER_2: (LOS_ANGELES_TODAY, 9),
+    }
+    results = {result.user_id: result for result in response.results}
+    assert results[USER_1].briefing_date == TODAY
+    assert results[USER_1].snapshot_id == f"snapshot-{USER_1}"
+    assert results[USER_1].snapshot_status == "generated"
+    assert results[USER_1].briefing_id == f"briefing-{USER_1}"
+    assert results[USER_1].briefing_status == "generated"
+    assert results[USER_1].period_key == TODAY.isoformat()
+    assert results[USER_2].briefing_date == LOS_ANGELES_TODAY
+    assert results[USER_2].snapshot_status == "reused"
+    assert results[USER_2].briefing_status == "refreshed"
+    assert recommendation_engine.calls == []
+
+
+def test_scheduled_service_isolates_profile_snapshot_and_briefing_failures() -> None:
+    targets = [
+        ScheduledRefreshTarget(
+            user_id=USER_1,
+            briefing_date=None,
+            selection_reason="invalid_timezone",
+            error="ZoneInfoNotFoundError",
+        ),
+        ScheduledRefreshTarget(
+            user_id=USER_2,
+            briefing_date=TODAY,
+            selection_reason="missing_snapshot",
+        ),
+        ScheduledRefreshTarget(
+            user_id=USER_3,
+            briefing_date=TODAY,
+            selection_reason="missing_briefing",
+        ),
+        ScheduledRefreshTarget(
+            user_id=USER_4,
+            briefing_date=TODAY,
+            selection_reason="stale_briefing",
+        ),
+    ]
+    briefing_service = FakeBriefingService(
+        failures={USER_2: "snapshot", USER_3: "briefing"},
+        outcomes={USER_4: ("reused", "refreshed")},
+    )
+    service = ScheduledRefreshService(
+        repository=FakeScheduledRefreshRepository(targets),
+        briefing_service=briefing_service,
+        now_provider=lambda: RUN_AT,
+    )
+
+    response = run(service.refresh_daily(ScheduledRefreshRequest()))
+
+    assert response.processed == 4
     assert response.succeeded == 1
-    assert response.results[0].recommendation_count == 0
-    assert recommendation_engine.calls[0][0] == "user-1"
+    assert response.failed == 3
+    results = {result.user_id: result for result in response.results}
+    assert results[USER_1].failed_stage == "profile_date"
+    assert results[USER_1].error == "ZoneInfoNotFoundError"
+    assert results[USER_1].briefing_date is None
+    assert results[USER_2].failed_stage == "snapshot"
+    assert results[USER_2].error == "RuntimeError"
+    assert results[USER_3].failed_stage == "briefing"
+    assert results[USER_3].error == "RuntimeError"
+    assert results[USER_4].status == "succeeded"
+    assert {call["user_id"] for call in briefing_service.calls} == {
+        USER_2,
+        USER_3,
+        USER_4,
+    }
+
+
+def test_current_preparation_retries_recommendations_without_rewriting_briefing(
+) -> None:
+    target = ScheduledRefreshTarget(
+        user_id=USER_1,
+        briefing_date=TODAY,
+        selection_reason="recommendation_refresh",
+    )
+    repository = FakeScheduledRefreshRepository([target])
+    briefing_service = FakeBriefingService(
+        outcomes={USER_1: ("reused", "unchanged")},
+    )
+    recommendation_engine = FakeRecommendationEngine(failing_users={USER_1})
+    service = ScheduledRefreshService(
+        repository=repository,
+        briefing_service=briefing_service,
+        recommendation_engine=recommendation_engine,
+        now_provider=lambda: RUN_AT,
+    )
+    request = ScheduledRefreshRequest(
+        include_recommendations=True,
+        recommendation_window_days=21,
+    )
+
+    failed = run(service.refresh_daily(request))
+
+    assert failed.failed == 1
+    assert failed.results[0].failed_stage == "recommendations"
+    assert failed.results[0].error == "RuntimeError"
+    assert repository.calls[0]["include_current"] is True
+    assert briefing_service.calls[0]["briefing_date"] == TODAY
     recommendation_request = recommendation_engine.calls[0][1]
     assert recommendation_request.window_days == 21
     assert recommendation_request.force is False
     assert recommendation_request.allow_llm_wording is False
 
+    recommendation_engine.failing_users.clear()
+    retried = run(service.refresh_daily(request))
 
-def test_scheduled_refresh_repository_prioritizes_missing_then_oldest_daily_snapshots() -> None:
-    client = FakeSupabaseClient()
+    assert retried.succeeded == 1
+    assert retried.results[0].selection_reason == "recommendation_refresh"
+    assert retried.results[0].snapshot_status == "reused"
+    assert retried.results[0].briefing_status == "unchanged"
+    assert retried.results[0].recommendation_count == 0
+    assert len(briefing_service.calls) == 2
+    assert len(recommendation_engine.calls) == 2
+    assert repository.calls[1]["include_current"] is True
+
+
+def test_scheduled_service_rejects_naive_run_time() -> None:
+    service = ScheduledRefreshService(
+        repository=FakeScheduledRefreshRepository([]),
+        briefing_service=FakeBriefingService(),
+        now_provider=lambda: datetime(2026, 7, 12, 1, 30),
+    )
+
+    with pytest.raises(ValueError, match="include a timezone"):
+        run(service.refresh_daily(ScheduledRefreshRequest()))
+
+
+def test_scheduled_service_normalizes_run_time_to_utc() -> None:
+    repository = FakeScheduledRefreshRepository([])
+    service = ScheduledRefreshService(
+        repository=repository,
+        briefing_service=FakeBriefingService(),
+        now_provider=lambda: datetime.fromisoformat("2026-07-12T03:30:00+02:00"),
+    )
+
+    response = run(service.refresh_daily(ScheduledRefreshRequest()))
+
+    assert response.run_at == RUN_AT
+    assert repository.calls[0]["run_at"] == RUN_AT
+
+
+def test_repository_selects_local_missing_and_stale_targets_only() -> None:
+    client = FakeSupabaseClient(
+        profiles=[
+            _profile(USER_1, timezone_name="Europe/Berlin"),
+            _profile(USER_2, timezone_name="America/Los_Angeles"),
+            _profile(USER_3),
+            _profile(USER_4),
+            _profile(USER_5, timezone_name="Not/A_Timezone"),
+            _profile(GUEST_USER, role="guest"),
+            _profile(INCOMPLETE_USER, onboarded=False),
+        ],
+        snapshots=[
+            _snapshot(USER_2, LOS_ANGELES_TODAY),
+            _snapshot(USER_3, TODAY),
+            _snapshot(USER_4, TODAY),
+        ],
+        briefings=[
+            _briefing(USER_3, TODAY, source_snapshot_id="different-snapshot"),
+            _briefing(USER_4, TODAY),
+        ],
+    )
     repository = SupabaseScheduledRefreshRepository(client)
 
-    user_ids = run(repository.list_daily_refresh_user_ids(limit=4, target_date=TODAY))
+    targets = run(
+        repository.list_daily_refresh_targets(
+            limit=10,
+            run_at=RUN_AT,
+            target_date=None,
+            profile_ids=[],
+            include_current=False,
+        ),
+    )
 
-    assert user_ids == [
-        "missing-daily-1",
-        "missing-daily-2",
-        "has-daily-1",
-        "oldest-daily-1",
+    assert [target.user_id for target in targets] == [
+        USER_1,
+        USER_2,
+        USER_3,
+        USER_5,
     ]
-    assert client.select_calls == [
-        (
-            "profiles",
-            {
-                "select": "id",
-                "onboarding_completed_at": "not.is.null",
-                "role": "neq.guest",
-                "order": "created_at.asc,id.asc",
-                "limit": "100",
-                "offset": "0",
-            },
+    by_user = {target.user_id: target for target in targets}
+    assert by_user[USER_1].briefing_date == TODAY
+    assert by_user[USER_1].selection_reason == "missing_snapshot"
+    assert by_user[USER_2].briefing_date == LOS_ANGELES_TODAY
+    assert by_user[USER_2].selection_reason == "missing_briefing"
+    assert by_user[USER_3].selection_reason == "stale_briefing"
+    assert by_user[USER_5].briefing_date is None
+    assert by_user[USER_5].selection_reason == "invalid_timezone"
+    assert by_user[USER_5].error == "ZoneInfoNotFoundError"
+    assert USER_4 not in by_user
+    assert GUEST_USER not in by_user
+    assert INCOMPLETE_USER not in by_user
+    assert client.select_calls[0] == (
+        "profiles",
+        {
+            "select": "id,timezone",
+            "onboarding_completed_at": "not.is.null",
+            "role": "neq.guest",
+            "order": "created_at.asc,id.asc",
+            "limit": "100",
+            "offset": "0",
+        },
+    )
+
+
+def test_repository_selects_current_target_for_recommendation_retry() -> None:
+    client = FakeSupabaseClient(
+        profiles=[_profile(USER_4)],
+        snapshots=[_snapshot(USER_4, TODAY)],
+        briefings=[_briefing(USER_4, TODAY)],
+    )
+    repository = SupabaseScheduledRefreshRepository(client)
+
+    normal_targets = run(
+        repository.list_daily_refresh_targets(
+            limit=10,
+            run_at=RUN_AT,
+            target_date=None,
+            profile_ids=[],
+            include_current=False,
         ),
-        (
-            "user_state_snapshots",
-            {
-                "select": "user_id",
-                "user_id": "in.(missing-daily-1,has-daily-1,missing-daily-2)",
-                "scope": "eq.daily",
-                "period_key": "eq.2026-07-04",
-                "limit": "3",
-            },
+    )
+    retry_targets = run(
+        repository.list_daily_refresh_targets(
+            limit=10,
+            run_at=RUN_AT,
+            target_date=None,
+            profile_ids=[],
+            include_current=True,
         ),
-        (
-            "user_state_snapshots",
-            {
-                "select": "user_id",
-                "scope": "eq.daily",
-                "order": "generated_at.asc",
-                "limit": "4",
-            },
+    )
+
+    assert normal_targets == []
+    assert retry_targets == [
+        ScheduledRefreshTarget(
+            user_id=USER_4,
+            briefing_date=TODAY,
+            selection_reason="recommendation_refresh",
         ),
     ]
+
+
+def test_repository_profile_ids_are_bounded_to_eligible_requested_profiles() -> None:
+    client = FakeSupabaseClient(
+        profiles=[
+            _profile(USER_1),
+            _profile(USER_2),
+            _profile(GUEST_USER, role="guest"),
+            _profile(INCOMPLETE_USER, onboarded=False),
+        ],
+    )
+    repository = SupabaseScheduledRefreshRepository(client)
+
+    targets = run(
+        repository.list_daily_refresh_targets(
+            limit=10,
+            run_at=RUN_AT,
+            target_date=TODAY,
+            profile_ids=[USER_2, GUEST_USER, INCOMPLETE_USER, USER_2],
+            include_current=False,
+        ),
+    )
+
+    assert targets == [
+        ScheduledRefreshTarget(
+            user_id=USER_2,
+            briefing_date=TODAY,
+            selection_reason="missing_snapshot",
+        ),
+    ]
+    assert client.select_calls[0][1]["id"] == (
+        f"in.({USER_2},{GUEST_USER},{INCOMPLETE_USER})"
+    )
 
 
 async def request(
@@ -277,13 +613,22 @@ def test_scheduled_refresh_endpoint_rejects_wrong_token() -> None:
     assert response.status_code == 401
 
 
-def test_scheduled_refresh_endpoint_runs_injected_service() -> None:
+@pytest.mark.parametrize(
+    "body",
+    [
+        {"user_id": USER_1},
+        {"profile_ids": ["not-a-uuid"]},
+        {"profile_ids": [USER_1] * 21},
+        {"unexpected": True},
+    ],
+)
+def test_scheduled_refresh_endpoint_rejects_invalid_or_unbounded_body(body) -> None:
     original_token = scheduled.settings.scheduled_refresh_token
     scheduled.settings.scheduled_refresh_token = "test-scheduled-token"
     service = ScheduledRefreshService(
-        repository=FakeScheduledRefreshRepository(["user-1"]),
-        snapshot_aggregator=FakeSnapshotAggregator(),
-        today_provider=lambda: TODAY,
+        repository=FakeScheduledRefreshRepository([]),
+        briefing_service=FakeBriefingService(),
+        now_provider=lambda: RUN_AT,
     )
     try:
         response = run(
@@ -291,7 +636,45 @@ def test_scheduled_refresh_endpoint_runs_injected_service() -> None:
                 "POST",
                 "/v1/scheduled/daily-refresh",
                 headers={"X-Scheduled-Refresh-Token": "test-scheduled-token"},
-                json={"target_date": "2026-07-04", "limit": 5},
+                json=body,
+                service=service,
+            ),
+        )
+    finally:
+        scheduled.settings.scheduled_refresh_token = original_token
+
+    assert response.status_code == 422
+
+
+def test_scheduled_refresh_endpoint_runs_injected_service_with_strict_response(
+) -> None:
+    original_token = scheduled.settings.scheduled_refresh_token
+    scheduled.settings.scheduled_refresh_token = "test-scheduled-token"
+    repository = FakeScheduledRefreshRepository(
+        [
+            ScheduledRefreshTarget(
+                user_id=USER_1,
+                briefing_date=TODAY,
+                selection_reason="missing_snapshot",
+            ),
+        ],
+    )
+    service = ScheduledRefreshService(
+        repository=repository,
+        briefing_service=FakeBriefingService(),
+        now_provider=lambda: RUN_AT,
+    )
+    try:
+        response = run(
+            request(
+                "POST",
+                "/v1/scheduled/daily-refresh",
+                headers={"X-Scheduled-Refresh-Token": "test-scheduled-token"},
+                json={
+                    "target_date": TODAY.isoformat(),
+                    "limit": 5,
+                    "profile_ids": [USER_1],
+                },
                 service=service,
             ),
         )
@@ -300,7 +683,12 @@ def test_scheduled_refresh_endpoint_runs_injected_service() -> None:
 
     assert response.status_code == 200
     body = response.json()
-    assert body["target_date"] == "2026-07-04"
+    assert body["run_at"] == RUN_AT.isoformat().replace("+00:00", "Z")
+    assert body["target_date"] == TODAY.isoformat()
     assert body["processed"] == 1
     assert body["succeeded"] == 1
     assert body["failed"] == 0
+    assert body["results"][0]["briefing_date"] == TODAY.isoformat()
+    assert body["results"][0]["snapshot_status"] == "generated"
+    assert body["results"][0]["briefing_status"] == "generated"
+    assert repository.calls[0]["profile_ids"] == [USER_1]

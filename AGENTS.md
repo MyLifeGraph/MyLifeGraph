@@ -117,10 +117,13 @@ refresh action calls the deterministic recommendation generate endpoint without
 LLM wording. Phase 3 executable tasks, cadence-aware habits, linked focus
 sessions, and the strict `executable-action-v1` envelope are implemented for
 authenticated real accounts. Snapshots now include additive habit-outcome and
-focus-session summaries while preserving Phase 2 Daily State unchanged. A
-backend-only scheduled endpoint refreshes onboarded non-guest profiles for
-cron-style runs. Phase 4 now persists one strict deterministic briefing per
-profile-local date behind read-only GET and deliberate idempotent POST routes.
+focus-session summaries while preserving Phase 2 Daily State unchanged. Phase
+7 extends the backend-only scheduled endpoint into idempotent daily preparation:
+one captured UTC instant resolves each eligible profile's local date, missing
+snapshots and briefings are created, snapshot-stale briefings are refreshed,
+and current pairs are left untouched. Phase 4 persists one strict deterministic
+briefing per profile-local date behind read-only GET and deliberate idempotent
+POST routes.
 Phase 5 now consumes that contract in a decision-first Today Dashboard: normal
 load is GET-only, missing/stale/error truth stays visible, stale actions are
 disabled until deliberate adjustment, and validated primary/support targets
@@ -129,14 +132,19 @@ never fabricates a personalized briefing.
 Phase 6 adds exact owned-action feedback with idempotent requests, deletable
 history, a decayed/capped context match under `feedback-ranking-v1`, and one
 cautious default Insight before advanced correlation exploration.
+Phase 7 adds bounded per-user failure stages, retry-safe daily identities, an
+optional eligible-profile-filtered operational retry, and no hidden Dashboard
+generation.
+It does not claim deployed cron wiring or send notifications.
 Read `docs/backend-roadmap.md`,
 `docs/daily-briefing-implementation-plan.md`, and the Phase 3 contract before
 planning the next backend, briefing, dashboard, or agent workflow.
 
-Do not jump straight to broad LLM integration, calendar import, weekly planning,
-vector search, or autonomous background agents. The next product slice is Phase
-7 scheduled daily preparation through the existing deterministic backend
-boundary. Phase 0A, Honest Capture, is
+Do not jump straight to broad LLM integration, calendar import, vector search,
+or autonomous background agents. The next product slice is Phase 8 bounded
+weekly review and habit adaptation; deployed scheduling and notification
+delivery still require their own directly verified operational contracts.
+Phase 0A, Honest Capture, is
 implemented: `/daily-check-in` redirects to the canonical lightweight flow;
 measurements require explicit selection; a typed draft drives guest and Supabase
 persistence; same-day guest rows and linked behavioral events are deduplicated;
@@ -243,7 +251,17 @@ and never execute or rewrite an action. Recent context-matched effects decay,
 remain bounded behind recovery/urgency safeguards, and are exposed in briefing
 provenance. Users can inspect and delete history. Insights starts with one
 non-causal observation, evidence window, confidence/data-quality label, and an
-optional bounded experiment. Phase 7 scheduled preparation is next.
+optional bounded experiment.
+
+Phase 7, Scheduled Daily Preparation, is implemented at the backend boundary.
+The protected scheduler selects only onboarded non-guest profiles whose exact
+profile-local date is missing a snapshot/briefing or has stale briefing
+provenance. Preparation reuses current snapshots, creates only missing
+prerequisites, converges briefing provenance after overlapping upserts, and
+reports sanitized per-user stages without failing the whole batch. A bounded
+`profile_ids` filter supports operational retry and isolated E2E. Normal
+Dashboard GET remains read-only; notification delivery and deployed cron wiring
+are not claimed.
 
 FastAPI-backed browser E2E coverage for revisioned Setup ownership/retry/edit,
 concurrent same-request convergence, post-intake recommendations, exact Phase 2
@@ -259,10 +277,13 @@ and idempotent daily-identity assertions. Phase 5 adds GET-only Dashboard load,
 honest briefing state, deliberate `force=true` adjustment, and real primary
 action dispatch. Phase 6 adds exact feedback create/history/delete, bounded
 ranking provenance, correction back to zero influence, and the cautious default
-Insight before advanced correlations.
-The combined Phase 3/4/5/6 browser journey passed
-non-destructively in the 2026-07-12 implementation checkout; later changes must
-still establish their own current-checkout pass before claiming E2E.
+Insight before advanced correlations. Phase 7 replaces the first manual briefing
+generation in that journey with a token-protected, single-profile scheduled
+preparation and verifies local-date, snapshot/briefing identity, no-LLM
+provenance, and a write-free retry.
+The combined Phase 3/4/5/6/7 browser journey passed non-destructively in the
+2026-07-12 Phase 7 implementation checkout; later changes must still establish
+their own current-checkout pass before claiming E2E.
 
 The implemented post-intake refresh is backend-only and best-effort:
 
@@ -299,9 +320,12 @@ The implemented post-intake refresh is backend-only and best-effort:
   bearer token and creates or refreshes deterministic `daily` and `weekly`
   `user_state_snapshots`.
 - `POST /v1/scheduled/daily-refresh` is backend-only, uses
-  `X-Scheduled-Refresh-Token`, lists onboarded non-guest profiles, and refreshes
-  deterministic daily snapshots without LLM usage. If recommendation refresh is
-  explicitly included, LLM wording remains disabled.
+  `X-Scheduled-Refresh-Token`, lists onboarded non-guest profiles, resolves one
+  local briefing date per profile from one UTC run instant, and prepares missing
+  daily snapshots plus missing or snapshot-stale persisted briefings. Current
+  pairs remain write-free on retry. An optional bounded `profile_ids` filter is
+  backend-only; if recommendation refresh is explicitly included, LLM wording
+  remains disabled.
 - The canonical Supabase-backed Evening Shutdown and Morning Calibration plus
   authenticated task, habit, and focus writes call daily snapshot refresh
   best-effort after the durable write. Capture refreshes include their explicit

@@ -185,6 +185,41 @@ preserves unmarked onboarding schedule rows except for the exact historical
 placeholder `Math`, `Room 204`, Monday `08:15`-`09:45` with empty metadata,
 which is removed when omitted.
 
+## Phase 7 Scheduled Daily Preparation
+
+Phase 7 adds no migration and no table. The protected FastAPI scheduler reuses:
+
+- `profiles.timezone`, `onboarding_completed_at`, and `role` to select only
+  onboarded non-guest profiles and resolve one exact local date from the batch's
+  captured timezone-aware UTC run instant;
+- the unique `(user_id, scope, period_key)` snapshot identity to create a
+  missing daily snapshot without duplicating an existing period; and
+- the unique `(user_id, briefing_date)` briefing identity plus persisted source
+  snapshot id/time provenance to distinguish missing, stale, and current output.
+
+Normal runs omit `target_date` and use each profile's local date. An explicit
+`target_date` is a privileged backfill override for the still-eligible selected
+profiles; it does not change ownership or expose the scheduler to Flutter.
+
+Missing prerequisites are created, a briefing whose snapshot provenance changed
+is upserted on the same daily identity, and a current snapshot/briefing pair is
+left write-free. Invalid profile timezones and snapshot, briefing, or optional
+recommendation failures remain isolated per profile with sanitized stage
+results. Recommendation generation is disabled by default and, when explicitly
+requested, remains deterministic with LLM wording disabled.
+
+The optional `profile_ids` request filter is bounded to 20 UUIDs and remains an
+intersection with the same onboarded non-guest query; it does not grant access
+to an otherwise ineligible profile. It supports targeted operational retry and
+isolated local E2E without introducing a client-visible user selector. The
+scheduler token and service-role key remain backend-only and are never Flutter
+configuration.
+
+This repository state proves the local persistence contract only. It does not
+claim that a remote project has the migrations, profile timezones, token, or
+deployed cron wiring configured. Phase 7 sends no notifications and adds no
+notification preference, delivery, snooze, or deduplication schema.
+
 ## Legacy Tables
 
 Older remote databases may contain CamelCase app tables:
@@ -296,6 +331,20 @@ intentionally stops with a check violation if a legacy habit log has
 intentional skip. Inspect and resolve its meaning before applying the migration;
 do not coerce it into `skipped` merely to make migration pass.
 
+`20260712064836_phase_4_daily_briefings.sql` creates one backend-owned
+`daily_briefings` row per `(user_id, briefing_date)`, bounded JSON checks,
+authenticated owner/admin reads, service-role writes, forced RLS, and the index
+used for recent owner-scoped reads.
+
+`20260712190000_phase_6_decision_feedback.sql` creates retry-safe
+`decision_feedback` history with unique `(user_id, request_id)`, bounded exact
+action/context fields, authenticated owner read/delete access, service-role
+writes, forced RLS, and indexes for the deterministic 28-day ranking window.
+
+Phase 7 adds no migration after Phase 6. Scheduled preparation relies on the
+existing profile timezone and the Phase 2/4 unique snapshot and briefing
+identities described above.
+
 ## Local Verification Workflow
 
 For local Supabase-backed testing, the reset should complete through:
@@ -384,9 +433,10 @@ start/finish/abandon with owned linkage and no implicit target mutation. The
 source injects committed response loss for habit/task create, habit
 outcome/undo, task completion/undo, and focus start/finish. Negative
 task/focus/habit lifecycle, duration, active-target, and weekday-cadence writes
-include terminal-focus `updated_at` mutation. Run the smoke successfully before
-claiming coverage passed; this document does not claim such a run. Do not run
-destructive reset commands against a remote database.
+include terminal-focus `updated_at` mutation. The combined Phase 3 through Phase
+7 smoke passed non-destructively in the 2026-07-12 Phase 7 implementation
+checkout. Later changes must establish a new pass. Do not run destructive reset
+commands against a remote database.
 
 For manual local product exploration, `npm run seed:demo` creates repeatable
 local-only Auth users and app rows for student, worker, and recovery scenarios.
@@ -432,9 +482,10 @@ The latest schema addition is
 `decision_feedback` history with a unique `(user_id, request_id)`, exact bounded
 feedback/context fields, read/delete RLS for authenticated owners, service-role
 writes, and indexes for the 28-day ranking window. The preceding Phase 4
-migration creates one owner-scoped `daily_briefings` row per user/local date with bounded action/evidence JSON,
-explicit authenticated read and service-role write grants, forced RLS, and
-owner/admin select plus service-role policies. The preceding Phase 3
+migration creates one owner-scoped `daily_briefings` row per user/local date
+with bounded action/evidence JSON, explicit authenticated read and service-role
+write grants, forced RLS, and owner/admin select plus service-role policies. The
+preceding Phase 3
 executable-action migration over the existing task, habit-log, and focus-session
 tables preserves table RLS and
 grants while adding explicit fields, checks, ownership/transition triggers, and
@@ -447,4 +498,5 @@ client/backend mapping; Phase 2 consumes that data inside existing snapshot
 JSON; Phase 3 adds action facts without changing Phase 2 classification; and
 Phase 4 persists deterministic briefing decisions without changing either
 contract; Phase 6 adds feedback as separate evidence and never rewrites those
-persisted reasons.
+persisted reasons. Phase 7 adds no schema object; it prepares the existing
+snapshot and briefing identities by profile-local date.
