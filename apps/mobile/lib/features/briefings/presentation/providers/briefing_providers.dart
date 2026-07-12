@@ -6,8 +6,12 @@ import '../../../../core/network/api_client.dart';
 import '../../../../core/supabase/supabase_providers.dart';
 import '../../data/briefing_api_data_source.dart';
 import '../../data/briefing_repository_impl.dart';
+import '../../data/feedback_api_data_source.dart';
+import '../../data/feedback_repository_impl.dart';
 import '../../domain/briefing_repository.dart';
 import '../../domain/daily_briefing.dart';
+import '../../domain/decision_feedback.dart';
+import '../../domain/feedback_repository.dart';
 
 final briefingApiDataSourceProvider = Provider<BriefingApiDataSource>(
   (ref) => BriefingApiDataSource(ref.watch(apiClientProvider)),
@@ -30,4 +34,20 @@ final briefingRepositoryProvider = Provider<BriefingRepository>((ref) {
 
 final todayBriefingProvider = FutureProvider.autoDispose<BriefingFeed>(
   (ref) => ref.watch(briefingRepositoryProvider).getToday(),
+);
+
+final feedbackRepositoryProvider = Provider<FeedbackRepository>((ref) {
+  final apiClient = ref.watch(apiClientProvider);
+  final capabilities = ref.watch(appSurfaceCapabilitiesProvider);
+  return FeedbackRepositoryImpl(
+    api: FeedbackApiDataSource(apiClient),
+    accessToken: () async =>
+        ref.read(supabaseClientProvider)?.auth.currentSession?.accessToken,
+    isLocalDemo: capabilities.isLocalDemo,
+  );
+});
+
+final decisionFeedbackProvider =
+    FutureProvider.autoDispose<List<DecisionFeedback>>(
+  (ref) => ref.watch(feedbackRepositoryProvider).listRecent(),
 );

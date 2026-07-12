@@ -182,17 +182,28 @@ Already implemented:
   - Recovery-first deterministic ranking chooses one executable primary action
     and at most two support actions from open tasks, due habits, and conservative
     capture fallback. Every target passes `executable-action-v1`; no LLM is used.
+- Phase 6 feedback and useful Insights:
+  - `GET|POST|DELETE /v1/feedback` derives the owner from the bearer token,
+    validates an exact action inside an owned briefing, and makes create retries
+    idempotent through `(user_id, request_id)`.
+  - `decision_feedback` remains separate append-only evidence; users can delete
+    a mistaken entry and original briefing/recommendation reasons never change.
+  - `feedback-ranking-v1` applies only a 28-day mode/kind/rule match, decays by
+    age, caps contribution, and keeps missing/stale capture plus urgent facts
+    ahead of preference fit. Briefing provenance exposes every applied effect.
+  - Insights defaults to one cautious observation with an evidence window,
+    confidence/data quality, non-causal copy, and optional bounded experiment;
+    the existing correlation tools remain available as advanced exploration.
 - Browser E2E starts FastAPI with local Supabase backend settings and verifies
   authenticated required-only Setup, retry/edit/review identity and ownership,
   deterministic post-intake recommendations, backend daily snapshot refresh
   after check-ins, exact Phase 2 state recomputation, core Supabase-backed app
   writes, Phase 4 read-only/generate/idempotent briefing persistence, and Phase
-  5 GET-only Today load, deliberate adjustment, and primary action dispatch.
+  5 GET-only Today load, deliberate adjustment, primary action dispatch, and
+  Phase 6 feedback persistence/ranking/deletion plus useful default Insights.
 
 Not yet implemented:
 
-- Append-only briefing/recommendation feedback history and its bounded,
-  deterministic ranking input; that remains Phase 6.
 - A bounded planning execution surface; Phase 3 returns `review_plan` as
   explicitly unavailable rather than a no-op.
 - A production background job queue or worker.
@@ -238,7 +249,7 @@ repositories, and jobs, not as unconstrained autonomous LLM loops.
 | Signal aggregator | Intake, daily check-in, task/habit/focus changes, scheduled jobs | `daily_logs`, `behavioral_events`, `tasks`, `goals`, `habits`, `habit_logs`, `focus_sessions`, `schedule_items`, `memory_entries` | `user_state_snapshots`, optional `ai_insights` | None by default |
 | Recommendation service | Intake complete, explicit refresh, scheduled refresh | `user_state_snapshots`, `daily_logs`, `behavioral_events`, `tasks`, existing `recommendations` | `recommendations` | Optional wording only later |
 | Recommendation verifier | Every generated recommendation | Candidate metadata, active recommendations | Accept/reject result | None |
-| Daily briefing service | Explicit refresh today; scheduled generation remains later | `user_state_snapshots`, `recommendations`, goals, tasks, habits, habit outcomes | `daily_briefings` | None for v1 |
+| Daily briefing service | Explicit refresh today; scheduled generation remains later | `user_state_snapshots`, `recommendations`, goals, tasks, habits, habit outcomes, `decision_feedback` | `daily_briefings` | None for v1 |
 | Coach service | User sends coach message | Recent messages, snapshots, selected memory | `coach_messages`, optional memory candidates | Yes, budgeted |
 | Memory service | Check-ins, coach conversations, weekly review | Raw notes/messages, existing memory | `memory_entries` | Optional extraction only |
 | Planning service | Weekly review, user request | Goals, tasks, habits, schedule, snapshots | `tasks`, `schedule_items`, `recommendations`, `coach_messages` | Optional for complex plans |
@@ -249,9 +260,9 @@ authenticated snapshot aggregator endpoint, deliberate dashboard refresh UX,
 the Phase 3 task/habit/focus execution contracts, scheduler-triggered daily
 refresh endpoint, and deterministic Insights correlation exploration now
 exist. Phase 4's deterministic Daily Briefing service supplies the backend
-decision contract, and Phase 5 now consumes it in the decision-first Today
-surface. The next product work is Phase 6 feedback history and useful default
-Insights, before any coach, memory extraction, weekly planning, calendar import,
+decision contract, Phase 5 consumes it in the decision-first Today surface, and
+Phase 6 closes the bounded feedback/Insight loop. The next product work is Phase
+7 scheduled daily preparation, before any coach, memory extraction, weekly planning, calendar import,
 or LLM provider work. Deployed cron/job
 execution remains useful, but it should precompute a defined daily state or
 briefing contract rather than exist as infrastructure in search of a product
@@ -455,13 +466,9 @@ Access:
 
 ### Later Tables
 
-`daily_briefings` is now implemented in Phase 4 after capture, Daily Mode, and
-executable action contracts proved the required persistence boundary. Do not
-add these remaining tables until their owning phase needs them:
-
-- `decision_feedback` in Phase 6, after the briefing action contract is stable
-  and ranking needs append-only outcome history across recommendations and
-  action types.
+`daily_briefings` and `decision_feedback` are implemented after their owning
+contracts proved the persistence boundary. Do not add these remaining tables
+until their owning phase needs them:
 - `backend_jobs` for durable idempotent jobs and retries.
 - `llm_usage_events` for per-user budget tracking.
 - `calendar_connections` and `calendar_events` for provider sync.
@@ -591,11 +598,11 @@ Use these rules before adding any model provider:
 
 The next implementation should build on completed Phase 0 product integrity,
 Phase 1 capture, Phase 2 explainable state, Phase 3 executable action targets,
-Phase 4's persisted deterministic briefing contract, and Phase 5's decision-first
-Today consumer. The immediate slice is **Phase 6: Feedback And Useful
-Insights**: persist bounded append-only feedback, use it deterministically in
-ranking without erasing original evidence, and make the default Insight one
-cautious observation plus optional experiment. LLM usage remains later work.
+Phase 4's persisted deterministic briefing contract, Phase 5's decision-first
+Today consumer, and Phase 6's bounded feedback/Insight loop. The immediate slice
+is **Phase 7: Scheduled Daily Preparation**: use the existing protected
+scheduled boundary to prepare deterministic snapshots and briefings by
+profile-local date without hiding generation or adding an LLM.
 
 ### Completed Slice 0A: Honest Capture
 

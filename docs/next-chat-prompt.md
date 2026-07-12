@@ -1,10 +1,10 @@
 # Next Chat Prompt
 
-Use this prompt when starting Phase 6 after the decision-first Today Dashboard.
+Use this prompt when starting Phase 7 after Feedback And Useful Insights.
 
-Recommended reasoning level: **high**. This slice introduces durable preference
-history into deterministic ranking and must not erase evidence or overfit one
-click.
+Recommended reasoning level: **high**. This slice turns the existing protected
+refresh endpoint into reliable daily preparation without hiding generation or
+introducing autonomous product changes.
 
 Prompt:
 
@@ -16,34 +16,31 @@ docs/backend-roadmap.md, docs/daily-briefing-implementation-plan.md,
 docs/phase-3-executable-actions-contract.md, docs/supabase-current-state.md,
 docs/local-dev.md, and docs/verification.md.
 
-Goal: implement Phase 6, Feedback And Useful Insights.
+Goal: implement Phase 7, Scheduled Daily Preparation.
 
-Phases 0 through 5 are implemented. Today reads one persisted strict
-`daily-briefing-v1` decision without generation on normal load, preserves
-missing/current/stale/error/demo truth, deliberately adjusts with `force=true`,
-and dispatches current `executable-action-v1` targets through Phase 3 handlers.
+Phases 0 through 6 are implemented. Today consumes one persisted deterministic
+briefing, executes strict actions, records bounded owner-scoped feedback, and
+explains feedback influence through `feedback-ranking-v1`. Insights defaults to
+one cautious observation; correlation analytics remain advanced exploration.
 
-Define the feedback contract before schema or UI work:
-
-- Use bounded append-only events tied to the authenticated owner, briefing,
-  recommendation when present, stable action id/kind, and exact feedback type.
-- Support done, later, not_helpful, too_much, and does_not_fit semantics without
-  confusing execution outcome with preference feedback.
-- Keep original briefing/recommendation reason, provenance, and score evidence
-  immutable; feedback is additional historical evidence.
-- Scope effects by recency and relevant context such as Daily Mode, action kind,
-  estimate, and rule/category. One click must not create a permanent global ban.
-- Make feedback contribution bounded, deterministic, versioned, testable, and
-  explainable in the resulting briefing provenance.
-- Preserve recovery-first safeguards and urgent facts ahead of preference fit.
-- Let users correct/delete their feedback history under owner-scoped RLS.
-- Replace the default Insights entry with one cautious observation, visible
-  evidence window, confidence/data-quality state, and optional bounded
-  experiment; keep correlation exploration advanced and never claim causation.
-- Keep normal Dashboard GET read-only. Do not add Coach, calendar, workers,
-  notifications, autonomous changes, or an LLM.
-- Add migration/RLS/grants when the contract justifies persistence, strict
-  backend/Flutter models, focused tests, full verification, and browser evidence.
-- Update architecture, roadmap, local-dev, verification, README, and AGENTS.md.
-  Do not claim browser E2E unless it succeeds in the current checkout.
+- Extend the existing protected scheduled refresh boundary instead of adding an
+  unrelated worker abstraction.
+- Prepare daily snapshots and persisted briefings for onboarded non-guest users
+  according to each profile timezone and local briefing date.
+- Define idempotent missing/stale/current behavior and isolate one user's failure
+  from the rest of the batch.
+- Keep all scheduled generation deterministic, no-LLM, bounded, observable, and
+  safe to retry.
+- Preserve normal Dashboard GET-only behavior and explicit user adjustment.
+- Do not generate recommendations, mutate tasks/habits/goals, or send
+  notifications unless the Phase 7 contract explicitly requires and tests it.
+- If notification preparation is included, make it opt-in, honor quiet hours and
+  frequency caps, deep-link to an exact action, and exclude sensitive state.
+- Do not add Coach, calendar import, weekly planning, vector search, autonomous
+  changes, or an LLM.
+- Add focused backend/schema/client tests only where the contract requires them,
+  full verification, browser evidence, and current documentation.
+- Do not claim deployed cron wiring unless the deployment target is directly
+  configured and inspected; a locally verified scheduler endpoint is not a
+  production deployment claim.
 ```

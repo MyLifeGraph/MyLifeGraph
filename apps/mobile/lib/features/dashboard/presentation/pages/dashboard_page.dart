@@ -13,6 +13,7 @@ import '../../../../core/widgets/app_card.dart';
 import '../../../actions/application/executable_action_dispatcher.dart';
 import '../../../actions/domain/executable_action_target.dart';
 import '../../../briefings/domain/daily_briefing.dart';
+import '../../../briefings/domain/decision_feedback.dart';
 import '../../../briefings/presentation/providers/briefing_providers.dart';
 import '../../../briefings/presentation/widgets/today_briefing_section.dart';
 import '../../../optimization/domain/entities/recommendation_feed.dart';
@@ -45,6 +46,10 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
   bool _isGeneratingBriefing = false;
   String? _briefingGenerationError;
   final Set<String> _executingBriefingActionIds = {};
+  bool _isSubmittingFeedback = false;
+  String? _feedbackError;
+  DecisionFeedbackType? _submittedFeedbackType;
+  final Map<String, String> _feedbackRequestIds = {};
 
   @override
   Widget build(BuildContext context) {
@@ -89,6 +94,11 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
           snapshot: data,
           canUseSyncedExecution: capabilities.canUseSyncedExecution,
         ),
+        isSubmittingFeedback: _isSubmittingFeedback,
+        feedbackError: _feedbackError,
+        submittedFeedbackType: _submittedFeedbackType,
+        onSubmitFeedback: _submitFeedback,
+        onShowFeedbackHistory: _showFeedbackHistory,
         onAddTask: () => _openTaskEditor(),
         onEditTask: (task) => _openTaskEditor(task: task),
         onCompleteTask: _completeTask,
@@ -167,6 +177,9 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
       await ref.read(briefingRepositoryProvider).generateToday(force: force);
       ref.invalidate(todayBriefingProvider);
       if (mounted) {
+        setState(() => _submittedFeedbackType = null);
+      }
+      if (mounted) {
         _showTaskMessage(
           force ? 'Today adjusted.' : 'Today briefing generated.',
         );
@@ -183,6 +196,55 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
         setState(() => _isGeneratingBriefing = false);
       }
     }
+  }
+
+  Future<void> _submitFeedback(
+    BriefingAction action,
+    DecisionFeedbackType type,
+  ) async {
+    if (_isSubmittingFeedback) return;
+    final feed = ref.read(todayBriefingProvider).value;
+    final briefing = feed?.briefing;
+    if (briefing == null || feed?.freshness != BriefingFreshness.current) {
+      setState(() => _feedbackError = 'Refresh today before saving feedback.');
+      return;
+    }
+    final requestKey = '${briefing.id}:${action.target.id}:${type.code}';
+    final requestId =
+        _feedbackRequestIds.putIfAbsent(requestKey, newClientUuid);
+    setState(() {
+      _isSubmittingFeedback = true;
+      _feedbackError = null;
+    });
+    try {
+      await ref.read(feedbackRepositoryProvider).create(
+            requestId: requestId,
+            briefingId: briefing.id,
+            actionId: action.target.id,
+            feedbackType: type,
+          );
+      _feedbackRequestIds.remove(requestKey);
+      ref.invalidate(decisionFeedbackProvider);
+      if (mounted) {
+        setState(() => _submittedFeedbackType = type);
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _feedbackError = 'Feedback was not confirmed. Retry the same choice.';
+        });
+      }
+    } finally {
+      if (mounted) setState(() => _isSubmittingFeedback = false);
+    }
+  }
+
+  Future<void> _showFeedbackHistory() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => const _FeedbackHistorySheet(),
+    );
   }
 
   Future<void> _executeBriefingAction(
@@ -588,6 +650,11 @@ class _DashboardHome extends StatelessWidget {
     required this.onRetryBriefing,
     required this.onGenerateBriefing,
     required this.onExecuteBriefingAction,
+    required this.isSubmittingFeedback,
+    required this.feedbackError,
+    required this.submittedFeedbackType,
+    required this.onSubmitFeedback,
+    required this.onShowFeedbackHistory,
     required this.onAddTask,
     required this.onEditTask,
     required this.onCompleteTask,
@@ -622,6 +689,11 @@ class _DashboardHome extends StatelessWidget {
   final VoidCallback onRetryBriefing;
   final GenerateBriefingCallback onGenerateBriefing;
   final ExecuteBriefingActionCallback onExecuteBriefingAction;
+  final bool isSubmittingFeedback;
+  final String? feedbackError;
+  final DecisionFeedbackType? submittedFeedbackType;
+  final SubmitFeedbackCallback onSubmitFeedback;
+  final VoidCallback onShowFeedbackHistory;
   final VoidCallback onAddTask;
   final ValueChanged<PlanItem> onEditTask;
   final ValueChanged<PlanItem> onCompleteTask;
@@ -682,6 +754,11 @@ class _DashboardHome extends StatelessWidget {
                             onRetryRead: onRetryBriefing,
                             onGenerate: onGenerateBriefing,
                             onExecute: onExecuteBriefingAction,
+                            isSubmittingFeedback: isSubmittingFeedback,
+                            feedbackError: feedbackError,
+                            submittedFeedbackType: submittedFeedbackType,
+                            onFeedback: onSubmitFeedback,
+                            onShowFeedbackHistory: onShowFeedbackHistory,
                           ),
                           const SizedBox(height: AppSpacing.xl),
                           _LatestCheckInCard(
@@ -741,6 +818,99 @@ class _DashboardHome extends StatelessWidget {
     );
   }
 }
+
+class _FeedbackHistorySheet extends ConsumerWidget {
+  const _FeedbackHistorySheet();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final value = ref.watch(decisionFeedbackProvider);
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Feedback history',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Close',
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: const Icon(Icons.close),
+                ),
+              ],
+            ),
+            const Text(
+              'Recent feedback can influence matching rankings for up to 28 days. Delete an entry to correct it; original briefing evidence stays unchanged.',
+            ),
+            const SizedBox(height: AppSpacing.md),
+            Flexible(
+              child: value.when(
+                loading: () => const Center(child: CircularProgressIndicator()),
+                error: (_, __) =>
+                    const Text('Feedback history is unavailable.'),
+                data: (items) {
+                  if (items.isEmpty) return const Text('No recent feedback.');
+                  return ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: items.length,
+                    separatorBuilder: (_, __) => const Divider(),
+                    itemBuilder: (context, index) {
+                      final item = items[index];
+                      return ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: Text(_feedbackTypeLabel(item.feedbackType)),
+                        subtitle: Text(
+                          '${item.actionKind} · ${DateFormat.yMMMd().add_Hm().format(item.createdAt.toLocal())}',
+                        ),
+                        trailing: IconButton(
+                          tooltip: 'Delete feedback',
+                          onPressed: () async {
+                            try {
+                              await ref
+                                  .read(feedbackRepositoryProvider)
+                                  .delete(item.id);
+                              ref.invalidate(decisionFeedbackProvider);
+                            } catch (_) {
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content:
+                                        Text('Feedback could not be deleted.'),
+                                  ),
+                                );
+                              }
+                            }
+                          },
+                          icon: const Icon(Icons.delete_outline),
+                        ),
+                      );
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+String _feedbackTypeLabel(DecisionFeedbackType type) => switch (type) {
+      DecisionFeedbackType.done => 'Done',
+      DecisionFeedbackType.later => 'Later',
+      DecisionFeedbackType.notHelpful => 'Not helpful',
+      DecisionFeedbackType.tooMuch => 'Too much today',
+      DecisionFeedbackType.doesNotFit => 'Does not fit',
+    };
 
 class _DashboardHeader extends StatelessWidget {
   const _DashboardHeader({required this.snapshot});

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_life_graph/features/actions/domain/executable_action_target.dart';
 import 'package:my_life_graph/features/briefings/domain/daily_briefing.dart';
+import 'package:my_life_graph/features/briefings/domain/decision_feedback.dart';
 import 'package:my_life_graph/features/briefings/presentation/widgets/today_briefing_section.dart';
 
 import 'support/briefing_fixtures.dart';
@@ -27,6 +28,25 @@ void main() {
     await tester.tap(find.text('Open task'));
     await tester.pump();
     expect(executed?.command, ExecutableActionCommand.openTask);
+  });
+
+  testWidgets('feedback is explicit and does not execute the action',
+      (tester) async {
+    DecisionFeedbackType? feedback;
+    var executions = 0;
+    await _pumpSection(
+      tester,
+      value: AsyncValue.data(currentBriefingFeed()),
+      onExecute: (_) async => executions++,
+      onFeedback: (_, type) async => feedback = type,
+    );
+
+    await tester.tap(find.text('Too much'));
+    await tester.pump();
+
+    expect(feedback, DecisionFeedbackType.tooMuch);
+    expect(executions, 0);
+    expect(find.textContaining('does not complete'), findsOneWidget);
   });
 
   testWidgets('stale briefing stays visible but cannot execute',
@@ -102,6 +122,7 @@ Future<void> _pumpSection(
   required AsyncValue<BriefingFeed> value,
   GenerateBriefingCallback? onGenerate,
   ExecuteBriefingActionCallback? onExecute,
+  SubmitFeedbackCallback? onFeedback,
 }) async {
   await tester.pumpWidget(
     MaterialApp(
@@ -115,6 +136,11 @@ Future<void> _pumpSection(
             onRetryRead: () {},
             onGenerate: onGenerate ?? ({required force}) async {},
             onExecute: onExecute ?? (_) async {},
+            isSubmittingFeedback: false,
+            feedbackError: null,
+            submittedFeedbackType: null,
+            onFeedback: onFeedback ?? (_, DecisionFeedbackType __) async {},
+            onShowFeedbackHistory: () {},
           ),
         ),
       ),

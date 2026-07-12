@@ -1907,6 +1907,39 @@ try {
     );
   }
 
+  const [feedbackResponse] = await Promise.all([
+    waitForAiPost(page, '/v1/feedback', 'primary briefing feedback'),
+    clickChoiceChip(page, 'Too much'),
+  ]);
+  const feedbackPayload = feedbackResponse.request().postDataJSON();
+  if (
+    feedbackPayload.briefing_id !== phaseFourBriefing.briefing.id ||
+    feedbackPayload.action_id !==
+      phaseFourBriefing.briefing.primary_action.target.id ||
+    feedbackPayload.feedback_type !== 'too_much' ||
+    typeof feedbackPayload.request_id !== 'string' ||
+    Object.keys(feedbackPayload).sort().join(',') !==
+      'action_id,briefing_id,feedback_type,request_id'
+  ) {
+    throw new Error(
+      `Today feedback payload is invalid: ${JSON.stringify(feedbackPayload)}`,
+    );
+  }
+  await expectText(page, 'Saved. Use Adjust today');
+  await assertRows(
+    `decision_feedback?select=id,request_id,briefing_id,action_id,action_kind,feedback_type,context_mode,estimated_minutes,rule_key,metadata&user_id=eq.${user.id}`,
+    (rows) =>
+      rows.length === 1 &&
+      rows[0].request_id === feedbackPayload.request_id &&
+      rows[0].briefing_id === phaseFourBriefing.briefing.id &&
+      rows[0].action_id ===
+        phaseFourBriefing.briefing.primary_action.target.id &&
+      rows[0].feedback_type === 'too_much' &&
+      rows[0].context_mode === phaseFourBriefing.briefing.mode &&
+      rows[0].metadata?.contract_version === 'decision-feedback-v1',
+    'owner-scoped Phase 6 feedback history',
+  );
+
   await assertBriefingPrimaryActionDispatch(
     page,
     phaseFourBriefing.briefing.primary_action.target,
@@ -1926,7 +1959,10 @@ try {
   const adjustedBriefing = await adjustResponse.json();
   if (
     adjustedBriefing?.briefing?.id !== phaseFourBriefing.briefing.id ||
-    adjustedBriefing?.freshness !== 'current'
+    adjustedBriefing?.freshness !== 'current' ||
+    adjustedBriefing?.briefing?.provenance?.feedback_ranking
+        ?.contract_version !== 'feedback-ranking-v1' ||
+    adjustedBriefing?.briefing?.provenance?.feedback_ranking?.event_count !== 1
   ) {
     throw new Error(
       `Today adjustment did not preserve current daily identity: ${JSON.stringify(adjustedBriefing)}`,
@@ -1934,6 +1970,40 @@ try {
   }
   await expectText(page, 'Today adjusted.');
   await expectText(page, adjustedBriefing.briefing.primary_action.title);
+  await clickByText(page, 'Feedback history');
+  await expectText(page, 'Too much today');
+  const deleteFeedbackPromise = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'DELETE' &&
+      response.url().startsWith(`${aiServiceBaseUrl}/v1/feedback/`) &&
+      response.ok(),
+  );
+  await clickByRoleName(page, 'button', 'Delete feedback');
+  await deleteFeedbackPromise;
+  await assertRows(
+    `decision_feedback?select=id&user_id=eq.${user.id}`,
+    (rows) => rows.length === 0,
+    'deleted feedback correction',
+  );
+  await clickByRoleName(page, 'button', 'Close');
+  const correctedAdjustPromise = waitForAiPost(
+    page,
+    '/v1/briefings/generate',
+    'Today adjustment after feedback deletion',
+  );
+  await clickByText(page, 'Adjust today');
+  const correctedAdjust = await correctedAdjustPromise;
+  const correctedBriefing = await correctedAdjust.json();
+  if (
+    correctedBriefing?.briefing?.provenance?.feedback_ranking?.event_count !== 0 ||
+    correctedBriefing?.briefing?.provenance?.feedback_ranking
+        ?.primary_contribution !== 0
+  ) {
+    throw new Error(
+      `Deleted feedback still influenced ranking: ${JSON.stringify(correctedBriefing)}`,
+    );
+  }
+  await scrollFlutterPage(page, 2200);
   const [manualSnapshotResponse, manualRecommendationResponse] =
     await Promise.all([
       waitForAiPost(page, '/v1/snapshots/generate', 'manual snapshot refresh'),
@@ -1992,6 +2062,15 @@ try {
       ),
     'deterministic recommendations after manual refresh',
   );
+
+  await page.goto(appRoute('/insights'), { waitUntil: 'domcontentloaded' });
+  await waitForFlutterShell(page);
+  await enableFlutterSemantics(page);
+  await expectText(page, 'ONE OBSERVATION');
+  await expectText(page, 'Keep gathering comparable days');
+  await expectText(page, 'Advanced correlation exploration');
+  await clickByText(page, 'Advanced correlation exploration');
+  await expectText(page, 'Compare');
 
   await page.goto(appRoute('/alerts'), { waitUntil: 'domcontentloaded' });
   await waitForFlutterShell(page);
@@ -2975,6 +3054,9 @@ async function assertDeterministicDailyBriefing(userId) {
     briefing?.mode !== 'recover' ||
     briefing?.provenance?.engine !== 'deterministic' ||
     briefing?.provenance?.llm_used !== false ||
+    briefing?.provenance?.feedback_ranking?.contract_version !==
+      'feedback-ranking-v1' ||
+    briefing?.provenance?.feedback_ranking?.event_count !== 0 ||
     briefing?.capacity_minutes !== null ||
     !isExecutableBriefingAction(briefing?.primary_action) ||
     !Array.isArray(briefing?.support_actions) ||
@@ -2998,7 +3080,7 @@ async function assertDeterministicDailyBriefing(userId) {
     persisted[0].capacity_minutes !== null ||
     persisted[0].metadata?.contract_version !== 'daily-briefing-v1' ||
     persisted[0].metadata?.ranking_version !==
-      'deterministic-briefing-ranker-v1' ||
+      'deterministic-briefing-ranker-v2' ||
     persisted[0].provenance?.source_snapshot_id !==
       briefing.provenance.source_snapshot_id ||
     stableJson(persisted[0].primary_action) !==

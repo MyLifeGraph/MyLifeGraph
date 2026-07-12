@@ -404,6 +404,13 @@ void main() {
     await tester.tap(find.text('Insights'));
     await tester.pumpAndSettle();
 
+    expect(find.text('ONE OBSERVATION'), findsOneWidget);
+    expect(find.text('Advanced correlation exploration'), findsOneWidget);
+    expect(find.text('Compare'), findsNothing);
+
+    await tester.tap(find.text('Advanced correlation exploration'));
+    await tester.pumpAndSettle();
+
     expect(find.text('Compare'), findsOneWidget);
     expect(find.text('3M'), findsOneWidget);
     expect(find.text('All'), findsOneWidget);

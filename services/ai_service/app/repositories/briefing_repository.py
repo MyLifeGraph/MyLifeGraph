@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from typing import Any, Protocol
 
@@ -19,6 +19,7 @@ class BriefingContext:
     habits: list[dict[str, Any]]
     habit_logs: list[dict[str, Any]]
     recommendations: list[dict[str, Any]]
+    feedback: list[dict[str, Any]] = field(default_factory=list)
 
 
 class BriefingRepository(Protocol):
@@ -185,6 +186,20 @@ class SupabaseBriefingRepository:
                 "limit": "20",
             },
         )
+        feedback_since = briefing_date - timedelta(days=28)
+        feedback = await self._client.select(
+            "decision_feedback",
+            params={
+                "select": (
+                    "id,action_id,action_kind,feedback_type,context_mode,"
+                    "estimated_minutes,rule_key,created_at"
+                ),
+                "user_id": f"eq.{user_id}",
+                "created_at": f"gte.{feedback_since.isoformat()}T00:00:00Z",
+                "order": "created_at.desc,id.desc",
+                "limit": "200",
+            },
+        )
         return BriefingContext(
             snapshot=snapshot,
             tasks=tasks,
@@ -192,6 +207,7 @@ class SupabaseBriefingRepository:
             habits=habits,
             habit_logs=habit_logs,
             recommendations=recommendations,
+            feedback=feedback,
         )
 
     async def persist_daily_briefing(
@@ -223,6 +239,16 @@ def _daily_briefing(row: dict[str, Any]) -> DailyBriefing:
         raise ValueError("Persisted briefing action lists are invalid.")
     if not isinstance(provenance, dict) or not isinstance(metadata, dict):
         raise ValueError("Persisted briefing metadata is invalid.")
+    normalized_provenance = dict(provenance)
+    if "feedback_ranking" not in normalized_provenance:
+        normalized_provenance["feedback_ranking"] = {
+            "contract_version": "feedback-ranking-v1",
+            "lookback_days": 28,
+            "event_count": 0,
+            "applied_count": 0,
+            "primary_contribution": 0,
+            "reasons": [],
+        }
     return DailyBriefing(
         id=str(row["id"]),
         briefing_date=date.fromisoformat(str(row["briefing_date"])),
@@ -241,7 +267,7 @@ def _daily_briefing(row: dict[str, Any]) -> DailyBriefing:
         ],
         provenance=BriefingProvenance.model_validate(
             {
-                **provenance,
+                **normalized_provenance,
                 "source_snapshot_generated_at": _datetime(
                     provenance.get("source_snapshot_generated_at"),
                 ),

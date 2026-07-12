@@ -467,3 +467,68 @@ def test_profile_timezone_determines_briefing_date() -> None:
     response = run(service.get_today(user_id="user-123"))
 
     assert response.briefing_date == TODAY
+
+
+def test_repeated_recent_feedback_changes_ranking_with_bounded_provenance() -> None:
+    first_id = "77777777-7777-4777-8777-777777777777"
+    second_id = "88888888-8888-4888-8888-888888888888"
+    feedback_rows = [
+        {
+            "action_id": f"open_task:{first_id}",
+            "action_kind": "task",
+            "feedback_type": "not_helpful",
+            "context_mode": "steady",
+            "rule_key": "open_task",
+            "created_at": NOW.isoformat(),
+        }
+        for _ in range(3)
+    ]
+    service, _, _ = service_for(
+        BriefingContext(
+            snapshot=snapshot(),
+            tasks=[
+                {
+                    "id": first_id,
+                    "title": "First task",
+                    "status": "todo",
+                    "priority": "high",
+                    "deadline": None,
+                    "estimated_minutes": 30,
+                    "metadata": {},
+                },
+                {
+                    "id": second_id,
+                    "title": "Second task",
+                    "status": "todo",
+                    "priority": "medium",
+                    "deadline": None,
+                    "estimated_minutes": 30,
+                    "metadata": {},
+                },
+            ],
+            goals=[],
+            habits=[],
+            habit_logs=[],
+            recommendations=[],
+            feedback=feedback_rows,
+        ),
+    )
+
+    response = run(
+        service.generate_today(
+            user_id="user-123",
+            request=BriefingGenerateRequest(),
+        ),
+    )
+
+    assert response.briefing is not None
+    assert response.briefing.primary_action.target.target_id == second_id
+    ranking = response.briefing.provenance.feedback_ranking
+    assert ranking.contract_version == "feedback-ranking-v1"
+    assert ranking.event_count == 3
+    assert ranking.applied_count == 3
+    assert ranking.primary_contribution == -135
+    assert ranking.reasons == ["recent_not_helpful_feedback"]
+    assert response.briefing.primary_action.reason == (
+        "This open task is the strongest remaining executable option."
+    )

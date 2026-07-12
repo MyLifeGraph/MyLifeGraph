@@ -8,6 +8,7 @@ import '../../../../core/widgets/async_value_view.dart';
 import '../../domain/entities/correlation.dart';
 import '../../domain/entities/insight.dart';
 import '../../domain/services/correlation_analyzer.dart';
+import '../../domain/services/coaching_observation.dart';
 import '../providers/insights_providers.dart';
 
 class InsightsPage extends ConsumerWidget {
@@ -72,6 +73,7 @@ class _InsightsHomeState extends ConsumerState<_InsightsHome> {
     );
     final metricA = widget.report.metricById(_metricAId);
     final metricB = widget.report.metricById(_metricBId);
+    final observation = const CoachingObservationBuilder().build(widget.report);
 
     return SafeArea(
       child: CustomScrollView(
@@ -93,106 +95,136 @@ class _InsightsHomeState extends ConsumerState<_InsightsHome> {
                   },
                 ),
                 SizedBox(height: isMobile ? AppSpacing.lg : AppSpacing.xl),
-                _ControlsPanel(
-                  isMobile: isMobile,
-                  windowDays: windowDays,
-                  metrics: widget.report.metrics,
-                  metricAId: _metricAId,
-                  metricBId: _metricBId,
-                  onWindowChanged: (value) {
-                    ref.read(insightsWindowDaysProvider.notifier).state = value;
-                  },
-                  onMetricAChanged: (value) {
-                    if (value == null) {
-                      return;
-                    }
-                    setState(() {
-                      _metricAId = value;
-                      if (_metricAId == _metricBId) {
-                        _metricBId = _fallbackMetricId(except: _metricAId);
-                      }
-                    });
-                  },
-                  onMetricBChanged: (value) {
-                    if (value == null) {
-                      return;
-                    }
-                    setState(() {
-                      _metricBId = value;
-                      if (_metricAId == _metricBId) {
-                        _metricAId = _fallbackMetricId(except: _metricBId);
-                      }
-                    });
-                  },
-                ),
+                _CoachingObservationCard(observation: observation),
                 SizedBox(height: isMobile ? AppSpacing.md : AppSpacing.lg),
-                _TrendOverlayCard(
-                  report: widget.report,
-                  selectedMetricIds: _trendMetricIds,
-                  onMetricToggled: (metricId) {
-                    setState(() {
-                      if (_trendMetricIds.contains(metricId)) {
-                        if (_trendMetricIds.length > 1) {
-                          _trendMetricIds.remove(metricId);
-                        }
-                      } else {
-                        _trendMetricIds.add(metricId);
-                      }
-                    });
-                  },
-                  isMobile: isMobile,
-                ),
-                SizedBox(height: isMobile ? AppSpacing.md : AppSpacing.lg),
-                if (isMobile) ...[
-                  _CorrelationCard(
-                    metricA: metricA,
-                    metricB: metricB,
-                    result: activeResult,
-                    values: values,
-                    isMobile: true,
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-                  _TopPatternsCard(report: widget.report, isMobile: true),
-                ] else
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        flex: 3,
-                        child: _CorrelationCard(
-                          metricA: metricA,
-                          metricB: metricB,
-                          result: activeResult,
-                          values: values,
-                          isMobile: false,
-                        ),
+                _InsightsPanel(
+                  padding: EdgeInsets.zero,
+                  child: Material(
+                    type: MaterialType.transparency,
+                    child: ExpansionTile(
+                      title: const Text('Advanced correlation exploration'),
+                      subtitle: const Text(
+                        'Inspect matrices, trends, and individual signal pairs.',
                       ),
-                      const SizedBox(width: AppSpacing.lg),
-                      Expanded(
-                        flex: 2,
-                        child: _TopPatternsCard(
+                      childrenPadding: EdgeInsets.all(
+                        isMobile ? AppSpacing.md : AppSpacing.lg,
+                      ),
+                      children: [
+                        _ControlsPanel(
+                          isMobile: isMobile,
+                          windowDays: windowDays,
+                          metrics: widget.report.metrics,
+                          metricAId: _metricAId,
+                          metricBId: _metricBId,
+                          onWindowChanged: (value) {
+                            ref
+                                .read(insightsWindowDaysProvider.notifier)
+                                .state = value;
+                          },
+                          onMetricAChanged: (value) {
+                            if (value == null) return;
+                            setState(() {
+                              _metricAId = value;
+                              if (_metricAId == _metricBId) {
+                                _metricBId =
+                                    _fallbackMetricId(except: _metricAId);
+                              }
+                            });
+                          },
+                          onMetricBChanged: (value) {
+                            if (value == null) return;
+                            setState(() {
+                              _metricBId = value;
+                              if (_metricAId == _metricBId) {
+                                _metricAId =
+                                    _fallbackMetricId(except: _metricBId);
+                              }
+                            });
+                          },
+                        ),
+                        SizedBox(
+                          height: isMobile ? AppSpacing.md : AppSpacing.lg,
+                        ),
+                        _TrendOverlayCard(
                           report: widget.report,
-                          isMobile: false,
+                          selectedMetricIds: _trendMetricIds,
+                          onMetricToggled: (metricId) {
+                            setState(() {
+                              if (_trendMetricIds.contains(metricId)) {
+                                if (_trendMetricIds.length > 1) {
+                                  _trendMetricIds.remove(metricId);
+                                }
+                              } else {
+                                _trendMetricIds.add(metricId);
+                              }
+                            });
+                          },
+                          isMobile: isMobile,
                         ),
-                      ),
-                    ],
+                        SizedBox(
+                          height: isMobile ? AppSpacing.md : AppSpacing.lg,
+                        ),
+                        if (isMobile) ...[
+                          _CorrelationCard(
+                            metricA: metricA,
+                            metricB: metricB,
+                            result: activeResult,
+                            values: values,
+                            isMobile: true,
+                          ),
+                          const SizedBox(height: AppSpacing.md),
+                          _TopPatternsCard(
+                            report: widget.report,
+                            isMobile: true,
+                          ),
+                        ] else
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                flex: 3,
+                                child: _CorrelationCard(
+                                  metricA: metricA,
+                                  metricB: metricB,
+                                  result: activeResult,
+                                  values: values,
+                                  isMobile: false,
+                                ),
+                              ),
+                              const SizedBox(width: AppSpacing.lg),
+                              Expanded(
+                                flex: 2,
+                                child: _TopPatternsCard(
+                                  report: widget.report,
+                                  isMobile: false,
+                                ),
+                              ),
+                            ],
+                          ),
+                        SizedBox(
+                          height: isMobile ? AppSpacing.md : AppSpacing.lg,
+                        ),
+                        _CorrelationMatrixCard(
+                          report: widget.report,
+                          selectedMetricAId: _metricAId,
+                          selectedMetricBId: _metricBId,
+                          onPairSelected: (metricAId, metricBId) {
+                            setState(() {
+                              _metricAId = metricAId;
+                              _metricBId = metricBId;
+                            });
+                          },
+                        ),
+                        SizedBox(
+                          height: isMobile ? AppSpacing.md : AppSpacing.lg,
+                        ),
+                        _DiscoveredPatternsCard(
+                          insights: widget.insights,
+                          isMobile: isMobile,
+                        ),
+                      ],
+                    ),
                   ),
-                SizedBox(height: isMobile ? AppSpacing.md : AppSpacing.lg),
-                _CorrelationMatrixCard(
-                  report: widget.report,
-                  selectedMetricAId: _metricAId,
-                  selectedMetricBId: _metricBId,
-                  onPairSelected: (metricAId, metricBId) {
-                    setState(() {
-                      _metricAId = metricAId;
-                      _metricBId = metricBId;
-                    });
-                  },
-                ),
-                SizedBox(height: isMobile ? AppSpacing.md : AppSpacing.lg),
-                _DiscoveredPatternsCard(
-                  insights: widget.insights,
-                  isMobile: isMobile,
                 ),
               ],
             ),
@@ -254,7 +286,7 @@ class _InsightsHeader extends StatelessWidget {
         ),
         const SizedBox(height: AppSpacing.lg),
         Text(
-          'Compare sleep, workload, stress, habits, focus, mood, and movement over time.',
+          'Start with one cautious observation. Open advanced exploration when you want the underlying correlations.',
           style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                 color: const Color(0xFFA8B5BE),
                 height: 1.7,
@@ -298,6 +330,65 @@ class _InsightsHeader extends StatelessWidget {
         const SizedBox(width: AppSpacing.md),
         action,
       ],
+    );
+  }
+}
+
+class _CoachingObservationCard extends StatelessWidget {
+  const _CoachingObservationCard({required this.observation});
+
+  final CoachingObservation observation;
+
+  @override
+  Widget build(BuildContext context) {
+    final confidence = switch (observation.confidence) {
+      ObservationConfidence.insufficient => 'Insufficient',
+      ObservationConfidence.emerging => 'Emerging',
+      ObservationConfidence.stronger => 'Stronger',
+    };
+    return _InsightsPanel(
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'ONE OBSERVATION',
+            style: Theme.of(context).textTheme.labelLarge,
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            observation.title,
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(observation.summary),
+          const SizedBox(height: AppSpacing.md),
+          Wrap(
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.xs,
+            children: [
+              Chip(label: Text('$confidence confidence')),
+              Chip(label: Text(observation.evidenceWindow)),
+              Chip(label: Text(observation.dataQuality)),
+            ],
+          ),
+          if (observation.experiment != null) ...[
+            const SizedBox(height: AppSpacing.md),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(AppSpacing.md),
+              decoration: BoxDecoration(
+                color: Theme.of(context)
+                    .colorScheme
+                    .primaryContainer
+                    .withAlpha(90),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(observation.experiment!),
+            ),
+          ],
+        ],
+      ),
     );
   }
 }

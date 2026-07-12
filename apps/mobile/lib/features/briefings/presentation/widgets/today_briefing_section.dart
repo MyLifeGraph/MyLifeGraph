@@ -6,12 +6,17 @@ import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../actions/domain/executable_action_target.dart';
 import '../../domain/daily_briefing.dart';
+import '../../domain/decision_feedback.dart';
 
 typedef GenerateBriefingCallback = Future<void> Function({
   required bool force,
 });
 typedef ExecuteBriefingActionCallback = Future<void> Function(
   ExecutableActionTarget target,
+);
+typedef SubmitFeedbackCallback = Future<void> Function(
+  BriefingAction action,
+  DecisionFeedbackType type,
 );
 
 class TodayBriefingSection extends StatelessWidget {
@@ -24,6 +29,11 @@ class TodayBriefingSection extends StatelessWidget {
     required this.onRetryRead,
     required this.onGenerate,
     required this.onExecute,
+    required this.isSubmittingFeedback,
+    required this.feedbackError,
+    required this.submittedFeedbackType,
+    required this.onFeedback,
+    required this.onShowFeedbackHistory,
   });
 
   final AsyncValue<BriefingFeed> value;
@@ -33,6 +43,11 @@ class TodayBriefingSection extends StatelessWidget {
   final VoidCallback onRetryRead;
   final GenerateBriefingCallback onGenerate;
   final ExecuteBriefingActionCallback onExecute;
+  final bool isSubmittingFeedback;
+  final String? feedbackError;
+  final DecisionFeedbackType? submittedFeedbackType;
+  final SubmitFeedbackCallback onFeedback;
+  final VoidCallback onShowFeedbackHistory;
 
   @override
   Widget build(BuildContext context) {
@@ -96,6 +111,11 @@ class TodayBriefingSection extends StatelessWidget {
           executingActionIds: executingActionIds,
           onGenerate: () => onGenerate(force: true),
           onExecute: onExecute,
+          isSubmittingFeedback: isSubmittingFeedback,
+          feedbackError: feedbackError,
+          submittedFeedbackType: submittedFeedbackType,
+          onFeedback: onFeedback,
+          onShowFeedbackHistory: onShowFeedbackHistory,
         );
       },
     );
@@ -174,6 +194,11 @@ class _BriefingCard extends StatelessWidget {
     required this.executingActionIds,
     required this.onGenerate,
     required this.onExecute,
+    required this.isSubmittingFeedback,
+    required this.feedbackError,
+    required this.submittedFeedbackType,
+    required this.onFeedback,
+    required this.onShowFeedbackHistory,
   });
 
   final BriefingFeed feed;
@@ -182,6 +207,11 @@ class _BriefingCard extends StatelessWidget {
   final Set<String> executingActionIds;
   final VoidCallback onGenerate;
   final ExecuteBriefingActionCallback onExecute;
+  final bool isSubmittingFeedback;
+  final String? feedbackError;
+  final DecisionFeedbackType? submittedFeedbackType;
+  final SubmitFeedbackCallback onFeedback;
+  final VoidCallback onShowFeedbackHistory;
 
   @override
   Widget build(BuildContext context) {
@@ -254,6 +284,44 @@ class _BriefingCard extends StatelessWidget {
             ),
             onExecute: onExecute,
           ),
+          const SizedBox(height: AppSpacing.md),
+          Text(
+            'How did this suggestion fit?',
+            style: Theme.of(context).textTheme.labelLarge,
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          const Text(
+            'This records feedback only; it does not complete or change the action.',
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Wrap(
+            spacing: AppSpacing.xs,
+            runSpacing: AppSpacing.xs,
+            children: DecisionFeedbackType.values.map((type) {
+              return ChoiceChip(
+                label: Text(_feedbackLabel(type)),
+                selected: submittedFeedbackType == type,
+                onSelected: stale ||
+                        isSubmittingFeedback ||
+                        submittedFeedbackType == type
+                    ? null
+                    : (_) => onFeedback(briefing.primaryAction, type),
+              );
+            }).toList(growable: false),
+          ),
+          if (submittedFeedbackType != null) ...[
+            const SizedBox(height: AppSpacing.sm),
+            const Text(
+              'Saved. Use Adjust today to apply recent feedback to a new ranking.',
+            ),
+          ],
+          if (feedbackError != null) ...[
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              feedbackError!,
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            ),
+          ],
           if (briefing.supportActions.isNotEmpty) ...[
             const SizedBox(height: AppSpacing.lg),
             Text(
@@ -296,6 +364,11 @@ class _BriefingCard extends StatelessWidget {
                       )
                     : const Icon(Icons.refresh),
                 label: Text(isGenerating ? 'Adjusting…' : 'Adjust today'),
+              ),
+              TextButton.icon(
+                onPressed: onShowFeedbackHistory,
+                icon: const Icon(Icons.history),
+                label: const Text('Feedback history'),
               ),
               Text(
                 'Updated ${DateFormat.Hm().format(briefing.updatedAt.toLocal())}',
@@ -409,6 +482,14 @@ String _qualityLabel(BriefingDataQuality quality) => switch (quality) {
       BriefingDataQuality.partial => 'Partial',
       BriefingDataQuality.current => 'Current',
       BriefingDataQuality.stale => 'Stale',
+    };
+
+String _feedbackLabel(DecisionFeedbackType type) => switch (type) {
+      DecisionFeedbackType.done => 'Done',
+      DecisionFeedbackType.later => 'Later',
+      DecisionFeedbackType.notHelpful => 'Not helpful',
+      DecisionFeedbackType.tooMuch => 'Too much',
+      DecisionFeedbackType.doesNotFit => "Doesn't fit",
     };
 
 String _commandLabel(ExecutableActionCommand command) => switch (command) {

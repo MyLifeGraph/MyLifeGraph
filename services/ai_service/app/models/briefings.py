@@ -59,6 +59,18 @@ class BriefingProvenance(BaseModel):
     source_snapshot_generated_at: datetime
     baseline: Literal["none"]
     llm_used: Literal[False]
+    feedback_ranking: "FeedbackRankingProvenance"
+
+
+class FeedbackRankingProvenance(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+
+    contract_version: Literal["feedback-ranking-v1"]
+    lookback_days: Literal[28]
+    event_count: int = Field(ge=0, le=200)
+    applied_count: int = Field(ge=0, le=200)
+    primary_contribution: int = Field(ge=-240, le=120)
+    reasons: list[str] = Field(default_factory=list, max_length=4)
 
 
 class DailyBriefing(BaseModel):

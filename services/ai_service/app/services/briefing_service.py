@@ -12,6 +12,7 @@ from app.models.briefings import (
     BriefingGenerateRequest,
     BriefingProvenance,
     BriefingReadResponse,
+    FeedbackRankingProvenance,
 )
 from app.models.executable_actions import ExecutableActionTarget
 from app.models.snapshots import SnapshotGenerateRequest
@@ -25,6 +26,9 @@ class _Candidate:
     action: BriefingAction
     score: int
     category: str
+    feedback_contribution: int = 0
+    feedback_reasons: tuple[str, ...] = ()
+    feedback_applied_count: int = 0
 
 
 class BriefingService:
@@ -134,6 +138,7 @@ def _build_briefing_row(
         data_quality=data_quality,
     )
     primary = candidates[0].action
+    primary_candidate = candidates[0]
     support = _support_actions(candidates[1:], primary=primary)
     evidence = _dedupe_evidence(
         [
@@ -153,6 +158,14 @@ def _build_briefing_row(
         source_snapshot_generated_at=snapshot_generated_at,
         baseline="none",
         llm_used=False,
+        feedback_ranking=FeedbackRankingProvenance(
+            contract_version="feedback-ranking-v1",
+            lookback_days=28,
+            event_count=min(len(context.feedback), 200),
+            applied_count=primary_candidate.feedback_applied_count,
+            primary_contribution=primary_candidate.feedback_contribution,
+            reasons=list(primary_candidate.feedback_reasons[:4]),
+        ),
     )
     capacity_note = _capacity_note(mode)
     return {
@@ -176,7 +189,7 @@ def _build_briefing_row(
         "metadata": {
             "contract_version": DAILY_BRIEFING_CONTRACT_VERSION,
             "capacity_note": capacity_note,
-            "ranking_version": "deterministic-briefing-ranker-v1",
+            "ranking_version": "deterministic-briefing-ranker-v2",
             "candidate_count": len(candidates),
         },
         "generated_at": generated_at.isoformat(),
@@ -268,10 +281,97 @@ def _rank_candidates(
                 ),
             ),
         )
+    adjusted = _apply_feedback(
+        candidates=candidates,
+        feedback=context.feedback,
+        mode=mode,
+        briefing_date=briefing_date,
+        protect_capture=data_quality in {"missing", "stale"},
+    )
     return sorted(
-        candidates,
+        adjusted,
         key=lambda item: (-item.score, item.category, item.action.target.id),
     )
+
+
+def _apply_feedback(
+    *,
+    candidates: list[_Candidate],
+    feedback: list[dict[str, Any]],
+    mode: str,
+    briefing_date: date,
+    protect_capture: bool,
+) -> list[_Candidate]:
+    adjusted: list[_Candidate] = []
+    for candidate in candidates:
+        target = candidate.action.target
+        if protect_capture and target.kind == "capture":
+            adjusted.append(candidate)
+            continue
+        contribution = 0
+        applied_count = 0
+        reason_types: set[str] = set()
+        for event in feedback[:200]:
+            event_date = _parse_optional_date(event.get("created_at"))
+            if event_date is None:
+                continue
+            age_days = (briefing_date - event_date).days
+            if age_days < 0 or age_days > 28:
+                continue
+            match_weight = _feedback_match_weight(
+                event=event,
+                action_id=target.id,
+                action_kind=target.kind,
+                rule_key=target.command,
+                mode=mode,
+            )
+            if match_weight == 0:
+                continue
+            feedback_type = event.get("feedback_type")
+            base = {
+                "done": 30,
+                "later": -25,
+                "not_helpful": -90,
+                "too_much": -75,
+                "does_not_fit": -85,
+            }.get(feedback_type)
+            if base is None:
+                continue
+            decay = 1.0 if age_days <= 6 else 0.75 if age_days <= 13 else 0.5 if age_days <= 20 else 0.25
+            contribution += round(base * match_weight * decay)
+            applied_count += 1
+            reason_types.add(str(feedback_type))
+        bounded = max(-240, min(120, contribution))
+        reasons = tuple(
+            f"recent_{kind}_feedback"
+            for kind in sorted(reason_types)
+        )
+        adjusted.append(
+            _Candidate(
+                action=candidate.action,
+                score=candidate.score + bounded,
+                category=candidate.category,
+                feedback_contribution=bounded,
+                feedback_reasons=reasons,
+                feedback_applied_count=applied_count,
+            ),
+        )
+    return adjusted
+
+
+def _feedback_match_weight(
+    *,
+    event: dict[str, Any],
+    action_id: str,
+    action_kind: str,
+    rule_key: str,
+    mode: str,
+) -> float:
+    if event.get("action_id") == action_id:
+        return 1.0
+    if event.get("context_mode") != mode or event.get("action_kind") != action_kind:
+        return 0.0
+    return 0.5 if event.get("rule_key") == rule_key else 0.35
 
 
 def _task_candidate(

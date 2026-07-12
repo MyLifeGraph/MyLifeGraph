@@ -59,6 +59,7 @@ The app table constants live in
 | `intake_responses` | Typed Setup history with request identity, optimistic revision, pending/applied state, and structured lifecycle items. |
 | `user_state_snapshots` | Compact backend-owned onboarding/daily/weekly state; daily and weekly summaries add Phase 2 Daily State plus Phase 3 explicit habit-outcome/focus facts while remaining deterministic recommendation context. |
 | `daily_briefings` | One backend-owned deterministic `daily-briefing-v1` decision per user/profile-local date with strict executable actions, source-snapshot provenance, bounded evidence, and stale detection. |
+| `decision_feedback` | Retry-safe append-only feedback for an exact owned briefing action; authenticated owners can read/delete history and FastAPI owns validated writes. |
 
 Phase 1 canonical capture upserts one `daily_logs` row per user/date with source
 `quick_check_in`. `metadata.capture_version=daily-capture-v2` contains separate
@@ -300,7 +301,7 @@ do not coerce it into `skipped` merely to make migration pass.
 For local Supabase-backed testing, the reset should complete through:
 
 ```text
-20260712064836_phase_4_daily_briefings.sql
+20260712190000_phase_6_decision_feedback.sql
 ```
 
 Then configure `.env` with:
@@ -342,7 +343,7 @@ RESET_DB=true FLUTTER_BIN=/path/to/flutter scripts/verify_supabase_local.sh
 ```
 
 The reset form should apply all migrations through
-`20260712064836_phase_4_daily_briefings.sql`; expected legacy-table
+`20260712190000_phase_6_decision_feedback.sql`; expected legacy-table
 skip notices may be emitted for missing CamelCase tables. Use reset when proving
 the full migration/backfill/constraint chain from a fresh local database, not
 merely because one non-destructive migration is pending.
@@ -365,6 +366,9 @@ Supabase-backed path:
 - Open Dashboard and confirm its execution links remain unranked. Call the
   read-only briefing GET, deliberately generate once, and confirm exactly one
   `daily_briefings` row whose actions point to current executable targets.
+- Record briefing feedback, confirm its exact `decision_feedback` context,
+  deliberately adjust Today, then delete the history row and confirm the next
+  adjustment reports zero feedback influence.
 - Open notifications.
 
 This checks that Auth, RLS, grants, FastAPI backend workflows, and the app's
@@ -424,8 +428,11 @@ legacy compatibility only and should be dropped in a later dedicated migration
 after data migration and app verification are complete.
 
 The latest schema addition is
-`20260712064836_phase_4_daily_briefings.sql`. It creates one owner-scoped
-`daily_briefings` row per user/local date with bounded action/evidence JSON,
+`20260712190000_phase_6_decision_feedback.sql`. It creates owner-scoped
+`decision_feedback` history with a unique `(user_id, request_id)`, exact bounded
+feedback/context fields, read/delete RLS for authenticated owners, service-role
+writes, and indexes for the 28-day ranking window. The preceding Phase 4
+migration creates one owner-scoped `daily_briefings` row per user/local date with bounded action/evidence JSON,
 explicit authenticated read and service-role write grants, forced RLS, and
 owner/admin select plus service-role policies. The preceding Phase 3
 executable-action migration over the existing task, habit-log, and focus-session
@@ -439,4 +446,5 @@ guard remain unchanged. Phase 1 changes only typed capture metadata and
 client/backend mapping; Phase 2 consumes that data inside existing snapshot
 JSON; Phase 3 adds action facts without changing Phase 2 classification; and
 Phase 4 persists deterministic briefing decisions without changing either
-contract.
+contract; Phase 6 adds feedback as separate evidence and never rewrites those
+persisted reasons.

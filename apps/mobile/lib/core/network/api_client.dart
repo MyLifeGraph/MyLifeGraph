@@ -57,4 +57,19 @@ class ApiClient {
       throw AppException('Network request failed', cause: error);
     }
   }
+
+  Future<Map<String, dynamic>> deleteJson(
+    String path, {
+    Map<String, String>? headers,
+  }) async {
+    try {
+      final response = await _dio.delete<Map<String, dynamic>>(
+        path,
+        options: headers == null ? null : Options(headers: headers),
+      );
+      return response.data ?? <String, dynamic>{};
+    } on DioException catch (error) {
+      throw AppException('Network request failed', cause: error);
+    }
+  }
 }

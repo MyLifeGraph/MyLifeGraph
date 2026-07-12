@@ -131,6 +131,12 @@ and freshness-shape rejection, bearer GET versus deliberate force POST,
 guest/mock locality, current/missing/stale/error rendering, stale execution
 disabling, and primary action dispatch. Dashboard tests keep direct source
 metrics and recommendation failure truth intact below the new decision surface.
+Phase 6 tests cover strict feedback parsing, exact owned-action validation,
+idempotent request replay/conflict, authenticated GET/POST/DELETE, local-demo
+isolation, 28-day context matching, decay/caps, unchanged original reasons, and
+explicit feedback-ranking provenance. Insights tests prove insufficient versus
+emerging/stronger observation labels, visible evidence windows, optional
+bounded experiments, and non-causal copy.
 Scheduled refresh tests
 cover the backend-only token guard, onboarded non-guest profile selection,
 per-user failure isolation, deterministic daily snapshot refresh, and optional
@@ -388,6 +394,11 @@ It then opens Dashboard and proves Phase 5 normal load issues no briefing POST,
 renders the exact persisted primary title, dispatches the returned real command,
 and sends exactly `{"force":true}` only after `Adjust today`, preserving the
 same daily briefing identity.
+Phase 6 then records `too_much` through Today, asserts the exact owner-scoped
+database row and ranking provenance after adjustment, opens history, deletes the
+entry, and proves a subsequent generation returns to zero feedback influence.
+It also proves Insights begins with one cautious observation and keeps the
+correlation controls inside explicit advanced exploration.
 
 The Setup assertions inspect exact `request_id`, base/revision, applied state,
 stable materialized ids, server ownership metadata, record counts, and the
@@ -568,7 +579,7 @@ The repository now contains browser E2E automation, but it still depends on a
 real Ubuntu Node.js 20+ installation, `npm`, Playwright browser installation,
 Docker access, and a real Ubuntu `supabase` CLI on `PATH`.
 
-The combined Phase 3/4/5 browser journey passed non-destructively in the
+The combined Phase 3/4/5/6 browser journey passed non-destructively in the
 2026-07-12 implementation checkout. Future changes must establish their own
 current-checkout result with the browser command above; use the `RESET_DB=true`
 form when proving the full migration chain from a fresh database. The journey

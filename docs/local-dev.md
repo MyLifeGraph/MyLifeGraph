@@ -253,6 +253,21 @@ curl -X POST http://localhost:8000/v1/briefings/generate \
   -d '{"force":false}'
 ```
 
+Phase 6 feedback is authenticated, tied to an exact action in an owned briefing,
+and retry-safe through `request_id`:
+
+```bash
+curl -X POST http://localhost:8000/v1/feedback \
+  -H 'Authorization: Bearer <supabase_access_token>' \
+  -H 'Content-Type: application/json' \
+  -d '{"request_id":"11111111-1111-4111-8111-111111111111","briefing_id":"22222222-2222-4222-8222-222222222222","action_id":"open_task:33333333-3333-4333-8333-333333333333","feedback_type":"too_much"}'
+```
+
+`GET /v1/feedback` lists the recent 28-day history and
+`DELETE /v1/feedback/{feedback_id}` corrects an entry. Feedback never executes
+the action. A deliberate later briefing generation applies only bounded,
+decayed context matches and reports the result under `feedback-ranking-v1`.
+
 `force=false` returns an already-current persisted briefing unchanged. Missing
 or stale output refreshes the daily snapshot and upserts the same
 `(user_id, briefing_date)` identity. `force=true` deliberately recomputes it.

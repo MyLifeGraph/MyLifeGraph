@@ -28,7 +28,7 @@ way to explore the product today is the Flutter app in mock-data guest mode.
   stress, energy, mood, screen time, activity, steps, habits, recovery, and
   focus. It computes 7/14/30-day relationships in Flutter from existing
   Supabase rows or local mock time series, without LLM usage.
-- Phase 0A through Phase 5 are implemented. Evening and Morning merge without
+- Phase 0A through Phase 6 are implemented. Evening and Morning merge without
   erasing each other and feed a strict backend-only state parser; Setup remains
   progressive, revision-safe, reviewable, and atomically materialized. Phase 3
   adds durable task commands, cadence-aware Habit V1 outcomes, linked focus
@@ -42,7 +42,10 @@ way to explore the product today is the Flutter app in mock-data guest mode.
   briefing above metrics in Today without generation on normal load. Current,
   missing, stale, error, and local-demo states remain distinct; stale targets
   require deliberate adjustment, and current targets use the existing action
-  dispatcher. Phase 6 feedback history and useful default Insights are next. See
+  dispatcher. Phase 6 adds retry-safe owner-scoped feedback, bounded 28-day
+  context-matched ranking effects with explicit provenance, deletable history,
+  and one cautious default Insight before advanced correlation exploration.
+  Phase 7 scheduled daily preparation is next. See
   `docs/phase-3-executable-actions-contract.md` and
   `docs/daily-briefing-implementation-plan.md`.
 - Repository docs and scripts should be treated as the shared team source of
@@ -244,15 +247,16 @@ Supabase is the intended auth and persistence backend. The current app supports:
   controls but still does not rank actions, persist a briefing, mutate a plan,
   or call an LLM. Dashboard capture cards continue to show direct nullable
   source values and persisted structured context. Phase 4 owns deterministic
-  briefing selection; Phase 5 only reads or deliberately refreshes that persisted
-  decision and does not adapt ranking from feedback yet.
+  briefing selection; Phase 5 reads or deliberately refreshes that persisted
+  decision, and Phase 6 adds bounded recent feedback without changing the
+  source evidence or Daily State classifier.
 - `POST /v1/scheduled/daily-refresh` is a backend-only scheduler endpoint
   protected by `X-Scheduled-Refresh-Token`; it must not be called from Flutter.
 
 Important current caveat: the Flutter app targets the canonical snake_case
 schema. A clean local Supabase reset should apply
-`20260712064836_phase_4_daily_briefings.sql`, after the Phase 3 executable
-action migration. Phase 3 adds task estimates/terminal times,
+`20260712190000_phase_6_decision_feedback.sql`, after the Phase 4 briefing
+migration. Phase 3 adds task estimates/terminal times,
 locked cadence-aware habit outcomes, immutable linked focus history, and
 restricted target deletion without replacing existing RLS or table grants.
 Phase 4 adds the persisted owner-scoped daily briefing identity and policies.

@@ -127,6 +127,27 @@ class SupabaseRestClient:
             raise ValueError(f"Expected list response from Supabase table {table}.")
         return data
 
+    async def delete(
+        self,
+        table: str,
+        *,
+        params: dict[str, str],
+    ) -> list[dict[str, Any]]:
+        async with httpx.AsyncClient(timeout=self._timeout_seconds) as client:
+            response = await client.delete(
+                f"{self._url}/rest/v1/{table}",
+                params=params,
+                headers={
+                    **self._rest_headers(),
+                    "Prefer": "return=representation",
+                },
+            )
+        response.raise_for_status()
+        data = response.json()
+        if not isinstance(data, list):
+            raise ValueError(f"Expected list response from Supabase table {table}.")
+        return data
+
     async def rpc(
         self,
         function: str,

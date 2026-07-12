@@ -286,6 +286,8 @@ surface. The canonical application schema is now snake_case and centered on:
   history and compact backend-owned user state.
 - `daily_briefings` for one persisted deterministic decision per user/local
   date; authenticated users may read their row, while FastAPI owns writes.
+- `decision_feedback` for retry-safe owner-scoped outcome/preference events;
+  users may read/delete history while FastAPI validates and inserts it.
 
 Legacy CamelCase tables such as `"User"`, `"DailyLog"`, and `"Task"` may still
 exist in older remote projects. The canonical migration copies data from those
@@ -462,8 +464,11 @@ making claims about deployed data.
   unavailable. Phase 5 consumes this strict contract in Flutter: a normal
   Dashboard read never posts, stale actions are disabled until deliberate
   `force=true` adjustment, and current primary/support actions reuse Phase 3
-  handlers. Feedback-history persistence and adaptive score input remain Phase
-  6 rather than hidden client-side learning.
+  handlers. Phase 6 adds `/v1/feedback` GET/POST/DELETE, exact owned-action
+  validation, and a deterministic 28-day `feedback-ranking-v1` contribution.
+  Original action reasons remain immutable; bounded contribution and reason
+  codes are additive briefing provenance. Insights starts with one cautious
+  observation and keeps full correlation analytics as advanced exploration.
 - The remote Production project may still contain legacy CamelCase tables until
   the canonical schema migration has been applied and verified.
 - The repository does not contain real Supabase credentials.

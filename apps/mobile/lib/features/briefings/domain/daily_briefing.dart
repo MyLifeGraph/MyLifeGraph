@@ -378,6 +378,7 @@ class BriefingProvenance {
   const BriefingProvenance({
     required this.sourceSnapshotId,
     required this.sourceSnapshotGeneratedAt,
+    required this.feedbackRanking,
   });
 
   factory BriefingProvenance.fromJson(Map<String, dynamic> json) {
@@ -392,6 +393,7 @@ class BriefingProvenance {
         'source_snapshot_generated_at',
         'baseline',
         'llm_used',
+        'feedback_ranking',
       },
       'briefing provenance',
     );
@@ -401,7 +403,8 @@ class BriefingProvenance {
         json['executable_action_contract_version'] !=
             ExecutableActionTarget.contractVersion ||
         json['baseline'] != 'none' ||
-        json['llm_used'] != false) {
+        json['llm_used'] != false ||
+        json['feedback_ranking'] is! Map) {
       throw const BriefingContractException(
         'Briefing provenance is unsupported.',
       );
@@ -416,11 +419,72 @@ class BriefingProvenance {
         json['source_snapshot_generated_at'],
         'source snapshot generated_at',
       ),
+      feedbackRanking: FeedbackRankingProvenance.fromJson(
+        Map<String, dynamic>.from(json['feedback_ranking'] as Map),
+      ),
     );
   }
 
   final String sourceSnapshotId;
   final DateTime sourceSnapshotGeneratedAt;
+  final FeedbackRankingProvenance feedbackRanking;
+}
+
+class FeedbackRankingProvenance {
+  FeedbackRankingProvenance({
+    required this.eventCount,
+    required this.appliedCount,
+    required this.primaryContribution,
+    required List<String> reasons,
+  }) : reasons = List.unmodifiable(reasons);
+
+  factory FeedbackRankingProvenance.fromJson(Map<String, dynamic> json) {
+    _expectExactKeys(
+      json,
+      const {
+        'contract_version',
+        'lookback_days',
+        'event_count',
+        'applied_count',
+        'primary_contribution',
+        'reasons',
+      },
+      'feedback ranking provenance',
+    );
+    final eventCount = json['event_count'];
+    final appliedCount = json['applied_count'];
+    final contribution = json['primary_contribution'];
+    final reasons = json['reasons'];
+    if (json['contract_version'] != 'feedback-ranking-v1' ||
+        json['lookback_days'] != 28 ||
+        eventCount is! int ||
+        eventCount < 0 ||
+        eventCount > 200 ||
+        appliedCount is! int ||
+        appliedCount < 0 ||
+        appliedCount > eventCount ||
+        contribution is! int ||
+        contribution < -240 ||
+        contribution > 120 ||
+        reasons is! List ||
+        reasons.length > 4 ||
+        reasons.any((reason) => reason is! String || reason.isEmpty)) {
+      throw const BriefingContractException(
+        'Feedback ranking provenance is invalid.',
+      );
+    }
+    return FeedbackRankingProvenance(
+      eventCount: eventCount,
+      appliedCount: appliedCount,
+      primaryContribution: contribution,
+      reasons: reasons.cast<String>(),
+    );
+  }
+
+  final int eventCount;
+  final int appliedCount;
+  final int primaryContribution;
+  final List<String> reasons;
 }
 
 class BriefingContractException implements Exception {

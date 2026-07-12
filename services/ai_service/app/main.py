@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes import (
     briefings,
+    feedback,
     health,
     intake,
     recommendations,
@@ -24,7 +25,7 @@ def create_app() -> FastAPI:
         CORSMiddleware,
         allow_origins=settings.allowed_origins,
         allow_credentials=True,
-        allow_methods=["GET", "POST"],
+        allow_methods=["GET", "POST", "DELETE"],
         allow_headers=["Authorization", "Content-Type"],
     )
 
@@ -33,6 +34,7 @@ def create_app() -> FastAPI:
     app.include_router(recommendations.router, prefix=settings.api_prefix)
     app.include_router(snapshots.router, prefix=settings.api_prefix)
     app.include_router(briefings.router, prefix=settings.api_prefix)
+    app.include_router(feedback.router, prefix=settings.api_prefix)
     app.include_router(scheduled.router, prefix=settings.api_prefix)
 
     return app

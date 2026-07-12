@@ -49,7 +49,7 @@ databases may still contain legacy CamelCase tables such as `"User"`,
 - `notification_preferences`
 - `goals`, `habits`, `habit_logs`, `focus_sessions`
 - `intake_responses`, `user_state_snapshots`
-- `daily_briefings`
+- `daily_briefings`, `decision_feedback`
 
 The migration
 `supabase/migrations/20260618170000_create_canonical_app_schema.sql` creates the
@@ -85,6 +85,11 @@ The migration
 `supabase/migrations/20260712064836_phase_4_daily_briefings.sql` adds the
 owner-scoped persisted daily briefing identity, bounded JSON checks, explicit
 Data API grants, and forced RLS policies used by the backend-only generator.
+The migration
+`supabase/migrations/20260712190000_phase_6_decision_feedback.sql` adds bounded
+append-only decision feedback with retry-safe request identity, owner-scoped
+read/delete RLS, backend-owned writes, and context indexes for its 28-day
+deterministic ranking window.
 
 ## Important Docs
 
@@ -121,14 +126,17 @@ load is GET-only, missing/stale/error truth stays visible, stale actions are
 disabled until deliberate adjustment, and validated primary/support targets
 dispatch through the existing Phase 3 handlers. Guest/mock remains local and
 never fabricates a personalized briefing.
+Phase 6 adds exact owned-action feedback with idempotent requests, deletable
+history, a decayed/capped context match under `feedback-ranking-v1`, and one
+cautious default Insight before advanced correlation exploration.
 Read `docs/backend-roadmap.md`,
 `docs/daily-briefing-implementation-plan.md`, and the Phase 3 contract before
 planning the next backend, briefing, dashboard, or agent workflow.
 
 Do not jump straight to broad LLM integration, calendar import, weekly planning,
 vector search, or autonomous background agents. The next product slice is Phase
-6's bounded decision-feedback history and useful default Insight; it must learn
-deterministically without erasing original briefing evidence. Phase 0A, Honest Capture, is
+7 scheduled daily preparation through the existing deterministic backend
+boundary. Phase 0A, Honest Capture, is
 implemented: `/daily-check-in` redirects to the canonical lightweight flow;
 measurements require explicit selection; a typed draft drives guest and Supabase
 persistence; same-day guest rows and linked behavioral events are deduplicated;
@@ -227,9 +235,15 @@ Phase 5, Decision-First Today Dashboard, is implemented. It consumes the
 persisted Phase 4 briefing without generation on normal load, puts mode,
 capacity, freshness, and one strict primary action above secondary metrics,
 dispatches validated actions through Phase 3, and preserves
-missing/stale/error/demo truth. The immediate next slice is Phase 6 feedback and
-useful Insights; do not fold Coach, calendar import, broad automation, or LLM
-work into it.
+missing/stale/error/demo truth.
+
+Phase 6, Feedback And Useful Insights, is implemented. `done`, `later`,
+`not_helpful`, `too_much`, and `does_not_fit` are additional historical evidence
+and never execute or rewrite an action. Recent context-matched effects decay,
+remain bounded behind recovery/urgency safeguards, and are exposed in briefing
+provenance. Users can inspect and delete history. Insights starts with one
+non-causal observation, evidence window, confidence/data-quality label, and an
+optional bounded experiment. Phase 7 scheduled preparation is next.
 
 FastAPI-backed browser E2E coverage for revisioned Setup ownership/retry/edit,
 concurrent same-request convergence, post-intake recommendations, exact Phase 2
@@ -243,7 +257,10 @@ cover lifecycle/range/cadence constraints and every terminal focus update,
 including `updated_at`. Phase 4 adds exact read-only/generate, persisted action,
 and idempotent daily-identity assertions. Phase 5 adds GET-only Dashboard load,
 honest briefing state, deliberate `force=true` adjustment, and real primary
-action dispatch assertions. The combined browser journey passed
+action dispatch. Phase 6 adds exact feedback create/history/delete, bounded
+ranking provenance, correction back to zero influence, and the cautious default
+Insight before advanced correlations.
+The combined Phase 3/4/5/6 browser journey passed
 non-destructively in the 2026-07-12 implementation checkout; later changes must
 still establish their own current-checkout pass before claiming E2E.
 
@@ -325,7 +342,7 @@ you actually intend to run `supabase db reset`.
 `supabase db reset` must complete through:
 
 ```text
-20260712064836_phase_4_daily_briefings.sql
+20260712190000_phase_6_decision_feedback.sql
 ```
 
 Expected local reset notices include skipped legacy CamelCase tables and

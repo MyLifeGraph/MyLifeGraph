@@ -159,7 +159,7 @@ Phase 4's deterministic briefing service.
 | --- | --- | --- |
 | Auth and guest entry | Yes | Local demo is labeled; mock/demo auth skips remote profile/data bootstrap and reloads local Setup, while canonical guest check-ins migrate best-effort only into a real non-demo account |
 | Onboarding / Setup | Yes, Phase 0C complete | Progressive explicit input, typed prefill, atomic revision-safe save, differentiated retry/reload, and durable review are implemented |
-| Dashboard | Yes, Phase 5 core complete | Persisted Daily Mode and strict primary/support actions appear above direct source metrics; GET-only normal load, explicit adjustment, stale disabling, error truth, and local-demo boundaries are implemented. Feedback history remains Phase 6. |
+| Dashboard | Yes, Phase 6 complete | Persisted Daily Mode and strict actions appear above metrics; GET-only load, explicit adjustment, feedback history, bounded explainable ranking effects, stale/error/demo truth, and execution/feedback separation are implemented. |
 | Canonical daily capture | Yes, Phase 1 complete | Evening and Morning are separate typed flows over one ownership-merged daily entry; Phase 2 now interprets their freshness and stress context only inside backend snapshots |
 | Legacy large Daily Check-In | Retired | `/daily-check-in` redirects to the canonical lightweight flow; do not recreate a competing form |
 | Habit management/completion | Yes, authenticated only | Habit V1 cadence, progress, streaks, explicit completion/skip, and undo are implemented; manual lifecycle stays in Habit Management, Setup-owned lifecycle stays in Settings Setup, and daily execution is available from Today Habits |
@@ -1278,7 +1278,7 @@ Evaluation:
 - Does action execution reuse durable command contracts without a parallel path?
 - Does mobile and desktop layout preserve readable, non-overlapping actions?
 
-### Phase 6: Feedback And Useful Insights
+### Phase 6: Feedback And Useful Insights (Implemented)
 
 Goal:
 
@@ -1454,9 +1454,11 @@ normal Dashboard load read-only, places the primary executable action above
 secondary metrics, preserves missing/stale/error/demo truth, disables stale
 targets until deliberate adjustment, and reuses the Phase 3 dispatcher.
 
-The next implementation should be **Phase 6: Feedback And Useful Insights**.
-It should persist bounded append-only outcome/preference feedback, apply recent
-context-matched feedback deterministically without erasing original evidence,
-and replace the default analytics-heavy Insights entry with one cautious,
-actionable observation. Coach, calendar, broad automation, and LLM work remain
-later phases.
+Phase 6 is implemented with retry-safe append-only feedback, owner-scoped
+history deletion, a decayed and capped 28-day context match, additive ranking
+provenance, and unchanged original reasons/evidence. Insights now defaults to
+one cautious observation with evidence window, confidence/data-quality state,
+and optional bounded experiment; analytics remain advanced exploration.
+
+The next implementation should be **Phase 7: Scheduled Daily Preparation**.
+Coach, calendar, broad autonomous changes, and LLM work remain later phases.
