@@ -290,8 +290,8 @@ repositories, and jobs, not as unconstrained autonomous LLM loops.
 | Daily briefing service | Explicit refresh today; protected scheduled daily preparation | `user_state_snapshots`, `recommendations`, goals, tasks, habits, habit outcomes, `decision_feedback` | `daily_briefings` | None for v1 |
 | Weekly review service | Explicit completed-week review read/generation | Profile timezone, weekly snapshot, tasks, goals, habits/outcomes, focus, daily snapshots, `decision_feedback` | `weekly_reviews` derived output only | None for v1 |
 | Calendar import service | Explicit consent and selected `.ics` upload | Bounded iCalendar text, profile timezone, owned connection | `calendar_connections`, `calendar_imports`, `calendar_events`, opaque `calendar_request_identities` | None |
-| Coach service | User sends coach message | Recent messages, snapshots, selected memory | `coach_messages`, optional memory candidates | Yes, budgeted |
-| Memory service | Check-ins, coach conversations, weekly review | Raw notes/messages, existing memory | `memory_entries` | Optional extraction only |
+| Coach service | Deliberate authenticated user send | Current snapshot/briefing, bounded active facts, selected memory, recent completed turns | Validated `coach_messages`, compact provenance/usage only | One configured provider call, budgeted |
+| Memory selection service | Explicit user inspect/select/deselect/edit/delete | Owner-scoped `memory_entries` plus Setup ownership | Separate Coach selection projection; content only through its owning contract | None for Phase 10 v1 |
 | Planning service | Weekly review, user request | Goals, tasks, habits, schedule, snapshots | `tasks`, `schedule_items`, `recommendations`, `coach_messages` | Optional for complex plans |
 | Notification service | Schedule and event changes | Preferences, recommendations, deadlines | `notifications` | None |
 
@@ -629,19 +629,38 @@ Authorization: Bearer <supabase_access_token>
 
 Target behavior:
 
-1. Store the user message in `coach_messages`.
-2. Build a compact context from:
-   - recent `coach_messages`
-   - latest `user_state_snapshots`
-   - selected `memory_entries`
-   - relevant active `recommendations`
-3. Decide if a deterministic response is enough.
-4. Call an LLM only when natural-language reasoning is needed.
-5. Store the assistant response in `coach_messages`.
-6. Optionally emit memory candidates, not direct high-confidence memory.
+1. Derive the owner from the verified Supabase bearer token and claim a
+   retry-safe bounded request identity.
+2. Build `coach-context-v1` from the current snapshot/Daily State, current
+   persisted briefing, bounded active goals/actions/focus facts, an explicitly
+   fresh weekly review when useful, explicitly selected memory, and a small
+   completed-turn window.
+3. Attach stable caps/order and a user-visible source/count/freshness manifest.
+   Never give a model database credentials, arbitrary SQL, full history,
+   imported calendar content, hidden free text, or cross-user rows.
+4. Call one explicitly configured provider only after a deliberate Coach send.
+5. Validate strict model output, then attach backend-owned request, provider,
+   model, prompt, context, time, safety, and uncertainty provenance.
+6. Persist only the bounded validated turn and compact manifest under a defined
+   retention/delete contract. Do not store the assembled prompt or raw provider
+   event stream.
+7. Return at most one review-only staged suggestion with no mutation command.
 
 This should come after the snapshot aggregator, because the coach needs
 structured daily/weekly context to be useful and affordable.
+
+The first test provider is deliberately `local_codex_oauth`. When explicitly
+enabled in development, FastAPI invokes the current Linux/WSL user's already
+authenticated Codex CLI without an application API key. Each developer runs
+their own `codex login`; OAuth files never enter Flutter, Supabase, Git, `.env`,
+or application logs. This same-user agentic subprocess is a local testing
+adapter, not a production isolation/deployment design. The complete locked
+boundary is `docs/phase-10-controlled-coach-plan.md`.
+The preferred normal Coach model is `gpt-5.5`: this workflow values general
+conversation, synthesis, cautious planning, and strict structured output over
+coding-agent speed. Do not default to Spark merely because Codex CLI supplies
+the local OAuth bridge, and do not silently replace an unavailable configured
+model.
 
 ## LLM Cost Control
 
@@ -655,6 +674,8 @@ Use these rules before adding any model provider:
   small message window.
 - Use idempotency keys for jobs that could retry.
 - Track LLM usage per user before enabling broad access.
+- Keep per-user, concurrency, timeout, input, context, and output caps even when
+  local subscription access rather than an API bill supplies the model.
 - Prefer small/cheap models for wording and extraction.
 - Use larger models only for complex coach or weekly planning tasks.
 - Cache or persist generated outputs.
@@ -671,6 +692,9 @@ confirmed manual Habit V1 adaptation, and Phase 9's bounded `.ics` import. The
 immediate next slice is **Phase 10: Controlled Coach**: begin with a bounded
 authenticated context, budget, safety, provenance, and staged-suggestion
 contract. The deterministic standalone loop must remain the source of truth.
+Implement it against the development-only local Codex OAuth adapter and fake-
+provider test seam fixed in `docs/phase-10-controlled-coach-plan.md`; do not
+generalize this into a production or autonomous agent platform.
 
 ### Completed Slice 0A: Honest Capture
 
@@ -917,6 +941,29 @@ in `docs/phase-8-weekly-review-contract.md`.
 The exact consent, import, identity, parser, privacy, and verification boundary
 lives in `docs/phase-9-calendar-import-contract.md`.
 
+### Planned Slice 10: Controlled Coach
+
+- Add one strict authenticated `coach-request-v1` / `coach-response-v1`
+  boundary and a side-effect-free provider capability read.
+- Add an injectable provider abstraction. Standard tests use a fake; one
+  explicit local-development adapter invokes the same Linux user's Codex CLI
+  and existing OAuth login without `OPENAI_API_KEY` or Hermes.
+- Prefer `gpt-5.5` for normal Coach turns. Treat its absence as honest
+  configuration and allow an explicit per-developer override; do not silently
+  choose a coding-focused Codex/Spark variant.
+- Use full owner-scoped backend reach with minimal model disclosure: current
+  compact state, briefing, bounded active life-graph facts, selected memory, and
+  a small message window only. Imported calendar content remains excluded.
+- Surface exact data-use, freshness, uncertainty, provider/model, prompt, and
+  context provenance. Keep all suggestions review-only and non-mutating.
+- Replace the gated canned Coach and direct Flutter message insert path; keep
+  guest/mock at zero backend/model calls.
+- Bound usage, concurrency, process environment, output, timeout, retention,
+  memory selection, safety, and retry identity before calling a real model.
+
+The detailed implementation order and acceptance criteria live in
+`docs/phase-10-controlled-coach-plan.md`.
+
 ### Completed Slice: Controlled Recommendation Refresh
 
 - Implemented: authenticated Intake V1 completion creates an onboarding
@@ -1018,9 +1065,13 @@ lives in `docs/phase-9-calendar-import-contract.md`.
   ordinary task, habit, focus, or capture writes.
 - Expanding `review_plan` beyond bounded review navigation into autonomous or
   compound plan mutation.
-- Implementing the gated Coach UI merely to keep it visible.
-- OpenAI/OpenRouter/local LLM integration.
-- Real coach assistant replies.
+- Ungating the canned Coach or persisting its placeholder response.
+- Any model integration other than the explicit development-only
+  `local_codex_oauth` adapter behind the provider seam.
+- A deployable OpenAI/OpenRouter/other API provider, API-key fallback, provider
+  failover, or claims that a local subscription adapter is production-ready.
+- Model-controlled tools, database access, unbounded history, automatic memory
+  promotion, or executable Coach suggestions.
 - Live calendar-provider OAuth, URL fetch, incremental/background sync,
   provider writes, and applying calendar-derived time blocks.
 - Autonomous weekly plan rewrites or applying review proposals without explicit

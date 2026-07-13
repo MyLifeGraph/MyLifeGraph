@@ -11,6 +11,7 @@ sequence, see `docs/backend-roadmap.md`.
 Flutter app <-> Supabase Auth/Postgres
 Flutter app <-> FastAPI AI service
 Flutter app <-> local mock data and guest storage
+FastAPI -> local Codex CLI/OAuth (planned Phase 10 development adapter only)
 ```
 
 The Flutter app is the main product surface. Supabase is the intended auth and
@@ -21,6 +22,9 @@ also owns deterministic user-state snapshot aggregation plus the protected
 scheduled preparation boundary for backend-generated daily state and briefings,
 the bounded deterministic weekly-review boundary, and the optional bounded
 read-only `.ics` import boundary.
+It does not currently invoke an LLM. Phase 10 plans one explicitly enabled
+development-only provider behind FastAPI; the CLI/OAuth process is not a new
+Flutter or Supabase connection.
 
 ## Mobile App
 
@@ -491,6 +495,55 @@ backend Supabase credentials. The repository still does not contain production
 credentials, and the live remote database must be inspected directly before
 making claims about deployed data.
 
+### Planned Phase 10 Local Model Boundary
+
+The locked Phase 10 implementation plan is
+`docs/phase-10-controlled-coach-plan.md`. Its first provider is intentionally a
+local test adapter, not a deployed service:
+
+```text
+authenticated Flutter request
+  -> FastAPI owner-scoped bounded context
+  -> fixed, hardened local `codex exec` subprocess
+  -> current Linux user's existing Codex OAuth login
+  -> schema validation and backend-owned provenance
+```
+
+OAuth state stays inside the local Codex installation. Flutter sends only its
+normal Supabase bearer token to FastAPI; it never sees a Codex token, model
+credential, or `CODEX_HOME`. FastAPI must not inspect OAuth files. Each Linux/
+WSL developer logs in independently with `codex login`, and account/model
+eligibility is an external capability that the app reports honestly.
+`gpt-5.5` is the preferred normal Coach model because the boundary needs
+general conversational reasoning and strict structured output, not coding-agent
+specialization. The CLI is transport/authentication only. An account that does
+not expose the configured model receives an honest unavailable state; there is
+no automatic Spark/model fallback.
+
+The provider is gated by development environment plus explicit Coach/local-
+Codex flags. It receives stdin prompt data in an isolated empty directory with
+ignored user configuration, ephemeral execution, read-only sandboxing, strict
+output schema, explicit disabling of every available model-controlled tool,
+bounded environment/output/time/concurrency, and no inherited Supabase or
+application secrets. A CLI that cannot establish tool-free execution is
+unavailable before context is sent. Because a same-user agentic CLI is not a
+production-grade isolation boundary, this adapter must never be enabled in
+production or presented as the deployed LLM architecture.
+
+The context boundary follows "full reach, minimal disclosure": FastAPI may read
+relevant canonical rows for the bearer-derived owner, but sends only a compact
+32 KiB `coach-context-v1` package for the current request. The first package is
+limited to current snapshot/Daily State, current briefing, bounded active
+actions/goals/focus facts, an explicitly fresh weekly review when useful,
+selected reviewable memory, and a small completed-turn window. The model gets
+no database credential, SQL/tool access, cross-user data, imported calendar
+content, or hidden free text. FastAPI attaches the exact used-data manifest;
+the model cannot invent provenance.
+
+All standard tests use an injected fake provider. A live subscription smoke is
+explicitly opt-in and never part of CI, normal verification, or a claim about a
+different developer's account.
+
 ## Security Posture
 
 - Supabase RLS is enabled and forced where migrations touch tables.
@@ -515,6 +568,9 @@ making claims about deployed data.
 - Production AI endpoints validate Supabase bearer tokens before reading user
   data or invoking privileged backend workflows when backend Supabase settings
   are configured.
+- Planned Phase 10 local Codex auth remains per-Linux-user CLI state. It must
+  never be copied into Flutter, Supabase, `.env`, Git, logs, fixtures, or a
+  subprocess environment alongside backend service credentials.
 
 ## Known Gaps
 
@@ -555,7 +611,10 @@ making claims about deployed data.
   the canonical schema migration has been applied and verified.
 - The repository does not contain real Supabase credentials.
 - The FastAPI service is connected to Supabase-backed deterministic
-  recommendations, but no LLM/model provider is connected.
+  recommendations, but no LLM/model provider is connected. Phase 10's planned
+  `local_codex_oauth` adapter remains unimplemented and development-only; it is
+  not evidence of a production provider, subscription entitlement, or server
+  deployment.
 - Daily and weekly snapshot aggregation exists behind an authenticated backend
   endpoint, and daily capture plus task/habit/focus writes trigger daily refresh
   best-effort. The protected scheduled endpoint can prepare profile-local daily

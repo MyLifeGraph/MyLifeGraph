@@ -67,6 +67,11 @@ FastAPI service boundary for recommendation and future ML workflows.
 - The service does not call LLMs, OpenRouter, local models, or vector search.
   The repository contains no deployed cron, background worker, or Phase 7
   notification sender.
+- Phase 10 is planned next with an injectable Coach provider and a strictly
+  development-only `local_codex_oauth` adapter. It will invoke the current
+  Linux user's manually authenticated Codex CLI without an application API key;
+  it is not implemented or production-ready in this checkout. See
+  `../../docs/phase-10-controlled-coach-plan.md`.
 
 ## Setup
 
@@ -280,6 +285,14 @@ SCHEDULED_REFRESH_TOKEN=
 Do not expose the Supabase service-role key to the Flutter app. It belongs only
 in the backend service environment. Keep `SCHEDULED_REFRESH_TOKEN` backend-only
 as well; it authorizes scheduler-triggered refresh runs.
+
+The future Phase 10 local-provider settings are intentionally not listed as
+active service configuration yet. When implementation lands, safe defaults must
+keep it disabled, and the setting/parser tests, `.env.example`, local runbook,
+and this file must be updated together. Codex OAuth remains private CLI state;
+the service may run a sanitized login/capability command but must never read or
+copy an auth file. Its child environment must exclude the Supabase service-role
+key and every other application secret.
 
 The Setup apply RPC comes from
 `20260710180000_atomic_intake_v1_setup_apply.sql`. Execute is revoked from

@@ -76,6 +76,12 @@ cd services/ai_service
 Use `python -m pytest` from an environment with `services/ai_service`
 requirements installed if the local `.venv` does not exist.
 
+Phase 10 is not implemented yet. Its locked verification design is that every
+normal FastAPI, Flutter, Supabase, and browser check uses an injected fake Coach
+provider. Standard verification must never depend on a Codex installation,
+ChatGPT subscription, OAuth login, live model, or external network call. See
+`docs/phase-10-controlled-coach-plan.md`.
+
 FastAPI tests cover authenticated Setup/Intake, deterministic recommendations,
 and the snapshot aggregator endpoint. Setup coverage includes principal-derived
 identity for both `GET /v1/intake/setup` and `POST /v1/intake/complete`, strict
@@ -633,6 +639,35 @@ On browser failure, Playwright saves a screenshot named:
 
 `.tools/` is ignored by git.
 
+## Planned Phase 10 Provider Verification
+
+When Phase 10 is implemented, add two strictly separate paths:
+
+1. The default deterministic path uses a fake provider/executable and runs in
+   pytest plus the normal browser journey. It must assert exact fixed argv,
+   stdin-only prompt transport, temporary-directory cleanup, allowlisted child
+   environment with no Supabase/application secrets, mandatory tool-feature
+   disabling, provider unavailability when tool-free mode cannot be proven,
+   rejection of unexpected tool events, strict JSON output, timeout/process
+   termination, sanitized errors, owner scoping, context caps, imported-
+   calendar/free-text exclusions, retry/budget behavior, memory/RLS, safety,
+   Flutter states, and zero hidden calls.
+2. A manual opt-in smoke such as `RUN_LOCAL_CODEX_SMOKE=true` may invoke the
+   current Linux user's logged-in Codex CLI. It is skipped by default, uses no
+   sensitive seeded content, and prints only a sanitized pass/fail plus provider
+   and truthful requested/reported model fields. It must not print prompts,
+   OAuth/account data, paths, raw JSON events, stderr, or tokens.
+
+The opt-in smoke proves only the exact machine, CLI version, account, and model
+tested at that time. It does not prove availability for another developer's
+Plus/Pro account and is not evidence of production readiness. A missing login,
+unavailable model, rate/account limit, invalid output, or timeout is an honest
+smoke failure, never a reason to add an API-key or model fallback silently.
+
+Do not add the planned smoke command to the verification-level table until the
+script/test marker actually exists. Keep the detailed plan and this runbook in
+sync when implementation lands.
+
 ## Local Tool State
 
 The scripts use a local CLI home at:
@@ -661,6 +696,12 @@ Local service role key: available for backend and Node-side assertions
 ```
 
 If command output includes a key unexpectedly, redact it before sharing logs.
+
+Codex OAuth state is also secret. Verification may run sanitized commands such
+as `codex login status`, but must never read, print, copy, snapshot, or attach
+`~/.codex/auth.json` or equivalent CLI state. The Phase 10 child process must
+receive an allowlisted environment rather than inheriting FastAPI's Supabase
+service-role key or other backend secrets.
 
 ## Current Automation Gap
 
@@ -698,6 +739,10 @@ Phase 9 source coverage is not a real Google/Microsoft/Apple Calendar test. It
 uses selected local `.ics` bytes and does not establish provider OAuth, token
 refresh/revocation, arbitrary URL fetch, incremental/background sync, provider
 writes, mobile-native file-picker behavior, or remote RLS state.
+
+Phase 10 still has no provider or Coach verification in the current checkout.
+The planned local Codex OAuth adapter, fake-provider suite, and opt-in live smoke
+must not be inferred from this documentation alone.
 
 Known harmless local E2E output includes Chromium WebGL performance warnings.
 The FastAPI AI service must be healthy for the browser smoke to pass.

@@ -12,6 +12,9 @@ does not assume any user-local Codex skills.
 - Optional: Supabase CLI and Docker for local Supabase work. Install the real
   Supabase CLI so `supabase --version` works in the Ubuntu shell; do not rely on
   a repo-local binary. Confirm Docker with `docker --version`.
+- Planned Phase 10 live-model smoke only: a real Codex CLI installed in the
+  same Linux/WSL user account that runs FastAPI. Standard development and tests
+  do not require Codex or a ChatGPT login.
 
 If Node.js, npm, or Supabase CLI are installed through `nvm`, remember that
 non-interactive agent shells may not source nvm automatically. In that case,
@@ -429,6 +432,68 @@ calls an LLM, normal Dashboard loads remain read-only GETs, and Phase 7 sends no
 notifications. This repository does not contain deployed cron wiring; the
 endpoint and local commands alone are not a production scheduling claim.
 
+## Planned Phase 10 Local Codex Provider
+
+This section records the next-slice runbook; the provider and Coach endpoints
+are **not implemented in the current checkout**. The exact contract is
+`docs/phase-10-controlled-coach-plan.md`.
+
+Phase 10's first real-model test should use the developer's existing Codex CLI
+OAuth login rather than an OpenAI API key. No Hermes process is involved. Each
+developer or project partner performs these steps inside the Linux/WSL account
+that will run FastAPI:
+
+```bash
+codex --version
+codex login
+codex login status
+```
+
+Do not copy `~/.codex`, `auth.json`, browser tokens, or another developer's
+`.env`. A Pro user and a Plus user use separate local login state; the repo
+cannot guarantee that both accounts expose the same model. FastAPI should
+surface `unavailable_model` honestly when an explicitly requested model is not
+available. The preferred Phase 10 Coach model is `gpt-5.5`: the workflow needs
+general conversational reasoning and structured output rather than a coding-
+focused Spark model. A partner may explicitly choose another model their own
+account exposes, but the provider must never change it silently.
+
+The planned backend-only settings are:
+
+```env
+COACH_PROVIDER=local_codex_oauth
+LOCAL_CODEX_ENABLED=true
+LOCAL_CODEX_BIN=codex
+LOCAL_CODEX_MODEL=gpt-5.5
+LOCAL_CODEX_TIMEOUT_SECONDS=45
+LOCAL_CODEX_MAX_REQUESTS_PER_USER_PER_DAY=20
+```
+
+They are deliberately absent from the current `.env.example` until code reads
+them. When implemented, safe defaults remain `COACH_PROVIDER=disabled` and
+`LOCAL_CODEX_ENABLED=false`; the start/service docs and `.env.example` must be
+updated in the same change. These values are FastAPI settings, not Flutter Dart
+defines. `LOCAL_CODEX_MODEL=gpt-5.5` is recommended for the Coach. If that exact
+model is unavailable, select another exposed model deliberately or leave the
+provider unavailable; do not fall back automatically. Empty means CLI default,
+and the app must not invent the exact model name.
+
+The implementation must run FastAPI as the logged-in Linux user, invoke Codex
+with a fixed non-shell argv, pass context through stdin, ignore user config, use
+an ephemeral read-only empty workspace, explicitly disable every available
+model-controlled shell/tool feature, and pass an allowlisted environment that
+excludes every Supabase key and application secret. If the installed CLI cannot
+prove a tool-free invocation, the provider remains unavailable. It must never
+inspect the OAuth file. Standard pytest/Flutter/browser verification uses a
+fake provider. A real subscription smoke is separately opt-in, for example
+with `RUN_LOCAL_CODEX_SMOKE=true`, and must print no prompt, token, OAuth state,
+or raw CLI event stream.
+
+This local adapter is suitable for developer testing on the machine that owns
+the login. It is not a production deployment mechanism, does not make a mobile
+app independently capable of contacting Codex, and must not be enabled by
+`APP_ENV=production`.
+
 ## Supabase
 
 Supabase is optional for mock mode. To work on local Supabase you need the real
@@ -791,6 +856,11 @@ the listed screens. Keep manual testing for flows not listed in
   `.tools/e2e/ai-service.log` and confirm `services/ai_service` dependencies are
   installed. If the log says the address is already in use, stop the stale
   service or set `AI_SERVICE_PORT` to a free port.
+- After Phase 10 lands, if the local Coach reports that its provider is
+  unavailable, run `codex --version` and `codex login status` as the same Linux
+  user that runs FastAPI. Do not troubleshoot by opening or copying the Codex
+  auth file. An unavailable explicitly configured model is not permission to
+  fall back silently.
 - If Flutter Web exits early during E2E, inspect `.tools/e2e/flutter-web.log`.
 - Chromium WebGL performance warnings during E2E are expected in headless/local
   runs.

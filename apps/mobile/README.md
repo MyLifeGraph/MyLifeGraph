@@ -167,6 +167,14 @@ and Phase 3 does not rank a briefing or call an LLM. See
 - `/coach` (compatibility redirect to `/dashboard`; preview is gated)
 - `/settings`
 
+Phase 10 will replace the gated canned `MorePage`/direct Supabase message path
+with a typed authenticated FastAPI Coach boundary. Flutter will not handle the
+developer's Codex OAuth login or receive any model credential; it will only show
+the backend's honest local-provider capability, answer, provenance, data-use,
+memory, and failure states. Guest/mock will remain zero-call. See
+`../../docs/phase-10-controlled-coach-plan.md`; none of that provider behavior
+is active in the current checkout.
+
 ## Verify
 
 ```bash

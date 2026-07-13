@@ -28,6 +28,9 @@ Read these files before making changes:
    facts, freshness, proposals, or confirmed habit adaptation
 10. `docs/phase-9-calendar-import-contract.md` before changing calendar
     consent, `.ics` parsing, imported-event identity, disconnect, or deletion
+11. `docs/phase-10-controlled-coach-plan.md` before changing Coach routing,
+    model providers, LLM context, memory selection, chat persistence, usage
+    budgets, or local Codex subprocess behavior
 
 ## Current State
 
@@ -139,6 +142,9 @@ fingerprint and is service-role insert/select only with forced RLS.
 - `docs/phase-9-calendar-import-contract.md` - implemented explicit consent,
   bounded `.ics` reconciliation, imported/read-only provenance, and separate
   disconnect/local-delete contract.
+- `docs/phase-10-controlled-coach-plan.md` - locked implementation plan for the
+  first bounded Coach contract and the development-only subscription-backed
+  local Codex OAuth adapter.
 - `README.md` - high-level project overview.
 
 ## Next Implementation Direction
@@ -181,14 +187,24 @@ separate and never mutate `schedule_items` or a source calendar.
 It does not claim deployed cron wiring or send notifications.
 Read `docs/backend-roadmap.md`,
 `docs/daily-briefing-implementation-plan.md`, and the Phase 3 and Phase 8
-contracts plus the Phase 9 calendar contract before planning the next backend,
-briefing, dashboard, integration, or agent workflow.
+contracts plus the Phase 9 calendar contract and Phase 10 Coach plan before
+planning the next backend, briefing, dashboard, integration, or agent workflow.
 
 Do not jump straight to broad LLM integration, vector search, autonomous
 background agents, or unreviewed provider writes. The next product slice is
 Phase 10 Controlled Coach, beginning only with a bounded authenticated
-explanation/context/budget boundary and staged suggestions. Live calendar
-provider OAuth/sync/writes, deployed scheduling, and notification delivery still
+explanation/context/budget boundary and staged suggestions. Its first test
+provider is deliberately `local_codex_oauth`: FastAPI may invoke the current
+Linux/WSL user's explicitly enabled, already authenticated Codex CLI without an
+API key, while OAuth state stays outside Flutter, Supabase, Git, and application
+logs. This adapter is local-development-only; another developer must run their
+own `codex login`, and the repo must not promise that one model is available to
+every Plus/Pro account. Prefer `gpt-5.5` for the normal Coach because this is a
+general conversational reasoning/structured-output workflow, not a coding-agent
+task. Do not silently fall back to a Codex/Spark model; an unavailable preferred
+model is honest configuration, and another developer may explicitly select a
+model their account exposes. Live calendar provider OAuth/sync/writes, a
+deployable LLM provider, deployed scheduling, and notification delivery still
 require their own directly verified contracts.
 Phase 0A, Honest Capture, is
 implemented: `/daily-check-in` redirects to the canonical lightweight flow;
@@ -659,6 +675,13 @@ material:
 
 Local Supabase anon keys are acceptable in `.env` for local development only.
 Production service-role keys must never be used in the Flutter app.
+
+Local Codex OAuth state is user-private secret material too. Agents must never
+read, print, copy, parse, commit, or move `~/.codex/auth.json` or equivalent
+files. Phase 10 may check sanitized CLI capability through commands such as
+`codex login status`; authentication itself remains a manual per-Linux-user
+step. A Codex subprocess must receive an allowlisted environment that excludes
+Supabase keys and application secrets.
 
 ## Working Tree Safety
 

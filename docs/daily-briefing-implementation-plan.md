@@ -1433,6 +1433,21 @@ Work:
 - Let users view, edit, and delete memory used for coaching.
 - Stage task, habit, or schedule proposals for explicit review.
 - Add wellness/medical boundaries and source-aware responses.
+- For the first local real-model test only, add an injectable
+  `local_codex_oauth` provider that invokes the current Linux/WSL user's
+  explicitly enabled, already authenticated Codex CLI. It uses no application
+  API key, shares no OAuth state, and is not the production provider design.
+- Prefer `gpt-5.5` for the normal interactive Coach because the task is general
+  conversational reasoning and bounded structured output. The Codex CLI is the
+  local OAuth transport, not a reason to select a coding-focused Spark model.
+  Keep unavailable-model truth explicit and require deliberate overrides.
+- Give FastAPI owner-scoped reach to relevant life-graph facts while disclosing
+  only a bounded `coach-context-v1` package. The model receives neither direct
+  database/tool access nor a full-history dump. Imported calendar content and
+  hidden free text remain excluded.
+- Replace the gated canned Coach and direct Flutter inserts with strict typed
+  FastAPI request/history/memory boundaries, honest unavailable states, and a
+  fake provider for all normal automation.
 
 Evaluation:
 
@@ -1440,6 +1455,13 @@ Evaluation:
 - Can the user inspect and control memory?
 - Are all state-changing suggestions reviewed before persistence?
 - Does Coach add value beyond the existing briefing instead of restating it?
+- Can two Linux developers use their own eligible Codex logins without copying
+  credentials, while disabled/login/model-limit failures remain honest?
+
+The exact provider, context, subprocess, retention, safety, UI, verification,
+and acceptance contract is fixed in
+`docs/phase-10-controlled-coach-plan.md`. It must be read before implementing
+this phase.
 
 ## Evaluation Checklist For Next Work
 
@@ -1532,4 +1554,7 @@ The next implementation should be **Phase 10: Controlled Coach**, beginning
 only with an authenticated, budgeted, source-aware explanation boundary and
 reviewable memory. Live provider calendar sync/writes, broad autonomous changes,
 notification delivery, deployed scheduling, vector search, and unbounded LLM
-context remain separate later concerns.
+context remain separate later concerns. The first real-model path is the
+explicitly enabled local Codex OAuth development adapter defined in
+`docs/phase-10-controlled-coach-plan.md`; it does not establish a deployable LLM
+provider or universal subscription/model availability.

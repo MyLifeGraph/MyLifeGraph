@@ -65,10 +65,20 @@ way to explore the product today is the Flutter app in mock-data guest mode.
   only imported local data. No provider credential, URL fetch, provider write,
   background sync, LLM processing, or `schedule_items` mutation is introduced.
   The repository does not configure a deployed cron or create notifications.
+  Phase 10 is planned next as one controlled authenticated Coach boundary. Its
+  first real-model adapter is intentionally local-development-only: FastAPI
+  invokes an explicitly enabled Codex CLI already authenticated by the current
+  Linux/WSL user, so local Pro/Plus subscription testing needs no application
+  API key and shares no OAuth files. No Coach/model provider is implemented in
+  the current checkout yet. The planned interactive Coach prefers `gpt-5.5`
+  for general conversation/reasoning and strict output rather than a coding-
+  focused Spark variant, with no silent fallback when an account lacks it.
+  Production deployment requires a separate provider/security contract.
   See
   `docs/phase-3-executable-actions-contract.md` and
   `docs/phase-8-weekly-review-contract.md`, and
-  `docs/phase-9-calendar-import-contract.md`.
+  `docs/phase-9-calendar-import-contract.md`. The exact next-slice decisions
+  live in `docs/phase-10-controlled-coach-plan.md`.
 - Repository docs and scripts should be treated as the shared team source of
   truth. Do not depend on user-local Codex skills or machine-specific paths.
 
@@ -91,6 +101,8 @@ Prerequisites:
 - Python 3.11+ if you want to run the AI service or static web fallback.
 - Node.js 20+ and npm for browser E2E.
 - Supabase CLI and Docker for local Supabase-backed tests and browser E2E.
+- Codex CLI plus a per-user `codex login` only for the future opt-in Phase 10
+  real-model local smoke; it is not needed for current or standard tests.
 
 From a fresh clone:
 
@@ -177,6 +189,14 @@ Then check:
 ```bash
 curl http://localhost:8000/v1/health
 ```
+
+The current service remains deterministic and has no model provider. The
+planned Phase 10 development adapter will never use `OPENAI_API_KEY`: each
+Linux/WSL developer authenticates their own Codex CLI manually, and FastAPI
+uses it only behind explicit local flags. Do not copy another developer's
+Codex OAuth state into the repo or `.env`. See
+`docs/phase-10-controlled-coach-plan.md` for the exact boundary; its settings
+and commands must not be described as active until the implementation lands.
 
 See `services/ai_service/README.md` for details.
 
@@ -424,6 +444,9 @@ has the nvm bin directory on `PATH`.
   proposals, freshness, ownership, and confirmed habit adaptation.
 - `docs/phase-9-calendar-import-contract.md` - Explicit `.ics` consent,
   bounded retry-safe import, read-only provenance, and disconnect/delete rules.
+- `docs/phase-10-controlled-coach-plan.md` - Planned bounded Coach contract,
+  local subscription-backed Codex OAuth adapter, privacy limits, and acceptance
+  criteria.
 - `docs/next-chat-prompt.md` - Ready-to-use prompt for continuing the next
   implementation slice in a new chat.
 - `apps/mobile/README.md` - Flutter app commands and configuration.

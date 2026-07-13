@@ -47,8 +47,8 @@ The app table constants live in
 | `notifications` | Read-only Notifications inbox; original type, priority, read state, and allowlisted internal `action_url` targets. |
 | `schedule_items` | Setup-owned confirmed fixed commitments plus preserved manual/other-source dashboard schedule rows. |
 | `ai_insights` | Insights list. |
-| `coach_messages` | Reserved persisted history; the canned Coach preview is gated from production navigation. |
-| `memory_entries` | Durable onboarding and future reviewed coach memory. Check-in notes are not promoted automatically. |
+| `coach_messages` | Reserved persisted history; the canned Coach preview is gated. Phase 10 must add retry-safe bounded backend-owned turn/provenance rules and remove direct Flutter inserts before using it for real model replies. |
+| `memory_entries` | Durable Setup-owned onboarding and future reviewed Coach memory. Check-in notes are not promoted automatically. Phase 10 selection must remain separate from Setup-replaced metadata so toggling Coach use does not transfer ownership. |
 | `focus_sessions` | Real one-active-session Deep Work lifecycle with bounded planned/measured duration, fully immutable terminal history, persisted local start date, and at most one owned task or active-habit target whose deletion is restricted. |
 | `goals` | User goals, including deterministically identified Setup-owned rows with archive lifecycle. |
 | `habits` | Habit V1 daily, selected-ISO-weekday, or weekly-target cadence plus active/paused/archived manual lifecycle; Setup owns definition/lifecycle for its rows while active rows share execution. |
