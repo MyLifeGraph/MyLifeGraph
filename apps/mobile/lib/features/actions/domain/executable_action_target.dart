@@ -161,11 +161,14 @@ class ExecutableActionTarget {
 
   ExecutableActionAvailability availability({
     required bool canUseSyncedExecution,
+    bool canUseWeeklyReview = false,
   }) {
     if (command == ExecutableActionCommand.reviewPlan) {
-      return const ExecutableActionAvailability.unavailable(
-        'Plan review is not available yet.',
-      );
+      return canUseSyncedExecution && canUseWeeklyReview
+          ? const ExecutableActionAvailability.available()
+          : const ExecutableActionAvailability.unavailable(
+              'Weekly review requires a synced account.',
+            );
     }
     if (command == ExecutableActionCommand.openCapture) {
       return const ExecutableActionAvailability.available();

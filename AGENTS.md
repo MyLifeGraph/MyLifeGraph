@@ -24,6 +24,8 @@ Read these files before making changes:
    or migrations
 8. `docs/phase-3-executable-actions-contract.md` before changing executable
    actions or consuming them in a briefing
+9. `docs/phase-8-weekly-review-contract.md` before changing weekly review
+   facts, freshness, proposals, or confirmed habit adaptation
 
 ## Current State
 
@@ -49,7 +51,7 @@ databases may still contain legacy CamelCase tables such as `"User"`,
 - `notification_preferences`
 - `goals`, `habits`, `habit_logs`, `focus_sessions`
 - `intake_responses`, `user_state_snapshots`
-- `daily_briefings`, `decision_feedback`
+- `daily_briefings`, `decision_feedback`, `weekly_reviews`
 
 The migration
 `supabase/migrations/20260618170000_create_canonical_app_schema.sql` creates the
@@ -90,6 +92,15 @@ The migration
 append-only decision feedback with retry-safe request identity, owner-scoped
 read/delete RLS, backend-owned writes, and context indexes for its 28-day
 deterministic ranking window.
+The migration
+`supabase/migrations/20260712210000_phase_8_weekly_reviews.sql` adds one bounded
+backend-owned deterministic review per profile/ISO-week identity, exact
+Monday-to-Sunday and source-fingerprint checks, authenticated owner/admin reads,
+service-role writes, and forced RLS.
+The migration
+`supabase/migrations/20260712211500_phase_8_weekly_review_provenance_guard.sql`
+non-destructively completes the weekly-review provenance check by requiring the
+strict deterministic contract keys and matching source fingerprint.
 
 ## Important Docs
 
@@ -106,6 +117,8 @@ deterministic ranking window.
   current E2E gaps.
 - `docs/phase-3-executable-actions-contract.md` - implemented task, habit,
   focus, and ranking-independent action-target contract.
+- `docs/phase-8-weekly-review-contract.md` - implemented bounded ISO-week fact,
+  proposal, freshness, ownership, and confirmed Habit V1 adaptation contract.
 - `README.md` - high-level project overview.
 
 ## Next Implementation Direction
@@ -135,15 +148,24 @@ cautious default Insight before advanced correlation exploration.
 Phase 7 adds bounded per-user failure stages, retry-safe daily identities, an
 optional eligible-profile-filtered operational retry, and no hidden Dashboard
 generation.
+Phase 8 adds one strict `weekly-review-v1` review for an explicit completed
+profile-local ISO week. Read paths are side-effect free; deliberate generation
+persists only derived facts and at most two proposals. Only explicit
+confirmation may reuse the existing exact manual Habit V1 shrink/pause/archive
+commands. Setup-owned changes stay in Settings Setup, and replacement plus
+goal/task/schedule proposals remain staged and non-mutating.
 It does not claim deployed cron wiring or send notifications.
 Read `docs/backend-roadmap.md`,
-`docs/daily-briefing-implementation-plan.md`, and the Phase 3 contract before
-planning the next backend, briefing, dashboard, or agent workflow.
+`docs/daily-briefing-implementation-plan.md`, and the Phase 3 and Phase 8
+contracts before planning the next backend, briefing, dashboard, or agent
+workflow.
 
-Do not jump straight to broad LLM integration, calendar import, vector search,
-or autonomous background agents. The next product slice is Phase 8 bounded
-weekly review and habit adaptation; deployed scheduling and notification
-delivery still require their own directly verified operational contracts.
+Do not jump straight to broad LLM integration, vector search, autonomous
+background agents, or unreviewed provider writes. The next product slice is
+Phase 9 optional integrations, beginning only with consented staged calendar
+read/import and visible disconnect/delete controls. Deployed scheduling and
+notification delivery still require their own directly verified operational
+contracts.
 Phase 0A, Honest Capture, is
 implemented: `/daily-check-in` redirects to the canonical lightweight flow;
 measurements require explicit selection; a typed draft drives guest and Supabase
@@ -231,8 +253,9 @@ row or its absence, and refresh that same date. Focus finish/abandon uses exact
 terminal readback. Terminal focus history rejects every update and linked
 targets cannot be deleted out from under it. The strict Flutter/FastAPI
 `executable-action-v1` parsers reject the same unknown, explicit-null, coerced,
-and mismatched shapes; unsupported commands remain explicit, and `review_plan`
-stays unavailable. New focus rows persist the local start `entry_date`; the
+and mismatched shapes; unsupported commands remain explicit. Phase 8 gives
+`review_plan` one real synced navigation handler without making it a mutation.
+New focus rows persist the local start `entry_date`; the
 migration backfills missing legacy values from the UTC date of `started_at`,
 which is also the shared Flutter/FastAPI fallback. Snapshots add bounded
 habit/focus counts and evidence from fully paginated, stably ordered 1,000-row
@@ -263,6 +286,18 @@ reports sanitized per-user stages without failing the whole batch. A bounded
 Dashboard GET remains read-only; notification delivery and deployed cron wiring
 are not claimed.
 
+Phase 8, Bounded Weekly Review And Habit Adaptation, is implemented through a
+strict authenticated FastAPI/Flutter boundary. The latest read resolves one
+completed profile-local ISO week and never generates; an explicit POST persists
+one `weekly_reviews` identity with exact bounded facts, a canonical source
+fingerprint, deterministic/no-baseline/no-LLM provenance, and at most two
+proposals. Completed, carried, skipped, missed, unknown, and recovery facts stay
+distinct. Only manual Habit V1 shrink/pause/archive proposals are directly
+applicable after a before/after confirmation and exact `updated_at` check.
+Setup-owned proposals open Settings Setup without a generic write; replace,
+defer, goal, task, and schedule proposals remain staged. `review_plan` opens the
+real synced weekly-review surface but never generates or applies by itself.
+
 FastAPI-backed browser E2E coverage for revisioned Setup ownership/retry/edit,
 concurrent same-request convergence, post-intake recommendations, exact Phase 2
 Daily State recomputation, daily snapshot refresh, deliberate dashboard
@@ -281,8 +316,11 @@ Insight before advanced correlations. Phase 7 replaces the first manual briefing
 generation in that journey with a token-protected, single-profile scheduled
 preparation and verifies local-date, snapshot/briefing identity, no-LLM
 provenance, and a write-free retry.
-The combined Phase 3/4/5/6/7 browser journey passed non-destructively in the
-2026-07-12 Phase 7 implementation checkout; later changes must still establish
+Phase 8 extends that source journey with read-only missing truth, deliberate
+weekly generation, exact persisted facts/proposals, confirmed manual Habit V1
+adaptation, Setup ownership, stale/refresh behavior, and review-table RLS.
+The combined Phase 3/4/5/6/7/8 browser journey passed non-destructively in the
+2026-07-12 Phase 8 implementation checkout. Later changes must still establish
 their own current-checkout pass before claiming E2E.
 
 The implemented post-intake refresh is backend-only and best-effort:
@@ -366,7 +404,7 @@ you actually intend to run `supabase db reset`.
 `supabase db reset` must complete through:
 
 ```text
-20260712190000_phase_6_decision_feedback.sql
+20260712211500_phase_8_weekly_review_provenance_guard.sql
 ```
 
 Expected local reset notices include skipped legacy CamelCase tables and

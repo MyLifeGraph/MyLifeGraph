@@ -17,6 +17,7 @@ import '../../features/quick_action/presentation/pages/quick_mood_check_in_page.
 import '../../features/quick_action/presentation/pages/quick_action_page.dart';
 import '../../features/settings/presentation/pages/settings_page.dart';
 import '../../features/shell/presentation/main_shell.dart';
+import '../../features/weekly_review/presentation/pages/weekly_review_page.dart';
 import 'app_routes.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
@@ -109,6 +110,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             redirect: (context, state) =>
                 capabilities.canUseSyncedHabits ? null : AppRoutes.quickAction,
             builder: (context, state) => const HabitManagementPage(),
+          ),
+          GoRoute(
+            path: AppRoutes.weeklyReview,
+            redirect: (context, state) =>
+                capabilities.canUseWeeklyReview ? null : AppRoutes.dashboard,
+            builder: (context, state) => const WeeklyReviewPage(),
           ),
           GoRoute(
             path: AppRoutes.alerts,

@@ -31,7 +31,7 @@ way to explore the product today is the Flutter app in mock-data guest mode.
   stress, energy, mood, screen time, activity, steps, habits, recovery, and
   focus. It computes 7/14/30-day relationships in Flutter from existing
   Supabase rows or local mock time series, without LLM usage.
-- Phase 0A through Phase 7 are implemented. Evening and Morning merge without
+- Phase 0A through Phase 8 are implemented. Evening and Morning merge without
   erasing each other and feed a strict backend-only state parser; Setup remains
   progressive, revision-safe, reviewable, and atomically materialized. Phase 3
   adds durable task commands, cadence-aware Habit V1 outcomes, linked focus
@@ -51,10 +51,16 @@ way to explore the product today is the Flutter app in mock-data guest mode.
   Phase 7 adds bounded scheduled daily preparation: missing prerequisites are
   generated, stale briefings are refreshed against their exact source snapshot,
   and current snapshot/briefing pairs remain write-free. Each user failure is
-  isolated and reports its stage. The repository does not configure a deployed
-  cron or create notifications. See
+  isolated and reports its stage. Phase 8 adds one backend-owned
+  `weekly-review-v1` identity per completed profile-local ISO week. Read paths
+  remain side-effect free, deliberate generation persists only derived facts
+  and at most two proposals, and exact source fingerprints expose staleness.
+  Confirmed manual Habit V1 shrink/pause/archive changes reuse Phase 3; Setup
+  changes deep-link to Setup, while replacement and goal/task/schedule changes
+  remain staged. The repository does not configure a deployed cron or create
+  notifications. See
   `docs/phase-3-executable-actions-contract.md` and
-  `docs/daily-briefing-implementation-plan.md`.
+  `docs/phase-8-weekly-review-contract.md`.
 - Repository docs and scripts should be treated as the shared team source of
   truth. Do not depend on user-local Codex skills or machine-specific paths.
 
@@ -241,7 +247,9 @@ Supabase is the intended auth and persistence backend. The current app supports:
   FastAPI and is consumed by persisted briefings. Both parsers reject the same
   unknown fields, explicit-null metadata fields, coercions, invalid dates,
   duration bounds, metadata leakage, and command/kind/target mismatches.
-  `review_plan` is explicitly unavailable until its own bounded surface exists.
+  `review_plan` opens the real authenticated `/weekly-review` surface and never
+  generates or applies a proposal by itself. Guest/mock sessions remain
+  unavailable.
 - The additive `summary.daily_state` contract is
   `explainable-daily-state-v1`. It uses strict V2 parsing, a fixed seven-day
   state lookback separate from the requested statistics window, explicit
@@ -267,14 +275,23 @@ Supabase is the intended auth and persistence backend. The current app supports:
   expose per-user snapshot, briefing, and failure-stage status. Recommendation
   refresh is off by default, and every scheduler path remains no-LLM. Normal
   Dashboard loads continue to read briefings with GET only.
+- `GET /v1/weekly-reviews/latest` and the explicit-period GET are read-only.
+  `POST /v1/weekly-reviews/generate` deliberately persists one deterministic
+  completed-ISO-week review. Stale proposal controls stay disabled until a
+  deliberate refresh. Direct application is limited to confirmed manual Habit
+  V1 shrink/pause/archive commands with an exact target timestamp; other
+  proposal kinds remain staged or return to Settings Setup.
 
 Important current caveat: the Flutter app targets the canonical snake_case
 schema. A clean local Supabase reset should apply
-`20260712190000_phase_6_decision_feedback.sql`, after the Phase 4 briefing
-migration. Phase 3 adds task estimates/terminal times,
+`20260712211500_phase_8_weekly_review_provenance_guard.sql`, after the Phase 8
+weekly-review table migration. Phase 3 adds task estimates/terminal times,
 locked cadence-aware habit outcomes, immutable linked focus history, and
 restricted target deletion without replacing existing RLS or table grants.
 Phase 4 adds the persisted owner-scoped daily briefing identity and policies.
+Phase 8 adds the backend-owned owner-readable weekly review identity, forced
+RLS, and a strict deterministic-provenance guard; it does not grant
+authenticated review writes.
 Remote projects still need to be inspected directly before relying on
 `USE_MOCK_DATA=false`.
 
@@ -361,6 +378,12 @@ committed-response-loss reconciliation for habit/task create, habit
 outcome/undo, task completion/undo, and focus start/finish, plus negative
 database assertions including terminal-focus `updated_at` mutation. Do not
 describe them as passed until the command succeeds in the current checkout.
+The Phase 8 source path additionally covers missing/read-only review truth,
+deliberate generation, exact persisted weekly facts/proposals, confirmed manual
+habit adaptation, stale refresh, Setup non-mutation, and review-table RLS. It
+passed non-destructively as part of the combined Phase 3/4/5/6/7/8 journey in
+the 2026-07-12 Phase 8 implementation checkout. Later changes must establish
+their own current-checkout pass before claiming E2E.
 
 With a fresh local database:
 
@@ -382,6 +405,8 @@ has the nvm bin directory on `PATH`.
 - `docs/verification.md` - Automated verification scripts and browser E2E.
 - `docs/phase-3-executable-actions-contract.md` - Implemented executable task,
   habit, focus, and action-target contract.
+- `docs/phase-8-weekly-review-contract.md` - Bounded ISO-week facts,
+  proposals, freshness, ownership, and confirmed habit adaptation.
 - `docs/next-chat-prompt.md` - Ready-to-use prompt for continuing the next
   implementation slice in a new chat.
 - `apps/mobile/README.md` - Flutter app commands and configuration.

@@ -18,7 +18,8 @@ persistence backend. The FastAPI service is an independent AI boundary that
 currently serves authenticated Intake V1 and deterministic recommendation
 and daily-briefing workflows when backend Supabase settings are configured. It
 also owns deterministic user-state snapshot aggregation plus the protected
-scheduled preparation boundary for backend-generated daily state and briefings.
+scheduled preparation boundary for backend-generated daily state and briefings,
+and the bounded deterministic weekly-review boundary.
 
 ## Mobile App
 
@@ -150,6 +151,15 @@ A local guest dashboard reads the locally saved canonical check-in and otherwise
 shows a real empty state instead of a static fake plan. It labels briefing
 generation unavailable instead of inventing a personalized local decision.
 
+Authenticated real accounts can open `/weekly-review` from Dashboard or a
+strict `review_plan` action. Flutter reads the latest completed profile-local
+ISO week without generation, preserves `not_ready`, missing, current, stale,
+and error truth, and generates or refreshes only after an explicit control.
+Only a manual Habit V1 shrink/pause/archive proposal can call an existing typed
+Habit V1 command after exact before/after confirmation. Setup-owned changes
+return to Settings Setup; staged replacement, goal, task, or schedule proposals
+do not mutate a record. Guest/mock sessions never call the weekly-review API.
+
 Insights also uses this boundary for deterministic correlation analysis. In
 mock or guest mode it renders local time series. In real Supabase mode it reads
 recent `daily_logs`, `tasks`, `schedule_items`, `habits`, and `habit_logs`,
@@ -199,8 +209,9 @@ unsupported or unsynced execution. Flutter and FastAPI deliberately reject the
 same unknown top-level/metadata fields, null or non-object metadata, explicit
 null metadata fields, coercible numbers, invalid calendar dates, identifier
 normalization, duration/linkage bounds, and command-specific metadata leakage.
-`review_plan` is intentionally unavailable until a bounded planning surface
-exists. Phase 3 defines executable targets but does not select a primary action,
+Phase 8 gives `review_plan` a real authenticated `/weekly-review` navigation
+handler; guest/mock and unsupported sessions stay unavailable, and dispatch
+never generates or mutates. Phase 3 defines executable targets but does not select a primary action,
 persist a briefing, redesign Dashboard as Today, generate recommendations during
 normal writes, or call an LLM. The full contract is in
 `docs/phase-3-executable-actions-contract.md`.
@@ -288,6 +299,8 @@ surface. The canonical application schema is now snake_case and centered on:
   date; authenticated users may read their row, while FastAPI owns writes.
 - `decision_feedback` for retry-safe owner-scoped outcome/preference events;
   users may read/delete history while FastAPI validates and inserts it.
+- `weekly_reviews` for one backend-owned deterministic completed-ISO-week
+  review per user/period; authenticated owners may read but only FastAPI writes.
 
 Legacy CamelCase tables such as `"User"`, `"DailyLog"`, and `"Task"` may still
 exist in older remote projects. The canonical migration copies data from those
@@ -310,6 +323,8 @@ Current responsibilities:
   `/v1/snapshots/generate`.
 - Serve scheduler-triggered deterministic daily preparation at
   `/v1/scheduled/daily-refresh` with a backend-only scheduled refresh token.
+- Serve read-only latest/explicit weekly-review GETs plus deliberate
+  `POST /v1/weekly-reviews/generate` under `weekly-review-v1`.
 - Keep recommendation generation behind a service boundary.
 - Verify bearer tokens through an isolated auth verifier when Supabase backend
   settings are configured.
@@ -435,6 +450,16 @@ The repository contains no deployed cron manifest, background worker, or Phase 7
 notification sender, so endpoint availability must not be described as deployed
 scheduling or notification delivery.
 
+Weekly review is authenticated but not scheduled. FastAPI resolves one
+completed ISO week from the profile timezone, loads exact durable facts with
+stable pagination, computes a canonical SHA-256 source fingerprint, and
+persists one `(user_id, period_key)` review only on deliberate generation.
+Read-only GET recomputes freshness without changing the row. The existing
+generic weekly snapshot is supporting evidence, not a historical ledger:
+task undo/restore and habit definition revisions cannot be reconstructed, so
+those limitations stay explicit and affected habit opportunities become
+unknown. Generation never applies a proposal or mutates a user-owned object.
+
 Flutter Setup sends the structured Intake V1 payload to
 `POST /v1/intake/complete` only in real backend mode with a Supabase access
 token and loads the newest Setup row through `GET /v1/intake/setup`. A pending
@@ -465,6 +490,10 @@ making claims about deployed data.
   terminal row; direct helper execution is revoked from app roles. Restricted
   target FKs preserve history, and a partial unique index permits at most one
   active focus session per user.
+- `weekly_reviews` uses forced RLS, authenticated owner/admin SELECT only, and
+  service-role writes. FastAPI scopes every privileged source query by the
+  bearer-derived owner. Confirmed manual habit changes reuse authenticated
+  Habit V1 ownership and optimistic timestamp checks.
 - Mobile config uses Dart defines so credentials are not hard-coded in source.
 - Production AI endpoints validate Supabase bearer tokens before reading user
   data or invoking privileged backend workflows when backend Supabase settings
@@ -484,8 +513,8 @@ making claims about deployed data.
   ranks only strict Phase 3 targets. `GET /v1/briefings/today` is read-only and
   reports missing/current/stale state; deliberate
   `POST /v1/briefings/generate` refreshes the daily snapshot when generation is
-  needed and upserts the same daily identity. `review_plan` remains explicitly
-  unavailable. Phase 5 consumes this strict contract in Flutter: a normal
+  needed and upserts the same daily identity. Phase 5 consumes this strict
+  contract in Flutter: a normal
   Dashboard read never posts, stale actions are disabled until deliberate
   `force=true` adjustment, and current primary/support actions reuse Phase 3
   handlers. Phase 6 adds `/v1/feedback` GET/POST/DELETE, exact owned-action
@@ -493,6 +522,12 @@ making claims about deployed data.
   Original action reasons remain immutable; bounded contribution and reason
   codes are additive briefing provenance. Insights starts with one cautious
   observation and keeps full correlation analytics as advanced exploration.
+- Phase 8 persists a deterministic weekly review only after explicit
+  generation. `review_plan` is a real synced navigation handler, not an enabled
+  no-op. Direct apply remains limited to manual Habit V1 shrink/pause/archive.
+  Setup ownership stays in Setup, while replacement and goal/task/schedule
+  changes remain staged. There is no task-transition or habit-definition
+  history claim.
 - The remote Production project may still contain legacy CamelCase tables until
   the canonical schema migration has been applied and verified.
 - The repository does not contain real Supabase credentials.
@@ -508,8 +543,8 @@ making claims about deployed data.
   task/habit/focus rows; response-loss paths for habit/task create, habit
   outcome/undo, task completion/undo, and focus start/finish; and negative
   database lifecycle/range/cadence assertions including terminal-focus
-  `updated_at`. The combined Phase 3 through Phase 7 journey passed
-  non-destructively in the 2026-07-12 Phase 7 implementation checkout; later
-  changes still need their own pass.
+  `updated_at`. The combined Phase 3 through Phase 8 journey passed
+  non-destructively in the 2026-07-12 Phase 8 implementation checkout. Later
+  changes must establish their own current-checkout pass before claiming E2E.
 - Explicit local demo mode remains the no-credentials exploration path and is
   labeled throughout the shell.

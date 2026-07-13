@@ -60,6 +60,7 @@ The app table constants live in
 | `user_state_snapshots` | Compact backend-owned onboarding/daily/weekly state; daily and weekly summaries add Phase 2 Daily State plus Phase 3 explicit habit-outcome/focus facts while remaining deterministic recommendation context. |
 | `daily_briefings` | One backend-owned deterministic `daily-briefing-v1` decision per user/profile-local date with strict executable actions, source-snapshot provenance, bounded evidence, and stale detection. |
 | `decision_feedback` | Retry-safe append-only feedback for an exact owned briefing action; authenticated owners can read/delete history and FastAPI owns validated writes. |
+| `weekly_reviews` | One backend-owned bounded `weekly-review-v1` output per user/completed ISO week with source fingerprint, at most two proposals, owner/admin reads, and service-role writes. |
 
 Phase 1 canonical capture upserts one `daily_logs` row per user/date with source
 `quick_check_in`. `metadata.capture_version=daily-capture-v2` contains separate
@@ -220,6 +221,29 @@ claim that a remote project has the migrations, profile timezones, token, or
 deployed cron wiring configured. Phase 7 sends no notifications and adds no
 notification preference, delivery, snooze, or deduplication schema.
 
+## Phase 8 Bounded Weekly Review
+
+Phase 8 adds `weekly_reviews` rather than overloading generic weekly snapshots,
+recommendations, or daily briefings. Each row owns one `(user_id, period_key)`
+identity with exact profile-local Monday/Sunday dates, timezone, bounded
+narrative and JSON facts/proposals/evidence/provenance, and the canonical
+lowercase SHA-256 source fingerprint used for stale detection.
+
+Authenticated users may select only their own rows; authenticated insert,
+update, and delete are not granted. FastAPI uses service-role writes after
+bearer-token verification and explicit owner-scoped source queries. RLS is
+enabled and forced. Deliberate generation persists derived review output only;
+proposal confirmation continues through existing authenticated Habit V1
+commands and never grants the client review-table writes.
+
+The existing weekly snapshot is supporting evidence, not a complete historical
+ledger. Current task rows cannot recreate undone transitions, and current habit
+rows cannot recreate prior cadence/lifecycle definitions. Phase 8 keeps those
+limitations explicit, marks affected opportunity math unknown, and does not
+infer an adaptation from misses alone. Direct application remains limited to
+confirmed manual Habit V1 shrink/pause/archive. Setup-owned changes stay in
+Setup; replacement and goal/task/schedule changes remain staged.
+
 ## Legacy Tables
 
 Older remote databases may contain CamelCase app tables:
@@ -345,12 +369,26 @@ Phase 7 adds no migration after Phase 6. Scheduled preparation relies on the
 existing profile timezone and the Phase 2/4 unique snapshot and briefing
 identities described above.
 
+`20260712210000_phase_8_weekly_reviews.sql` creates one backend-owned
+`weekly_reviews` row per `(user_id, period_key)`. Checks require the exact ISO
+period derived from a Monday `week_start`, a Sunday `week_end`, bounded timezone
+and narrative, `insufficient|partial|sufficient` quality, bounded JSON objects,
+at most two proposals, at most 40 evidence references, and one lowercase
+64-character hexadecimal source fingerprint. Authenticated owners/admins have
+SELECT only; service role owns writes; RLS is enabled and forced.
+
+`20260712211500_phase_8_weekly_review_provenance_guard.sql` replaces the initial
+provenance check non-destructively. It requires the deterministic engine,
+`weekly-review-v1`, `baseline=none`, `llm_used=false`, bounded evidence-window
+and limitations containers, source snapshot fields, and the exact matching
+source fingerprint.
+
 ## Local Verification Workflow
 
 For local Supabase-backed testing, the reset should complete through:
 
 ```text
-20260712190000_phase_6_decision_feedback.sql
+20260712211500_phase_8_weekly_review_provenance_guard.sql
 ```
 
 Then configure `.env` with:
@@ -392,7 +430,7 @@ RESET_DB=true FLUTTER_BIN=/path/to/flutter scripts/verify_supabase_local.sh
 ```
 
 The reset form should apply all migrations through
-`20260712190000_phase_6_decision_feedback.sql`; expected legacy-table
+`20260712211500_phase_8_weekly_review_provenance_guard.sql`; expected legacy-table
 skip notices may be emitted for missing CamelCase tables. Use reset when proving
 the full migration/backfill/constraint chain from a fresh local database, not
 merely because one non-destructive migration is pending.
@@ -418,6 +456,10 @@ Supabase-backed path:
 - Record briefing feedback, confirm its exact `decision_feedback` context,
   deliberately adjust Today, then delete the history row and confirm the next
   adjustment reports zero feedback influence.
+- Open Weekly Review, confirm latest GET is read-only, deliberately generate one
+  completed ISO week, and inspect one exact `weekly_reviews` identity. Cancel a
+  proposal without writes; confirm an eligible manual Habit V1 change; verify
+  Setup ownership is untouched and the old review becomes stale until refresh.
 - Open notifications.
 
 This checks that Auth, RLS, grants, FastAPI backend workflows, and the app's
@@ -478,10 +520,15 @@ legacy compatibility only and should be dropped in a later dedicated migration
 after data migration and app verification are complete.
 
 The latest schema addition is
-`20260712190000_phase_6_decision_feedback.sql`. It creates owner-scoped
-`decision_feedback` history with a unique `(user_id, request_id)`, exact bounded
-feedback/context fields, read/delete RLS for authenticated owners, service-role
-writes, and indexes for the 28-day ranking window. The preceding Phase 4
+`20260712211500_phase_8_weekly_review_provenance_guard.sql`. It completes the
+bounded backend-owned weekly-review schema with strict deterministic-provenance
+and matching-fingerprint checks. The preceding Phase 8 table migration creates
+one review per owner/ISO period with exact week checks, forced RLS,
+authenticated owner/admin reads, and service-role writes.
+The preceding Phase 6 migration creates owner-scoped `decision_feedback`
+history with a unique `(user_id, request_id)`, exact bounded feedback/context
+fields, read/delete RLS for authenticated owners, service-role writes, and
+indexes for the 28-day ranking window. The preceding Phase 4
 migration creates one owner-scoped `daily_briefings` row per user/local date
 with bounded action/evidence JSON, explicit authenticated read and service-role
 write grants, forced RLS, and owner/admin select plus service-role policies. The
@@ -499,4 +546,6 @@ JSON; Phase 3 adds action facts without changing Phase 2 classification; and
 Phase 4 persists deterministic briefing decisions without changing either
 contract; Phase 6 adds feedback as separate evidence and never rewrites those
 persisted reasons. Phase 7 adds no schema object; it prepares the existing
-snapshot and briefing identities by profile-local date.
+snapshot and briefing identities by profile-local date. Phase 8 persists only
+derived weekly review output and reuses existing Habit V1 mutations after
+explicit confirmation.

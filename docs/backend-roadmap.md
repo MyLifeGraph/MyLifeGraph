@@ -156,8 +156,9 @@ Already implemented:
     legacy backfill and shared Flutter/FastAPI fallback.
   - Flutter and FastAPI enforce parser parity for unknown, explicit-null,
     coerced, or mismatched `executable-action-v1` envelopes. Flutter dispatches
-    every supported command through a typed injected handler; `review_plan` is
-    explicitly unavailable.
+    every supported command through a typed injected handler. Phase 8 gives
+    `review_plan` a real synced weekly-review navigation handler without making
+    dispatch itself mutate or generate.
   - Migration `20260711120000_phase_3_executable_action_schema.sql` adds the
     necessary task, habit-log, and focus columns/checks/triggers while preserving
     existing RLS and table grants.
@@ -206,24 +207,37 @@ Already implemented:
   - Insights defaults to one cautious observation with an evidence window,
     confidence/data quality, non-causal copy, and optional bounded experiment;
     the existing correlation tools remain available as advanced exploration.
+- Phase 8 bounded weekly review and Habit V1 adaptation:
+  - Read-only latest and explicit-period GETs resolve one completed
+    profile-local ISO week; deliberate POST persists one stable
+    `weekly-review-v1` identity with no LLM.
+  - Canonical source fingerprints distinguish missing, current, and stale
+    derived output while completed, carried, skipped, missed, unknown, recovery,
+    focus, and feedback facts remain explicit.
+  - At most two proposals are persisted. Only confirmed manual Habit V1
+    shrink/pause/archive reuses an existing exact owner-scoped command.
+    Setup-owned changes return to Setup; replacements and goal/task/schedule
+    proposals remain staged.
 - Browser E2E starts FastAPI with local Supabase backend settings and verifies
   authenticated required-only Setup, retry/edit/review identity and ownership,
   deterministic post-intake recommendations, backend daily snapshot refresh
   after check-ins, exact Phase 2 state recomputation, core Supabase-backed app
   writes, Phase 4 read-only/generate/idempotent briefing persistence, and Phase
   5 GET-only Today load, deliberate adjustment, primary action dispatch, and
-  Phase 6 feedback persistence/ranking/deletion plus useful default Insights.
+  Phase 6 feedback persistence/ranking/deletion plus useful default Insights,
+  and the Phase 8 weekly-review contract and confirmed Habit V1 boundary.
 
 Not yet implemented:
 
-- A bounded planning execution surface; Phase 3 returns `review_plan` as
-  explicitly unavailable rather than a no-op.
+- Broad weekly planning or compound goal/task/schedule/replacement execution;
+  Phase 8 implements only bounded review navigation and confirmed manual Habit
+  V1 shrink/pause/archive.
 - A production background job queue or worker.
 - Deployed cron wiring for the scheduler-triggered refresh endpoint.
 - Real coach-response backend.
 - LLM provider integration.
 - Memory extraction beyond current direct writes.
-- Weekly planning and weekly review.
+- Autonomous weekly planning.
 - Calendar import.
 
 ## Architectural Principles
@@ -262,6 +276,7 @@ repositories, and jobs, not as unconstrained autonomous LLM loops.
 | Recommendation service | Intake complete, explicit refresh, scheduled refresh | `user_state_snapshots`, `daily_logs`, `behavioral_events`, `tasks`, existing `recommendations` | `recommendations` | Optional wording only later |
 | Recommendation verifier | Every generated recommendation | Candidate metadata, active recommendations | Accept/reject result | None |
 | Daily briefing service | Explicit refresh today; protected scheduled daily preparation | `user_state_snapshots`, `recommendations`, goals, tasks, habits, habit outcomes, `decision_feedback` | `daily_briefings` | None for v1 |
+| Weekly review service | Explicit completed-week review read/generation | Profile timezone, weekly snapshot, tasks, goals, habits/outcomes, focus, daily snapshots, `decision_feedback` | `weekly_reviews` derived output only | None for v1 |
 | Coach service | User sends coach message | Recent messages, snapshots, selected memory | `coach_messages`, optional memory candidates | Yes, budgeted |
 | Memory service | Check-ins, coach conversations, weekly review | Raw notes/messages, existing memory | `memory_entries` | Optional extraction only |
 | Planning service | Weekly review, user request | Goals, tasks, habits, schedule, snapshots | `tasks`, `schedule_items`, `recommendations`, `coach_messages` | Optional for complex plans |
@@ -275,9 +290,11 @@ exist. Phase 4's deterministic Daily Briefing service supplies the backend
 decision contract, Phase 5 consumes it in the decision-first Today surface,
 Phase 6 closes the bounded feedback/Insight loop, and the minimal Phase 7
 backend prepares timezone-pinned daily snapshots and briefings through the
-existing protected endpoint. The next product work is Phase 8's bounded weekly
-review and user-confirmed habit adaptation, before Coach, calendar import, or
-LLM provider work. Deployed cron/job wiring and notification delivery remain
+existing protected endpoint. Phase 8 now adds bounded weekly review and
+user-confirmed manual Habit V1 adaptation. The next product work is Phase 9's
+optional consented integration boundary, beginning with staged calendar
+read/import rather than provider writes. Coach and LLM provider work remain
+later. Deployed cron/job wiring and notification delivery remain
 unimplemented and must not be inferred from the callable endpoint. See
 `docs/daily-briefing-implementation-plan.md` for the current product contract
 and phase sequence, and
@@ -477,10 +494,29 @@ Access:
 - User can read own snapshots if the UI needs them.
 - Writes should be backend-owned.
 
+### `weekly_reviews`
+
+Purpose: persist one bounded deterministic review for a completed
+profile-local ISO week without mixing derived output into generic snapshots or
+mutating user-owned records during generation.
+
+Implemented identity and bounds:
+
+- unique `(user_id, period_key)`;
+- exact Monday `week_start` and Sunday `week_end` consistent with `IYYY-Www`;
+- bounded timezone, narrative, facts, no more than two proposals, no more than
+  40 evidence references, provenance, and SHA-256 source fingerprint;
+- `insufficient|partial|sufficient` data quality separate from freshness;
+- authenticated owner/admin SELECT only, service-role writes, forced RLS.
+
+The review GET computes missing/current/stale truth without writing. Deliberate
+generation upserts the derived row. Proposal application is not a table write:
+confirmed eligible manual Habit V1 changes reuse Phase 3 owner-scoped commands.
+
 ### Later Tables
 
-`daily_briefings` and `decision_feedback` are implemented after their owning
-contracts proved the persistence boundary. Do not add these remaining tables
+`daily_briefings`, `decision_feedback`, and `weekly_reviews` are implemented
+after their owning contracts proved the persistence boundary. Do not add these remaining tables
 until their owning phase needs them:
 - `backend_jobs` for durable idempotent jobs and retries.
 - `llm_usage_events` for per-user budget tracking.
@@ -612,12 +648,12 @@ Use these rules before adding any model provider:
 The next implementation should build on completed Phase 0 product integrity,
 Phase 1 capture, Phase 2 explainable state, Phase 3 executable action targets,
 Phase 4's persisted deterministic briefing contract, Phase 5's decision-first
-Today consumer, Phase 6's bounded feedback/Insight loop, and the minimal Phase 7
-scheduled preparation backend. The immediate slice is **Phase 8: Bounded Weekly
-Review And Habit Adaptation**: summarize a small, explicit evidence window,
-separate completed, skipped, missed, carried, and recovery-day facts, propose at
-most one or two changes, and require confirmation before changing a user-owned
-goal, habit, task, or schedule record.
+Today consumer, Phase 6's bounded feedback/Insight loop, the minimal Phase 7
+scheduled preparation backend, and Phase 8's bounded weekly review plus
+confirmed manual Habit V1 adaptation. The immediate next slice is **Phase 9:
+Optional Integrations**: begin with consented calendar read/import, explicit
+source provenance, staged time-block proposals, and disconnect/delete controls.
+The standalone loop must remain fully usable without an integration.
 
 ### Completed Slice 0A: Honest Capture
 
@@ -741,8 +777,9 @@ goal, habit, task, or schedule record.
 - Implemented reliable `executable-action-v1` targets for task, habit, focus,
   and capture commands. Flutter and FastAPI reject unknown fields, invalid
   kind/command/target combinations, and unsupported routes. Planning's
-  `review_plan` is explicitly unavailable, and the reserved `recovery` kind has
-  no executable command yet.
+  `review_plan` was explicitly unavailable in Phase 3 until Phase 8 supplied
+  its real navigation surface; the reserved `recovery` kind has no executable
+  command yet.
 - Implemented owner-scoped task create/edit/complete/postpone/cancel/restore and
   direct undo with validation, stable create ids, retained drafts, confirmation
   for terminal actions, exact requested-field/timestamp reconciliation after an
@@ -794,7 +831,7 @@ goal, habit, task, or schedule record.
 - Disables stale actions until deliberate `Adjust today`, whose POST sends only
   `force=true`; missing state offers deliberate first generation.
 - Dispatches current targets through the existing exhaustive Phase 3 handler
-  boundary and keeps `review_plan` explicitly unavailable.
+  boundary; Phase 8 later adds the real synced `review_plan` navigation handler.
 - Adds model/repository/widget tests and browser assertions for read-only load,
   persisted identity, deliberate adjustment, and real action dispatch.
 
@@ -819,6 +856,28 @@ goal, habit, task, or schedule record.
 - Preserves deterministic no-LLM output, GET-only Dashboard load, deliberate
   user adjustment, and ordinary-write boundaries. It sends no notifications,
   installs no production worker, and does not establish deployed cron wiring.
+
+### Completed Slice 8: Bounded Weekly Review And Habit Adaptation
+
+- Added one strict `weekly-review-v1` contract over an explicit completed
+  profile-local ISO week. Latest/period GET is read-only; deliberate generation
+  upserts one stable `(user_id, period_key)` derived review.
+- Added exact bounded task, habit, focus, recovery-day, and feedback facts with
+  explicit unknown/limitation states. A canonical SHA-256 source fingerprint
+  makes changed evidence or targets stale without a hidden write.
+- Added at most two deterministic evidence-backed proposals. Misses alone never
+  authorize an adaptation, recovery overlap remains separate, and no learned
+  baseline or LLM is claimed.
+- Added the real synced `/weekly-review` surface and `review_plan` navigation.
+  Only an explicitly confirmed manual Habit V1 shrink/pause/archive reuses the
+  existing Phase 3 exact timestamp/readback commands. Setup remains owner of its
+  definitions; replacement and goal/task/schedule proposals remain staged.
+- Added backend-owned `weekly_reviews` persistence with bounded JSON, exact ISO
+  period checks, forced RLS, authenticated owner/admin reads, and service-role
+  writes.
+
+The complete limitation, proposal, freshness, and verification contract lives
+in `docs/phase-8-weekly-review-contract.md`.
 
 ### Completed Slice: Controlled Recommendation Refresh
 
@@ -882,10 +941,10 @@ goal, habit, task, or schedule record.
   committed-response-loss for habit/task create, habit
   outcome/undo, task completion/undo, and focus start/finish are encoded in the
   smoke. Negative lifecycle/range/cadence writes include terminal-focus
-  `updated_at`. The Phase 7 run also proves targeted scheduled preparation and a
-  write-free retry. The combined Phase 3 through Phase 7 journey passed
-  non-destructively in the 2026-07-12 Phase 7 implementation checkout; later
-  changes require a new pass.
+  `updated_at`. The Phase 7 portion also proves targeted scheduled preparation
+  and a write-free retry. The combined Phase 3 through Phase 8 journey passed
+  non-destructively in the 2026-07-12 Phase 8 implementation checkout. Later
+  changes must establish their own current-checkout pass before claiming E2E.
 
 ### Completed Slice: Controlled Snapshot Triggers
 
@@ -917,11 +976,13 @@ goal, habit, task, or schedule record.
   semantics as a side effect of ranking them.
 - Generating a briefing or recommendations during normal Dashboard reads or
   ordinary task, habit, focus, or capture writes.
-- Treating `review_plan` as available before a bounded planning surface exists.
+- Expanding `review_plan` beyond bounded review navigation into autonomous or
+  compound plan mutation.
 - Implementing the gated Coach UI merely to keep it visible.
 - OpenAI/OpenRouter/local LLM integration.
 - Real coach assistant replies.
-- Calendar provider connection.
+- Calendar provider writes; Phase 9 begins with consented read/import and staged
+  proposals only.
 - Autonomous weekly plan rewrites or applying review proposals without explicit
   confirmation.
 - Vector search.

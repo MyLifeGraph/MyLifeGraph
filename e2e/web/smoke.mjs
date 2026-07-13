@@ -52,6 +52,11 @@ let page;
 try {
   await assertAiServiceHealthy();
   const user = await createConfirmedUser();
+  await patchRows(
+    `profiles?id=eq.${user.id}`,
+    { timezone: 'Europe/Berlin' },
+    'E2E profile timezone',
+  );
   page = await browser.newPage({
     viewport: { width: 1280, height: 960 },
   });
@@ -2005,6 +2010,7 @@ try {
       `Deleted feedback still influenced ranking: ${JSON.stringify(correctedBriefing)}`,
     );
   }
+  await assertBoundedWeeklyReview(page, user.id);
   await scrollFlutterPage(page, 2200);
   const [manualSnapshotResponse, manualRecommendationResponse] =
     await Promise.all([
@@ -2973,6 +2979,40 @@ function isoDateInTimeZone(value, timeZone) {
   return `${parts.year}-${parts.month}-${parts.day}`;
 }
 
+function latestCompletedIsoWeek(timeZone) {
+  const localToday = isoDateInTimeZone(new Date().toISOString(), timeZone);
+  const today = new Date(`${localToday}T00:00:00Z`);
+  const isoWeekday = today.getUTCDay() === 0 ? 7 : today.getUTCDay();
+  const currentWeekStart = addUtcDays(localToday, -(isoWeekday - 1));
+  const endsOn = addUtcDays(currentWeekStart, -1);
+  const startsOn = addUtcDays(endsOn, -6);
+  return {
+    periodKey: isoPeriodKey(startsOn),
+    startsOn,
+    endsOn,
+  };
+}
+
+function isoPeriodKey(dateValue) {
+  const date = new Date(`${dateValue}T00:00:00Z`);
+  const isoWeekday = date.getUTCDay() === 0 ? 7 : date.getUTCDay();
+  date.setUTCDate(date.getUTCDate() + 4 - isoWeekday);
+  const isoYear = date.getUTCFullYear();
+  const yearStart = new Date(Date.UTC(isoYear, 0, 1));
+  const week = Math.ceil(((date - yearStart) / 86400000 + 1) / 7);
+  return `${isoYear}-W${String(week).padStart(2, '0')}`;
+}
+
+function addUtcDays(dateValue, days) {
+  const date = new Date(`${dateValue}T00:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+function isoTimestampOnDate(dateValue, timeValue) {
+  return `${dateValue}T${timeValue}Z`;
+}
+
 function isUuid(value) {
   return (
     typeof value === 'string' &&
@@ -3024,6 +3064,605 @@ async function latestDailySnapshotGeneratedAt(userId) {
     return 0;
   }
   return Date.parse(rows[0].generated_at);
+}
+
+async function assertBoundedWeeklyReview(page, userId) {
+  await scrollFlutterPage(page, 500);
+  await expectText(page, 'Review your week');
+  const timezone = 'Europe/Berlin';
+  const period = latestCompletedIsoWeek(timezone);
+  const createdBeforeWeek = isoTimestampOnDate(
+    addUtcDays(period.startsOn, -7),
+    '08:00:00',
+  );
+  const monday = period.startsOn;
+  const tuesday = addUtcDays(monday, 1);
+  const wednesday = addUtcDays(monday, 2);
+  const thursday = addUtcDays(monday, 3);
+  const friday = addUtcDays(monday, 4);
+  const manualHabitId = crypto.randomUUID();
+  const setupHabitId = crypto.randomUUID();
+  const goalId = crypto.randomUUID();
+  const completedTaskId = crypto.randomUUID();
+  const carriedTaskId = crypto.randomUUID();
+  const focusId = crypto.randomUUID();
+  const briefingId = crypto.randomUUID();
+  const manualHabitTitle = `E2E weekly target ${runId}`;
+  const setupHabitTitle = `E2E weekly setup habit ${runId}`;
+  const stableHabitUpdatedAt = createdBeforeWeek;
+
+  await insertRows('goals', [
+    {
+      id: goalId,
+      user_id: userId,
+      title: `E2E weekly goal ${runId}`,
+      status: 'active',
+      progress: 10,
+      metadata: { source: 'manual-e2e-phase-8' },
+      created_at: createdBeforeWeek,
+      updated_at: createdBeforeWeek,
+    },
+  ]);
+  await insertRows('tasks', [
+    {
+      id: completedTaskId,
+      user_id: userId,
+      title: `E2E weekly completed task ${runId}`,
+      status: 'done',
+      priority: 'high',
+      deadline: null,
+      completed_at: isoTimestampOnDate(tuesday, '12:00:00'),
+      cancelled_at: null,
+      source: 'manual',
+      metadata: { goal_id: goalId, source: 'manual-e2e-phase-8' },
+      created_at: createdBeforeWeek,
+      updated_at: isoTimestampOnDate(tuesday, '12:00:00'),
+    },
+    {
+      id: carriedTaskId,
+      user_id: userId,
+      title: `E2E weekly carried task ${runId}`,
+      status: 'todo',
+      priority: 'medium',
+      deadline: isoTimestampOnDate(friday, '09:00:00'),
+      completed_at: null,
+      cancelled_at: null,
+      source: 'manual',
+      metadata: { source: 'manual-e2e-phase-8' },
+      created_at: createdBeforeWeek,
+      updated_at: createdBeforeWeek,
+    },
+  ]);
+  await insertRows('habits', [
+    {
+      id: manualHabitId,
+      user_id: userId,
+      title: manualHabitTitle,
+      frequency: 'weekly',
+      target: 4,
+      active: true,
+      metadata: {
+        source: 'flutter-habit-management-v1',
+        contract_version: 'habit-v1',
+        cadence: 'weekly_target',
+        lifecycle: 'active',
+        started_on: addUtcDays(monday, -14),
+      },
+      created_at: createdBeforeWeek,
+      updated_at: stableHabitUpdatedAt,
+    },
+    {
+      id: setupHabitId,
+      user_id: userId,
+      title: setupHabitTitle,
+      frequency: 'weekly',
+      target: 4,
+      active: true,
+      metadata: {
+        source: 'intake-v1',
+        managed_by: 'setup',
+        setup_state: 'active',
+        setup_item_id: crypto.randomUUID(),
+        revision: 4,
+        contract_version: 'habit-v1',
+        cadence: 'weekly_target',
+        started_on: addUtcDays(monday, -14),
+      },
+      created_at: createdBeforeWeek,
+      updated_at: createdBeforeWeek,
+    },
+  ]);
+  await insertRows('habit_logs', [
+    {
+      user_id: userId,
+      habit_id: manualHabitId,
+      entry_date: monday,
+      status: 'completed',
+      value: 1,
+      created_at: isoTimestampOnDate(monday, '18:00:00'),
+      updated_at: isoTimestampOnDate(monday, '18:00:00'),
+    },
+    {
+      user_id: userId,
+      habit_id: manualHabitId,
+      entry_date: thursday,
+      status: 'completed',
+      value: 1,
+      created_at: isoTimestampOnDate(thursday, '18:00:00'),
+      updated_at: isoTimestampOnDate(thursday, '18:00:00'),
+    },
+    {
+      user_id: userId,
+      habit_id: setupHabitId,
+      entry_date: monday,
+      status: 'completed',
+      value: 1,
+      created_at: isoTimestampOnDate(monday, '18:05:00'),
+      updated_at: isoTimestampOnDate(monday, '18:05:00'),
+    },
+    {
+      user_id: userId,
+      habit_id: setupHabitId,
+      entry_date: thursday,
+      status: 'completed',
+      value: 1,
+      created_at: isoTimestampOnDate(thursday, '18:05:00'),
+      updated_at: isoTimestampOnDate(thursday, '18:05:00'),
+    },
+  ]);
+  await insertRows('focus_sessions', [
+    {
+      id: focusId,
+      user_id: userId,
+      status: 'completed',
+      started_at: isoTimestampOnDate(wednesday, '10:00:00'),
+      ended_at: isoTimestampOnDate(wednesday, '10:25:00'),
+      planned_minutes: 30,
+      actual_minutes: 25,
+      distractions: 0,
+      social_media_warning: false,
+      metadata: { entry_date: wednesday, source: 'manual-e2e-phase-8' },
+      created_at: isoTimestampOnDate(wednesday, '10:00:00'),
+      updated_at: isoTimestampOnDate(wednesday, '10:25:00'),
+    },
+  ]);
+
+  await upsertRows(
+    'user_state_snapshots',
+    Array.from({ length: 7 }, (_, index) => {
+      const entryDate = addUtcDays(monday, index);
+      return {
+        id: crypto.randomUUID(),
+        user_id: userId,
+        scope: 'daily',
+        period_key: entryDate,
+        summary: {
+          daily_state: {
+            contract_version: 'explainable-daily-state-v1',
+            target_date: entryDate,
+            mode: entryDate === friday ? 'recover' : 'steady',
+            data_quality: 'current',
+          },
+        },
+        signals: {},
+        source: 'backend',
+        generated_at: isoTimestampOnDate(entryDate, '19:00:00'),
+        metadata: {
+          source: 'snapshot-aggregator-v1',
+          daily_state_contract_version: 'explainable-daily-state-v1',
+          target_date: entryDate,
+          window_days: 7,
+          state_lookback_days: 7,
+        },
+      };
+    }),
+    'user_id,scope,period_key',
+  );
+  await insertRows('daily_briefings', [
+    {
+      id: briefingId,
+      user_id: userId,
+      briefing_date: wednesday,
+      mode: 'steady',
+      summary: 'E2E weekly review feedback source',
+      primary_action: {
+        target: {
+          contract_version: 'executable-action-v1',
+          id: `log_habit:${manualHabitId}:${wednesday}`,
+          kind: 'habit',
+          command: 'log_habit',
+          target_id: manualHabitId,
+          metadata: {
+            entry_date: wednesday,
+            habit_outcome: 'completed',
+            source: 'daily-briefing-v1',
+          },
+        },
+        title: manualHabitTitle,
+        reason: 'E2E weekly review feedback evidence',
+        evidence_refs: [],
+      },
+      support_actions: [],
+      evidence_refs: [],
+      provenance: {
+        engine: 'deterministic',
+        contract_version: 'daily-briefing-v1',
+        llm_used: false,
+      },
+      data_quality: 'current',
+      metadata: {
+        contract_version: 'daily-briefing-v1',
+        capacity_note: 'A bounded E2E week.',
+      },
+      generated_at: isoTimestampOnDate(wednesday, '07:00:00'),
+      created_at: isoTimestampOnDate(wednesday, '07:00:00'),
+      updated_at: isoTimestampOnDate(wednesday, '07:00:00'),
+    },
+  ]);
+  await insertRows('decision_feedback', [
+    {
+      user_id: userId,
+      request_id: crypto.randomUUID(),
+      briefing_id: briefingId,
+      action_id: `log_habit:${manualHabitId}:${wednesday}`,
+      action_kind: 'habit',
+      feedback_type: 'too_much',
+      context_mode: 'steady',
+      rule_key: 'habit_due',
+      metadata: {
+        contract_version: 'decision-feedback-v1',
+        briefing_date: wednesday,
+      },
+      created_at: isoTimestampOnDate(wednesday, '20:00:00'),
+    },
+    {
+      user_id: userId,
+      request_id: crypto.randomUUID(),
+      briefing_id: briefingId,
+      action_id: `log_habit:${setupHabitId}:${wednesday}`,
+      action_kind: 'habit',
+      feedback_type: 'too_much',
+      context_mode: 'steady',
+      rule_key: 'habit_due',
+      metadata: {
+        contract_version: 'decision-feedback-v1',
+        briefing_date: wednesday,
+      },
+      created_at: isoTimestampOnDate(wednesday, '20:05:00'),
+    },
+  ]);
+
+  const accessToken = await signInAccessToken('Phase 8 weekly review');
+  const weeklySnapshot = await briefingRequest(
+    '/v1/snapshots/generate',
+    accessToken,
+    { scope: 'weekly', target_date: period.endsOn, window_days: 7 },
+  );
+  if (
+    weeklySnapshot.scope !== 'weekly' ||
+    weeklySnapshot.period_key !== period.periodKey
+  ) {
+    throw new Error(
+      `Phase 8 weekly snapshot prerequisite is invalid: ${JSON.stringify(weeklySnapshot)}`,
+    );
+  }
+
+  const reviewPath =
+    `weekly_reviews?select=id&user_id=eq.${userId}` +
+    `&period_key=eq.${period.periodKey}`;
+  await assertRows(
+    reviewPath,
+    (rows) => rows.length === 0,
+    'Phase 8 review missing before read-only GET',
+  );
+  const missing = await briefingRequest(
+    '/v1/weekly-reviews/latest',
+    accessToken,
+  );
+  if (
+    missing.contract_version !== 'weekly-review-v1' ||
+    missing.period_key !== period.periodKey ||
+    missing.starts_on !== period.startsOn ||
+    missing.ends_on !== period.endsOn ||
+    missing.timezone !== timezone ||
+    missing.freshness !== 'missing' ||
+    missing.needs_generation !== true ||
+    missing.stale_reasons?.length !== 0 ||
+    missing.review !== null
+  ) {
+    throw new Error(
+      `Read-only latest weekly review did not report missing truth: ${JSON.stringify(missing)}`,
+    );
+  }
+  await assertRows(
+    reviewPath,
+    (rows) => rows.length === 0,
+    'read-only latest weekly review GET creates no row',
+  );
+
+  await page.goto(appRoute('/weekly-review'), { waitUntil: 'domcontentloaded' });
+  await waitForFlutterShell(page);
+  await enableFlutterSemantics(page);
+  await expectText(page, 'No weekly review yet');
+  const generateResponsePromise = waitForAiPost(
+    page,
+    '/v1/weekly-reviews/generate',
+    'deliberate weekly review generation',
+  );
+  await clickByText(page, 'Generate weekly review');
+  const generateResponse = await generateResponsePromise;
+  assertJsonPayload(
+    generateResponse.request(),
+    { period_key: period.periodKey, force: false },
+    'deliberate weekly review generation payload',
+  );
+  const generated = await generateResponse.json();
+  await expectText(page, 'Current');
+  const review = generated.review;
+  const manualProposal = review?.proposals?.find(
+    (proposal) =>
+      proposal.target_id === manualHabitId &&
+      proposal.operation === 'shrink',
+  );
+  const setupProposal = review?.proposals?.find(
+    (proposal) => proposal.target_id === setupHabitId,
+  );
+  if (
+    generated.freshness !== 'current' ||
+    generated.needs_generation !== false ||
+    !['partial', 'sufficient'].includes(review?.data_quality) ||
+    !isUuid(review?.id) ||
+    !Array.isArray(review?.proposals) ||
+    review.proposals.length > 2 ||
+    review?.facts?.tasks?.completed !== 1 ||
+    review?.facts?.tasks?.carried !== 1 ||
+    review?.facts?.tasks?.overdue_carried !== 1 ||
+    review?.facts?.tasks?.goal_linked_completed !== 1 ||
+    review?.facts?.habits?.scheduled_opportunities !== 8 ||
+    review?.facts?.habits?.completed !== 4 ||
+    review?.facts?.habits?.skipped !== 0 ||
+    review?.facts?.habits?.missed !== 2 ||
+    review?.facts?.habits?.recovery_open !== 2 ||
+    review?.facts?.habits?.unknown !== 0 ||
+    review?.facts?.focus?.completed_sessions !== 1 ||
+    review?.facts?.focus?.actual_minutes !== 25 ||
+    review?.facts?.recovery?.observed_days !== 7 ||
+    review?.facts?.recovery?.recovery_days !== 1 ||
+    review?.facts?.feedback?.total !== 2 ||
+    review?.facts?.feedback?.too_much !== 2 ||
+    review?.provenance?.engine !== 'deterministic' ||
+    review?.provenance?.contract_version !== 'weekly-review-v1' ||
+    review?.provenance?.source_snapshot_id !== weeklySnapshot.snapshot_id ||
+    review?.provenance?.baseline !== 'none' ||
+    review?.provenance?.llm_used !== false ||
+    !/^[0-9a-f]{64}$/.test(
+      review?.provenance?.source_fingerprint ?? '',
+    ) ||
+    manualProposal?.application_mode !== 'direct_habit' ||
+    manualProposal?.ownership !== 'manual' ||
+    Date.parse(manualProposal?.expected_updated_at) !==
+      Date.parse(stableHabitUpdatedAt) ||
+    manualProposal?.change?.before?.cadence?.kind !== 'weekly_target' ||
+    manualProposal?.change?.before?.cadence?.weekly_target !== 4 ||
+    manualProposal?.change?.after?.cadence?.weekly_target !== 3 ||
+    setupProposal?.application_mode !== 'settings_setup' ||
+    setupProposal?.ownership !== 'setup'
+  ) {
+    throw new Error(
+      `Generated Phase 8 weekly review violates its exact contract: ${JSON.stringify(generated)}`,
+    );
+  }
+
+  const persistedRows = await fetchRows(
+    `weekly_reviews?select=id,period_key,week_start,week_end,timezone,data_quality,narrative,facts,proposals,evidence_refs,provenance,source_fingerprint,generated_at,updated_at&user_id=eq.${userId}&period_key=eq.${period.periodKey}`,
+    'persisted Phase 8 weekly review',
+  );
+  if (
+    persistedRows.length !== 1 ||
+    persistedRows[0].id !== review.id ||
+    persistedRows[0].week_start !== period.startsOn ||
+    persistedRows[0].week_end !== period.endsOn ||
+    persistedRows[0].timezone !== timezone ||
+    persistedRows[0].source_fingerprint !==
+      review.provenance.source_fingerprint ||
+    stableJson(persistedRows[0].facts) !== stableJson(review.facts) ||
+    stableJson(persistedRows[0].proposals) !==
+      stableJson(review.proposals) ||
+    stableJson(persistedRows[0].evidence_refs) !==
+      stableJson(review.evidence_refs) ||
+    stableJson(persistedRows[0].provenance) !==
+      stableJson(review.provenance)
+  ) {
+    throw new Error(
+      `Persisted Phase 8 weekly review does not match its response: ${JSON.stringify(persistedRows)}`,
+    );
+  }
+  await assertWeeklyReviewDatabaseConstraints({
+    userId,
+    period,
+    review,
+    manualProposal,
+  });
+
+  const repeated = await briefingRequest(
+    `/v1/weekly-reviews/${period.periodKey}`,
+    accessToken,
+  );
+  if (
+    repeated.freshness !== 'current' ||
+    repeated.review?.id !== review.id ||
+    repeated.review?.generated_at !== review.generated_at ||
+    repeated.review?.updated_at !== review.updated_at
+  ) {
+    throw new Error(
+      `Idempotent weekly review GET changed the row: ${JSON.stringify(repeated)}`,
+    );
+  }
+
+  await assertWeeklyReviewRls({
+    ownerAccessToken: accessToken,
+    userId,
+    reviewId: review.id,
+    periodKey: period.periodKey,
+    period,
+    review,
+    habitId: manualHabitId,
+    expectedHabitTarget: 4,
+  });
+
+  const setupBefore = await fetchRows(
+    `habits?select=id,title,frequency,target,active,metadata,updated_at&id=eq.${setupHabitId}`,
+    'Setup-owned habit before weekly review UI',
+  );
+  await page.goto(appRoute('/weekly-review'), { waitUntil: 'domcontentloaded' });
+  await waitForFlutterShell(page);
+  await enableFlutterSemantics(page);
+  await expectText(page, 'Weekly review');
+  await expectText(page, manualHabitTitle);
+  await expectText(page, setupHabitTitle);
+
+  await clickByText(page, 'Review in Setup');
+  await page.waitForURL('**/#/onboarding?edit=1');
+  await waitForFlutterShell(page);
+  await enableFlutterSemantics(page);
+  await expectText(page, 'Review your setup');
+  await assertRows(
+    `habits?select=id,title,frequency,target,active,metadata,updated_at&id=eq.${setupHabitId}`,
+    (rows) => stableJson(rows) === stableJson(setupBefore),
+    'weekly review Setup navigation performs no generic habit write',
+  );
+  await page.goto(appRoute('/weekly-review'), { waitUntil: 'domcontentloaded' });
+  await waitForFlutterShell(page);
+  await enableFlutterSemantics(page);
+  await expectText(page, manualHabitTitle);
+
+  await clickByText(page, 'Apply change');
+  await expectText(page, 'Apply this habit change?');
+  await clickByText(page, 'Keep current');
+  await assertRows(
+    `habits?select=id,target,updated_at&id=eq.${manualHabitId}`,
+    (rows) =>
+      rows.length === 1 &&
+      rows[0].target === 4 &&
+      Date.parse(rows[0].updated_at) === Date.parse(stableHabitUpdatedAt),
+    'cancelled weekly proposal performs no habit write',
+  );
+
+  let lostWeeklyHabitPatchCount = 0;
+  const loseWeeklyHabitPatchResponse = async (route) => {
+    const request = route.request();
+    if (request.method() !== 'PATCH' || lostWeeklyHabitPatchCount > 0) {
+      await route.continue();
+      return;
+    }
+    const committedResponse = await route.fetch();
+    if (!committedResponse.ok()) {
+      throw new Error(
+        `Weekly habit response-loss precondition failed: ${committedResponse.status()} ${await committedResponse.text()}`,
+      );
+    }
+    lostWeeklyHabitPatchCount += 1;
+    await route.abort('failed');
+  };
+  await page.route('**/rest/v1/habits**', loseWeeklyHabitPatchResponse);
+  await clickByText(page, 'Apply change');
+  await expectText(page, 'Apply this habit change?');
+  await clickByText(page, 'Apply change', { match: 'last' });
+  await expectText(page, 'Habit change saved.');
+  await waitForRows(
+    `habits?select=id,title,frequency,target,active,metadata,updated_at&id=eq.${manualHabitId}`,
+    (rows) =>
+      rows.length === 1 &&
+      rows[0].title === manualHabitTitle &&
+      rows[0].frequency === 'weekly' &&
+      rows[0].target === 3 &&
+      rows[0].active === true &&
+      rows[0].metadata?.source === 'flutter-habit-management-v1' &&
+      rows[0].metadata?.contract_version === 'habit-v1' &&
+      rows[0].metadata?.cadence === 'weekly_target' &&
+      rows[0].metadata?.lifecycle === 'active' &&
+      Date.parse(rows[0].updated_at) > Date.parse(stableHabitUpdatedAt),
+    'confirmed weekly proposal applies one exact manual Habit V1 shrink',
+  );
+  await page.unroute('**/rest/v1/habits**', loseWeeklyHabitPatchResponse);
+  if (lostWeeklyHabitPatchCount !== 1) {
+    throw new Error(
+      'Weekly habit response-loss path was not exercised exactly once.',
+    );
+  }
+  await assertRows(
+    `habit_logs?select=habit_id,entry_date,status,value&habit_id=eq.${manualHabitId}&order=entry_date.asc`,
+    (rows) =>
+      rows.length === 2 &&
+      rows.every((row) => row.status === 'completed' && row.value === 1),
+    'weekly habit adaptation preserves historical outcomes',
+  );
+  await assertRows(
+    `habits?select=id,title,frequency,target,active,metadata,updated_at&id=eq.${setupHabitId}`,
+    (rows) => stableJson(rows) === stableJson(setupBefore),
+    'confirmed manual weekly proposal preserves Setup-owned definition',
+  );
+
+  const stale = await briefingRequest(
+    `/v1/weekly-reviews/${period.periodKey}`,
+    accessToken,
+  );
+  if (
+    stale.freshness !== 'stale' ||
+    stale.needs_generation !== true ||
+    stale.review?.id !== review.id ||
+    !stale.stale_reasons?.includes('source_facts_changed') ||
+    stale.review?.updated_at !== review.updated_at
+  ) {
+    throw new Error(
+      `Applied weekly proposal did not make the old review stale: ${JSON.stringify(stale)}`,
+    );
+  }
+  await page.goto(appRoute('/weekly-review'), { waitUntil: 'domcontentloaded' });
+  await waitForFlutterShell(page);
+  await enableFlutterSemantics(page);
+  await expectText(page, 'Weekly review');
+  await expectText(page, 'Stale');
+  const staleApplyButtons = page.getByRole('button', {
+    name: 'Apply change',
+    exact: true,
+  });
+  if ((await staleApplyButtons.count()) > 0) {
+    for (let index = 0; index < (await staleApplyButtons.count()); index++) {
+      if (await staleApplyButtons.nth(index).isEnabled()) {
+        throw new Error('A stale weekly proposal remained executable.');
+      }
+    }
+  }
+
+  const refreshResponsePromise = waitForAiPost(
+    page,
+    '/v1/weekly-reviews/generate',
+    'deliberate weekly review refresh',
+  );
+  await clickByText(page, 'Refresh weekly review');
+  const refreshResponse = await refreshResponsePromise;
+  assertJsonPayload(
+    refreshResponse.request(),
+    { period_key: period.periodKey, force: true },
+    'deliberate weekly review refresh payload',
+  );
+  const refreshed = await refreshResponse.json();
+  if (
+    refreshed.freshness !== 'current' ||
+    refreshed.review?.id !== review.id ||
+    refreshed.review?.provenance?.source_fingerprint ===
+      review.provenance.source_fingerprint ||
+    Date.parse(refreshed.review?.updated_at) <= Date.parse(review.updated_at)
+  ) {
+    throw new Error(
+      `Weekly review refresh did not reuse its identity with new facts: ${JSON.stringify(refreshed)}`,
+    );
+  }
+
+  await page.goto(appRoute('/dashboard'), { waitUntil: 'domcontentloaded' });
+  await waitForFlutterShell(page);
+  await enableFlutterSemantics(page);
 }
 
 async function assertDeterministicDailyBriefing(userId) {
@@ -3463,6 +4102,397 @@ async function insertRows(table, rows) {
     );
   }
   return response.json();
+}
+
+async function upsertRows(table, rows, onConflict) {
+  const response = await fetch(
+    `${supabaseUrl}/rest/v1/${table}?on_conflict=${encodeURIComponent(onConflict)}`,
+    {
+      method: 'POST',
+      headers: {
+        apikey: serviceRoleKey,
+        Authorization: `Bearer ${serviceRoleKey}`,
+        'Content-Type': 'application/json',
+        Prefer: 'resolution=merge-duplicates,return=representation',
+      },
+      body: JSON.stringify(rows),
+    },
+  );
+  if (!response.ok) {
+    throw new Error(
+      `Could not upsert ${table} rows: ${response.status} ${await response.text()}`,
+    );
+  }
+  return response.json();
+}
+
+async function patchRows(path, values, description) {
+  const response = await fetch(`${supabaseUrl}/rest/v1/${path}`, {
+    method: 'PATCH',
+    headers: {
+      apikey: serviceRoleKey,
+      Authorization: `Bearer ${serviceRoleKey}`,
+      'Content-Type': 'application/json',
+      Prefer: 'return=representation',
+    },
+    body: JSON.stringify(values),
+  });
+  if (!response.ok) {
+    throw new Error(
+      `Could not patch ${description}: ${response.status} ${await response.text()}`,
+    );
+  }
+  const rows = await response.json();
+  if (!Array.isArray(rows) || rows.length !== 1) {
+    throw new Error(
+      `Patch for ${description} returned an unexpected result: ${JSON.stringify(rows)}`,
+    );
+  }
+  return rows[0];
+}
+
+async function assertWeeklyReviewRls({
+  ownerAccessToken,
+  userId,
+  reviewId,
+  periodKey,
+  period,
+  review,
+  habitId,
+  expectedHabitTarget,
+}) {
+  const ownerRead = await authenticatedRestRequest(
+    `weekly_reviews?select=id,user_id,period_key&id=eq.${reviewId}`,
+    ownerAccessToken,
+  );
+  if (
+    !ownerRead.response.ok ||
+    ownerRead.rows?.length !== 1 ||
+    ownerRead.rows[0].user_id !== userId ||
+    ownerRead.rows[0].period_key !== periodKey
+  ) {
+    throw new Error(
+      `Weekly review owner SELECT failed: ${ownerRead.response.status} ${ownerRead.text}`,
+    );
+  }
+
+  const secondaryEmail = `e2e-phase8-other-${runId}@example.test`;
+  const secondaryPassword = `E2e-phase8-other-${runId}-password`;
+  await createConfirmedUserWithCredentials({
+    emailAddress: secondaryEmail,
+    passwordValue: secondaryPassword,
+    displayName: 'E2E Weekly Review Other User',
+  });
+  const secondaryToken = await signInCredentials({
+    emailAddress: secondaryEmail,
+    passwordValue: secondaryPassword,
+    context: 'Phase 8 secondary principal',
+  });
+  const secondaryRead = await authenticatedRestRequest(
+    `weekly_reviews?select=id&id=eq.${reviewId}`,
+    secondaryToken,
+  );
+  if (!secondaryRead.response.ok || secondaryRead.rows?.length !== 0) {
+    throw new Error(
+      `Weekly review RLS exposed another owner's row: ${secondaryRead.response.status} ${secondaryRead.text}`,
+    );
+  }
+
+  const ownerDelete = await authenticatedRestRequest(
+    `weekly_reviews?id=eq.${reviewId}`,
+    ownerAccessToken,
+    { method: 'DELETE' },
+  );
+  if (ownerDelete.response.ok) {
+    throw new Error('Authenticated owner unexpectedly deleted a weekly review.');
+  }
+  const ownerPatch = await authenticatedRestRequest(
+    `weekly_reviews?id=eq.${reviewId}`,
+    ownerAccessToken,
+    { method: 'PATCH', body: { narrative: 'client rewrite' } },
+  );
+  if (ownerPatch.response.ok) {
+    throw new Error('Authenticated owner unexpectedly updated a weekly review.');
+  }
+  const ownerInsert = weeklyReviewRowForPeriod({
+    userId,
+    startsOn: addUtcDays(period.startsOn, -14),
+    review,
+    narrative: 'E2E authenticated insert must be rejected',
+  });
+  const ownerInsertResponse = await authenticatedRestRequest(
+    'weekly_reviews',
+    ownerAccessToken,
+    { method: 'POST', body: ownerInsert },
+  );
+  if (ownerInsertResponse.response.ok) {
+    throw new Error('Authenticated owner unexpectedly inserted a weekly review.');
+  }
+  await assertRows(
+    `weekly_reviews?select=id&id=eq.${ownerInsert.id}`,
+    (rows) => rows.length === 0,
+    'backend-owned weekly review rejects direct authenticated insert',
+  );
+  await assertRows(
+    `weekly_reviews?select=id&id=eq.${reviewId}`,
+    (rows) => rows.length === 1,
+    'backend-owned weekly review survives direct authenticated delete',
+  );
+
+  const crossOwnerHabitPatch = await authenticatedRestRequest(
+    `habits?id=eq.${habitId}`,
+    secondaryToken,
+    { method: 'PATCH', body: { target: expectedHabitTarget - 1 } },
+  );
+  if (
+    !crossOwnerHabitPatch.response.ok ||
+    crossOwnerHabitPatch.rows?.length !== 0
+  ) {
+    throw new Error(
+      `Cross-owner habit PATCH did not resolve to an empty RLS result: ${crossOwnerHabitPatch.response.status} ${crossOwnerHabitPatch.text}`,
+    );
+  }
+  await assertRows(
+    `habits?select=id,target&id=eq.${habitId}`,
+    (rows) =>
+      rows.length === 1 && rows[0].target === expectedHabitTarget,
+    'cross-owner weekly proposal target remains unchanged',
+  );
+}
+
+async function assertWeeklyReviewDatabaseConstraints({
+  userId,
+  period,
+  review,
+  manualProposal,
+}) {
+  const startsOn = addUtcDays(period.startsOn, -7);
+  const base = weeklyReviewRowForPeriod({
+    userId,
+    startsOn,
+    review,
+    narrative: 'E2E rejected weekly review constraint candidate',
+  });
+  await assertInsertRejected(
+    'weekly_reviews',
+    [
+      {
+        ...base,
+        id: crypto.randomUUID(),
+        source_fingerprint: 'A'.repeat(64),
+        provenance: {
+          ...base.provenance,
+          source_fingerprint: 'A'.repeat(64),
+        },
+      },
+    ],
+    'uppercase weekly review source fingerprint',
+    'weekly_reviews_source_fingerprint',
+  );
+  await assertInsertRejected(
+    'weekly_reviews',
+    [
+      {
+        ...base,
+        id: crypto.randomUUID(),
+        proposals: [manualProposal, manualProposal, manualProposal],
+      },
+    ],
+    'weekly review with more than two proposals',
+    'weekly_reviews_proposals_array',
+  );
+  await assertInsertRejected(
+    'weekly_reviews',
+    [
+      {
+        ...base,
+        id: crypto.randomUUID(),
+        evidence_refs: Array.from({ length: 41 }, (_, index) => ({
+          table: 'habits',
+          id: `bounded-evidence-${index}`,
+          field: 'updated_at',
+        })),
+      },
+    ],
+    'weekly review with more than forty evidence references',
+    'weekly_reviews_evidence_refs_array',
+  );
+  await assertInsertRejected(
+    'weekly_reviews',
+    [{ ...base, id: crypto.randomUUID(), narrative: '   ' }],
+    'blank weekly review narrative',
+    'weekly_reviews_narrative_length',
+  );
+  await assertInsertRejected(
+    'weekly_reviews',
+    [{ ...base, id: crypto.randomUUID(), data_quality: 'complete' }],
+    'unknown weekly review data quality',
+    'weekly_reviews_data_quality_check',
+  );
+  await assertInsertRejected(
+    'weekly_reviews',
+    [{ ...base, id: crypto.randomUUID(), facts: [] }],
+    'weekly review facts with a non-object shape',
+    'weekly_reviews_facts_object',
+  );
+  await assertInsertRejected(
+    'weekly_reviews',
+    [
+      {
+        ...base,
+        id: crypto.randomUUID(),
+        provenance: {
+          ...base.provenance,
+          source_fingerprint: 'b'.repeat(64),
+        },
+      },
+    ],
+    'weekly review with mismatched fingerprint provenance',
+    'weekly_reviews_provenance_object',
+  );
+  const { contract_version: _contractVersion, ...missingContract } =
+    base.provenance;
+  await assertInsertRejected(
+    'weekly_reviews',
+    [
+      {
+        ...base,
+        id: crypto.randomUUID(),
+        provenance: missingContract,
+      },
+    ],
+    'weekly review without provenance contract version',
+    'weekly_reviews_provenance_object',
+  );
+  await assertInsertRejected(
+    'weekly_reviews',
+    [
+      {
+        ...base,
+        id: crypto.randomUUID(),
+        provenance: {
+          ...base.provenance,
+          evidence_window: {
+            ...base.provenance.evidence_window,
+            starts_on: period.startsOn,
+            ends_on: period.endsOn,
+          },
+        },
+      },
+    ],
+    'weekly review with cross-period provenance window',
+    'weekly_reviews_provenance_object',
+  );
+  await assertInsertRejected(
+    'weekly_reviews',
+    [{ ...base, id: crypto.randomUUID(), period_key: '2026-W54' }],
+    'invalid ISO weekly review period',
+    'weekly_reviews_period_key_format',
+  );
+}
+
+function weeklyReviewRowForPeriod({ userId, startsOn, review, narrative }) {
+  const endsOn = addUtcDays(startsOn, 6);
+  return {
+    id: crypto.randomUUID(),
+    user_id: userId,
+    period_key: isoPeriodKey(startsOn),
+    week_start: startsOn,
+    week_end: endsOn,
+    timezone: 'Europe/Berlin',
+    data_quality: review.data_quality,
+    narrative,
+    facts: review.facts,
+    proposals: [],
+    evidence_refs: [],
+    provenance: {
+      ...review.provenance,
+      evidence_window: { starts_on: startsOn, ends_on: endsOn, days: 7 },
+    },
+    source_fingerprint: review.provenance.source_fingerprint,
+    generated_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+}
+
+async function authenticatedRestRequest(
+  path,
+  accessToken,
+  { method = 'GET', body } = {},
+) {
+  const response = await fetch(`${supabaseUrl}/rest/v1/${path}`, {
+    method,
+    headers: {
+      apikey: supabaseAnonKey,
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+      Prefer: 'return=representation',
+    },
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+  });
+  const text = await response.text();
+  let rows;
+  try {
+    rows = text.length === 0 ? [] : JSON.parse(text);
+  } catch (_) {
+    rows = null;
+  }
+  return { response, text, rows };
+}
+
+async function createConfirmedUserWithCredentials({
+  emailAddress,
+  passwordValue,
+  displayName,
+}) {
+  const response = await fetch(`${supabaseUrl}/auth/v1/admin/users`, {
+    method: 'POST',
+    headers: {
+      apikey: serviceRoleKey,
+      Authorization: `Bearer ${serviceRoleKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      email: emailAddress,
+      password: passwordValue,
+      email_confirm: true,
+      user_metadata: { display_name: displayName },
+    }),
+  });
+  if (!response.ok) {
+    throw new Error(
+      `Could not create additional local auth user: ${response.status} ${await response.text()}`,
+    );
+  }
+  return response.json();
+}
+
+async function signInCredentials({
+  emailAddress,
+  passwordValue,
+  context,
+}) {
+  const response = await fetch(
+    `${supabaseUrl}/auth/v1/token?grant_type=password`,
+    {
+      method: 'POST',
+      headers: {
+        apikey: supabaseAnonKey,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ email: emailAddress, password: passwordValue }),
+    },
+  );
+  if (!response.ok) {
+    throw new Error(
+      `${context} sign-in failed: ${response.status} ${await response.text()}`,
+    );
+  }
+  const accessToken = (await response.json()).access_token;
+  if (typeof accessToken !== 'string' || accessToken.length === 0) {
+    throw new Error(`${context} sign-in returned no access token.`);
+  }
+  return accessToken;
 }
 
 async function assertInsertRejected(

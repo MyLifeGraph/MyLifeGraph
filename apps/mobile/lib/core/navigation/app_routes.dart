@@ -11,6 +11,7 @@ class AppRoutes {
   static const morningCalibration = '/morning-calibration';
   static const habitCompletion = '/habit-completion';
   static const habitManagement = '/habits';
+  static const weeklyReview = '/weekly-review';
   static const alerts = '/alerts';
   static const notifications = '/notifications';
   static const dailyCheckIn = '/daily-check-in';

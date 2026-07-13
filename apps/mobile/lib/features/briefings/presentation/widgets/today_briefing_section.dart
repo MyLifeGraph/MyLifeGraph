@@ -497,7 +497,7 @@ String _commandLabel(ExecutableActionCommand command) => switch (command) {
       ExecutableActionCommand.completeTask => 'Complete task',
       ExecutableActionCommand.logHabit => 'Mark habit done',
       ExecutableActionCommand.startFocus => 'Start focus',
-      ExecutableActionCommand.reviewPlan => 'Plan review unavailable',
+      ExecutableActionCommand.reviewPlan => 'Review your week',
       ExecutableActionCommand.openCapture => 'Open calibration',
     };
 

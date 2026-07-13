@@ -152,6 +152,16 @@ recommendation/profile-date failure stages, continuation after one user's
 failure, and optional deterministic recommendation refresh with LLM wording
 disabled. The default scheduled path does not generate recommendations or call
 an LLM.
+Phase 8 tests cover strict `weekly-review-v1` request/response parsing,
+principal-derived ownership, profile-local completed ISO weeks across year/DST
+boundaries, read-only latest/period GET, idempotent same-row generation, and
+canonical source-fingerprint staleness. Fact tests keep completed/carried tasks,
+stable versus changed habit definitions, completed/skipped/missed/recovery-open/
+unknown opportunities, focus, recovery days, and feedback distinct. Repository
+tests require stable full pagination and exact user/date scoping. Proposal tests
+cap deterministic output at two, require matching `too_much` evidence before
+the initial weekly-target shrink rule, preserve Setup ownership, and never apply
+a user-owned mutation during generation.
 
 Current Flutter widget tests include:
 
@@ -249,9 +259,15 @@ Current Flutter widget tests include:
   no implicit target completion, recent history, and snapshot refresh.
 - Executable action-target tests cover every supported kind/command matrix,
   strict top-level/metadata shapes and scalar types, exact ids/dates/durations,
-  task/habit/focus/capture routing, explicit `review_plan` unavailability, and
+  task/habit/focus/capture routing, the real synced `review_plan` handler, and
   unsupported-command behavior. Dispatcher tests prove one typed handler per
   command, unavailable-before-handler behavior, and failure propagation.
+- Weekly Review tests cover strict nested parsing, `not_ready`/missing/current/
+  stale/error/local-demo states, latest GET versus deliberate generate/refresh,
+  separate weekly facts, the two-proposal cap, stale disabled controls, exact
+  before/after confirmation, cancel with zero writes, Setup deep-link without a
+  generic write, manual Habit V1 expected-timestamp application, and guest/mock
+  API isolation.
 
 These tests cover the default mock/guest product path. They do not prove real
 Supabase registration, RLS, or browser behavior.
@@ -302,7 +318,7 @@ supabase db reset
 Expected successful reset output applies migrations through:
 
 ```text
-20260712190000_phase_6_decision_feedback.sql
+20260712211500_phase_8_weekly_review_provenance_guard.sql
 ```
 
 Expected notices include skipped legacy CamelCase tables and already-existing
@@ -422,6 +438,19 @@ and one exact briefing identity, deterministic/no-LLM provenance, and exact
 source-snapshot id and timestamp linkage. A repeated scheduled request must
 process zero users and leave both rows and timestamps unchanged. The subsequent
 Dashboard path remains GET-only; the E2E scheduler token stays outside Flutter.
+
+The Phase 8 portion seeds one completed profile-local ISO week with exact task,
+manual and Setup-owned habit, habit-outcome, focus, daily-state, and
+decision-feedback rows. Latest GET must report missing without a write;
+deliberate generation must persist exactly one owner/period review whose facts,
+fingerprint, no-LLM provenance, and at-most-two proposals match the response.
+A repeated read remains write-free. Cancelling the before/after dialog changes
+nothing; confirming the eligible manual weekly-target shrink must preserve the
+habit identity/ownership/logs, use its exact expected timestamp, and make the
+old review stale. Setup-owned review navigation must not write a habit or goal.
+Deliberate refresh reuses the same weekly review identity. Authenticated REST
+assertions use a second principal to prove owner-only SELECT and rejection of
+direct review-table writes/cross-owner habit changes.
 
 The Setup assertions inspect exact `request_id`, base/revision, applied state,
 stable materialized ids, server ownership metadata, record counts, and the
@@ -607,26 +636,31 @@ The repository now contains browser E2E automation, but it still depends on a
 real Ubuntu Node.js 20+ installation, `npm`, Playwright browser installation,
 Docker access, and a real Ubuntu `supabase` CLI on `PATH`.
 
-The combined Phase 3/4/5/6/7 browser journey passed non-destructively in the
-2026-07-12 Phase 7 implementation checkout. Future changes must establish their own
-current-checkout result with the browser command above; use the `RESET_DB=true`
-form when proving the full migration chain from a fresh database. The journey
+The combined Phase 3/4/5/6/7/8 browser journey passed non-destructively in the
+2026-07-12 Phase 8 implementation checkout. Later changes must establish their
+own current-checkout result with the browser command above; use the
+`RESET_DB=true` form when proving the full migration chain from a fresh
+database. The journey
 includes committed-response-loss for habit/task create, habit
 outcome/undo, task completion/undo, and focus start/finish, plus negative
 lifecycle/range/active-target/weekday-cadence checks and terminal-focus
-`updated_at` mutation. It does not yet construct a second authenticated
-principal for an explicit cross-user target attempt or directly exercise
-restrict-delete FKs. It also does not seed more than one habit/log page to prove
+`updated_at` mutation. Phase 8 adds a second principal for weekly-review RLS and
+one cross-owner habit attempt; it still does not directly exercise restrict-
+delete FKs. It also does not seed more than one habit/log page to prove
 the browser pagination boundary or carry a focus session across local midnight
 to assert the refresh date in-browser. Backend repository tests separately
 cover more than 1,000 habit-log and focus-session rows. Do not infer the other
 paths merely from the same-user UI journey.
 
-Phase 7 targeted scheduled-preparation assertions passed as part of that
-non-destructive 2026-07-12 browser run. They verify only the local test stack and
-uniquely named E2E profile. They do not establish remote database state,
-deployed cron execution, production token configuration, or notification
-delivery.
+Phase 7 targeted scheduled-preparation and Phase 8 bounded weekly-review
+assertions passed as part of that non-destructive 2026-07-12 browser run. They
+verify only the local test stack and uniquely named E2E profile. They do not
+establish remote database state, deployed cron execution, production token
+configuration, weekly scheduling, notification delivery, or autonomous
+planning.
+
+The Phase 8 pass also does not establish complete task-transition history,
+historical habit-definition revisions, or remote RLS state.
 
 Known harmless local E2E output includes Chromium WebGL performance warnings.
 The FastAPI AI service must be healthy for the browser smoke to pass.

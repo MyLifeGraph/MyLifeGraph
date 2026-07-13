@@ -680,9 +680,10 @@ command, target, route, estimate, or metadata combinations. Their parsers also
 agree on unknown top-level fields, null/non-object metadata, explicit-null
 metadata fields, numeric coercion, exact ISO dates, focus duration/linkage, and
 command-specific metadata. A briefing must run the same strict validation
-before returning an action. `review_plan` is explicitly unavailable, and the
-reserved `recovery` kind has no executable command yet; neither may become an
-enabled no-op.
+before returning an action. Phase 8 now gives `review_plan` a real synced
+navigation handler to `/weekly-review`; dispatch still never generates or
+applies a proposal. The reserved `recovery` kind has no executable command yet
+and may not become an enabled no-op.
 
 Suggested endpoints:
 
@@ -1193,8 +1194,8 @@ Implemented:
   UTC, matching the Flutter/FastAPI fallback and refresh date.
 - Added parser-equivalent strict Flutter and FastAPI `executable-action-v1`
   validation, including explicit-null metadata-field rejection, and typed
-  Flutter dispatch. `review_plan` remains explicitly unavailable until bounded
-  planning exists.
+  Flutter dispatch. `review_plan` remained explicitly unavailable in Phase 3;
+  Phase 8 later supplies its bounded synced navigation surface.
 - Added explicit habit-outcome and focus-session snapshot summaries while
   paginating complete backend action windows in stably ordered 1,000-row pages,
   keeping the Phase 2 Daily State output unchanged, and leaving recommendation
@@ -1203,8 +1204,9 @@ Implemented:
 The browser E2E source injects response loss for habit/task create, habit
 outcome/undo, task completion/undo, and focus start/finish. Its negative writes
 include terminal-focus `updated_at` mutation. The combined Phase 3 through Phase
-7 journey passed non-destructively in the 2026-07-12 Phase 7 implementation
-checkout; later changes require a new pass.
+8 journey passed non-destructively in the 2026-07-12 Phase 8 implementation
+checkout. Later changes must establish their own current-checkout pass before
+claiming E2E.
 
 The complete object/command/validation/recovery contract is in
 `docs/phase-3-executable-actions-contract.md`.
@@ -1348,19 +1350,30 @@ Evaluation:
   local window, exact deep links, disabled/demo state, quiet hours, and
   sensitive-copy restrictions?
 
-### Phase 8: Weekly Review And Habit Adaptation
+### Phase 8: Weekly Review And Habit Adaptation (Implemented)
 
 Goal:
 
 - Help the user improve the system instead of merely accumulate history.
 
-Work:
+Implemented:
 
-- Summarize goal actions, task rollover, scheduled habit opportunities, recovery
-  days, and recommendation feedback.
-- Propose at most one or two plan or habit adaptations.
-- Let users keep, shrink, pause, replace, or archive habits and goals.
-- Require confirmation before applying changes.
+- One strict `weekly-review-v1` review is pinned to an explicit completed
+  profile-local ISO week. Latest/period GET remains read-only; deliberate POST
+  upserts one backend-owned derived identity.
+- Exact facts distinguish current durable completed and carried tasks,
+  completed/skipped/missed/unknown habit opportunities, focus, valid persisted
+  recovery days, and feedback. Known task-history and changed-cadence gaps remain
+  limitations instead of reconstructed events.
+- A canonical source fingerprint exposes stale evidence. Generation persists
+  only the review and at most two deterministic proposals; it never changes a
+  user-owned record or calls an LLM.
+- Manual Habit V1 shrink/pause/archive is available only after exact before/after
+  confirmation and the existing owner-scoped timestamp/readback command.
+  Setup-owned changes open Settings Setup. Keep is non-mutating; replacement,
+  defer, and goal/task/schedule changes remain staged.
+- `review_plan` opens the real authenticated weekly-review surface without
+  generating or applying by itself. Guest/mock remains local and review-free.
 
 Evaluation:
 
@@ -1487,8 +1500,13 @@ briefings idempotently, supports bounded `profile_ids`, and isolates per-user
 failures. It does not make Dashboard reads generate, send notifications, add a
 worker, or prove deployed cron wiring.
 
-The next implementation should be **Phase 8: Bounded Weekly Review And Habit
-Adaptation**. It should summarize explicit weekly facts, propose at most one or
-two changes, and require confirmation before applying them. Coach, calendar,
-broad autonomous changes, notification delivery, deployed scheduling, and LLM
-work remain separate later concerns.
+Phase 8 is implemented with bounded persisted ISO-week facts, at most two
+deterministic proposals, explicit freshness, Setup ownership, and confirmed
+manual Habit V1 adaptation only. It does not reconstruct missing task or habit
+definition history and does not make staged compound changes executable.
+
+The next implementation should be **Phase 9: Optional Integrations**. Begin with
+consented calendar read/import, visible provenance, staged time-block proposals,
+and disconnect/delete controls. Provider writes, Coach, broad autonomous
+changes, notification delivery, deployed scheduling, and LLM work remain
+separate later concerns.

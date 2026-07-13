@@ -372,6 +372,11 @@ void main() {
     expect(find.text('Add signal'), findsOneWidget);
     expect(find.text('Habit management'), findsNothing);
 
+    router.go(AppRoutes.weeklyReview);
+    await tester.pumpAndSettle();
+    expect(find.text('Latest check-in'), findsOneWidget);
+    expect(find.text('Weekly review'), findsNothing);
+
     await tester.tap(find.text('Settings'));
     await tester.pumpAndSettle();
 

@@ -143,6 +143,38 @@ void main() {
     );
     expect(find.text('Recommendations checked.'), findsNothing);
   });
+
+  testWidgets('weekly review entry is account-only', (tester) async {
+    await _pumpDashboard(
+      tester,
+      snapshot: Future.value(
+        DashboardSnapshot.empty(
+          origin: DashboardOrigin.localDemo,
+          loadedAt: DateTime.now(),
+        ),
+      ),
+      feed: Future.value(RecommendationFeed.demo(const [])),
+    );
+    expect(find.text('Review your week'), findsNothing);
+
+    await _pumpDashboard(
+      tester,
+      snapshot: Future.value(
+        DashboardSnapshot.empty(
+          origin: DashboardOrigin.account,
+          loadedAt: DateTime.now(),
+        ),
+      ),
+      feed: Future.value(RecommendationFeed.demo(const [])),
+      capabilities: const AppSurfaceCapabilities(
+        isLocalDemo: false,
+        canUseSyncedHabits: true,
+        canUseSyncedExecution: true,
+        canUseWeeklyReview: true,
+      ),
+    );
+    expect(find.text('Review your week'), findsOneWidget);
+  });
 }
 
 Future<RecommendationFeed> _failingFeed() async {
@@ -161,6 +193,10 @@ Future<void> _pumpDashboard(
   required Future<RecommendationFeed> feed,
   OptimizationService? optimizationService,
   SnapshotRefreshService? snapshotRefreshService,
+  AppSurfaceCapabilities capabilities = const AppSurfaceCapabilities(
+    isLocalDemo: true,
+    canUseSyncedHabits: false,
+  ),
 }) async {
   tester.view.physicalSize = const Size(1200, 1200);
   tester.view.devicePixelRatio = 1;
@@ -173,10 +209,7 @@ Future<void> _pumpDashboard(
     ProviderScope(
       overrides: [
         appSurfaceCapabilitiesProvider.overrideWithValue(
-          const AppSurfaceCapabilities(
-            isLocalDemo: true,
-            canUseSyncedHabits: false,
-          ),
+          capabilities,
         ),
         dashboardSnapshotProvider.overrideWith((ref) => snapshot),
         todayBriefingProvider.overrideWith(

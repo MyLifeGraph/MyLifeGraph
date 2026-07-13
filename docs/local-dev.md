@@ -268,7 +268,44 @@ curl -X POST http://localhost:8000/v1/feedback \
 the action. A deliberate later briefing generation applies only bounded,
 decayed context matches and reports the result under `feedback-ranking-v1`.
 
-`force=false` returns an already-current persisted briefing unchanged. Missing
+Phase 8 weekly review reads the latest completed profile-local ISO week without
+generation:
+
+```bash
+curl http://localhost:8000/v1/weekly-reviews/latest \
+  -H 'Authorization: Bearer <supabase_access_token>'
+```
+
+An explicit period read is also side-effect free:
+
+```bash
+curl http://localhost:8000/v1/weekly-reviews/2026-W28 \
+  -H 'Authorization: Bearer <supabase_access_token>'
+```
+
+Replace `2026-W28` with the `period_key` returned by `latest`; V1 accepts only
+the latest completed profile-local ISO week.
+
+Deliberately generate or refresh that completed week with:
+
+```bash
+curl -X POST http://localhost:8000/v1/weekly-reviews/generate \
+  -H 'Authorization: Bearer <supabase_access_token>' \
+  -H 'Content-Type: application/json' \
+  -d '{"period_key":"2026-W28","force":false}'
+```
+
+The generate request uses that same latest completed `period_key`.
+
+The response preserves `not_ready`, missing, current, or stale truth. Generation
+persists one backend-owned derived review and never applies its proposals. In
+Flutter, only an eligible manual Habit V1 shrink/pause/archive proposal can be
+confirmed through the existing exact timestamp/readback command. Setup-owned
+changes return to Setup; replace/defer and goal/task/schedule proposals remain
+staged. Guest/mock does not call this API or fabricate a local review.
+
+For the daily briefing endpoint, `force=false` returns an already-current
+persisted briefing unchanged. Missing
 or stale output refreshes the daily snapshot and upserts the same
 `(user_id, briefing_date)` identity. `force=true` deliberately recomputes it.
 
@@ -374,7 +411,19 @@ local schema to include:
 20260711120000_phase_3_executable_action_schema.sql
 ```
 
-That migration adds bounded task fields, explicit habit outcomes, and the real
+Weekly Review additionally requires:
+
+```text
+20260712210000_phase_8_weekly_reviews.sql
+20260712211500_phase_8_weekly_review_provenance_guard.sql
+```
+
+These migrations create forced-RLS backend-owned `weekly_reviews` persistence
+and require its deterministic provenance keys to match the source fingerprint.
+Authenticated users can read only their own review rows; only service role can
+write them.
+
+The earlier Phase 3 migration adds bounded task fields, explicit habit outcomes, and the real
 focus lifecycle. Its checks/triggers enforce exact task/focus shapes, lock and
 revalidate active selected-weekday habit eligibility and selected focus targets,
 reject every update to a terminal focus row, restrict linked-target deletion,
@@ -420,7 +469,8 @@ For local Supabase-backed app testing:
    create/edit/postpone/undo/complete/restore/cancel/restore, manual and
    Setup-owned habit complete/skip/undo, focus start/finish/abandon with an owned
    target, the decision-first Today briefing with deliberate adjustment,
-   Notifications, real Deep Work, and the
+   bounded Weekly Review with one cancelled and one confirmed manual Habit V1
+   proposal, Notifications, real Deep Work, and the
    gated Coach compatibility redirect.
 
 Do not infer remote Supabase state from local migrations. Verify the remote
@@ -620,9 +670,13 @@ The Phase 0C portion remains part of the same smoke: it verifies revisioned
 Setup ownership and retry/edit behavior, the service-role-only atomic apply RPC,
 manual-row preservation, profile projection, and concurrent same-request
 convergence before and after the capture journey. This describes the coverage
-implemented by `e2e/web/smoke.mjs`. The combined Phase 3 through Phase 7 path
-passed non-destructively in the 2026-07-12 Phase 7 implementation checkout; use
-the command above to establish the result again after later changes.
+implemented by `e2e/web/smoke.mjs`. The Phase 8 path adds read-only missing
+truth, deliberate generation, exact persisted weekly facts/proposals, confirmed
+manual Habit V1 adaptation, stale/refresh behavior, Setup non-mutation, and
+review-table RLS. The combined Phase 3 through Phase 8 path passed
+non-destructively in the 2026-07-12 Phase 8 implementation checkout. Use the
+command above to establish a new result after later changes; source coverage
+alone is not a pass.
 
 By default the script starts FastAPI on `http://127.0.0.1:8000`. Useful AI
 service overrides:

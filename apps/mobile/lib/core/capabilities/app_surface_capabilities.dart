@@ -10,11 +10,13 @@ class AppSurfaceCapabilities {
     required this.isLocalDemo,
     required this.canUseSyncedHabits,
     this.canUseSyncedExecution = false,
+    this.canUseWeeklyReview = false,
   });
 
   final bool isLocalDemo;
   final bool canUseSyncedHabits;
   final bool canUseSyncedExecution;
+  final bool canUseWeeklyReview;
 
   factory AppSurfaceCapabilities.forSession({
     required AppSession? session,
@@ -32,6 +34,7 @@ class AppSurfaceCapabilities {
       isLocalDemo: isLocalDemo,
       canUseSyncedHabits: canUseSyncedExecution,
       canUseSyncedExecution: canUseSyncedExecution,
+      canUseWeeklyReview: canUseSyncedExecution,
     );
   }
 }

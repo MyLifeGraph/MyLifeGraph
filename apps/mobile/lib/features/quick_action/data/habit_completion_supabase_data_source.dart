@@ -22,6 +22,9 @@ class HabitCompletionSupabaseDataSource {
     return habits.where((habit) => habit.isRelevantOn(today)).toList();
   }
 
+  Future<HabitV1> fetchOwnedHabit(String habitId) =>
+      _requireOwnedHabit(habitId);
+
   Future<List<HabitV1>> fetchHabits({
     bool activeOnly = false,
     bool excludeSetupManaged = false,

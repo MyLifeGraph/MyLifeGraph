@@ -56,31 +56,43 @@ typedef OpenCaptureActionHandler = Future<void> Function({
   String? source,
 });
 
+typedef ReviewPlanActionHandler = Future<void> Function({
+  required String actionId,
+  String? reviewId,
+  int? estimatedMinutes,
+  String? source,
+});
+
 class ExecutableActionDispatcher {
   const ExecutableActionDispatcher({
     required OpenTaskActionHandler openTask,
     required CompleteTaskActionHandler completeTask,
     required LogHabitActionHandler logHabit,
     required StartFocusActionHandler startFocus,
+    required ReviewPlanActionHandler reviewPlan,
     required OpenCaptureActionHandler openCapture,
   })  : _openTask = openTask,
         _completeTask = completeTask,
         _logHabit = logHabit,
         _startFocus = startFocus,
+        _reviewPlan = reviewPlan,
         _openCapture = openCapture;
 
   final OpenTaskActionHandler _openTask;
   final CompleteTaskActionHandler _completeTask;
   final LogHabitActionHandler _logHabit;
   final StartFocusActionHandler _startFocus;
+  final ReviewPlanActionHandler _reviewPlan;
   final OpenCaptureActionHandler _openCapture;
 
   Future<ExecutableActionDispatchResult> dispatch(
     ExecutableActionTarget target, {
     required bool canUseSyncedExecution,
+    bool canUseWeeklyReview = false,
   }) async {
     final availability = target.availability(
       canUseSyncedExecution: canUseSyncedExecution,
+      canUseWeeklyReview: canUseWeeklyReview,
     );
 
     switch (target.command) {
@@ -133,10 +145,15 @@ class ExecutableActionDispatcher {
           source: target.metadata['source'] as String?,
         );
       case ExecutableActionCommand.reviewPlan:
-        return ExecutableActionUnavailable(
+        final unavailable = _unavailable(target, availability);
+        if (unavailable != null) {
+          return unavailable;
+        }
+        await _reviewPlan(
           actionId: target.id,
-          command: target.command,
-          reason: availability.reason ?? 'Plan review is not available yet.',
+          reviewId: target.targetId,
+          estimatedMinutes: target.estimatedMinutes,
+          source: target.metadata['source'] as String?,
         );
       case ExecutableActionCommand.openCapture:
         final unavailable = _unavailable(target, availability);

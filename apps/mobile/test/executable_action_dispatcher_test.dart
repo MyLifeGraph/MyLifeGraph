@@ -168,7 +168,7 @@ void main() {
       expect(harness.callCount, 1);
     });
 
-    test('review_plan is explicitly unavailable and invokes no handler',
+    test('review_plan is unavailable before weekly review capability',
         () async {
       final harness = _DispatchHarness();
       final target = ExecutableActionTarget(
@@ -188,9 +188,39 @@ void main() {
       expect(result.command, ExecutableActionCommand.reviewPlan);
       expect(
         (result as ExecutableActionUnavailable).reason,
-        'Plan review is not available yet.',
+        'Weekly review requires a synced account.',
       );
       expect(harness.callCount, 0);
+    });
+
+    test('review_plan invokes only the typed weekly review handler', () async {
+      final harness = _DispatchHarness();
+      final target = ExecutableActionTarget(
+        id: 'review_plan:2026-W27',
+        kind: ExecutableActionKind.planning,
+        command: ExecutableActionCommand.reviewPlan,
+        targetId: 'review-1',
+        estimatedMinutes: 5,
+        metadata: const {'source': 'daily_briefing'},
+      );
+
+      final result = await harness.dispatcher.dispatch(
+        target,
+        canUseSyncedExecution: true,
+        canUseWeeklyReview: true,
+      );
+
+      expect(result, isA<ExecutableActionHandled>());
+      expect(
+        harness.reviewPlanCall,
+        (
+          actionId: 'review_plan:2026-W27',
+          reviewId: 'review-1',
+          estimatedMinutes: 5,
+          source: 'daily_briefing',
+        ),
+      );
+      expect(harness.callCount, 1);
     });
 
     test('synced commands return unavailable before invoking a handler',
@@ -306,6 +336,19 @@ class _DispatchHarness {
           source: source,
         );
       },
+      reviewPlan: ({
+        required String actionId,
+        String? reviewId,
+        int? estimatedMinutes,
+        String? source,
+      }) async {
+        reviewPlanCall = (
+          actionId: actionId,
+          reviewId: reviewId,
+          estimatedMinutes: estimatedMinutes,
+          source: source,
+        );
+      },
       openCapture: ({
         required String actionId,
         required ExecutableCaptureRoute route,
@@ -348,6 +391,12 @@ class _DispatchHarness {
   })? startFocusCall;
   ({
     String actionId,
+    String? reviewId,
+    int? estimatedMinutes,
+    String? source,
+  })? reviewPlanCall;
+  ({
+    String actionId,
     ExecutableCaptureRoute route,
     String? entryDate,
     String? source,
@@ -358,6 +407,7 @@ class _DispatchHarness {
         completeTaskCall,
         logHabitCall,
         startFocusCall,
+        reviewPlanCall,
         openCaptureCall,
       ].where((call) => call != null).length;
 }

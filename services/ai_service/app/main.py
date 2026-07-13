@@ -9,6 +9,7 @@ from app.api.routes import (
     recommendations,
     scheduled,
     snapshots,
+    weekly_reviews,
 )
 from app.core.config import settings
 
@@ -36,6 +37,7 @@ def create_app() -> FastAPI:
     app.include_router(briefings.router, prefix=settings.api_prefix)
     app.include_router(feedback.router, prefix=settings.api_prefix)
     app.include_router(scheduled.router, prefix=settings.api_prefix)
+    app.include_router(weekly_reviews.router, prefix=settings.api_prefix)
 
     return app
 

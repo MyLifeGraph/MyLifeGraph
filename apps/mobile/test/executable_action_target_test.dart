@@ -384,20 +384,25 @@ void main() {
   });
 
   group('ExecutableActionAvailability', () {
-    test('plan review is explicitly unavailable in every session mode', () {
+    test('plan review follows the explicit weekly review capability', () {
       final target = ExecutableActionTarget(
         id: 'review-plan',
         kind: ExecutableActionKind.planning,
         command: ExecutableActionCommand.reviewPlan,
       );
 
-      for (final canUseSyncedExecution in [false, true]) {
-        final availability = target.availability(
-          canUseSyncedExecution: canUseSyncedExecution,
-        );
-        expect(availability.isAvailable, isFalse);
-        expect(availability.reason, 'Plan review is not available yet.');
-      }
+      final unavailable = target.availability(
+        canUseSyncedExecution: true,
+      );
+      final available = target.availability(
+        canUseSyncedExecution: true,
+        canUseWeeklyReview: true,
+      );
+
+      expect(unavailable.isAvailable, isFalse);
+      expect(unavailable.reason, 'Weekly review requires a synced account.');
+      expect(available.isAvailable, isTrue);
+      expect(available.reason, isNull);
     });
 
     test('capture remains available without a synced account', () {

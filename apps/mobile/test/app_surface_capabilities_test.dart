@@ -13,6 +13,7 @@ void main() {
     expect(capabilities.isLocalDemo, isTrue);
     expect(capabilities.canUseSyncedHabits, isFalse);
     expect(capabilities.canUseSyncedExecution, isFalse);
+    expect(capabilities.canUseWeeklyReview, isFalse);
   });
 
   test('demo account remains local even with a Supabase client', () {
@@ -30,6 +31,7 @@ void main() {
     expect(capabilities.isLocalDemo, isTrue);
     expect(capabilities.canUseSyncedHabits, isFalse);
     expect(capabilities.canUseSyncedExecution, isFalse);
+    expect(capabilities.canUseWeeklyReview, isFalse);
   });
 
   test('authenticated account can use Supabase-backed habits', () {
@@ -44,6 +46,7 @@ void main() {
     expect(capabilities.isLocalDemo, isFalse);
     expect(capabilities.canUseSyncedHabits, isTrue);
     expect(capabilities.canUseSyncedExecution, isTrue);
+    expect(capabilities.canUseWeeklyReview, isTrue);
   });
 
   test('mock configuration never exposes synced habits', () {
@@ -58,6 +61,7 @@ void main() {
     expect(capabilities.isLocalDemo, isTrue);
     expect(capabilities.canUseSyncedHabits, isFalse);
     expect(capabilities.canUseSyncedExecution, isFalse);
+    expect(capabilities.canUseWeeklyReview, isFalse);
   });
 }
 

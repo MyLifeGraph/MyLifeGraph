@@ -187,14 +187,15 @@ Command compatibility:
 | `complete_task` | task plus task id | Execute typed task completion |
 | `log_habit` | habit plus habit id | Open or execute today's habit outcome |
 | `start_focus` | focus; optional owned task/habit context in bounded metadata | Open the real focus-session flow |
-| `review_plan` | planning, optional target | Explicitly unavailable until a bounded planning surface exists |
+| `review_plan` | planning, optional target | Phase 8 opens the real authenticated `/weekly-review` surface; dispatch itself never generates or applies |
 | `open_capture` | capture plus implemented route | Open Evening Shutdown or Morning Calibration only |
 
 Flutter's exhaustive `ExecutableActionDispatcher` accepts only an already
 validated target and delegates supported commands to injected, command-specific
-handlers. It returns an explicit unavailable result for `review_plan` and for
-synced commands outside a real authenticated session; it does not swallow
-handler failures.
+handlers. Phase 8 adds a typed `review_plan` navigation handler for a real
+authenticated synced session. Guest/mock and other unavailable capability
+states remain explicit, dispatch performs no generation or proposal mutation,
+and handler failures are not swallowed.
 
 The Flutter and FastAPI parsers intentionally enforce the same boundary:
 unknown top-level or metadata fields, null/non-object metadata, explicit-null
@@ -207,6 +208,10 @@ sides.
 An unknown command, invalid kind/target combination, unavailable capability,
 or invalid metadata value produces an explicit unsupported result. It never
 maps to a generic route or enabled no-op.
+
+The bounded planning surface and its mutation limits are defined in
+`docs/phase-8-weekly-review-contract.md`. Goal/task/schedule/replacement changes
+are not made executable merely because weekly review navigation exists.
 
 ## Refresh And Failure Semantics
 

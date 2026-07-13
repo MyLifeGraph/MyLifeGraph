@@ -82,6 +82,8 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
         onAddMorning: () => context.go(AppRoutes.morningCalibration),
         onOpenTodayHabits: () => context.go(AppRoutes.habitCompletion),
         onOpenFocus: () => context.go(AppRoutes.deepWork),
+        canUseWeeklyReview: capabilities.canUseWeeklyReview,
+        onOpenWeeklyReview: () => context.go(AppRoutes.weeklyReview),
         onRetryRecommendations: () {
           setState(() => _recommendationRefreshError = null);
           ref.invalidate(recommendationFeedProvider);
@@ -93,6 +95,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
           target,
           snapshot: data,
           canUseSyncedExecution: capabilities.canUseSyncedExecution,
+          canUseWeeklyReview: capabilities.canUseWeeklyReview,
         ),
         isSubmittingFeedback: _isSubmittingFeedback,
         feedbackError: _feedbackError,
@@ -251,6 +254,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
     ExecutableActionTarget target, {
     required DashboardSnapshot snapshot,
     required bool canUseSyncedExecution,
+    required bool canUseWeeklyReview,
   }) async {
     if (_executingBriefingActionIds.contains(target.id)) {
       return;
@@ -335,6 +339,14 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
             context.go('${AppRoutes.deepWork}$suffix');
           }
         },
+        reviewPlan: ({
+          required actionId,
+          reviewId,
+          estimatedMinutes,
+          source,
+        }) async {
+          if (mounted) context.go(AppRoutes.weeklyReview);
+        },
         openCapture: ({
           required actionId,
           required route,
@@ -349,6 +361,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
       final result = await dispatcher.dispatch(
         target,
         canUseSyncedExecution: canUseSyncedExecution,
+        canUseWeeklyReview: canUseWeeklyReview,
       );
       if (result is ExecutableActionUnavailable && mounted) {
         _showTaskMessage(result.reason);
@@ -645,6 +658,8 @@ class _DashboardHome extends StatelessWidget {
     required this.onAddMorning,
     required this.onOpenTodayHabits,
     required this.onOpenFocus,
+    required this.canUseWeeklyReview,
+    required this.onOpenWeeklyReview,
     required this.onRetryRecommendations,
     required this.onRefreshRecommendations,
     required this.onRetryBriefing,
@@ -684,6 +699,8 @@ class _DashboardHome extends StatelessWidget {
   final VoidCallback onAddMorning;
   final VoidCallback onOpenTodayHabits;
   final VoidCallback onOpenFocus;
+  final bool canUseWeeklyReview;
+  final VoidCallback onOpenWeeklyReview;
   final VoidCallback onRetryRecommendations;
   final VoidCallback onRefreshRecommendations;
   final VoidCallback onRetryBriefing;
@@ -760,6 +777,12 @@ class _DashboardHome extends StatelessWidget {
                             onFeedback: onSubmitFeedback,
                             onShowFeedbackHistory: onShowFeedbackHistory,
                           ),
+                          if (canUseWeeklyReview) ...[
+                            const SizedBox(height: AppSpacing.md),
+                            _WeeklyReviewEntryCard(
+                              onOpen: onOpenWeeklyReview,
+                            ),
+                          ],
                           const SizedBox(height: AppSpacing.xl),
                           _LatestCheckInCard(
                             snapshot: snapshot,
@@ -948,6 +971,31 @@ class _DashboardHeader extends StatelessWidget {
           icon: const Icon(Icons.settings_outlined),
         ),
       ],
+    );
+  }
+}
+
+class _WeeklyReviewEntryCard extends StatelessWidget {
+  const _WeeklyReviewEntryCard({required this.onOpen});
+
+  final VoidCallback onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    return AppCard(
+      padding: EdgeInsets.zero,
+      child: ListTile(
+        leading: Icon(
+          Icons.event_note_outlined,
+          color: Theme.of(context).colorScheme.primary,
+        ),
+        title: const Text('Review your week'),
+        subtitle: const Text(
+          'Completed, skipped, missed, carried, and recovery facts stay distinct.',
+        ),
+        trailing: const Icon(Icons.chevron_right),
+        onTap: onOpen,
+      ),
     );
   }
 }

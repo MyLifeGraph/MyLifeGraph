@@ -35,6 +35,8 @@ class MainShell extends ConsumerWidget {
         AppRoutes.quickAction,
       final path when path.startsWith(AppRoutes.dailyCheckIn) =>
         AppRoutes.quickAction,
+      final path when path.startsWith(AppRoutes.weeklyReview) =>
+        AppRoutes.dashboard,
       final path when path.startsWith(AppRoutes.deepWork) => AppRoutes.alerts,
       _ => currentPath,
     };
