@@ -11,7 +11,7 @@ sequence, see `docs/backend-roadmap.md`.
 Flutter app <-> Supabase Auth/Postgres
 Flutter app <-> FastAPI AI service
 Flutter app <-> local mock data and guest storage
-FastAPI -> local Codex CLI/OAuth (planned Phase 10 development adapter only)
+FastAPI -> local Codex CLI/OAuth (explicit Phase 10 development adapter only)
 ```
 
 The Flutter app is the main product surface. Supabase is the intended auth and
@@ -22,9 +22,12 @@ also owns deterministic user-state snapshot aggregation plus the protected
 scheduled preparation boundary for backend-generated daily state and briefings,
 the bounded deterministic weekly-review boundary, and the optional bounded
 read-only `.ics` import boundary.
-It does not currently invoke an LLM. Phase 10 plans one explicitly enabled
-development-only provider behind FastAPI; the CLI/OAuth process is not a new
-Flutter or Supabase connection.
+It also owns the bounded authenticated Coach boundary. Only a deliberate
+`POST /v1/coach/respond` may invoke a configured provider; capability, history,
+memory, Dashboard, capture, action, scheduler, recommendation, and weekly-review
+paths remain generation-free. The first real provider is explicitly enabled and
+development-only; the CLI/OAuth process is not a new Flutter or Supabase
+connection.
 
 ## Mobile App
 
@@ -42,7 +45,9 @@ The Flutter app uses feature-first clean architecture:
 State management is Riverpod. Navigation is GoRouter. The shell navigation maps
 to Dashboard, Insights, central quick-action, Notifications, and Settings.
 Guest/demo sessions receive one persistent `Local demo` banner. The canned
-Coach preview remains outside productive routing and redirects to Dashboard.
+Coach preview and direct Supabase message writer have been replaced by a typed
+FastAPI Coach surface at `/coach`; `/more` aliases that route. Guest/mock renders
+honest local unavailability and makes no Coach HTTP call.
 `/deep-work` now serves the real linked focus lifecycle only when synced
 execution is available; guest/demo sessions redirect to Quick Action.
 
@@ -78,6 +83,10 @@ habit, and focus commands from local guests and to validate route capabilities.
 Calendar import follows the same rule: a real authenticated account uses the
 FastAPI-backed integration source, while guest/mock renders an honest local
 state and makes no calendar API call.
+Coach follows it too: a static real-account capability permits the route, while
+the authenticated backend capability independently reports
+`disabled|unavailable|ready` and controls sending. Provider outage does not hide
+persisted history or memory controls.
 
 `USE_MOCK_DATA=true` wins over the presence of a Supabase client, access token,
 or authenticated profile. Setup, canonical check-in, Dashboard,
@@ -315,6 +324,12 @@ surface. The canonical application schema is now snake_case and centered on:
   `calendar_request_identities` registry prevents request reinterpretation
   across owners and operations without retaining content fingerprints. These
   tables remain separate from app-authored `schedule_items`.
+- `coach_requests` for message-free pending claims, retry/lease state, bounded
+  validated response/provenance, and deletion tombstones;
+  `coach_usage_events` for retained append-only per-request outcomes/counters;
+  and `coach_memory_selections` for explicit owner-scoped Coach use without
+  rewriting `memory_entries`. Completed turns use exactly one bounded user and
+  assistant `coach_messages` pair linked to the request.
 
 Legacy CamelCase tables such as `"User"`, `"DailyLog"`, and `"Task"` may still
 exist in older remote projects. The canonical migration copies data from those
@@ -343,6 +358,16 @@ Current responsibilities:
   import, disconnect, and imported-data deletion under `calendar-import-v1`.
   The service parses bounded caller-selected UTF-8 `.ics` text; it does not
   fetch arbitrary URLs, hold provider credentials, or write to a calendar.
+- Serve authenticated `coach-capabilities-v1`, `coach-request-v1`,
+  `coach-response-v1`, `coach-history-v1`, and
+  `coach-memory-selection-v1` endpoints. Only `POST /v1/coach/respond` can call
+  a provider; exact completed replay returns the persisted result without
+  another call.
+- Claim a request without storing its message, build at most 32 KiB of bounded
+  owner-scoped `coach-context-v1`, run deterministic safety boundaries, and
+  atomically persist a successful user/assistant pair, response manifest, and
+  retained usage event. Failed claims remain terminal; history deletion removes
+  content and tombstones requests without deleting usage or freeing budget.
 - Keep recommendation generation behind a service boundary.
 - Verify bearer tokens through an isolated auth verifier when Supabase backend
   settings are configured.
@@ -495,10 +520,10 @@ backend Supabase credentials. The repository still does not contain production
 credentials, and the live remote database must be inspected directly before
 making claims about deployed data.
 
-### Planned Phase 10 Local Model Boundary
+### Implemented Phase 10 Controlled Coach Boundary
 
-The locked Phase 10 implementation plan is
-`docs/phase-10-controlled-coach-plan.md`. Its first provider is intentionally a
+The exact Phase 10 contract is
+`docs/phase-10-controlled-coach-plan.md`. Its first real provider is intentionally a
 local test adapter, not a deployed service:
 
 ```text
@@ -540,9 +565,35 @@ no database credential, SQL/tool access, cross-user data, imported calendar
 content, or hidden free text. FastAPI attaches the exact used-data manifest;
 the model cannot invent provenance.
 
+Authenticated HTTP separates read/control paths from generation:
+`GET /v1/coach/capabilities`, `GET|DELETE /v1/coach/history`, and
+`GET /v1/coach/memories` plus explicit selection/deselection never call a model.
+`POST /v1/coach/respond` accepts one strict 2,000-code-point message with a
+retry-safe request id and `today` scope. One owner may have one live claim and,
+by default, 20 retained attempts per profile-local day. Successful completion
+atomically writes exactly one bounded user/assistant message pair and an
+append-only usage event. History deletion removes those messages and clears
+message fingerprints, responses, used-context manifests, and errors into
+tombstones. Bounded provider/model/prompt/context accounting metadata, usage
+events, and request identities remain, so deletion cannot reset budget or
+permit request-id reinterpretation.
+Memory selection is a separate projection capped at eight and does not rewrite
+Setup-owned or manual memory content.
+
 All standard tests use an injected fake provider. A live subscription smoke is
 explicitly opt-in and never part of CI, normal verification, or a claim about a
-different developer's account.
+different developer's account. The synthetic-context smoke completed on
+2026-07-13 with the explicitly requested `gpt-5.5` model (`1 passed`), without
+fallback and without logging the answer, prompt, or raw event stream. Real
+local PostgreSQL parallel lock smokes also completed without deadlock or
+timeout. Those results establish only this machine's provider path and local
+database concurrency contract. A focused Phase 10 fake-provider browser rerun
+and the subsequent full non-destructive local-Supabase journey also passed in
+the current checkout. A separate authenticated Flutter -> FastAPI ->
+`local_codex_oauth` -> same-user Codex CLI product-path turn also passed with
+explicit `gpt-5.5`, strict persisted provenance, and visible UI data-use truth.
+None of these checks establishes remote state, production readiness, or another
+developer's account.
 
 ## Security Posture
 
@@ -551,6 +602,11 @@ different developer's account.
 - Supabase service-role secrets are not used by the mobile app.
 - The atomic Setup apply RPC revokes execute from `public`, `anon`, and
   `authenticated`; only the FastAPI service-role client can invoke it.
+- Canonical profile identity and eligibility are backend-owned. Application
+  roles cannot insert/delete profiles, change `role` or `auth_provider`, or
+  write `onboarding_completed_at`; authorization reads only `profiles` and
+  never falls back to a mutable legacy `"User"` row. The service-role Intake
+  apply path retains the authority needed to project onboarding state.
 - Phase 3 preserves existing table RLS/grants. A locked habit trigger rejects
   cross-user, inactive, paused/archived/candidate, and unscheduled selected-
   weekday outcomes. Focus triggers reject invalid links and every update to a
@@ -568,16 +624,22 @@ different developer's account.
 - Production AI endpoints validate Supabase bearer tokens before reading user
   data or invoking privileged backend workflows when backend Supabase settings
   are configured.
-- Planned Phase 10 local Codex auth remains per-Linux-user CLI state. It must
+- Phase 10 local Codex auth remains per-Linux-user CLI state. It must
   never be copied into Flutter, Supabase, `.env`, Git, logs, fixtures, or a
   subprocess environment alongside backend service credentials.
+- Phase 10 Coach tables use forced RLS. Authenticated users may read only their
+  own validated message, memory, and selection projections; request, usage,
+  response, selection, and deletion mutations are service-role-only RPC work.
+  Pending claims contain only a message fingerprint, not the message itself.
 
 ## Known Gaps
 
-- Coach remains gated and redirects to Dashboard. Deep Work is no longer a
-  preview: it is available only to authenticated real accounts with synced
-  execution capability. Settings exposes read-only account data, session-only
-  theme, the durable Setup entry, optional Calendar Import entry, and sign-out.
+- Coach is now a typed FastAPI surface for authenticated real accounts, with
+  `/more` as a compatibility alias. Its backend capability may still report
+  disabled or unavailable, and guest/mock makes zero Coach HTTP calls. Deep
+  Work is available only to authenticated real accounts with synced execution
+  capability. Settings exposes read-only account data, session-only theme, the
+  durable Setup entry, optional Calendar Import and Coach entries, and sign-out.
 - Notifications are currently a read-only inbox. Original `type`, `priority`,
   read state, and supported `action_url` are shown; there is no mark-read command
   until the repository has a durable write contract. Phase 7 does not send
@@ -610,11 +672,11 @@ different developer's account.
 - The remote Production project may still contain legacy CamelCase tables until
   the canonical schema migration has been applied and verified.
 - The repository does not contain real Supabase credentials.
-- The FastAPI service is connected to Supabase-backed deterministic
-  recommendations, but no LLM/model provider is connected. Phase 10's planned
-  `local_codex_oauth` adapter remains unimplemented and development-only; it is
-  not evidence of a production provider, subscription entitlement, or server
-  deployment.
+- The only real-model adapter is `local_codex_oauth`, and it is disabled by
+  default, development-only, same-Linux-user, and deliberately tool-free. It is
+  not evidence of a production provider, subscription entitlement, universal
+  model availability, or server deployment. No API-key fallback or provider
+  failover exists.
 - Daily and weekly snapshot aggregation exists behind an authenticated backend
   endpoint, and daily capture plus task/habit/focus writes trigger daily refresh
   best-effort. The protected scheduled endpoint can prepare profile-local daily
@@ -632,3 +694,9 @@ different developer's account.
   current-checkout pass before claiming E2E.
 - Explicit local demo mode remains the no-credentials exploration path and is
   labeled throughout the shell.
+- The repository records one successful opt-in synthetic local Codex smoke for
+  this machine and `gpt-5.5`, one successful authenticated Flutter-to-live-
+  Codex product turn, plus focused and full current-checkout local browser
+  passes with the deterministic fake provider. Standard automation remains
+  fake-provider-only, and these checks do not establish remote state, another
+  developer's account, or production readiness.

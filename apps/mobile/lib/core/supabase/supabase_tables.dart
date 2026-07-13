@@ -7,7 +7,6 @@ class SupabaseTables {
   static const notifications = 'notifications';
   static const scheduleItems = 'schedule_items';
   static const aiInsights = 'ai_insights';
-  static const coachMessages = 'coach_messages';
   static const focusSessions = 'focus_sessions';
   static const memoryEntries = 'memory_entries';
   static const behavioralEvents = 'behavioral_events';

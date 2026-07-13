@@ -1,13 +1,73 @@
 # Phase 10 Controlled Coach Implementation Plan
 
-Status: planned, not implemented. Phase 9 is the current implementation
-checkpoint. This document fixes the intended Phase 10 boundary before model or
-Coach code is added.
+Status: implemented at the repository boundary. This document now records the
+locked Phase 10 contract and the separate verification limits. The opt-in
+synthetic local Codex provider smoke passed on 2026-07-13 with explicitly
+requested `gpt-5.5`. A focused Phase 10 fake-provider browser rerun and the
+subsequent full non-destructive local-Supabase journey also passed in the
+current checkout. The first full-product live-account acceptance also passed
+non-destructively on 2026-07-13 in the working tree based on `b8c7935`:
+authenticated Flutter -> FastAPI -> `local_codex_oauth` -> the same Linux
+user's logged-in Codex CLI -> validated and persisted `coach-response-v1`.
+
+## Implemented Boundary
+
+The current checkout includes:
+
+- strict authenticated capability, deliberate response, history/delete, and
+  memory-selection HTTP models and Flutter parsers;
+- a deterministic fake provider for standard tests and browser setup;
+- the development-only `local_codex_oauth` provider with fixed non-shell argv,
+  stdin prompt transport, per-request permission-`0700` workspace, ignored user
+  configuration/rules, read-only sandbox, strict schema, feature disabling,
+  allowlisted environment, bounded process I/O/events/time/concurrency, process-
+  group termination, sanitized errors, and unexpected tool-event rejection;
+- a deterministic 32 KiB `coach-context-v1` builder over owner-scoped current
+  state, briefing, active goals/tasks/habits/focus, only a current weekly review,
+  up to eight explicitly selected eligible memories, and up to six completed
+  turns, with an exact source/count/freshness manifest;
+- deterministic urgent-risk provider bypass and post-provider safety/
+  uncertainty checks;
+- `coach_requests`, `coach_usage_events`, and `coach_memory_selections`, plus
+  request-linked `coach_messages`, forced RLS/grant hardening, and service-role-
+  only atomic claim/complete/fail/select/delete RPCs;
+- a follow-up owner-first advisory-lock wrapper around claim/complete/fail,
+  aligned with history deletion so concurrent lifecycle paths do not acquire
+  owner and request/row locks in inverse order;
+- follow-up database guards that persist whether safety copy bypassed or
+  replaced a provider response, make canonical profile identity/role authority
+  backend-owned, remove legacy-role fallback and authenticated profile delete,
+  and reserve onboarding eligibility projection for the backend Intake RPC; and
+- the typed `/coach` Flutter surface, `/more` compatibility alias, visible
+  provider/model/prompt/context/data-use truth, preserved exact retry drafts,
+  review-only suggestions, explicit memory selection, and conversation deletion.
+
+Pending claims store no message, only its fingerprint. Successful completion
+atomically writes the full bounded user/assistant pair. Conversation deletion
+removes messages and request content, leaves content-free request tombstones,
+and retains append-only usage, so it does not reset the daily attempt budget or
+allow request-id reinterpretation.
+
+The additive hardening chain after the base Coach schema is:
+
+- `20260713213000_phase_10_coach_lock_order_guard.sql` aligns public
+  claim/complete/fail wrappers and history deletion on the owner-first lock;
+- `20260713220000_phase_10_coach_safety_provenance_guard.sql` requires exact
+  persisted `provider_called` provenance for model and deterministic-safety
+  responses;
+- `20260713223000_phase_10_profile_privilege_guard.sql` blocks application-role
+  profile insertion and `role`/`auth_provider` mutation while preserving
+  bounded non-identity profile edits;
+- `20260713224500_phase_10_role_authority_guard.sql` removes legacy `"User"`
+  fallback from role authority and revokes authenticated profile deletion; and
+- `20260713230000_phase_10_onboarding_eligibility_guard.sql` revokes
+  authenticated `onboarding_completed_at` updates and keeps that projection
+  behind service-role/atomic Intake apply authority.
 
 ## Outcome
 
-Phase 10 should make one real, authenticated Coach conversation locally
-testable without an OpenAI API key. During development, FastAPI may invoke the
+Phase 10 makes an authenticated Coach conversation locally testable without an
+OpenAI API key. During development, FastAPI may invoke the
 Codex CLI that is already installed and authenticated for the current Linux or
 WSL user. That user's own ChatGPT subscription-backed Codex login supplies the
 model access.
@@ -17,7 +77,7 @@ future deployed service must use a separately approved server-side provider
 and credential contract. The Flutter app, Supabase, repository, and browser
 must never receive or copy Codex OAuth credentials.
 
-The first slice is deliberately narrow:
+The implemented slice is deliberately narrow:
 
 - one explicit user submit to an authenticated Coach endpoint;
 - one bounded `coach-context-v1` package built by FastAPI;
@@ -83,7 +143,7 @@ Do not run the service as root merely to reach another user's auth files.
 
 ## Local Configuration Contract
 
-The implementation should add these backend-only settings. They must not be
+The implementation adds these backend-only settings. They must not be
 passed to Flutter as Dart defines:
 
 ```env
@@ -162,9 +222,10 @@ real subscription call part of standard verification or CI.
 
 ## Provider Invocation Contract
 
-Implement a provider interface independent of Codex, then add
-`LocalCodexCoachProvider`. Tests use a fake provider; only an explicit local
-smoke uses the real CLI.
+The provider interface is independent of Codex.
+`LocalCodexCoachProvider` is the only real-model adapter; tests use a fake
+provider/process runner, while only an explicit per-machine request may use the
+real CLI.
 
 The subprocess wrapper must:
 
@@ -211,7 +272,7 @@ described as a security control.
 
 ## HTTP Contract
 
-Add an authenticated, side-effect-free capability read:
+The authenticated, model-call-free capability read is:
 
 ```text
 GET /v1/coach/capabilities
@@ -222,7 +283,7 @@ provider mode, configured model request, limits, and a sanitized reason code.
 It must not return account identity, OAuth details, filesystem paths, or token
 content. Capability checks must not make a model call.
 
-Add one deliberate response endpoint:
+The one deliberate response endpoint is:
 
 ```text
 POST /v1/coach/respond
@@ -279,7 +340,8 @@ FastAPI attaches request identity and provenance that the model cannot invent:
     "model_source": "cli_default|explicit",
     "prompt_version": "controlled-coach-prompt-v1",
     "context_version": "coach-context-v1",
-    "generated_at": "RFC3339 UTC"
+    "generated_at": "RFC3339 UTC",
+    "provider_called": true
   }
 }
 ```
@@ -290,9 +352,14 @@ the first slice. Invalid, truncated, unknown-field, non-JSON, or oversized
 model output is an unavailable response, never partially rendered as trusted
 Coach content.
 
+For `safety_redirect`, `provenance.provider_called` distinguishes the
+deterministic pre-provider bypass (`false`) from backend safety copy that
+replaces an unsafe provider result (`true`). The model cannot set either the
+provenance source or this call truth.
+
 ## Context Contract: Full Reach, Minimal Disclosure
 
-The desired personalization is not a full database dump. FastAPI owns a
+The implemented personalization is not a full database dump. FastAPI owns a
 read-only `CoachContextRepository` that may reach relevant canonical tables for
 the bearer-derived owner, then builds a deterministic compact package. The LLM
 cannot query Supabase itself.
@@ -331,6 +398,12 @@ User text, task titles, goal titles, and memory content are untrusted data, not
 system instructions. Serialize them as typed JSON inside explicit data
 delimiters and keep application instructions outside that data envelope.
 
+The current memory-selection repository excludes every `type=preference` row.
+Intake's hidden context note and coaching-style memory share that type without a
+stable sensitivity discriminator, so Phase 10 does not guess from titles or
+content. The structured coaching preference comes from the bounded onboarding
+snapshot projection instead.
+
 Future Coach modes may add bounded historical retrieval across more of the life
 graph. They must add an explicit scope, source allowlist, limits, consent where
 needed, and user-visible data-use manifest. Do not solve this with vector search
@@ -343,22 +416,25 @@ Coach memory and chat history are separate:
 - Setup-owned memory remains owned by revisioned Settings Setup. Coach may
   reference it only after a separate user selection; toggling Coach use must not
   rewrite Setup metadata or transfer ownership.
-- Add a separate owner-scoped memory-selection projection if needed instead of
-  storing a flag inside metadata that Setup apply replaces.
+- `coach_memory_selections` is the separate owner-scoped projection; no flag is
+  stored inside metadata that Setup apply replaces.
 - The user can inspect every selected memory and remove it from Coach context.
   Editing/deleting Setup-owned content routes to Setup; future manual Coach
   memory needs its own explicit edit/delete contract.
 - Phase 10 does not extract memory candidates from conversation and does not
   silently update strength, evidence, or `last_seen_at`.
 
-The first implementation may persist validated user/assistant turns in
-`coach_messages`, but it must first add a retry-safe turn identity and bounded
-backend-owned metadata/provenance contract. Flutter must stop inserting canned
-user or assistant rows directly. Authenticated owners may read and delete their
-history; model/provider writes go through FastAPI. Define and expose a clear
-delete-conversation action. Do not persist the assembled prompt, copied
-snapshot, or raw CLI event stream. Persist only the message, compact context
-manifest, validated response metadata, and usage counters needed for audit.
+The implementation persists validated user/assistant turns in
+`coach_messages` under a retry-safe request identity and bounded backend-owned
+response/provenance contract. Flutter no longer inserts canned user or
+assistant rows directly. Authenticated owners read history through FastAPI and
+delete it through the explicit body-free endpoint; model/provider writes go
+through FastAPI. The assembled prompt, copied snapshot, and raw CLI event stream
+are not persisted. A pending claim stores only a message fingerprint, and
+successful atomic completion stores the bounded pair, compact context manifest,
+validated response metadata, and usage counters. Delete removes message/
+response content while retaining content-free request tombstones and append-only
+usage.
 
 `--ephemeral` prevents this application invocation from deliberately creating a
 resumable Codex session. It does not by itself define OpenAI service retention,
@@ -407,10 +483,10 @@ an honest local-unavailable Coach state and makes zero backend/model calls.
 
 ## Flutter Slice
 
-Replace the currently gated canned Coach implementation rather than merely
-removing the route redirect.
+The gated canned Coach implementation and direct Supabase writer are replaced
+rather than merely removing the route redirect.
 
-The first usable surface should:
+The first usable surface:
 
 - be reachable only for an authenticated real account when capabilities are
   ready;
@@ -430,7 +506,7 @@ The existing `MorePage` canned string and `CoachSupabaseService.addMessage`
 path are not an implementation foundation. Remove or replace them so they
 cannot be accidentally ungated.
 
-## Implementation Order
+## Implementation Order Used
 
 1. Freeze strict Python and Dart request/response/context models and the model
    output JSON schema.
@@ -473,20 +549,64 @@ or a real Codex login. Provide a fake executable/provider fixture that proves:
 - Flutter guest/mock isolation, honest unavailable/error states, preserved
   draft, provenance/data-use display, and no direct Supabase Coach write.
 
-The existing browser journey should use the deterministic fake provider. A
-separate command or marker such as `RUN_LOCAL_CODEX_SMOKE=true` may enable a
-manual real-subscription smoke, but it must be skipped by default, avoid seeded
-sensitive content, print no prompt or CLI event stream, and report only a
-sanitized pass/fail/provider/model summary.
+The browser journey is configured to use the deterministic fake provider.
+`services/ai_service/tests/test_local_codex_smoke.py` is the separate
+real-subscription smoke; it is skipped unless `RUN_LOCAL_CODEX_SMOKE=true`, uses
+only synthetic context, and must print no prompt or CLI event stream. On
+2026-07-13 that smoke completed against the explicitly requested `gpt-5.5`
+model (`1 passed`), with no fallback and no answer, prompt, or raw event stream
+logged. The result is specific to that machine, CLI, login, and account.
+
+The follow-up lock-order migration also passed real local PostgreSQL parallel
+claim/completion/deletion smokes: the operations converged to the exact message,
+usage, and deletion outcomes without deadlock or timeout.
+
+Browser verification passed in two layers on 2026-07-13. First,
+`E2E_PHASE10_ONLY=true` with the existing `E2E_RUN_ID=1783945829` repeated the
+Coach UI/API/RLS journey as a focused diagnostic. Then the full non-destructive
+current-checkout command ran against local Supabase with the deterministic fake
+provider and reported
+`E2E browser smoke passed for e2e-1783947134@example.test`. The focused mode
+requires an existing eligible E2E principal and omits the earlier product
+phases; it is not a replacement for the full run.
+
+The previously open first live-account product-path criterion passed on
+2026-07-13 with that existing onboarded local E2E principal. FastAPI ran with
+`COACH_PROVIDER=local_codex_oauth`, the fake provider disabled, and explicit
+`LOCAL_CODEX_MODEL=gpt-5.5`; Flutter ran with `USE_MOCK_DATA=false`. The UI
+authenticated, reported the provider ready, deliberately sent one request, and
+rendered the validated answer plus expanded `Data used` and provider/model
+truth. The response recorded `source=model`,
+`provider=local_codex_oauth`, `provider_called=true`, the exact prompt/context
+versions, normal safety, and medium uncertainty. The CLI did not emit a
+reliable `model_reported` field, so that value remained `null`; the exact
+configured request remained `gpt-5.5` with no fallback.
+
+The used-context manifest included profile `1/1`, daily snapshot `1/1`, stale
+daily briefing `1/1`, goals `2/2`, tasks `2/2`, habits `2/2`, and focus sessions
+`3/3`. It excluded the stale weekly review (`0/1`) and had no selected memory or
+prior completed turn (`0/0` each). The authenticated history endpoint returned
+the exact persisted turn. The harness validated reply bounds and UI rendering
+without printing the question, assembled prompt, answer, raw CLI events,
+stderr, account identity, token, path, `.env` value, or Supabase key.
+
+Focused Python and Flutter tests plus migration contract tests exist in the
+checkout, but source coverage is not a pass claim. Record actual commands and
+results only after they run in the current checkout.
 
 ## Phase 10 Acceptance Criteria
 
-Phase 10's first slice is complete only when:
+The repository implementation covers the contract below, and the first
+end-to-end live-account criterion is now verified on this machine. The
+synthetic provider smoke alone did not establish that result; the separate
+Flutter/FastAPI product-path run recorded above did. One live-account criterion
+remains open, so Phase 10's full multi-developer acceptance is not complete:
 
-- a real authenticated local user can deliberately receive one validated Coach
-  answer through their own logged-in Codex CLI without an API key;
-- another Linux user can clone the repo, log in with their own eligible account,
-  and use the same documented setup without copied credentials;
+- **Verified on this machine, 2026-07-13:** a real authenticated local user can
+  deliberately receive one validated Coach answer through their own logged-in
+  Codex CLI without an API key;
+- **Open:** another Linux user can clone the repo, log in with their own eligible
+  account, and use the same documented setup without copied credentials;
 - disabled, missing-login, unavailable-model, timeout, invalid-output, and
   account-limit states are honest and recoverable;
 - the user can see which compact product sources and memories were used;

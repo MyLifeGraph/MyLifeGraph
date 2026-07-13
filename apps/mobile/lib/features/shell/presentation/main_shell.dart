@@ -38,6 +38,7 @@ class MainShell extends ConsumerWidget {
       final path when path.startsWith(AppRoutes.weeklyReview) =>
         AppRoutes.dashboard,
       final path when path.startsWith(AppRoutes.deepWork) => AppRoutes.alerts,
+      final path when path.startsWith(AppRoutes.coach) => AppRoutes.settings,
       _ => currentPath,
     };
     final currentIndex = _routes.indexWhere(

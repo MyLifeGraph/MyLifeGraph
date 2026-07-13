@@ -12,6 +12,7 @@ class AppSurfaceCapabilities {
     this.canUseSyncedExecution = false,
     this.canUseWeeklyReview = false,
     this.canUseCalendarIntegration = false,
+    this.canAccessCoachBackend = false,
   });
 
   final bool isLocalDemo;
@@ -19,16 +20,21 @@ class AppSurfaceCapabilities {
   final bool canUseSyncedExecution;
   final bool canUseWeeklyReview;
   final bool canUseCalendarIntegration;
+  final bool canAccessCoachBackend;
 
   factory AppSurfaceCapabilities.forSession({
     required AppSession? session,
     required bool useMockData,
     required bool hasSupabaseClient,
   }) {
+    final profile = session?.profile;
+    final authProvider = profile?.authProvider.trim().toLowerCase();
     final isLocalDemo = useMockData ||
         session?.isGuestSession == true ||
-        session?.profile.authProvider == 'guest' ||
-        session?.profile.email.toLowerCase() == 'demo@personal-coach.local';
+        profile?.role == AppRole.guest ||
+        authProvider == 'guest' ||
+        authProvider == 'anonymous' ||
+        profile?.email.toLowerCase() == 'demo@personal-coach.local';
 
     final canUseSyncedExecution =
         !isLocalDemo && session?.isAuthenticated == true && hasSupabaseClient;
@@ -38,6 +44,7 @@ class AppSurfaceCapabilities {
       canUseSyncedExecution: canUseSyncedExecution,
       canUseWeeklyReview: canUseSyncedExecution,
       canUseCalendarIntegration: canUseSyncedExecution,
+      canAccessCoachBackend: canUseSyncedExecution,
     );
   }
 }

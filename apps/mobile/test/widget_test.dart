@@ -361,7 +361,20 @@ void main() {
     );
     router.go(AppRoutes.coach);
     await tester.pumpAndSettle();
-    expect(find.text('Latest check-in'), findsOneWidget);
+    expect(find.text('Coach'), findsOneWidget);
+    expect(find.text('Coach unavailable'), findsOneWidget);
+    expect(find.text('Ask Coach'), findsNWidgets(2));
+    expect(
+      tester
+          .widget<TextField>(find.byKey(const Key('coach-message-field')))
+          .enabled,
+      isFalse,
+    );
+
+    router.go(AppRoutes.more);
+    await tester.pumpAndSettle();
+    expect(router.routeInformationProvider.value.uri.path, AppRoutes.coach);
+    expect(find.text('Coach unavailable'), findsOneWidget);
 
     router.go(AppRoutes.deepWork);
     await tester.pumpAndSettle();
@@ -397,6 +410,7 @@ void main() {
     expect(find.text('Sign out'), findsOneWidget);
     expect(find.text('Setup and commitments'), findsOneWidget);
     expect(find.text('Calendar import (optional)'), findsOneWidget);
+    expect(find.text('Coach'), findsOneWidget);
     expect(find.text('Export data'), findsNothing);
     expect(find.text('Alert rules'), findsNothing);
     expect(find.text('Coach behavior'), findsNothing);

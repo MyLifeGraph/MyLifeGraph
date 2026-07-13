@@ -59,6 +59,7 @@ databases may still contain legacy CamelCase tables such as `"User"`,
 - `daily_briefings`, `decision_feedback`, `weekly_reviews`
 - `calendar_connections`, `calendar_imports`, `calendar_events`
 - `calendar_request_identities`
+- `coach_requests`, `coach_usage_events`, `coach_memory_selections`
 
 The migration
 `supabase/migrations/20260618170000_create_canonical_app_schema.sql` creates the
@@ -121,6 +122,37 @@ calendar create/import/disconnect/delete, changes application conflicts to
 PostgREST `PT409`, and permits import replay only while that import is still the
 connected source's current projection. The registry stores no file or content
 fingerprint and is service-role insert/select only with forced RLS.
+The migration
+`supabase/migrations/20260713200000_phase_10_controlled_coach.sql` adds the
+retry-safe Coach request ledger, append-only usage ledger, explicit memory
+selection projection, and bounded request-linked message pairs. It hardens
+`coach_messages` and `memory_entries` to authenticated owner reads with
+backend-owned mutations, forces RLS on the Coach tables, and exposes only
+service-role claim/complete/fail/selection/history-delete RPCs. Conversation
+deletion removes message content and tombstones request content while retaining
+usage rows and request identities, so deletion cannot reset the daily budget or
+reinterpret an old request id.
+The follow-up migration
+`supabase/migrations/20260713213000_phase_10_coach_lock_order_guard.sql`
+wraps Coach claim, complete, and fail with the same owner advisory lock that
+history deletion takes first. The renamed inner RPC bodies are uncallable by
+application roles, including `service_role`; only the public wrappers remain
+service-role executable. The consistent owner-before-request/row lock order
+removes the inverse ordering between concurrent claim/completion/deletion paths.
+The migration
+`supabase/migrations/20260713220000_phase_10_coach_safety_provenance_guard.sql`
+extends the strict persisted response contract with backend-owned
+`provider_called` truth so a deterministic safety redirect records whether it
+bypassed the provider or replaced a provider result. The migrations
+`supabase/migrations/20260713223000_phase_10_profile_privilege_guard.sql` and
+`supabase/migrations/20260713224500_phase_10_role_authority_guard.sql` make
+canonical profile identity and authorization backend-owned: application roles
+cannot insert a profile, change `role`/`auth_provider`, delete the canonical
+profile, or gain authority from a legacy `"User"` fallback. The migration
+`supabase/migrations/20260713230000_phase_10_onboarding_eligibility_guard.sql`
+also removes authenticated write authority over
+`profiles.onboarding_completed_at`; only the backend-owned Intake apply path
+may advance that eligibility projection.
 
 ## Important Docs
 
@@ -142,9 +174,9 @@ fingerprint and is service-role insert/select only with forced RLS.
 - `docs/phase-9-calendar-import-contract.md` - implemented explicit consent,
   bounded `.ics` reconciliation, imported/read-only provenance, and separate
   disconnect/local-delete contract.
-- `docs/phase-10-controlled-coach-plan.md` - locked implementation plan for the
-  first bounded Coach contract and the development-only subscription-backed
-  local Codex OAuth adapter.
+- `docs/phase-10-controlled-coach-plan.md` - implemented first bounded Coach
+  contract and the development-only subscription-backed local Codex OAuth
+  adapter, including its separate live-verification boundary.
 - `README.md` - high-level project overview.
 
 ## Next Implementation Direction
@@ -190,11 +222,11 @@ Read `docs/backend-roadmap.md`,
 contracts plus the Phase 9 calendar contract and Phase 10 Coach plan before
 planning the next backend, briefing, dashboard, integration, or agent workflow.
 
-Do not jump straight to broad LLM integration, vector search, autonomous
-background agents, or unreviewed provider writes. The next product slice is
-Phase 10 Controlled Coach, beginning only with a bounded authenticated
-explanation/context/budget boundary and staged suggestions. Its first test
-provider is deliberately `local_codex_oauth`: FastAPI may invoke the current
+Phase 10 Controlled Coach is implemented at the repository boundary. It adds a
+bounded authenticated explanation/context/budget contract, explicit memory
+selection, persisted validated history, retained usage accounting, and at most
+one review-only staged suggestion. Its first real-model provider is deliberately
+`local_codex_oauth`: FastAPI may invoke the current
 Linux/WSL user's explicitly enabled, already authenticated Codex CLI without an
 API key, while OAuth state stays outside Flutter, Supabase, Git, and application
 logs. This adapter is local-development-only; another developer must run their
@@ -203,7 +235,14 @@ every Plus/Pro account. Prefer `gpt-5.5` for the normal Coach because this is a
 general conversational reasoning/structured-output workflow, not a coding-agent
 task. Do not silently fall back to a Codex/Spark model; an unavailable preferred
 model is honest configuration, and another developer may explicitly select a
-model their account exposes. Live calendar provider OAuth/sync/writes, a
+model their account exposes. Standard automation uses the deterministic fake
+provider and never requires Codex, OAuth, or a network call. A real-model smoke
+is explicitly opt-in and must not be claimed without a recorded current-machine
+run.
+
+Do not expand this boundary into broad LLM integration, vector search,
+autonomous background agents, model-controlled tools, unreviewed provider
+writes, or automatic memory extraction. Live calendar provider OAuth/sync/writes, a
 deployable LLM provider, deployed scheduling, and notification delivery still
 require their own directly verified contracts.
 Phase 0A, Honest Capture, is
@@ -348,6 +387,19 @@ local events/history while preserving every `schedule_items` row. Guest/mock is
 zero-call. There is no provider OAuth/token, URL fetch, RRULE engine, provider
 write, background sync, LLM processing, or automatic calendar-derived action.
 
+Phase 10, Controlled Coach, is implemented through strict authenticated
+`coach-request-v1`, `coach-response-v1`, `coach-capabilities-v1`,
+`coach-history-v1`, and `coach-memory-selection-v1` boundaries. `/coach` uses
+FastAPI only for a real authenticated account; `/more` is an alias. Guest/mock
+is zero-call and shows honest local unavailability. FastAPI builds at most
+32 KiB of owner-scoped `coach-context-v1` data from current state, briefing,
+active facts, a current weekly review, explicitly selected eligible memory, and
+up to six completed turns. Imported calendar content, hidden capture/intake
+free text, credentials, and cross-user rows are excluded. Capability, history,
+and memory reads never call a model; every response is a deliberate, budgeted
+send. Urgent safety may bypass the provider, and no suggestion can execute or
+mutate product state.
+
 FastAPI-backed browser E2E coverage for revisioned Setup ownership/retry/edit,
 concurrent same-request convergence, post-intake recommendations, exact Phase 2
 Daily State recomputation, daily snapshot refresh, deliberate dashboard
@@ -375,6 +427,24 @@ disconnect-retains, local delete, schedule preservation, and integration-table
 RLS. The combined Phase 3/4/5/6/7/8/9 browser journey passed non-destructively
 in the 2026-07-13 Phase 9 implementation checkout. Later changes must still
 establish their own current-checkout pass before claiming E2E.
+Phase 10 source uses only the deterministic fake provider for deliberate send,
+replay/conflict, safety bypass, exact persistence, memory selection, history
+delete/tombstones, ownership/RLS, UI provenance, and guest zero-call assertions.
+The opt-in synthetic `local_codex_oauth` smoke completed on 2026-07-13 against
+the explicitly requested `gpt-5.5` model (`1 passed`), with no fallback and no
+answer, prompt, or raw event stream logged. Real local PostgreSQL parallel lock
+smokes also completed without deadlock or timeout and converged the
+claim/completion/deletion outcomes. A focused fake-provider Phase 10 browser
+rerun and the subsequent full non-destructive browser journey both passed on
+the current checkout against local Supabase; the full run reported
+`E2E browser smoke passed for e2e-1783947134@example.test`. These checks
+establish only this machine's local/provider boundaries, not remote Supabase,
+production readiness, or a second developer's account. A separate authenticated
+Flutter -> FastAPI -> `local_codex_oauth` -> same-user Codex CLI live turn also
+passed non-destructively on 2026-07-13 with explicit `gpt-5.5`, strict validated
+and persisted response provenance, visible UI data-use/provider truth, and no
+question/prompt/answer/raw-event logging. The different-Linux-user clone/login
+acceptance remains open.
 
 The implemented post-intake refresh is backend-only and best-effort:
 
@@ -457,7 +527,7 @@ you actually intend to run `supabase db reset`.
 `supabase db reset` must complete through:
 
 ```text
-20260713143000_phase_9_calendar_request_identity_guard.sql
+20260713230000_phase_10_onboarding_eligibility_guard.sql
 ```
 
 Expected local reset notices include skipped legacy CamelCase tables and
@@ -535,6 +605,9 @@ Manual smoke test after schema or Supabase-client changes:
   target automatically.
 - Open dashboard.
 - Open notifications.
+- Open Coach with a real local account and confirm capability, history, and
+  memory reads do not generate. Use the fake provider for ordinary automated
+  smoke; enable `local_codex_oauth` only for a deliberate per-machine check.
 
 The browser smoke path is automated through Playwright in `scripts/e2e_web.sh`.
 The widget tests still cover the faster guest auth, guest onboarding, and guest
@@ -616,6 +689,18 @@ npm install
 npx playwright install chromium
 FLUTTER_BIN=/home/gregor/tools/flutter/bin/flutter bash scripts/e2e_web.sh
 ```
+
+For a focused Phase 10 diagnosis only, reuse an existing eligible E2E principal:
+
+```bash
+E2E_PHASE10_ONLY=true \
+E2E_RUN_ID=<existing-e2e-run-id> \
+FLUTTER_BIN=/home/gregor/tools/flutter/bin/flutter \
+bash scripts/e2e_web.sh
+```
+
+That mode resets and repeats only the existing user's Coach assertions. It
+requires the prior E2E user and never substitutes for a full browser run.
 
 Browser E2E also requires real Ubuntu Node.js 20+ and npm. Windows `npm`/`npx`
 shims are not sufficient inside this WSL project.

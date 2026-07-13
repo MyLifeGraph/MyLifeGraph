@@ -76,11 +76,12 @@ cd services/ai_service
 Use `python -m pytest` from an environment with `services/ai_service`
 requirements installed if the local `.venv` does not exist.
 
-Phase 10 is not implemented yet. Its locked verification design is that every
-normal FastAPI, Flutter, Supabase, and browser check uses an injected fake Coach
-provider. Standard verification must never depend on a Codex installation,
-ChatGPT subscription, OAuth login, live model, or external network call. See
-`docs/phase-10-controlled-coach-plan.md`.
+Phase 10 follows that locked separation: every normal FastAPI, Flutter,
+Supabase, and browser check uses an injected deterministic fake Coach provider.
+Standard verification must never depend on a Codex installation, ChatGPT
+subscription, OAuth login, live model, or external network call. The
+development-only `local_codex_oauth` adapter is covered with fake process
+runners. See `docs/phase-10-controlled-coach-plan.md`.
 
 FastAPI tests cover authenticated Setup/Intake, deterministic recommendations,
 and the snapshot aggregator endpoint. Setup coverage includes principal-derived
@@ -180,6 +181,27 @@ read-only GET, exact body-free delete, disconnect retention, local imported-data
 deletion, schedule preservation, global cross-owner/operation request identity,
 reliable `PT409` conflicts, forced-RLS owner reads, and rejection of
 authenticated direct or cross-owner writes.
+Phase 10 focused backend source coverage is split across strict model/API,
+service, migration, and local-provider tests. It covers exact request/error
+shapes and bearer-derived ownership; completed replay without context/provider;
+public in-progress/conflict codes; missing-state uncertainty; deterministic
+urgent safety bypass; unexpected provider failure terminalization; ambiguous
+atomic completion; retained request-count budgets; message-free request claims;
+exact completed message pairs; service-only memory selection; history
+tombstones with retained usage; and authenticated mutation denial. The local
+provider tests use fake runners to assert fixed argv, stdin-only prompt data,
+allowlisted child environment, temporary-directory cleanup, explicit model
+truth with no fallback, and rejection of tool/command/file events. This source
+coverage is distinct from the opt-in live-Codex pass recorded below.
+The follow-up migration contract test also checks that public
+claim/complete/fail wrappers acquire the owner advisory lock before calling
+their ungranted inner bodies, matching history-delete lock order. Additional
+migration tests require exact provider-call safety provenance, backend-owned
+profile identity fields, canonical-only role authority, rejected authenticated
+profile deletion, and backend-owned onboarding eligibility. Real local
+PostgreSQL parallel claim/completion/deletion smokes completed on 2026-07-13
+without deadlock or timeout and converged on the expected message, usage, and
+deletion outcomes.
 
 Current Flutter widget tests include:
 
@@ -239,8 +261,9 @@ Current Flutter widget tests include:
   provenance and structured context, Morning energy precedence, honest
   empty/error states, local source labels, and the absence of former proxy
   metrics.
-- Capability, Settings, and notification tests cover gated Coach, real synced
-  Deep Work versus guest/mock redirect, unavailable guest/mock execution,
+- Capability, Settings, and notification tests cover the real-account Coach
+  route plus guest/mock zero-call boundary, real synced Deep Work versus
+  guest/mock redirect, unavailable guest/mock execution,
   persistent local-demo label, the strict `action_url` allowlist, original
   notification fields/read state, and separate real empty/error states.
 - The Snapshot refresh service posts `POST /v1/snapshots/generate` with bearer
@@ -292,6 +315,13 @@ Current Flutter widget tests include:
   imported/read-only source labels, stable pagination, event-local timezone and
   all-day rendering, no event mutation controls, and the distinct disconnect,
   retained-data, delete, empty, and error states.
+- Controlled Coach tests cover strict capability/request/response/history/
+  memory parsing; exact bearer-authenticated GET/POST/DELETE calls; guest/mock
+  zero HTTP; timeout-aware exact retry identity and preserved drafts; duplicate
+  submit prevention; distinct unavailable/rate-limit/error states; visible
+  uncertainty, safety, provider/model/prompt/context provenance and `Data used`
+  counts; review-only suggestions; memory selection/Setup routing; and confirmed
+  conversation deletion without a direct Supabase Coach write.
 
 These tests cover the default mock/guest product path. They do not prove real
 Supabase registration, RLS, or browser behavior.
@@ -342,7 +372,7 @@ supabase db reset
 Expected successful reset output applies migrations through:
 
 ```text
-20260712211500_phase_8_weekly_review_provenance_guard.sql
+20260713230000_phase_10_onboarding_eligibility_guard.sql
 ```
 
 Expected notices include skipped legacy CamelCase tables and already-existing
@@ -386,6 +416,23 @@ the repository's local Supabase stack and skips `supabase db reset`. The smoke
 still writes a uniquely named local Auth user and its test rows. Do not set
 `RESET_DB=true` unless recreating the local database is explicitly intended.
 
+After a full or partially completed run has already created and onboarded its
+E2E principal, Phase 10 can be repeated narrowly for diagnosis:
+
+```bash
+E2E_PHASE10_ONLY=true \
+E2E_RUN_ID=<existing-e2e-run-id> \
+FLUTTER_BIN=/path/to/flutter \
+bash scripts/e2e_web.sh
+```
+
+This mode signs in to the existing `e2e-<run-id>@example.test` principal,
+resets only its Coach E2E state, and repeats the fake-provider Coach UI/API/RLS
+assertions. It does not create the prerequisite principal or exercise Setup,
+capture, executable actions, briefing, feedback, weekly review, or calendar
+import. Treat it as a focused diagnosis/repetition path, never as a substitute
+for the full command.
+
 For a fresh local database before the browser run:
 
 ```bash
@@ -411,7 +458,9 @@ The script:
 3. Reads `API_URL`, `ANON_KEY`, and `SERVICE_ROLE_KEY` from
    `supabase status -o env` without printing key values.
 4. Starts the FastAPI AI service on `127.0.0.1:8000` by default with backend
-   local Supabase settings plus a run-scoped scheduled-refresh token.
+   local Supabase settings, a run-scoped scheduled-refresh token, and
+   `COACH_PROVIDER=fake` plus `COACH_FAKE_PROVIDER_ENABLED=true`. Standard E2E
+   never contacts a live Codex account.
 5. Starts Flutter Web on `127.0.0.1:7357` with `USE_MOCK_DATA=false` and
    `AI_SERVICE_BASE_URL` pointing at the local FastAPI service.
 6. Passes the same token only to the Node assertion process and runs
@@ -489,6 +538,18 @@ DELETE rejects a body. A second principal checks owner-only visibility and
 rejected direct/cross-owner writes. Guest/mock coverage remains zero-call.
 The complete combined browser command passed these assertions non-destructively
 in the 2026-07-13 Phase 9 implementation checkout.
+
+The Phase 10 source portion uses only the deterministic fake provider. It is
+designed to assert read-only capability/history/memory calls, explicit memory
+selection, one deliberate bounded response, exact persisted message/request/
+usage identity, same-id replay without another durable turn, conflicting-id
+rejection, deterministic safety bypass, visible UI provenance and review-only
+suggestion, conversation deletion with retained tombstones/usage, owner-only
+reads and rejected authenticated mutations, plus guest/mock zero Coach calls.
+On 2026-07-13 a focused non-reset run with `E2E_RUN_ID=1783945829` passed. The
+subsequent full current-checkout command also passed non-destructively against
+local Supabase with the deterministic fake provider and reported
+`E2E browser smoke passed for e2e-1783947134@example.test`.
 
 The Setup assertions inspect exact `request_id`, base/revision, applied state,
 stable materialized ids, server ownership metadata, record counts, and the
@@ -570,9 +631,10 @@ selected-weekday habit. A refreshed daily snapshot must contain the explicit
 habit/focus input counts and neutral summaries while preserving the Phase 2
 Daily State, and observed task/habit/focus writes must make no
 recommendation-generate request.
-The smoke then uses deliberate recommendation refresh, opens
-Notifications, verifies real Deep Work and the gated Coach route, and checks the
-explicit payloads of manual snapshot/recommendation requests.
+The smoke then uses deliberate recommendation refresh, opens Notifications,
+exercises the Controlled Coach journey against the deterministic fake provider,
+verifies real Deep Work, and checks the explicit payloads of manual snapshot/
+recommendation requests. Source coverage is not a current-checkout pass.
 
 These assertions are present in `e2e/web/smoke.mjs`; run one of the commands in
 this section to establish pass/fail for the current checkout. Documentation of
@@ -639,24 +701,31 @@ On browser failure, Playwright saves a screenshot named:
 
 `.tools/` is ignored by git.
 
-## Planned Phase 10 Provider Verification
+## Phase 10 Provider Verification
 
-When Phase 10 is implemented, add two strictly separate paths:
+Phase 10 keeps two strictly separate paths:
 
-1. The default deterministic path uses a fake provider/executable and runs in
-   pytest plus the normal browser journey. It must assert exact fixed argv,
-   stdin-only prompt transport, temporary-directory cleanup, allowlisted child
-   environment with no Supabase/application secrets, mandatory tool-feature
-   disabling, provider unavailability when tool-free mode cannot be proven,
-   rejection of unexpected tool events, strict JSON output, timeout/process
-   termination, sanitized errors, owner scoping, context caps, imported-
-   calendar/free-text exclusions, retry/budget behavior, memory/RLS, safety,
-   Flutter states, and zero hidden calls.
-2. A manual opt-in smoke such as `RUN_LOCAL_CODEX_SMOKE=true` may invoke the
-   current Linux user's logged-in Codex CLI. It is skipped by default, uses no
-   sensitive seeded content, and prints only a sanitized pass/fail plus provider
-   and truthful requested/reported model fields. It must not print prompts,
-   OAuth/account data, paths, raw JSON events, stderr, or tokens.
+1. The default deterministic path uses a fake provider/process runner in
+   pytest, Flutter tests, and the configured browser environment. It asserts
+   strict HTTP/models, request replay, safety, memory/history behavior, fixed
+   argv, stdin-only prompt transport, temporary-directory cleanup, an
+   allowlisted environment, explicit model truth, and unsafe tool-event
+   rejection. Before a full boundary claim, the combined suites must also prove
+   no application secret reaches the child, mandatory feature disabling and
+   unavailable tool-free state, strict output/timeout/process termination,
+   sanitized errors, owner scoping, context caps/exclusions, retry/budget,
+   memory/RLS, Flutter states, and zero hidden calls.
+2. `services/ai_service/tests/test_local_codex_smoke.py` is the deliberately
+   separate per-machine real-model smoke. It is skipped unless
+   `RUN_LOCAL_CODEX_SMOKE=true`, uses only synthetic context, and must print no
+   prompts, OAuth/account data, paths, raw JSON events, stderr, or tokens. Run
+   it only with the explicit local provider settings and an existing login:
+
+```bash
+cd services/ai_service
+RUN_LOCAL_CODEX_SMOKE=true ./.venv/bin/python -m pytest -q \
+  tests/test_local_codex_smoke.py
+```
 
 The opt-in smoke proves only the exact machine, CLI version, account, and model
 tested at that time. It does not prove availability for another developer's
@@ -664,9 +733,36 @@ Plus/Pro account and is not evidence of production readiness. A missing login,
 unavailable model, rate/account limit, invalid output, or timeout is an honest
 smoke failure, never a reason to add an API-key or model fallback silently.
 
-Do not add the planned smoke command to the verification-level table until the
-script/test marker actually exists. Keep the detailed plan and this runbook in
-sync when implementation lands.
+Recorded local result on 2026-07-13: the synthetic-context smoke completed
+against the explicitly requested `gpt-5.5` model (`1 passed`), with no fallback
+and no answer, prompt, OAuth/account data, or raw event stream logged.
+This does not replace the fake-provider browser journey or satisfy the separate
+another-developer/login acceptance check.
+
+Recorded full-product local result on 2026-07-13 in the working tree based on
+`b8c7935`: an existing onboarded local E2E principal authenticated through
+Flutter Web, loaded a ready `local_codex_oauth` capability from FastAPI, and
+deliberately received one validated and persisted `coach-response-v1` through
+the same Linux user's logged-in Codex CLI. The configured request was exactly
+`gpt-5.5`, no fake provider or fallback was enabled, and persisted provenance
+reported `source=model`, `provider_called=true`,
+`controlled-coach-prompt-v1`, and `coach-context-v1`. The CLI did not provide a
+reliable selected-model event, so `model_reported` truthfully remained `null`.
+Flutter rendered the response, expanded `Data used`, and expanded provider/model
+truth; authenticated history returned the exact turn. The harness logged only
+sanitized contract/provenance/count results, never the question, assembled
+prompt, answer, raw event stream, stderr, account identity, path, token, `.env`
+value, or Supabase key.
+
+That live manifest included current profile and daily snapshot; a stale daily
+briefing; current goals, tasks, habits, and focus sessions; and explicitly
+omitted the stale weekly review. No memory was selected and no previous
+completed turn entered context. This proves the first local live-account
+product-path criterion on this machine only. The separate clone/setup/login
+acceptance with another Linux user and their own eligible account remains open.
+
+Keep the smoke out of the standard verification-level table and CI. It is an
+explicit account/network action, not a prerequisite for deterministic checks.
 
 ## Local Tool State
 
@@ -709,11 +805,13 @@ The repository now contains browser E2E automation, but it still depends on a
 real Ubuntu Node.js 20+ installation, `npm`, Playwright browser installation,
 Docker access, and a real Ubuntu `supabase` CLI on `PATH`.
 
-The combined Phase 3/4/5/6/7/8/9 browser journey passed non-destructively in the
-2026-07-13 Phase 9 implementation checkout. Later changes must establish their
-own current-checkout result with the browser command above; use the
-`RESET_DB=true` form when proving the full migration chain from a fresh
-database. The journey
+The combined Phase 3/4/5/6/7/8/9 browser journey first passed in the Phase 9
+implementation checkout. A focused Phase 10 run and the subsequent full
+Phase 3-through-10 journey passed non-destructively against local Supabase in
+the 2026-07-13 current checkout. Later changes must establish their own full
+result with the browser command above; the focused mode is diagnostic only, and
+the `RESET_DB=true` form is reserved for proving the migration chain from a
+fresh database. The full journey
 includes committed-response-loss for habit/task create, habit
 outcome/undo, task completion/undo, and focus start/finish, plus negative
 lifecycle/range/active-target/weekday-cadence checks and terminal-focus
@@ -740,9 +838,16 @@ uses selected local `.ics` bytes and does not establish provider OAuth, token
 refresh/revocation, arbitrary URL fetch, incremental/background sync, provider
 writes, mobile-native file-picker behavior, or remote RLS state.
 
-Phase 10 still has no provider or Coach verification in the current checkout.
-The planned local Codex OAuth adapter, fake-provider suite, and opt-in live smoke
-must not be inferred from this documentation alone.
+Phase 10 has focused fake-provider/process-runner, strict contract, service,
+migration, repository, controller, and widget tests in the checkout. Its
+focused browser path and the subsequent full fake-provider browser journey
+passed locally in this checkout. The development-only local Codex OAuth
+adapter's opt-in synthetic-context smoke and the separate authenticated
+Flutter-to-live-Codex product path also passed on this machine with explicit
+`gpt-5.5`; these results establish neither remote state, another account's
+availability, nor production readiness. Multi-developer acceptance still needs
+one different Linux user to clone, authenticate their own eligible account, and
+complete the documented path without copied credentials.
 
 Known harmless local E2E output includes Chromium WebGL performance warnings.
 The FastAPI AI service must be healthy for the browser smoke to pass.

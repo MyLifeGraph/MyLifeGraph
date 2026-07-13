@@ -58,6 +58,29 @@ class ApiClient {
     }
   }
 
+  Future<Map<String, dynamic>> postJsonWithTimeout(
+    String path, {
+    required Duration receiveTimeout,
+    Map<String, dynamic>? body,
+    Map<String, String>? headers,
+    CancelToken? cancelToken,
+  }) async {
+    try {
+      final response = await _dio.post<Map<String, dynamic>>(
+        path,
+        data: body ?? <String, dynamic>{},
+        options: Options(
+          headers: headers,
+          receiveTimeout: receiveTimeout,
+        ),
+        cancelToken: cancelToken,
+      );
+      return response.data ?? <String, dynamic>{};
+    } on DioException catch (error) {
+      throw AppException('Network request failed', cause: error);
+    }
+  }
+
   Future<Map<String, dynamic>> deleteJson(
     String path, {
     Map<String, String>? headers,

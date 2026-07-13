@@ -78,17 +78,17 @@ Supabase is only initialized when both `SUPABASE_URL` and
 `USE_MOCK_DATA=true` forces product data surfaces to local/demo sources even
 when an authenticated Supabase session exists. Use `false` for real Setup,
 Evening/Morning capture, Dashboard, Recommendations, Insights, Notifications,
-synced tasks/habits/focus sessions, and snapshot refresh behavior. Mock/demo
+synced tasks/habits/focus sessions, Controlled Coach, and snapshot refresh
+behavior. Mock/demo
 auth boot skips remote profile access and overlays the locally applied Setup
 name/completion state, so local Setup survives a browser reload.
 
 For authenticated real accounts, successful Evening/Morning writes refresh the
-backend Daily State best-effort. That snapshot may classify a deterministic
-Daily Mode, but the current Flutter surface does not display a Today plan or
-generate recommendations. Morning Calibration therefore describes only what it
-does locally: it records current state and does not generate recommendations or
-create or change a plan. Guest/mock capture remains local and makes no snapshot
-request.
+backend Daily State best-effort. The decision-first Dashboard reads a separately
+persisted deterministic Today briefing with GET-only normal load; capture itself
+does not generate recommendations or create/change a plan. Morning Calibration
+therefore describes only what that save does. Guest/mock capture remains local
+and makes no snapshot request.
 
 ## Auth Modes
 
@@ -164,16 +164,22 @@ and Phase 3 does not rank a briefing or call an LLM. See
 - `/daily-check-in` (redirects to Evening Shutdown)
 - `/deep-work` (real focus lifecycle for authenticated real accounts; local
   guest/demo redirects to Quick Action)
-- `/coach` (compatibility redirect to `/dashboard`; preview is gated)
+- `/coach` (typed Controlled Coach for authenticated real accounts; guest/mock
+  shows local unavailability with zero Coach HTTP calls)
+- `/more` (compatibility alias to `/coach`)
 - `/settings`
 
-Phase 10 will replace the gated canned `MorePage`/direct Supabase message path
-with a typed authenticated FastAPI Coach boundary. Flutter will not handle the
-developer's Codex OAuth login or receive any model credential; it will only show
-the backend's honest local-provider capability, answer, provenance, data-use,
-memory, and failure states. Guest/mock will remain zero-call. See
-`../../docs/phase-10-controlled-coach-plan.md`; none of that provider behavior
-is active in the current checkout.
+Phase 10 replaces the gated canned `MorePage`/direct Supabase message path with
+a typed authenticated FastAPI Coach boundary. Flutter does not handle the
+developer's Codex OAuth login or receive any model credential. It loads
+capability, validated history, and eligible memory without generating; sends
+only a strict deliberate `coach-request-v1`; and shows uncertainty, safety,
+provider/model/prompt/context provenance, exact `Data used` counts/freshness,
+and at most one review-only suggestion. Memory selection/deselection is explicit
+and underlying Setup/manual content stays unchanged. Failed/ambiguous sends keep
+the draft and exact retry identity when needed; double submit is disabled.
+Conversation deletion is explicit. Guest/mock remains zero-call. See
+`../../docs/phase-10-controlled-coach-plan.md`.
 
 ## Verify
 
@@ -195,7 +201,10 @@ merge, persistence, retry, and readback; source-aware dashboard/recommendation
 states; route capability gates; durable Settings Setup entry; and strict
 notification action routing. Focused domain tests now cover strict action-target
 parsing, task validation/undo, all Habit V1 cadence/outcome calculations, and
-focus lifecycle invariants. Browser E2E additionally covers authenticated
+focus lifecycle invariants. Controlled Coach tests cover strict nested parsing,
+authenticated request methods/bodies/timeouts, guest/mock zero HTTP, controller
+retry/cancellation, capability/error/rate-limit states, visible provenance/data
+use, memory control, and conversation deletion. Browser E2E additionally covers authenticated
 Setup revisions,
 identity/ownership-safe reconciliation, exact Phase 1 capture metadata and
 deduplicated linked signals, authenticated target-date refreshes, exact Phase 2
@@ -204,7 +213,15 @@ task/habit/focus journeys now include exact rows, committed-response-loss cases
 for habit/task create, habit outcome/undo, task completion/undo, and focus
 start/finish, plus negative lifecycle/range/cadence and terminal-focus
 `updated_at` assertions in `e2e/web/smoke.mjs`. They must not be claimed as
-passed until the current-checkout run succeeds.
+passed in a later checkout until that checkout's full run succeeds. In the
+2026-07-13 current checkout, a focused Phase 10 rerun and the subsequent full
+non-destructive local browser journey passed with the fake provider. The
+focused mode is diagnostic only. A separate authenticated Flutter-to-FastAPI-to-
+`local_codex_oauth` live turn also passed on this machine with explicit
+`gpt-5.5`, validated UI rendering and provenance, and persisted authenticated
+history; no question, prompt, or answer content was logged. Another Linux
+user's independent clone/login acceptance remains open. See
+`../../docs/verification.md`.
 
 Browser E2E lives at the repository root:
 

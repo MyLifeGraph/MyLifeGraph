@@ -115,10 +115,13 @@ if [[ "$AI_SERVICE_START" == "true" ]]; then
   cd "$ROOT_DIR/services/ai_service"
   APP_ENV=development \
   API_PREFIX=/v1 \
+  USE_MOCK_DATA=false \
   ALLOWED_ORIGINS="$APP_URL,http://localhost:$PORT" \
   SUPABASE_URL="$api_url" \
   SUPABASE_SERVICE_ROLE_KEY="$local_service_role_key" \
   SCHEDULED_REFRESH_TOKEN="$SCHEDULED_REFRESH_TOKEN" \
+  COACH_PROVIDER=fake \
+  COACH_FAKE_PROVIDER_ENABLED=true \
   "$AI_SERVICE_PYTHON" -m uvicorn app.main:app \
     --host "$AI_SERVICE_HOST" \
     --port "$AI_SERVICE_PORT" \

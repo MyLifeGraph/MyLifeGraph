@@ -12,9 +12,9 @@ does not assume any user-local Codex skills.
 - Optional: Supabase CLI and Docker for local Supabase work. Install the real
   Supabase CLI so `supabase --version` works in the Ubuntu shell; do not rely on
   a repo-local binary. Confirm Docker with `docker --version`.
-- Planned Phase 10 live-model smoke only: a real Codex CLI installed in the
-  same Linux/WSL user account that runs FastAPI. Standard development and tests
-  do not require Codex or a ChatGPT login.
+- Optional Phase 10 real-model local path only: a real Codex CLI installed in
+  the same Linux/WSL user account that runs FastAPI. Standard development and
+  tests use the fake provider and do not require Codex or a ChatGPT login.
 
 If Node.js, npm, or Supabase CLI are installed through `nvm`, remember that
 non-interactive agent shells may not source nvm automatically. In that case,
@@ -432,16 +432,14 @@ calls an LLM, normal Dashboard loads remain read-only GETs, and Phase 7 sends no
 notifications. This repository does not contain deployed cron wiring; the
 endpoint and local commands alone are not a production scheduling claim.
 
-## Planned Phase 10 Local Codex Provider
+## Phase 10 Controlled Coach
 
-This section records the next-slice runbook; the provider and Coach endpoints
-are **not implemented in the current checkout**. The exact contract is
-`docs/phase-10-controlled-coach-plan.md`.
-
-Phase 10's first real-model test should use the developer's existing Codex CLI
-OAuth login rather than an OpenAI API key. No Hermes process is involved. Each
-developer or project partner performs these steps inside the Linux/WSL account
-that will run FastAPI:
+The exact implemented boundary is
+`docs/phase-10-controlled-coach-plan.md`. Coach is disabled by default. Standard
+tests use the deterministic fake provider; the real local adapter uses the
+developer's existing Codex CLI OAuth login rather than an OpenAI API key. No
+Hermes process is involved. Each developer or project partner performs these
+steps inside the Linux/WSL account that will run FastAPI:
 
 ```bash
 codex --version
@@ -451,48 +449,114 @@ codex login status
 
 Do not copy `~/.codex`, `auth.json`, browser tokens, or another developer's
 `.env`. A Pro user and a Plus user use separate local login state; the repo
-cannot guarantee that both accounts expose the same model. FastAPI should
+cannot guarantee that both accounts expose the same model. FastAPI does
 surface `unavailable_model` honestly when an explicitly requested model is not
 available. The preferred Phase 10 Coach model is `gpt-5.5`: the workflow needs
 general conversational reasoning and structured output rather than a coding-
 focused Spark model. A partner may explicitly choose another model their own
 account exposes, but the provider must never change it silently.
 
-The planned backend-only settings are:
+The active backend-only settings are:
 
 ```env
+APP_ENV=development
+USE_MOCK_DATA=false
 COACH_PROVIDER=local_codex_oauth
 LOCAL_CODEX_ENABLED=true
 LOCAL_CODEX_BIN=codex
 LOCAL_CODEX_MODEL=gpt-5.5
 LOCAL_CODEX_TIMEOUT_SECONDS=45
 LOCAL_CODEX_MAX_REQUESTS_PER_USER_PER_DAY=20
+LOCAL_CODEX_GLOBAL_CONCURRENCY=2
 ```
 
-They are deliberately absent from the current `.env.example` until code reads
-them. When implemented, safe defaults remain `COACH_PROVIDER=disabled` and
-`LOCAL_CODEX_ENABLED=false`; the start/service docs and `.env.example` must be
-updated in the same change. These values are FastAPI settings, not Flutter Dart
+Safe defaults remain `COACH_PROVIDER=disabled` and
+`LOCAL_CODEX_ENABLED=false`. These values are FastAPI settings, not Flutter Dart
 defines. `LOCAL_CODEX_MODEL=gpt-5.5` is recommended for the Coach. If that exact
 model is unavailable, select another exposed model deliberately or leave the
 provider unavailable; do not fall back automatically. Empty means CLI default,
 and the app must not invent the exact model name.
 
-The implementation must run FastAPI as the logged-in Linux user, invoke Codex
-with a fixed non-shell argv, pass context through stdin, ignore user config, use
-an ephemeral read-only empty workspace, explicitly disable every available
-model-controlled shell/tool feature, and pass an allowlisted environment that
+For deterministic local automation instead, configure FastAPI with:
+
+```env
+COACH_PROVIDER=fake
+COACH_FAKE_PROVIDER_ENABLED=true
+```
+
+Never enable the fake provider in production or present its fixed response as a
+real model answer.
+
+The adapter runs FastAPI as the logged-in Linux user, invokes Codex
+with a fixed non-shell argv, passes context through stdin, ignores user config,
+uses an ephemeral read-only empty workspace, explicitly disables every available
+model-controlled shell/tool feature, and passes an allowlisted environment that
 excludes every Supabase key and application secret. If the installed CLI cannot
 prove a tool-free invocation, the provider remains unavailable. It must never
 inspect the OAuth file. Standard pytest/Flutter/browser verification uses a
-fake provider. A real subscription smoke is separately opt-in, for example
-with `RUN_LOCAL_CODEX_SMOKE=true`, and must print no prompt, token, OAuth state,
-or raw CLI event stream.
+fake provider. The committed live smoke is skipped by default, uses only
+synthetic context, and is per-machine:
+
+```bash
+cd services/ai_service
+RUN_LOCAL_CODEX_SMOKE=true ./.venv/bin/python -m pytest -q \
+  tests/test_local_codex_smoke.py
+```
+
+Run it only after the local provider settings above are enabled and
+`codex login status` succeeds for the same Linux user. It must print no prompt,
+token, OAuth state, answer, or raw CLI event stream. On 2026-07-13 this
+synthetic-context smoke completed with the explicitly requested `gpt-5.5`
+model (`1 passed`) and no fallback. That result applies only to the tested
+machine, CLI, login, and account; it does not prove another developer's model
+access or a deployable provider. The focused Phase 10 and subsequent full
+non-destructive local fake-provider browser journeys also passed in the current
+checkout; they do not establish remote state or production readiness.
+
+A separate full-product live acceptance also passed on this machine on
+2026-07-13: an existing onboarded local user authenticated through Flutter Web,
+FastAPI used `local_codex_oauth` with exact `gpt-5.5`, and the same Linux user's
+Codex login returned one validated, UI-rendered, persisted response. The harness
+logged no question, assembled prompt, answer, raw event stream, stderr, account
+identity, path, token, `.env` value, or Supabase key. This verifies the first
+local live-account product path only; another Linux user must still clone, log
+in with their own eligible account, and repeat the documented setup without
+copied credentials.
 
 This local adapter is suitable for developer testing on the machine that owns
 the login. It is not a production deployment mechanism, does not make a mobile
 app independently capable of contacting Codex, and must not be enabled by
 `APP_ENV=production`.
+
+All Coach endpoints require the normal Supabase bearer token. Read capability,
+history, and eligible memory without generating:
+
+```bash
+curl http://localhost:8000/v1/coach/capabilities \
+  -H 'Authorization: Bearer <supabase_access_token>'
+curl http://localhost:8000/v1/coach/history \
+  -H 'Authorization: Bearer <supabase_access_token>'
+curl http://localhost:8000/v1/coach/memories \
+  -H 'Authorization: Bearer <supabase_access_token>'
+```
+
+One deliberate send accepts only the strict `today` scope and a stable UUID:
+
+```bash
+curl -X POST http://localhost:8000/v1/coach/respond \
+  -H 'Authorization: Bearer <supabase_access_token>' \
+  -H 'Content-Type: application/json' \
+  -d '{"contract_version":"coach-request-v1","request_id":"11111111-1111-4111-8111-111111111111","message":"What should I protect today?","context_scope":"today"}'
+```
+
+Retry an ambiguous result with the exact message and request id. Editing the
+message requires a new id. Completed replay returns the persisted response
+without another provider call; failed and deleted ids remain terminal. Select a
+memory with `POST /v1/coach/memories/{memory_id}/selection` and exact body
+`{"selected":true}`; deselect with a body-free DELETE. `DELETE
+/v1/coach/history` is also body-free. It deletes conversation content but
+retains usage events and request tombstones, so it does not restore the daily
+request budget.
 
 ## Supabase
 
@@ -536,6 +600,37 @@ minimal fingerprint-free `calendar_request_identities` registry and reliable
 HTTP 409 conflict semantics. Apply both non-destructively with the same
 `supabase migration up --local` workflow once pending; do not reset the local
 database merely to install them.
+
+Controlled Coach additionally requires:
+
+```text
+20260713200000_phase_10_controlled_coach.sql
+20260713213000_phase_10_coach_lock_order_guard.sql
+20260713220000_phase_10_coach_safety_provenance_guard.sql
+20260713223000_phase_10_profile_privilege_guard.sql
+20260713224500_phase_10_role_authority_guard.sql
+20260713230000_phase_10_onboarding_eligibility_guard.sql
+```
+
+It creates backend-owned Coach request, usage, and memory-selection state;
+hardens message/memory RLS and grants; and installs the service-role-only atomic
+claim, complete, fail, select/deselect, and history-delete RPCs. Apply it with
+the same non-destructive `supabase migration up --local` workflow. History
+deletion intentionally retains request tombstones and usage rows.
+The follow-up guard keeps the public RPC signatures but makes
+claim/complete/fail acquire the same owner advisory lock before their existing
+inner bodies, matching history deletion and avoiding inverse lock order.
+The remaining guards persist exact provider-call truth for safety redirects;
+block application-role profile insertion, role/provider changes, deletion, and
+onboarding projection changes; and remove legacy `"User"` fallback from role
+authority. Authenticated profile edits are limited to non-authority fields;
+service role and the atomic Intake apply RPC retain the required backend
+projection authority. A fresh migration-chain verification should end at
+`20260713230000_phase_10_onboarding_eligibility_guard.sql`.
+On 2026-07-13 real local PostgreSQL parallel claim/completion/deletion smokes
+completed without deadlock or timeout and converged on the expected message,
+usage, and deletion state. This is local concurrency evidence, not remote
+project verification.
 
 The earlier Phase 3 migration adds bounded task fields, explicit habit outcomes, and the real
 focus lifecycle. Its checks/triggers enforce exact task/focus shapes, lock and
@@ -584,8 +679,9 @@ For local Supabase-backed app testing:
    Setup-owned habit complete/skip/undo, focus start/finish/abandon with an owned
    target, the decision-first Today briefing with deliberate adjustment,
    bounded Weekly Review with one cancelled and one confirmed manual Habit V1
-   proposal, Notifications, real Deep Work, and the
-   gated Coach compatibility redirect.
+   proposal, Notifications, real Deep Work, and Controlled Coach capability,
+   memory selection, deliberate response, history, and confirmed history
+   deletion with a fake provider.
 
 Do not infer remote Supabase state from local migrations. Verify the remote
 project through the Supabase dashboard, CLI, or connector before using it for
@@ -646,9 +742,10 @@ scripts/start_frontend.sh
 ```
 
 Open `http://127.0.0.1:7357`, sign in with one of the demo accounts, and compare
-Dashboard, Notifications, Insights, and Habits across scenarios. Coach and Deep
-Work no longer share the same status: Coach remains gated, while authenticated
-real-data mode exposes the Phase 3 Deep Work lifecycle.
+Dashboard, Notifications, Insights, and Habits across scenarios. Deep Work is
+available in authenticated real-data mode. Coach is also routed for real
+accounts, but sending remains disabled until FastAPI reports a ready configured
+provider; seeded rows do not imply a live model connection.
 Seeded recommendations are visible through the FastAPI recommendation endpoint
 when the AI service is running with the same local Supabase project settings;
 without FastAPI, an authenticated account shows a recoverable recommendation
@@ -732,6 +829,27 @@ This is the normal non-reset path. It writes only its uniquely named test data
 to the local stack and skips `supabase db reset` unless `RESET_DB=true` is
 explicitly supplied.
 
+For a narrow Phase 10 diagnosis against an already-created, onboarded E2E
+principal, reuse that principal's exact run id:
+
+```bash
+E2E_PHASE10_ONLY=true \
+E2E_RUN_ID=<existing-e2e-run-id> \
+FLUTTER_BIN=/path/to/flutter \
+bash scripts/e2e_web.sh
+```
+
+This mode signs in as the existing `e2e-<run-id>@example.test` account, clears
+only its Coach E2E state, and reruns the bounded Coach browser/RLS assertions.
+It does not create the prerequisite user or exercise Setup, capture, action,
+briefing, review, and calendar journeys, so it is a diagnostic/repetition aid,
+never a substitute for the full command above.
+
+On 2026-07-13 the focused non-reset run with `E2E_RUN_ID=1783945829` passed,
+then the full non-destructive current-checkout command passed against local
+Supabase with the deterministic fake Coach provider and reported
+`E2E browser smoke passed for e2e-1783947134@example.test`.
+
 Browser E2E with a fresh local database:
 
 ```bash
@@ -739,7 +857,7 @@ RESET_DB=true FLUTTER_BIN=/path/to/flutter bash scripts/e2e_web.sh
 ```
 
 The E2E script starts local Supabase, starts the FastAPI AI service with the
-local Supabase backend settings, starts Flutter Web on `http://127.0.0.1:7357`,
+local Supabase backend settings and deterministic fake Coach provider, starts Flutter Web on `http://127.0.0.1:7357`,
 creates a confirmed local test user through the local Supabase admin API, signs
 in through the app, completes required-only Setup, exercises retry/edit/review
 and ownership-safe reconciliation, then walks Phase 1 Evening Shutdown and
@@ -793,10 +911,11 @@ The Phase 9 source journey additionally covers explicit consent, connection
 without import, retry-safe `.ics` reconciliation, stable paginated event reads,
 read-only provenance, all-day/timezone/recurrence/cancellation boundaries,
 disconnect-retains versus delete-local-only behavior, schedule preservation,
-and owner/cross-owner RLS. The combined Phase 3 through Phase 9 path passed
-non-destructively in the 2026-07-13 Phase 9 implementation checkout. Use the
-complete command above to establish a new current-checkout result after later
-changes; source coverage alone is not a pass.
+and owner/cross-owner RLS. Phase 10 adds the deterministic fake-provider Coach
+journey. The focused Phase 10 rerun and subsequent full Phase 3-through-10 path
+passed non-destructively in the 2026-07-13 current checkout. Use the complete
+command above to establish a new result after later changes; the focused mode
+or source coverage alone is not a full-checkout pass.
 
 By default the script starts FastAPI on `http://127.0.0.1:8000`. Useful AI
 service overrides:
@@ -815,7 +934,9 @@ not reuse an already-running service on the same port; stop that service or set
 intentionally want to reuse a compatible FastAPI process that is already running
 with local `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` settings. Because the
 smoke exercises Phase 7, a reused process must also use the same
-`SCHEDULED_REFRESH_TOKEN` supplied to the script.
+`SCHEDULED_REFRESH_TOKEN` supplied to the script. If a reused process is meant
+to exercise Coach, it must also use the fake-provider settings above; standard
+E2E must not contact a live Codex account.
 
 The local service-role key is used only inside FastAPI and the Node E2E process
 for local test setup and assertions. It is not passed to Flutter.
@@ -856,7 +977,7 @@ the listed screens. Keep manual testing for flows not listed in
   `.tools/e2e/ai-service.log` and confirm `services/ai_service` dependencies are
   installed. If the log says the address is already in use, stop the stale
   service or set `AI_SERVICE_PORT` to a free port.
-- After Phase 10 lands, if the local Coach reports that its provider is
+- If the local Coach reports that its provider is
   unavailable, run `codex --version` and `codex login status` as the same Linux
   user that runs FastAPI. Do not troubleshoot by opening or copying the Codex
   auth file. An unavailable explicitly configured model is not permission to

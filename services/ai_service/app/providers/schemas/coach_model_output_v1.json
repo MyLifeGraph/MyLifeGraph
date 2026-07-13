@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["reply", "uncertainty", "staged_suggestion", "safety"],
+  "properties": {
+    "reply": {"type": "string", "minLength": 1, "maxLength": 4000},
+    "uncertainty": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["level", "reason"],
+      "properties": {
+        "level": {"enum": ["low", "medium", "high"]},
+        "reason": {"type": "string", "minLength": 1, "maxLength": 300}
+      }
+    },
+    "staged_suggestion": {
+      "anyOf": [
+        {"type": "null"},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["title", "rationale"],
+          "properties": {
+            "title": {"type": "string", "minLength": 1, "maxLength": 120},
+            "rationale": {"type": "string", "minLength": 1, "maxLength": 500}
+          }
+        }
+      ]
+    },
+    "safety": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["classification"],
+      "properties": {
+        "classification": {"enum": ["normal", "sensitive", "safety_redirect"]}
+      }
+    }
+  }
+}

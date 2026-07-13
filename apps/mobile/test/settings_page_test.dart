@@ -36,9 +36,13 @@ void main() {
     expect(find.text('guest@personal-coach.local'), findsOneWidget);
     expect(find.text('Europe/Berlin'), findsOneWidget);
     expect(find.text('Local guest'), findsOneWidget);
-    expect(find.text('Applies until the app is restarted.'), findsOneWidget);
     expect(find.text('Setup and commitments'), findsOneWidget);
     expect(find.text('Calendar import (optional)'), findsOneWidget);
+    expect(find.text('Coach'), findsOneWidget);
+    expect(
+      find.text('Ask for bounded guidance and manage Coach data use.'),
+      findsOneWidget,
+    );
     expect(
       find.text('Import a selected .ics file as a read-only local copy.'),
       findsOneWidget,
@@ -55,6 +59,13 @@ void main() {
     expect(find.text('Coach behavior'), findsNothing);
     expect(find.text('Personal memory'), findsNothing);
     expect(find.text('Biometric app lock'), findsNothing);
+
+    await tester.scrollUntilVisible(
+      find.text('Light mode'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('Applies until the app is restarted.'), findsOneWidget);
 
     expect(tester.widget<Switch>(find.byType(Switch)).value, isFalse);
     await tester.tap(find.text('Light mode'));

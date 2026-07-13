@@ -40,15 +40,15 @@ The app table constants live in
 
 | Table | Current app use |
 | --- | --- |
-| `profiles` | Auth profile rows, roles, provider, timezone, onboarding state, and monotonic `setup_revision` projection guard. |
+| `profiles` | Canonical auth profile projection. Identity/authority (`role`, `auth_provider`) and onboarding eligibility are backend-owned; authenticated edits are limited to non-authority fields, and `setup_revision` remains a monotonic backend projection guard. |
 | `daily_logs` | One canonical daily row whose V2 metadata owns separate Evening/Morning captures plus direct nullable numeric Dashboard projections; the Dashboard does not synthesize proxy scores. |
 | `behavioral_events` | Granular AI signal stream; canonical capture writes a dynamic deterministic maximum of four current events linked to its `daily_logs` row. |
 | `tasks` | Owner-scoped executable tasks with create/edit/complete/postpone/cancel/restore/undo, optional 5-480 minute estimates, and explicit completion/cancellation timestamps. |
 | `notifications` | Read-only Notifications inbox; original type, priority, read state, and allowlisted internal `action_url` targets. |
 | `schedule_items` | Setup-owned confirmed fixed commitments plus preserved manual/other-source dashboard schedule rows. |
 | `ai_insights` | Insights list. |
-| `coach_messages` | Reserved persisted history; the canned Coach preview is gated. Phase 10 must add retry-safe bounded backend-owned turn/provenance rules and remove direct Flutter inserts before using it for real model replies. |
-| `memory_entries` | Durable Setup-owned onboarding and future reviewed Coach memory. Check-in notes are not promoted automatically. Phase 10 selection must remain separate from Setup-replaced metadata so toggling Coach use does not transfer ownership. |
+| `coach_messages` | Bounded validated Phase 10 user/assistant history linked to a retry-safe backend request. Authenticated owners can read; only FastAPI can insert/delete V1 turns. Legacy rows remain distinguishable by null request/contract fields. |
+| `memory_entries` | Durable Setup/manual memory content. Authenticated owners can read, but Phase 10 selection is a separate projection and does not transfer Setup ownership or promote check-in/conversation text automatically. Preference rows remain ineligible until a later sensitivity contract can distinguish hidden context safely. |
 | `focus_sessions` | Real one-active-session Deep Work lifecycle with bounded planned/measured duration, fully immutable terminal history, persisted local start date, and at most one owned task or active-habit target whose deletion is restricted. |
 | `goals` | User goals, including deterministically identified Setup-owned rows with archive lifecycle. |
 | `habits` | Habit V1 daily, selected-ISO-weekday, or weekly-target cadence plus active/paused/archived manual lifecycle; Setup owns definition/lifecycle for its rows while active rows share execution. |
@@ -65,6 +65,9 @@ The app table constants live in
 | `calendar_imports` | Immutable retry-safe `.ics` import identity, bounded window/counts, and canonical input/request fingerprints. |
 | `calendar_events` | Current whitelisted imported event copy with stable single/recurrence identity and explicit imported/read-only provenance. |
 | `calendar_request_identities` | Minimal global UUID/owner/connection/operation registry enforcing stable identity across calendar lifecycle mutations; forced RLS and service-role insert/select only, with no content fingerprint. |
+| `coach_requests` | Backend-only retry/lease/terminal ledger. Pending rows store only a SHA-256 message fingerprint; completed rows store the strict response/manifest; deleted rows are content-free tombstones. |
+| `coach_usage_events` | Backend-only append-only one-row-per-request outcome/counter ledger retained across conversation deletion and used with request rows for the profile-local daily attempt budget. |
+| `coach_memory_selections` | Explicit owner-scoped selection of at most eight eligible `memory_entries` for Coach context, stored separately from memory ownership/content. |
 
 Phase 1 canonical capture upserts one `daily_logs` row per user/date with source
 `quick_check_in`. `metadata.capture_version=daily-capture-v2` contains separate
@@ -293,6 +296,69 @@ source fingerprint. The migration also replaces application-conflict SQLSTATEs
 with PostgREST `PT409` and restricts import replay to an exact-input import that
 is still connected and current.
 
+## Phase 10 Controlled Coach
+
+`20260713200000_phase_10_controlled_coach.sql` adds
+`coach_requests`, `coach_usage_events`, and `coach_memory_selections`, then
+extends `coach_messages` with nullable `request_id` and `contract_version` so
+legacy rows remain valid while new `coach-message-v1` rows form exactly one
+bounded user/assistant pair per completed request. The request table owns global
+retry identity, one pending request per owner, a bounded lease, configured
+provider/model/prompt/context truth, strict response/manifest/error JSON, and
+content-free deletion tombstones. A pending request stores the message
+fingerprint only; the full message is written only as part of atomic successful
+completion.
+
+The append-only usage table stores one completed, failed, or deterministic
+safety-redirect outcome per request with bounded byte/code-point counters. The
+request and usage rows remain after history deletion, so delete cannot restore
+the profile-local daily request allowance or permit an old request id to be
+reused with different content. History deletion removes all owner
+`coach_messages`, clears stored response/context/error/fingerprint data, and
+marks request rows deleted. It rejects a still-live request and first
+terminalizes an expired lease.
+
+Memory selection uses a composite `(memory_id, user_id)` ownership foreign key,
+an owner-level advisory lock, and a maximum of eight rows. It excludes every
+`type='preference'` memory because current Intake hidden context and coaching
+style share that type without a stable sensitivity discriminator. Selection
+never changes the underlying memory row or its Setup metadata.
+
+RLS is forced on the new tables plus hardened `coach_messages` and
+`memory_entries`. Authenticated users receive owner/admin SELECT only for
+messages, memories, and selections; they receive no direct request, usage,
+message, memory-selection, or memory-content mutation grant from this migration.
+Service role owns the exact claim, atomic complete, fail, selection, and
+history-delete RPCs. All RPC execute grants are revoked from `public`, `anon`,
+and `authenticated`.
+
+`20260713213000_phase_10_coach_lock_order_guard.sql` is a non-destructive
+follow-up. It renames the tested claim/complete/fail bodies to uncallable inner
+functions, then recreates the public service-role-only RPC signatures as
+wrappers that acquire the owner advisory lock first. History deletion already
+uses that owner-first order. The wrapper preserves the exact transaction
+contracts while preventing a completion from holding a request row lock and
+waiting on an owner lock held by a concurrent claim or deletion. Real local
+PostgreSQL parallel claim/completion/deletion smokes completed on 2026-07-13
+without deadlock or timeout and converged on the expected message, usage, and
+deletion outcomes.
+
+`20260713220000_phase_10_coach_safety_provenance_guard.sql` extends the exact
+persisted response validator with `provenance.provider_called`. A model response
+must record `true`; deterministic safety copy records whether it bypassed the
+provider (`false`) or replaced provider output (`true`).
+
+`20260713223000_phase_10_profile_privilege_guard.sql` makes profile identity
+backend-owned. Application roles cannot insert a profile or change `role` or
+`auth_provider`; authenticated updates are reduced to named non-identity
+projection columns. `20260713224500_phase_10_role_authority_guard.sql` makes
+`private.current_app_role()` read only canonical `profiles`, removes mutable
+legacy `"User"` fallback authority, and revokes authenticated profile deletion.
+`20260713230000_phase_10_onboarding_eligibility_guard.sql` additionally revokes
+authenticated updates to `onboarding_completed_at` and blocks application-role
+identity/eligibility mutation in the profile trigger. Service role and the
+service-role-only atomic Intake apply RPC retain backend projection authority.
+
 ## Legacy Tables
 
 Older remote databases may contain CamelCase app tables:
@@ -444,12 +510,44 @@ registry service-role insert/select only under forced RLS, returns reliable
 `PT409` application conflicts, and prevents replay of a superseded,
 disconnected, or deleted import.
 
+`20260713200000_phase_10_controlled_coach.sql` creates the bounded Coach
+request/usage/selection schema, adds the request-linked V1 message contract,
+hardens memory/message grants and forced RLS, and installs service-role-only
+`claim_coach_request_v1`, `complete_coach_request_v1`,
+`fail_coach_request_v1`, `set_coach_memory_selection_v1`, and
+`delete_coach_history_v1` RPCs. Claim and owner advisory locks enforce exact
+replay, one active request, lease expiry, and the profile-local daily limit;
+completion atomically writes the validated turn and usage event; delete retains
+content-free request tombstones and usage rows.
+
+`20260713213000_phase_10_coach_lock_order_guard.sql` keeps the public Coach RPC
+signatures and service-role-only grants but places the owner advisory lock in
+front of the existing claim/complete/fail bodies, aligning them with history
+delete and removing inverse lock ordering.
+
+`20260713220000_phase_10_coach_safety_provenance_guard.sql` makes
+`provider_called` a required boolean in persisted `coach-response-v1`
+provenance, preserving the distinction between pre-provider and post-provider
+deterministic safety redirects.
+
+`20260713223000_phase_10_profile_privilege_guard.sql` blocks application-role
+profile insertion and identity-field mutation while narrowing authenticated
+updates to explicit non-identity columns.
+
+`20260713224500_phase_10_role_authority_guard.sql` removes the legacy `"User"`
+authorization fallback and authenticated profile deletion.
+
+`20260713230000_phase_10_onboarding_eligibility_guard.sql` makes
+`profiles.onboarding_completed_at` backend-owned, preserving service-role and
+atomic Intake RPC projection while rejecting application-role eligibility
+changes.
+
 ## Local Verification Workflow
 
 For local Supabase-backed testing, the reset should complete through:
 
 ```text
-20260713143000_phase_9_calendar_request_identity_guard.sql
+20260713230000_phase_10_onboarding_eligibility_guard.sql
 ```
 
 Then configure `.env` with:
@@ -491,7 +589,7 @@ RESET_DB=true FLUTTER_BIN=/path/to/flutter scripts/verify_supabase_local.sh
 ```
 
 The reset form should apply all migrations through
-`20260713143000_phase_9_calendar_request_identity_guard.sql`; expected legacy-table
+`20260713230000_phase_10_onboarding_eligibility_guard.sql`; expected legacy-table
 skip notices may be emitted for missing CamelCase tables. Use reset when proving
 the full migration/backfill/constraint chain from a fresh local database, not
 merely because one non-destructive migration is pending.
@@ -525,6 +623,11 @@ Supabase-backed path:
   import a bounded `.ics` file, page through events, disconnect while retaining
   the visibly imported/read-only copy, then delete that local copy and confirm
   `schedule_items` is unchanged.
+- Open Coach with the fake provider, confirm read-only capability/history/
+  memory loading, explicitly select one eligible memory, send one bounded turn,
+  replay its request id, delete the conversation, and confirm messages are gone
+  while request tombstones and usage remain. Confirm guest/mock makes no Coach
+  request.
 - Open notifications.
 
 This checks that Auth, RLS, grants, FastAPI backend workflows, and the app's
@@ -540,10 +643,16 @@ start/finish/abandon with owned linkage and no implicit target mutation. The
 source injects committed response loss for habit/task create, habit
 outcome/undo, task completion/undo, and focus start/finish. Negative
 task/focus/habit lifecycle, duration, active-target, and weekday-cadence writes
-include terminal-focus `updated_at` mutation. The combined Phase 3 through Phase
-7 smoke passed non-destructively in the 2026-07-12 Phase 7 implementation
-checkout. Later changes must establish a new pass. Do not run destructive reset
-commands against a remote database.
+include terminal-focus `updated_at` mutation. Phase 8/9 source adds weekly review
+and calendar import. Phase 10 source starts FastAPI with the deterministic fake
+provider and adds bounded Coach persistence, replay, safety, memory, history,
+RLS, UI, and guest-zero-call assertions. The combined Phase 3 through Phase 9
+smoke first passed in the Phase 9 implementation checkout. In the 2026-07-13
+current checkout, a focused Phase 10 rerun and the subsequent full combined
+journey passed non-destructively against local Supabase with the deterministic
+fake provider. This establishes neither remote migration/RLS state nor
+production readiness. Later changes must establish a new full pass. Do not run
+destructive reset commands against a remote database.
 
 For manual local product exploration, `npm run seed:demo` creates repeatable
 local-only Auth users and app rows for student, worker, and recovery scenarios.
@@ -585,7 +694,19 @@ legacy compatibility only and should be dropped in a later dedicated migration
 after data migration and app verification are complete.
 
 The latest schema addition is
-`20260713143000_phase_9_calendar_request_identity_guard.sql`. It adds the global
+`20260713230000_phase_10_onboarding_eligibility_guard.sql`. Together with the
+profile privilege and canonical role-authority guards immediately before it,
+it makes profile identity, application role, and onboarding eligibility
+backend-owned, removes legacy-role fallback, and preserves the atomic Intake
+RPC as the onboarding projection path. The preceding safety-provenance guard
+requires exact provider-call truth for persisted Coach safety redirects. The
+earlier lock-order guard gives Coach claim/complete/fail/history-delete one
+owner-first advisory lock order without changing their public signatures or
+service-role-only boundary; the base Phase 10 migration adds retry-safe bounded
+Coach request, usage, selection, message, deletion, grant, and forced-RLS
+contracts.
+The earlier
+`20260713143000_phase_9_calendar_request_identity_guard.sql` adds the global
 minimal calendar request registry, forced RLS with service-role insert/select
 only, reliable `PT409` conflicts, and current-only import replay. The preceding
 `20260713120000_phase_9_calendar_import.sql` creates the dedicated bounded
@@ -619,4 +740,5 @@ contract; Phase 6 adds feedback as separate evidence and never rewrites those
 persisted reasons. Phase 7 adds no schema object; it prepares the existing
 snapshot and briefing identities by profile-local date. Phase 8 persists only
 derived weekly review output and reuses existing Habit V1 mutations after
-explicit confirmation.
+explicit confirmation. Phase 10 adds conversational explanation without making
+any Coach suggestion executable or changing the deterministic briefing loop.

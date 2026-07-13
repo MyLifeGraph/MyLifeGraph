@@ -166,7 +166,7 @@ Phase 4's deterministic briefing service.
 | Insights correlations | Yes, as advanced exploration | Default to cautious actionable insight with evidence and confidence |
 | Notifications | Read-only inbox | Structured internal actions are allowlisted; add preferences and durable read writes only with real contracts |
 | Deep Work | Yes, authenticated real-data mode | One active session, optional owned task/habit linkage, measured finish/abandon duration, and no implicit target completion are implemented; guest/mock redirects to Quick Action |
-| Coach | Gated | Restore only after a controlled authenticated backend exists |
+| Coach | Yes, authenticated real-data mode | Strict capability/history/memory reads are generation-free; deliberate sends use bounded owner-scoped context and review-only suggestions, while guest/mock is zero-call |
 | Settings | Honest minimum plus durable Setup | Read-only profile, Setup re-entry/review, session theme, and sign-out remain; add other controls only when durable |
 
 ## Guiding Principles
@@ -894,9 +894,14 @@ Reasoning:
 ### Coach And Automation Gate
 
 - Do not present canned responses as personalized AI coaching.
-- Coach becomes production-visible only when it can use current snapshots,
-  selected memories, and evidence-backed recommendations.
-- Users must be able to view, correct, and delete coach memory.
+- The implemented Coach is visible only to authenticated real-data sessions and
+  may send only when its backend capability is ready. It uses current snapshots,
+  the persisted briefing, bounded active facts, explicitly selected eligible
+  memories, a current weekly review when available, and limited completed
+  history.
+- Users can inspect and select/deselect eligible memory. Setup-owned content is
+  corrected through Setup; Phase 10 does not add automatic memory extraction or
+  a parallel content editor.
 - Any coach-proposed task, habit, or schedule change is staged for review before
   it is persisted.
 - Health and stress guidance remains informational and must not claim diagnosis
@@ -1208,6 +1213,12 @@ and Phase 9 adds bounded calendar-import ownership and recovery assertions. The
 combined Phase 3 through Phase 9 journey passed non-destructively in the
 2026-07-13 Phase 9 implementation checkout. Later changes must establish their
 own current-checkout pass before claiming E2E.
+Phase 10 browser source uses the deterministic fake provider and adds bounded
+Coach response/replay/safety/history/memory/RLS/UI assertions. Its focused rerun
+and the subsequent full non-destructive local-Supabase browser journey passed
+in the 2026-07-13 current checkout. The separate opt-in synthetic live-model
+smoke also passed with explicitly requested `gpt-5.5`, no fallback, and no
+answer/prompt/raw event stream logged.
 
 The complete object/command/validation/recovery contract is in
 `docs/phase-3-executable-actions-contract.md`.
@@ -1418,38 +1429,48 @@ Evaluation:
 - Can users see, disconnect, and delete imported data?
 - Do integrations reduce capture effort without making recommendations opaque?
 
-### Phase 10: Controlled Coach
+### Phase 10: Controlled Coach (Implemented Repository Boundary)
 
 Goal:
 
 - Add conversational explanation and adaptation after the deterministic product
   loop works.
 
-Work:
+Implemented:
 
-- Add authenticated coach response service with budget and feature flags.
-- Build context from compact snapshots, current briefing, selected memories, and
+- Added authenticated Coach capability, deliberate response, history/delete,
+  and memory-selection services with retry identity, one in-flight request per
+  owner, a retained profile-local daily attempt budget, and safe feature flags.
+- Builds context from compact snapshots, current briefing, selected memories, and
   a bounded message window.
-- Let users view, edit, and delete memory used for coaching.
-- Stage task, habit, or schedule proposals for explicit review.
-- Add wellness/medical boundaries and source-aware responses.
-- For the first local real-model test only, add an injectable
+- Lets users inspect and explicitly select/deselect eligible memory; memory
+  content remains owned by Setup or its future manual contract.
+- Stages at most one text-only idea for review and exposes no apply command.
+- Adds deterministic pre/post wellness safety boundaries, urgent provider
+  bypass, required uncertainty for missing/stale Daily State, and source-aware
+  responses.
+- Adds an injectable
   `local_codex_oauth` provider that invokes the current Linux/WSL user's
   explicitly enabled, already authenticated Codex CLI. It uses no application
   API key, shares no OAuth state, and is not the production provider design.
-- Prefer `gpt-5.5` for the normal interactive Coach because the task is general
+- Prefers the explicitly configured `gpt-5.5` for the normal interactive Coach because the task is general
   conversational reasoning and bounded structured output. The Codex CLI is the
   local OAuth transport, not a reason to select a coding-focused Spark model.
   Keep unavailable-model truth explicit and require deliberate overrides.
-- Give FastAPI owner-scoped reach to relevant life-graph facts while disclosing
+- Gives FastAPI owner-scoped reach to relevant life-graph facts while disclosing
   only a bounded `coach-context-v1` package. The model receives neither direct
   database/tool access nor a full-history dump. Imported calendar content and
   hidden free text remain excluded.
-- Replace the gated canned Coach and direct Flutter inserts with strict typed
+- Replaces the gated canned Coach and direct Flutter inserts with strict typed
   FastAPI request/history/memory boundaries, honest unavailable states, and a
   fake provider for all normal automation.
+- Adds database follow-up guards for exact provider-call safety provenance,
+  owner-first Coach lock order, backend-owned profile identity and onboarding
+  eligibility, canonical-only role authority, and rejected authenticated
+  profile deletion. Real local PostgreSQL parallel Coach lifecycle smokes
+  completed without deadlock or timeout.
 
-Evaluation:
+Current evaluation boundary:
 
 - Does Coach answer from actual current state and disclose uncertainty?
 - Can the user inspect and control memory?
@@ -1460,8 +1481,13 @@ Evaluation:
 
 The exact provider, context, subprocess, retention, safety, UI, verification,
 and acceptance contract is fixed in
-`docs/phase-10-controlled-coach-plan.md`. It must be read before implementing
-this phase.
+`docs/phase-10-controlled-coach-plan.md`. Standard verification uses the fake
+provider. The opt-in synthetic local Codex smoke passed on this machine with
+`gpt-5.5`; the focused and full non-destructive local fake-provider browser
+runs also passed in the current checkout. A separate authenticated Flutter-to-
+live-Codex product turn passed on this machine with explicit `gpt-5.5`, strict
+persisted provenance, and visible UI data-use/provider truth. These are not
+claims about another account, remote state, or production readiness.
 
 ## Evaluation Checklist For Next Work
 
@@ -1550,11 +1576,13 @@ imported/read-only provenance, reconciles stable identities, and separates
 disconnect from local imported-data deletion. It does not make imported events
 briefing inputs or user-owned commitments.
 
-The next implementation should be **Phase 10: Controlled Coach**, beginning
-only with an authenticated, budgeted, source-aware explanation boundary and
-reviewable memory. Live provider calendar sync/writes, broad autonomous changes,
-notification delivery, deployed scheduling, vector search, and unbounded LLM
-context remain separate later concerns. The first real-model path is the
-explicitly enabled local Codex OAuth development adapter defined in
-`docs/phase-10-controlled-coach-plan.md`; it does not establish a deployable LLM
-provider or universal subscription/model availability.
+Phase 10 is implemented as an authenticated, budgeted, source-aware explanation
+boundary with explicit reviewable memory selection, bounded validated history,
+and non-executable suggestions. Live provider calendar sync/writes, broad
+autonomous changes, notification delivery, deployed scheduling, vector search,
+automatic memory extraction, and unbounded LLM context remain separate later
+concerns. The real-model path is the explicitly enabled local Codex OAuth
+development adapter defined in `docs/phase-10-controlled-coach-plan.md`; it does
+not establish a deployable LLM provider or universal subscription/model
+availability. Select the next slice from a separately verified user need rather
+than broadening Coach automatically.

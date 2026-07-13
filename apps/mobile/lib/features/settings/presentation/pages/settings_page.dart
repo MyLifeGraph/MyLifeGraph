@@ -66,6 +66,18 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         AppCard(
           padding: EdgeInsets.zero,
           child: ListTile(
+            leading: const Icon(Icons.forum_outlined),
+            title: const Text('Coach'),
+            subtitle: const Text(
+              'Ask for bounded guidance and manage Coach data use.',
+            ),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => context.go(AppRoutes.coach),
+          ),
+        ),
+        AppCard(
+          padding: EdgeInsets.zero,
+          child: ListTile(
             leading: const Icon(Icons.calendar_month_outlined),
             title: const Text('Calendar import (optional)'),
             subtitle: const Text(

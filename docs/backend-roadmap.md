@@ -42,7 +42,8 @@ Already implemented:
 - Supabase Auth and canonical snake_case app tables.
 - Flutter mock and guest mode.
 - Flutter Supabase-backed auth, onboarding, dashboard, notifications, and
-  check-ins. The unimplemented Coach surface is gated from production routing.
+  check-ins, plus a typed authenticated Controlled Coach surface. Guest/mock
+  Coach remains honest local-unavailable and zero-call.
 - Honest Capture:
   - One canonical lightweight check-in implementation serves both current routes.
   - Mood, energy, sleep, and stress require explicit selection and flow through a
@@ -229,6 +230,27 @@ Already implemented:
     `schedule_items` remain unchanged.
   - There is no provider OAuth/token, arbitrary URL fetch, calendar write,
     hidden sync, RRULE engine, LLM processing, or calendar-driven ranking.
+- Phase 10 Controlled Coach:
+  - Strict authenticated capability, deliberate response, history/delete, and
+    explicit memory-selection contracts with guest/mock zero-call behavior.
+  - A deterministic fake provider for normal tests and an opt-in,
+    development-only `local_codex_oauth` adapter with fixed tool-free Codex CLI
+    invocation, allowlisted environment, bounded process I/O/time/concurrency,
+    strict output schema, and no API-key/model fallback.
+  - At most 32 KiB of owner-scoped current context, including current state and
+    briefing, bounded active facts, a current weekly review, up to eight
+    explicitly selected eligible memories, and up to six completed turns.
+    Imported calendar content, hidden free text, credentials, and cross-user
+    rows remain excluded.
+  - Message-free pending claims, exact retry replay, one in-flight request per
+    owner, retained profile-local daily attempt limits, atomic validated
+    user/assistant completion, deterministic safety bypass/post-checks, and
+    review-only non-executable suggestions.
+  - A follow-up wrapper gives claim, complete, fail, and history delete one
+    owner-first advisory-lock order before existing request/row locks.
+  - Conversation deletion removes message/content projections and tombstones
+    request state while retaining request identities and append-only usage, so
+    it cannot reset budget or permit request reinterpretation.
 - Browser E2E starts FastAPI with local Supabase backend settings and verifies
   authenticated required-only Setup, retry/edit/review identity and ownership,
   deterministic post-intake recommendations, backend daily snapshot refresh
@@ -236,7 +258,10 @@ Already implemented:
   writes, Phase 4 read-only/generate/idempotent briefing persistence, and Phase
   5 GET-only Today load, deliberate adjustment, primary action dispatch, and
   Phase 6 feedback persistence/ranking/deletion plus useful default Insights,
-  and the Phase 8 weekly-review contract and confirmed Habit V1 boundary.
+  the Phase 8 weekly-review contract and confirmed Habit V1 boundary, and Phase
+  9 calendar import. Phase 10 browser coverage uses the deterministic fake
+  provider; its focused rerun and the subsequent full non-destructive local
+  journey passed in the 2026-07-13 current checkout.
 
 Not yet implemented:
 
@@ -245,8 +270,9 @@ Not yet implemented:
   V1 shrink/pause/archive.
 - A production background job queue or worker.
 - Deployed cron wiring for the scheduler-triggered refresh endpoint.
-- Real coach-response backend.
-- LLM provider integration.
+- A deployable Coach provider, production provider credentials/billing, and
+  provider failover. The implemented real-model adapter is local development
+  only.
 - Memory extraction beyond current direct writes.
 - Autonomous weekly planning.
 - Live calendar-provider OAuth, refresh tokens, URL subscriptions, background
@@ -291,7 +317,7 @@ repositories, and jobs, not as unconstrained autonomous LLM loops.
 | Weekly review service | Explicit completed-week review read/generation | Profile timezone, weekly snapshot, tasks, goals, habits/outcomes, focus, daily snapshots, `decision_feedback` | `weekly_reviews` derived output only | None for v1 |
 | Calendar import service | Explicit consent and selected `.ics` upload | Bounded iCalendar text, profile timezone, owned connection | `calendar_connections`, `calendar_imports`, `calendar_events`, opaque `calendar_request_identities` | None |
 | Coach service | Deliberate authenticated user send | Current snapshot/briefing, bounded active facts, selected memory, recent completed turns | Validated `coach_messages`, compact provenance/usage only | One configured provider call, budgeted |
-| Memory selection service | Explicit user inspect/select/deselect/edit/delete | Owner-scoped `memory_entries` plus Setup ownership | Separate Coach selection projection; content only through its owning contract | None for Phase 10 v1 |
+| Memory selection service | Explicit user inspect/select/deselect | Owner-scoped eligible `memory_entries` plus Setup ownership | Separate Coach selection projection; content changes only through its owning contract | None for Phase 10 v1 |
 | Planning service | Weekly review, user request | Goals, tasks, habits, schedule, snapshots | `tasks`, `schedule_items`, `recommendations`, `coach_messages` | Optional for complex plans |
 | Notification service | Schedule and event changes | Preferences, recommendations, deadlines | `notifications` | None |
 
@@ -306,10 +332,11 @@ backend prepares timezone-pinned daily snapshots and briefings through the
 existing protected endpoint. Phase 8 adds bounded weekly review and
 user-confirmed manual Habit V1 adaptation. Phase 9 adds the first optional
 consented integration boundary as a user-selected `.ics` import with no
-provider access or writes. The next product work is Phase 10's controlled Coach
-boundary. Deployed cron/job wiring, notification delivery, real calendar
-provider integration, and LLM provider work remain
-unimplemented and must not be inferred from the callable endpoint. See
+provider access or writes. Phase 10 adds the controlled Coach boundary without
+changing that deterministic loop. Deployed cron/job wiring, notification
+delivery, real calendar provider integration, and a deployable LLM provider
+remain unimplemented and must not be inferred from the callable endpoints or
+the development-only local adapter. See
 `docs/daily-briefing-implementation-plan.md` for the current product contract
 and phase sequence, and
 `docs/phase-3-executable-actions-contract.md` for the completed action contract.
@@ -419,6 +446,7 @@ The current canonical schema already has useful tables:
 - `skillset_profiles`
 - `notification_preferences`
 - `goals`, `habits`, `habit_logs`, `focus_sessions`
+- `coach_requests`, `coach_usage_events`, `coach_memory_selections`
 
 `profiles.setup_revision` stores the latest Setup revision projected onto the
 profile. It starts at zero, is backfilled from applied `intake-v1` history, and
@@ -530,12 +558,12 @@ confirmed eligible manual Habit V1 changes reuse Phase 3 owner-scoped commands.
 
 ### Later Tables
 
-`daily_briefings`, `decision_feedback`, `weekly_reviews`, and the bounded Phase
-9 calendar import tables are implemented
-after their owning contracts proved the persistence boundary. Do not add these remaining tables
+`daily_briefings`, `decision_feedback`, `weekly_reviews`, the bounded Phase 9
+calendar tables, and the Phase 10 Coach request/usage/selection tables are
+implemented after their owning contracts proved the persistence boundary. Do
+not add these remaining tables
 until their owning phase needs them:
 - `backend_jobs` for durable idempotent jobs and retries.
-- `llm_usage_events` for per-user budget tracking.
 - provider-account, credential, cursor, or webhook tables for live calendar
   sync.
 - `memory_candidates` if memory extraction needs review before promotion to
@@ -620,14 +648,19 @@ every dashboard load.
 
 ## Coach Flow
 
-Target endpoint, not implemented yet:
+Implemented authenticated endpoints:
 
 ```text
+GET /v1/coach/capabilities
 POST /v1/coach/respond
+GET /v1/coach/history
+DELETE /v1/coach/history
+GET /v1/coach/memories
+POST|DELETE /v1/coach/memories/{memory_id}/selection
 Authorization: Bearer <supabase_access_token>
 ```
 
-Target behavior:
+Current behavior:
 
 1. Derive the owner from the verified Supabase bearer token and claim a
    retry-safe bounded request identity.
@@ -641,20 +674,20 @@ Target behavior:
 4. Call one explicitly configured provider only after a deliberate Coach send.
 5. Validate strict model output, then attach backend-owned request, provider,
    model, prompt, context, time, safety, and uncertainty provenance.
-6. Persist only the bounded validated turn and compact manifest under a defined
-   retention/delete contract. Do not store the assembled prompt or raw provider
-   event stream.
+6. Atomically persist only the bounded validated user/assistant pair, compact
+   manifest, response provenance, request state, and usage counters. Do not
+   store the assembled prompt or raw provider event stream.
 7. Return at most one review-only staged suggestion with no mutation command.
-
-This should come after the snapshot aggregator, because the coach needs
-structured daily/weekly context to be useful and affordable.
+8. Delete conversation content explicitly while retaining request tombstones and
+   append-only usage, so deletion neither resets budget nor permits request-id
+   reinterpretation.
 
 The first test provider is deliberately `local_codex_oauth`. When explicitly
 enabled in development, FastAPI invokes the current Linux/WSL user's already
 authenticated Codex CLI without an application API key. Each developer runs
 their own `codex login`; OAuth files never enter Flutter, Supabase, Git, `.env`,
 or application logs. This same-user agentic subprocess is a local testing
-adapter, not a production isolation/deployment design. The complete locked
+adapter, not a production isolation/deployment design. The complete implemented
 boundary is `docs/phase-10-controlled-coach-plan.md`.
 The preferred normal Coach model is `gpt-5.5`: this workflow values general
 conversation, synthesis, cautious planning, and strict structured output over
@@ -681,20 +714,20 @@ Use these rules before adding any model provider:
 - Cache or persist generated outputs.
 - Add feature flags for every LLM-backed path.
 
-## Immediate Implementation Plan
+## Current Implementation Checkpoint
 
-The next implementation should build on completed Phase 0 product integrity,
+The current repository builds on completed Phase 0 product integrity,
 Phase 1 capture, Phase 2 explainable state, Phase 3 executable action targets,
 Phase 4's persisted deterministic briefing contract, Phase 5's decision-first
 Today consumer, Phase 6's bounded feedback/Insight loop, the minimal Phase 7
 scheduled preparation backend, and Phase 8's bounded weekly review plus
-confirmed manual Habit V1 adaptation, and Phase 9's bounded `.ics` import. The
-immediate next slice is **Phase 10: Controlled Coach**: begin with a bounded
-authenticated context, budget, safety, provenance, and staged-suggestion
-contract. The deterministic standalone loop must remain the source of truth.
-Implement it against the development-only local Codex OAuth adapter and fake-
-provider test seam fixed in `docs/phase-10-controlled-coach-plan.md`; do not
-generalize this into a production or autonomous agent platform.
+confirmed manual Habit V1 adaptation, Phase 9's bounded `.ics` import, and
+Phase 10 Controlled Coach. The Coach keeps the deterministic standalone loop as
+the source of truth and uses the development-only local Codex OAuth adapter plus
+the deterministic fake-provider test seam fixed in
+`docs/phase-10-controlled-coach-plan.md`. The next slice must be selected from a
+separately verified product need; do not generalize this checkpoint into a
+production provider or autonomous agent platform by default.
 
 ### Completed Slice 0A: Honest Capture
 
@@ -941,25 +974,41 @@ in `docs/phase-8-weekly-review-contract.md`.
 The exact consent, import, identity, parser, privacy, and verification boundary
 lives in `docs/phase-9-calendar-import-contract.md`.
 
-### Planned Slice 10: Controlled Coach
+### Completed Slice 10: Controlled Coach
 
-- Add one strict authenticated `coach-request-v1` / `coach-response-v1`
-  boundary and a side-effect-free provider capability read.
-- Add an injectable provider abstraction. Standard tests use a fake; one
+- Added strict authenticated `coach-request-v1`, `coach-response-v1`,
+  `coach-capabilities-v1`, history, and memory-selection boundaries.
+- Added an injectable provider abstraction. Standard tests use a fake; one
   explicit local-development adapter invokes the same Linux user's Codex CLI
   and existing OAuth login without `OPENAI_API_KEY` or Hermes.
-- Prefer `gpt-5.5` for normal Coach turns. Treat its absence as honest
+- Prefer `gpt-5.5` for normal Coach turns. Its absence is honest
   configuration and allow an explicit per-developer override; do not silently
   choose a coding-focused Codex/Spark variant.
-- Use full owner-scoped backend reach with minimal model disclosure: current
+- Uses full owner-scoped backend reach with minimal model disclosure: current
   compact state, briefing, bounded active life-graph facts, selected memory, and
   a small message window only. Imported calendar content remains excluded.
-- Surface exact data-use, freshness, uncertainty, provider/model, prompt, and
+- Surfaces exact data-use, freshness, uncertainty, provider/model, prompt, and
   context provenance. Keep all suggestions review-only and non-mutating.
-- Replace the gated canned Coach and direct Flutter message insert path; keep
+- Replaced the gated canned Coach and direct Flutter message insert path; keeps
   guest/mock at zero backend/model calls.
-- Bound usage, concurrency, process environment, output, timeout, retention,
+- Bounds usage, concurrency, process environment, output, timeout, retention,
   memory selection, safety, and retry identity before calling a real model.
+- Persists successful turns as one atomic user/assistant pair, retains request
+  and usage identity across deletion, and stores no prompt or raw CLI event
+  stream. Suggestions remain review-only and non-executable.
+- Hardens persisted safety-call provenance plus canonical profile role and
+  onboarding authority. Application roles cannot self-promote, delete/recreate
+  the canonical profile, use a legacy role fallback, or opt into backend
+  workflows by writing onboarding completion.
+- Verification recorded on 2026-07-13 includes green real local PostgreSQL
+  parallel Coach lifecycle smokes and one opt-in synthetic
+  `local_codex_oauth` call with explicitly requested `gpt-5.5` (`1 passed`), no
+  fallback, and no answer/prompt/raw stream logged. The focused Phase 10 and
+  subsequent full non-destructive local fake-provider browser runs also passed.
+  A separate authenticated Flutter -> FastAPI -> `local_codex_oauth` -> same-
+  user Codex CLI live turn passed with explicit `gpt-5.5`, strict persisted
+  provenance, and visible UI data-use/provider truth. Remote/production state
+  and another developer/account remain unverified.
 
 The detailed implementation order and acceptance criteria live in
 `docs/phase-10-controlled-coach-plan.md`.
@@ -1029,6 +1078,8 @@ The detailed implementation order and acceptance criteria live in
   `updated_at`. The Phase 7 portion also proves targeted scheduled preparation
   and a write-free retry. Phase 8 adds bounded weekly review, and Phase 9 adds
   bounded calendar-import ownership, retry, pagination, and deletion boundaries.
+  Phase 10 source adds fake-provider response/replay/safety/history/memory/RLS/UI
+  assertions without a live account.
   The combined Phase 3 through Phase 9 journey passed non-destructively in the
   2026-07-13 Phase 9 implementation checkout. Later changes must establish their
   own current-checkout pass before claiming E2E.
@@ -1065,7 +1116,8 @@ The detailed implementation order and acceptance criteria live in
   ordinary task, habit, focus, or capture writes.
 - Expanding `review_plan` beyond bounded review navigation into autonomous or
   compound plan mutation.
-- Ungating the canned Coach or persisting its placeholder response.
+- Restoring the canned Coach, direct Flutter Coach writes, or persisting its
+  placeholder response.
 - Any model integration other than the explicit development-only
   `local_codex_oauth` adapter behind the provider seam.
 - A deployable OpenAI/OpenRouter/other API provider, API-key fallback, provider

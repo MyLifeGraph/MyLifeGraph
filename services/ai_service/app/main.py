@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.routes import (
     briefings,
     calendar_integrations,
+    coach,
     feedback,
     health,
     intake,
@@ -40,6 +41,7 @@ def create_app() -> FastAPI:
     app.include_router(scheduled.router, prefix=settings.api_prefix)
     app.include_router(weekly_reviews.router, prefix=settings.api_prefix)
     app.include_router(calendar_integrations.router, prefix=settings.api_prefix)
+    app.include_router(coach.router, prefix=settings.api_prefix)
 
     return app
 

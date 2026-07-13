@@ -23,6 +23,10 @@ const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const scheduledRefreshToken = process.env.SCHEDULED_REFRESH_TOKEN;
 const headed = process.env.HEADED === 'true';
 const runId = process.env.E2E_RUN_ID ?? `${Date.now()}`;
+const phase10Only = process.env.E2E_PHASE10_ONLY === 'true';
+const coachAttemptId = phase10Only
+  ? `${runId}-${process.pid}-${Date.now()}`
+  : runId;
 const artifactDir = process.env.E2E_ARTIFACT_DIR ?? '.tools/e2e';
 const email = `e2e-${runId}@example.test`;
 const password = `E2e-${runId}-password`;
@@ -42,6 +46,11 @@ const phase3EditedTaskTitle = `E2E executable task edited ${runId}`;
 const eveningTomorrowPriority = `E2E protect a calm morning ${runId}`;
 const editedEveningTomorrowPriority =
   `E2E finish the smallest useful draft ${runId}`;
+const coachMemoryTitle = `E2E bounded Coach memory ${runId}`;
+const coachApiMessage = `E2E explain one bounded next step ${runId}`;
+const coachUiMessage = `E2E UI Coach question ${runId}`;
+const coachSafetyMessage =
+  `E2E safety check ${runId}: I am in immediate danger and might hurt myself.`;
 
 const browser = await chromium.launch({
   headless: !headed,
@@ -51,6 +60,29 @@ const browser = await chromium.launch({
 let page;
 try {
   await assertAiServiceHealthy();
+  if (phase10Only) {
+    const accessToken = await signInAccessToken('focused Phase 10 browser run');
+    const userId = await authenticatedUserId(accessToken);
+    await resetCoachE2EState(userId);
+    page = await browser.newPage({ viewport: { width: 1280, height: 960 } });
+    page.on('pageerror', (error) => {
+      console.error(`[browser page error] ${error.message}`);
+    });
+    page.on('console', (message) => {
+      if (['error', 'warning'].includes(message.type())) {
+        console.error(`[browser ${message.type()}] ${message.text()}`);
+      }
+    });
+    await page.goto(appRoute('/auth'), { waitUntil: 'domcontentloaded' });
+    await waitForFlutterShell(page);
+    await enableFlutterSemantics(page);
+    await fillByLabelOrPlaceholder(page, 'Email', email, 0);
+    await fillByLabelOrPlaceholder(page, 'Password', password, 1);
+    await clickByText(page, 'Login', { match: 'last' });
+    await page.waitForURL('**/#/dashboard', { timeout: 45000 });
+    await assertControlledCoach(page, userId);
+    console.log(`Focused Phase 10 browser smoke passed for ${email}`);
+  } else {
   const user = await createConfirmedUser();
   await patchRows(
     `profiles?id=eq.${user.id}`,
@@ -2087,11 +2119,7 @@ try {
   await enableFlutterSemantics(page);
   await expectText(page, 'Notifications');
 
-  await page.goto(appRoute('/coach'), { waitUntil: 'domcontentloaded' });
-  await waitForFlutterShell(page);
-  await enableFlutterSemantics(page);
-  await page.waitForURL('**/#/dashboard');
-  await expectText(page, 'Latest check-in');
+  await assertControlledCoach(page, user.id);
 
   await page.goto(appRoute('/deep-work'), { waitUntil: 'domcontentloaded' });
   await waitForFlutterShell(page);
@@ -2133,6 +2161,7 @@ try {
   await assertConcurrentSetupReplay(user.id);
 
   console.log(`E2E browser smoke passed for ${email}`);
+  }
 } catch (error) {
   if (page) {
     const screenshotPath = `${artifactDir}/failure-${runId}.png`;
@@ -2643,6 +2672,50 @@ async function clickByText(page, text, options = {}) {
   }
 }
 
+async function textLocatorInViewport(page, text, { buttonFirst = false } = {}) {
+  const candidates = buttonFirst
+    ? [
+        page.getByRole('button', { name: text, exact: true }),
+        page.getByText(text, { exact: true }),
+        page.getByLabel(text, { exact: false }),
+      ]
+    : [
+        page.getByText(text, { exact: true }),
+        page.getByLabel(text, { exact: false }),
+        page.getByRole('button', { name: text, exact: true }),
+      ];
+  const viewport = page.viewportSize();
+  for (const candidate of candidates) {
+    const count = await candidate.count();
+    for (let index = 0; index < count; index += 1) {
+      const locator = candidate.nth(index);
+      const box = await locator.boundingBox().catch(() => null);
+      if (
+        box &&
+        box.width > 0 &&
+        box.height > 0 &&
+        (!viewport || (box.y < viewport.height && box.y + box.height > 0))
+      ) {
+        return locator;
+      }
+    }
+  }
+  return null;
+}
+
+async function scrollUntilTextInViewport(
+  page,
+  text,
+  { deltaY = 700, maxSteps = 20, buttonFirst = false } = {},
+) {
+  for (let step = 0; step <= maxSteps; step += 1) {
+    const locator = await textLocatorInViewport(page, text, { buttonFirst });
+    if (locator) return locator;
+    if (step < maxSteps) await scrollFlutterPage(page, deltaY);
+  }
+  throw new Error(`Could not bring ${text} into the Flutter viewport.`);
+}
+
 async function expectText(page, text) {
   try {
     await page.getByText(text).first().waitFor({
@@ -3019,6 +3092,15 @@ function isUuid(value) {
   return (
     typeof value === 'string' &&
     /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+      value,
+    )
+  );
+}
+
+function isCanonicalUuid(value) {
+  return (
+    typeof value === 'string' &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
       value,
     )
   );
@@ -4767,6 +4849,1150 @@ async function assertCalendarGuestBoundary() {
   }
 }
 
+async function assertControlledCoach(page, userId) {
+  const accessToken = await signInAccessToken('Phase 10 Controlled Coach');
+  const persistenceBeforeReads = await coachPersistenceSnapshot(userId);
+  if (
+    persistenceBeforeReads.requests.length !== 0 ||
+    persistenceBeforeReads.messages.length !== 0 ||
+    persistenceBeforeReads.usage.length !== 0
+  ) {
+    throw new Error('Phase 10 requires an empty owner-scoped Coach history.');
+  }
+
+  const capabilityResult = await coachApiRequest(
+    '/v1/coach/capabilities',
+    accessToken,
+  );
+  assertCoachApiStatus(capabilityResult, 200, 'initial Coach capability');
+  const initialCapability = assertCoachCapability(
+    capabilityResult.json,
+    'initial Coach capability',
+  );
+
+  const emptyHistoryResult = await coachApiRequest(
+    '/v1/coach/history',
+    accessToken,
+  );
+  assertCoachApiStatus(emptyHistoryResult, 200, 'read-only empty Coach history');
+  assertCoachHistoryEnvelope(
+    emptyHistoryResult.json,
+    [],
+    'read-only empty Coach history',
+  );
+  const persistenceAfterReads = await coachPersistenceSnapshot(userId);
+  if (stableJson(persistenceAfterReads) !== stableJson(persistenceBeforeReads)) {
+    throw new Error('Coach capability/history GET created persistence rows.');
+  }
+
+  const coachMemoryId = crypto.randomUUID();
+  const coachMemoryContent =
+    `Synthetic E2E memory ${runId}: prefer one bounded, reviewable next step.`;
+  await insertRows('memory_entries', [
+    {
+      id: coachMemoryId,
+      user_id: userId,
+      type: 'pattern',
+      title: coachMemoryTitle,
+      content: coachMemoryContent,
+      strength: 0.7,
+      evidence: [],
+      metadata: { source: 'phase-10-e2e' },
+    },
+  ]);
+
+  const memoriesResult = await coachApiRequest(
+    '/v1/coach/memories',
+    accessToken,
+  );
+  assertCoachApiStatus(memoriesResult, 200, 'Coach memory read');
+  const memories = assertCoachMemoryEnvelope(
+    memoriesResult.json,
+    'Coach memory read',
+  );
+  const eligibleMemory = memories.memories.find(
+    (memory) => memory.id === coachMemoryId,
+  );
+  if (
+    eligibleMemory?.type !== 'pattern' ||
+    eligibleMemory.title !== coachMemoryTitle ||
+    eligibleMemory.content !== coachMemoryContent ||
+    eligibleMemory.ownership !== 'manual' ||
+    eligibleMemory.selected !== false
+  ) {
+    throw new Error('Coach did not expose the exact eligible E2E memory.');
+  }
+  if (memories.memories.some((memory) => memory.type === 'preference')) {
+    throw new Error('Coach exposed a preference memory as selectable context.');
+  }
+
+  const selectResult = await coachApiRequest(
+    `/v1/coach/memories/${coachMemoryId}/selection`,
+    accessToken,
+    { method: 'POST', body: { selected: true } },
+  );
+  assertCoachApiStatus(selectResult, 200, 'Coach memory selection');
+  const selectedMemories = assertCoachMemoryEnvelope(
+    selectResult.json,
+    'Coach memory selection',
+  );
+  if (
+    selectedMemories.memories.find((memory) => memory.id === coachMemoryId)
+      ?.selected !== true
+  ) {
+    throw new Error('Coach memory selection did not persist as selected.');
+  }
+  await assertRows(
+    `coach_memory_selections?select=user_id,memory_id,selection_version&user_id=eq.${userId}&memory_id=eq.${coachMemoryId}`,
+    (rows) =>
+      rows.length === 1 &&
+      rows[0].selection_version === 'coach-memory-selection-v1',
+    'one exact Coach memory selection row',
+  );
+
+  const productBeforeResponses = await coachProductSnapshot(userId);
+  const firstRequestId = crypto.randomUUID();
+  const firstRequest = {
+    contract_version: 'coach-request-v1',
+    request_id: firstRequestId,
+    message: coachApiMessage,
+    context_scope: 'today',
+  };
+  const firstResult = await coachApiRequest(
+    '/v1/coach/respond',
+    accessToken,
+    { method: 'POST', body: firstRequest },
+  );
+  assertCoachApiStatus(firstResult, 200, 'first Coach response');
+  const firstResponse = assertCoachResponse(
+    firstResult.json,
+    {
+      requestId: firstRequestId,
+      source: 'model',
+      providerCalled: true,
+      safety: 'normal',
+    },
+    'first Coach response',
+  );
+  const memoryContext = firstResponse.used_context.find(
+    (item) => item.source === 'memories',
+  );
+  if (
+    memoryContext?.available_count !== 1 ||
+    memoryContext.included_count !== 1 ||
+    memoryContext.omitted_count !== 0
+  ) {
+    throw new Error('Selected Coach memory was not used exactly once.');
+  }
+  await assertCoachAtomicPersistence(userId, [
+    {
+      requestId: firstRequestId,
+      message: coachApiMessage,
+      response: firstResponse,
+      outcome: 'completed',
+      providerCalled: true,
+    },
+  ]);
+
+  const persistenceBeforeReplay = await coachPersistenceSnapshot(userId);
+  const replayResult = await coachApiRequest(
+    '/v1/coach/respond',
+    accessToken,
+    { method: 'POST', body: firstRequest },
+  );
+  assertCoachApiStatus(replayResult, 200, 'same-id Coach replay');
+  if (stableJson(replayResult.json) !== stableJson(firstResponse)) {
+    throw new Error('Same-id same-body Coach replay changed the response.');
+  }
+  const persistenceAfterReplay = await coachPersistenceSnapshot(userId);
+  if (stableJson(persistenceAfterReplay) !== stableJson(persistenceBeforeReplay)) {
+    throw new Error('Same-id Coach replay created or changed persistence rows.');
+  }
+
+  const conflictResult = await coachApiRequest(
+    '/v1/coach/respond',
+    accessToken,
+    {
+      method: 'POST',
+      body: { ...firstRequest, message: `${coachApiMessage} changed` },
+    },
+  );
+  assertCoachApiStatus(conflictResult, 409, 'same-id Coach conflict');
+  const expectedConflict = {
+    detail: {
+      code: 'request_conflict',
+      message: 'The Coach request id conflicts with an earlier request.',
+      retryable: false,
+    },
+  };
+  if (stableJson(conflictResult.json) !== stableJson(expectedConflict)) {
+    throw new Error('Same-id different-body Coach conflict was not exact.');
+  }
+  if (
+    stableJson(await coachPersistenceSnapshot(userId)) !==
+    stableJson(persistenceBeforeReplay)
+  ) {
+    throw new Error('Rejected Coach request-id conflict changed persistence.');
+  }
+
+  const safetyRequestId = crypto.randomUUID();
+  const safetyResult = await coachApiRequest(
+    '/v1/coach/respond',
+    accessToken,
+    {
+      method: 'POST',
+      body: {
+        contract_version: 'coach-request-v1',
+        request_id: safetyRequestId,
+        message: coachSafetyMessage,
+        context_scope: 'today',
+      },
+    },
+  );
+  assertCoachApiStatus(safetyResult, 200, 'deterministic Coach safety response');
+  const safetyResponse = assertCoachResponse(
+    safetyResult.json,
+    {
+      requestId: safetyRequestId,
+      source: 'deterministic_safety',
+      providerCalled: false,
+      safety: 'safety_redirect',
+    },
+    'deterministic Coach safety response',
+  );
+  if (
+    safetyResponse.used_context.length !== 0 ||
+    safetyResponse.staged_suggestion !== null ||
+    safetyResponse.uncertainty.level !== 'high'
+  ) {
+    throw new Error('Deterministic Coach safety bypass included model context.');
+  }
+  await assertCoachAtomicPersistence(userId, [
+    {
+      requestId: firstRequestId,
+      message: coachApiMessage,
+      response: firstResponse,
+      outcome: 'completed',
+      providerCalled: true,
+    },
+    {
+      requestId: safetyRequestId,
+      message: coachSafetyMessage,
+      response: safetyResponse,
+      outcome: 'safety_redirect',
+      providerCalled: false,
+    },
+  ]);
+
+  const persistedHistory = await coachApiRequest(
+    '/v1/coach/history',
+    accessToken,
+  );
+  assertCoachApiStatus(persistedHistory, 200, 'persisted Coach history');
+  assertCoachHistoryEnvelope(
+    persistedHistory.json,
+    [firstRequestId, safetyRequestId],
+    'persisted Coach history',
+  );
+
+  await page.goto(appRoute('/coach'), { waitUntil: 'domcontentloaded' });
+  await waitForFlutterShell(page);
+  await enableFlutterSemantics(page);
+  await page.waitForURL('**/#/coach');
+  await expectText(page, 'Coach ready');
+  await expectText(page, 'Responses use the deterministic test provider.');
+  await fillByLabelOrPlaceholder(page, 'Ask Coach', coachUiMessage, -1);
+  const uiResponsePromise = waitForAiPost(
+    page,
+    '/v1/coach/respond',
+    'deliberate Coach UI response',
+  );
+  await clickByText(page, 'Send');
+  const uiResponseResult = await uiResponsePromise;
+  const uiPayload = uiResponseResult.request().postDataJSON();
+  assertExactCoachKeys(
+    uiPayload,
+    ['contract_version', 'request_id', 'message', 'context_scope'],
+    'Coach UI request',
+  );
+  if (
+    uiPayload.contract_version !== 'coach-request-v1' ||
+    !isUuid(uiPayload.request_id) ||
+    uiPayload.message !== coachUiMessage ||
+    uiPayload.context_scope !== 'today'
+  ) {
+    throw new Error('Coach UI did not send the exact bounded request contract.');
+  }
+  const uiResponse = assertCoachResponse(
+    await uiResponseResult.json(),
+    {
+      requestId: uiPayload.request_id,
+      source: 'model',
+      providerCalled: true,
+      safety: 'normal',
+    },
+    'Coach UI response',
+  );
+  // Anchor these assertions to the newly inserted Latest response card. The
+  // deterministic provider intentionally returns the same wording for older
+  // turns, so a global first/last text match can expand the wrong history card.
+  await scrollFlutterPage(page, -20000);
+  await scrollUntilTextInViewport(page, coachUiMessage);
+  await scrollUntilTextInViewport(page, uiResponse.reply);
+  await scrollUntilTextInViewport(page, 'Uncertainty');
+  await scrollUntilTextInViewport(page, uiResponse.uncertainty.reason);
+  await scrollUntilTextInViewport(page, 'Review-only suggestion');
+  await scrollUntilTextInViewport(page, uiResponse.staged_suggestion.title);
+  await scrollUntilTextInViewport(
+    page,
+    'This suggestion cannot apply changes.',
+  );
+  await scrollUntilTextInViewport(page, 'Data used', {
+    buttonFirst: true,
+  });
+  await scrollUntilTextInViewport(
+    page,
+    'Provider and model',
+    { buttonFirst: true },
+  );
+  // Exact expanded data-use and provenance text is exercised in Flutter's
+  // widget test. The browser assertion stays anchored to this unique latest
+  // card while the exact API envelope above verifies every underlying value.
+
+  await assertCoachAtomicPersistence(userId, [
+    {
+      requestId: firstRequestId,
+      message: coachApiMessage,
+      response: firstResponse,
+      outcome: 'completed',
+      providerCalled: true,
+    },
+    {
+      requestId: safetyRequestId,
+      message: coachSafetyMessage,
+      response: safetyResponse,
+      outcome: 'safety_redirect',
+      providerCalled: false,
+    },
+    {
+      requestId: uiPayload.request_id,
+      message: coachUiMessage,
+      response: uiResponse,
+      outcome: 'completed',
+      providerCalled: true,
+    },
+  ]);
+  const uiHistory = await coachApiRequest('/v1/coach/history', accessToken);
+  assertCoachApiStatus(uiHistory, 200, 'Coach history after UI response');
+  assertCoachHistoryEnvelope(
+    uiHistory.json,
+    [firstRequestId, safetyRequestId, uiPayload.request_id],
+    'Coach history after UI response',
+  );
+
+  await assertCoachRls({
+    ownerAccessToken: accessToken,
+    userId,
+    memoryId: coachMemoryId,
+    memoryTitle: coachMemoryTitle,
+    requestId: firstRequestId,
+  });
+  const productAfterResponses = await coachProductSnapshot(userId);
+  if (stableJson(productAfterResponses) !== stableJson(productBeforeResponses)) {
+    throw new Error('Controlled Coach mutated owner product records.');
+  }
+
+  const deselectResult = await coachApiRequest(
+    `/v1/coach/memories/${coachMemoryId}/selection`,
+    accessToken,
+    { method: 'DELETE' },
+  );
+  assertCoachApiStatus(deselectResult, 200, 'Coach memory deselection');
+  const deselectedMemories = assertCoachMemoryEnvelope(
+    deselectResult.json,
+    'Coach memory deselection',
+  );
+  if (
+    deselectedMemories.memories.find((memory) => memory.id === coachMemoryId)
+      ?.selected !== false
+  ) {
+    throw new Error('Coach memory deselection did not persist.');
+  }
+  await assertRows(
+    `coach_memory_selections?select=memory_id&user_id=eq.${userId}&memory_id=eq.${coachMemoryId}`,
+    (rows) => rows.length === 0,
+    'removed Coach memory selection row',
+  );
+
+  const capabilityBeforeDeleteResult = await coachApiRequest(
+    '/v1/coach/capabilities',
+    accessToken,
+  );
+  assertCoachApiStatus(
+    capabilityBeforeDeleteResult,
+    200,
+    'Coach capability before history deletion',
+  );
+  const capabilityBeforeDelete = assertCoachCapability(
+    capabilityBeforeDeleteResult.json,
+    'Coach capability before history deletion',
+  );
+  if (
+    capabilityBeforeDelete.limits.remaining_requests !==
+    initialCapability.limits.remaining_requests - 3
+  ) {
+    throw new Error('Coach attempts did not decrement the daily budget exactly.');
+  }
+
+  await scrollUntilTextInViewport(page, 'Conversation history');
+  const firstDeleteConversation = await scrollUntilTextInViewport(
+    page,
+    'Delete conversation',
+    { buttonFirst: true },
+  );
+  const historyDeletes = [];
+  const historyDeleteObserver = (request) => {
+    if (
+      request.method() === 'DELETE' &&
+      request.url() === `${aiServiceBaseUrl}/v1/coach/history`
+    ) {
+      historyDeletes.push(request);
+    }
+  };
+  page.on('request', historyDeleteObserver);
+  await firstDeleteConversation.click();
+  await expectText(page, 'Delete conversation?');
+  await page.waitForTimeout(250);
+  if (historyDeletes.length !== 0) {
+    throw new Error('Coach history was deleted before confirmation.');
+  }
+  await clickByText(page, 'Cancel', { match: 'last' });
+  await page.waitForTimeout(250);
+  if (historyDeletes.length !== 0) {
+    throw new Error('Cancelling Coach history deletion still called the API.');
+  }
+
+  const secondDeleteConversation = await scrollUntilTextInViewport(
+    page,
+    'Delete conversation',
+    { buttonFirst: true },
+  );
+  await secondDeleteConversation.click();
+  await expectText(page, 'Delete conversation?');
+  const deleteResponsePromise = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'DELETE' &&
+      response.url() === `${aiServiceBaseUrl}/v1/coach/history`,
+  );
+  await clickByText(page, 'Delete conversation', { match: 'last' });
+  const deleteResponse = await deleteResponsePromise;
+  page.off('request', historyDeleteObserver);
+  if (!deleteResponse.ok()) {
+    throw new Error(
+      `Coach UI history deletion failed with ${deleteResponse.status()}.`,
+    );
+  }
+  const historyDeleteBody = historyDeletes[0]?.postData();
+  if (
+    historyDeletes.length !== 1 ||
+    (historyDeleteBody !== null && historyDeleteBody !== '')
+  ) {
+    throw new Error('Coach UI history DELETE was not exactly body-free.');
+  }
+  const deletePayload = await deleteResponse.json();
+  if (
+    stableJson(deletePayload) !==
+    stableJson({ contract_version: 'coach-history-v1', deleted: true })
+  ) {
+    throw new Error('Coach UI history deletion returned an invalid envelope.');
+  }
+  await expectText(page, 'No persisted Coach conversation yet.');
+
+  const afterDelete = await coachPersistenceSnapshot(userId);
+  if (
+    afterDelete.messages.length !== 0 ||
+    afterDelete.requests.length !== 3 ||
+    afterDelete.usage.length !== 3 ||
+    afterDelete.requests.some(
+      (request) =>
+        request.state !== 'deleted' ||
+        request.message_fingerprint !== null ||
+        request.response !== null ||
+        stableJson(request.used_context) !== '[]' ||
+        request.deleted_at === null,
+    )
+  ) {
+    throw new Error('Coach history deletion did not retain exact tombstones/usage.');
+  }
+  const deletedHistory = await coachApiRequest('/v1/coach/history', accessToken);
+  assertCoachApiStatus(deletedHistory, 200, 'deleted Coach history read');
+  assertCoachHistoryEnvelope(
+    deletedHistory.json,
+    [],
+    'deleted Coach history read',
+  );
+  const capabilityAfterDeleteResult = await coachApiRequest(
+    '/v1/coach/capabilities',
+    accessToken,
+  );
+  assertCoachApiStatus(
+    capabilityAfterDeleteResult,
+    200,
+    'Coach capability after history deletion',
+  );
+  const capabilityAfterDelete = assertCoachCapability(
+    capabilityAfterDeleteResult.json,
+    'Coach capability after history deletion',
+  );
+  if (
+    capabilityAfterDelete.limits.remaining_requests !==
+    capabilityBeforeDelete.limits.remaining_requests
+  ) {
+    throw new Error('Deleting Coach history reset the retained daily budget.');
+  }
+
+  await assertCoachGuestBoundary();
+}
+
+async function coachApiRequest(path, accessToken, options = {}) {
+  return calendarApiRequest(path, accessToken, options);
+}
+
+function assertCoachApiStatus(result, expectedStatus, context) {
+  if (result.response.status !== expectedStatus) {
+    throw new Error(
+      `${context} returned ${result.response.status}, expected ${expectedStatus}: ${result.text}`,
+    );
+  }
+}
+
+function assertCoachCapability(payload, context) {
+  assertExactCoachKeys(
+    payload,
+    [
+      'contract_version',
+      'state',
+      'provider',
+      'provider_mode',
+      'model_requested',
+      'model_source',
+      'reason_code',
+      'limits',
+    ],
+    context,
+  );
+  assertExactCoachKeys(
+    payload.limits,
+    [
+      'message_codepoints',
+      'context_bytes',
+      'reply_codepoints',
+      'timeout_seconds',
+      'requests_per_local_day',
+      'remaining_requests',
+    ],
+    `${context} limits`,
+  );
+  if (
+    payload.contract_version !== 'coach-capabilities-v1' ||
+    payload.state !== 'ready' ||
+    payload.provider !== 'fake' ||
+    payload.provider_mode !== 'deterministic_test_only' ||
+    payload.model_requested !== null ||
+    payload.model_source !== 'not_applicable' ||
+    payload.reason_code !== 'ready' ||
+    payload.limits.message_codepoints !== 2000 ||
+    payload.limits.context_bytes !== 32768 ||
+    payload.limits.reply_codepoints !== 4000 ||
+    !Number.isInteger(payload.limits.timeout_seconds) ||
+    payload.limits.timeout_seconds < 5 ||
+    payload.limits.timeout_seconds > 120 ||
+    !Number.isInteger(payload.limits.requests_per_local_day) ||
+    payload.limits.requests_per_local_day < 1 ||
+    payload.limits.requests_per_local_day > 100 ||
+    !Number.isInteger(payload.limits.remaining_requests) ||
+    payload.limits.remaining_requests < 0 ||
+    payload.limits.remaining_requests > payload.limits.requests_per_local_day
+  ) {
+    throw new Error(`${context} is not the ready deterministic fake capability.`);
+  }
+  return payload;
+}
+
+function assertCoachMemoryEnvelope(payload, context) {
+  assertExactCoachKeys(
+    payload,
+    ['contract_version', 'max_selected', 'available_count', 'memories'],
+    context,
+  );
+  if (
+    payload.contract_version !== 'coach-memory-selection-v1' ||
+    payload.max_selected !== 8 ||
+    !Number.isInteger(payload.available_count) ||
+    payload.available_count < 0 ||
+    !Array.isArray(payload.memories) ||
+    payload.available_count < payload.memories.length
+  ) {
+    throw new Error(`${context} has an invalid memory-selection envelope.`);
+  }
+  for (const memory of payload.memories) {
+    assertExactCoachKeys(
+      memory,
+      [
+        'id',
+        'type',
+        'title',
+        'content',
+        'content_truncated',
+        'ownership',
+        'selected',
+        'updated_at',
+      ],
+      `${context} memory`,
+    );
+    if (
+      !isCanonicalUuid(memory.id) ||
+      !['pattern', 'goal', 'habit', 'recurring_problem', 'recommendation'].includes(
+        memory.type,
+      ) ||
+      typeof memory.title !== 'string' ||
+      memory.title.length === 0 ||
+      typeof memory.content !== 'string' ||
+      memory.content.length === 0 ||
+      typeof memory.content_truncated !== 'boolean' ||
+      !['setup', 'manual'].includes(memory.ownership) ||
+      typeof memory.selected !== 'boolean' ||
+      Number.isNaN(Date.parse(memory.updated_at))
+    ) {
+      throw new Error(`${context} contains an invalid memory row.`);
+    }
+  }
+  if (payload.memories.filter((memory) => memory.selected).length > 8) {
+    throw new Error(`${context} exceeds the selected-memory limit.`);
+  }
+  return payload;
+}
+
+function assertCoachResponse(payload, expected, context) {
+  assertExactCoachKeys(
+    payload,
+    [
+      'contract_version',
+      'request_id',
+      'reply',
+      'uncertainty',
+      'staged_suggestion',
+      'safety',
+      'used_context',
+      'provenance',
+    ],
+    context,
+  );
+  assertExactCoachKeys(
+    payload.uncertainty,
+    ['level', 'reason'],
+    `${context} uncertainty`,
+  );
+  assertExactCoachKeys(
+    payload.safety,
+    ['classification'],
+    `${context} safety`,
+  );
+  assertExactCoachKeys(
+    payload.provenance,
+    [
+      'source',
+      'provider',
+      'provider_mode',
+      'model_requested',
+      'model_reported',
+      'model_source',
+      'prompt_version',
+      'context_version',
+      'generated_at',
+      'provider_called',
+    ],
+    `${context} provenance`,
+  );
+  if (
+    payload.contract_version !== 'coach-response-v1' ||
+    payload.request_id !== expected.requestId ||
+    typeof payload.reply !== 'string' ||
+    payload.reply.length === 0 ||
+    !['low', 'medium', 'high'].includes(payload.uncertainty.level) ||
+    typeof payload.uncertainty.reason !== 'string' ||
+    payload.uncertainty.reason.length === 0 ||
+    payload.safety.classification !== expected.safety ||
+    !Array.isArray(payload.used_context) ||
+    payload.provenance.source !== expected.source ||
+    payload.provenance.provider !== 'fake' ||
+    payload.provenance.provider_mode !== 'deterministic_test_only' ||
+    payload.provenance.model_requested !== null ||
+    payload.provenance.model_reported !== null ||
+    payload.provenance.model_source !== 'not_applicable' ||
+    payload.provenance.prompt_version !== 'controlled-coach-prompt-v1' ||
+    payload.provenance.context_version !== 'coach-context-v1' ||
+    payload.provenance.provider_called !== expected.providerCalled ||
+    Number.isNaN(Date.parse(payload.provenance.generated_at))
+  ) {
+    throw new Error(`${context} violates the exact Coach response contract.`);
+  }
+  if (payload.staged_suggestion !== null) {
+    assertExactCoachKeys(
+      payload.staged_suggestion,
+      ['title', 'rationale'],
+      `${context} staged suggestion`,
+    );
+    if (
+      typeof payload.staged_suggestion.title !== 'string' ||
+      payload.staged_suggestion.title.length === 0 ||
+      typeof payload.staged_suggestion.rationale !== 'string' ||
+      payload.staged_suggestion.rationale.length === 0
+    ) {
+      throw new Error(`${context} has an invalid staged suggestion.`);
+    }
+  }
+
+  const sources = [];
+  for (const item of payload.used_context) {
+    assertExactCoachKeys(
+      item,
+      [
+        'source',
+        'available_count',
+        'included_count',
+        'omitted_count',
+        'freshness',
+      ],
+      `${context} used context`,
+    );
+    if (
+      !Number.isInteger(item.available_count) ||
+      !Number.isInteger(item.included_count) ||
+      !Number.isInteger(item.omitted_count) ||
+      item.included_count + item.omitted_count !== item.available_count ||
+      !['current', 'stale', 'missing', 'not_applicable'].includes(
+        item.freshness,
+      )
+    ) {
+      throw new Error(`${context} has non-reconciling context counts.`);
+    }
+    sources.push(item.source);
+  }
+  if (new Set(sources).size !== sources.length) {
+    throw new Error(`${context} repeats a context source.`);
+  }
+  if (expected.source === 'model') {
+    const expectedSources = [
+      'profile',
+      'daily_snapshot',
+      'daily_briefing',
+      'goals',
+      'tasks',
+      'habits',
+      'focus_sessions',
+      'weekly_review',
+      'memories',
+      'coach_history',
+    ];
+    if (stableJson(sources) !== stableJson(expectedSources)) {
+      throw new Error(`${context} has an incomplete ordered context manifest.`);
+    }
+    const expectedReply =
+      'Your current plan already contains a clear next step. Keep it small, then reassess your available capacity.';
+    if (
+      payload.reply !== expectedReply ||
+      payload.staged_suggestion?.title !== 'Protect one small next step' ||
+      payload.staged_suggestion?.rationale !==
+        'Review whether one deliberately small action fits the capacity you have today.'
+    ) {
+      throw new Error(`${context} was not produced by the deterministic fake provider.`);
+    }
+  }
+  return payload;
+}
+
+function assertCoachHistoryEnvelope(payload, expectedRequestIds, context) {
+  assertExactCoachKeys(payload, ['contract_version', 'turns'], context);
+  if (
+    payload.contract_version !== 'coach-history-v1' ||
+    !Array.isArray(payload.turns) ||
+    payload.turns.length !== expectedRequestIds.length
+  ) {
+    throw new Error(`${context} has an invalid history envelope.`);
+  }
+  const actualIds = [];
+  for (const turn of payload.turns) {
+    assertExactCoachKeys(
+      turn,
+      ['request_id', 'message', 'response', 'created_at'],
+      `${context} turn`,
+    );
+    if (
+      !isUuid(turn.request_id) ||
+      typeof turn.message !== 'string' ||
+      turn.message.length === 0 ||
+      Number.isNaN(Date.parse(turn.created_at)) ||
+      turn.response?.request_id !== turn.request_id
+    ) {
+      throw new Error(`${context} contains an invalid history turn.`);
+    }
+    assertCoachResponse(
+      turn.response,
+      {
+        requestId: turn.request_id,
+        source: turn.response.provenance?.source,
+        providerCalled: turn.response.provenance?.provider_called,
+        safety: turn.response.safety?.classification,
+      },
+      `${context} persisted response`,
+    );
+    actualIds.push(turn.request_id);
+  }
+  if (
+    stableJson([...actualIds].sort()) !==
+    stableJson([...expectedRequestIds].sort())
+  ) {
+    throw new Error(`${context} returned the wrong request identities.`);
+  }
+  return payload;
+}
+
+function assertExactCoachKeys(value, keys, context) {
+  if (
+    value === null ||
+    typeof value !== 'object' ||
+    Array.isArray(value) ||
+    stableJson(Object.keys(value).sort()) !== stableJson([...keys].sort())
+  ) {
+    throw new Error(`${context} has unknown, missing, or non-object fields.`);
+  }
+}
+
+async function coachPersistenceSnapshot(userId) {
+  const [requests, messages, usage] = await Promise.all([
+    fetchRows(
+      `coach_requests?select=request_id,user_id,contract_version,context_scope,local_date,message_fingerprint,state,lease_expires_at,provider,provider_mode,model_requested,model_reported,model_source,prompt_version,context_version,response,used_context,error,created_at,completed_at,failed_at,deleted_at,updated_at&user_id=eq.${userId}&order=request_id.asc`,
+      'Phase 10 Coach requests',
+    ),
+    fetchRows(
+      `coach_messages?select=id,user_id,request_id,contract_version,role,content,metadata,created_at&user_id=eq.${userId}&order=request_id.asc,role.asc,id.asc`,
+      'Phase 10 Coach messages',
+    ),
+    fetchRows(
+      `coach_usage_events?select=id,request_id,user_id,local_date,outcome,provider,provider_mode,model_requested,model_reported,model_source,error_code,counters,created_at&user_id=eq.${userId}&order=request_id.asc`,
+      'Phase 10 Coach usage',
+    ),
+  ]);
+  return { requests, messages, usage };
+}
+
+async function assertCoachAtomicPersistence(userId, expected) {
+  const persisted = await coachPersistenceSnapshot(userId);
+  if (
+    persisted.requests.length !== expected.length ||
+    persisted.messages.length !== expected.length * 2 ||
+    persisted.usage.length !== expected.length
+  ) {
+    throw new Error('Coach did not persist one request, pair, and usage row per turn.');
+  }
+  for (const item of expected) {
+    const request = persisted.requests.find(
+      (row) => row.request_id === item.requestId,
+    );
+    const messages = persisted.messages.filter(
+      (row) => row.request_id === item.requestId,
+    );
+    const usage = persisted.usage.find(
+      (row) => row.request_id === item.requestId,
+    );
+    if (
+      request?.state !== 'completed' ||
+      request.contract_version !== 'coach-request-v1' ||
+      request.context_scope !== 'today' ||
+      request.provider !== 'fake' ||
+      request.provider_mode !== 'deterministic_test_only' ||
+      request.model_requested !== null ||
+      request.model_source !== 'not_applicable' ||
+      request.prompt_version !== 'controlled-coach-prompt-v1' ||
+      request.context_version !== 'coach-context-v1' ||
+      !/^[0-9a-f]{64}$/.test(request.message_fingerprint ?? '') ||
+      stableJson(request.response) !== stableJson(item.response) ||
+      stableJson(request.used_context) !== stableJson(item.response.used_context) ||
+      request.error !== null ||
+      request.completed_at === null ||
+      stableJson(request).includes(item.message)
+    ) {
+      throw new Error(`Coach request ${item.requestId} is not an exact terminal row.`);
+    }
+    if (
+      messages.length !== 2 ||
+      !messages.every(
+        (message) =>
+          message.user_id === userId &&
+          message.contract_version === 'coach-message-v1' &&
+          stableJson(message.metadata) === '{}',
+      ) ||
+      messages.find((message) => message.role === 'user')?.content !==
+        item.message ||
+      messages.find((message) => message.role === 'assistant')?.content !==
+        item.response.reply
+    ) {
+      throw new Error(`Coach request ${item.requestId} lacks its exact atomic pair.`);
+    }
+    assertExactCoachKeys(
+      usage?.counters,
+      ['provider_called', 'prompt_bytes', 'context_bytes', 'reply_codepoints'],
+      `Coach request ${item.requestId} usage counters`,
+    );
+    if (
+      usage?.outcome !== item.outcome ||
+      usage.provider !== 'fake' ||
+      usage.provider_mode !== 'deterministic_test_only' ||
+      usage.model_requested !== null ||
+      usage.model_reported !== null ||
+      usage.model_source !== 'not_applicable' ||
+      usage.error_code !== null ||
+      usage.counters.provider_called !== item.providerCalled ||
+      usage.counters.reply_codepoints !== Array.from(item.response.reply).length ||
+      (item.providerCalled &&
+        (usage.counters.prompt_bytes <= 0 || usage.counters.context_bytes <= 0)) ||
+      (!item.providerCalled &&
+        (usage.counters.prompt_bytes !== 0 || usage.counters.context_bytes !== 0))
+    ) {
+      throw new Error(`Coach request ${item.requestId} has invalid retained usage.`);
+    }
+  }
+}
+
+async function coachProductSnapshot(userId) {
+  const tables = [
+    'daily_logs',
+    'behavioral_events',
+    'goals',
+    'tasks',
+    'habits',
+    'habit_logs',
+    'focus_sessions',
+    'schedule_items',
+    'memory_entries',
+    'recommendations',
+    'user_state_snapshots',
+    'daily_briefings',
+    'weekly_reviews',
+  ];
+  const rows = await Promise.all(
+    tables.map((table) =>
+      fetchRows(
+        `${table}?select=*&user_id=eq.${userId}&order=id.asc`,
+        `Phase 10 ${table} mutation baseline`,
+      ),
+    ),
+  );
+  const [profile] = await fetchRows(
+    `profiles?select=*&id=eq.${userId}`,
+    'Phase 10 profile mutation baseline',
+  );
+  return {
+    profile,
+    ...Object.fromEntries(tables.map((table, index) => [table, rows[index]])),
+  };
+}
+
+async function assertCoachRls({
+  ownerAccessToken,
+  userId,
+  memoryId,
+  memoryTitle,
+  requestId,
+}) {
+  const ownerMessages = await authenticatedRestRequest(
+    `coach_messages?select=id,user_id,request_id,role&request_id=eq.${requestId}`,
+    ownerAccessToken,
+  );
+  const ownerMemory = await authenticatedRestRequest(
+    `memory_entries?select=id,user_id,type,title&id=eq.${memoryId}`,
+    ownerAccessToken,
+  );
+  const ownerSelection = await authenticatedRestRequest(
+    `coach_memory_selections?select=user_id,memory_id,selection_version&memory_id=eq.${memoryId}`,
+    ownerAccessToken,
+  );
+  if (
+    !ownerMessages.response.ok ||
+    ownerMessages.rows?.length !== 2 ||
+    !ownerMemory.response.ok ||
+    ownerMemory.rows?.length !== 1 ||
+    !ownerSelection.response.ok ||
+    ownerSelection.rows?.length !== 1
+  ) {
+    throw new Error('Coach owner SELECT policies did not expose exact owned rows.');
+  }
+
+  const secondaryEmail = `e2e-phase10-other-${coachAttemptId}@example.test`;
+  const secondaryPassword = `E2e-phase10-other-${coachAttemptId}-password`;
+  const secondary = await createConfirmedUserWithCredentials({
+    emailAddress: secondaryEmail,
+    passwordValue: secondaryPassword,
+    displayName: 'E2E Coach Other User',
+  });
+  const secondaryToken = await signInCredentials({
+    emailAddress: secondaryEmail,
+    passwordValue: secondaryPassword,
+    context: 'Phase 10 secondary principal',
+  });
+  const selfPromotion = await authenticatedRestRequest(
+    `profiles?id=eq.${secondary.id}`,
+    secondaryToken,
+    {
+      method: 'PATCH',
+      body: { role: 'admin', auth_provider: 'email' },
+    },
+  );
+  if (selfPromotion.response.ok) {
+    throw new Error('Authenticated Coach principal self-promoted to admin.');
+  }
+  const selfOnboarding = await authenticatedRestRequest(
+    `profiles?id=eq.${secondary.id}`,
+    secondaryToken,
+    {
+      method: 'PATCH',
+      body: { onboarding_completed_at: new Date().toISOString() },
+    },
+  );
+  if (selfOnboarding.response.ok) {
+    throw new Error(
+      'Authenticated Coach principal bypassed the atomic Setup apply contract.',
+    );
+  }
+  await assertRows(
+    `profiles?select=id,role,auth_provider,onboarding_completed_at&id=eq.${secondary.id}`,
+    (rows) =>
+      rows.length === 1 &&
+      rows[0].role === 'user' &&
+      rows[0].auth_provider === 'email' &&
+      rows[0].onboarding_completed_at === null,
+    'Coach secondary profile authority survives direct privilege attempts',
+  );
+  const crossOwnerReads = await Promise.all([
+    authenticatedRestRequest(
+      `coach_messages?select=id&request_id=eq.${requestId}`,
+      secondaryToken,
+    ),
+    authenticatedRestRequest(
+      `memory_entries?select=id&id=eq.${memoryId}`,
+      secondaryToken,
+    ),
+    authenticatedRestRequest(
+      `coach_memory_selections?select=memory_id&memory_id=eq.${memoryId}`,
+      secondaryToken,
+    ),
+  ]);
+  if (
+    crossOwnerReads.some(
+      (result) => !result.response.ok || result.rows?.length !== 0,
+    )
+  ) {
+    throw new Error('Coach RLS exposed owner rows to a secondary principal.');
+  }
+  const secondaryHistory = await coachApiRequest(
+    '/v1/coach/history',
+    secondaryToken,
+  );
+  assertCoachApiStatus(secondaryHistory, 200, 'cross-owner Coach history');
+  assertCoachHistoryEnvelope(
+    secondaryHistory.json,
+    [],
+    'cross-owner Coach history',
+  );
+
+  const directMessageInsert = await authenticatedRestRequest(
+    'coach_messages',
+    ownerAccessToken,
+    {
+      method: 'POST',
+      body: {
+        user_id: userId,
+        role: 'user',
+        content: `E2E unauthorized Coach message ${runId}`,
+        metadata: {},
+      },
+    },
+  );
+  const directMemoryPatch = await authenticatedRestRequest(
+    `memory_entries?id=eq.${memoryId}`,
+    ownerAccessToken,
+    { method: 'PATCH', body: { title: 'E2E unauthorized memory rewrite' } },
+  );
+  const directSelectionDelete = await authenticatedRestRequest(
+    `coach_memory_selections?user_id=eq.${userId}&memory_id=eq.${memoryId}`,
+    ownerAccessToken,
+    { method: 'DELETE' },
+  );
+  if (
+    directMessageInsert.response.ok ||
+    directMemoryPatch.response.ok ||
+    directSelectionDelete.response.ok
+  ) {
+    throw new Error('Authenticated client wrote backend-owned Coach state directly.');
+  }
+  await assertRows(
+    `coach_messages?select=id&user_id=eq.${userId}`,
+    (rows) => rows.length === 6,
+    'Coach messages survive direct authenticated insert',
+  );
+  await assertRows(
+    `memory_entries?select=id,title&id=eq.${memoryId}`,
+    (rows) => rows.length === 1 && rows[0].title === memoryTitle,
+    'Coach memory survives direct authenticated update',
+  );
+  await assertRows(
+    `coach_memory_selections?select=memory_id&user_id=eq.${userId}&memory_id=eq.${memoryId}`,
+    (rows) => rows.length === 1,
+    'Coach selection survives direct authenticated delete',
+  );
+}
+
+async function assertCoachGuestBoundary() {
+  const context = await browser.newContext({
+    viewport: { width: 390, height: 844 },
+  });
+  await context.addInitScript(() => {
+    localStorage.setItem('flutter.auth_guest_active', 'true');
+    localStorage.setItem('flutter.auth_guest_onboarding_done', 'true');
+    localStorage.setItem(
+      'flutter.auth_guest_name',
+      JSON.stringify('Phase 10 Guest'),
+    );
+  });
+  const guestPage = await context.newPage();
+  const coachRequests = [];
+  guestPage.on('request', (request) => {
+    if (request.url().includes('/v1/coach')) {
+      coachRequests.push(`${request.method()} ${request.url()}`);
+    }
+  });
+  try {
+    await guestPage.goto(appRoute('/coach'), { waitUntil: 'domcontentloaded' });
+    await waitForFlutterShell(guestPage);
+    await enableFlutterSemantics(guestPage);
+    await guestPage.waitForURL('**/#/coach');
+    await expectText(guestPage, 'Coach unavailable');
+    await expectText(
+      guestPage,
+      'This local surface does not contact a Coach provider.',
+    );
+    await guestPage.waitForTimeout(500);
+    if (coachRequests.length !== 0) {
+      throw new Error(
+        `Guest Coach surface contacted the authenticated API: ${JSON.stringify(coachRequests)}`,
+      );
+    }
+  } finally {
+    await context.close();
+  }
+}
+
 async function assertDeterministicDailyBriefing(userId) {
   const accessToken = await signInAccessToken('Phase 4 briefing');
   const rowsBefore = await fetchRows(
@@ -5062,6 +6288,40 @@ async function signInAccessToken(context) {
     throw new Error(`${context} sign-in returned no access token.`);
   }
   return accessToken;
+}
+
+async function authenticatedUserId(accessToken) {
+  const response = await fetch(`${supabaseUrl}/auth/v1/user`, {
+    headers: {
+      apikey: supabaseAnonKey,
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+  if (!response.ok) {
+    throw new Error(
+      `Focused Phase 10 user lookup failed: ${response.status} ${await response.text()}`,
+    );
+  }
+  const id = (await response.json()).id;
+  if (!isCanonicalUuid(id)) {
+    throw new Error('Focused Phase 10 user lookup returned no valid user id.');
+  }
+  return id;
+}
+
+async function resetCoachE2EState(userId) {
+  await deleteRows(
+    `coach_memory_selections?user_id=eq.${userId}`,
+    'focused Phase 10 memory selections',
+  );
+  await deleteRows(
+    `coach_requests?user_id=eq.${userId}`,
+    'focused Phase 10 request history',
+  );
+  await deleteRows(
+    `memory_entries?user_id=eq.${userId}&title=eq.${encodeURIComponent(coachMemoryTitle)}`,
+    'focused Phase 10 synthetic memories',
+  );
 }
 
 async function briefingRequest(path, accessToken, body) {

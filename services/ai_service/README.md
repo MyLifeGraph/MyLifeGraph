@@ -64,14 +64,17 @@ FastAPI service boundary for recommendation and future ML workflows.
   request registry prevents UUID reuse across owners or operations. It has no
   provider credential, URL fetch, provider write, background sync, or LLM
   processing.
-- The service does not call LLMs, OpenRouter, local models, or vector search.
-  The repository contains no deployed cron, background worker, or Phase 7
-  notification sender.
-- Phase 10 is planned next with an injectable Coach provider and a strictly
-  development-only `local_codex_oauth` adapter. It will invoke the current
-  Linux user's manually authenticated Codex CLI without an application API key;
-  it is not implemented or production-ready in this checkout. See
-  `../../docs/phase-10-controlled-coach-plan.md`.
+- Phase 10 exposes authenticated capability, deliberate response,
+  history/delete, and explicit memory-selection contracts. Standard tests use
+  the deterministic fake provider. The only real-model adapter is the strictly
+  development-only `local_codex_oauth`, which invokes the current Linux user's
+  manually authenticated Codex CLI without an application API key, tools, or
+  model fallback. Only a deliberate Coach send may call it; all other service
+  workflows remain deterministic/no-model. It is not a production provider.
+  See `../../docs/phase-10-controlled-coach-plan.md`.
+- The repository contains no deployed cron, background worker, Phase 7
+  notification sender, vector search, autonomous agent, or deployable LLM
+  provider.
 
 ## Setup
 
@@ -268,31 +271,75 @@ separate body-free post-disconnect local operation and never changes
 an owner, connection, or lifecycle operation returns conflict. See
 `../../docs/phase-9-calendar-import-contract.md`.
 
+Phase 10 Coach uses these bearer-authenticated endpoints:
+
+```text
+GET    /v1/coach/capabilities
+POST   /v1/coach/respond
+GET    /v1/coach/history
+DELETE /v1/coach/history
+GET    /v1/coach/memories
+POST   /v1/coach/memories/{memory_id}/selection
+DELETE /v1/coach/memories/{memory_id}/selection
+```
+
+Capability, history, and memory operations never call a model. Respond accepts
+only strict `coach-request-v1` with one UUID, a trimmed message of at most 2,000
+Unicode code points, and `context_scope=today`. It builds at most 32 KiB of
+owner-scoped current context, returns strict `coach-response-v1`, and exposes
+exact source counts/freshness plus provider/model/prompt/context provenance.
+Completed same-id replay does not call the provider again; changed input with
+the same id conflicts; failed/deleted ids remain terminal. One owner has at most
+one live claim and the default retained attempt limit is 20 per profile-local
+day.
+
+Memory selection is explicit, separate from memory content/Setup ownership, and
+capped at eight eligible rows. Conversation deletion is body-free: it removes
+message/response content but retains content-free request tombstones and
+append-only usage events, so it neither resets the daily limit nor permits
+request-id reinterpretation. Coach returns at most one review-only text
+suggestion and has no mutation command.
+
 ## Environment
 
 The service reads `.env` from `services/ai_service`:
 
 ```env
 APP_ENV=development
+USE_MOCK_DATA=true
 API_PREFIX=/v1
 ALLOWED_ORIGINS=http://127.0.0.1:7357,http://localhost:7357
 SUPABASE_URL=
 SUPABASE_SERVICE_ROLE_KEY=
 SUPABASE_TIMEOUT_SECONDS=10
 SCHEDULED_REFRESH_TOKEN=
+COACH_PROVIDER=disabled
+COACH_FAKE_PROVIDER_ENABLED=false
+LOCAL_CODEX_ENABLED=false
+LOCAL_CODEX_BIN=codex
+LOCAL_CODEX_MODEL=gpt-5.5
+LOCAL_CODEX_TIMEOUT_SECONDS=45
+LOCAL_CODEX_MAX_REQUESTS_PER_USER_PER_DAY=20
+LOCAL_CODEX_GLOBAL_CONCURRENCY=2
 ```
 
 Do not expose the Supabase service-role key to the Flutter app. It belongs only
 in the backend service environment. Keep `SCHEDULED_REFRESH_TOKEN` backend-only
 as well; it authorizes scheduler-triggered refresh runs.
 
-The future Phase 10 local-provider settings are intentionally not listed as
-active service configuration yet. When implementation lands, safe defaults must
-keep it disabled, and the setting/parser tests, `.env.example`, local runbook,
-and this file must be updated together. Codex OAuth remains private CLI state;
-the service may run a sanitized login/capability command but must never read or
-copy an auth file. Its child environment must exclude the Supabase service-role
-key and every other application secret.
+Coach is off by default. Standard automation may explicitly use
+`COACH_PROVIDER=fake` with `COACH_FAKE_PROVIDER_ENABLED=true`. The real local
+adapter additionally requires `APP_ENV=development`, `USE_MOCK_DATA=false`,
+`COACH_PROVIDER=local_codex_oauth`, `LOCAL_CODEX_ENABLED=true`, valid backend
+Supabase settings, an executable CLI, and an existing login for the FastAPI
+Linux user. An empty `LOCAL_CODEX_MODEL` truthfully selects the CLI default;
+otherwise the exact configured model is requested with no fallback.
+
+Codex OAuth remains private CLI state; the service may run sanitized
+help/feature/login capability commands but must never read or copy an auth file.
+Its child environment is allowlisted and excludes the Supabase service-role key
+and every other application secret. The adapter is rejected outside development
+and is not a deployment design.
 
 The Setup apply RPC comes from
 `20260710180000_atomic_intake_v1_setup_apply.sql`. Execute is revoked from
@@ -315,6 +362,26 @@ Existing table RLS/grants remain unchanged. Positive legacy habit values
 normalize to completion; the migration rejects ambiguous rows with missing
 status and `value <= 0` instead of inventing skip intent.
 
+Controlled Coach persistence requires
+`20260713200000_phase_10_controlled_coach.sql` plus
+`20260713213000_phase_10_coach_lock_order_guard.sql`, followed by
+`20260713220000_phase_10_coach_safety_provenance_guard.sql`,
+`20260713223000_phase_10_profile_privilege_guard.sql`,
+`20260713224500_phase_10_role_authority_guard.sql`, and
+`20260713230000_phase_10_onboarding_eligibility_guard.sql`. The first adds backend-owned
+`coach_requests`, `coach_usage_events`, and `coach_memory_selections`; exact
+request-linked V1 message pairs; hardened forced RLS/grants for messages and
+memories; and service-role-only atomic claim, complete, fail, selection, and
+history-delete RPCs. Apply it non-destructively with `supabase migration up
+--local` when pending. The guard keeps those public signatures and makes
+claim/complete/fail take the same owner-first advisory lock as history delete.
+The additive guards persist exact provider-call truth for safety redirects,
+make profile identity and onboarding eligibility backend-owned, remove legacy
+`"User"` role fallback and authenticated profile deletion, and retain
+service-role/atomic Intake authority. Real local PostgreSQL parallel
+claim/completion/deletion smokes completed on 2026-07-13 without deadlock or
+timeout and converged on the expected state.
+
 JWT verification is isolated in the FastAPI auth dependency. Tests inject fake
 verifiers and repositories, so production or remote Supabase credentials are not
 required for the unit test suite. Intake tests cover authenticated read/save,
@@ -334,6 +401,36 @@ documented test suite alone is not a pass claim. The combined Phase 3 through
 Phase 9 browser journey passed non-destructively in the 2026-07-13 Phase 9
 implementation checkout; run it again after later changes to establish their
 current result.
+
+Phase 10 tests use fake services/providers/process runners. They do not require
+Codex, OAuth, a subscription, or network access. A focused Phase 10 browser
+rerun and the subsequent full non-destructive local-Supabase journey passed in
+the 2026-07-13 current checkout with the deterministic fake provider. The full
+run reported `E2E browser smoke passed for e2e-1783947134@example.test`; see
+`../../docs/verification.md` for the diagnostic-only focused rerun command.
+The separate synthetic-context live smoke is skipped by default and runs only
+after explicit local-provider setup and login:
+
+```bash
+RUN_LOCAL_CODEX_SMOKE=true ./.venv/bin/python -m pytest -q \
+  tests/test_local_codex_smoke.py
+```
+
+On 2026-07-13 that smoke completed with the explicitly requested `gpt-5.5`
+model (`1 passed`), with no fallback and no answer, prompt, or raw event stream
+logged. This records only the tested machine/CLI/login/account and is not a
+deployable-provider or another-developer availability claim. The browser
+results likewise establish neither remote Supabase nor production readiness.
+
+The separate authenticated product-path acceptance also passed on this machine
+on 2026-07-13: Flutter Web authenticated an existing onboarded local principal,
+this service reported ready `local_codex_oauth` with explicit `gpt-5.5`, and one
+deliberate send returned and persisted a strict `coach-response-v1` with model
+provenance and `provider_called=true`. No fake provider or fallback was enabled,
+and the harness logged no question, assembled prompt, answer, raw event stream,
+stderr, account identity, path, token, `.env` value, or Supabase key. The CLI
+did not emit a reliable selected-model field, so `model_reported` remained
+`null`. Another Linux user's independent clone/login run remains unverified.
 
 Run service tests with:
 

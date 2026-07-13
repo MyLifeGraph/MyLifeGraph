@@ -31,7 +31,7 @@ way to explore the product today is the Flutter app in mock-data guest mode.
   stress, energy, mood, screen time, activity, steps, habits, recovery, and
   focus. It computes 7/14/30-day relationships in Flutter from existing
   Supabase rows or local mock time series, without LLM usage.
-- Phase 0A through Phase 9 are implemented. Evening and Morning merge without
+- Phase 0A through Phase 10 are implemented at the repository boundary. Evening and Morning merge without
   erasing each other and feed a strict backend-only state parser; Setup remains
   progressive, revision-safe, reviewable, and atomically materialized. Phase 3
   adds durable task commands, cadence-aware Habit V1 outcomes, linked focus
@@ -65,15 +65,30 @@ way to explore the product today is the Flutter app in mock-data guest mode.
   only imported local data. No provider credential, URL fetch, provider write,
   background sync, LLM processing, or `schedule_items` mutation is introduced.
   The repository does not configure a deployed cron or create notifications.
-  Phase 10 is planned next as one controlled authenticated Coach boundary. Its
-  first real-model adapter is intentionally local-development-only: FastAPI
-  invokes an explicitly enabled Codex CLI already authenticated by the current
-  Linux/WSL user, so local Pro/Plus subscription testing needs no application
-  API key and shares no OAuth files. No Coach/model provider is implemented in
-  the current checkout yet. The planned interactive Coach prefers `gpt-5.5`
-  for general conversation/reasoning and strict output rather than a coding-
-  focused Spark variant, with no silent fallback when an account lacks it.
-  Production deployment requires a separate provider/security contract.
+  Phase 10 adds a strict authenticated, deliberate-send Coach boundary with a
+  32 KiB owner-scoped context cap, visible source/freshness/uncertainty
+  provenance, explicit selection of up to eight eligible memories, bounded
+  validated history, retained usage accounting, and at most one review-only
+  suggestion. Capability/history/memory reads never call a model; guest/mock is
+  zero-call; Coach cannot mutate tasks, habits, goals, schedules, briefings,
+  reviews, memory content, or calendar data. Standard tests use the deterministic
+  fake provider. The real-model adapter is intentionally local-development-only:
+  FastAPI invokes an explicitly enabled Codex CLI already authenticated by the
+  current Linux/WSL user, so local subscription testing needs no application API
+  key and shares no OAuth files. It prefers the explicitly configured `gpt-5.5`
+  setting, reports unavailable login/model/tool-free capability honestly, and
+  never silently falls back. Production deployment requires a separate
+  provider/security contract. An opt-in synthetic-context smoke completed on
+  2026-07-13 with the explicitly requested `gpt-5.5` model (`1 passed`), no
+  fallback, and no answer/prompt/raw event stream logged. That result is
+  machine- and account-specific. A separate authenticated Flutter -> FastAPI ->
+  `local_codex_oauth` -> same-user Codex CLI live turn also passed and persisted
+  a validated response on this machine with explicit `gpt-5.5`; no prompt or
+  answer content was logged. The current checkout's focused Phase 10 rerun and
+  subsequent full non-destructive local browser-E2E journey also passed with
+  the deterministic fake provider. None of these results establishes a remote/
+  production provider or another developer's account; the separate other-Linux-
+  user acceptance remains open.
   See
   `docs/phase-3-executable-actions-contract.md` and
   `docs/phase-8-weekly-review-contract.md`, and
@@ -101,8 +116,8 @@ Prerequisites:
 - Python 3.11+ if you want to run the AI service or static web fallback.
 - Node.js 20+ and npm for browser E2E.
 - Supabase CLI and Docker for local Supabase-backed tests and browser E2E.
-- Codex CLI plus a per-user `codex login` only for the future opt-in Phase 10
-  real-model local smoke; it is not needed for current or standard tests.
+- Codex CLI plus a per-user `codex login` only for the opt-in Phase 10
+  real-model local path; it is not needed for standard tests.
 
 From a fresh clone:
 
@@ -190,13 +205,14 @@ Then check:
 curl http://localhost:8000/v1/health
 ```
 
-The current service remains deterministic and has no model provider. The
-planned Phase 10 development adapter will never use `OPENAI_API_KEY`: each
-Linux/WSL developer authenticates their own Codex CLI manually, and FastAPI
-uses it only behind explicit local flags. Do not copy another developer's
-Codex OAuth state into the repo or `.env`. See
-`docs/phase-10-controlled-coach-plan.md` for the exact boundary; its settings
-and commands must not be described as active until the implementation lands.
+The service remains deterministic except for an explicit authenticated Coach
+send. Coach is disabled by default; automated tests use an explicitly enabled
+fake provider, while the development-only `local_codex_oauth` adapter never
+uses `OPENAI_API_KEY`. Each Linux/WSL developer authenticates their own Codex
+CLI manually, and FastAPI uses it only behind explicit local flags. Do not copy
+another developer's Codex OAuth state into the repo or `.env`. See
+`docs/phase-10-controlled-coach-plan.md` for the exact boundary and
+`docs/local-dev.md` for the active settings and routes.
 
 See `services/ai_service/README.md` for details.
 
@@ -314,17 +330,36 @@ Supabase is the intended auth and persistence backend. The current app supports:
   import is a deliberate retry-safe POST, event pages are read-only, and
   disconnect/delete have separate local semantics. Imported events never become
   app-authored commitments or provider writes.
+- `/v1/coach/capabilities`, `/v1/coach/history`, and `/v1/coach/memories` are
+  authenticated read/control boundaries that do not generate a reply.
+  `POST /v1/coach/respond` is the only deliberate model-call path. Completed
+  request replay is provider-free; one request id cannot be reinterpreted, one
+  owner has at most one in-flight request, and the default daily limit is 20
+  retained attempts in the profile-local day. History deletion removes message
+  content, tombstones requests, and keeps usage rows plus request identities.
+  Memory selection is a separate owner-scoped projection and never edits the
+  underlying Setup/manual memory.
 
 Important current caveat: the Flutter app targets the canonical snake_case
-schema. A clean local Supabase reset should apply
-`20260712211500_phase_8_weekly_review_provenance_guard.sql`, after the Phase 8
-weekly-review table migration. Phase 3 adds task estimates/terminal times,
+schema. A clean local Supabase reset should apply through
+`20260713230000_phase_10_onboarding_eligibility_guard.sql`. Phase 3 adds task estimates/terminal times,
 locked cadence-aware habit outcomes, immutable linked focus history, and
 restricted target deletion without replacing existing RLS or table grants.
 Phase 4 adds the persisted owner-scoped daily briefing identity and policies.
 Phase 8 adds the backend-owned owner-readable weekly review identity, forced
 RLS, and a strict deterministic-provenance guard; it does not grant
 authenticated review writes.
+Phase 10 adds `coach_requests`, `coach_usage_events`, and
+`coach_memory_selections`, hardens Coach/message-memory grants and forced RLS,
+and installs service-role-only atomic request, turn, selection, and deletion
+RPCs. Its follow-up guard aligns claim/complete/fail with history deletion on an
+owner-first advisory-lock order. The later Phase 10 guards preserve whether a
+safety redirect called the provider, make profile identity/role authority
+canonical and backend-owned, remove legacy-role fallback and authenticated
+profile deletion, and reserve onboarding eligibility projection for the atomic
+backend Intake path. Real local PostgreSQL parallel claim/completion/deletion
+smokes completed without deadlock or timeout and converged on the expected
+message/usage/tombstone outcomes.
 Remote projects still need to be inspected directly before relying on
 `USE_MOCK_DATA=false`.
 
@@ -397,8 +432,13 @@ npx playwright install chromium
 FLUTTER_BIN=/path/to/flutter bash scripts/e2e_web.sh
 ```
 
+For diagnosis only, `E2E_PHASE10_ONLY=true` plus the exact `E2E_RUN_ID` of an
+existing eligible principal repeats the Coach portion against that E2E user.
+It is not a substitute for the full command; see `docs/verification.md`.
+
 The browser E2E script starts local Supabase, starts FastAPI with local backend
-Supabase settings, and runs Flutter Web. Its smoke path includes authenticated
+Supabase settings and the deterministic fake Coach provider, and runs Flutter
+Web. It never contacts a live Codex account. Its smoke path includes authenticated
 Setup ownership/revision assertions, Evening/Morning merge assertions,
 deterministic linked-event checks, snapshot refresh, recommendations, core app
 writes, and a token-protected Phase 7 preparation targeted only to its unique
@@ -410,15 +450,18 @@ The smoke now contains Phase 3 task transition/undo, habit skip/undo, focus,
 committed-response-loss reconciliation for habit/task create, habit
 outcome/undo, task completion/undo, and focus start/finish, plus negative
 database assertions including terminal-focus `updated_at` mutation. Do not
-describe them as passed until the command succeeds in the current checkout.
+describe them as passed in a later checkout until that checkout's command
+succeeds.
 The Phase 8 source path additionally covers missing/read-only review truth,
 deliberate generation, exact persisted weekly facts/proposals, confirmed manual
 habit adaptation, stale refresh, Setup non-mutation, and review-table RLS. Phase
 9 adds explicit consent, bounded `.ics` reconciliation, paginated imported-only
 events, disconnect/delete separation, schedule preservation, and integration
-RLS. The combined Phase 3/4/5/6/7/8/9 journey passed non-destructively in the
-2026-07-13 Phase 9 implementation checkout. Later changes must establish their
-own current-checkout pass before claiming E2E.
+RLS. Phase 10 adds fake-provider Coach request/replay/safety/history/memory/RLS/
+UI assertions. A focused Phase 10 rerun and the subsequent full combined journey
+passed non-destructively against local Supabase in the 2026-07-13 current
+checkout; the full run reported
+`E2E browser smoke passed for e2e-1783947134@example.test`.
 
 With a fresh local database:
 
@@ -444,9 +487,9 @@ has the nvm bin directory on `PATH`.
   proposals, freshness, ownership, and confirmed habit adaptation.
 - `docs/phase-9-calendar-import-contract.md` - Explicit `.ics` consent,
   bounded retry-safe import, read-only provenance, and disconnect/delete rules.
-- `docs/phase-10-controlled-coach-plan.md` - Planned bounded Coach contract,
-  local subscription-backed Codex OAuth adapter, privacy limits, and acceptance
-  criteria.
+- `docs/phase-10-controlled-coach-plan.md` - Implemented bounded Coach contract,
+  local subscription-backed Codex OAuth adapter, privacy limits, and separate
+  live-verification criteria.
 - `docs/next-chat-prompt.md` - Ready-to-use prompt for continuing the next
   implementation slice in a new chat.
 - `apps/mobile/README.md` - Flutter app commands and configuration.
