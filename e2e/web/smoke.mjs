@@ -2011,6 +2011,8 @@ try {
     );
   }
   await assertBoundedWeeklyReview(page, user.id);
+  await assertBoundedCalendarImport(user.id);
+  await assertCalendarImportUi(page, user.id);
   await scrollFlutterPage(page, 2200);
   const [manualSnapshotResponse, manualRecommendationResponse] =
     await Promise.all([
@@ -3665,6 +3667,1106 @@ async function assertBoundedWeeklyReview(page, userId) {
   await enableFlutterSemantics(page);
 }
 
+async function assertBoundedCalendarImport(userId) {
+  const accessToken = await signInAccessToken('Phase 9 calendar import');
+  const scheduleBefore = await calendarScheduleSnapshot(userId);
+
+  const initial = await calendarApiRequest(
+    '/v1/calendar-integrations',
+    accessToken,
+  );
+  assertCalendarApiStatus(initial, 200, 'initial calendar connection read');
+  const initialConnection = assertCalendarConnectionEnvelope(
+    initial.json,
+    'initial calendar connection read',
+  );
+  if (initialConnection !== null) {
+    throw new Error(
+      `Phase 9 expected no initial calendar source: ${initial.text}`,
+    );
+  }
+  await assertRows(
+    `calendar_connections?select=id&user_id=eq.${userId}`,
+    (rows) => rows.length === 0,
+    'read-only initial calendar GET',
+  );
+
+  const sourceLabel = `E2E calendar ${runId}`;
+  const createRequestId = crypto.randomUUID();
+  const createBody = {
+    request_id: createRequestId,
+    source_kind: 'ical_file',
+    source_label: sourceLabel,
+    consent: {
+      consent_version: 'calendar-import-consent-v1',
+      read_calendar_events: true,
+      store_event_basics: true,
+      provider_writes: false,
+      llm_processing: false,
+    },
+  };
+  const created = await calendarApiRequest(
+    '/v1/calendar-integrations/connections',
+    accessToken,
+    { method: 'POST', body: createBody },
+  );
+  assertCalendarApiStatus(created, 200, 'calendar connection create');
+  const connection = assertCalendarConnectionEnvelope(
+    created.json,
+    'calendar connection create',
+  );
+  if (
+    connection === null ||
+    connection.status !== 'connected' ||
+    connection.source_label !== sourceLabel ||
+    Object.hasOwn(connection, 'last_import') ||
+    Object.hasOwn(connection, 'disconnected_at') ||
+    Object.hasOwn(connection, 'imported_data_deleted_at')
+  ) {
+    throw new Error(
+      `Calendar connection create returned invalid state: ${created.text}`,
+    );
+  }
+
+  const createReplay = await calendarApiRequest(
+    '/v1/calendar-integrations/connections',
+    accessToken,
+    { method: 'POST', body: createBody },
+  );
+  assertCalendarApiStatus(createReplay, 200, 'calendar connection replay');
+  assertCalendarConnectionEnvelope(
+    createReplay.json,
+    'calendar connection replay',
+  );
+  if (stableJson(createReplay.json) !== stableJson(created.json)) {
+    throw new Error(
+      `Calendar connection replay changed its public result: ${createReplay.text}`,
+    );
+  }
+  const createConflict = await calendarApiRequest(
+    '/v1/calendar-integrations/connections',
+    accessToken,
+    {
+      method: 'POST',
+      body: { ...createBody, source_label: `${sourceLabel} changed` },
+    },
+  );
+  assertCalendarApiStatus(
+    createConflict,
+    409,
+    'calendar connection request-id conflict',
+  );
+  const secondCurrentSource = await calendarApiRequest(
+    '/v1/calendar-integrations/connections',
+    accessToken,
+    {
+      method: 'POST',
+      body: { ...createBody, request_id: crypto.randomUUID() },
+    },
+  );
+  assertCalendarApiStatus(
+    secondCurrentSource,
+    409,
+    'second current calendar source',
+  );
+
+  await assertRows(
+    `calendar_connections?select=id,user_id,create_request_id,source_label,status,last_import_id,provider_writes,llm_processing&user_id=eq.${userId}`,
+    (rows) =>
+      rows.length === 1 &&
+      rows[0].id === connection.id &&
+      rows[0].create_request_id === createRequestId &&
+      rows[0].source_label === sourceLabel &&
+      rows[0].status === 'connected' &&
+      rows[0].last_import_id === null &&
+      rows[0].provider_writes === false &&
+      rows[0].llm_processing === false,
+    'consented calendar connection without import',
+  );
+  await assertRows(
+    `calendar_imports?select=id&user_id=eq.${userId}`,
+    (rows) => rows.length === 0,
+    'calendar connection create without import history',
+  );
+  await assertRows(
+    `calendar_events?select=id&user_id=eq.${userId}`,
+    (rows) => rows.length === 0,
+    'calendar connection create without imported events',
+  );
+  await assertCalendarScheduleUnchanged(
+    userId,
+    scheduleBefore,
+    'calendar consent',
+  );
+
+  const fixture = buildCalendarImportFixture(
+    isoDateInTimeZone(new Date().toISOString(), 'Europe/Berlin'),
+  );
+  const firstImportRequestId = crypto.randomUUID();
+  const firstImportBody = {
+    request_id: firstImportRequestId,
+    calendar_text: fixture.firstCalendarText,
+  };
+  const firstImport = await calendarApiRequest(
+    `/v1/calendar-integrations/connections/${connection.id}/imports`,
+    accessToken,
+    { method: 'POST', body: firstImportBody },
+  );
+  assertCalendarApiStatus(firstImport, 200, 'first calendar file import');
+  const firstImported = assertCalendarImportEnvelope(
+    firstImport.json,
+    'first calendar file import',
+  );
+  assertCalendarCounts(
+    firstImported.import.counts,
+    fixture.firstCounts,
+    'first calendar file import',
+  );
+  if (
+    firstImported.connection.id !== connection.id ||
+    firstImported.connection.status !== 'connected'
+  ) {
+    throw new Error(
+      `First calendar import changed its connection identity: ${firstImport.text}`,
+    );
+  }
+
+  const firstImportReplay = await calendarApiRequest(
+    `/v1/calendar-integrations/connections/${connection.id}/imports`,
+    accessToken,
+    { method: 'POST', body: firstImportBody },
+  );
+  assertCalendarApiStatus(firstImportReplay, 200, 'calendar import replay');
+  assertCalendarImportEnvelope(
+    firstImportReplay.json,
+    'calendar import replay',
+  );
+  if (stableJson(firstImportReplay.json) !== stableJson(firstImport.json)) {
+    throw new Error(
+      `Calendar import replay changed its persisted result: ${firstImportReplay.text}`,
+    );
+  }
+  const firstImportConflict = await calendarApiRequest(
+    `/v1/calendar-integrations/connections/${connection.id}/imports`,
+    accessToken,
+    {
+      method: 'POST',
+      body: {
+        ...firstImportBody,
+        calendar_text: `${fixture.firstCalendarText} `,
+      },
+    },
+  );
+  assertCalendarApiStatus(
+    firstImportConflict,
+    409,
+    'calendar import request-id conflict',
+  );
+
+  await assertRows(
+    `calendar_imports?select=id,request_id,connection_id,input_fingerprint,source_fingerprint,window_starts_on,window_ends_before,timezone,accepted_count,cancelled_count,out_of_window_count,unsupported_recurring_count,invalid_count&user_id=eq.${userId}`,
+    (rows) =>
+      rows.length === 1 &&
+      rows[0].id === firstImported.import.id &&
+      rows[0].request_id === firstImportRequestId &&
+      rows[0].connection_id === connection.id &&
+      /^[0-9a-f]{64}$/.test(rows[0].input_fingerprint) &&
+      rows[0].source_fingerprint ===
+        firstImported.import.source_fingerprint &&
+      rows[0].window_starts_on === firstImported.import.window.starts_on &&
+      rows[0].window_ends_before ===
+        firstImported.import.window.ends_before &&
+      rows[0].timezone === 'Europe/Berlin' &&
+      rows[0].accepted_count === fixture.firstCounts.accepted &&
+      rows[0].cancelled_count === fixture.firstCounts.cancelled &&
+      rows[0].out_of_window_count === fixture.firstCounts.out_of_window &&
+      rows[0].unsupported_recurring_count ===
+        fixture.firstCounts.unsupported_recurring &&
+      rows[0].invalid_count === fixture.firstCounts.invalid,
+    'single replay-safe calendar import identity',
+  );
+  await assertRows(
+    `calendar_events?select=id,connection_id,import_id,title,event_kind,source_event_key,source_fingerprint&user_id=eq.${userId}&order=id.asc`,
+    (rows) =>
+      rows.length === fixture.firstCounts.accepted &&
+      rows.every(
+        (row) =>
+          row.connection_id === connection.id &&
+          row.import_id === firstImported.import.id &&
+          isCalendarIdentifier(row.id) &&
+          /^[0-9a-f]{64}$/.test(row.source_event_key) &&
+          /^[0-9a-f]{64}$/.test(row.source_fingerprint),
+      ),
+    'bounded deduplicated calendar event copy',
+  );
+  await assertCalendarScheduleUnchanged(
+    userId,
+    scheduleBefore,
+    'first calendar import',
+  );
+
+  const firstEventPageResult = await calendarApiRequest(
+    `/v1/calendar-integrations/connections/${connection.id}/events`,
+    accessToken,
+  );
+  assertCalendarApiStatus(
+    firstEventPageResult,
+    200,
+    'first calendar event page',
+  );
+  const firstEventPage = assertCalendarEventsEnvelope(
+    firstEventPageResult.json,
+    sourceLabel,
+    'first calendar event page',
+  );
+  if (
+    firstEventPage.connection_id !== connection.id ||
+    firstEventPage.import_id !== firstImported.import.id ||
+    firstEventPage.events.length !== 50 ||
+    typeof firstEventPage.next_cursor !== 'string'
+  ) {
+    throw new Error(
+      `First calendar event page is not bounded/paginated: ${firstEventPageResult.text}`,
+    );
+  }
+  const staleCursor = firstEventPage.next_cursor;
+  const secondEventPageResult = await calendarApiRequest(
+    `/v1/calendar-integrations/connections/${connection.id}/events?cursor=${encodeURIComponent(staleCursor)}`,
+    accessToken,
+  );
+  assertCalendarApiStatus(
+    secondEventPageResult,
+    200,
+    'second calendar event page',
+  );
+  const secondEventPage = assertCalendarEventsEnvelope(
+    secondEventPageResult.json,
+    sourceLabel,
+    'second calendar event page',
+  );
+  if (
+    secondEventPage.import_id !== firstImported.import.id ||
+    secondEventPage.events.length !== fixture.firstCounts.accepted - 50 ||
+    Object.hasOwn(secondEventPage, 'next_cursor')
+  ) {
+    throw new Error(
+      `Second calendar event page is invalid: ${secondEventPageResult.text}`,
+    );
+  }
+  const firstVisibleEvents = [
+    ...firstEventPage.events,
+    ...secondEventPage.events,
+  ];
+  const firstVisibleIds = new Set(firstVisibleEvents.map((event) => event.id));
+  if (
+    firstVisibleIds.size !== fixture.firstCounts.accepted ||
+    !firstVisibleEvents.some(
+      (event) =>
+        event.title === fixture.timezoneTitle &&
+        event.event_kind === 'timed' &&
+        event.event_timezone === 'Europe/Berlin' &&
+        event.timezone_source === 'event' &&
+        event.local_starts_at === `${fixture.timezoneDate}T09:00:00` &&
+        event.location === 'Room Phase 9',
+    ) ||
+    !firstVisibleEvents.some(
+      (event) =>
+        event.title === fixture.allDayTitle &&
+        event.event_kind === 'all_day' &&
+        event.starts_on === fixture.allDayDate &&
+        event.ends_on === addUtcDays(fixture.allDayDate, 1) &&
+        event.timezone_source === 'profile',
+    ) ||
+    !firstVisibleEvents.some(
+      (event) =>
+        event.title === fixture.recurrenceTitle &&
+        event.event_kind === 'timed',
+    ) ||
+    stableJson(firstVisibleEvents).includes(fixture.sensitiveMarker)
+  ) {
+    throw new Error(
+      `Calendar event projection lost bounded TZ/all-day/recurrence/privacy semantics: ${JSON.stringify(firstVisibleEvents)}`,
+    );
+  }
+  const firstEventIdsByTitle = Object.fromEntries(
+    firstVisibleEvents.map((event) => [event.title, event.id]),
+  );
+
+  await assertCalendarIntegrationRls({
+    ownerAccessToken: accessToken,
+    userId,
+    connectionId: connection.id,
+    importId: firstImported.import.id,
+    eventId: firstVisibleEvents[0].id,
+    claimedRequestId: createRequestId,
+  });
+
+  const secondImportRequestId = crypto.randomUUID();
+  const secondImport = await calendarApiRequest(
+    `/v1/calendar-integrations/connections/${connection.id}/imports`,
+    accessToken,
+    {
+      method: 'POST',
+      body: {
+        request_id: secondImportRequestId,
+        calendar_text: fixture.secondCalendarText,
+      },
+    },
+  );
+  assertCalendarApiStatus(secondImport, 200, 'replacement calendar import');
+  const secondImported = assertCalendarImportEnvelope(
+    secondImport.json,
+    'replacement calendar import',
+  );
+  assertCalendarCounts(
+    secondImported.import.counts,
+    fixture.secondCounts,
+    'replacement calendar import',
+  );
+  if (
+    secondImported.import.id === firstImported.import.id ||
+    secondImported.import.source_fingerprint ===
+      firstImported.import.source_fingerprint
+  ) {
+    throw new Error(
+      `Replacement calendar import did not advance provenance: ${secondImport.text}`,
+    );
+  }
+  const supersededImportReplay = await calendarApiRequest(
+    `/v1/calendar-integrations/connections/${connection.id}/imports`,
+    accessToken,
+    { method: 'POST', body: firstImportBody },
+  );
+  assertCalendarApiStatus(
+    supersededImportReplay,
+    409,
+    'superseded calendar import replay',
+  );
+
+  const stalePage = await calendarApiRequest(
+    `/v1/calendar-integrations/connections/${connection.id}/events?cursor=${encodeURIComponent(staleCursor)}`,
+    accessToken,
+  );
+  assertCalendarApiStatus(stalePage, 409, 'stale calendar event cursor');
+
+  const replacementPageResult = await calendarApiRequest(
+    `/v1/calendar-integrations/connections/${connection.id}/events`,
+    accessToken,
+  );
+  assertCalendarApiStatus(
+    replacementPageResult,
+    200,
+    'replacement calendar event page',
+  );
+  const replacementPage = assertCalendarEventsEnvelope(
+    replacementPageResult.json,
+    sourceLabel,
+    'replacement calendar event page',
+  );
+  const replacementTailResult = await calendarApiRequest(
+    `/v1/calendar-integrations/connections/${connection.id}/events?cursor=${encodeURIComponent(replacementPage.next_cursor)}`,
+    accessToken,
+  );
+  assertCalendarApiStatus(
+    replacementTailResult,
+    200,
+    'replacement calendar event tail',
+  );
+  const replacementTail = assertCalendarEventsEnvelope(
+    replacementTailResult.json,
+    sourceLabel,
+    'replacement calendar event tail',
+  );
+  const replacementEvents = [
+    ...replacementPage.events,
+    ...replacementTail.events,
+  ];
+  if (
+    replacementPage.import_id !== secondImported.import.id ||
+    replacementEvents.length !== fixture.secondCounts.accepted ||
+    replacementEvents.some(
+      (event) => event.title === fixture.recurrenceTitle,
+    ) ||
+    replacementEvents.some(
+      (event) => event.title === fixture.omittedSnapshotTitle,
+    ) ||
+    replacementEvents.some(
+      (event) =>
+        firstEventIdsByTitle[event.title] !== undefined &&
+        firstEventIdsByTitle[event.title] !== event.id,
+    )
+  ) {
+    throw new Error(
+      `Replacement calendar reconciliation is invalid: ${JSON.stringify(replacementEvents)}`,
+    );
+  }
+  await assertRows(
+    `calendar_imports?select=id,request_id&user_id=eq.${userId}&order=imported_at.asc`,
+    (rows) =>
+      rows.length === 2 &&
+      rows[0].id === firstImported.import.id &&
+      rows[1].id === secondImported.import.id,
+    'immutable calendar import history before disconnect',
+  );
+  await assertRows(
+    `calendar_events?select=id,import_id,title&user_id=eq.${userId}&order=id.asc`,
+    (rows) =>
+      rows.length === fixture.secondCounts.accepted &&
+      rows.every(
+        (row) =>
+          row.import_id === secondImported.import.id &&
+          row.title !== fixture.recurrenceTitle &&
+          row.title !== fixture.omittedSnapshotTitle,
+      ),
+    'full-snapshot cancellation reconciliation',
+  );
+  await assertCalendarScheduleUnchanged(
+    userId,
+    scheduleBefore,
+    'replacement calendar import',
+  );
+
+  const disconnectRequestId = crypto.randomUUID();
+  const disconnectBody = { request_id: disconnectRequestId };
+  const disconnected = await calendarApiRequest(
+    `/v1/calendar-integrations/connections/${connection.id}/disconnect`,
+    accessToken,
+    { method: 'POST', body: disconnectBody },
+  );
+  assertCalendarApiStatus(disconnected, 200, 'calendar disconnect');
+  const disconnectedConnection = assertCalendarConnectionEnvelope(
+    disconnected.json,
+    'calendar disconnect',
+  );
+  if (
+    disconnectedConnection?.id !== connection.id ||
+    disconnectedConnection.status !== 'disconnected' ||
+    !Object.hasOwn(disconnectedConnection, 'disconnected_at') ||
+    disconnectedConnection.last_import?.id !== secondImported.import.id
+  ) {
+    throw new Error(
+      `Calendar disconnect did not retain stale imported data: ${disconnected.text}`,
+    );
+  }
+  const disconnectReplay = await calendarApiRequest(
+    `/v1/calendar-integrations/connections/${connection.id}/disconnect`,
+    accessToken,
+    { method: 'POST', body: disconnectBody },
+  );
+  assertCalendarApiStatus(disconnectReplay, 200, 'calendar disconnect replay');
+  if (stableJson(disconnectReplay.json) !== stableJson(disconnected.json)) {
+    throw new Error(
+      `Calendar disconnect replay changed terminal state: ${disconnectReplay.text}`,
+    );
+  }
+  const disconnectConflict = await calendarApiRequest(
+    `/v1/calendar-integrations/connections/${connection.id}/disconnect`,
+    accessToken,
+    { method: 'POST', body: { request_id: crypto.randomUUID() } },
+  );
+  assertCalendarApiStatus(
+    disconnectConflict,
+    409,
+    'calendar disconnect request-id conflict',
+  );
+  const rejectedAfterDisconnect = await calendarApiRequest(
+    `/v1/calendar-integrations/connections/${connection.id}/imports`,
+    accessToken,
+    {
+      method: 'POST',
+      body: {
+        request_id: crypto.randomUUID(),
+        calendar_text: fixture.firstCalendarText,
+      },
+    },
+  );
+  assertCalendarApiStatus(
+    rejectedAfterDisconnect,
+    409,
+    'calendar import after disconnect',
+  );
+  const replayRejectedAfterDisconnect = await calendarApiRequest(
+    `/v1/calendar-integrations/connections/${connection.id}/imports`,
+    accessToken,
+    {
+      method: 'POST',
+      body: {
+        request_id: secondImportRequestId,
+        calendar_text: fixture.secondCalendarText,
+      },
+    },
+  );
+  assertCalendarApiStatus(
+    replayRejectedAfterDisconnect,
+    409,
+    'calendar import replay after disconnect',
+  );
+  const retainedEventsResult = await calendarApiRequest(
+    `/v1/calendar-integrations/connections/${connection.id}/events`,
+    accessToken,
+  );
+  assertCalendarApiStatus(
+    retainedEventsResult,
+    200,
+    'retained disconnected calendar events',
+  );
+  const retainedEvents = assertCalendarEventsEnvelope(
+    retainedEventsResult.json,
+    sourceLabel,
+    'retained disconnected calendar events',
+  );
+  if (
+    retainedEvents.import_id !== secondImported.import.id ||
+    retainedEvents.events.length !== 50
+  ) {
+    throw new Error(
+      `Disconnected calendar did not retain a stale local copy: ${retainedEventsResult.text}`,
+    );
+  }
+  await assertCalendarScheduleUnchanged(
+    userId,
+    scheduleBefore,
+    'calendar disconnect',
+  );
+
+  const deleteRequestId = crypto.randomUUID();
+  const deletePath =
+    `/v1/calendar-integrations/connections/${connection.id}/imported-data` +
+    `?request_id=${encodeURIComponent(deleteRequestId)}`;
+  const crossOperationDelete = await calendarApiRequest(
+    `/v1/calendar-integrations/connections/${connection.id}/imported-data` +
+      `?request_id=${encodeURIComponent(disconnectRequestId)}`,
+    accessToken,
+    { method: 'DELETE' },
+  );
+  assertCalendarApiStatus(
+    crossOperationDelete,
+    409,
+    'calendar request id reused across disconnect and delete',
+  );
+  const deleteWithBody = await calendarApiRequest(deletePath, accessToken, {
+    method: 'DELETE',
+    body: { extra: true },
+  });
+  assertCalendarApiStatus(
+    deleteWithBody,
+    422,
+    'calendar imported-data delete body rejection',
+  );
+  const deleted = await calendarApiRequest(deletePath, accessToken, {
+    method: 'DELETE',
+  });
+  assertCalendarApiStatus(deleted, 200, 'calendar imported-data delete');
+  const deletedConnection = assertCalendarConnectionEnvelope(
+    deleted.json,
+    'calendar imported-data delete',
+  );
+  if (
+    deletedConnection?.id !== connection.id ||
+    deletedConnection.status !== 'disconnected' ||
+    !Object.hasOwn(deletedConnection, 'imported_data_deleted_at') ||
+    Object.hasOwn(deletedConnection, 'last_import')
+  ) {
+    throw new Error(
+      `Calendar imported-data delete returned invalid tombstone: ${deleted.text}`,
+    );
+  }
+  const deleteReplay = await calendarApiRequest(deletePath, accessToken, {
+    method: 'DELETE',
+  });
+  assertCalendarApiStatus(deleteReplay, 200, 'calendar delete replay');
+  if (stableJson(deleteReplay.json) !== stableJson(deleted.json)) {
+    throw new Error(
+      `Calendar delete replay changed terminal state: ${deleteReplay.text}`,
+    );
+  }
+  const deleteConflict = await calendarApiRequest(
+    `/v1/calendar-integrations/connections/${connection.id}/imported-data` +
+      `?request_id=${encodeURIComponent(crypto.randomUUID())}`,
+    accessToken,
+    { method: 'DELETE' },
+  );
+  assertCalendarApiStatus(
+    deleteConflict,
+    409,
+    'calendar delete request-id conflict',
+  );
+
+  await assertRows(
+    `calendar_connections?select=id,status,disconnect_request_id,delete_request_id,last_import_id,imported_data_deleted_at&user_id=eq.${userId}`,
+    (rows) =>
+      rows.length === 1 &&
+      rows[0].id === connection.id &&
+      rows[0].status === 'disconnected' &&
+      rows[0].disconnect_request_id === disconnectRequestId &&
+      rows[0].delete_request_id === deleteRequestId &&
+      rows[0].last_import_id === null &&
+      rows[0].imported_data_deleted_at != null,
+    'minimal deleted calendar connection tombstone',
+  );
+  await assertRows(
+    `calendar_request_identities?select=request_id,user_id,connection_id,operation&user_id=eq.${userId}&order=created_at.asc,request_id.asc`,
+    (rows) => {
+      const identities = new Map(
+        rows.map((row) => [row.request_id, row]),
+      );
+      return (
+        rows.length === 5 &&
+        identities.get(createRequestId)?.operation === 'create_connection' &&
+        identities.get(firstImportRequestId)?.operation === 'import_file' &&
+        identities.get(secondImportRequestId)?.operation === 'import_file' &&
+        identities.get(disconnectRequestId)?.operation === 'disconnect' &&
+        identities.get(deleteRequestId)?.operation === 'delete_imported_data' &&
+        rows.every(
+          (row) =>
+            row.user_id === userId && row.connection_id === connection.id,
+        )
+      );
+    },
+    'global opaque calendar request identities',
+  );
+  await assertRows(
+    `calendar_imports?select=id&user_id=eq.${userId}`,
+    (rows) => rows.length === 0,
+    'deleted local calendar import history',
+  );
+  await assertRows(
+    `calendar_events?select=id&user_id=eq.${userId}`,
+    (rows) => rows.length === 0,
+    'deleted local calendar events',
+  );
+  const emptyEventsResult = await calendarApiRequest(
+    `/v1/calendar-integrations/connections/${connection.id}/events`,
+    accessToken,
+  );
+  assertCalendarApiStatus(
+    emptyEventsResult,
+    200,
+    'deleted calendar event read',
+  );
+  const emptyEvents = assertCalendarEventsEnvelope(
+    emptyEventsResult.json,
+    sourceLabel,
+    'deleted calendar event read',
+  );
+  if (
+    emptyEvents.events.length !== 0 ||
+    Object.hasOwn(emptyEvents, 'import_id') ||
+    Object.hasOwn(emptyEvents, 'next_cursor')
+  ) {
+    throw new Error(
+      `Deleted calendar event read fabricated retained data: ${emptyEventsResult.text}`,
+    );
+  }
+  await assertCalendarScheduleUnchanged(
+    userId,
+    scheduleBefore,
+    'calendar imported-data deletion',
+  );
+}
+
+async function assertCalendarImportUi(page, userId) {
+  const accessToken = await signInAccessToken('Phase 9 calendar UI');
+  const scheduleBefore = await calendarScheduleSnapshot(userId);
+  await page.goto(appRoute('/settings'), { waitUntil: 'domcontentloaded' });
+  await waitForFlutterShell(page);
+  await enableFlutterSemantics(page);
+  await expectText(page, 'Settings');
+  const initialStatusPromise = page.waitForResponse(
+    (response) =>
+      response.url() === `${aiServiceBaseUrl}/v1/calendar-integrations` &&
+      response.request().method() === 'GET' &&
+      response.ok(),
+  );
+  await clickByText(page, 'Calendar import (optional)');
+  await page.waitForURL('**/#/settings/integrations/calendar');
+  await initialStatusPromise;
+  await expectText(page, 'Calendar import');
+  await expectText(page, 'Optional, explicit, and read-only');
+  await expectText(page, 'Read-only import');
+  await expectText(page, 'Imported data deleted');
+
+  const sourceLabel = `E2E UI calendar ${runId}`;
+  const consent = page.getByRole('checkbox', {
+    name: /I consent to this read-only import/i,
+  });
+  const createButton = page.getByRole('button', {
+    name: 'Create read-only source',
+    exact: true,
+  });
+  if ((await consent.count()) !== 1 || (await consent.isChecked())) {
+    throw new Error('Calendar import consent was not explicit and unchecked.');
+  }
+  if ((await createButton.count()) !== 1 || (await createButton.isEnabled())) {
+    throw new Error('Calendar source creation was enabled before explicit consent.');
+  }
+  await fillByLabelOrPlaceholder(page, 'Source label', sourceLabel, 0);
+  await clickChoiceChip(page, 'I consent to this read-only import');
+  if (!(await createButton.isEnabled())) {
+    throw new Error('Calendar source creation stayed disabled after valid consent.');
+  }
+  const createResponsePromise = waitForAiPost(
+    page,
+    '/v1/calendar-integrations/connections',
+    'calendar source creation',
+  );
+  await clickByText(page, 'Create read-only source');
+  const createResponse = await createResponsePromise;
+  const createPayload = createResponse.request().postDataJSON();
+  assertExactCalendarKeys(
+    createPayload,
+    ['request_id', 'source_kind', 'source_label', 'consent'],
+    'calendar UI create request',
+  );
+  assertCalendarConsent(createPayload.consent, 'calendar UI create consent');
+  if (
+    !isUuid(createPayload.request_id) ||
+    createPayload.source_kind !== 'ical_file' ||
+    createPayload.source_label !== sourceLabel
+  ) {
+    throw new Error(
+      `Calendar UI sent an invalid create request: ${JSON.stringify(createPayload)}`,
+    );
+  }
+  const createdConnection = assertCalendarConnectionEnvelope(
+    await createResponse.json(),
+    'calendar UI create response',
+  );
+  if (
+    createdConnection?.source_label !== sourceLabel ||
+    createdConnection.status !== 'connected' ||
+    Object.hasOwn(createdConnection, 'last_import')
+  ) {
+    throw new Error('Calendar UI did not show a connected import-only source.');
+  }
+  await expectText(page, sourceLabel);
+  await expectText(page, 'Connected');
+  await expectText(page, 'No file has been imported yet.');
+  await assertRows(
+    `calendar_imports?select=id&user_id=eq.${userId}`,
+    (rows) => rows.length === 0,
+    'UI consent creates no calendar import',
+  );
+  await assertRows(
+    `calendar_events?select=id&user_id=eq.${userId}`,
+    (rows) => rows.length === 0,
+    'UI consent creates no calendar events',
+  );
+  await assertCalendarScheduleUnchanged(
+    userId,
+    scheduleBefore,
+    'calendar UI consent',
+  );
+
+  const fixture = buildCalendarImportFixture(
+    isoDateInTimeZone(new Date().toISOString(), 'Europe/Berlin'),
+  );
+  const selectedName = `phase9-${runId}.ics`;
+  const selectedBytes = Buffer.byteLength(fixture.firstCalendarText, 'utf8');
+  const fileChooserPromise = page.waitForEvent('filechooser');
+  await clickByText(page, 'Choose .ics file');
+  const fileChooser = await fileChooserPromise;
+  await fileChooser.setFiles({
+    name: selectedName,
+    mimeType: 'text/calendar',
+    buffer: Buffer.from(fixture.firstCalendarText, 'utf8'),
+  });
+  await expectText(page, `${selectedName} · ${selectedBytes} bytes`);
+
+  let lostImportPayload;
+  const importUrl =
+    `${aiServiceBaseUrl}/v1/calendar-integrations/connections/` +
+    `${createdConnection.id}/imports`;
+  const loseCommittedImportResponse = async (route) => {
+    if (route.request().method() !== 'POST') {
+      await route.continue();
+      return;
+    }
+    lostImportPayload = route.request().postDataJSON();
+    const committedResponse = await route.fetch();
+    if (!committedResponse.ok()) {
+      throw new Error(
+        `Calendar response-loss precondition failed: ${committedResponse.status()} ${await committedResponse.text()}`,
+      );
+    }
+    await route.abort('failed');
+  };
+  await page.route(importUrl, loseCommittedImportResponse);
+  await clickByText(page, 'Import selected file');
+  await expectText(page, 'Calendar operation result uncertain');
+  await expectText(page, 'Retry exact import');
+  await expectText(page, `${selectedName} · ${selectedBytes} bytes`);
+  await page.unroute(importUrl, loseCommittedImportResponse);
+  if (
+    !isUuid(lostImportPayload?.request_id) ||
+    lostImportPayload?.calendar_text !== fixture.firstCalendarText ||
+    stableJson(Object.keys(lostImportPayload ?? {}).sort()) !==
+      stableJson(['calendar_text', 'request_id'])
+  ) {
+    throw new Error(
+      `Calendar UI did not retain the exact import request: ${JSON.stringify(lostImportPayload)}`,
+    );
+  }
+  await assertRows(
+    `calendar_imports?select=id,request_id,accepted_count,cancelled_count,out_of_window_count,unsupported_recurring_count,invalid_count&user_id=eq.${userId}`,
+    (rows) =>
+      rows.length === 1 &&
+      rows[0].request_id === lostImportPayload.request_id &&
+      rows[0].accepted_count === fixture.firstCounts.accepted &&
+      rows[0].cancelled_count === fixture.firstCounts.cancelled &&
+      rows[0].out_of_window_count === fixture.firstCounts.out_of_window &&
+      rows[0].unsupported_recurring_count ===
+        fixture.firstCounts.unsupported_recurring &&
+      rows[0].invalid_count === fixture.firstCounts.invalid,
+    'server-committed calendar import after lost UI response',
+  );
+  await assertRows(
+    `calendar_events?select=id&user_id=eq.${userId}`,
+    (rows) => rows.length === fixture.firstCounts.accepted,
+    'server-committed calendar events after lost UI response',
+  );
+
+  const retryResponsePromise = waitForAiPost(
+    page,
+    `/v1/calendar-integrations/connections/${createdConnection.id}/imports`,
+    'exact calendar import retry',
+  );
+  await clickByText(page, 'Retry exact import');
+  const retryResponse = await retryResponsePromise;
+  const retryPayload = retryResponse.request().postDataJSON();
+  if (
+    retryPayload.request_id !== lostImportPayload.request_id ||
+    retryPayload.calendar_text !== lostImportPayload.calendar_text
+  ) {
+    throw new Error(
+      `Calendar import retry changed identity or bytes. First ${JSON.stringify(lostImportPayload)}, retry ${JSON.stringify(retryPayload)}`,
+    );
+  }
+  const retryImport = assertCalendarImportEnvelope(
+    await retryResponse.json(),
+    'calendar UI import retry response',
+  );
+  assertCalendarCounts(
+    retryImport.import.counts,
+    fixture.firstCounts,
+    'calendar UI import retry',
+  );
+  await expectText(page, fixture.timezoneTitle);
+  await expectText(page, 'Imported · read-only');
+  await expectText(
+    page,
+    `${fixture.firstCounts.accepted} accepted · ${fixture.firstCounts.cancelled} cancelled`,
+  );
+  await assertRows(
+    `calendar_imports?select=id,request_id&user_id=eq.${userId}`,
+    (rows) =>
+      rows.length === 1 &&
+      rows[0].id === retryImport.import.id &&
+      rows[0].request_id === retryPayload.request_id,
+    'one import identity after exact UI retry',
+  );
+
+  const firstPageResult = await calendarApiRequest(
+    `/v1/calendar-integrations/connections/${createdConnection.id}/events`,
+    accessToken,
+  );
+  assertCalendarApiStatus(firstPageResult, 200, 'UI calendar event baseline');
+  const firstPage = assertCalendarEventsEnvelope(
+    firstPageResult.json,
+    sourceLabel,
+    'UI calendar event baseline',
+  );
+  const tailResult = await calendarApiRequest(
+    `/v1/calendar-integrations/connections/${createdConnection.id}/events?cursor=${encodeURIComponent(firstPage.next_cursor)}`,
+    accessToken,
+  );
+  assertCalendarApiStatus(tailResult, 200, 'UI calendar event tail');
+  const tail = assertCalendarEventsEnvelope(
+    tailResult.json,
+    sourceLabel,
+    'UI calendar event tail',
+  );
+  const tailTitle = tail.events.at(-1)?.title;
+  if (!tailTitle) {
+    throw new Error('Calendar pagination fixture did not produce a UI tail event.');
+  }
+  await scrollFlutterPage(page, 12000);
+  await expectText(page, 'Load more imported events');
+  await Promise.all([
+    page.waitForResponse(
+      (response) =>
+        response.request().method() === 'GET' &&
+        response.url().startsWith(
+          `${aiServiceBaseUrl}/v1/calendar-integrations/connections/${createdConnection.id}/events?cursor=`,
+        ) &&
+        response.ok(),
+    ),
+    clickByText(page, 'Load more imported events'),
+  ]);
+  await scrollFlutterPage(page, 3000);
+  await expectText(page, tailTitle);
+  const actionLabels = await page.getByRole('button').allTextContents();
+  if (
+    actionLabels.some((label) =>
+      /edit imported event|add (?:to )?(?:schedule|calendar)|write to provider/i.test(
+        label,
+      ),
+    )
+  ) {
+    throw new Error(
+      `Imported calendar events exposed a write affordance: ${JSON.stringify(actionLabels)}`,
+    );
+  }
+  await assertCalendarScheduleUnchanged(
+    userId,
+    scheduleBefore,
+    'calendar UI import and pagination',
+  );
+
+  await clickByText(page, 'Disconnect source');
+  await expectText(page, 'Disconnect calendar source?');
+  const [disconnectResponse] = await Promise.all([
+    waitForAiPost(
+      page,
+      `/v1/calendar-integrations/connections/${createdConnection.id}/disconnect`,
+      'calendar UI disconnect',
+    ),
+    clickByText(page, 'Disconnect'),
+  ]);
+  const disconnectPayload = disconnectResponse.request().postDataJSON();
+  if (
+    stableJson(Object.keys(disconnectPayload).sort()) !==
+      stableJson(['request_id']) ||
+    !isUuid(disconnectPayload.request_id)
+  ) {
+    throw new Error(
+      `Calendar UI disconnect request is invalid: ${JSON.stringify(disconnectPayload)}`,
+    );
+  }
+  const disconnected = assertCalendarConnectionEnvelope(
+    await disconnectResponse.json(),
+    'calendar UI disconnect response',
+  );
+  if (
+    disconnected?.status !== 'disconnected' ||
+    disconnected.last_import?.id !== retryImport.import.id
+  ) {
+    throw new Error('Calendar UI disconnect did not retain imported data.');
+  }
+  await scrollFlutterPage(page, -20000);
+  await expectText(page, 'Disconnected · stale');
+  await scrollFlutterPage(page, 20000);
+  await expectText(page, tailTitle);
+  if ((await page.getByText('Choose .ics file', { exact: true }).count()) !== 0) {
+    throw new Error('Calendar UI still allowed file import after disconnect.');
+  }
+  await assertRows(
+    `calendar_events?select=id&user_id=eq.${userId}`,
+    (rows) => rows.length === fixture.firstCounts.accepted,
+    'UI disconnect retains imported calendar events',
+  );
+  await assertCalendarScheduleUnchanged(
+    userId,
+    scheduleBefore,
+    'calendar UI disconnect',
+  );
+
+  await clickByText(page, 'Delete imported data');
+  await expectText(page, 'Delete imported calendar data?');
+  const [deleteResponse] = await Promise.all([
+    page.waitForResponse(
+      (response) =>
+        response.request().method() === 'DELETE' &&
+        response.url().startsWith(
+          `${aiServiceBaseUrl}/v1/calendar-integrations/connections/${createdConnection.id}/imported-data?`,
+        ) &&
+        response.ok(),
+    ),
+    clickByText(page, 'Delete local imported data'),
+  ]);
+  const deleteUrl = new URL(deleteResponse.url());
+  const deleteQueryKeys = [...deleteUrl.searchParams.keys()].sort();
+  if (
+    stableJson(deleteQueryKeys) !== stableJson(['request_id']) ||
+    !isUuid(deleteUrl.searchParams.get('request_id')) ||
+    deleteResponse.request().postData() !== null
+  ) {
+    throw new Error(
+      `Calendar UI delete transport is invalid: ${deleteResponse.url()}`,
+    );
+  }
+  const deleted = assertCalendarConnectionEnvelope(
+    await deleteResponse.json(),
+    'calendar UI delete response',
+  );
+  if (
+    deleted?.id !== createdConnection.id ||
+    !Object.hasOwn(deleted, 'imported_data_deleted_at') ||
+    Object.hasOwn(deleted, 'last_import')
+  ) {
+    throw new Error('Calendar UI delete did not return a minimal tombstone.');
+  }
+  await expectText(page, 'Imported data deleted');
+  await assertRows(
+    `calendar_imports?select=id&user_id=eq.${userId}`,
+    (rows) => rows.length === 0,
+    'UI deletion removes calendar import history',
+  );
+  await assertRows(
+    `calendar_events?select=id&user_id=eq.${userId}`,
+    (rows) => rows.length === 0,
+    'UI deletion removes imported calendar events',
+  );
+  await assertCalendarScheduleUnchanged(
+    userId,
+    scheduleBefore,
+    'calendar UI deletion',
+  );
+
+  await assertCalendarGuestBoundary();
+  await page.goto(appRoute('/dashboard'), { waitUntil: 'domcontentloaded' });
+  await waitForFlutterShell(page);
+  await enableFlutterSemantics(page);
+  await expectText(page, 'Latest check-in');
+}
+
+async function assertCalendarGuestBoundary() {
+  const context = await browser.newContext({
+    viewport: { width: 390, height: 844 },
+  });
+  await context.addInitScript(() => {
+    localStorage.setItem('flutter.auth_guest_active', 'true');
+    localStorage.setItem('flutter.auth_guest_onboarding_done', 'true');
+    localStorage.setItem(
+      'flutter.auth_guest_name',
+      JSON.stringify('Phase 9 Guest'),
+    );
+  });
+  const guestPage = await context.newPage();
+  const calendarRequests = [];
+  guestPage.on('request', (request) => {
+    if (request.url().includes('/v1/calendar-integrations')) {
+      calendarRequests.push(`${request.method()} ${request.url()}`);
+    }
+  });
+  try {
+    await guestPage.goto(appRoute('/settings/integrations/calendar'), {
+      waitUntil: 'domcontentloaded',
+    });
+    await waitForFlutterShell(guestPage);
+    await enableFlutterSemantics(guestPage);
+    await expectText(guestPage, 'Calendar import unavailable in local demo');
+    await guestPage.waitForTimeout(500);
+    if (calendarRequests.length !== 0) {
+      throw new Error(
+        `Guest calendar surface contacted the authenticated API: ${JSON.stringify(calendarRequests)}`,
+      );
+    }
+  } finally {
+    await context.close();
+  }
+}
+
 async function assertDeterministicDailyBriefing(userId) {
   const accessToken = await signInAccessToken('Phase 4 briefing');
   const rowsBefore = await fetchRows(
@@ -3977,6 +5079,756 @@ async function briefingRequest(path, accessToken, body) {
     );
   }
   return response.json();
+}
+
+async function calendarApiRequest(
+  path,
+  accessToken,
+  { method = 'GET', body } = {},
+) {
+  const response = await fetch(`${aiServiceBaseUrl}${path}`, {
+    method,
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
+    },
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+  });
+  const text = await response.text();
+  let json = null;
+  try {
+    json = text.length === 0 ? null : JSON.parse(text);
+  } catch (_) {
+    // The status assertion below reports the unparsed response body.
+  }
+  return { response, text, json };
+}
+
+function assertCalendarApiStatus(result, expectedStatus, context) {
+  if (result.response.status !== expectedStatus) {
+    throw new Error(
+      `${context} returned ${result.response.status}, expected ${expectedStatus}: ${result.text}`,
+    );
+  }
+}
+
+function assertCalendarConnectionEnvelope(payload, context) {
+  assertExactCalendarKeys(
+    payload,
+    ['contract_version', 'origin', 'connection'],
+    context,
+  );
+  if (
+    payload.contract_version !== 'calendar-import-v1' ||
+    payload.origin !== 'authenticated_backend'
+  ) {
+    throw new Error(`${context} has invalid root provenance: ${stableJson(payload)}`);
+  }
+  if (payload.connection === null) return null;
+
+  const connection = payload.connection;
+  const required = [
+    'id',
+    'contract_version',
+    'origin',
+    'source_kind',
+    'source_label',
+    'status',
+    'consent',
+    'consented_at',
+    'connected_at',
+    'provider_writes',
+    'llm_processed',
+  ];
+  const optional = [
+    'disconnected_at',
+    'imported_data_deleted_at',
+    'last_import',
+  ].filter((key) => Object.hasOwn(connection, key));
+  assertExactCalendarKeys(connection, [...required, ...optional], `${context} connection`);
+  if (optional.some((key) => connection[key] === null)) {
+    throw new Error(`${context} returned an explicit-null optional connection field.`);
+  }
+  if (
+    !isCalendarIdentifier(connection.id) ||
+    connection.contract_version !== 'calendar-import-v1' ||
+    connection.origin !== 'authenticated_backend' ||
+    connection.source_kind !== 'ical_file' ||
+    typeof connection.source_label !== 'string' ||
+    connection.source_label.trim() !== connection.source_label ||
+    [...connection.source_label].length < 1 ||
+    [...connection.source_label].length > 80 ||
+    !['connected', 'disconnected'].includes(connection.status) ||
+    connection.provider_writes !== false ||
+    connection.llm_processed !== false ||
+    !isAwareCalendarTimestamp(connection.consented_at) ||
+    !isAwareCalendarTimestamp(connection.connected_at)
+  ) {
+    throw new Error(`${context} returned an invalid connection: ${stableJson(connection)}`);
+  }
+  assertCalendarConsent(connection.consent, `${context} consent`);
+  if (
+    (connection.status === 'connected' &&
+      Object.hasOwn(connection, 'disconnected_at')) ||
+    (connection.status === 'disconnected' &&
+      !isAwareCalendarTimestamp(connection.disconnected_at)) ||
+    (Object.hasOwn(connection, 'imported_data_deleted_at') &&
+      (connection.status !== 'disconnected' ||
+        !isAwareCalendarTimestamp(connection.imported_data_deleted_at) ||
+        Object.hasOwn(connection, 'last_import')))
+  ) {
+    throw new Error(`${context} returned an invalid connection lifecycle.`);
+  }
+  if (Object.hasOwn(connection, 'last_import')) {
+    assertCalendarImportSummary(connection.last_import, `${context} last import`);
+  }
+  return connection;
+}
+
+function assertCalendarConsent(consent, context) {
+  assertExactCalendarKeys(
+    consent,
+    [
+      'consent_version',
+      'read_calendar_events',
+      'store_event_basics',
+      'provider_writes',
+      'llm_processing',
+    ],
+    context,
+  );
+  if (
+    consent.consent_version !== 'calendar-import-consent-v1' ||
+    consent.read_calendar_events !== true ||
+    consent.store_event_basics !== true ||
+    consent.provider_writes !== false ||
+    consent.llm_processing !== false
+  ) {
+    throw new Error(`${context} is invalid: ${stableJson(consent)}`);
+  }
+}
+
+function assertCalendarImportEnvelope(payload, context) {
+  assertExactCalendarKeys(
+    payload,
+    ['contract_version', 'origin', 'connection', 'import'],
+    context,
+  );
+  const connection = assertCalendarConnectionEnvelope(
+    {
+      contract_version: payload.contract_version,
+      origin: payload.origin,
+      connection: payload.connection,
+    },
+    context,
+  );
+  if (connection === null) {
+    throw new Error(`${context} omitted its connection.`);
+  }
+  assertCalendarImportSummary(payload.import, `${context} import`);
+  if (
+    !Object.hasOwn(connection, 'last_import') ||
+    stableJson(connection.last_import) !== stableJson(payload.import)
+  ) {
+    throw new Error(`${context} import does not match last_import projection.`);
+  }
+  return { connection, import: payload.import };
+}
+
+function assertCalendarImportSummary(summary, context) {
+  assertExactCalendarKeys(
+    summary,
+    ['id', 'imported_at', 'window', 'counts', 'source_fingerprint'],
+    context,
+  );
+  if (
+    !isCalendarIdentifier(summary.id) ||
+    !isAwareCalendarTimestamp(summary.imported_at) ||
+    !/^[0-9a-f]{64}$/.test(summary.source_fingerprint ?? '')
+  ) {
+    throw new Error(`${context} has invalid identity/provenance.`);
+  }
+  assertExactCalendarKeys(
+    summary.window,
+    ['starts_on', 'ends_before', 'timezone'],
+    `${context} window`,
+  );
+  if (
+    !isCalendarDate(summary.window.starts_on) ||
+    !isCalendarDate(summary.window.ends_before) ||
+    addUtcDays(summary.window.starts_on, 105) !== summary.window.ends_before ||
+    typeof summary.window.timezone !== 'string' ||
+    summary.window.timezone.trim() !== summary.window.timezone ||
+    summary.window.timezone.length < 1 ||
+    summary.window.timezone.length > 100
+  ) {
+    throw new Error(`${context} has an invalid import window.`);
+  }
+  assertCalendarCounts(summary.counts, null, `${context} counts`);
+  const localImportDate = isoDateInTimeZone(
+    summary.imported_at,
+    summary.window.timezone,
+  );
+  if (
+    summary.window.starts_on !== addUtcDays(localImportDate, -14) ||
+    summary.window.ends_before !== addUtcDays(localImportDate, 91)
+  ) {
+    throw new Error(`${context} window is not derived from the import instant.`);
+  }
+}
+
+function assertCalendarCounts(actual, expected, context) {
+  assertExactCalendarKeys(
+    actual,
+    [
+      'accepted',
+      'cancelled',
+      'out_of_window',
+      'unsupported_recurring',
+      'invalid',
+    ],
+    context,
+  );
+  const values = Object.values(actual);
+  if (
+    values.some(
+      (value) => !Number.isInteger(value) || value < 0 || value > 2000,
+    ) ||
+    actual.accepted > 500 ||
+    values.reduce((sum, value) => sum + value, 0) > 2000
+  ) {
+    throw new Error(`${context} exceeds the bounded count contract.`);
+  }
+  if (expected !== null && stableJson(actual) !== stableJson(expected)) {
+    throw new Error(
+      `${context} counts differ: expected ${stableJson(expected)}, got ${stableJson(actual)}`,
+    );
+  }
+}
+
+function assertCalendarEventsEnvelope(payload, sourceLabel, context) {
+  const required = [
+    'contract_version',
+    'origin',
+    'connection_id',
+    'events',
+  ];
+  const optional = ['import_id', 'next_cursor'].filter((key) =>
+    Object.hasOwn(payload, key),
+  );
+  assertExactCalendarKeys(payload, [...required, ...optional], context);
+  if (optional.some((key) => payload[key] === null)) {
+    throw new Error(`${context} returned an explicit-null optional root field.`);
+  }
+  if (
+    payload.contract_version !== 'calendar-import-v1' ||
+    payload.origin !== 'authenticated_backend' ||
+    !isCalendarIdentifier(payload.connection_id) ||
+    !Array.isArray(payload.events) ||
+    payload.events.length > 50 ||
+    (Object.hasOwn(payload, 'import_id') &&
+      !isCalendarIdentifier(payload.import_id)) ||
+    (Object.hasOwn(payload, 'next_cursor') &&
+      (typeof payload.next_cursor !== 'string' ||
+        payload.next_cursor.length < 1 ||
+        payload.next_cursor.length > 512)) ||
+    (payload.events.length > 0 && !Object.hasOwn(payload, 'import_id')) ||
+    (Object.hasOwn(payload, 'next_cursor') &&
+      !Object.hasOwn(payload, 'import_id'))
+  ) {
+    throw new Error(`${context} has invalid root fields: ${stableJson(payload)}`);
+  }
+  const ids = new Set();
+  for (const event of payload.events) {
+    assertCalendarEvent(event, sourceLabel, `${context} event`);
+    if (ids.has(event.id)) {
+      throw new Error(`${context} contains a duplicate event id.`);
+    }
+    ids.add(event.id);
+  }
+  return payload;
+}
+
+function assertCalendarEvent(event, sourceLabel, context) {
+  const base = [
+    'id',
+    'title',
+    'event_kind',
+    'busy_status',
+    'event_status',
+    'event_timezone',
+    'timezone_source',
+    'imported_at',
+    'last_seen_at',
+    'source_fingerprint',
+    'provenance',
+  ];
+  const variant =
+    event?.event_kind === 'timed'
+      ? ['starts_at', 'ends_at', 'local_starts_at', 'local_ends_at']
+      : ['starts_on', 'ends_on'];
+  const optional = Object.hasOwn(event ?? {}, 'location') ? ['location'] : [];
+  assertExactCalendarKeys(event, [...base, ...variant, ...optional], context);
+  if (optional.some((key) => event[key] === null)) {
+    throw new Error(`${context} returned explicit-null optional fields.`);
+  }
+  if (
+    !isCalendarIdentifier(event.id) ||
+    typeof event.title !== 'string' ||
+    event.title.trim() !== event.title ||
+    [...event.title].length < 1 ||
+    [...event.title].length > 200 ||
+    (Object.hasOwn(event, 'location') &&
+      (typeof event.location !== 'string' ||
+        event.location.trim() !== event.location ||
+        [...event.location].length < 1 ||
+        [...event.location].length > 300)) ||
+    !['timed', 'all_day'].includes(event.event_kind) ||
+    !['busy', 'free'].includes(event.busy_status) ||
+    !['confirmed', 'tentative'].includes(event.event_status) ||
+    typeof event.event_timezone !== 'string' ||
+    event.event_timezone.trim() !== event.event_timezone ||
+    event.event_timezone.length < 1 ||
+    event.event_timezone.length > 100 ||
+    !['utc', 'event', 'profile'].includes(event.timezone_source) ||
+    !isAwareCalendarTimestamp(event.imported_at) ||
+    !isAwareCalendarTimestamp(event.last_seen_at) ||
+    Date.parse(event.last_seen_at) < Date.parse(event.imported_at) ||
+    !/^[0-9a-f]{64}$/.test(event.source_fingerprint ?? '')
+  ) {
+    throw new Error(`${context} has invalid common fields: ${stableJson(event)}`);
+  }
+  if (event.event_kind === 'timed') {
+    if (
+      !isAwareCalendarTimestamp(event.starts_at) ||
+      !isAwareCalendarTimestamp(event.ends_at) ||
+      Date.parse(event.ends_at) <= Date.parse(event.starts_at) ||
+      !isLocalCalendarTimestamp(event.local_starts_at) ||
+      !isLocalCalendarTimestamp(event.local_ends_at)
+    ) {
+      throw new Error(`${context} has invalid timed fields.`);
+    }
+  } else if (
+    !isCalendarDate(event.starts_on) ||
+    !isCalendarDate(event.ends_on) ||
+    event.timezone_source !== 'profile' ||
+    new Date(`${event.ends_on}T00:00:00Z`) <=
+      new Date(`${event.starts_on}T00:00:00Z`)
+  ) {
+    throw new Error(`${context} has invalid all-day fields.`);
+  }
+  assertExactCalendarKeys(
+    event.provenance,
+    [
+      'kind',
+      'contract_version',
+      'source_kind',
+      'source_label',
+      'provider_writes',
+      'llm_processed',
+    ],
+    `${context} provenance`,
+  );
+  if (
+    event.provenance.kind !== 'integration' ||
+    event.provenance.contract_version !== 'calendar-import-v1' ||
+    event.provenance.source_kind !== 'ical_file' ||
+    event.provenance.source_label !== sourceLabel ||
+    event.provenance.provider_writes !== false ||
+    event.provenance.llm_processed !== false
+  ) {
+    throw new Error(`${context} has invalid integration provenance.`);
+  }
+}
+
+function assertExactCalendarKeys(value, keys, context) {
+  if (
+    value === null ||
+    typeof value !== 'object' ||
+    Array.isArray(value) ||
+    stableJson(Object.keys(value).sort()) !== stableJson([...keys].sort())
+  ) {
+    throw new Error(
+      `${context} fields differ from the exact contract: ${stableJson(value)}`,
+    );
+  }
+}
+
+function isCalendarIdentifier(value) {
+  return (
+    typeof value === 'string' &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(
+      value,
+    )
+  );
+}
+
+function isCalendarDate(value) {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return false;
+  }
+  const parsed = new Date(`${value}T00:00:00Z`);
+  return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+}
+
+function isAwareCalendarTimestamp(value) {
+  return (
+    typeof value === 'string' &&
+    /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})$/.test(
+      value,
+    ) &&
+    Number.isFinite(Date.parse(value))
+  );
+}
+
+function isLocalCalendarTimestamp(value) {
+  if (
+    typeof value !== 'string' ||
+    !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?$/.test(value)
+  ) {
+    return false;
+  }
+  const [day, time] = value.split('T');
+  if (!isCalendarDate(day)) return false;
+  const [hour, minute, second] = time.split(/[.:]/).map(Number);
+  return hour <= 23 && minute <= 59 && second <= 59;
+}
+
+function buildCalendarImportFixture(localToday) {
+  const timezoneDate = addUtcDays(localToday, 1);
+  const allDayDate = addUtcDays(localToday, 2);
+  const recurrenceDate = addUtcDays(localToday, 3);
+  const generatedDate = addUtcDays(localToday, 4);
+  const unsupportedDate = addUtcDays(localToday, 5);
+  const invalidDate = addUtcDays(localToday, 6);
+  const outsideDate = addUtcDays(localToday, 120);
+  const timezoneTitle = `Phase 9 timezone event ${runId}`;
+  const allDayTitle = `Phase 9 all-day event ${runId}`;
+  const recurrenceTitle = `Phase 9 moved occurrence ${runId}`;
+  const sensitiveMarker = `private-phase9-${runId}`;
+  const timed = calendarEventComponent([
+    `UID:phase9-timezone-${runId}@example.test`,
+    `DTSTART;TZID=Europe/Berlin:${compactCalendarDate(timezoneDate)}T090000`,
+    `DTEND;TZID=Europe/Berlin:${compactCalendarDate(timezoneDate)}T100000`,
+    `SUMMARY:${timezoneTitle}`,
+    'LOCATION:Room Phase 9',
+    `DESCRIPTION:${sensitiveMarker}`,
+    `ATTENDEE:mailto:${sensitiveMarker}@example.test`,
+    `ORGANIZER:mailto:${sensitiveMarker}-owner@example.test`,
+    'TRANSP:OPAQUE',
+    'BEGIN:VALARM',
+    'TRIGGER:-PT15M',
+    'ACTION:DISPLAY',
+    `DESCRIPTION:${sensitiveMarker}-alarm`,
+    'END:VALARM',
+  ]);
+  const allDay = calendarEventComponent([
+    `UID:phase9-all-day-${runId}@example.test`,
+    `DTSTART;VALUE=DATE:${compactCalendarDate(allDayDate)}`,
+    `SUMMARY:${allDayTitle}`,
+    'TRANSP:TRANSPARENT',
+  ]);
+  const recurrence = calendarEventComponent([
+    `UID:phase9-series-${runId}@example.test`,
+    `RECURRENCE-ID;TZID=Europe/Berlin:${compactCalendarDate(recurrenceDate)}T090000`,
+    `DTSTART;TZID=Europe/Berlin:${compactCalendarDate(recurrenceDate)}T110000`,
+    `DTEND;TZID=Europe/Berlin:${compactCalendarDate(recurrenceDate)}T120000`,
+    `SUMMARY:${recurrenceTitle}`,
+  ]);
+  const cancellation = calendarEventComponent([
+    `UID:phase9-series-${runId}@example.test`,
+    `RECURRENCE-ID;TZID=Europe/Berlin:${compactCalendarDate(recurrenceDate)}T090000`,
+    'STATUS:CANCELLED',
+  ]);
+  const generated = Array.from({ length: 52 }, (_, index) =>
+    calendarEventComponent([
+      `UID:phase9-page-${index}-${runId}@example.test`,
+      `DTSTART:${compactCalendarDate(generatedDate)}T120000Z`,
+      `DTEND:${compactCalendarDate(generatedDate)}T123000Z`,
+      `SUMMARY:Phase 9 page event ${String(index).padStart(2, '0')} ${runId}`,
+    ]),
+  );
+  const unsupported = calendarEventComponent([
+    `UID:phase9-master-${runId}@example.test`,
+    `DTSTART:${compactCalendarDate(unsupportedDate)}T090000Z`,
+    `DTEND:${compactCalendarDate(unsupportedDate)}T100000Z`,
+    'RRULE:FREQ=WEEKLY',
+    `SUMMARY:Phase 9 unsupported master ${runId}`,
+  ]);
+  const outside = calendarEventComponent([
+    `UID:phase9-outside-${runId}@example.test`,
+    `DTSTART:${compactCalendarDate(outsideDate)}T090000Z`,
+    `DTEND:${compactCalendarDate(outsideDate)}T100000Z`,
+    `SUMMARY:Phase 9 outside event ${runId}`,
+  ]);
+  const invalid = calendarEventComponent([
+    `UID:phase9-invalid-${runId}@example.test`,
+    `DTSTART:${compactCalendarDate(invalidDate)}T090000Z`,
+    `SUMMARY:Phase 9 invalid event ${runId}`,
+  ]);
+
+  return {
+    firstCalendarText: calendarDocument([
+      timed,
+      timed,
+      allDay,
+      recurrence,
+      ...generated,
+      unsupported,
+      outside,
+      invalid,
+    ]),
+    secondCalendarText: calendarDocument([
+      timed,
+      timed,
+      allDay,
+      ...generated.slice(0, -1),
+      unsupported,
+      outside,
+      invalid,
+      cancellation,
+    ]),
+    firstCounts: {
+      accepted: 55,
+      cancelled: 0,
+      out_of_window: 1,
+      unsupported_recurring: 1,
+      invalid: 1,
+    },
+    secondCounts: {
+      accepted: 53,
+      cancelled: 1,
+      out_of_window: 1,
+      unsupported_recurring: 1,
+      invalid: 1,
+    },
+    timezoneDate,
+    allDayDate,
+    timezoneTitle,
+    allDayTitle,
+    recurrenceTitle,
+    omittedSnapshotTitle: `Phase 9 page event 51 ${runId}`,
+    sensitiveMarker,
+  };
+}
+
+function calendarDocument(events) {
+  return ['BEGIN:VCALENDAR', 'VERSION:2.0', ...events, 'END:VCALENDAR', ''].join(
+    '\r\n',
+  );
+}
+
+function calendarEventComponent(lines) {
+  return ['BEGIN:VEVENT', ...lines, 'END:VEVENT'].join('\r\n');
+}
+
+function compactCalendarDate(value) {
+  return value.replaceAll('-', '');
+}
+
+async function calendarScheduleSnapshot(userId) {
+  return fetchRows(
+    `schedule_items?select=id,title,location,weekday,starts_at,ends_at,source,metadata,updated_at&user_id=eq.${userId}&order=id.asc`,
+    'Phase 9 schedule baseline',
+  );
+}
+
+async function assertCalendarScheduleUnchanged(userId, expected, context) {
+  const actual = await calendarScheduleSnapshot(userId);
+  if (stableJson(actual) !== stableJson(expected)) {
+    throw new Error(
+      `${context} changed user-authored/setup schedule rows: ${JSON.stringify(actual)}`,
+    );
+  }
+}
+
+async function assertCalendarIntegrationRls({
+  ownerAccessToken,
+  userId,
+  connectionId,
+  importId,
+  eventId,
+  claimedRequestId,
+}) {
+  const ownerConnectionRead = await authenticatedRestRequest(
+    `calendar_connections?select=id,contract_version,origin,source_kind,source_label,status,consent_version,read_calendar_events,store_event_basics,provider_writes,llm_processing,consented_at,connected_at,disconnected_at,imported_data_deleted_at,last_import_id&id=eq.${connectionId}`,
+    ownerAccessToken,
+  );
+  if (
+    !ownerConnectionRead.response.ok ||
+    ownerConnectionRead.rows?.length !== 1 ||
+    ownerConnectionRead.rows[0].id !== connectionId ||
+    ownerConnectionRead.rows[0].provider_writes !== false ||
+    ownerConnectionRead.rows[0].llm_processing !== false
+  ) {
+    throw new Error(
+      `Calendar connection owner SELECT failed: ${ownerConnectionRead.response.status} ${ownerConnectionRead.text}`,
+    );
+  }
+  const ownerEventRead = await authenticatedRestRequest(
+    `calendar_events?select=id,connection_id,import_id,contract_version,origin,source_kind,source_fingerprint,title,location,event_kind,busy_status,event_status,event_timezone,timezone_source,starts_at,ends_at,local_starts_at,local_ends_at,starts_on,ends_on,imported_at,last_seen_at&id=eq.${eventId}`,
+    ownerAccessToken,
+  );
+  if (
+    !ownerEventRead.response.ok ||
+    ownerEventRead.rows?.length !== 1 ||
+    ownerEventRead.rows[0].id !== eventId ||
+    ownerEventRead.rows[0].connection_id !== connectionId ||
+    ownerEventRead.rows[0].import_id !== importId
+  ) {
+    throw new Error(
+      `Calendar event owner SELECT failed: ${ownerEventRead.response.status} ${ownerEventRead.text}`,
+    );
+  }
+
+  const restrictedReads = [
+    await authenticatedRestRequest(
+      `calendar_connections?select=create_request_id&id=eq.${connectionId}`,
+      ownerAccessToken,
+    ),
+    await authenticatedRestRequest(
+      `calendar_events?select=source_event_key&id=eq.${eventId}`,
+      ownerAccessToken,
+    ),
+    await authenticatedRestRequest(
+      `calendar_imports?select=id&id=eq.${importId}`,
+      ownerAccessToken,
+    ),
+    await authenticatedRestRequest(
+      `calendar_request_identities?select=request_id&connection_id=eq.${connectionId}`,
+      ownerAccessToken,
+    ),
+  ];
+  if (restrictedReads.some((result) => result.response.ok)) {
+    throw new Error(
+      `Calendar Data API exposed backend-only identity/import columns: ${JSON.stringify(restrictedReads.map((result) => result.text))}`,
+    );
+  }
+
+  const secondaryEmail = `e2e-phase9-other-${runId}@example.test`;
+  const secondaryPassword = `E2e-phase9-other-${runId}-password`;
+  const secondary = await createConfirmedUserWithCredentials({
+    emailAddress: secondaryEmail,
+    passwordValue: secondaryPassword,
+    displayName: 'E2E Calendar Other User',
+  });
+  const secondaryToken = await signInCredentials({
+    emailAddress: secondaryEmail,
+    passwordValue: secondaryPassword,
+    context: 'Phase 9 secondary principal',
+  });
+  const [crossConnection, crossEvent] = await Promise.all([
+    authenticatedRestRequest(
+      `calendar_connections?select=id&id=eq.${connectionId}`,
+      secondaryToken,
+    ),
+    authenticatedRestRequest(
+      `calendar_events?select=id&id=eq.${eventId}`,
+      secondaryToken,
+    ),
+  ]);
+  if (
+    !crossConnection.response.ok ||
+    crossConnection.rows?.length !== 0 ||
+    !crossEvent.response.ok ||
+    crossEvent.rows?.length !== 0
+  ) {
+    throw new Error(
+      `Calendar RLS exposed owner rows to ${secondary.id}: ${crossConnection.text} ${crossEvent.text}`,
+    );
+  }
+  const crossOwnerApi = await calendarApiRequest(
+    `/v1/calendar-integrations/connections/${connectionId}/events`,
+    secondaryToken,
+  );
+  assertCalendarApiStatus(
+    crossOwnerApi,
+    404,
+    'cross-owner calendar API read',
+  );
+  const crossOwnerRequestReuse = await calendarApiRequest(
+    '/v1/calendar-integrations/connections',
+    secondaryToken,
+    {
+      method: 'POST',
+      body: {
+        request_id: claimedRequestId,
+        source_kind: 'ical_file',
+        source_label: `Cross-owner ${runId}`,
+        consent: {
+          consent_version: 'calendar-import-consent-v1',
+          read_calendar_events: true,
+          store_event_basics: true,
+          provider_writes: false,
+          llm_processing: false,
+        },
+      },
+    },
+  );
+  assertCalendarApiStatus(
+    crossOwnerRequestReuse,
+    409,
+    'cross-owner calendar request-id reuse',
+  );
+
+  const directWrites = [
+    await authenticatedRestRequest(
+      `calendar_connections?id=eq.${connectionId}`,
+      ownerAccessToken,
+      { method: 'PATCH', body: { source_label: 'Client rewrite' } },
+    ),
+    await authenticatedRestRequest(
+      `calendar_events?id=eq.${eventId}`,
+      ownerAccessToken,
+      { method: 'DELETE' },
+    ),
+    await authenticatedRestRequest(
+      `calendar_imports?id=eq.${importId}`,
+      ownerAccessToken,
+      { method: 'DELETE' },
+    ),
+    await authenticatedRestRequest('calendar_events', ownerAccessToken, {
+      method: 'POST',
+      body: { id: crypto.randomUUID(), title: 'Client injected event' },
+    }),
+    await authenticatedRestRequest(
+      'calendar_request_identities',
+      ownerAccessToken,
+      {
+        method: 'POST',
+        body: {
+          request_id: crypto.randomUUID(),
+          user_id: userId,
+          connection_id: connectionId,
+          operation: 'delete_imported_data',
+          created_at: new Date().toISOString(),
+        },
+      },
+    ),
+  ];
+  if (directWrites.some((result) => result.response.ok)) {
+    throw new Error(
+      `Authenticated client unexpectedly wrote backend-owned calendar state: ${JSON.stringify(directWrites.map((result) => result.text))}`,
+    );
+  }
+  await assertRows(
+    `calendar_connections?select=id,source_label&id=eq.${connectionId}`,
+    (rows) => rows.length === 1 && rows[0].source_label !== 'Client rewrite',
+    'calendar connection survives direct authenticated write attempts',
+  );
+  await assertRows(
+    `calendar_imports?select=id&id=eq.${importId}`,
+    (rows) => rows.length === 1,
+    'calendar import survives direct authenticated write attempts',
+  );
+  await assertRows(
+    `calendar_events?select=id&id=eq.${eventId}`,
+    (rows) => rows.length === 1,
+    'calendar event survives direct authenticated write attempts',
+  );
+  if (secondary?.id === userId) {
+    throw new Error('Phase 9 RLS secondary principal unexpectedly matched owner.');
+  }
 }
 
 async function scheduledRefreshRequest(body) {

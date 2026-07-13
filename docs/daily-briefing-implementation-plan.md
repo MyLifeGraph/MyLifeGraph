@@ -1203,10 +1203,11 @@ Implemented:
 
 The browser E2E source injects response loss for habit/task create, habit
 outcome/undo, task completion/undo, and focus start/finish. Its negative writes
-include terminal-focus `updated_at` mutation. The combined Phase 3 through Phase
-8 journey passed non-destructively in the 2026-07-12 Phase 8 implementation
-checkout. Later changes must establish their own current-checkout pass before
-claiming E2E.
+include terminal-focus `updated_at` mutation. Phase 8 adds bounded weekly review,
+and Phase 9 adds bounded calendar-import ownership and recovery assertions. The
+combined Phase 3 through Phase 9 journey passed non-destructively in the
+2026-07-13 Phase 9 implementation checkout. Later changes must establish their
+own current-checkout pass before claiming E2E.
 
 The complete object/command/validation/recovery contract is in
 `docs/phase-3-executable-actions-contract.md`.
@@ -1381,19 +1382,35 @@ Evaluation:
 - Are skips and recovery days treated differently from unaddressed commitments?
 - Do confirmed changes improve the following week's briefing inputs?
 
-### Phase 9: Optional Integrations
+### Phase 9: Optional Integrations (First Bounded Slice Implemented)
 
 Goal:
 
 - Reduce manual capture after the standalone loop has proven useful.
 
-Work:
+Implemented first slice:
 
-- Add calendar read/import first with clear source and disconnect/delete controls.
-- Stage proposed time blocks before any provider write.
-- Add wearable or platform health signals only with explicit consent and clear
+- One optional authenticated `ical_file` source requires explicit
+  `calendar-import-consent-v1`; Setup calendar interest never counts as consent.
+- A deliberate bounded UTF-8 `.ics` upload persists only whitelisted basics in
+  dedicated read-only integration rows. Stable connection/import/event and
+  recurrence-occurrence identities reconcile retries and duplicate input.
+- Timed, all-day, cancellation, invalid, and unsupported recurrence cases stay
+  explicit. Event reads are stable and paginated, and every row carries
+  imported/read-only provenance.
+- Disconnect retains and marks the local copy stale; confirmed deletion removes
+  imported local events/history while preserving manual and Setup-owned
+  commitments.
+- There is no provider OAuth/token, arbitrary URL fetch, provider write,
+  background sync, RRULE expansion, LLM processing, or automatic time-block
+  proposal/application. A future block must remain `staged_only` until its own
+  recoverable mutation contract exists.
+
+Still later:
+
+- Live calendar-provider connections and carefully bounded sync.
+- Wearable or platform health signals with separate explicit consent and
   provenance.
-- Reconcile duplicates instead of creating parallel schedule or activity rows.
 
 Evaluation:
 
@@ -1505,8 +1522,14 @@ deterministic proposals, explicit freshness, Setup ownership, and confirmed
 manual Habit V1 adaptation only. It does not reconstruct missing task or habit
 definition history and does not make staged compound changes executable.
 
-The next implementation should be **Phase 9: Optional Integrations**. Begin with
-consented calendar read/import, visible provenance, staged time-block proposals,
-and disconnect/delete controls. Provider writes, Coach, broad autonomous
-changes, notification delivery, deployed scheduling, and LLM work remain
-separate later concerns.
+The first bounded Phase 9 integration is implemented as an explicit `.ics`
+file import. It remains independent of the standalone product loop, preserves
+imported/read-only provenance, reconciles stable identities, and separates
+disconnect from local imported-data deletion. It does not make imported events
+briefing inputs or user-owned commitments.
+
+The next implementation should be **Phase 10: Controlled Coach**, beginning
+only with an authenticated, budgeted, source-aware explanation boundary and
+reviewable memory. Live provider calendar sync/writes, broad autonomous changes,
+notification delivery, deployed scheduling, vector search, and unbounded LLM
+context remain separate later concerns.

@@ -162,6 +162,18 @@ tests require stable full pagination and exact user/date scoping. Proposal tests
 cap deterministic output at two, require matching `too_much` evidence before
 the initial weekly-target shrink rule, preserve Setup ownership, and never apply
 a user-owned mutation during generation.
+Phase 9 tests cover strict `calendar-import-v1` and
+`calendar-import-consent-v1` parsing, bearer-derived ownership, connection
+without import, create/import request replay and conflict, bounded `.ics`
+parsing, profile-local windows, stable event and recurrence identities,
+identical versus conflicting duplicates, exclusive all-day dates, aware timed
+intervals, explicit unsupported recurrence, cancellation tombstones, and
+atomic replacement only after a complete valid parse. Repository/API tests also
+cover stable event pagination and concurrent stale-projection detection,
+read-only GET, exact body-free delete, disconnect retention, local imported-data
+deletion, schedule preservation, global cross-owner/operation request identity,
+reliable `PT409` conflicts, forced-RLS owner reads, and rejection of
+authenticated direct or cross-owner writes.
 
 Current Flutter widget tests include:
 
@@ -268,6 +280,12 @@ Current Flutter widget tests include:
   before/after confirmation, cancel with zero writes, Setup deep-link without a
   generic write, manual Habit V1 expected-timestamp application, and guest/mock
   API isolation.
+- Calendar import tests cover strict nested consent/connection/import/event
+  parsing, authenticated bearer requests, local-demo zero-call selection,
+  unchecked consent, connection-without-import, retained exact retry identity,
+  imported/read-only source labels, stable pagination, event-local timezone and
+  all-day rendering, no event mutation controls, and the distinct disconnect,
+  retained-data, delete, empty, and error states.
 
 These tests cover the default mock/guest product path. They do not prove real
 Supabase registration, RLS, or browser behavior.
@@ -451,6 +469,20 @@ old review stale. Setup-owned review navigation must not write a habit or goal.
 Deliberate refresh reuses the same weekly review identity. Authenticated REST
 assertions use a second principal to prove owner-only SELECT and rejection of
 direct review-table writes/cross-owner habit changes.
+
+The Phase 9 source portion starts from an exact empty read, confirms explicit
+read/store consent, and proves that connection alone creates no import/event.
+It imports bounded `.ics` fixtures with duplicate, all-day, timezone-aware,
+materialized recurrence, unsupported recurrence, and cancellation cases;
+asserts stable retry/event identities plus paginated read-only provenance; and
+keeps `schedule_items` byte-for-byte unchanged. Separate confirmations prove
+disconnect retains the stale local copy while delete removes only integration
+events/history. The opaque fingerprint-free request ledger rejects reuse across
+operations and owners, a disconnected or superseded import cannot replay, and
+DELETE rejects a body. A second principal checks owner-only visibility and
+rejected direct/cross-owner writes. Guest/mock coverage remains zero-call.
+The complete combined browser command passed these assertions non-destructively
+in the 2026-07-13 Phase 9 implementation checkout.
 
 The Setup assertions inspect exact `request_id`, base/revision, applied state,
 stable materialized ids, server ownership metadata, record counts, and the
@@ -636,8 +668,8 @@ The repository now contains browser E2E automation, but it still depends on a
 real Ubuntu Node.js 20+ installation, `npm`, Playwright browser installation,
 Docker access, and a real Ubuntu `supabase` CLI on `PATH`.
 
-The combined Phase 3/4/5/6/7/8 browser journey passed non-destructively in the
-2026-07-12 Phase 8 implementation checkout. Later changes must establish their
+The combined Phase 3/4/5/6/7/8/9 browser journey passed non-destructively in the
+2026-07-13 Phase 9 implementation checkout. Later changes must establish their
 own current-checkout result with the browser command above; use the
 `RESET_DB=true` form when proving the full migration chain from a fresh
 database. The journey
@@ -652,15 +684,20 @@ to assert the refresh date in-browser. Backend repository tests separately
 cover more than 1,000 habit-log and focus-session rows. Do not infer the other
 paths merely from the same-user UI journey.
 
-Phase 7 targeted scheduled-preparation and Phase 8 bounded weekly-review
-assertions passed as part of that non-destructive 2026-07-12 browser run. They
-verify only the local test stack and uniquely named E2E profile. They do not
-establish remote database state, deployed cron execution, production token
-configuration, weekly scheduling, notification delivery, or autonomous
-planning.
+Phase 7 targeted scheduled-preparation, Phase 8 bounded weekly-review, and Phase
+9 bounded calendar-import assertions passed as part of that non-destructive
+2026-07-13 browser run. They verify only the local test stack and uniquely named
+E2E profile. They do not establish remote database state, deployed cron
+execution, production token configuration, weekly scheduling, notification
+delivery, or autonomous planning.
 
 The Phase 8 pass also does not establish complete task-transition history,
 historical habit-definition revisions, or remote RLS state.
+
+Phase 9 source coverage is not a real Google/Microsoft/Apple Calendar test. It
+uses selected local `.ics` bytes and does not establish provider OAuth, token
+refresh/revocation, arbitrary URL fetch, incremental/background sync, provider
+writes, mobile-native file-picker behavior, or remote RLS state.
 
 Known harmless local E2E output includes Chromium WebGL performance warnings.
 The FastAPI AI service must be healthy for the browser smoke to pass.

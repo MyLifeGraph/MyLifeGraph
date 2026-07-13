@@ -61,6 +61,10 @@ The app table constants live in
 | `daily_briefings` | One backend-owned deterministic `daily-briefing-v1` decision per user/profile-local date with strict executable actions, source-snapshot provenance, bounded evidence, and stale detection. |
 | `decision_feedback` | Retry-safe append-only feedback for an exact owned briefing action; authenticated owners can read/delete history and FastAPI owns validated writes. |
 | `weekly_reviews` | One backend-owned bounded `weekly-review-v1` output per user/completed ISO week with source fingerprint, at most two proposals, owner/admin reads, and service-role writes. |
+| `calendar_connections` | One optional consented `ical_file` source per owner with stable connect/disconnect/delete identity and no provider credential. |
+| `calendar_imports` | Immutable retry-safe `.ics` import identity, bounded window/counts, and canonical input/request fingerprints. |
+| `calendar_events` | Current whitelisted imported event copy with stable single/recurrence identity and explicit imported/read-only provenance. |
+| `calendar_request_identities` | Minimal global UUID/owner/connection/operation registry enforcing stable identity across calendar lifecycle mutations; forced RLS and service-role insert/select only, with no content fingerprint. |
 
 Phase 1 canonical capture upserts one `daily_logs` row per user/date with source
 `quick_check_in`. `metadata.capture_version=daily-capture-v2` contains separate
@@ -244,6 +248,51 @@ infer an adaptation from misses alone. Direct application remains limited to
 confirmed manual Habit V1 shrink/pause/archive. Setup-owned changes stay in
 Setup; replacement and goal/task/schedule changes remain staged.
 
+## Phase 9 Bounded Calendar File Import
+
+Phase 9 adds dedicated integration tables instead of copying external events
+into `schedule_items`. One real authenticated owner may create one consented
+`ical_file` connection. Connection alone stores consent and source identity; it
+does not parse a file or create an event.
+
+A deliberate backend import stores one immutable `(user_id, request_id)` row
+and atomically reconciles the connection's current event copy. Event identity is
+derived from connection, exact iCalendar `UID`, and either `single` or the
+normalized `RECURRENCE-ID`, so retry, edit, moved occurrence, duplicate, and
+cancellation behavior does not create parallel rows. Timed instants and
+event-local projections stay separate from exclusive all-day dates. Raw files,
+descriptions, attendees, organizer addresses, conferencing data, alarms, and
+unknown provider payload are not persisted.
+
+RLS is enabled and forced. Authenticated owners/admins may read the public
+connection/event projection; authenticated direct writes are not granted.
+FastAPI owns create/import/disconnect/delete after bearer verification, and the
+atomic import operation is service-role-only. Composite ownership checks keep
+connection/import/event users consistent even under privileged writes.
+
+Disconnect retains the visibly read-only local event copy and rejects another
+import. A separate confirmed delete hard-deletes imported events/history while
+preserving the minimal connection tombstone and every manual or Setup-owned
+schedule row. The schema stores no OAuth/refresh token or provider cursor and
+supports no provider write, URL fetch, background sync, or automatic
+snapshot/briefing consumption.
+
+`20260713120000_phase_9_calendar_import.sql` creates these three tables and the
+service-role-only atomic RPCs `create_calendar_connection_v1`,
+`apply_calendar_import_v1`, `disconnect_calendar_connection_v1`, and
+`delete_calendar_imported_data_v1`. Authenticated clients receive only the
+bounded public connection/event projection and no internal request identities
+or source keys.
+
+`20260713143000_phase_9_calendar_request_identity_guard.sql` adds a minimal
+global `(request_id, user_id, connection_id, operation)` registry across all
+four lifecycle operations. Its backfill aborts instead of reinterpreting an
+existing cross-scope collision. The table uses forced RLS, grants service role
+only immutable select/insert access, and stores no imported content or content/
+source fingerprint. The migration also replaces application-conflict SQLSTATEs
+with PostgREST `PT409` and restricts import replay to an exact-input import that
+is still connected and current.
+
 ## Legacy Tables
 
 Older remote databases may contain CamelCase app tables:
@@ -383,12 +432,24 @@ provenance check non-destructively. It requires the deterministic engine,
 and limitations containers, source snapshot fields, and the exact matching
 source fingerprint.
 
+`20260713120000_phase_9_calendar_import.sql` creates the bounded Phase 9
+connection/import/event schema and its four service-role-only atomic RPCs.
+Forced RLS, column-level grants, composite owner foreign keys, and terminal
+request identities keep authenticated reads bounded and all mutations behind
+FastAPI.
+
+`20260713143000_phase_9_calendar_request_identity_guard.sql` non-destructively
+backfills and enforces one global minimal calendar request identity, makes the
+registry service-role insert/select only under forced RLS, returns reliable
+`PT409` application conflicts, and prevents replay of a superseded,
+disconnected, or deleted import.
+
 ## Local Verification Workflow
 
 For local Supabase-backed testing, the reset should complete through:
 
 ```text
-20260712211500_phase_8_weekly_review_provenance_guard.sql
+20260713143000_phase_9_calendar_request_identity_guard.sql
 ```
 
 Then configure `.env` with:
@@ -430,7 +491,7 @@ RESET_DB=true FLUTTER_BIN=/path/to/flutter scripts/verify_supabase_local.sh
 ```
 
 The reset form should apply all migrations through
-`20260712211500_phase_8_weekly_review_provenance_guard.sql`; expected legacy-table
+`20260713143000_phase_9_calendar_request_identity_guard.sql`; expected legacy-table
 skip notices may be emitted for missing CamelCase tables. Use reset when proving
 the full migration/backfill/constraint chain from a fresh local database, not
 merely because one non-destructive migration is pending.
@@ -460,6 +521,10 @@ Supabase-backed path:
   completed ISO week, and inspect one exact `weekly_reviews` identity. Cancel a
   proposal without writes; confirm an eligible manual Habit V1 change; verify
   Setup ownership is untouched and the old review becomes stale until refresh.
+- Open Calendar integration, create the consented file source, deliberately
+  import a bounded `.ics` file, page through events, disconnect while retaining
+  the visibly imported/read-only copy, then delete that local copy and confirm
+  `schedule_items` is unchanged.
 - Open notifications.
 
 This checks that Auth, RLS, grants, FastAPI backend workflows, and the app's
@@ -520,9 +585,15 @@ legacy compatibility only and should be dropped in a later dedicated migration
 after data migration and app verification are complete.
 
 The latest schema addition is
-`20260712211500_phase_8_weekly_review_provenance_guard.sql`. It completes the
+`20260713143000_phase_9_calendar_request_identity_guard.sql`. It adds the global
+minimal calendar request registry, forced RLS with service-role insert/select
+only, reliable `PT409` conflicts, and current-only import replay. The preceding
+`20260713120000_phase_9_calendar_import.sql` creates the dedicated bounded
+calendar connection/import/event schema, restricted authenticated reads,
+service-role writes, and four atomic lifecycle RPCs. The earlier
+`20260712211500_phase_8_weekly_review_provenance_guard.sql` completes the
 bounded backend-owned weekly-review schema with strict deterministic-provenance
-and matching-fingerprint checks. The preceding Phase 8 table migration creates
+and matching-fingerprint checks. The Phase 8 table migration creates
 one review per owner/ISO period with exact week checks, forced RLS,
 authenticated owner/admin reads, and service-role writes.
 The preceding Phase 6 migration creates owner-scoped `decision_feedback`

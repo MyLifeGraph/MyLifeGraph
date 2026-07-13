@@ -19,7 +19,8 @@ currently serves authenticated Intake V1 and deterministic recommendation
 and daily-briefing workflows when backend Supabase settings are configured. It
 also owns deterministic user-state snapshot aggregation plus the protected
 scheduled preparation boundary for backend-generated daily state and briefings,
-and the bounded deterministic weekly-review boundary.
+the bounded deterministic weekly-review boundary, and the optional bounded
+read-only `.ics` import boundary.
 
 ## Mobile App
 
@@ -70,6 +71,9 @@ Source selection is explicit rather than a recovery fallback:
 Dashboard, Recommendations, Insights, and Notifications follow this source
 boundary. `AppSurfaceCapabilities` also uses it to hide Supabase-only task,
 habit, and focus commands from local guests and to validate route capabilities.
+Calendar import follows the same rule: a real authenticated account uses the
+FastAPI-backed integration source, while guest/mock renders an honest local
+state and makes no calendar API call.
 
 `USE_MOCK_DATA=true` wins over the presence of a Supabase client, access token,
 or authenticated profile. Setup, canonical check-in, Dashboard,
@@ -301,6 +305,12 @@ surface. The canonical application schema is now snake_case and centered on:
   users may read/delete history while FastAPI validates and inserts it.
 - `weekly_reviews` for one backend-owned deterministic completed-ISO-week
   review per user/period; authenticated owners may read but only FastAPI writes.
+- `calendar_connections`, `calendar_imports`, and `calendar_events` for one
+  explicitly consented `.ics` source, immutable retry identities, and the
+  current whitelisted read-only local event copy. A backend-only
+  `calendar_request_identities` registry prevents request reinterpretation
+  across owners and operations without retaining content fingerprints. These
+  tables remain separate from app-authored `schedule_items`.
 
 Legacy CamelCase tables such as `"User"`, `"DailyLog"`, and `"Task"` may still
 exist in older remote projects. The canonical migration copies data from those
@@ -325,6 +335,10 @@ Current responsibilities:
   `/v1/scheduled/daily-refresh` with a backend-only scheduled refresh token.
 - Serve read-only latest/explicit weekly-review GETs plus deliberate
   `POST /v1/weekly-reviews/generate` under `weekly-review-v1`.
+- Serve authenticated calendar connection/read endpoints plus deliberate file
+  import, disconnect, and imported-data deletion under `calendar-import-v1`.
+  The service parses bounded caller-selected UTF-8 `.ics` text; it does not
+  fetch arbitrary URLs, hold provider credentials, or write to a calendar.
 - Keep recommendation generation behind a service boundary.
 - Verify bearer tokens through an isolated auth verifier when Supabase backend
   settings are configured.
@@ -494,6 +508,9 @@ making claims about deployed data.
   service-role writes. FastAPI scopes every privileged source query by the
   bearer-derived owner. Confirmed manual habit changes reuse authenticated
   Habit V1 ownership and optimistic timestamp checks.
+- Calendar integration tables use forced RLS and backend-owned writes.
+  FastAPI derives the owner before connect/import/disconnect/delete, and the
+  schema prevents privileged cross-owner child rows.
 - Mobile config uses Dart defines so credentials are not hard-coded in source.
 - Production AI endpoints validate Supabase bearer tokens before reading user
   data or invoking privileged backend workflows when backend Supabase settings
@@ -504,7 +521,7 @@ making claims about deployed data.
 - Coach remains gated and redirects to Dashboard. Deep Work is no longer a
   preview: it is available only to authenticated real accounts with synced
   execution capability. Settings exposes read-only account data, session-only
-  theme, the durable Setup entry, and sign-out.
+  theme, the durable Setup entry, optional Calendar Import entry, and sign-out.
 - Notifications are currently a read-only inbox. Original `type`, `priority`,
   read state, and supported `action_url` are shown; there is no mark-read command
   until the repository has a durable write contract. Phase 7 does not send
@@ -528,6 +545,12 @@ making claims about deployed data.
   Setup ownership stays in Setup, while replacement and goal/task/schedule
   changes remain staged. There is no task-transition or habit-definition
   history claim.
+- Phase 9 accepts one explicitly consented, user-selected `.ics` source for a
+  real account. Connection alone imports nothing; a bounded deliberate import
+  reconciles stable event identities and exposes imported/read-only provenance.
+  Disconnect retains the local copy, and confirmed deletion removes only local
+  imported data. There is no provider OAuth, URL fetch, recurrence engine,
+  provider write, background sync, or calendar-driven ranking change.
 - The remote Production project may still contain legacy CamelCase tables until
   the canonical schema migration has been applied and verified.
 - The repository does not contain real Supabase credentials.
@@ -543,8 +566,10 @@ making claims about deployed data.
   task/habit/focus rows; response-loss paths for habit/task create, habit
   outcome/undo, task completion/undo, and focus start/finish; and negative
   database lifecycle/range/cadence assertions including terminal-focus
-  `updated_at`. The combined Phase 3 through Phase 8 journey passed
-  non-destructively in the 2026-07-12 Phase 8 implementation checkout. Later
-  changes must establish their own current-checkout pass before claiming E2E.
+  `updated_at`. The journey also covers Phase 8 weekly-review and Phase 9
+  bounded calendar-import ownership and recovery boundaries. The combined Phase
+  3 through Phase 9 journey passed non-destructively in the 2026-07-13 Phase 9
+  implementation checkout. Later changes must establish their own
+  current-checkout pass before claiming E2E.
 - Explicit local demo mode remains the no-credentials exploration path and is
   labeled throughout the shell.

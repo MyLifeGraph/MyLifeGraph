@@ -5,6 +5,7 @@ class AppRoutes {
   static const auth = '/auth';
   static const onboarding = '/onboarding';
   static const settings = '/settings';
+  static const calendarIntegration = '/settings/integrations/calendar';
   static const insights = '/insights';
   static const quickAction = '/quick-action';
   static const quickMoodCheckIn = '/quick-mood-check-in';

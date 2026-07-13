@@ -5,6 +5,7 @@ import '../capabilities/app_surface_capabilities.dart';
 import '../../features/auth/presentation/pages/auth_page.dart';
 import '../../features/auth/presentation/pages/onboarding_page.dart';
 import '../../features/auth/presentation/providers/auth_providers.dart';
+import '../../features/calendar_integration/presentation/pages/calendar_integration_page.dart';
 import '../../features/dashboard/presentation/pages/dashboard_page.dart';
 import '../../features/focus/domain/focus_session.dart';
 import '../../features/focus/presentation/pages/focus_session_page.dart';
@@ -90,6 +91,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: AppRoutes.settings,
             builder: (context, state) => const SettingsPage(),
+          ),
+          GoRoute(
+            path: AppRoutes.calendarIntegration,
+            builder: (context, state) => const CalendarIntegrationPage(),
           ),
           GoRoute(
             path: AppRoutes.insights,

@@ -218,6 +218,17 @@ Already implemented:
     shrink/pause/archive reuses an existing exact owner-scoped command.
     Setup-owned changes return to Setup; replacements and goal/task/schedule
     proposals remain staged.
+- Phase 9 bounded calendar import:
+  - One authenticated `ical_file` source requires exact explicit read/store
+    consent. Creating the source does not import anything.
+  - A deliberate bounded UTF-8 `.ics` upload reconciles stable connection,
+    import, single-event, and recurrence-occurrence identities in dedicated
+    tables with imported/read-only provenance.
+  - Disconnect retains the imported local copy; a separate confirmed delete
+    removes imported events/history only. Manual and Setup-owned
+    `schedule_items` remain unchanged.
+  - There is no provider OAuth/token, arbitrary URL fetch, calendar write,
+    hidden sync, RRULE engine, LLM processing, or calendar-driven ranking.
 - Browser E2E starts FastAPI with local Supabase backend settings and verifies
   authenticated required-only Setup, retry/edit/review identity and ownership,
   deterministic post-intake recommendations, backend daily snapshot refresh
@@ -238,7 +249,8 @@ Not yet implemented:
 - LLM provider integration.
 - Memory extraction beyond current direct writes.
 - Autonomous weekly planning.
-- Calendar import.
+- Live calendar-provider OAuth, refresh tokens, URL subscriptions, background
+  sync, and provider writes.
 
 ## Architectural Principles
 
@@ -277,6 +289,7 @@ repositories, and jobs, not as unconstrained autonomous LLM loops.
 | Recommendation verifier | Every generated recommendation | Candidate metadata, active recommendations | Accept/reject result | None |
 | Daily briefing service | Explicit refresh today; protected scheduled daily preparation | `user_state_snapshots`, `recommendations`, goals, tasks, habits, habit outcomes, `decision_feedback` | `daily_briefings` | None for v1 |
 | Weekly review service | Explicit completed-week review read/generation | Profile timezone, weekly snapshot, tasks, goals, habits/outcomes, focus, daily snapshots, `decision_feedback` | `weekly_reviews` derived output only | None for v1 |
+| Calendar import service | Explicit consent and selected `.ics` upload | Bounded iCalendar text, profile timezone, owned connection | `calendar_connections`, `calendar_imports`, `calendar_events`, opaque `calendar_request_identities` | None |
 | Coach service | User sends coach message | Recent messages, snapshots, selected memory | `coach_messages`, optional memory candidates | Yes, budgeted |
 | Memory service | Check-ins, coach conversations, weekly review | Raw notes/messages, existing memory | `memory_entries` | Optional extraction only |
 | Planning service | Weekly review, user request | Goals, tasks, habits, schedule, snapshots | `tasks`, `schedule_items`, `recommendations`, `coach_messages` | Optional for complex plans |
@@ -290,11 +303,12 @@ exist. Phase 4's deterministic Daily Briefing service supplies the backend
 decision contract, Phase 5 consumes it in the decision-first Today surface,
 Phase 6 closes the bounded feedback/Insight loop, and the minimal Phase 7
 backend prepares timezone-pinned daily snapshots and briefings through the
-existing protected endpoint. Phase 8 now adds bounded weekly review and
-user-confirmed manual Habit V1 adaptation. The next product work is Phase 9's
-optional consented integration boundary, beginning with staged calendar
-read/import rather than provider writes. Coach and LLM provider work remain
-later. Deployed cron/job wiring and notification delivery remain
+existing protected endpoint. Phase 8 adds bounded weekly review and
+user-confirmed manual Habit V1 adaptation. Phase 9 adds the first optional
+consented integration boundary as a user-selected `.ics` import with no
+provider access or writes. The next product work is Phase 10's controlled Coach
+boundary. Deployed cron/job wiring, notification delivery, real calendar
+provider integration, and LLM provider work remain
 unimplemented and must not be inferred from the callable endpoint. See
 `docs/daily-briefing-implementation-plan.md` for the current product contract
 and phase sequence, and
@@ -375,17 +389,18 @@ Optional fields:
 
 Calendar import is a quality booster, not an onboarding gate.
 
-Implement later as:
+The first bounded implementation is:
 
-- Optional connection after the first useful dashboard.
-- Read/import into canonical schedule/calendar tables.
-- User-visible controls for disconnecting and deleting imported data.
-- No LLM processing of calendar content by default.
+- Optional explicit `ical_file` consent after the first useful dashboard.
+- Deliberate bounded file import into dedicated connection/import/event tables.
+- User-visible, separate disconnect and imported-data deletion controls.
+- Imported/read-only provenance and no LLM processing of calendar content.
+- No provider OAuth, URL fetch, provider write, hidden sync, or automatic
+  schedule/briefing mutation.
 
-If calendar support is added, prefer dedicated tables such as
-`calendar_connections` and `calendar_events` instead of overloading
-`schedule_items` with provider sync state. `schedule_items` can still represent
-stable user routines and app-authored planned blocks.
+`schedule_items` continues to represent stable user routines and app-authored
+planned blocks. A live-provider follow-up must keep credentials, cursors, and
+webhooks backend-only and preserve the same explicit provenance/control rules.
 
 ## Data Model Direction
 
@@ -515,12 +530,14 @@ confirmed eligible manual Habit V1 changes reuse Phase 3 owner-scoped commands.
 
 ### Later Tables
 
-`daily_briefings`, `decision_feedback`, and `weekly_reviews` are implemented
+`daily_briefings`, `decision_feedback`, `weekly_reviews`, and the bounded Phase
+9 calendar import tables are implemented
 after their owning contracts proved the persistence boundary. Do not add these remaining tables
 until their owning phase needs them:
 - `backend_jobs` for durable idempotent jobs and retries.
 - `llm_usage_events` for per-user budget tracking.
-- `calendar_connections` and `calendar_events` for provider sync.
+- provider-account, credential, cursor, or webhook tables for live calendar
+  sync.
 - `memory_candidates` if memory extraction needs review before promotion to
   `memory_entries`.
 
@@ -650,10 +667,10 @@ Phase 1 capture, Phase 2 explainable state, Phase 3 executable action targets,
 Phase 4's persisted deterministic briefing contract, Phase 5's decision-first
 Today consumer, Phase 6's bounded feedback/Insight loop, the minimal Phase 7
 scheduled preparation backend, and Phase 8's bounded weekly review plus
-confirmed manual Habit V1 adaptation. The immediate next slice is **Phase 9:
-Optional Integrations**: begin with consented calendar read/import, explicit
-source provenance, staged time-block proposals, and disconnect/delete controls.
-The standalone loop must remain fully usable without an integration.
+confirmed manual Habit V1 adaptation, and Phase 9's bounded `.ics` import. The
+immediate next slice is **Phase 10: Controlled Coach**: begin with a bounded
+authenticated context, budget, safety, provenance, and staged-suggestion
+contract. The deterministic standalone loop must remain the source of truth.
 
 ### Completed Slice 0A: Honest Capture
 
@@ -879,6 +896,27 @@ The standalone loop must remain fully usable without an integration.
 The complete limitation, proposal, freshness, and verification contract lives
 in `docs/phase-8-weekly-review-contract.md`.
 
+### Completed Slice 9: Bounded Calendar File Import
+
+- Added the strict `calendar-import-v1` boundary for one optional authenticated
+  `ical_file` source. `calendar-import-consent-v1` is explicit and independent
+  of Setup's calendar-interest answer.
+- Added retry-safe connection and import identities plus deterministic event
+  reconciliation over a bounded profile-local window. Persisted fields are
+  whitelisted; event reads are paginated, stable, and side-effect free.
+- Timed, all-day, explicitly materialized recurrence occurrences, duplicate
+  identity, cancellation, invalid component, and unsupported recurrence states
+  remain explicit. Phase 9 does not invent a recurrence expansion engine.
+- Added separate confirmed disconnect and imported-data deletion semantics.
+  Disconnect retains a visibly stale/read-only local copy; delete removes only
+  integration rows and preserves every manual or Setup-owned schedule row.
+- Added no provider OAuth, credentials, URL fetch, provider mutation,
+  background sync, snapshot/briefing input, LLM processing, or staged-block
+  application.
+
+The exact consent, import, identity, parser, privacy, and verification boundary
+lives in `docs/phase-9-calendar-import-contract.md`.
+
 ### Completed Slice: Controlled Recommendation Refresh
 
 - Implemented: authenticated Intake V1 completion creates an onboarding
@@ -942,9 +980,11 @@ in `docs/phase-8-weekly-review-contract.md`.
   outcome/undo, task completion/undo, and focus start/finish are encoded in the
   smoke. Negative lifecycle/range/cadence writes include terminal-focus
   `updated_at`. The Phase 7 portion also proves targeted scheduled preparation
-  and a write-free retry. The combined Phase 3 through Phase 8 journey passed
-  non-destructively in the 2026-07-12 Phase 8 implementation checkout. Later
-  changes must establish their own current-checkout pass before claiming E2E.
+  and a write-free retry. Phase 8 adds bounded weekly review, and Phase 9 adds
+  bounded calendar-import ownership, retry, pagination, and deletion boundaries.
+  The combined Phase 3 through Phase 9 journey passed non-destructively in the
+  2026-07-13 Phase 9 implementation checkout. Later changes must establish their
+  own current-checkout pass before claiming E2E.
 
 ### Completed Slice: Controlled Snapshot Triggers
 
@@ -981,8 +1021,8 @@ in `docs/phase-8-weekly-review-contract.md`.
 - Implementing the gated Coach UI merely to keep it visible.
 - OpenAI/OpenRouter/local LLM integration.
 - Real coach assistant replies.
-- Calendar provider writes; Phase 9 begins with consented read/import and staged
-  proposals only.
+- Live calendar-provider OAuth, URL fetch, incremental/background sync,
+  provider writes, and applying calendar-derived time blocks.
 - Autonomous weekly plan rewrites or applying review proposals without explicit
   confirmation.
 - Vector search.

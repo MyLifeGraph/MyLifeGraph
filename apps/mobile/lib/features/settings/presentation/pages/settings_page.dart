@@ -65,6 +65,18 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         ),
         AppCard(
           padding: EdgeInsets.zero,
+          child: ListTile(
+            leading: const Icon(Icons.calendar_month_outlined),
+            title: const Text('Calendar import (optional)'),
+            subtitle: const Text(
+              'Import a selected .ics file as a read-only local copy.',
+            ),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => context.go(AppRoutes.calendarIntegration),
+          ),
+        ),
+        AppCard(
+          padding: EdgeInsets.zero,
           child: SwitchListTile(
             value: lightModeEnabled,
             onChanged: (value) {

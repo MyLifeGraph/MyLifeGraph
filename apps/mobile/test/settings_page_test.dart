@@ -37,8 +37,12 @@ void main() {
     expect(find.text('Europe/Berlin'), findsOneWidget);
     expect(find.text('Local guest'), findsOneWidget);
     expect(find.text('Applies until the app is restarted.'), findsOneWidget);
-    expect(find.text('Sign out'), findsOneWidget);
     expect(find.text('Setup and commitments'), findsOneWidget);
+    expect(find.text('Calendar import (optional)'), findsOneWidget);
+    expect(
+      find.text('Import a selected .ics file as a read-only local copy.'),
+      findsOneWidget,
+    );
     expect(
       find.text(
         'Review goals, routine candidates, and fixed commitments.',
@@ -57,6 +61,12 @@ void main() {
     await tester.pump();
     expect(tester.widget<Switch>(find.byType(Switch)).value, isTrue);
 
+    await tester.scrollUntilVisible(
+      find.text('Sign out'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('Sign out'), findsOneWidget);
     await tester.tap(find.text('Sign out'));
     await tester.pumpAndSettle();
     final preferences = await SharedPreferences.getInstance();

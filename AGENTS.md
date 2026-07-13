@@ -26,6 +26,8 @@ Read these files before making changes:
    actions or consuming them in a briefing
 9. `docs/phase-8-weekly-review-contract.md` before changing weekly review
    facts, freshness, proposals, or confirmed habit adaptation
+10. `docs/phase-9-calendar-import-contract.md` before changing calendar
+    consent, `.ics` parsing, imported-event identity, disconnect, or deletion
 
 ## Current State
 
@@ -52,6 +54,8 @@ databases may still contain legacy CamelCase tables such as `"User"`,
 - `goals`, `habits`, `habit_logs`, `focus_sessions`
 - `intake_responses`, `user_state_snapshots`
 - `daily_briefings`, `decision_feedback`, `weekly_reviews`
+- `calendar_connections`, `calendar_imports`, `calendar_events`
+- `calendar_request_identities`
 
 The migration
 `supabase/migrations/20260618170000_create_canonical_app_schema.sql` creates the
@@ -101,6 +105,19 @@ The migration
 `supabase/migrations/20260712211500_phase_8_weekly_review_provenance_guard.sql`
 non-destructively completes the weekly-review provenance check by requiring the
 strict deterministic contract keys and matching source fingerprint.
+The migration
+`supabase/migrations/20260713120000_phase_9_calendar_import.sql` adds dedicated
+consented calendar connection, immutable import, and current imported-event
+tables with forced RLS and service-role-only atomic connection, import,
+disconnect, and local-delete RPCs. It stores no provider credential and never
+copies imported events into `schedule_items`.
+The migration
+`supabase/migrations/20260713143000_phase_9_calendar_request_identity_guard.sql`
+non-destructively adds one minimal global request-identity registry across
+calendar create/import/disconnect/delete, changes application conflicts to
+PostgREST `PT409`, and permits import replay only while that import is still the
+connected source's current projection. The registry stores no file or content
+fingerprint and is service-role insert/select only with forced RLS.
 
 ## Important Docs
 
@@ -119,6 +136,9 @@ strict deterministic contract keys and matching source fingerprint.
   focus, and ranking-independent action-target contract.
 - `docs/phase-8-weekly-review-contract.md` - implemented bounded ISO-week fact,
   proposal, freshness, ownership, and confirmed Habit V1 adaptation contract.
+- `docs/phase-9-calendar-import-contract.md` - implemented explicit consent,
+  bounded `.ics` reconciliation, imported/read-only provenance, and separate
+  disconnect/local-delete contract.
 - `README.md` - high-level project overview.
 
 ## Next Implementation Direction
@@ -154,18 +174,22 @@ persists only derived facts and at most two proposals. Only explicit
 confirmation may reuse the existing exact manual Habit V1 shrink/pause/archive
 commands. Setup-owned changes stay in Settings Setup, and replacement plus
 goal/task/schedule proposals remain staged and non-mutating.
+Phase 9 adds one optional explicitly consented `ical_file` connection and
+bounded deliberate `.ics` import. Dedicated imported rows retain stable
+read-only provenance; disconnect and local imported-data deletion remain
+separate and never mutate `schedule_items` or a source calendar.
 It does not claim deployed cron wiring or send notifications.
 Read `docs/backend-roadmap.md`,
 `docs/daily-briefing-implementation-plan.md`, and the Phase 3 and Phase 8
-contracts before planning the next backend, briefing, dashboard, or agent
-workflow.
+contracts plus the Phase 9 calendar contract before planning the next backend,
+briefing, dashboard, integration, or agent workflow.
 
 Do not jump straight to broad LLM integration, vector search, autonomous
 background agents, or unreviewed provider writes. The next product slice is
-Phase 9 optional integrations, beginning only with consented staged calendar
-read/import and visible disconnect/delete controls. Deployed scheduling and
-notification delivery still require their own directly verified operational
-contracts.
+Phase 10 Controlled Coach, beginning only with a bounded authenticated
+explanation/context/budget boundary and staged suggestions. Live calendar
+provider OAuth/sync/writes, deployed scheduling, and notification delivery still
+require their own directly verified contracts.
 Phase 0A, Honest Capture, is
 implemented: `/daily-check-in` redirects to the canonical lightweight flow;
 measurements require explicit selection; a typed draft drives guest and Supabase
@@ -298,6 +322,16 @@ Setup-owned proposals open Settings Setup without a generic write; replace,
 defer, goal, task, and schedule proposals remain staged. `review_plan` opens the
 real synced weekly-review surface but never generates or applies by itself.
 
+Phase 9, Bounded Calendar File Import, is implemented through one optional
+authenticated `ical_file` source. Exact `calendar-import-consent-v1` is required
+before connection, and connection alone imports nothing. A deliberate bounded
+UTF-8 `.ics` upload reconciles stable request/event/recurrence identities into
+dedicated backend-owned rows with imported/read-only provenance. Disconnect
+retains the stale local copy; a separate confirmed delete removes imported
+local events/history while preserving every `schedule_items` row. Guest/mock is
+zero-call. There is no provider OAuth/token, URL fetch, RRULE engine, provider
+write, background sync, LLM processing, or automatic calendar-derived action.
+
 FastAPI-backed browser E2E coverage for revisioned Setup ownership/retry/edit,
 concurrent same-request convergence, post-intake recommendations, exact Phase 2
 Daily State recomputation, daily snapshot refresh, deliberate dashboard
@@ -319,9 +353,12 @@ provenance, and a write-free retry.
 Phase 8 extends that source journey with read-only missing truth, deliberate
 weekly generation, exact persisted facts/proposals, confirmed manual Habit V1
 adaptation, Setup ownership, stale/refresh behavior, and review-table RLS.
-The combined Phase 3/4/5/6/7/8 browser journey passed non-destructively in the
-2026-07-12 Phase 8 implementation checkout. Later changes must still establish
-their own current-checkout pass before claiming E2E.
+Phase 9 source assertions extend the journey with consent, connect-without-
+import, retry-safe `.ics` reconciliation, paginated read-only events,
+disconnect-retains, local delete, schedule preservation, and integration-table
+RLS. The combined Phase 3/4/5/6/7/8/9 browser journey passed non-destructively
+in the 2026-07-13 Phase 9 implementation checkout. Later changes must still
+establish their own current-checkout pass before claiming E2E.
 
 The implemented post-intake refresh is backend-only and best-effort:
 
@@ -404,7 +441,7 @@ you actually intend to run `supabase db reset`.
 `supabase db reset` must complete through:
 
 ```text
-20260712211500_phase_8_weekly_review_provenance_guard.sql
+20260713143000_phase_9_calendar_request_identity_guard.sql
 ```
 
 Expected local reset notices include skipped legacy CamelCase tables and

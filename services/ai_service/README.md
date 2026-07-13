@@ -56,6 +56,14 @@ FastAPI service boundary for recommendation and future ML workflows.
   each profile-local date; current pairs are write-free, while missing or stale
   state converges on the existing daily identities with isolated per-user stage
   results.
+- Phase 8 exposes read-only completed-week review GETs and deliberate
+  deterministic review generation under `weekly-review-v1`.
+- Phase 9 exposes one optional `calendar-import-v1` `.ics` connection. Consent,
+  file import, stable paginated event reads, disconnect, and local imported-data
+  deletion are authenticated and owner scoped. One fingerprint-free backend
+  request registry prevents UUID reuse across owners or operations. It has no
+  provider credential, URL fetch, provider write, background sync, or LLM
+  processing.
 - The service does not call LLMs, OpenRouter, local models, or vector search.
   The repository contains no deployed cron, background worker, or Phase 7
   notification sender.
@@ -225,6 +233,36 @@ explicit `include_recommendations=true` remains deterministic and forces LLM
 wording off. Scheduled snapshot/briefing preparation never calls an LLM. This is
 an invocable backend endpoint, not evidence of deployed cron or notifications.
 
+Read Phase 8 review state without generation, or deliberately generate the
+latest completed profile-local ISO week:
+
+```text
+GET  /v1/weekly-reviews/latest
+GET  /v1/weekly-reviews/{period_key}
+POST /v1/weekly-reviews/generate
+```
+
+Phase 9 calendar import uses these bearer-authenticated endpoints:
+
+```text
+GET    /v1/calendar-integrations
+POST   /v1/calendar-integrations/connections
+POST   /v1/calendar-integrations/connections/{connection_id}/imports
+GET    /v1/calendar-integrations/connections/{connection_id}/events
+POST   /v1/calendar-integrations/connections/{connection_id}/disconnect
+DELETE /v1/calendar-integrations/connections/{connection_id}/imported-data?request_id=<uuid>
+```
+
+Create requires the exact `calendar-import-consent-v1` read/store consent.
+Creating a connection never imports. Import accepts one stable request id and a
+bounded UTF-8 `calendar_text`; the same exact request replays without applying
+events again only while that import remains connected/current. GET is
+side-effect free. Disconnect retains the local read-only copy; delete is a
+separate body-free post-disconnect local operation and never changes
+`schedule_items` or a source calendar. Reusing any calendar request UUID across
+an owner, connection, or lifecycle operation returns conflict. See
+`../../docs/phase-9-calendar-import-contract.md`.
+
 ## Environment
 
 The service reads `.env` from `services/ai_service`:
@@ -275,8 +313,14 @@ filtering, preservation of Phase 2 Daily State behavior, and terminal-task
 exclusion from recommendation pressure. Phase 4 through Phase 7 coverage adds
 strict persisted briefings, profile-local scheduled dates, missing/stale/current
 write behavior, bounded targeted retry, per-user failure isolation, and default
-no-recommendation/no-LLM preparation. A documented test suite is not a claim
-that it passed for the current checkout; run it to establish the result.
+no-recommendation/no-LLM preparation. Phase 8/9 coverage adds weekly-review
+freshness/proposals plus strict calendar consent, retry-safe `.ics` identity,
+timezone/all-day/recurrence/cancellation handling, stable event pagination,
+disconnect/delete separation, schedule preservation, and RLS ownership. A
+documented test suite alone is not a pass claim. The combined Phase 3 through
+Phase 9 browser journey passed non-destructively in the 2026-07-13 Phase 9
+implementation checkout; run it again after later changes to establish their
+current result.
 
 Run service tests with:
 

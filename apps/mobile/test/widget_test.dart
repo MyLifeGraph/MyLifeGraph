@@ -377,6 +377,15 @@ void main() {
     expect(find.text('Latest check-in'), findsOneWidget);
     expect(find.text('Weekly review'), findsNothing);
 
+    router.go(AppRoutes.calendarIntegration);
+    await tester.pumpAndSettle();
+    expect(find.text('Calendar import'), findsOneWidget);
+    expect(
+      find.text('Calendar import unavailable in local demo'),
+      findsOneWidget,
+    );
+    expect(find.text('Create read-only source'), findsNothing);
+
     await tester.tap(find.text('Settings'));
     await tester.pumpAndSettle();
 
@@ -387,6 +396,7 @@ void main() {
     expect(find.text('Applies until the app is restarted.'), findsOneWidget);
     expect(find.text('Sign out'), findsOneWidget);
     expect(find.text('Setup and commitments'), findsOneWidget);
+    expect(find.text('Calendar import (optional)'), findsOneWidget);
     expect(find.text('Export data'), findsNothing);
     expect(find.text('Alert rules'), findsNothing);
     expect(find.text('Coach behavior'), findsNothing);

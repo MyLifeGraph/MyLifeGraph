@@ -31,7 +31,7 @@ way to explore the product today is the Flutter app in mock-data guest mode.
   stress, energy, mood, screen time, activity, steps, habits, recovery, and
   focus. It computes 7/14/30-day relationships in Flutter from existing
   Supabase rows or local mock time series, without LLM usage.
-- Phase 0A through Phase 8 are implemented. Evening and Morning merge without
+- Phase 0A through Phase 9 are implemented. Evening and Morning merge without
   erasing each other and feed a strict backend-only state parser; Setup remains
   progressive, revision-safe, reviewable, and atomically materialized. Phase 3
   adds durable task commands, cadence-aware Habit V1 outcomes, linked focus
@@ -57,10 +57,18 @@ way to explore the product today is the Flutter app in mock-data guest mode.
   and at most two proposals, and exact source fingerprints expose staleness.
   Confirmed manual Habit V1 shrink/pause/archive changes reuse Phase 3; Setup
   changes deep-link to Setup, while replacement and goal/task/schedule changes
-  remain staged. The repository does not configure a deployed cron or create
-  notifications. See
+  remain staged. Phase 9 adds one optional authenticated `ical_file` connection
+  with explicit read/store consent, deliberate bounded `.ics` import, stable
+  connection/import/event identities, and visibly read-only imported events.
+  Connect never imports; repeated files reconcile instead of duplicating rows;
+  disconnect retains the local copy, while a separate confirmed delete removes
+  only imported local data. No provider credential, URL fetch, provider write,
+  background sync, LLM processing, or `schedule_items` mutation is introduced.
+  The repository does not configure a deployed cron or create notifications.
+  See
   `docs/phase-3-executable-actions-contract.md` and
-  `docs/phase-8-weekly-review-contract.md`.
+  `docs/phase-8-weekly-review-contract.md`, and
+  `docs/phase-9-calendar-import-contract.md`.
 - Repository docs and scripts should be treated as the shared team source of
   truth. Do not depend on user-local Codex skills or machine-specific paths.
 
@@ -281,6 +289,11 @@ Supabase is the intended auth and persistence backend. The current app supports:
   deliberate refresh. Direct application is limited to confirmed manual Habit
   V1 shrink/pause/archive commands with an exact target timestamp; other
   proposal kinds remain staged or return to Settings Setup.
+- `/v1/calendar-integrations` exposes the optional `calendar-import-v1`
+  boundary. Connection requires explicit `calendar-import-consent-v1`, file
+  import is a deliberate retry-safe POST, event pages are read-only, and
+  disconnect/delete have separate local semantics. Imported events never become
+  app-authored commitments or provider writes.
 
 Important current caveat: the Flutter app targets the canonical snake_case
 schema. A clean local Supabase reset should apply
@@ -380,10 +393,12 @@ database assertions including terminal-focus `updated_at` mutation. Do not
 describe them as passed until the command succeeds in the current checkout.
 The Phase 8 source path additionally covers missing/read-only review truth,
 deliberate generation, exact persisted weekly facts/proposals, confirmed manual
-habit adaptation, stale refresh, Setup non-mutation, and review-table RLS. It
-passed non-destructively as part of the combined Phase 3/4/5/6/7/8 journey in
-the 2026-07-12 Phase 8 implementation checkout. Later changes must establish
-their own current-checkout pass before claiming E2E.
+habit adaptation, stale refresh, Setup non-mutation, and review-table RLS. Phase
+9 adds explicit consent, bounded `.ics` reconciliation, paginated imported-only
+events, disconnect/delete separation, schedule preservation, and integration
+RLS. The combined Phase 3/4/5/6/7/8/9 journey passed non-destructively in the
+2026-07-13 Phase 9 implementation checkout. Later changes must establish their
+own current-checkout pass before claiming E2E.
 
 With a fresh local database:
 
@@ -407,6 +422,8 @@ has the nvm bin directory on `PATH`.
   habit, focus, and action-target contract.
 - `docs/phase-8-weekly-review-contract.md` - Bounded ISO-week facts,
   proposals, freshness, ownership, and confirmed habit adaptation.
+- `docs/phase-9-calendar-import-contract.md` - Explicit `.ics` consent,
+  bounded retry-safe import, read-only provenance, and disconnect/delete rules.
 - `docs/next-chat-prompt.md` - Ready-to-use prompt for continuing the next
   implementation slice in a new chat.
 - `apps/mobile/README.md` - Flutter app commands and configuration.

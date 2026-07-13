@@ -304,6 +304,46 @@ confirmed through the existing exact timestamp/readback command. Setup-owned
 changes return to Setup; replace/defer and goal/task/schedule proposals remain
 staged. Guest/mock does not call this API or fabricate a local review.
 
+Phase 9 calendar import is also authenticated and optional. Read the current
+connection state without importing:
+
+```bash
+curl http://localhost:8000/v1/calendar-integrations \
+  -H 'Authorization: Bearer <supabase_access_token>'
+```
+
+Create consent separately from import:
+
+```bash
+curl -X POST http://localhost:8000/v1/calendar-integrations/connections \
+  -H 'Authorization: Bearer <supabase_access_token>' \
+  -H 'Content-Type: application/json' \
+  -d '{"request_id":"11111111-1111-4111-8111-111111111111","source_kind":"ical_file","source_label":"Work calendar","consent":{"consent_version":"calendar-import-consent-v1","read_calendar_events":true,"store_event_basics":true,"provider_writes":false,"llm_processing":false}}'
+```
+
+Connection alone reads no file and creates no event. Deliberate import sends a
+new stable request id plus bounded UTF-8 iCalendar text to
+`POST /v1/calendar-integrations/connections/{connection_id}/imports`. Keep the
+same request id and exact bytes for an ambiguous retry. Prefer the Flutter file
+picker for manual testing instead of putting a large `.ics` body on a command
+line.
+
+`GET /v1/calendar-integrations/connections/{connection_id}/events` is paginated
+and side-effect free.
+Disconnect and imported-data deletion require separate confirmations:
+
+```text
+POST   /v1/calendar-integrations/connections/{connection_id}/disconnect
+DELETE /v1/calendar-integrations/connections/{connection_id}/imported-data?request_id=<uuid>
+```
+
+Disconnect retains the local read-only event copy and rejects future imports.
+Delete is permitted only after disconnect and removes integration event/import
+rows without touching `schedule_items` or any source calendar. Setup's calendar
+interest answer never creates consent. The slice has no OAuth token, provider
+URL, provider write, background sync, LLM processing, or automatic
+snapshot/briefing input. See `docs/phase-9-calendar-import-contract.md`.
+
 For the daily briefing endpoint, `force=false` returns an already-current
 persisted briefing unchanged. Missing
 or stale output refreshes the daily snapshot and upserts the same
@@ -422,6 +462,15 @@ These migrations create forced-RLS backend-owned `weekly_reviews` persistence
 and require its deterministic provenance keys to match the source fingerprint.
 Authenticated users can read only their own review rows; only service role can
 write them.
+
+Calendar import additionally requires the Phase 9 migration listed in
+`docs/supabase-current-state.md`. It creates dedicated backend-owned
+`calendar_connections`, `calendar_imports`, and `calendar_events` plus four
+service-role-only atomic lifecycle operations. Its follow-up guard adds the
+minimal fingerprint-free `calendar_request_identities` registry and reliable
+HTTP 409 conflict semantics. Apply both non-destructively with the same
+`supabase migration up --local` workflow once pending; do not reset the local
+database merely to install them.
 
 The earlier Phase 3 migration adds bounded task fields, explicit habit outcomes, and the real
 focus lifecycle. Its checks/triggers enforce exact task/focus shapes, lock and
@@ -673,10 +722,16 @@ convergence before and after the capture journey. This describes the coverage
 implemented by `e2e/web/smoke.mjs`. The Phase 8 path adds read-only missing
 truth, deliberate generation, exact persisted weekly facts/proposals, confirmed
 manual Habit V1 adaptation, stale/refresh behavior, Setup non-mutation, and
-review-table RLS. The combined Phase 3 through Phase 8 path passed
-non-destructively in the 2026-07-12 Phase 8 implementation checkout. Use the
-command above to establish a new result after later changes; source coverage
-alone is not a pass.
+review-table RLS.
+
+The Phase 9 source journey additionally covers explicit consent, connection
+without import, retry-safe `.ics` reconciliation, stable paginated event reads,
+read-only provenance, all-day/timezone/recurrence/cancellation boundaries,
+disconnect-retains versus delete-local-only behavior, schedule preservation,
+and owner/cross-owner RLS. The combined Phase 3 through Phase 9 path passed
+non-destructively in the 2026-07-13 Phase 9 implementation checkout. Use the
+complete command above to establish a new current-checkout result after later
+changes; source coverage alone is not a pass.
 
 By default the script starts FastAPI on `http://127.0.0.1:8000`. Useful AI
 service overrides:

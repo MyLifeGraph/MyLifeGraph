@@ -11,6 +11,8 @@ dependencies:
     sdk: flutter
   cupertino_icons: ^1.0.8
   dio: ^5.7.0
+  # Keep Dart 3.4 resolvable through file_selector 1.0.3; 1.1 needs Dart 3.9.
+  file_selector: ">=1.0.3 <1.1.0"
   flutter_riverpod: ^2.6.1
   go_router: ^14.6.2
   intl: ^0.20.1
