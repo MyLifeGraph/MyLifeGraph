@@ -5,8 +5,13 @@ import pytest
 from pydantic import ValidationError
 
 from app.models.notifications import (
+    NotificationCategories,
+    NotificationDeliveryReceiptRequest,
     NotificationLifecycleActionRequest,
     NotificationLifecycleActionResponse,
+    NotificationQuietHours,
+    NotificationSettingsResponse,
+    NotificationSettingsUpdateRequest,
 )
 
 
@@ -137,4 +142,91 @@ def test_notification_lifecycle_response_rejects_inconsistent_command_state() ->
             dismissed_at=None,
             updated_at=datetime(2026, 7, 14, 8, 31, tzinfo=UTC),
             replayed=False,
+        )
+
+
+def _settings_request_payload() -> dict[str, object]:
+    return {
+        "contract_version": "notification-settings-v1",
+        "request_id": REQUEST_ID,
+        "expected_updated_at": UPDATED_AT,
+        "in_app_delivery_enabled": True,
+        "consent_version": "in-app-notification-consent-v1",
+        "categories": {
+            "focus_prompt": True,
+            "recovery_prompt": True,
+            "weekly_summary": False,
+        },
+        "quiet_hours": {"starts_at": "22:30", "ends_at": "07:00"},
+        "daily_limit": 2,
+    }
+
+
+def test_notification_settings_require_explicit_delivery_consent_contract() -> None:
+    request = NotificationSettingsUpdateRequest.model_validate(
+        _settings_request_payload(),
+    )
+
+    assert request.in_app_delivery_enabled is True
+    assert request.consent_version == "in-app-notification-consent-v1"
+    assert request.quiet_hours == NotificationQuietHours(
+        starts_at="22:30",
+        ends_at="07:00",
+    )
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"consent_version": "reminder-preference-v1"},
+        {"in_app_delivery_enabled": 1},
+        {"categories": {"focus_prompt": True}},
+        {"quiet_hours": {"starts_at": "9:00", "ends_at": "07:00"}},
+        {"daily_limit": 0},
+        {"daily_limit": 6},
+        {"user_id": "attacker"},
+    ],
+)
+def test_notification_settings_reject_old_permission_or_unsafe_shapes(
+    change: dict[str, object],
+) -> None:
+    payload = _settings_request_payload()
+    payload.update(change)
+
+    with pytest.raises(ValidationError):
+        NotificationSettingsUpdateRequest.model_validate(payload)
+
+
+def test_notification_settings_response_requires_coherent_consent_state() -> None:
+    with pytest.raises(ValidationError, match="active consent"):
+        NotificationSettingsResponse(
+            contract_version="notification-settings-v1",
+            in_app_delivery_enabled=True,
+            consent_version=None,
+            consented_at=None,
+            disabled_at=None,
+            categories=NotificationCategories(
+                focus_prompt=True,
+                recovery_prompt=True,
+                weekly_summary=True,
+            ),
+            quiet_hours=None,
+            daily_limit=2,
+            updated_at=datetime(2026, 7, 14, 8, 30, tzinfo=UTC),
+            replayed=False,
+        )
+
+
+def test_delivery_receipt_request_has_no_owner_or_content_fields() -> None:
+    request = NotificationDeliveryReceiptRequest.model_validate(
+        {"contract_version": "in-app-notification-delivery-v1"},
+    )
+    assert request.contract_version == "in-app-notification-delivery-v1"
+
+    with pytest.raises(ValidationError):
+        NotificationDeliveryReceiptRequest.model_validate(
+            {
+                "contract_version": "in-app-notification-delivery-v1",
+                "user_id": "attacker",
+            },
         )

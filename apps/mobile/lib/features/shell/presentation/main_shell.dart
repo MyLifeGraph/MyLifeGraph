@@ -1,9 +1,13 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/capabilities/app_surface_capabilities.dart';
 import '../../../core/navigation/app_routes.dart';
+import '../../notifications/domain/entities/notification_action_target.dart';
+import '../../notifications/presentation/providers/notifications_providers.dart';
 
 class MainShell extends ConsumerWidget {
   const MainShell({
@@ -26,6 +30,52 @@ class MainShell extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final capabilities = ref.watch(appSurfaceCapabilitiesProvider);
+    ref.listen(inAppNotificationDeliveryProvider, (previous, next) {
+      if (previous?.sequence == next.sequence || next.notification == null) {
+        return;
+      }
+      final notification = next.notification!;
+      unawaited(ref.read(notificationsProvider.notifier).load());
+      final target = NotificationActionTargetResolver(
+        canUseSyncedHabits: capabilities.canUseSyncedHabits,
+        canUseFocusSessions: capabilities.canUseSyncedExecution,
+        canUseWeeklyReview: capabilities.canUseWeeklyReview,
+      ).resolve(notification.actionUrl);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!context.mounted) return;
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(
+            SnackBar(
+              key: ValueKey('in-app-notification-${notification.id}'),
+              duration: const Duration(seconds: 8),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    notification.title,
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(notification.body),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'In-app · deterministic · no LLM',
+                    style: TextStyle(fontSize: 12),
+                  ),
+                ],
+              ),
+              action: target == null
+                  ? null
+                  : SnackBarAction(
+                      label: 'Open',
+                      onPressed: () => context.go(target.location),
+                    ),
+            ),
+          );
+      });
+    });
     final effectivePath = switch (currentPath) {
       final path when path.startsWith(AppRoutes.habitCompletion) =>
         AppRoutes.quickAction,
@@ -40,6 +90,8 @@ class MainShell extends ConsumerWidget {
       final path when path.startsWith(AppRoutes.deepWork) =>
         AppRoutes.quickAction,
       final path when path.startsWith(AppRoutes.calendarIntegration) =>
+        AppRoutes.settings,
+      final path when path.startsWith(AppRoutes.notificationSettings) =>
         AppRoutes.settings,
       final path when path.startsWith(AppRoutes.coach) => AppRoutes.settings,
       _ => currentPath,

@@ -76,7 +76,9 @@ way to explore the product today is the Flutter app in mock-data guest mode.
   disconnect retains the local copy, while a separate confirmed delete removes
   only imported local data. No provider credential, URL fetch, provider write,
   background sync, LLM processing, or `schedule_items` mutation is introduced.
-  The repository does not configure a deployed cron or create notifications.
+  The repository does not configure a deployed cron. Notification Delivery V1
+  can create bounded local deterministic Inbox rows only after separate in-app
+  consent; it still adds no provider/system delivery channel.
   Phase 10 adds a strict authenticated, deliberate-send Coach boundary with a
   32 KiB owner-scoped context cap, visible source/freshness/uncertainty
   provenance, explicit selection of up to eight eligible memories, bounded
@@ -104,9 +106,13 @@ way to explore the product today is the Flutter app in mock-data guest mode.
   Notification Lifecycle V1 adds strict stored-Inbox read/unread/dismiss
   tombstones for real authenticated accounts through FastAPI and one
   service-role-only retry ledger. Guest/demo stays local and zero-call, and
-  direct authenticated Notification DML remains forbidden. This lifecycle does
-  not generate, schedule, or deliver notifications; existing reminder settings
-  are not delivery consent.
+  direct authenticated Notification DML remains forbidden. Notification
+  Delivery V1 keeps that lifecycle separate while adding fail-closed in-app
+  consent, deterministic/no-LLM generation, timezone/quiet/category/cap/dedupe
+  guards, the local runner, and an acknowledged foreground Flutter banner. It
+  enables no push, browser, email, Android, background-mobile, or deployed
+  scheduling channel; existing reminder settings remain configuration rather
+  than delivery consent.
   See
   `docs/phase-3-executable-actions-contract.md` and
   `docs/phase-8-weekly-review-contract.md`, and
@@ -378,11 +384,18 @@ Supabase is the intended auth and persistence backend. The current app supports:
 - `POST /v1/notifications/{notification_id}/actions` is the authenticated
   `notification-lifecycle-v1` path for retry-safe read/unread/dismiss
   tombstones. Direct authenticated Notification DML remains forbidden, and the
-  endpoint does not create or deliver notifications.
+  endpoint does not itself create or deliver notifications. Settings use
+  `GET/PATCH /v1/notifications/settings`; foreground presentation uses
+  `POST /v1/notifications/{notification_id}/delivery` only after explicit
+  consent and deterministic generation through the protected local scheduler.
 
 Important current caveat: the Flutter app targets the canonical snake_case
-schema. A clean local Supabase reset should apply through
-`20260714110000_account_export_lifestyle_entries_grant.sql`. The final small
+schema. The migration chain currently ends at
+`20260714143000_notification_delivery_settings_guard.sql`. The follow-up makes
+Notification Settings replays request-exact across the shared Setup writer and
+keeps the preference revision monotone. The preceding Notification Delivery
+migration adds explicit consent, deterministic generation, and foreground
+receipts. The earlier Account Export
 grant restores only FastAPI's service-role read access to `lifestyle_entries`,
 which is required by the existing 28-table Account Export V1 contract. Phase 3 adds task
 estimates/terminal times, locked cadence-aware habit outcomes, immutable linked
@@ -564,6 +577,9 @@ has the nvm bin directory on `PATH`.
 - `docs/notification-lifecycle-v1-contract.md` - Stored-Inbox visibility,
   read/unread/dismiss commands, exact retry/conflict behavior, and delivery
   non-claims.
+- `docs/notification-delivery-v1-contract.md` - Explicit foreground consent,
+  deterministic generation, timezone/quiet/category/cap/dedupe guards, local
+  scheduling, and at-most-once in-app presentation.
 - `docs/v1-account-controls-contract.md` - Authenticated timezone, strict data
   export, password recovery, and permanent account-deletion contract.
 - `docs/local-product-completion-handoff.md` - Ordered local completion plan for

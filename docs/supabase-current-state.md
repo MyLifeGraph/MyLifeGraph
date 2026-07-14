@@ -50,7 +50,7 @@ The app table constants live in
 | `daily_logs` | One canonical daily row whose V2 metadata owns separate Evening/Morning captures plus direct nullable numeric Dashboard projections; the Dashboard does not synthesize proxy scores. |
 | `behavioral_events` | Granular AI signal stream; canonical capture writes a dynamic deterministic maximum of four current events linked to its `daily_logs` row. |
 | `tasks` | Owner-scoped executable tasks with create/edit/complete/postpone/cancel/restore/undo, optional 5-480 minute estimates, and explicit completion/cancellation timestamps. |
-| `notifications` | Authenticated read-only Inbox projection with backend-owned read/unread/dismiss lifecycle, original type/priority, due visibility, and allowlisted internal `action_url` targets. Stored rows do not prove delivery. |
+| `notifications` | Authenticated read-only Inbox projection with backend-owned read/unread/dismiss lifecycle plus optional deterministic generation key/category/local-date/provenance and foreground receipt time. A stored row alone does not prove delivery. |
 | `notification_action_requests` | Service-role-only exact retry/result ledger for `notification-lifecycle-v1`; it contains identities and lifecycle projections, not notification copy. |
 | `schedule_items` | Setup-owned confirmed fixed commitments plus preserved manual/other-source dashboard schedule rows. |
 | `ai_insights` | Insights list. |
@@ -62,7 +62,7 @@ The app table constants live in
 | `habit_logs` | One explicit `completed` or `skipped` outcome per habit/local date, with checked 1/0 compatibility value; open and missed opportunities are derived and progress/streaks are cadence-aware. |
 | `skillset_profiles` | Generated coaching/skill profile snapshots. |
 | `recommendations` | Generated recommendations and user statuses; FastAPI can create first deterministic rows after authenticated Intake V1. |
-| `notification_preferences` | User alert preferences. |
+| `notification_preferences` | Reminder/category/quiet-hour configuration plus separate fail-closed in-app delivery consent/version/timestamps and a bounded daily cap. Reminder fields alone grant no delivery. |
 | `intake_responses` | Typed Setup history with request identity, optimistic revision, pending/applied state, and structured lifecycle items. |
 | `user_state_snapshots` | Compact backend-owned onboarding/daily/weekly state; daily and weekly summaries add Phase 2 Daily State plus Phase 3 explicit habit-outcome/focus facts while remaining deterministic recommendation context. |
 | `daily_briefings` | One backend-owned deterministic `daily-briefing-v1` decision per user/profile-local date with strict executable actions, source-snapshot provenance, bounded evidence, and stale detection. |
@@ -233,8 +233,9 @@ configuration.
 
 This repository state proves the local persistence contract only. It does not
 claim that a remote project has the migrations, profile timezones, token, or
-deployed cron wiring configured. Phase 7 sends no notifications and adds no
-notification preference, delivery, snooze, or deduplication schema.
+deployed cron wiring configured. Notification Delivery V1 adds only the local
+runner and foreground Flutter path; it adds no push/system, background-mobile,
+email, browser, Android, snooze, or production scheduling claim.
 
 ## Phase 8 Bounded Weekly Review
 
@@ -622,12 +623,28 @@ prevents reuse of the installed Auth trigger functions, adds the
 Notification-ledger child index, and enforces six new/updated-row timestamp
 ordering checks without validating historical rows.
 
+`20260714110000_account_export_lifestyle_entries_grant.sql` restores only the
+service-role read grant required by the existing Account Export table set.
+
+`20260714130000_notification_delivery_v1.sql` adds separate fail-closed in-app
+consent, settings request identity, category/quiet/cap fields, deterministic
+generation identity/provenance, an at-most-once foreground receipt, and three
+owner-locked service-role-only RPCs. Authenticated users keep owner SELECT but
+cannot mutate delivery settings or generated notifications directly.
+
+`20260714143000_notification_delivery_settings_guard.sql` adds a SHA-256
+fingerprint over the complete Settings request, including its expected
+revision. A row trigger invalidates that replay identity when Intake Setup
+changes the shared preference projection and prevents Setup's earlier captured
+timestamp from regressing `updated_at` below either the prior revision or
+retained consent timestamps.
+
 ## Local Verification Workflow
 
 For local Supabase-backed testing, the reset should complete through:
 
 ```text
-20260714103000_application_table_privilege_guard.sql
+20260714143000_notification_delivery_settings_guard.sql
 ```
 
 Then configure `.env` with:
@@ -781,7 +798,15 @@ legacy compatibility only and should be dropped in a later dedicated migration
 after data migration and app verification are complete.
 
 The latest schema addition is
-`20260714110000_account_export_lifestyle_entries_grant.sql`. It grants only
+`20260714143000_notification_delivery_settings_guard.sql`. It makes the
+preceding Notification Delivery Settings identity request-exact across the
+shared Intake Setup writer and enforces monotone consent-safe revisions. The
+preceding `20260714130000_notification_delivery_v1.sql` adds explicit foreground
+consent and deterministic generated-notification/receipt fields without a new
+table, so Account Export V1's table count is unchanged. Its settings,
+generation, and delivery RPCs are service-role-only and revalidate current
+owner state under the advisory lock. The preceding
+`20260714110000_account_export_lifestyle_entries_grant.sql` grants only
 `service_role` `SELECT` on the legacy-but-canonical `lifestyle_entries` table,
 which Account Export V1 must read even when it has no rows. It does not change
 anon or authenticated application authority. The preceding
@@ -794,8 +819,9 @@ public-table defaults, prevents reuse of installed Auth trigger functions,
 adds the Notification-ledger lookup index, and protects new/updated timestamp
 ordering without claiming historical validation. The preceding
 `20260714100000_notification_lifecycle_v1.sql` adds exact stored-Inbox
-read/unread/dismiss tombstones and retry identity without adding generation or
-delivery. The preceding `20260713233000_v1_account_delete.sql` adds the
+read/unread/dismiss tombstones and retry identity; its lifecycle remains
+separate from the later generation/delivery path. The preceding
+`20260713233000_v1_account_delete.sql` adds the
 confirmed service-role-only transactional full-account cascade while
 preserving ordinary Phase 3 target-history restrictions. The preceding
 `20260713230000_phase_10_onboarding_eligibility_guard.sql`, together with the

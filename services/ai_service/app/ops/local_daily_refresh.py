@@ -291,6 +291,7 @@ def build_payload(profile_ids: Sequence[str] = ()) -> dict[str, object]:
         "window_days": 7,
         "limit": 100,
         "include_recommendations": False,
+        "include_notifications": True,
     }
     if profile_ids:
         payload["profile_ids"] = list(profile_ids)

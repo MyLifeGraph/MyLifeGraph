@@ -8,6 +8,7 @@ import pytest
 
 from app.api.routes import scheduled
 from app.main import create_app
+from app.models.notifications import NotificationGenerationResult
 from app.models.recommendations import RecommendationListResponse
 from app.models.scheduled import ScheduledRefreshRequest
 from app.repositories.scheduled_refresh_repository import (
@@ -43,6 +44,7 @@ class FakeScheduledRefreshRepository:
         target_date: date | None,
         profile_ids: list[str],
         include_current: bool,
+        current_selection_reason: str,
     ) -> list[ScheduledRefreshTarget]:
         self.calls.append(
             {
@@ -51,6 +53,7 @@ class FakeScheduledRefreshRepository:
                 "target_date": target_date,
                 "profile_ids": profile_ids,
                 "include_current": include_current,
+                "current_selection_reason": current_selection_reason,
             },
         )
         return self.targets[:limit]
@@ -123,6 +126,24 @@ class FakeRecommendationEngine:
         )
 
 
+class FakeNotificationGenerationService:
+    def __init__(self, *, failing_users: set[str] | None = None) -> None:
+        self.failing_users = failing_users or set()
+        self.calls: list[dict[str, object]] = []
+
+    async def generate_for_user(self, **kwargs):
+        self.calls.append(kwargs)
+        if kwargs["user_id"] in self.failing_users:
+            raise RuntimeError("notification generation failed")
+        return NotificationGenerationResult(
+            status="created",
+            category="focus_prompt",
+            delivery_date=kwargs["delivery_date"],
+            created_count=1,
+            duplicate_count=0,
+        )
+
+
 class FakeSupabaseClient:
     def __init__(
         self,
@@ -130,10 +151,12 @@ class FakeSupabaseClient:
         profiles: list[dict[str, object]],
         snapshots: list[dict[str, object]] | None = None,
         briefings: list[dict[str, object]] | None = None,
+        notification_preferences: list[dict[str, object]] | None = None,
     ) -> None:
         self.profiles = profiles
         self.snapshots = snapshots or []
         self.briefings = briefings or []
+        self.notification_preferences = notification_preferences or []
         self.select_calls: list[tuple[str, object]] = []
 
     async def select(self, table: str, *, params):
@@ -169,6 +192,16 @@ class FakeSupabaseClient:
                 for row in self.briefings
                 if row.get("user_id") in user_ids
                 and row.get("briefing_date") in briefing_dates
+            ]
+        if table == "notification_preferences":
+            user_ids = _in_values(params["user_id"])
+            return [
+                {"user_id": row["user_id"]}
+                for row in self.notification_preferences
+                if row.get("user_id") in user_ids
+                and row.get("in_app_delivery_enabled") is True
+                and row.get("in_app_delivery_consent_version")
+                == "in-app-notification-consent-v1"
             ]
         return []
 
@@ -276,6 +309,7 @@ def test_scheduled_service_uses_pinned_local_dates_and_reports_stage_results() -
             "target_date": None,
             "profile_ids": [USER_1, USER_2],
             "include_current": False,
+            "current_selection_reason": "recommendation_refresh",
         },
     ]
     assert response.run_at == RUN_AT
@@ -387,6 +421,9 @@ def test_current_preparation_retries_recommendations_without_rewriting_briefing(
     assert failed.results[0].failed_stage == "recommendations"
     assert failed.results[0].error == "RuntimeError"
     assert repository.calls[0]["include_current"] is True
+    assert repository.calls[0]["current_selection_reason"] == (
+        "recommendation_refresh"
+    )
     assert briefing_service.calls[0]["briefing_date"] == TODAY
     recommendation_request = recommendation_engine.calls[0][1]
     assert recommendation_request.window_days == 21
@@ -404,6 +441,46 @@ def test_current_preparation_retries_recommendations_without_rewriting_briefing(
     assert len(briefing_service.calls) == 2
     assert len(recommendation_engine.calls) == 2
     assert repository.calls[1]["include_current"] is True
+
+
+def test_current_preparation_generates_notifications_with_one_pinned_run_time() -> None:
+    target = ScheduledRefreshTarget(
+        user_id=USER_1,
+        briefing_date=TODAY,
+        selection_reason="notification_delivery",
+    )
+    repository = FakeScheduledRefreshRepository([target])
+    notifications = FakeNotificationGenerationService()
+    service = ScheduledRefreshService(
+        repository=repository,
+        briefing_service=FakeBriefingService(
+            outcomes={USER_1: ("reused", "unchanged")},
+        ),
+        notification_generation_service=notifications,
+        now_provider=lambda: RUN_AT,
+    )
+
+    response = run(
+        service.refresh_daily(
+            ScheduledRefreshRequest(include_notifications=True),
+        ),
+    )
+
+    assert repository.calls[0]["include_current"] is True
+    assert repository.calls[0]["current_selection_reason"] == (
+        "notification_delivery"
+    )
+    assert notifications.calls == [
+        {
+            "user_id": USER_1,
+            "delivery_date": TODAY,
+            "run_at": RUN_AT,
+        },
+    ]
+    result = response.results[0]
+    assert result.notification_status == "created"
+    assert result.notification_created_count == 1
+    assert result.notification_duplicate_count == 0
 
 
 def test_scheduled_service_rejects_naive_run_time() -> None:
@@ -461,6 +538,7 @@ def test_repository_selects_local_missing_and_stale_targets_only() -> None:
             target_date=None,
             profile_ids=[],
             include_current=False,
+            current_selection_reason="recommendation_refresh",
         ),
     )
 
@@ -510,6 +588,7 @@ def test_repository_selects_current_target_for_recommendation_retry() -> None:
             target_date=None,
             profile_ids=[],
             include_current=False,
+            current_selection_reason="recommendation_refresh",
         ),
     )
     retry_targets = run(
@@ -519,6 +598,7 @@ def test_repository_selects_current_target_for_recommendation_retry() -> None:
             target_date=None,
             profile_ids=[],
             include_current=True,
+            current_selection_reason="recommendation_refresh",
         ),
     )
 
@@ -529,6 +609,69 @@ def test_repository_selects_current_target_for_recommendation_retry() -> None:
             briefing_date=TODAY,
             selection_reason="recommendation_refresh",
         ),
+    ]
+
+
+def test_repository_selects_only_consented_current_notification_targets() -> None:
+    client = FakeSupabaseClient(
+        profiles=[_profile(USER_1), _profile(USER_2), _profile(USER_3)],
+        snapshots=[_snapshot(USER_1, TODAY), _snapshot(USER_2, TODAY)],
+        briefings=[_briefing(USER_1, TODAY), _briefing(USER_2, TODAY)],
+        notification_preferences=[
+            {
+                "user_id": USER_1,
+                "in_app_delivery_enabled": True,
+                "in_app_delivery_consent_version": (
+                    "in-app-notification-consent-v1"
+                ),
+            },
+            {
+                "user_id": USER_2,
+                "in_app_delivery_enabled": False,
+                "in_app_delivery_consent_version": None,
+            },
+        ],
+    )
+    repository = SupabaseScheduledRefreshRepository(client)
+
+    targets = run(
+        repository.list_daily_refresh_targets(
+            limit=10,
+            run_at=RUN_AT,
+            target_date=None,
+            profile_ids=[],
+            include_current=True,
+            current_selection_reason="notification_delivery",
+        ),
+    )
+
+    assert targets == [
+        ScheduledRefreshTarget(
+            user_id=USER_1,
+            briefing_date=TODAY,
+            selection_reason="notification_delivery",
+        ),
+        ScheduledRefreshTarget(
+            user_id=USER_3,
+            briefing_date=TODAY,
+            selection_reason="missing_snapshot",
+        ),
+    ]
+    preference_calls = [
+        params
+        for table, params in client.select_calls
+        if table == "notification_preferences"
+    ]
+    assert preference_calls == [
+        {
+            "select": "user_id",
+            "user_id": f"in.({USER_1},{USER_2},{USER_3})",
+            "in_app_delivery_enabled": "eq.true",
+            "in_app_delivery_consent_version": (
+                "eq.in-app-notification-consent-v1"
+            ),
+            "limit": "3",
+        },
     ]
 
 
@@ -550,6 +693,7 @@ def test_repository_profile_ids_are_bounded_to_eligible_requested_profiles() -> 
             target_date=TODAY,
             profile_ids=[USER_2, GUEST_USER, INCOMPLETE_USER, USER_2],
             include_current=False,
+            current_selection_reason="recommendation_refresh",
         ),
     )
 
@@ -619,6 +763,7 @@ def test_scheduled_refresh_endpoint_rejects_wrong_token() -> None:
         {"user_id": USER_1},
         {"profile_ids": ["not-a-uuid"]},
         {"profile_ids": [USER_1] * 21},
+        {"target_date": TODAY.isoformat(), "include_notifications": True},
         {"unexpected": True},
     ],
 )

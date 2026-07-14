@@ -22,23 +22,41 @@ Flutter application.
 
 ## Current Checkout Truth
 
-Captured on 2026-07-13:
+Updated on 2026-07-14:
 
 - Repository: `/home/gregor/projects/ai-personal-coach`
-- Branch: `new_backend_gh`, twelve commits ahead of its recorded remote tracking
-  branch at capture time.
-- Current base/HEAD before the completion checkpoint:
-  `5fb11beef0de83f6044a682a8f9093e187db3d6a`.
-- The large uncommitted delta contains the completed V1 audit/hardening work:
-  account timezone/export/deletion, password recovery, durable settings and
-  theme, Skillset source truth, offline truth, Android auth callback and signing
-  guard, layout/accessibility work, backend account routes, final Supabase
-  migration, tests, and documentation.
-- Recorded results for that delta: clean Flutter analysis, 487 Flutter tests,
-  596 FastAPI tests with one explicitly opt-in live-provider test skipped,
-  passing `scripts/verify.sh`, and a passing Flutter Web release build.
-- The final account-control/frontend delta still needs a new full non-reset
-  browser E2E result before it is the final local release candidate.
+- Branch: `new_backend_gh`, thirteen commits ahead of its recorded remote
+  tracking branch at the start of the Notification slice.
+- Current checkpoint HEAD: `f6e7b2b` (`feat: complete account controls and app
+  hardening`). The working tree was clean before Notification Delivery V1 work.
+- The checkpoint contains account timezone/export/deletion, password recovery,
+  durable settings/theme, Skillset and offline truth, local stack/migration
+  hardening, Android auth/signing guards, layout/accessibility coverage, and the
+  controlled local Coach.
+- Recorded checkpoint results: 684 Backend tests green with one opt-in skip,
+  510 Flutter tests green, clean Flutter analysis, clean local Supabase
+  migration verification, and a passing live `local_codex_oauth` Coach smoke
+  with explicit `gpt-5.5` and no fallback.
+- `20260714110000_account_export_lifestyle_entries_grant.sql` is applied to the
+  local database. Android APK packaging remains environmentally blocked because
+  WSL has no Android SDK/`ANDROID_HOME`; this is not a proved code defect.
+- The current uncommitted slice adds Notification Delivery V1 and explicit
+  Weekly Review action-authority copy. A subsequent review added the
+  `20260714143000_notification_delivery_settings_guard.sql` follow-up plus
+  recovery, weekly-freshness, polling, and conflict-state fixes. The current
+  review tree has 721 Backend tests green with one opt-in skip, 524 Flutter tests
+  green, clean Flutter analysis, and a passing `scripts/verify.sh`. After
+  explicit permission,
+  `20260714130000_notification_delivery_v1.sql` and the reviewed
+  `20260714143000_notification_delivery_settings_guard.sql` follow-up were
+  applied to the local stack without a reset; local history matches the
+  repository. A rollback-only database guard smoke passed. The full non-reset
+  browser journey passed on 2026-07-14 and reported
+  `E2E browser smoke passed for e2e-1784046486@example.test`.
+- The browser run exposed and fixed
+  stale Inbox state after a foreground receipt; the Shell now reloads the
+  stored Inbox when it emits a new banner. Review source, local migration, guard,
+  and browser verification are now recorded above.
 - No remote Supabase, deployment, Play Console, or production signing state has
   been inspected or changed.
 
@@ -67,7 +85,7 @@ user later explicitly authorizes a local checkpoint commit, the intended message
 is:
 
 ```text
-feat: complete account controls and app hardening
+feat: complete notification delivery and weekly review UX
 ```
 
 Before that commit, run at minimum:
@@ -203,6 +221,8 @@ reviewable slices:
 
 ### 3A. Durable Inbox Lifecycle
 
+Implemented at the `notification-lifecycle-v1` boundary.
+
 - typed mark-read/unread, dismiss/delete, and supported action commands;
 - owner-scoped RLS and exact retry/ambiguous-write handling;
 - loading, empty, error, retry, and offline truth;
@@ -210,6 +230,12 @@ reviewable slices:
 - widget, repository, migration/RLS, and browser assertions.
 
 ### 3B. Notification Generation Policy
+
+Implemented in the current Notification Delivery V1 slice with explicit
+consent, fixed no-LLM copy, timezone/quiet/category/cap/dedupe guards, and
+bounded provenance. The base migration is applied to the authorized local stack;
+the review follow-up is also applied without a reset, and the full non-reset
+browser journey passes on that schema.
 
 - backend-owned generation from explicit preferences and supported events;
 - profile timezone and quiet hours;
@@ -221,6 +247,14 @@ reviewable slices:
 - exact source/provenance and a visible reason for each generated item.
 
 ### 3C. Local Scheduling And Delivery
+
+Implemented in the current slice through the existing secret-safe 15-minute
+local runner and acknowledged at-most-once Flutter foreground banners. This is
+not Android/push/background delivery.
+
+The notification-only current-target selector is consent-aware so bounded
+runner slots are not consumed by fully current consent-off profiles. Missing or
+stale Phase 7 preparation remains independently eligible.
 
 - invoke generation/preparation from a documented local scheduler or runner;
 - expose run status and per-user failure stage;
@@ -248,6 +282,12 @@ This completes local automation. A production cron platform remains an Android
 deployment task, not a hidden assumption.
 
 ## Phase 5: Close Remaining Visible Action Gaps
+
+Weekly Review now labels direct manual habit operations as executable, Setup
+links as guidance that applies nothing, and staged replacements/defer or keep
+proposals as non-interactive suggestion/no-write notes. The current slice adds
+widget coverage for that authority boundary; the final E2E inventory remains
+part of release acceptance.
 
 Inventory the final UI again after Notifications and scheduling. For each
 visible button, menu entry, proposal, and setting, prove one of:

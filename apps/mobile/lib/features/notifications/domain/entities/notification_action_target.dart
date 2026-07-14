@@ -5,6 +5,7 @@ enum NotificationActionTarget {
   dailyCheckIn('/quick-mood-check-in'),
   habitCompletion('/habit-completion'),
   habitManagement('/habits'),
+  weeklyReview('/weekly-review'),
   focusSession('/deep-work');
 
   const NotificationActionTarget(this.location);
@@ -16,10 +17,12 @@ class NotificationActionTargetResolver {
   const NotificationActionTargetResolver({
     required this.canUseSyncedHabits,
     this.canUseFocusSessions = false,
+    this.canUseWeeklyReview = false,
   });
 
   final bool canUseSyncedHabits;
   final bool canUseFocusSessions;
+  final bool canUseWeeklyReview;
 
   NotificationActionTarget? resolve(String? actionUrl) {
     if (actionUrl == null ||
@@ -50,6 +53,8 @@ class NotificationActionTargetResolver {
         NotificationActionTarget.habitCompletion,
       '/habits' when canUseSyncedHabits =>
         NotificationActionTarget.habitManagement,
+      '/weekly-review' when canUseWeeklyReview =>
+        NotificationActionTarget.weeklyReview,
       '/deep-work' when canUseFocusSessions =>
         NotificationActionTarget.focusSession,
       _ => null,

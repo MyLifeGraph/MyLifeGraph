@@ -406,7 +406,11 @@ void main() {
     expect(find.text('Guest Coach User'), findsOneWidget);
     expect(find.text('guest@personal-coach.local'), findsOneWidget);
     expect(find.text('Setup and commitments'), findsOneWidget);
-    expect(find.text('Reminder preference'), findsOneWidget);
+    expect(find.text('In-app notifications'), findsOneWidget);
+    expect(
+      find.text('In-app delivery is available only for a synced account.'),
+      findsOneWidget,
+    );
     await tester.scrollUntilVisible(
       find.text('Calendar import (optional)'),
       180,

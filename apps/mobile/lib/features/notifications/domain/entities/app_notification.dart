@@ -14,6 +14,11 @@ class AppNotification {
     required this.readAt,
     required this.dismissedAt,
     required this.dueAt,
+    this.generationKey,
+    this.generationCategory,
+    this.deliveryDate,
+    this.inAppDeliveredAt,
+    this.generationProvenance,
   });
 
   final String id;
@@ -28,6 +33,13 @@ class AppNotification {
   final DateTime? readAt;
   final DateTime? dismissedAt;
   final DateTime? dueAt;
+  final String? generationKey;
+  final String? generationCategory;
+  final String? deliveryDate;
+  final DateTime? inAppDeliveredAt;
+  final NotificationGenerationProvenance? generationProvenance;
+
+  bool get isDeterministicallyGenerated => generationKey != null;
 
   AppNotification applyLifecycle(NotificationLifecycleResult result) {
     if (result.notificationId != id) {
@@ -48,6 +60,27 @@ class AppNotification {
       readAt: result.readAt,
       dismissedAt: result.dismissedAt,
       dueAt: dueAt,
+      generationKey: generationKey,
+      generationCategory: generationCategory,
+      deliveryDate: deliveryDate,
+      inAppDeliveredAt: inAppDeliveredAt,
+      generationProvenance: generationProvenance,
     );
   }
+}
+
+class NotificationGenerationProvenance {
+  const NotificationGenerationProvenance({
+    required this.reasonCode,
+    required this.timezone,
+    required this.sourceKind,
+    required this.sourceId,
+    required this.sourceGeneratedAt,
+  });
+
+  final String reasonCode;
+  final String timezone;
+  final String sourceKind;
+  final String sourceId;
+  final DateTime sourceGeneratedAt;
 }

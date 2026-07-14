@@ -418,7 +418,7 @@ class _CurrentReview extends StatelessWidget {
               ),
               const SizedBox(height: AppSpacing.xs),
               const Text(
-                'At most two bounded changes. Nothing is applied without your explicit choice.',
+                'At most two bounded proposals. Only a manual shrink, pause, or archive marked executable can change a habit after confirmation. Setup and suggestion-only rows never auto-apply.',
               ),
               const SizedBox(height: AppSpacing.md),
               if (review.proposals.isEmpty)
@@ -579,6 +579,9 @@ class _ProposalCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final hasReviewAction = proposal.applicationMode ==
+            WeeklyReviewApplicationMode.directHabit ||
+        proposal.applicationMode == WeeklyReviewApplicationMode.settingsSetup;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(AppSpacing.md),
@@ -606,25 +609,43 @@ class _ProposalCard extends StatelessWidget {
             '${proposal.change.after == null ? 'Staged for manual review' : _stateLabel(proposal.change.after!)}',
             style: Theme.of(context).textTheme.bodySmall,
           ),
-          const SizedBox(height: AppSpacing.md),
-          FilledButton.icon(
-            onPressed: stale || isApplying || isApplied || isNoChange
-                ? null
-                : onPressed,
-            icon: isApplying
-                ? const SizedBox.square(
-                    dimension: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : Icon(_proposalIcon(proposal.applicationMode)),
-            label: Text(
-              isApplied
-                  ? 'Change applied'
-                  : isNoChange
-                      ? 'No change made'
-                      : _proposalButtonLabel(proposal),
+          const SizedBox(height: AppSpacing.sm),
+          Container(
+            key: ValueKey('weekly-proposal-authority-${proposal.id}'),
+            width: double.infinity,
+            padding: const EdgeInsets.all(AppSpacing.sm),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surface,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Text(
+              _proposalAuthorityLabel(proposal.applicationMode),
+              style: Theme.of(context).textTheme.labelMedium,
             ),
           ),
+          if (hasReviewAction) ...[
+            const SizedBox(height: AppSpacing.md),
+            if (proposal.applicationMode ==
+                WeeklyReviewApplicationMode.directHabit)
+              FilledButton.icon(
+                onPressed: stale || isApplying || isApplied || isNoChange
+                    ? null
+                    : onPressed,
+                icon: isApplying
+                    ? const SizedBox.square(
+                        dimension: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : Icon(_proposalIcon(proposal.applicationMode)),
+                label: Text(isApplied ? 'Change applied' : 'Apply change'),
+              )
+            else
+              OutlinedButton.icon(
+                onPressed: stale || isApplying ? null : onPressed,
+                icon: Icon(_proposalIcon(proposal.applicationMode)),
+                label: const Text('Open Setup (no auto-apply)'),
+              ),
+          ],
         ],
       ),
     );
@@ -717,15 +738,16 @@ String _ownershipLabel(WeeklyReviewOwnership ownership) => switch (ownership) {
       WeeklyReviewOwnership.setup => 'Setup-managed habit',
     };
 
-String _proposalButtonLabel(WeeklyReviewProposal proposal) =>
-    switch (proposal.applicationMode) {
-      WeeklyReviewApplicationMode.directHabit => 'Apply change',
-      WeeklyReviewApplicationMode.settingsSetup => 'Review in Setup',
+String _proposalAuthorityLabel(WeeklyReviewApplicationMode mode) =>
+    switch (mode) {
+      WeeklyReviewApplicationMode.directHabit =>
+        'Executable habit action · explicit confirmation required',
+      WeeklyReviewApplicationMode.settingsSetup =>
+        'Setup guidance only · opening Setup applies nothing',
       WeeklyReviewApplicationMode.stagedOnly =>
-        proposal.operation == WeeklyReviewOperation.replace
-            ? 'Manage habits'
-            : 'Keep current',
-      WeeklyReviewApplicationMode.none => 'Keep current',
+        'Suggestion only · not executable from Weekly Review',
+      WeeklyReviewApplicationMode.none =>
+        'No-change note · no product data will be written',
     };
 
 IconData _proposalIcon(WeeklyReviewApplicationMode mode) => switch (mode) {

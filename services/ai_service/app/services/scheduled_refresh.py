@@ -14,6 +14,7 @@ from app.repositories.scheduled_refresh_repository import (
     ScheduledRefreshTarget,
 )
 from app.services.briefing_service import BriefingPreparationError, BriefingService
+from app.services.notification_service import NotificationGenerationService
 from app.services.recommendation_engine import RecommendationEngine
 
 _MAX_CONCURRENT_USERS = 5
@@ -29,11 +30,13 @@ class ScheduledRefreshService:
         repository: ScheduledRefreshRepository,
         briefing_service: BriefingService,
         recommendation_engine: RecommendationEngine | None = None,
+        notification_generation_service: NotificationGenerationService | None = None,
         now_provider: Callable[[], datetime] | None = None,
     ) -> None:
         self._repository = repository
         self._briefing_service = briefing_service
         self._recommendation_engine = recommendation_engine
+        self._notification_generation_service = notification_generation_service
         self._now_provider = now_provider or _utc_now
 
     async def refresh_daily(
@@ -49,7 +52,15 @@ class ScheduledRefreshService:
             run_at=run_at,
             target_date=request.target_date,
             profile_ids=[str(profile_id) for profile_id in request.profile_ids],
-            include_current=request.include_recommendations,
+            include_current=(
+                request.include_recommendations or request.include_notifications
+            ),
+            current_selection_reason=(
+                "notification_delivery"
+                if request.include_notifications
+                and not request.include_recommendations
+                else "recommendation_refresh"
+            ),
         )
         semaphore = asyncio.Semaphore(_MAX_CONCURRENT_USERS)
 
@@ -57,7 +68,11 @@ class ScheduledRefreshService:
             target: ScheduledRefreshTarget,
         ) -> ScheduledUserRefreshResult:
             async with semaphore:
-                return await self._refresh_user(target=target, request=request)
+                return await self._refresh_user(
+                    target=target,
+                    request=request,
+                    run_at=run_at,
+                )
 
         results = await asyncio.gather(*(refresh_target(target) for target in targets))
         succeeded = sum(1 for result in results if result.status == "succeeded")
@@ -83,6 +98,7 @@ class ScheduledRefreshService:
         *,
         target: ScheduledRefreshTarget,
         request: ScheduledRefreshRequest,
+        run_at: datetime,
     ) -> ScheduledUserRefreshResult:
         if target.briefing_date is None:
             logger.warning(
@@ -129,6 +145,21 @@ class ScheduledRefreshService:
                 )
                 recommendation_count = len(recommendations.items)
 
+            notification_result = None
+            if request.include_notifications:
+                failed_stage = "notifications"
+                if self._notification_generation_service is None:
+                    raise RuntimeError(
+                        "Notification generation service is not configured.",
+                    )
+                notification_result = (
+                    await self._notification_generation_service.generate_for_user(
+                        user_id=target.user_id,
+                        delivery_date=target.briefing_date,
+                        run_at=run_at,
+                    )
+                )
+
             return ScheduledUserRefreshResult(
                 user_id=target.user_id,
                 status="succeeded",
@@ -140,6 +171,21 @@ class ScheduledRefreshService:
                 briefing_id=briefing.id,
                 briefing_status=prepared.briefing_status,
                 recommendation_count=recommendation_count,
+                notification_status=(
+                    notification_result.status
+                    if notification_result is not None
+                    else None
+                ),
+                notification_created_count=(
+                    notification_result.created_count
+                    if notification_result is not None
+                    else None
+                ),
+                notification_duplicate_count=(
+                    notification_result.duplicate_count
+                    if notification_result is not None
+                    else None
+                ),
             )
         except BriefingPreparationError as exc:
             logger.warning(

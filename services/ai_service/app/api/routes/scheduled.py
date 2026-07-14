@@ -6,16 +6,20 @@ from app.clients.supabase import SupabaseConfigurationError, SupabaseRestClient
 from app.core.config import settings
 from app.models.scheduled import ScheduledRefreshRequest, ScheduledRefreshResponse
 from app.repositories.briefing_repository import SupabaseBriefingRepository
+from app.repositories.notification_repository import SupabaseNotificationRepository
 from app.repositories.recommendation_repository import SupabaseRecommendationRepository
 from app.repositories.scheduled_refresh_repository import (
     SupabaseScheduledRefreshRepository,
 )
 from app.repositories.snapshot_repository import SupabaseSnapshotRepository
 from app.repositories.user_context_repository import SupabaseUserContextRepository
+from app.repositories.weekly_review_repository import SupabaseWeeklyReviewRepository
 from app.services.briefing_service import BriefingService
+from app.services.notification_service import NotificationGenerationService
 from app.services.recommendation_engine import RecommendationEngine
 from app.services.scheduled_refresh import ScheduledRefreshService
 from app.services.snapshot_aggregator import SnapshotAggregator
+from app.services.weekly_review_service import WeeklyReviewService
 
 router = APIRouter(prefix="/scheduled", tags=["scheduled"])
 
@@ -58,6 +62,13 @@ async def get_scheduled_refresh_service(request: Request) -> ScheduledRefreshSer
         recommendation_engine=RecommendationEngine(
             user_context_repository=SupabaseUserContextRepository(client),
             recommendation_repository=SupabaseRecommendationRepository(client),
+        ),
+        notification_generation_service=NotificationGenerationService(
+            repository=SupabaseNotificationRepository(client),
+            weekly_review_reader=WeeklyReviewService(
+                repository=SupabaseWeeklyReviewRepository(client),
+                snapshot_aggregator=snapshot_aggregator,
+            ),
         ),
     )
 

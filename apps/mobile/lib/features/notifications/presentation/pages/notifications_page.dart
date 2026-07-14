@@ -22,6 +22,7 @@ class NotificationsPage extends ConsumerWidget {
     final resolver = NotificationActionTargetResolver(
       canUseSyncedHabits: capabilities.canUseSyncedHabits,
       canUseFocusSessions: capabilities.canUseSyncedExecution,
+      canUseWeeklyReview: capabilities.canUseWeeklyReview,
     );
 
     if (state.isLoading && state.items.isEmpty) {
@@ -244,9 +245,9 @@ class _NotificationsHeader extends StatelessWidget {
                   'as notifications. Up to the latest 30 items are shown; '
                   'the counts cover only the items shown.'
               : 'Stored inbox items can be marked read or dismissed here. '
-                  'This app does not send notifications yet. Up to the '
-                  'latest 30 items are shown; the counts cover only the '
-                  'items shown.',
+                  'In-app banners require separate consent and appear only '
+                  'while the app is open; no push delivery is enabled. '
+                  'Up to the latest 30 items are shown.',
           style: Theme.of(context).textTheme.bodyMedium,
         ),
       ],
@@ -590,6 +591,8 @@ class _NotificationCardContent extends StatelessWidget {
               key: ValueKey('notification-read-state-${notification.id}'),
               label: notification.isRead ? 'Read' : 'Unread',
             ),
+            if (notification.isDeterministicallyGenerated)
+              const _NotificationBadge(label: 'Deterministic · no LLM'),
           ],
         ),
         const SizedBox(height: AppSpacing.md),
@@ -607,6 +610,16 @@ class _NotificationCardContent extends StatelessWidget {
           Text(
             'Available since '
             '${DateFormat('MMM d, HH:mm').format(notification.dueAt!.toLocal())}',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ],
+        if (notification.generationProvenance != null) ...[
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            'Generated from ${_sourceLabel(notification.generationProvenance!.sourceKind)} '
+            'for ${notification.deliveryDate} in '
+            '${notification.generationProvenance!.timezone}.',
+            key: ValueKey('notification-provenance-${notification.id}'),
             style: Theme.of(context).textTheme.bodySmall,
           ),
         ],
@@ -702,6 +715,15 @@ class _NotificationCardContent extends StatelessWidget {
       NotificationLifecycleCommand.markRead => 'Marking as read…',
       NotificationLifecycleCommand.markUnread => 'Marking as unread…',
       NotificationLifecycleCommand.dismiss => 'Dismissing…',
+    };
+  }
+
+  String _sourceLabel(String sourceKind) {
+    return switch (sourceKind) {
+      'daily_state' => 'the current Daily State',
+      'daily_briefing' => 'the current Daily Briefing',
+      'weekly_review' => 'the completed Weekly Review',
+      _ => 'a bounded backend source',
     };
   }
 }

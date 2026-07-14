@@ -27,6 +27,7 @@ class ScheduledRefreshRepository(Protocol):
         target_date: date | None,
         profile_ids: list[str],
         include_current: bool,
+        current_selection_reason: ScheduledSelectionReason,
     ) -> list[ScheduledRefreshTarget]:
         pass
 
@@ -43,6 +44,7 @@ class SupabaseScheduledRefreshRepository:
         target_date: date | None,
         profile_ids: list[str],
         include_current: bool,
+        current_selection_reason: ScheduledSelectionReason,
     ) -> list[ScheduledRefreshTarget]:
         if run_at.tzinfo is None:
             raise ValueError("Scheduled run time must include a timezone.")
@@ -71,6 +73,12 @@ class SupabaseScheduledRefreshRepository:
             ]
             snapshots = await self._daily_snapshots(valid_targets)
             briefings = await self._daily_briefings(valid_targets)
+            notification_delivery_user_ids = (
+                await self._notification_delivery_user_ids(profiles)
+                if include_current
+                and current_selection_reason == "notification_delivery"
+                else None
+            )
 
             for target in page_targets:
                 if target.briefing_date is None:
@@ -86,7 +94,12 @@ class SupabaseScheduledRefreshRepository:
                     if reason is None:
                         if not include_current:
                             continue
-                        reason = "recommendation_refresh"
+                        if (
+                            notification_delivery_user_ids is not None
+                            and target.user_id not in notification_delivery_user_ids
+                        ):
+                            continue
+                        reason = current_selection_reason
                     selected.append(
                         ScheduledRefreshTarget(
                             user_id=target.user_id,
@@ -125,6 +138,36 @@ class SupabaseScheduledRefreshRepository:
             for row in rows
             if isinstance(row.get("id"), str) and str(row["id"]).strip()
         ]
+
+    async def _notification_delivery_user_ids(
+        self,
+        profiles: list[dict[str, Any]],
+    ) -> set[str]:
+        user_ids = _unique(
+            str(profile["id"])
+            for profile in profiles
+            if isinstance(profile.get("id"), str)
+        )
+        if not user_ids:
+            return set()
+        rows = await self._client.select(
+            "notification_preferences",
+            params={
+                "select": "user_id",
+                "user_id": f"in.({','.join(user_ids)})",
+                "in_app_delivery_enabled": "eq.true",
+                "in_app_delivery_consent_version": (
+                    "eq.in-app-notification-consent-v1"
+                ),
+                "limit": str(len(user_ids)),
+            },
+        )
+        return {
+            user_id
+            for row in rows
+            if isinstance(user_id := row.get("user_id"), str)
+            and user_id in user_ids
+        }
 
     async def _daily_snapshots(
         self,

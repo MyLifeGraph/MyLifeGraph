@@ -6,6 +6,7 @@ class AppRoutes {
   static const passwordRecovery = '/auth/recovery';
   static const onboarding = '/onboarding';
   static const settings = '/settings';
+  static const notificationSettings = '/settings/notifications';
   static const calendarIntegration = '/settings/integrations/calendar';
   static const insights = '/insights';
   static const quickAction = '/quick-action';

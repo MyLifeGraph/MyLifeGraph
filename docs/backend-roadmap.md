@@ -320,7 +320,8 @@ repositories, and jobs, not as unconstrained autonomous LLM loops.
 | Memory selection service | Explicit user inspect/select/deselect | Owner-scoped eligible `memory_entries` plus Setup ownership | Separate Coach selection projection; content changes only through its owning contract | None for Phase 10 v1 |
 | Planning service | Weekly review, user request | Goals, tasks, habits, schedule, snapshots | `tasks`, `schedule_items`, `recommendations`, `coach_messages` | Optional for complex plans |
 | Notification lifecycle service | Deliberate authenticated Inbox action | One owner-scoped stored notification plus retry identity | Read/unread/dismiss projection and `notification_action_requests` result ledger | None |
-| Notification service | Schedule and event changes | Preferences, recommendations, deadlines | `notifications` | None |
+| Notification generation service | Protected current-day local scheduler run | Explicit delivery consent, profile timezone, current snapshot/briefing, exact completed weekly review | Bounded deduplicated `notifications` rows with strict provenance | None |
+| In-app delivery service | Foreground authenticated Flutter poll | Current consent/category/quiet settings plus one due generated row | At-most-once `in_app_delivered_at` receipt | None |
 
 The intake foundation, controlled post-intake recommendation refresh, first
 authenticated snapshot aggregator endpoint, deliberate dashboard refresh UX,
@@ -723,7 +724,8 @@ Phase 4's persisted deterministic briefing contract, Phase 5's decision-first
 Today consumer, Phase 6's bounded feedback/Insight loop, the minimal Phase 7
 scheduled preparation backend, and Phase 8's bounded weekly review plus
 confirmed manual Habit V1 adaptation, Phase 9's bounded `.ics` import, and
-Phase 10 Controlled Coach. The Coach keeps the deterministic standalone loop as
+Phase 10 Controlled Coach, and Notification Delivery V1's local foreground
+path. The Coach keeps the deterministic standalone loop as
 the source of truth and uses the development-only local Codex OAuth adapter plus
 the deterministic fake-provider test seam fixed in
 `docs/phase-10-controlled-coach-plan.md`. The next slice must be selected from a
@@ -778,7 +780,10 @@ production provider or autonomous agent platform by default.
   read state, distinguishes empty from error, and exposes Open only for a
   strict allowlist of implemented internal `action_url` targets. Notification
   Lifecycle V1 adds owner-scoped, retry-safe read/unread/dismiss tombstones
-  without claiming generation or delivery.
+  independently of delivery. Notification Delivery V1 later adds separate
+  fail-closed foreground consent, deterministic current briefing/recovery and
+  exact-week generation, a local runner, and acknowledged in-app banners; it
+  adds no push/system or deployed delivery channel.
 - Verified with mapper, repository, provider, widget, route-capability,
   notification-target, and browser smoke coverage.
 
@@ -1056,10 +1061,11 @@ The detailed implementation order and acceptance criteria live in
 - Implemented: scheduler-triggered timezone-pinned daily snapshot and briefing
   preparation for onboarded non-guest profiles, with bounded targeting,
   idempotent current/missing/stale behavior, and per-user failure isolation.
-- Still open: deployed cron/job wiring plus notification consent, deterministic
-  generation, scheduling, and delivery. Durable stored-Inbox lifecycle alone
-  does not imply any of them, Dashboard-load generation, or a hidden background
-  process.
+- Implemented locally: explicit in-app consent, deterministic current-day
+  generation, owner-locked timezone/quiet/category/cap/dedupe guards, the local
+  runner, and acknowledged foreground Flutter delivery. Still open: deployed
+  cron/job wiring and every push, browser, Android, background-mobile, email, or
+  provider delivery channel. Durable Inbox rows alone imply none of them.
 
 ### Completed Slice: E2E Expansion
 

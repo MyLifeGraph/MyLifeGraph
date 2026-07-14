@@ -625,16 +625,31 @@ sensitive and daily capture is easy to abandon after one bad interaction.
 
 The current `/alerts` surface is a stored Inbox over rows with durable
 read/unread/dismiss tombstones under
-`docs/notification-lifecycle-v1-contract.md`. That lifecycle does not create or
-deliver an item. None of the delivery behavior below is implemented yet:
+`docs/notification-lifecycle-v1-contract.md`. Notification Delivery V1 now adds
+the separate local foreground boundary in
+`docs/notification-delivery-v1-contract.md`:
+
+- Existing reminder preferences do not grant delivery; dedicated consent
+  defaults off and is explicitly confirmed in Flutter.
+- The local scheduler can create fixed, non-LLM focus, recovery, and exact-week
+  items with timezone, quiet-hour, category, local-day cap, dedupe, provenance,
+  and sensitive-copy guards revalidated in the database.
+- Missing/stale daily preparation stays independent of consent; only actively
+  consented fully current profiles consume notification-only runner slots.
+- An open authenticated Flutter app acknowledges a due row before showing one
+  at-most-once in-app banner. Guest/demo makes no delivery call.
+
+Still future:
 
 - Start with explicit user-selected check-in and commitment reminders.
-- Add a morning briefing-ready notification only after persisted briefings and
-  scheduled preparation are reliable.
+- Add user-selected check-in/commitment reminder identities only under a new
+  directly verified source contract; the current slice uses briefing/recovery
+  and completed-week sources only.
 - Route each notification to the exact capture, task, habit, or briefing action;
   never to a generic dashboard with no obvious next step.
-- Respect timezone, quiet hours, per-category opt-in, snooze, and a conservative
-  daily frequency cap.
+- Snooze and every push/browser/Android/background delivery channel remain
+  absent; local foreground delivery already respects timezone, quiet hours,
+  per-category flags, and a conservative daily cap.
 - Do not use streak-loss pressure or send another reminder after the user paused
   the day, intentionally skipped, or entered recover mode.
 - Keep private stress, health, relationship, and free-text detail out of lock
@@ -1355,9 +1370,10 @@ Deliberately not claimed:
 
 - No deployed cron/job has been configured or inspected; the repository now
   provides the protected callable backend boundary only.
-- No briefing-ready or check-in notification is created or sent. Quiet hours,
-  opt-in, snooze, frequency caps, sensitive-copy policy, and deep links remain
-  requirements for any later notification slice.
+- No deployed/background, push, browser, Android, email, or check-in reminder is
+  configured. The local runner and foreground in-app path cover explicit
+  consent, fixed copy, quiet hours, category flags, cap, dedupe, and allowlisted
+  Today/Weekly Review links only. Snooze remains future work.
 
 Evaluation:
 
@@ -1569,8 +1585,9 @@ The minimal Phase 7 backend is implemented. The protected scheduled boundary
 pins one run instant, selects eligible profiles by local date and
 missing/stale/current state, prepares deterministic snapshots and persisted
 briefings idempotently, supports bounded `profile_ids`, and isolates per-user
-failures. It does not make Dashboard reads generate, send notifications, add a
-worker, or prove deployed cron wiring.
+failures. Notification Delivery V1 extends only the local runner with explicit
+current-day deterministic generation and a foreground Flutter receipt/banner;
+it does not make Dashboard reads generate or prove deployed cron/push delivery.
 
 Phase 8 is implemented with bounded persisted ISO-week facts, at most two
 deterministic proposals, explicit freshness, Setup ownership, and confirmed
@@ -1586,7 +1603,8 @@ briefing inputs or user-owned commitments.
 Phase 10 is implemented as an authenticated, budgeted, source-aware explanation
 boundary with explicit reviewable memory selection, bounded validated history,
 and non-executable suggestions. Live provider calendar sync/writes, broad
-autonomous changes, notification delivery, deployed scheduling, vector search,
+autonomous changes, deployed/background notification delivery or scheduling,
+vector search,
 automatic memory extraction, and unbounded LLM context remain separate later
 concerns. The real-model path is the explicitly enabled local Codex OAuth
 development adapter defined in `docs/phase-10-controlled-coach-plan.md`; it does

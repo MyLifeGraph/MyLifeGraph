@@ -156,7 +156,7 @@ void main() {
     expect(disabledApply.onPressed, isNull);
   });
 
-  testWidgets('keep records only a no-change UI state', (tester) async {
+  testWidgets('keep is a non-interactive no-write note', (tester) async {
     final keepFeed = _feed(
       operation: 'keep',
       applicationMode: 'none',
@@ -174,11 +174,11 @@ void main() {
       ),
     );
 
-    await tester.ensureVisible(find.text('Keep current'));
-    await tester.tap(find.text('Keep current'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('No change made'), findsOneWidget);
+    expect(
+      find.text('No-change note · no product data will be written'),
+      findsOneWidget,
+    );
+    expect(find.text('Keep current (no write)'), findsNothing);
     expect(find.text('Change applied'), findsNothing);
     expect(gateway.fetches, 0);
     expect(gateway.updates, 0);
@@ -205,11 +205,46 @@ void main() {
       ),
     );
 
-    await tester.ensureVisible(find.text('Review in Setup'));
-    await tester.tap(find.text('Review in Setup'));
+    expect(
+      find.text('Setup guidance only · opening Setup applies nothing'),
+      findsOneWidget,
+    );
+    await tester.ensureVisible(find.text('Open Setup (no auto-apply)'));
+    await tester.tap(find.text('Open Setup (no auto-apply)'));
     await tester.pumpAndSettle();
 
     expect(find.text('Setup destination'), findsOneWidget);
+    expect(gateway.fetches, 0);
+    expect(gateway.updates, 0);
+    expect(gateway.lifecycleUpdates, 0);
+  });
+
+  testWidgets('staged replacement is visibly non-executable', (tester) async {
+    final gateway = _FakeHabitGateway(_habit());
+    final repository = _FakeWeeklyReviewRepository(
+      _feed(
+        operation: 'replace',
+        applicationMode: 'staged_only',
+        after: null,
+      ),
+    );
+    await _pumpPage(
+      tester,
+      repository: repository,
+      applier: WeeklyReviewProposalApplier(
+        habitGateway: gateway,
+        loadLatestReview: repository.getLatest,
+        refreshDailySnapshot: () async {},
+      ),
+    );
+
+    expect(
+      find.text('Suggestion only · not executable from Weekly Review'),
+      findsOneWidget,
+    );
+    expect(find.text('Open habits (no auto-apply)'), findsNothing);
+    expect(find.text('Acknowledge only'), findsNothing);
+    expect(find.text('Apply change'), findsNothing);
     expect(gateway.fetches, 0);
     expect(gateway.updates, 0);
     expect(gateway.lifecycleUpdates, 0);

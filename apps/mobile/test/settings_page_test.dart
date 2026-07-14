@@ -42,7 +42,7 @@ void main() {
     );
     expect(find.text('Local guest'), findsOneWidget);
     expect(find.text('Setup and commitments'), findsOneWidget);
-    expect(find.text('Reminder preference'), findsOneWidget);
+    expect(find.text('In-app notifications'), findsOneWidget);
     await tester.scrollUntilVisible(
       find.text('Calendar import (optional)'),
       180,

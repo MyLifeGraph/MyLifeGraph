@@ -108,12 +108,16 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           padding: EdgeInsets.zero,
           child: ListTile(
             leading: const Icon(Icons.notifications_active_outlined),
-            title: const Text('Reminder preference'),
-            subtitle: const Text(
-              'Stores your opt-in and quiet hours only. Notification delivery is not enabled.',
+            title: const Text('In-app notifications'),
+            subtitle: Text(
+              syncedAccount
+                  ? 'Manage separate delivery consent, categories, quiet hours, and the daily limit.'
+                  : 'In-app delivery is available only for a synced account.',
             ),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () => context.go('${AppRoutes.onboarding}?edit=1'),
+            trailing: syncedAccount ? const Icon(Icons.chevron_right) : null,
+            onTap: syncedAccount
+                ? () => context.go(AppRoutes.notificationSettings)
+                : null,
           ),
         ),
         if (capabilities.canShowCoachSurface)

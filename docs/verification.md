@@ -302,6 +302,15 @@ Current Flutter widget tests include:
   due/dismiss visibility, lifecycle parser parity, confirmed read/unread/
   dismiss state, exact ambiguous retry, retained refresh data, accessibility,
   and 320 px/2x-text layout.
+- Notification Delivery V1 model/repository/controller/widget tests keep saved
+  reminder flags separate from explicit consent, validate generated provenance,
+  stop consent-off before a pending-row query, filter disabled categories before
+  the bounded query, retain an exact ambiguous settings retry, keep a definitive
+  conflict locked through failed reloads, acknowledge before presentation,
+  suppress receipt replays,
+  render the explicit consent dialog/settings, and show one deterministic/no-
+  LLM foreground banner. Weekly Review widget tests visibly distinguish direct
+  manual actions from Setup guidance and non-executable staged suggestions.
 - The Snapshot refresh service posts `POST /v1/snapshots/generate` with bearer
   auth in real backend mode, includes an explicit capture `target_date`, skips
   guest/mock/missing-token paths, and treats network failures as best-effort.
@@ -424,7 +433,7 @@ supabase db reset
 Expected successful reset output applies migrations through:
 
 ```text
-20260714110000_account_export_lifestyle_entries_grant.sql
+20260714143000_notification_delivery_settings_guard.sql
 ```
 
 Expected notices include skipped legacy CamelCase tables and already-existing
@@ -908,6 +917,29 @@ E2E profile. They do not establish remote database state, deployed cron
 execution, production token configuration, weekly scheduling, notification
 delivery, or autonomous planning.
 
+Notification Delivery V1 currently has focused backend contract/repository/
+service/API/scheduler/migration tests and Flutter parser/controller/settings/
+Inbox/banner tests. The browser source now also encodes explicit UI consent,
+settings replay/conflict, scheduler generation, privacy-safe provenance,
+dedupe, category/quiet/cap rejection, foreground receipt, Inbox truth, and
+receipt replay suppression. After explicit authorization,
+`20260714130000_notification_delivery_v1.sql` was applied to the local stack and
+the reviewed `20260714143000_notification_delivery_settings_guard.sql` follow-up
+was subsequently applied without a reset. Local history matches the repository.
+A rollback-only database smoke verified exact replay, expected-revision
+conflict, Setup-style monotone timestamps, consent ordering, and identity
+invalidation. The full non-reset current-checkout browser journey passed on
+2026-07-14 with
+`E2E browser smoke passed for e2e-1784046486@example.test`. That run exercised
+the real local Flutter -> FastAPI -> Supabase consent, deterministic generation,
+policy rejection, foreground receipt, banner, Inbox refresh/provenance, dedupe,
+and replay boundaries. It exposed and fixed a stale Inbox provider after a
+foreground receipt before the recorded passing rerun.
+Focused source tests also cover recovery opt-out suppression, Phase 8
+fingerprint freshness,
+request-exact Settings replay, monotone cross-writer revisions, category
+starvation, and the reload-required Flutter state.
+
 The Phase 8 pass also does not establish complete task-transition history,
 historical habit-definition revisions, or remote RLS state.
 
@@ -936,9 +968,8 @@ Still missing for broader product verification:
 - Playwright trace artifact collection on failure.
 - Deployed scheduler/cron wiring and monitoring; the repository verifies the
   protected preparation endpoint, not any production invocation platform.
-- Notification delivery consent, deterministic generation/deduplication,
-  quiet-hour scheduling, and local/Android delivery assertions. Stored-Inbox
-  lifecycle coverage does not establish those later behaviors.
+- Android/system notification delivery is not part of Notification Delivery V1
+  and remains absent; physical-device foreground acceptance is still useful.
 - Installed-device Google OAuth/recovery acceptance, a complete physical-device
   layout/accessibility pass, and best-effort authenticated guest check-in
   migration. Widget tests cover the critical 320 px/text-scale surfaces, but

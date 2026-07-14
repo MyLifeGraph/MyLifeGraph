@@ -20,10 +20,12 @@ The initial directly applicable proposal surface is deliberately narrow:
 - use the existing exact requested-field/timestamp readback if the committed
   Supabase response is lost.
 
-`keep` is explanatory and makes no change. `replace` and `defer` remain staged
-choices. Setup-owned habits and goals deep-link to Settings Setup without a
-generic write. Goal, task, schedule, and replacement mutations remain
-unavailable until each has a typed, atomic or otherwise recoverable command.
+`keep` is an explanatory non-interactive note and makes no change. `replace`
+and `defer` remain non-interactive staged suggestions on this surface.
+Setup-owned habits and goals deep-link to Settings Setup with explicit no-auto-
+apply copy and without a generic write. Goal, task, schedule, and replacement
+mutations remain unavailable until each has a typed, atomic or otherwise
+recoverable command.
 
 Phase 8 does not add an LLM, Coach, calendar integration, notification,
 background worker, deployed weekly schedule, or autonomous plan rewrite.
@@ -236,7 +238,8 @@ and mutation-timestamp readback.
 
 Setup-owned targets use `application_mode=settings_setup`. Staged proposals use
 `application_mode=staged_only`. Neither path may call the generic manual Habit
-V1 updater.
+V1 updater. Flutter renders staged-only and `keep` rows without an action
+control; their authority label states that Weekly Review cannot execute them.
 
 One initial deterministic shrink rule may propose reducing a stable manual
 weekly target by one when the week has full valid daily-state coverage, exactly

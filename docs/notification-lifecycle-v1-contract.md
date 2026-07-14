@@ -2,8 +2,9 @@
 
 This document defines the first durable lifecycle boundary for stored Inbox
 items. It covers reading visible rows, marking them read or unread, and
-dismissing them. It does not define notification generation, scheduling, Web or
-Android delivery, or permission consent.
+dismissing them. It does not itself define notification generation, scheduling,
+or permission consent; the later local foreground boundary is specified
+separately in `docs/notification-delivery-v1-contract.md`.
 
 ## Trust Boundary
 
@@ -138,10 +139,12 @@ request identities in the same owner-locked account-deletion workflow.
 - This contract does not generate an Inbox row.
 - Existing Setup reminder preferences are not delivery permission and must not
   silently authorize a future delivery channel.
-- Quiet hours, timezone scheduling, stable generation identity, category caps,
-  deduplication, foreground polling, Web notifications, Android notification
-  permission, FCM, and push-token storage require later contracts and direct
-  verification.
+- Notification Delivery V1 separately defines explicit in-app consent,
+  timezone/quiet/category/cap/dedupe guards, local generation, and foreground
+  acknowledgement. This lifecycle contract still implies none of those merely
+  from a stored row or lifecycle action.
+- Browser/system Web notifications, Android notification permission, FCM,
+  push-token storage, email, and background delivery remain unimplemented.
 - A repository migration is not claimed to be applied to any remote Supabase
   project.
 

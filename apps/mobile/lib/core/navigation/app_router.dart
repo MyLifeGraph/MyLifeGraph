@@ -13,6 +13,7 @@ import '../../features/focus/domain/focus_session.dart';
 import '../../features/focus/presentation/pages/focus_session_page.dart';
 import '../../features/insights/presentation/pages/insights_page.dart';
 import '../../features/notifications/presentation/pages/notifications_page.dart';
+import '../../features/notifications/presentation/pages/notification_settings_page.dart';
 import '../../features/quick_action/presentation/pages/habit_completion_page.dart';
 import '../../features/quick_action/presentation/pages/habit_management_page.dart';
 import '../../features/quick_action/presentation/pages/morning_calibration_page.dart';
@@ -29,6 +30,7 @@ const _postAuthContinuationPaths = <String>{
   AppRoutes.dashboard,
   AppRoutes.onboarding,
   AppRoutes.settings,
+  AppRoutes.notificationSettings,
   AppRoutes.calendarIntegration,
   AppRoutes.insights,
   AppRoutes.quickAction,
@@ -141,6 +143,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: AppRoutes.settings,
             builder: (context, state) => const SettingsPage(),
+          ),
+          GoRoute(
+            path: AppRoutes.notificationSettings,
+            redirect: (context, state) =>
+                ref.read(appSurfaceCapabilitiesProvider).canUseSyncedExecution
+                    ? null
+                    : AppRoutes.settings,
+            builder: (context, state) => const NotificationSettingsPage(),
           ),
           GoRoute(
             path: AppRoutes.calendarIntegration,

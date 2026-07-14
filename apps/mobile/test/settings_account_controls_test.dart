@@ -61,7 +61,13 @@ void main() {
     final container = ProviderScope.containerOf(
       tester.element(find.text('Synced account')),
     );
-    expect(find.text('Reminder preference'), findsOneWidget);
+    expect(find.text('In-app notifications'), findsOneWidget);
+    expect(
+      find.text(
+        'Manage separate delivery consent, categories, quiet hours, and the daily limit.',
+      ),
+      findsOneWidget,
+    );
     await tester.tap(find.text('Change timezone'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Europe/Berlin').last);

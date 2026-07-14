@@ -87,4 +87,20 @@ void main() {
       );
     });
   });
+
+  test('weekly review target requires the real review capability', () {
+    expect(
+      const NotificationActionTargetResolver(
+        canUseSyncedHabits: true,
+      ).resolve('/weekly-review'),
+      isNull,
+    );
+    expect(
+      const NotificationActionTargetResolver(
+        canUseSyncedHabits: true,
+        canUseWeeklyReview: true,
+      ).resolve('/weekly-review'),
+      NotificationActionTarget.weeklyReview,
+    );
+  });
 }

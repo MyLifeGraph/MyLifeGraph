@@ -365,6 +365,10 @@ Current responsibilities:
   `POST /v1/notifications/{notification_id}/actions`; owner-scoped
   read/unread/dismiss mutations use one service-role-only RPC and never imply
   notification generation or delivery.
+- Serve bearer-derived notification settings and foreground acknowledgement.
+  The protected daily refresh may request deterministic generation; its
+  database boundary revalidates explicit consent, timezone/local date, quiet
+  hours, category, daily cap, and dedupe under the owner lock.
 - Serve read-only latest/explicit weekly-review GETs plus deliberate
   `POST /v1/weekly-reviews/generate` under `weekly-review-v1`.
 - Serve authenticated calendar connection/read endpoints plus deliberate file
@@ -505,9 +509,14 @@ Recommendation generation is disabled by default. Explicit
 `include_recommendations=true` remains deterministic and forces LLM wording off;
 snapshot and briefing preparation never call an LLM. This endpoint is not a
 Flutter or browser runtime endpoint, and normal Dashboard load remains GET-only.
-The repository contains no deployed cron manifest, background worker, or Phase 7
-notification sender, so endpoint availability must not be described as deployed
-scheduling or notification delivery.
+The repository contains no deployed cron manifest or production worker. The
+local stack runner requests current-day deterministic notification generation
+every 15 minutes, and Flutter can acknowledge/show a foreground banner after
+separate consent. That local path must not be described as deployed scheduling,
+push, browser, Android, or background-mobile delivery.
+The target selector still prepares missing/stale Phase 7 state for eligible
+profiles, but includes a fully current profile in a notification-only batch only
+when the dedicated consent row is active.
 
 Weekly review is authenticated but not scheduled. FastAPI resolves one
 completed ISO week from the profile timezone, loads exact durable facts with
@@ -665,6 +674,13 @@ all-time result.
   Lifecycle DML is available only through bearer-derived FastAPI and the
   owner-locked service-role `apply_notification_action_v1` RPC; its retry
   ledger is forced-RLS and unavailable to application roles.
+- `notification_preferences` delivery fields are authenticated read-only and
+  default fail-closed. Settings, deterministic generated-row creation, and
+  foreground receipts use three owner-locked service-role-only RPCs. Flutter
+  presents a banner only after the receipt RPC revalidates current consent,
+  category, due time, timezone, and quiet hours. Settings replay fingerprints
+  the expected revision and complete payload; the shared Setup writer
+  invalidates that identity and cannot regress the preference revision.
 - `20260714103000_application_table_privilege_guard.sql` closes table-level
   authority that RLS does not cover across every repo-owned product and ledger
   table. `anon` is fail-closed; authenticated `TRUNCATE`, `REFERENCES`, and
@@ -707,9 +723,15 @@ all-time result.
 - Inbox is a strict stored-item view. Original `type`, `priority`, read state,
   and supported `action_url` are shown; authenticated real accounts use the
   FastAPI `notification-lifecycle-v1` boundary to mark rows read/unread or keep
-  a dismiss tombstone. Guest/mock stays local and zero-call. Phase 7 still does
-  not create or deliver briefing-ready or check-in notifications, and existing
-  reminder preferences are not permission for a future delivery channel.
+  a dismiss tombstone. Guest/mock stays local and zero-call. Explicit in-app
+  consent now permits only fixed deterministic current briefing/recovery and
+  exact completed-week items. The local runner creates bounded stored rows and
+  an open authenticated Flutter app may acknowledge/show one at-most-once
+  foreground banner. Recovery mode suppresses focus even when the recovery
+  category is off, and weekly copy reuses the full Phase 8 source-fingerprint
+  freshness check. Pending polling filters currently disabled categories before
+  its bounded query. Existing reminder preferences alone grant no delivery;
+  push/system delivery and deployed scheduling remain absent.
 - Phase 4 persists one deterministic daily briefing per user/local date and
   ranks only strict Phase 3 targets. `GET /v1/briefings/today` is read-only and
   reports missing/current/stale state; deliberate

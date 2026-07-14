@@ -36,6 +36,9 @@ Read these files before making changes:
     notification mutation authority
 13. `docs/v1-account-controls-contract.md` before changing password recovery,
     profile timezone, account export, or permanent account deletion
+14. `docs/notification-delivery-v1-contract.md` before changing notification
+    consent, deterministic generation, quiet hours, category/cap enforcement,
+    local scheduling, foreground delivery, or delivery provenance
 
 ## Current State
 
@@ -191,6 +194,19 @@ The migration
 restores the one missing backend `SELECT` grant required by the existing
 28-table Account Export V1 contract. It grants only `service_role` read access
 to `lifestyle_entries`; it adds no guest or authenticated-user authority.
+The migration
+`supabase/migrations/20260714130000_notification_delivery_v1.sql` adds
+fail-closed explicit in-app consent, settings request identity, bounded
+deterministic generation provenance/dedupe fields, and an at-most-once
+foreground receipt. Its settings, generation, and delivery RPCs take the owner
+lock, are service-role-only, and revalidate timezone/local date, quiet hours,
+category flags, daily cap, and current consent. It adds no push/system or
+deployed delivery channel.
+The follow-up migration
+`supabase/migrations/20260714143000_notification_delivery_settings_guard.sql`
+binds Settings replay to the complete request payload and expected revision,
+invalidates that identity when Setup changes the shared preference projection,
+and keeps `updated_at` monotone and no earlier than retained consent timestamps.
 
 ## Important Docs
 
@@ -218,6 +234,9 @@ to `lifestyle_entries`; it adds no guest or authenticated-user authority.
 - `docs/notification-lifecycle-v1-contract.md` - authenticated stored-Inbox
   visibility, strict lifecycle commands, replay/conflict behavior, owner/RLS
   boundary, and explicit delivery non-claims.
+- `docs/notification-delivery-v1-contract.md` - explicit in-app consent,
+  deterministic bounded generation, timezone/quiet/category/cap/dedupe guards,
+  local runner behavior, and foreground at-most-once delivery.
 - `docs/v1-account-controls-contract.md` - authenticated timezone, bounded JSON
   export, password recovery, and permanent account deletion boundary.
 - `README.md` - high-level project overview.
@@ -259,7 +278,9 @@ Phase 9 adds one optional explicitly consented `ical_file` connection and
 bounded deliberate `.ics` import. Dedicated imported rows retain stable
 read-only provenance; disconnect and local imported-data deletion remain
 separate and never mutate `schedule_items` or a source calendar.
-It does not claim deployed cron wiring or send notifications.
+These phases do not claim deployed cron wiring. Notification Delivery V1 below
+separately adds only consented local deterministic rows and foreground banners,
+not push/system delivery.
 Read `docs/backend-roadmap.md`,
 `docs/daily-briefing-implementation-plan.md`, and the Phase 3 and Phase 8
 contracts plus the Phase 9 calendar contract and Phase 10 Coach plan before
@@ -286,8 +307,8 @@ run.
 Do not expand this boundary into broad LLM integration, vector search,
 autonomous background agents, model-controlled tools, unreviewed provider
 writes, or automatic memory extraction. Live calendar provider OAuth/sync/writes, a
-deployable LLM provider, deployed scheduling, and notification delivery still
-require their own directly verified contracts.
+deployable LLM provider, deployed scheduling, and push/background notification
+delivery still require their own directly verified contracts.
 Notification Lifecycle V1 is implemented at the repository boundary: real
 authenticated accounts may mark stored Inbox rows read/unread or dismiss them
 through one strict FastAPI/service-role RPC, while guest/mock remains zero-call
@@ -295,6 +316,15 @@ and direct authenticated DML remains forbidden. Dismissal is a retained
 tombstone, not hard deletion. This does not generate, schedule, or deliver a
 notification, and existing reminder preferences are not permission for a new
 delivery channel.
+Notification Delivery V1 separately adds explicit foreground consent,
+deterministic fixed-copy generation from current briefing/recovery or the exact
+completed week, the local 15-minute runner, and acknowledged at-most-once
+Flutter banners. Guest/demo remains zero-call. It does not enable browser,
+Android, push, email, background-mobile, or deployed scheduling.
+The scheduler continues missing/stale Phase 7 preparation for eligible profiles,
+but selects a fully current profile for a notification-only run only when its
+separate in-app consent is active, preventing consent-off current profiles from
+consuming the bounded runner batch.
 Phase 0A, Honest Capture, is
 implemented: `/daily-check-in` redirects to the canonical lightweight flow;
 measurements require explicit selection; a typed draft drives guest and Supabase
@@ -414,8 +444,9 @@ provenance. Preparation reuses current snapshots, creates only missing
 prerequisites, converges briefing provenance after overlapping upserts, and
 reports sanitized per-user stages without failing the whole batch. A bounded
 `profile_ids` filter supports operational retry and isolated E2E. Normal
-Dashboard GET remains read-only; notification delivery and deployed cron wiring
-are not claimed.
+Dashboard GET remains read-only. The later Notification Delivery V1 local
+runner reuses this endpoint with explicit current-day generation, but deployed
+cron and every push/background channel remain unclaimed.
 
 Phase 8, Bounded Weekly Review And Habit Adaptation, is implemented through a
 strict authenticated FastAPI/Flutter boundary. The latest read resolves one
@@ -497,6 +528,20 @@ passed non-destructively on 2026-07-13 with explicit `gpt-5.5`, strict validated
 and persisted response provenance, visible UI data-use/provider truth, and no
 question/prompt/answer/raw-event logging. The different-Linux-user clone/login
 acceptance remains open.
+
+After explicit local migration authorization, Notification Delivery V1's base
+`20260714130000_notification_delivery_v1.sql` and the reviewed follow-up
+`20260714143000_notification_delivery_settings_guard.sql` were applied to the
+local stack on 2026-07-14; local history matches the repository. A rollback-only
+database smoke verified exact replay, expected-revision conflict, Setup-style
+monotone timestamps, consent ordering, and request-identity invalidation. The
+full non-reset current-checkout browser journey then passed with
+`E2E browser smoke passed for e2e-1784046486@example.test`. It exercised exact
+foreground consent, settings replay/conflict, deterministic scheduler
+generation, category/quiet/cap rejection, UUIDv5 dedupe, receipt replay,
+privacy-safe provenance, acknowledged banner display, and fresh Inbox display.
+That run proves only this local fake-provider stack; it adds no push/system,
+background-mobile, deployed scheduler, remote Supabase, or live-provider claim.
 
 The implemented post-intake refresh is backend-only and best-effort:
 

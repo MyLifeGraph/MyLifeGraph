@@ -467,7 +467,8 @@ and persisted briefing. Missing snapshots are generated; existing snapshots are
 reused when only the briefing is missing; stale briefings are refreshed against
 the matching snapshot; and current snapshot/briefing pairs are skipped without
 changing ids or timestamps. `target_date` is optional and should be used only as
-an explicit backfill override.
+an explicit backfill override; it cannot be combined with
+`include_notifications=true`.
 
 For a bounded operational retry, a token holder can restrict the request to at
 most 20 UUIDs:
@@ -487,10 +488,25 @@ for one profile does not stop other selected profiles.
 
 Recommendation refresh is off by default. Explicit
 `include_recommendations=true` runs only the deterministic recommendation path
-and keeps LLM wording disabled. Scheduled snapshot/briefing preparation never
-calls an LLM, normal Dashboard loads remain read-only GETs, and Phase 7 sends no
-notifications. This repository does not contain deployed cron wiring; the
-endpoint and local commands alone are not a production scheduling claim.
+and keeps LLM wording disabled. The supported local stack runner sends
+`include_notifications=true` every 15 minutes. Only separately consented real
+accounts can receive fixed current-day deterministic rows; the database
+revalidates timezone, quiet hours, category flags, daily cap, and dedupe. An
+open Flutter app acknowledges a row before showing a foreground banner.
+Missing/stale Phase 7 preparation remains independent of consent, while a fully
+current profile is selected for a notification-only runner pass only with active
+in-app consent so consent-off current rows do not exhaust the bounded batch.
+Dashboard loads remain GET-only, and this repository still contains no deployed
+cron, push, browser, Android, email, or background-mobile delivery wiring.
+
+Manage the separate foreground permission at Settings -> In-app notifications.
+The old Setup reminder preference is not permission. A manual local one-shot
+uses the same safe runner payload:
+
+```bash
+cd services/ai_service
+python -m app.ops.local_daily_refresh --once
+```
 
 ## Phase 10 Controlled Coach
 

@@ -104,6 +104,7 @@ def test_once_posts_exact_safe_default_payload_and_environment_token() -> None:
         "window_days": 7,
         "limit": 100,
         "include_recommendations": False,
+        "include_notifications": True,
     }
     assert request.get_header("X-scheduled-refresh-token") == TOKEN
     assert request.get_header("Content-type") == "application/json"
@@ -130,6 +131,7 @@ def test_profile_ids_are_canonical_bounded_and_sent_only_in_request() -> None:
         "window_days": 7,
         "limit": 100,
         "include_recommendations": False,
+        "include_notifications": True,
         "profile_ids": [PROFILE_1, PROFILE_2],
     }
     combined_output = "\n".join(output)

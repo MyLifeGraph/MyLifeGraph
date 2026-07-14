@@ -80,9 +80,15 @@ FastAPI service boundary for recommendation and future ML workflows.
   bearer-derived `notification-lifecycle-v1` read/unread/dismiss commands
   through a retry-safe service-role RPC. It does not generate or deliver
   notifications. See `../../docs/notification-lifecycle-v1-contract.md`.
-- The repository contains no deployed cron, background worker, Phase 7
-  notification sender, vector search, autonomous agent, or deployable LLM
-  provider.
+- `GET/PATCH /v1/notifications/settings` and
+  `POST /v1/notifications/{notification_id}/delivery` expose the separate
+  explicit foreground-delivery boundary. The protected daily refresh may
+  create fixed deterministic/no-LLM rows with timezone, quiet-hour, category,
+  cap, dedupe, and provenance guards. See
+  `../../docs/notification-delivery-v1-contract.md`.
+- The repository contains no deployed cron, production/background notification
+  worker, push/system delivery, vector search, autonomous agent, or deployable
+  LLM provider.
 
 ## Setup
 
@@ -231,7 +237,7 @@ The endpoint captures one UTC `run_at`, derives each eligible profile's local
 outcomes. It generates a missing snapshot, reuses an existing snapshot when only
 the briefing is missing, refreshes a stale briefing against its exact source,
 and performs no write for a current pair. `target_date` is available only as an
-explicit backfill override.
+explicit backfill override and cannot be combined with notification generation.
 
 A privileged operational retry can be narrowed to at most 20 eligible profiles:
 
@@ -246,8 +252,12 @@ The filter never bypasses onboarding or guest exclusion. Failures are isolated
 per profile and identify `profile_date`, `snapshot`, `briefing`, or optional
 `recommendations` as the stage. Recommendation generation is off by default;
 explicit `include_recommendations=true` remains deterministic and forces LLM
-wording off. Scheduled snapshot/briefing preparation never calls an LLM. This is
-an invocable backend endpoint, not evidence of deployed cron or notifications.
+wording off. `include_notifications=true` requests the exact current profile-
+local day only; the local runner enables it every 15 minutes. Missing/stale
+Phase 7 preparation remains eligible, but a fully current notification-only
+target must already have active separate in-app consent. Database guards then
+recheck consent/category/quiet/cap/dedupe outcomes. This is not evidence of
+deployed cron, push, browser, Android, or background delivery.
 
 Read Phase 8 review state without generation, or deliberately generate the
 latest completed profile-local ISO week:
@@ -302,6 +312,18 @@ loaded row's aware `expected_updated_at`. Exact replay is mutation-free;
 request-id reinterpretation or stale state is `409`, a foreign row is the same
 owner-safe `404`, and two unresolved persistence attempts are explicit `502`.
 Direct authenticated Notification DML remains forbidden.
+
+Foreground notification settings and receipts use:
+
+```text
+GET   /v1/notifications/settings
+PATCH /v1/notifications/settings
+POST  /v1/notifications/{notification_id}/delivery
+```
+
+The PATCH requires dedicated consent, a UUID request identity, and the loaded
+settings timestamp. The receipt is at-most-once: Flutter presents only a
+non-replayed acknowledgement after current consent/category/quiet/due checks.
 
 V1 account controls are authenticated and owner-derived:
 
@@ -445,6 +467,12 @@ tables stay frozen. It also hardens future `postgres` public-table defaults,
 prevents application and service roles from reusing the installed Auth trigger
 functions without removing their triggers, and adds the Notification-ledger
 child index plus non-validating timestamp-order checks for new or updated rows.
+`20260714130000_notification_delivery_v1.sql` then adds the separate consent,
+generated-row provenance/dedupe, and foreground receipt fields plus three
+owner-locked service-role-only RPCs.
+`20260714143000_notification_delivery_settings_guard.sql` follows with a full
+Settings request fingerprint and a shared-writer revision trigger, so Intake
+Setup cannot regress consent timestamp ordering or leave a stale replay identity.
 
 JWT verification is isolated in the FastAPI auth dependency. Tests inject fake
 verifiers and repositories, so production or remote Supabase credentials are not

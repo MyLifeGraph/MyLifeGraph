@@ -2,7 +2,9 @@ from datetime import date, datetime
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+from app.models.notifications import NotificationGenerationStatus
 
 
 ScheduledRefreshStatus = Literal["succeeded", "failed"]
@@ -12,6 +14,7 @@ ScheduledSelectionReason = Literal[
     "stale_briefing",
     "invalid_timezone",
     "recommendation_refresh",
+    "notification_delivery",
 ]
 ScheduledSnapshotStatus = Literal["generated", "reused"]
 ScheduledBriefingStatus = Literal["generated", "refreshed", "unchanged"]
@@ -20,6 +23,7 @@ ScheduledFailureStage = Literal[
     "snapshot",
     "briefing",
     "recommendations",
+    "notifications",
 ]
 
 
@@ -32,6 +36,15 @@ class ScheduledRefreshRequest(BaseModel):
     profile_ids: list[UUID] = Field(default_factory=list, max_length=20)
     include_recommendations: bool = False
     recommendation_window_days: int = Field(default=28, ge=1, le=365)
+    include_notifications: bool = False
+
+    @model_validator(mode="after")
+    def reject_notification_backfill(self) -> "ScheduledRefreshRequest":
+        if self.include_notifications and self.target_date is not None:
+            raise ValueError(
+                "notification delivery is unavailable for target_date backfills",
+            )
+        return self
 
 
 class ScheduledUserRefreshResult(BaseModel):
@@ -47,6 +60,9 @@ class ScheduledUserRefreshResult(BaseModel):
     briefing_id: str | None = None
     briefing_status: ScheduledBriefingStatus | None = None
     recommendation_count: int | None = None
+    notification_status: NotificationGenerationStatus | None = None
+    notification_created_count: int | None = Field(default=None, ge=0, le=3)
+    notification_duplicate_count: int | None = Field(default=None, ge=0, le=3)
     failed_stage: ScheduledFailureStage | None = None
     error: str | None = None
 

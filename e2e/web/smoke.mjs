@@ -268,11 +268,17 @@ try {
   await toggleSetupSection(page, 'Goals and friction', 'Add goal');
   await clickByText(page, 'Add goal');
   await fillByLabelOrPlaceholder(page, 'Goal title', setupGoalTitle, 1);
+  await expectFieldValue(page, 'Goal title', setupGoalTitle, 1);
+  await page.keyboard.press('Tab');
+  await page.waitForTimeout(250);
   await scrollFlutterPage(page, 700);
   await toggleSetupSection(page, 'Routines', 'Add routine candidate');
   await scrollFlutterPage(page, 700);
   await clickByText(page, 'Add routine candidate');
   await fillByLabelOrPlaceholder(page, 'Routine name', setupRoutineTitle, 3);
+  await expectFieldValue(page, 'Routine name', setupRoutineTitle, 3);
+  await page.keyboard.press('Tab');
+  await page.waitForTimeout(250);
   await scrollFlutterPage(page, 700);
   await toggleSetupSection(
     page,
@@ -286,6 +292,12 @@ try {
   await selectDropdownOption(page, 'Weekday', 'Monday');
   await fillByLabelOrPlaceholder(page, 'Starts (HH:mm)', '14:15', -2);
   await fillByLabelOrPlaceholder(page, 'Ends (HH:mm)', '15:45', -1);
+  await expectFieldValue(page, 'Title', setupCommitmentTitle, 4);
+  await expectFieldValue(page, 'Location optional', 'Room E2E', 5);
+  await expectFieldValue(page, 'Starts (HH:mm)', '14:15', -2);
+  await expectFieldValue(page, 'Ends (HH:mm)', '15:45', -1);
+  await page.keyboard.press('Tab');
+  await page.waitForTimeout(250);
   await scrollFlutterPage(page, 1800);
 
   let lostSavePayload;
@@ -308,11 +320,6 @@ try {
   await clickByText(page, 'Save setup');
   await expectText(page, 'Setup was not saved. Your draft is still here.');
   await page.unroute(intakeCompleteUrl, loseAppliedResponse);
-  await scrollFlutterPage(page, -6000);
-  await scrollUntilTextInViewport(page, setupGoalTitle, { deltaY: 500 });
-  await scrollUntilTextInViewport(page, setupRoutineTitle, { deltaY: 500 });
-  await scrollUntilTextInViewport(page, setupCommitmentTitle, { deltaY: 500 });
-  await scrollFlutterPage(page, 2400);
   await waitForRows(
     `intake_responses?select=id,request_id,base_revision,revision,state,responses,metadata&user_id=eq.${user.id}&order=revision.asc`,
     (rows) =>
@@ -342,10 +349,11 @@ try {
   const retryPayload = retryResponse.request().postDataJSON();
   if (
     retryPayload.request_id !== lostSavePayload?.request_id ||
-    retryPayload.base_revision !== 1
+    retryPayload.base_revision !== 1 ||
+    stableJson(retryPayload) !== stableJson(lostSavePayload)
   ) {
     throw new Error(
-      `Setup retry changed idempotency identity. First ${JSON.stringify(lostSavePayload)}, retry ${JSON.stringify(retryPayload)}`,
+      `Setup retry changed the exact locked submission. First ${JSON.stringify(lostSavePayload)}, retry ${JSON.stringify(retryPayload)}`,
     );
   }
   await page.waitForURL('**/#/settings');
@@ -2168,6 +2176,7 @@ try {
   await expectText(page, 'Compare');
 
   await assertNotificationLifecycle(page, user.id);
+  await assertNotificationDelivery(page, user.id);
 
   await assertControlledCoach(page, user.id);
 
@@ -3159,6 +3168,15 @@ function isUuid(value) {
   );
 }
 
+function isUuidV5(value) {
+  return (
+    typeof value === 'string' &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+      value,
+    )
+  );
+}
+
 function isCanonicalUuid(value) {
   return (
     typeof value === 'string' &&
@@ -3789,6 +3807,481 @@ async function assertNotificationLifecycle(page, userId) {
     passwordValue: secondaryPassword,
     accessToken: secondaryToken,
   });
+}
+
+async function assertNotificationDelivery(page, userId) {
+  const accessToken = await signInAccessToken('Notification delivery');
+  const initialResponse = await notificationSettingsRequest(
+    accessToken,
+    'GET',
+  );
+  const initialText = await initialResponse.text();
+  let initialSettings;
+  try {
+    initialSettings = JSON.parse(initialText);
+  } catch (_) {
+    initialSettings = null;
+  }
+  if (initialResponse.status !== 200) {
+    throw new Error(
+      `Initial Notification settings failed: ${initialResponse.status} ${initialText}`,
+    );
+  }
+  assertNotificationSettingsResponse(initialSettings, {
+    enabled: false,
+    replayed: false,
+  });
+  if (
+    initialSettings.categories.focus_prompt !== false ||
+    initialSettings.categories.recovery_prompt !== false ||
+    initialSettings.categories.weekly_summary !== false
+  ) {
+    throw new Error(
+      `No-reminders Setup preference changed unexpectedly: ${initialText}`,
+    );
+  }
+  await assertRows(
+    `notification_preferences?select=user_id,in_app_delivery_enabled,in_app_delivery_consent_version,in_app_delivery_consented_at,in_app_delivery_disabled_at,focus_prompts_enabled,recovery_prompts_enabled,weekly_summary_enabled,daily_notification_limit,updated_at&user_id=eq.${userId}`,
+    (rows) =>
+      rows.length === 1 &&
+      rows[0].in_app_delivery_enabled === false &&
+      rows[0].in_app_delivery_consent_version === null &&
+      rows[0].in_app_delivery_consented_at === null &&
+      rows[0].in_app_delivery_disabled_at === null &&
+      rows[0].focus_prompts_enabled === false &&
+      rows[0].recovery_prompts_enabled === false &&
+      rows[0].weekly_summary_enabled === false &&
+      rows[0].daily_notification_limit === 2,
+    'fail-closed in-app consent separate from No-reminders Setup preferences',
+  );
+
+  const settingsGetPromise = page.waitForResponse(
+    (candidate) =>
+      candidate.url() === `${aiServiceBaseUrl}/v1/notifications/settings` &&
+      candidate.request().method() === 'GET' &&
+      candidate.ok(),
+    { timeout: 45000 },
+  );
+  await page.goto(appRoute('/settings/notifications'), {
+    waitUntil: 'domcontentloaded',
+  });
+  await waitForFlutterShell(page);
+  await enableFlutterSemantics(page);
+  await settingsGetPromise;
+  await expectText(page, 'In-app notifications');
+  await expectText(page, 'Explicit foreground delivery controls');
+  await expectText(
+    page,
+    'Shows a banner only while MyLifeGraph is open. This is separate from your saved reminder preference.',
+  );
+  await page
+    .getByLabel('Allow in-app delivery', { exact: false })
+    .first()
+    .click();
+  await page.getByLabel('Recovery prompt', { exact: false }).first().click();
+  await scrollUntilTextInViewport(page, 'Save notification settings', {
+    deltaY: 650,
+    buttonFirst: true,
+  });
+  await clickByText(page, 'Save notification settings');
+  await expectText(page, 'Allow in-app notifications?');
+  await expectText(
+    page,
+    'Your existing reminder preference did not grant it.',
+  );
+  const settingsPatchPromise = page.waitForResponse(
+    (candidate) =>
+      candidate.url() === `${aiServiceBaseUrl}/v1/notifications/settings` &&
+      candidate.request().method() === 'PATCH',
+    { timeout: 45000 },
+  );
+  await clickByText(page, 'Allow in-app only');
+  const settingsPatchResponse = await settingsPatchPromise;
+  if (!settingsPatchResponse.ok()) {
+    throw new Error(
+      `Notification consent save failed: ${settingsPatchResponse.status()} ${await settingsPatchResponse.text()}`,
+    );
+  }
+  const consentRequest = settingsPatchResponse.request().postDataJSON();
+  const expectedSettingsKeys = [
+    'categories',
+    'consent_version',
+    'contract_version',
+    'daily_limit',
+    'expected_updated_at',
+    'in_app_delivery_enabled',
+    'quiet_hours',
+    'request_id',
+  ];
+  if (
+    stableJson(Object.keys(consentRequest).sort()) !==
+      stableJson(expectedSettingsKeys) ||
+    consentRequest.contract_version !== 'notification-settings-v1' ||
+    !isUuid(consentRequest.request_id) ||
+    !sameInstant(
+      consentRequest.expected_updated_at,
+      initialSettings.updated_at,
+    ) ||
+    consentRequest.in_app_delivery_enabled !== true ||
+    consentRequest.consent_version !== 'in-app-notification-consent-v1' ||
+    stableJson(consentRequest.categories) !==
+      stableJson({
+        focus_prompt: false,
+        recovery_prompt: true,
+        weekly_summary: false,
+      }) ||
+    consentRequest.quiet_hours !== null ||
+    consentRequest.daily_limit !== 2
+  ) {
+    throw new Error(
+      `Notification consent request was not exact: ${JSON.stringify(consentRequest)}`,
+    );
+  }
+  const consentSettings = await settingsPatchResponse.json();
+  assertNotificationSettingsResponse(consentSettings, {
+    enabled: true,
+    replayed: false,
+    categories: consentRequest.categories,
+    quietHours: null,
+    dailyLimit: 2,
+  });
+  await expectText(page, 'Notification settings saved.');
+
+  const replayResponse = await notificationSettingsRequest(
+    accessToken,
+    'PATCH',
+    consentRequest,
+  );
+  const replayText = await replayResponse.text();
+  const replaySettings = JSON.parse(replayText);
+  if (replayResponse.status !== 200) {
+    throw new Error(
+      `Exact Notification settings replay failed: ${replayResponse.status} ${replayText}`,
+    );
+  }
+  assertNotificationSettingsResponse(replaySettings, {
+    enabled: true,
+    replayed: true,
+    categories: consentRequest.categories,
+    quietHours: null,
+    dailyLimit: 2,
+  });
+  if (!sameInstant(replaySettings.updated_at, consentSettings.updated_at)) {
+    throw new Error(
+      `Exact Notification settings replay changed the row: ${replayText}`,
+    );
+  }
+  const conflictingResponse = await notificationSettingsRequest(
+    accessToken,
+    'PATCH',
+    { ...consentRequest, daily_limit: 3 },
+  );
+  const conflictingText = await conflictingResponse.text();
+  let conflictingBody = null;
+  try {
+    conflictingBody = JSON.parse(conflictingText);
+  } catch (_) {
+    // The exact assertion below reports the raw response.
+  }
+  if (
+    conflictingResponse.status !== 409 ||
+    conflictingBody?.detail !==
+      'Notification settings request id was already used'
+  ) {
+    throw new Error(
+      `Reinterpreted Notification settings identity was not rejected: ${conflictingResponse.status} ${conflictingText}`,
+    );
+  }
+
+  const deliveryResponsePromise = page.waitForResponse(
+    (candidate) =>
+      candidate.url().startsWith(`${aiServiceBaseUrl}/v1/notifications/`) &&
+      candidate.url().endsWith('/delivery') &&
+      candidate.request().method() === 'POST',
+    { timeout: 45000 },
+  );
+  const generated = await scheduledRefreshRequest({
+    profile_ids: [userId],
+    window_days: 7,
+    limit: 1,
+    include_recommendations: false,
+    include_notifications: true,
+  });
+  const generatedResult = generated.results?.[0];
+  if (
+    !isIsoTimestamp(generated.run_at) ||
+    generated.target_date !== null ||
+    generated.processed !== 1 ||
+    generated.succeeded !== 1 ||
+    generated.failed !== 0 ||
+    generatedResult?.user_id !== userId ||
+    generatedResult?.status !== 'succeeded' ||
+    !['stale_briefing', 'notification_delivery'].includes(
+      generatedResult?.selection_reason,
+    ) ||
+    generatedResult?.notification_status !== 'created' ||
+    generatedResult?.notification_created_count !== 1 ||
+    generatedResult?.notification_duplicate_count !== 0 ||
+    generatedResult?.failed_stage !== null ||
+    generatedResult?.error !== null
+  ) {
+    throw new Error(
+      `Scheduled Notification generation violated its result contract: ${JSON.stringify(generated)}`,
+    );
+  }
+
+  const deliveryResponse = await deliveryResponsePromise;
+  if (!deliveryResponse.ok()) {
+    throw new Error(
+      `Foreground Notification receipt failed: ${deliveryResponse.status()} ${await deliveryResponse.text()}`,
+    );
+  }
+  const deliveryRequest = deliveryResponse.request().postDataJSON();
+  const receipt = await deliveryResponse.json();
+  if (
+    stableJson(deliveryRequest) !==
+      stableJson({
+        contract_version: 'in-app-notification-delivery-v1',
+      }) ||
+    receipt.contract_version !== 'in-app-notification-delivery-v1' ||
+    !isUuidV5(receipt.notification_id) ||
+    receipt.channel !== 'in_app' ||
+    !isIsoTimestamp(receipt.delivered_at) ||
+    receipt.replayed !== false
+  ) {
+    throw new Error(
+      `Foreground Notification receipt was not exact: ${JSON.stringify({ deliveryRequest, receipt })}`,
+    );
+  }
+  await expectText(page, 'A gentler plan is ready');
+  await expectText(page, 'In-app · deterministic · no LLM');
+
+  const generatedRows = await fetchRows(
+    `notifications?select=id,user_id,title,message,type,priority,is_read,read_at,dismissed_at,action_url,due_at,metadata,generation_key,generation_category,delivery_date,in_app_delivered_at,created_at,updated_at&id=eq.${receipt.notification_id}`,
+    'generated and acknowledged in-app Notification',
+  );
+  const generatedRow = generatedRows[0];
+  if (
+    generatedRows.length !== 1 ||
+    generatedRow.user_id !== userId ||
+    generatedRow.title !== 'A gentler plan is ready' ||
+    generatedRow.message !==
+      'Open Today to review one manageable next step. No private check-in details are included here.' ||
+    generatedRow.type !== 'coaching' ||
+    generatedRow.priority !== 'medium' ||
+    generatedRow.is_read !== false ||
+    generatedRow.read_at !== null ||
+    generatedRow.dismissed_at !== null ||
+    generatedRow.action_url !== '/dashboard' ||
+    generatedRow.generation_key !==
+      `notification-generation-v1:recovery_prompt:${generatedResult.briefing_date}` ||
+    generatedRow.generation_category !== 'recovery_prompt' ||
+    generatedRow.delivery_date !== generatedResult.briefing_date ||
+    generatedRow.metadata?.contract_version !== 'notification-generation-v1' ||
+    generatedRow.metadata?.origin !== 'deterministic_backend' ||
+    generatedRow.metadata?.category !== 'recovery_prompt' ||
+    generatedRow.metadata?.reason_code !== 'current_recovery_mode' ||
+    generatedRow.metadata?.delivery_date !== generatedResult.briefing_date ||
+    generatedRow.metadata?.timezone !== 'Europe/Berlin' ||
+    generatedRow.metadata?.source_kind !== 'daily_state' ||
+    typeof generatedRow.metadata?.source_id !== 'string' ||
+    !isIsoTimestamp(generatedRow.metadata?.source_generated_at) ||
+    generatedRow.metadata?.sensitive_copy_excluded !== true ||
+    generatedRow.metadata?.llm_used !== false ||
+    !sameInstant(generatedRow.in_app_delivered_at, receipt.delivered_at) ||
+    !sameInstant(generatedRow.created_at, generatedRow.due_at) ||
+    !sameInstant(generatedRow.updated_at, generatedRow.created_at)
+  ) {
+    throw new Error(
+      `Generated Notification row or provenance was invalid: ${JSON.stringify(generatedRows)}`,
+    );
+  }
+  const serializedGeneratedRow = JSON.stringify(generatedRow);
+  for (const privateText of [
+    editedEveningTomorrowPriority,
+    'workload',
+    'mostly_controllable',
+  ]) {
+    if (serializedGeneratedRow.includes(privateText)) {
+      throw new Error(
+        `Generated Notification leaked private source content: ${JSON.stringify(privateText)}`,
+      );
+    }
+  }
+
+  const repeated = await scheduledRefreshRequest({
+    profile_ids: [userId],
+    window_days: 7,
+    limit: 1,
+    include_recommendations: false,
+    include_notifications: true,
+  });
+  const repeatedResult = repeated.results?.[0];
+  if (
+    repeated.processed !== 1 ||
+    repeated.succeeded !== 1 ||
+    repeated.failed !== 0 ||
+    repeatedResult?.selection_reason !== 'notification_delivery' ||
+    repeatedResult?.notification_status !== 'duplicate' ||
+    repeatedResult?.notification_created_count !== 0 ||
+    repeatedResult?.notification_duplicate_count !== 1
+  ) {
+    throw new Error(
+      `Repeated Notification generation was not deduplicated: ${JSON.stringify(repeated)}`,
+    );
+  }
+  await assertRows(
+    `notifications?select=id,generation_key,in_app_delivered_at&user_id=eq.${userId}&generation_key=eq.${encodeURIComponent(generatedRow.generation_key)}`,
+    (rows) =>
+      rows.length === 1 &&
+      rows[0].id === generatedRow.id &&
+      sameInstant(rows[0].in_app_delivered_at, receipt.delivered_at),
+    'one stable generated Notification after scheduler replay',
+  );
+
+  const receiptReplayResponse = await notificationDeliveryRequest(
+    accessToken,
+    generatedRow.id,
+  );
+  const receiptReplayText = await receiptReplayResponse.text();
+  const receiptReplay = JSON.parse(receiptReplayText);
+  if (
+    receiptReplayResponse.status !== 200 ||
+    receiptReplay.contract_version !== 'in-app-notification-delivery-v1' ||
+    receiptReplay.notification_id !== generatedRow.id ||
+    receiptReplay.channel !== 'in_app' ||
+    receiptReplay.replayed !== true ||
+    !sameInstant(receiptReplay.delivered_at, receipt.delivered_at)
+  ) {
+    throw new Error(
+      `In-app receipt replay changed delivery identity: ${receiptReplayResponse.status} ${receiptReplayText}`,
+    );
+  }
+
+  let currentSettings = consentSettings;
+  currentSettings = await updateNotificationSettingsForE2e(
+    accessToken,
+    currentSettings,
+    {
+      categories: {
+        focus_prompt: false,
+        recovery_prompt: false,
+        weekly_summary: false,
+      },
+    },
+  );
+  const categoryRejected = await notificationGenerationRpcForE2e({
+    userId,
+    generatedRow,
+    generationKey: `notification-generation-v1:e2e-category:${runId}`,
+  });
+  if (stableJson(categoryRejected) !== stableJson({ status: 'category_disabled' })) {
+    throw new Error(
+      `Disabled Notification category was not rejected: ${JSON.stringify(categoryRejected)}`,
+    );
+  }
+
+  currentSettings = await updateNotificationSettingsForE2e(
+    accessToken,
+    currentSettings,
+    {
+      categories: {
+        focus_prompt: false,
+        recovery_prompt: true,
+        weekly_summary: false,
+      },
+      quietHours: { starts_at: '00:00', ends_at: '00:00' },
+    },
+  );
+  const quietRejected = await notificationGenerationRpcForE2e({
+    userId,
+    generatedRow,
+    generationKey: `notification-generation-v1:e2e-quiet:${runId}`,
+  });
+  if (stableJson(quietRejected) !== stableJson({ status: 'quiet_hours' })) {
+    throw new Error(
+      `All-day Notification quiet window was not enforced: ${JSON.stringify(quietRejected)}`,
+    );
+  }
+
+  currentSettings = await updateNotificationSettingsForE2e(
+    accessToken,
+    currentSettings,
+    { quietHours: null, dailyLimit: 1 },
+  );
+  const capRejected = await notificationGenerationRpcForE2e({
+    userId,
+    generatedRow,
+    generationKey: `notification-generation-v1:e2e-cap:${runId}`,
+  });
+  if (stableJson(capRejected) !== stableJson({ status: 'daily_limit' })) {
+    throw new Error(
+      `Notification local-date cap was not enforced: ${JSON.stringify(capRejected)}`,
+    );
+  }
+  const duplicateBeforePolicy = await notificationGenerationRpcForE2e({
+    userId,
+    generatedRow,
+    notificationId: crypto.randomUUID(),
+    generationKey: generatedRow.generation_key,
+  });
+  if (
+    duplicateBeforePolicy.status !== 'duplicate' ||
+    duplicateBeforePolicy.notification_id !== generatedRow.id
+  ) {
+    throw new Error(
+      `Existing Notification identity did not win retry dedupe: ${JSON.stringify(duplicateBeforePolicy)}`,
+    );
+  }
+
+  const directPreferenceWrite = await authenticatedRestRequest(
+    `notification_preferences?user_id=eq.${userId}`,
+    accessToken,
+    { method: 'PATCH', body: { in_app_delivery_enabled: false } },
+  );
+  if (directPreferenceWrite.response.ok) {
+    throw new Error(
+      `Authenticated Flutter authority unexpectedly mutated Notification delivery settings: ${directPreferenceWrite.text}`,
+    );
+  }
+
+  currentSettings = await updateNotificationSettingsForE2e(
+    accessToken,
+    currentSettings,
+    { dailyLimit: 2 },
+  );
+  assertNotificationSettingsResponse(currentSettings, {
+    enabled: true,
+    replayed: false,
+    categories: {
+      focus_prompt: false,
+      recovery_prompt: true,
+      weekly_summary: false,
+    },
+    quietHours: null,
+    dailyLimit: 2,
+  });
+
+  await page.goto(appRoute('/alerts'), { waitUntil: 'domcontentloaded' });
+  await waitForFlutterShell(page);
+  await enableFlutterSemantics(page);
+  await expectText(page, 'Inbox');
+  await expectText(page, generatedRow.title);
+  await expectText(page, 'Deterministic · no LLM');
+  await expectText(
+    page,
+    `Generated from the current Daily State for ${generatedRow.delivery_date} in Europe/Berlin.`,
+  );
+  await assertFlutterTextAbsent(
+    page,
+    notificationLifecycleTitle,
+    'dismissed lifecycle item beside generated Notification',
+  );
+  await assertFlutterTextAbsent(
+    page,
+    notificationFutureTitle,
+    'future-due item beside generated Notification',
+  );
 }
 
 async function assertDisposableAccountExportAndDeletion({
@@ -4468,6 +4961,198 @@ async function notificationActionRequest(accessToken, notificationId, body) {
   );
 }
 
+async function notificationSettingsRequest(accessToken, method, body) {
+  return fetch(`${aiServiceBaseUrl}/v1/notifications/settings`, {
+    method,
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
+    },
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+  });
+}
+
+function assertNotificationSettingsResponse(
+  payload,
+  {
+    enabled,
+    replayed,
+    categories,
+    quietHours,
+    dailyLimit,
+  },
+) {
+  const expectedKeys = [
+    'categories',
+    'consent_version',
+    'consented_at',
+    'contract_version',
+    'daily_limit',
+    'disabled_at',
+    'in_app_delivery_enabled',
+    'quiet_hours',
+    'replayed',
+    'updated_at',
+  ];
+  if (
+    payload === null ||
+    typeof payload !== 'object' ||
+    Array.isArray(payload) ||
+    stableJson(Object.keys(payload).sort()) !== stableJson(expectedKeys) ||
+    payload.contract_version !== 'notification-settings-v1' ||
+    payload.in_app_delivery_enabled !== enabled ||
+    payload.replayed !== replayed ||
+    !isIsoTimestamp(payload.updated_at) ||
+    typeof payload.categories !== 'object' ||
+    payload.categories === null ||
+    Array.isArray(payload.categories) ||
+    stableJson(Object.keys(payload.categories).sort()) !==
+      stableJson(['focus_prompt', 'recovery_prompt', 'weekly_summary']) ||
+    !Object.values(payload.categories).every((value) => typeof value === 'boolean') ||
+    (categories !== undefined &&
+      stableJson(payload.categories) !== stableJson(categories)) ||
+    (quietHours !== undefined &&
+      stableJson(payload.quiet_hours) !== stableJson(quietHours)) ||
+    (dailyLimit !== undefined && payload.daily_limit !== dailyLimit) ||
+    !Number.isInteger(payload.daily_limit) ||
+    payload.daily_limit < 1 ||
+    payload.daily_limit > 5 ||
+    (payload.quiet_hours !== null &&
+      (typeof payload.quiet_hours !== 'object' ||
+        stableJson(Object.keys(payload.quiet_hours).sort()) !==
+          stableJson(['ends_at', 'starts_at']) ||
+        !/^\d{2}:\d{2}$/.test(payload.quiet_hours.starts_at) ||
+        !/^\d{2}:\d{2}$/.test(payload.quiet_hours.ends_at))) ||
+    (enabled
+      ? payload.consent_version !== 'in-app-notification-consent-v1' ||
+        !isIsoTimestamp(payload.consented_at) ||
+        payload.disabled_at !== null
+      : payload.consented_at === null
+        ? payload.consent_version !== null || payload.disabled_at !== null
+        : payload.consent_version !== 'in-app-notification-consent-v1' ||
+          !isIsoTimestamp(payload.consented_at) ||
+          !isIsoTimestamp(payload.disabled_at))
+  ) {
+    throw new Error(
+      `Notification settings response violated its contract: ${JSON.stringify(payload)}`,
+    );
+  }
+}
+
+async function updateNotificationSettingsForE2e(
+  accessToken,
+  current,
+  changes,
+) {
+  const categories = changes.categories ?? current.categories;
+  const quietHours = Object.hasOwn(changes, 'quietHours')
+    ? changes.quietHours
+    : current.quiet_hours;
+  const dailyLimit = changes.dailyLimit ?? current.daily_limit;
+  const body = {
+    contract_version: 'notification-settings-v1',
+    request_id: crypto.randomUUID(),
+    expected_updated_at: current.updated_at,
+    in_app_delivery_enabled:
+      changes.enabled ?? current.in_app_delivery_enabled,
+    consent_version: 'in-app-notification-consent-v1',
+    categories,
+    quiet_hours: quietHours,
+    daily_limit: dailyLimit,
+  };
+  const response = await notificationSettingsRequest(
+    accessToken,
+    'PATCH',
+    body,
+  );
+  const text = await response.text();
+  let payload = null;
+  try {
+    payload = JSON.parse(text);
+  } catch (_) {
+    // The status assertion below reports the raw response.
+  }
+  if (response.status !== 200) {
+    throw new Error(
+      `Notification settings E2E update failed: ${response.status} ${text}`,
+    );
+  }
+  assertNotificationSettingsResponse(payload, {
+    enabled: body.in_app_delivery_enabled,
+    replayed: false,
+    categories,
+    quietHours,
+    dailyLimit,
+  });
+  return payload;
+}
+
+async function notificationDeliveryRequest(accessToken, notificationId) {
+  return fetch(
+    `${aiServiceBaseUrl}/v1/notifications/${notificationId}/delivery`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        contract_version: 'in-app-notification-delivery-v1',
+      }),
+    },
+  );
+}
+
+async function notificationGenerationRpcForE2e({
+  userId,
+  generatedRow,
+  generationKey,
+  notificationId = crypto.randomUUID(),
+}) {
+  const response = await fetch(
+    `${supabaseUrl}/rest/v1/rpc/create_generated_notification_v1`,
+    {
+      method: 'POST',
+      headers: {
+        apikey: serviceRoleKey,
+        Authorization: `Bearer ${serviceRoleKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        p_user_id: userId,
+        p_notification_id: notificationId,
+        p_generation_key: generationKey,
+        p_category: 'recovery_prompt',
+        p_delivery_date: generatedRow.delivery_date,
+        p_run_at: generatedRow.created_at,
+        p_timezone: generatedRow.metadata.timezone,
+        p_title: 'E2E policy guard candidate',
+        p_message: 'This fixed E2E candidate must remain policy controlled.',
+        p_type: 'coaching',
+        p_priority: 'medium',
+        p_action_url: '/dashboard',
+        p_reason_code: 'e2e_policy_guard',
+        p_source_kind: generatedRow.metadata.source_kind,
+        p_source_id: generatedRow.metadata.source_id,
+        p_source_generated_at: generatedRow.metadata.source_generated_at,
+      }),
+    },
+  );
+  const text = await response.text();
+  let payload = null;
+  try {
+    payload = JSON.parse(text);
+  } catch (_) {
+    // The status assertion below reports the raw response.
+  }
+  if (!response.ok) {
+    throw new Error(
+      `Notification generation policy RPC failed: ${response.status} ${text}`,
+    );
+  }
+  return payload;
+}
+
 function sameInstant(left, right) {
   const leftNanos = isoInstantNanoseconds(left);
   const rightNanos = isoInstantNanoseconds(right);
@@ -4968,7 +5653,7 @@ async function assertBoundedWeeklyReview(page, userId) {
   await expectText(page, manualHabitTitle);
   await expectText(page, setupHabitTitle);
 
-  await clickByText(page, 'Review in Setup');
+  await clickByText(page, 'Open Setup (no auto-apply)');
   await page.waitForURL('**/#/onboarding?edit=1');
   await waitForFlutterShell(page);
   await enableFlutterSemantics(page);

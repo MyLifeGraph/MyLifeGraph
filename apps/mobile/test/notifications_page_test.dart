@@ -443,7 +443,7 @@ void main() {
     expect(find.text('Inbox'), findsOneWidget);
     expect(
       find.text(
-        'Stored inbox items can be marked read or dismissed here. This app does not send notifications yet. Up to the latest 30 items are shown; the counts cover only the items shown.',
+        'Stored inbox items can be marked read or dismissed here. In-app banners require separate consent and appear only while the app is open; no push delivery is enabled. Up to the latest 30 items are shown.',
       ),
       findsOneWidget,
     );
@@ -496,7 +496,7 @@ void main() {
 
     await tester.drag(
       find.byType(CustomScrollView),
-      const Offset(0, -260),
+      const Offset(0, -340),
     );
     await tester.pumpAndSettle();
 

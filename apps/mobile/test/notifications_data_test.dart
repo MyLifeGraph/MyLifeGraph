@@ -390,6 +390,11 @@ Map<String, dynamic> _row({
     'read_at': readAt,
     'dismissed_at': dismissedAt,
     'due_at': dueAt,
+    'metadata': <String, dynamic>{},
+    'generation_key': null,
+    'generation_category': null,
+    'delivery_date': null,
+    'in_app_delivered_at': null,
   };
 }
 
