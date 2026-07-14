@@ -8,6 +8,7 @@ import '../datasources/optimization_mock_data_source.dart';
 import '../datasources/recommendations_api_data_source.dart';
 
 typedef AccessTokenProvider = FutureOr<String?> Function();
+typedef SkillsetProfileLoader = Future<SkillsetProfile> Function();
 
 class OptimizationRepositoryImpl implements OptimizationRepository {
   const OptimizationRepositoryImpl({
@@ -15,17 +16,20 @@ class OptimizationRepositoryImpl implements OptimizationRepository {
     required OptimizationMockDataSource mockDataSource,
     required RecommendationsApiDataSource recommendationsApiDataSource,
     required AccessTokenProvider accessTokenProvider,
+    SkillsetProfileLoader? skillsetProfileLoader,
     required bool allowDemoData,
   })  : _config = config,
         _mockDataSource = mockDataSource,
         _recommendationsApiDataSource = recommendationsApiDataSource,
         _accessTokenProvider = accessTokenProvider,
+        _skillsetProfileLoader = skillsetProfileLoader,
         _allowDemoData = allowDemoData;
 
   final AppConfig _config;
   final OptimizationMockDataSource _mockDataSource;
   final RecommendationsApiDataSource _recommendationsApiDataSource;
   final AccessTokenProvider _accessTokenProvider;
+  final SkillsetProfileLoader? _skillsetProfileLoader;
   final bool _allowDemoData;
 
   bool get _usesDemoData => _config.useMockData || _allowDemoData;
@@ -36,9 +40,12 @@ class OptimizationRepositoryImpl implements OptimizationRepository {
       return _mockDataSource.getSkillsetProfile();
     }
 
-    throw UnsupportedError(
-      'A real skillset profile data source is not implemented.',
-    );
+    if (!_config.isSupabaseConfigured || _skillsetProfileLoader == null) {
+      throw const SkillsetProfileAccessException(
+        'Authenticated skillset profiles require Supabase configuration.',
+      );
+    }
+    return _skillsetProfileLoader();
   }
 
   @override
@@ -86,6 +93,15 @@ class OptimizationRepositoryImpl implements OptimizationRepository {
     }
     return accessToken.trim();
   }
+}
+
+class SkillsetProfileAccessException implements Exception {
+  const SkillsetProfileAccessException(this.message);
+
+  final String message;
+
+  @override
+  String toString() => 'SkillsetProfileAccessException: $message';
 }
 
 enum RecommendationAccessFailure {

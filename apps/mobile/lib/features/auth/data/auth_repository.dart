@@ -10,17 +10,24 @@ import 'guest_setup_data_source.dart';
 import '../domain/app_session.dart';
 import '../domain/intake_response.dart';
 
+const localDeviceTimezoneMarker = 'device-local';
+
+typedef GoogleOAuthLauncher = Future<bool> Function(String redirectTo);
+
 class AuthRepository {
   AuthRepository(
     this._client, {
     required bool useMockData,
     GuestSetupDataSource guestSetupDataSource = const GuestSetupDataSource(),
+    GoogleOAuthLauncher? googleOAuthLauncher,
   })  : _useMockData = useMockData,
-        _guestSetupDataSource = guestSetupDataSource;
+        _guestSetupDataSource = guestSetupDataSource,
+        _googleOAuthLauncher = googleOAuthLauncher;
 
   final SupabaseClient _client;
   final bool _useMockData;
   final GuestSetupDataSource _guestSetupDataSource;
+  final GoogleOAuthLauncher? _googleOAuthLauncher;
 
   Stream<AuthState> get authStateChanges => _client.auth.onAuthStateChange;
 
@@ -45,7 +52,7 @@ class AuthRepository {
       id: 'local_guest',
       email: 'guest@personal-coach.local',
       name: prefs.getString(_Prefs.guestName) ?? 'Guest Coach User',
-      timezone: 'Europe/Berlin',
+      timezone: localDeviceTimezoneMarker,
       role: AppRole.guest,
       onboardingDone: prefs.getBool(_Prefs.guestOnboardingDone) ?? false,
       authProvider: 'guest',
@@ -81,6 +88,7 @@ class AuthRepository {
     final response = await _client.auth.signUp(
       email: email,
       password: password,
+      emailRedirectTo: authRedirectUrl(),
       data: {
         if (name != null && name.trim().isNotEmpty) 'display_name': name.trim(),
       },
@@ -101,10 +109,34 @@ class AuthRepository {
   }
 
   Future<void> signInWithGoogle() async {
-    await _client.auth.signInWithOAuth(
-      OAuthProvider.google,
-      redirectTo: kIsWeb ? Uri.base.origin : null,
+    final redirectTo = authRedirectUrl();
+    final opened = await (_googleOAuthLauncher?.call(redirectTo) ??
+        _client.auth.signInWithOAuth(
+          OAuthProvider.google,
+          redirectTo: redirectTo,
+        ));
+    if (!opened) {
+      throw const AuthException('Google sign-in could not be opened.');
+    }
+  }
+
+  Future<void> requestPasswordReset({required String email}) async {
+    await _client.auth.resetPasswordForEmail(
+      email.trim(),
+      redirectTo: authRedirectUrl(),
     );
+  }
+
+  Future<void> resendSignupConfirmation({required String email}) async {
+    await _client.auth.resend(
+      type: OtpType.signup,
+      email: email.trim(),
+      emailRedirectTo: authRedirectUrl(),
+    );
+  }
+
+  Future<void> updatePassword({required String password}) async {
+    await _client.auth.updateUser(UserAttributes(password: password));
   }
 
   Future<AppSession> continueAsGuest() async {
@@ -115,7 +147,7 @@ class AuthRepository {
         id: 'local_guest',
         email: 'guest@personal-coach.local',
         name: prefs.getString(_Prefs.guestName) ?? 'Guest Coach User',
-        timezone: 'Europe/Berlin',
+        timezone: localDeviceTimezoneMarker,
         role: AppRole.guest,
         onboardingDone: prefs.getBool(_Prefs.guestOnboardingDone) ?? false,
         authProvider: 'guest',
@@ -129,6 +161,15 @@ class AuthRepository {
     await _client.auth.signOut();
     await _clearGuestActiveFlag();
     _cachedSession = null;
+  }
+
+  Future<void> signOutAfterAccountDeletion() async {
+    try {
+      await _client.auth.signOut();
+    } finally {
+      await _clearGuestActiveFlag();
+      _cachedSession = null;
+    }
   }
 
   Future<AppProfile> ensureProfileForAuthUser(
@@ -152,7 +193,7 @@ class AuthRepository {
       'id': user.id,
       'email': email,
       'display_name': name,
-      'timezone': 'Europe/Berlin',
+      'timezone': 'UTC',
       'auth_provider': provider,
       'updated_at': now,
       'role': AppRole.user.databaseValue,
@@ -185,7 +226,7 @@ class AuthRepository {
       id: '${row['id'] ?? fallbackUser?.id ?? ''}',
       email: '${row['email'] ?? fallbackUser?.email ?? ''}',
       name: '${row['display_name'] ?? 'New User'}',
-      timezone: '${row['timezone'] ?? 'Europe/Berlin'}',
+      timezone: '${row['timezone'] ?? 'UTC'}',
       role: AppRole.fromDatabase(row['role']?.toString()),
       onboardingDone: row['onboarding_completed_at'] != null,
       authProvider: '${row['auth_provider'] ?? 'email'}',
@@ -260,6 +301,10 @@ class AuthRepository {
   }
 }
 
+const nativeAuthCallbackUrl = 'com.mylifegraph.app://login-callback/';
+
+String authRedirectUrl() => kIsWeb ? Uri.base.origin : nativeAuthCallbackUrl;
+
 bool usesLocalDemoAuthData({
   required bool useMockData,
   required AppProfile profile,
@@ -313,7 +358,7 @@ AppProfile localDemoProfileFromAuthUser(
     id: user.id,
     email: email,
     name: name,
-    timezone: 'Europe/Berlin',
+    timezone: localDeviceTimezoneMarker,
     role: AppRole.user,
     onboardingDone: false,
     authProvider: user.appMetadata['provider']?.toString() ?? 'email',

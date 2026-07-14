@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../../../core/constants/app_spacing.dart';
-import '../../../../core/navigation/app_routes.dart';
 import '../providers/auth_providers.dart';
 
 class AuthPage extends ConsumerStatefulWidget {
@@ -19,6 +17,8 @@ class _AuthPageState extends ConsumerState<AuthPage> {
   final _nameController = TextEditingController();
   bool _registrationMode = false;
   bool _submitting = false;
+  String? _accountHelpMessage;
+  bool _accountHelpFailed = false;
 
   @override
   void dispose() {
@@ -30,18 +30,12 @@ class _AuthPageState extends ConsumerState<AuthPage> {
 
   @override
   Widget build(BuildContext context) {
-    ref.listen(authControllerProvider, (previous, next) {
-      final session = next.valueOrNull;
-      if (session == null) {
-        return;
-      }
-      context.go(
-        session.requiresOnboarding ? AppRoutes.onboarding : AppRoutes.dashboard,
-      );
-    });
-
     final authState = ref.watch(authControllerProvider);
+    final authNotice = ref.watch(authNoticeProvider);
     final isBusy = _submitting || authState.isLoading;
+    final authErrorMessage = authState.error is AuthConfigurationException
+        ? 'Synced sign-in is not configured. Configure Supabase or continue as guest.'
+        : 'Authentication failed. Check your details and connection, then try again.';
 
     return Scaffold(
       body: SafeArea(
@@ -78,17 +72,37 @@ class _AuthPageState extends ConsumerState<AuthPage> {
                     ),
                     const SizedBox(height: AppSpacing.md),
                     Text(
-                      'Start as guest, connect later, and give the app your timetable so reminders understand school, study blocks, recovery windows, and deadlines.',
+                      'Use a synced account or explore locally as a guest. Guest Setup stays on this device and is not copied into a later account; only guest check-ins may migrate best-effort.',
                       style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                             color: _AuthColors.muted(context),
                             height: 1.55,
                           ),
                     ),
+                    if (authNotice != null) ...[
+                      const SizedBox(height: AppSpacing.md),
+                      _InlineStatus(
+                        message: authNotice.message,
+                        isError: authNotice.isError,
+                      ),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton(
+                          onPressed: () => ref
+                              .read(authNoticeProvider.notifier)
+                              .state = null,
+                          child: const Text('Dismiss'),
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: AppSpacing.xl),
                     _ModeTabs(
                       registrationMode: _registrationMode,
                       onChanged: (value) {
-                        setState(() => _registrationMode = value);
+                        setState(() {
+                          _registrationMode = value;
+                          _accountHelpMessage = null;
+                        });
+                        _clearAuthNotice();
                       },
                     ),
                     const SizedBox(height: AppSpacing.md),
@@ -99,11 +113,41 @@ class _AuthPageState extends ConsumerState<AuthPage> {
                       passwordController: _passwordController,
                       onSubmit: isBusy ? null : _submitEmail,
                     ),
+                    if (authState.hasError) ...[
+                      const SizedBox(height: AppSpacing.md),
+                      _InlineStatus(
+                        message: authErrorMessage,
+                        isError: true,
+                      ),
+                    ],
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton(
+                        onPressed: isBusy
+                            ? null
+                            : _registrationMode
+                                ? _resendSignupConfirmation
+                                : _requestPasswordReset,
+                        child: Text(
+                          _registrationMode
+                              ? 'Resend confirmation email'
+                              : 'Forgot password?',
+                        ),
+                      ),
+                    ),
+                    if (_accountHelpMessage != null) ...[
+                      const SizedBox(height: AppSpacing.sm),
+                      _InlineStatus(
+                        message: _accountHelpMessage!,
+                        isError: _accountHelpFailed,
+                      ),
+                    ],
                     const SizedBox(height: AppSpacing.md),
                     _AuthActionTile(
                       icon: Icons.person_outline,
                       title: 'Continue as guest',
-                      subtitle: 'Best for testing right now',
+                      subtitle:
+                          'Local demo. Setup stays on this device and will not move to a later account.',
                       onTap: isBusy ? null : _continueAsGuest,
                     ),
                     const SizedBox(height: AppSpacing.md),
@@ -113,10 +157,6 @@ class _AuthPageState extends ConsumerState<AuthPage> {
                       subtitle: 'Continue with your Google account',
                       onTap: isBusy ? null : _signInWithGoogle,
                     ),
-                    if (authState.hasError) ...[
-                      const SizedBox(height: AppSpacing.md),
-                      _InlineError(message: '${authState.error}'),
-                    ],
                     if (isBusy) ...[
                       const SizedBox(height: AppSpacing.lg),
                       const LinearProgressIndicator(),
@@ -132,6 +172,7 @@ class _AuthPageState extends ConsumerState<AuthPage> {
   }
 
   Future<void> _submitEmail() async {
+    _clearAuthNotice();
     final email = _emailController.text.trim();
     final password = _passwordController.text;
     if (email.isEmpty || password.length < 6) {
@@ -149,7 +190,15 @@ class _AuthPageState extends ConsumerState<AuthPage> {
                   name: _nameController.text.trim(),
                 );
         if (!created && mounted) {
-          _showMessage('Check your email to confirm the registration.');
+          final registrationState = ref.read(authControllerProvider);
+          if (registrationState.hasError) {
+            return;
+          }
+          setState(() {
+            _accountHelpFailed = false;
+            _accountHelpMessage =
+                'Check your email to confirm registration. You can resend the confirmation here if needed.';
+          });
         }
       } else {
         await ref.read(authControllerProvider.notifier).signInWithEmail(
@@ -165,22 +214,107 @@ class _AuthPageState extends ConsumerState<AuthPage> {
   }
 
   Future<void> _continueAsGuest() async {
+    _clearAuthNotice();
     await ref.read(authControllerProvider.notifier).continueAsGuest();
   }
 
   Future<void> _signInWithGoogle() async {
+    _clearAuthNotice();
     setState(() => _submitting = true);
     try {
       await ref.read(authControllerProvider.notifier).signInWithGoogle();
-    } catch (error) {
-      _showMessage(
-        'Google sign-in could not start. Check Supabase OAuth settings.',
-      );
+    } catch (_) {
+      if (mounted) {
+        _showMessage(
+          'Google sign-in could not start. Check Supabase OAuth settings.',
+        );
+      }
     } finally {
       if (mounted) {
         setState(() => _submitting = false);
       }
     }
+  }
+
+  Future<void> _requestPasswordReset() async {
+    _clearAuthNotice();
+    final email = _emailController.text.trim();
+    if (!_looksLikeEmail(email)) {
+      setState(() {
+        _accountHelpFailed = true;
+        _accountHelpMessage = 'Enter your account email first.';
+      });
+      return;
+    }
+    await _runAccountHelp(
+      () => ref
+          .read(authControllerProvider.notifier)
+          .requestPasswordReset(email: email),
+      success:
+          'If that account exists, a password-reset link has been sent. Open it on this device to choose a new password.',
+      failure:
+          'The password-reset email could not be requested. Check your connection and try again.',
+    );
+  }
+
+  Future<void> _resendSignupConfirmation() async {
+    _clearAuthNotice();
+    final email = _emailController.text.trim();
+    if (!_looksLikeEmail(email)) {
+      setState(() {
+        _accountHelpFailed = true;
+        _accountHelpMessage = 'Enter the registration email first.';
+      });
+      return;
+    }
+    await _runAccountHelp(
+      () => ref
+          .read(authControllerProvider.notifier)
+          .resendSignupConfirmation(email: email),
+      success: 'If confirmation is still pending, a new email has been sent.',
+      failure:
+          'The confirmation email could not be resent. Check your connection and try again.',
+    );
+  }
+
+  Future<void> _runAccountHelp(
+    Future<void> Function() operation, {
+    required String success,
+    required String failure,
+  }) async {
+    setState(() {
+      _submitting = true;
+      _accountHelpMessage = null;
+    });
+    try {
+      await operation();
+      if (mounted) {
+        setState(() {
+          _accountHelpFailed = false;
+          _accountHelpMessage = success;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _accountHelpFailed = true;
+          _accountHelpMessage = failure;
+        });
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _submitting = false);
+      }
+    }
+  }
+
+  bool _looksLikeEmail(String value) {
+    final at = value.indexOf('@');
+    return at > 0 && at < value.length - 1;
+  }
+
+  void _clearAuthNotice() {
+    ref.read(authNoticeProvider.notifier).state = null;
   }
 
   void _showMessage(String message) {
@@ -309,36 +443,58 @@ class _AuthActionTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
+    final borderRadius = BorderRadius.circular(28);
+    return Semantics(
+      button: true,
+      enabled: onTap != null,
+      label: title,
+      hint: subtitle,
       onTap: onTap,
-      child: _AuthSurface(
-        child: Row(
-          children: [
-            leading ??
-                Icon(
-                  icon,
-                  color: Theme.of(context).colorScheme.primary,
-                  size: 30,
-                ),
-            const SizedBox(width: AppSpacing.lg),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+      child: ExcludeSemantics(
+        child: Material(
+          color: _AuthColors.panel(context),
+          shape: RoundedRectangleBorder(
+            borderRadius: borderRadius,
+            side: BorderSide(color: _AuthColors.border(context), width: 2),
+          ),
+          child: InkWell(
+            borderRadius: borderRadius,
+            onTap: onTap,
+            child: Padding(
+              padding: const EdgeInsets.all(AppSpacing.lg),
+              child: Row(
                 children: [
-                  Text(title, style: Theme.of(context).textTheme.titleMedium),
-                  const SizedBox(height: AppSpacing.xs),
-                  Text(
-                    subtitle,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: _AuthColors.muted(context),
+                  leading ??
+                      Icon(
+                        icon,
+                        color: Theme.of(context).colorScheme.primary,
+                        size: 30,
+                      ),
+                  const SizedBox(width: AppSpacing.lg),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title,
+                          style: Theme.of(context).textTheme.titleMedium,
                         ),
+                        const SizedBox(height: AppSpacing.xs),
+                        Text(
+                          subtitle,
+                          style:
+                              Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                    color: _AuthColors.muted(context),
+                                  ),
+                        ),
+                      ],
+                    ),
                   ),
+                  const Icon(Icons.chevron_right),
                 ],
               ),
             ),
-            const Icon(Icons.chevron_right),
-          ],
+          ),
         ),
       ),
     );
@@ -426,21 +582,32 @@ class _AuthSurface extends StatelessWidget {
   }
 }
 
-class _InlineError extends StatelessWidget {
-  const _InlineError({required this.message});
+class _InlineStatus extends StatelessWidget {
+  const _InlineStatus({required this.message, required this.isError});
 
   final String message;
+  final bool isError;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        color: const Color(0xFFFF8F70).withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(18),
+    return Semantics(
+      liveRegion: true,
+      container: true,
+      label: isError ? 'Error. $message' : message,
+      child: ExcludeSemantics(
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(AppSpacing.md),
+          decoration: BoxDecoration(
+            color: (isError
+                    ? const Color(0xFFFF8F70)
+                    : Theme.of(context).colorScheme.primary)
+                .withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(18),
+          ),
+          child: Text(message, style: Theme.of(context).textTheme.bodyMedium),
+        ),
       ),
-      child: Text(message, style: Theme.of(context).textTheme.bodyMedium),
     );
   }
 }

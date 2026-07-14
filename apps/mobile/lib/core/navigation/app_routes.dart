@@ -3,6 +3,7 @@ class AppRoutes {
 
   static const dashboard = '/dashboard';
   static const auth = '/auth';
+  static const passwordRecovery = '/auth/recovery';
   static const onboarding = '/onboarding';
   static const settings = '/settings';
   static const calendarIntegration = '/settings/integrations/calendar';

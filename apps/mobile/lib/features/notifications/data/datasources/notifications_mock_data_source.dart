@@ -16,7 +16,11 @@ class NotificationsMockDataSource {
         priority: 'high',
         actionUrl: null,
         createdAt: now.subtract(const Duration(minutes: 12)),
+        updatedAt: now.subtract(const Duration(minutes: 12)),
         isRead: false,
+        readAt: null,
+        dismissedAt: null,
+        dueAt: null,
       ),
       AppNotification(
         id: 'recovery_check',
@@ -26,7 +30,11 @@ class NotificationsMockDataSource {
         priority: 'medium',
         actionUrl: '/daily-check-in',
         createdAt: now.subtract(const Duration(hours: 2)),
+        updatedAt: now.subtract(const Duration(hours: 2)),
         isRead: false,
+        readAt: null,
+        dismissedAt: null,
+        dueAt: null,
       ),
       AppNotification(
         id: 'weekly_profile',
@@ -36,7 +44,11 @@ class NotificationsMockDataSource {
         priority: 'low',
         actionUrl: '/insights',
         createdAt: now.subtract(const Duration(days: 1)),
+        updatedAt: now.subtract(const Duration(hours: 20)),
         isRead: true,
+        readAt: now.subtract(const Duration(hours: 20)),
+        dismissedAt: null,
+        dueAt: null,
       ),
     ];
   }

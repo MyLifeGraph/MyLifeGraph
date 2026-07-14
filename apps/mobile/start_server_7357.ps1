@@ -17,6 +17,13 @@ if (Test-Path -LiteralPath $envPath) {
 }
 
 function Get-DefineValue($name, $fallback) {
+    $processValue = [Environment]::GetEnvironmentVariable($name, "Process")
+    # An explicitly empty process value is still an override. This lets a
+    # caller clear a value from .env (especially Supabase credentials or the
+    # Coach surface flag) without editing that file.
+    if ($null -ne $processValue) {
+        return $processValue
+    }
     if ($defines.ContainsKey($name) -and $defines[$name].Length -gt 0) {
         return $defines[$name]
     }
@@ -30,6 +37,7 @@ $useMockData = Get-DefineValue "USE_MOCK_DATA" "true"
 $supabaseUrl = Get-DefineValue "SUPABASE_URL" ""
 $supabaseAnonKey = Get-DefineValue "SUPABASE_ANON_KEY" ""
 $aiServiceBaseUrl = Get-DefineValue "AI_SERVICE_BASE_URL" "http://localhost:8000"
+$coachSurfaceEnabled = Get-DefineValue "COACH_SURFACE_ENABLED" ""
 
 & $flutterBin pub get
 if ($LASTEXITCODE -ne 0) {
@@ -41,7 +49,8 @@ if ($LASTEXITCODE -ne 0) {
     --dart-define=USE_MOCK_DATA=$useMockData `
     --dart-define=SUPABASE_URL=$supabaseUrl `
     --dart-define=SUPABASE_ANON_KEY=$supabaseAnonKey `
-    --dart-define=AI_SERVICE_BASE_URL=$aiServiceBaseUrl
+    --dart-define=AI_SERVICE_BASE_URL=$aiServiceBaseUrl `
+    --dart-define=COACH_SURFACE_ENABLED=$coachSurfaceEnabled
 if ($LASTEXITCODE -ne 0) {
     exit $LASTEXITCODE
 }

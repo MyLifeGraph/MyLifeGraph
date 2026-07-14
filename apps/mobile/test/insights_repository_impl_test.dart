@@ -3,6 +3,7 @@ import 'package:my_life_graph/features/insights/data/datasources/insights_mock_d
 import 'package:my_life_graph/features/insights/data/datasources/insights_supabase_data_source.dart';
 import 'package:my_life_graph/features/insights/data/repositories/insights_repository_impl.dart';
 import 'package:my_life_graph/features/insights/domain/entities/correlation.dart';
+import 'package:my_life_graph/features/insights/domain/entities/insight.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 void main() {
@@ -31,29 +32,201 @@ void main() {
     expect(points, isEmpty);
   });
 
-  test('does not substitute mock points when a real source fails', () async {
+  test('bounds legacy all-time and oversized windows to 90 days', () async {
+    final source = _CapturingSupabaseDataSource();
+    final repository = InsightsRepositoryImpl(
+      mockDataSource: const _SentinelMockDataSource(),
+      supabaseDataSource: source,
+      allowMockData: false,
+    );
+
+    await repository.getCorrelationDataPoints(windowDays: -1);
+    await repository.getCorrelationDataPoints(windowDays: 365);
+
+    expect(source.windowDayRequests, [90, 90]);
+  });
+
+  test('propagates a real correlation source failure', () async {
     final repository = InsightsRepositoryImpl(
       mockDataSource: const _SentinelMockDataSource(),
       supabaseDataSource: _ThrowingSupabaseDataSource(),
       allowMockData: false,
     );
 
-    final points = await repository.getCorrelationDataPoints(windowDays: 14);
-
-    expect(points, isEmpty);
+    expect(
+      repository.getCorrelationDataPoints(windowDays: 14),
+      throwsA(isA<StateError>()),
+    );
   });
 
-  test('returns empty real points when Supabase is unavailable', () async {
+  test('reports missing real correlation configuration as an error', () async {
     final repository = InsightsRepositoryImpl(
       mockDataSource: const _SentinelMockDataSource(),
       allowMockData: false,
     );
 
-    final points = await repository.getCorrelationDataPoints(windowDays: 14);
+    expect(
+      repository.getCorrelationDataPoints(windowDays: 14),
+      throwsA(isA<StateError>()),
+    );
+  });
 
-    expect(points, isEmpty);
+  test('propagates real discovered-insight failures', () async {
+    final repository = InsightsRepositoryImpl(
+      mockDataSource: const _SentinelMockDataSource(),
+      supabaseDataSource: _ThrowingSupabaseDataSource(),
+      allowMockData: false,
+    );
+
+    expect(repository.getInsights(), throwsA(isA<StateError>()));
+  });
+
+  test('reports missing real discovered-insight configuration as an error',
+      () async {
+    final repository = InsightsRepositoryImpl(
+      mockDataSource: const _SentinelMockDataSource(),
+      allowMockData: false,
+    );
+
+    expect(repository.getInsights(), throwsA(isA<StateError>()));
+  });
+
+  test('keeps nullable persisted insight confidence honest', () {
+    const mapper = InsightSupabaseRowMapper();
+    final withoutConfidence = mapper.fromRow(
+      _insightRow(confidence: null),
+    );
+    final withConfidence = mapper.fromRow(
+      _insightRow(confidence: 0.82),
+    );
+
+    expect(withoutConfidence.confidence, isNull);
+    expect(withoutConfidence.confidenceLabel, 'Confidence not stored');
+    expect(withConfidence.confidence, 0.82);
+    expect(withConfidence.confidenceLabel, '82% confidence');
+  });
+
+  test('rejects malformed persisted insight confidence', () {
+    const mapper = InsightSupabaseRowMapper();
+
+    expect(
+      () => mapper.fromRow(_insightRow(confidence: '0.82')),
+      throwsFormatException,
+    );
+    expect(
+      () => mapper.fromRow(_insightRow(confidence: 1.2)),
+      throwsFormatException,
+    );
+  });
+
+  test('uses local task days for UTC query bounds and deadline buckets', () {
+    const offset = Duration(hours: 2);
+    final localDates = InsightsLocalDatePolicy(
+      localizer: (timestamp) => DateTime.fromMicrosecondsSinceEpoch(
+        timestamp.toUtc().microsecondsSinceEpoch + offset.inMicroseconds,
+        isUtc: true,
+      ),
+      localMidnightToUtc: (localDate) => DateTime.utc(
+        localDate.year,
+        localDate.month,
+        localDate.day,
+      ).subtract(offset),
+    );
+
+    final range = localDates.taskDeadlineUtcRange(
+      startDate: '2026-07-01',
+      endDate: '2026-07-02',
+    );
+
+    expect(range.startInclusive, DateTime.utc(2026, 6, 30, 22));
+    expect(range.endExclusive, DateTime.utc(2026, 7, 2, 22));
+    expect(
+      localDates.taskDeadlineDateKey(DateTime.utc(2026, 7, 1, 21, 59)),
+      '2026-07-01',
+    );
+    expect(
+      localDates.taskDeadlineDateKey(DateTime.utc(2026, 7, 1, 22, 1)),
+      '2026-07-02',
+    );
+  });
+
+  test('paginates through every row beyond one response page', () async {
+    const paginator = InsightsQueryPaginator(pageSize: 2);
+    final sourceRows = List.generate(5, (index) => {'id': 'row-$index'});
+    final requestedRanges = <(int, int)>[];
+
+    final rows = await paginator.load((from, to) async {
+      requestedRanges.add((from, to));
+      if (from >= sourceRows.length) {
+        return const <Map<String, dynamic>>[];
+      }
+      final end = to + 1 > sourceRows.length ? sourceRows.length : to + 1;
+      return sourceRows.sublist(
+        from,
+        end,
+      );
+    });
+
+    expect(rows.map((row) => row['id']), [
+      'row-0',
+      'row-1',
+      'row-2',
+      'row-3',
+      'row-4',
+    ]);
+    expect(requestedRanges, [(0, 1), (2, 3), (4, 5)]);
+  });
+
+  test('accepts the exact pagination bound after an empty sentinel page',
+      () async {
+    const paginator = InsightsQueryPaginator(pageSize: 2, maxRows: 4);
+    final sourceRows = List.generate(4, (index) => {'id': 'row-$index'});
+    final requestedRanges = <(int, int)>[];
+
+    final rows = await paginator.load((from, to) async {
+      requestedRanges.add((from, to));
+      if (from >= sourceRows.length) {
+        return const <Map<String, dynamic>>[];
+      }
+      final end = to + 1 > sourceRows.length ? sourceRows.length : to + 1;
+      return sourceRows.sublist(from, end);
+    });
+
+    expect(rows, hasLength(4));
+    expect(requestedRanges, [(0, 1), (2, 3), (4, 4)]);
+  });
+
+  test('fails explicitly when a source exceeds the pagination bound', () async {
+    const paginator = InsightsQueryPaginator(pageSize: 2, maxRows: 4);
+    final sourceRows = List.generate(5, (index) => {'id': 'row-$index'});
+
+    await expectLater(
+      paginator.load((from, to) async {
+        if (from >= sourceRows.length) {
+          return const <Map<String, dynamic>>[];
+        }
+        final end = to + 1 > sourceRows.length ? sourceRows.length : to + 1;
+        return sourceRows.sublist(from, end);
+      }),
+      throwsA(
+        isA<StateError>().having(
+          (error) => error.message,
+          'message',
+          contains('exceeds the 4-row verification limit'),
+        ),
+      ),
+    );
   });
 }
+
+Map<String, dynamic> _insightRow({required Object? confidence}) => {
+      'id': 'insight-1',
+      'title': 'Stored pattern',
+      'description': 'A persisted non-causal observation.',
+      'confidence': confidence,
+      'category': 'Recovery',
+      'priority': 'medium',
+    };
 
 class _SentinelMockDataSource extends InsightsMockDataSource {
   const _SentinelMockDataSource();
@@ -82,8 +255,27 @@ class _EmptySupabaseDataSource extends InsightsSupabaseDataSource {
   }
 }
 
+class _CapturingSupabaseDataSource extends InsightsSupabaseDataSource {
+  _CapturingSupabaseDataSource() : super(_testSupabaseClient());
+
+  final windowDayRequests = <int>[];
+
+  @override
+  Future<List<CorrelationDataPoint>> getCorrelationDataPoints({
+    required int windowDays,
+  }) async {
+    windowDayRequests.add(windowDays);
+    return const [];
+  }
+}
+
 class _ThrowingSupabaseDataSource extends InsightsSupabaseDataSource {
   _ThrowingSupabaseDataSource() : super(_testSupabaseClient());
+
+  @override
+  Future<List<Insight>> getInsights() async {
+    throw StateError('real source failed');
+  }
 
   @override
   Future<List<CorrelationDataPoint>> getCorrelationDataPoints({

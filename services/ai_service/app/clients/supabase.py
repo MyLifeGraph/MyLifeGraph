@@ -1,4 +1,6 @@
+import json
 from collections.abc import Mapping, Sequence
+from decimal import Decimal
 from typing import Any
 
 import httpx
@@ -10,6 +12,10 @@ QueryParams = Mapping[str, str] | Sequence[tuple[str, str]]
 
 
 class SupabaseConfigurationError(RuntimeError):
+    pass
+
+
+class SupabaseResponseTooLargeError(RuntimeError):
     pass
 
 
@@ -42,7 +48,14 @@ class SupabaseRestClient:
         table: str,
         *,
         params: QueryParams,
+        max_response_bytes: int | None = None,
     ) -> list[dict[str, Any]]:
+        if max_response_bytes is not None:
+            return await self._select_bounded(
+                table,
+                params=params,
+                max_response_bytes=max_response_bytes,
+            )
         async with httpx.AsyncClient(timeout=self._timeout_seconds) as client:
             response = await client.get(
                 f"{self._url}/rest/v1/{table}",
@@ -51,6 +64,55 @@ class SupabaseRestClient:
             )
         response.raise_for_status()
         data = response.json()
+        if not isinstance(data, list):
+            raise ValueError(f"Expected list response from Supabase table {table}.")
+        return data
+
+    async def _select_bounded(
+        self,
+        table: str,
+        *,
+        params: QueryParams,
+        max_response_bytes: int,
+    ) -> list[dict[str, Any]]:
+        if max_response_bytes <= 0:
+            raise ValueError("max_response_bytes must be positive")
+        body = bytearray()
+        async with httpx.AsyncClient(timeout=self._timeout_seconds) as client:
+            async with client.stream(
+                "GET",
+                f"{self._url}/rest/v1/{table}",
+                params=params,
+                headers=self._rest_headers(),
+            ) as response:
+                response.raise_for_status()
+                content_length = response.headers.get("Content-Length")
+                if content_length is not None:
+                    try:
+                        declared_bytes = int(content_length)
+                    except ValueError:
+                        declared_bytes = None
+                    if (
+                        declared_bytes is not None
+                        and declared_bytes > max_response_bytes
+                    ):
+                        raise SupabaseResponseTooLargeError(
+                            "Supabase response exceeds the configured byte bound.",
+                        )
+                async for chunk in response.aiter_bytes(
+                    chunk_size=min(64 * 1024, max_response_bytes + 1),
+                ):
+                    if len(body) + len(chunk) > max_response_bytes:
+                        raise SupabaseResponseTooLargeError(
+                            "Supabase response exceeds the configured byte bound.",
+                        )
+                    body.extend(chunk)
+        try:
+            data = json.loads(body, parse_float=Decimal)
+        except RecursionError as exc:
+            raise ValueError(
+                f"Invalid JSON response from Supabase table {table}.",
+            ) from exc
         if not isinstance(data, list):
             raise ValueError(f"Expected list response from Supabase table {table}.")
         return data

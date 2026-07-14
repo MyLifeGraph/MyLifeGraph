@@ -19,35 +19,32 @@ class InsightsRepositoryImpl implements InsightsRepository {
 
   @override
   Future<List<Insight>> getInsights() async {
-    if (_allowMockData || _supabaseDataSource == null) {
+    if (_allowMockData) {
       return _mockDataSource.getInsights();
     }
-
-    try {
-      final items = await _supabaseDataSource.getInsights();
-      return items;
-    } catch (_) {
-      return const [];
+    final source = _supabaseDataSource;
+    if (source == null) {
+      throw StateError('Account insights are not configured.');
     }
+
+    return source.getInsights();
   }
 
   @override
   Future<List<CorrelationDataPoint>> getCorrelationDataPoints({
     required int windowDays,
   }) async {
+    final boundedWindowDays = normalizeInsightsWindowDays(windowDays);
     if (_allowMockData) {
-      return _mockDataSource.getCorrelationDataPoints(windowDays: windowDays);
+      return _mockDataSource.getCorrelationDataPoints(
+        windowDays: boundedWindowDays,
+      );
     }
-    if (_supabaseDataSource == null) {
-      return const [];
+    final source = _supabaseDataSource;
+    if (source == null) {
+      throw StateError('Account insight correlations are not configured.');
     }
 
-    try {
-      return await _supabaseDataSource.getCorrelationDataPoints(
-        windowDays: windowDays,
-      );
-    } catch (_) {
-      return const [];
-    }
+    return source.getCorrelationDataPoints(windowDays: boundedWindowDays);
   }
 }

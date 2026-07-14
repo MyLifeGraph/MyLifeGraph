@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 final appConfigProvider = Provider<AppConfig>(
@@ -11,6 +12,7 @@ class AppConfig {
     required this.supabaseAnonKey,
     required this.aiServiceBaseUrl,
     required this.useMockData,
+    this.coachSurfaceEnabled = true,
   });
 
   factory AppConfig.fromEnvironment() {
@@ -27,15 +29,28 @@ class AppConfig {
       defaultValue: 'http://localhost:8000',
     );
 
-    return const AppConfig(
-      environment: String.fromEnvironment(
-        'APP_ENV',
-        defaultValue: 'development',
-      ),
+    const environment = String.fromEnvironment(
+      'APP_ENV',
+      defaultValue: 'development',
+    );
+    const coachSurfaceOverride = String.fromEnvironment(
+      'COACH_SURFACE_ENABLED',
+      defaultValue: '',
+    );
+    return AppConfig(
+      environment: environment,
       supabaseUrl: supabaseUrl,
       supabaseAnonKey: supabaseAnonKey,
       aiServiceBaseUrl: aiServiceBaseUrl,
-      useMockData: bool.fromEnvironment('USE_MOCK_DATA', defaultValue: false),
+      useMockData: const bool.fromEnvironment(
+        'USE_MOCK_DATA',
+        defaultValue: false,
+      ),
+      coachSurfaceEnabled: resolveCoachSurfaceEnabled(
+        environment: environment,
+        releaseMode: kReleaseMode,
+        explicitValue: coachSurfaceOverride,
+      ),
     );
   }
 
@@ -44,7 +59,19 @@ class AppConfig {
   final String supabaseAnonKey;
   final String aiServiceBaseUrl;
   final bool useMockData;
+  final bool coachSurfaceEnabled;
 
   bool get isSupabaseConfigured =>
       supabaseUrl.isNotEmpty && supabaseAnonKey.isNotEmpty;
+}
+
+bool resolveCoachSurfaceEnabled({
+  required String environment,
+  required bool releaseMode,
+  String explicitValue = '',
+}) {
+  if (explicitValue.isNotEmpty) {
+    return explicitValue == 'true';
+  }
+  return environment != 'production' && !releaseMode;
 }

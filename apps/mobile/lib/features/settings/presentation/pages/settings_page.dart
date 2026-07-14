@@ -2,12 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/capabilities/app_surface_capabilities.dart';
 import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/theme/theme_mode_provider.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_page.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
+import '../../domain/account_settings.dart';
+import '../providers/account_settings_providers.dart';
 
 class SettingsPage extends ConsumerStatefulWidget {
   const SettingsPage({super.key});
@@ -18,13 +21,22 @@ class SettingsPage extends ConsumerStatefulWidget {
 
 class _SettingsPageState extends ConsumerState<SettingsPage> {
   bool _isSigningOut = false;
+  bool _isSavingTimezone = false;
+  bool _isExporting = false;
+  bool _isDeleting = false;
 
   @override
   Widget build(BuildContext context) {
     final session = ref.watch(authControllerProvider).valueOrNull;
     final profile = session?.profile;
+    final capabilities = ref.watch(appSurfaceCapabilitiesProvider);
     final themeMode = ref.watch(appThemeModeProvider);
     final lightModeEnabled = themeMode == ThemeMode.light;
+    final syncedAccount =
+        session?.isAuthenticated == true && capabilities.canUseSyncedExecution;
+    final profileTimezone = capabilities.isLocalDemo && profile != null
+        ? 'Device local (${DateTime.now().timeZoneName})'
+        : profile?.timezone;
 
     return AppPage(
       title: 'Settings',
@@ -38,7 +50,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               const SizedBox(height: AppSpacing.md),
               _ProfileValue(label: 'Name', value: profile?.name),
               _ProfileValue(label: 'Email', value: profile?.email),
-              _ProfileValue(label: 'Timezone', value: profile?.timezone),
+              _ProfileValue(label: 'Timezone', value: profileTimezone),
               _ProfileValue(
                 label: 'Account',
                 value: session == null
@@ -48,6 +60,35 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                         : 'Synced account',
                 isLast: true,
               ),
+              const SizedBox(height: AppSpacing.md),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: syncedAccount && !_isSavingTimezone
+                      ? _chooseTimezone
+                      : null,
+                  icon: _isSavingTimezone
+                      ? const SizedBox.square(
+                          dimension: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.public_outlined),
+                  label: Text(
+                    syncedAccount
+                        ? 'Change timezone'
+                        : 'Local dates follow this device',
+                  ),
+                ),
+              ),
+              if (!syncedAccount) ...[
+                const SizedBox(height: AppSpacing.sm),
+                Text(
+                  capabilities.isLocalDemo
+                      ? 'Guest/demo capture dates use this device clock; no account timezone is stored.'
+                      : 'Timezone changes are available only for a synced account.',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
             ],
           ),
         ),
@@ -66,15 +107,28 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         AppCard(
           padding: EdgeInsets.zero,
           child: ListTile(
-            leading: const Icon(Icons.forum_outlined),
-            title: const Text('Coach'),
+            leading: const Icon(Icons.notifications_active_outlined),
+            title: const Text('Reminder preference'),
             subtitle: const Text(
-              'Ask for bounded guidance and manage Coach data use.',
+              'Stores your opt-in and quiet hours only. Notification delivery is not enabled.',
             ),
             trailing: const Icon(Icons.chevron_right),
-            onTap: () => context.go(AppRoutes.coach),
+            onTap: () => context.go('${AppRoutes.onboarding}?edit=1'),
           ),
         ),
+        if (capabilities.canShowCoachSurface)
+          AppCard(
+            padding: EdgeInsets.zero,
+            child: ListTile(
+              leading: const Icon(Icons.forum_outlined),
+              title: const Text('Coach'),
+              subtitle: const Text(
+                'Ask for bounded guidance and manage Coach data use.',
+              ),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => context.go(AppRoutes.coach),
+            ),
+          ),
         AppCard(
           padding: EdgeInsets.zero,
           child: ListTile(
@@ -89,18 +143,65 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         ),
         AppCard(
           padding: EdgeInsets.zero,
+          child: Column(
+            children: [
+              ListTile(
+                enabled: syncedAccount && !_isExporting && !_isDeleting,
+                leading: _isExporting
+                    ? const SizedBox.square(
+                        dimension: 24,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.download_outlined),
+                title: const Text('Export data'),
+                subtitle: Text(
+                  syncedAccount
+                      ? 'Save or share a JSON copy of your account data.'
+                      : 'Available only for a synced account.',
+                ),
+                onTap: syncedAccount && !_isExporting && !_isDeleting
+                    ? _exportData
+                    : null,
+              ),
+              const Divider(height: 1),
+              ListTile(
+                enabled: syncedAccount && !_isDeleting && !_isExporting,
+                leading: _isDeleting
+                    ? const SizedBox.square(
+                        dimension: 24,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : Icon(
+                        Icons.delete_forever_outlined,
+                        color: syncedAccount
+                            ? Theme.of(context).colorScheme.error
+                            : null,
+                      ),
+                title: const Text('Delete account'),
+                subtitle: Text(
+                  syncedAccount
+                      ? 'Permanently delete your account and owned data. Requires a sign-in within the last 15 minutes.'
+                      : 'A local guest has no synced account to delete.',
+                ),
+                onTap: syncedAccount && !_isDeleting && !_isExporting
+                    ? _confirmDeleteAccount
+                    : null,
+              ),
+            ],
+          ),
+        ),
+        AppCard(
+          padding: EdgeInsets.zero,
           child: SwitchListTile(
             value: lightModeEnabled,
-            onChanged: (value) {
-              ref.read(appThemeModeProvider.notifier).setLightMode(value);
-            },
+            onChanged: _setLightMode,
             secondary: Icon(
               lightModeEnabled
                   ? Icons.light_mode_outlined
                   : Icons.dark_mode_outlined,
             ),
             title: const Text('Light mode'),
-            subtitle: const Text('Applies until the app is restarted.'),
+            subtitle: const Text('Saved on this device.'),
           ),
         ),
         AppCard(
@@ -122,10 +223,169 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     );
   }
 
+  Future<void> _chooseTimezone() async {
+    final profile = ref.read(authControllerProvider).valueOrNull?.profile;
+    if (profile == null) return;
+    final timezone = await showDialog<String>(
+      context: context,
+      builder: (context) => _TimezoneDialog(current: profile.timezone),
+    );
+    if (!mounted || timezone == null || timezone == profile.timezone) return;
+    final accountRepository = ref.read(accountSettingsRepositoryProvider);
+    final authController = ref.read(authControllerProvider.notifier);
+    setState(() => _isSavingTimezone = true);
+    try {
+      final saved = await accountRepository.updateTimezone(timezone);
+      authController.updateProfileTimezone(saved);
+      if (mounted) {
+        _showMessage('Timezone updated to $saved.');
+      }
+    } on AccountTimezoneRejectedException {
+      if (mounted) {
+        _showMessage(
+          'Timezone was not recognized. Choose another IANA timezone.',
+        );
+      }
+    } on AccountProfileUpdateOutcomeUnknownException {
+      if (mounted) {
+        _showMessage(
+          'Timezone update could not be confirmed. Select the same timezone again to retry safely, or sign in again to verify it before choosing another.',
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        _showMessage('Could not update the timezone. Try again.');
+      }
+    } finally {
+      if (mounted) setState(() => _isSavingTimezone = false);
+    }
+  }
+
+  Future<void> _exportData() async {
+    final accountRepository = ref.read(accountSettingsRepositoryProvider);
+    final exportSaver = ref.read(accountExportSaverProvider);
+    final sharePositionOrigin = _sharePositionOrigin();
+    setState(() => _isExporting = true);
+    try {
+      final export = await accountRepository.exportAccount();
+      if (!mounted) return;
+      final result = await exportSaver.save(
+        suggestedName: _exportFileName(DateTime.now().toUtc()),
+        export: export,
+        sharePositionOrigin: sharePositionOrigin,
+      );
+      if (!mounted) return;
+      _showMessage(
+        switch (result) {
+          AccountExportSaveResult.saved => 'Account export saved.',
+          AccountExportSaveResult.shared =>
+            'Account export handoff opened on this device.',
+          AccountExportSaveResult.cancelled =>
+            'Export cancelled. No destination was selected.',
+          AccountExportSaveResult.shareDismissed =>
+            'Share dismissed. No destination was selected; the platform may retain a temporary protected cache copy until cleanup.',
+        },
+      );
+    } on AccountExportTooLargeException {
+      if (mounted) {
+        _showMessage(
+          'This account exceeds the V1 export limits. Retrying unchanged will not help; reduce deletable history or request a larger export workflow.',
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        _showMessage('Could not export account data. Try again.');
+      }
+    } finally {
+      if (mounted) setState(() => _isExporting = false);
+    }
+  }
+
+  Rect? _sharePositionOrigin() {
+    final renderObject = context.findRenderObject();
+    if (renderObject is! RenderBox || !renderObject.hasSize) {
+      return null;
+    }
+    return renderObject.localToGlobal(Offset.zero) & renderObject.size;
+  }
+
+  Future<void> _confirmDeleteAccount() async {
+    final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (_) => const _DeleteAccountDialog(),
+        ) ??
+        false;
+    if (!mounted || !confirmed) return;
+    final accountRepository = ref.read(accountSettingsRepositoryProvider);
+    final authController = ref.read(authControllerProvider.notifier);
+    final authNotice = ref.read(authNoticeProvider.notifier);
+    setState(() => _isDeleting = true);
+    try {
+      await accountRepository.deleteAccount();
+    } on AccountRecentAuthenticationRequiredException {
+      if (mounted) {
+        _showMessage(
+          'For safety, sign out and sign in again, then return here to delete the account.',
+        );
+        setState(() => _isDeleting = false);
+      }
+      return;
+    } on AccountDeletionOutcomeUnknownException {
+      authNotice.state = const AuthNotice(
+        'Deletion could not be confirmed. Sign in again; if the account remains, retry deletion.',
+        isError: true,
+      );
+      try {
+        await authController.finalizeDeletedAccount();
+      } catch (_) {
+        // The controller still clears the local session in its finally block.
+      }
+      if (mounted) setState(() => _isDeleting = false);
+      return;
+    } catch (_) {
+      if (mounted) {
+        _showMessage('Could not delete the account. You remain signed in.');
+      }
+      if (mounted) setState(() => _isDeleting = false);
+      return;
+    }
+    authNotice.state = const AuthNotice(
+      'Account and canonical synced data deleted.',
+    );
+    try {
+      await authController.finalizeDeletedAccount();
+    } catch (_) {
+      if (mounted) {
+        _showMessage(
+          'The account was deleted and the local session was closed. Remote sign-out cleanup could not be confirmed.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isDeleting = false);
+    }
+  }
+
+  Future<void> _setLightMode(bool enabled) async {
+    final controller = ref.read(appThemeModeProvider.notifier);
+    final saved = await controller.setLightMode(enabled);
+    if (!saved && mounted) {
+      _showMessage('Could not save the appearance setting. Try again.');
+    }
+  }
+
+  void _showMessage(String message) {
+    ScaffoldMessenger.of(context)
+      ..clearSnackBars()
+      ..showSnackBar(
+        SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
+      );
+  }
+
   Future<void> _signOut() async {
+    final authController = ref.read(authControllerProvider.notifier);
     setState(() => _isSigningOut = true);
     try {
-      await ref.read(authControllerProvider.notifier).signOut();
+      await authController.signOut();
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -140,6 +400,163 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         setState(() => _isSigningOut = false);
       }
     }
+  }
+}
+
+String _exportFileName(DateTime utcNow) {
+  String two(int value) => value.toString().padLeft(2, '0');
+  return 'mylifegraph-export-${utcNow.year}-${two(utcNow.month)}-'
+      '${two(utcNow.day)}.json';
+}
+
+class _TimezoneDialog extends StatefulWidget {
+  const _TimezoneDialog({required this.current});
+
+  final String current;
+
+  @override
+  State<_TimezoneDialog> createState() => _TimezoneDialogState();
+}
+
+class _TimezoneDialogState extends State<_TimezoneDialog> {
+  static const _customValue = '__custom_iana_timezone__';
+  String? _selected;
+  late final TextEditingController _customController;
+
+  @override
+  void initState() {
+    super.initState();
+    final curated = isSupportedAccountTimezone(widget.current);
+    _selected = curated ? widget.current : _customValue;
+    _customController = TextEditingController(
+      text: curated ? '' : widget.current,
+    );
+  }
+
+  @override
+  void dispose() {
+    _customController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      scrollable: true,
+      title: const Text('Account timezone'),
+      content: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 420),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            DropdownButtonFormField<String>(
+              initialValue: _selected,
+              isExpanded: true,
+              decoration: const InputDecoration(
+                labelText: 'IANA timezone',
+                helperText:
+                    'Used for local dates, briefings, reviews, and budgets.',
+              ),
+              items: [
+                for (final timezone in supportedAccountTimezones)
+                  DropdownMenuItem(value: timezone, child: Text(timezone)),
+                const DropdownMenuItem(
+                  value: _customValue,
+                  child: Text('Enter another IANA timezone…'),
+                ),
+              ],
+              onChanged: (value) => setState(() => _selected = value),
+            ),
+            if (_selected == _customValue) ...[
+              const SizedBox(height: AppSpacing.md),
+              TextField(
+                controller: _customController,
+                autofocus: true,
+                decoration: const InputDecoration(
+                  labelText: 'Custom IANA timezone',
+                  hintText: 'Africa/Johannesburg',
+                  helperText: 'The account service validates the zone.',
+                ),
+                onChanged: (_) => setState(() {}),
+              ),
+            ],
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: !isValidAccountTimezone(_selectedTimezone)
+              ? null
+              : () => Navigator.of(context).pop(_selectedTimezone.trim()),
+          child: const Text('Save timezone'),
+        ),
+      ],
+    );
+  }
+
+  String get _selectedTimezone =>
+      _selected == _customValue ? _customController.text : _selected ?? '';
+}
+
+class _DeleteAccountDialog extends StatefulWidget {
+  const _DeleteAccountDialog();
+
+  @override
+  State<_DeleteAccountDialog> createState() => _DeleteAccountDialogState();
+}
+
+class _DeleteAccountDialogState extends State<_DeleteAccountDialog> {
+  final _confirmationController = TextEditingController();
+
+  @override
+  void dispose() {
+    _confirmationController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final confirmed = _confirmationController.text == 'DELETE';
+    return AlertDialog(
+      scrollable: true,
+      title: const Text('Delete account permanently?'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'This permanently deletes the synced account and owned data. This action cannot be undone. For safety, you must have signed in within the last 15 minutes.',
+          ),
+          const SizedBox(height: AppSpacing.md),
+          TextField(
+            controller: _confirmationController,
+            autofocus: true,
+            decoration: const InputDecoration(
+              labelText: 'Type DELETE to confirm',
+            ),
+            onChanged: (_) => setState(() {}),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(false),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: confirmed ? () => Navigator.of(context).pop(true) : null,
+          style: FilledButton.styleFrom(
+            backgroundColor: Theme.of(context).colorScheme.error,
+            foregroundColor: Theme.of(context).colorScheme.onError,
+          ),
+          child: const Text('Delete account'),
+        ),
+      ],
+    );
   }
 }
 

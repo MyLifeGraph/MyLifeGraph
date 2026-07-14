@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/navigation/app_router.dart';
 import 'core/theme/app_theme.dart';
 import 'core/theme/theme_mode_provider.dart';
+import 'core/widgets/offline_status_banner.dart';
 
 class PersonalOptimizationApp extends ConsumerWidget {
   const PersonalOptimizationApp({super.key});
@@ -20,6 +21,9 @@ class PersonalOptimizationApp extends ConsumerWidget {
       darkTheme: AppTheme.dark,
       themeMode: themeMode,
       routerConfig: router,
+      builder: (context, child) => OfflineStatusBanner(
+        child: child ?? const SizedBox.shrink(),
+      ),
     );
   }
 }

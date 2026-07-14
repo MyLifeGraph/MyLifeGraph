@@ -72,6 +72,14 @@ FastAPI service boundary for recommendation and future ML workflows.
   model fallback. Only a deliberate Coach send may call it; all other service
   workflows remain deterministic/no-model. It is not a production provider.
   See `../../docs/phase-10-controlled-coach-plan.md`.
+- `/v1/account/profile`, `/v1/account/export`, and `/v1/account` expose the
+  bearer-derived V1 timezone, bounded JSON portability, and confirmed permanent
+  deletion boundary. The client never supplies an owner id. See
+  `../../docs/v1-account-controls-contract.md`.
+- `POST /v1/notifications/{notification_id}/actions` exposes strict,
+  bearer-derived `notification-lifecycle-v1` read/unread/dismiss commands
+  through a retry-safe service-role RPC. It does not generate or deliver
+  notifications. See `../../docs/notification-lifecycle-v1-contract.md`.
 - The repository contains no deployed cron, background worker, Phase 7
   notification sender, vector search, autonomous agent, or deployable LLM
   provider.
@@ -283,6 +291,33 @@ POST   /v1/coach/memories/{memory_id}/selection
 DELETE /v1/coach/memories/{memory_id}/selection
 ```
 
+Stored Inbox lifecycle uses one bearer-authenticated endpoint:
+
+```text
+POST /v1/notifications/{notification_id}/actions
+```
+
+The strict request contains one UUID, `mark_read|mark_unread|dismiss`, and the
+loaded row's aware `expected_updated_at`. Exact replay is mutation-free;
+request-id reinterpretation or stale state is `409`, a foreign row is the same
+owner-safe `404`, and two unresolved persistence attempts are explicit `502`.
+Direct authenticated Notification DML remains forbidden.
+
+V1 account controls are authenticated and owner-derived:
+
+```text
+PATCH  /v1/account/profile
+GET    /v1/account/export
+DELETE /v1/account
+```
+
+The delete body must be exactly `{"confirmation":"DELETE"}`. The same verified
+bearer session must also contain recognized, non-refresh Supabase `amr`
+authentication evidence no more than 15 minutes old; missing, stale, invalid,
+refresh-only, or materially future evidence fails closed with `403` before the
+delete service runs. Do not exercise deletion against anything except an
+intentionally disposable account.
+
 Capability, history, and memory operations never call a model. Respond accepts
 only strict `coach-request-v1` with one UUID, a trimmed message of at most 2,000
 Unicode code points, and `context_scope=today`. It builds at most 32 KiB of
@@ -341,6 +376,14 @@ Its child environment is allowlisted and excludes the Supabase service-role key
 and every other application secret. The adapter is rejected outside development
 and is not a deployment design.
 
+From the repository root, `scripts/start_local_stack.sh` is the supported local
+supervisor for Supabase, FastAPI, Flutter, and the scheduled preparation loop.
+It derives the local service-role key and a run-scoped scheduler token only in
+memory. The loop invokes `python -m app.ops.local_daily_refresh --loop`, accepts
+only a loopback FastAPI URL, disables redirects/proxies, and prints only
+aggregate counts. Use `python -m app.ops.local_daily_refresh --once` inside an
+already configured backend environment for an explicit one-shot run.
+
 The Setup apply RPC comes from
 `20260710180000_atomic_intake_v1_setup_apply.sql`. Execute is revoked from
 `public`, `anon`, and `authenticated` and granted only to `service_role`. Its
@@ -381,6 +424,27 @@ make profile identity and onboarding eligibility backend-owned, remove legacy
 service-role/atomic Intake authority. Real local PostgreSQL parallel
 claim/completion/deletion smokes completed on 2026-07-13 without deadlock or
 timeout and converged on the expected state.
+
+Permanent account deletion requires
+`20260713233000_v1_account_delete.sql`. Its exact-confirmation RPC is
+service-role-only, removes the owner's restrict-linked focus history before
+deleting `auth.users`, and verifies the canonical profile/product cascade in
+the same transaction. FastAPI additionally requires session-bound Supabase JWT
+`amr` sign-in evidence no more than 15 minutes old before invoking that RPC; a
+refresh-only or stale session receives `403` without a database mutation.
+
+Stored-Inbox lifecycle requires
+`20260714100000_notification_lifecycle_v1.sql`, followed by
+`20260714110000_account_export_lifestyle_entries_grant.sql`. The latter adds
+only the missing service-role `lifestyle_entries` read grant needed by the
+existing Account Export V1 contract; the preceding privilege guard closes
+unintended authority across every repo-owned product/ledger table: `anon` is
+fail-closed, authenticated `TRUNCATE`/`REFERENCES`/`TRIGGER` is removed while
+intended DML remains, backend projections stay read-only, and optional legacy
+tables stay frozen. It also hardens future `postgres` public-table defaults,
+prevents application and service roles from reusing the installed Auth trigger
+functions without removing their triggers, and adds the Notification-ledger
+child index plus non-validating timestamp-order checks for new or updated rows.
 
 JWT verification is isolated in the FastAPI auth dependency. Tests inject fake
 verifiers and repositories, so production or remote Supabase credentials are not

@@ -121,6 +121,48 @@ void main() {
     expect(find.text('No persisted Coach conversation yet.'), findsOneWidget);
   });
 
+  testWidgets('history dialog result is ignored after Coach unmounts',
+      (tester) async {
+    tester.view.physicalSize = const Size(1200, 2000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final repository = _FakeCoachRepository(
+      history: CoachHistory.fromJson(coachHistoryJson()),
+    );
+    final showCoach = ValueNotifier<bool>(true);
+    addTearDown(showCoach.dispose);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [coachRepositoryProvider.overrideWithValue(repository)],
+        child: MaterialApp(
+          home: Scaffold(
+            body: ValueListenableBuilder<bool>(
+              valueListenable: showCoach,
+              builder: (_, visible, __) =>
+                  visible ? const CoachPage() : const Text('Different page'),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await _scrollTo(tester, find.text('Conversation history'));
+    await tester.tap(find.text('Delete conversation'));
+    await tester.pumpAndSettle();
+
+    showCoach.value = false;
+    await tester.pump();
+    await tester.tap(
+      find.widgetWithText(FilledButton, 'Delete conversation'),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Different page'), findsOneWidget);
+    expect(repository.deleteHistoryCalls, 0);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('timeout keeps draft and advertises exact retry', (tester) async {
     final request = RequestOptions(path: '/v1/coach/respond');
     final repository = _FakeCoachRepository(

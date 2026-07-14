@@ -71,13 +71,14 @@ The app reads configuration from Dart defines in
 | `SUPABASE_URL` | empty | Enables Supabase when paired with anon key. |
 | `SUPABASE_ANON_KEY` | empty | Public anon key for Supabase client. |
 | `AI_SERVICE_BASE_URL` | `http://localhost:8000` | FastAPI service base URL. |
+| `COACH_SURFACE_ENABLED` | unset/fail-closed in release and production | Exact `true` explicitly exposes Coach; backend capability still controls sending. |
 
 Supabase is only initialized when both `SUPABASE_URL` and
 `SUPABASE_ANON_KEY` are non-empty.
 
 `USE_MOCK_DATA=true` forces product data surfaces to local/demo sources even
 when an authenticated Supabase session exists. Use `false` for real Setup,
-Evening/Morning capture, Dashboard, Recommendations, Insights, Notifications,
+Evening/Morning capture, Dashboard, Recommendations, Insights, Inbox,
 synced tasks/habits/focus sessions, Controlled Coach, and snapshot refresh
 behavior. Mock/demo
 auth boot skips remote profile access and overlays the locally applied Setup
@@ -98,8 +99,11 @@ and makes no snapshot request.
   migrated best-effort only when real, non-demo authentication succeeds with
   `USE_MOCK_DATA=false`.
 - Email/password auth requires Supabase configuration.
-- Google auth requires Supabase configuration and OAuth redirect settings for
-  `http://127.0.0.1:7357` and `http://localhost:7357`.
+- Google auth requires Supabase configuration and redirect allowlist entries for
+  `http://127.0.0.1:7357`, `http://localhost:7357`, and installed Android builds
+  additionally require `com.mylifegraph.app://login-callback/`. Signup,
+  recovery, and OAuth use that same Android callback. This repository contains
+  no iOS runner, so native iOS callback support is not claimed.
 
 First-run Setup uses explicit required selections and progressive optional
 goals, routines, context, and fixed commitments. `/onboarding?edit=1` loads the
@@ -152,6 +156,7 @@ and Phase 3 does not rank a briefing or call an LLM. See
 ## Main Routes
 
 - `/auth`
+- `/auth/recovery` (Supabase password-recovery event only)
 - `/onboarding` (`?edit=1` re-enters the durable Setup flow)
 - `/dashboard`
 - `/insights`
@@ -160,14 +165,39 @@ and Phase 3 does not rank a briefing or call an LLM. See
 - `/morning-calibration` (short typed Morning Calibration)
 - `/habit-completion` (Today Habits for authenticated real accounts)
 - `/habits` (manual Habit V1 management for authenticated real accounts)
-- `/alerts`
+- `/weekly-review` (authenticated, completed-week review)
+- `/alerts` (stored Inbox with authenticated read/unread/dismiss lifecycle;
+  notification generation and delivery are not implemented)
+- `/notifications` (compatibility redirect to `/alerts`)
 - `/daily-check-in` (redirects to Evening Shutdown)
 - `/deep-work` (real focus lifecycle for authenticated real accounts; local
   guest/demo redirects to Quick Action)
-- `/coach` (typed Controlled Coach for authenticated real accounts; guest/mock
-  shows local unavailability with zero Coach HTTP calls)
+- `/coach` (typed Controlled Coach; hidden/redirected in production and release
+  unless explicitly enabled; guest/mock makes zero Coach HTTP calls)
 - `/more` (compatibility alias to `/coach`)
 - `/settings`
+- `/settings/integrations/calendar` (optional authenticated `.ics` import)
+
+The global offline banner reports only that no network transport is available;
+it does not prove Supabase or FastAPI reachability. Synced writes are not queued.
+Guest/demo local persistence continues on the current device while offline.
+
+The synced-account JSON export is bounded and is not a backup, restore format,
+or transaction-wide snapshot. Web downloads and desktop saves use a chosen
+destination. Android uses the platform share sheet; the app removes its own
+dedicated temporary source best-effort, while the plugin or operating system
+may retain a protected cache copy until its cleanup. The source has an iOS
+branch, but this repository has no iOS runner or installed-iOS acceptance claim.
+Permanent deletion requires typed confirmation and session-bound Supabase
+sign-in evidence no more than 15 minutes old. A stale or refresh-only session
+stays signed in and receives an explicit sign-out/sign-in instruction.
+
+Insights visibly consumes the strict latest `skillset_profiles` row. Missing or
+malformed real rows remain an explicit retryable state; no demo profile is
+substituted into a real account.
+Correlation exploration offers only bounded 7/14/30/90-day windows and pages
+every contributing Supabase source with a hard explicit row ceiling; it neither
+labels a silently truncated result as all-time nor allocates unbounded history.
 
 Phase 10 replaces the gated canned `MorePage`/direct Supabase message path with
 a typed authenticated FastAPI Coach boundary. Flutter does not handle the
@@ -234,4 +264,8 @@ FLUTTER_BIN=/path/to/flutter bash scripts/e2e_web.sh
 For local Supabase reset E2E, service-role handling, artifacts, and known
 headless browser warnings, use `docs/verification.md` as the source of truth.
 
-Android builds require Android Studio or Android SDK command-line tools.
+Android builds require Android Studio or Android SDK command-line tools. Debug
+builds use debug signing. A distributable release intentionally fails until an
+ignored `android/key.properties` supplies `storePassword`, `keyPassword`,
+`keyAlias`, and `storeFile` for a private release keystore; release never falls
+back to the debug key.

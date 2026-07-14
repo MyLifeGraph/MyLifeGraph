@@ -8,6 +8,7 @@ import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../application/optimization_service.dart';
 import '../../data/datasources/optimization_mock_data_source.dart';
 import '../../data/datasources/recommendations_api_data_source.dart';
+import '../../data/datasources/skillset_profile_supabase_data_source.dart';
 import '../../data/repositories/optimization_repository_impl.dart';
 import '../../domain/entities/recommendation_feed.dart';
 import '../../domain/entities/skillset_profile.dart';
@@ -36,12 +37,16 @@ final recommendationAccessTokenProvider = Provider<AccessTokenProvider>((ref) {
 final optimizationRepositoryProvider = Provider<OptimizationRepository>((ref) {
   final config = ref.watch(appConfigProvider);
   final session = ref.watch(authControllerProvider).valueOrNull;
+  final client = ref.watch(supabaseClientProvider);
   return OptimizationRepositoryImpl(
     config: config,
     mockDataSource: ref.watch(optimizationMockDataSourceProvider),
     recommendationsApiDataSource:
         ref.watch(recommendationsApiDataSourceProvider),
     accessTokenProvider: ref.watch(recommendationAccessTokenProvider),
+    skillsetProfileLoader: client == null
+        ? null
+        : SkillsetProfileSupabaseDataSource(client).getLatestProfile,
     allowDemoData: usesRecommendationDemoData(
       config: config,
       session: session,

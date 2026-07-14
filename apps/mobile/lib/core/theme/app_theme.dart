@@ -16,6 +16,9 @@ class AppTheme {
   static const _lightSurfaceElevated = Color(0xFFEAF1F0);
   static const _lightTextPrimary = Color(0xFF101820);
   static const _lightTextSecondary = Color(0xFF607078);
+  static const _lightPrimary = Color(0xFF00796B);
+  static const _lightSecondary = Color(0xFF795900);
+  static const _lightDanger = Color(0xFFB3261E);
 
   static ThemeData get dark {
     final colorScheme = ColorScheme.fromSeed(
@@ -36,8 +39,8 @@ class AppTheme {
       splashFactory: NoSplash.splashFactory,
       splashColor: Colors.transparent,
       highlightColor: Colors.transparent,
-      focusColor: Colors.transparent,
-      hoverColor: Colors.transparent,
+      focusColor: _primary.withValues(alpha: 0.28),
+      hoverColor: _primary.withValues(alpha: 0.08),
       appBarTheme: const AppBarTheme(
         backgroundColor: _background,
         foregroundColor: _textPrimary,
@@ -75,28 +78,28 @@ class AppTheme {
         style: FilledButton.styleFrom(
           splashFactory: NoSplash.splashFactory,
         ).copyWith(
-          overlayColor: WidgetStateProperty.all(Colors.transparent),
+          overlayColor: _interactionOverlay(colorScheme.onPrimary),
         ),
       ),
       iconButtonTheme: IconButtonThemeData(
         style: IconButton.styleFrom(
           splashFactory: NoSplash.splashFactory,
         ).copyWith(
-          overlayColor: WidgetStateProperty.all(Colors.transparent),
+          overlayColor: _interactionOverlay(_primary),
         ),
       ),
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
           splashFactory: NoSplash.splashFactory,
         ).copyWith(
-          overlayColor: WidgetStateProperty.all(Colors.transparent),
+          overlayColor: _interactionOverlay(_primary),
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
           splashFactory: NoSplash.splashFactory,
         ).copyWith(
-          overlayColor: WidgetStateProperty.all(Colors.transparent),
+          overlayColor: _interactionOverlay(_primary),
         ),
       ),
       textTheme: const TextTheme(
@@ -150,9 +153,9 @@ class AppTheme {
     final colorScheme = ColorScheme.fromSeed(
       seedColor: _primary,
       brightness: Brightness.light,
-      primary: const Color(0xFF12BFA1),
-      secondary: _secondary,
-      error: _danger,
+      primary: _lightPrimary,
+      secondary: _lightSecondary,
+      error: _lightDanger,
       surface: _lightSurface,
     );
 
@@ -165,8 +168,8 @@ class AppTheme {
       splashFactory: NoSplash.splashFactory,
       splashColor: Colors.transparent,
       highlightColor: Colors.transparent,
-      focusColor: Colors.transparent,
-      hoverColor: Colors.transparent,
+      focusColor: _lightPrimary.withValues(alpha: 0.24),
+      hoverColor: _lightPrimary.withValues(alpha: 0.08),
       appBarTheme: const AppBarTheme(
         backgroundColor: _lightBackground,
         foregroundColor: _lightTextPrimary,
@@ -190,14 +193,14 @@ class AppTheme {
         iconTheme: WidgetStateProperty.resolveWith(
           (states) => IconThemeData(
             color: states.contains(WidgetState.selected)
-                ? const Color(0xFF12BFA1)
+                ? _lightPrimary
                 : _lightTextSecondary,
           ),
         ),
       ),
       bottomNavigationBarTheme: const BottomNavigationBarThemeData(
         backgroundColor: _lightSurface,
-        selectedItemColor: Color(0xFF12BFA1),
+        selectedItemColor: _lightPrimary,
         unselectedItemColor: _lightTextSecondary,
         type: BottomNavigationBarType.fixed,
         showUnselectedLabels: true,
@@ -215,39 +218,43 @@ class AppTheme {
         fillColor: _lightSurfaceElevated,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: BorderSide.none,
+          borderSide: const BorderSide(color: _lightTextSecondary),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(8),
+          borderSide: const BorderSide(color: _lightTextSecondary),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(8),
-          borderSide: const BorderSide(color: Color(0xFF12BFA1)),
+          borderSide: const BorderSide(color: _lightPrimary),
         ),
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
           splashFactory: NoSplash.splashFactory,
         ).copyWith(
-          overlayColor: WidgetStateProperty.all(Colors.transparent),
+          overlayColor: _interactionOverlay(colorScheme.onPrimary),
         ),
       ),
       iconButtonTheme: IconButtonThemeData(
         style: IconButton.styleFrom(
           splashFactory: NoSplash.splashFactory,
         ).copyWith(
-          overlayColor: WidgetStateProperty.all(Colors.transparent),
+          overlayColor: _interactionOverlay(_lightPrimary),
         ),
       ),
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
           splashFactory: NoSplash.splashFactory,
         ).copyWith(
-          overlayColor: WidgetStateProperty.all(Colors.transparent),
+          overlayColor: _interactionOverlay(_lightPrimary),
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
           splashFactory: NoSplash.splashFactory,
         ).copyWith(
-          overlayColor: WidgetStateProperty.all(Colors.transparent),
+          overlayColor: _interactionOverlay(_lightPrimary),
         ),
       ),
       textTheme: const TextTheme(
@@ -295,5 +302,20 @@ class AppTheme {
         ),
       ),
     );
+  }
+
+  static WidgetStateProperty<Color?> _interactionOverlay(Color color) {
+    return WidgetStateProperty.resolveWith((states) {
+      if (states.contains(WidgetState.focused)) {
+        return color.withValues(alpha: 0.28);
+      }
+      if (states.contains(WidgetState.pressed)) {
+        return color.withValues(alpha: 0.16);
+      }
+      if (states.contains(WidgetState.hovered)) {
+        return color.withValues(alpha: 0.08);
+      }
+      return null;
+    });
   }
 }

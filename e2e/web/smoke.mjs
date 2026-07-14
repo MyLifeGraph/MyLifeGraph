@@ -51,6 +51,49 @@ const coachApiMessage = `E2E explain one bounded next step ${runId}`;
 const coachUiMessage = `E2E UI Coach question ${runId}`;
 const coachSafetyMessage =
   `E2E safety check ${runId}: I am in immediate danger and might hurt myself.`;
+const notificationLifecycleTitle = `E2E inbox lifecycle ${runId}`;
+const notificationFutureTitle = `E2E future inbox item ${runId}`;
+const accountExportV1TableNames = [
+  'profiles',
+  'notification_preferences',
+  'daily_logs',
+  'behavioral_events',
+  'lifestyle_entries',
+  'tasks',
+  'schedule_items',
+  'notifications',
+  'coach_messages',
+  'memory_entries',
+  'ai_insights',
+  'recommendations',
+  'skillset_profiles',
+  'goals',
+  'habits',
+  'habit_logs',
+  'focus_sessions',
+  'intake_responses',
+  'user_state_snapshots',
+  'daily_briefings',
+  'decision_feedback',
+  'weekly_reviews',
+  'calendar_connections',
+  'calendar_imports',
+  'calendar_events',
+  'coach_requests',
+  'coach_usage_events',
+  'coach_memory_selections',
+];
+const accountExportV1SanitizedTables = [
+  'calendar_connections',
+  'calendar_imports',
+  'calendar_events',
+  'coach_requests',
+  'coach_usage_events',
+];
+const accountExportV1OmittedTables = {
+  calendar_request_identities: 'backend_only_anti_replay_ledger',
+  notification_action_requests: 'backend_only_anti_replay_ledger',
+};
 
 const browser = await chromium.launch({
   headless: !headed,
@@ -265,9 +308,11 @@ try {
   await clickByText(page, 'Save setup');
   await expectText(page, 'Setup was not saved. Your draft is still here.');
   await page.unroute(intakeCompleteUrl, loseAppliedResponse);
-  await expectText(page, setupGoalTitle);
-  await expectText(page, setupRoutineTitle);
-  await expectText(page, setupCommitmentTitle);
+  await scrollFlutterPage(page, -6000);
+  await scrollUntilTextInViewport(page, setupGoalTitle, { deltaY: 500 });
+  await scrollUntilTextInViewport(page, setupRoutineTitle, { deltaY: 500 });
+  await scrollUntilTextInViewport(page, setupCommitmentTitle, { deltaY: 500 });
+  await scrollFlutterPage(page, 2400);
   await waitForRows(
     `intake_responses?select=id,request_id,base_revision,revision,state,responses,metadata&user_id=eq.${user.id}&order=revision.asc`,
     (rows) =>
@@ -399,6 +444,10 @@ try {
   await scrollFlutterPage(page, 1400);
   await expectText(page, setupCommitmentTitle);
   await scrollFlutterPage(page, -2800);
+  // Flutter Web does not automatically scroll its internal viewport when
+  // Playwright focuses a semantics node near the fold. Keep the existing goal
+  // editor clear of the required-setup dropdown before editing it.
+  await scrollFlutterPage(page, 500);
   await fillByLabelOrPlaceholder(page, 'Goal title', editedSetupGoalTitle, 1);
   await scrollFlutterPage(page, 700);
   await selectDropdownOption(
@@ -2045,7 +2094,11 @@ try {
   await assertBoundedWeeklyReview(page, user.id);
   await assertBoundedCalendarImport(user.id);
   await assertCalendarImportUi(page, user.id);
-  await scrollFlutterPage(page, 2200);
+  await scrollFlutterPage(page, -20000);
+  await scrollUntilTextInViewport(page, 'Refresh recommendations', {
+    deltaY: 500,
+    buttonFirst: true,
+  });
   const [manualSnapshotResponse, manualRecommendationResponse] =
     await Promise.all([
       waitForAiPost(page, '/v1/snapshots/generate', 'manual snapshot refresh'),
@@ -2114,10 +2167,7 @@ try {
   await clickByText(page, 'Advanced correlation exploration');
   await expectText(page, 'Compare');
 
-  await page.goto(appRoute('/alerts'), { waitUntil: 'domcontentloaded' });
-  await waitForFlutterShell(page);
-  await enableFlutterSemantics(page);
-  await expectText(page, 'Notifications');
+  await assertNotificationLifecycle(page, user.id);
 
   await assertControlledCoach(page, user.id);
 
@@ -2731,6 +2781,18 @@ async function expectText(page, text) {
   }
 }
 
+async function assertFlutterTextAbsent(page, text, description) {
+  const exactTextCount = await page.getByText(text, { exact: true }).count();
+  const mergedLabelCount = await page
+    .getByLabel(text, { exact: false })
+    .count();
+  if (exactTextCount !== 0 || mergedLabelCount !== 0) {
+    throw new Error(
+      `Unexpected ${description}: text=${exactTextCount}, semantics=${mergedLabelCount}`,
+    );
+  }
+}
+
 async function assertRows(path, predicate, description) {
   const rows = await fetchRows(path, description);
   if (!predicate(rows)) {
@@ -3148,6 +3210,1307 @@ async function latestDailySnapshotGeneratedAt(userId) {
     return 0;
   }
   return Date.parse(rows[0].generated_at);
+}
+
+async function assertNotificationLifecycle(page, userId) {
+  const notificationId = crypto.randomUUID();
+  const futureNotificationId = crypto.randomUUID();
+  const createdAt = new Date(Date.now() - 60_000).toISOString();
+  const futureDueAt = new Date(Date.now() + 86_400_000).toISOString();
+  const inserted = await insertRows('notifications', [
+    {
+      id: notificationId,
+      user_id: userId,
+      title: notificationLifecycleTitle,
+      message: 'Stored Inbox lifecycle verification item.',
+      type: 'reminder',
+      priority: 'high',
+      is_read: false,
+      action_url: '/dashboard',
+      due_at: null,
+      metadata: {
+        source: 'e2e',
+        contract_version: 'notification-lifecycle-v1',
+      },
+      created_at: createdAt,
+      updated_at: createdAt,
+    },
+    {
+      id: futureNotificationId,
+      user_id: userId,
+      title: notificationFutureTitle,
+      message: 'This future Inbox item must remain hidden.',
+      type: 'reminder',
+      priority: 'low',
+      is_read: false,
+      action_url: null,
+      due_at: futureDueAt,
+      metadata: { source: 'e2e-future' },
+      created_at: createdAt,
+      updated_at: createdAt,
+    },
+  ]);
+  const initial = inserted.find((row) => row.id === notificationId);
+  if (
+    !initial ||
+    initial.is_read !== false ||
+    initial.read_at !== null ||
+    initial.dismissed_at !== null ||
+    !sameInstant(initial.updated_at, createdAt)
+  ) {
+    throw new Error(
+      `Notification lifecycle fixture has an invalid initial state: ${JSON.stringify(inserted)}`,
+    );
+  }
+
+  const accessToken = await signInAccessToken('Notification lifecycle');
+  await page.goto(appRoute('/alerts'), { waitUntil: 'domcontentloaded' });
+  await waitForFlutterShell(page);
+  await enableFlutterSemantics(page);
+  await expectText(page, 'Inbox');
+  await expectText(page, notificationLifecycleTitle);
+  await assertFlutterTextAbsent(
+    page,
+    notificationFutureTitle,
+    'future-due notification in the Inbox',
+  );
+
+  const markReadResponsePromise = waitForNotificationAction(
+    page,
+    notificationId,
+    'mark-read lifecycle action',
+  );
+  await clickByRoleName(
+    page,
+    'button',
+    `Mark read notification ${notificationLifecycleTitle}`,
+  );
+  const markReadResponse = await markReadResponsePromise;
+  const markReadRequest = assertNotificationActionRequest(
+    markReadResponse.request(),
+    {
+      notificationId,
+      command: 'mark_read',
+      expectedUpdatedAt: createdAt,
+    },
+    'mark-read lifecycle request',
+  );
+  const markRead = assertNotificationActionResponse(
+    await markReadResponse.json(),
+    {
+      notificationId,
+      command: 'mark_read',
+      replayed: false,
+      expectedUpdatedAt: createdAt,
+    },
+    'mark-read lifecycle response',
+  );
+  if (!sameInstant(markRead.read_at, markRead.updated_at)) {
+    throw new Error('Mark-read did not persist matching lifecycle timestamps.');
+  }
+  await page
+    .getByRole('button', {
+      name: `Mark unread notification ${notificationLifecycleTitle}`,
+      exact: true,
+    })
+    .waitFor({ state: 'visible' });
+  await assertRows(
+    `notifications?select=id,is_read,read_at,dismissed_at,updated_at&id=eq.${notificationId}`,
+    (rows) =>
+      rows.length === 1 &&
+      rows[0].is_read === true &&
+      sameInstant(rows[0].read_at, markRead.read_at) &&
+      rows[0].dismissed_at === null &&
+      sameInstant(rows[0].updated_at, markRead.updated_at),
+    'persisted mark-read notification lifecycle',
+  );
+
+  const replayResponse = await notificationActionRequest(
+    accessToken,
+    notificationId,
+    markReadRequest,
+  );
+  if (!replayResponse.ok) {
+    throw new Error(
+      `Exact notification replay failed: ${replayResponse.status} ${await replayResponse.text()}`,
+    );
+  }
+  const replay = assertNotificationActionResponse(
+    await replayResponse.json(),
+    {
+      notificationId,
+      command: 'mark_read',
+      replayed: true,
+      expectedUpdatedAt: createdAt,
+    },
+    'exact notification lifecycle replay',
+  );
+  if (
+    !sameInstant(replay.read_at, markRead.read_at) ||
+    replay.dismissed_at !== null ||
+    !sameInstant(replay.updated_at, markRead.updated_at)
+  ) {
+    throw new Error('Exact notification replay changed the persisted result.');
+  }
+
+  const reinterpretation = await notificationActionRequest(
+    accessToken,
+    notificationId,
+    {
+      ...markReadRequest,
+      command: 'mark_unread',
+      expected_updated_at: markRead.updated_at,
+    },
+  );
+  const reinterpretationText = await reinterpretation.text();
+  let reinterpretationBody = null;
+  try {
+    reinterpretationBody = JSON.parse(reinterpretationText);
+  } catch (_) {
+    // The exact JSON detail assertion below reports the raw response.
+  }
+  if (
+    reinterpretation.status !== 409 ||
+    reinterpretationBody?.detail !==
+      'Notification action request id was already used'
+  ) {
+    throw new Error(
+      `Notification request-id reinterpretation was not rejected exactly: ${reinterpretation.status} ${reinterpretationText}`,
+    );
+  }
+  await assertRows(
+    `notifications?select=id,is_read,read_at,dismissed_at,updated_at&id=eq.${notificationId}`,
+    (rows) =>
+      rows.length === 1 &&
+      rows[0].is_read === true &&
+      sameInstant(rows[0].read_at, markRead.read_at) &&
+      rows[0].dismissed_at === null &&
+      sameInstant(rows[0].updated_at, markRead.updated_at),
+    'unchanged notification after request-id reinterpretation conflict',
+  );
+
+  const staleAction = await notificationActionRequest(
+    accessToken,
+    notificationId,
+    {
+      contract_version: 'notification-lifecycle-v1',
+      request_id: crypto.randomUUID(),
+      command: 'mark_unread',
+      expected_updated_at: createdAt,
+    },
+  );
+  const staleActionText = await staleAction.text();
+  let staleActionBody = null;
+  try {
+    staleActionBody = JSON.parse(staleActionText);
+  } catch (_) {
+    // The exact JSON detail assertion below reports the raw response.
+  }
+  if (
+    staleAction.status !== 409 ||
+    staleActionBody?.detail !== 'Notification changed since it was loaded'
+  ) {
+    throw new Error(
+      `Stale notification action was not rejected exactly: ${staleAction.status} ${staleActionText}`,
+    );
+  }
+  await assertRows(
+    `notifications?select=id,is_read,read_at,dismissed_at,updated_at&id=eq.${notificationId}`,
+    (rows) =>
+      rows.length === 1 &&
+      rows[0].is_read === true &&
+      sameInstant(rows[0].read_at, markRead.read_at) &&
+      rows[0].dismissed_at === null &&
+      sameInstant(rows[0].updated_at, markRead.updated_at),
+    'unchanged notification after stale timestamp conflict',
+  );
+
+  const ownerRead = await authenticatedRestRequest(
+    `notifications?select=id,user_id,is_read,read_at,dismissed_at,updated_at&id=eq.${notificationId}`,
+    accessToken,
+  );
+  if (
+    !ownerRead.response.ok ||
+    ownerRead.rows?.length !== 1 ||
+    ownerRead.rows[0].user_id !== userId
+  ) {
+    throw new Error(
+      `Notification owner read failed: ${ownerRead.response.status} ${ownerRead.text}`,
+    );
+  }
+  const forbiddenPatch = await authenticatedRestRequest(
+    `notifications?id=eq.${notificationId}`,
+    accessToken,
+    {
+      method: 'PATCH',
+      body: { title: 'Forbidden direct Notification update' },
+    },
+  );
+  if (forbiddenPatch.response.ok) {
+    throw new Error('Authenticated direct Notification UPDATE was accepted.');
+  }
+  await assertRows(
+    `notifications?select=id,title,is_read,read_at,dismissed_at,updated_at&id=eq.${notificationId}`,
+    (rows) =>
+      rows.length === 1 &&
+      rows[0].title === notificationLifecycleTitle &&
+      rows[0].is_read === true &&
+      sameInstant(rows[0].read_at, markRead.read_at) &&
+      rows[0].dismissed_at === null &&
+      sameInstant(rows[0].updated_at, markRead.updated_at),
+    'unchanged notification after forbidden direct update',
+  );
+  const forbiddenLedgerRead = await authenticatedRestRequest(
+    `notification_action_requests?select=request_id&request_id=eq.${markReadRequest.request_id}`,
+    accessToken,
+  );
+  if (forbiddenLedgerRead.response.ok) {
+    throw new Error('Authenticated Notification retry-ledger SELECT was accepted.');
+  }
+
+  const secondaryEmail = `e2e-notification-other-${runId}@example.test`;
+  const secondaryPassword = `E2e-notification-other-${runId}-password`;
+  const secondary = await createConfirmedUserWithCredentials({
+    emailAddress: secondaryEmail,
+    passwordValue: secondaryPassword,
+    displayName: 'E2E Notification Other User',
+  });
+  const secondaryToken = await signInCredentials({
+    emailAddress: secondaryEmail,
+    passwordValue: secondaryPassword,
+    context: 'Notification secondary principal',
+  });
+  const secondaryRead = await authenticatedRestRequest(
+    `notifications?select=id&id=eq.${notificationId}`,
+    secondaryToken,
+  );
+  if (!secondaryRead.response.ok || secondaryRead.rows?.length !== 0) {
+    throw new Error(
+      `Notification RLS exposed an owner row: ${secondaryRead.response.status} ${secondaryRead.text}`,
+    );
+  }
+  const foreignAction = await notificationActionRequest(
+    secondaryToken,
+    notificationId,
+    {
+      contract_version: 'notification-lifecycle-v1',
+      request_id: crypto.randomUUID(),
+      command: 'mark_unread',
+      expected_updated_at: markRead.updated_at,
+    },
+  );
+  if (foreignAction.status !== 404) {
+    throw new Error(
+      `Cross-owner notification action was not owner-safe 404: ${foreignAction.status} ${await foreignAction.text()}`,
+    );
+  }
+  if (!isCanonicalUuid(secondary.id)) {
+    throw new Error('Notification secondary user has no canonical UUID.');
+  }
+
+  const forbiddenDirectRpc = await authenticatedRestRequest(
+    'rpc/apply_notification_action_v1',
+    secondaryToken,
+    {
+      method: 'POST',
+      body: {
+        p_user_id: userId,
+        p_notification_id: notificationId,
+        p_request_id: crypto.randomUUID(),
+        p_command: 'mark_unread',
+        p_expected_updated_at: markRead.updated_at,
+      },
+    },
+  );
+  if (forbiddenDirectRpc.response.ok) {
+    throw new Error(
+      'Authenticated user directly invoked the service-role Notification RPC.',
+    );
+  }
+  await assertRows(
+    `notifications?select=id,is_read,read_at,dismissed_at,updated_at&id=eq.${notificationId}`,
+    (rows) =>
+      rows.length === 1 &&
+      rows[0].is_read === true &&
+      sameInstant(rows[0].read_at, markRead.read_at) &&
+      rows[0].dismissed_at === null &&
+      sameInstant(rows[0].updated_at, markRead.updated_at),
+    'unchanged notification after forbidden direct RPC invocation',
+  );
+
+  const markUnreadResponsePromise = waitForNotificationAction(
+    page,
+    notificationId,
+    'mark-unread lifecycle action',
+  );
+  await clickByRoleName(
+    page,
+    'button',
+    `Mark unread notification ${notificationLifecycleTitle}`,
+  );
+  const markUnreadResponse = await markUnreadResponsePromise;
+  const markUnreadRequest = assertNotificationActionRequest(
+    markUnreadResponse.request(),
+    {
+      notificationId,
+      command: 'mark_unread',
+      expectedUpdatedAt: markRead.updated_at,
+    },
+    'mark-unread lifecycle request',
+  );
+  const markUnread = assertNotificationActionResponse(
+    await markUnreadResponse.json(),
+    {
+      notificationId,
+      command: 'mark_unread',
+      replayed: false,
+      expectedUpdatedAt: markRead.updated_at,
+    },
+    'mark-unread lifecycle response',
+  );
+  await page
+    .getByRole('button', {
+      name: `Mark read notification ${notificationLifecycleTitle}`,
+      exact: true,
+    })
+    .waitFor({ state: 'visible' });
+  await assertRows(
+    `notifications?select=id,is_read,read_at,dismissed_at,updated_at&id=eq.${notificationId}`,
+    (rows) =>
+      rows.length === 1 &&
+      rows[0].is_read === false &&
+      rows[0].read_at === null &&
+      rows[0].dismissed_at === null &&
+      sameInstant(rows[0].updated_at, markUnread.updated_at),
+    'persisted mark-unread notification lifecycle',
+  );
+
+  const dismissResponsePromise = waitForNotificationAction(
+    page,
+    notificationId,
+    'dismiss lifecycle action',
+  );
+  await clickByRoleName(
+    page,
+    'button',
+    `Dismiss notification ${notificationLifecycleTitle}`,
+  );
+  const dismissResponse = await dismissResponsePromise;
+  const dismissRequest = assertNotificationActionRequest(
+    dismissResponse.request(),
+    {
+      notificationId,
+      command: 'dismiss',
+      expectedUpdatedAt: markUnread.updated_at,
+    },
+    'dismiss lifecycle request',
+  );
+  const dismissed = assertNotificationActionResponse(
+    await dismissResponse.json(),
+    {
+      notificationId,
+      command: 'dismiss',
+      replayed: false,
+      expectedUpdatedAt: markUnread.updated_at,
+    },
+    'dismiss lifecycle response',
+  );
+  if (
+    !sameInstant(dismissed.read_at, dismissed.updated_at) ||
+    !sameInstant(dismissed.dismissed_at, dismissed.updated_at)
+  ) {
+    throw new Error('Dismiss did not persist one exact lifecycle timestamp.');
+  }
+  await page
+    .getByText(notificationLifecycleTitle, { exact: true })
+    .waitFor({ state: 'hidden' });
+  await assertRows(
+    `notifications?select=id,is_read,read_at,dismissed_at,updated_at&id=eq.${notificationId}`,
+    (rows) =>
+      rows.length === 1 &&
+      rows[0].is_read === true &&
+      sameInstant(rows[0].read_at, dismissed.read_at) &&
+      sameInstant(rows[0].dismissed_at, dismissed.dismissed_at) &&
+      sameInstant(rows[0].updated_at, dismissed.updated_at),
+    'persisted dismissed notification tombstone',
+  );
+
+  const historicalReplayResponse = await notificationActionRequest(
+    accessToken,
+    notificationId,
+    markReadRequest,
+  );
+  if (!historicalReplayResponse.ok) {
+    throw new Error(
+      `Historical notification replay failed: ${historicalReplayResponse.status} ${await historicalReplayResponse.text()}`,
+    );
+  }
+  const historicalReplay = assertNotificationActionResponse(
+    await historicalReplayResponse.json(),
+    {
+      notificationId,
+      command: 'mark_read',
+      replayed: true,
+      expectedUpdatedAt: createdAt,
+    },
+    'historical notification lifecycle replay',
+  );
+  if (
+    !sameInstant(historicalReplay.read_at, markRead.read_at) ||
+    historicalReplay.dismissed_at !== null ||
+    !sameInstant(historicalReplay.updated_at, markRead.updated_at)
+  ) {
+    throw new Error(
+      'Historical notification replay did not return the exact stored result.',
+    );
+  }
+  await assertRows(
+    `notifications?select=id,is_read,read_at,dismissed_at,updated_at&id=eq.${notificationId}`,
+    (rows) =>
+      rows.length === 1 &&
+      rows[0].is_read === true &&
+      sameInstant(rows[0].read_at, dismissed.read_at) &&
+      sameInstant(rows[0].dismissed_at, dismissed.dismissed_at) &&
+      sameInstant(rows[0].updated_at, dismissed.updated_at),
+    'unchanged dismissed notification after historical replay',
+  );
+  await assertRows(
+    `notification_action_requests?select=request_id,user_id,notification_id,contract_version,command,expected_updated_at,result_is_read,result_read_at,result_dismissed_at,result_updated_at&notification_id=eq.${notificationId}&order=created_at.asc`,
+    (rows) =>
+      rows.length === 3 &&
+      rows.every(
+        (row) =>
+          row.user_id === userId &&
+          row.notification_id === notificationId &&
+          row.contract_version === 'notification-lifecycle-v1',
+      ) &&
+      rows[0].request_id === markReadRequest.request_id &&
+      rows[0].command === 'mark_read' &&
+      sameInstant(rows[0].expected_updated_at, createdAt) &&
+      rows[0].result_is_read === true &&
+      sameInstant(rows[0].result_read_at, markRead.read_at) &&
+      rows[0].result_dismissed_at === null &&
+      sameInstant(rows[0].result_updated_at, markRead.updated_at) &&
+      rows[1].request_id === markUnreadRequest.request_id &&
+      rows[1].command === 'mark_unread' &&
+      sameInstant(rows[1].expected_updated_at, markRead.updated_at) &&
+      rows[1].result_is_read === false &&
+      rows[1].result_read_at === null &&
+      rows[1].result_dismissed_at === null &&
+      sameInstant(rows[1].result_updated_at, markUnread.updated_at) &&
+      rows[2].request_id === dismissRequest.request_id &&
+      rows[2].command === 'dismiss' &&
+      sameInstant(rows[2].expected_updated_at, markUnread.updated_at) &&
+      rows[2].result_is_read === true &&
+      sameInstant(rows[2].result_read_at, dismissed.read_at) &&
+      sameInstant(rows[2].result_dismissed_at, dismissed.dismissed_at) &&
+      sameInstant(rows[2].result_updated_at, dismissed.updated_at),
+    'three exact Notification lifecycle request identities',
+  );
+
+  const dismissedAction = await notificationActionRequest(
+    accessToken,
+    notificationId,
+    {
+      contract_version: 'notification-lifecycle-v1',
+      request_id: crypto.randomUUID(),
+      command: 'mark_read',
+      expected_updated_at: dismissed.updated_at,
+    },
+  );
+  const dismissedActionText = await dismissedAction.text();
+  let dismissedActionBody = null;
+  try {
+    dismissedActionBody = JSON.parse(dismissedActionText);
+  } catch (_) {
+    // The exact JSON detail assertion below reports the raw response.
+  }
+  if (
+    dismissedAction.status !== 409 ||
+    dismissedActionBody?.detail !== 'Notification is already dismissed'
+  ) {
+    throw new Error(
+      `Dismissed notification did not reject a new command exactly: ${dismissedAction.status} ${dismissedActionText}`,
+    );
+  }
+  await assertRows(
+    `notifications?select=id,is_read,read_at,dismissed_at,updated_at&id=eq.${notificationId}`,
+    (rows) =>
+      rows.length === 1 &&
+      rows[0].is_read === true &&
+      sameInstant(rows[0].read_at, dismissed.read_at) &&
+      sameInstant(rows[0].dismissed_at, dismissed.dismissed_at) &&
+      sameInstant(rows[0].updated_at, dismissed.updated_at),
+    'unchanged tombstone after dismissed notification conflict',
+  );
+
+  await assertRows(
+    `notifications?select=id,title,message,type,priority,is_read,read_at,dismissed_at,action_url,due_at,metadata,created_at,updated_at&id=eq.${futureNotificationId}`,
+    (rows) =>
+      rows.length === 1 &&
+      rows[0].title === notificationFutureTitle &&
+      rows[0].message === 'This future Inbox item must remain hidden.' &&
+      rows[0].type === 'reminder' &&
+      rows[0].priority === 'low' &&
+      rows[0].is_read === false &&
+      rows[0].read_at === null &&
+      rows[0].dismissed_at === null &&
+      rows[0].action_url === null &&
+      sameInstant(rows[0].due_at, futureDueAt) &&
+      stableJson(rows[0].metadata) === stableJson({ source: 'e2e-future' }) &&
+      sameInstant(rows[0].created_at, createdAt) &&
+      sameInstant(rows[0].updated_at, createdAt),
+    'unchanged hidden future-due notification',
+  );
+
+  await page.goto(appRoute('/alerts'), { waitUntil: 'domcontentloaded' });
+  await waitForFlutterShell(page);
+  await enableFlutterSemantics(page);
+  await expectText(page, 'Inbox');
+  await expectText(page, 'Your inbox is empty.');
+  await assertFlutterTextAbsent(
+    page,
+    notificationLifecycleTitle,
+    'dismissed notification after Inbox reload',
+  );
+  await assertFlutterTextAbsent(
+    page,
+    notificationFutureTitle,
+    'future-due notification after Inbox reload',
+  );
+
+  await assertDisposableAccountExportAndDeletion({
+    mainPage: page,
+    mainUserId: userId,
+    mainNotificationId: notificationId,
+    mainFutureNotificationId: futureNotificationId,
+    user: secondary,
+    emailAddress: secondaryEmail,
+    passwordValue: secondaryPassword,
+    accessToken: secondaryToken,
+  });
+}
+
+async function assertDisposableAccountExportAndDeletion({
+  mainPage,
+  mainUserId,
+  mainNotificationId,
+  mainFutureNotificationId,
+  user,
+  emailAddress,
+  passwordValue,
+  accessToken,
+}) {
+  const userId = user?.id;
+  if (!isCanonicalUuid(userId)) {
+    throw new Error('Disposable account-control user has no canonical UUID.');
+  }
+
+  await waitForRows(
+    `profiles?select=id,email,role,auth_provider,onboarding_completed_at&id=eq.${userId}`,
+    (rows) =>
+      rows.length === 1 &&
+      rows[0].id === userId &&
+      rows[0].email === emailAddress &&
+      rows[0].role === 'user' &&
+      rows[0].auth_provider === 'email' &&
+      rows[0].onboarding_completed_at === null,
+    'disposable account profile created by the Auth trigger',
+  );
+  await waitForRows(
+    `notification_preferences?select=user_id&user_id=eq.${userId}`,
+    (rows) => rows.length === 1 && rows[0].user_id === userId,
+    'disposable account Notification preferences created by the Auth trigger',
+  );
+
+  const fixtureNow = Date.now();
+  const onboardedAt = new Date(fixtureNow).toISOString();
+  const focusEndedAt = new Date(fixtureNow - 2 * 60_000).toISOString();
+  const focusStartedAt = new Date(
+    fixtureNow - 12 * 60_000,
+  ).toISOString();
+  const notificationCreatedAt = new Date(
+    fixtureNow - 60_000,
+  ).toISOString();
+  const taskId = crypto.randomUUID();
+  const focusId = crypto.randomUUID();
+  const notificationId = crypto.randomUUID();
+  const actionRequestId = crypto.randomUUID();
+  const taskTitle = `E2E disposable account task ${runId}`;
+  const notificationTitle = `E2E disposable account export ${runId}`;
+
+  await patchRows(
+    `profiles?id=eq.${userId}`,
+    {
+      timezone: 'Europe/Berlin',
+      onboarding_completed_at: onboardedAt,
+      updated_at: onboardedAt,
+    },
+    'disposable account-control profile eligibility',
+  );
+  await insertRows('tasks', [
+    {
+      id: taskId,
+      user_id: userId,
+      title: taskTitle,
+      description: 'Cascade verification target.',
+      status: 'todo',
+      priority: 'medium',
+      deadline: null,
+      estimated_minutes: 10,
+      completed_at: null,
+      cancelled_at: null,
+      source: 'manual',
+      metadata: { source: 'e2e-account-delete' },
+      created_at: focusStartedAt,
+      updated_at: focusStartedAt,
+    },
+  ]);
+  await insertRows('focus_sessions', [
+    {
+      id: focusId,
+      user_id: userId,
+      task_id: taskId,
+      habit_id: null,
+      status: 'completed',
+      started_at: focusStartedAt,
+      ended_at: focusEndedAt,
+      planned_minutes: 10,
+      actual_minutes: 10,
+      label: 'Disposable account restrict cleanup',
+      metadata: {
+        source: 'e2e-account-delete',
+        entry_date: isoDateInTimeZone(focusStartedAt, 'Europe/Berlin'),
+      },
+      created_at: focusStartedAt,
+      updated_at: focusEndedAt,
+    },
+  ]);
+  const [notification] = await insertRows('notifications', [
+    {
+      id: notificationId,
+      user_id: userId,
+      title: notificationTitle,
+      message: 'This tombstone must be exported while its retry ledger is omitted.',
+      type: 'reminder',
+      priority: 'medium',
+      is_read: false,
+      action_url: '/settings',
+      due_at: null,
+      metadata: {
+        source: 'e2e-account-delete',
+        contract_version: 'notification-lifecycle-v1',
+      },
+      created_at: notificationCreatedAt,
+      updated_at: notificationCreatedAt,
+    },
+  ]);
+  if (
+    notification?.id !== notificationId ||
+    notification.is_read !== false ||
+    notification.read_at !== null ||
+    notification.dismissed_at !== null ||
+    !sameInstant(notification.updated_at, notificationCreatedAt)
+  ) {
+    throw new Error(
+      `Disposable Notification fixture is invalid: ${JSON.stringify(notification)}`,
+    );
+  }
+
+  const dismissRequest = {
+    contract_version: 'notification-lifecycle-v1',
+    request_id: actionRequestId,
+    command: 'dismiss',
+    expected_updated_at: notification.updated_at,
+  };
+  const dismissResponse = await notificationActionRequest(
+    accessToken,
+    notificationId,
+    dismissRequest,
+  );
+  if (!dismissResponse.ok) {
+    throw new Error(
+      `Disposable Notification dismiss failed: ${dismissResponse.status} ${await dismissResponse.text()}`,
+    );
+  }
+  const dismissed = assertNotificationActionResponse(
+    await dismissResponse.json(),
+    {
+      notificationId,
+      command: 'dismiss',
+      replayed: false,
+      expectedUpdatedAt: notification.updated_at,
+    },
+    'disposable account Notification dismiss response',
+  );
+  if (
+    !sameInstant(dismissed.read_at, dismissed.updated_at) ||
+    !sameInstant(dismissed.dismissed_at, dismissed.updated_at)
+  ) {
+    throw new Error(
+      'Disposable account dismiss did not persist one exact lifecycle timestamp.',
+    );
+  }
+  await assertRows(
+    `notification_action_requests?select=request_id,user_id,notification_id,command,expected_updated_at,result_is_read,result_read_at,result_dismissed_at,result_updated_at&request_id=eq.${actionRequestId}`,
+    (rows) =>
+      rows.length === 1 &&
+      rows[0].request_id === actionRequestId &&
+      rows[0].user_id === userId &&
+      rows[0].notification_id === notificationId &&
+      rows[0].command === 'dismiss' &&
+      sameInstant(rows[0].expected_updated_at, notification.updated_at) &&
+      rows[0].result_is_read === true &&
+      sameInstant(rows[0].result_read_at, dismissed.read_at) &&
+      sameInstant(rows[0].result_dismissed_at, dismissed.dismissed_at) &&
+      sameInstant(rows[0].result_updated_at, dismissed.updated_at),
+    'disposable account Notification retry ledger before export',
+  );
+
+  const authUserBeforeDelete = await fetch(
+    `${supabaseUrl}/auth/v1/admin/users/${userId}`,
+    {
+      headers: {
+        apikey: serviceRoleKey,
+        Authorization: `Bearer ${serviceRoleKey}`,
+      },
+    },
+  );
+  if (!authUserBeforeDelete.ok) {
+    throw new Error(
+      `Disposable Auth user was unavailable before deletion: ${authUserBeforeDelete.status}`,
+    );
+  }
+
+  const accountContext = await browser.newContext({
+    viewport: { width: 1280, height: 960 },
+    acceptDownloads: true,
+  });
+  const accountPage = await accountContext.newPage();
+  accountPage.on('pageerror', (error) => {
+    console.error(`[account-controls page error] ${error.message}`);
+  });
+  accountPage.on('console', (message) => {
+    if (['error', 'warning'].includes(message.type())) {
+      console.error(
+        `[account-controls ${message.type()}] ${message.text()}`,
+      );
+    }
+  });
+
+  try {
+    await accountPage.goto(appRoute('/auth'), {
+      waitUntil: 'domcontentloaded',
+    });
+    await waitForFlutterShell(accountPage);
+    await enableFlutterSemantics(accountPage);
+    await fillByLabelOrPlaceholder(accountPage, 'Email', emailAddress, 0);
+    await fillByLabelOrPlaceholder(
+      accountPage,
+      'Password',
+      passwordValue,
+      1,
+    );
+    await clickByText(accountPage, 'Login', { match: 'last' });
+    await accountPage.waitForURL('**/#/dashboard', { timeout: 45000 });
+
+    await accountPage.goto(appRoute('/settings'), {
+      waitUntil: 'domcontentloaded',
+    });
+    await waitForFlutterShell(accountPage);
+    await enableFlutterSemantics(accountPage);
+    await expectText(accountPage, 'Settings');
+    await expectText(accountPage, 'Synced account');
+    const exportResponsePromise = accountPage.waitForResponse(
+      (candidate) =>
+        candidate.url() === `${aiServiceBaseUrl}/v1/account/export` &&
+        candidate.request().method() === 'GET',
+      { timeout: 45000 },
+    );
+    // A failed API response deliberately produces no browser download. Keep
+    // that listener handled, but inspect the HTTP result first so an export
+    // regression fails with the backend status/body instead of a 45-second
+    // download timeout.
+    const downloadPromise = accountPage
+      .waitForEvent('download', { timeout: 45000 })
+      .catch(() => null);
+    await clickByText(accountPage, 'Export data');
+    const exportResponse = await exportResponsePromise;
+    if (exportResponse.status() !== 200) {
+      throw new Error(
+        `Unexpected account export response: ${exportResponse.status()} ${await exportResponse.text()}`,
+      );
+    }
+    if (
+      !exportResponse.headers()['content-type']?.startsWith(
+        'application/json',
+      ) ||
+      exportResponse.headers()['cache-control'] !== 'no-store' ||
+      exportResponse.headers()['content-disposition'] !==
+        'attachment; filename="mylifegraph-account-export.json"'
+    ) {
+      throw new Error(
+        `Unexpected account export response: ${exportResponse.status()} ${JSON.stringify(exportResponse.headers())}`,
+      );
+    }
+    const download = await downloadPromise;
+    if (download === null) {
+      throw new Error('Account export returned no browser download.');
+    }
+    const exportBytes = await exportResponse.body();
+    let exportPayload;
+    try {
+      exportPayload = JSON.parse(exportBytes.toString('utf8'));
+    } catch (_) {
+      throw new Error('Account export response was not UTF-8 JSON.');
+    }
+    assertDisposableAccountExportPayload(exportPayload, {
+      userId,
+      taskId,
+      focusId,
+      notificationId,
+      dismissed,
+    });
+
+    const downloadFailure = await download.failure();
+    if (downloadFailure !== null) {
+      throw new Error(`Account export download failed: ${downloadFailure}`);
+    }
+    if (
+      !/^mylifegraph-export-\d{4}-\d{2}-\d{2}\.json$/.test(
+        download.suggestedFilename(),
+      )
+    ) {
+      throw new Error(
+        `Unexpected account export filename: ${download.suggestedFilename()}`,
+      );
+    }
+    const downloadStream = await download.createReadStream();
+    if (downloadStream === null) {
+      throw new Error('Account export download returned no byte stream.');
+    }
+    const downloadChunks = [];
+    for await (const chunk of downloadStream) {
+      downloadChunks.push(Buffer.from(chunk));
+    }
+    const downloadedBytes = Buffer.concat(downloadChunks);
+    if (!downloadedBytes.equals(exportBytes)) {
+      throw new Error(
+        'Flutter Web account export bytes differ from the validated backend response.',
+      );
+    }
+    await expectText(accountPage, 'Account export saved.');
+
+    await clickByText(accountPage, 'Delete account');
+    await expectText(accountPage, 'Delete account permanently?');
+    await fillByLabelOrPlaceholder(
+      accountPage,
+      'Type DELETE to confirm',
+      'DELETE',
+      0,
+    );
+    const deleteResponsePromise = accountPage.waitForResponse(
+      (candidate) =>
+        candidate.url() === `${aiServiceBaseUrl}/v1/account` &&
+        candidate.request().method() === 'DELETE',
+      { timeout: 45000 },
+    );
+    await clickByText(accountPage, 'Delete account', { match: 'last' });
+    const deleteResponse = await deleteResponsePromise;
+    let deletePayload;
+    try {
+      deletePayload = deleteResponse.request().postDataJSON();
+    } catch (_) {
+      deletePayload = null;
+    }
+    const deleteBytes = await deleteResponse.body();
+    if (
+      deleteResponse.status() !== 204 ||
+      stableJson(deletePayload) !== stableJson({ confirmation: 'DELETE' }) ||
+      deleteBytes.length !== 0
+    ) {
+      throw new Error(
+        `Unexpected account deletion response: ${deleteResponse.status()} ${JSON.stringify(deletePayload)} bytes=${deleteBytes.length}`,
+      );
+    }
+    await accountPage.waitForURL('**/#/auth**', { timeout: 45000 });
+    await expectText(accountPage, 'Account and canonical synced data deleted.');
+  } catch (error) {
+    try {
+      await accountPage.screenshot({
+        path: `${artifactDir}/failure-${runId}-account-controls.png`,
+        fullPage: true,
+      });
+    } catch (_) {
+      // The original assertion is more useful than a screenshot failure.
+    }
+    throw error;
+  } finally {
+    await accountContext.close();
+  }
+
+  const authUserAfterDelete = await fetch(
+    `${supabaseUrl}/auth/v1/admin/users/${userId}`,
+    {
+      headers: {
+        apikey: serviceRoleKey,
+        Authorization: `Bearer ${serviceRoleKey}`,
+      },
+    },
+  );
+  if (authUserAfterDelete.status !== 404) {
+    throw new Error(
+      `Deleted Auth user is still available: ${authUserAfterDelete.status}`,
+    );
+  }
+
+  const deletedLogin = await fetch(
+    `${supabaseUrl}/auth/v1/token?grant_type=password`,
+    {
+      method: 'POST',
+      headers: {
+        apikey: supabaseAnonKey,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ email: emailAddress, password: passwordValue }),
+    },
+  );
+  if (deletedLogin.ok) {
+    throw new Error('Deleted disposable account could still sign in.');
+  }
+
+  const cascadeChecks = [
+    [
+      `profiles?select=id&id=eq.${userId}`,
+      'deleted disposable profile',
+    ],
+    [
+      `notification_preferences?select=user_id&user_id=eq.${userId}`,
+      'deleted disposable Notification preferences',
+    ],
+    [
+      `tasks?select=id,user_id&id=eq.${taskId}`,
+      'deleted disposable task',
+    ],
+    [
+      `focus_sessions?select=id,user_id,task_id&id=eq.${focusId}`,
+      'deleted disposable restrict-linked focus history',
+    ],
+    [
+      `notifications?select=id,user_id&id=eq.${notificationId}`,
+      'deleted disposable Notification tombstone',
+    ],
+    [
+      `notification_action_requests?select=request_id,user_id,notification_id&request_id=eq.${actionRequestId}`,
+      'deleted disposable Notification retry ledger',
+    ],
+  ];
+  for (const [path, description] of cascadeChecks) {
+    await assertRows(path, (rows) => rows.length === 0, description);
+  }
+
+  await assertRows(
+    `profiles?select=id&id=eq.${mainUserId}`,
+    (rows) => rows.length === 1 && rows[0].id === mainUserId,
+    'preserved main E2E profile after disposable account deletion',
+  );
+  await assertRows(
+    `notifications?select=id,user_id,is_read,read_at,dismissed_at,due_at&id=in.(${mainNotificationId},${mainFutureNotificationId})`,
+    (rows) => {
+      const lifecycle = rows.find((row) => row.id === mainNotificationId);
+      const future = rows.find(
+        (row) => row.id === mainFutureNotificationId,
+      );
+      return (
+        rows.length === 2 &&
+        lifecycle?.user_id === mainUserId &&
+        lifecycle.is_read === true &&
+        lifecycle.read_at !== null &&
+        lifecycle.dismissed_at !== null &&
+        future?.user_id === mainUserId &&
+        future.is_read === false &&
+        future.read_at === null &&
+        future.dismissed_at === null &&
+        future.due_at !== null
+      );
+    },
+    'preserved main E2E Notification rows after disposable account deletion',
+  );
+  await expectText(mainPage, 'Inbox');
+}
+
+function assertDisposableAccountExportPayload(
+  payload,
+  { userId, taskId, focusId, notificationId, dismissed },
+) {
+  const expectedTopLevelKeys = [
+    'contract_version',
+    'data',
+    'exported_at',
+    'ledger_policy',
+    'limits',
+    'record_counts',
+  ];
+  const expectedTableKeys = [...accountExportV1TableNames].sort();
+  const expectedRecordCounts = Object.fromEntries(
+    accountExportV1TableNames.map((tableName) => [tableName, 0]),
+  );
+  Object.assign(expectedRecordCounts, {
+    profiles: 1,
+    notification_preferences: 1,
+    tasks: 1,
+    notifications: 1,
+    focus_sessions: 1,
+  });
+  if (
+    payload === null ||
+    typeof payload !== 'object' ||
+    Array.isArray(payload) ||
+    stableJson(Object.keys(payload).sort()) !==
+      stableJson(expectedTopLevelKeys) ||
+    payload.contract_version !== 'account-export-v1' ||
+    !isIsoTimestamp(payload.exported_at) ||
+    !/(Z|[+-]\d{2}:\d{2})$/.test(payload.exported_at) ||
+    payload.data === null ||
+    typeof payload.data !== 'object' ||
+    Array.isArray(payload.data) ||
+    payload.record_counts === null ||
+    typeof payload.record_counts !== 'object' ||
+    Array.isArray(payload.record_counts) ||
+    stableJson(Object.keys(payload.data).sort()) !==
+      stableJson(expectedTableKeys) ||
+    stableJson(Object.keys(payload.record_counts).sort()) !==
+      stableJson(expectedTableKeys)
+  ) {
+    throw new Error(
+      `Account export has an invalid V1 envelope: ${JSON.stringify(payload)}`,
+    );
+  }
+  if (stableJson(payload.record_counts) !== stableJson(expectedRecordCounts)) {
+    throw new Error(
+      `Account export has unexpected owner-row counts: ${JSON.stringify(payload.record_counts)}`,
+    );
+  }
+  for (const tableName of accountExportV1TableNames) {
+    if (
+      !Array.isArray(payload.data[tableName]) ||
+      !Number.isInteger(payload.record_counts[tableName]) ||
+      payload.record_counts[tableName] !== payload.data[tableName].length
+    ) {
+      throw new Error(
+        `Account export count mismatch for ${tableName}: ${JSON.stringify(payload.record_counts[tableName])}`,
+      );
+    }
+  }
+  if (
+    Object.keys(accountExportV1OmittedTables).some(
+      (tableName) =>
+        Object.hasOwn(payload.data, tableName) ||
+        Object.hasOwn(payload.record_counts, tableName),
+    ) ||
+    stableJson(payload.ledger_policy) !==
+      stableJson({
+        sanitized_tables: accountExportV1SanitizedTables,
+        omitted_tables: accountExportV1OmittedTables,
+      }) ||
+    stableJson(payload.limits) !==
+      stableJson({
+        max_rows_per_table: 10000,
+        max_total_rows: 50000,
+        max_json_bytes: 8 * 1024 * 1024,
+      })
+  ) {
+    throw new Error(
+      `Account export has an invalid ledger or limit policy: ${JSON.stringify(payload)}`,
+    );
+  }
+
+  const profileRows = payload.data.profiles;
+  const preferenceRows = payload.data.notification_preferences;
+  const taskRows = payload.data.tasks;
+  const focusRows = payload.data.focus_sessions;
+  const notificationRows = payload.data.notifications;
+  const exportedNotification = notificationRows[0];
+  if (
+    profileRows.length !== 1 ||
+    profileRows[0].id !== userId ||
+    preferenceRows.length !== 1 ||
+    preferenceRows[0].user_id !== userId ||
+    taskRows.length !== 1 ||
+    taskRows[0].id !== taskId ||
+    taskRows[0].user_id !== userId ||
+    focusRows.length !== 1 ||
+    focusRows[0].id !== focusId ||
+    focusRows[0].user_id !== userId ||
+    focusRows[0].task_id !== taskId ||
+    notificationRows.length !== 1 ||
+    exportedNotification.id !== notificationId ||
+    exportedNotification.user_id !== userId ||
+    exportedNotification.is_read !== true ||
+    !sameInstant(exportedNotification.read_at, dismissed.read_at) ||
+    !sameInstant(
+      exportedNotification.dismissed_at,
+      dismissed.dismissed_at,
+    ) ||
+    !sameInstant(exportedNotification.updated_at, dismissed.updated_at)
+  ) {
+    throw new Error(
+      `Account export lost owned rows or Notification lifecycle state: ${JSON.stringify({
+        profiles: profileRows,
+        notification_preferences: preferenceRows,
+        tasks: taskRows,
+        focus_sessions: focusRows,
+        notifications: notificationRows,
+      })}`,
+    );
+  }
+}
+
+async function waitForNotificationAction(page, notificationId, description) {
+  const response = await page.waitForResponse(
+    (candidate) =>
+      candidate.url() ===
+        `${aiServiceBaseUrl}/v1/notifications/${notificationId}/actions` &&
+      candidate.request().method() === 'POST',
+    { timeout: 45000 },
+  );
+  if (!response.ok()) {
+    throw new Error(
+      `Unexpected ${description} response: ${response.status()} ${await response.text()}`,
+    );
+  }
+  return response;
+}
+
+function assertNotificationActionRequest(
+  request,
+  { notificationId, command, expectedUpdatedAt },
+  description,
+) {
+  const payload = request.postData() ? JSON.parse(request.postData()) : {};
+  const expectedKeys = [
+    'command',
+    'contract_version',
+    'expected_updated_at',
+    'request_id',
+  ];
+  if (
+    stableJson(Object.keys(payload).sort()) !== stableJson(expectedKeys) ||
+    payload.contract_version !== 'notification-lifecycle-v1' ||
+    payload.command !== command ||
+    !isUuid(payload.request_id) ||
+    !sameInstant(payload.expected_updated_at, expectedUpdatedAt) ||
+    !request.url().endsWith(`/v1/notifications/${notificationId}/actions`)
+  ) {
+    throw new Error(
+      `Unexpected ${description}: ${JSON.stringify(payload)}`,
+    );
+  }
+  return payload;
+}
+
+function assertNotificationActionResponse(
+  payload,
+  { notificationId, command, replayed, expectedUpdatedAt },
+  description,
+) {
+  const expectedKeys = [
+    'command',
+    'contract_version',
+    'dismissed_at',
+    'is_read',
+    'notification_id',
+    'read_at',
+    'replayed',
+    'updated_at',
+  ];
+  const readExpected = command !== 'mark_unread';
+  const dismissedExpected = command === 'dismiss';
+  if (
+    payload === null ||
+    typeof payload !== 'object' ||
+    Array.isArray(payload) ||
+    stableJson(Object.keys(payload).sort()) !== stableJson(expectedKeys) ||
+    payload.contract_version !== 'notification-lifecycle-v1' ||
+    payload.notification_id !== notificationId ||
+    payload.command !== command ||
+    payload.is_read !== readExpected ||
+    payload.replayed !== replayed ||
+    (readExpected ? !isIsoTimestamp(payload.read_at) : payload.read_at !== null) ||
+    (dismissedExpected
+      ? !isIsoTimestamp(payload.dismissed_at)
+      : payload.dismissed_at !== null) ||
+    !isIsoTimestamp(payload.updated_at) ||
+    !instantIsAfter(payload.updated_at, expectedUpdatedAt) ||
+    (payload.read_at !== null &&
+      instantIsAfter(payload.read_at, payload.updated_at)) ||
+    (payload.dismissed_at !== null &&
+      instantIsAfter(payload.dismissed_at, payload.updated_at))
+  ) {
+    throw new Error(
+      `Unexpected ${description}: ${JSON.stringify(payload)}`,
+    );
+  }
+  return payload;
+}
+
+async function notificationActionRequest(accessToken, notificationId, body) {
+  return fetch(
+    `${aiServiceBaseUrl}/v1/notifications/${notificationId}/actions`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    },
+  );
+}
+
+function sameInstant(left, right) {
+  const leftNanos = isoInstantNanoseconds(left);
+  const rightNanos = isoInstantNanoseconds(right);
+  return leftNanos !== null && rightNanos !== null && leftNanos === rightNanos;
+}
+
+function instantIsAfter(left, right) {
+  const leftNanos = isoInstantNanoseconds(left);
+  const rightNanos = isoInstantNanoseconds(right);
+  return leftNanos !== null && rightNanos !== null && leftNanos > rightNanos;
+}
+
+function isoInstantNanoseconds(value) {
+  if (typeof value !== 'string' || !Number.isFinite(Date.parse(value))) {
+    return null;
+  }
+  const match = value.match(
+    /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,9}))?(Z|[+-]\d{2}:\d{2})$/,
+  );
+  if (!match) {
+    return null;
+  }
+  const [, year, month, day, hour, minute, second, fraction = '', zone] =
+    match;
+  const localMillis = Date.UTC(
+    Number(year),
+    Number(month) - 1,
+    Number(day),
+    Number(hour),
+    Number(minute),
+    Number(second),
+  );
+  let offsetMinutes = 0;
+  if (zone !== 'Z') {
+    const sign = zone[0] === '+' ? 1 : -1;
+    offsetMinutes =
+      sign * (Number(zone.slice(1, 3)) * 60 + Number(zone.slice(4, 6)));
+  }
+  const epochMillis = localMillis - offsetMinutes * 60_000;
+  return (
+    BigInt(epochMillis) * 1_000_000n +
+    BigInt(fraction.padEnd(9, '0'))
+  );
 }
 
 async function assertBoundedWeeklyReview(page, userId) {

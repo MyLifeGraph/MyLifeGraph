@@ -105,7 +105,7 @@ boundary for these primitives:
 
 - Explicit local demo sessions are persistently labeled and remain off real
   recommendation and snapshot APIs.
-- Real recommendation, dashboard, Insights, and Notifications failures stay
+- Real recommendation, dashboard, Insights, and Inbox failures stay
   errors instead of becoming mock content.
 - The dashboard renders direct stored check-in fields, tasks, and commitments;
   proxy score and metric-gallery placeholders are removed.
@@ -163,11 +163,11 @@ Phase 4's deterministic briefing service.
 | Canonical daily capture | Yes, Phase 1 complete | Evening and Morning are separate typed flows over one ownership-merged daily entry; Phase 2 now interprets their freshness and stress context only inside backend snapshots |
 | Legacy large Daily Check-In | Retired | `/daily-check-in` redirects to the canonical lightweight flow; do not recreate a competing form |
 | Habit management/completion | Yes, authenticated only | Habit V1 cadence, progress, streaks, explicit completion/skip, and undo are implemented; manual lifecycle stays in Habit Management, Setup-owned lifecycle stays in Settings Setup, and daily execution is available from Today Habits |
-| Insights correlations | Yes, as advanced exploration | Default to cautious actionable insight with evidence and confidence |
-| Notifications | Read-only inbox | Structured internal actions are allowlisted; add preferences and durable read writes only with real contracts |
+| Insights correlations and Skillset | Yes | Default to one cautious observation; advanced correlations and the strict latest generated Skillset profile expose independent loading/error truth |
+| Inbox (`/alerts`) | Stored inbox with Lifecycle V1 | Structured internal links are allowlisted; read/unread/dismiss is durable and retry-safe, while stored preferences and rows still do not imply delivery |
 | Deep Work | Yes, authenticated real-data mode | One active session, optional owned task/habit linkage, measured finish/abandon duration, and no implicit target completion are implemented; guest/mock redirects to Quick Action |
-| Coach | Yes, authenticated real-data mode | Strict capability/history/memory reads are generation-free; deliberate sends use bounded owner-scoped context and review-only suggestions, while guest/mock is zero-call |
-| Settings | Honest minimum plus durable Setup | Read-only profile, Setup re-entry/review, session theme, and sign-out remain; add other controls only when durable |
+| Coach | Explicitly gated authenticated mode | The route/surface is fail-closed in release/production unless explicitly enabled; capability/history/memory reads are generation-free and backend `ready` gates sending |
+| Settings | Durable V1 controls | Profile, Setup review, account timezone, bounded export, confirmed deletion, device-persisted theme, Calendar Import, gated Coach, and sign-out expose their actual persistence boundaries |
 
 ## Guiding Principles
 
@@ -621,7 +621,12 @@ sensitive and daily capture is easy to abandon after one bad interaction.
 - A successful save should immediately affect the next relevant state or screen
   so the user can see that their input mattered.
 
-### Notifications And Attention
+### Future Delivery And Attention
+
+The current `/alerts` surface is a stored Inbox over rows with durable
+read/unread/dismiss tombstones under
+`docs/notification-lifecycle-v1-contract.md`. That lifecycle does not create or
+deliver an item. None of the delivery behavior below is implemented yet:
 
 - Start with explicit user-selected check-in and commitment reminders.
 - Add a morning briefing-ready notification only after persisted briefings and
@@ -1018,9 +1023,11 @@ queried:
 - `stress_controllability`
 - `stress_intensity_label`
 
-Use the current recommendation `status` for the smallest interaction slice. Add
-an append-only feedback table only when ranking needs outcome history across
-briefings and action types.
+The current recommendation `action_label` is informational suggested-next-step
+copy, not an executable control. Actual Today execution requires a strict
+current briefing target and the Phase 3 dispatcher. Recommendation `status`
+remains historical state; Phase 6's append-only feedback table owns briefing
+outcome evidence across action types.
 
 Suggested future table:
 

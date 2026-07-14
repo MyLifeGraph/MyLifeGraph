@@ -43,7 +43,7 @@ The Flutter app uses feature-first clean architecture:
 - `features/*/presentation` contains pages, widgets, and Riverpod providers.
 
 State management is Riverpod. Navigation is GoRouter. The shell navigation maps
-to Dashboard, Insights, central quick-action, Notifications, and Settings.
+to Dashboard, Insights, central quick-action, the stored Inbox, and Settings.
 Guest/demo sessions receive one persistent `Local demo` banner. The canned
 Coach preview and direct Supabase message writer have been replaced by a typed
 FastAPI Coach surface at `/coach`; `/more` aliases that route. Guest/mock renders
@@ -60,6 +60,7 @@ The mobile app reads Dart defines through `AppConfig.fromEnvironment()`:
 - `SUPABASE_URL`
 - `SUPABASE_ANON_KEY`
 - `AI_SERVICE_BASE_URL`
+- `COACH_SURFACE_ENABLED`
 
 Supabase is initialized only when both Supabase values are non-empty. Without
 them, the app can still run through local guest mode and mock data.
@@ -77,20 +78,28 @@ Source selection is explicit rather than a recovery fallback:
    network failures as recoverable errors. Do not substitute personalized-looking
    mock content. A successful empty response remains a separate valid state.
 
-Dashboard, Recommendations, Insights, and Notifications follow this source
+Dashboard, Recommendations, Insights, and the Inbox follow this source
 boundary. `AppSurfaceCapabilities` also uses it to hide Supabase-only task,
 habit, and focus commands from local guests and to validate route capabilities.
 Calendar import follows the same rule: a real authenticated account uses the
 FastAPI-backed integration source, while guest/mock renders an honest local
 state and makes no calendar API call.
-Coach follows it too: a static real-account capability permits the route, while
-the authenticated backend capability independently reports
+Coach follows it too: `COACH_SURFACE_ENABLED` controls whether navigation is
+shown and whether `/coach` remains accessible. It is fail-closed in every
+release build and for `APP_ENV=production` unless the exact value `true` is
+supplied. When the surface is enabled, a static real-account capability permits
+backend access while the authenticated backend capability independently reports
 `disabled|unavailable|ready` and controls sending. Provider outage does not hide
 persisted history or memory controls.
 
+The global offline banner observes network transport only. It does not claim
+that Supabase or FastAPI is reachable, and synced writes are not queued for
+later delivery. Guest/demo persistence can continue locally on the current
+device; failed synced forms retain their own draft/retry behavior.
+
 `USE_MOCK_DATA=true` wins over the presence of a Supabase client, access token,
 or authenticated profile. Setup, canonical check-in, Dashboard,
-Recommendations, Insights, and Notifications stay on their local/demo sources,
+Recommendations, Insights, and the Inbox stay on their local/demo sources,
 and synced execution plus snapshot actions remain unavailable. This prevents a
 partly real, partly demo session during local exploration. Auth boot also skips
 remote profile reads/creation and guest check-in migration in this mode, then
@@ -352,6 +361,10 @@ Current responsibilities:
   `/v1/snapshots/generate`.
 - Serve scheduler-triggered deterministic daily preparation at
   `/v1/scheduled/daily-refresh` with a backend-only scheduled refresh token.
+- Serve authenticated retry-safe stored-Inbox lifecycle at
+  `POST /v1/notifications/{notification_id}/actions`; owner-scoped
+  read/unread/dismiss mutations use one service-role-only RPC and never imply
+  notification generation or delivery.
 - Serve read-only latest/explicit weekly-review GETs plus deliberate
   `POST /v1/weekly-reviews/generate` under `weekly-review-v1`.
 - Serve authenticated calendar connection/read endpoints plus deliberate file
@@ -433,6 +446,9 @@ it calls `POST /v1/recommendations/generate` with `allow_llm_wording=false`
 after a best-effort daily snapshot refresh, then reloads persisted
 recommendations. A failed refresh retains the previously displayed feed and
 shows a recoverable failure; local demo sessions do not call the backend.
+Persisted recommendation `action_label` values are rendered as informational
+"Suggested next step" text, not as controls. Executable Today actions come only
+from a validated current `daily-briefing-v1` target and its Phase 3 dispatcher.
 
 Snapshot refresh is a deliberate authenticated backend action through
 `POST /v1/snapshots/generate`. The request can select `daily` or `weekly`
@@ -595,6 +611,31 @@ explicit `gpt-5.5`, strict persisted provenance, and visible UI data-use truth.
 None of these checks establishes remote state, production readiness, or another
 developer's account.
 
+### V1 Account Controls
+
+The exact boundary is `docs/v1-account-controls-contract.md`. Real authenticated
+accounts use bearer-derived FastAPI routes for durable IANA timezone changes, a
+strict bounded `account-export-v1` JSON portability export, and permanent
+deletion.
+Password reset and confirmation resend remain Supabase Auth operations with a
+dedicated recovery-event route in Flutter. Guest/mock sessions make no account
+API calls.
+
+Export reads only owner-filtered canonical product tables, applies field
+allowlists to backend-owned Calendar/Coach ledgers, names the anti-replay ledger
+it omits, and fails rather than truncating at a V1 bound. Flutter validates the
+entire envelope and counts before saving. Full deletion requires exact typed
+confirmation and one service-role-only database RPC. The RPC locks the existing
+owner workflows, removes restrict-linked focus history, deletes the Auth user,
+and verifies the profile/product cascade in one transaction. The client then
+clears its local session even if the deleted remote session can no longer be
+signed out normally.
+
+Insights correlation exploration is bounded to visible 7/14/30/90-day windows.
+Its five Supabase fact sources use stable pagination and fail explicitly at the
+client row ceiling instead of presenting a silently truncated or unbounded
+all-time result.
+
 ## Security Posture
 
 - Supabase RLS is enabled and forced where migrations touch tables.
@@ -620,6 +661,24 @@ developer's account.
 - Calendar integration tables use forced RLS and backend-owned writes.
   FastAPI derives the owner before connect/import/disconnect/delete, and the
   schema prevents privileged cross-owner child rows.
+- `notifications` remains authenticated read-only through the Data API.
+  Lifecycle DML is available only through bearer-derived FastAPI and the
+  owner-locked service-role `apply_notification_action_v1` RPC; its retry
+  ledger is forced-RLS and unavailable to application roles.
+- `20260714103000_application_table_privilege_guard.sql` closes table-level
+  authority that RLS does not cover across every repo-owned product and ledger
+  table. `anon` is fail-closed; authenticated `TRUNCATE`, `REFERENCES`, and
+  `TRIGGER` are removed while intended table-specific DML is preserved; and
+  backend projections remain authenticated read-only. Optional legacy tables
+  are frozen and future `postgres`-created public tables inherit the same safe
+  defaults. The installed Auth triggers remain active, but application and
+  service roles cannot reuse their security-definer functions on another
+  table. Notification child lookup and non-validating timestamp-order checks
+  complete the guard without treating unverified legacy rows as clean.
+- `20260714110000_account_export_lifestyle_entries_grant.sql` adds the missing
+  `service_role`-only `SELECT` grant for the legacy-but-canonical
+  `lifestyle_entries` table. Account Export V1 reads it even when it is empty;
+  authenticated and anonymous application permissions remain unchanged.
 - Mobile config uses Dart defines so credentials are not hard-coded in source.
 - Production AI endpoints validate Supabase bearer tokens before reading user
   data or invoking privileged backend workflows when backend Supabase settings
@@ -631,19 +690,26 @@ developer's account.
   own validated message, memory, and selection projections; request, usage,
   response, selection, and deletion mutations are service-role-only RPC work.
   Pending claims contain only a message fingerprint, not the message itself.
+- V1 account profile/export/delete routes derive identity only from the verified
+  bearer principal. The full-delete RPC is executable only by `service_role`,
+  requires exact confirmation, and verifies the profile cascade before success.
 
 ## Known Gaps
 
 - Coach is now a typed FastAPI surface for authenticated real accounts, with
   `/more` as a compatibility alias. Its backend capability may still report
-  disabled or unavailable, and guest/mock makes zero Coach HTTP calls. Deep
+  disabled or unavailable; production hides the surface unless explicitly
+  enabled, and guest/mock makes zero Coach HTTP calls. Deep
   Work is available only to authenticated real accounts with synced execution
-  capability. Settings exposes read-only account data, session-only theme, the
-  durable Setup entry, optional Calendar Import and Coach entries, and sign-out.
-- Notifications are currently a read-only inbox. Original `type`, `priority`,
-  read state, and supported `action_url` are shown; there is no mark-read command
-  until the repository has a durable write contract. Phase 7 does not send
-  briefing-ready or check-in notifications.
+  capability. Settings exposes durable timezone, export and confirmed deletion
+  for synced accounts, device-persisted theme, the durable Setup entry, optional
+  Calendar Import and gated Coach entries, and sign-out.
+- Inbox is a strict stored-item view. Original `type`, `priority`, read state,
+  and supported `action_url` are shown; authenticated real accounts use the
+  FastAPI `notification-lifecycle-v1` boundary to mark rows read/unread or keep
+  a dismiss tombstone. Guest/mock stays local and zero-call. Phase 7 still does
+  not create or deliver briefing-ready or check-in notifications, and existing
+  reminder preferences are not permission for a future delivery channel.
 - Phase 4 persists one deterministic daily briefing per user/local date and
   ranks only strict Phase 3 targets. `GET /v1/briefings/today` is read-only and
   reports missing/current/stale state; deliberate

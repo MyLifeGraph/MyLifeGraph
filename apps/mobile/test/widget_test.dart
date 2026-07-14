@@ -378,7 +378,7 @@ void main() {
 
     router.go(AppRoutes.deepWork);
     await tester.pumpAndSettle();
-    expect(find.text('Alerts'), findsWidgets);
+    expect(find.text('Inbox'), findsWidgets);
 
     router.go(AppRoutes.habitManagement);
     await tester.pumpAndSettle();
@@ -405,18 +405,45 @@ void main() {
     expect(find.text('Profile'), findsOneWidget);
     expect(find.text('Guest Coach User'), findsOneWidget);
     expect(find.text('guest@personal-coach.local'), findsOneWidget);
-    expect(find.text('Light mode'), findsOneWidget);
-    expect(find.text('Applies until the app is restarted.'), findsOneWidget);
-    expect(find.text('Sign out'), findsOneWidget);
     expect(find.text('Setup and commitments'), findsOneWidget);
+    expect(find.text('Reminder preference'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('Calendar import (optional)'),
+      180,
+      scrollable: find.byType(Scrollable).first,
+    );
     expect(find.text('Calendar import (optional)'), findsOneWidget);
     expect(find.text('Coach'), findsOneWidget);
-    expect(find.text('Export data'), findsNothing);
+    await tester.scrollUntilVisible(
+      find.text('Export data'),
+      180,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('Export data'), findsOneWidget);
+    expect(find.text('Delete account'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('Light mode'),
+      180,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('Light mode'), findsOneWidget);
+    expect(find.text('Saved on this device.'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('Sign out'),
+      180,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('Sign out'), findsOneWidget);
     expect(find.text('Alert rules'), findsNothing);
     expect(find.text('Coach behavior'), findsNothing);
     expect(find.text('Personal memory'), findsNothing);
     expect(find.text('Biometric app lock'), findsNothing);
 
+    await tester.scrollUntilVisible(
+      find.text('Setup and commitments'),
+      -250,
+      scrollable: find.byType(Scrollable).first,
+    );
     await tester.ensureVisible(find.text('Setup and commitments'));
     await tester.tap(find.text('Setup and commitments'));
     await tester.pumpAndSettle();
@@ -433,6 +460,8 @@ void main() {
     await tester.tap(find.text('Insights'));
     await tester.pumpAndSettle();
 
+    tester.view.physicalSize = const Size(1200, 1300);
+    await tester.pumpAndSettle();
     expect(find.text('ONE OBSERVATION'), findsOneWidget);
     expect(find.text('Advanced correlation exploration'), findsOneWidget);
     expect(find.text('Compare'), findsNothing);
@@ -441,8 +470,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Compare'), findsOneWidget);
-    expect(find.text('3M'), findsOneWidget);
-    expect(find.text('All'), findsOneWidget);
+    expect(find.text('90d'), findsOneWidget);
+    expect(find.text('All'), findsNothing);
     expect(find.text('Trend overlay'), findsOneWidget);
     expect(find.text('0-100 normalized'), findsOneWidget);
 

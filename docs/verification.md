@@ -11,9 +11,10 @@ Use the lowest level that covers the change.
 | Level | Command | Purpose | Destructive |
 | --- | --- | --- | --- |
 | Standard | `FLUTTER_BIN=/path/to/flutter scripts/verify.sh` | Non-destructive repo checks. | No |
-| Local Supabase preflight | `FLUTTER_BIN=/path/to/flutter scripts/verify_supabase_local.sh` | Starts local Supabase and runs tests with Supabase config. | No |
+| Local Supabase preflight | `FLUTTER_BIN=/path/to/flutter scripts/verify_supabase_local.sh` | Starts local Supabase, requires matching migration history, and runs tests with Supabase config. | No |
+| Local Supabase migration apply | `APPLY_MIGRATIONS=true FLUTTER_BIN=/path/to/flutter scripts/verify_supabase_local.sh` | Explicitly applies reviewed pending SQL, verifies history, then runs tests. | May change or delete local rows |
 | Local Supabase reset | `RESET_DB=true FLUTTER_BIN=/path/to/flutter scripts/verify_supabase_local.sh` | Recreates local DB, applies migrations, then runs tests. | Yes, local DB only |
-| Browser E2E | `FLUTTER_BIN=/path/to/flutter bash scripts/e2e_web.sh` | Starts local Supabase, starts Flutter Web, drives Playwright, and checks DB writes. | No |
+| Browser E2E | `FLUTTER_BIN=/path/to/flutter bash scripts/e2e_web.sh` | Requires matching local migration history, starts Flutter Web, drives Playwright, and checks uniquely named DB writes. | No reset; writes test rows |
 | Browser E2E with reset | `RESET_DB=true FLUTTER_BIN=/path/to/flutter bash scripts/e2e_web.sh` | Recreates local DB, then runs browser E2E. | Yes, local DB only |
 | Demo seed | `npm run seed:demo` | Starts local Supabase and seeds repeatable demo users/data for manual exploration. | No |
 
@@ -60,6 +61,10 @@ FLUTTER_BIN=/path/to/flutter scripts/verify.sh
 The script runs:
 
 - `bash -n scripts/start_frontend.sh`
+- syntax checks for the shared migration helper, local-stack supervisor, and
+  their hermetic harnesses
+- `bash scripts/test_local_supabase_migrations.sh`
+- `bash scripts/test_start_local_stack.sh`
 - `flutter pub get`
 - `flutter analyze`
 - `flutter test`
@@ -113,6 +118,30 @@ does not change deterministic candidate ranking. Aggregator assertions also
 keep `summary.risk_flags` as the current Daily State alias, preserve older
 window flags under `summary.window_risk_flags`, and derive
 `recommended_next_focus` recovery-first from mode.
+
+Account-control tests additionally cover strict bearer-derived timezone updates,
+IANA validation, cross-owner export rejection, pagination and size bounds,
+sanitized/omitted ledgers, exact download headers, exact delete confirmation,
+session-bound and refresh-resistant 15-minute `amr` freshness rejection before
+service calls, service-role-only RPC grants, both Phase 3 restrict links,
+focus-first deletion, and the profile-cascade postcondition. Flutter tests cover the exact export
+envelope/count parser, platform save/share cancellation truth, dedicated mobile
+temporary-source cleanup, password recovery state and password validation,
+rejected versus outcome-unknown timezone updates, device-persisted theme,
+Settings capability gates, typed recent-auth and ambiguous-deletion notices,
+and local session cleanup after a completed account deletion.
+The export path also proves receive-time cancellation above 8 MiB, invalid
+UTF-8 rejection, defensive raw-byte ownership, and byte-for-byte preservation
+of large integers and precise decimals through the platform saver boundary.
+The export checks pin 1,000-row server pages and the Flutter-only two-minute
+receive timeout so the documented 50,000-row edge is not forced through the
+ordinary 20-second JSON request path.
+Migration-source tests inventory every repo-created canonical product/ledger
+table and pin the application privilege guard's current-role, legacy-table,
+projection, default-privilege, Auth-trigger-function, Notification-index, and
+six `NOT VALID` timestamp-check statements. Those static tests do not prove a
+particular local or remote database grant catalog; the local migration/reset
+workflow and direct database inspection establish applied state separately.
 Phase 3 backend tests validate strict `executable-action-v1` parsing and reject
 unknown/coerced top-level and metadata fields, null/non-object metadata,
 explicit-null metadata fields, invalid calendar dates,
@@ -143,7 +172,11 @@ idempotent request replay/conflict, authenticated GET/POST/DELETE, local-demo
 isolation, 28-day context matching, decay/caps, unchanged original reasons, and
 explicit feedback-ranking provenance. Insights tests prove insufficient versus
 emerging/stronger observation labels, visible evidence windows, optional
-bounded experiments, and non-causal copy.
+bounded experiments, and non-causal copy. They also cover nullable persisted
+confidence without a fabricated fallback, visible 7/14/30/90-day windows,
+stable pagination across all five Supabase fact sources, the explicit 10,000-row
+per-source client ceiling, missing/error retry truth, and readable Light/Dark
+panel colors.
 Phase 7 scheduled-preparation tests cover the backend-only token guard and
 strict bounded request, including the maximum-20 `profile_ids` operational
 filter and explicit `target_date` backfill override. Repository tests prove
@@ -265,7 +298,10 @@ Current Flutter widget tests include:
   route plus guest/mock zero-call boundary, real synced Deep Work versus
   guest/mock redirect, unavailable guest/mock execution,
   persistent local-demo label, the strict `action_url` allowlist, original
-  notification fields/read state, and separate real empty/error states.
+  notification fields/read state, separate real empty/error states, strict
+  due/dismiss visibility, lifecycle parser parity, confirmed read/unread/
+  dismiss state, exact ambiguous retry, retained refresh data, accessibility,
+  and 320 px/2x-text layout.
 - The Snapshot refresh service posts `POST /v1/snapshots/generate` with bearer
   auth in real backend mode, includes an explicit capture `target_date`, skips
   guest/mock/missing-token paths, and treats network failures as best-effort.
@@ -352,8 +388,24 @@ SUPABASE_URL=<local API URL>
 SUPABASE_ANON_KEY=<local anon key>
 ```
 
-Without `RESET_DB=true`, the script does not reset the database. It is useful as
-a Docker/Supabase/toolchain preflight plus app test run.
+With the default `RESET_DB=false` and `APPLY_MIGRATIONS=false`, the script runs
+`supabase migration list --local` and requires every repository/DB history row
+to match. It never applies pending SQL automatically. A mismatch fails before
+reading client configuration or running Flutter tests and explains the two
+explicit choices.
+
+After reviewing the pending SQL and affected local rows, apply intentionally:
+
+```bash
+APPLY_MIGRATIONS=true \
+FLUTTER_BIN=/path/to/flutter \
+scripts/verify_supabase_local.sh
+```
+
+The script warns that this may change or delete local rows, runs
+`migration up --local`, and verifies history again before continuing. An empty,
+unknown, or non-boolean flag value is rejected. `APPLY_MIGRATIONS=true` and
+`RESET_DB=true` are mutually exclusive.
 
 ## Local Supabase Reset
 
@@ -372,11 +424,22 @@ supabase db reset
 Expected successful reset output applies migrations through:
 
 ```text
-20260713230000_phase_10_onboarding_eligibility_guard.sql
+20260714110000_account_export_lifestyle_entries_grant.sql
 ```
 
 Expected notices include skipped legacy CamelCase tables and already-existing
 canonical objects. Those notices are normal. Errors are not normal.
+
+The final privilege-guard migration must leave `anon` with no repo-owned
+product/ledger table privileges and remove authenticated `TRUNCATE`,
+`REFERENCES`, and `TRIGGER` without erasing intended table-specific DML.
+Backend projections stay authenticated read-only, optional legacy tables stay
+mutation-frozen, and future public tables created by `postgres` inherit the
+fail-closed defaults. Existing Auth triggers must still fire even though their
+security-definer functions are no longer reusable by application or service
+roles. Its Notification-ledger index and six `NOT VALID` timestamp-order checks
+must exist; `NOT VALID` intentionally means old rows were not scanned, while
+new and updated rows are constrained.
 
 The Phase 3 migration backfills and constrains task, habit-log, and focus rows,
 including missing focus `metadata.entry_date` from the UTC date of `started_at`.
@@ -386,17 +449,20 @@ interpreted honestly as completion or intentional skip. Inspect and resolve
 such local data before retrying. The reset also installs exact task lifecycle,
 locked active/weekday habit eligibility, bounded focus lifecycle, locked target
 validation, one-active, all-update terminal immutability, and restrict-delete
-target constraints/triggers. Existing local stacks may apply pending migrations
-non-destructively with:
+target constraints/triggers. Existing local stacks may apply reviewed pending
+migrations explicitly with:
 
 ```bash
-HOME=.tools/supabase-home \
-SUPABASE_TELEMETRY_DISABLED=1 \
-supabase migration up --local
+APPLY_MIGRATIONS=true \
+FLUTTER_BIN=/path/to/flutter \
+scripts/verify_supabase_local.sh
 ```
 
+This is not a non-destructive claim: migration SQL may change or delete local
+rows even when it does not reset the entire database.
+
 Use the reset form to prove the complete migration chain from an empty local
-database; do not use it merely because a non-destructive migration is pending.
+database; do not use it merely because a reviewed migration is pending.
 
 The reset destroys and recreates the local Supabase database. It must not be
 used for a remote project.
@@ -411,9 +477,11 @@ npx playwright install chromium
 FLUTTER_BIN=/path/to/flutter bash scripts/e2e_web.sh
 ```
 
-This is the normal non-destructive database path: the script starts or reuses
-the repository's local Supabase stack and skips `supabase db reset`. The smoke
-still writes a uniquely named local Auth user and its test rows. Do not set
+This is the normal non-reset database path: the script starts or reuses the
+repository's local Supabase stack, skips `supabase db reset`, inspects
+`supabase migration list --local`, and fails when repository and database
+history differ. It never applies pending SQL automatically. The smoke still
+writes a uniquely named local Auth user and its test rows. Do not set
 `RESET_DB=true` unless recreating the local database is explicitly intended.
 
 After a full or partially completed run has already created and onboarded its
@@ -439,12 +507,17 @@ For a fresh local database before the browser run:
 RESET_DB=true FLUTTER_BIN=/path/to/flutter bash scripts/e2e_web.sh
 ```
 
-If an existing local database is behind the repository migrations, apply pending
-local migrations before running the smoke:
+If an existing local database differs from repository migrations, review the
+pending SQL and affected local rows before opting into application:
 
 ```bash
-HOME=.tools/supabase-home SUPABASE_TELEMETRY_DISABLED=1 supabase migration up --local
+APPLY_MIGRATIONS=true \
+FLUTTER_BIN=/path/to/flutter \
+bash scripts/e2e_web.sh
 ```
+
+This may change or delete local rows. The script verifies history again before
+starting FastAPI, Flutter, or Playwright.
 
 Use real Ubuntu-installed Node.js, npm, Supabase CLI, and Docker. If these tools
 are installed through nvm, non-interactive agent shells may need an explicit
@@ -631,10 +704,15 @@ selected-weekday habit. A refreshed daily snapshot must contain the explicit
 habit/focus input counts and neutral summaries while preserving the Phase 2
 Daily State, and observed task/habit/focus writes must make no
 recommendation-generate request.
-The smoke then uses deliberate recommendation refresh, opens Notifications,
-exercises the Controlled Coach journey against the deterministic fake provider,
-verifies real Deep Work, and checks the explicit payloads of manual snapshot/
-recommendation requests. Source coverage is not a current-checkout pass.
+The smoke then uses deliberate recommendation refresh and exercises Inbox
+(`/alerts`) through one real unread/read/unread/dismiss lifecycle. It checks
+the exact FastAPI payload/result, persisted tombstone and three-row retry
+ledger, exact replay, request-id reinterpretation conflict, foreign-owner 404,
+owner/cross-owner SELECT, direct authenticated DML rejection, ledger
+invisibility, due filtering, and dismissal after reload. It then exercises the
+Controlled Coach journey against the deterministic fake provider, verifies real
+Deep Work, and checks the explicit payloads of manual snapshot/recommendation
+requests. Source coverage is not a current-checkout pass.
 
 These assertions are present in `e2e/web/smoke.mjs`; run one of the commands in
 this section to establish pass/fail for the current checkout. Documentation of
@@ -807,7 +885,7 @@ Docker access, and a real Ubuntu `supabase` CLI on `PATH`.
 
 The combined Phase 3/4/5/6/7/8/9 browser journey first passed in the Phase 9
 implementation checkout. A focused Phase 10 run and the subsequent full
-Phase 3-through-10 journey passed non-destructively against local Supabase in
+Phase 3-through-10 journey passed without a database reset against local Supabase in
 the 2026-07-13 current checkout. Later changes must establish their own full
 result with the browser command above; the focused mode is diagnostic only, and
 the `RESET_DB=true` form is reserved for proving the migration chain from a
@@ -858,12 +936,14 @@ Still missing for broader product verification:
 - Playwright trace artifact collection on failure.
 - Deployed scheduler/cron wiring and monitoring; the repository verifies the
   protected preparation endpoint, not any production invocation platform.
-- Dedicated database assertions for notifications, notification preferences,
-  and non-Setup memory behavior beyond the current Setup ownership/snapshot
-  checks.
-- Coverage for Google OAuth, mobile layout, and best-effort authenticated guest
-  check-in migration. Guest Setup intentionally has no automatic account
-  migration.
+- Notification delivery consent, deterministic generation/deduplication,
+  quiet-hour scheduling, and local/Android delivery assertions. Stored-Inbox
+  lifecycle coverage does not establish those later behaviors.
+- Installed-device Google OAuth/recovery acceptance, a complete physical-device
+  layout/accessibility pass, and best-effort authenticated guest check-in
+  migration. Widget tests cover the critical 320 px/text-scale surfaces, but
+  do not replace device acceptance. Guest Setup intentionally has no automatic
+  account migration.
 
 When changing E2E flows, keep `e2e/web/smoke.mjs`, `scripts/e2e_web.sh`, and
 this document in sync.

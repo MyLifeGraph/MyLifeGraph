@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../capabilities/app_surface_capabilities.dart';
 import '../../features/auth/presentation/pages/auth_page.dart';
 import '../../features/auth/presentation/pages/onboarding_page.dart';
+import '../../features/auth/presentation/pages/password_recovery_page.dart';
 import '../../features/auth/presentation/providers/auth_providers.dart';
 import '../../features/calendar_integration/presentation/pages/calendar_integration_page.dart';
 import '../../features/coach/presentation/pages/coach_page.dart';
@@ -22,18 +23,51 @@ import '../../features/shell/presentation/main_shell.dart';
 import '../../features/weekly_review/presentation/pages/weekly_review_page.dart';
 import 'app_routes.dart';
 
-final appRouterProvider = Provider<GoRouter>((ref) {
-  final authState = ref.watch(authControllerProvider);
-  final capabilities = ref.watch(appSurfaceCapabilitiesProvider);
+const _postAuthContinuationParameter = 'continue';
+const _postAuthContinuationPaths = <String>{
+  '/',
+  AppRoutes.dashboard,
+  AppRoutes.onboarding,
+  AppRoutes.settings,
+  AppRoutes.calendarIntegration,
+  AppRoutes.insights,
+  AppRoutes.quickAction,
+  AppRoutes.quickMoodCheckIn,
+  AppRoutes.morningCalibration,
+  AppRoutes.habitCompletion,
+  AppRoutes.habitManagement,
+  AppRoutes.weeklyReview,
+  AppRoutes.alerts,
+  AppRoutes.notifications,
+  AppRoutes.dailyCheckIn,
+  AppRoutes.deepWork,
+  AppRoutes.coach,
+  AppRoutes.more,
+};
 
-  return GoRouter(
+final appRouterProvider = Provider<GoRouter>((ref) {
+  Uri? pendingPostAuthLocation;
+  final router = GoRouter(
     initialLocation: AppRoutes.dashboard,
     redirect: (context, state) {
+      final authState = ref.read(authControllerProvider);
+      final passwordRecoveryActive = ref.read(passwordRecoveryActiveProvider);
       final path = state.uri.path;
       final isAuthRoute = path == AppRoutes.auth;
+      final isPasswordRecoveryRoute = path == AppRoutes.passwordRecovery;
+
+      if (passwordRecoveryActive) {
+        return isPasswordRecoveryRoute ? null : AppRoutes.passwordRecovery;
+      }
+
+      if (isPasswordRecoveryRoute) {
+        return AppRoutes.auth;
+      }
 
       if (authState.isLoading) {
-        return isAuthRoute ? null : AppRoutes.auth;
+        if (isAuthRoute) return null;
+        pendingPostAuthLocation = _validPostAuthLocation(state.uri);
+        return _authLocationFor(state.uri);
       }
 
       final session = authState.valueOrNull;
@@ -42,15 +76,26 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           isOnboardingRoute && state.uri.queryParameters['edit'] == '1';
 
       if (session == null) {
-        return isAuthRoute ? null : AppRoutes.auth;
+        if (isAuthRoute) return null;
+        pendingPostAuthLocation = _validPostAuthLocation(state.uri);
+        return _authLocationFor(state.uri);
       }
 
       if (session.requiresOnboarding && !isOnboardingRoute) {
+        pendingPostAuthLocation = null;
         return AppRoutes.onboarding;
       }
 
+      if (isAuthRoute) {
+        final continuation = _postAuthContinuation(state.uri) ??
+            pendingPostAuthLocation?.toString();
+        pendingPostAuthLocation = null;
+        return continuation ?? AppRoutes.dashboard;
+      }
+
       if (!session.requiresOnboarding &&
-          (isAuthRoute || (isOnboardingRoute && !isEditingOnboarding))) {
+          isOnboardingRoute &&
+          !isEditingOnboarding) {
         return AppRoutes.dashboard;
       }
 
@@ -64,6 +109,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.auth,
         builder: (context, state) => const AuthPage(),
+      ),
+      GoRoute(
+        path: AppRoutes.passwordRecovery,
+        builder: (context, state) => const PasswordRecoveryPage(),
       ),
       GoRoute(
         path: AppRoutes.onboarding,
@@ -108,19 +157,25 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: AppRoutes.habitCompletion,
             redirect: (context, state) =>
-                capabilities.canUseSyncedHabits ? null : AppRoutes.quickAction,
+                ref.read(appSurfaceCapabilitiesProvider).canUseSyncedHabits
+                    ? null
+                    : AppRoutes.quickAction,
             builder: (context, state) => const HabitCompletionPage(),
           ),
           GoRoute(
             path: AppRoutes.habitManagement,
             redirect: (context, state) =>
-                capabilities.canUseSyncedHabits ? null : AppRoutes.quickAction,
+                ref.read(appSurfaceCapabilitiesProvider).canUseSyncedHabits
+                    ? null
+                    : AppRoutes.quickAction,
             builder: (context, state) => const HabitManagementPage(),
           ),
           GoRoute(
             path: AppRoutes.weeklyReview,
             redirect: (context, state) =>
-                capabilities.canUseWeeklyReview ? null : AppRoutes.dashboard,
+                ref.read(appSurfaceCapabilitiesProvider).canUseWeeklyReview
+                    ? null
+                    : AppRoutes.dashboard,
             builder: (context, state) => const WeeklyReviewPage(),
           ),
           GoRoute(
@@ -137,9 +192,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: AppRoutes.deepWork,
-            redirect: (context, state) => capabilities.canUseSyncedExecution
-                ? null
-                : AppRoutes.quickAction,
+            redirect: (context, state) =>
+                ref.read(appSurfaceCapabilitiesProvider).canUseSyncedExecution
+                    ? null
+                    : AppRoutes.quickAction,
             builder: (context, state) => FocusSessionPage(
               initialTargetKind: FocusTargetKind.fromCode(
                 state.uri.queryParameters['target_kind'],
@@ -149,6 +205,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: AppRoutes.coach,
+            redirect: (context, state) =>
+                ref.read(appSurfaceCapabilitiesProvider).canShowCoachSurface
+                    ? null
+                    : AppRoutes.settings,
             builder: (context, state) => const CoachPage(),
           ),
           GoRoute(
@@ -159,4 +219,36 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       ),
     ],
   );
+  ref.listen(authControllerProvider, (_, __) => router.refresh());
+  ref.listen(passwordRecoveryActiveProvider, (_, __) => router.refresh());
+  ref.listen(appSurfaceCapabilitiesProvider, (_, __) => router.refresh());
+  ref.onDispose(router.dispose);
+  return router;
 });
+
+String _authLocationFor(Uri intendedLocation) {
+  return Uri(
+    path: AppRoutes.auth,
+    queryParameters: {
+      _postAuthContinuationParameter: intendedLocation.toString(),
+    },
+  ).toString();
+}
+
+String? _postAuthContinuation(Uri authLocation) {
+  final raw = authLocation.queryParameters[_postAuthContinuationParameter];
+  if (raw == null || raw.isEmpty) return null;
+
+  final target = Uri.tryParse(raw);
+  return target == null ? null : _validPostAuthLocation(target)?.toString();
+}
+
+Uri? _validPostAuthLocation(Uri target) {
+  if (target.hasScheme ||
+      target.hasAuthority ||
+      target.fragment.isNotEmpty ||
+      !_postAuthContinuationPaths.contains(target.path)) {
+    return null;
+  }
+  return target;
+}

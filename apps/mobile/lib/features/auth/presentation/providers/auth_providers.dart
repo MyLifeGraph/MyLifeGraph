@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../../core/config/app_config.dart';
 import '../../../../core/network/api_client.dart';
@@ -26,22 +27,60 @@ final authRepositoryProvider = Provider<AuthRepository?>((ref) {
         );
 });
 
+const passwordRecoveryActivePreferenceKey = 'auth_password_recovery_active';
+
+final passwordRecoveryActiveProvider = StateProvider<bool>((_) => false);
+final authNoticeProvider = StateProvider<AuthNotice?>((_) => null);
+
+class AuthNotice {
+  const AuthNotice(this.message, {this.isError = false});
+
+  final String message;
+  final bool isError;
+}
+
 final authControllerProvider =
     StateNotifierProvider<AuthController, AsyncValue<AppSession?>>((ref) {
   final repository = ref.watch(authRepositoryProvider);
-  return AuthController(repository);
+  return AuthController(
+    repository,
+    onPasswordRecoveryStateChanged: (active) {
+      ref.read(passwordRecoveryActiveProvider.notifier).state = active;
+    },
+  );
 });
 
 class AuthController extends StateNotifier<AsyncValue<AppSession?>> {
-  AuthController(this._repository) : super(const AsyncValue.loading()) {
+  AuthController(
+    this._repository, {
+    void Function(bool active)? onPasswordRecoveryStateChanged,
+  })  : _onPasswordRecoveryStateChanged = onPasswordRecoveryStateChanged,
+        super(const AsyncValue.loading()) {
     _load();
-    _subscription = _repository?.authStateChanges.listen((_) => refresh());
+    _subscription = _repository?.authStateChanges.listen(_handleAuthChange);
   }
 
   final AuthRepository? _repository;
+  final void Function(bool active)? _onPasswordRecoveryStateChanged;
   StreamSubscription<dynamic>? _subscription;
+  Future<void> _recoveryWriteTail = Future<void>.value();
+  bool _recoveryStateRestored = false;
+  bool _recoveryChangedDuringRestore = false;
+
+  void _handleAuthChange(AuthState change) {
+    if (change.event == AuthChangeEvent.passwordRecovery) {
+      _recoveryChangedDuringRestore = true;
+      _onPasswordRecoveryStateChanged?.call(true);
+      unawaited(_persistPasswordRecoveryActive(true));
+    }
+    unawaited(refresh());
+  }
 
   Future<void> _load() async {
+    if (!_recoveryStateRestored) {
+      await _restorePasswordRecoveryState();
+      _recoveryStateRestored = true;
+    }
     if (_repository == null) {
       state = AsyncValue.data(await _localGuestSession());
       return;
@@ -59,10 +98,12 @@ class AuthController extends StateNotifier<AsyncValue<AppSession?>> {
     required String email,
     required String password,
   }) async {
-    final repository = _requireRepository();
     state = const AsyncValue.loading();
     state = await AsyncValue.guard(
-      () => repository.signInWithEmail(email: email, password: password),
+      () => _requireRepository().signInWithEmail(
+        email: email,
+        password: password,
+      ),
     );
   }
 
@@ -71,10 +112,9 @@ class AuthController extends StateNotifier<AsyncValue<AppSession?>> {
     required String password,
     String? name,
   }) async {
-    final repository = _requireRepository();
     state = const AsyncValue.loading();
     final result = await AsyncValue.guard(
-      () => repository.registerWithEmail(
+      () => _requireRepository().registerWithEmail(
         email: email,
         password: password,
         name: name,
@@ -88,6 +128,26 @@ class AuthController extends StateNotifier<AsyncValue<AppSession?>> {
     final repository = _requireRepository();
     await repository.signInWithGoogle();
   }
+
+  Future<void> requestPasswordReset({required String email}) {
+    return _requireRepository().requestPasswordReset(email: email);
+  }
+
+  Future<void> resendSignupConfirmation({required String email}) {
+    return _requireRepository().resendSignupConfirmation(email: email);
+  }
+
+  Future<PasswordRecoveryCompletion> completePasswordRecovery({
+    required String password,
+  }) async {
+    await _requireRepository().updatePassword(password: password);
+    await refresh();
+    return !state.hasError
+        ? PasswordRecoveryCompletion.updated
+        : PasswordRecoveryCompletion.updatedSessionUnavailable;
+  }
+
+  Future<bool> finalizePasswordRecovery() => _setPasswordRecoveryActive(false);
 
   Future<void> continueAsGuest() async {
     state = const AsyncValue.loading();
@@ -114,15 +174,83 @@ class AuthController extends StateNotifier<AsyncValue<AppSession?>> {
     );
   }
 
+  void updateProfileTimezone(String timezone) {
+    final session = state.valueOrNull;
+    if (session == null || session.isGuestSession) {
+      throw StateError('A synced account session is required.');
+    }
+    state = AsyncValue.data(
+      AppSession.authenticated(
+        session.profile.copyWith(timezone: timezone),
+      ),
+    );
+  }
+
   Future<void> signOut() async {
     state = const AsyncValue.loading();
-    final repository = _repository;
-    if (repository == null) {
-      await _clearLocalGuest();
-    } else {
-      await repository.signOut();
+    try {
+      final repository = _repository;
+      if (repository == null) {
+        await _clearLocalGuest();
+      } else {
+        await repository.signOut();
+      }
+    } finally {
+      state = const AsyncValue.data(null);
+      await _setPasswordRecoveryActive(false);
     }
-    state = const AsyncValue.data(null);
+  }
+
+  Future<void> finalizeDeletedAccount() async {
+    state = const AsyncValue.loading();
+    try {
+      final repository = _repository;
+      if (repository == null) {
+        await _clearLocalGuest();
+      } else {
+        await repository.signOutAfterAccountDeletion();
+      }
+    } finally {
+      state = const AsyncValue.data(null);
+      await _setPasswordRecoveryActive(false);
+    }
+  }
+
+  Future<void> _restorePasswordRecoveryState() async {
+    try {
+      final preferences = await SharedPreferences.getInstance();
+      final active =
+          preferences.getBool(passwordRecoveryActivePreferenceKey) ?? false;
+      if (!_recoveryChangedDuringRestore) {
+        _onPasswordRecoveryStateChanged?.call(active);
+      }
+    } catch (_) {
+      if (!_recoveryChangedDuringRestore) {
+        _onPasswordRecoveryStateChanged?.call(false);
+      }
+    }
+  }
+
+  Future<bool> _setPasswordRecoveryActive(bool active) async {
+    _recoveryChangedDuringRestore = true;
+    _onPasswordRecoveryStateChanged?.call(active);
+    return _persistPasswordRecoveryActive(active);
+  }
+
+  Future<bool> _persistPasswordRecoveryActive(bool active) {
+    final operation = _recoveryWriteTail.then((_) async {
+      try {
+        final preferences = await SharedPreferences.getInstance();
+        return preferences.setBool(
+          passwordRecoveryActivePreferenceKey,
+          active,
+        );
+      } catch (_) {
+        return false;
+      }
+    });
+    _recoveryWriteTail = operation.then<void>((_) {});
+    return operation;
   }
 
   Future<AppSession?> _localGuestSession() async {
@@ -136,7 +264,7 @@ class AuthController extends StateNotifier<AsyncValue<AppSession?>> {
         id: 'local_guest',
         email: 'guest@personal-coach.local',
         name: prefs.getString(_LocalGuestPrefs.name) ?? 'Guest Coach User',
-        timezone: 'Europe/Berlin',
+        timezone: localDeviceTimezoneMarker,
         role: AppRole.guest,
         onboardingDone: prefs.getBool(_LocalGuestPrefs.onboardingDone) ?? false,
         authProvider: 'guest',
@@ -152,7 +280,7 @@ class AuthController extends StateNotifier<AsyncValue<AppSession?>> {
         id: 'local_guest',
         email: 'guest@personal-coach.local',
         name: prefs.getString(_LocalGuestPrefs.name) ?? 'Guest Coach User',
-        timezone: 'Europe/Berlin',
+        timezone: localDeviceTimezoneMarker,
         role: AppRole.guest,
         onboardingDone: prefs.getBool(_LocalGuestPrefs.onboardingDone) ?? false,
         authProvider: 'guest',
@@ -168,7 +296,7 @@ class AuthController extends StateNotifier<AsyncValue<AppSession?>> {
   AuthRepository _requireRepository() {
     final repository = _repository;
     if (repository == null) {
-      throw StateError('Supabase is not configured.');
+      throw const AuthConfigurationException();
     }
     return repository;
   }
@@ -179,6 +307,15 @@ class AuthController extends StateNotifier<AsyncValue<AppSession?>> {
     super.dispose();
   }
 }
+
+class AuthConfigurationException implements Exception {
+  const AuthConfigurationException();
+
+  @override
+  String toString() => 'Synced authentication is not configured.';
+}
+
+enum PasswordRecoveryCompletion { updated, updatedSessionUnavailable }
 
 class _LocalGuestPrefs {
   const _LocalGuestPrefs._();

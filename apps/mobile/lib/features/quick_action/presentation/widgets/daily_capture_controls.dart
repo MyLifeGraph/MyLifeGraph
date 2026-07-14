@@ -40,6 +40,7 @@ class CaptureChoiceControl<T> extends StatelessWidget {
             button: true,
             selected: selected,
             label: choice.semanticLabel ?? choice.label,
+            onTap: () => onChanged(choice.value),
             child: ExcludeSemantics(
               child: ChoiceChip(
                 selected: selected,
@@ -121,6 +122,7 @@ class CaptureRatingControl extends StatelessWidget {
               button: true,
               selected: selected,
               label: '$semanticPrefix $rating of 10',
+              onTap: () => onChanged(rating),
               child: ExcludeSemantics(
                 child: SizedBox.square(
                   dimension: 48,
@@ -185,6 +187,7 @@ class CaptureSleepHoursControl extends StatelessWidget {
               button: true,
               selected: hours == value,
               label: 'morning sleep $label',
+              onTap: () => onChanged(hours),
               child: ExcludeSemantics(
                 child: OutlinedButton(
                   onPressed: () => onChanged(hours),

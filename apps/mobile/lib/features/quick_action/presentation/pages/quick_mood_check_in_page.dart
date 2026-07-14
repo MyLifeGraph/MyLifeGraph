@@ -252,6 +252,11 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
               button: true,
               selected: _draft.makeTomorrowGentler,
               label: 'make tomorrow gentler',
+              onTap: () => setState(
+                () => _draft = _draft.copyWith(
+                  makeTomorrowGentler: !_draft.makeTomorrowGentler,
+                ),
+              ),
               child: ExcludeSemantics(
                 child: FilterChip(
                   selected: _draft.makeTomorrowGentler,

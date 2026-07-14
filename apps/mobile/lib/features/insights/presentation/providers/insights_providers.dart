@@ -39,7 +39,9 @@ final correlationAnalyzerProvider = Provider<CorrelationAnalyzer>(
 
 final correlationReportProvider =
     FutureProvider<CorrelationReport>((ref) async {
-  final windowDays = ref.watch(insightsWindowDaysProvider);
+  final windowDays = normalizeInsightsWindowDays(
+    ref.watch(insightsWindowDaysProvider),
+  );
   final points = await ref
       .watch(insightsRepositoryProvider)
       .getCorrelationDataPoints(windowDays: windowDays);

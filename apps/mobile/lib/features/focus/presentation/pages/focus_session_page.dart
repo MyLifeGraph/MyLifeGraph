@@ -9,9 +9,16 @@ import '../../../../core/utils/client_uuid.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_page.dart';
 import '../../../dashboard/presentation/providers/dashboard_providers.dart';
+import '../../../snapshots/application/snapshot_refresh_service.dart';
 import '../../../snapshots/presentation/providers/snapshot_providers.dart';
 import '../../data/focus_session_supabase_data_source.dart';
 import '../../domain/focus_session.dart';
+
+final focusSessionPageDataSourceProvider =
+    Provider<FocusSessionSupabaseDataSource?>((ref) {
+  final client = ref.watch(supabaseClientProvider);
+  return client == null ? null : FocusSessionSupabaseDataSource(client);
+});
 
 class FocusSessionPage extends ConsumerStatefulWidget {
   const FocusSessionPage({
@@ -36,6 +43,7 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage> {
   int _plannedMinutes = 25;
   bool _isLoading = true;
   bool _isSaving = false;
+  String? _loadError;
 
   @override
   void initState() {
@@ -65,6 +73,11 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage> {
               ),
             ),
           )
+        else if (_loadError != null)
+          _FocusLoadErrorCard(
+            message: _loadError!,
+            onRetry: _load,
+          )
         else if (_active != null)
           _ActiveFocusCard(
             session: _active!,
@@ -87,23 +100,39 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage> {
             },
             onStart: _start,
           ),
-        if (!_isLoading) _FocusHistoryCard(sessions: _recent),
+        if (!_isLoading && _loadError == null)
+          _FocusHistoryCard(sessions: _recent),
       ],
     );
   }
 
   Future<void> _load() async {
+    if (!mounted) return;
     final config = ref.read(appConfigProvider);
-    final client = ref.read(supabaseClientProvider);
-    if (config.useMockData || client == null) {
+    final source = ref.read(focusSessionPageDataSourceProvider);
+    if (config.useMockData) {
       if (mounted) {
-        setState(() => _isLoading = false);
+        setState(() {
+          _loadError = null;
+          _isLoading = false;
+        });
       }
       return;
     }
-    setState(() => _isLoading = true);
+    if (source == null) {
+      if (mounted) {
+        setState(() {
+          _loadError = 'Synced focus sessions are not configured.';
+          _isLoading = false;
+        });
+      }
+      return;
+    }
+    setState(() {
+      _loadError = null;
+      _isLoading = true;
+    });
     try {
-      final source = FocusSessionSupabaseDataSource(client);
       final results = await Future.wait([
         source.fetchActiveSession(),
         source.fetchRecentSessions(),
@@ -124,35 +153,44 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage> {
           }
         }
       }
+      if (selected != null &&
+          !targets.any((target) => target.value == selected)) {
+        selected = null;
+      }
       if (mounted) {
         setState(() {
           _active = active;
           _recent = recent;
           _targets = targets;
           _selectedTargetValue = selected;
+          _loadError = null;
           _isLoading = false;
         });
       }
     } catch (_) {
+      if (!mounted) return;
       if (mounted) {
-        setState(() => _isLoading = false);
-        _showMessage('Could not load focus sessions.');
+        setState(() {
+          _loadError = 'Could not load focus sessions.';
+          _isLoading = false;
+        });
       }
     }
   }
 
   Future<void> _start() async {
-    final client = ref.read(supabaseClientProvider);
-    if (client == null || _isSaving) {
+    final source = ref.read(focusSessionPageDataSourceProvider);
+    if (source == null || _isSaving) {
       return;
     }
     final target = _targets
         .where((candidate) => candidate.value == _selectedTargetValue)
         .firstOrNull;
     final requestId = newClientUuid();
+    final snapshotRefresh = ref.read(snapshotRefreshServiceProvider);
     setState(() => _isSaving = true);
     try {
-      final started = await FocusSessionSupabaseDataSource(client).startSession(
+      final started = await source.startSession(
         sessionId: requestId,
         draft: FocusStartDraft(
           plannedMinutes: _plannedMinutes,
@@ -161,14 +199,26 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage> {
           label: target?.title ?? 'Independent focus block',
         ),
       );
-      await _afterDurableWrite(started);
+      await _afterDurableWrite(started, snapshotRefresh);
       if (mounted) {
         _showMessage('Focus session started.');
       }
     } catch (error) {
+      if (!mounted) {
+        try {
+          final active = await source.fetchActiveSession();
+          if (active?.id == requestId) {
+            await _afterDurableWrite(active!, snapshotRefresh);
+          }
+        } catch (_) {
+          // The mutation remains honestly unconfirmed after navigation.
+        }
+        return;
+      }
       await _load();
+      if (!mounted) return;
       if (_active?.id == requestId) {
-        await _afterDurableWrite(_active!);
+        await _afterDurableWrite(_active!, snapshotRefresh);
         if (mounted) {
           _showMessage('Focus session started.');
         }
@@ -190,17 +240,18 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage> {
 
   Future<void> _finish() async {
     final active = _active;
-    final client = ref.read(supabaseClientProvider);
-    if (active == null || client == null || _isSaving) {
+    final source = ref.read(focusSessionPageDataSourceProvider);
+    if (active == null || source == null || _isSaving) {
       return;
     }
+    final snapshotRefresh = ref.read(snapshotRefreshServiceProvider);
     setState(() => _isSaving = true);
     try {
-      await FocusSessionSupabaseDataSource(client).finishSession(active.id);
+      await source.finishSession(active.id);
       if (mounted) {
         setState(() => _selectedTargetValue = null);
       }
-      await _afterDurableWrite(active);
+      await _afterDurableWrite(active, snapshotRefresh);
       if (mounted) {
         _showMessage(
           'Focus session finished. Linked tasks and habits were not '
@@ -224,8 +275,8 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage> {
 
   Future<void> _abandon() async {
     final active = _active;
-    final client = ref.read(supabaseClientProvider);
-    if (active == null || client == null || _isSaving) {
+    final source = ref.read(focusSessionPageDataSourceProvider);
+    if (active == null || source == null || _isSaving) {
       return;
     }
     final confirmed = await showDialog<bool>(
@@ -250,13 +301,14 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage> {
     if (confirmed != true || !mounted) {
       return;
     }
+    final snapshotRefresh = ref.read(snapshotRefreshServiceProvider);
     setState(() => _isSaving = true);
     try {
-      await FocusSessionSupabaseDataSource(client).abandonSession(active.id);
+      await source.abandonSession(active.id);
       if (mounted) {
         setState(() => _selectedTargetValue = null);
       }
-      await _afterDurableWrite(active);
+      await _afterDurableWrite(active, snapshotRefresh);
       if (mounted) {
         _showMessage('Focus session abandoned.');
       }
@@ -275,10 +327,14 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage> {
     }
   }
 
-  Future<void> _afterDurableWrite(FocusSession session) async {
-    await ref.read(snapshotRefreshServiceProvider).refreshDailyAfterFocusChange(
-          targetDate: session.snapshotEntryDate,
-        );
+  Future<void> _afterDurableWrite(
+    FocusSession session,
+    SnapshotRefreshService snapshotRefresh,
+  ) async {
+    await snapshotRefresh.refreshDailyAfterFocusChange(
+      targetDate: session.snapshotEntryDate,
+    );
+    if (!mounted) return;
     ref.invalidate(dashboardSnapshotProvider);
     await _load();
   }
@@ -296,6 +352,39 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage> {
   void _showMessage(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
+    );
+  }
+}
+
+class _FocusLoadErrorCard extends StatelessWidget {
+  const _FocusLoadErrorCard({
+    required this.message,
+    required this.onRetry,
+  });
+
+  final String message;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(message, style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: AppSpacing.sm),
+          const Text(
+            'No empty focus state was assumed. Check your connection and '
+            'try again.',
+          ),
+          const SizedBox(height: AppSpacing.md),
+          OutlinedButton.icon(
+            onPressed: onRetry,
+            icon: const Icon(Icons.refresh),
+            label: const Text('Retry'),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -347,14 +436,20 @@ class _StartFocusCard extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.lg),
           DropdownButtonFormField<String?>(
+            key: ValueKey('focus-target-selector-$selectedTargetValue'),
             initialValue: selectedTargetValue,
+            isExpanded: true,
             decoration: const InputDecoration(
               labelText: 'Linked action optional',
             ),
             items: [
               const DropdownMenuItem<String?>(
                 value: null,
-                child: Text('Independent focus block'),
+                child: Text(
+                  'Independent focus block',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
               ...targets.map(
                 (target) => DropdownMenuItem<String?>(
@@ -362,6 +457,8 @@ class _StartFocusCard extends StatelessWidget {
                   child: Text(
                     '${target.kind == FocusTargetKind.task ? 'Task' : 'Habit'}: '
                     '${target.title}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
               ),
@@ -416,9 +513,11 @@ class _ActiveFocusCard extends StatelessWidget {
                 color: Theme.of(context).colorScheme.primary,
               ),
               const SizedBox(width: AppSpacing.sm),
-              Text(
-                'Focus active',
-                style: Theme.of(context).textTheme.titleLarge,
+              Expanded(
+                child: Text(
+                  'Focus active',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
               ),
             ],
           ),
@@ -431,18 +530,22 @@ class _ActiveFocusCard extends StatelessWidget {
             style: Theme.of(context).textTheme.bodySmall,
           ),
           const SizedBox(height: AppSpacing.lg),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
+          Wrap(
+            key: const ValueKey('active-focus-actions'),
+            alignment: WrapAlignment.end,
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.sm,
             children: [
               TextButton(
                 onPressed: isSaving ? null : onAbandon,
                 child: const Text('Abandon'),
               ),
-              const SizedBox(width: AppSpacing.sm),
-              FilledButton.icon(
+              FilledButton(
                 onPressed: isSaving ? null : onFinish,
-                icon: const Icon(Icons.stop),
-                label: const Text('Finish focus session'),
+                child: const Text(
+                  'Finish focus session',
+                  textAlign: TextAlign.center,
+                ),
               ),
             ],
           ),

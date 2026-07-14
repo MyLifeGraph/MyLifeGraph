@@ -3,13 +3,17 @@ class Insight {
     required this.id,
     required this.title,
     required this.summary,
-    required this.impact,
+    required this.confidence,
     required this.tags,
   });
 
   final String id;
   final String title;
   final String summary;
-  final String impact;
+  final double? confidence;
   final List<String> tags;
+
+  String get confidenceLabel => confidence == null
+      ? 'Confidence not stored'
+      : '${(confidence! * 100).floor()}% confidence';
 }

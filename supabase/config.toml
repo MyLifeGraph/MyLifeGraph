@@ -9,7 +9,7 @@ max_rows = 1000
 [auth]
 enabled = true
 site_url = "http://127.0.0.1:7357"
-additional_redirect_urls = ["http://localhost:7357", "http://127.0.0.1:7357"]
+additional_redirect_urls = ["http://localhost:7357", "http://127.0.0.1:7357", "com.mylifegraph.app://login-callback/"]
 jwt_expiry = 3600
 enable_signup = true
 

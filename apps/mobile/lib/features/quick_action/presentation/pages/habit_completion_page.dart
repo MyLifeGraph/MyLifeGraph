@@ -13,6 +13,12 @@ import '../../../snapshots/presentation/providers/snapshot_providers.dart';
 import '../../data/habit_completion_supabase_data_source.dart';
 import '../../domain/habit_v1.dart';
 
+final habitCompletionPageDataSourceProvider =
+    Provider<HabitCompletionSupabaseDataSource?>((ref) {
+  final client = ref.watch(supabaseClientProvider);
+  return client == null ? null : HabitCompletionSupabaseDataSource(client);
+});
+
 class HabitCompletionPage extends ConsumerStatefulWidget {
   const HabitCompletionPage({super.key});
 
@@ -25,6 +31,8 @@ class _HabitCompletionPageState extends ConsumerState<HabitCompletionPage> {
   List<HabitV1> _habits = const [];
   final Set<String> _savingHabitIds = {};
   bool _isLoading = true;
+  String? _loadError;
+  int _loadGeneration = 0;
 
   @override
   void initState() {
@@ -41,7 +49,8 @@ class _HabitCompletionPageState extends ConsumerState<HabitCompletionPage> {
       actions: [
         IconButton(
           tooltip: 'Refresh',
-          onPressed: _isLoading ? null : _loadHabits,
+          onPressed:
+              _isLoading || _savingHabitIds.isNotEmpty ? null : _loadHabits,
           icon: const Icon(Icons.refresh),
         ),
         IconButton(
@@ -59,6 +68,11 @@ class _HabitCompletionPageState extends ConsumerState<HabitCompletionPage> {
                 child: CircularProgressIndicator(),
               ),
             ),
+          )
+        else if (_loadError != null)
+          _HabitLoadErrorCard(
+            message: _loadError!,
+            onRetry: _savingHabitIds.isEmpty ? _loadHabits : null,
           )
         else if (_habits.isEmpty)
           const AppCard(
@@ -91,36 +105,49 @@ class _HabitCompletionPageState extends ConsumerState<HabitCompletionPage> {
   }
 
   Future<void> _loadHabits() async {
+    if (!mounted) return;
+    final generation = ++_loadGeneration;
     final config = ref.read(appConfigProvider);
-    final client = ref.read(supabaseClientProvider);
-    if (config.useMockData || client == null) {
-      if (mounted) {
+    final source = ref.read(habitCompletionPageDataSourceProvider);
+    if (config.useMockData) {
+      if (mounted && generation == _loadGeneration) {
         setState(() {
           _habits = const [];
+          _loadError = null;
           _isLoading = false;
         });
-        if (!config.useMockData) {
-          _showMessage('Supabase is not configured.');
-        }
+      }
+      return;
+    }
+    if (source == null) {
+      if (mounted && generation == _loadGeneration) {
+        setState(() {
+          _loadError = 'Synced habits are not configured.';
+          _isLoading = false;
+        });
       }
       return;
     }
 
-    setState(() => _isLoading = true);
+    setState(() {
+      _loadError = null;
+      _isLoading = true;
+    });
     try {
-      final habits = await HabitCompletionSupabaseDataSource(
-        client,
-      ).fetchActiveHabits();
-      if (mounted) {
+      final habits = await source.fetchActiveHabits();
+      if (mounted && generation == _loadGeneration) {
         setState(() {
           _habits = habits;
+          _loadError = null;
           _isLoading = false;
         });
       }
     } catch (_) {
-      if (mounted) {
-        setState(() => _isLoading = false);
-        _showMessage('Could not load today\'s habits.');
+      if (mounted && generation == _loadGeneration) {
+        setState(() {
+          _loadError = 'Could not load today\'s habits.';
+          _isLoading = false;
+        });
       }
     }
   }
@@ -128,8 +155,8 @@ class _HabitCompletionPageState extends ConsumerState<HabitCompletionPage> {
   Future<void> _setOutcome(HabitV1 habit, HabitOutcome outcome) async {
     final targetDate = habitDateOnly(DateTime.now());
     final config = ref.read(appConfigProvider);
-    final client = ref.read(supabaseClientProvider);
-    if (config.useMockData || client == null) {
+    final source = ref.read(habitCompletionPageDataSourceProvider);
+    if (config.useMockData || source == null) {
       _showMessage('Supabase is not configured.');
       return;
     }
@@ -137,18 +164,18 @@ class _HabitCompletionPageState extends ConsumerState<HabitCompletionPage> {
       return;
     }
 
+    final snapshotRefresh = ref.read(snapshotRefreshServiceProvider);
     setState(() => _savingHabitIds.add(habit.id));
     try {
-      await HabitCompletionSupabaseDataSource(client).setTodayOutcome(
+      await source.setTodayOutcome(
         habitId: habit.id,
         outcome: outcome,
         targetDate: targetDate,
       );
-      await ref
-          .read(snapshotRefreshServiceProvider)
-          .refreshDailyAfterHabitChange(
-            targetDate: habitDateKey(targetDate),
-          );
+      await snapshotRefresh.refreshDailyAfterHabitChange(
+        targetDate: habitDateKey(targetDate),
+      );
+      if (!mounted) return;
       ref.invalidate(dashboardSnapshotProvider);
       await _loadHabits();
       if (mounted) {
@@ -172,8 +199,8 @@ class _HabitCompletionPageState extends ConsumerState<HabitCompletionPage> {
   Future<void> _undoOutcome(HabitV1 habit) async {
     final targetDate = habitDateOnly(DateTime.now());
     final config = ref.read(appConfigProvider);
-    final client = ref.read(supabaseClientProvider);
-    if (config.useMockData || client == null) {
+    final source = ref.read(habitCompletionPageDataSourceProvider);
+    if (config.useMockData || source == null) {
       _showMessage('Supabase is not configured.');
       return;
     }
@@ -181,17 +208,17 @@ class _HabitCompletionPageState extends ConsumerState<HabitCompletionPage> {
       return;
     }
 
+    final snapshotRefresh = ref.read(snapshotRefreshServiceProvider);
     setState(() => _savingHabitIds.add(habit.id));
     try {
-      await HabitCompletionSupabaseDataSource(client).undoTodayOutcome(
+      await source.undoTodayOutcome(
         habitId: habit.id,
         targetDate: targetDate,
       );
-      await ref
-          .read(snapshotRefreshServiceProvider)
-          .refreshDailyAfterHabitChange(
-            targetDate: habitDateKey(targetDate),
-          );
+      await snapshotRefresh.refreshDailyAfterHabitChange(
+        targetDate: habitDateKey(targetDate),
+      );
+      if (!mounted) return;
       ref.invalidate(dashboardSnapshotProvider);
       await _loadHabits();
       if (mounted) {
@@ -211,6 +238,39 @@ class _HabitCompletionPageState extends ConsumerState<HabitCompletionPage> {
   void _showMessage(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
+    );
+  }
+}
+
+class _HabitLoadErrorCard extends StatelessWidget {
+  const _HabitLoadErrorCard({
+    required this.message,
+    required this.onRetry,
+  });
+
+  final String message;
+  final VoidCallback? onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(message, style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: AppSpacing.sm),
+          const Text(
+            'No empty habit state was assumed. Check your connection and '
+            'try again.',
+          ),
+          const SizedBox(height: AppSpacing.md),
+          OutlinedButton.icon(
+            onPressed: onRetry,
+            icon: const Icon(Icons.refresh),
+            label: const Text('Retry'),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -335,6 +395,7 @@ class HabitOutcomeTile extends StatelessWidget {
                 child: Semantics(
                   label: 'Undo habit ${habit.title}',
                   button: true,
+                  onTap: onUndo,
                   child: ExcludeSemantics(
                     child: OutlinedButton.icon(
                       onPressed: onUndo,
@@ -347,12 +408,16 @@ class HabitOutcomeTile extends StatelessWidget {
                 ),
               )
             else
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
+              Wrap(
+                key: ValueKey('habit-outcome-actions-${habit.id}'),
+                alignment: WrapAlignment.end,
+                spacing: AppSpacing.sm,
+                runSpacing: AppSpacing.sm,
                 children: [
                   Semantics(
                     label: 'Skip habit ${habit.title}',
                     button: true,
+                    onTap: onSkip,
                     child: ExcludeSemantics(
                       child: TextButton(
                         onPressed: onSkip,
@@ -360,15 +425,17 @@ class HabitOutcomeTile extends StatelessWidget {
                       ),
                     ),
                   ),
-                  const SizedBox(width: AppSpacing.sm),
                   Semantics(
                     label: 'Complete habit ${habit.title}',
                     button: true,
+                    onTap: onComplete,
                     child: ExcludeSemantics(
-                      child: FilledButton.icon(
+                      child: FilledButton(
                         onPressed: onComplete,
-                        icon: const Icon(Icons.check),
-                        label: const Text('Complete today'),
+                        child: const Text(
+                          'Complete today',
+                          textAlign: TextAlign.center,
+                        ),
                       ),
                     ),
                   ),

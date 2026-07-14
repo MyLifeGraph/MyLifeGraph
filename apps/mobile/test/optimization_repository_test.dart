@@ -7,6 +7,7 @@ import 'package:my_life_graph/features/optimization/data/datasources/recommendat
 import 'package:my_life_graph/features/optimization/data/repositories/optimization_repository_impl.dart';
 import 'package:my_life_graph/features/optimization/domain/entities/recommendation.dart';
 import 'package:my_life_graph/features/optimization/domain/entities/recommendation_feed.dart';
+import 'package:my_life_graph/features/optimization/domain/entities/skillset_profile.dart';
 
 void main() {
   group('OptimizationRepositoryImpl.getRecommendations', () {
@@ -367,16 +368,35 @@ void main() {
     });
   });
 
-  test('real skillset profile never returns the demo profile', () async {
+  test('real skillset profile uses the authenticated loader', () async {
+    final expected = SkillsetProfile(
+      userName: 'Taylor',
+      overallScore: 71,
+      primaryArchetype: 'Steady Builder',
+      scores: const [],
+      updatedAt: DateTime.utc(2026, 7, 13),
+    );
     final repository = _buildRepository(
       config: _config(useMockData: false, supabaseConfigured: true),
       apiClient: _FakeApiClient(),
       accessTokenProvider: () => 'token',
+      skillsetProfileLoader: () async => expected,
+    );
+
+    expect(await repository.getSkillsetProfile(), same(expected));
+  });
+
+  test('real skillset profile reports missing Supabase configuration',
+      () async {
+    final repository = _buildRepository(
+      config: _config(useMockData: false),
+      apiClient: _FakeApiClient(),
+      accessTokenProvider: () => null,
     );
 
     await expectLater(
       repository.getSkillsetProfile(),
-      throwsA(isA<UnsupportedError>()),
+      throwsA(isA<SkillsetProfileAccessException>()),
     );
   });
 }
@@ -387,12 +407,14 @@ OptimizationRepositoryImpl _buildRepository({
   required AccessTokenProvider accessTokenProvider,
   bool allowDemoData = false,
   _FakeMockDataSource? mockDataSource,
+  SkillsetProfileLoader? skillsetProfileLoader,
 }) {
   return OptimizationRepositoryImpl(
     config: config,
     mockDataSource: mockDataSource ?? _FakeMockDataSource(),
     recommendationsApiDataSource: RecommendationsApiDataSource(apiClient),
     accessTokenProvider: accessTokenProvider,
+    skillsetProfileLoader: skillsetProfileLoader,
     allowDemoData: allowDemoData,
   );
 }

@@ -29,8 +29,20 @@ way to explore the product today is the Flutter app in mock-data guest mode.
   without an LLM.
 - Insights includes deterministic correlation exploration for sleep, workload,
   stress, energy, mood, screen time, activity, steps, habits, recovery, and
-  focus. It computes 7/14/30-day relationships in Flutter from existing
-  Supabase rows or local mock time series, without LLM usage.
+  focus. It computes bounded 7/14/30/90-day relationships in Flutter from
+  paginated Supabase rows or local mock time series, without LLM usage. Its generated
+  Skillset section independently loads the latest strict `skillset_profiles`
+  row and exposes missing, malformed, loading, and retry states without a real-
+  account demo substitute.
+- Real authenticated accounts now have durable timezone editing, a strict
+  bounded `account-export-v1` JSON portability export, password reset/confirmation-email
+  recovery, and confirmed permanent account deletion. The deletion is one
+  service-role-only database transaction and requires session-bound Supabase
+  sign-in evidence no more than 15 minutes old; guest/mock exposes none of
+  these as synced operations. Theme choice is persisted on the current device.
+- A global offline banner distinguishes local guest/demo persistence from
+  unavailable synced writes. It reports network transport only; it is not a
+  Supabase/FastAPI health check and the app does not claim an offline sync queue.
 - Phase 0A through Phase 10 are implemented at the repository boundary. Evening and Morning merge without
   erasing each other and feed a strict backend-only state parser; Setup remains
   progressive, revision-safe, reviewable, and atomically materialized. Phase 3
@@ -89,6 +101,12 @@ way to explore the product today is the Flutter app in mock-data guest mode.
   the deterministic fake provider. None of these results establishes a remote/
   production provider or another developer's account; the separate other-Linux-
   user acceptance remains open.
+  Notification Lifecycle V1 adds strict stored-Inbox read/unread/dismiss
+  tombstones for real authenticated accounts through FastAPI and one
+  service-role-only retry ledger. Guest/demo stays local and zero-call, and
+  direct authenticated Notification DML remains forbidden. This lifecycle does
+  not generate, schedule, or deliver notifications; existing reminder settings
+  are not delivery consent.
   See
   `docs/phase-3-executable-actions-contract.md` and
   `docs/phase-8-weekly-review-contract.md`, and
@@ -134,6 +152,24 @@ http://127.0.0.1:7357
 
 Use **Continue as guest** in the app. This is the intended local path when no
 Supabase credentials are configured.
+
+For the complete local real-data stack (Supabase, FastAPI, daily preparation
+runner, and Flutter Web), run:
+
+```bash
+FLUTTER_BIN=/path/to/flutter scripts/start_local_stack.sh
+```
+
+The default command verifies that local database migration history exactly
+matches the repository and exits without applying SQL when it differs. After
+reviewing pending SQL and local rows, opt in explicitly with
+`APPLY_MIGRATIONS=true`; a migration may change or delete local rows. The Coach
+is safely disabled by default. Use
+`LOCAL_STACK_COACH_PROVIDER=fake` for deterministic development or explicitly
+use `LOCAL_STACK_COACH_PROVIDER=local_codex_oauth` with the current WSL user's
+existing `codex login`. The supervisor is loopback-only, never resets the
+database, does not expose backend keys to Flutter, and stores private logs under
+`.tools/local-stack/`. See `docs/local-dev.md` for the exact boundary.
 
 If Flutter is not on `PATH`:
 
@@ -339,12 +375,19 @@ Supabase is the intended auth and persistence backend. The current app supports:
   content, tombstones requests, and keeps usage rows plus request identities.
   Memory selection is a separate owner-scoped projection and never edits the
   underlying Setup/manual memory.
+- `POST /v1/notifications/{notification_id}/actions` is the authenticated
+  `notification-lifecycle-v1` path for retry-safe read/unread/dismiss
+  tombstones. Direct authenticated Notification DML remains forbidden, and the
+  endpoint does not create or deliver notifications.
 
 Important current caveat: the Flutter app targets the canonical snake_case
 schema. A clean local Supabase reset should apply through
-`20260713230000_phase_10_onboarding_eligibility_guard.sql`. Phase 3 adds task estimates/terminal times,
-locked cadence-aware habit outcomes, immutable linked focus history, and
-restricted target deletion without replacing existing RLS or table grants.
+`20260714110000_account_export_lifestyle_entries_grant.sql`. The final small
+grant restores only FastAPI's service-role read access to `lifestyle_entries`,
+which is required by the existing 28-table Account Export V1 contract. Phase 3 adds task
+estimates/terminal times, locked cadence-aware habit outcomes, immutable linked
+focus history, and restricted target deletion without replacing existing RLS
+or table grants.
 Phase 4 adds the persisted owner-scoped daily briefing identity and policies.
 Phase 8 adds the backend-owned owner-readable weekly review identity, forced
 RLS, and a strict deterministic-provenance guard; it does not grant
@@ -360,6 +403,18 @@ profile deletion, and reserve onboarding eligibility projection for the atomic
 backend Intake path. Real local PostgreSQL parallel claim/completion/deletion
 smokes completed without deadlock or timeout and converged on the expected
 message/usage/tombstone outcomes.
+The V1 account migration adds a service-role-only full-account deletion RPC;
+it removes restrict-linked focus history before the Auth/profile/product
+cascade and does not weaken normal task or habit deletion.
+The Notification lifecycle migration adds its owner-locked read/unread/dismiss
+RPC and retry ledger. The subsequent application-table privilege guard makes
+`anon` fail closed across every repo-owned product/ledger table, removes
+authenticated `TRUNCATE`, `REFERENCES`, and `TRIGGER` authority while preserving
+the intended per-table DML, and retains backend projections as read-only. It
+also freezes optional legacy tables, hardens future `postgres` public-table
+defaults, prevents reuse of the installed Auth trigger functions without
+removing their triggers, and adds the Notification-ledger lookup index plus
+non-validating timestamp-order checks for new or updated rows.
 Remote projects still need to be inspected directly before relying on
 `USE_MOCK_DATA=false`.
 
@@ -415,6 +470,18 @@ Local Supabase verification:
 FLUTTER_BIN=/path/to/flutter scripts/verify_supabase_local.sh
 ```
 
+This default is inspection-only for migrations and fails if repository files
+and local database history differ. After reviewing the pending SQL and local
+data, use:
+
+```bash
+APPLY_MIGRATIONS=true \
+FLUTTER_BIN=/path/to/flutter \
+scripts/verify_supabase_local.sh
+```
+
+That opt-in may change or delete local rows.
+
 Local Supabase reset and migration verification:
 
 ```bash
@@ -431,6 +498,10 @@ npm install
 npx playwright install chromium
 FLUTTER_BIN=/path/to/flutter bash scripts/e2e_web.sh
 ```
+
+The normal E2E command likewise requires current migration history and never
+applies pending SQL automatically. Use `APPLY_MIGRATIONS=true` only after
+reviewing and accepting the possible local-row changes.
 
 For diagnosis only, `E2E_PHASE10_ONLY=true` plus the exact `E2E_RUN_ID` of an
 existing eligible principal repeats the Coach portion against that E2E user.
@@ -490,6 +561,14 @@ has the nvm bin directory on `PATH`.
 - `docs/phase-10-controlled-coach-plan.md` - Implemented bounded Coach contract,
   local subscription-backed Codex OAuth adapter, privacy limits, and separate
   live-verification criteria.
+- `docs/notification-lifecycle-v1-contract.md` - Stored-Inbox visibility,
+  read/unread/dismiss commands, exact retry/conflict behavior, and delivery
+  non-claims.
+- `docs/v1-account-controls-contract.md` - Authenticated timezone, strict data
+  export, password recovery, and permanent account-deletion contract.
+- `docs/local-product-completion-handoff.md` - Ordered local completion plan for
+  the real Coach, notifications, scheduling, visible actions, full-stack startup,
+  and release-candidate verification before Android production work.
 - `docs/next-chat-prompt.md` - Ready-to-use prompt for continuing the next
   implementation slice in a new chat.
 - `apps/mobile/README.md` - Flutter app commands and configuration.

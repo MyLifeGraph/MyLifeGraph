@@ -52,6 +52,53 @@ http://127.0.0.1:7357
 Choose **Continue as guest**. The default local workflow uses mock data and does
 not need Supabase.
 
+## Complete Local Stack
+
+For the real-data WSL workflow, one supervisor starts or reuses local Supabase,
+verifies that its migration history matches the repository, starts FastAPI,
+runs the protected daily preparation loop, and starts Flutter Web:
+
+```bash
+FLUTTER_BIN=/path/to/flutter scripts/start_local_stack.sh
+```
+
+The default is migration inspection-only. If repository files and local
+database history differ, the supervisor exits before reading keys or starting
+app processes. Review the pending SQL and local data first, then opt in only
+when those changes are intended:
+
+```bash
+APPLY_MIGRATIONS=true \
+FLUTTER_BIN=/path/to/flutter \
+scripts/start_local_stack.sh
+```
+
+Pending migrations may change or delete local rows even though they do not
+reset the whole database.
+
+The safe default leaves the Coach provider disabled. Standard deterministic
+development may use the fake provider:
+
+```bash
+LOCAL_STACK_COACH_PROVIDER=fake \
+FLUTTER_BIN=/path/to/flutter scripts/start_local_stack.sh
+```
+
+The explicitly opt-in real local Coach uses only the current Linux user's
+existing Codex login:
+
+```bash
+LOCAL_STACK_COACH_PROVIDER=local_codex_oauth \
+FLUTTER_BIN=/path/to/flutter scripts/start_local_stack.sh
+```
+
+The supervisor binds only to loopback, keeps the service-role key and scheduler
+token out of Flutter and command arguments, writes private logs under
+`.tools/local-stack/`, and leaves Supabase running after Ctrl+C. It never runs a
+database reset. It refuses occupied app ports instead of attaching to unknown
+processes. Run `bash scripts/test_start_local_stack.sh` for the hermetic
+credential-separation and cleanup check.
+
 ## Environment
 
 The root `.env.example` documents the shared local values:
@@ -69,13 +116,21 @@ defines.
 
 `USE_MOCK_DATA=true` is a deliberate whole-product local/demo boundary even if
 the browser still has a Supabase auth session. Setup, Evening Shutdown, Morning
-Calibration, Dashboard, Recommendations, Insights, and Notifications stay
+Calibration, Dashboard, Recommendations, Insights, and the Inbox stay
 local; synced task, habit, and focus commands are unavailable; and snapshot
 refresh is skipped. Set it to `false` to exercise real authenticated
 Supabase/FastAPI sources.
 In mock/demo mode, auth boot also skips remote profile reads/creation and guest
 capture migration, then restores the locally applied Setup name and completion
 state across reloads.
+
+For web auth, allow both local origins in Supabase Auth redirect URLs. An
+installed Android build additionally requires the exact callback
+`com.mylifegraph.app://login-callback/` in the Supabase redirect allowlist;
+signup confirmation, password recovery, and Google OAuth all use that callback
+on Android. The manifest already declares the matching VIEW/BROWSABLE intent
+filter. This repository has no iOS runner and therefore does not claim native
+iOS callback handling.
 
 ## Frontend Script
 
@@ -103,6 +158,11 @@ SUPABASE_URL=https://your-project.supabase.co \
 SUPABASE_ANON_KEY=your-anon-key \
 scripts/start_frontend.sh
 ```
+
+With no explicit override, `COACH_SURFACE_ENABLED` is fail-closed for every
+release build and for `APP_ENV=production`; debug/profile development enables
+it. Exact `true` is an explicit opt-in. Enabling the Flutter route does not make
+a provider ready; FastAPI capability remains the independent send gate.
 
 Windows PowerShell:
 
@@ -558,20 +618,102 @@ memory with `POST /v1/coach/memories/{memory_id}/selection` and exact body
 retains usage events and request tombstones, so it does not restore the daily
 request budget.
 
+## Stored Inbox Lifecycle
+
+A real authenticated account reads its visible Inbox rows directly through
+Supabase and sends lifecycle mutations through FastAPI:
+
+```bash
+curl -X POST \
+  http://localhost:8000/v1/notifications/<notification_id>/actions \
+  -H 'Authorization: Bearer <supabase_access_token>' \
+  -H 'Content-Type: application/json' \
+  -d '{"contract_version":"notification-lifecycle-v1","request_id":"11111111-1111-4111-8111-111111111111","command":"mark_read","expected_updated_at":"2026-07-14T08:30:00Z"}'
+```
+
+Use exactly `mark_read`, `mark_unread`, or `dismiss`. Retry an ambiguous result
+with the unchanged request id, command, and expected timestamp. A definite
+`409` requires reloading the Inbox state. Dismiss keeps a tombstone and hides it
+from normal reads. This endpoint does not generate, schedule, or deliver a
+notification; existing reminder settings are not delivery consent. See
+`docs/notification-lifecycle-v1-contract.md`.
+
+## V1 Account Controls
+
+With FastAPI and the matching Supabase project configured, a real account can
+update its IANA timezone, export bounded JSON, and permanently delete itself:
+
+```bash
+curl -X PATCH http://localhost:8000/v1/account/profile \
+  -H 'Authorization: Bearer <supabase_access_token>' \
+  -H 'Content-Type: application/json' \
+  -d '{"timezone":"Europe/Berlin"}'
+
+curl http://localhost:8000/v1/account/export \
+  -H 'Authorization: Bearer <supabase_access_token>'
+```
+
+Permanent deletion additionally requires
+`20260713233000_v1_account_delete.sql` and exact `DELETE` confirmation. Exercise
+it only with an intentionally disposable local account. The verified bearer
+session must contain a recognized, non-refresh Supabase `amr` authentication
+timestamp no more than 15 minutes old; otherwise FastAPI returns `403` before
+the RPC. A successful call deletes the Auth user and every canonical owned
+product row and cannot be undone. See `docs/v1-account-controls-contract.md`.
+Do not run a live deletion merely to verify a non-destructive checkout.
+
+Export first validates the complete bounded envelope. Web uses a browser
+download, desktop opens a cancellable save-location dialog, and Android uses
+the platform share sheet so the user chooses the destination. The app deletes
+its dedicated Android source file best-effort after handoff and before the next
+export, but the share plugin or operating system may retain a protected cache
+copy until its own cleanup. The source contains an iOS share branch, but there
+is no iOS runner or installed-iOS acceptance claim. An export is not a
+transaction-wide point-in-time database snapshot or a restore format.
+
+## Android Builds
+
+Debug builds use the normal Android debug signing path. Distributable release
+builds deliberately fail unless ignored `apps/mobile/android/key.properties`
+contains all four values below and `storeFile` resolves to a private keystore:
+
+```properties
+storePassword=<secret>
+keyPassword=<secret>
+keyAlias=<alias>
+storeFile=<path-to-keystore>
+```
+
+Neither file belongs in Git. The repository never falls back to the debug key
+for a release. Installing a release also requires the remote Supabase redirect
+allowlist entry described above.
+
 ## Supabase
 
 Supabase is optional for mock mode. To work on local Supabase you need the real
 Supabase CLI and Docker available in the Ubuntu shell.
 
-Start or reuse the local stack, then apply pending migrations without deleting
-local data:
+Start or reuse the local stack, then inspect repository files against the local
+database history:
 
 ```bash
 supabase start
-HOME=.tools/supabase-home \
-SUPABASE_TELEMETRY_DISABLED=1 \
-supabase migration up --local
+HOME=.tools/supabase-home SUPABASE_TELEMETRY_DISABLED=1 \
+supabase migration list --local
 ```
+
+Repository scripts stop when either side differs and do not apply pending SQL
+by default. After reviewing the migration and affected local rows, apply it and
+verify the resulting history with:
+
+```bash
+APPLY_MIGRATIONS=true \
+FLUTTER_BIN=/path/to/flutter \
+scripts/verify_supabase_local.sh
+```
+
+This explicit opt-in may change or delete local rows. It must not be described
+as non-destructive merely because it avoids `db reset`.
 
 Read `docs/supabase-current-state.md` first. The Phase 3 runtime requires the
 local schema to include:
@@ -597,9 +739,9 @@ Calendar import additionally requires the Phase 9 migration listed in
 `calendar_connections`, `calendar_imports`, and `calendar_events` plus four
 service-role-only atomic lifecycle operations. Its follow-up guard adds the
 minimal fingerprint-free `calendar_request_identities` registry and reliable
-HTTP 409 conflict semantics. Apply both non-destructively with the same
-`supabase migration up --local` workflow once pending; do not reset the local
-database merely to install them.
+HTTP 409 conflict semantics. Apply both only after reviewing the SQL and local
+rows, using the explicit `APPLY_MIGRATIONS=true` workflow above. Do not reset
+the local database merely to install them.
 
 Controlled Coach additionally requires:
 
@@ -615,8 +757,9 @@ Controlled Coach additionally requires:
 It creates backend-owned Coach request, usage, and memory-selection state;
 hardens message/memory RLS and grants; and installs the service-role-only atomic
 claim, complete, fail, select/deselect, and history-delete RPCs. Apply it with
-the same non-destructive `supabase migration up --local` workflow. History
-deletion intentionally retains request tombstones and usage rows.
+the same reviewed, explicit `APPLY_MIGRATIONS=true` workflow. Migrations may
+change or delete local rows. History deletion intentionally retains request
+tombstones and usage rows.
 The follow-up guard keeps the public RPC signatures but makes
 claim/complete/fail acquire the same owner advisory lock before their existing
 inner bodies, matching history deletion and avoiding inverse lock order.
@@ -626,7 +769,24 @@ onboarding projection changes; and remove legacy `"User"` fallback from role
 authority. Authenticated profile edits are limited to non-authority fields;
 service role and the atomic Intake apply RPC retain the required backend
 projection authority. A fresh migration-chain verification should end at
-`20260713230000_phase_10_onboarding_eligibility_guard.sql`.
+`20260714110000_account_export_lifestyle_entries_grant.sql`. The small final
+grant gives only `service_role` the `lifestyle_entries` read authority required
+by the existing Account Export V1 table set. The account-delete
+migration installs the service-role-only full-account delete transaction; it
+removes restrict-linked focus history before the Auth/profile/product cascade
+without changing normal task or habit deletion. The later Notification
+migration adds the service-role-only lifecycle RPC and retry ledger without
+delivery behavior.
+The final privilege guard covers every repo-owned product and ledger table:
+`anon` receives no table authority, authenticated users lose `TRUNCATE`,
+`REFERENCES`, and `TRIGGER` while intended table-specific DML remains, and the
+four backend projections stay read-only. Optional legacy tables are frozen,
+future public tables created by `postgres` inherit fail-closed application-role
+defaults, and the installed Auth triggers continue firing even though their
+security-definer functions are no longer reusable by application or service
+roles. The migration also adds the Notification-ledger child index and six
+`NOT VALID` timestamp-order checks; those checks protect new or updated rows
+without claiming that pre-existing remote rows have been validated.
 On 2026-07-13 real local PostgreSQL parallel claim/completion/deletion smokes
 completed without deadlock or timeout and converged on the expected message,
 usage, and deletion state. This is local concurrency evidence, not remote
@@ -666,8 +826,10 @@ scripts/verify_supabase_local.sh
 For local Supabase-backed app testing:
 
 1. Run `supabase start`.
-2. Apply pending migrations with the non-reset command above, or use the
-   `RESET_DB=true` verification flow when a fresh local database is intended.
+2. Confirm that `migration list --local` matches. If it does not, review the
+   SQL and local data before using `APPLY_MIGRATIONS=true`, or use the
+   `RESET_DB=true` verification flow only when a fresh local database is
+   deliberately intended.
 3. Run `supabase status` and copy the local anon key into `.env`.
 4. Set `USE_MOCK_DATA=false`, `SUPABASE_URL=http://127.0.0.1:54321`, and
    `SUPABASE_ANON_KEY=<local anon key>`.
@@ -679,7 +841,7 @@ For local Supabase-backed app testing:
    Setup-owned habit complete/skip/undo, focus start/finish/abandon with an owned
    target, the decision-first Today briefing with deliberate adjustment,
    bounded Weekly Review with one cancelled and one confirmed manual Habit V1
-   proposal, Notifications, real Deep Work, and Controlled Coach capability,
+   proposal, Inbox (`/alerts`), real Deep Work, and Controlled Coach capability,
    memory selection, deliberate response, history, and confirmed history
    deletion with a fake provider.
 
@@ -742,7 +904,7 @@ scripts/start_frontend.sh
 ```
 
 Open `http://127.0.0.1:7357`, sign in with one of the demo accounts, and compare
-Dashboard, Notifications, Insights, and Habits across scenarios. Deep Work is
+Dashboard, Inbox, Insights, and Habits across scenarios. Deep Work is
 available in authenticated real-data mode. Coach is also routed for real
 accounts, but sending remains disabled until FastAPI reports a ready configured
 provider; seeded rows do not imply a live model connection.
@@ -798,8 +960,20 @@ Non-destructive local Supabase preflight:
 FLUTTER_BIN=/path/to/flutter scripts/verify_supabase_local.sh
 ```
 
-The command starts or reuses the repository's local Supabase stack, reads the
-local anon key without printing it, and does not reset the database.
+The command starts or reuses the repository's local Supabase stack, verifies
+that repository and database migration history match, reads the local anon key
+without printing it, and does not reset or apply migrations. A mismatch fails
+with instructions before Flutter tests run.
+
+After reviewing pending SQL and local data, the explicit application path is:
+
+```bash
+APPLY_MIGRATIONS=true \
+FLUTTER_BIN=/path/to/flutter \
+scripts/verify_supabase_local.sh
+```
+
+That operation may change or delete local rows.
 
 Local Supabase reset workflow, only when a fresh local database is explicitly
 intended:
@@ -825,9 +999,12 @@ npx playwright install chromium
 FLUTTER_BIN=/path/to/flutter bash scripts/e2e_web.sh
 ```
 
-This is the normal non-reset path. It writes only its uniquely named test data
-to the local stack and skips `supabase db reset` unless `RESET_DB=true` is
-explicitly supplied.
+This is the normal non-reset path. It requires repository and local database
+migration history to match and never applies pending SQL automatically. It
+writes only its uniquely named test data to the local stack and skips
+`supabase db reset` unless `RESET_DB=true` is explicitly supplied. After
+reviewing pending SQL and local rows, `APPLY_MIGRATIONS=true` is the separate
+opt-in; it may change or delete those rows.
 
 For a narrow Phase 10 diagnosis against an already-created, onboarded E2E
 principal, reuse that principal's exact run id:
@@ -872,7 +1049,7 @@ Phase 2 partial/current quality, recovery-first classification, exact stress/
 sleep/energy/day-shape context, source-risk replacement after an Evening edit,
 stable same-period snapshot identity, field-level evidence, deterministic
 provenance, and capture free-text exclusion. It then continues through habit
-execution, deliberate dashboard recommendation refresh, Notifications, and
+execution, deliberate dashboard recommendation refresh, Inbox (`/alerts`), and
 implemented compatibility routes.
 
 The Phase 3 portion contains exact assertions for a typed task's create/edit,
@@ -964,11 +1141,11 @@ the listed screens. Keep manual testing for flows not listed in
 - If `scripts/e2e_web.sh` says Playwright is missing, run `npm install`.
 - If Playwright cannot find a browser, run `npx playwright install chromium` or
   set `CHROME_BIN=/path/to/chrome`.
-- If E2E database assertions say `intake_responses`, `user_state_snapshots`,
-  `habit_logs.status`, `focus_sessions.status`, or the Phase 3 task fields are
-  missing, apply pending local migrations with
-  `HOME=.tools/supabase-home SUPABASE_TELEMETRY_DISABLED=1 supabase migration up --local`
-  or run the fresh local DB flow with `RESET_DB=true`.
+- If E2E preflight or database assertions say migration history or required
+  fields differ, inspect `supabase migration list --local`, the pending SQL,
+  and affected local rows. Re-run with `APPLY_MIGRATIONS=true` only when those
+  changes are intended, or use the fresh local DB flow with `RESET_DB=true`
+  only when destroying the local database is intended.
 - If the Phase 3 migration refuses a legacy habit log with missing status and
   `value <= 0`, inspect that local row and decide its real outcome before
   retrying. The migration deliberately will not reinterpret it as a skip;

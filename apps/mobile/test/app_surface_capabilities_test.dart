@@ -3,6 +3,20 @@ import 'package:my_life_graph/core/capabilities/app_surface_capabilities.dart';
 import 'package:my_life_graph/features/auth/domain/app_session.dart';
 
 void main() {
+  test('explicit release gating hides Coach and blocks backend access', () {
+    final capabilities = AppSurfaceCapabilities.forSession(
+      session: AppSession.authenticated(
+        _profile(email: 'person@example.test', authProvider: 'email'),
+      ),
+      useMockData: false,
+      hasSupabaseClient: true,
+      coachSurfaceEnabled: false,
+    );
+
+    expect(capabilities.canShowCoachSurface, isFalse);
+    expect(capabilities.canAccessCoachBackend, isFalse);
+  });
+
   test('guest session exposes only local capabilities', () {
     final capabilities = AppSurfaceCapabilities.forSession(
       session: AppSession.guest(_profile(authProvider: 'guest')),

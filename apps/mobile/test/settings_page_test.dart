@@ -34,9 +34,20 @@ void main() {
 
     expect(find.text('Review Guest'), findsOneWidget);
     expect(find.text('guest@personal-coach.local'), findsOneWidget);
-    expect(find.text('Europe/Berlin'), findsOneWidget);
+    expect(find.textContaining('Device local ('), findsOneWidget);
+    expect(find.text('Local dates follow this device'), findsOneWidget);
+    expect(
+      find.textContaining('no account timezone is stored'),
+      findsOneWidget,
+    );
     expect(find.text('Local guest'), findsOneWidget);
     expect(find.text('Setup and commitments'), findsOneWidget);
+    expect(find.text('Reminder preference'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('Calendar import (optional)'),
+      180,
+      scrollable: find.byType(Scrollable).first,
+    );
     expect(find.text('Calendar import (optional)'), findsOneWidget);
     expect(find.text('Coach'), findsOneWidget);
     expect(
@@ -54,7 +65,19 @@ void main() {
       findsOneWidget,
     );
 
-    expect(find.text('Export data'), findsNothing);
+    await tester.scrollUntilVisible(
+      find.text('Export data'),
+      180,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('Export data'), findsOneWidget);
+    await tester.ensureVisible(find.text('Delete account'));
+    await tester.pumpAndSettle();
+    expect(find.text('Delete account'), findsOneWidget);
+    expect(
+      find.text('Available only for a synced account.'),
+      findsOneWidget,
+    );
     expect(find.text('Alert rules'), findsNothing);
     expect(find.text('Coach behavior'), findsNothing);
     expect(find.text('Personal memory'), findsNothing);
@@ -65,12 +88,14 @@ void main() {
       200,
       scrollable: find.byType(Scrollable).first,
     );
-    expect(find.text('Applies until the app is restarted.'), findsOneWidget);
+    expect(find.text('Saved on this device.'), findsOneWidget);
 
     expect(tester.widget<Switch>(find.byType(Switch)).value, isFalse);
     await tester.tap(find.text('Light mode'));
-    await tester.pump();
+    await tester.pumpAndSettle();
     expect(tester.widget<Switch>(find.byType(Switch)).value, isTrue);
+    final preferencesAfterTheme = await SharedPreferences.getInstance();
+    expect(preferencesAfterTheme.getString('app_theme_mode'), 'light');
 
     await tester.scrollUntilVisible(
       find.text('Sign out'),

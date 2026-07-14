@@ -4,11 +4,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/constants/app_spacing.dart';
-import '../../../../core/widgets/async_value_view.dart';
 import '../../domain/entities/correlation.dart';
 import '../../domain/entities/insight.dart';
 import '../../domain/services/correlation_analyzer.dart';
 import '../../domain/services/coaching_observation.dart';
+import '../../../optimization/domain/entities/skillset_profile.dart';
+import '../../../optimization/presentation/providers/optimization_providers.dart';
 import '../providers/insights_providers.dart';
 
 class InsightsPage extends ConsumerWidget {
@@ -18,14 +19,63 @@ class InsightsPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final insights = ref.watch(insightsProvider);
     final report = ref.watch(correlationReportProvider);
+    final skillset = ref.watch(skillsetProfileProvider);
 
-    return AsyncValueView(
-      value: insights,
-      data: (items) => AsyncValueView(
-        value: report,
-        data: (correlationReport) => _InsightsHome(
-          insights: items,
-          report: correlationReport,
+    if (insights.hasError || report.hasError) {
+      return _InsightsLoadError(
+        onRetry: () {
+          ref.invalidate(insightsProvider);
+          ref.invalidate(correlationReportProvider);
+        },
+      );
+    }
+    if (insights.isLoading || report.isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    return _InsightsHome(
+      insights: insights.requireValue,
+      report: report.requireValue,
+      skillset: skillset,
+    );
+  }
+}
+
+class _InsightsLoadError extends StatelessWidget {
+  const _InsightsLoadError({required this.onRetry});
+
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.cloud_off_outlined, size: 36),
+              const SizedBox(height: AppSpacing.md),
+              Text(
+                'Could not load account insights.',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              const Text(
+                'No demo patterns were substituted. Check your connection '
+                'and try again.',
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: AppSpacing.md),
+              OutlinedButton.icon(
+                onPressed: onRetry,
+                icon: const Icon(Icons.refresh),
+                label: const Text('Retry'),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -36,10 +86,12 @@ class _InsightsHome extends ConsumerStatefulWidget {
   const _InsightsHome({
     required this.insights,
     required this.report,
+    required this.skillset,
   });
 
   final List<Insight> insights;
   final CorrelationReport report;
+  final AsyncValue<SkillsetProfile> skillset;
 
   @override
   ConsumerState<_InsightsHome> createState() => _InsightsHomeState();
@@ -92,10 +144,16 @@ class _InsightsHomeState extends ConsumerState<_InsightsHome> {
                   onRefresh: () {
                     ref.invalidate(correlationReportProvider);
                     ref.invalidate(insightsProvider);
+                    ref.invalidate(skillsetProfileProvider);
                   },
                 ),
                 SizedBox(height: isMobile ? AppSpacing.lg : AppSpacing.xl),
                 _CoachingObservationCard(observation: observation),
+                SizedBox(height: isMobile ? AppSpacing.md : AppSpacing.lg),
+                _SkillsetProfileCard(
+                  skillset: widget.skillset,
+                  onRetry: () => ref.invalidate(skillsetProfileProvider),
+                ),
                 SizedBox(height: isMobile ? AppSpacing.md : AppSpacing.lg),
                 _InsightsPanel(
                   padding: EdgeInsets.zero,
@@ -287,8 +345,9 @@ class _InsightsHeader extends StatelessWidget {
         const SizedBox(height: AppSpacing.lg),
         Text(
           'Start with one cautious observation. Open advanced exploration when you want the underlying correlations.',
+          key: const Key('insights-header-description'),
           style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                color: const Color(0xFFA8B5BE),
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
                 height: 1.7,
               ),
         ),
@@ -298,7 +357,7 @@ class _InsightsHeader extends StatelessWidget {
     final action = FilledButton.icon(
       style: FilledButton.styleFrom(
         backgroundColor: Theme.of(context).colorScheme.primary,
-        foregroundColor: Colors.black,
+        foregroundColor: Theme.of(context).colorScheme.onPrimary,
         padding: const EdgeInsets.symmetric(
           horizontal: AppSpacing.md,
           vertical: AppSpacing.md,
@@ -347,6 +406,7 @@ class _CoachingObservationCard extends StatelessWidget {
       ObservationConfidence.stronger => 'Stronger',
     };
     return _InsightsPanel(
+      panelKey: const Key('insights-observation-panel'),
       padding: const EdgeInsets.all(AppSpacing.lg),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -388,6 +448,132 @@ class _CoachingObservationCard extends StatelessWidget {
             ),
           ],
         ],
+      ),
+    );
+  }
+}
+
+class _SkillsetProfileCard extends StatelessWidget {
+  const _SkillsetProfileCard({
+    required this.skillset,
+    required this.onRetry,
+  });
+
+  final AsyncValue<SkillsetProfile> skillset;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return _InsightsPanel(
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      child: skillset.when(
+        loading: () => const Row(
+          children: [
+            SizedBox.square(
+              dimension: 22,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+            SizedBox(width: AppSpacing.md),
+            Expanded(child: Text('Loading generated skillset profile…')),
+          ],
+        ),
+        error: (error, __) => Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'SKILLSET PROFILE',
+              style: Theme.of(context).textTheme.labelLarge,
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              error is SkillsetProfileUnavailableException
+                  ? 'No generated skillset profile yet.'
+                  : 'Could not load generated skillset profile.',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              error is SkillsetProfileUnavailableException
+                  ? 'This account has no generated profile. Nothing was substituted.'
+                  : 'No demo profile was substituted. Check your connection and retry.',
+            ),
+            const SizedBox(height: AppSpacing.md),
+            OutlinedButton.icon(
+              onPressed: onRetry,
+              icon: const Icon(Icons.refresh),
+              label: Text(
+                error is SkillsetProfileUnavailableException
+                    ? 'Check again'
+                    : 'Retry skillset profile',
+              ),
+            ),
+          ],
+        ),
+        data: (profile) => Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'SKILLSET PROFILE',
+              style: Theme.of(context).textTheme.labelLarge,
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              '${profile.primaryArchetype} · ${profile.overallScore} / 100',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              'Generated for ${profile.userName} · ${profile.updatedAt.toLocal()}',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: AppSpacing.md),
+            if (profile.scores.isEmpty)
+              const Text('No individual skill signals were stored.')
+            else
+              ...profile.scores.map(
+                (score) => Padding(
+                  padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      final description = Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            score.name,
+                            style: Theme.of(context).textTheme.titleSmall,
+                          ),
+                          Text(
+                            score.signal,
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ],
+                      );
+                      final stackScore = constraints.maxWidth < 280 ||
+                          MediaQuery.textScalerOf(context).scale(14) > 21;
+                      if (stackScore) {
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            description,
+                            const SizedBox(height: AppSpacing.xs),
+                            Text('${score.score} / 100'),
+                          ],
+                        );
+                      }
+                      return Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(child: description),
+                          const SizedBox(width: AppSpacing.md),
+                          Text('${score.score} / 100'),
+                        ],
+                      );
+                    },
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -477,8 +663,7 @@ class _WindowSelector extends StatelessWidget {
           ButtonSegment(value: 7, label: Text('7d')),
           ButtonSegment(value: 14, label: Text('14d')),
           ButtonSegment(value: 30, label: Text('30d')),
-          ButtonSegment(value: 90, label: Text('3M')),
-          ButtonSegment(value: -1, label: Text('All')),
+          ButtonSegment(value: 90, label: Text('90d')),
         ],
         selected: {value},
         onSelectionChanged: (selection) => onChanged(selection.first),
@@ -534,10 +719,16 @@ class _TrendOverlayCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final brightness = Theme.of(context).brightness;
     final selectedMetrics = report.metrics
         .where((metric) => selectedMetricIds.contains(metric.id))
         .toList(growable: false);
-    final series = _buildTrendSeries(report.points, selectedMetrics);
+    final series = _buildTrendSeries(
+      report.points,
+      selectedMetrics,
+      brightness,
+    );
 
     return _InsightsPanel(
       padding: EdgeInsets.all(isMobile ? AppSpacing.md : AppSpacing.lg),
@@ -559,7 +750,8 @@ class _TrendOverlayCard extends StatelessWidget {
                     Text(
                       'Select multiple signals to compare their peaks over time.',
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: const Color(0xFFA8B5BE),
+                            color:
+                                Theme.of(context).colorScheme.onSurfaceVariant,
                           ),
                     ),
                   ],
@@ -579,9 +771,9 @@ class _TrendOverlayCard extends StatelessWidget {
                   label: Text(metric.label),
                   selected: selectedMetricIds.contains(metric.id),
                   onSelected: (_) => onMetricToggled(metric.id),
-                  selectedColor:
-                      _trendColorForMetric(metric.id).withValues(alpha: 0.22),
-                  checkmarkColor: _trendColorForMetric(metric.id),
+                  selectedColor: _trendColorForMetric(metric.id, brightness)
+                      .withValues(alpha: 0.22),
+                  checkmarkColor: _trendColorForMetric(metric.id, brightness),
                 ),
             ],
           ),
@@ -591,8 +783,9 @@ class _TrendOverlayCard extends StatelessWidget {
             child: CustomPaint(
               painter: _TrendOverlayPainter(
                 series: series,
-                axisColor: Colors.white.withValues(alpha: 0.28),
-                gridColor: Colors.white.withValues(alpha: 0.08),
+                axisColor: colors.outline,
+                gridColor: colors.outlineVariant,
+                labelColor: colors.onSurfaceVariant,
               ),
               child: const SizedBox.expand(),
             ),
@@ -614,6 +807,7 @@ class _TrendOverlayCard extends StatelessWidget {
   List<_TrendSeries> _buildTrendSeries(
     List<CorrelationDataPoint> points,
     List<CorrelationMetric> metrics,
+    Brightness brightness,
   ) {
     return metrics.map((metric) {
       final rawValues = points
@@ -630,7 +824,7 @@ class _TrendOverlayCard extends StatelessWidget {
       if (rawValues.isEmpty) {
         return _TrendSeries(
           metric: metric,
-          color: _trendColorForMetric(metric.id),
+          color: _trendColorForMetric(metric.id, brightness),
           points: const [],
         );
       }
@@ -643,7 +837,7 @@ class _TrendOverlayCard extends StatelessWidget {
 
       return _TrendSeries(
         metric: metric,
-        color: _trendColorForMetric(metric.id),
+        color: _trendColorForMetric(metric.id, brightness),
         points: rawValues
             .map(
               (point) => point.copyWith(
@@ -663,15 +857,16 @@ class _SmallInfoBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.md,
         vertical: AppSpacing.sm,
       ),
       decoration: BoxDecoration(
-        color: const Color(0xFF101721),
+        color: colors.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+        border: Border.all(color: colors.outlineVariant),
       ),
       child: Text(label, style: Theme.of(context).textTheme.labelSmall),
     );
@@ -696,6 +891,8 @@ class _CorrelationCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final activeResult = result;
+    final colors = Theme.of(context).colorScheme;
+    final olderPointColor = colors.onSurfaceVariant;
     return _InsightsPanel(
       padding: EdgeInsets.all(isMobile ? AppSpacing.md : AppSpacing.lg),
       child: Column(
@@ -717,7 +914,8 @@ class _CorrelationCard extends StatelessWidget {
                       activeResult?.summary ??
                           'Choose two different signals to compare.',
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color: const Color(0xFFA8B5BE),
+                            color:
+                                Theme.of(context).colorScheme.onSurfaceVariant,
                             height: 1.4,
                           ),
                     ),
@@ -740,16 +938,22 @@ class _CorrelationCard extends StatelessWidget {
                 values: values,
                 metricA: metricA,
                 metricB: metricB,
-                color: Theme.of(context).colorScheme.primary,
-                trendColor: _resultColor(activeResult, metricA, metricB),
+                color: colors.primary,
+                trendColor:
+                    _resultColor(context, activeResult, metricA, metricB),
+                axisColor: colors.outline,
+                gridColor: colors.outlineVariant,
+                labelColor: colors.onSurfaceVariant,
+                pointOutlineColor: colors.surface,
+                olderPointColor: olderPointColor,
               ),
               child: const SizedBox.expand(),
             ),
           ),
           const SizedBox(height: AppSpacing.md),
           _PointLegend(
-            olderColor: _olderPointColor,
-            newerColor: Theme.of(context).colorScheme.primary,
+            olderColor: olderPointColor,
+            newerColor: colors.primary,
           ),
           const SizedBox(height: AppSpacing.sm),
           Row(
@@ -765,7 +969,7 @@ class _CorrelationCard extends StatelessWidget {
               Text(
                 '${activeResult?.sampleSize ?? values.length} shared days',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: const Color(0xFFA8B5BE),
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
               ),
               Expanded(
@@ -800,7 +1004,7 @@ class _CorrelationBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     final label = result?.coefficientLabel ?? '--';
     final caption = result?.strengthLabel ?? 'No pair';
-    final color = _resultColor(result, metricA, metricB);
+    final color = _resultColor(context, result, metricA, metricB);
     return Container(
       width: 112,
       padding: const EdgeInsets.all(AppSpacing.md),
@@ -848,7 +1052,7 @@ class _PointLegend extends StatelessWidget {
         Text(
           'Each dot is one day',
           style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: const Color(0xFFA8B5BE),
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
               ),
         ),
       ],
@@ -908,7 +1112,7 @@ class _TopPatternsCard extends StatelessWidget {
           Text(
             'Strongest relationships in the selected window.',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: const Color(0xFFA8B5BE),
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
           ),
           const SizedBox(height: AppSpacing.lg),
@@ -943,11 +1147,11 @@ class _TopPatternTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final metricA = report.metricById(result.metricAId);
     final metricB = report.metricById(result.metricBId);
-    final color = _resultColor(result, metricA, metricB);
+    final color = _resultColor(context, result, metricA, metricB);
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
-        color: const Color(0xFF222C33),
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(18),
       ),
       child: Row(
@@ -981,7 +1185,7 @@ class _TopPatternTile extends StatelessWidget {
                 Text(
                   result.strengthLabel,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: const Color(0xFFA8B5BE),
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
                 ),
               ],
@@ -1027,7 +1231,7 @@ class _CorrelationMatrixCard extends StatelessWidget {
           Text(
             'Tap any cell to inspect that pair.',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: const Color(0xFFA8B5BE),
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
           ),
           const SizedBox(height: AppSpacing.lg),
@@ -1058,6 +1262,7 @@ class _CorrelationMatrixCard extends StatelessWidget {
                               columnMetric.id,
                             );
                             final color = _resultColor(
+                              context,
                               result,
                               rowMetric,
                               columnMetric,
@@ -1067,6 +1272,11 @@ class _CorrelationMatrixCard extends StatelessWidget {
                               columnMetric.id,
                             );
                             return _MatrixCell(
+                              cellKey: ValueKey(
+                                'insights-matrix-cell-${rowMetric.id}-${columnMetric.id}',
+                              ),
+                              rowLabel: rowMetric.label,
+                              columnLabel: columnMetric.label,
                               result: result,
                               color: color,
                               selected: selected,
@@ -1139,6 +1349,9 @@ class _MatrixRowLabel extends StatelessWidget {
 
 class _MatrixCell extends StatelessWidget {
   const _MatrixCell({
+    required this.cellKey,
+    required this.rowLabel,
+    required this.columnLabel,
     required this.result,
     required this.color,
     required this.selected,
@@ -1146,6 +1359,9 @@ class _MatrixCell extends StatelessWidget {
     required this.onTap,
   });
 
+  final Key cellKey;
+  final String rowLabel;
+  final String columnLabel;
   final CorrelationResult? result;
   final Color color;
   final bool selected;
@@ -1154,35 +1370,54 @@ class _MatrixCell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     final fillColor = disabled
-        ? const Color(0xFF182126)
+        ? colors.surfaceContainerHighest
         : color.withValues(
             alpha: (result?.coefficient?.abs() ?? 0.08).clamp(0.12, 0.9),
           );
+    final resultDescription = switch (result) {
+      null => 'No result',
+      final value when value.coefficient == null => value.strengthLabel,
+      final value => '${value.coefficientLabel}. ${value.strengthLabel}',
+    };
+    final semanticLabel = disabled
+        ? '$rowLabel, same metric'
+        : '$rowLabel and $columnLabel correlation. $resultDescription';
     return Padding(
       padding: const EdgeInsets.only(right: AppSpacing.xs),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Container(
-          width: 64,
-          height: 42,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: fillColor,
+      child: Semantics(
+        key: cellKey,
+        container: true,
+        label: semanticLabel,
+        button: !disabled,
+        enabled: !disabled,
+        selected: disabled ? null : selected,
+        onTap: disabled ? null : onTap,
+        child: ExcludeSemantics(
+          child: InkWell(
+            onTap: onTap,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: selected
-                  ? Theme.of(context).colorScheme.primary
-                  : Colors.white.withValues(alpha: 0.08),
-              width: selected ? 2 : 1,
-            ),
-          ),
-          child: Text(
-            disabled ? '·' : result?.coefficientLabel ?? '--',
-            style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: disabled ? const Color(0xFF6E7D84) : Colors.white,
+            child: Container(
+              width: 64,
+              height: 42,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: fillColor,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: selected ? colors.primary : colors.outlineVariant,
+                  width: selected ? 2 : 1,
                 ),
+              ),
+              child: Text(
+                disabled ? '·' : result?.coefficientLabel ?? '--',
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color:
+                          disabled ? colors.onSurfaceVariant : colors.onSurface,
+                    ),
+              ),
+            ),
           ),
         ),
       ),
@@ -1227,7 +1462,8 @@ class _DiscoveredPatternsCard extends StatelessWidget {
                     Text(
                       'Stored insights and previous AI notes',
                       style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                            color: const Color(0xFFA8B5BE),
+                            color:
+                                Theme.of(context).colorScheme.onSurfaceVariant,
                           ),
                     ),
                   ],
@@ -1245,7 +1481,10 @@ class _DiscoveredPatternsCard extends StatelessWidget {
             ...insights.map(
               (insight) => Padding(
                 padding: const EdgeInsets.only(bottom: AppSpacing.md),
-                child: _PatternTile(insight: insight, isMobile: isMobile),
+                child: InsightsPatternTile(
+                  insight: insight,
+                  isMobile: isMobile,
+                ),
               ),
             ),
         ],
@@ -1254,8 +1493,9 @@ class _DiscoveredPatternsCard extends StatelessWidget {
   }
 }
 
-class _PatternTile extends StatelessWidget {
-  const _PatternTile({
+class InsightsPatternTile extends StatelessWidget {
+  const InsightsPatternTile({
+    super.key,
     required this.insight,
     required this.isMobile,
   });
@@ -1268,29 +1508,36 @@ class _PatternTile extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
-        color: const Color(0xFF222C33),
+        color: Theme.of(context).colorScheme.surfaceContainerHighest,
         borderRadius: BorderRadius.circular(18),
       ),
       child: isMobile
           ? Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
+                Wrap(
+                  spacing: AppSpacing.md,
+                  runSpacing: AppSpacing.sm,
+                  crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
-                    Expanded(
-                      child: Text(
-                        insight.title,
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
+                    Text(
+                      insight.title,
+                      key: ValueKey('insight-pattern-title-${insight.id}'),
+                      style: Theme.of(context).textTheme.titleMedium,
                     ),
-                    _ImpactBadge(impact: insight.impact),
+                    _ConfidenceBadge(
+                      key: ValueKey(
+                        'insight-pattern-confidence-${insight.id}',
+                      ),
+                      label: insight.confidenceLabel,
+                    ),
                   ],
                 ),
                 const SizedBox(height: AppSpacing.md),
                 Text(
                   insight.summary,
                   style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                        color: const Color(0xFFA8B5BE),
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
                         height: 1.45,
                       ),
                 ),
@@ -1311,7 +1558,9 @@ class _PatternTile extends StatelessWidget {
                       Text(
                         insight.summary,
                         style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                              color: const Color(0xFFA8B5BE),
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurfaceVariant,
                               height: 1.45,
                             ),
                       ),
@@ -1319,17 +1568,17 @@ class _PatternTile extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: AppSpacing.md),
-                _ImpactBadge(impact: insight.impact),
+                _ConfidenceBadge(label: insight.confidenceLabel),
               ],
             ),
     );
   }
 }
 
-class _ImpactBadge extends StatelessWidget {
-  const _ImpactBadge({required this.impact});
+class _ConfidenceBadge extends StatelessWidget {
+  const _ConfidenceBadge({super.key, required this.label});
 
-  final String impact;
+  final String label;
 
   @override
   Widget build(BuildContext context) {
@@ -1339,11 +1588,13 @@ class _ImpactBadge extends StatelessWidget {
         vertical: AppSpacing.sm,
       ),
       decoration: BoxDecoration(
-        color: const Color(0xFF101721),
+        color: Theme.of(context).colorScheme.surfaceContainer,
         borderRadius: BorderRadius.circular(999),
       ),
       child: Text(
-        impact,
+        label,
+        softWrap: true,
+        textAlign: TextAlign.center,
         style: Theme.of(context).textTheme.labelLarge,
       ),
     );
@@ -1357,6 +1608,11 @@ class _ScatterPlotPainter extends CustomPainter {
     required this.metricB,
     required this.color,
     required this.trendColor,
+    required this.axisColor,
+    required this.gridColor,
+    required this.labelColor,
+    required this.pointOutlineColor,
+    required this.olderPointColor,
   });
 
   final List<MetricPairValues> values;
@@ -1364,6 +1620,11 @@ class _ScatterPlotPainter extends CustomPainter {
   final CorrelationMetric metricB;
   final Color color;
   final Color trendColor;
+  final Color axisColor;
+  final Color gridColor;
+  final Color labelColor;
+  final Color pointOutlineColor;
+  final Color olderPointColor;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -1382,10 +1643,10 @@ class _ScatterPlotPainter extends CustomPainter {
     final plotHeight = math.max(plotBottom - plotTop, 1).toDouble();
 
     final gridPaint = Paint()
-      ..color = Colors.white.withValues(alpha: 0.08)
+      ..color = gridColor
       ..strokeWidth = 1;
     final axisPaint = Paint()
-      ..color = Colors.white.withValues(alpha: 0.28)
+      ..color = axisColor
       ..strokeWidth = 1.2;
 
     canvas.drawLine(
@@ -1400,11 +1661,11 @@ class _ScatterPlotPainter extends CustomPainter {
     );
 
     final labelStyle = TextStyle(
-      color: Colors.white.withValues(alpha: 0.62),
+      color: labelColor,
       fontSize: 10,
     );
     final titleStyle = TextStyle(
-      color: Colors.white.withValues(alpha: 0.78),
+      color: labelColor,
       fontSize: 11,
       fontWeight: FontWeight.w600,
     );
@@ -1476,7 +1737,7 @@ class _ScatterPlotPainter extends CustomPainter {
     }
 
     final outlinePaint = Paint()
-      ..color = const Color(0xFF071015).withValues(alpha: 0.75)
+      ..color = pointOutlineColor
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.4;
     for (var index = 0; index < sortedValues.length; index++) {
@@ -1484,7 +1745,7 @@ class _ScatterPlotPainter extends CustomPainter {
       final recency =
           sortedValues.length == 1 ? 1.0 : index / (sortedValues.length - 1);
       final pointPaint = Paint()
-        ..color = _pointColorForRecency(recency, color)
+        ..color = _pointColorForRecency(recency, color, olderPointColor)
         ..style = PaintingStyle.fill;
       final point = pointFor(value);
       final radius = index == sortedValues.length - 1 ? 6.2 : 4.6;
@@ -1547,7 +1808,12 @@ class _ScatterPlotPainter extends CustomPainter {
         metricA != oldDelegate.metricA ||
         metricB != oldDelegate.metricB ||
         color != oldDelegate.color ||
-        trendColor != oldDelegate.trendColor;
+        trendColor != oldDelegate.trendColor ||
+        axisColor != oldDelegate.axisColor ||
+        gridColor != oldDelegate.gridColor ||
+        labelColor != oldDelegate.labelColor ||
+        pointOutlineColor != oldDelegate.pointOutlineColor ||
+        olderPointColor != oldDelegate.olderPointColor;
   }
 
   void _drawAxisTitles(
@@ -1620,11 +1886,13 @@ class _TrendOverlayPainter extends CustomPainter {
     required this.series,
     required this.axisColor,
     required this.gridColor,
+    required this.labelColor,
   });
 
   final List<_TrendSeries> series;
   final Color axisColor;
   final Color gridColor;
+  final Color labelColor;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -1658,7 +1926,7 @@ class _TrendOverlayPainter extends CustomPainter {
     );
 
     final labelStyle = TextStyle(
-      color: Colors.white.withValues(alpha: 0.62),
+      color: labelColor,
       fontSize: 10,
     );
     for (var index = 0; index <= 4; index++) {
@@ -1794,7 +2062,8 @@ class _TrendOverlayPainter extends CustomPainter {
   bool shouldRepaint(covariant _TrendOverlayPainter oldDelegate) {
     return series != oldDelegate.series ||
         axisColor != oldDelegate.axisColor ||
-        gridColor != oldDelegate.gridColor;
+        gridColor != oldDelegate.gridColor ||
+        labelColor != oldDelegate.labelColor;
   }
 }
 
@@ -1854,19 +2123,23 @@ class _InsightsPanel extends StatelessWidget {
   const _InsightsPanel({
     required this.child,
     this.padding = EdgeInsets.zero,
+    this.panelKey,
   });
 
   final Widget child;
   final EdgeInsetsGeometry padding;
+  final Key? panelKey;
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     return Container(
+      key: panelKey,
       padding: padding,
       decoration: BoxDecoration(
-        color: const Color(0xFF122329),
+        color: colors.surfaceContainerLow,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: const Color(0xFF2A424A), width: 2),
+        border: Border.all(color: colors.outlineVariant, width: 2),
         boxShadow: [
           BoxShadow(
             color:
@@ -1883,16 +2156,19 @@ class _InsightsPanel extends StatelessWidget {
 }
 
 Color _resultColor(
+  BuildContext context,
   CorrelationResult? result,
   CorrelationMetric metricA,
   CorrelationMetric metricB,
 ) {
+  final colors = Theme.of(context).colorScheme;
+  final isLight = Theme.of(context).brightness == Brightness.light;
   final coefficient = result?.coefficient;
   if (coefficient == null) {
-    return const Color(0xFF7D8B91);
+    return colors.onSurfaceVariant;
   }
   if (coefficient.abs() < 0.2) {
-    return const Color(0xFFFFC857);
+    return isLight ? const Color(0xFF795900) : const Color(0xFFFFC857);
   }
 
   final bothPositive = metricA.higherIsPositive && metricB.higherIsPositive;
@@ -1903,19 +2179,41 @@ Color _resultColor(
       (bothRisk && coefficient < 0);
 
   if (supportive) {
-    return const Color(0xFF66D19E);
+    return isLight ? const Color(0xFF18794E) : const Color(0xFF66D19E);
   }
-  return const Color(0xFFFF8F70);
+  return isLight ? colors.error : const Color(0xFFFF8F70);
 }
 
-const _olderPointColor = Color(0xFF6E7D84);
-
-Color _pointColorForRecency(double recency, Color newestColor) {
-  final middle = Color.lerp(_olderPointColor, const Color(0xFF8EA7FF), recency);
+Color _pointColorForRecency(
+  double recency,
+  Color newestColor,
+  Color olderPointColor,
+) {
+  final middle = Color.lerp(
+    olderPointColor,
+    const Color(0xFF4968B8),
+    recency,
+  );
   return Color.lerp(middle, newestColor, recency * 0.7) ?? newestColor;
 }
 
-Color _trendColorForMetric(String metricId) {
+Color _trendColorForMetric(String metricId, Brightness brightness) {
+  if (brightness == Brightness.light) {
+    return switch (metricId) {
+      'sleep_hours' => const Color(0xFF3154A3),
+      'focus_minutes' => const Color(0xFF18794E),
+      'workload_score' => const Color(0xFF795900),
+      'stress_level' => const Color(0xFFB3261E),
+      'energy_level' => const Color(0xFF006A65),
+      'mood_score' => const Color(0xFF7B1FA2),
+      'screen_time_hours' => const Color(0xFF5E35B1),
+      'activity_level' => const Color(0xFF2E7D32),
+      'steps' => const Color(0xFF0061A4),
+      'habit_completion_rate' => const Color(0xFF8A4B08),
+      'recovery_score' => const Color(0xFF466900),
+      _ => const Color(0xFF334155),
+    };
+  }
   return switch (metricId) {
     'sleep_hours' => const Color(0xFF8EA7FF),
     'focus_minutes' => const Color(0xFF66D19E),

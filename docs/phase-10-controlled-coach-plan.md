@@ -37,10 +37,15 @@ The current checkout includes:
 - follow-up database guards that persist whether safety copy bypassed or
   replaced a provider response, make canonical profile identity/role authority
   backend-owned, remove legacy-role fallback and authenticated profile delete,
-  and reserve onboarding eligibility projection for the backend Intake RPC; and
+  and reserve onboarding eligibility projection for the backend Intake RPC;
 - the typed `/coach` Flutter surface, `/more` compatibility alias, visible
   provider/model/prompt/context/data-use truth, preserved exact retry drafts,
-  review-only suggestions, explicit memory selection, and conversation deletion.
+  review-only suggestions, explicit memory selection, and conversation deletion;
+  and
+- an independent Flutter surface gate: release builds and
+  `APP_ENV=production` hide navigation and redirect `/coach` to Settings unless
+  `COACH_SURFACE_ENABLED=true` is supplied exactly. This opt-in exposes only the
+  UI boundary; backend capability still controls whether sending is ready.
 
 Pending claims store no message, only its fingerprint. Successful completion
 atomically writes the full bounded user/assistant pair. Conversation deletion
@@ -488,8 +493,12 @@ rather than merely removing the route redirect.
 
 The first usable surface:
 
-- be reachable only for an authenticated real account when capabilities are
-  ready;
+- be exposed only when the independent surface gate is enabled;
+- let an authenticated real account inspect persisted history and capability
+  truth while the provider is disabled or unavailable, while only a backend
+  `ready` capability enables sending;
+- show guest/mock unavailability locally with zero Coach HTTP calls when a
+  development build deliberately exposes the surface;
 - explain that the active provider is a local development connection;
 - load persisted validated history without generating a reply;
 - send only through FastAPI with a fresh retry-safe request id;

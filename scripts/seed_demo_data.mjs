@@ -534,18 +534,26 @@ async function seedScenario(userId, scenario) {
 
   await insertRows(
     'notifications',
-    scenario.notifications.map(([title, message, type, priority, offsetDays], index) => ({
-      user_id: userId,
-      title,
-      message,
-      type,
-      priority,
-      is_read: index > 0,
-      action_url: null,
-      due_at: atHour(addDays(now, offsetDays), 15 + index, 0),
-      metadata,
-      created_at: addDays(now, -index).toISOString(),
-    })),
+    scenario.notifications.map(
+      ([title, message, type, priority, offsetDays], index) => {
+        const lifecycleTimestamp = addDays(now, -index).toISOString();
+        const isRead = index > 0;
+        return {
+          user_id: userId,
+          title,
+          message,
+          type,
+          priority,
+          is_read: isRead,
+          read_at: isRead ? lifecycleTimestamp : null,
+          action_url: null,
+          due_at: atHour(addDays(now, offsetDays), 15 + index, 0),
+          metadata,
+          created_at: lifecycleTimestamp,
+          updated_at: lifecycleTimestamp,
+        };
+      },
+    ),
   );
 
   await insertRows(

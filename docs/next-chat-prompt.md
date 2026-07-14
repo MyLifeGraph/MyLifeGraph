@@ -1,108 +1,77 @@
 # Next Chat Prompt
 
-Use this prompt to continue from the Phase 10 Controlled Coach implementation
-checkpoint. Recommended reasoning level: **high**.
+This run may start from a verified but uncommitted working tree. A missing Git
+approval must not block safe implementation or verification. Use this prompt in
+the new chat.
+Recommended reasoning level: **high**.
 
 ```text
-We are in /home/gregor/projects/ai-personal-coach.
+We are in /home/gregor/projects/ai-personal-coach. The user's goal is to finish
+the complete product locally in WSL first, including the real Coach through
+their own already authenticated Codex CLI. Android packaging and a deployable
+API-backed LLM provider come only after the local release candidate is complete.
+This is not a reduced demo target.
 
-First read AGENTS.md and every linked document required for backend, AI,
-Supabase, Flutter, and verification work. Read
-docs/phase-10-controlled-coach-plan.md completely. Run git status --short before
-editing and preserve unrelated work.
+First read AGENTS.md completely and every document it requires for all Flutter,
+backend, Supabase, product, Coach, notification, scheduling, account-control,
+and verification work you will touch. Then read
+docs/local-product-completion-handoff.md completely. Treat its completion
+definition, phase order, and authorization boundary as the execution contract.
+Run git status --short --branch before editing and preserve all user work.
 
-Phase 10 Controlled Coach is implemented at the repository boundary. Do not
-rebuild it from the old gated MorePage design. Inspect the current strict
-FastAPI/Dart Coach contracts, owner-scoped context builder, fake provider,
-development-only local_codex_oauth adapter, migration/RPCs, Flutter surface,
-focused tests, and browser source before planning changes.
+Verify HEAD, the complete working tree, and all untracked files without assuming
+that a checkpoint commit exists. If uncommitted work remains, do not discard it.
+Run the applicable verification and continue safe work; if Git itself requires a
+new interactive approval, leave an exact commit boundary and continue other
+in-scope work rather than idling.
 
-The current boundary must remain fixed:
+Work autonomously through as much of the handoff as the environment permits:
 
-- only a real authenticated account may use the FastAPI Coach path; guest/mock
-  is honest local-unavailable and makes zero Coach HTTP calls;
-- capability, history, and memory reads never generate; only a deliberate
-  POST /v1/coach/respond may call one configured provider;
-- coach-request-v1 uses one UUID, a trimmed maximum-2,000-code-point message,
-  and today scope; completed replay is provider-free, one owner has at most one
-  active request, and retained requests enforce the profile-local daily budget;
-- coach-context-v1 is deterministic, owner scoped, capped at 32 KiB, and limited
-  to current state/briefing, bounded active facts, only a current weekly review,
-  explicitly selected eligible memories, and bounded completed history;
-- imported calendar content, hidden capture/intake/notification free text,
-  credentials, OAuth files, application secrets, raw history, and cross-user
-  rows never enter model context;
-- suggestions are review-only text and expose no command/apply endpoint;
-- pending claims contain only a message fingerprint; successful completion
-  atomically writes one bounded user/assistant pair and usage event;
-- conversation deletion removes content but retains request tombstones and
-  append-only usage, so it cannot reset budget or reinterpret an old request id;
-- memory selection is separate from memory ownership/content and capped at
-  eight; no automatic memory extraction exists;
-- local_codex_oauth remains APP_ENV=development only, explicitly enabled,
-  fixed-argv/non-shell, stdin-only, ephemeral/read-only/tool-free, bounded, and
-  allowlisted. It never accepts an API key, Hermes, arbitrary CLI args, tools,
-  search, plugins, MCP, writable access, model fallback, or copied OAuth state;
-- gpt-5.5 is the preferred explicit Coach setting only when that local account
-  exposes it. Unavailable login/model/tool-free capability remains honest;
-- all normal tests and browser E2E use the deterministic fake provider and make
-  no live model/network call.
-- the additive Phase 10 hardening chain ends at
-  20260713230000_phase_10_onboarding_eligibility_guard.sql after
-  20260713220000_phase_10_coach_safety_provenance_guard.sql,
-  20260713223000_phase_10_profile_privilege_guard.sql, and
-  20260713224500_phase_10_role_authority_guard.sql;
-  application roles cannot self-promote, delete/recreate the canonical profile,
-  or write onboarding eligibility.
+1. Re-establish the complete deterministic local product loop with standard
+   verification, the full FastAPI suite, non-reset local Supabase verification,
+   and the full non-reset browser E2E. The user authorizes uniquely named local
+   E2E users and rows, but not RESET_DB=true or supabase db reset.
+2. Make the real local Coach a reproducible supported local mode. Run fake
+   provider coverage first, then the explicitly opt-in synthetic and full
+   product live-Coach checks through the current WSL user's existing `codex
+   login`. Never read/copy OAuth files or log the question, prompt, answer, raw
+   events, account identity, paths, tokens, environment values, or Supabase
+   keys. Use the exact configured model the account exposes and never add a
+   silent fallback.
+3. Close the proven Notification gap in separate reviewable slices: durable
+   Inbox lifecycle, preference-aware backend generation, timezone/quiet-hour/
+   cap/deduplication policy, and honest local scheduled delivery. Add migration,
+   RLS, backend, Flutter, and browser regression coverage.
+4. Make the existing protected daily-preparation endpoint actually run through
+   a secret-safe documented local WSL scheduler/runner. Preserve idempotency,
+   local dates, bounded targeting, per-user failure isolation, and no-LLM
+   behavior.
+5. Re-inventory every visible action and close remaining apparent-action gaps,
+   especially Weekly Review proposals. Every visible control must be a durable
+   typed recoverable command, unmistakably read-only information, or absent.
+   Do not make Coach suggestions mutate state without a separately reviewed
+   confirmation/ownership/recovery contract.
+6. Provide a secret-safe one-command or short-sequence full local start path,
+   then exercise the complete manual user journey and resilience/accessibility
+   matrix from the handoff.
+7. Rerun every final gate on the exact final checkout. Fix proved defects in
+   the smallest owning contract with regression tests. Prepare small local
+   commit boundaries after green slices, but commit only when the user has
+   explicitly authorized Git writes. Do not push.
 
-Start by establishing the current checkout's real status. Run focused FastAPI
-Coach/migration/provider tests, Flutter Coach tests, Flutter analyze, standard
-non-destructive verification, and git diff --check. Apply pending local
-migrations with supabase migration up --local rather than resetting unless a
-fresh local database is explicitly requested. Then run the fake-provider
-browser journey if the local toolchain is available. Do not claim any command
-passed until it actually completes in this checkout.
+Keep going while safe in-scope work remains. Do not stop after analysis or one
+passing suite. Distinguish product defects from environment/tool blockers and do
+not claim a manual, live-provider, scheduler, delivery, or E2E result unless it
+actually ran on the final relevant checkout.
 
-The skipped-by-default synthetic-context smoke is
-services/ai_service/tests/test_local_codex_smoke.py and runs only with
-RUN_LOCAL_CODEX_SMOKE=true plus explicit local-provider settings. It passed on
-2026-07-13 with explicitly requested gpt-5.5 (1 passed), no fallback, and no
-answer, prompt, or raw event stream logged. Real local PostgreSQL parallel
-claim/completion/deletion smokes also passed without deadlock or timeout. A
-focused Phase 10 fake-provider browser rerun and the subsequent full
-non-destructive local-Supabase browser journey passed in the same current
-checkout; the full run reported E2E browser smoke passed for
-e2e-1783947134@example.test. E2E_PHASE10_ONLY=true with an existing eligible
-principal's exact E2E_RUN_ID is diagnostic only and does not replace the full
-run.
+Do not reset any database, inspect/mutate remote Supabase, deploy, push, open a
+PR, publish, create/copy credentials or signing keys, automate login, read OAuth
+files, or delete a non-disposable account. Do not broaden the product into
+vector search, autonomous agents, model-controlled database/tools, hidden
+memory extraction, live calendar-provider sync, or Android production work
+during this local completion run.
 
-The previously open first full-product live-account criterion also passed
-non-destructively on 2026-07-13 in the working tree based on b8c7935. The
-existing onboarded local E2E principal authenticated through Flutter Web,
-FastAPI reported ready `local_codex_oauth` with explicit `gpt-5.5`, and one
-deliberate request returned a validated, UI-rendered, persisted
-`coach-response-v1` with `provider_called=true`. The harness expanded data-use
-and provider/model truth and logged no question, prompt, answer, raw event,
-stderr, account identity, token, path, `.env` value, or Supabase key. The CLI
-did not report a reliable selected-model field, so `model_reported` remained
-null while `model_requested=gpt-5.5` stayed exact and no fallback occurred.
-The remaining live acceptance item is a different Linux user cloning the repo,
-logging in with their own eligible account, and completing the same path without
-copied credentials. Do not claim that criterion until that separate user runs
-it.
-
-Never read, print, copy, parse, or commit ~/.codex/auth.json or equivalent OAuth
-state. Do not automate login. A live request is separate, per-machine, and may
-run only when explicitly opted in and already authenticated; it must expose no
-prompt, raw CLI event, stderr, account identity, path, token, .env value, or
-Supabase key. A successful local call does not prove another Plus/Pro account or
-production readiness.
-
-If verification finds a defect, fix the smallest owning contract and add a
-regression test. Do not broaden Phase 10 into a deployable provider, API-key
-fallback, autonomous agent, vector search, background message, model-controlled
-tool/database access, automatic memory promotion, executable suggestion,
-calendar prompt content, or notification delivery. Select any new product
-slice only from a separately verified user need, and update docs with exact
-current-checkout results.
+Finish with exact commit ids, test/E2E/build results, live-Coach truth,
+notification/scheduler behavior actually proven, manual acceptance results,
+and the remaining external Android/deployment gates.
 ```

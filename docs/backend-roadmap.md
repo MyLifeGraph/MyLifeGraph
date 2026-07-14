@@ -319,6 +319,7 @@ repositories, and jobs, not as unconstrained autonomous LLM loops.
 | Coach service | Deliberate authenticated user send | Current snapshot/briefing, bounded active facts, selected memory, recent completed turns | Validated `coach_messages`, compact provenance/usage only | One configured provider call, budgeted |
 | Memory selection service | Explicit user inspect/select/deselect | Owner-scoped eligible `memory_entries` plus Setup ownership | Separate Coach selection projection; content changes only through its owning contract | None for Phase 10 v1 |
 | Planning service | Weekly review, user request | Goals, tasks, habits, schedule, snapshots | `tasks`, `schedule_items`, `recommendations`, `coach_messages` | Optional for complex plans |
+| Notification lifecycle service | Deliberate authenticated Inbox action | One owner-scoped stored notification plus retry identity | Read/unread/dismiss projection and `notification_action_requests` result ledger | None |
 | Notification service | Schedule and event changes | Preferences, recommendations, deadlines | `notifications` | None |
 
 The intake foundation, controlled post-intake recommendation refresh, first
@@ -773,9 +774,11 @@ production provider or autonomous agent platform by default.
   from productive routes, Settings was reduced to durable behavior, and
   compatibility links redirected to working surfaces. Phase 3 later replaced
   the Deep Work placeholder with a real authenticated focus-session flow.
-- Implemented: Notifications preserve original fields and source read state,
-  distinguish empty from error, and expose Open only for a strict allowlist of
-  implemented internal `action_url` targets.
+- Implemented: the Inbox preserves original notification fields and source
+  read state, distinguishes empty from error, and exposes Open only for a
+  strict allowlist of implemented internal `action_url` targets. Notification
+  Lifecycle V1 adds owner-scoped, retry-safe read/unread/dismiss tombstones
+  without claiming generation or delivery.
 - Verified with mapper, repository, provider, widget, route-capability,
   notification-target, and browser smoke coverage.
 
@@ -1053,8 +1056,9 @@ The detailed implementation order and acceptance criteria live in
 - Implemented: scheduler-triggered timezone-pinned daily snapshot and briefing
   preparation for onboarded non-guest profiles, with bounded targeting,
   idempotent current/missing/stale behavior, and per-user failure isolation.
-- Still open: deployed cron/job wiring and all notification delivery. Their
-  absence does not imply Dashboard-load generation or a hidden background
+- Still open: deployed cron/job wiring plus notification consent, deterministic
+  generation, scheduling, and delivery. Durable stored-Inbox lifecycle alone
+  does not imply any of them, Dashboard-load generation, or a hidden background
   process.
 
 ### Completed Slice: E2E Expansion

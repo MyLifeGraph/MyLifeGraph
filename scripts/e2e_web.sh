@@ -2,6 +2,8 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "$ROOT_DIR/scripts/lib/local_supabase_migrations.sh"
+
 FLUTTER_BIN="${FLUTTER_BIN:-flutter}"
 NODE_BIN="${NODE_BIN:-node}"
 HOST="${HOST:-127.0.0.1}"
@@ -10,9 +12,12 @@ APP_URL="${APP_URL:-http://$HOST:$PORT}"
 AI_SERVICE_HOST="${AI_SERVICE_HOST:-127.0.0.1}"
 AI_SERVICE_PORT="${AI_SERVICE_PORT:-8000}"
 AI_SERVICE_BASE_URL="${AI_SERVICE_BASE_URL:-http://$AI_SERVICE_HOST:$AI_SERVICE_PORT}"
-AI_SERVICE_START="${AI_SERVICE_START:-true}"
+AI_SERVICE_START="${AI_SERVICE_START-true}"
+HEADED="${HEADED-false}"
+E2E_PHASE10_ONLY="${E2E_PHASE10_ONLY-false}"
 SCHEDULED_REFRESH_TOKEN="${SCHEDULED_REFRESH_TOKEN:-local-e2e-scheduled-refresh-${E2E_RUN_ID:-$$}}"
-RESET_DB="${RESET_DB:-false}"
+RESET_DB="${RESET_DB-false}"
+APPLY_MIGRATIONS="${APPLY_MIGRATIONS-false}"
 SUPABASE_HOME="$ROOT_DIR/.tools/supabase-home"
 E2E_LOG_DIR="$ROOT_DIR/.tools/e2e"
 FLUTTER_LOG="$E2E_LOG_DIR/flutter-web.log"
@@ -20,6 +25,12 @@ AI_SERVICE_LOG="$E2E_LOG_DIR/ai-service.log"
 
 cd "$ROOT_DIR"
 mkdir -p "$SUPABASE_HOME" "$E2E_LOG_DIR"
+
+local_supabase_validate_migration_flags \
+  "$RESET_DB" "$APPLY_MIGRATIONS" true || exit $?
+local_supabase_validate_boolean AI_SERVICE_START "$AI_SERVICE_START" || exit $?
+local_supabase_validate_boolean HEADED "$HEADED" || exit $?
+local_supabase_validate_boolean E2E_PHASE10_ONLY "$E2E_PHASE10_ONLY" || exit $?
 
 if command -v supabase >/dev/null 2>&1; then
   SUPABASE_BIN="$(command -v supabase)"
@@ -74,11 +85,8 @@ if ! start_output="$(supabase_cli start 2>&1)"; then
 fi
 printf '%s\n' "$start_output" | sanitize_supabase_output
 
-if [[ "$RESET_DB" == "true" ]]; then
-  supabase_cli db reset
-else
-  echo "Skipping destructive local reset. Re-run with RESET_DB=true to execute supabase db reset."
-fi
+local_supabase_prepare_migration_state \
+  "$RESET_DB" "$APPLY_MIGRATIONS" true
 
 status_output="$(supabase_cli status -o env)"
 api_url="$(printf '%s\n' "$status_output" | awk -F= '$1 == "API_URL" {gsub(/"/, "", $2); print $2; exit}')"
@@ -172,6 +180,7 @@ AI_SERVICE_BASE_URL="$AI_SERVICE_BASE_URL" \
   --dart-define=SUPABASE_URL="$api_url" \
   --dart-define=SUPABASE_ANON_KEY="$local_anon_key" \
   --dart-define=AI_SERVICE_BASE_URL="$AI_SERVICE_BASE_URL" \
+  --dart-define=COACH_SURFACE_ENABLED=true \
   --dart-define=E2E_ENABLE_SEMANTICS=true \
   >"$FLUTTER_LOG" 2>&1 &
 FLUTTER_PID="$!"

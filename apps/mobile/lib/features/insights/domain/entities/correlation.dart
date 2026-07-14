@@ -14,6 +14,19 @@ class CorrelationMetric {
   final bool higherIsPositive;
 }
 
+const insightsWindowDayOptions = <int>[7, 14, 30, 90];
+const maximumInsightsWindowDays = 90;
+
+int normalizeInsightsWindowDays(int windowDays) {
+  if (windowDays < 0 || windowDays > maximumInsightsWindowDays) {
+    return maximumInsightsWindowDays;
+  }
+  if (windowDays < insightsWindowDayOptions.first) {
+    return insightsWindowDayOptions.first;
+  }
+  return windowDays;
+}
+
 class CorrelationDataPoint {
   const CorrelationDataPoint({
     required this.date,

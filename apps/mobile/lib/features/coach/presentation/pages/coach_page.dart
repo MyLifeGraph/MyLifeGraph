@@ -99,9 +99,8 @@ class _CoachPageState extends ConsumerState<CoachPage> {
         ],
       ),
     );
-    if (confirmed == true) {
-      await ref.read(coachControllerProvider.notifier).deleteHistory();
-    }
+    if (!mounted || confirmed != true) return;
+    await ref.read(coachControllerProvider.notifier).deleteHistory();
   }
 }
 

@@ -26,12 +26,18 @@ mode, then restores locally applied Setup state across reloads. Use
 | --- | --- | --- |
 | Guest | No | Stores session and typed revisioned Setup state locally with `shared_preferences`; Setup is not copied into a later account automatically. |
 | Email/password | Yes | Uses Supabase Auth `signInWithPassword` and `signUp`. |
-| Google OAuth | Yes | Uses Supabase OAuth and redirects to the current web origin. |
+| Google OAuth | Yes | Uses Supabase OAuth; web returns to the current origin and installed Android returns through `com.mylifegraph.app://login-callback/`. |
 
 Supabase local auth config allows:
 
 - `http://127.0.0.1:7357`
 - `http://localhost:7357`
+- `com.mylifegraph.app://login-callback/`
+
+The Android callback is also used for signup confirmation and password
+recovery. A remote Supabase project must allowlist it explicitly before an
+installed Android build can complete those flows. There is no iOS runner in
+this repository, so native iOS callbacks are outside the current boundary.
 
 ## Canonical Tables Referenced By The Flutter App
 
@@ -44,7 +50,8 @@ The app table constants live in
 | `daily_logs` | One canonical daily row whose V2 metadata owns separate Evening/Morning captures plus direct nullable numeric Dashboard projections; the Dashboard does not synthesize proxy scores. |
 | `behavioral_events` | Granular AI signal stream; canonical capture writes a dynamic deterministic maximum of four current events linked to its `daily_logs` row. |
 | `tasks` | Owner-scoped executable tasks with create/edit/complete/postpone/cancel/restore/undo, optional 5-480 minute estimates, and explicit completion/cancellation timestamps. |
-| `notifications` | Read-only Notifications inbox; original type, priority, read state, and allowlisted internal `action_url` targets. |
+| `notifications` | Authenticated read-only Inbox projection with backend-owned read/unread/dismiss lifecycle, original type/priority, due visibility, and allowlisted internal `action_url` targets. Stored rows do not prove delivery. |
+| `notification_action_requests` | Service-role-only exact retry/result ledger for `notification-lifecycle-v1`; it contains identities and lifecycle projections, not notification copy. |
 | `schedule_items` | Setup-owned confirmed fixed commitments plus preserved manual/other-source dashboard schedule rows. |
 | `ai_insights` | Insights list. |
 | `coach_messages` | Bounded validated Phase 10 user/assistant history linked to a retry-safe backend request. Authenticated owners can read; only FastAPI can insert/delete V1 turns. Legacy rows remain distinguishable by null request/contract fields. |
@@ -176,11 +183,12 @@ requested window. See
 failure semantics.
 
 Phase 0B did not require a migration. Flutter now treats missing or failing real
-Dashboard/Notifications/Recommendation sources as empty or error according to
+Dashboard/Inbox/Recommendation sources as empty or error according to
 their contracts and never substitutes mock rows. Notification routing reads the
 existing `action_url`, but only implemented internal paths are enabled; no
-notification read-state write is claimed until a durable repository command is
-added.
+notification mutation is inferred from that link allowlist. Notification
+Lifecycle V1 later added the separate durable backend-owned
+read/unread/dismiss command without broadening direct authenticated table DML.
 
 Phase 0C adds the revision history contract to `intake_responses` and the
 monotonic projection revision to `profiles`. Setup-created goals, habits,
@@ -358,6 +366,61 @@ legacy `"User"` fallback authority, and revokes authenticated profile deletion.
 authenticated updates to `onboarding_completed_at` and blocks application-role
 identity/eligibility mutation in the profile trigger. Service role and the
 service-role-only atomic Intake apply RPC retain backend projection authority.
+
+## V1 Account Deletion
+
+`20260713233000_v1_account_delete.sql` adds one
+`delete_account_v1(uuid, text)` function. Execute is revoked from `public`,
+`anon`, and `authenticated` and granted only to `service_role`. The FastAPI
+account route may call it only after deriving the owner from a verified bearer
+principal and receiving exact `DELETE` confirmation.
+
+The RPC takes the existing Intake, Calendar, and Coach owner advisory locks in
+fixed order, pre-locks Calendar request identities before their connection rows,
+and locks the matching `auth.users` row. Phase 3 intentionally uses
+`ON DELETE RESTRICT` from focus history to task/habit targets, so the full-account
+transaction deletes only that owner's `focus_sessions` first. Deleting the Auth
+user then activates the canonical `auth.users -> profiles -> owned tables`
+cascade. A missing Auth user and a completed deletion have distinct exact JSON
+results; success additionally requires that the profile no longer exists.
+Normal task/habit lifecycle and deletion constraints are unchanged.
+
+The same migration gives new canonical and legacy Auth profile projections a
+UTC default without rewriting existing users, removes authenticated direct
+timezone updates, freezes all 14 known CamelCase tables against application-role
+insert/update/delete/truncate, and makes `notifications`, `ai_insights`,
+`recommendations`, and `skillset_profiles` authenticated-read/service-write
+projections. These grants prevent an old JWT from repopulating legacy owner rows
+after deletion and avoid exposing writes that the Flutter product does not own.
+
+## Application Table Privilege Guard
+
+`20260714103000_application_table_privilege_guard.sql` closes unintended
+table-level authority across all 30 repo-owned canonical product and ledger
+tables. `public` and `anon` lose every table privilege. `authenticated` loses
+`TRUNCATE`, `REFERENCES`, and `TRIGGER`, which RLS does not safely substitute
+for, while each table's intended `SELECT`/`INSERT`/`UPDATE`/`DELETE` grants stay
+intact. The four backend-owned projections `notifications`, `ai_insights`,
+`recommendations`, and `skillset_profiles` are reaffirmed as authenticated
+read-only. Any retained subset of the 14 CamelCase legacy tables remains
+application-role mutation-frozen.
+
+The migration also changes default privileges for future public tables created
+by the repository migration role `postgres`: `public` and `anon` default to no
+table authority, and authenticated future grants exclude `TRUNCATE`,
+`REFERENCES`, and `TRIGGER`. Other creators' defaults and service-role defaults
+are deliberately not rewritten. Execute on `handle_new_user()` and
+`handle_new_auth_user()` is revoked from application roles and `service_role`,
+preventing those security-definer functions from being attached to another
+table. Their already-installed `auth.users` triggers are not removed and keep
+their normal firing behavior.
+
+A child-side `(notification_id, user_id)` index supports Notification-ledger
+cascades. Six timestamp-order checks cover `notifications` and
+`notification_action_requests` with `NOT VALID`: PostgreSQL enforces them for
+new or updated rows, but the migration neither scans nor claims validation of
+pre-existing remote rows. Legacy cleanup and later constraint validation remain
+separate evidence-driven work.
 
 ## Legacy Tables
 
@@ -542,12 +605,29 @@ authorization fallback and authenticated profile deletion.
 atomic Intake RPC projection while rejecting application-role eligibility
 changes.
 
+`20260713233000_v1_account_delete.sql` adds the owner-locked permanent-account
+RPC and freezes backend-owned projections and known legacy tables against
+application-role mutation.
+
+`20260714100000_notification_lifecycle_v1.sql` adds `read_at` and
+`dismissed_at`, consistent lifecycle checks, the service-role-only global
+`notification_action_requests` ledger, and the owner-locked
+`apply_notification_action_v1` RPC. Authenticated users retain owner/admin
+SELECT only; direct application-role Notification DML remains revoked.
+
+`20260714103000_application_table_privilege_guard.sql` removes unintended
+application-role table authority across the complete repo-owned schema,
+hardens optional legacy tables and future `postgres` public-table defaults,
+prevents reuse of the installed Auth trigger functions, adds the
+Notification-ledger child index, and enforces six new/updated-row timestamp
+ordering checks without validating historical rows.
+
 ## Local Verification Workflow
 
 For local Supabase-backed testing, the reset should complete through:
 
 ```text
-20260713230000_phase_10_onboarding_eligibility_guard.sql
+20260714103000_application_table_privilege_guard.sql
 ```
 
 Then configure `.env` with:
@@ -573,14 +653,20 @@ For local Supabase preflight without resetting the database:
 FLUTTER_BIN=/path/to/flutter scripts/verify_supabase_local.sh
 ```
 
-If the existing local database is behind, apply pending migrations without
-destroying its data:
+This default starts/reuses the local stack, inspects
+`supabase migration list --local`, and fails if repository files and database
+history differ. It never applies SQL automatically. If the histories differ,
+review the pending SQL and affected local rows before opting in:
 
 ```bash
-HOME=.tools/supabase-home \
-SUPABASE_TELEMETRY_DISABLED=1 \
-supabase migration up --local
+APPLY_MIGRATIONS=true \
+FLUTTER_BIN=/path/to/flutter \
+scripts/verify_supabase_local.sh
 ```
+
+Pending migrations may change or delete local rows. Avoid describing this path
+as non-destructive merely because it does not reset the full database. The
+script verifies migration history again after the explicit application.
 
 For local Supabase reset and migration verification:
 
@@ -589,10 +675,10 @@ RESET_DB=true FLUTTER_BIN=/path/to/flutter scripts/verify_supabase_local.sh
 ```
 
 The reset form should apply all migrations through
-`20260713230000_phase_10_onboarding_eligibility_guard.sql`; expected legacy-table
+`20260714103000_application_table_privilege_guard.sql`; expected legacy-table
 skip notices may be emitted for missing CamelCase tables. Use reset when proving
 the full migration/backfill/constraint chain from a fresh local database, not
-merely because one non-destructive migration is pending.
+merely because a reviewed migration is pending.
 
 Then either run the browser E2E smoke in `scripts/e2e_web.sh` or start the
 frontend with `scripts/start_frontend.sh` and manually verify the
@@ -628,7 +714,8 @@ Supabase-backed path:
   replay its request id, delete the conversation, and confirm messages are gone
   while request tombstones and usage remain. Confirm guest/mock makes no Coach
   request.
-- Open notifications.
+- Open Inbox (`/alerts`); mark one row read/unread, dismiss it, reload, and do
+  not infer notification delivery from stored rows or preferences.
 
 This checks that Auth, RLS, grants, FastAPI backend workflows, and the app's
 snake_case table mappings work together. The repository provides
@@ -694,9 +781,26 @@ legacy compatibility only and should be dropped in a later dedicated migration
 after data migration and app verification are complete.
 
 The latest schema addition is
-`20260713230000_phase_10_onboarding_eligibility_guard.sql`. Together with the
+`20260714110000_account_export_lifestyle_entries_grant.sql`. It grants only
+`service_role` `SELECT` on the legacy-but-canonical `lifestyle_entries` table,
+which Account Export V1 must read even when it has no rows. It does not change
+anon or authenticated application authority. The preceding
+`20260714103000_application_table_privilege_guard.sql` closes unintended
+application-role table privileges across every repo-owned product and ledger
+table, makes `anon` fail closed, preserves intended authenticated DML while
+removing `TRUNCATE`/`REFERENCES`/`TRIGGER`, and keeps backend projections
+read-only. It also freezes optional legacy tables, hardens future `postgres`
+public-table defaults, prevents reuse of installed Auth trigger functions,
+adds the Notification-ledger lookup index, and protects new/updated timestamp
+ordering without claiming historical validation. The preceding
+`20260714100000_notification_lifecycle_v1.sql` adds exact stored-Inbox
+read/unread/dismiss tombstones and retry identity without adding generation or
+delivery. The preceding `20260713233000_v1_account_delete.sql` adds the
+confirmed service-role-only transactional full-account cascade while
+preserving ordinary Phase 3 target-history restrictions. The preceding
+`20260713230000_phase_10_onboarding_eligibility_guard.sql`, together with the
 profile privilege and canonical role-authority guards immediately before it,
-it makes profile identity, application role, and onboarding eligibility
+makes profile identity, application role, and onboarding eligibility
 backend-owned, removes legacy-role fallback, and preserves the atomic Intake
 RPC as the onboarding projection path. The preceding safety-provenance guard
 requires exact provider-call truth for persisted Coach safety redirects. The

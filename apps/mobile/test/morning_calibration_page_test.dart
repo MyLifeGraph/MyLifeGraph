@@ -9,6 +9,7 @@ import 'package:my_life_graph/features/quick_action/presentation/providers/quick
 void main() {
   testWidgets('morning-only calibration saves three explicit answers',
       (tester) async {
+    final semantics = tester.ensureSemantics();
     final store = _MorningStore();
     await _pumpPage(tester, store);
 
@@ -17,9 +18,9 @@ void main() {
     );
     expect(saveButton.onPressed, isNull);
 
-    await tester.tap(find.bySemanticsLabel('morning sleep 5.5 h'));
-    await tester.tap(find.bySemanticsLabel('morning energy 4 of 10'));
-    await tester.tap(find.bySemanticsLabel('day shape constrained'));
+    await _performSemanticTap(tester, 'morning sleep 5.5 h');
+    await _performSemanticTap(tester, 'morning energy 4 of 10');
+    await _performSemanticTap(tester, 'day shape constrained');
     await tester.pump();
     await tester.tap(find.text('Save morning calibration'));
     await tester.pumpAndSettle();
@@ -30,6 +31,7 @@ void main() {
     expect(draft.sleepHours, 5.5);
     expect(draft.energy, 4);
     expect(draft.dayShape, DayShape.constrained);
+    semantics.dispose();
   });
 
   testWidgets('morning retry retains exact values and capture identity',
@@ -91,6 +93,25 @@ void main() {
     expect(written.captureId, saved.captureId);
     expect(written.capturedAt, isNot(saved.capturedAt));
   });
+}
+
+Future<void> _performSemanticTap(
+  WidgetTester tester,
+  String label,
+) async {
+  final node = tester.getSemantics(find.bySemanticsLabel(label));
+  expect(
+    node,
+    matchesSemantics(
+      label: label,
+      isButton: true,
+      hasSelectedState: true,
+      isSelected: false,
+      hasTapAction: true,
+    ),
+  );
+  await tester.tap(find.bySemanticsLabel(label));
+  await tester.pump();
 }
 
 Future<void> _pumpPage(WidgetTester tester, QuickCheckInStore store) async {

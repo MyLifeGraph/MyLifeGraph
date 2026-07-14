@@ -2,12 +2,14 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes import (
+    account,
     briefings,
     calendar_integrations,
     coach,
     feedback,
     health,
     intake,
+    notifications,
     recommendations,
     scheduled,
     snapshots,
@@ -28,12 +30,15 @@ def create_app() -> FastAPI:
         CORSMiddleware,
         allow_origins=settings.allowed_origins,
         allow_credentials=True,
-        allow_methods=["GET", "POST", "DELETE"],
+        allow_methods=["GET", "POST", "PATCH", "DELETE"],
         allow_headers=["Authorization", "Content-Type"],
+        expose_headers=["Content-Disposition"],
     )
 
     app.include_router(health.router, prefix=settings.api_prefix)
+    app.include_router(account.router, prefix=settings.api_prefix)
     app.include_router(intake.router, prefix=settings.api_prefix)
+    app.include_router(notifications.router, prefix=settings.api_prefix)
     app.include_router(recommendations.router, prefix=settings.api_prefix)
     app.include_router(snapshots.router, prefix=settings.api_prefix)
     app.include_router(briefings.router, prefix=settings.api_prefix)

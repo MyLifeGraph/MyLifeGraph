@@ -25,7 +25,7 @@ class InsightCard extends StatelessWidget {
                 ),
               ),
               Text(
-                insight.impact,
+                insight.confidenceLabel,
                 style: Theme.of(context).textTheme.labelLarge?.copyWith(
                       color: Theme.of(context).colorScheme.primary,
                     ),

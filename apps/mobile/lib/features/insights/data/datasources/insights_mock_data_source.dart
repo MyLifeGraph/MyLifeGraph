@@ -13,7 +13,7 @@ class InsightsMockDataSource {
         title: 'Activity lifts mood',
         summary:
             'Mood tends to be better on days with 8k+ steps or higher activity levels.',
-        impact: '72%',
+        confidence: 0.72,
         tags: ['Activity', 'Mood'],
       ),
       Insight(
@@ -21,21 +21,21 @@ class InsightsMockDataSource {
         title: 'Activity lifts mood',
         summary:
             'Mood tends to be better on days with 8k+ steps or higher activity levels.',
-        impact: '72%',
+        confidence: 0.72,
         tags: ['Activity', 'Mood'],
       ),
       Insight(
         id: 'screen_focus_primary',
         title: 'Screen time competes with focus',
         summary: 'High screen-time days often have lower deep-work minutes.',
-        impact: '68%',
+        confidence: 0.68,
         tags: ['Screen time', 'Focus'],
       ),
       Insight(
         id: 'screen_focus_secondary',
         title: 'Screen time competes with focus',
         summary: 'High screen-time days often have lower deep-work minutes.',
-        impact: '68%',
+        confidence: 0.68,
         tags: ['Screen time', 'Focus'],
       ),
     ];
@@ -47,7 +47,7 @@ class InsightsMockDataSource {
     await Future<void>.delayed(const Duration(milliseconds: 160));
 
     final today = DateTime.now();
-    final count = windowDays < 0 ? 180 : windowDays.clamp(7, 90);
+    final count = normalizeInsightsWindowDays(windowDays);
     return List.generate(count, (index) {
       final offset = index - count + 1;
       final date = DateTime(today.year, today.month, today.day).add(

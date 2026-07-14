@@ -51,7 +51,7 @@ class CoachingObservationBuilder {
       summary:
           '${metricA.label} and ${metricB.label} $direction across the shared days. This is an association, not proof that one caused the other.',
       evidenceWindow:
-          '${result.sampleSize} shared days within the ${report.windowDays < 0 ? 'all-time' : '${report.windowDays}-day'} window',
+          '${result.sampleSize} shared days within the ${normalizeInsightsWindowDays(report.windowDays)}-day window',
       confidence: confidence,
       dataQuality: confidence == ObservationConfidence.stronger
           ? 'Repeated shared measurements'

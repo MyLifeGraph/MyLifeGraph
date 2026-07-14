@@ -35,20 +35,40 @@ class RecommendationCard extends StatelessWidget {
             style: Theme.of(context).textTheme.bodyMedium,
           ),
           const SizedBox(height: AppSpacing.md),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(Icons.arrow_forward, size: 18, color: color),
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(
-                child: Text(
-                  recommendation.actionLabel,
-                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                        color: color,
-                      ),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(AppSpacing.sm),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surfaceContainerHighest,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  Icons.info_outline,
+                  size: 18,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
-              ),
-            ],
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Suggested next step',
+                        style: Theme.of(context).textTheme.labelMedium,
+                      ),
+                      const SizedBox(height: AppSpacing.xs),
+                      Text(
+                        recommendation.actionLabel,
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -66,6 +86,15 @@ class RecommendationCard extends StatelessWidget {
   }
 
   Color _categoryColor(BuildContext context, RecommendationCategory category) {
+    if (Theme.of(context).brightness == Brightness.light) {
+      return switch (category) {
+        RecommendationCategory.focus => Theme.of(context).colorScheme.primary,
+        RecommendationCategory.recovery => const Color(0xFF3154A3),
+        RecommendationCategory.nutrition => const Color(0xFF795900),
+        RecommendationCategory.movement => const Color(0xFFB3261E),
+        RecommendationCategory.planning => const Color(0xFF466900),
+      };
+    }
     return switch (category) {
       RecommendationCategory.focus => Theme.of(context).colorScheme.primary,
       RecommendationCategory.recovery => const Color(0xFF8EA7FF),

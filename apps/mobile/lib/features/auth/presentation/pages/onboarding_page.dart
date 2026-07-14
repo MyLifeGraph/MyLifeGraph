@@ -466,8 +466,13 @@ class _RequiredSetupSection extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.lg),
           Text(
-            'Reminders required',
+            'Reminder preference required',
             style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            'This stores your opt-in. If reminders are enabled, both quiet-hour times are required. Notification delivery is not enabled yet.',
+            style: Theme.of(context).textTheme.bodySmall,
           ),
           const SizedBox(height: AppSpacing.sm),
           Wrap(

@@ -11,9 +11,16 @@ import '../../../../core/utils/local_date.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_page.dart';
 import '../../../dashboard/presentation/providers/dashboard_providers.dart';
+import '../../../snapshots/application/snapshot_refresh_service.dart';
 import '../../../snapshots/presentation/providers/snapshot_providers.dart';
 import '../../data/habit_completion_supabase_data_source.dart';
 import '../../domain/habit_v1.dart';
+
+final habitManagementPageDataSourceProvider =
+    Provider<HabitCompletionSupabaseDataSource?>((ref) {
+  final client = ref.watch(supabaseClientProvider);
+  return client == null ? null : HabitCompletionSupabaseDataSource(client);
+});
 
 class HabitManagementPage extends ConsumerStatefulWidget {
   const HabitManagementPage({super.key});
@@ -27,6 +34,8 @@ class _HabitManagementPageState extends ConsumerState<HabitManagementPage> {
   List<HabitV1> _habits = const [];
   bool _isLoading = true;
   bool _isSaving = false;
+  String? _loadError;
+  int _loadGeneration = 0;
 
   @override
   void initState() {
@@ -45,12 +54,14 @@ class _HabitManagementPageState extends ConsumerState<HabitManagementPage> {
       actions: [
         IconButton(
           tooltip: 'Refresh',
-          onPressed: _isLoading ? null : _loadHabits,
+          onPressed: _isLoading || _isSaving ? null : _loadHabits,
           icon: const Icon(Icons.refresh),
         ),
         IconButton(
           tooltip: 'Add habit',
-          onPressed: _isSaving ? null : () => _openEditor(),
+          onPressed: _isLoading || _isSaving || _loadError != null
+              ? null
+              : () => _openEditor(),
           icon: const Icon(Icons.add),
         ),
       ],
@@ -76,6 +87,11 @@ class _HabitManagementPageState extends ConsumerState<HabitManagementPage> {
                 child: CircularProgressIndicator(),
               ),
             ),
+          )
+        else if (_loadError != null)
+          _HabitManagementLoadErrorCard(
+            message: _loadError!,
+            onRetry: _isSaving ? null : _loadHabits,
           )
         else if (_habits.isEmpty)
           AppCard(
@@ -131,37 +147,53 @@ class _HabitManagementPageState extends ConsumerState<HabitManagementPage> {
 
   bool get _canUseSupabase {
     final config = ref.read(appConfigProvider);
-    final client = ref.read(supabaseClientProvider);
-    return !config.useMockData && client != null;
+    final source = ref.read(habitManagementPageDataSourceProvider);
+    return !config.useMockData && source != null;
   }
 
   Future<void> _loadHabits() async {
+    if (!mounted) return;
+    final generation = ++_loadGeneration;
     final config = ref.read(appConfigProvider);
-    final client = ref.read(supabaseClientProvider);
-    if (config.useMockData || client == null) {
-      if (mounted) {
+    final source = ref.read(habitManagementPageDataSourceProvider);
+    if (config.useMockData) {
+      if (mounted && generation == _loadGeneration) {
         setState(() {
           _habits = const [];
+          _loadError = null;
           _isLoading = false;
         });
       }
       return;
     }
-    setState(() => _isLoading = true);
+    if (source == null) {
+      if (mounted && generation == _loadGeneration) {
+        setState(() {
+          _loadError = 'Synced habit management is not configured.';
+          _isLoading = false;
+        });
+      }
+      return;
+    }
+    setState(() {
+      _loadError = null;
+      _isLoading = true;
+    });
     try {
-      final habits = await HabitCompletionSupabaseDataSource(
-        client,
-      ).fetchHabits(excludeSetupManaged: true);
-      if (mounted) {
+      final habits = await source.fetchHabits(excludeSetupManaged: true);
+      if (mounted && generation == _loadGeneration) {
         setState(() {
           _habits = habits;
+          _loadError = null;
           _isLoading = false;
         });
       }
     } catch (_) {
-      if (mounted) {
-        setState(() => _isLoading = false);
-        _showMessage('Could not load habits.');
+      if (mounted && generation == _loadGeneration) {
+        setState(() {
+          _loadError = 'Could not load habits.';
+          _isLoading = false;
+        });
       }
     }
   }
@@ -172,7 +204,7 @@ class _HabitManagementPageState extends ConsumerState<HabitManagementPage> {
       isScrollControlled: true,
       builder: (context) => _HabitEditorSheet(habit: habit),
     );
-    if (result == null) {
+    if (!mounted || result == null) {
       return;
     }
     await _saveEditorResult(
@@ -191,15 +223,16 @@ class _HabitManagementPageState extends ConsumerState<HabitManagementPage> {
       return;
     }
     final config = ref.read(appConfigProvider);
-    final client = ref.read(supabaseClientProvider);
-    if (config.useMockData || client == null) {
+    final dataSource = ref.read(habitManagementPageDataSourceProvider);
+    if (config.useMockData || dataSource == null) {
       _showMessage('Supabase is not configured.');
       return;
     }
 
+    final snapshotRefresh = ref.read(snapshotRefreshServiceProvider);
+    final snapshotTargetDate = localDateKey(DateTime.now());
     setState(() => _isSaving = true);
     try {
-      final dataSource = HabitCompletionSupabaseDataSource(client);
       if (habit == null) {
         await dataSource.createHabit(
           habitId: requestId,
@@ -215,7 +248,10 @@ class _HabitManagementPageState extends ConsumerState<HabitManagementPage> {
           cadence: result.cadence,
         );
       }
-      await _afterDurableWrite();
+      await _afterDurableWrite(
+        snapshotRefresh: snapshotRefresh,
+        targetDate: snapshotTargetDate,
+      );
       if (mounted) {
         _showMessage(habit == null ? 'Habit added.' : 'Habit updated.');
       }
@@ -276,22 +312,27 @@ class _HabitManagementPageState extends ConsumerState<HabitManagementPage> {
           ],
         ),
       );
-      if (confirmed != true) {
+      if (!mounted || confirmed != true) {
         return;
       }
     }
-    final client = ref.read(supabaseClientProvider);
-    if (client == null) {
+    final dataSource = ref.read(habitManagementPageDataSourceProvider);
+    if (dataSource == null) {
       _showMessage('Supabase is not configured.');
       return;
     }
+    final snapshotRefresh = ref.read(snapshotRefreshServiceProvider);
+    final snapshotTargetDate = localDateKey(DateTime.now());
     setState(() => _isSaving = true);
     try {
-      await HabitCompletionSupabaseDataSource(client).setHabitLifecycle(
+      await dataSource.setHabitLifecycle(
         habit: habit,
         lifecycle: lifecycle,
       );
-      await _afterDurableWrite();
+      await _afterDurableWrite(
+        snapshotRefresh: snapshotRefresh,
+        targetDate: snapshotTargetDate,
+      );
       if (mounted) {
         _showMessage(
           switch (lifecycle) {
@@ -312,10 +353,12 @@ class _HabitManagementPageState extends ConsumerState<HabitManagementPage> {
     }
   }
 
-  Future<void> _afterDurableWrite() async {
-    await ref
-        .read(snapshotRefreshServiceProvider)
-        .refreshDailyAfterHabitChange(targetDate: localDateKey(DateTime.now()));
+  Future<void> _afterDurableWrite({
+    required SnapshotRefreshService snapshotRefresh,
+    required String targetDate,
+  }) async {
+    await snapshotRefresh.refreshDailyAfterHabitChange(targetDate: targetDate);
+    if (!mounted) return;
     ref.invalidate(dashboardSnapshotProvider);
     await _loadHabits();
   }
@@ -323,6 +366,39 @@ class _HabitManagementPageState extends ConsumerState<HabitManagementPage> {
   void _showMessage(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
+    );
+  }
+}
+
+class _HabitManagementLoadErrorCard extends StatelessWidget {
+  const _HabitManagementLoadErrorCard({
+    required this.message,
+    required this.onRetry,
+  });
+
+  final String message;
+  final VoidCallback? onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(message, style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: AppSpacing.sm),
+          const Text(
+            'No empty habit list was assumed. Check your connection and '
+            'try again.',
+          ),
+          const SizedBox(height: AppSpacing.md),
+          OutlinedButton.icon(
+            onPressed: onRetry,
+            icon: const Icon(Icons.refresh),
+            label: const Text('Retry'),
+          ),
+        ],
+      ),
     );
   }
 }

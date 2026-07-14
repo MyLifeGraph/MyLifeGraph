@@ -2,12 +2,18 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "$ROOT_DIR/scripts/lib/local_supabase_migrations.sh"
+
 FLUTTER_BIN="${FLUTTER_BIN:-flutter}"
-RESET_DB="${RESET_DB:-false}"
+RESET_DB="${RESET_DB-false}"
+APPLY_MIGRATIONS="${APPLY_MIGRATIONS-false}"
 SUPABASE_HOME="$ROOT_DIR/.tools/supabase-home"
 
 cd "$ROOT_DIR"
 mkdir -p "$SUPABASE_HOME"
+
+local_supabase_validate_migration_flags \
+  "$RESET_DB" "$APPLY_MIGRATIONS" true || exit $?
 
 if command -v supabase >/dev/null 2>&1; then
   SUPABASE_BIN="$(command -v supabase)"
@@ -35,11 +41,8 @@ supabase_cli --help >/dev/null
 start_output="$(supabase_cli start 2>&1)"
 printf '%s\n' "$start_output" | sanitize_supabase_output
 
-if [[ "$RESET_DB" == "true" ]]; then
-  supabase_cli db reset
-else
-  echo "Skipping destructive local reset. Re-run with RESET_DB=true to execute supabase db reset."
-fi
+local_supabase_prepare_migration_state \
+  "$RESET_DB" "$APPLY_MIGRATIONS" true
 
 status_output="$(supabase_cli status -o env)"
 api_url="$(printf '%s\n' "$status_output" | awk -F= '$1 == "API_URL" {gsub(/"/, "", $2); print $2; exit}')"
