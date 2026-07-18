@@ -169,6 +169,14 @@ respects:
 - fixed app commitments and confirmed preparation blocks; and
 - current imported busy intervals only when explicitly enabled.
 
+`buffer_days` counts complete profile-local calendar days that must remain free
+immediately before the deadline day. For example, a value of one leaves the
+whole preceding day clear, so the last preferred preparation day is two dates
+before the deadline. A value of zero may use the deadline day up to the exact
+aware `deadline_at`. Flutter labels these as clear days and normalizes a saved
+past `planning_start_on` to the current device date when opening a new replan;
+the backend still clamps effective planning to its profile-local current date.
+
 DST gaps or ambiguous local wall times are rejected or avoided rather than
 guessed. The planner has no LLM/provider call or model-provenance field; its
 bounded input and deterministic planning fingerprint are the persisted truth.

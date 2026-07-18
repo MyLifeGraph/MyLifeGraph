@@ -521,6 +521,7 @@ class _StartFocusCard extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.lg),
           SegmentedButton<int>(
+            direction: _focusChoiceDirection(context),
             segments: [
               for (final minutes in durations)
                 ButtonSegment(
@@ -676,7 +677,7 @@ class _ActiveFocusCard extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.lg),
           Semantics(
-            liveRegion: true,
+            liveRegion: reachedPlan,
             label: reachedPlan
                 ? 'Planned focus time reached'
                 : '${_focusTimerText(remaining)} remaining',
@@ -723,6 +724,13 @@ class _ActiveFocusCard extends StatelessWidget {
       ),
     );
   }
+}
+
+Axis _focusChoiceDirection(BuildContext context) {
+  final scaledBody = MediaQuery.textScalerOf(context).scale(14);
+  return MediaQuery.sizeOf(context).width < 420 || scaledBody > 20
+      ? Axis.vertical
+      : Axis.horizontal;
 }
 
 String _focusTimerText(Duration duration) {

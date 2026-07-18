@@ -25,6 +25,8 @@ void main() {
     expect(preparation.time, '10:00–10:50');
     expect(preparation.origin, ScheduleEventOrigin.deadlinePreparation);
     expect(preparation.deadlinePlanId, deadlinePlanId);
+    expect(preparation.sortMinutes, 10 * 60);
+    expect(preparation.endSortMinutes, 10 * 60 + 50);
     expect(preparation.provenanceLabel, contains('MyLifeGraph reservation'));
   });
 

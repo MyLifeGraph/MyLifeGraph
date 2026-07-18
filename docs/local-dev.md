@@ -443,13 +443,15 @@ retain it and may change only its title/deadline/update projection while open.
 Generic Task edit/lifecycle/editor paths must reject that managed source and
 redirect to `/preparation-plans`; focus may still target the open task. Complete
 or cancel a plan through the corresponding
-`/{plan_id}/complete|cancel` POST with a new request id and the expected active
-`current_revision`; both require an active plan, so draft cancellation is not a
-cleanup shortcut. Replanning instead sends the returned `latest_revision` as
-`base_revision`. Keep the exact body for an ambiguous retry. The same id with
-another operation, revision, or payload is a conflict. Plan complete/cancel and
-the matching task `done`/`cancelled` timestamp projection commit atomically. The
-local deadline day may be no more than 366 days after `planning_start_on`.
+`/{plan_id}/complete|cancel` POST with a new request id. Completion requires an
+active plan and its expected `current_revision`. Cancellation accepts either an
+active plan's `current_revision` or a still-draft plan's `latest_revision`; a
+draft discard creates or changes no managed task. Replanning instead sends the
+returned `latest_revision` as `base_revision`. Keep the exact body for an
+ambiguous retry. The same id with another operation, revision, or payload is a
+conflict. Active-plan complete/cancel and the matching task
+`done`/`cancelled` timestamp projection commit atomically. The local deadline
+day may be no more than 366 days after `planning_start_on`.
 
 An event-derived proposal uses `source_kind=calendar_event` and must include the
 explicitly selected current `source_calendar_event_id` and lowercase source

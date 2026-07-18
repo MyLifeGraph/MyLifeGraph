@@ -134,6 +134,10 @@ These are local checkout results, not evidence of remote migration state,
 deployed scheduling, push/background delivery, installed-device acceptance,
 long-term learning benefit, or the still-unrun five-student usability study.
 
+The requested implementation follow-up from this handoff is recorded separately
+in `docs/product-review-followup-2026-07-18.md`; the counts above remain the
+historical pre-handoff results rather than being rewritten after the fact.
+
 ## Prompt For A New Chat
 
 ```text

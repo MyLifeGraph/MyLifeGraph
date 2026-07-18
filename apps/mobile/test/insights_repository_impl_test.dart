@@ -150,6 +150,93 @@ void main() {
     );
   });
 
+  test('legacy focus rows fall back to the UTC start day', () {
+    const mapper = InsightsCorrelationRowMapper();
+
+    final totals = mapper.focusMinutesByDate(
+      [
+        {
+          'status': 'completed',
+          'actual_minutes': 20,
+          'started_at': '2026-07-01T08:00:00Z',
+          'metadata': {'entry_date': '2026-07-02'},
+        },
+        {
+          'status': 'completed',
+          'actual_minutes': 30,
+          'started_at': '2026-07-02T00:30:00+02:00',
+          'metadata': const <String, dynamic>{},
+        },
+        {
+          'status': 'completed',
+          'actual_minutes': 40,
+          'started_at': '2026-07-03T23:30:00-02:00',
+          'metadata': {'entry_date': 'not-a-date'},
+        },
+        {
+          'status': 'active',
+          'actual_minutes': 99,
+          'started_at': '2026-07-01T12:00:00Z',
+          'metadata': const <String, dynamic>{},
+        },
+      ],
+      startDate: '2026-07-01',
+      endDate: '2026-07-04',
+    );
+
+    expect(totals, {
+      '2026-07-01': 30,
+      '2026-07-02': 20,
+      '2026-07-04': 40,
+    });
+  });
+
+  test('planned load includes only confirmed preparation reservations', () {
+    const mapper = InsightsCorrelationRowMapper();
+
+    final totals = mapper.plannedMinutesByDate(
+      taskRows: const [
+        {
+          'deadline': '2026-07-21T12:00:00Z',
+          'status': 'open',
+          'estimated_minutes': 90,
+        },
+      ],
+      scheduleRows: const [
+        {
+          'weekday': DateTime.monday,
+          'starts_at': '09:00:00',
+          'ends_at': '10:00:00',
+        },
+      ],
+      preparationBlockRows: const [
+        {
+          'reservation_state': 'active',
+          'local_date': '2026-07-20',
+          'planned_minutes': 50,
+        },
+        {
+          'reservation_state': 'proposed',
+          'local_date': '2026-07-20',
+          'planned_minutes': 90,
+        },
+        {
+          'reservation_state': 'active',
+          'local_date': '2026-07-22',
+          'planned_minutes': 25,
+        },
+      ],
+      startDate: DateTime(2026, 7, 20),
+      windowDays: 2,
+      localDates: const InsightsLocalDatePolicy(),
+    );
+
+    expect(totals, {
+      '2026-07-20': 110,
+      '2026-07-21': 90,
+    });
+  });
+
   test('paginates through every row beyond one response page', () async {
     const paginator = InsightsQueryPaginator(pageSize: 2);
     final sourceRows = List.generate(5, (index) => {'id': 'row-$index'});

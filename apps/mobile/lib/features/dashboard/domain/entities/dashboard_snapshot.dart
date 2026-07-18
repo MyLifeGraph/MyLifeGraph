@@ -137,6 +137,7 @@ class ScheduleEvent {
     this.deadlinePlanBlockId,
     this.state,
     this.sortMinutes,
+    this.endSortMinutes,
   });
 
   final String title;
@@ -147,6 +148,7 @@ class ScheduleEvent {
   final String? deadlinePlanBlockId;
   final String? state;
   final int? sortMinutes;
+  final int? endSortMinutes;
 
   bool get isDeadlinePreparation =>
       origin == ScheduleEventOrigin.deadlinePreparation;

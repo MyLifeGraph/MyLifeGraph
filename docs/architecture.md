@@ -196,11 +196,13 @@ do not mutate a record. Guest/mock sessions never call the weekly-review API.
 Insights also uses this boundary for deterministic correlation analysis. In
 mock or guest mode it renders local time series. In real Supabase mode it reads
 recent `daily_logs`, `tasks`, `schedule_items`, `habits`, `habit_logs`, and
-completed `focus_sessions`. Planned load is based on real schedule durations
-and task estimates; focus uses persisted completed minutes and local entry
-dates. Metrics without measured values are hidden, and the primary observation
-requires at least 14 shared days. The bounded 7/14/30/90-day exploration stays
-in Flutter and does not call FastAPI or an LLM.
+completed `focus_sessions`, plus active `deadline_plan_blocks`. Planned load is
+based on real schedule durations, task estimates, and confirmed preparation
+reservations; proposed or superseded blocks are excluded. Focus uses persisted
+completed minutes and explicit local entry dates, with the documented UTC
+start-day fallback for legacy rows. Metrics without measured values are hidden,
+and the primary observation requires at least 14 shared days. The bounded
+7/14/30/90-day exploration stays in Flutter and does not call FastAPI or an LLM.
 
 ## Phase 3 Executable Actions
 
@@ -695,7 +697,7 @@ clears its local session even if the deleted remote session can no longer be
 signed out normally.
 
 Insights correlation exploration is bounded to visible 7/14/30/90-day windows.
-Its five Supabase fact sources use stable pagination and fail explicitly at the
+Its six Supabase fact sources use stable pagination and fail explicitly at the
 client row ceiling instead of presenting a silently truncated or unbounded
 all-time result.
 

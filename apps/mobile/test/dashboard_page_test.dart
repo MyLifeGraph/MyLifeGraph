@@ -174,6 +174,87 @@ void main() {
     expect(find.text('Recommendations checked.'), findsNothing);
   });
 
+  testWidgets('today capture status ignores an older latest check-in',
+      (tester) async {
+    final snapshot = DashboardSnapshot(
+      origin: DashboardOrigin.account,
+      loadedAt: DateTime(2026, 7, 20, 10),
+      latestCheckIn: DashboardCheckIn(
+        entryDate: DateTime(2026, 7, 19),
+        mood: 7,
+        hasMorningCapture: true,
+        hasEveningCapture: true,
+      ),
+      checkInStreakDays: 1,
+      todayPlan: const [],
+      scheduleDays: const [],
+    );
+
+    await _pumpDashboard(
+      tester,
+      snapshot: Future.value(snapshot),
+      feed: Future.value(RecommendationFeed.demo(const [])),
+    );
+
+    expect(find.text('No signal saved today'), findsOneWidget);
+    expect(find.byTooltip('Add morning check-in'), findsOneWidget);
+    expect(find.byTooltip('Edit evening check-in'), findsNothing);
+
+    await _expandDashboardSection(
+      tester,
+      const ValueKey('dashboard-saved-signals'),
+    );
+    expect(find.text('Latest check-in'), findsOneWidget);
+    expect(find.text('7/10'), findsOneWidget);
+  });
+
+  testWidgets('today card keeps an event visible while it is in progress',
+      (tester) async {
+    final snapshot = DashboardSnapshot(
+      origin: DashboardOrigin.account,
+      loadedAt: DateTime(2026, 7, 20, 10, 30),
+      latestCheckIn: null,
+      checkInStreakDays: 0,
+      todayPlan: const [],
+      scheduleDays: [
+        ScheduleDay(
+          label: 'Mon',
+          dateLabel: 'Jul 20',
+          date: DateTime(2026, 7, 20),
+          events: const [
+            ScheduleEvent(
+              title: 'Finished class',
+              time: '08:00-09:00',
+              sortMinutes: 8 * 60,
+              endSortMinutes: 9 * 60,
+            ),
+            ScheduleEvent(
+              title: 'Current seminar',
+              time: '10:00-11:00',
+              sortMinutes: 10 * 60,
+              endSortMinutes: 11 * 60,
+            ),
+            ScheduleEvent(
+              title: 'Later lab',
+              time: '12:00-13:00',
+              sortMinutes: 12 * 60,
+              endSortMinutes: 13 * 60,
+            ),
+          ],
+        ),
+      ],
+    );
+
+    await _pumpDashboard(
+      tester,
+      snapshot: Future.value(snapshot),
+      feed: Future.value(RecommendationFeed.demo(const [])),
+    );
+
+    expect(find.text('Current seminar'), findsOneWidget);
+    expect(find.text('Later lab'), findsNothing);
+  });
+
   testWidgets('weekly review entry is account-only', (tester) async {
     await _pumpDashboard(
       tester,

@@ -26,6 +26,7 @@ class DeadlinePlanScheduleMerger {
               deadlinePlanId: block.planId,
               deadlinePlanBlockId: block.id,
               sortMinutes: startsAt.hour * 60 + startsAt.minute,
+              endSortMinutes: endsAt.hour * 60 + endsAt.minute,
             ),
           );
     }

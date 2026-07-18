@@ -83,6 +83,63 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('start duration choices stack at 320 pixels and 200% text',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(320, 568));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          appConfigProvider.overrideWithValue(_realConfig),
+          focusSessionPageDataSourceProvider.overrideWithValue(
+            _LongTargetFocusSource(),
+          ),
+        ],
+        child: MaterialApp(
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(context).copyWith(
+              textScaler: const TextScaler.linear(2),
+            ),
+            child: child!,
+          ),
+          home: const Scaffold(
+            body: FocusSessionPage(initialPlannedMinutes: 45),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(
+      find.text('Start a focus block'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Start a focus block'), findsOneWidget);
+    final choices = find.byWidgetPredicate(
+      (widget) => widget is SegmentedButton,
+      description: 'duration segmented button',
+    );
+    expect(choices, findsOneWidget);
+    final firstChoice = find.descendant(
+      of: choices,
+      matching: find.text('25 min'),
+    );
+    final secondChoice = find.descendant(
+      of: choices,
+      matching: find.text('45 min'),
+    );
+    expect(firstChoice, findsOneWidget);
+    expect(secondChoice, findsOneWidget);
+    expect(
+      tester.getTopLeft(secondChoice).dy,
+      greaterThan(tester.getTopLeft(firstChoice).dy),
+    );
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('reload clears a selected target that is no longer available',
       (tester) async {
     final source = _TargetRemovedOnReloadFocusSource();

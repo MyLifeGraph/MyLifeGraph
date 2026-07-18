@@ -184,6 +184,34 @@ void main() {
     expect(find.text('Algorithms exam'), findsWidgets);
   });
 
+  testWidgets('replanning normalizes a saved past start to today',
+      (tester) async {
+    final repository = _FakeDeadlinePlanRepository(
+      feeds: [
+        DeadlinePlanFeed(plans: [_plan()]),
+      ],
+    );
+    await _pumpPage(
+      tester,
+      repository: repository,
+      page: DeadlinePlansPage(currentTime: DateTime(2026, 7, 22, 10)),
+    );
+
+    await _tap(tester, find.text('Adjust estimate or plan'));
+    await _tap(tester, find.text('Continue'));
+    await _tap(tester, find.text('Continue'));
+
+    expect(find.text('Start planning Jul 22, 2026'), findsOneWidget);
+    expect(find.text('Clear days before finish-by date'), findsOneWidget);
+    expect(
+      find.textContaining('saved start in the past moves to today'),
+      findsOneWidget,
+    );
+    await _tap(tester, find.text('Create preview'));
+
+    expect(repository.proposalDrafts.single.planningStartOn, '2026-07-22');
+  });
+
   testWidgets('large active plan initially renders only six block rows',
       (tester) async {
     final repository = _FakeDeadlinePlanRepository(
@@ -477,7 +505,7 @@ Future<void> _completeNewWizard(WidgetTester tester) async {
   await _tap(tester, find.byKey(const ValueKey('deadline-estimate-5h')));
   await _tap(tester, find.text('No untracked time'));
   await _tap(tester, find.text('Continue'));
-  expect(find.text('0 days'), findsWidgets);
+  expect(find.text('0 clear days'), findsWidgets);
   await _tap(tester, find.text('Create preview'));
 }
 

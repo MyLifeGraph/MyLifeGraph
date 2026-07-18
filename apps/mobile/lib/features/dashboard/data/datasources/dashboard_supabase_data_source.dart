@@ -201,6 +201,7 @@ class DashboardSnapshotMapper {
       title: '${row['title'] ?? 'Schedule block'}',
       time: time,
       sortMinutes: _timeSortMinutes(startsAt),
+      endSortMinutes: _timeSortMinutes(endsAt),
     );
   }
 

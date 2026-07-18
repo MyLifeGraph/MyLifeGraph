@@ -1131,10 +1131,19 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
       _bufferDays = 0;
     }
     _sourceKind = widget.sourceKind;
-    _planningStart = DateTime.tryParse(
-          retained?.planningStartOn ?? existing?.planningStartOn ?? '',
-        ) ??
-        now;
+    final today = DateTime(now.year, now.month, now.day);
+    final savedPlanningStart = DateTime.tryParse(
+      retained?.planningStartOn ?? existing?.planningStartOn ?? '',
+    );
+    final requestedPlanningStart = savedPlanningStart == null
+        ? today
+        : DateTime(
+            savedPlanningStart.year,
+            savedPlanningStart.month,
+            savedPlanningStart.day,
+          );
+    _planningStart =
+        requestedPlanningStart.isBefore(today) ? today : requestedPlanningStart;
     _useCalendarAvailability = retained?.useCalendarAvailability ??
         existing?.useCalendarAvailability ??
         false;
@@ -1435,18 +1444,26 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
         const SizedBox(height: AppSpacing.md),
         DropdownButtonFormField<int>(
           initialValue: _bufferDays,
-          decoration:
-              const InputDecoration(labelText: 'Buffer before deadline'),
+          decoration: const InputDecoration(
+            labelText: 'Clear days before finish-by date',
+          ),
           items: List.generate(
             8,
             (days) => DropdownMenuItem(
               value: days,
-              child: Text('$days ${days == 1 ? 'day' : 'days'}'),
+              child: Text(
+                '$days ${days == 1 ? 'clear day' : 'clear days'}',
+              ),
             ),
           ),
           onChanged: (value) {
             if (value != null) setState(() => _bufferDays = value);
           },
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        Text(
+          'A clear day receives no preparation blocks. With 0 clear days, the finish-by day may still be used.',
+          style: Theme.of(context).textTheme.bodySmall,
         ),
         const SizedBox(height: AppSpacing.md),
         OutlinedButton.icon(
@@ -1455,6 +1472,11 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
           label: Text(
             'Start planning ${DateFormat.yMMMd().format(_planningStart)}',
           ),
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        Text(
+          'When replanning, a saved start in the past moves to today.',
+          style: Theme.of(context).textTheme.bodySmall,
         ),
         const SizedBox(height: AppSpacing.sm),
         SwitchListTile(
@@ -1562,11 +1584,12 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
 
   Future<void> _pickPlanningStart() async {
     final now = _now;
+    final today = DateTime(now.year, now.month, now.day);
     final deadlineDate = _deadline?.toLocal();
     final lastDate = deadlineDate == null
         ? now.add(const Duration(days: 365))
         : DateTime(deadlineDate.year, deadlineDate.month, deadlineDate.day);
-    final firstDate = now.subtract(const Duration(days: 366));
+    final firstDate = today;
     final initialDate = _planningStart.isAfter(lastDate)
         ? lastDate
         : _planningStart.isBefore(firstDate)

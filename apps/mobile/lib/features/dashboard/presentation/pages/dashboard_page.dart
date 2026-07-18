@@ -1072,9 +1072,20 @@ class _TodayAtAGlanceCard extends StatelessWidget {
     final currentMinute = now.hour * 60 + now.minute;
     final nextEvent = events.where((event) {
       final minute = event.sortMinutes;
+      final endMinute = event.endSortMinutes;
+      if (endMinute != null) return endMinute > currentMinute;
       return minute == null || minute >= currentMinute;
     }).firstOrNull;
-    final checkIn = snapshot.latestCheckIn;
+    final latestCheckIn = snapshot.latestCheckIn;
+    final checkInDate = latestCheckIn?.entryDate.toLocal();
+    final checkIn = checkInDate != null &&
+            checkInDate.year == now.year &&
+            checkInDate.month == now.month &&
+            checkInDate.day == now.day
+        ? latestCheckIn
+        : null;
+    final morningSaved = checkIn?.hasMorningCapture == true;
+    final eveningSaved = checkIn?.hasEveningCapture == true;
     final captureStatus = checkIn == null
         ? 'No signal saved today'
         : [
@@ -1116,14 +1127,14 @@ class _TodayAtAGlanceCard extends StatelessWidget {
             title: Text(captureStatus),
             subtitle: const Text('Details stay available below when needed.'),
             trailing: IconButton(
-              tooltip: checkIn?.hasEveningCapture == true
-                  ? 'Edit evening check-in'
-                  : 'Add evening check-in',
-              onPressed: checkIn?.hasMorningCapture == true
-                  ? onAddEvening
-                  : onAddMorning,
+              tooltip: !morningSaved
+                  ? 'Add morning check-in'
+                  : eveningSaved
+                      ? 'Edit evening check-in'
+                      : 'Add evening check-in',
+              onPressed: morningSaved ? onAddEvening : onAddMorning,
               icon: Icon(
-                checkIn?.hasMorningCapture == true
+                morningSaved
                     ? Icons.nights_stay_outlined
                     : Icons.wb_sunny_outlined,
               ),
