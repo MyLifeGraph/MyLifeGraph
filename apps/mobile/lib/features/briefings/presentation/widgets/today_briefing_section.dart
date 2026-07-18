@@ -143,7 +143,7 @@ class _MissingBriefingCard extends StatelessWidget {
           Row(
             children: [
               Icon(
-                Icons.assistant_outlined,
+                Icons.rule_outlined,
                 color: Theme.of(context).colorScheme.primary,
               ),
               const SizedBox(width: AppSpacing.sm),
@@ -159,6 +159,11 @@ class _MissingBriefingCard extends StatelessWidget {
           const SizedBox(height: AppSpacing.sm),
           const Text(
             'Create a plan from your latest check-ins and the tasks or habits you can do today. This will not change them.',
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            'Rule-based · not AI-written',
+            style: Theme.of(context).textTheme.labelMedium,
           ),
           if (generationError != null) ...[
             const SizedBox(height: AppSpacing.sm),
@@ -237,6 +242,11 @@ class _BriefingCard extends StatelessWidget {
                     Text(
                       '${_modeLabel(briefing.mode)} mode · ${_qualityLabel(briefing.dataQuality)} data',
                       style: Theme.of(context).textTheme.labelLarge,
+                    ),
+                    const SizedBox(height: AppSpacing.xs),
+                    Text(
+                      'Rule-based · not AI-written',
+                      style: Theme.of(context).textTheme.labelMedium,
                     ),
                   ],
                 ),

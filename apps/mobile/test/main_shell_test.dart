@@ -175,7 +175,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      const labels = ['home', 'insights', 'quick-actions', 'inbox', 'settings'];
+      const labels = ['today', 'insights', 'quick-actions', 'inbox', 'settings'];
       for (final label in labels) {
         final labelFinder = find.byKey(ValueKey('main-nav-label-$label'));
         expect(labelFinder, findsOneWidget);
@@ -211,7 +211,7 @@ void main() {
         findsNothing,
       );
       expect(
-        find.byKey(const ValueKey('main-nav-label-home')),
+        find.byKey(const ValueKey('main-nav-label-today')),
         findsOneWidget,
       );
       expect(
@@ -264,9 +264,9 @@ void main() {
       ),
     );
     expect(
-      tester.getSemantics(find.byKey(const ValueKey('main-nav-home'))),
+      tester.getSemantics(find.byKey(const ValueKey('main-nav-today'))),
       matchesSemantics(
-        label: 'Home',
+        label: 'Today',
         isButton: true,
         hasSelectedState: true,
         isSelected: false,

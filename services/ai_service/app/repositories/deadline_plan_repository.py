@@ -140,8 +140,35 @@ class DeadlinePlanRepository(Protocol):
 
 
 class SupabaseDeadlinePlanRepository:
+    _page_size = 1_000
+
     def __init__(self, client: SupabaseRestClient) -> None:
         self._client = client
+
+    async def _select_pages(
+        self,
+        table: str,
+        *,
+        params: dict[str, Any],
+        max_rows: int,
+    ) -> list[dict[str, Any]]:
+        rows: list[dict[str, Any]] = []
+        while len(rows) < max_rows:
+            page_limit = min(self._page_size, max_rows - len(rows))
+            page = await self._client.select(
+                table,
+                params={
+                    **params,
+                    "limit": str(page_limit),
+                    "offset": str(len(rows)),
+                },
+            )
+            if len(page) > page_limit:
+                raise ValueError("PostgREST returned more rows than requested.")
+            rows.extend(page)
+            if len(page) < page_limit:
+                break
+        return rows
 
     async def get_request_identity(
         self,
@@ -237,7 +264,7 @@ class SupabaseDeadlinePlanRepository:
         task_id: UUID,
         started_at_or_after: datetime,
     ) -> list[dict[str, Any]]:
-        return await self._client.select(
+        return await self._select_pages(
             "focus_sessions",
             params={
                 "select": "id,started_at,ended_at,actual_minutes,status",
@@ -246,8 +273,8 @@ class SupabaseDeadlinePlanRepository:
                 "status": "eq.completed",
                 "started_at": f"gte.{started_at_or_after.isoformat()}",
                 "order": "started_at.asc,id.asc",
-                "limit": "10001",
             },
+            max_rows=10_001,
         )
 
     async def get_calendar_event(
@@ -317,16 +344,16 @@ class SupabaseDeadlinePlanRepository:
             }:
                 best_energy_window = candidate
 
-        schedule_items = await self._client.select(
+        schedule_items = await self._select_pages(
             "schedule_items",
             params={
                 "select": "id,weekday,starts_at,ends_at,updated_at",
                 "user_id": f"eq.{user_id}",
                 "order": "weekday.asc,starts_at.asc,id.asc",
-                "limit": "1001",
             },
+            max_rows=1_001,
         )
-        confirmed_blocks = await self._client.select(
+        confirmed_blocks = await self._select_pages(
             "deadline_plan_blocks",
             params={
                 "select": "id,plan_id,starts_at,ends_at",
@@ -336,8 +363,8 @@ class SupabaseDeadlinePlanRepository:
                 "ends_at": f"gt.{range_starts_at.isoformat()}",
                 "starts_at": f"lt.{range_ends_at.isoformat()}",
                 "order": "starts_at.asc,id.asc",
-                "limit": "6000",
             },
+            max_rows=6_000,
         )
 
         source_calendar_event = None
@@ -379,7 +406,7 @@ class SupabaseDeadlinePlanRepository:
             calendar_availability_current = current_import_id is not None
         if include_calendar_availability and calendar_availability_current:
             assert current_connection is not None
-            timed_events = await self._client.select(
+            timed_events = await self._select_pages(
                 "calendar_events",
                 params={
                     "select": "id,event_kind,busy_status,starts_at,ends_at",
@@ -391,10 +418,10 @@ class SupabaseDeadlinePlanRepository:
                     "ends_at": f"gt.{range_starts_at.isoformat()}",
                     "starts_at": f"lt.{range_ends_at.isoformat()}",
                     "order": "starts_at.asc,id.asc",
-                    "limit": "2000",
                 },
+                max_rows=2_000,
             )
-            all_day_events = await self._client.select(
+            all_day_events = await self._select_pages(
                 "calendar_events",
                 params={
                     "select": "id,event_kind,busy_status,starts_on,ends_on",
@@ -406,8 +433,8 @@ class SupabaseDeadlinePlanRepository:
                     "ends_on": f"gt.{starts_on.isoformat()}",
                     "starts_on": f"lt.{range_ends_at.date().isoformat()}",
                     "order": "starts_on.asc,id.asc",
-                    "limit": "2000",
                 },
+                max_rows=2_000,
             )
 
         return DeadlinePlanningContext(

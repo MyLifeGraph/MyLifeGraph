@@ -255,13 +255,14 @@ void main() {
     expect(find.text('Later lab'), findsNothing);
   });
 
-  testWidgets('weekly review entry is account-only', (tester) async {
+  testWidgets('weekly review entry is account-only and available after Monday',
+      (tester) async {
     await _pumpDashboard(
       tester,
       snapshot: Future.value(
         DashboardSnapshot.empty(
           origin: DashboardOrigin.localDemo,
-          loadedAt: DateTime(2026, 7, 13),
+          loadedAt: DateTime(2026, 7, 14),
         ),
       ),
       feed: Future.value(RecommendationFeed.demo(const [])),
@@ -273,7 +274,7 @@ void main() {
       snapshot: Future.value(
         DashboardSnapshot.empty(
           origin: DashboardOrigin.account,
-          loadedAt: DateTime(2026, 7, 13),
+          loadedAt: DateTime(2026, 7, 14),
         ),
       ),
       feed: Future.value(RecommendationFeed.demo(const [])),

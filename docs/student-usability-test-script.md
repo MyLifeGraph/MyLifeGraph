@@ -1,7 +1,11 @@
 # Five-student Usability Test Script
 
-Status: ready for recruitment and moderated two-part sessions; no participant
-sessions or results are claimed yet.
+Status: ready for recruitment and moderated two-part sessions, but the real
+five-student study was deliberately skipped/deferred on 2026-07-18. No
+participant sessions or results are claimed. The separate five-agent compressed
+persona walkthrough in
+`docs/synthetic-student-persona-simulation-2026-07-18.md` is synthetic and does
+not count toward this protocol.
 
 Run this script with:
 

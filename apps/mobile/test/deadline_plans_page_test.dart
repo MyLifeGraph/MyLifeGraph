@@ -42,11 +42,17 @@ void main() {
     await tester.pump(const Duration(seconds: 5));
 
     await _tap(tester, find.byKey(const ValueKey('deadline-estimate-5h')));
+    expect(find.textContaining('cannot estimate this for you'), findsOneWidget);
     await _tap(tester, find.text('Continue'));
     expect(find.text('Step 2 of 3'), findsOneWidget);
-    await _tap(tester, find.text('No untracked time'));
+    await _tap(tester, find.text('No additional prior work'));
     await _tap(tester, find.text('Continue'));
     expect(find.text('Step 3 of 3'), findsOneWidget);
+    expect(
+      find.text('Maximum preparation minutes per day for this plan'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('there is no background sync'), findsOneWidget);
   });
 
   testWidgets('three-step same-day preview needs explicit confirmation',
@@ -117,10 +123,10 @@ void main() {
     );
     await _tap(tester, find.text('Continue'));
     expect(
-      find.textContaining('not already recorded as Focus'),
+      find.textContaining('before this plan was first activated'),
       findsOneWidget,
     );
-    expect(find.textContaining('25 min tracked Focus'), findsOneWidget);
+    expect(find.textContaining('25 min linked Focus'), findsOneWidget);
     await _tap(tester, find.text('Continue'));
     await _tap(tester, find.text('Create preview'));
 
@@ -151,6 +157,50 @@ void main() {
     expect(find.text('Algorithms exam'), findsOneWidget);
     expect(
       find.byTooltip('Start plan focus with this remaining duration'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('active missed warning remains visible under staged replan',
+      (tester) async {
+    final repository = _FakeDeadlinePlanRepository(
+      feeds: [
+        DeadlinePlanFeed(plans: [_pendingPlanWithMissedActiveBlock()]),
+      ],
+    );
+    await _pumpPage(
+      tester,
+      repository: repository,
+      page: DeadlinePlansPage(currentTime: now),
+    );
+
+    expect(find.text('Plan needs attention'), findsOneWidget);
+    expect(
+      find.textContaining('replacement remains an unconfirmed preview'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('active plan exposes deterministic planning and credit rules',
+      (tester) async {
+    final repository = _FakeDeadlinePlanRepository(
+      feeds: [
+        DeadlinePlanFeed(plans: [_plan()]),
+      ],
+    );
+    await _pumpPage(
+      tester,
+      repository: repository,
+      page: DeadlinePlansPage(currentTime: now),
+    );
+
+    expect(
+      find.textContaining('Rule-based windows: prefers 08:00–13:00'),
+      findsOneWidget,
+    );
+    expect(find.text('Entered prior credit'), findsOneWidget);
+    expect(
+      find.textContaining('Linked Focus completed after this plan'),
       findsOneWidget,
     );
   });
@@ -503,7 +553,7 @@ Future<void> _completeNewWizard(WidgetTester tester) async {
   await _tap(tester, find.text('Exam'));
   await _tap(tester, find.text('Continue'));
   await _tap(tester, find.byKey(const ValueKey('deadline-estimate-5h')));
-  await _tap(tester, find.text('No untracked time'));
+  await _tap(tester, find.text('No additional prior work'));
   await _tap(tester, find.text('Continue'));
   expect(find.text('0 clear days'), findsWidgets);
   await _tap(tester, find.text('Create preview'));
@@ -577,6 +627,13 @@ DeadlinePlan _plan({String status = 'active', bool pending = false}) =>
 
 DeadlinePlan _missedPlan() {
   final json = deadlinePlanEnvelope();
+  final revision = json['active_revision'] as Map<String, dynamic>;
+  revision['blocks'] = [deadlineBlock(state: 'missed')];
+  return DeadlinePlanResponse.fromJson(json).plan;
+}
+
+DeadlinePlan _pendingPlanWithMissedActiveBlock() {
+  final json = deadlinePlanEnvelope(pending: true);
   final revision = json['active_revision'] as Map<String, dynamic>;
   revision['blocks'] = [deadlineBlock(state: 'missed')];
   return DeadlinePlanResponse.fromJson(json).plan;

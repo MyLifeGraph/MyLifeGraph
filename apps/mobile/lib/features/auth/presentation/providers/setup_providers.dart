@@ -125,6 +125,8 @@ class SetupController extends StateNotifier<SetupEditorState> {
   final AppSession? _session;
   final void Function(IntakeResponseDraft responses) _onApplied;
 
+  AppSession? get session => _session;
+
   Future<void> load() async {
     state = state.copyWith(
       isLoading: true,

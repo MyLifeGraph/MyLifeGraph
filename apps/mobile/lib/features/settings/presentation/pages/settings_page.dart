@@ -471,6 +471,11 @@ class _TimezoneDialogState extends State<_TimezoneDialog> {
               ],
               onChanged: (value) => setState(() => _selected = value),
             ),
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              'New rule-based proposals and recurring commitments use this timezone. Existing preparation reservations keep their saved instants; imported calendar files do not refresh automatically.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
             if (_selected == _customValue) ...[
               const SizedBox(height: AppSpacing.md),
               TextField(

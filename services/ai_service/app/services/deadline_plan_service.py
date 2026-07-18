@@ -568,7 +568,7 @@ class DeadlinePlanService:
                 display_state = "partial"
             elif plan_status in {"completed", "cancelled"}:
                 display_state = "missed"
-            elif now > ends_at:
+            elif now >= ends_at:
                 display_state = "missed"
             else:
                 display_state = "upcoming"

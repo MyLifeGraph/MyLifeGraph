@@ -6,6 +6,7 @@ import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/navigation/app_routes.dart';
 import '../../../dashboard/presentation/providers/dashboard_providers.dart';
 import '../../../optimization/presentation/providers/optimization_providers.dart';
+import '../../domain/app_session.dart';
 import '../../domain/intake_response.dart';
 import '../providers/setup_providers.dart';
 
@@ -328,6 +329,40 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     }
     ref.invalidate(recommendationFeedProvider);
     ref.invalidate(dashboardSnapshotProvider);
+    final session = ref.read(setupControllerProvider.notifier).session;
+    if (shouldConfirmInitialUtcTimezone(
+      editing: widget.editing,
+      session: session,
+    )) {
+      final reviewTimezone = await showDialog<bool>(
+        context: context,
+        barrierDismissible: false,
+        builder: (dialogContext) => PopScope(
+          canPop: false,
+          child: AlertDialog(
+            title: const Text('Confirm account timezone'),
+            content: const Text(
+              'This synced account currently uses UTC. Local dates, rule-based plans, briefings, reviews, and budgets follow the account timezone. Keep UTC only if it matches you, or review it in Settings. Existing preparation reservations keep their saved instants.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(false),
+                child: const Text('Keep UTC'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(dialogContext).pop(true),
+                child: const Text('Review in Settings'),
+              ),
+            ],
+          ),
+        ),
+      );
+      if (!mounted) return;
+      context.go(
+        reviewTimezone == true ? AppRoutes.settings : AppRoutes.dashboard,
+      );
+      return;
+    }
     context.go(widget.editing ? AppRoutes.settings : AppRoutes.dashboard);
   }
 
@@ -336,6 +371,15 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
       SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
     );
   }
+}
+
+bool shouldConfirmInitialUtcTimezone({
+  required bool editing,
+  required AppSession? session,
+}) {
+  return !editing &&
+      session?.isAuthenticated == true &&
+      session?.profile.timezone == 'UTC';
 }
 
 class _RequiredSetupSection extends StatelessWidget {

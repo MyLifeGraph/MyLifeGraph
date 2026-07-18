@@ -119,7 +119,95 @@ def test_focus_query_is_activation_bounded_and_has_overflow_sentinel() -> None:
     params = client.calls[-1][1]
     assert params["status"] == "eq.completed"
     assert params["started_at"] == f"gte.{activated_at.isoformat()}"
-    assert params["limit"] == "10001"
+    assert params["limit"] == "1000"
+    assert params["offset"] == "0"
+
+
+class CappedPagingClient:
+    def __init__(self, rows: list[dict]) -> None:
+        self.rows = rows
+        self.calls = []
+
+    async def select(self, table, *, params):
+        self.calls.append((table, params))
+        offset = int(params.get("offset", 0))
+        requested = int(params["limit"])
+        effective_limit = min(requested, 1_000)
+        return self.rows[offset : offset + effective_limit]
+
+
+def test_focus_query_pages_past_postgrest_max_rows() -> None:
+    rows = [
+        {
+            "id": str(index),
+            "started_at": "2026-07-20T09:00:00+00:00",
+            "ended_at": "2026-07-20T09:05:00+00:00",
+            "actual_minutes": 5,
+            "status": "completed",
+        }
+        for index in range(1_001)
+    ]
+    client = CappedPagingClient(rows)
+    repository = SupabaseDeadlinePlanRepository(client)
+
+    result = asyncio.run(
+        repository.list_completed_focus(
+            user_id=USER_ID,
+            task_id=PLAN_ID,
+            started_at_or_after=datetime(2026, 7, 20, 9, tzinfo=UTC),
+        ),
+    )
+
+    assert len(result) == 1_001
+    assert [params["offset"] for _, params in client.calls] == ["0", "1000"]
+    assert [params["limit"] for _, params in client.calls] == ["1000", "1000"]
+
+
+class CappedScheduleClient(Client):
+    def __init__(self) -> None:
+        super().__init__()
+        self.schedule_rows = [
+            {
+                "id": str(index),
+                "weekday": 1,
+                "starts_at": "09:00:00",
+                "ends_at": "10:00:00",
+                "updated_at": "2026-07-20T08:00:00+00:00",
+            }
+            for index in range(1_001)
+        ]
+
+    async def select(self, table, *, params):
+        if table != "schedule_items":
+            return await super().select(table, params=params)
+        self.calls.append((table, params))
+        offset = int(params.get("offset", 0))
+        limit = min(int(params["limit"]), 1_000)
+        return self.schedule_rows[offset : offset + limit]
+
+
+def test_planning_context_pages_to_the_schedule_overflow_sentinel() -> None:
+    client = CappedScheduleClient()
+    repository = SupabaseDeadlinePlanRepository(client)
+
+    context = asyncio.run(
+        repository.load_planning_context(
+            user_id=USER_ID,
+            plan_id=PLAN_ID,
+            starts_on=date(2026, 7, 20),
+            range_starts_at=datetime(2026, 7, 20, tzinfo=UTC),
+            range_ends_at=datetime(2026, 8, 1, tzinfo=UTC),
+            source_calendar_event_id=None,
+            include_calendar_availability=False,
+        ),
+    )
+
+    assert len(context.schedule_items) == 1_001
+    schedule_calls = [
+        params for table, params in client.calls if table == "schedule_items"
+    ]
+    assert [params["offset"] for params in schedule_calls] == ["0", "1000"]
+    assert [params["limit"] for params in schedule_calls] == ["1000", "1"]
 
 
 class BulkClient:

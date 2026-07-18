@@ -45,6 +45,12 @@ into a primary title, button, field label, or first-line error.
 - Say `rule-based` for deterministic personalized calculations, `fixed text`
   for deterministic reminders, `example` for local demo data, and `preview`
   for a staged change that has not been applied.
+- Daily briefings visibly say `Rule-based · not AI-written`. Stored Insight
+  rows are called notes unless their individual source proves a narrower AI
+  claim. Preparation load is named `Current planned workload` because it combines
+  saved schedule durations, task estimates, and active preparation reservations,
+  and because active revisions can replace the projection; it is not presented
+  as immutable historical load.
 - State whether a change is automatic, requires confirmation, or cannot change
   data. Do not imply that a preview or recommendation already changed a plan.
 - Keep provider names, model names, contract versions, source manifests, and

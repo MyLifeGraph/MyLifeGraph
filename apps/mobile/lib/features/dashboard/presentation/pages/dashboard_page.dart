@@ -809,9 +809,7 @@ class _DashboardHome extends StatelessWidget {
                             onAddMorning: onAddMorning,
                             onAddEvening: onAddEvening,
                           ),
-                          if (canUseWeeklyReview &&
-                              snapshot.loadedAt.toLocal().weekday ==
-                                  DateTime.monday) ...[
+                          if (canUseWeeklyReview) ...[
                             const SizedBox(height: AppSpacing.md),
                             _WeeklyReviewEntryCard(
                               onOpen: onOpenWeeklyReview,

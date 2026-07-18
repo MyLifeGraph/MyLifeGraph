@@ -11,6 +11,14 @@ import 'package:my_life_graph/features/optimization/domain/entities/skillset_pro
 import 'package:my_life_graph/features/optimization/presentation/providers/optimization_providers.dart';
 
 void main() {
+  test('planned load names the current mutable workload projection', () {
+    final metric = correlationMetrics.singleWhere(
+      (candidate) => candidate.id == 'planned_minutes',
+    );
+
+    expect(metric.label, 'Current planned workload');
+  });
+
   testWidgets('keeps an account insight failure distinct from empty evidence',
       (tester) async {
     var insightLoads = 0;
@@ -276,6 +284,11 @@ void main() {
     );
     expect(find.text('All'), findsNothing);
     expect(find.text('Confidence not stored'), findsOneWidget);
+    expect(
+      find.text('Stored insights and previous notes'),
+      findsOneWidget,
+    );
+    expect(find.text('Stored insights and previous AI notes'), findsNothing);
   });
 
   testWidgets('matrix cells expose their metric pair, result, and selection',

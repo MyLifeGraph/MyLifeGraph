@@ -202,7 +202,7 @@ class _FloatingBottomNav extends StatelessWidget {
                         _FloatingNavItem(
                           icon: Icons.home_outlined,
                           selectedIcon: Icons.home,
-                          label: 'Home',
+                          label: 'Today',
                           isSelected: selectedIndex == 0,
                           showLabel: !compact,
                           flex: itemFlex(selectedIndex == 0),
@@ -254,7 +254,7 @@ class _FloatingBottomNav extends StatelessWidget {
                         runSpacing: 4,
                         children: [
                           _CompactNavLabel(
-                            label: 'Home',
+                            label: 'Today',
                             isSelected: selectedIndex == 0,
                             selectedColor: selectedColor,
                             idleColor: idleColor,

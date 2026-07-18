@@ -1,9 +1,12 @@
 # Product Polish Follow-up
 
-Status: implemented on 2026-07-18, with the manual five-student usability study
-still pending. The runnable protocol is in
+Status: implemented on 2026-07-18. The manual five-student usability study was
+subsequently skipped/deferred and remains not run. The runnable protocol is in
 `docs/student-usability-test-script.md`; recruitment, facilitation, notes, and
-synthesis templates are in `docs/student-usability-study/`.
+synthesis templates are in `docs/student-usability-study/`. A five-agent
+compressed persona walkthrough is documented separately in
+`docs/synthetic-student-persona-simulation-2026-07-18.md` and is not participant
+evidence.
 
 ## 6. Remove Or Finish Unproven Product Promises
 

@@ -688,8 +688,9 @@ class _DeadlinePlanCardState extends State<_DeadlinePlanCard> {
         revision.sourceStatus == DeadlinePlanSourceStatus.stale ||
             revision.sourceStatus == DeadlinePlanSourceStatus.unavailable;
     final canMutate = !isBusy && !exactRetryLocked && !plan.isTerminal;
-    final missedBlocks = !pending && plan.isActive
-        ? revision.blocks
+    final missedSourceRevision = pending && active != null ? active : revision;
+    final missedBlocks = plan.isActive
+        ? missedSourceRevision.blocks
             .where((block) => block.state == DeadlinePlanBlockState.missed)
             .toList(growable: false)
         : const <DeadlinePlanBlock>[];
@@ -778,6 +779,10 @@ class _DeadlinePlanCardState extends State<_DeadlinePlanCard> {
             'Preparation blocks use your profile timezone: ${revision.timezone}',
             style: Theme.of(context).textTheme.bodySmall,
           ),
+          Text(
+            _planningWindowDescription(revision.bestEnergyWindow),
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
           const SizedBox(height: AppSpacing.md),
           Wrap(
             spacing: AppSpacing.lg,
@@ -788,7 +793,7 @@ class _DeadlinePlanCardState extends State<_DeadlinePlanCard> {
                 value: _duration(estimate),
               ),
               _ProgressValue(
-                label: 'Untracked prior credit',
+                label: 'Entered prior credit',
                 value: _duration(prior),
               ),
               _ProgressValue(
@@ -836,7 +841,7 @@ class _DeadlinePlanCardState extends State<_DeadlinePlanCard> {
           if (plan.isActive) ...[
             const SizedBox(height: AppSpacing.xs),
             Text(
-              'Completed focus counts toward the plan as a whole and fills reserved blocks in chronological order. Starting from a row only prefills its remaining duration.',
+              'Linked Focus completed after this plan was first activated counts toward the plan as a whole and fills reserved blocks in chronological order. Starting from a row only prefills its remaining duration.',
               style: Theme.of(context).textTheme.bodySmall,
             ),
           ],
@@ -860,6 +865,12 @@ class _DeadlinePlanCardState extends State<_DeadlinePlanCard> {
                   Text(
                     '${missedBlocks.length} reserved ${missedBlocks.length == 1 ? 'block has' : 'blocks have'} passed with ${_duration(missedMinutes)} still uncredited. Replan from today; completed focus remains counted.',
                   ),
+                  if (pending) ...[
+                    const SizedBox(height: AppSpacing.xs),
+                    const Text(
+                      'The active reservations still need attention while the replacement remains an unconfirmed preview.',
+                    ),
+                  ],
                   const SizedBox(height: AppSpacing.sm),
                   FilledButton.icon(
                     key: ValueKey('deadline-replan-missed-${plan.id}'),
@@ -1359,20 +1370,23 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
         ),
         const SizedBox(height: AppSpacing.xs),
         Text(
-          'Optional shortcuts — your estimate is only filled after you choose one.',
+          'MyLifeGraph cannot estimate this for you. One transparent approach is topics × sessions per topic × minutes per session; these chips are only optional shortcuts.',
           style: Theme.of(context).textTheme.bodySmall,
         ),
         const SizedBox(height: AppSpacing.lg),
         const Text(
-          'Do you have preparation time that MyLifeGraph has not tracked yet?',
+          'Do you have preparation this plan will not credit automatically?',
         ),
         const SizedBox(height: AppSpacing.sm),
         SegmentedButton<bool>(
           direction: _choiceDirection(context),
           emptySelectionAllowed: true,
           segments: const [
-            ButtonSegment(value: false, label: Text('No untracked time')),
-            ButtonSegment(value: true, label: Text('Yes')),
+            ButtonSegment(
+              value: false,
+              label: Text('No additional prior work'),
+            ),
+            ButtonSegment(value: true, label: Text('Yes, add prior work')),
           ],
           selected: _alreadyStarted == null ? const {} : {_alreadyStarted!},
           onSelectionChanged: (values) {
@@ -1387,18 +1401,18 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
             prefix: 'deadline-prior',
             hours: _priorHoursController,
             minutes: _priorMinutesController,
-            label: 'Active preparation not tracked by MyLifeGraph',
+            label: 'Prior preparation to credit',
           ),
           const SizedBox(height: AppSpacing.xs),
           Text(
-            'Only enter work that is not already recorded as Focus. Tracked Focus is added separately, so entering it again would double-count it.',
+            'Enter earlier preparation, including Focus completed before this plan was first activated or Focus linked to another task. Do not re-enter the linked Focus shown below; after activation it is credited automatically.',
             style: Theme.of(context).textTheme.bodySmall,
           ),
         ],
         if (_totalMinutes != null && _creditedPriorMinutes != null) ...[
           const SizedBox(height: AppSpacing.md),
           Text(
-            '${_duration(_totalMinutes!)} total · ${_duration(_creditedPriorMinutes!)} untracked prior credit · ${_duration(widget.trackedFocusMinutes)} tracked Focus · ${_duration((_totalMinutes! - _creditedPriorMinutes! - widget.trackedFocusMinutes).clamp(0, _totalMinutes!).toInt())} to schedule',
+            '${_duration(_totalMinutes!)} total · ${_duration(_creditedPriorMinutes!)} entered prior credit · ${_duration(widget.trackedFocusMinutes)} linked Focus · ${_duration((_totalMinutes! - _creditedPriorMinutes! - widget.trackedFocusMinutes).clamp(0, _totalMinutes!).toInt())} to schedule',
             key: const ValueKey('deadline-estimate-summary'),
           ),
         ],
@@ -1438,7 +1452,7 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
           controller: _dailyCapController,
           keyboardType: TextInputType.number,
           decoration: const InputDecoration(
-            labelText: 'Maximum preparation minutes per day',
+            labelText: 'Maximum preparation minutes per day for this plan',
           ),
         ),
         const SizedBox(height: AppSpacing.md),
@@ -1486,7 +1500,7 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
               setState(() => _useCalendarAvailability = value),
           title: const Text('Use imported busy times'),
           subtitle: const Text(
-            'Avoid current imported busy periods in this proposal. Event text is not sent to AI.',
+            'Uses busy periods from the latest file you imported for this account and requires a connected completed import. Re-import after calendar changes; there is no background sync. Planning is rule-based and event text is not sent to AI.',
           ),
         ),
         const SizedBox(height: AppSpacing.md),
@@ -1957,9 +1971,23 @@ String _statusLabel(DeadlinePlanStatus status) => switch (status) {
 String _blockLabel(DeadlinePlanBlockState state) => switch (state) {
       DeadlinePlanBlockState.proposed => 'proposed',
       DeadlinePlanBlockState.upcoming => 'upcoming',
-      DeadlinePlanBlockState.partial => 'partly tracked',
-      DeadlinePlanBlockState.completed => 'completed',
+      DeadlinePlanBlockState.partial => 'partly credited',
+      DeadlinePlanBlockState.completed => 'fully credited',
       DeadlinePlanBlockState.missed => 'missed',
+    };
+
+String _planningWindowDescription(String energyWindow) =>
+    switch (energyWindow) {
+      'early_morning' =>
+        'Rule-based windows: prefers 06:00–11:00, then tries 13:00–17:00 and 18:00–21:00 if needed.',
+      'morning' =>
+        'Rule-based windows: prefers 08:00–13:00, then tries 14:00–18:00 and 18:00–21:00 if needed.',
+      'afternoon' =>
+        'Rule-based windows: prefers 13:00–18:00, then tries 09:00–12:00 and 18:00–21:00 if needed.',
+      'evening' =>
+        'Rule-based windows: prefers 18:00–23:00, then tries 14:00–17:00 and 09:00–12:00 if needed.',
+      _ =>
+        'Rule-based windows: tries 09:00–12:00, 14:00–18:00, then 18:00–21:00.',
     };
 
 String _errorMessage(Object error) => switch (error) {

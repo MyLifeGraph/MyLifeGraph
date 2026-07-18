@@ -70,6 +70,14 @@ void main() {
     );
     await tester.tap(find.text('Change timezone'));
     await tester.pumpAndSettle();
+    expect(
+      find.textContaining('Existing preparation reservations keep'),
+      findsOneWidget,
+    );
+    expect(
+      find.textContaining('do not refresh automatically'),
+      findsOneWidget,
+    );
     await tester.tap(find.text('Europe/Berlin').last);
     await tester.pumpAndSettle();
     await tester.tap(find.text('Europe/London').last);

@@ -172,7 +172,7 @@ const correlationMetrics = [
   ),
   CorrelationMetric(
     id: 'planned_minutes',
-    label: 'Planned load',
+    label: 'Current planned workload',
     unit: 'min',
     category: 'Work',
     higherIsPositive: false,

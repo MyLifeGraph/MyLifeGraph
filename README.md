@@ -582,7 +582,7 @@ checkout; the full run reported
 After Deadline Planner V1 was added, the full non-reset combined journey passed
 again on 2026-07-18 after the product-polish slice. It reported
 `E2E browser smoke passed for e2e-1784404040@example.test` and included the
-two-page Evening flow, compact Dashboard expansions, Monday-only weekly entry,
+two-page Evening flow, compact Dashboard expansions, the weekly-review entry,
 planner lifecycle/projection, Calendar isolation, focus progress, RLS, Account
 Export, account deletion, and guest zero-call checks.
 
@@ -622,6 +622,9 @@ has the nvm bin directory on `PATH`.
 - `docs/student-usability-study/` - Recruitment copy, facilitator runbook,
   anonymized per-session note template, and synthesis template for the
   still-manual study.
+- `docs/synthetic-student-persona-simulation-2026-07-18.md` - Five-agent
+  compressed persona walkthrough, code-backed findings and fixes, and explicit
+  limits; it is not a participant or longitudinal study.
 - `docs/product-review-handoff.md` - Self-contained review scope, invariants,
   verification checklist, and prompt for a fresh review chat.
 - `docs/phase-10-controlled-coach-plan.md` - Implemented bounded Coach contract,

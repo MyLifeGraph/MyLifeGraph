@@ -67,7 +67,7 @@ class QuickActionPage extends ConsumerWidget {
           ),
           _ActionTile(
             icon: Icons.timer_outlined,
-            title: 'Focus session',
+            title: 'Focus',
             subtitle: 'Start a real timed block linked to a task or habit',
             onTap: () => context.go(AppRoutes.deepWork),
           ),

@@ -1,12 +1,54 @@
 import 'package:dio/dio.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
+import 'package:my_life_graph/core/navigation/app_routes.dart';
 import 'package:my_life_graph/core/errors/app_exception.dart';
 import 'package:my_life_graph/features/auth/data/intake_setup_repository.dart';
 import 'package:my_life_graph/features/auth/domain/app_session.dart';
 import 'package:my_life_graph/features/auth/domain/intake_response.dart';
+import 'package:my_life_graph/features/auth/presentation/pages/onboarding_page.dart';
 import 'package:my_life_graph/features/auth/presentation/providers/setup_providers.dart';
 
 void main() {
+  test('only first-time authenticated UTC setup requires confirmation', () {
+    final utcAccount = AppSession.authenticated(
+      const AppProfile(
+        id: 'account',
+        email: 'student@example.test',
+        name: 'Student',
+        timezone: 'UTC',
+        role: AppRole.user,
+        onboardingDone: false,
+        authProvider: 'email',
+      ),
+    );
+    final berlinAccount = AppSession.authenticated(
+      utcAccount.profile.copyWith(timezone: 'Europe/Berlin'),
+    );
+    final utcGuest = AppSession.guest(
+      utcAccount.profile.copyWith(role: AppRole.guest),
+    );
+
+    expect(
+      shouldConfirmInitialUtcTimezone(editing: false, session: utcAccount),
+      isTrue,
+    );
+    expect(
+      shouldConfirmInitialUtcTimezone(editing: false, session: berlinAccount),
+      isFalse,
+    );
+    expect(
+      shouldConfirmInitialUtcTimezone(editing: false, session: utcGuest),
+      isFalse,
+    );
+    expect(
+      shouldConfirmInitialUtcTimezone(editing: true, session: utcAccount),
+      isFalse,
+    );
+  });
+
   test('server failures remain exact-retry locked', () {
     expect(
       setupSaveRequiresExactRetry(
@@ -14,6 +56,70 @@ void main() {
       ),
       isTrue,
     );
+  });
+
+  testWidgets('first authenticated UTC save requires an explicit choice',
+      (tester) async {
+    final gateway = _FakeSetupGateway(
+      fetched: const IntakeSetupReadState.empty(),
+    );
+    late SetupController controller;
+    final router = GoRouter(
+      initialLocation: AppRoutes.onboarding,
+      routes: [
+        GoRoute(
+          path: AppRoutes.onboarding,
+          builder: (_, __) => const OnboardingPage(),
+        ),
+        GoRoute(
+          path: AppRoutes.dashboard,
+          builder: (_, __) => const Scaffold(
+            body: Text('Dashboard destination'),
+          ),
+        ),
+        GoRoute(
+          path: AppRoutes.settings,
+          builder: (_, __) => const Scaffold(
+            body: Text('Settings destination'),
+          ),
+        ),
+      ],
+    );
+    addTearDown(router.dispose);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          setupControllerProvider.overrideWith((ref) {
+            controller = SetupController(
+              repository: gateway,
+              session: _authenticatedUtcSession(),
+              onApplied: (_) {},
+            );
+            return controller;
+          }),
+        ],
+        child: MaterialApp.router(routerConfig: router),
+      ),
+    );
+    await tester.pumpAndSettle();
+    controller.updateDraft(_requiredDraft());
+    await tester.pump();
+    await tester.scrollUntilVisible(
+      find.text('Save setup'),
+      500,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.tap(find.text('Save setup'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Confirm account timezone'), findsOneWidget);
+    expect(find.textContaining('currently uses UTC'), findsOneWidget);
+    expect(find.text('Dashboard destination'), findsNothing);
+
+    await tester.tap(find.text('Keep UTC'));
+    await tester.pumpAndSettle();
+    expect(find.text('Dashboard destination'), findsOneWidget);
   });
 
   test('client validation error does not freeze the editable draft', () async {
@@ -264,6 +370,20 @@ AppSession _guestSession({required bool onboardingDone}) {
       role: AppRole.guest,
       onboardingDone: onboardingDone,
       authProvider: 'guest',
+    ),
+  );
+}
+
+AppSession _authenticatedUtcSession() {
+  return AppSession.authenticated(
+    const AppProfile(
+      id: 'account-id',
+      email: 'student@example.test',
+      name: 'Student',
+      timezone: 'UTC',
+      role: AppRole.user,
+      onboardingDone: false,
+      authProvider: 'email',
     ),
   );
 }

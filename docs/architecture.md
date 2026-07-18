@@ -179,7 +179,8 @@ A compact `Today at a glance` card follows the briefing with the next scheduled
 commitment/preparation block, capture status, and direct Focus/Habit actions.
 Tasks remain the main management section. Saved signal detail, secondary
 recommendations, and the full week stay in collapsed supporting sections. The
-weekly-review entry appears on Monday instead of occupying every day.
+weekly-review entry remains available on Today for authenticated accounts;
+review period selection still comes from the profile-local completed ISO week.
 A local guest dashboard reads the locally saved canonical check-in and otherwise
 shows a real empty state instead of a static fake plan. It labels briefing
 generation unavailable instead of inventing a personalized local decision.
@@ -196,9 +197,11 @@ do not mutate a record. Guest/mock sessions never call the weekly-review API.
 Insights also uses this boundary for deterministic correlation analysis. In
 mock or guest mode it renders local time series. In real Supabase mode it reads
 recent `daily_logs`, `tasks`, `schedule_items`, `habits`, `habit_logs`, and
-completed `focus_sessions`, plus active `deadline_plan_blocks`. Planned load is
-based on real schedule durations, task estimates, and confirmed preparation
-reservations; proposed or superseded blocks are excluded. Focus uses persisted
+completed `focus_sessions`, plus active `deadline_plan_blocks`. The visible
+`Current planned workload` metric is based on real schedule durations, task
+estimates, and currently active confirmed preparation reservations; proposed or
+superseded blocks are excluded. It is not immutable historical planned load.
+Focus uses persisted
 completed minutes and explicit local entry dates, with the documented UTC
 start-day fallback for legacy rows. Metrics without measured values are hidden,
 and the primary observation requires at least 14 shared days. The bounded
@@ -262,8 +265,10 @@ normal writes, or call an LLM. The full contract is in
 
 `deadline-plan-v1` is a separate authenticated FastAPI workflow for explicit
 exam and assignment preparation. `/preparation-plans` asks the user for their
-own `30..30000` minute total estimate and prior credit, plus bounded session/
-daily preferences. `POST /v1/deadline-plans/proposals` persists an immutable
+own `30..30000` minute total estimate and prior credit that will not otherwise
+be credited, plus bounded session/per-plan-daily preferences. The surface shows
+the deterministic ordered energy windows and latest-manual-import boundary.
+`POST /v1/deadline-plans/proposals` persists an immutable
 proposed revision with at most 120 deterministic dated blocks; it cannot replace
 the active revision until the user confirms it. The first confirmation creates
 one stable managed Phase 3 task with the plan id, and later confirmations retain
@@ -313,6 +318,9 @@ Setup is one typed contract across first completion, re-entry, and review:
   real-mode sessions read `GET /v1/intake/setup` and save through
   `POST /v1/intake/complete`; there is no direct Supabase fallback that can mark
   an incomplete backend intake as finished.
+- New synced profiles retain the neutral database default `UTC`, but the first
+  successful Setup save requires an explicit `Keep UTC` or `Review in Settings`
+  choice. Editing an existing Setup and guest Setup do not add that prompt.
 - The Setup read returns the newest `intake-v1` row. A newest `pending` row is
   exposed with its request id so the client can freeze edits and retry that exact
   operation; otherwise the read returns the latest applied revision.

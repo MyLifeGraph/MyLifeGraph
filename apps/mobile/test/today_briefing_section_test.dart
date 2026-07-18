@@ -21,6 +21,7 @@ void main() {
 
     expect(find.text("Today's decision"), findsOneWidget);
     expect(find.text('Recovery mode · Up-to-date data'), findsOneWidget);
+    expect(find.text('Rule-based · not AI-written'), findsOneWidget);
     expect(find.text('Primary action'), findsOneWidget);
     expect(find.text('Submit the report'), findsOneWidget);
     expect(find.text('Open task'), findsOneWidget);
@@ -90,6 +91,7 @@ void main() {
     );
 
     expect(forced, isNull);
+    expect(find.text('Rule-based · not AI-written'), findsOneWidget);
     await tester.tap(find.text('Create today\'s plan'));
     await tester.pump();
     expect(forced, isFalse);

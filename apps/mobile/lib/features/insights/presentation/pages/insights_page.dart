@@ -1545,7 +1545,7 @@ class _DiscoveredPatternsCard extends StatelessWidget {
                     ),
                     const SizedBox(height: AppSpacing.xs),
                     Text(
-                      'Stored insights and previous AI notes',
+                      'Stored insights and previous notes',
                       style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                             color:
                                 Theme.of(context).colorScheme.onSurfaceVariant,

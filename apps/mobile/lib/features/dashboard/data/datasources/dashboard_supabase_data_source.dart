@@ -5,12 +5,19 @@ import '../../../../core/supabase/supabase_tables.dart';
 import '../../domain/entities/dashboard_snapshot.dart';
 
 class DashboardSupabaseDataSource {
-  const DashboardSupabaseDataSource(this._client);
+  const DashboardSupabaseDataSource(
+    this._client, {
+    Future<String> Function()? resolveUserId,
+  }) : _resolveUserId = resolveUserId;
 
   final SupabaseClient _client;
+  final Future<String> Function()? _resolveUserId;
 
   Future<DashboardSnapshot> getSnapshot() async {
-    final userId = await AppUserResolver(_client).resolveUserId();
+    final resolver = _resolveUserId;
+    final userId = resolver == null
+        ? await AppUserResolver(_client).resolveUserId()
+        : await resolver();
     final results = await Future.wait([
       _client
           .from(SupabaseTables.dailyLogs)
@@ -28,7 +35,18 @@ class DashboardSupabaseDataSource {
             'source,metadata',
           )
           .eq('user_id', userId)
+          .inFilter('status', const ['todo', 'in_progress'])
           .order('deadline', ascending: true, nullsFirst: true)
+          .order('updated_at', ascending: false)
+          .limit(100),
+      _client
+          .from(SupabaseTables.tasks)
+          .select(
+            'id,title,description,deadline,priority,status,estimated_minutes,'
+            'source,metadata',
+          )
+          .eq('user_id', userId)
+          .inFilter('status', const ['done', 'cancelled'])
           .order('updated_at', ascending: false)
           .limit(100),
       _client
@@ -41,8 +59,11 @@ class DashboardSupabaseDataSource {
 
     return const DashboardSnapshotMapper().map(
       dailyLogs: List<Map<String, dynamic>>.from(results[0] as List),
-      taskRows: List<Map<String, dynamic>>.from(results[1] as List),
-      scheduleRows: List<Map<String, dynamic>>.from(results[2] as List),
+      taskRows: [
+        ...List<Map<String, dynamic>>.from(results[1] as List),
+        ...List<Map<String, dynamic>>.from(results[2] as List),
+      ],
+      scheduleRows: List<Map<String, dynamic>>.from(results[3] as List),
       loadedAt: DateTime.now(),
     );
   }

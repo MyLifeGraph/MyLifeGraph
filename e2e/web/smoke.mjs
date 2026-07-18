@@ -5413,14 +5413,8 @@ function isoInstantNanoseconds(value) {
 }
 
 async function assertBoundedWeeklyReview(page, userId) {
-  if (new Date().getDay() === 1) {
-    await scrollFlutterPage(page, 500);
-    await expectText(page, 'Review your week');
-  } else if (
-    (await page.getByText('Review your week', { exact: true }).count()) !== 0
-  ) {
-    throw new Error('Dashboard showed the weekly-review entry outside Monday.');
-  }
+  await scrollFlutterPage(page, 500);
+  await expectText(page, 'Review your week');
   const timezone = 'Europe/Berlin';
   const period = latestCompletedIsoWeek(timezone);
   const createdBeforeWeek = isoTimestampOnDate(

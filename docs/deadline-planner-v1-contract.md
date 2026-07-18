@@ -21,7 +21,14 @@ Active preparation means deliberate working or study time, not elapsed days,
 classes, breaks, or calendar occupancy. The backend never invents either value
 from the title, event duration, event type, another user's data, or an LLM.
 Suggested duration chips are UI shortcuts only: no value is submitted until the
-user explicitly selects or enters it.
+user explicitly selects or enters it. The UI states that it cannot estimate
+effort for the user and offers topics multiplied by sessions per topic and
+minutes per session only as a transparent estimation aid.
+
+`credited_prior_minutes` is work the plan will not credit automatically. This
+includes preparation completed before the plan's first activation and Focus
+linked to another task. The user must not re-enter qualifying linked Focus that
+the plan already shows, because that would double-count it.
 
 Progress reports `accounted_minutes` as the estimate-bounded sum of prior
 credit and qualifying completed focus time, plus exact `remaining_minutes` and
@@ -79,7 +86,9 @@ revision contains at most 120 blocks. Persisted revision and block state is
 exactly `proposed`, `active`, or `superseded`; public block progress is derived
 as `proposed`, `upcoming`, `partial`, `completed`, or `missed`. Blocks are app-
 owned reservations, not recurring `schedule_items` and not provider-calendar
-events.
+events. An uncredited active block uses the half-open interval
+`[starts_at, ends_at)` and is therefore `missed` at `now >= ends_at`, including
+the exact end instant.
 
 If all requested preparation time cannot fit before the deadline, the proposal
 returns the exact unallocated minutes for explicit review. It never hides the
@@ -118,7 +127,9 @@ Active and abandoned sessions do not contribute. A completed linked session
 updates derived progress but never completes the managed task, a block, or the
 deadline plan implicitly. The user remains the authority for plan completion.
 Existing Phase 3 terminal-focus immutability and target ownership checks remain
-unchanged.
+unchanged. Focus completed before first activation or against another task is
+not discoverable as qualifying plan progress and must be entered deliberately
+as prior credit if the user wants it included.
 
 ## Calendar And Busy-Time Use
 
@@ -139,6 +150,9 @@ planner first requires one connected owner source whose imported data has not
 been deleted and whose `last_import_id` is non-null. It may use only `busy`
 timed/all-day rows belonging to exactly that current import. Disconnected,
 deleted, or never-imported availability is a conflict, not an empty calendar.
+Here, `current import` means the latest completed file import recorded by the
+app, not live provider state or a freshness-age guarantee. The student must
+re-import after source-calendar changes; there is no background refresh.
 The planner does not broaden consent, inspect hidden calendar fields, contact a
 provider, or persist event content in plan blocks. The revision records
 `use_calendar_availability`; its planning fingerprint covers the exact bounded
@@ -168,6 +182,25 @@ respects:
 - the user's selected block duration and daily availability;
 - fixed app commitments and confirmed preparation blocks; and
 - current imported busy intervals only when explicitly enabled.
+
+`max_daily_minutes` is a cap for this plan revision, not an account-wide cap
+across multiple active plans. Confirmed blocks from other plans still occupy
+time and cannot overlap, but two plans may together reserve more minutes on one
+date than either plan's individual cap.
+
+The ordered rule-based planning windows are frozen by
+`best_energy_window`:
+
+| Profile answer | First window | Fallback windows |
+| --- | --- | --- |
+| `early_morning` | 06:00–11:00 | 13:00–17:00, 18:00–21:00 |
+| `morning` | 08:00–13:00 | 14:00–18:00, 18:00–21:00 |
+| `afternoon` | 13:00–18:00 | 09:00–12:00, 18:00–21:00 |
+| `evening` | 18:00–23:00 | 14:00–17:00, 09:00–12:00 |
+| `variable` | 09:00–12:00 | 14:00–18:00, 18:00–21:00 |
+
+The planner tries these windows in order after subtracting current time and
+busy intervals. They are deterministic defaults, not AI-selected availability.
 
 `buffer_days` counts complete profile-local calendar days that must remain free
 immediately before the deadline day. For example, a value of one leaves the
@@ -276,14 +309,16 @@ and estimate.
 
 The preview shows total estimate, prior spent, currently qualifying focus time,
 remaining minutes, dated staged blocks, optional busy-time provenance, and any
-unallocated deficit before confirmation. Guest/mock shows honest unavailability
-and makes zero planner calls.
+unallocated deficit before confirmation. It names the fixed planning windows,
+the per-plan daily cap, and the manually imported availability boundary.
+Guest/mock shows honest unavailability and makes zero planner calls.
 
 An active plan with passed `missed` blocks shows the number of affected blocks
 and still-uncredited minutes. `Replan remaining time` opens the existing staged
 proposal flow from the current date. It does not mutate reservations in the
 background, and previously completed qualifying focus remains credited to the
-plan as a whole.
+plan as a whole. The active warning remains visible while a replacement
+revision is only an unconfirmed preview.
 
 ## Explicit Non-Claims
 
@@ -321,6 +356,8 @@ Focused backend, Flutter, migration, and browser coverage must prove:
 - exact replay, request conflict, stale revision, response-loss retry, and
   concurrent-confirm convergence;
 - completed post-activation linked focus progress without implicit completion;
+- stable pagination past a 1,000-row PostgREST response cap for bounded Focus,
+  recurring schedule, confirmed-block, and imported-busy projections;
 - manual and explicitly selected imported-event sources, stale source
   fingerprint rejection, optional current-import-only busy-time use, explicit
   conflict for unavailable availability, and no title inference;

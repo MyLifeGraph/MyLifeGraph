@@ -15,8 +15,11 @@ FastAPI retry and conflict behavior, PostgreSQL/RLS contracts, copy boundaries,
 small-screen behavior, and the existing automated coverage for loading, empty,
 offline, error, and ambiguous-response states.
 
-The prepared five-student study in `docs/student-usability-test-script.md` has
-not been run. The observations below are code-, contract-, and automation-based;
+The prepared five-student study in `docs/student-usability-test-script.md` was
+later deliberately skipped/deferred and has not been run. The subsequent
+five-agent compressed walkthrough is documented in
+`docs/synthetic-student-persona-simulation-2026-07-18.md`; it is not participant
+evidence. The observations below are code-, contract-, and automation-based;
 they are not invented participant findings or evidence of long-term learning
 benefit.
 
@@ -76,7 +79,7 @@ Deadline Planner V1 remains deterministic and transparent. Its core remainder
 is:
 
 ```text
-max(0, estimated total - explicit untracked prior work - eligible tracked Focus)
+max(0, estimated total - entered prior credit - eligible tracked Focus)
 ```
 
 Eligible tracked Focus is limited to completed sessions linked to the stable
@@ -90,8 +93,9 @@ the estimate fits.
 
 Those rules are suitable for V1 because students can inspect and change every
 authoritative input. The estimate is necessarily subjective, and explicit
-untracked prior work can be entered incorrectly; the UI warns against entering
-Focus a second time. This review found no evidence that an LLM should own or
+prior credit can be entered incorrectly; the UI names which Focus the plan
+credits automatically and warns against entering that work a second time. This
+review found no evidence that an LLM should own or
 silently alter the arithmetic, schedule, estimate, or mutations. An LLM may
 explain these rules or offer a separately accepted suggestion, but no such
 authority was added.
@@ -148,11 +152,11 @@ All results below are from this local checkout on 2026-07-18:
 
 ## Remaining manual or external validation
 
-1. Run the prepared five-student usability study with
+1. If real usability evidence is wanted later, run the prepared five-student
+   usability study with
    `docs/student-usability-study/facilitator-runbook.md` and report only
-   observed results, especially estimate comprehension, clear-day meaning,
-   Weekly review discoverability outside Monday, and repeated missed-block
-   replanning.
+   observed results. The current decision is to skip/defer it; the synthetic
+   agent report does not count as five participants.
 2. Test representative physical phones and desktop browsers with OS-level 200%
    text, keyboard-only navigation, VoiceOver/TalkBack, reduced motion, and real
    network transitions. Widget/headless coverage is not installed-device

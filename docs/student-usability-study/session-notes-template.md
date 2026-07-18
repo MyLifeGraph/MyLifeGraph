@@ -56,7 +56,7 @@ Intervention: `0 none`, `1 neutral`, `2 scenario clarification`,
 - Kind: `exam | assignment`
 - Days until fictional finish-by date:
 - Estimated total active preparation minutes:
-- Explicit untracked prior minutes:
+- Explicit prior minutes the plan will not credit automatically:
 - Tracked Focus shown:
 - Preferred block minutes:
 - Daily cap:

@@ -995,6 +995,18 @@ combined browser run reported
 this local current checkout only and does not expand any of the non-claims
 above. The manual five-student usability study remains not run.
 
+The subsequent five-agent compressed persona walkthrough on 2026-07-18 is
+documented in
+`docs/synthetic-student-persona-simulation-2026-07-18.md`. It produced code-
+backed findings, not participant or two-month evidence. After its fixes, the
+changed-area suites reported `63` Flutter tests and `14` focused Deadline
+Planner backend tests; the complete FastAPI suite reported
+`748 passed, 1 skipped`. The standard gate and non-reset local Supabase check
+each passed all `591` Flutter tests with clean analysis and matching local
+migration history. The full non-reset browser journey reported
+`E2E browser smoke passed for e2e-1784413991@example.test`. These results apply
+only to this local checkout and do not change the manual/external gaps below.
+
 Phase 10 has focused fake-provider/process-runner, strict contract, service,
 migration, repository, controller, and widget tests in the checkout. Its
 focused browser path and the subsequent full fake-provider browser journey

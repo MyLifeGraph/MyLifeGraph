@@ -311,3 +311,45 @@ def test_exact_proposal_replay_short_circuits_stale_base_and_time() -> None:
     assert response.plan.latest_revision == 1
     assert response.pending_revision is not None
     assert repository.context_loaded is False
+
+
+def test_active_block_is_missed_at_its_exact_end_instant() -> None:
+    repository = ReplayRepository("unused")
+    service = DeadlinePlanService(repository=repository, now=lambda: NOW)
+    row = asyncio.run(repository.list_revisions(user_id="owner", plan_id=PLAN_ID))[0]
+    row = {
+        **row,
+        "state": "active",
+        "activated_at": "2026-07-20T08:00:00+00:00",
+        "planned_minutes": 50,
+        "unscheduled_minutes": 150,
+    }
+    ends_at = datetime(2026, 7, 20, 10, tzinfo=UTC)
+    block = {
+        "id": "44444444-4444-4444-8444-444444444444",
+        "user_id": "owner",
+        "plan_id": str(PLAN_ID),
+        "revision": 1,
+        "sequence": 1,
+        "starts_at": "2026-07-20T09:10:00+00:00",
+        "ends_at": ends_at.isoformat(),
+        "local_date": "2026-07-20",
+        "local_start_time": "09:10:00",
+        "local_end_time": "10:00:00",
+        "planned_minutes": 50,
+    }
+
+    revision = asyncio.run(
+        service._revision_from_row(
+            user_id="owner",
+            row=row,
+            block_rows=[block],
+            tracked_focus_minutes=0,
+            now=ends_at,
+            plan_status="active",
+            calendar_events={},
+        ),
+    )
+
+    assert revision is not None
+    assert revision.blocks[0].state == "missed"
