@@ -280,6 +280,65 @@ int measuredFocusMinutes({
   return endedAt.difference(startedAt).inMinutes;
 }
 
+class FocusPreferenceSuggestion {
+  const FocusPreferenceSuggestion({
+    required this.durationMinutes,
+    required this.evidenceSessions,
+    this.timeWindowLabel,
+  });
+
+  final int durationMinutes;
+  final int evidenceSessions;
+  final String? timeWindowLabel;
+
+  static FocusPreferenceSuggestion? fromSessions(
+    Iterable<FocusSession> sessions,
+  ) {
+    final completed = sessions
+        .where(
+          (session) =>
+              session.status == FocusSessionStatus.completed &&
+              (session.actualMinutes ?? 0) >= 5,
+        )
+        .toList(growable: false);
+    if (completed.length < 5) return null;
+
+    final durations =
+        completed.map((session) => session.actualMinutes!).toList()..sort();
+    final middle = durations.length ~/ 2;
+    final median = durations.length.isOdd
+        ? durations[middle].toDouble()
+        : (durations[middle - 1] + durations[middle]) / 2;
+    final roundedDuration = ((median / 5).round() * 5).clamp(5, 240);
+
+    final windows = <String, int>{};
+    for (final session in completed) {
+      final hour = session.startedAt.toLocal().hour;
+      final label = switch (hour) {
+        >= 5 && < 12 => 'in the morning',
+        >= 12 && < 17 => 'in the afternoon',
+        >= 17 && < 22 => 'in the evening',
+        _ => 'late at night',
+      };
+      windows[label] = (windows[label] ?? 0) + 1;
+    }
+    final rankedWindows = windows.entries.toList()
+      ..sort((left, right) {
+        final count = right.value.compareTo(left.value);
+        return count != 0 ? count : left.key.compareTo(right.key);
+      });
+    final strongestWindow = rankedWindows.first;
+    final hasUsefulWindow = strongestWindow.value >= 3 &&
+        strongestWindow.value / completed.length >= 0.4;
+
+    return FocusPreferenceSuggestion(
+      durationMinutes: roundedDuration,
+      evidenceSessions: completed.length,
+      timeWindowLabel: hasUsefulWindow ? strongestWindow.key : null,
+    );
+  }
+}
+
 class FocusCommandException implements Exception {
   const FocusCommandException(this.message);
 

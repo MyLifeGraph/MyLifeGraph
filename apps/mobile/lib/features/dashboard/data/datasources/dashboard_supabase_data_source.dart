@@ -24,7 +24,8 @@ class DashboardSupabaseDataSource {
       _client
           .from(SupabaseTables.tasks)
           .select(
-            'id,title,description,deadline,priority,status,estimated_minutes',
+            'id,title,description,deadline,priority,status,estimated_minutes,'
+            'source,metadata',
           )
           .eq('user_id', userId)
           .order('deadline', ascending: true, nullsFirst: true)
@@ -131,8 +132,11 @@ class DashboardSnapshotMapper {
   PlanItem _taskToPlanItem(Map<String, dynamic> row) {
     final status = '${row['status']}'.toLowerCase();
     final priority = '${row['priority'] ?? 'normal'}'.trim().toLowerCase();
+    final source = _optionalString(row['source']);
+    final taskId = '${row['id']}';
+    final deadlinePlanId = source == 'deadline-plan-v1' ? taskId : null;
     return PlanItem(
-      id: '${row['id']}',
+      id: taskId,
       title: '${row['title'] ?? 'Untitled task'}',
       deadline: DateTime.tryParse('${row['deadline'] ?? ''}')?.toLocal(),
       priority: priority.isEmpty ? 'normal' : priority,
@@ -140,6 +144,8 @@ class DashboardSnapshotMapper {
       status: status,
       description: _optionalString(row['description']),
       estimatedMinutes: (row['estimated_minutes'] as num?)?.toInt(),
+      source: source,
+      deadlinePlanId: deadlinePlanId,
     );
   }
 
@@ -178,6 +184,7 @@ class DashboardSnapshotMapper {
         label: _weekdayLabel(weekday),
         dateLabel: '${_monthLabel(date.month)} ${date.day}',
         events: events,
+        date: DateTime(date.year, date.month, date.day),
       );
     });
   }
@@ -193,7 +200,18 @@ class DashboardSnapshotMapper {
     return ScheduleEvent(
       title: '${row['title'] ?? 'Schedule block'}',
       time: time,
+      sortMinutes: _timeSortMinutes(startsAt),
     );
+  }
+
+  int? _timeSortMinutes(String value) {
+    final match = RegExp(r'^(\d{2}):(\d{2})').firstMatch(value);
+    final hour = int.tryParse(match?.group(1) ?? '');
+    final minute = int.tryParse(match?.group(2) ?? '');
+    if (hour == null || minute == null || hour > 23 || minute > 59) {
+      return null;
+    }
+    return hour * 60 + minute;
   }
 
   String _weekdayLabel(int weekday) {

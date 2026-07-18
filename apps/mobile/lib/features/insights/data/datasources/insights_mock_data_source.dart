@@ -74,18 +74,16 @@ class InsightsMockDataSource {
           .toDouble();
       final habitRate =
           (62 + wave * 22 + (sleep > 7.2 ? 12 : -8)).clamp(0, 100).toDouble();
-      final workload = (42 + stress * 4 + (index % 5 == 0 ? 20 : 0))
-          .clamp(0, 100)
+      final plannedMinutes = (120 + stress * 18 + (index % 5 == 0 ? 90 : 0))
+          .clamp(30, 480)
           .toDouble();
-      final recovery =
-          ((sleep / 8 * 70) + (energy / 10 * 30)).clamp(0, 100).toDouble();
 
       return CorrelationDataPoint(
         date: date,
         values: {
           'sleep_hours': sleep,
           'focus_minutes': focus,
-          'workload_score': workload,
+          'planned_minutes': plannedMinutes,
           'stress_level': stress,
           'energy_level': energy,
           'mood_score': mood,
@@ -93,7 +91,6 @@ class InsightsMockDataSource {
           'activity_level': activity,
           'steps': (5400 + activity * 620).roundToDouble(),
           'habit_completion_rate': habitRate,
-          'recovery_score': recovery,
         },
       );
     });

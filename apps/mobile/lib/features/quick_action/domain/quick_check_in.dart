@@ -199,12 +199,26 @@ class EveningShutdownDraft {
       mood: (json['mood'] as num?)?.toInt(),
       energy: (json['energy'] as num?)?.toInt(),
       stress: (json['stress_intensity'] as num?)?.toInt(),
-      stressSource: StressSource.fromCode(json['stress_source']),
-      stressControllability:
-          StressControllability.fromCode(json['stress_controllability']),
-      focusBand: FocusBand.fromCode(json['focus_band']),
+      stressSource: _optionalEnumFromCode(
+        StressSource.values,
+        json['stress_source'],
+        (item) => item.code,
+        'stress source',
+      ),
+      stressControllability: _optionalEnumFromCode(
+        StressControllability.values,
+        json['stress_controllability'],
+        (item) => item.code,
+        'stress controllability',
+      ),
+      focusBand: _optionalEnumFromCode(
+        FocusBand.values,
+        json['focus_band'],
+        (item) => item.code,
+        'focus band',
+      ),
       mainFriction: MainFriction.fromCode(json['main_friction']),
-      tomorrowPriority: _requiredString(json, 'tomorrow_priority'),
+      tomorrowPriority: _optionalString(json['tomorrow_priority']) ?? '',
       reflectionNote: _optionalString(json['reflection_note']) ?? '',
       specificBlocker: _optionalString(json['specific_blocker']) ?? '',
       makeTomorrowGentler: json['gentle_tomorrow'] == true,
@@ -237,15 +251,18 @@ class EveningShutdownDraft {
   final String specificBlocker;
   final bool makeTomorrowGentler;
 
+  bool get requiresStressContext => stress != null && stress! >= 5;
+
+  bool get hasConsistentStressContext =>
+      (stressSource == null) == (stressControllability == null) &&
+      (!requiresStressContext || stressSource != null);
+
   bool get isComplete =>
       mood != null &&
       energy != null &&
       stress != null &&
-      stressSource != null &&
-      stressControllability != null &&
-      focusBand != null &&
       mainFriction != null &&
-      tomorrowPriority.trim().isNotEmpty;
+      hasConsistentStressContext;
 
   StressIntensityLabel get stressIntensityLabel =>
       stressIntensityLabelFor(stress!);
@@ -307,17 +324,22 @@ class EveningShutdownDraft {
     );
     if (!isComplete) {
       throw const FormatException(
-        'All required Evening Shutdown answers must be selected.',
+        'All required evening check-in answers must be selected.',
       );
     }
     _validateRating('mood', mood!);
     _validateRating('energy', energy!);
     _validateRating('stress', stress!);
+    if (!hasConsistentStressContext) {
+      throw const FormatException(
+        'Stress source and controllability must be supplied together when '
+        'stress is medium or high.',
+      );
+    }
     _validateBoundedString(
       'tomorrow priority',
       tomorrowPriority,
       maxTomorrowPriorityLength,
-      required: true,
     );
     _validateBoundedString(
       'reflection note',
@@ -343,11 +365,13 @@ class EveningShutdownDraft {
       'energy': value.energy,
       'stress_intensity': value.stress,
       'stress_intensity_label': value.stressIntensityLabel.code,
-      'stress_source': value.stressSource!.code,
-      'stress_controllability': value.stressControllability!.code,
-      'focus_band': value.focusBand!.code,
+      if (value.stressSource != null) 'stress_source': value.stressSource!.code,
+      if (value.stressControllability != null)
+        'stress_controllability': value.stressControllability!.code,
+      if (value.focusBand != null) 'focus_band': value.focusBand!.code,
       'main_friction': value.mainFriction!.code,
-      'tomorrow_priority': value.tomorrowPriority,
+      if (value.tomorrowPriority.isNotEmpty)
+        'tomorrow_priority': value.tomorrowPriority,
       if (value.reflectionNote.isNotEmpty)
         'reflection_note': value.reflectionNote,
       if (value.specificBlocker.isNotEmpty)
@@ -446,7 +470,7 @@ class MorningCalibrationDraft {
     );
     if (!isComplete) {
       throw const FormatException(
-        'All Morning Calibration answers must be selected.',
+        'All morning check-in answers must be selected.',
       );
     }
     _validateRating('energy', energy!);
@@ -854,6 +878,18 @@ T _enumFromCode<T>(
     }
   }
   throw FormatException('Invalid $field.');
+}
+
+T? _optionalEnumFromCode<T>(
+  List<T> values,
+  Object? raw,
+  String Function(T value) code,
+  String field,
+) {
+  if (raw == null) {
+    return null;
+  }
+  return _enumFromCode<T>(values, raw, code, field);
 }
 
 void _validateCaptureIdentity({

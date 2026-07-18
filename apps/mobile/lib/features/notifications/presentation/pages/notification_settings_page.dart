@@ -54,8 +54,8 @@ class _NotificationSettingsPageState
         !state.requiresReload;
 
     return AppPage(
-      title: 'In-app notifications',
-      subtitle: 'Explicit foreground delivery controls',
+      title: 'In-app reminders',
+      subtitle: 'Banners only while the app is open',
       children: [
         AppCard(
           child: Column(
@@ -71,22 +71,22 @@ class _NotificationSettingsPageState
                           _dirty = true;
                         })
                     : null,
-                title: const Text('Allow in-app delivery'),
+                title: const Text('Allow in-app banners'),
                 subtitle: const Text(
                   'Shows a banner only while MyLifeGraph is open. This is separate from your saved reminder preference.',
                 ),
               ),
               const SizedBox(height: AppSpacing.sm),
               Text(
-                'This does not enable browser, Android, email, or push notifications. The local scheduler creates only fixed, non-LLM copy after consent.',
+                'MyLifeGraph cannot send browser, phone-system, email, push, or background notifications. Reminder text is fixed and not AI-written.',
                 style: Theme.of(context).textTheme.bodySmall,
               ),
               if (settings.consentedAt != null) ...[
                 const SizedBox(height: AppSpacing.sm),
                 Text(
                   _deliveryEnabled
-                      ? 'Consent is active.'
-                      : 'In-app delivery is disabled; stored Inbox items remain available.',
+                      ? 'In-app banners are on.'
+                      : 'In-app banners are off. Saved Inbox items remain available.',
                   key: const ValueKey('notification-consent-status'),
                   style: Theme.of(context).textTheme.labelLarge,
                 ),
@@ -106,7 +106,7 @@ class _NotificationSettingsPageState
               _categorySwitch(
                 key: 'notification-category-focus',
                 title: 'Today focus prompt',
-                subtitle: 'Available only when a current briefing exists.',
+                subtitle: 'Available only when today\'s plan is up to date.',
                 value: _focusPrompt,
                 enabled: controlsEnabled,
                 onChanged: (value) => _setDraft(
@@ -126,7 +126,8 @@ class _NotificationSettingsPageState
               _categorySwitch(
                 key: 'notification-category-weekly',
                 title: 'Weekly review summary',
-                subtitle: 'Only for the exact completed week on Monday.',
+                subtitle:
+                    'Only for the last completed week, prepared on Monday.',
                 value: _weeklySummary,
                 enabled: controlsEnabled,
                 onChanged: (value) => _setDraft(
@@ -180,7 +181,7 @@ class _NotificationSettingsPageState
               const SizedBox(height: AppSpacing.lg),
               Row(
                 children: [
-                  const Expanded(child: Text('Daily generated-item limit')),
+                  const Expanded(child: Text('Maximum reminders per day')),
                   DropdownButton<int>(
                     key: const ValueKey('notification-daily-limit'),
                     value: _dailyLimit,
@@ -208,8 +209,8 @@ class _NotificationSettingsPageState
               children: [
                 Text(
                   state.requiresExactRetry
-                      ? 'The save result is unknown. Retry the exact same settings or reload before making another change.'
-                      : 'Settings changed or could not be saved. Reload current settings before trying again.',
+                      ? 'The save could not be confirmed. Your choices are still here. Retry unchanged or reload.'
+                      : 'These settings could not be saved. Reload the current settings and try again.',
                   key: const ValueKey('notification-settings-error'),
                 ),
                 const SizedBox(height: AppSpacing.md),
@@ -218,7 +219,7 @@ class _NotificationSettingsPageState
                     key: const ValueKey('notification-settings-exact-retry'),
                     onPressed: state.isSaving ? null : controller.retryExact,
                     icon: const Icon(Icons.replay_outlined),
-                    label: const Text('Retry exact save'),
+                    label: const Text('Retry unchanged'),
                   )
                 else
                   OutlinedButton.icon(
@@ -240,7 +241,7 @@ class _NotificationSettingsPageState
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
                 : const Icon(Icons.save_outlined),
-            label: const Text('Save notification settings'),
+            label: const Text('Save in-app reminders'),
           ),
         ),
       ],
@@ -310,9 +311,9 @@ class _NotificationSettingsPageState
       final confirmed = await showDialog<bool>(
         context: context,
         builder: (context) => AlertDialog(
-          title: const Text('Allow in-app notifications?'),
+          title: const Text('Allow in-app banners?'),
           content: const Text(
-            'This is new delivery permission. Your existing reminder preference did not grant it. MyLifeGraph may show fixed, privacy-safe banners while the app is open; no push, email, browser, or Android notification is enabled.',
+            'Your Setup preference did not turn these on. MyLifeGraph may show fixed, privacy-safe banners while the app is open. It cannot notify you after you close it.',
           ),
           actions: [
             TextButton(
@@ -322,7 +323,7 @@ class _NotificationSettingsPageState
             FilledButton(
               key: const ValueKey('notification-consent-confirm'),
               onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('Allow in-app only'),
+              child: const Text('Allow while open'),
             ),
           ],
         ),
@@ -344,7 +345,7 @@ class _NotificationSettingsPageState
               : null,
           dailyLimit: _dailyLimit,
         );
-    if (mounted && saved) _showMessage('Notification settings saved.');
+    if (mounted && saved) _showMessage('In-app reminder settings saved.');
   }
 
   TimeOfDay _parseTime(String value) {
@@ -378,7 +379,7 @@ class _NotificationSettingsLoadError extends StatelessWidget {
           children: [
             const Icon(Icons.cloud_off_outlined, size: 36),
             const SizedBox(height: AppSpacing.md),
-            const Text('Could not load notification settings.'),
+            const Text('Could not load in-app reminder settings.'),
             const SizedBox(height: AppSpacing.md),
             OutlinedButton.icon(
               onPressed: onRetry,

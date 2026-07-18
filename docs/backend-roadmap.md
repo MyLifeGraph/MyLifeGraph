@@ -230,6 +230,25 @@ Already implemented:
     `schedule_items` remain unchanged.
   - There is no provider OAuth/token, arbitrary URL fetch, calendar write,
     hidden sync, RRULE engine, LLM processing, or calendar-driven ranking.
+- Deadline Planner V1:
+  - Authenticated read-only GET plus explicit proposal, confirm, complete, and
+    cancel routes under `deadline-plan-v1`.
+  - The user supplies exam/assignment type, deadline, `30..30000` active-
+    preparation minutes, prior credit, and bounded session/daily preferences.
+  - Each proposal persists at most 120 deterministic dated blocks in an
+    immutable pending revision. It cannot replace the active revision before
+    exact confirmation; first confirm creates the stable managed Phase 3 task.
+    The plan exposes separate latest/current revision counters, and planning is
+    bounded to 366 profile-local calendar days.
+  - Generic task edit/lifecycle/editor paths reject the managed source. Focus
+    may target it while open; planner confirm changes only title/deadline/time,
+    and plan complete/cancel atomically own matching task terminal projection.
+  - Completed focus linked to that task after activation contributes measured
+    progress but never completes the plan. A manual source or one explicitly
+    selected imported event is allowed; imported busy-time use is a separate
+    plan choice that requires one connected, non-deleted current import. There
+    is no inference, provider write, notification, LLM,
+    background sync, scheduled generation, or Dashboard-load generation.
 - Phase 10 Controlled Coach:
   - Strict authenticated capability, deliberate response, history/delete, and
     explicit memory-selection contracts with guest/mock zero-call behavior.
@@ -316,6 +335,7 @@ repositories, and jobs, not as unconstrained autonomous LLM loops.
 | Daily briefing service | Explicit refresh today; protected scheduled daily preparation | `user_state_snapshots`, `recommendations`, goals, tasks, habits, habit outcomes, `decision_feedback` | `daily_briefings` | None for v1 |
 | Weekly review service | Explicit completed-week review read/generation | Profile timezone, weekly snapshot, tasks, goals, habits/outcomes, focus, daily snapshots, `decision_feedback` | `weekly_reviews` derived output only | None for v1 |
 | Calendar import service | Explicit consent and selected `.ics` upload | Bounded iCalendar text, profile timezone, owned connection | `calendar_connections`, `calendar_imports`, `calendar_events`, opaque `calendar_request_identities` | None |
+| Deadline planning service | Explicit user proposal/confirmation/lifecycle command | User-entered estimate, profile timezone/energy window, app commitments, confirmed blocks, optional current imported busy time | `deadline_plans`, immutable revisions/blocks, one first-confirm managed task, opaque request identities | None |
 | Coach service | Deliberate authenticated user send | Current snapshot/briefing, bounded active facts, selected memory, recent completed turns | Validated `coach_messages`, compact provenance/usage only | One configured provider call, budgeted |
 | Memory selection service | Explicit user inspect/select/deselect | Owner-scoped eligible `memory_entries` plus Setup ownership | Separate Coach selection projection; content changes only through its owning contract | None for Phase 10 v1 |
 | Planning service | Weekly review, user request | Goals, tasks, habits, schedule, snapshots | `tasks`, `schedule_items`, `recommendations`, `coach_messages` | Optional for complex plans |
@@ -427,6 +447,12 @@ The first bounded implementation is:
 - No provider OAuth, URL fetch, provider write, hidden sync, or automatic
   schedule/briefing mutation.
 
+Deadline planning is a separate explicit product action, not a side effect of
+calendar import. One event may prefill a proposal only after the user selects
+it; the user still chooses exam/assignment, deadline, and preparation estimate.
+Using imported busy intervals is an independent per-plan boolean. Confirmed
+blocks are app-owned dated reservations, never source-calendar writes.
+
 `schedule_items` continues to represent stable user routines and app-authored
 planned blocks. A live-provider follow-up must keep credentials, cursors, and
 webhooks backend-only and preserve the same explicit provenance/control rules.
@@ -449,6 +475,8 @@ The current canonical schema already has useful tables:
 - `notification_preferences`
 - `goals`, `habits`, `habit_logs`, `focus_sessions`
 - `coach_requests`, `coach_usage_events`, `coach_memory_selections`
+- `deadline_plans`, `deadline_plan_revisions`, `deadline_plan_blocks`, and the
+  backend-only `deadline_plan_request_identities`
 
 `profiles.setup_revision` stores the latest Setup revision projected onto the
 profile. It starts at zero, is backfilled from applied `intake-v1` history, and
@@ -561,7 +589,8 @@ confirmed eligible manual Habit V1 changes reuse Phase 3 owner-scoped commands.
 ### Later Tables
 
 `daily_briefings`, `decision_feedback`, `weekly_reviews`, the bounded Phase 9
-calendar tables, and the Phase 10 Coach request/usage/selection tables are
+calendar tables, the Phase 10 Coach request/usage/selection tables, and the
+Deadline Planner plan/revision/block/request tables are
 implemented after their owning contracts proved the persistence boundary. Do
 not add these remaining tables
 until their owning phase needs them:
@@ -982,6 +1011,32 @@ in `docs/phase-8-weekly-review-contract.md`.
 The exact consent, import, identity, parser, privacy, and verification boundary
 lives in `docs/phase-9-calendar-import-contract.md`.
 
+### Deadline Planner V1: Explicit Preparation Plans
+
+- Adds strict read-only collection/detail GET plus explicit proposal, confirm,
+  complete, and cancel commands under `/v1/deadline-plans`.
+- Keeps the original user-entered estimate/prior credit on the plan and stores
+  later inputs as immutable proposed/active/superseded revisions.
+- Derives at most 120 deterministic, timezone-aware blocks and honest
+  unscheduled minutes inside a 366-day horizon. A pending proposal cannot
+  replace the active revision; proposal edits use the latest revision while
+  complete/cancel require the current active revision.
+- Creates one managed open Phase 3 task only on first confirmation. Completed
+  post-activation focus linked to that task contributes measured progress and a
+  completion suggestion, never an implicit completion. Generic task mutation is
+  blocked; later confirm and terminal projection remain planner-owned.
+- Accepts only a manual deadline or one explicitly selected current imported
+  event. Optional imported busy-time use is plan-local, read-only, and requires
+  a connected source with a non-null current import.
+- Uses forced-RLS backend-owned persistence and one global retry ledger; plan,
+  revision, and block rows enter Account Export while the ledger is omitted.
+- Adds no title inference, calendar/provider write, notification, LLM,
+  background sync, scheduler job, or hidden generation.
+
+The exact contract and required verification live in
+`docs/deadline-planner-v1-contract.md`. Do not claim a current-checkout browser,
+local migration, remote, or installed-device pass without running that boundary.
+
 ### Completed Slice 10: Controlled Coach
 
 - Added strict authenticated `coach-request-v1`, `coach-response-v1`,
@@ -1135,7 +1190,7 @@ The detailed implementation order and acceptance criteria live in
 - Model-controlled tools, database access, unbounded history, automatic memory
   promotion, or executable Coach suggestions.
 - Live calendar-provider OAuth, URL fetch, incremental/background sync,
-  provider writes, and applying calendar-derived time blocks.
+  provider writes, and hidden or automatic calendar-derived time blocks.
 - Autonomous weekly plan rewrites or applying review proposals without explicit
   confirmation.
 - Vector search.

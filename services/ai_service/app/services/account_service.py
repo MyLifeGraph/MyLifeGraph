@@ -147,6 +147,30 @@ ACCOUNT_EXPORT_TABLES = (
         cursor_column="memory_id",
         watermark_column="selected_at",
     ),
+    _table(
+        "deadline_plans",
+        "id,user_id,contract_version,origin,status,kind,title,managed_task_id,"
+        "original_estimated_total_minutes,original_credited_prior_minutes,"
+        "current_revision,latest_revision,first_activated_at,completed_at,"
+        "cancelled_at,created_at,updated_at",
+    ),
+    _table(
+        "deadline_plan_revisions",
+        "id,user_id,plan_id,revision,base_revision,state,kind,title,deadline_at,"
+        "estimated_total_minutes,credited_prior_minutes,preferred_session_minutes,"
+        "max_daily_minutes,planning_start_on,buffer_days,source_kind,"
+        "source_calendar_event_id,source_calendar_event_fingerprint,"
+        "use_calendar_availability,availability_connection_id,"
+        "availability_import_id,timezone,best_energy_window,planning_fingerprint,"
+        "tracked_focus_minutes_at_proposal,remaining_minutes_at_proposal,"
+        "planned_minutes,unscheduled_minutes,created_at,activated_at,superseded_at",
+    ),
+    _table(
+        "deadline_plan_blocks",
+        "id,user_id,plan_id,revision,sequence,reservation_state,starts_at,ends_at,"
+        "local_date,local_start_time,local_end_time,planned_minutes,created_at,"
+        "updated_at",
+    ),
 )
 
 

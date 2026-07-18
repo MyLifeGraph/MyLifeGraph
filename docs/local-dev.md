@@ -159,10 +159,12 @@ SUPABASE_ANON_KEY=your-anon-key \
 scripts/start_frontend.sh
 ```
 
-With no explicit override, `COACH_SURFACE_ENABLED` is fail-closed for every
-release build and for `APP_ENV=production`; debug/profile development enables
-it. Exact `true` is an explicit opt-in. Enabling the Flutter route does not make
-a provider ready; FastAPI capability remains the independent send gate.
+`COACH_SURFACE_ENABLED` is ignored in every release build and whenever
+`APP_ENV=production`; those modes always hide the Coach route. In a
+non-production debug/profile build, exact `true` enables and exact `false`
+disables the surface, with development defaulting to enabled. Exposing the
+Flutter route does not make a provider ready; FastAPI capability remains the
+independent send gate.
 
 Windows PowerShell:
 
@@ -407,6 +409,58 @@ interest answer never creates consent. The slice has no OAuth token, provider
 URL, provider write, background sync, LLM processing, or automatic
 snapshot/briefing input. See `docs/phase-9-calendar-import-contract.md`.
 
+Deadline Planner V1 is a separate authenticated, explicit workflow. Read the
+collection without generation:
+
+```bash
+curl http://localhost:8000/v1/deadline-plans \
+  -H 'Authorization: Bearer <supabase_access_token>'
+```
+
+Create a manual staged proposal with one stable client plan id and request id:
+
+```bash
+curl -X POST http://localhost:8000/v1/deadline-plans/proposals \
+  -H 'Authorization: Bearer <supabase_access_token>' \
+  -H 'Content-Type: application/json' \
+  -d '{"request_id":"11111111-1111-4111-8111-111111111111","plan_id":"22222222-2222-4222-8222-222222222222","base_revision":0,"kind":"exam","title":"Statistics exam","deadline_at":"2026-08-20T09:00:00+02:00","estimated_total_minutes":480,"credited_prior_minutes":60,"preferred_session_minutes":50,"max_daily_minutes":100,"planning_start_on":"2026-07-20","buffer_days":2,"source_kind":"manual","use_calendar_availability":false}'
+```
+
+The proposal persists immutable staged blocks and leaves the active revision
+unchanged. Inspect it with
+`GET /v1/deadline-plans/{plan_id}`. Confirm only after review:
+
+```bash
+curl -X POST \
+  http://localhost:8000/v1/deadline-plans/22222222-2222-4222-8222-222222222222/confirm \
+  -H 'Authorization: Bearer <supabase_access_token>' \
+  -H 'Content-Type: application/json' \
+  -d '{"request_id":"33333333-3333-4333-8333-333333333333","expected_revision":1}'
+```
+
+First confirmation creates the stable managed task; later confirmed revisions
+retain it and may change only its title/deadline/update projection while open.
+Generic Task edit/lifecycle/editor paths must reject that managed source and
+redirect to `/preparation-plans`; focus may still target the open task. Complete
+or cancel a plan through the corresponding
+`/{plan_id}/complete|cancel` POST with a new request id and the expected active
+`current_revision`; both require an active plan, so draft cancellation is not a
+cleanup shortcut. Replanning instead sends the returned `latest_revision` as
+`base_revision`. Keep the exact body for an ambiguous retry. The same id with
+another operation, revision, or payload is a conflict. Plan complete/cancel and
+the matching task `done`/`cancelled` timestamp projection commit atomically. The
+local deadline day may be no more than 366 days after `planning_start_on`.
+
+An event-derived proposal uses `source_kind=calendar_event` and must include the
+explicitly selected current `source_calendar_event_id` and lowercase source
+fingerprint. `use_calendar_availability` independently controls whether current
+imported busy intervals constrain that proposal. Enabling it requires a
+connected source, no imported-data deletion, and a non-null current import;
+otherwise the proposal conflicts instead of assuming an empty calendar.
+Neither choice writes to the source calendar. Flutter exposes this at
+`/preparation-plans`; guest/mock is zero-call. See
+`docs/deadline-planner-v1-contract.md`.
+
 For the daily briefing endpoint, `force=false` returns an already-current
 persisted briefing unchanged. Missing
 or stale output refreshes the daily snapshot and upserts the same
@@ -499,7 +553,7 @@ in-app consent so consent-off current rows do not exhaust the bounded batch.
 Dashboard loads remain GET-only, and this repository still contains no deployed
 cron, push, browser, Android, email, or background-mobile delivery wiring.
 
-Manage the separate foreground permission at Settings -> In-app notifications.
+Manage the separate foreground permission at Settings -> In-app reminders.
 The old Setup reminder preference is not permission. A manual local one-shot
 uses the same safe runner payload:
 
@@ -758,6 +812,12 @@ minimal fingerprint-free `calendar_request_identities` registry and reliable
 HTTP 409 conflict semantics. Apply both only after reviewing the SQL and local
 rows, using the explicit `APPLY_MIGRATIONS=true` workflow above. Do not reset
 the local database merely to install them.
+
+Deadline Planner additionally requires the migration listed in
+`docs/supabase-current-state.md`. It creates forced-RLS backend-owned plan,
+revision, block, and request-identity tables plus service-role-only atomic
+mutation RPCs. Review and apply it through the same explicit migration workflow;
+do not encode dated blocks as recurring `schedule_items`.
 
 Controlled Coach additionally requires:
 
@@ -1109,6 +1169,14 @@ journey. The focused Phase 10 rerun and subsequent full Phase 3-through-10 path
 passed non-destructively in the 2026-07-13 current checkout. Use the complete
 command above to establish a new result after later changes; the focused mode
 or source coverage alone is not a full-checkout pass.
+
+Deadline Planner source coverage must additionally prove explicit estimate and
+prior-credit input, deterministic bounded block totals, staged-versus-active
+revision truth, first-confirm task creation, linked-focus progress without
+implicit completion, calendar isolation/optional busy time, exact retry and
+cross-owner RLS, Account Export inclusion, and guest zero-call. This paragraph
+does not claim those assertions or a current browser pass; run the full command
+after the implementation and migration are present.
 
 By default the script starts FastAPI on `http://127.0.0.1:8000`. Useful AI
 service overrides:

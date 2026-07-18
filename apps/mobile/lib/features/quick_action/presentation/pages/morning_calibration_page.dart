@@ -37,8 +37,8 @@ class _MorningCalibrationPageState
   @override
   Widget build(BuildContext context) {
     return CaptureFlowScaffold(
-      eyebrow: 'MORNING CALIBRATION',
-      title: 'Calibrate this morning',
+      eyebrow: 'MORNING · CHECK-IN',
+      title: 'How are you starting today?',
       subtitle:
           'Sleep, current energy, and today\'s shape only. Evening context stays untouched.',
       progress: 1,
@@ -47,9 +47,9 @@ class _MorningCalibrationPageState
       isLastStep: true,
       isLoading: _isLoading,
       isSaving: _isSaving,
-      saveLabel: 'Save morning calibration',
+      saveLabel: 'Save morning check-in',
       statusMessage: _loadedSavedCapture
-          ? 'Today\'s Morning Calibration is loaded. Saving replaces only its morning state.'
+          ? 'Today\'s morning check-in is loaded. Saving updates only these morning answers.'
           : _loadError,
       errorMessage: _saveError,
       onClose: () => context.go(AppRoutes.quickAction),
@@ -115,7 +115,7 @@ class _MorningCalibrationPageState
             ),
           ),
           Text(
-            'This calibration records current state only. It does not generate recommendations or create or change a plan.',
+            'This check-in records how today starts. It does not create or change a plan.',
             style: Theme.of(context).textTheme.bodySmall,
           ),
         ],
@@ -148,8 +148,8 @@ class _MorningCalibrationPageState
       }
       _showMessage(
         store.target == QuickCheckInSaveTarget.guest
-            ? 'Morning Calibration saved locally.'
-            : 'Morning Calibration saved.',
+            ? 'Morning check-in saved on this device.'
+            : 'Morning check-in saved.',
       );
       context.go(AppRoutes.dashboard);
     } catch (error) {
@@ -158,7 +158,7 @@ class _MorningCalibrationPageState
       }
       final message = error is QuickCheckInUnavailableException
           ? error.message
-          : 'Could not save. Your exact Morning Calibration is still here. Try again.';
+          : 'Could not save. Your answers are still here. Try again.';
       setState(() => _saveError = message);
       _showMessage(message);
     } finally {

@@ -40,14 +40,14 @@ void main() {
       ),
     );
     expect(find.text('Weekly review not ready'), findsOneWidget);
-    expect(find.text('Generate weekly review'), findsNothing);
+    expect(find.text('Create weekly review'), findsNothing);
 
     await _pumpPage(
       tester,
       repository: _FakeWeeklyReviewRepository(_feed(), readFails: true),
     );
     expect(find.text('Weekly review unavailable'), findsOneWidget);
-    expect(find.textContaining('not replaced'), findsOneWidget);
+    expect(find.textContaining('Nothing was replaced'), findsOneWidget);
   });
 
   testWidgets('missing generation and stale refresh require explicit taps',
@@ -59,10 +59,10 @@ void main() {
     await _pumpPage(tester, repository: missingRepository);
 
     expect(missingRepository.generateCalls, isEmpty);
-    await tester.tap(find.text('Generate weekly review'));
+    await tester.tap(find.text('Create weekly review'));
     await tester.pumpAndSettle();
     expect(missingRepository.generateCalls, [('2026-W28', false)]);
-    expect(find.text('Current'), findsOneWidget);
+    expect(find.text('Up to date'), findsOneWidget);
 
     final staleRepository = _FakeWeeklyReviewRepository(
       _feed(freshness: 'stale'),
@@ -73,8 +73,8 @@ void main() {
       find.widgetWithText(FilledButton, 'Apply change'),
     );
     expect(applyButton.onPressed, isNull);
-    await tester.ensureVisible(find.text('Refresh weekly review'));
-    await tester.tap(find.text('Refresh weekly review'));
+    await tester.ensureVisible(find.text('Update weekly review'));
+    await tester.tap(find.text('Update weekly review'));
     await tester.pumpAndSettle();
     expect(staleRepository.generateCalls, [('2026-W28', true)]);
   });
@@ -149,7 +149,7 @@ void main() {
     expect(gateway.fetches, 0);
     expect(gateway.updates, 0);
     expect(gateway.lifecycleUpdates, 0);
-    expect(find.text('Stale'), findsOneWidget);
+    expect(find.text('Needs update'), findsOneWidget);
     final disabledApply = tester.widget<FilledButton>(
       find.widgetWithText(FilledButton, 'Apply change'),
     );
@@ -175,7 +175,7 @@ void main() {
     );
 
     expect(
-      find.text('No-change note · no product data will be written'),
+      find.text('Information only — nothing will change'),
       findsOneWidget,
     );
     expect(find.text('Keep current (no write)'), findsNothing);
@@ -206,7 +206,7 @@ void main() {
     );
 
     expect(
-      find.text('Setup guidance only · opening Setup applies nothing'),
+      find.text('Opens Setup only — nothing changes automatically'),
       findsOneWidget,
     );
     await tester.ensureVisible(find.text('Open Setup (no auto-apply)'));
@@ -239,7 +239,7 @@ void main() {
     );
 
     expect(
-      find.text('Suggestion only · not executable from Weekly Review'),
+      find.text('Preview only — make any change yourself'),
       findsOneWidget,
     );
     expect(find.text('Open habits (no auto-apply)'), findsNothing);

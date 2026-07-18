@@ -82,6 +82,9 @@ const accountExportV1TableNames = [
   'coach_requests',
   'coach_usage_events',
   'coach_memory_selections',
+  'deadline_plans',
+  'deadline_plan_revisions',
+  'deadline_plan_blocks',
 ];
 const accountExportV1SanitizedTables = [
   'calendar_connections',
@@ -93,6 +96,7 @@ const accountExportV1SanitizedTables = [
 const accountExportV1OmittedTables = {
   calendar_request_identities: 'backend_only_anti_replay_ledger',
   notification_action_requests: 'backend_only_anti_replay_ledger',
+  deadline_plan_request_identities: 'backend_only_anti_replay_ledger',
 };
 
 const browser = await chromium.launch({
@@ -164,11 +168,11 @@ try {
   );
   await selectDropdownOption(page, 'Best energy window required', 'Morning');
   await selectDropdownOption(page, 'Coaching style required', 'Direct');
-  await clickChoiceChip(page, 'No reminders');
+  await clickChoiceChip(page, 'Prefer no reminders');
   await clickByText(page, 'Save setup');
 
   await page.waitForURL('**/#/dashboard');
-  await expectText(page, 'Latest check-in');
+  await expectText(page, 'Today at a glance');
   await waitForRows(
     `intake_responses?select=id,request_id,base_revision,revision,state,version,responses,metadata&user_id=eq.${user.id}&order=revision.asc`,
     (rows) =>
@@ -237,7 +241,7 @@ try {
   await expectText(page, 'School or work blocks');
   await expectText(page, 'Morning');
   await expectText(page, 'Direct');
-  await expectText(page, 'No reminders');
+  await expectText(page, 'Prefer no reminders');
 
   const [legacyDefaultSchedule, legacyExplicitSchedule] = await insertRows(
     'schedule_items',
@@ -344,7 +348,7 @@ try {
     '/v1/intake/complete',
     'idempotent setup retry',
   );
-  await clickByText(page, 'Retry exact setup save');
+  await clickByText(page, 'Retry unchanged');
   const retryResponse = await retryResponsePromise;
   const retryPayload = retryResponse.request().postDataJSON();
   if (
@@ -804,34 +808,28 @@ try {
   await enableFlutterSemantics(page);
   await page.waitForURL('**/#/quick-mood-check-in');
   await clickByRoleName(page, 'button', 'evening mood 2 of 10');
-  await clickByText(page, 'Next');
   await clickByRoleName(page, 'button', 'evening energy 9 of 10');
-  await clickByText(page, 'Next');
   await clickByRoleName(page, 'button', 'evening stress 8 of 10');
   await clickByText(page, 'Next');
+  await clickByRoleName(page, 'button', 'main friction emotional_load');
+  await page.waitForTimeout(250);
   await clickByRoleName(page, 'button', 'stress source private_emotional');
-  await clickByText(page, 'Next');
+  await page.waitForTimeout(250);
   await clickByRoleName(
     page,
     'button',
-    'stress controllability hardly_controllable',
+    'stress influence hardly_controllable',
   );
-  await clickByText(page, 'Next');
-  await clickByRoleName(page, 'button', 'focus band 30_to_60_minutes');
-  await clickByText(page, 'Next');
-  await clickByRoleName(page, 'button', 'main friction emotional_load');
-  await clickByText(page, 'Next');
   await fillByLabelOrPlaceholder(
     page,
-    'Tomorrow priority',
+    'Possible priority tomorrow (optional)',
     `  ${eveningTomorrowPriority}  `,
     0,
   );
-  await clickByText(page, 'Next');
-  await clickByText(page, 'Save evening shutdown');
+  await clickByText(page, 'Save evening check-in');
   await expectText(
     page,
-    'Could not save. Your exact Evening Shutdown is still here. Try again.',
+    'Could not save. Your answers are still here. Try again.',
   );
   await page.unroute(
     '**/rest/v1/daily_logs**',
@@ -872,7 +870,7 @@ try {
         tomorrowPriority: eveningTomorrowPriority,
         expectMorning: false,
       }),
-    'one committed required-only Evening Shutdown row after lost response',
+    'one committed required-only evening check-in row after lost response',
   );
 
   const eveningRetrySnapshotPromise = waitForAiPost(
@@ -880,7 +878,7 @@ try {
     '/v1/snapshots/generate',
     'Evening retry snapshot refresh',
   );
-  await clickByText(page, 'Save evening shutdown');
+  await clickByText(page, 'Save evening check-in');
   const eveningRetrySnapshotResponse = await eveningRetrySnapshotPromise;
   assertJsonPayload(
     eveningRetrySnapshotResponse.request(),
@@ -891,7 +889,7 @@ try {
     },
     'Evening retry snapshot refresh payload',
   );
-  await expectText(page, 'Latest check-in');
+  await expectText(page, 'Today at a glance');
   await waitForRows(
     dailyCapturePath,
     (rows) =>
@@ -904,11 +902,11 @@ try {
         tomorrowPriority: eveningTomorrowPriority,
         expectMorning: false,
       }),
-    'one Evening Shutdown row after exact retry',
+    'one evening check-in row after exact retry',
   );
   const eveningOnlyRows = await fetchRows(
     dailyCapturePath,
-    'Evening Shutdown row after retry',
+    'evening check-in row after retry',
   );
   const dailyLogId = eveningOnlyRows[0].id;
   const eveningDailyState = await assertPhaseTwoDailyStateResponse(
@@ -961,9 +959,9 @@ try {
   const morningSnapshotPromise = waitForAiPost(
     page,
     '/v1/snapshots/generate',
-    'Morning Calibration snapshot refresh',
+    'morning check-in snapshot refresh',
   );
-  await clickByText(page, 'Save morning calibration');
+  await clickByText(page, 'Save morning check-in');
   const morningSnapshotResponse = await morningSnapshotPromise;
   assertJsonPayload(
     morningSnapshotResponse.request(),
@@ -972,7 +970,7 @@ try {
       window_days: 7,
       target_date: captureEntryDate,
     },
-    'Morning Calibration snapshot refresh payload',
+    'morning check-in snapshot refresh payload',
   );
   const morningDailyState = await assertPhaseTwoDailyStateResponse(
     morningSnapshotResponse,
@@ -1003,7 +1001,7 @@ try {
       `Morning refresh replaced the daily snapshot identity: ${JSON.stringify({ eveningDailyState, morningDailyState })}`,
     );
   }
-  await expectText(page, 'Latest check-in');
+  await expectText(page, 'Today at a glance');
 
   await waitForRows(
     dailyCapturePath,
@@ -1042,7 +1040,7 @@ try {
         stressControllability: 'hardly_controllable',
         tomorrowPriority: eveningTomorrowPriority,
       }),
-    'four exact merged current events after Morning Calibration',
+    'four exact merged current events after morning check-in',
   );
 
   await page.goto(appRoute('/quick-mood-check-in'), {
@@ -1052,28 +1050,23 @@ try {
   await enableFlutterSemantics(page);
   await expectText(
     page,
-    "Today's Evening Shutdown is loaded. Saving replaces only its evening state.",
+    "Today's evening check-in is loaded. Saving updates only these evening answers.",
   );
-  for (let index = 0; index < 3; index += 1) {
-    await clickByText(page, 'Next');
-  }
-  await clickByRoleName(page, 'button', 'stress source workload');
   await clickByText(page, 'Next');
+  await clickByRoleName(page, 'button', 'stress source workload');
+  await page.waitForTimeout(250);
   await clickByRoleName(
     page,
     'button',
-    'stress controllability mostly_controllable',
+    'stress influence mostly_controllable',
   );
-  await clickByText(page, 'Next');
-  await clickByText(page, 'Next');
-  await clickByText(page, 'Next');
+  await page.waitForTimeout(250);
   await fillByLabelOrPlaceholder(
     page,
-    'Tomorrow priority',
+    'Possible priority tomorrow (optional)',
     editedEveningTomorrowPriority,
     0,
   );
-  await clickByText(page, 'Next');
   await expectFieldValue(page, 'Reflection (optional)', '', 0);
   await expectFieldValue(page, 'Specific blocker (optional)', '', 1);
   const eveningEditSnapshotPromise = waitForAiPost(
@@ -1081,7 +1074,7 @@ try {
     '/v1/snapshots/generate',
     'Evening edit snapshot refresh',
   );
-  await clickByText(page, 'Save evening shutdown');
+  await clickByText(page, 'Save evening check-in');
   const eveningEditSnapshotResponse = await eveningEditSnapshotPromise;
   assertJsonPayload(
     eveningEditSnapshotResponse.request(),
@@ -1127,6 +1120,8 @@ try {
       `Evening edit replaced the daily snapshot identity: ${JSON.stringify({ eveningDailyState, editedDailyState })}`,
     );
   }
+  await expectText(page, 'Today at a glance');
+  await clickByText(page, 'Saved signals');
   await expectText(page, 'Latest check-in');
   await expectText(page, 'Morning energy');
   await expectText(page, '4/10');
@@ -1993,8 +1988,8 @@ try {
   await enableFlutterSemantics(page);
   await expectText(page, "Today's decision");
   await expectText(page, phaseFourBriefing.briefing.primary_action.title);
-  await expectText(page, 'Current');
-  await expectText(page, 'Latest check-in');
+  await expectText(page, 'Up to date');
+  await expectText(page, 'Today at a glance');
   await page.waitForTimeout(500);
   page.off('request', dashboardBriefingObserver);
   if (dashboardBriefingPosts.length !== 0) {
@@ -2021,7 +2016,7 @@ try {
       `Today feedback payload is invalid: ${JSON.stringify(feedbackPayload)}`,
     );
   }
-  await expectText(page, 'Saved. Use Adjust today');
+  await expectText(page, "Saved. Use Update today's plan");
   await assertRows(
     `decision_feedback?select=id,request_id,briefing_id,action_id,action_kind,feedback_type,context_mode,estimated_minutes,rule_key,metadata&user_id=eq.${user.id}`,
     (rows) =>
@@ -2045,7 +2040,7 @@ try {
     '/v1/briefings/generate',
     'deliberate Today adjustment',
   );
-  await clickByText(page, 'Adjust today');
+  await clickByText(page, "Update today's plan");
   const adjustResponse = await adjustResponsePromise;
   assertJsonPayload(
     adjustResponse.request(),
@@ -2064,7 +2059,7 @@ try {
       `Today adjustment did not preserve current daily identity: ${JSON.stringify(adjustedBriefing)}`,
     );
   }
-  await expectText(page, 'Today adjusted.');
+  await expectText(page, "Today's plan updated.");
   await expectText(page, adjustedBriefing.briefing.primary_action.title);
   await clickByText(page, 'Feedback history');
   await expectText(page, 'Too much today');
@@ -2087,7 +2082,7 @@ try {
     '/v1/briefings/generate',
     'Today adjustment after feedback deletion',
   );
-  await clickByText(page, 'Adjust today');
+  await clickByText(page, "Update today's plan");
   const correctedAdjust = await correctedAdjustPromise;
   const correctedBriefing = await correctedAdjust.json();
   if (
@@ -2100,9 +2095,11 @@ try {
     );
   }
   await assertBoundedWeeklyReview(page, user.id);
+  await assertDeadlinePlanner(page, user.id);
   await assertBoundedCalendarImport(user.id);
   await assertCalendarImportUi(page, user.id);
-  await scrollFlutterPage(page, -20000);
+  await scrollFlutterPage(page, 20000);
+  await clickChoiceChip(page, 'Supporting suggestions');
   await scrollUntilTextInViewport(page, 'Refresh recommendations', {
     deltaY: 500,
     buttonFirst: true,
@@ -2600,10 +2597,14 @@ async function fillByLabelOrPlaceholder(page, label, value, fallbackIndex) {
 }
 
 async function expectFieldValue(page, label, value, fallbackIndex) {
+  const labelPattern = new RegExp(
+    `^${escapeRegExp(label)}(?:$|\\s)`,
+    'i',
+  );
   const candidates = [
-    page.getByLabel(label),
-    page.getByPlaceholder(label),
-    page.getByRole('textbox', { name: label }),
+    page.getByLabel(labelPattern),
+    page.getByPlaceholder(label, { exact: true }),
+    page.getByRole('textbox', { name: labelPattern }),
   ];
 
   for (const locator of candidates) {
@@ -2618,8 +2619,11 @@ async function expectFieldValue(page, label, value, fallbackIndex) {
   }
 
   const textboxes = page.getByRole('textbox');
-  if ((await textboxes.count()) > fallbackIndex) {
-    const fallback = textboxes.nth(fallbackIndex);
+  const textboxCount = await textboxes.count();
+  const resolvedIndex =
+    fallbackIndex < 0 ? textboxCount + fallbackIndex : fallbackIndex;
+  if (resolvedIndex >= 0 && textboxCount > resolvedIndex) {
+    const fallback = textboxes.nth(resolvedIndex);
     await fallback.click({ timeout: 2500 });
     if (await locatorHasValue(page, fallback, value)) {
       return;
@@ -2633,7 +2637,11 @@ async function fillLocatorWithValue(page, locator, value) {
   try {
     await fillFocusedLocator(page, locator);
     await page.keyboard.type(value, { delay: 2 });
-    if (await activeElementHasValue(page, value)) {
+    await page.waitForTimeout(100);
+    await page.keyboard.press('Tab');
+    await page.waitForTimeout(100);
+    await locator.click({ timeout: 2500 });
+    if (await locatorHasValue(page, locator, value)) {
       return;
     }
   } catch (_) {
@@ -3006,7 +3014,7 @@ function hasExactPhaseOneDailyRow(row, expected) {
     evening?.stress_intensity_label === 'high' &&
     evening?.stress_source === expected.stressSource &&
     evening?.stress_controllability === expected.stressControllability &&
-    evening?.focus_band === '30_to_60_minutes' &&
+    !Object.hasOwn(evening ?? {}, 'focus_band') &&
     evening?.main_friction === 'emotional_load' &&
     evening?.tomorrow_priority === expected.tomorrowPriority &&
     !Object.hasOwn(evening ?? {}, 'reflection_note') &&
@@ -3073,7 +3081,7 @@ function hasExactCaptureEvents(rows, expected, contract) {
       return (
         metadata?.capture_kind !== 'evening' ||
         metadata?.capture_id !== expected.eveningCaptureId ||
-        metadata?.focus_band !== '30_to_60_minutes' ||
+        Object.hasOwn(metadata ?? {}, 'focus_band') ||
         metadata?.main_friction !== 'emotional_load' ||
         metadata?.tomorrow_priority !== expected.tomorrowPriority ||
         Object.hasOwn(metadata ?? {}, 'gentle_tomorrow')
@@ -3868,26 +3876,26 @@ async function assertNotificationDelivery(page, userId) {
   await waitForFlutterShell(page);
   await enableFlutterSemantics(page);
   await settingsGetPromise;
-  await expectText(page, 'In-app notifications');
-  await expectText(page, 'Explicit foreground delivery controls');
+  await expectText(page, 'In-app reminders');
+  await expectText(page, 'Banners only while the app is open');
   await expectText(
     page,
     'Shows a banner only while MyLifeGraph is open. This is separate from your saved reminder preference.',
   );
   await page
-    .getByLabel('Allow in-app delivery', { exact: false })
+    .getByLabel('Allow in-app banners', { exact: false })
     .first()
     .click();
   await page.getByLabel('Recovery prompt', { exact: false }).first().click();
-  await scrollUntilTextInViewport(page, 'Save notification settings', {
+  await scrollUntilTextInViewport(page, 'Save in-app reminders', {
     deltaY: 650,
     buttonFirst: true,
   });
-  await clickByText(page, 'Save notification settings');
-  await expectText(page, 'Allow in-app notifications?');
+  await clickByText(page, 'Save in-app reminders');
+  await expectText(page, 'Allow in-app banners?');
   await expectText(
     page,
-    'Your existing reminder preference did not grant it.',
+    'Your Setup preference did not turn these on.',
   );
   const settingsPatchPromise = page.waitForResponse(
     (candidate) =>
@@ -3895,7 +3903,7 @@ async function assertNotificationDelivery(page, userId) {
       candidate.request().method() === 'PATCH',
     { timeout: 45000 },
   );
-  await clickByText(page, 'Allow in-app only');
+  await clickByText(page, 'Allow while open');
   const settingsPatchResponse = await settingsPatchPromise;
   if (!settingsPatchResponse.ok()) {
     throw new Error(
@@ -3945,7 +3953,7 @@ async function assertNotificationDelivery(page, userId) {
     quietHours: null,
     dailyLimit: 2,
   });
-  await expectText(page, 'Notification settings saved.');
+  await expectText(page, 'In-app reminder settings saved.');
 
   const replayResponse = await notificationSettingsRequest(
     accessToken,
@@ -4054,7 +4062,7 @@ async function assertNotificationDelivery(page, userId) {
     );
   }
   await expectText(page, 'A gentler plan is ready');
-  await expectText(page, 'In-app · deterministic · no LLM');
+  await expectText(page, 'In-app · fixed text · not AI-written');
 
   const generatedRows = await fetchRows(
     `notifications?select=id,user_id,title,message,type,priority,is_read,read_at,dismissed_at,action_url,due_at,metadata,generation_key,generation_category,delivery_date,in_app_delivered_at,created_at,updated_at&id=eq.${receipt.notification_id}`,
@@ -4267,10 +4275,10 @@ async function assertNotificationDelivery(page, userId) {
   await enableFlutterSemantics(page);
   await expectText(page, 'Inbox');
   await expectText(page, generatedRow.title);
-  await expectText(page, 'Deterministic · no LLM');
+  await expectText(page, 'Fixed text · not AI-written');
   await expectText(
     page,
-    `Generated from the current Daily State for ${generatedRow.delivery_date} in Europe/Berlin.`,
+    `Based on your current check-in state for ${generatedRow.delivery_date} in Europe/Berlin.`,
   );
   await assertFlutterTextAbsent(
     page,
@@ -4282,6 +4290,126 @@ async function assertNotificationDelivery(page, userId) {
     notificationFutureTitle,
     'future-due item beside generated Notification',
   );
+}
+
+async function createDisposableDeadlinePlanForExport({ userId, accessToken }) {
+  const localToday = isoDateInTimeZone(
+    new Date().toISOString(),
+    'Europe/Berlin',
+  );
+  const planId = crypto.randomUUID();
+  const title = `E2E disposable export exam ${runId}`;
+  const deadlineAt = `${addUtcDays(localToday, 8)}T12:00:00Z`;
+  const proposalRequestId = crypto.randomUUID();
+  const proposalBody = {
+    request_id: proposalRequestId,
+    plan_id: planId,
+    base_revision: 0,
+    kind: 'exam',
+    title,
+    deadline_at: deadlineAt,
+    estimated_total_minutes: 90,
+    credited_prior_minutes: 15,
+    preferred_session_minutes: 30,
+    max_daily_minutes: 60,
+    planning_start_on: localToday,
+    buffer_days: 1,
+    source_kind: 'manual',
+    use_calendar_availability: false,
+  };
+  const proposedResult = await deadlinePlanApiRequest(
+    '/v1/deadline-plans/proposals',
+    accessToken,
+    { method: 'POST', body: proposalBody },
+  );
+  assertDeadlinePlanApiStatus(
+    proposedResult,
+    200,
+    'disposable export deadline proposal',
+  );
+  const proposed = assertDeadlinePlanEnvelope(
+    proposedResult.json,
+    'disposable export deadline proposal',
+  );
+  const blockIds = proposed.pending_revision?.blocks.map((block) => block.id);
+  if (
+    proposed.plan.id !== planId ||
+    proposed.plan.status !== 'draft' ||
+    proposed.pending_revision?.revision !== 1 ||
+    proposed.pending_revision?.remaining_minutes_at_proposal !== 75 ||
+    !Array.isArray(blockIds) ||
+    blockIds.length < 1
+  ) {
+    throw new Error(
+      `Disposable export Deadline Planner proposal is invalid: ${proposedResult.text}`,
+    );
+  }
+  const confirmRequestId = crypto.randomUUID();
+  const confirmedResult = await deadlinePlanApiRequest(
+    `/v1/deadline-plans/${planId}/confirm`,
+    accessToken,
+    {
+      method: 'POST',
+      body: { request_id: confirmRequestId, expected_revision: 1 },
+    },
+  );
+  assertDeadlinePlanApiStatus(
+    confirmedResult,
+    200,
+    'disposable export deadline confirmation',
+  );
+  const confirmed = assertDeadlinePlanEnvelope(
+    confirmedResult.json,
+    'disposable export deadline confirmation',
+  );
+  if (
+    confirmed.plan.status !== 'active' ||
+    confirmed.plan.managed_task_id !== planId ||
+    confirmed.active_revision?.revision !== 1 ||
+    Object.hasOwn(confirmed, 'pending_revision')
+  ) {
+    throw new Error(
+      `Disposable export Deadline Planner confirmation is invalid: ${confirmedResult.text}`,
+    );
+  }
+  await assertRows(
+    `tasks?select=id,user_id,title,status,estimated_minutes,source,metadata&user_id=eq.${userId}&id=eq.${planId}`,
+    (rows) =>
+      rows.length === 1 &&
+      rows[0].title === title &&
+      rows[0].status === 'todo' &&
+      rows[0].estimated_minutes === null &&
+      rows[0].source === 'deadline-plan-v1' &&
+      stableJson(rows[0].metadata) ===
+        stableJson({
+          contract_version: 'deadline-plan-v1',
+          managed_by: 'deadline-planner',
+          plan_id: planId,
+        }),
+    'disposable export managed task',
+  );
+  await assertRows(
+    `deadline_plan_request_identities?select=request_id,user_id,plan_id,operation&user_id=eq.${userId}&plan_id=eq.${planId}&order=created_at.asc`,
+    (rows) => {
+      const byRequestId = new Map(rows.map((row) => [row.request_id, row]));
+      return (
+        rows.length === 2 &&
+        byRequestId.get(proposalRequestId)?.operation === 'proposal' &&
+        byRequestId.get(confirmRequestId)?.operation === 'confirm' &&
+        rows.every((row) => row.user_id === userId && row.plan_id === planId)
+      );
+    },
+    'disposable export Deadline Planner ledger before omission',
+  );
+  return {
+    planId,
+    title,
+    deadlineAt,
+    revision: 1,
+    blockIds,
+    proposalRequestId,
+    confirmRequestId,
+  };
 }
 
 async function assertDisposableAccountExportAndDeletion({
@@ -4341,6 +4469,10 @@ async function assertDisposableAccountExportAndDeletion({
     },
     'disposable account-control profile eligibility',
   );
+  const deadlinePlanFixture = await createDisposableDeadlinePlanForExport({
+    userId,
+    accessToken,
+  });
   await insertRows('tasks', [
     {
       id: taskId,
@@ -4563,6 +4695,7 @@ async function assertDisposableAccountExportAndDeletion({
       focusId,
       notificationId,
       dismissed,
+      deadlinePlanFixture,
     });
 
     const downloadFailure = await download.failure();
@@ -4686,6 +4819,10 @@ async function assertDisposableAccountExportAndDeletion({
       'deleted disposable task',
     ],
     [
+      `tasks?select=id,user_id&id=eq.${deadlinePlanFixture.planId}`,
+      'deleted disposable Deadline Planner managed task',
+    ],
+    [
       `focus_sessions?select=id,user_id,task_id&id=eq.${focusId}`,
       'deleted disposable restrict-linked focus history',
     ],
@@ -4696,6 +4833,22 @@ async function assertDisposableAccountExportAndDeletion({
     [
       `notification_action_requests?select=request_id,user_id,notification_id&request_id=eq.${actionRequestId}`,
       'deleted disposable Notification retry ledger',
+    ],
+    [
+      `deadline_plans?select=id,user_id&id=eq.${deadlinePlanFixture.planId}`,
+      'deleted disposable Deadline Planner identity',
+    ],
+    [
+      `deadline_plan_revisions?select=id,user_id,plan_id&plan_id=eq.${deadlinePlanFixture.planId}`,
+      'deleted disposable Deadline Planner revisions',
+    ],
+    [
+      `deadline_plan_blocks?select=id,user_id,plan_id&plan_id=eq.${deadlinePlanFixture.planId}`,
+      'deleted disposable Deadline Planner blocks',
+    ],
+    [
+      `deadline_plan_request_identities?select=request_id,user_id,plan_id&plan_id=eq.${deadlinePlanFixture.planId}`,
+      'deleted disposable Deadline Planner retry ledger',
     ],
   ];
   for (const [path, description] of cascadeChecks) {
@@ -4734,7 +4887,14 @@ async function assertDisposableAccountExportAndDeletion({
 
 function assertDisposableAccountExportPayload(
   payload,
-  { userId, taskId, focusId, notificationId, dismissed },
+  {
+    userId,
+    taskId,
+    focusId,
+    notificationId,
+    dismissed,
+    deadlinePlanFixture,
+  },
 ) {
   const expectedTopLevelKeys = [
     'contract_version',
@@ -4751,9 +4911,12 @@ function assertDisposableAccountExportPayload(
   Object.assign(expectedRecordCounts, {
     profiles: 1,
     notification_preferences: 1,
-    tasks: 1,
+    tasks: 2,
     notifications: 1,
     focus_sessions: 1,
+    deadline_plans: 1,
+    deadline_plan_revisions: 1,
+    deadline_plan_blocks: deadlinePlanFixture.blockIds.length,
   });
   if (
     payload === null ||
@@ -4823,15 +4986,37 @@ function assertDisposableAccountExportPayload(
   const taskRows = payload.data.tasks;
   const focusRows = payload.data.focus_sessions;
   const notificationRows = payload.data.notifications;
+  const deadlinePlanRows = payload.data.deadline_plans;
+  const deadlineRevisionRows = payload.data.deadline_plan_revisions;
+  const deadlineBlockRows = payload.data.deadline_plan_blocks;
   const exportedNotification = notificationRows[0];
+  const manualTask = taskRows.find((row) => row.id === taskId);
+  const managedTask = taskRows.find(
+    (row) => row.id === deadlinePlanFixture.planId,
+  );
+  const exportedPlan = deadlinePlanRows[0];
+  const exportedRevision = deadlineRevisionRows[0];
+  const expectedBlockIds = [...deadlinePlanFixture.blockIds].sort();
+  const exportedBlockIds = deadlineBlockRows
+    .map((row) => row.id)
+    .sort();
   if (
     profileRows.length !== 1 ||
     profileRows[0].id !== userId ||
     preferenceRows.length !== 1 ||
     preferenceRows[0].user_id !== userId ||
-    taskRows.length !== 1 ||
-    taskRows[0].id !== taskId ||
-    taskRows[0].user_id !== userId ||
+    taskRows.length !== 2 ||
+    manualTask?.user_id !== userId ||
+    managedTask?.user_id !== userId ||
+    managedTask?.title !== deadlinePlanFixture.title ||
+    managedTask?.status !== 'todo' ||
+    managedTask?.source !== 'deadline-plan-v1' ||
+    stableJson(managedTask?.metadata) !==
+      stableJson({
+        contract_version: 'deadline-plan-v1',
+        managed_by: 'deadline-planner',
+        plan_id: deadlinePlanFixture.planId,
+      }) ||
     focusRows.length !== 1 ||
     focusRows[0].id !== focusId ||
     focusRows[0].user_id !== userId ||
@@ -4845,7 +5030,33 @@ function assertDisposableAccountExportPayload(
       exportedNotification.dismissed_at,
       dismissed.dismissed_at,
     ) ||
-    !sameInstant(exportedNotification.updated_at, dismissed.updated_at)
+    !sameInstant(exportedNotification.updated_at, dismissed.updated_at) ||
+    deadlinePlanRows.length !== 1 ||
+    exportedPlan.id !== deadlinePlanFixture.planId ||
+    exportedPlan.user_id !== userId ||
+    exportedPlan.status !== 'active' ||
+    exportedPlan.current_revision !== deadlinePlanFixture.revision ||
+    exportedPlan.latest_revision !== deadlinePlanFixture.revision ||
+    exportedPlan.managed_task_id !== deadlinePlanFixture.planId ||
+    deadlineRevisionRows.length !== 1 ||
+    exportedRevision.user_id !== userId ||
+    exportedRevision.plan_id !== deadlinePlanFixture.planId ||
+    exportedRevision.revision !== deadlinePlanFixture.revision ||
+    exportedRevision.state !== 'active' ||
+    exportedRevision.estimated_total_minutes !== 90 ||
+    exportedRevision.credited_prior_minutes !== 15 ||
+    exportedRevision.remaining_minutes_at_proposal !== 75 ||
+    exportedRevision.planned_minutes +
+        exportedRevision.unscheduled_minutes !==
+      75 ||
+    stableJson(exportedBlockIds) !== stableJson(expectedBlockIds) ||
+    deadlineBlockRows.some(
+      (row) =>
+        row.user_id !== userId ||
+        row.plan_id !== deadlinePlanFixture.planId ||
+        row.revision !== deadlinePlanFixture.revision ||
+        row.reservation_state !== 'active',
+    )
   ) {
     throw new Error(
       `Account export lost owned rows or Notification lifecycle state: ${JSON.stringify({
@@ -4854,6 +5065,9 @@ function assertDisposableAccountExportPayload(
         tasks: taskRows,
         focus_sessions: focusRows,
         notifications: notificationRows,
+        deadline_plans: deadlinePlanRows,
+        deadline_plan_revisions: deadlineRevisionRows,
+        deadline_plan_blocks: deadlineBlockRows,
       })}`,
     );
   }
@@ -5199,8 +5413,14 @@ function isoInstantNanoseconds(value) {
 }
 
 async function assertBoundedWeeklyReview(page, userId) {
-  await scrollFlutterPage(page, 500);
-  await expectText(page, 'Review your week');
+  if (new Date().getDay() === 1) {
+    await scrollFlutterPage(page, 500);
+    await expectText(page, 'Review your week');
+  } else if (
+    (await page.getByText('Review your week', { exact: true }).count()) !== 0
+  ) {
+    throw new Error('Dashboard showed the weekly-review entry outside Monday.');
+  }
   const timezone = 'Europe/Berlin';
   const period = latestCompletedIsoWeek(timezone);
   const createdBeforeWeek = isoTimestampOnDate(
@@ -5521,7 +5741,7 @@ async function assertBoundedWeeklyReview(page, userId) {
     '/v1/weekly-reviews/generate',
     'deliberate weekly review generation',
   );
-  await clickByText(page, 'Generate weekly review');
+  await clickByText(page, 'Create weekly review');
   const generateResponse = await generateResponsePromise;
   assertJsonPayload(
     generateResponse.request(),
@@ -5529,7 +5749,7 @@ async function assertBoundedWeeklyReview(page, userId) {
     'deliberate weekly review generation payload',
   );
   const generated = await generateResponse.json();
-  await expectText(page, 'Current');
+  await expectText(page, 'Up to date');
   const review = generated.review;
   const manualProposal = review?.proposals?.find(
     (proposal) =>
@@ -5754,7 +5974,7 @@ async function assertBoundedWeeklyReview(page, userId) {
   await waitForFlutterShell(page);
   await enableFlutterSemantics(page);
   await expectText(page, 'Weekly review');
-  await expectText(page, 'Stale');
+  await expectText(page, 'Needs update');
   const staleApplyButtons = page.getByRole('button', {
     name: 'Apply change',
     exact: true,
@@ -5772,7 +5992,7 @@ async function assertBoundedWeeklyReview(page, userId) {
     '/v1/weekly-reviews/generate',
     'deliberate weekly review refresh',
   );
-  await clickByText(page, 'Refresh weekly review');
+  await clickByText(page, 'Update weekly review');
   const refreshResponse = await refreshResponsePromise;
   assertJsonPayload(
     refreshResponse.request(),
@@ -5797,9 +6017,1854 @@ async function assertBoundedWeeklyReview(page, userId) {
   await enableFlutterSemantics(page);
 }
 
+async function assertDeadlinePlanner(page, userId) {
+  const accessToken = await signInAccessToken('Deadline Planner V1');
+  const localToday = isoDateInTimeZone(
+    new Date().toISOString(),
+    'Europe/Berlin',
+  );
+  const planId = crypto.randomUUID();
+  const title = `E2E statistics exam ${runId}`;
+  const deadlineDate = addUtcDays(localToday, 12);
+  const deadlineAt = `${deadlineDate}T12:00:00Z`;
+  const initialTaskRows = await fetchRows(
+    `tasks?select=id&user_id=eq.${userId}`,
+    'Deadline Planner task baseline',
+  );
+  const scheduleBefore = await calendarScheduleSnapshot(userId);
+
+  const initial = await deadlinePlanApiRequest(
+    '/v1/deadline-plans',
+    accessToken,
+  );
+  assertDeadlinePlanApiStatus(initial, 200, 'initial deadline plan read');
+  const initialFeed = assertDeadlinePlanCollection(
+    initial.json,
+    'initial deadline plan read',
+  );
+  if (initialFeed.plans.length !== 0) {
+    throw new Error(
+      `Fresh E2E account unexpectedly has preparation plans: ${initial.text}`,
+    );
+  }
+  await assertRows(
+    `deadline_plans?select=id&user_id=eq.${userId}`,
+    (rows) => rows.length === 0,
+    'read-only initial Deadline Planner GET',
+  );
+
+  const proposalRequestId = crypto.randomUUID();
+  const proposalBody = {
+    request_id: proposalRequestId,
+    plan_id: planId,
+    base_revision: 0,
+    kind: 'exam',
+    title,
+    deadline_at: deadlineAt,
+    estimated_total_minutes: 180,
+    credited_prior_minutes: 30,
+    preferred_session_minutes: 50,
+    max_daily_minutes: 100,
+    planning_start_on: localToday,
+    buffer_days: 2,
+    source_kind: 'manual',
+    use_calendar_availability: false,
+  };
+  for (const [body, description] of [
+    [
+      Object.fromEntries(
+        Object.entries(proposalBody).filter(
+          ([key]) => key !== 'estimated_total_minutes',
+        ),
+      ),
+      'proposal without an explicit user estimate',
+    ],
+    [
+      {
+        ...proposalBody,
+        request_id: crypto.randomUUID(),
+        credited_prior_minutes: proposalBody.estimated_total_minutes,
+      },
+      'proposal whose prior credit consumes the estimate',
+    ],
+    [
+      {
+        ...proposalBody,
+        request_id: crypto.randomUUID(),
+        user_id: userId,
+      },
+      'proposal with a request-provided owner',
+    ],
+    [
+      {
+        ...proposalBody,
+        request_id: crypto.randomUUID(),
+        deadline_at: `${addUtcDays(localToday, 367)}T12:00:00Z`,
+      },
+      'proposal beyond the 366-day horizon',
+    ],
+  ]) {
+    const rejected = await deadlinePlanApiRequest(
+      '/v1/deadline-plans/proposals',
+      accessToken,
+      { method: 'POST', body },
+    );
+    assertDeadlinePlanApiStatus(rejected, 422, description);
+  }
+  await assertRows(
+    `deadline_plans?select=id&user_id=eq.${userId}`,
+    (rows) => rows.length === 0,
+    'invalid Deadline Planner requests create no plan',
+  );
+
+  const cancelledDraftPlanId = crypto.randomUUID();
+  const cancelledDraftProposalRequestId = crypto.randomUUID();
+  const cancelledDraftBody = {
+    ...proposalBody,
+    request_id: cancelledDraftProposalRequestId,
+    plan_id: cancelledDraftPlanId,
+    title: `E2E disposable preparation draft ${runId}`,
+    estimated_total_minutes: 60,
+    credited_prior_minutes: 0,
+    preferred_session_minutes: 30,
+    max_daily_minutes: 60,
+    buffer_days: 1,
+  };
+  const disposableDraftResult = await deadlinePlanApiRequest(
+    '/v1/deadline-plans/proposals',
+    accessToken,
+    { method: 'POST', body: cancelledDraftBody },
+  );
+  assertDeadlinePlanApiStatus(
+    disposableDraftResult,
+    200,
+    'disposable deadline draft proposal',
+  );
+  const disposableDraft = assertDeadlinePlanEnvelope(
+    disposableDraftResult.json,
+    'disposable deadline draft proposal',
+  );
+  const disposableDraftBlockCount =
+    disposableDraft.pending_revision?.blocks.length;
+  if (
+    disposableDraft.plan.status !== 'draft' ||
+    disposableDraft.plan.current_revision !== 0 ||
+    disposableDraft.plan.latest_revision !== 1 ||
+    Object.hasOwn(disposableDraft.plan, 'managed_task_id') ||
+    disposableDraft.pending_revision?.revision !== 1 ||
+    !Number.isInteger(disposableDraftBlockCount) ||
+    disposableDraftBlockCount < 1
+  ) {
+    throw new Error(
+      `Disposable Deadline Planner draft is invalid: ${disposableDraftResult.text}`,
+    );
+  }
+  const cancelledDraftRequestId = crypto.randomUUID();
+  const cancelledDraftRequest = {
+    request_id: cancelledDraftRequestId,
+    expected_revision: 1,
+  };
+  const cancelledDraftResult = await deadlinePlanApiRequest(
+    `/v1/deadline-plans/${cancelledDraftPlanId}/cancel`,
+    accessToken,
+    { method: 'POST', body: cancelledDraftRequest },
+  );
+  assertDeadlinePlanApiStatus(
+    cancelledDraftResult,
+    200,
+    'explicit draft deadline cancellation',
+  );
+  const cancelledDraft = assertDeadlinePlanEnvelope(
+    cancelledDraftResult.json,
+    'explicit draft deadline cancellation',
+  );
+  if (
+    cancelledDraft.plan.status !== 'cancelled' ||
+    cancelledDraft.plan.current_revision !== 0 ||
+    cancelledDraft.plan.latest_revision !== 1 ||
+    !isIsoTimestamp(cancelledDraft.plan.cancelled_at) ||
+    Object.hasOwn(cancelledDraft.plan, 'managed_task_id') ||
+    Object.hasOwn(cancelledDraft, 'active_revision') ||
+    Object.hasOwn(cancelledDraft, 'pending_revision') ||
+    cancelledDraft.progress.estimated_total_minutes !== 60 ||
+    cancelledDraft.progress.credited_prior_minutes !== 0 ||
+    cancelledDraft.progress.tracked_focus_minutes !== 0
+  ) {
+    throw new Error(
+      `Draft cancellation fabricated activation or a managed task: ${cancelledDraftResult.text}`,
+    );
+  }
+  const cancelledDraftReplay = await deadlinePlanApiRequest(
+    `/v1/deadline-plans/${cancelledDraftPlanId}/cancel`,
+    accessToken,
+    { method: 'POST', body: cancelledDraftRequest },
+  );
+  assertDeadlinePlanApiStatus(
+    cancelledDraftReplay,
+    200,
+    'draft deadline cancellation replay',
+  );
+  if (
+    stableJson(cancelledDraftReplay.json) !==
+    stableJson(cancelledDraftResult.json)
+  ) {
+    throw new Error(
+      `Draft cancellation replay changed terminal state: ${cancelledDraftReplay.text}`,
+    );
+  }
+  await assertRows(
+    `deadline_plans?select=id,status,current_revision,latest_revision,managed_task_id,first_activated_at,cancelled_at&user_id=eq.${userId}&id=eq.${cancelledDraftPlanId}`,
+    (rows) =>
+      rows.length === 1 &&
+      rows[0].status === 'cancelled' &&
+      rows[0].current_revision === 0 &&
+      rows[0].latest_revision === 1 &&
+      rows[0].managed_task_id === null &&
+      rows[0].first_activated_at === null &&
+      rows[0].cancelled_at !== null,
+    'cancelled draft Deadline Planner identity',
+  );
+  await assertRows(
+    `deadline_plan_revisions?select=revision,state,activated_at,superseded_at&user_id=eq.${userId}&plan_id=eq.${cancelledDraftPlanId}`,
+    (rows) =>
+      rows.length === 1 &&
+      rows[0].revision === 1 &&
+      rows[0].state === 'superseded' &&
+      rows[0].activated_at === null &&
+      rows[0].superseded_at !== null,
+    'cancelled draft supersedes its pending revision',
+  );
+  await assertRows(
+    `deadline_plan_blocks?select=id,reservation_state&user_id=eq.${userId}&plan_id=eq.${cancelledDraftPlanId}`,
+    (rows) =>
+      rows.length === disposableDraftBlockCount &&
+      rows.every((row) => row.reservation_state === 'superseded'),
+    'cancelled draft releases proposed reservations',
+  );
+  await assertRows(
+    `tasks?select=id&user_id=eq.${userId}&id=eq.${cancelledDraftPlanId}`,
+    (rows) => rows.length === 0,
+    'cancelled draft creates no managed task',
+  );
+
+  const proposed = await deadlinePlanApiRequest(
+    '/v1/deadline-plans/proposals',
+    accessToken,
+    { method: 'POST', body: proposalBody },
+  );
+  assertDeadlinePlanApiStatus(proposed, 200, 'manual deadline proposal');
+  const draft = assertDeadlinePlanEnvelope(
+    proposed.json,
+    'manual deadline proposal',
+  );
+  if (
+    draft.plan.id !== planId ||
+    draft.plan.status !== 'draft' ||
+    draft.plan.kind !== 'exam' ||
+    draft.plan.title !== title ||
+    Object.hasOwn(draft.plan, 'managed_task_id') ||
+    draft.plan.original_estimated_total_minutes !== 180 ||
+    draft.plan.original_credited_prior_minutes !== 30 ||
+    draft.plan.current_revision !== 0 ||
+    draft.plan.latest_revision !== 1 ||
+    Object.hasOwn(draft, 'active_revision') ||
+    draft.pending_revision?.revision !== 1 ||
+    draft.pending_revision?.base_revision !== 0 ||
+    draft.pending_revision?.state !== 'proposed' ||
+    draft.pending_revision?.tracked_focus_minutes_at_proposal !== 0 ||
+    draft.pending_revision?.remaining_minutes_at_proposal !== 150 ||
+    draft.pending_revision?.planned_minutes +
+        draft.pending_revision?.unscheduled_minutes !==
+      150 ||
+    draft.pending_revision?.blocks.length < 1 ||
+    draft.progress.estimated_total_minutes !== 180 ||
+    draft.progress.credited_prior_minutes !== 30 ||
+    draft.progress.tracked_focus_minutes !== 0 ||
+    draft.progress.accounted_minutes !== 30 ||
+    draft.progress.remaining_minutes !== 150 ||
+    draft.progress.completion_suggested !== false
+  ) {
+    throw new Error(
+      `Manual Deadline Planner proposal is not a staged explicit estimate: ${proposed.text}`,
+    );
+  }
+  const proposedBlockIds = draft.pending_revision.blocks.map(
+    (block) => block.id,
+  );
+
+  const proposalReplay = await deadlinePlanApiRequest(
+    '/v1/deadline-plans/proposals',
+    accessToken,
+    { method: 'POST', body: proposalBody },
+  );
+  assertDeadlinePlanApiStatus(
+    proposalReplay,
+    200,
+    'exact deadline proposal replay',
+  );
+  assertDeadlinePlanEnvelope(
+    proposalReplay.json,
+    'exact deadline proposal replay',
+  );
+  if (stableJson(proposalReplay.json) !== stableJson(proposed.json)) {
+    throw new Error(
+      `Exact Deadline Planner proposal replay changed persisted output: ${proposalReplay.text}`,
+    );
+  }
+  const proposalConflict = await deadlinePlanApiRequest(
+    '/v1/deadline-plans/proposals',
+    accessToken,
+    {
+      method: 'POST',
+      body: { ...proposalBody, title: `${title} changed` },
+    },
+  );
+  assertDeadlinePlanApiStatus(
+    proposalConflict,
+    409,
+    'deadline proposal request-id reinterpretation',
+  );
+  const staleInitialBase = await deadlinePlanApiRequest(
+    '/v1/deadline-plans/proposals',
+    accessToken,
+    {
+      method: 'POST',
+      body: { ...proposalBody, request_id: crypto.randomUUID() },
+    },
+  );
+  assertDeadlinePlanApiStatus(
+    staleInitialBase,
+    409,
+    'stale initial deadline base revision',
+  );
+  await assertRows(
+    `deadline_plans?select=id,user_id,status,kind,title,managed_task_id,original_estimated_total_minutes,original_credited_prior_minutes,current_revision,latest_revision&user_id=eq.${userId}&id=eq.${planId}`,
+    (rows) =>
+      rows.length === 1 &&
+      rows[0].status === 'draft' &&
+      rows[0].managed_task_id === null &&
+      rows[0].original_estimated_total_minutes === 180 &&
+      rows[0].original_credited_prior_minutes === 30 &&
+      rows[0].current_revision === 0 &&
+      rows[0].latest_revision === 1,
+    'persisted staged Deadline Planner identity',
+  );
+  await assertRows(
+    `deadline_plan_revisions?select=plan_id,revision,base_revision,state,estimated_total_minutes,credited_prior_minutes,tracked_focus_minutes_at_proposal,remaining_minutes_at_proposal,planned_minutes,unscheduled_minutes,activated_at,superseded_at&user_id=eq.${userId}&plan_id=eq.${planId}`,
+    (rows) =>
+      rows.length === 1 &&
+      rows[0].revision === 1 &&
+      rows[0].base_revision === 0 &&
+      rows[0].state === 'proposed' &&
+      rows[0].planned_minutes + rows[0].unscheduled_minutes === 150 &&
+      rows[0].activated_at === null &&
+      rows[0].superseded_at === null,
+    'immutable proposed Deadline Planner revision',
+  );
+  await assertRows(
+    `deadline_plan_blocks?select=id,revision,sequence,reservation_state,planned_minutes&user_id=eq.${userId}&plan_id=eq.${planId}&order=sequence.asc`,
+    (rows) =>
+      rows.length === proposedBlockIds.length &&
+      rows.every(
+        (row, index) =>
+          row.id === proposedBlockIds[index] &&
+          row.revision === 1 &&
+          row.sequence === index + 1 &&
+          row.reservation_state === 'proposed',
+      ) &&
+      rows.reduce((sum, row) => sum + row.planned_minutes, 0) ===
+        draft.pending_revision.planned_minutes,
+    'deterministic proposed Deadline Planner blocks',
+  );
+  await assertRows(
+    `tasks?select=id&user_id=eq.${userId}&id=eq.${planId}`,
+    (rows) => rows.length === 0,
+    'proposal creates no managed task before confirmation',
+  );
+  await assertCalendarScheduleUnchanged(
+    userId,
+    scheduleBefore,
+    'manual Deadline Planner proposal',
+  );
+
+  const confirmRequestId = crypto.randomUUID();
+  const confirmBody = {
+    request_id: confirmRequestId,
+    expected_revision: 1,
+  };
+  const crossOperationConfirm = await deadlinePlanApiRequest(
+    `/v1/deadline-plans/${planId}/confirm`,
+    accessToken,
+    {
+      method: 'POST',
+      body: { request_id: proposalRequestId, expected_revision: 1 },
+    },
+  );
+  assertDeadlinePlanApiStatus(
+    crossOperationConfirm,
+    409,
+    'deadline request id reused across proposal and confirmation',
+  );
+  await assertRows(
+    `tasks?select=id&user_id=eq.${userId}&id=eq.${planId}`,
+    (rows) => rows.length === 0,
+    'cross-operation deadline conflict remains staged',
+  );
+  const confirmedResult = await deadlinePlanApiRequest(
+    `/v1/deadline-plans/${planId}/confirm`,
+    accessToken,
+    { method: 'POST', body: confirmBody },
+  );
+  assertDeadlinePlanApiStatus(
+    confirmedResult,
+    200,
+    'first deadline confirmation',
+  );
+  const confirmed = assertDeadlinePlanEnvelope(
+    confirmedResult.json,
+    'first deadline confirmation',
+  );
+  if (
+    confirmed.plan.status !== 'active' ||
+    confirmed.plan.managed_task_id !== planId ||
+    confirmed.plan.current_revision !== 1 ||
+    confirmed.plan.latest_revision !== 1 ||
+    confirmed.active_revision?.revision !== 1 ||
+    confirmed.active_revision?.state !== 'active' ||
+    !isIsoTimestamp(confirmed.active_revision?.activated_at) ||
+    Object.hasOwn(confirmed, 'pending_revision')
+  ) {
+    throw new Error(
+      `First Deadline Planner confirmation is not active: ${confirmedResult.text}`,
+    );
+  }
+  const confirmReplay = await deadlinePlanApiRequest(
+    `/v1/deadline-plans/${planId}/confirm`,
+    accessToken,
+    { method: 'POST', body: confirmBody },
+  );
+  assertDeadlinePlanApiStatus(confirmReplay, 200, 'deadline confirm replay');
+  assertDeadlinePlanEnvelope(confirmReplay.json, 'deadline confirm replay');
+  if (stableJson(confirmReplay.json) !== stableJson(confirmedResult.json)) {
+    throw new Error(
+      `Deadline confirmation replay changed persisted state: ${confirmReplay.text}`,
+    );
+  }
+  const confirmConflict = await deadlinePlanApiRequest(
+    `/v1/deadline-plans/${planId}/confirm`,
+    accessToken,
+    {
+      method: 'POST',
+      body: { ...confirmBody, expected_revision: 2 },
+    },
+  );
+  assertDeadlinePlanApiStatus(
+    confirmConflict,
+    409,
+    'deadline confirm request-id reinterpretation',
+  );
+
+  const managedTasks = await fetchRows(
+    `tasks?select=id,user_id,title,status,deadline,estimated_minutes,completed_at,cancelled_at,source,metadata&user_id=eq.${userId}&id=eq.${planId}`,
+    'first Deadline Planner managed task',
+  );
+  const managedTask = managedTasks[0];
+  if (
+    managedTasks.length !== 1 ||
+    managedTask.id !== planId ||
+    managedTask.user_id !== userId ||
+    managedTask.title !== title ||
+    managedTask.status !== 'todo' ||
+    !sameInstant(managedTask.deadline, deadlineAt) ||
+    managedTask.estimated_minutes !== null ||
+    managedTask.completed_at !== null ||
+    managedTask.cancelled_at !== null ||
+    managedTask.source !== 'deadline-plan-v1' ||
+    stableJson(managedTask.metadata) !==
+      stableJson({
+        contract_version: 'deadline-plan-v1',
+        managed_by: 'deadline-planner',
+        plan_id: planId,
+      })
+  ) {
+    throw new Error(
+      `Deadline Planner managed task projection is invalid: ${JSON.stringify(managedTasks)}`,
+    );
+  }
+
+  await assertDeadlinePlannerFlutterSurface({
+    page,
+    planId,
+    title,
+    activeRevision: confirmed.active_revision,
+  });
+
+  await assertDeadlinePlannerRls({
+    ownerAccessToken: accessToken,
+    userId,
+    planId,
+    revision: 1,
+    blockId: confirmed.active_revision.blocks[0].id,
+    claimedRequestId: proposalRequestId,
+    proposalBody,
+  });
+
+  const directTaskMutation = await authenticatedRestRequest(
+    `tasks?id=eq.${planId}`,
+    accessToken,
+    { method: 'PATCH', body: { title: 'Authenticated task rewrite' } },
+  );
+  if (directTaskMutation.response.ok) {
+    throw new Error(
+      `Generic task authority changed a planner-managed task: ${directTaskMutation.text}`,
+    );
+  }
+  await assertRows(
+    `tasks?select=id,title,status,deadline&user_id=eq.${userId}&id=eq.${planId}`,
+    (rows) =>
+      rows.length === 1 &&
+      rows[0].title === title &&
+      rows[0].status === 'todo' &&
+      sameInstant(rows[0].deadline, deadlineAt),
+    'managed task rejects generic mutation',
+  );
+
+  const firstActivation = confirmed.active_revision.activated_at;
+  const activeFocusId = crypto.randomUUID();
+  const activeStartedAt = new Date(
+    Math.max(Date.now(), Date.parse(firstActivation) + 1000),
+  ).toISOString();
+  const activeFocus = await authenticatedRestRequest(
+    'focus_sessions',
+    accessToken,
+    {
+      method: 'POST',
+      body: {
+        id: activeFocusId,
+        user_id: userId,
+        task_id: planId,
+        habit_id: null,
+        status: 'active',
+        started_at: activeStartedAt,
+        ended_at: null,
+        planned_minutes: 25,
+        actual_minutes: null,
+        label: 'E2E planner focus start',
+        metadata: {
+          source: 'e2e-deadline-plan',
+          entry_date: isoDateInTimeZone(activeStartedAt, 'Europe/Berlin'),
+        },
+        created_at: activeStartedAt,
+        updated_at: activeStartedAt,
+      },
+    },
+  );
+  if (
+    !activeFocus.response.ok ||
+    activeFocus.rows?.length !== 1 ||
+    activeFocus.rows[0].id !== activeFocusId ||
+    activeFocus.rows[0].task_id !== planId ||
+    activeFocus.rows[0].status !== 'active'
+  ) {
+    throw new Error(
+      `Open planner-managed task rejected an owned focus start: ${activeFocus.response.status} ${activeFocus.text}`,
+    );
+  }
+  const activeEndedAt = new Date(
+    Date.parse(activeStartedAt) + 60_000,
+  ).toISOString();
+  const finishedFocus = await authenticatedRestRequest(
+    `focus_sessions?id=eq.${activeFocusId}&user_id=eq.${userId}&status=eq.active`,
+    accessToken,
+    {
+      method: 'PATCH',
+      body: {
+        status: 'completed',
+        ended_at: activeEndedAt,
+        actual_minutes: 1,
+        updated_at: activeEndedAt,
+      },
+    },
+  );
+  if (
+    !finishedFocus.response.ok ||
+    finishedFocus.rows?.length !== 1 ||
+    finishedFocus.rows[0].status !== 'completed' ||
+    finishedFocus.rows[0].actual_minutes !== 1
+  ) {
+    throw new Error(
+      `Planner-linked focus finish failed: ${finishedFocus.response.status} ${finishedFocus.text}`,
+    );
+  }
+  const completedFocusId = crypto.randomUUID();
+  const completedStartedAt = new Date(
+    Date.parse(activeEndedAt) + 1000,
+  ).toISOString();
+  const completedEndedAt = new Date(
+    Date.parse(completedStartedAt) + 34 * 60_000,
+  ).toISOString();
+  const abandonedFocusId = crypto.randomUUID();
+  const abandonedStartedAt = new Date(
+    Date.parse(completedEndedAt) + 1000,
+  ).toISOString();
+  const abandonedEndedAt = new Date(
+    Date.parse(abandonedStartedAt) + 20 * 60_000,
+  ).toISOString();
+  const preActivationFocusId = crypto.randomUUID();
+  const preActivationStartedAt = new Date(
+    Date.parse(firstActivation) - 20 * 60_000,
+  ).toISOString();
+  const preActivationEndedAt = new Date(
+    Date.parse(firstActivation) - 5 * 60_000,
+  ).toISOString();
+  await insertRows('focus_sessions', [
+    {
+      id: preActivationFocusId,
+      user_id: userId,
+      task_id: planId,
+      habit_id: null,
+      status: 'completed',
+      started_at: preActivationStartedAt,
+      ended_at: preActivationEndedAt,
+      planned_minutes: 15,
+      actual_minutes: 15,
+      label: 'E2E planner pre-activation history',
+      metadata: {
+        source: 'e2e-deadline-plan',
+        entry_date: isoDateInTimeZone(
+          preActivationStartedAt,
+          'Europe/Berlin',
+        ),
+      },
+      created_at: preActivationStartedAt,
+      updated_at: preActivationEndedAt,
+    },
+    {
+      id: completedFocusId,
+      user_id: userId,
+      task_id: planId,
+      habit_id: null,
+      status: 'completed',
+      started_at: completedStartedAt,
+      ended_at: completedEndedAt,
+      planned_minutes: 35,
+      actual_minutes: 34,
+      label: 'E2E planner measured progress',
+      metadata: {
+        source: 'e2e-deadline-plan',
+        entry_date: isoDateInTimeZone(completedStartedAt, 'Europe/Berlin'),
+      },
+      created_at: completedStartedAt,
+      updated_at: completedEndedAt,
+    },
+    {
+      id: abandonedFocusId,
+      user_id: userId,
+      task_id: planId,
+      habit_id: null,
+      status: 'abandoned',
+      started_at: abandonedStartedAt,
+      ended_at: abandonedEndedAt,
+      planned_minutes: 20,
+      actual_minutes: 20,
+      label: 'E2E planner abandoned time',
+      metadata: {
+        source: 'e2e-deadline-plan',
+        entry_date: isoDateInTimeZone(abandonedStartedAt, 'Europe/Berlin'),
+      },
+      created_at: abandonedStartedAt,
+      updated_at: abandonedEndedAt,
+    },
+  ]);
+
+  const progressedResult = await deadlinePlanApiRequest(
+    `/v1/deadline-plans/${planId}`,
+    accessToken,
+  );
+  assertDeadlinePlanApiStatus(
+    progressedResult,
+    200,
+    'deadline progress after linked focus',
+  );
+  const progressed = assertDeadlinePlanEnvelope(
+    progressedResult.json,
+    'deadline progress after linked focus',
+  );
+  const firstProgressedBlock = progressed.active_revision.blocks[0];
+  const expectedFirstProgressedState =
+    firstProgressedBlock.credited_tracked_minutes ===
+    firstProgressedBlock.planned_minutes
+      ? 'completed'
+      : 'partial';
+  if (
+    progressed.plan.status !== 'active' ||
+    progressed.progress.tracked_focus_minutes !== 35 ||
+    progressed.progress.accounted_minutes !== 65 ||
+    progressed.progress.remaining_minutes !== 115 ||
+    progressed.progress.completion_suggested !== false ||
+    progressed.active_revision.blocks.reduce(
+      (sum, block) => sum + block.credited_tracked_minutes,
+      0,
+    ) !== 35 ||
+    firstProgressedBlock.credited_tracked_minutes <= 0 ||
+    firstProgressedBlock.state !== expectedFirstProgressedState
+  ) {
+    throw new Error(
+      `Pre-activation/abandoned focus accounting changed plan authority: ${progressedResult.text}`,
+    );
+  }
+  await assertRows(
+    `tasks?select=id,status,completed_at,cancelled_at&user_id=eq.${userId}&id=eq.${planId}`,
+    (rows) =>
+      rows.length === 1 &&
+      rows[0].status === 'todo' &&
+      rows[0].completed_at === null &&
+      rows[0].cancelled_at === null,
+    'linked focus never completes the managed task',
+  );
+
+  const secondProposalRequestId = crypto.randomUUID();
+  const secondTitle = `E2E statistics exam adjusted ${runId}`;
+  const secondDeadlineAt = `${addUtcDays(localToday, 14)}T12:00:00Z`;
+  const secondProposalBody = {
+    ...proposalBody,
+    request_id: secondProposalRequestId,
+    base_revision: 1,
+    title: secondTitle,
+    deadline_at: secondDeadlineAt,
+    estimated_total_minutes: 240,
+    credited_prior_minutes: 40,
+    preferred_session_minutes: 45,
+    max_daily_minutes: 90,
+  };
+  const secondProposalResult = await deadlinePlanApiRequest(
+    '/v1/deadline-plans/proposals',
+    accessToken,
+    { method: 'POST', body: secondProposalBody },
+  );
+  assertDeadlinePlanApiStatus(
+    secondProposalResult,
+    200,
+    'active deadline replan proposal',
+  );
+  const stagedReplan = assertDeadlinePlanEnvelope(
+    secondProposalResult.json,
+    'active deadline replan proposal',
+  );
+  if (
+    stagedReplan.plan.status !== 'active' ||
+    stagedReplan.plan.current_revision !== 1 ||
+    stagedReplan.plan.latest_revision !== 2 ||
+    stagedReplan.active_revision?.revision !== 1 ||
+    stagedReplan.pending_revision?.revision !== 2 ||
+    stagedReplan.pending_revision?.base_revision !== 1 ||
+    stagedReplan.pending_revision?.title !== secondTitle ||
+    stagedReplan.pending_revision?.tracked_focus_minutes_at_proposal !== 35 ||
+    stagedReplan.pending_revision?.remaining_minutes_at_proposal !== 165 ||
+    stagedReplan.progress.estimated_total_minutes !== 180 ||
+    stagedReplan.progress.tracked_focus_minutes !== 35
+  ) {
+    throw new Error(
+      `Replan replaced active revision before confirmation: ${secondProposalResult.text}`,
+    );
+  }
+  const secondProposalReplay = await deadlinePlanApiRequest(
+    '/v1/deadline-plans/proposals',
+    accessToken,
+    { method: 'POST', body: secondProposalBody },
+  );
+  assertDeadlinePlanApiStatus(
+    secondProposalReplay,
+    200,
+    'exact active replan replay',
+  );
+  if (
+    stableJson(secondProposalReplay.json) !==
+    stableJson(secondProposalResult.json)
+  ) {
+    throw new Error(
+      `Exact active replan replay changed staged state: ${secondProposalReplay.text}`,
+    );
+  }
+  await assertRows(
+    `tasks?select=id,title,deadline,status&user_id=eq.${userId}&id=eq.${planId}`,
+    (rows) =>
+      rows.length === 1 &&
+      rows[0].title === title &&
+      sameInstant(rows[0].deadline, deadlineAt) &&
+      rows[0].status === 'todo',
+    'pending revision leaves managed task on active projection',
+  );
+
+  const currentInsteadOfLatest = await deadlinePlanApiRequest(
+    '/v1/deadline-plans/proposals',
+    accessToken,
+    {
+      method: 'POST',
+      body: { ...secondProposalBody, request_id: crypto.randomUUID() },
+    },
+  );
+  assertDeadlinePlanApiStatus(
+    currentInsteadOfLatest,
+    409,
+    'current revision cannot replace latest pending revision',
+  );
+
+  const thirdProposalRequestId = crypto.randomUUID();
+  const finalTitle = `E2E statistics exam final ${runId}`;
+  const finalDeadlineAt = `${addUtcDays(localToday, 16)}T12:00:00Z`;
+  const thirdProposalBody = {
+    ...secondProposalBody,
+    request_id: thirdProposalRequestId,
+    base_revision: 2,
+    title: finalTitle,
+    deadline_at: finalDeadlineAt,
+    estimated_total_minutes: 210,
+    credited_prior_minutes: 35,
+  };
+  const thirdProposalResult = await deadlinePlanApiRequest(
+    '/v1/deadline-plans/proposals',
+    accessToken,
+    { method: 'POST', body: thirdProposalBody },
+  );
+  assertDeadlinePlanApiStatus(
+    thirdProposalResult,
+    200,
+    'replacement pending deadline proposal',
+  );
+  const replacementPending = assertDeadlinePlanEnvelope(
+    thirdProposalResult.json,
+    'replacement pending deadline proposal',
+  );
+  if (
+    replacementPending.plan.current_revision !== 1 ||
+    replacementPending.plan.latest_revision !== 3 ||
+    replacementPending.active_revision?.revision !== 1 ||
+    replacementPending.pending_revision?.revision !== 3 ||
+    replacementPending.pending_revision?.base_revision !== 2 ||
+    replacementPending.pending_revision?.tracked_focus_minutes_at_proposal !==
+      35 ||
+    replacementPending.pending_revision?.remaining_minutes_at_proposal !== 140
+  ) {
+    throw new Error(
+      `Latest-based replacement proposal is invalid: ${thirdProposalResult.text}`,
+    );
+  }
+  await assertRows(
+    `deadline_plan_revisions?select=revision,state,activated_at,superseded_at&user_id=eq.${userId}&plan_id=eq.${planId}&order=revision.asc`,
+    (rows) =>
+      rows.length === 3 &&
+      rows[0].state === 'active' &&
+      rows[0].activated_at !== null &&
+      rows[0].superseded_at === null &&
+      rows[1].state === 'superseded' &&
+      rows[1].activated_at === null &&
+      rows[1].superseded_at !== null &&
+      rows[2].state === 'proposed' &&
+      rows[2].activated_at === null &&
+      rows[2].superseded_at === null,
+    'pending replacement preserves active and superseded provenance',
+  );
+  await assertRows(
+    `deadline_plan_blocks?select=revision,reservation_state&user_id=eq.${userId}&plan_id=eq.${planId}&order=revision.asc,sequence.asc`,
+    (rows) =>
+      rows.length ===
+        replacementPending.active_revision.blocks.length +
+          stagedReplan.pending_revision.blocks.length +
+          replacementPending.pending_revision.blocks.length &&
+      rows.every((row) =>
+        row.revision === 1
+          ? row.reservation_state === 'active'
+          : row.revision === 2
+            ? row.reservation_state === 'superseded'
+            : row.revision === 3 &&
+              row.reservation_state === 'proposed',
+      ),
+    'pending replacement keeps only active reservations committed',
+  );
+
+  const finalConfirmRequestId = crypto.randomUUID();
+  const finalConfirmBody = {
+    request_id: finalConfirmRequestId,
+    expected_revision: 3,
+  };
+  const finalConfirmResult = await deadlinePlanApiRequest(
+    `/v1/deadline-plans/${planId}/confirm`,
+    accessToken,
+    { method: 'POST', body: finalConfirmBody },
+  );
+  assertDeadlinePlanApiStatus(
+    finalConfirmResult,
+    200,
+    'replacement deadline confirmation',
+  );
+  const finalConfirmed = assertDeadlinePlanEnvelope(
+    finalConfirmResult.json,
+    'replacement deadline confirmation',
+  );
+  if (
+    finalConfirmed.plan.status !== 'active' ||
+    finalConfirmed.plan.managed_task_id !== planId ||
+    finalConfirmed.plan.original_estimated_total_minutes !== 180 ||
+    finalConfirmed.plan.original_credited_prior_minutes !== 30 ||
+    finalConfirmed.plan.current_revision !== 3 ||
+    finalConfirmed.plan.latest_revision !== 3 ||
+    finalConfirmed.active_revision?.revision !== 3 ||
+    finalConfirmed.active_revision?.title !== finalTitle ||
+    Object.hasOwn(finalConfirmed, 'pending_revision') ||
+    finalConfirmed.progress.estimated_total_minutes !== 210 ||
+    finalConfirmed.progress.credited_prior_minutes !== 35 ||
+    finalConfirmed.progress.tracked_focus_minutes !== 35 ||
+    finalConfirmed.progress.remaining_minutes !== 140
+  ) {
+    throw new Error(
+      `Confirmed replacement revision is invalid: ${finalConfirmResult.text}`,
+    );
+  }
+  await assertRows(
+    `deadline_plan_revisions?select=revision,state,activated_at,superseded_at&user_id=eq.${userId}&plan_id=eq.${planId}&order=revision.asc`,
+    (rows) =>
+      rows.length === 3 &&
+      rows[0].state === 'superseded' &&
+      rows[0].activated_at !== null &&
+      rows[0].superseded_at !== null &&
+      rows[1].state === 'superseded' &&
+      rows[1].activated_at === null &&
+      rows[1].superseded_at !== null &&
+      rows[2].state === 'active' &&
+      rows[2].activated_at !== null &&
+      rows[2].superseded_at === null,
+    'confirmed replacement keeps activation provenance',
+  );
+  await assertRows(
+    `deadline_plan_blocks?select=revision,reservation_state&user_id=eq.${userId}&plan_id=eq.${planId}&order=revision.asc,sequence.asc`,
+    (rows) =>
+      rows.length ===
+        replacementPending.active_revision.blocks.length +
+          stagedReplan.pending_revision.blocks.length +
+          replacementPending.pending_revision.blocks.length &&
+      rows.every((row) =>
+        row.revision === 3
+          ? row.reservation_state === 'active'
+          : [1, 2].includes(row.revision) &&
+            row.reservation_state === 'superseded',
+      ),
+    'replacement confirmation switches reservation authority atomically',
+  );
+  await assertRows(
+    `tasks?select=id,title,deadline,status,estimated_minutes,source,metadata&user_id=eq.${userId}&id=eq.${planId}`,
+    (rows) =>
+      rows.length === 1 &&
+      rows[0].id === planId &&
+      rows[0].title === finalTitle &&
+      sameInstant(rows[0].deadline, finalDeadlineAt) &&
+      rows[0].status === 'todo' &&
+      rows[0].estimated_minutes === null &&
+      rows[0].source === 'deadline-plan-v1' &&
+      stableJson(rows[0].metadata) ===
+        stableJson({
+          contract_version: 'deadline-plan-v1',
+          managed_by: 'deadline-planner',
+          plan_id: planId,
+        }),
+    'stable managed task after replacement confirmation',
+  );
+
+  const completeRequestId = crypto.randomUUID();
+  const completeBody = {
+    request_id: completeRequestId,
+    expected_revision: 3,
+  };
+  const completedResult = await deadlinePlanApiRequest(
+    `/v1/deadline-plans/${planId}/complete`,
+    accessToken,
+    { method: 'POST', body: completeBody },
+  );
+  assertDeadlinePlanApiStatus(
+    completedResult,
+    200,
+    'explicit deadline completion',
+  );
+  const completed = assertDeadlinePlanEnvelope(
+    completedResult.json,
+    'explicit deadline completion',
+  );
+  if (
+    completed.plan.status !== 'completed' ||
+    !isIsoTimestamp(completed.plan.completed_at) ||
+    Object.hasOwn(completed.plan, 'cancelled_at') ||
+    completed.plan.current_revision !== 3 ||
+    completed.plan.latest_revision !== 3 ||
+    completed.active_revision?.revision !== 3
+  ) {
+    throw new Error(
+      `Explicit Deadline Planner completion is invalid: ${completedResult.text}`,
+    );
+  }
+  const completeReplay = await deadlinePlanApiRequest(
+    `/v1/deadline-plans/${planId}/complete`,
+    accessToken,
+    { method: 'POST', body: completeBody },
+  );
+  assertDeadlinePlanApiStatus(
+    completeReplay,
+    200,
+    'deadline completion replay',
+  );
+  if (stableJson(completeReplay.json) !== stableJson(completedResult.json)) {
+    throw new Error(
+      `Deadline completion replay changed terminal state: ${completeReplay.text}`,
+    );
+  }
+  await assertRows(
+    `tasks?select=id,status,completed_at,cancelled_at,title,deadline&user_id=eq.${userId}&id=eq.${planId}`,
+    (rows) =>
+      rows.length === 1 &&
+      rows[0].status === 'done' &&
+      sameInstant(rows[0].completed_at, completed.plan.completed_at) &&
+      rows[0].cancelled_at === null &&
+      rows[0].title === finalTitle &&
+      sameInstant(rows[0].deadline, finalDeadlineAt),
+    'atomic matching plan/task completion',
+  );
+  await assertRows(
+    `deadline_plan_blocks?select=revision,reservation_state&user_id=eq.${userId}&plan_id=eq.${planId}`,
+    (rows) =>
+      rows.length > 0 &&
+      rows.every((row) => row.reservation_state === 'superseded'),
+    'explicit completion releases every retained reservation revision',
+  );
+
+  const rejectedTerminalFocusId = crypto.randomUUID();
+  const rejectedTerminalFocus = await authenticatedRestRequest(
+    'focus_sessions',
+    accessToken,
+    {
+      method: 'POST',
+      body: {
+        id: rejectedTerminalFocusId,
+        user_id: userId,
+        task_id: planId,
+        status: 'active',
+        started_at: new Date().toISOString(),
+        planned_minutes: 25,
+        label: 'Must not start on a terminal plan',
+        metadata: {
+          source: 'e2e-deadline-plan',
+          entry_date: localToday,
+        },
+      },
+    },
+  );
+  if (rejectedTerminalFocus.response.ok) {
+    throw new Error('Terminal planner-managed task accepted a new focus start.');
+  }
+  await assertRows(
+    `focus_sessions?select=id&id=eq.${rejectedTerminalFocusId}`,
+    (rows) => rows.length === 0,
+    'terminal planner-managed task rejects focus start',
+  );
+
+  const requestIds = new Map([
+    [proposalRequestId, 'proposal'],
+    [confirmRequestId, 'confirm'],
+    [secondProposalRequestId, 'proposal'],
+    [thirdProposalRequestId, 'proposal'],
+    [finalConfirmRequestId, 'confirm'],
+    [completeRequestId, 'complete'],
+  ]);
+  await assertRows(
+    `deadline_plan_request_identities?select=request_id,user_id,plan_id,operation&user_id=eq.${userId}&plan_id=eq.${planId}&order=created_at.asc,request_id.asc`,
+    (rows) =>
+      rows.length === requestIds.size &&
+      rows.every(
+        (row) =>
+          row.user_id === userId &&
+          row.plan_id === planId &&
+          requestIds.get(row.request_id) === row.operation,
+      ),
+    'minimal unique Deadline Planner request identities',
+  );
+  const finalFeedResult = await deadlinePlanApiRequest(
+    '/v1/deadline-plans',
+    accessToken,
+  );
+  assertDeadlinePlanApiStatus(finalFeedResult, 200, 'final deadline plan feed');
+  const finalFeed = assertDeadlinePlanCollection(
+    finalFeedResult.json,
+    'final deadline plan feed',
+  );
+  const finalPlansById = new Map(
+    finalFeed.plans.map((detail) => [detail.plan.id, detail]),
+  );
+  if (
+    finalFeed.plans.length !== 2 ||
+    finalPlansById.get(planId)?.plan.status !== 'completed' ||
+    finalPlansById.get(cancelledDraftPlanId)?.plan.status !== 'cancelled' ||
+    finalPlansById.get(cancelledDraftPlanId)?.plan.current_revision !== 0
+  ) {
+    throw new Error(
+      `Deadline Planner collection lost terminal plan truth: ${finalFeedResult.text}`,
+    );
+  }
+  await assertCalendarScheduleUnchanged(
+    userId,
+    scheduleBefore,
+    'complete Deadline Planner lifecycle',
+  );
+  const finalTasks = await fetchRows(
+    `tasks?select=id&user_id=eq.${userId}`,
+    'Deadline Planner final task set',
+  );
+  if (
+    finalTasks.length !== initialTaskRows.length + 1 ||
+    !finalTasks.some((row) => row.id === planId)
+  ) {
+    throw new Error(
+      `Deadline Planner did not retain exactly one stable managed task: ${JSON.stringify(finalTasks)}`,
+    );
+  }
+}
+
+async function assertDeadlinePlannerFlutterSurface({
+  page,
+  planId,
+  title,
+  activeRevision,
+}) {
+  const planPageLoad = page.waitForResponse(
+    (response) =>
+      response.url() === `${aiServiceBaseUrl}/v1/deadline-plans` &&
+      response.request().method() === 'GET',
+    { timeout: 45000 },
+  );
+  await page.goto(
+    appRoute(`/preparation-plans?plan_id=${encodeURIComponent(planId)}`),
+    { waitUntil: 'domcontentloaded' },
+  );
+  const planPageResponse = await planPageLoad;
+  if (!planPageResponse.ok()) {
+    throw new Error(
+      `Preparation-plan Flutter surface failed to load: ${planPageResponse.status()} ${await planPageResponse.text()}`,
+    );
+  }
+  await waitForFlutterShell(page);
+  await enableFlutterSemantics(page);
+  await expectText(page, 'Preparation plans');
+  await scrollUntilTextInViewport(page, title, { maxSteps: 16 });
+  await expectText(page, 'Active');
+  await scrollUntilTextInViewport(page, 'Reserved in MyLifeGraph only', {
+    maxSteps: 12,
+  });
+
+  const firstBlock = activeRevision.blocks[0];
+  const firstBlockLabel =
+    `${firstBlock.local_date} · ` +
+    `${firstBlock.local_start_time.substring(0, 5)}–` +
+    firstBlock.local_end_time.substring(0, 5);
+  await scrollUntilTextInViewport(page, firstBlockLabel, { maxSteps: 12 });
+  await scrollUntilTextInViewport(page, 'Adjust estimate or plan', {
+    maxSteps: 12,
+    buttonFirst: true,
+  });
+
+  const currentWeekBlockId = await page.evaluate((blocks) => {
+    const now = new Date();
+    const isoWeekday = now.getDay() || 7;
+    const weekStart = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate() - (isoWeekday - 1),
+    );
+    const weekEnd = new Date(
+      weekStart.getFullYear(),
+      weekStart.getMonth(),
+      weekStart.getDate() + 7,
+    );
+    return (
+      blocks.find((block) => {
+        const startsAt = new Date(block.starts_at);
+        return startsAt >= weekStart && startsAt < weekEnd;
+      })?.id ?? null
+    );
+  }, activeRevision.blocks);
+  const currentWeekBlock = activeRevision.blocks.find(
+    (block) => block.id === currentWeekBlockId,
+  );
+
+  await page.goto(appRoute('/dashboard'), { waitUntil: 'domcontentloaded' });
+  const dashboardPlanApiRequests = [];
+  const captureDashboardRequest = (request) => {
+    if (
+      request.url().startsWith(`${aiServiceBaseUrl}/v1/deadline-plans`)
+    ) {
+      dashboardPlanApiRequests.push({
+        method: request.method(),
+        url: request.url(),
+      });
+    }
+  };
+  page.on('request', captureDashboardRequest);
+  const dashboardBlockLoad = page.waitForResponse(
+    (response) =>
+      response.url().includes('/rest/v1/deadline_plan_blocks?') &&
+      response.request().method() === 'GET',
+    { timeout: 45000 },
+  );
+  // Hash navigation retains Riverpod's non-autoDispose Dashboard projection.
+  // A real reload proves the current database reservations instead of reusing
+  // the snapshot that Flutter loaded before the Node-side Planner mutations.
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  const dashboardBlockResponse = await dashboardBlockLoad;
+  if (!dashboardBlockResponse.ok()) {
+    throw new Error(
+      `Dashboard preparation block projection failed to load: ${dashboardBlockResponse.status()} ${await dashboardBlockResponse.text()}`,
+    );
+  }
+  await waitForFlutterShell(page);
+  await enableFlutterSemantics(page);
+  await scrollFlutterPage(page, 20000);
+  await clickChoiceChip(page, 'Full week');
+  await scrollUntilTextInViewport(page, 'Commitments', { maxSteps: 30 });
+  page.off('request', captureDashboardRequest);
+  if (dashboardPlanApiRequests.length !== 0) {
+    throw new Error(
+      `Dashboard called the preparation-plan API instead of remaining on its read-only bounded Supabase projection: ${JSON.stringify(dashboardPlanApiRequests)}`,
+    );
+  }
+  if (currentWeekBlock) {
+    await scrollUntilTextInViewport(page, `Preparation: ${title}`, {
+      maxSteps: 12,
+    });
+    await scrollUntilTextInViewport(
+      page,
+      'Device time · MyLifeGraph reservation',
+      { maxSteps: 8 },
+    );
+    await scrollUntilTextInViewport(page, 'Open preparation plan', {
+      maxSteps: 4,
+      buttonFirst: true,
+    });
+  }
+}
+
+async function assertDeadlinePlannerRls({
+  ownerAccessToken,
+  userId,
+  planId,
+  revision,
+  blockId,
+  claimedRequestId,
+  proposalBody,
+}) {
+  const ownerPlanRead = await authenticatedRestRequest(
+    `deadline_plans?select=id,user_id,status,current_revision,latest_revision&id=eq.${planId}`,
+    ownerAccessToken,
+  );
+  const ownerRevisionRead = await authenticatedRestRequest(
+    `deadline_plan_revisions?select=plan_id,user_id,revision,state&plan_id=eq.${planId}&revision=eq.${revision}`,
+    ownerAccessToken,
+  );
+  const ownerBlockRead = await authenticatedRestRequest(
+    `deadline_plan_blocks?select=id,plan_id,user_id,revision,reservation_state&id=eq.${blockId}`,
+    ownerAccessToken,
+  );
+  if (
+    !ownerPlanRead.response.ok ||
+    ownerPlanRead.rows?.length !== 1 ||
+    ownerPlanRead.rows[0].user_id !== userId ||
+    !ownerRevisionRead.response.ok ||
+    ownerRevisionRead.rows?.length !== 1 ||
+    ownerRevisionRead.rows[0].user_id !== userId ||
+    !ownerBlockRead.response.ok ||
+    ownerBlockRead.rows?.length !== 1 ||
+    ownerBlockRead.rows[0].user_id !== userId
+  ) {
+    throw new Error(
+      `Deadline Planner owner RLS reads failed: ${stableJson({ ownerPlanRead: ownerPlanRead.text, ownerRevisionRead: ownerRevisionRead.text, ownerBlockRead: ownerBlockRead.text })}`,
+    );
+  }
+
+  const ledgerRead = await authenticatedRestRequest(
+    `deadline_plan_request_identities?select=request_id&request_id=eq.${claimedRequestId}`,
+    ownerAccessToken,
+  );
+  if (ledgerRead.response.ok) {
+    throw new Error(
+      `Authenticated owner unexpectedly read the Deadline Planner ledger: ${ledgerRead.text}`,
+    );
+  }
+
+  const directMutations = [
+    await authenticatedRestRequest(
+      `deadline_plans?id=eq.${planId}`,
+      ownerAccessToken,
+      { method: 'PATCH', body: { title: 'Direct plan rewrite' } },
+    ),
+    await authenticatedRestRequest(
+      `deadline_plan_revisions?plan_id=eq.${planId}&revision=eq.${revision}`,
+      ownerAccessToken,
+      { method: 'PATCH', body: { title: 'Direct revision rewrite' } },
+    ),
+    await authenticatedRestRequest(
+      `deadline_plan_blocks?id=eq.${blockId}`,
+      ownerAccessToken,
+      { method: 'DELETE' },
+    ),
+    await authenticatedRestRequest(
+      'deadline_plans',
+      ownerAccessToken,
+      { method: 'POST', body: {} },
+    ),
+  ];
+  if (directMutations.some((result) => result.response.ok)) {
+    throw new Error(
+      `Authenticated direct Deadline Planner mutation was accepted: ${stableJson(directMutations.map((result) => ({ status: result.response.status, body: result.text })))}`,
+    );
+  }
+  await assertRows(
+    `deadline_plans?select=id,status,title,current_revision,latest_revision&id=eq.${planId}`,
+    (rows) =>
+      rows.length === 1 &&
+      rows[0].status === 'active' &&
+      rows[0].title === proposalBody.title &&
+      rows[0].current_revision === revision &&
+      rows[0].latest_revision === revision,
+    'backend-owned Deadline Planner state survives direct DML',
+  );
+
+  const secondaryEmail = `e2e-deadline-other-${runId}@example.test`;
+  const secondaryPassword = `E2e-deadline-other-${runId}-password`;
+  const secondaryUser = await createConfirmedUserWithCredentials({
+    emailAddress: secondaryEmail,
+    passwordValue: secondaryPassword,
+    displayName: 'E2E Deadline Planner Other User',
+  });
+  const secondaryId = secondaryUser?.user?.id ?? secondaryUser?.id;
+  if (!isCanonicalUuid(secondaryId)) {
+    throw new Error(
+      `Deadline Planner secondary Auth user is invalid: ${stableJson(secondaryUser)}`,
+    );
+  }
+  const secondaryToken = await signInCredentials({
+    emailAddress: secondaryEmail,
+    passwordValue: secondaryPassword,
+    context: 'Deadline Planner secondary principal',
+  });
+  const crossOwnerGet = await deadlinePlanApiRequest(
+    `/v1/deadline-plans/${planId}`,
+    secondaryToken,
+  );
+  assertDeadlinePlanApiStatus(
+    crossOwnerGet,
+    404,
+    'cross-owner deadline plan detail',
+  );
+  const crossOwnerFeed = await deadlinePlanApiRequest(
+    '/v1/deadline-plans',
+    secondaryToken,
+  );
+  assertDeadlinePlanApiStatus(
+    crossOwnerFeed,
+    200,
+    'cross-owner deadline plan collection',
+  );
+  const secondaryFeed = assertDeadlinePlanCollection(
+    crossOwnerFeed.json,
+    'cross-owner deadline plan collection',
+  );
+  if (secondaryFeed.plans.length !== 0) {
+    throw new Error(
+      `Deadline Planner collection exposed another owner's plan: ${crossOwnerFeed.text}`,
+    );
+  }
+  for (const [table, filter] of [
+    ['deadline_plans', `id=eq.${planId}`],
+    ['deadline_plan_revisions', `plan_id=eq.${planId}`],
+    ['deadline_plan_blocks', `plan_id=eq.${planId}`],
+  ]) {
+    const crossOwnerRead = await authenticatedRestRequest(
+      `${table}?select=*&${filter}`,
+      secondaryToken,
+    );
+    if (!crossOwnerRead.response.ok || crossOwnerRead.rows?.length !== 0) {
+      throw new Error(
+        `Deadline Planner ${table} RLS exposed another owner: ${crossOwnerRead.response.status} ${crossOwnerRead.text}`,
+      );
+    }
+  }
+  const crossOwnerRequestReuse = await deadlinePlanApiRequest(
+    '/v1/deadline-plans/proposals',
+    secondaryToken,
+    { method: 'POST', body: proposalBody },
+  );
+  assertDeadlinePlanApiStatus(
+    crossOwnerRequestReuse,
+    409,
+    'global cross-owner deadline request identity',
+  );
+  await assertRows(
+    `deadline_plans?select=id,user_id&id=eq.${planId}`,
+    (rows) => rows.length === 1 && rows[0].user_id === userId,
+    'cross-owner deadline request cannot reinterpret plan ownership',
+  );
+  await assertRows(
+    `deadline_plans?select=id&user_id=eq.${secondaryId}`,
+    (rows) => rows.length === 0,
+    'cross-owner deadline conflict creates no secondary plan',
+  );
+}
+
+async function assertDeadlinePlannerUnavailableAvailability({
+  userId,
+  accessToken,
+  localToday,
+}) {
+  const planId = crypto.randomUUID();
+  const unavailable = await deadlinePlanApiRequest(
+    '/v1/deadline-plans/proposals',
+    accessToken,
+    {
+      method: 'POST',
+      body: {
+        request_id: crypto.randomUUID(),
+        plan_id: planId,
+        base_revision: 0,
+        kind: 'assignment',
+        title: `E2E unavailable calendar capacity ${runId}`,
+        deadline_at: `${addUtcDays(localToday, 7)}T12:00:00Z`,
+        estimated_total_minutes: 90,
+        credited_prior_minutes: 0,
+        preferred_session_minutes: 45,
+        max_daily_minutes: 90,
+        planning_start_on: localToday,
+        buffer_days: 1,
+        source_kind: 'manual',
+        use_calendar_availability: true,
+      },
+    },
+  );
+  assertDeadlinePlanApiStatus(
+    unavailable,
+    409,
+    'Deadline Planner availability without a current import',
+  );
+  await assertRows(
+    `deadline_plans?select=id&user_id=eq.${userId}&id=eq.${planId}`,
+    (rows) => rows.length === 0,
+    'unavailable calendar capacity does not become an empty-calendar plan',
+  );
+}
+
+async function assertDeadlinePlannerCalendarSource({
+  userId,
+  accessToken,
+  scheduleBefore,
+  fixture,
+  firstVisibleEvents,
+  replacementEvents,
+  currentImportId,
+}) {
+  const localToday = isoDateInTimeZone(
+    new Date().toISOString(),
+    'Europe/Berlin',
+  );
+  const removedSource = firstVisibleEvents.find(
+    (event) => event.title === fixture.recurrenceTitle,
+  );
+  const sourceEvent = replacementEvents.find(
+    (event) => event.title === `Phase 9 page event 00 ${runId}`,
+  );
+  if (
+    removedSource?.event_kind !== 'timed' ||
+    sourceEvent?.event_kind !== 'timed' ||
+    sourceEvent.busy_status !== 'busy' ||
+    !isIsoTimestamp(sourceEvent.starts_at) ||
+    !/^[0-9a-f]{64}$/.test(sourceEvent.source_fingerprint ?? '')
+  ) {
+    throw new Error(
+      `Calendar fixture has no eligible explicit Deadline Planner source: ${stableJson({ removedSource, sourceEvent })}`,
+    );
+  }
+
+  const stalePlanId = crypto.randomUUID();
+  const staleSourceResult = await deadlinePlanApiRequest(
+    '/v1/deadline-plans/proposals',
+    accessToken,
+    {
+      method: 'POST',
+      body: {
+        request_id: crypto.randomUUID(),
+        plan_id: stalePlanId,
+        base_revision: 0,
+        kind: 'assignment',
+        title: `E2E removed calendar assignment ${runId}`,
+        deadline_at: removedSource.starts_at,
+        estimated_total_minutes: 90,
+        credited_prior_minutes: 0,
+        preferred_session_minutes: 45,
+        max_daily_minutes: 90,
+        planning_start_on: localToday,
+        buffer_days: 0,
+        source_kind: 'calendar_event',
+        source_calendar_event_id: removedSource.id,
+        source_calendar_event_fingerprint: removedSource.source_fingerprint,
+        use_calendar_availability: false,
+      },
+    },
+  );
+  assertDeadlinePlanApiStatus(
+    staleSourceResult,
+    409,
+    'removed imported event deadline source',
+  );
+  const changedFingerprintPlanId = crypto.randomUUID();
+  const changedFingerprint =
+    `${sourceEvent.source_fingerprint[0] === '0' ? '1' : '0'}` +
+    sourceEvent.source_fingerprint.slice(1);
+  const changedSourceResult = await deadlinePlanApiRequest(
+    '/v1/deadline-plans/proposals',
+    accessToken,
+    {
+      method: 'POST',
+      body: {
+        request_id: crypto.randomUUID(),
+        plan_id: changedFingerprintPlanId,
+        base_revision: 0,
+        kind: 'assignment',
+        title: `E2E stale fingerprint assignment ${runId}`,
+        deadline_at: sourceEvent.starts_at,
+        estimated_total_minutes: 90,
+        credited_prior_minutes: 0,
+        preferred_session_minutes: 45,
+        max_daily_minutes: 90,
+        planning_start_on: localToday,
+        buffer_days: 0,
+        source_kind: 'calendar_event',
+        source_calendar_event_id: sourceEvent.id,
+        source_calendar_event_fingerprint: changedFingerprint,
+        use_calendar_availability: false,
+      },
+    },
+  );
+  assertDeadlinePlanApiStatus(
+    changedSourceResult,
+    409,
+    'stale imported event fingerprint',
+  );
+  await assertRows(
+    `deadline_plans?select=id&user_id=eq.${userId}&id=in.(${stalePlanId},${changedFingerprintPlanId})`,
+    (rows) => rows.length === 0,
+    'stale event sources create no Deadline Planner state',
+  );
+
+  const calendarBefore = await calendarPlannerSourceSnapshot(userId);
+  const planId = crypto.randomUUID();
+  const proposalRequestId = crypto.randomUUID();
+  const title = `E2E user-chosen calendar assignment ${runId}`;
+  if (title === sourceEvent.title) {
+    throw new Error('Calendar Deadline Planner fixture accidentally inferred its title.');
+  }
+  const proposalBody = {
+    request_id: proposalRequestId,
+    plan_id: planId,
+    base_revision: 0,
+    kind: 'assignment',
+    title,
+    deadline_at: sourceEvent.starts_at,
+    estimated_total_minutes: 150,
+    credited_prior_minutes: 30,
+    preferred_session_minutes: 40,
+    max_daily_minutes: 80,
+    planning_start_on: localToday,
+    buffer_days: 1,
+    source_kind: 'calendar_event',
+    source_calendar_event_id: sourceEvent.id,
+    source_calendar_event_fingerprint: sourceEvent.source_fingerprint,
+    use_calendar_availability: true,
+  };
+  const proposalResult = await deadlinePlanApiRequest(
+    '/v1/deadline-plans/proposals',
+    accessToken,
+    { method: 'POST', body: proposalBody },
+  );
+  assertDeadlinePlanApiStatus(
+    proposalResult,
+    200,
+    'explicit calendar-derived deadline proposal',
+  );
+  const proposed = assertDeadlinePlanEnvelope(
+    proposalResult.json,
+    'explicit calendar-derived deadline proposal',
+  );
+  const revision = proposed.pending_revision;
+  if (
+    proposed.plan.id !== planId ||
+    proposed.plan.status !== 'draft' ||
+    proposed.plan.title !== title ||
+    proposed.plan.kind !== 'assignment' ||
+    revision?.source_kind !== 'calendar_event' ||
+    revision?.source_calendar_event_id !== sourceEvent.id ||
+    revision?.source_calendar_event_fingerprint !==
+      sourceEvent.source_fingerprint ||
+    revision?.source_status !== 'current' ||
+    revision?.use_calendar_availability !== true ||
+    revision?.tracked_focus_minutes_at_proposal !== 0 ||
+    revision?.remaining_minutes_at_proposal !== 120 ||
+    revision?.planned_minutes + revision?.unscheduled_minutes !== 120 ||
+    revision?.blocks.length < 1 ||
+    !deadlineBlocksAvoidCurrentBusyEvents(revision.blocks, replacementEvents)
+  ) {
+    throw new Error(
+      `Calendar-derived Deadline Planner proposal violated explicit source/capacity truth: ${proposalResult.text}`,
+    );
+  }
+  await assertRows(
+    `deadline_plan_revisions?select=plan_id,revision,source_kind,source_calendar_event_id,source_calendar_event_fingerprint,use_calendar_availability,availability_connection_id,availability_import_id,planning_fingerprint&user_id=eq.${userId}&plan_id=eq.${planId}`,
+    (rows) =>
+      rows.length === 1 &&
+      rows[0].revision === 1 &&
+      rows[0].source_kind === 'calendar_event' &&
+      rows[0].source_calendar_event_id === sourceEvent.id &&
+      rows[0].source_calendar_event_fingerprint ===
+        sourceEvent.source_fingerprint &&
+      rows[0].use_calendar_availability === true &&
+      isCanonicalUuid(rows[0].availability_connection_id) &&
+      rows[0].availability_import_id === currentImportId &&
+      /^[0-9a-f]{64}$/.test(rows[0].planning_fingerprint),
+    'pinned current-import Deadline Planner provenance',
+  );
+  await assertCalendarPlannerSourceUnchanged(
+    userId,
+    calendarBefore,
+    'calendar-derived Deadline Planner proposal',
+  );
+  await assertCalendarScheduleUnchanged(
+    userId,
+    scheduleBefore,
+    'calendar-derived Deadline Planner proposal',
+  );
+
+  const confirmRequestId = crypto.randomUUID();
+  const confirmedResult = await deadlinePlanApiRequest(
+    `/v1/deadline-plans/${planId}/confirm`,
+    accessToken,
+    {
+      method: 'POST',
+      body: { request_id: confirmRequestId, expected_revision: 1 },
+    },
+  );
+  assertDeadlinePlanApiStatus(
+    confirmedResult,
+    200,
+    'calendar-derived deadline confirmation',
+  );
+  const confirmed = assertDeadlinePlanEnvelope(
+    confirmedResult.json,
+    'calendar-derived deadline confirmation',
+  );
+  if (
+    confirmed.plan.status !== 'active' ||
+    confirmed.plan.managed_task_id !== planId ||
+    confirmed.active_revision?.source_status !== 'current' ||
+    confirmed.active_revision?.use_calendar_availability !== true ||
+    Object.hasOwn(confirmed, 'pending_revision')
+  ) {
+    throw new Error(
+      `Calendar-derived Deadline Planner confirmation is invalid: ${confirmedResult.text}`,
+    );
+  }
+  await assertRows(
+    `tasks?select=id,title,status,deadline,source,metadata&user_id=eq.${userId}&id=eq.${planId}`,
+    (rows) =>
+      rows.length === 1 &&
+      rows[0].title === title &&
+      rows[0].status === 'todo' &&
+      sameInstant(rows[0].deadline, sourceEvent.starts_at) &&
+      rows[0].source === 'deadline-plan-v1' &&
+      stableJson(rows[0].metadata) ===
+        stableJson({
+          contract_version: 'deadline-plan-v1',
+          managed_by: 'deadline-planner',
+          plan_id: planId,
+        }),
+    'calendar-derived plan creates only its managed task',
+  );
+  await assertCalendarPlannerSourceUnchanged(
+    userId,
+    calendarBefore,
+    'calendar-derived Deadline Planner confirmation',
+  );
+  await assertCalendarScheduleUnchanged(
+    userId,
+    scheduleBefore,
+    'calendar-derived Deadline Planner confirmation',
+  );
+  return { planId, title, sourceEvent };
+}
+
+async function assertDeadlinePlannerCalendarSourceStatus({
+  accessToken,
+  planId,
+  expectedSourceStatus,
+  expectedPlanStatus,
+  context,
+}) {
+  const result = await deadlinePlanApiRequest(
+    `/v1/deadline-plans/${planId}`,
+    accessToken,
+  );
+  assertDeadlinePlanApiStatus(result, 200, context);
+  const detail = assertDeadlinePlanEnvelope(result.json, context);
+  if (
+    detail.plan.status !== expectedPlanStatus ||
+    detail.active_revision?.source_status !== expectedSourceStatus ||
+    detail.active_revision?.source_kind !== 'calendar_event'
+  ) {
+    throw new Error(`${context} lost retained source truth: ${result.text}`);
+  }
+  return detail;
+}
+
+async function cancelCalendarDeadlinePlan({
+  userId,
+  accessToken,
+  planId,
+  title,
+  expectedRevision,
+}) {
+  const requestId = crypto.randomUUID();
+  const body = {
+    request_id: requestId,
+    expected_revision: expectedRevision,
+  };
+  const result = await deadlinePlanApiRequest(
+    `/v1/deadline-plans/${planId}/cancel`,
+    accessToken,
+    { method: 'POST', body },
+  );
+  assertDeadlinePlanApiStatus(
+    result,
+    200,
+    'explicit calendar-derived deadline cancellation',
+  );
+  const cancelled = assertDeadlinePlanEnvelope(
+    result.json,
+    'explicit calendar-derived deadline cancellation',
+  );
+  if (
+    cancelled.plan.status !== 'cancelled' ||
+    cancelled.plan.current_revision !== expectedRevision ||
+    cancelled.active_revision?.source_status !== 'unavailable' ||
+    !isIsoTimestamp(cancelled.plan.cancelled_at)
+  ) {
+    throw new Error(
+      `Calendar-derived Deadline Planner cancellation is invalid: ${result.text}`,
+    );
+  }
+  const replay = await deadlinePlanApiRequest(
+    `/v1/deadline-plans/${planId}/cancel`,
+    accessToken,
+    { method: 'POST', body },
+  );
+  assertDeadlinePlanApiStatus(
+    replay,
+    200,
+    'calendar-derived deadline cancellation replay',
+  );
+  if (stableJson(replay.json) !== stableJson(result.json)) {
+    throw new Error(
+      `Calendar-derived cancellation replay changed state: ${replay.text}`,
+    );
+  }
+  await assertRows(
+    `tasks?select=id,title,status,completed_at,cancelled_at&user_id=eq.${userId}&id=eq.${planId}`,
+    (rows) =>
+      rows.length === 1 &&
+      rows[0].title === title &&
+      rows[0].status === 'cancelled' &&
+      rows[0].completed_at === null &&
+      sameInstant(rows[0].cancelled_at, cancelled.plan.cancelled_at),
+    'atomic matching calendar plan/task cancellation',
+  );
+  await assertRows(
+    `deadline_plan_blocks?select=revision,reservation_state&user_id=eq.${userId}&plan_id=eq.${planId}`,
+    (rows) =>
+      rows.length > 0 &&
+      rows.every(
+        (row) =>
+          row.revision === expectedRevision &&
+          row.reservation_state === 'superseded',
+      ),
+    'calendar plan cancellation releases its local reservations',
+  );
+  await assertRows(
+    `calendar_events?select=id&user_id=eq.${userId}`,
+    (rows) => rows.length === 0,
+    'plan cancellation never recreates deleted imported events',
+  );
+}
+
+function deadlineBlocksAvoidCurrentBusyEvents(blocks, events) {
+  const busyTimed = events.filter(
+    (event) => event.busy_status === 'busy' && event.event_kind === 'timed',
+  );
+  const busyAllDay = events.filter(
+    (event) => event.busy_status === 'busy' && event.event_kind === 'all_day',
+  );
+  return blocks.every(
+    (block) =>
+      busyTimed.every(
+        (event) =>
+          Date.parse(block.ends_at) <= Date.parse(event.starts_at) ||
+          Date.parse(block.starts_at) >= Date.parse(event.ends_at),
+      ) &&
+      busyAllDay.every(
+        (event) =>
+          block.local_date < event.starts_on ||
+          block.local_date >= event.ends_on,
+      ),
+  );
+}
+
+async function calendarPlannerSourceSnapshot(userId) {
+  const [connections, imports, events] = await Promise.all([
+    fetchRows(
+      `calendar_connections?select=*&user_id=eq.${userId}&order=id.asc`,
+      'Deadline Planner calendar connection baseline',
+    ),
+    fetchRows(
+      `calendar_imports?select=*&user_id=eq.${userId}&order=id.asc`,
+      'Deadline Planner calendar import baseline',
+    ),
+    fetchRows(
+      `calendar_events?select=*&user_id=eq.${userId}&order=id.asc`,
+      'Deadline Planner calendar event baseline',
+    ),
+  ]);
+  return { connections, imports, events };
+}
+
+async function assertCalendarPlannerSourceUnchanged(
+  userId,
+  expected,
+  context,
+) {
+  const actual = await calendarPlannerSourceSnapshot(userId);
+  if (stableJson(actual) !== stableJson(expected)) {
+    throw new Error(
+      `${context} mutated Calendar import/source state: ${stableJson(actual)}`,
+    );
+  }
+}
+
 async function assertBoundedCalendarImport(userId) {
   const accessToken = await signInAccessToken('Phase 9 calendar import');
   const scheduleBefore = await calendarScheduleSnapshot(userId);
+  const deadlinePlansBeforeCalendarImport = await fetchRows(
+    `deadline_plans?select=*&user_id=eq.${userId}&order=id.asc`,
+    'Deadline Planner state before Calendar connect/import',
+  );
 
   const initial = await calendarApiRequest(
     '/v1/calendar-integrations',
@@ -5928,6 +7993,14 @@ async function assertBoundedCalendarImport(userId) {
     scheduleBefore,
     'calendar consent',
   );
+  await assertDeadlinePlannerUnavailableAvailability({
+    userId,
+    accessToken,
+    localToday: isoDateInTimeZone(
+      new Date().toISOString(),
+      'Europe/Berlin',
+    ),
+  });
 
   const fixture = buildCalendarImportFixture(
     isoDateInTimeZone(new Date().toISOString(), 'Europe/Berlin'),
@@ -6255,6 +8328,21 @@ async function assertBoundedCalendarImport(userId) {
     scheduleBefore,
     'replacement calendar import',
   );
+  await assertRows(
+    `deadline_plans?select=*&user_id=eq.${userId}&order=id.asc`,
+    (rows) =>
+      stableJson(rows) === stableJson(deadlinePlansBeforeCalendarImport),
+    'Calendar connect and imports create or mutate no preparation plan',
+  );
+  const calendarDeadlinePlan = await assertDeadlinePlannerCalendarSource({
+    userId,
+    accessToken,
+    scheduleBefore,
+    fixture,
+    firstVisibleEvents,
+    replacementEvents,
+    currentImportId: secondImported.import.id,
+  });
 
   const disconnectRequestId = crypto.randomUUID();
   const disconnectBody = { request_id: disconnectRequestId };
@@ -6357,6 +8445,53 @@ async function assertBoundedCalendarImport(userId) {
     userId,
     scheduleBefore,
     'calendar disconnect',
+  );
+  await assertDeadlinePlannerCalendarSourceStatus({
+    accessToken,
+    planId: calendarDeadlinePlan.planId,
+    expectedSourceStatus: 'stale',
+    expectedPlanStatus: 'active',
+    context: 'calendar-derived deadline plan after disconnect',
+  });
+  const disconnectedSourcePlanId = crypto.randomUUID();
+  const disconnectedSourceProposal = await deadlinePlanApiRequest(
+    '/v1/deadline-plans/proposals',
+    accessToken,
+    {
+      method: 'POST',
+      body: {
+        request_id: crypto.randomUUID(),
+        plan_id: disconnectedSourcePlanId,
+        base_revision: 0,
+        kind: 'assignment',
+        title: `E2E disconnected calendar source ${runId}`,
+        deadline_at: calendarDeadlinePlan.sourceEvent.starts_at,
+        estimated_total_minutes: 90,
+        credited_prior_minutes: 0,
+        preferred_session_minutes: 45,
+        max_daily_minutes: 90,
+        planning_start_on: isoDateInTimeZone(
+          new Date().toISOString(),
+          'Europe/Berlin',
+        ),
+        buffer_days: 0,
+        source_kind: 'calendar_event',
+        source_calendar_event_id: calendarDeadlinePlan.sourceEvent.id,
+        source_calendar_event_fingerprint:
+          calendarDeadlinePlan.sourceEvent.source_fingerprint,
+        use_calendar_availability: false,
+      },
+    },
+  );
+  assertDeadlinePlanApiStatus(
+    disconnectedSourceProposal,
+    409,
+    'disconnected imported event deadline source',
+  );
+  await assertRows(
+    `deadline_plans?select=id&user_id=eq.${userId}&id=eq.${disconnectedSourcePlanId}`,
+    (rows) => rows.length === 0,
+    'disconnected event source creates no Deadline Planner state',
   );
 
   const deleteRequestId = crypto.randomUUID();
@@ -6493,6 +8628,20 @@ async function assertBoundedCalendarImport(userId) {
     scheduleBefore,
     'calendar imported-data deletion',
   );
+  await assertDeadlinePlannerCalendarSourceStatus({
+    accessToken,
+    planId: calendarDeadlinePlan.planId,
+    expectedSourceStatus: 'unavailable',
+    expectedPlanStatus: 'active',
+    context: 'calendar-derived deadline plan after local data deletion',
+  });
+  await cancelCalendarDeadlinePlan({
+    userId,
+    accessToken,
+    planId: calendarDeadlinePlan.planId,
+    title: calendarDeadlinePlan.title,
+    expectedRevision: 1,
+  });
 }
 
 async function assertCalendarImportUi(page, userId) {
@@ -6623,8 +8772,8 @@ async function assertCalendarImportUi(page, userId) {
   };
   await page.route(importUrl, loseCommittedImportResponse);
   await clickByText(page, 'Import selected file');
-  await expectText(page, 'Calendar operation result uncertain');
-  await expectText(page, 'Retry exact import');
+  await expectText(page, 'Could not confirm the calendar change');
+  await expectText(page, 'Retry unchanged');
   await expectText(page, `${selectedName} · ${selectedBytes} bytes`);
   await page.unroute(importUrl, loseCommittedImportResponse);
   if (
@@ -6661,7 +8810,7 @@ async function assertCalendarImportUi(page, userId) {
     `/v1/calendar-integrations/connections/${createdConnection.id}/imports`,
     'exact calendar import retry',
   );
-  await clickByText(page, 'Retry exact import');
+  await clickByText(page, 'Retry unchanged');
   const retryResponse = await retryResponsePromise;
   const retryPayload = retryResponse.request().postDataJSON();
   if (
@@ -6784,7 +8933,7 @@ async function assertCalendarImportUi(page, userId) {
     throw new Error('Calendar UI disconnect did not retain imported data.');
   }
   await scrollFlutterPage(page, -20000);
-  await expectText(page, 'Disconnected · stale');
+  await expectText(page, 'Disconnected · may be out of date');
   await scrollFlutterPage(page, 20000);
   await expectText(page, tailTitle);
   if ((await page.getByText('Choose .ics file', { exact: true }).count()) !== 0) {
@@ -6857,7 +9006,7 @@ async function assertCalendarImportUi(page, userId) {
   await page.goto(appRoute('/dashboard'), { waitUntil: 'domcontentloaded' });
   await waitForFlutterShell(page);
   await enableFlutterSemantics(page);
-  await expectText(page, 'Latest check-in');
+  await expectText(page, 'Today at a glance');
 }
 
 async function assertCalendarGuestBoundary() {
@@ -6874,9 +9023,16 @@ async function assertCalendarGuestBoundary() {
   });
   const guestPage = await context.newPage();
   const calendarRequests = [];
+  const deadlinePlanRequests = [];
   guestPage.on('request', (request) => {
     if (request.url().includes('/v1/calendar-integrations')) {
       calendarRequests.push(`${request.method()} ${request.url()}`);
+    }
+    if (
+      request.url().includes('/v1/deadline-plans') ||
+      request.url().includes('/rest/v1/deadline_plan')
+    ) {
+      deadlinePlanRequests.push(`${request.method()} ${request.url()}`);
     }
   });
   try {
@@ -6890,6 +9046,26 @@ async function assertCalendarGuestBoundary() {
     if (calendarRequests.length !== 0) {
       throw new Error(
         `Guest calendar surface contacted the authenticated API: ${JSON.stringify(calendarRequests)}`,
+      );
+    }
+
+    await guestPage.goto(appRoute('/preparation-plans'), {
+      waitUntil: 'domcontentloaded',
+    });
+    await waitForFlutterShell(guestPage);
+    await enableFlutterSemantics(guestPage);
+    await expectText(guestPage, 'Preparation plans');
+    await expectText(guestPage, 'Synced preparation plans unavailable');
+    await guestPage.waitForTimeout(500);
+    await guestPage.goto(appRoute('/dashboard'), {
+      waitUntil: 'domcontentloaded',
+    });
+    await waitForFlutterShell(guestPage);
+    await enableFlutterSemantics(guestPage);
+    await guestPage.waitForTimeout(500);
+    if (deadlinePlanRequests.length !== 0) {
+      throw new Error(
+        `Guest preparation surface contacted the authenticated API: ${JSON.stringify(deadlinePlanRequests)}`,
       );
     }
   } finally {
@@ -7147,8 +9323,8 @@ async function assertControlledCoach(page, userId) {
   await waitForFlutterShell(page);
   await enableFlutterSemantics(page);
   await page.waitForURL('**/#/coach');
-  await expectText(page, 'Coach ready');
-  await expectText(page, 'Responses use the deterministic test provider.');
+  await expectText(page, 'Development Coach ready');
+  await expectText(page, 'Uses fixed test responses. This is not a live assistant.');
   await fillByLabelOrPlaceholder(page, 'Ask Coach', coachUiMessage, -1);
   const uiResponsePromise = waitForAiPost(
     page,
@@ -7354,7 +9530,7 @@ async function assertControlledCoach(page, userId) {
   ) {
     throw new Error('Coach UI history deletion returned an invalid envelope.');
   }
-  await expectText(page, 'No persisted Coach conversation yet.');
+  await expectText(page, 'No saved Coach conversation yet.');
 
   const afterDelete = await coachPersistenceSnapshot(userId);
   if (
@@ -8028,7 +10204,7 @@ async function assertCoachGuestBoundary() {
     await expectText(guestPage, 'Coach unavailable');
     await expectText(
       guestPage,
-      'This local surface does not contact a Coach provider.',
+      'No Coach provider is connected.',
     );
     await guestPage.waitForTimeout(500);
     if (coachRequests.length !== 0) {
@@ -8279,11 +10455,11 @@ async function assertBriefingPrimaryActionDispatch(page, target) {
         rows[0].status === target.metadata.habit_outcome,
       'Today primary habit action persisted its exact outcome',
     );
-    await expectText(page, 'Stale');
+    await expectText(page, 'Needs update');
     return;
   }
   if (target.command === 'open_capture') {
-    await clickByText(page, 'Open calibration');
+    await clickByText(page, 'Open check-in');
     await page.waitForURL(`**/#${target.metadata.route}`);
     await page.goto(appRoute('/dashboard'), { waitUntil: 'domcontentloaded' });
     await waitForFlutterShell(page);
@@ -8387,6 +10563,511 @@ async function briefingRequest(path, accessToken, body) {
     );
   }
   return response.json();
+}
+
+async function deadlinePlanApiRequest(
+  path,
+  accessToken,
+  { method = 'GET', body } = {},
+) {
+  const response = await fetch(`${aiServiceBaseUrl}${path}`, {
+    method,
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
+    },
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+  });
+  const text = await response.text();
+  let json = null;
+  try {
+    json = text.length === 0 ? null : JSON.parse(text);
+  } catch (_) {
+    // The status assertion reports the raw response body.
+  }
+  return { response, text, json };
+}
+
+function assertDeadlinePlanApiStatus(result, expectedStatus, context) {
+  if (result.response.status !== expectedStatus) {
+    throw new Error(
+      `${context} returned ${result.response.status}, expected ${expectedStatus}: ${result.text}`,
+    );
+  }
+}
+
+function assertDeadlinePlanCollection(payload, context) {
+  assertExactDeadlineKeys(
+    payload,
+    ['contract_version', 'origin', 'plans'],
+    context,
+  );
+  if (
+    payload.contract_version !== 'deadline-plan-v1' ||
+    payload.origin !== 'authenticated_backend' ||
+    !Array.isArray(payload.plans) ||
+    payload.plans.length > 50
+  ) {
+    throw new Error(
+      `${context} has invalid Deadline Planner provenance or bounds: ${stableJson(payload)}`,
+    );
+  }
+  const ids = new Set();
+  for (const [index, detail] of payload.plans.entries()) {
+    const parsed = assertDeadlinePlanDetail(
+      detail,
+      `${context} plan ${index + 1}`,
+    );
+    if (ids.has(parsed.plan.id)) {
+      throw new Error(`${context} contains duplicate plan identities.`);
+    }
+    ids.add(parsed.plan.id);
+  }
+  return payload;
+}
+
+function assertDeadlinePlanEnvelope(payload, context) {
+  if (
+    payload === null ||
+    typeof payload !== 'object' ||
+    Array.isArray(payload)
+  ) {
+    throw new Error(`${context} did not return a Deadline Planner object.`);
+  }
+  const detail = { ...payload };
+  delete detail.contract_version;
+  delete detail.origin;
+  if (
+    payload.contract_version !== 'deadline-plan-v1' ||
+    payload.origin !== 'authenticated_backend'
+  ) {
+    throw new Error(
+      `${context} has invalid Deadline Planner provenance: ${stableJson(payload)}`,
+    );
+  }
+  assertDeadlinePlanDetail(detail, context);
+  assertExactDeadlineKeys(
+    payload,
+    ['contract_version', 'origin', ...Object.keys(detail)],
+    context,
+  );
+  return payload;
+}
+
+function assertDeadlinePlanDetail(detail, context) {
+  const keys = ['plan', 'progress'];
+  for (const optional of ['active_revision', 'pending_revision']) {
+    if (Object.hasOwn(detail ?? {}, optional)) keys.push(optional);
+  }
+  assertExactDeadlineKeys(detail, keys, context);
+  if (
+    ['active_revision', 'pending_revision'].some(
+      (key) => Object.hasOwn(detail, key) && detail[key] === null,
+    )
+  ) {
+    throw new Error(`${context} returned an explicit-null optional revision.`);
+  }
+  const plan = assertDeadlinePlanIdentity(detail.plan, `${context} identity`);
+  const active = Object.hasOwn(detail, 'active_revision')
+    ? assertDeadlinePlanRevision(
+        detail.active_revision,
+        `${context} active revision`,
+      )
+    : null;
+  const pending = Object.hasOwn(detail, 'pending_revision')
+    ? assertDeadlinePlanRevision(
+        detail.pending_revision,
+        `${context} pending revision`,
+      )
+    : null;
+  const progress = assertDeadlinePlanProgress(
+    detail.progress,
+    `${context} progress`,
+  );
+  if (
+    (plan.status === 'draft' && (active !== null || pending === null)) ||
+    (['active', 'completed'].includes(plan.status) && active === null) ||
+    (plan.status === 'cancelled' &&
+      ((plan.current_revision === 0 &&
+        (active !== null || pending !== null)) ||
+        (plan.current_revision > 0 && active === null))) ||
+    (active !== null &&
+      (active.plan_id !== plan.id ||
+        active.revision !== plan.current_revision ||
+        active.state !== 'active')) ||
+    (pending !== null &&
+      (pending.plan_id !== plan.id ||
+        pending.revision !== plan.latest_revision ||
+        pending.state !== 'proposed')) ||
+    (pending !== null && pending.revision <= plan.current_revision) ||
+    (pending === null &&
+      plan.latest_revision !== plan.current_revision &&
+      !(plan.status === 'cancelled' && plan.current_revision === 0)) ||
+    (plan.status === 'draft' && plan.current_revision !== 0)
+  ) {
+    throw new Error(`${context} has inconsistent revision projections.`);
+  }
+  return { plan, active_revision: active, pending_revision: pending, progress };
+}
+
+function assertDeadlinePlanIdentity(plan, context) {
+  const keys = [
+    'id',
+    'status',
+    'kind',
+    'title',
+    'original_estimated_total_minutes',
+    'original_credited_prior_minutes',
+    'current_revision',
+    'latest_revision',
+    'created_at',
+    'updated_at',
+  ];
+  for (const optional of [
+    'managed_task_id',
+    'completed_at',
+    'cancelled_at',
+  ]) {
+    if (Object.hasOwn(plan ?? {}, optional)) keys.push(optional);
+  }
+  assertExactDeadlineKeys(plan, keys, context);
+  if (
+    ['managed_task_id', 'completed_at', 'cancelled_at'].some(
+      (key) => Object.hasOwn(plan, key) && plan[key] === null,
+    ) ||
+    !isCanonicalUuid(plan.id) ||
+    !['draft', 'active', 'completed', 'cancelled'].includes(plan.status) ||
+    !['exam', 'assignment'].includes(plan.kind) ||
+    typeof plan.title !== 'string' ||
+    plan.title.trim() !== plan.title ||
+    [...plan.title].length < 1 ||
+    [...plan.title].length > 160 ||
+    !Number.isInteger(plan.original_estimated_total_minutes) ||
+    plan.original_estimated_total_minutes < 30 ||
+    plan.original_estimated_total_minutes > 30000 ||
+    !Number.isInteger(plan.original_credited_prior_minutes) ||
+    plan.original_credited_prior_minutes < 0 ||
+    plan.original_credited_prior_minutes >=
+      plan.original_estimated_total_minutes ||
+    !Number.isInteger(plan.current_revision) ||
+    plan.current_revision < 0 ||
+    !Number.isInteger(plan.latest_revision) ||
+    plan.latest_revision < 1 ||
+    plan.latest_revision < Math.max(1, plan.current_revision) ||
+    !isIsoTimestamp(plan.created_at) ||
+    !isIsoTimestamp(plan.updated_at) ||
+    Date.parse(plan.updated_at) < Date.parse(plan.created_at) ||
+    (plan.current_revision === 0) !==
+      !Object.hasOwn(plan, 'managed_task_id') ||
+    (Object.hasOwn(plan, 'managed_task_id') &&
+      plan.managed_task_id !== plan.id)
+  ) {
+    throw new Error(`${context} is invalid: ${stableJson(plan)}`);
+  }
+  if (
+    (plan.status === 'completed' &&
+      (!isIsoTimestamp(plan.completed_at) ||
+        Object.hasOwn(plan, 'cancelled_at'))) ||
+    (plan.status === 'cancelled' &&
+      (!isIsoTimestamp(plan.cancelled_at) ||
+        Object.hasOwn(plan, 'completed_at'))) ||
+    (['draft', 'active'].includes(plan.status) &&
+      (Object.hasOwn(plan, 'completed_at') ||
+        Object.hasOwn(plan, 'cancelled_at')))
+  ) {
+    throw new Error(`${context} has an invalid terminal lifecycle.`);
+  }
+  return plan;
+}
+
+function assertDeadlinePlanRevision(revision, context) {
+  const keys = [
+    'plan_id',
+    'revision',
+    'base_revision',
+    'state',
+    'kind',
+    'title',
+    'deadline_at',
+    'estimated_total_minutes',
+    'credited_prior_minutes',
+    'preferred_session_minutes',
+    'max_daily_minutes',
+    'planning_start_on',
+    'buffer_days',
+    'source_kind',
+    'source_status',
+    'use_calendar_availability',
+    'timezone',
+    'best_energy_window',
+    'planning_fingerprint',
+    'tracked_focus_minutes_at_proposal',
+    'remaining_minutes_at_proposal',
+    'planned_minutes',
+    'unscheduled_minutes',
+    'created_at',
+    'blocks',
+  ];
+  for (const optional of [
+    'source_calendar_event_id',
+    'source_calendar_event_fingerprint',
+    'availability_connection_id',
+    'availability_import_id',
+    'activated_at',
+    'superseded_at',
+  ]) {
+    if (Object.hasOwn(revision ?? {}, optional)) keys.push(optional);
+  }
+  assertExactDeadlineKeys(revision, keys, context);
+  if (
+    [
+      'source_calendar_event_id',
+      'source_calendar_event_fingerprint',
+      'availability_connection_id',
+      'availability_import_id',
+      'activated_at',
+      'superseded_at',
+    ].some((key) => Object.hasOwn(revision, key) && revision[key] === null) ||
+    !isCanonicalUuid(revision.plan_id) ||
+    !Number.isInteger(revision.revision) ||
+    revision.revision < 1 ||
+    !Number.isInteger(revision.base_revision) ||
+    revision.base_revision < 0 ||
+    revision.base_revision >= revision.revision ||
+    !['proposed', 'active', 'superseded'].includes(revision.state) ||
+    !['exam', 'assignment'].includes(revision.kind) ||
+    typeof revision.title !== 'string' ||
+    revision.title.trim() !== revision.title ||
+    [...revision.title].length < 1 ||
+    [...revision.title].length > 160 ||
+    !isIsoTimestamp(revision.deadline_at) ||
+    !Number.isInteger(revision.estimated_total_minutes) ||
+    revision.estimated_total_minutes < 30 ||
+    revision.estimated_total_minutes > 30000 ||
+    !Number.isInteger(revision.credited_prior_minutes) ||
+    revision.credited_prior_minutes < 0 ||
+    revision.credited_prior_minutes >= revision.estimated_total_minutes ||
+    !Number.isInteger(revision.preferred_session_minutes) ||
+    revision.preferred_session_minutes < 25 ||
+    revision.preferred_session_minutes > 180 ||
+    !Number.isInteger(revision.max_daily_minutes) ||
+    revision.max_daily_minutes < revision.preferred_session_minutes ||
+    revision.max_daily_minutes > 480 ||
+    !isCalendarDate(revision.planning_start_on) ||
+    !Number.isInteger(revision.buffer_days) ||
+    revision.buffer_days < 0 ||
+    revision.buffer_days > 7 ||
+    !['manual', 'calendar_event'].includes(revision.source_kind) ||
+    !['not_applicable', 'current', 'stale', 'unavailable'].includes(
+      revision.source_status,
+    ) ||
+    typeof revision.use_calendar_availability !== 'boolean' ||
+    typeof revision.timezone !== 'string' ||
+    revision.timezone.trim() !== revision.timezone ||
+    revision.timezone.length < 1 ||
+    revision.timezone.length > 100 ||
+    ![
+      'early_morning',
+      'morning',
+      'afternoon',
+      'evening',
+      'variable',
+    ].includes(revision.best_energy_window) ||
+    !/^[0-9a-f]{64}$/.test(revision.planning_fingerprint ?? '') ||
+    !Number.isInteger(revision.tracked_focus_minutes_at_proposal) ||
+    revision.tracked_focus_minutes_at_proposal < 0 ||
+    !Number.isInteger(revision.remaining_minutes_at_proposal) ||
+    revision.remaining_minutes_at_proposal < 0 ||
+    !Number.isInteger(revision.planned_minutes) ||
+    revision.planned_minutes < 0 ||
+    !Number.isInteger(revision.unscheduled_minutes) ||
+    revision.unscheduled_minutes < 0 ||
+    !isIsoTimestamp(revision.created_at) ||
+    !Array.isArray(revision.blocks) ||
+    revision.blocks.length > 120
+  ) {
+    throw new Error(`${context} is invalid: ${stableJson(revision)}`);
+  }
+  const expectedRemaining = Math.max(
+    0,
+    revision.estimated_total_minutes -
+      revision.credited_prior_minutes -
+      revision.tracked_focus_minutes_at_proposal,
+  );
+  if (
+    revision.remaining_minutes_at_proposal !== expectedRemaining ||
+    revision.planned_minutes + revision.unscheduled_minutes !==
+      expectedRemaining
+  ) {
+    throw new Error(`${context} has inconsistent proposal-time minutes.`);
+  }
+  if (
+    (revision.source_kind === 'manual' &&
+      (revision.source_status !== 'not_applicable' ||
+        Object.hasOwn(revision, 'source_calendar_event_id') ||
+        Object.hasOwn(revision, 'source_calendar_event_fingerprint'))) ||
+    (revision.source_kind === 'calendar_event' &&
+      (!isCanonicalUuid(revision.source_calendar_event_id) ||
+        !/^[0-9a-f]{64}$/.test(
+          revision.source_calendar_event_fingerprint ?? '',
+        ) ||
+        revision.source_status === 'not_applicable'))
+  ) {
+    throw new Error(`${context} has invalid source provenance.`);
+  }
+  const hasAvailabilityConnection = Object.hasOwn(
+    revision,
+    'availability_connection_id',
+  );
+  const hasAvailabilityImport = Object.hasOwn(
+    revision,
+    'availability_import_id',
+  );
+  if (
+    hasAvailabilityConnection !== hasAvailabilityImport ||
+    revision.use_calendar_availability !== hasAvailabilityConnection ||
+    (hasAvailabilityConnection &&
+      (!isCanonicalUuid(revision.availability_connection_id) ||
+        !isCanonicalUuid(revision.availability_import_id)))
+  ) {
+    throw new Error(`${context} has invalid availability provenance.`);
+  }
+  if (
+    (revision.state === 'proposed' &&
+      (Object.hasOwn(revision, 'activated_at') ||
+        Object.hasOwn(revision, 'superseded_at'))) ||
+    (revision.state === 'active' &&
+      (!isIsoTimestamp(revision.activated_at) ||
+        Object.hasOwn(revision, 'superseded_at'))) ||
+    (revision.state === 'superseded' &&
+      (!isIsoTimestamp(revision.superseded_at) ||
+        (Object.hasOwn(revision, 'activated_at') &&
+          !isIsoTimestamp(revision.activated_at))))
+  ) {
+    throw new Error(`${context} has invalid revision timestamps.`);
+  }
+  let plannedTotal = 0;
+  const blockIds = new Set();
+  for (const [index, block] of revision.blocks.entries()) {
+    assertDeadlinePlanBlock(block, revision, index + 1, `${context} block`);
+    plannedTotal += block.planned_minutes;
+    if (blockIds.has(block.id)) {
+      throw new Error(`${context} contains duplicate block identities.`);
+    }
+    blockIds.add(block.id);
+  }
+  if (plannedTotal !== revision.planned_minutes) {
+    throw new Error(`${context} block total differs from planned_minutes.`);
+  }
+  return revision;
+}
+
+function assertDeadlinePlanBlock(block, revision, expectedSequence, context) {
+  assertExactDeadlineKeys(
+    block,
+    [
+      'id',
+      'sequence',
+      'starts_at',
+      'ends_at',
+      'local_date',
+      'local_start_time',
+      'local_end_time',
+      'planned_minutes',
+      'credited_tracked_minutes',
+      'state',
+    ],
+    context,
+  );
+  if (
+    !isCanonicalUuid(block.id) ||
+    block.sequence !== expectedSequence ||
+    !isIsoTimestamp(block.starts_at) ||
+    !isIsoTimestamp(block.ends_at) ||
+    Date.parse(block.ends_at) <= Date.parse(block.starts_at) ||
+    !isCalendarDate(block.local_date) ||
+    !isDeadlineLocalTime(block.local_start_time) ||
+    !isDeadlineLocalTime(block.local_end_time) ||
+    !Number.isInteger(block.planned_minutes) ||
+    block.planned_minutes < 5 ||
+    block.planned_minutes > 240 ||
+    (Date.parse(block.ends_at) - Date.parse(block.starts_at)) / 60000 !==
+      block.planned_minutes ||
+    !Number.isInteger(block.credited_tracked_minutes) ||
+    block.credited_tracked_minutes < 0 ||
+    block.credited_tracked_minutes > block.planned_minutes ||
+    !['proposed', 'upcoming', 'partial', 'completed', 'missed'].includes(
+      block.state,
+    ) ||
+    (revision.state === 'proposed' &&
+      (block.state !== 'proposed' || block.credited_tracked_minutes !== 0)) ||
+    (revision.state === 'active' && block.state === 'proposed')
+  ) {
+    throw new Error(`${context} is invalid: ${stableJson(block)}`);
+  }
+}
+
+function assertDeadlinePlanProgress(progress, context) {
+  assertExactDeadlineKeys(
+    progress,
+    [
+      'estimated_total_minutes',
+      'credited_prior_minutes',
+      'tracked_focus_minutes',
+      'accounted_minutes',
+      'remaining_minutes',
+      'completion_suggested',
+    ],
+    context,
+  );
+  const values = [
+    progress.estimated_total_minutes,
+    progress.credited_prior_minutes,
+    progress.tracked_focus_minutes,
+    progress.accounted_minutes,
+    progress.remaining_minutes,
+  ];
+  const expectedAccounted = Math.min(
+    progress.estimated_total_minutes,
+    progress.credited_prior_minutes + progress.tracked_focus_minutes,
+  );
+  if (
+    values.some((value) => !Number.isInteger(value) || value < 0) ||
+    progress.estimated_total_minutes < 30 ||
+    progress.estimated_total_minutes > 30000 ||
+    progress.credited_prior_minutes >= progress.estimated_total_minutes ||
+    progress.accounted_minutes !== expectedAccounted ||
+    progress.remaining_minutes !==
+      progress.estimated_total_minutes - expectedAccounted ||
+    progress.completion_suggested !== (progress.remaining_minutes === 0)
+  ) {
+    throw new Error(`${context} is invalid: ${stableJson(progress)}`);
+  }
+  return progress;
+}
+
+function assertExactDeadlineKeys(value, keys, context) {
+  if (
+    value === null ||
+    typeof value !== 'object' ||
+    Array.isArray(value) ||
+    stableJson(Object.keys(value).sort()) !== stableJson([...keys].sort())
+  ) {
+    throw new Error(
+      `${context} fields differ from deadline-plan-v1: ${stableJson(value)}`,
+    );
+  }
+}
+
+function isDeadlineLocalTime(value) {
+  if (
+    typeof value !== 'string' ||
+    !/^\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?$/.test(value)
+  ) {
+    return false;
+  }
+  const [hour, minute, second] = value.split(/[.:]/).map(Number);
+  return hour <= 23 && minute <= 59 && second <= 59;
 }
 
 async function calendarApiRequest(

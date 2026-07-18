@@ -108,11 +108,11 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           padding: EdgeInsets.zero,
           child: ListTile(
             leading: const Icon(Icons.notifications_active_outlined),
-            title: const Text('In-app notifications'),
+            title: const Text('In-app reminders'),
             subtitle: Text(
               syncedAccount
-                  ? 'Manage separate delivery consent, categories, quiet hours, and the daily limit.'
-                  : 'In-app delivery is available only for a synced account.',
+                  ? 'Allow banners while the app is open and choose what may appear.'
+                  : 'In-app banners are available only for a synced account.',
             ),
             trailing: syncedAccount ? const Icon(Icons.chevron_right) : null,
             onTap: syncedAccount
@@ -127,7 +127,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               leading: const Icon(Icons.forum_outlined),
               title: const Text('Coach'),
               subtitle: const Text(
-                'Ask for bounded guidance and manage Coach data use.',
+                'Development preview only. Cannot change your data.',
               ),
               trailing: const Icon(Icons.chevron_right),
               onTap: () => context.go(AppRoutes.coach),

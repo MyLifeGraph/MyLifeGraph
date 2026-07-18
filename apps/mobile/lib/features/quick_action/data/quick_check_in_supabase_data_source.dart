@@ -296,15 +296,18 @@ class QuickCheckInPayloadBuilder {
       if (origin.capturedAt != null)
         'captured_at': origin.capturedAt!.toUtc().toIso8601String(),
       if (evening != null) ...{
-        'focus_band': evening.focusBand!.code,
+        if (evening.focusBand != null) 'focus_band': evening.focusBand!.code,
         'main_friction': evening.mainFriction!.code,
-        'tomorrow_priority': evening.tomorrowPriority,
+        if (evening.tomorrowPriority.isNotEmpty)
+          'tomorrow_priority': evening.tomorrowPriority,
         if (evening.makeTomorrowGentler) 'gentle_tomorrow': true,
       },
       if (evening != null && type == 'stress') ...{
         'stress_intensity_label': evening.stressIntensityLabel.code,
-        'stress_source': evening.stressSource!.code,
-        'stress_controllability': evening.stressControllability!.code,
+        if (evening.stressSource != null)
+          'stress_source': evening.stressSource!.code,
+        if (evening.stressControllability != null)
+          'stress_controllability': evening.stressControllability!.code,
       },
       if (morning != null) 'day_shape': morning.dayShape!.code,
     };

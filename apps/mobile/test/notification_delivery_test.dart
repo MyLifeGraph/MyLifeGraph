@@ -353,9 +353,9 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('notification-settings-save')));
     await tester.pumpAndSettle();
 
-    expect(find.text('Allow in-app notifications?'), findsOneWidget);
+    expect(find.text('Allow in-app banners?'), findsOneWidget);
     expect(
-      find.textContaining('existing reminder preference did not grant it'),
+      find.textContaining('Setup preference did not turn these on'),
       findsOneWidget,
     );
     expect(repository.updates, isEmpty);
@@ -415,7 +415,7 @@ void main() {
       find.byKey(const ValueKey('in-app-notification-$_notificationId')),
       findsOneWidget,
     );
-    expect(find.text('In-app · deterministic · no LLM'), findsOneWidget);
+    expect(find.text('In-app · fixed text · not AI-written'), findsOneWidget);
     expect(find.text("Today's plan is ready"), findsWidgets);
     expect(find.text('Your inbox is empty.'), findsNothing);
     expect(inboxRepository.calls, greaterThanOrEqualTo(2));
@@ -426,7 +426,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(
       find.text(
-        'Generated from the current Daily Briefing for 2026-07-14 in Europe/Berlin.',
+        'Based on today\'s current plan for 2026-07-14 in Europe/Berlin.',
       ),
       findsOneWidget,
     );

@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/capabilities/app_surface_capabilities.dart';
 import '../../../../core/constants/app_spacing.dart';
 import '../../domain/entities/correlation.dart';
 import '../../domain/entities/insight.dart';
@@ -19,7 +20,10 @@ class InsightsPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final insights = ref.watch(insightsProvider);
     final report = ref.watch(correlationReportProvider);
-    final skillset = ref.watch(skillsetProfileProvider);
+    final showExampleSkillset =
+        ref.watch(appSurfaceCapabilitiesProvider).isLocalDemo;
+    final skillset =
+        showExampleSkillset ? ref.watch(skillsetProfileProvider) : null;
 
     if (insights.hasError || report.hasError) {
       return _InsightsLoadError(
@@ -91,7 +95,7 @@ class _InsightsHome extends ConsumerStatefulWidget {
 
   final List<Insight> insights;
   final CorrelationReport report;
-  final AsyncValue<SkillsetProfile> skillset;
+  final AsyncValue<SkillsetProfile>? skillset;
 
   @override
   ConsumerState<_InsightsHome> createState() => _InsightsHomeState();
@@ -109,14 +113,32 @@ class _InsightsHomeState extends ConsumerState<_InsightsHome> {
   @override
   void didUpdateWidget(covariant _InsightsHome oldWidget) {
     super.didUpdateWidget(oldWidget);
-    _ensureSelectedMetricsExist();
+    if (widget.report.metrics.length >= 2) {
+      _ensureSelectedMetricsExist();
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    _ensureSelectedMetricsExist();
     final windowDays = ref.watch(insightsWindowDaysProvider);
     final isMobile = MediaQuery.sizeOf(context).width < 620;
+    final observation = const CoachingObservationBuilder().build(widget.report);
+    if (widget.report.metrics.length < 2) {
+      return _SparseInsightsHome(
+        isMobile: isMobile,
+        report: widget.report,
+        observation: observation,
+        skillset: widget.skillset,
+        onRefresh: () {
+          ref.invalidate(correlationReportProvider);
+          ref.invalidate(insightsProvider);
+          if (widget.skillset != null) {
+            ref.invalidate(skillsetProfileProvider);
+          }
+        },
+      );
+    }
+    _ensureSelectedMetricsExist();
     final activeResult = widget.report.resultFor(_metricAId, _metricBId);
     final values = const CorrelationAnalyzer().pairValues(
       points: widget.report.points,
@@ -125,8 +147,6 @@ class _InsightsHomeState extends ConsumerState<_InsightsHome> {
     );
     final metricA = widget.report.metricById(_metricAId);
     final metricB = widget.report.metricById(_metricBId);
-    final observation = const CoachingObservationBuilder().build(widget.report);
-
     return SafeArea(
       child: CustomScrollView(
         slivers: [
@@ -144,17 +164,21 @@ class _InsightsHomeState extends ConsumerState<_InsightsHome> {
                   onRefresh: () {
                     ref.invalidate(correlationReportProvider);
                     ref.invalidate(insightsProvider);
-                    ref.invalidate(skillsetProfileProvider);
+                    if (widget.skillset != null) {
+                      ref.invalidate(skillsetProfileProvider);
+                    }
                   },
                 ),
                 SizedBox(height: isMobile ? AppSpacing.lg : AppSpacing.xl),
                 _CoachingObservationCard(observation: observation),
                 SizedBox(height: isMobile ? AppSpacing.md : AppSpacing.lg),
-                _SkillsetProfileCard(
-                  skillset: widget.skillset,
-                  onRetry: () => ref.invalidate(skillsetProfileProvider),
-                ),
-                SizedBox(height: isMobile ? AppSpacing.md : AppSpacing.lg),
+                if (widget.skillset != null) ...[
+                  _SkillsetProfileCard(
+                    skillset: widget.skillset!,
+                    onRetry: () => ref.invalidate(skillsetProfileProvider),
+                  ),
+                  SizedBox(height: isMobile ? AppSpacing.md : AppSpacing.lg),
+                ],
                 _InsightsPanel(
                   padding: EdgeInsets.zero,
                   child: Material(
@@ -309,6 +333,74 @@ class _InsightsHomeState extends ConsumerState<_InsightsHome> {
           orElse: () => widget.report.metrics.first,
         )
         .id;
+  }
+}
+
+class _SparseInsightsHome extends StatelessWidget {
+  const _SparseInsightsHome({
+    required this.isMobile,
+    required this.report,
+    required this.observation,
+    required this.skillset,
+    required this.onRefresh,
+  });
+
+  final bool isMobile;
+  final CorrelationReport report;
+  final CoachingObservation observation;
+  final AsyncValue<SkillsetProfile>? skillset;
+  final VoidCallback onRefresh;
+
+  @override
+  Widget build(BuildContext context) {
+    final measured = report.metrics.isEmpty
+        ? 'No comparable signal has enough data in this window yet.'
+        : '${report.metrics.single.label} is available, but a relationship needs a second measured signal.';
+    return SafeArea(
+      child: CustomScrollView(
+        slivers: [
+          SliverPadding(
+            padding: EdgeInsets.fromLTRB(
+              isMobile ? AppSpacing.md : AppSpacing.lg,
+              isMobile ? AppSpacing.sm : AppSpacing.lg,
+              isMobile ? AppSpacing.md : AppSpacing.lg,
+              AppSpacing.xl,
+            ),
+            sliver: SliverList.list(
+              children: [
+                _InsightsHeader(isMobile: isMobile, onRefresh: onRefresh),
+                SizedBox(height: isMobile ? AppSpacing.lg : AppSpacing.xl),
+                _CoachingObservationCard(observation: observation),
+                const SizedBox(height: AppSpacing.md),
+                _InsightsPanel(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Keep using the features you already need',
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                      Text(measured),
+                      const SizedBox(height: AppSpacing.sm),
+                      const Text(
+                        'Completed focus sessions now count automatically. Unmeasured screen, movement, or focus values are not offered as empty metrics.',
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.md),
+                if (skillset != null)
+                  _SkillsetProfileCard(
+                    skillset: skillset!,
+                    onRetry: onRefresh,
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -474,38 +566,31 @@ class _SkillsetProfileCard extends StatelessWidget {
               child: CircularProgressIndicator(strokeWidth: 2),
             ),
             SizedBox(width: AppSpacing.md),
-            Expanded(child: Text('Loading generated skillset profile…')),
+            Expanded(child: Text('Loading example skill profile…')),
           ],
         ),
         error: (error, __) => Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'SKILLSET PROFILE',
+              'EXAMPLE SKILL PROFILE',
               style: Theme.of(context).textTheme.labelLarge,
             ),
             const SizedBox(height: AppSpacing.sm),
             Text(
-              error is SkillsetProfileUnavailableException
-                  ? 'No generated skillset profile yet.'
-                  : 'Could not load generated skillset profile.',
+              'Example skill profile unavailable.',
               style: Theme.of(context).textTheme.titleMedium,
             ),
             const SizedBox(height: AppSpacing.xs),
             Text(
-              error is SkillsetProfileUnavailableException
-                  ? 'This account has no generated profile. Nothing was substituted.'
-                  : 'No demo profile was substituted. Check your connection and retry.',
+              'This optional demo card could not be loaded. Your real activity '
+              'was not scored or replaced.',
             ),
             const SizedBox(height: AppSpacing.md),
             OutlinedButton.icon(
               onPressed: onRetry,
               icon: const Icon(Icons.refresh),
-              label: Text(
-                error is SkillsetProfileUnavailableException
-                    ? 'Check again'
-                    : 'Retry skillset profile',
-              ),
+              label: const Text('Retry example'),
             ),
           ],
         ),
@@ -513,7 +598,7 @@ class _SkillsetProfileCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'SKILLSET PROFILE',
+              'EXAMPLE SKILL PROFILE',
               style: Theme.of(context).textTheme.labelLarge,
             ),
             const SizedBox(height: AppSpacing.sm),
@@ -523,7 +608,7 @@ class _SkillsetProfileCard extends StatelessWidget {
             ),
             const SizedBox(height: AppSpacing.xs),
             Text(
-              'Generated for ${profile.userName} · ${profile.updatedAt.toLocal()}',
+              'Local demo for ${profile.userName} · example data only',
               style: Theme.of(context).textTheme.bodySmall,
             ),
             const SizedBox(height: AppSpacing.md),
@@ -2202,7 +2287,7 @@ Color _trendColorForMetric(String metricId, Brightness brightness) {
     return switch (metricId) {
       'sleep_hours' => const Color(0xFF3154A3),
       'focus_minutes' => const Color(0xFF18794E),
-      'workload_score' => const Color(0xFF795900),
+      'planned_minutes' => const Color(0xFF795900),
       'stress_level' => const Color(0xFFB3261E),
       'energy_level' => const Color(0xFF006A65),
       'mood_score' => const Color(0xFF7B1FA2),
@@ -2210,14 +2295,13 @@ Color _trendColorForMetric(String metricId, Brightness brightness) {
       'activity_level' => const Color(0xFF2E7D32),
       'steps' => const Color(0xFF0061A4),
       'habit_completion_rate' => const Color(0xFF8A4B08),
-      'recovery_score' => const Color(0xFF466900),
       _ => const Color(0xFF334155),
     };
   }
   return switch (metricId) {
     'sleep_hours' => const Color(0xFF8EA7FF),
     'focus_minutes' => const Color(0xFF66D19E),
-    'workload_score' => const Color(0xFFFFC857),
+    'planned_minutes' => const Color(0xFFFFC857),
     'stress_level' => const Color(0xFFFF8F70),
     'energy_level' => const Color(0xFF2ED3C6),
     'mood_score' => const Color(0xFFE38CFF),
@@ -2225,7 +2309,6 @@ Color _trendColorForMetric(String metricId, Brightness brightness) {
     'activity_level' => const Color(0xFF8FE388),
     'steps' => const Color(0xFF4FB3FF),
     'habit_completion_rate' => const Color(0xFFFFB86B),
-    'recovery_score' => const Color(0xFFB7F07A),
     _ => const Color(0xFFEFF4F6),
   };
 }

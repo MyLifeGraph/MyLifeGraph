@@ -35,7 +35,8 @@ The backend accepts a trimmed stable IANA timezone name, validates it with the
 runtime timezone database, updates only the principal's `profiles` row, and
 returns exactly the persisted timezone. This timezone controls backend-owned
 product-local date resolution for briefings, weekly reviews, calendar import,
-scheduling, and Coach budgets. The current Flutter capture flows still derive
+scheduling, Deadline Planner proposals, and Coach budgets. The current Flutter
+capture flows still derive
 their explicit capture date from the device-local clock; changing the account
 timezone does not retroactively reinterpret or silently move those rows.
 Authenticated Data API callers have no direct `profiles.timezone` update
@@ -48,7 +49,7 @@ an unresolved outcome is an explicit `502`.
 ## Account Export
 
 `GET /v1/account/export` is side-effect free and returns the strict
-`account-export-v1` JSON envelope. It includes bounded owner rows from these 28
+`account-export-v1` JSON envelope. It includes bounded owner rows from these 31
 V1 product tables: `profiles`, `notification_preferences`, `daily_logs`,
 `behavioral_events`, `lifestyle_entries`, `tasks`, `schedule_items`,
 `notifications`, `coach_messages`, `memory_entries`, `ai_insights`,
@@ -56,12 +57,15 @@ V1 product tables: `profiles`, `notification_preferences`, `daily_logs`,
 `focus_sessions`, `intake_responses`, `user_state_snapshots`, `daily_briefings`,
 `decision_feedback`, `weekly_reviews`, `calendar_connections`,
 `calendar_imports`, `calendar_events`, `coach_requests`, `coach_usage_events`,
-and `coach_memory_selections`. It returns exact per-table record counts, an
-export timestamp, bounds, and an explicit ledger policy. Calendar
+`coach_memory_selections`, `deadline_plans`, `deadline_plan_revisions`, and
+`deadline_plan_blocks`. It returns exact per-table record counts, an export
+timestamp, bounds, and an explicit ledger policy. Calendar
 connection/import and Coach request/usage rows use field allowlists so
-backend-only details are not leaked. The global `calendar_request_identities`
-and `notification_action_requests` anti-replay ledgers are deliberately omitted
-and named in that policy.
+backend-only details are not leaked. The global `calendar_request_identities`,
+`notification_action_requests`, and `deadline_plan_request_identities` anti-
+replay ledgers are deliberately omitted and named in that policy. Deadline
+plan, revision, and block rows remain bounded owner product data; their opaque
+request fingerprints are not part of the export.
 
 `20260714110000_account_export_lifestyle_entries_grant.sql` gives only the
 verified-bearer FastAPI path's `service_role` client the missing `SELECT` grant
@@ -131,13 +135,14 @@ sign out, sign in again, and return to the deletion control.
 
 The RPC validates the owner and confirmation, takes the existing owner workflow
 advisory locks in fixed order, locks Calendar request identities before their
-connection rows, locks the Auth and profile rows, and write-blocks every mapped
+connection rows, serializes Deadline Planner requests under the same owner lock,
+locks the Auth and profile rows, and write-blocks every mapped
 CamelCase legacy table before cleanup. It removes the two Phase 3
 `ON DELETE RESTRICT` focus links and all provably owner-mapped legacy rows before
 deleting `auth.users`. The existing `auth.users -> profiles -> owned product
-rows` foreign-key cascade completes in the same database transaction, and both
-canonical and legacy postconditions are checked before the exact typed result
-is returned.
+rows` foreign-key cascade removes deadline plans, immutable revisions/blocks,
+and their retry ledger in the same database transaction, and both canonical and
+legacy postconditions are checked before the exact typed result is returned.
 
 An exact `deleted` or idempotent `not_found` RPC result returns `204` without a
 separate fallible profile read. After a transport, retryable `5xx`, JSON, or
@@ -176,8 +181,10 @@ deletion.
 
 Standard tests cover strict models, owner derivation, ambiguous-operation
 replay, streamed export bounds/ownership/keyset behavior, migration grants,
-Calendar/focus/legacy lock ordering, legacy mutation freeze, Flutter contract
-parsing, recovery state, theme persistence, and account-control widgets. A live
+Calendar/Deadline Planner/focus/legacy lock ordering, planner product-row
+inclusion and ledger omission, full planner cascade, legacy mutation freeze,
+Flutter contract parsing, recovery state, theme persistence, and account-
+control widgets. A live
 deletion requires an intentionally disposable local account and must never be
 performed as part of a non-destructive audit or against an unconfirmed remote
 project.

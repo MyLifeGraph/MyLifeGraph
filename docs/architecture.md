@@ -122,10 +122,12 @@ The current capture contract is:
 
 - Typed `EveningShutdownDraft` and `MorningCalibrationDraft` values have stable
   capture ids through retry. `DailyCaptureEntry` is the one same-day aggregate.
-- Evening requires mood, energy, stress intensity, the fixed stress source and
-  controllability taxonomies, focus band, main friction, and tomorrow priority.
-  Reflection, a specific blocker, and gentle-tomorrow intent are optional and
-  omitted from metadata when blank or false.
+- Evening is a two-page flow. Mood, energy, stress intensity, and main friction
+  are required. Stress source and controllability appear and become required
+  together only at stress `5..10`; tomorrow priority, reflection, a specific
+  blocker, and gentle-tomorrow intent are optional and omitted when blank or
+  false. The form no longer asks the user to estimate a focus band: completed
+  `focus_sessions` are the source of measured focus time.
 - Morning requires sleep hours, current energy, and `normal`, `constrained`, or
   `flexible` day shape. It does not repeat Evening questions and explicitly
   states that it does not generate recommendations or create or change a plan.
@@ -143,7 +145,7 @@ The current capture contract is:
   capture metadata.
 - The upsert clears legacy placeholder-only steps, activity, screen-time, focus,
   nutrition, and day-focus values because the canonical form does not collect
-  them. Rough focus stays a structured band and is not converted into invented
+  them. It never converts a subjective focus answer into invented
   `focus_minutes`.
 - Optional notes remain check-in context. They are not promoted to durable
   `memory_entries`, tasks, recommendations, schedule rows, or notification copy.
@@ -173,6 +175,11 @@ existing task section. The decision-first Today area now reads the persisted
 freshness, capacity note, one primary action, and at most two support actions
 above source metrics, then dispatches current targets through the exhaustive
 Phase 3 action dispatcher. Normal load is GET-only; generation is explicit.
+A compact `Today at a glance` card follows the briefing with the next scheduled
+commitment/preparation block, capture status, and direct Focus/Habit actions.
+Tasks remain the main management section. Saved signal detail, secondary
+recommendations, and the full week stay in collapsed supporting sections. The
+weekly-review entry appears on Monday instead of occupying every day.
 A local guest dashboard reads the locally saved canonical check-in and otherwise
 shows a real empty state instead of a static fake plan. It labels briefing
 generation unavailable instead of inventing a personalized local decision.
@@ -188,9 +195,12 @@ do not mutate a record. Guest/mock sessions never call the weekly-review API.
 
 Insights also uses this boundary for deterministic correlation analysis. In
 mock or guest mode it renders local time series. In real Supabase mode it reads
-recent `daily_logs`, `tasks`, `schedule_items`, `habits`, and `habit_logs`,
-derives daily metric values, and computes 7/14/30-day correlations in Flutter.
-This path does not call FastAPI or an LLM.
+recent `daily_logs`, `tasks`, `schedule_items`, `habits`, `habit_logs`, and
+completed `focus_sessions`. Planned load is based on real schedule durations
+and task estimates; focus uses persisted completed minutes and local entry
+dates. Metrics without measured values are hidden, and the primary observation
+requires at least 14 shared days. The bounded 7/14/30/90-day exploration stays
+in Flutter and does not call FastAPI or an LLM.
 
 ## Phase 3 Executable Actions
 
@@ -223,7 +233,11 @@ Phase 3 keeps simple user-owned mutations in typed Flutter/Supabase boundaries:
   completes the linked object automatically. Finish/abandon use exact terminal
   readback after a committed response loss. Target validation locks the chosen
   task/habit row. Terminal rows reject every update, including `updated_at`, and
-  `ON DELETE RESTRICT` target FKs preserve their historical linkage.
+  `ON DELETE RESTRICT` target FKs preserve their historical linkage. The UI
+  reconstructs countdown, progress, and end time from persisted state after a
+  reload, offers the latest/custom duration, and only after five completed
+  sessions may show a reviewable median-duration/time-window suggestion. It
+  changes no setting automatically.
 
 Flutter and FastAPI share a strict, ranking-independent
 `executable-action-v1` envelope for `open_task`, `complete_task`, `log_habit`,
@@ -241,6 +255,33 @@ never generates or mutates. Phase 3 defines executable targets but does not sele
 persist a briefing, redesign Dashboard as Today, generate recommendations during
 normal writes, or call an LLM. The full contract is in
 `docs/phase-3-executable-actions-contract.md`.
+
+## Deadline Planner V1
+
+`deadline-plan-v1` is a separate authenticated FastAPI workflow for explicit
+exam and assignment preparation. `/preparation-plans` asks the user for their
+own `30..30000` minute total estimate and prior credit, plus bounded session/
+daily preferences. `POST /v1/deadline-plans/proposals` persists an immutable
+proposed revision with at most 120 deterministic dated blocks; it cannot replace
+the active revision until the user confirms it. The first confirmation creates
+one stable managed Phase 3 task with the plan id, and later confirmations retain
+that identity. The planning window is at most 366 profile-local calendar days;
+proposal concurrency follows the latest persisted revision while completion and
+cancellation require the current active revision.
+
+The managed task is not generically editable. Task mutation/editor paths detect
+its planner source and route back to `/preparation-plans`; only planner confirm,
+complete, and cancel may update its bounded projection, with terminal plan/task
+state committed atomically. Phase 3 focus may still target it while it is open.
+
+Completed focus sessions linked to that task after activation contribute their
+measured minutes to derived progress. They never complete a block, task, or plan
+automatically. A proposal starts from a manual deadline or one imported event
+the user explicitly selected; calendar availability is a separate per-plan
+boolean and is valid only for a connected, non-deleted source with a current
+import. Imported content stays read-only, and normal GET, calendar import,
+Dashboard, scheduler, and focus completion paths never generate a proposal.
+The full contract is in `docs/deadline-planner-v1-contract.md`.
 
 ## Authentication
 
@@ -339,6 +380,11 @@ surface. The canonical application schema is now snake_case and centered on:
   and `coach_memory_selections` for explicit owner-scoped Coach use without
   rewriting `memory_entries`. Completed turns use exactly one bounded user and
   assistant `coach_messages` pair linked to the request.
+- `deadline_plans`, `deadline_plan_revisions`, and `deadline_plan_blocks` for
+  owner-scoped lifecycle, immutable proposal/activation history, and dated app-
+  owned reservations; `deadline_plan_request_identities` is the backend-only
+  global anti-replay ledger. These rows never become provider-calendar writes
+  or recurring `schedule_items`.
 
 Legacy CamelCase tables such as `"User"`, `"DailyLog"`, and `"Task"` may still
 exist in older remote projects. The canonical migration copies data from those
@@ -375,6 +421,13 @@ Current responsibilities:
   import, disconnect, and imported-data deletion under `calendar-import-v1`.
   The service parses bounded caller-selected UTF-8 `.ics` text; it does not
   fetch arbitrary URLs, hold provider credentials, or write to a calendar.
+- Serve read-only deadline-plan GETs plus deliberate proposal, confirm,
+  complete, and cancel commands under `deadline-plan-v1`. The service uses the
+  stored profile timezone and deterministic availability inputs, holds the
+  active revision until explicit confirm, creates the managed task only during
+  first confirm, enforces the 366-day horizon and current-import availability,
+  owns every later managed-task/terminal projection, and never calls an LLM or
+  notification/provider API.
 - Serve authenticated `coach-capabilities-v1`, `coach-request-v1`,
   `coach-response-v1`, `coach-history-v1`, and
   `coach-memory-selection-v1` endpoints. Only `POST /v1/coach/respond` can call
@@ -632,7 +685,8 @@ API calls.
 
 Export reads only owner-filtered canonical product tables, applies field
 allowlists to backend-owned Calendar/Coach ledgers, names the anti-replay ledger
-it omits, and fails rather than truncating at a V1 bound. Flutter validates the
+it omits, includes Deadline Planner plan/revision/block rows while omitting its
+request ledger, and fails rather than truncating at a V1 bound. Flutter validates the
 entire envelope and counts before saving. Full deletion requires exact typed
 confirmation and one service-role-only database RPC. The RPC locks the existing
 owner workflows, removes restrict-linked focus history, deletes the Auth user,
@@ -670,6 +724,11 @@ all-time result.
 - Calendar integration tables use forced RLS and backend-owned writes.
   FastAPI derives the owner before connect/import/disconnect/delete, and the
   schema prevents privileged cross-owner child rows.
+- Deadline Planner tables use forced RLS and backend-owned mutations. Public
+  routes derive the owner from the bearer principal; owner-locked RPCs bind
+  global request identity, payload fingerprint, plan revision, blocks, and the
+  first managed task atomically. Authenticated direct writes and request-ledger
+  reads are forbidden.
 - `notifications` remains authenticated read-only through the Data API.
   Lifecycle DML is available only through bearer-derived FastAPI and the
   owner-locked service-role `apply_notification_action_v1` RPC; its retry
@@ -756,7 +815,11 @@ all-time result.
   reconciles stable event identities and exposes imported/read-only provenance.
   Disconnect retains the local copy, and confirmed deletion removes only local
   imported data. There is no provider OAuth, URL fetch, recurrence engine,
-  provider write, background sync, or calendar-driven ranking change.
+  provider write, background sync, or hidden calendar-driven ranking change.
+  Deadline Planner may use only one explicitly selected event as a source and,
+  when the user enables it for that plan, current imported busy intervals as
+  deterministic capacity input. It performs no event-title inference or source
+  write and adds no notification delivery.
 - The remote Production project may still contain legacy CamelCase tables until
   the canonical schema migration has been applied and verified.
 - The repository does not contain real Supabase credentials.

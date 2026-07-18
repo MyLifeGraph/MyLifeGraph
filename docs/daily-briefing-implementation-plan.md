@@ -57,6 +57,7 @@ Today UI presents them together:
 | Habit | A recurring behavior with a cadence and flexible execution window | Weeks to months | Complete, skip intentionally, pause, adapt |
 | Schedule item | A fixed commitment or reserved block | One occurrence or recurring | Attend, edit, remove |
 | Focus session | Time spent executing a task, habit, or chosen action | Minutes to hours | Start, stop, finish, abandon |
+| Deadline plan | User-estimated preparation for one exam or assignment, versioned into dated blocks | Days to months | Propose, review, confirm, revise, complete, cancel |
 | Recommendation | A temporary evidence-backed candidate proposed by the system | Hours to days | Accept, defer, reject, mark too much |
 | Daily briefing | The editorial decision for today: mode, capacity, one primary action, and limited support actions | One day | Start, adjust, give feedback |
 
@@ -163,7 +164,7 @@ Phase 4's deterministic briefing service.
 | Canonical daily capture | Yes, Phase 1 complete | Evening and Morning are separate typed flows over one ownership-merged daily entry; Phase 2 now interprets their freshness and stress context only inside backend snapshots |
 | Legacy large Daily Check-In | Retired | `/daily-check-in` redirects to the canonical lightweight flow; do not recreate a competing form |
 | Habit management/completion | Yes, authenticated only | Habit V1 cadence, progress, streaks, explicit completion/skip, and undo are implemented; manual lifecycle stays in Habit Management, Setup-owned lifecycle stays in Settings Setup, and daily execution is available from Today Habits |
-| Insights correlations and Skillset | Yes | Default to one cautious observation; advanced correlations and the strict latest generated Skillset profile expose independent loading/error truth |
+| Insights correlations | Yes | Default to one cautious observation; advanced correlations expose data sufficiency, source, and independent loading/error truth. Real accounts hide Skillset until a real producer exists; demo data is labelled as an example. |
 | Inbox (`/alerts`) | Stored inbox with Lifecycle V1 | Structured internal links are allowlisted; read/unread/dismiss is durable and retry-safe, while stored preferences and rows still do not imply delivery |
 | Deep Work | Yes, authenticated real-data mode | One active session, optional owned task/habit linkage, measured finish/abandon duration, and no implicit target completion are implemented; guest/mock redirects to Quick Action |
 | Coach | Explicitly gated authenticated mode | The route/surface is fail-closed in release/production unless explicitly enabled; capability/history/memory reads are generation-free and backend `ready` gates sending |
@@ -247,6 +248,8 @@ What the user does:
 - Completes, postpones, or cancels a task.
 - Completes or intentionally skips a scheduled habit.
 - Starts and stops a focus session linked to the current action.
+- Explicitly plans an exam or assignment by entering total active preparation
+  time and prior credit, then reviews staged dated blocks before confirmation.
 - Uses a quick state check only when something materially changes.
 - Selects `adjust today` when capacity or commitments change.
 
@@ -264,8 +267,8 @@ What the app does:
 What the user does:
 
 1. Confirms what was completed, postponed, or no longer relevant.
-2. Reports mood, energy, stress intensity, stress source, controllability,
-   friction, and a rough focus band.
+2. Reports mood, energy, stress intensity, and friction. At medium/high stress,
+   the flow also asks source and controllability.
 3. Optionally chooses a likely priority and `make tomorrow gentler`.
 4. Reviews a provisional tomorrow preview and closes the day.
 
@@ -364,17 +367,19 @@ Reasoning:
 - It gives the backend time to generate the next daily state before the user
   opens the app again.
 
-Target effort: 60 to 90 seconds.
+Target effort: under 60 seconds in two pages.
 
 Required fields:
 
 - Energy level.
 - Stress intensity.
+- Mood.
+- Main friction point.
+
+Conditional fields at stress `5..10`:
+
 - Stress source.
 - Stress controllability.
-- Mood.
-- Focus minutes or rough focus band.
-- Main friction point.
 - One likely priority for tomorrow.
 
 Optional fields:
@@ -817,8 +822,11 @@ screens where the user expects feedback.
 
 The implemented Evening Shutdown quick action supports:
 
-- Required energy, mood, stress intensity, stress source, stress
-  controllability, focus band, main friction, and a short tomorrow priority.
+- Two pages instead of one page per answer.
+- Required energy, mood, stress intensity, and main friction; stress source and
+  controllability are a paired conditional question at stress `5..10`.
+- An optional short tomorrow priority. Measured focus comes from completed
+  Focus sessions instead of another self-estimate.
 - Optional reflection, specific blocker, and gentle-tomorrow intent; blank or
   false optionals are omitted rather than replaced with fallback content.
 - Prefill and same-kind replacement without erasing a saved Morning
@@ -1030,6 +1038,23 @@ The state lookback stays fixed at seven days even when `window_days` changes.
 Top-level `summary.risk_flags` is a compatibility alias for current Daily State
 risks; statistics-window risks remain separate in `summary.window_risk_flags`.
 No capture free text appears in this snapshot contract.
+
+Deadline Planner V1 uses dedicated backend-owned tables because immutable
+revision history, staged-versus-active truth, dated reservations, request
+replay, and account export do not fit recurring `schedule_items` or task
+metadata safely:
+
+```text
+deadline_plans
+deadline_plan_revisions
+deadline_plan_blocks
+deadline_plan_request_identities  # backend-only anti-replay ledger
+```
+
+The first three are owner-readable/exported product data. The request ledger is
+forced-RLS backend-only and explicitly omitted from Account Export. A confirmed
+plan owns one stable managed task; focus remains in `focus_sessions` and is
+counted only as derived post-activation progress.
 
 Add dedicated columns later only if the fields become stable and heavily
 queried:
@@ -1437,8 +1462,8 @@ Implemented first slice:
   commitments.
 - There is no provider OAuth/token, arbitrary URL fetch, provider write,
   background sync, RRULE expansion, LLM processing, or automatic time-block
-  proposal/application. A future block must remain `staged_only` until its own
-  recoverable mutation contract exists.
+  proposal/application. Deadline Planner V1 is the separate recoverable
+  contract for a user-selected event and retains explicit staging and confirm.
 
 Still later:
 
@@ -1451,6 +1476,46 @@ Evaluation:
 - Does the app remain fully usable without an integration?
 - Can users see, disconnect, and delete imported data?
 - Do integrations reduce capture effort without making recommendations opaque?
+
+### Deadline Planner V1: Explicit Exam And Assignment Preparation
+
+Goal:
+
+- Reserve realistic preparation time early while keeping effort estimates and
+  every activation under user control.
+
+Contract:
+
+- The user explicitly supplies `exam|assignment`, title, aware deadline,
+  `30..30000` active-preparation minutes, prior credit, planning start, session/
+  daily bounds, and `0..7` buffer days within a 366-day planning horizon.
+- A manual source or one explicitly selected imported event may be used. Title
+  inference is forbidden; imported busy intervals are a separate per-plan
+  opt-in and remain read-only.
+- Each deliberate request creates an immutable proposed revision with at most
+  120 deterministic dated blocks and honest unscheduled minutes. The active
+  revision stays authoritative until exact confirmation. Proposal edits match
+  the latest persisted revision; completion and cancellation after activation
+  require the current active revision. A still-draft plan may also be cancelled
+  at its latest revision to discard its pending preview and proposed
+  reservations without ever creating a managed task.
+- First confirmation atomically creates the stable managed Phase 3 task.
+  Completed post-activation focus linked to it contributes measured progress
+  but never completes the plan.
+- Generic Task edit/lifecycle/editor paths reject the managed source. Focus may
+  target it while open; later confirm owns title/deadline projection and plan
+  complete/cancel atomically own its matching terminal state.
+- GET and all unrelated product paths are side-effect free. There is no LLM,
+  notification, provider write, background sync, or hidden generation.
+
+Evaluation:
+
+- Does the plan reflect the user's estimate rather than an inferred workload?
+- Can response loss, stale revision, and concurrent confirmation converge
+  without replacing a newer active plan?
+- Are manual commitments, confirmed blocks, optional busy intervals, timezone,
+  DST, block bounds, and an impossible capacity deficit represented honestly?
+- Does linked focus change progress without stealing lifecycle authority?
 
 ### Phase 10: Controlled Coach (Implemented Repository Boundary)
 
@@ -1552,6 +1617,11 @@ streak length are not sufficient success measures.
 
 ## Current Recommendation
 
+The next two product-polish batches are deliberately recorded in
+`docs/product-polish-follow-up.md`: first remove or finish user-visible promises
+without a current producer/delivery path, then complete the plain-language and
+localization pass. They are not claimed as implemented by this document.
+
 **Phase 0A, Phase 0B, Phase 0C, Phase 1, Phase 2, and Phase 3 are complete.**
 Real and demo source states remain distinct; Setup is revision-safe and
 atomically reconciled; Evening/Morning provide exact ownership-merged context;
@@ -1599,6 +1669,16 @@ file import. It remains independent of the standalone product loop, preserves
 imported/read-only provenance, reconciles stable identities, and separates
 disconnect from local imported-data deletion. It does not make imported events
 briefing inputs or user-owned commitments.
+
+Deadline Planner V1 adds a separate explicit preparation loop. It persists the
+user's estimate and prior credit, keeps proposed and active revisions distinct,
+and creates staged dated app-owned blocks only on deliberate proposal; explicit
+confirmation alone makes them active.
+Staged blocks are created by deliberate proposal and become active only on
+confirmation. Calendar source/availability use remains opt-in and availability
+requires a connected current import; focus progress is measured but never
+completes the plan. Its verification requirements are defined in
+`docs/deadline-planner-v1-contract.md`; source text alone is not a passing run.
 
 Phase 10 is implemented as an authenticated, budgeted, source-aware explanation
 boundary with explicit reviewable memory selection, bounded validated history,

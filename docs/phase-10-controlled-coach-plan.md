@@ -43,9 +43,10 @@ The current checkout includes:
   review-only suggestions, explicit memory selection, and conversation deletion;
   and
 - an independent Flutter surface gate: release builds and
-  `APP_ENV=production` hide navigation and redirect `/coach` to Settings unless
-  `COACH_SURFACE_ENABLED=true` is supplied exactly. This opt-in exposes only the
-  UI boundary; backend capability still controls whether sending is ready.
+  `APP_ENV=production` always hide navigation and redirect `/coach` to Settings;
+  `COACH_SURFACE_ENABLED` cannot override either production boundary. Exact
+  `true` may expose only the UI boundary in a non-production debug/profile
+  build; backend capability still controls whether sending is ready.
 
 Pending claims store no message, only its fingerprint. Successful completion
 atomically writes the full bounded user/assistant pair. Conversation deletion

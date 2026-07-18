@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:my_life_graph/core/capabilities/app_surface_capabilities.dart';
 import 'package:my_life_graph/core/theme/app_theme.dart';
 import 'package:my_life_graph/features/insights/domain/entities/correlation.dart';
 import 'package:my_life_graph/features/insights/domain/entities/insight.dart';
@@ -17,6 +18,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          _demoSurfaceOverride(),
           insightsProvider.overrideWith((ref) async {
             insightLoads += 1;
             if (insightLoads == 1) {
@@ -68,6 +70,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          _demoSurfaceOverride(),
           insightsProvider.overrideWith((ref) async => const []),
           correlationReportProvider.overrideWith(
             (ref) async => const CorrelationReport(
@@ -91,22 +94,22 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.scrollUntilVisible(
-      find.text('Could not load generated skillset profile.'),
+      find.text('Example skill profile unavailable.'),
       200,
       scrollable: find.byType(Scrollable).first,
     );
     expect(
-      find.text('Could not load generated skillset profile.'),
+      find.text('Example skill profile unavailable.'),
       findsOneWidget,
     );
     expect(
-      find.textContaining('No demo profile was substituted'),
+      find.textContaining('optional demo card could not be loaded'),
       findsOneWidget,
     );
 
-    await tester.ensureVisible(find.text('Retry skillset profile'));
+    await tester.ensureVisible(find.text('Retry example'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Retry skillset profile'));
+    await tester.tap(find.text('Retry example'));
     await tester.pumpAndSettle();
 
     await tester.scrollUntilVisible(
@@ -118,11 +121,12 @@ void main() {
     expect(skillsetLoads, 2);
   });
 
-  testWidgets('missing skillset is an honest empty state, not a load failure',
+  testWidgets('missing demo skillset remains an honest example error',
       (tester) async {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          _demoSurfaceOverride(),
           insightsProvider.overrideWith((ref) async => const []),
           correlationReportProvider.overrideWith(
             (ref) async => const CorrelationReport(
@@ -144,22 +148,53 @@ void main() {
     await tester.pumpAndSettle();
 
     await tester.scrollUntilVisible(
-      find.text('No generated skillset profile yet.'),
+      find.text('Example skill profile unavailable.'),
       200,
       scrollable: find.byType(Scrollable).first,
     );
-    expect(find.text('No generated skillset profile yet.'), findsOneWidget);
+    expect(find.text('Example skill profile unavailable.'), findsOneWidget);
     expect(
       find.text(
-        'This account has no generated profile. Nothing was substituted.',
+        'This optional demo card could not be loaded. Your real activity was not scored or replaced.',
       ),
       findsOneWidget,
     );
     expect(
-      find.text('Could not load generated skillset profile.'),
-      findsNothing,
+      find.text('EXAMPLE SKILL PROFILE'),
+      findsOneWidget,
     );
-    expect(find.text('Check again'), findsOneWidget);
+    expect(find.text('Retry example'), findsOneWidget);
+  });
+
+  testWidgets('real account hides the unproduced skillset without loading it',
+      (tester) async {
+    var skillsetLoads = 0;
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          _realSurfaceOverride(),
+          insightsProvider.overrideWith((ref) async => const []),
+          correlationReportProvider.overrideWith(
+            (ref) async => const CorrelationReport(
+              windowDays: 14,
+              metrics: correlationMetrics,
+              points: [],
+              results: [],
+            ),
+          ),
+          skillsetProfileProvider.overrideWith((ref) async {
+            skillsetLoads += 1;
+            return _skillsetProfile();
+          }),
+        ],
+        child: const MaterialApp(home: Scaffold(body: InsightsPage())),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('EXAMPLE SKILL PROFILE'), findsNothing);
+    expect(find.text('Focused Builder · 82 / 100'), findsNothing);
+    expect(skillsetLoads, 0);
   });
 
   testWidgets('light theme derives panel and header contrast from its scheme',
@@ -278,6 +313,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          _demoSurfaceOverride(),
           insightsProvider.overrideWith((ref) async => const []),
           correlationReportProvider.overrideWith((ref) async => report),
           skillsetProfileProvider.overrideWith(
@@ -389,6 +425,7 @@ void main() {
 }
 
 List<Override> _loadedOverrides({List<Insight> insights = const []}) => [
+      _demoSurfaceOverride(),
       insightsProvider.overrideWith((ref) async => insights),
       correlationReportProvider.overrideWith(
         (ref) async => const CorrelationReport(
@@ -400,6 +437,23 @@ List<Override> _loadedOverrides({List<Insight> insights = const []}) => [
       ),
       skillsetProfileProvider.overrideWith((ref) async => _skillsetProfile()),
     ];
+
+Override _demoSurfaceOverride() =>
+    appSurfaceCapabilitiesProvider.overrideWithValue(
+      const AppSurfaceCapabilities(
+        isLocalDemo: true,
+        canUseSyncedHabits: false,
+      ),
+    );
+
+Override _realSurfaceOverride() =>
+    appSurfaceCapabilitiesProvider.overrideWithValue(
+      const AppSurfaceCapabilities(
+        isLocalDemo: false,
+        canUseSyncedHabits: true,
+        canUseSyncedExecution: true,
+      ),
+    );
 
 SkillsetProfile _skillsetProfile() => SkillsetProfile(
       userName: 'Alex',

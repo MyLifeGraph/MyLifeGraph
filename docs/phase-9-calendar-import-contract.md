@@ -13,15 +13,17 @@ Phase 9 begins with one optional, explicit, read-only calendar source:
 - the user deliberately selects and imports a UTF-8 `.ics` file;
 - FastAPI parses a bounded event window and persists only whitelisted event
   basics in dedicated backend-owned tables;
-- imported events remain visibly `Imported · read-only` and never become
-  `schedule_items`, tasks, goals, habits, recommendations, or briefings;
+- imported events remain visibly `Imported · read-only` and the import itself
+  never creates `schedule_items`, tasks, goals, habits, recommendations,
+  briefings, or preparation plans;
 - disconnect stops further imports into that source but retains the imported
   copy;
 - delete imported data removes the local event content and import history but
   never contacts or mutates the source calendar.
 
-The standalone Setup, capture, Today, Weekly Review, Insights, task, habit, and
-focus loops remain fully useful without this integration. Setup's existing
+The standalone Setup, capture, Today, Weekly Review, Insights, task, habit,
+focus, and preparation-planning loops remain fully useful without this
+integration. Setup's existing
 `calendar_connection_intent` answer is interest only. It is never consent and
 must not create a connection or import data.
 
@@ -304,6 +306,17 @@ Authenticated clients cannot insert, update, or delete any integration table.
 Service role owns bounded lifecycle writes; request identities are insert-only.
 No anon access is granted.
 
+Deadline Planner V1 does not change this authority boundary. One deliberate
+planner proposal may reference the id and exact current source fingerprint of
+an event the user explicitly selected, and may optionally read current imported
+busy intervals. Availability is current only when the owner source is connected,
+its imported data has not been deleted, and `last_import_id` is non-null; only
+`busy` rows from that exact import are eligible. Otherwise the planner proposal
+conflicts instead of treating unavailable data as an empty calendar. It stores
+only its own bounded source provenance in the separate planner schema. The
+proposal cannot update an event, import, connection, or source calendar, and
+calendar import never calls a planner RPC.
+
 Database checks enforce contract/source/status enums, consent flags, bounded
 labels and text, exact timed versus all-day shapes, positive intervals, IANA
 timezone text bounds, event/import counts, lowercase SHA-256 fingerprints, and
@@ -333,6 +346,7 @@ Delete imported data:
 - clears last-import content/fingerprints and records deletion time/request;
 - preserves the minimal connection/consent tombstone for retry and audit;
 - never deletes manual or Setup-owned `schedule_items`;
+- never deletes or completes an already proposed or confirmed preparation plan;
 - never calls a provider.
 
 Both operations are owner-scoped and idempotent. A response loss is reconciled
@@ -368,17 +382,30 @@ disconnect/delete consequences. Every event carries an `Imported · read-only`
 label, source label, local date/time, timezone, and import freshness. No event
 edit, provider delete, or provider-write control exists.
 
+An eligible current event may also expose `Plan preparation`. Navigation may
+prefill only its id, current source fingerprint, visible title, and deadline.
+The separate planner wizard still requires the user to classify it as an exam
+or assignment and explicitly enter total active preparation and prior credit;
+opening the CTA creates nothing.
+
 Calendar state uses an independent provider. A calendar failure cannot fail or
 replace Dashboard, Setup, capture, Today briefing, Weekly Review, Insights,
 manual commitments, tasks, habits, or focus state.
 
-## Staged Time Blocks
+## Explicit Deadline Preparation Plans
 
-Imported events are context only in this first slice. No time block is created
-or proposed automatically. If a future slice derives a block, it must use a
-separate `staged_only` proposal with source fingerprint and explicit review.
-There is no apply button until one-off app-owned schedule blocks have a typed,
-recoverable mutation contract. Provider calendar writes remain outside Phase 9.
+Imported events remain context unless the user deliberately starts the separate
+`deadline-plan-v1` flow for one selected event. That flow pins the event id and
+source fingerprint, stages deterministic app-owned blocks, and requires explicit
+review and confirmation before replacing an active plan revision. Blocks are
+not `calendar_events` or `schedule_items`, and they are never written to the
+provider.
+
+A re-import, disconnect, or local imported-data deletion cannot mutate an
+existing plan. A stale fingerprint, disconnected source, or deleted event makes
+a new event-derived proposal stale/unavailable until the user reloads or chooses
+a manual source; it does not silently reinterpret the retained plan. No event
+title is classified and no preparation duration is inferred.
 
 ## Verification Contract
 
@@ -395,6 +422,11 @@ Focused backend, Flutter, migration, and browser coverage must prove:
 - read-only GET and zero hidden imports/provider writes;
 - disconnect-retains versus delete-local-data behavior;
 - preservation of manual and Setup-owned schedule rows;
+- zero preparation-plan creation during connect/import/read/disconnect/delete,
+  plus explicit selected-event CTA prefill that still requires kind and effort;
+- stale/deleted/disconnected event-source handling for new planner proposals,
+  retention of existing plans, and no event/import/provider mutation from the
+  planner;
 - forced-RLS owner reads and rejection of direct/cross-owner writes;
 - guest/mock zero-call isolation and honest empty/error states;
 - visible imported/read-only provenance and absence of event mutation controls.

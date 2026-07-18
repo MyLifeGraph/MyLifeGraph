@@ -132,10 +132,10 @@ void main() {
     await tester.tap(find.text('Create read-only source'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Retry exact connection'), findsOneWidget);
-    expect(find.text('Calendar operation result uncertain'), findsOneWidget);
+    expect(find.text('Retry unchanged'), findsOneWidget);
+    expect(find.text('Could not confirm the calendar change'), findsOneWidget);
     expect(
-      find.textContaining('Submitted values or file, where applicable'),
+      find.textContaining('submitted values or file are still here'),
       findsOneWidget,
     );
     expect(
@@ -143,7 +143,7 @@ void main() {
       isFalse,
     );
 
-    await tester.tap(find.text('Retry exact connection'));
+    await tester.tap(find.text('Retry unchanged'));
     await tester.pumpAndSettle();
 
     expect(repository.createRequestIds, hasLength(2));
@@ -171,9 +171,9 @@ void main() {
     expect(find.text('work.ics · 5 bytes'), findsOneWidget);
     await tester.tap(find.text('Import selected file'));
     await tester.pumpAndSettle();
-    expect(find.text('Retry exact import'), findsOneWidget);
+    expect(find.text('Retry unchanged'), findsOneWidget);
 
-    await tester.tap(find.text('Retry exact import'));
+    await tester.tap(find.text('Retry unchanged'));
     await tester.pumpAndSettle();
 
     expect(picker.calls, 1);
@@ -223,16 +223,19 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(FilledButton, 'Disconnect'));
     await tester.pumpAndSettle();
-    expect(find.text('Retry exact disconnect'), findsOneWidget);
+    expect(find.text('Retry unchanged'), findsOneWidget);
 
-    await tester.tap(find.text('Retry exact disconnect'));
+    await tester.tap(find.text('Retry unchanged'));
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(FilledButton, 'Disconnect'));
     await tester.pumpAndSettle();
 
     expect(repository.disconnectRequestIds, hasLength(2));
     expect(repository.disconnectRequestIds.toSet(), hasLength(1));
-    expect(find.text('Disconnected · stale'), findsOneWidget);
+    expect(
+      find.text('Disconnected · may be out of date'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('ambiguous deletion retries the exact request id',
@@ -248,9 +251,9 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Delete local imported data'));
     await tester.pumpAndSettle();
-    expect(find.text('Retry exact deletion'), findsOneWidget);
+    expect(find.text('Retry unchanged'), findsOneWidget);
 
-    await tester.tap(find.text('Retry exact deletion'));
+    await tester.tap(find.text('Retry unchanged'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Delete local imported data'));
     await tester.pumpAndSettle();

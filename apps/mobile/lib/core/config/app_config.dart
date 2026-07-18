@@ -12,7 +12,7 @@ class AppConfig {
     required this.supabaseAnonKey,
     required this.aiServiceBaseUrl,
     required this.useMockData,
-    this.coachSurfaceEnabled = true,
+    this.coachSurfaceEnabled = false,
   });
 
   factory AppConfig.fromEnvironment() {
@@ -70,8 +70,11 @@ bool resolveCoachSurfaceEnabled({
   required bool releaseMode,
   String explicitValue = '',
 }) {
+  if (environment.trim().toLowerCase() == 'production' || releaseMode) {
+    return false;
+  }
   if (explicitValue.isNotEmpty) {
     return explicitValue == 'true';
   }
-  return environment != 'production' && !releaseMode;
+  return true;
 }

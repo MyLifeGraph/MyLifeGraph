@@ -14,14 +14,22 @@ class CorrelationAnalyzer {
   }) {
     final sortedPoints = points.toList(growable: false)
       ..sort((a, b) => a.date.compareTo(b.date));
+    final availableMetrics = metrics
+        .where(
+          (metric) => sortedPoints.any((point) {
+            final value = point.values[metric.id];
+            return value != null && value.isFinite;
+          }),
+        )
+        .toList(growable: false);
     final results = <CorrelationResult>[];
 
-    for (var i = 0; i < metrics.length; i++) {
-      for (var j = i + 1; j < metrics.length; j++) {
+    for (var i = 0; i < availableMetrics.length; i++) {
+      for (var j = i + 1; j < availableMetrics.length; j++) {
         results.add(
           _analyzePair(
-            metricA: metrics[i],
-            metricB: metrics[j],
+            metricA: availableMetrics[i],
+            metricB: availableMetrics[j],
             points: sortedPoints,
           ),
         );
@@ -30,7 +38,7 @@ class CorrelationAnalyzer {
 
     return CorrelationReport(
       windowDays: windowDays,
-      metrics: metrics,
+      metrics: availableMetrics,
       points: sortedPoints,
       results: results,
     );

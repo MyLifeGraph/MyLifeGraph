@@ -33,7 +33,7 @@ class _WeeklyReviewPageState extends ConsumerState<WeeklyReviewPage> {
     final value = ref.watch(latestWeeklyReviewProvider);
     return AppPage(
       title: 'Weekly review',
-      subtitle: 'A bounded look at the last completed week',
+      subtitle: 'What happened last week and what you may want to adjust',
       actions: [
         IconButton(
           tooltip: 'Retry weekly review',
@@ -72,7 +72,7 @@ class _WeeklyReviewPageState extends ConsumerState<WeeklyReviewPage> {
             ),
             SizedBox(height: AppSpacing.sm),
             Text(
-              'Weekly reviews require a synced account. No personalized review was fabricated for local demo mode.',
+              'Weekly reviews require a synced account. Demo data is not presented as your personal review.',
             ),
           ],
         ),
@@ -230,7 +230,7 @@ class _ReviewReadError extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.sm),
           const Text(
-            'Your account data was not replaced with a generated or demo review.',
+            'Nothing was replaced. Check your connection and try loading the review again.',
           ),
           const SizedBox(height: AppSpacing.md),
           OutlinedButton.icon(
@@ -263,7 +263,7 @@ class _NotReadyReviewCard extends StatelessWidget {
           Text(_periodLabel(feed)),
           const SizedBox(height: AppSpacing.sm),
           const Text(
-            'There is not enough trustworthy weekly evidence yet. Keep using explicit task, habit, focus, and recovery outcomes; no plan change was inferred.',
+            'There is not enough saved activity yet. Keep completing tasks, habits, Focus sessions, and recovery check-ins. Nothing will change automatically.',
           ),
         ],
       ),
@@ -298,7 +298,7 @@ class _MissingReviewCard extends StatelessWidget {
           Text(_periodLabel(feed)),
           const SizedBox(height: AppSpacing.sm),
           const Text(
-            'Generate a deterministic review deliberately. This does not change any task, habit, goal, or schedule item.',
+            'Create a rule-based review from your saved activity. This does not change any task, habit, goal, or calendar item.',
           ),
           if (generationError != null) ...[
             const SizedBox(height: AppSpacing.sm),
@@ -315,9 +315,9 @@ class _MissingReviewCard extends StatelessWidget {
                     dimension: 16,
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
-                : const Icon(Icons.auto_awesome_outlined),
+                : const Icon(Icons.fact_check_outlined),
             label: Text(
-              isGenerating ? 'Generating…' : 'Generate weekly review',
+              isGenerating ? 'Creating…' : 'Create weekly review',
             ),
           ),
         ],
@@ -375,14 +375,14 @@ class _CurrentReview extends StatelessWidget {
                       ],
                     ),
                   ),
-                  _ReviewPill(label: stale ? 'Stale' : 'Current'),
+                  _ReviewPill(label: stale ? 'Needs update' : 'Up to date'),
                 ],
               ),
               const SizedBox(height: AppSpacing.md),
               Text(review.narrative),
               const SizedBox(height: AppSpacing.sm),
               Text(
-                '${_qualityLabel(review.dataQuality)} data · deterministic · no LLM',
+                '${_qualityLabel(review.dataQuality)} data · rule-based · not AI-written',
                 style: Theme.of(context).textTheme.labelMedium,
               ),
               if (stale) ...[
@@ -395,7 +395,7 @@ class _CurrentReview extends StatelessWidget {
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
-                    'Source facts changed after this review. Refresh before applying a proposal.',
+                    'Your saved activity changed after this review. Update it before accepting a suggestion.',
                     style: TextStyle(
                       color: Theme.of(context).colorScheme.onErrorContainer,
                     ),
@@ -418,7 +418,7 @@ class _CurrentReview extends StatelessWidget {
               ),
               const SizedBox(height: AppSpacing.xs),
               const Text(
-                'At most two bounded proposals. Only a manual shrink, pause, or archive marked executable can change a habit after confirmation. Setup and suggestion-only rows never auto-apply.',
+                'You may see up to two suggestions. A manual habit changes only after you confirm it. Setup suggestions and previews never apply automatically.',
               ),
               const SizedBox(height: AppSpacing.md),
               if (review.proposals.isEmpty)
@@ -460,7 +460,7 @@ class _CurrentReview extends StatelessWidget {
                       )
                     : const Icon(Icons.refresh),
                 label: Text(
-                  isGenerating ? 'Refreshing…' : 'Refresh weekly review',
+                  isGenerating ? 'Updating…' : 'Update weekly review',
                 ),
               ),
             ],
@@ -606,7 +606,7 @@ class _ProposalCard extends StatelessWidget {
           const SizedBox(height: AppSpacing.sm),
           Text(
             '${_stateLabel(proposal.change.before)} → '
-            '${proposal.change.after == null ? 'Staged for manual review' : _stateLabel(proposal.change.after!)}',
+            '${proposal.change.after == null ? 'Preview only — review it yourself' : _stateLabel(proposal.change.after!)}',
             style: Theme.of(context).textTheme.bodySmall,
           ),
           const SizedBox(height: AppSpacing.sm),
@@ -741,13 +741,13 @@ String _ownershipLabel(WeeklyReviewOwnership ownership) => switch (ownership) {
 String _proposalAuthorityLabel(WeeklyReviewApplicationMode mode) =>
     switch (mode) {
       WeeklyReviewApplicationMode.directHabit =>
-        'Executable habit action · explicit confirmation required',
+        'Can change this manual habit only after you confirm',
       WeeklyReviewApplicationMode.settingsSetup =>
-        'Setup guidance only · opening Setup applies nothing',
+        'Opens Setup only — nothing changes automatically',
       WeeklyReviewApplicationMode.stagedOnly =>
-        'Suggestion only · not executable from Weekly Review',
+        'Preview only — make any change yourself',
       WeeklyReviewApplicationMode.none =>
-        'No-change note · no product data will be written',
+        'Information only — nothing will change',
     };
 
 IconData _proposalIcon(WeeklyReviewApplicationMode mode) => switch (mode) {

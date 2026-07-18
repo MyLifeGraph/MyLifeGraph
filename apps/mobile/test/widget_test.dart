@@ -27,7 +27,7 @@ void main() {
 
     await _startGuestAndCompleteSetup(tester);
 
-    expect(find.text('Latest check-in'), findsOneWidget);
+    expect(find.text('Today at a glance'), findsOneWidget);
     final prefs = await SharedPreferences.getInstance();
     final rawIntake = prefs.getString('auth_guest_intake_response');
     expect(rawIntake, isNotNull);
@@ -255,39 +255,47 @@ void main() {
 
     await tester.tap(find.byIcon(Icons.add).last);
     await tester.pumpAndSettle();
-    expect(find.text('Add signal'), findsOneWidget);
+    expect(find.text('Quick actions'), findsOneWidget);
 
-    await tester.tap(find.text('Evening Shutdown'));
+    await tester.tap(find.text('Evening check-in'));
     await tester.pumpAndSettle();
 
     for (final label in [
       'evening mood 2 of 10',
       'evening energy 9 of 10',
       'evening stress 8 of 10',
+    ]) {
+      final choice = find.bySemanticsLabel(label);
+      await tester.ensureVisible(choice);
+      await tester.tap(choice);
+      await tester.pump();
+    }
+    await tester.ensureVisible(find.text('Next'));
+    await tester.tap(find.text('Next'));
+    await tester.pumpAndSettle();
+    for (final label in [
       'stress source private_emotional',
-      'stress controllability hardly_controllable',
-      'focus band 30_to_60_minutes',
+      'stress influence hardly_controllable',
       'main friction emotional_load',
     ]) {
-      await tester.tap(find.bySemanticsLabel(label));
+      final choice = find.bySemanticsLabel(label);
+      await tester.ensureVisible(choice);
+      await tester.tap(choice);
       await tester.pump();
-      await tester.tap(find.text('Next'));
-      await tester.pumpAndSettle();
     }
     await tester.enterText(
-      _textFieldWithLabel('Tomorrow priority'),
+      _textFieldWithLabel('Possible priority tomorrow (optional)'),
       'Protect the guest morning',
     );
     await tester.pump();
-    await tester.tap(find.text('Next'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Save evening shutdown'));
+    await tester.ensureVisible(find.text('Save evening check-in'));
+    await tester.tap(find.text('Save evening check-in'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Latest check-in'), findsOneWidget);
+    expect(find.text('Today at a glance'), findsOneWidget);
     await tester.tap(find.byIcon(Icons.add).last);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Morning Calibration'));
+    await tester.tap(find.text('Morning check-in'));
     await tester.pumpAndSettle();
     await tester.tap(find.bySemanticsLabel('morning sleep 5.5 h'));
     await tester.tap(find.bySemanticsLabel('morning energy 4 of 10'));
@@ -295,11 +303,11 @@ void main() {
     await tester.ensureVisible(constrainedDay);
     await tester.tap(constrainedDay);
     await tester.pump();
-    await tester.ensureVisible(find.text('Save morning calibration'));
-    await tester.tap(find.text('Save morning calibration'));
+    await tester.ensureVisible(find.text('Save morning check-in'));
+    await tester.tap(find.text('Save morning check-in'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Latest check-in'), findsOneWidget);
+    expect(find.text('Today at a glance'), findsOneWidget);
     final prefs = await SharedPreferences.getInstance();
     final raw = jsonDecode(
       prefs.getString('guest_quick_checkins')!,
@@ -341,8 +349,8 @@ void main() {
     await tester.tap(find.byIcon(Icons.add).last);
     await tester.pumpAndSettle();
 
-    expect(find.text('Evening Shutdown'), findsOneWidget);
-    expect(find.text('Morning Calibration'), findsOneWidget);
+    expect(find.text('Evening check-in'), findsOneWidget);
+    expect(find.text('Morning check-in'), findsOneWidget);
     expect(find.text('Habit completion'), findsNothing);
     expect(find.text('Habit management'), findsNothing);
   });
@@ -357,11 +365,11 @@ void main() {
     expect(find.text('Settings'), findsOneWidget);
 
     final router = GoRouter.of(
-      tester.element(find.text('Latest check-in')),
+      tester.element(find.text('Today at a glance')),
     );
     router.go(AppRoutes.coach);
     await tester.pumpAndSettle();
-    expect(find.text('Coach'), findsOneWidget);
+    expect(find.text('Coach preview'), findsOneWidget);
     expect(find.text('Coach unavailable'), findsOneWidget);
     expect(find.text('Ask Coach'), findsNWidgets(2));
     expect(
@@ -382,12 +390,12 @@ void main() {
 
     router.go(AppRoutes.habitManagement);
     await tester.pumpAndSettle();
-    expect(find.text('Add signal'), findsOneWidget);
+    expect(find.text('Quick actions'), findsOneWidget);
     expect(find.text('Habit management'), findsNothing);
 
     router.go(AppRoutes.weeklyReview);
     await tester.pumpAndSettle();
-    expect(find.text('Latest check-in'), findsOneWidget);
+    expect(find.text('Today at a glance'), findsOneWidget);
     expect(find.text('Weekly review'), findsNothing);
 
     router.go(AppRoutes.calendarIntegration);
@@ -406,9 +414,9 @@ void main() {
     expect(find.text('Guest Coach User'), findsOneWidget);
     expect(find.text('guest@personal-coach.local'), findsOneWidget);
     expect(find.text('Setup and commitments'), findsOneWidget);
-    expect(find.text('In-app notifications'), findsOneWidget);
+    expect(find.text('In-app reminders'), findsOneWidget);
     expect(
-      find.text('In-app delivery is available only for a synced account.'),
+      find.text('In-app banners are available only for a synced account.'),
       findsOneWidget,
     );
     await tester.scrollUntilVisible(
@@ -512,6 +520,7 @@ Future<void> _pumpTestApp(
             supabaseAnonKey: '',
             aiServiceBaseUrl: 'http://localhost:8000',
             useMockData: true,
+            coachSurfaceEnabled: true,
           ),
         ),
       ],
@@ -561,8 +570,10 @@ Future<void> _startGuestAndFillRequiredSetup(WidgetTester tester) async {
   await _selectDropdownValue(tester, 0, 'Flexible schedule');
   await _selectDropdownValue(tester, 1, 'Morning');
   await _selectDropdownValue(tester, 2, 'Direct');
-  await tester.ensureVisible(find.widgetWithText(ChoiceChip, 'No reminders'));
-  await tester.tap(find.widgetWithText(ChoiceChip, 'No reminders'));
+  await tester.ensureVisible(
+    find.widgetWithText(ChoiceChip, 'Prefer no reminders'),
+  );
+  await tester.tap(find.widgetWithText(ChoiceChip, 'Prefer no reminders'));
   await tester.pump();
 }
 

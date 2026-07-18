@@ -71,6 +71,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Focus active'), findsOneWidget);
+    expect(find.byKey(const ValueKey('focus-countdown')), findsOneWidget);
+    expect(find.text('Planned time reached'), findsOneWidget);
     expect(find.byKey(const ValueKey('active-focus-actions')), findsOneWidget);
     expect(find.text('Abandon'), findsOneWidget);
     expect(find.text('Finish focus session'), findsOneWidget);

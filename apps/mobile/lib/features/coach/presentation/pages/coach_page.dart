@@ -37,8 +37,8 @@ class _CoachPageState extends ConsumerState<CoachPage> {
             .toList(growable: false);
 
     return AppPage(
-      title: 'Coach',
-      subtitle: 'Bounded planning and reflection with visible data use',
+      title: 'Coach preview',
+      subtitle: 'Development-only explanations and suggestions',
       actions: [
         IconButton(
           tooltip: 'Refresh Coach',
@@ -84,7 +84,7 @@ class _CoachPageState extends ConsumerState<CoachPage> {
       builder: (context) => AlertDialog(
         title: const Text('Delete conversation?'),
         content: const Text(
-          'This removes the persisted Coach conversation. It does not delete '
+          'This removes the saved Coach conversation. It does not delete '
           'your goals, tasks, check-ins, or memories.',
         ),
         actions: [
@@ -148,7 +148,7 @@ class _CapabilityCard extends StatelessWidget {
     final title = state.isRateLimited
         ? 'Rate limited'
         : switch (capability.state) {
-            CoachCapabilityState.ready => 'Coach ready',
+            CoachCapabilityState.ready => 'Development Coach ready',
             CoachCapabilityState.disabled => 'Coach unavailable',
             CoachCapabilityState.unavailable => 'Coach temporarily unavailable',
           };
@@ -174,29 +174,33 @@ class _CapabilityCard extends StatelessWidget {
           const SizedBox(height: AppSpacing.sm),
           Text(
             localProvider
-                ? 'Responses use your explicitly enabled local development '
-                    'Codex connection.'
+                ? 'Uses this developer\'s explicitly enabled local Codex login. '
+                    'This is not a production service and may not work on another device or account.'
                 : capability.provider == CoachProviderName.fake
-                    ? 'Responses use the deterministic test provider.'
-                    : 'This local surface does not contact a Coach provider.',
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Text(
-            'Availability: ${capability.state.code} · '
-            'Reason: ${_humanize(capability.reasonCode)}',
+                    ? 'Uses fixed test responses. This is not a live assistant.'
+                    : 'No Coach provider is connected.',
           ),
           if (ready) ...[
-            const SizedBox(height: AppSpacing.xs),
+            const SizedBox(height: AppSpacing.sm),
             Text(
               '${capability.limits.remainingRequests} of '
-              '${capability.limits.requestsPerLocalDay} local requests remain',
+              '${capability.limits.requestsPerLocalDay} development requests remain today',
             ),
           ],
-          const SizedBox(height: AppSpacing.xs),
-          Text(
-            capability.modelRequested == null
-                ? 'Requested model: CLI default'
-                : 'Requested model: ${capability.modelRequested}',
+          ExpansionTile(
+            tilePadding: EdgeInsets.zero,
+            childrenPadding: const EdgeInsets.only(bottom: AppSpacing.sm),
+            title: const Text('Technical availability'),
+            children: [
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Status: ${capability.state.code}\n'
+                  'Reason: ${_humanize(capability.reasonCode)}\n'
+                  'Requested model: ${capability.modelRequested ?? 'CLI default'}',
+                ),
+              ),
+            ],
           ),
           if (state.capabilityError != null) ...[
             const SizedBox(height: AppSpacing.sm),
@@ -241,7 +245,7 @@ class _ComposerCard extends StatelessWidget {
           Text('Ask Coach', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: AppSpacing.xs),
           const Text(
-            'Coach can explain and suggest. It cannot apply changes to your '
+            'Coach can explain and suggest. Every change remains a preview. It cannot apply changes to your '
             'tasks, habits, goals, or schedule.',
           ),
           const SizedBox(height: AppSpacing.md),
@@ -258,7 +262,7 @@ class _ComposerCard extends StatelessWidget {
               hintText: 'What should I pay attention to today?',
               border: const OutlineInputBorder(),
               errorText: state.draftCodepoints > coachMessageCodepoints
-                  ? 'Keep the message within 2,000 Unicode code points.'
+                  ? 'Keep the message within 2,000 characters.'
                   : null,
             ),
           ),
@@ -290,7 +294,7 @@ class _ComposerCard extends StatelessWidget {
               const Padding(
                 padding: EdgeInsets.only(top: AppSpacing.xs),
                 child: Text(
-                  'The exact message and request identity will be reused.',
+                  'Your message is still here. Retry it unchanged to check the same request safely.',
                 ),
               ),
           ],
@@ -338,8 +342,7 @@ class _MemoriesCard extends ConsumerWidget {
           ),
           const SizedBox(height: AppSpacing.sm),
           const Text(
-            'Only selected memories may enter Coach context. Selection does '
-            'not change the underlying memory.',
+            'Only selected saved notes may be used in an answer. Selecting one does not change it.',
           ),
           if (state.memoryError != null) ...[
             const SizedBox(height: AppSpacing.sm),
@@ -396,7 +399,7 @@ class _MemoryTile extends StatelessWidget {
       ),
       title: Text(memory.title),
       subtitle: Text(
-        '${setupOwned ? 'Setup-owned' : 'Manual'} · '
+        '${setupOwned ? 'From Setup' : 'Added manually'} · '
         '${memory.selected ? 'selected' : 'not selected'}',
       ),
       children: [
@@ -409,7 +412,7 @@ class _MemoryTile extends StatelessWidget {
             alignment: Alignment.centerLeft,
             child: Padding(
               padding: EdgeInsets.only(top: AppSpacing.xs),
-              child: Text('Preview truncated by the backend.'),
+              child: Text('Only part of this saved note can be shown here.'),
             ),
           ),
         const SizedBox(height: AppSpacing.sm),
@@ -500,7 +503,7 @@ class _HistoryCard extends StatelessWidget {
             const SizedBox(height: AppSpacing.sm),
             Text(
               state.latestResponse == null
-                  ? 'No persisted Coach conversation yet.'
+                  ? 'No saved Coach conversation yet.'
                   : 'The latest response is shown above.',
             ),
           ] else ...[
@@ -617,7 +620,7 @@ class _ResponseDetails extends StatelessWidget {
                 (item) => ListTile(
                   contentPadding: EdgeInsets.zero,
                   dense: true,
-                  title: Text(_humanize(item.source.code)),
+                  title: Text(_coachSourceLabel(item.source)),
                   subtitle: Text(
                     '${item.includedCount} of ${item.availableCount} included · '
                     '${item.omittedCount} omitted · '
@@ -645,7 +648,7 @@ class _ResponseDetails extends StatelessWidget {
                 'Prompt version: ${provenance.promptVersion}\n'
                 'Context version: ${provenance.contextVersion}\n'
                 'Provider called: ${provenance.providerCalled ? 'yes' : 'no'}\n'
-                'Generated: '
+                'Answered at: '
                 '${DateFormat('MMM d, HH:mm').format(provenance.generatedAt.toLocal())}',
               ),
             ),
@@ -673,3 +676,16 @@ String _humanize(String value) => value
     .where((part) => part.isNotEmpty)
     .map((part) => '${part[0].toUpperCase()}${part.substring(1)}')
     .join(' ');
+
+String _coachSourceLabel(CoachContextSource source) => switch (source) {
+      CoachContextSource.profile => 'Profile',
+      CoachContextSource.dailySnapshot => 'Today\'s check-in state',
+      CoachContextSource.dailyBriefing => 'Today\'s plan',
+      CoachContextSource.goals => 'Goals',
+      CoachContextSource.tasks => 'Tasks',
+      CoachContextSource.habits => 'Habits',
+      CoachContextSource.focusSessions => 'Focus sessions',
+      CoachContextSource.weeklyReview => 'Weekly review',
+      CoachContextSource.memories => 'Selected saved notes',
+      CoachContextSource.coachHistory => 'Earlier Coach messages',
+    };

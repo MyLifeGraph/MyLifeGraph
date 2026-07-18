@@ -16,8 +16,8 @@ void main() {
     final repository = _FakeCoachRepository();
     await _pumpPage(tester, repository);
 
-    expect(find.text('Coach'), findsOneWidget);
-    expect(find.text('Coach ready'), findsOneWidget);
+    expect(find.text('Coach preview'), findsOneWidget);
+    expect(find.text('Development Coach ready'), findsOneWidget);
     expect(find.text('Ask Coach'), findsNWidgets(2));
     expect(find.text('Conversation history'), findsOneWidget);
     expect(find.text('Selected memories'), findsOneWidget);
@@ -58,8 +58,8 @@ void main() {
     await _scrollTo(tester, find.text('Data used'));
     await tester.tap(find.text('Data used'));
     await tester.pumpAndSettle();
-    expect(find.text('Daily Snapshot'), findsOneWidget);
-    expect(find.text('Memories'), findsOneWidget);
+    expect(find.text('Today\'s check-in state'), findsOneWidget);
+    expect(find.text('Selected saved notes'), findsOneWidget);
 
     await _scrollTo(tester, find.text('Provider and model'));
     await tester.tap(find.text('Provider and model'));
@@ -101,7 +101,7 @@ void main() {
     await _scrollTo(tester, find.text('Prefer one clear next step'));
     await tester.tap(find.text('Prefer one clear next step'));
     await tester.pumpAndSettle();
-    expect(find.text('Setup-owned · selected'), findsOneWidget);
+    expect(find.text('From Setup · selected'), findsOneWidget);
     expect(find.text('Edit in Setup'), findsOneWidget);
     await tester.tap(find.text('Remove from Coach'));
     await tester.pumpAndSettle();
@@ -118,7 +118,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(repository.deleteHistoryCalls, 1);
-    expect(find.text('No persisted Coach conversation yet.'), findsOneWidget);
+    expect(find.text('No saved Coach conversation yet.'), findsOneWidget);
   });
 
   testWidgets('history dialog result is ignored after Coach unmounts',
@@ -189,7 +189,9 @@ void main() {
       findsOneWidget,
     );
     expect(
-      find.text('The exact message and request identity will be reused.'),
+      find.text(
+        'Your message is still here. Retry it unchanged to check the same request safely.',
+      ),
       findsOneWidget,
     );
     expect(
@@ -210,7 +212,7 @@ void main() {
 
     expect(find.text('Coach unavailable'), findsOneWidget);
     expect(
-      find.textContaining('does not contact a Coach provider'),
+      find.text('No Coach provider is connected.'),
       findsOneWidget,
     );
     expect(find.textContaining('I can help you break that down'), findsNothing);

@@ -24,7 +24,9 @@ class CoachingObservationBuilder {
   const CoachingObservationBuilder();
 
   CoachingObservation build(CorrelationReport report) {
-    final ranked = report.rankedResults;
+    final ranked = report.rankedResults
+        .where((result) => result.sampleSize >= 14)
+        .toList(growable: false);
     if (ranked.isEmpty) {
       return CoachingObservation(
         title: 'Keep gathering comparable days',
@@ -32,7 +34,7 @@ class CoachingObservationBuilder {
             'There is not yet a stable enough relationship to turn into a useful experiment.',
         evidenceWindow: '${report.points.length} logged days in this window',
         confidence: ObservationConfidence.insufficient,
-        dataQuality: 'Not enough shared variation',
+        dataQuality: 'Need at least 14 comparable days',
         experiment: null,
       );
     }
@@ -40,7 +42,7 @@ class CoachingObservationBuilder {
     final metricA = report.metricById(result.metricAId);
     final metricB = report.metricById(result.metricBId);
     final coefficient = result.coefficient!;
-    final confidence = result.sampleSize >= 14 && coefficient.abs() >= 0.4
+    final confidence = coefficient.abs() >= 0.4
         ? ObservationConfidence.stronger
         : ObservationConfidence.emerging;
     final direction =

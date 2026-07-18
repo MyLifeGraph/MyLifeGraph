@@ -20,7 +20,7 @@ void main() {
     );
 
     expect(find.text("Today's decision"), findsOneWidget);
-    expect(find.text('Recover mode · Current data'), findsOneWidget);
+    expect(find.text('Recovery mode · Up-to-date data'), findsOneWidget);
     expect(find.text('Primary action'), findsOneWidget);
     expect(find.text('Submit the report'), findsOneWidget);
     expect(find.text('Open task'), findsOneWidget);
@@ -61,8 +61,11 @@ void main() {
       onExecute: (_) async => executions += 1,
     );
 
-    expect(find.text('Stale'), findsOneWidget);
-    expect(find.textContaining('source state changed'), findsOneWidget);
+    expect(find.text('Needs update'), findsOneWidget);
+    expect(
+      find.textContaining('check-ins, tasks, or habits changed'),
+      findsOneWidget,
+    );
     final button = tester.widget<FilledButton>(
       find.widgetWithText(FilledButton, 'Open task'),
     );
@@ -87,7 +90,7 @@ void main() {
     );
 
     expect(forced, isNull);
-    await tester.tap(find.text('Generate today briefing'));
+    await tester.tap(find.text('Create today\'s plan'));
     await tester.pump();
     expect(forced, isFalse);
   });
@@ -102,7 +105,7 @@ void main() {
       ),
     );
     expect(
-      find.textContaining('unavailable in local demo mode'),
+      find.textContaining('unavailable in demo mode'),
       findsOneWidget,
     );
     expect(find.text('Submit the report'), findsNothing);
@@ -111,8 +114,8 @@ void main() {
       tester,
       value: AsyncValue.error(StateError('backend failed'), StackTrace.empty),
     );
-    expect(find.text('Today briefing unavailable'), findsOneWidget);
-    expect(find.textContaining('not replaced'), findsOneWidget);
+    expect(find.text('Today\'s plan unavailable'), findsOneWidget);
+    expect(find.textContaining('Nothing was replaced'), findsOneWidget);
     expect(find.text('Submit the report'), findsNothing);
   });
 }

@@ -16,6 +16,13 @@ Coach, import a calendar, or change the Phase 2 Daily State classifier.
 Guest and mock sessions remain local and do not receive Supabase-backed task,
 habit, focus, or snapshot commands.
 
+Deadline Planner V1 later composes these primitives without widening them. Its
+first explicit plan confirmation creates one planner-managed task, and its
+progress reads qualifying completed focus sessions linked to that task. The
+planner's proposal/revision/block lifecycle, retry ledger, and explicit
+completion remain a separate `deadline-plan-v1` backend contract; Phase 3 does
+not infer or generate them.
+
 ## Object And Command Matrix
 
 | Object | Command | Valid source state | Durable effect | Recovery |
@@ -63,6 +70,16 @@ results are treated as unavailable/invalid transitions, not success.
   persisted field match exactly; any different concurrent write remains a
   recoverable conflict.
 - Unknown status or command values are unsupported.
+- A Deadline Planner managed task is created only by the verified backend's
+  first-confirm transaction with `task.id = deadline_plan.id`,
+  `estimated_minutes = null`, and exact `deadline-plan-v1` provenance. Generic
+  task edit, complete, postpone, cancel, restore, and ordinary editor paths must
+  reject this source and route the user to `/preparation-plans`; focus start may
+  still target the open task. Later plan confirmation may update exactly title,
+  deadline, and `updated_at` while it is open. Only explicit plan complete or
+  cancel may atomically project the managed task to matching `done`/`cancelled`
+  state and terminal timestamp. No generic task command may replace that
+  authority or erase terminal user state.
 
 ### Habits
 
@@ -151,6 +168,11 @@ transition days still count as one scheduled day.
   rejected, including metadata, identifiers, and `updated_at`. Task and habit
   target foreign keys use `ON DELETE RESTRICT`, so deleting a linked target
   cannot erase or detach historical attribution.
+- For an active Deadline Planner plan, only a completed session linked to its
+  stable managed task and started no earlier than first activation contributes
+  measured `actual_minutes` to derived plan progress. Active or abandoned
+  sessions do not contribute. A qualifying session still never completes a
+  block, managed task, or plan; explicit planner completion remains required.
 
 The database enforces the planned-duration bounds, single-active-session
 invariant, exact lifecycle shape, linked-target ownership/availability,
@@ -212,6 +234,9 @@ maps to a generic route or enabled no-op.
 The bounded planning surface and its mutation limits are defined in
 `docs/phase-8-weekly-review-contract.md`. Goal/task/schedule/replacement changes
 are not made executable merely because weekly review navigation exists.
+Deadline Planner V1 likewise adds no new `executable-action-v1` command or
+metadata key: `/preparation-plans` is a deliberate product surface governed by
+`docs/deadline-planner-v1-contract.md`, not an implicit Dashboard mutation.
 
 ## Refresh And Failure Semantics
 
@@ -234,6 +259,10 @@ are not made executable merely because weekly review navigation exists.
 - Snapshot refresh failure never rolls back the original durable write.
 - Normal Dashboard reads remain read-only for recommendations.
 - Task/habit/focus writes never generate recommendations or call an LLM.
+- Finishing a linked focus session may change a later read of Deadline Planner
+  progress, but does not generate a revision, move a dated block, complete the
+  plan, or call a planner mutation. Replanning always requires a deliberate
+  proposal followed by explicit confirmation.
 - UI success is shown only after the durable response or exact owner-scoped
   reconciliation proves the requested write.
 - Risky terminal actions provide confirmation or a direct undo.
@@ -258,3 +287,11 @@ focus update including `updated_at`, focus duration, inactive habit, and
 unscheduled selected-weekday outcomes. These assertions define required
 coverage; they are not a claim that the current checkout's full browser run
 passed.
+
+Deadline Planner integration coverage must additionally prove stable managed-
+task identity, rejection/redirect of every generic task mutation/editor path,
+allowed focus start only while the managed task is open, exact planner-owned
+field and terminal projections, completed post-activation linked-focus
+accounting, exclusion of active/abandoned/pre-activation sessions, and absence
+of implicit block/task/plan completion. Those requirements extend the
+verification boundary; they do not claim a current test run passed.

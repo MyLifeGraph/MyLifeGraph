@@ -14,7 +14,7 @@ void main() {
     await _pumpPage(tester, store);
 
     final saveButton = tester.widget<FilledButton>(
-      find.widgetWithText(FilledButton, 'Save morning calibration'),
+      find.widgetWithText(FilledButton, 'Save morning check-in'),
     );
     expect(saveButton.onPressed, isNull);
 
@@ -22,7 +22,7 @@ void main() {
     await _performSemanticTap(tester, 'morning energy 4 of 10');
     await _performSemanticTap(tester, 'day shape constrained');
     await tester.pump();
-    await tester.tap(find.text('Save morning calibration'));
+    await tester.tap(find.text('Save morning check-in'));
     await tester.pumpAndSettle();
 
     expect(find.text('Dashboard destination'), findsOneWidget);
@@ -43,16 +43,16 @@ void main() {
     await tester.tap(find.bySemanticsLabel('morning energy 4 of 10'));
     await tester.tap(find.bySemanticsLabel('day shape constrained'));
     await tester.pump();
-    await tester.tap(find.text('Save morning calibration'));
+    await tester.tap(find.text('Save morning check-in'));
     await tester.pumpAndSettle();
 
     expect(
       find.text(
-        'Could not save. Your exact Morning Calibration is still here. Try again.',
+        'Could not save. Your answers are still here. Try again.',
       ),
       findsWidgets,
     );
-    await tester.tap(find.text('Save morning calibration'));
+    await tester.tap(find.text('Save morning check-in'));
     await tester.pumpAndSettle();
 
     expect(store.attempts, hasLength(2));
@@ -80,11 +80,11 @@ void main() {
 
     expect(
       find.text(
-        'Today\'s Morning Calibration is loaded. Saving replaces only its morning state.',
+        'Today\'s morning check-in is loaded. Saving updates only these morning answers.',
       ),
       findsOneWidget,
     );
-    await tester.tap(find.text('Save morning calibration'));
+    await tester.tap(find.text('Save morning check-in'));
     await tester.pumpAndSettle();
     final written = store.attempts.single;
     expect(written.sleepHours, saved.sleepHours);
@@ -93,12 +93,35 @@ void main() {
     expect(written.captureId, saved.captureId);
     expect(written.capturedAt, isNot(saved.capturedAt));
   });
+
+  testWidgets('morning check-in remains usable at 320 pixels and 200% text',
+      (tester) async {
+    final store = _MorningStore();
+    await _pumpPage(
+      tester,
+      store,
+      viewSize: const Size(320, 700),
+      textScale: 2,
+    );
+
+    expect(tester.takeException(), isNull);
+    await _performSemanticTap(tester, 'morning sleep 7 h');
+    await _performSemanticTap(tester, 'morning energy 7 of 10');
+    await _performSemanticTap(tester, 'day shape flexible');
+    final save = find.text('Save morning check-in');
+    await tester.ensureVisible(save);
+    await tester.pumpAndSettle();
+    expect(save.hitTestable(), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 }
 
 Future<void> _performSemanticTap(
   WidgetTester tester,
   String label,
 ) async {
+  await tester.ensureVisible(find.bySemanticsLabel(label));
+  await tester.pumpAndSettle();
   final node = tester.getSemantics(find.bySemanticsLabel(label));
   expect(
     node,
@@ -110,11 +133,16 @@ Future<void> _performSemanticTap(
       hasTapAction: true,
     ),
   );
-  await tester.tap(find.bySemanticsLabel(label));
+  await tester.tap(find.bySemanticsLabel(label).hitTestable());
   await tester.pump();
 }
 
-Future<void> _pumpPage(WidgetTester tester, QuickCheckInStore store) async {
+Future<void> _pumpPage(
+  WidgetTester tester,
+  QuickCheckInStore store, {
+  Size viewSize = const Size(1200, 1500),
+  double textScale = 1,
+}) async {
   final router = GoRouter(
     initialLocation: '/morning-calibration',
     routes: [
@@ -133,7 +161,7 @@ Future<void> _pumpPage(WidgetTester tester, QuickCheckInStore store) async {
     ],
   );
   addTearDown(router.dispose);
-  tester.view.physicalSize = const Size(1200, 1500);
+  tester.view.physicalSize = viewSize;
   tester.view.devicePixelRatio = 1;
   addTearDown(() {
     tester.view.resetPhysicalSize();
@@ -142,7 +170,15 @@ Future<void> _pumpPage(WidgetTester tester, QuickCheckInStore store) async {
   await tester.pumpWidget(
     ProviderScope(
       overrides: [quickCheckInStoreProvider.overrideWithValue(store)],
-      child: MaterialApp.router(routerConfig: router),
+      child: MaterialApp.router(
+        routerConfig: router,
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(context).copyWith(
+            textScaler: TextScaler.linear(textScale),
+          ),
+          child: child!,
+        ),
+      ),
     ),
   );
   await tester.pumpAndSettle();

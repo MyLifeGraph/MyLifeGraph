@@ -214,6 +214,24 @@ read-only GET, exact body-free delete, disconnect retention, local imported-data
 deletion, schedule preservation, global cross-owner/operation request identity,
 reliable `PT409` conflicts, forced-RLS owner reads, and rejection of
 authenticated direct or cross-owner writes.
+Deadline Planner V1 focused coverage must keep `deadline-plan-v1` strict across
+Pydantic and Flutter, require the user's explicit estimate/prior credit, and
+prove deterministic timezone-aware blocks, honest unscheduled minutes, staged-
+versus-active revisions, the 366-day horizon, separate latest/current revision
+semantics, task-free draft cancellation, and exact retry/conflict behavior,
+including replay returning a newer current detail projection without repeating
+the original mutation.
+Service and
+migration tests must cover first-confirm managed-task creation, stable task
+identity, generic task mutation/editor rejection and redirect, allowed open-task
+focus, exact later-confirm fields, atomic matching terminal projection, linked
+completed-focus progress without implicit completion, optional calendar busy-
+time use, stale selected-event fingerprints, forced RLS, global
+request identity, conflict instead of empty availability for disconnected/
+deleted/missing-current imports, account cascade, export inclusion, and omitted
+ledger policy.
+Normal GET, import, Dashboard, scheduler, and focus-completion paths must remain
+free of hidden proposal writes.
 Phase 10 focused backend source coverage is split across strict model/API,
 service, migration, and local-provider tests. It covers exact request/error
 shapes and bearer-derived ownership; completed replay without context/provider;
@@ -621,6 +639,18 @@ rejected direct/cross-owner writes. Guest/mock coverage remains zero-call.
 The complete combined browser command passed these assertions non-destructively
 in the 2026-07-13 Phase 9 implementation checkout.
 
+Deadline Planner interaction coverage is currently split honestly across two
+layers. Flutter widget tests drive the calendar prefill and three-step wizard,
+require explicit exam/assignment and distinctive total/prior inputs, inspect the
+staged preview, confirm explicitly, retain and rebase a draft after `409`, and
+exercise the narrow/large-text layout. The browser/database journey creates and
+activates the lifecycle through the authenticated API, then verifies the real
+Flutter active-plan surface, managed-task/focus behavior, no `schedule_items` or
+imported-event mutation, owner/cross-owner authority, Account Export inclusion/
+cascade, and guest zero-call. It does not currently claim that Playwright drives
+the wizard itself; a single end-to-end browser wizard journey remains additional
+coverage rather than evidence already supplied by the API-seeded journey.
+
 The Phase 10 source portion uses only the deterministic fake provider. It is
 designed to assert read-only capability/history/memory calls, explicit memory
 selection, one deliberate bounded response, exact persisted message/request/
@@ -947,6 +977,23 @@ Phase 9 source coverage is not a real Google/Microsoft/Apple Calendar test. It
 uses selected local `.ics` bytes and does not establish provider OAuth, token
 refresh/revocation, arbitrary URL fetch, incremental/background sync, provider
 writes, mobile-native file-picker behavior, or remote RLS state.
+
+Deadline Planner source coverage likewise does not establish long-term study
+outcomes, a live provider calendar, notifications, background replanning,
+remote migration/RLS state, or an installed-device pass. No passing browser or
+local migration result should be recorded until the full current-checkout
+commands complete after the new migration is applied.
+
+Those local commands completed on 2026-07-18. A rollback-only database smoke
+verified manual and current-calendar proposal/confirmation, active-Focus and
+stale-Focus guards, exact collection/detail projection, and a 1,202-block
+projection without PostgREST truncation. The complete AI-service suite reported
+`745 passed, 1 skipped`; the final standard source gate reported a clean Flutter
+analysis and `579` passing Flutter tests. The final post-polish non-reset
+combined browser run reported
+`E2E browser smoke passed for e2e-1784404040@example.test`. That is evidence for
+this local current checkout only and does not expand any of the non-claims
+above. The manual five-student usability study remains not run.
 
 Phase 10 has focused fake-provider/process-runner, strict contract, service,
 migration, repository, controller, and widget tests in the checkout. Its

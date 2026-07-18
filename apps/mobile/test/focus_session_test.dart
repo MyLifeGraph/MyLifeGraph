@@ -262,6 +262,43 @@ void main() {
     });
   });
 
+  group('Focus preference suggestion', () {
+    test('waits for five completed sessions', () {
+      final sessions = [
+        for (var index = 0; index < 4; index++)
+          _completedSession(index: index, actualMinutes: 30),
+      ];
+
+      expect(FocusPreferenceSuggestion.fromSessions(sessions), isNull);
+    });
+
+    test('uses completed-session median and a repeated time window', () {
+      final sessions = [
+        _completedSession(index: 0, actualMinutes: 24),
+        _completedSession(index: 1, actualMinutes: 28),
+        _completedSession(index: 2, actualMinutes: 30),
+        _completedSession(index: 3, actualMinutes: 34),
+        _completedSession(index: 4, actualMinutes: 80, startHour: 18),
+        FocusSession(
+          id: 'abandoned',
+          status: FocusSessionStatus.abandoned,
+          startedAt: DateTime(2026, 7, 10, 9),
+          endedAt: DateTime(2026, 7, 10, 9, 40),
+          plannedMinutes: 40,
+          actualMinutes: 40,
+          updatedAt: DateTime(2026, 7, 10, 9, 40),
+        ),
+      ];
+
+      final suggestion = FocusPreferenceSuggestion.fromSessions(sessions);
+
+      expect(suggestion, isNotNull);
+      expect(suggestion!.durationMinutes, 30);
+      expect(suggestion.evidenceSessions, 5);
+      expect(suggestion.timeWindowLabel, 'in the morning');
+    });
+  });
+
   group('FocusSession target pairing', () {
     test('supports no target, one task, or one habit', () {
       final none = FocusSession.fromRow(_activeRow());
@@ -431,6 +468,24 @@ void main() {
       );
     });
   });
+}
+
+FocusSession _completedSession({
+  required int index,
+  required int actualMinutes,
+  int startHour = 9,
+}) {
+  final start = DateTime(2026, 7, index + 1, startHour);
+  final end = start.add(Duration(minutes: actualMinutes));
+  return FocusSession(
+    id: 'completed-$index',
+    status: FocusSessionStatus.completed,
+    startedAt: start,
+    endedAt: end,
+    plannedMinutes: 30,
+    actualMinutes: actualMinutes,
+    updatedAt: end,
+  );
 }
 
 Map<String, dynamic> _activeRow() => {

@@ -41,4 +41,27 @@ void main() {
     expect(observation.summary, contains('not proof'));
     expect(observation.experiment, contains('Optional 7-day experiment'));
   });
+
+  test('does not promote a five-day correlation as an insight', () {
+    final observation = const CoachingObservationBuilder().build(
+      CorrelationReport(
+        windowDays: 7,
+        metrics: correlationMetrics,
+        points: const [],
+        results: const [
+          CorrelationResult(
+            metricAId: 'sleep_hours',
+            metricBId: 'energy_level',
+            sampleSize: 5,
+            coefficient: 0.95,
+            summary: 'unused',
+          ),
+        ],
+      ),
+    );
+
+    expect(observation.confidence, ObservationConfidence.insufficient);
+    expect(observation.experiment, isNull);
+    expect(observation.dataQuality, contains('14 comparable days'));
+  });
 }

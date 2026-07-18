@@ -61,10 +61,10 @@ void main() {
     final container = ProviderScope.containerOf(
       tester.element(find.text('Synced account')),
     );
-    expect(find.text('In-app notifications'), findsOneWidget);
+    expect(find.text('In-app reminders'), findsOneWidget);
     expect(
       find.text(
-        'Manage separate delivery consent, categories, quiet hours, and the daily limit.',
+        'Allow banners while the app is open and choose what may appear.',
       ),
       findsOneWidget,
     );
@@ -367,7 +367,9 @@ void main() {
       200,
       scrollable: find.byType(Scrollable).first,
     );
-    await tester.tap(find.text('Delete account'));
+    await tester.ensureVisible(find.text('Delete account'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Delete account').hitTestable());
     await tester.pumpAndSettle();
     await tester.enterText(
       find.widgetWithText(TextField, 'Type DELETE to confirm'),
@@ -418,7 +420,9 @@ void main() {
       200,
       scrollable: find.byType(Scrollable).first,
     );
-    await tester.tap(find.text('Delete account'));
+    await tester.ensureVisible(find.text('Delete account'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Delete account').hitTestable());
     await tester.pumpAndSettle();
     await tester.enterText(
       find.widgetWithText(TextField, 'Type DELETE to confirm'),
@@ -474,7 +478,9 @@ void main() {
       200,
       scrollable: find.byType(Scrollable).first,
     );
-    await tester.tap(find.text('Delete account'));
+    await tester.ensureVisible(find.text('Delete account'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Delete account').hitTestable());
     await tester.pumpAndSettle();
     await tester.enterText(
       find.widgetWithText(TextField, 'Type DELETE to confirm'),
@@ -539,7 +545,9 @@ void main() {
       200,
       scrollable: find.byType(Scrollable).first,
     );
-    await tester.tap(find.text('Delete account'));
+    await tester.ensureVisible(find.text('Delete account'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Delete account').hitTestable());
     await tester.pumpAndSettle();
     await tester.enterText(
       find.widgetWithText(TextField, 'Type DELETE to confirm'),

@@ -36,7 +36,7 @@ void main() {
         find.byKey(const ValueKey('main-shell-add-signal')),
       ),
       matchesSemantics(
-        label: 'Add signal',
+        label: 'Quick actions',
         isButton: true,
         hasSelectedState: true,
         isSelected: true,
@@ -175,7 +175,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      const labels = ['home', 'insights', 'add-signal', 'inbox', 'settings'];
+      const labels = ['home', 'insights', 'quick-actions', 'inbox', 'settings'];
       for (final label in labels) {
         final labelFinder = find.byKey(ValueKey('main-nav-label-$label'));
         expect(labelFinder, findsOneWidget);

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -25,10 +27,12 @@ class FocusSessionPage extends ConsumerStatefulWidget {
     super.key,
     this.initialTargetKind,
     this.initialTargetId,
+    this.initialPlannedMinutes,
   });
 
   final FocusTargetKind? initialTargetKind;
   final String? initialTargetId;
+  final int? initialPlannedMinutes;
 
   @override
   ConsumerState<FocusSessionPage> createState() => _FocusSessionPageState();
@@ -40,7 +44,10 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage> {
   List<FocusTargetOption> _targets = const [];
   String? _selectedTargetValue;
   bool _initialTargetApplied = false;
+  bool _initialDurationApplied = false;
   int _plannedMinutes = 25;
+  DateTime _clockNow = DateTime.now();
+  Timer? _ticker;
   bool _isLoading = true;
   bool _isSaving = false;
   String? _loadError;
@@ -48,7 +55,19 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage> {
   @override
   void initState() {
     super.initState();
+    final requestedMinutes = widget.initialPlannedMinutes;
+    if (requestedMinutes != null &&
+        requestedMinutes >= 5 &&
+        requestedMinutes <= 240) {
+      _plannedMinutes = requestedMinutes;
+    }
     Future.microtask(_load);
+  }
+
+  @override
+  void dispose() {
+    _ticker?.cancel();
+    super.dispose();
   }
 
   @override
@@ -82,6 +101,7 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage> {
           _ActiveFocusCard(
             session: _active!,
             target: _targetFor(_active!),
+            now: _clockNow,
             isSaving: _isSaving,
             onFinish: _finish,
             onAbandon: _abandon,
@@ -89,12 +109,14 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage> {
         else
           _StartFocusCard(
             plannedMinutes: _plannedMinutes,
+            suggestion: FocusPreferenceSuggestion.fromSessions(_recent),
             targets: _targets,
             selectedTargetValue: _selectedTargetValue,
             isSaving: _isSaving,
             onDurationChanged: (value) {
               setState(() => _plannedMinutes = value);
             },
+            onCustomDuration: _chooseCustomDuration,
             onTargetChanged: (value) {
               setState(() => _selectedTargetValue = value);
             },
@@ -157,15 +179,28 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage> {
           !targets.any((target) => target.value == selected)) {
         selected = null;
       }
+      var plannedMinutes = _plannedMinutes;
+      if (!_initialDurationApplied) {
+        _initialDurationApplied = true;
+        if (widget.initialPlannedMinutes == null && active == null) {
+          final terminal = recent.where((session) => !session.isActive);
+          if (terminal.isNotEmpty) {
+            plannedMinutes = terminal.first.plannedMinutes;
+          }
+        }
+      }
       if (mounted) {
         setState(() {
           _active = active;
           _recent = recent;
           _targets = targets;
           _selectedTargetValue = selected;
+          _plannedMinutes = plannedMinutes;
+          _clockNow = DateTime.now();
           _loadError = null;
           _isLoading = false;
         });
+        _syncTicker();
       }
     } catch (_) {
       if (!mounted) return;
@@ -175,6 +210,55 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage> {
           _isLoading = false;
         });
       }
+    }
+  }
+
+  void _syncTicker() {
+    _ticker?.cancel();
+    _ticker = null;
+    if (_active == null) return;
+    _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted || _active == null) return;
+      setState(() => _clockNow = DateTime.now());
+    });
+  }
+
+  Future<void> _chooseCustomDuration() async {
+    final controller = TextEditingController(text: '$_plannedMinutes');
+    final selected = await showDialog<int>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Custom focus duration'),
+        content: TextField(
+          key: const ValueKey('custom-focus-duration'),
+          controller: controller,
+          autofocus: true,
+          keyboardType: TextInputType.number,
+          decoration: const InputDecoration(
+            labelText: 'Minutes',
+            helperText: 'Between 5 and 240 minutes',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final value = int.tryParse(controller.text.trim());
+              if (value != null && value >= 5 && value <= 240) {
+                Navigator.of(context).pop(value);
+              }
+            },
+            child: const Text('Use duration'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (selected != null && mounted) {
+      setState(() => _plannedMinutes = selected);
     }
   }
 
@@ -392,24 +476,36 @@ class _FocusLoadErrorCard extends StatelessWidget {
 class _StartFocusCard extends StatelessWidget {
   const _StartFocusCard({
     required this.plannedMinutes,
+    required this.suggestion,
     required this.targets,
     required this.selectedTargetValue,
     required this.isSaving,
     required this.onDurationChanged,
+    required this.onCustomDuration,
     required this.onTargetChanged,
     required this.onStart,
   });
 
   final int plannedMinutes;
+  final FocusPreferenceSuggestion? suggestion;
   final List<FocusTargetOption> targets;
   final String? selectedTargetValue;
   final bool isSaving;
   final ValueChanged<int> onDurationChanged;
+  final VoidCallback onCustomDuration;
   final ValueChanged<String?> onTargetChanged;
   final VoidCallback onStart;
 
   @override
   Widget build(BuildContext context) {
+    final durations = <int>{
+      25,
+      50,
+      90,
+      plannedMinutes,
+      if (suggestion != null) suggestion!.durationMinutes,
+    }.toList()
+      ..sort();
     return AppCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -425,15 +521,51 @@ class _StartFocusCard extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.lg),
           SegmentedButton<int>(
-            segments: const [
-              ButtonSegment(value: 25, label: Text('25 min')),
-              ButtonSegment(value: 50, label: Text('50 min')),
-              ButtonSegment(value: 90, label: Text('90 min')),
+            segments: [
+              for (final minutes in durations)
+                ButtonSegment(
+                  value: minutes,
+                  label: Text('$minutes min'),
+                ),
             ],
             selected: {plannedMinutes},
             onSelectionChanged:
                 isSaving ? null : (values) => onDurationChanged(values.single),
           ),
+          const SizedBox(height: AppSpacing.sm),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: isSaving ? null : onCustomDuration,
+              icon: const Icon(Icons.tune),
+              label: const Text('Custom duration'),
+            ),
+          ),
+          if (suggestion != null) ...[
+            const SizedBox(height: AppSpacing.sm),
+            Container(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.insights_outlined, size: 20),
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: Text(
+                      'Your ${suggestion!.evidenceSessions} recent completed sessions cluster around '
+                      '${suggestion!.durationMinutes} minutes'
+                      '${suggestion!.timeWindowLabel == null ? '' : ' ${suggestion!.timeWindowLabel}'}. '
+                      'This is a suggestion, not an automatic setting.',
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
           const SizedBox(height: AppSpacing.lg),
           DropdownButtonFormField<String?>(
             key: ValueKey('focus-target-selector-$selectedTargetValue'),
@@ -489,6 +621,7 @@ class _ActiveFocusCard extends StatelessWidget {
   const _ActiveFocusCard({
     required this.session,
     required this.target,
+    required this.now,
     required this.isSaving,
     required this.onFinish,
     required this.onAbandon,
@@ -496,12 +629,24 @@ class _ActiveFocusCard extends StatelessWidget {
 
   final FocusSession session;
   final FocusTargetOption? target;
+  final DateTime now;
   final bool isSaving;
   final VoidCallback onFinish;
   final VoidCallback onAbandon;
 
   @override
   Widget build(BuildContext context) {
+    final plannedEnd = session.startedAt.add(
+      Duration(minutes: session.plannedMinutes),
+    );
+    final elapsed = now.isAfter(session.startedAt)
+        ? now.difference(session.startedAt)
+        : Duration.zero;
+    final remaining =
+        plannedEnd.isAfter(now) ? plannedEnd.difference(now) : Duration.zero;
+    final plannedDuration = Duration(minutes: session.plannedMinutes);
+    final progress = elapsed.inMilliseconds / plannedDuration.inMilliseconds;
+    final reachedPlan = !plannedEnd.isAfter(now);
     return AppCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -530,6 +675,31 @@ class _ActiveFocusCard extends StatelessWidget {
             style: Theme.of(context).textTheme.bodySmall,
           ),
           const SizedBox(height: AppSpacing.lg),
+          Semantics(
+            liveRegion: true,
+            label: reachedPlan
+                ? 'Planned focus time reached'
+                : '${_focusTimerText(remaining)} remaining',
+            child: Text(
+              reachedPlan
+                  ? '+${_focusTimerText(now.difference(plannedEnd))}'
+                  : _focusTimerText(remaining),
+              key: const ValueKey('focus-countdown'),
+              style: Theme.of(context).textTheme.displaySmall?.copyWith(
+                fontFeatures: const [FontFeature.tabularFigures()],
+              ),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            reachedPlan
+                ? 'Planned time reached'
+                : 'Ends at ${DateFormat.Hm().format(plannedEnd.toLocal())}',
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          LinearProgressIndicator(value: progress.clamp(0, 1)),
+          const SizedBox(height: AppSpacing.lg),
           Wrap(
             key: const ValueKey('active-focus-actions'),
             alignment: WrapAlignment.end,
@@ -553,6 +723,18 @@ class _ActiveFocusCard extends StatelessWidget {
       ),
     );
   }
+}
+
+String _focusTimerText(Duration duration) {
+  final safeSeconds = duration.inSeconds < 0 ? 0 : duration.inSeconds;
+  final hours = safeSeconds ~/ 3600;
+  final minutes = safeSeconds.remainder(3600) ~/ 60;
+  final seconds = safeSeconds.remainder(60);
+  final minuteText = minutes.toString().padLeft(2, '0');
+  final secondText = seconds.toString().padLeft(2, '0');
+  return hours > 0
+      ? '${hours.toString().padLeft(2, '0')}:$minuteText:$secondText'
+      : '$minuteText:$secondText';
 }
 
 class _FocusHistoryCard extends StatelessWidget {

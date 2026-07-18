@@ -63,18 +63,18 @@ class TodayBriefingSection extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Today briefing unavailable',
+              'Today\'s plan unavailable',
               style: Theme.of(context).textTheme.titleLarge,
             ),
             const SizedBox(height: AppSpacing.sm),
             const Text(
-              'Your account data was not replaced with a generated or demo plan.',
+              'Nothing was replaced. Check your connection and try loading your plan again.',
             ),
             const SizedBox(height: AppSpacing.md),
             OutlinedButton.icon(
               onPressed: onRetryRead,
               icon: const Icon(Icons.refresh),
-              label: const Text('Retry briefing'),
+              label: const Text('Retry today\'s plan'),
             ),
           ],
         ),
@@ -86,12 +86,12 @@ class TodayBriefingSection extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Daily briefing',
+                  'Today\'s plan',
                   style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
                 ),
                 SizedBox(height: AppSpacing.sm),
                 Text(
-                  'Personalized briefing generation is unavailable in local demo mode. No account plan was fabricated.',
+                  'A personal plan is unavailable in demo mode. The app will not pretend the example data is yours.',
                 ),
               ],
             ),
@@ -153,12 +153,12 @@ class _MissingBriefingCard extends StatelessWidget {
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
               ),
-              const _BriefingPill(label: 'Missing'),
+              const _BriefingPill(label: 'Not ready'),
             ],
           ),
           const SizedBox(height: AppSpacing.sm),
           const Text(
-            'No persisted briefing exists for today. Generate one deliberately from your current state and executable actions.',
+            'Create a plan from your latest check-ins and the tasks or habits you can do today. This will not change them.',
           ),
           if (generationError != null) ...[
             const SizedBox(height: AppSpacing.sm),
@@ -175,9 +175,9 @@ class _MissingBriefingCard extends StatelessWidget {
                     dimension: 16,
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
-                : const Icon(Icons.auto_awesome_outlined),
+                : const Icon(Icons.playlist_add_check),
             label: Text(
-              isGenerating ? 'Generating…' : 'Generate today briefing',
+              isGenerating ? 'Creating…' : 'Create today\'s plan',
             ),
           ),
         ],
@@ -241,7 +241,7 @@ class _BriefingCard extends StatelessWidget {
                   ],
                 ),
               ),
-              _BriefingPill(label: stale ? 'Stale' : 'Current'),
+              _BriefingPill(label: stale ? 'Needs update' : 'Up to date'),
             ],
           ),
           const SizedBox(height: AppSpacing.md),
@@ -265,7 +265,7 @@ class _BriefingCard extends StatelessWidget {
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Text(
-                'Your source state changed after this briefing. Adjust today before starting its actions.',
+                'Your check-ins, tasks, or habits changed after this plan was created. Update it before starting an action.',
                 style: TextStyle(
                   color: Theme.of(context).colorScheme.onErrorContainer,
                 ),
@@ -312,7 +312,7 @@ class _BriefingCard extends StatelessWidget {
           if (submittedFeedbackType != null) ...[
             const SizedBox(height: AppSpacing.sm),
             const Text(
-              'Saved. Use Adjust today to apply recent feedback to a new ranking.',
+              'Saved. Use Update today\'s plan if you want this feedback considered now.',
             ),
           ],
           if (feedbackError != null) ...[
@@ -363,7 +363,9 @@ class _BriefingCard extends StatelessWidget {
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
                     : const Icon(Icons.refresh),
-                label: Text(isGenerating ? 'Adjusting…' : 'Adjust today'),
+                label: Text(
+                  isGenerating ? 'Updating…' : 'Update today\'s plan',
+                ),
               ),
               TextButton.icon(
                 onPressed: onShowFeedbackHistory,
@@ -471,17 +473,17 @@ class _BriefingPill extends StatelessWidget {
 }
 
 String _modeLabel(BriefingMode mode) => switch (mode) {
-      BriefingMode.push => 'Push',
-      BriefingMode.steady => 'Steady',
-      BriefingMode.recover => 'Recover',
-      BriefingMode.plan => 'Plan',
+      BriefingMode.push => 'Higher-capacity',
+      BriefingMode.steady => 'Balanced',
+      BriefingMode.recover => 'Recovery',
+      BriefingMode.plan => 'Planning',
     };
 
 String _qualityLabel(BriefingDataQuality quality) => switch (quality) {
-      BriefingDataQuality.missing => 'Missing',
-      BriefingDataQuality.partial => 'Partial',
-      BriefingDataQuality.current => 'Current',
-      BriefingDataQuality.stale => 'Stale',
+      BriefingDataQuality.missing => 'No current',
+      BriefingDataQuality.partial => 'Some missing',
+      BriefingDataQuality.current => 'Up-to-date',
+      BriefingDataQuality.stale => 'Older',
     };
 
 String _feedbackLabel(DecisionFeedbackType type) => switch (type) {
@@ -498,7 +500,7 @@ String _commandLabel(ExecutableActionCommand command) => switch (command) {
       ExecutableActionCommand.logHabit => 'Mark habit done',
       ExecutableActionCommand.startFocus => 'Start focus',
       ExecutableActionCommand.reviewPlan => 'Review your week',
-      ExecutableActionCommand.openCapture => 'Open calibration',
+      ExecutableActionCommand.openCapture => 'Open check-in',
     };
 
 IconData _commandIcon(ExecutableActionCommand command) => switch (command) {

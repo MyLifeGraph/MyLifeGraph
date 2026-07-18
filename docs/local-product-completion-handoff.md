@@ -1,7 +1,9 @@
 # Local Product Completion Handoff
 
-Status: execution handoff for finishing the complete product locally in WSL
-before packaging a standalone Android production release. Internal contract
+Status: historical local-release checklist last fully updated on 2026-07-14.
+For the current Deadline Planner and usability-polish review, start with
+`docs/product-review-handoff.md`; it supersedes checkpoint counts and working-
+tree statements in this file. Internal contract
 names such as `intake-v1`, `habit-v1`, or `coach-response-v1` are versioned API
 and persistence contracts; they do not mean a demo, cheap edition, or reduced
 quality target.

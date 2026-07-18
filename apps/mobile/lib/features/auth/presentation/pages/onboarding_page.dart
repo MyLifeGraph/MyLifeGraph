@@ -260,7 +260,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                             state.isSaving
                                 ? 'Saving setup...'
                                 : state.retryLocked
-                                    ? 'Retry exact setup save'
+                                    ? 'Retry unchanged'
                                     : state.isPending
                                         ? 'Resume pending setup'
                                         : state.saveError == null
@@ -466,12 +466,12 @@ class _RequiredSetupSection extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.lg),
           Text(
-            'Reminder preference required',
+            'Reminder preference (required)',
             style: Theme.of(context).textTheme.titleMedium,
           ),
           const SizedBox(height: AppSpacing.sm),
           Text(
-            'This stores your opt-in. If reminders are enabled, both quiet-hour times are required. Notification delivery is not enabled yet.',
+            'This only saves what you would prefer. It does not turn on delivery. You can separately allow in-app banners in Settings; they appear only while the app is open.',
             style: Theme.of(context).textTheme.bodySmall,
           ),
           const SizedBox(height: AppSpacing.sm),
@@ -479,7 +479,7 @@ class _RequiredSetupSection extends StatelessWidget {
             spacing: AppSpacing.sm,
             children: [
               ChoiceChip(
-                label: const Text('Enable reminders'),
+                label: const Text('Prefer reminders'),
                 selected: draft.reminderPreference?.enabled == true,
                 onSelected: (_) {
                   onChanged(
@@ -492,7 +492,7 @@ class _RequiredSetupSection extends StatelessWidget {
                 },
               ),
               ChoiceChip(
-                label: const Text('No reminders'),
+                label: const Text('Prefer no reminders'),
                 selected: draft.reminderPreference?.enabled == false,
                 onSelected: (_) {
                   onChanged(
@@ -1339,23 +1339,33 @@ class _PendingSetupNotice extends StatelessWidget {
         children: [
           Text(
             retryLocked
-                ? 'Setup save needs an exact retry'
-                : 'Finish the pending setup save',
+                ? 'Setup save could not be confirmed'
+                : 'Finish saving Setup',
             style: Theme.of(context).textTheme.titleMedium,
           ),
           const SizedBox(height: AppSpacing.xs),
           Text(
             retryLocked
-                ? 'The save result is unknown. Your exact submitted draft is locked; retry it unchanged or reload the server state.'
-                : 'The previous request may have reached the server. The exact saved draft is locked until that same request is applied safely.',
+                ? 'Your answers are still here and locked for a safe retry. Retry unchanged or load the latest saved Setup.'
+                : 'Your previous save may have worked. These answers stay locked until the app can confirm the result safely.',
           ),
-          if (requestId != null) ...[
-            const SizedBox(height: AppSpacing.xs),
-            Text(
-              'Pending request ${requestId!.length > 8 ? requestId!.substring(0, 8) : requestId}…',
-              style: Theme.of(context).textTheme.labelSmall,
+          if (requestId != null)
+            Material(
+              type: MaterialType.transparency,
+              child: ExpansionTile(
+                tilePadding: EdgeInsets.zero,
+                title: const Text('Technical details'),
+                children: [
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'Save reference ${requestId!.length > 8 ? requestId!.substring(0, 8) : requestId}…',
+                      style: Theme.of(context).textTheme.labelSmall,
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ],
         ],
       ),
     );

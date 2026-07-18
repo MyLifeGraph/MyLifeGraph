@@ -362,19 +362,7 @@ def _parse_v2_capture(
             "mood": _rating(raw.get("mood"), minimum=1),
             "energy": _rating(raw.get("energy"), minimum=1),
             "stress_intensity": _rating(raw.get("stress_intensity"), minimum=1),
-            "stress_source": _enum_value(raw.get("stress_source"), _STRESS_SOURCES),
-            "stress_controllability": _enum_value(
-                raw.get("stress_controllability"),
-                _STRESS_CONTROLLABILITY,
-            ),
-            "focus_band": _enum_value(raw.get("focus_band"), _FOCUS_BANDS),
             "main_friction": _enum_value(raw.get("main_friction"), _MAIN_FRICTIONS),
-            "has_tomorrow_priority": (
-                True
-                if _non_empty_string(raw.get("tomorrow_priority"), max_length=160)
-                is not None
-                else None
-            ),
         }
         for field, value in required.items():
             if value is None:
@@ -382,6 +370,37 @@ def _parse_v2_capture(
             else:
                 values[field] = value
         stress = values.get("stress_intensity")
+        source = _enum_value(raw.get("stress_source"), _STRESS_SOURCES)
+        controllability = _enum_value(
+            raw.get("stress_controllability"),
+            _STRESS_CONTROLLABILITY,
+        )
+        if "stress_source" in raw and source is None:
+            _append_issue(issues, "evening.invalid_stress_source")
+        if "stress_controllability" in raw and controllability is None:
+            _append_issue(issues, "evening.invalid_stress_controllability")
+        if (source is None) != (controllability is None):
+            _append_issue(issues, "evening.incomplete_stress_context")
+        if stress is not None and stress >= 5 and source is None:
+            _append_issue(issues, "evening.missing_stress_context")
+        if source is not None and controllability is not None:
+            values["stress_source"] = source
+            values["stress_controllability"] = controllability
+
+        if "focus_band" in raw:
+            focus_band = _enum_value(raw.get("focus_band"), _FOCUS_BANDS)
+            if focus_band is None:
+                _append_issue(issues, "evening.invalid_focus_band")
+            else:
+                values["focus_band"] = focus_band
+
+        tomorrow_priority = raw.get("tomorrow_priority")
+        if tomorrow_priority is None:
+            values["has_tomorrow_priority"] = False
+        elif _non_empty_string(tomorrow_priority, max_length=160) is not None:
+            values["has_tomorrow_priority"] = True
+        else:
+            _append_issue(issues, "evening.invalid_tomorrow_priority")
         stored_label = _enum_value(
             raw.get("stress_intensity_label"),
             _STRESS_LABELS,
@@ -397,7 +416,10 @@ def _parse_v2_capture(
                 values["gentle_tomorrow"] = gentle
             else:
                 _append_issue(issues, "evening.invalid_gentle_tomorrow")
-        complete = all(value is not None for value in required.values())
+        complete = all(value is not None for value in required.values()) and (
+            stress is not None
+            and (stress < 5 or (source is not None and controllability is not None))
+        )
     else:
         required = {
             "sleep_hours": _sleep_hours(raw.get("sleep_hours"), half_hours=True),

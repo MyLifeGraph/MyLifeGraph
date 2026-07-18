@@ -22,12 +22,12 @@ void main() {
     await _pumpEveningPage(tester, store, snapshotRefresh: snapshotRefresh);
 
     await _completeEveningDraft(tester);
-    await tester.tap(find.text('Save evening shutdown'));
+    await _tapVisible(tester, find.text('Save evening check-in'));
     await tester.pumpAndSettle();
 
     expect(
       find.text(
-        'Could not save. Your exact Evening Shutdown is still here. Try again.',
+        'Could not save. Your answers are still here. Try again.',
       ),
       findsWidgets,
     );
@@ -41,7 +41,7 @@ void main() {
       first.stressControllability,
       StressControllability.hardlyControllable,
     );
-    expect(first.focusBand, FocusBand.thirtyToSixtyMinutes);
+    expect(first.focusBand, isNull);
     expect(first.mainFriction, MainFriction.emotionalLoad);
     expect(first.tomorrowPriority, 'Protect the exact priority');
     expect(first.reflectionNote, 'Exact retry reflection');
@@ -49,7 +49,7 @@ void main() {
     expect(first.makeTomorrowGentler, isTrue);
     expect(snapshotRefresh.targetDates, isEmpty);
 
-    await tester.tap(find.text('Save evening shutdown'));
+    await _tapVisible(tester, find.text('Save evening check-in'));
     await tester.pumpAndSettle();
 
     expect(find.text('Dashboard destination'), findsOneWidget);
@@ -76,19 +76,17 @@ void main() {
 
     expect(
       find.text(
-        'Today\'s Evening Shutdown is loaded. Saving replaces only its evening state.',
+        'Today\'s evening check-in is loaded. Saving updates only these evening answers.',
       ),
       findsOneWidget,
     );
-    for (var step = 0; step < 8; step++) {
-      await tester.tap(find.text('Next'));
-      await tester.pumpAndSettle();
-    }
+    await tester.tap(find.text('Next'));
+    await tester.pumpAndSettle();
     expect(
       _textFieldWithLabel('Reflection (optional)'),
       findsOneWidget,
     );
-    await tester.tap(find.text('Save evening shutdown'));
+    await _tapVisible(tester, find.text('Save evening check-in'));
     await tester.pumpAndSettle();
 
     final written = store.eveningAttempts.single.toMetadataJson();
@@ -103,8 +101,8 @@ void main() {
     await _pumpEveningPage(tester, store);
     await _completeEveningDraft(tester, includeOptionals: false);
 
-    await tester.tap(find.text('Save evening shutdown'));
-    await tester.tap(find.text('Save evening shutdown'));
+    await _tapVisible(tester, find.text('Save evening check-in'));
+    await tester.tap(find.widgetWithText(FilledButton, 'Saving...'));
     await tester.pump();
 
     expect(store.calls, 1);
@@ -161,24 +159,32 @@ Future<void> _completeEveningDraft(
   WidgetTester tester, {
   bool includeOptionals = true,
 }) async {
-  await _chooseAndContinue(tester, 'evening mood 2 of 10');
-  await _chooseAndContinue(tester, 'evening energy 9 of 10');
-  await _chooseAndContinue(tester, 'evening stress 8 of 10');
-  await _chooseAndContinue(tester, 'stress source private_emotional');
-  await _chooseAndContinue(
-    tester,
-    'stress controllability hardly_controllable',
-  );
-  await _chooseAndContinue(tester, 'focus band 30_to_60_minutes');
-  await _chooseAndContinue(tester, 'main friction emotional_load');
-
-  await tester.enterText(
-    _textFieldWithLabel('Tomorrow priority'),
-    'Protect the exact priority',
-  );
+  await tester.tap(find.bySemanticsLabel('evening mood 2 of 10'));
+  await tester.pump();
+  await tester.tap(find.bySemanticsLabel('evening energy 9 of 10'));
+  await tester.pump();
+  await tester.tap(find.bySemanticsLabel('evening stress 8 of 10'));
   await tester.pump();
   await tester.tap(find.text('Next'));
   await tester.pumpAndSettle();
+
+  await _tapVisible(
+    tester,
+    find.bySemanticsLabel('main friction emotional_load'),
+  );
+  await _tapVisible(
+    tester,
+    find.bySemanticsLabel('stress source private_emotional'),
+  );
+  await _tapVisible(
+    tester,
+    find.bySemanticsLabel('stress influence hardly_controllable'),
+  );
+
+  await tester.enterText(
+    _textFieldWithLabel('Possible priority tomorrow (optional)'),
+    'Protect the exact priority',
+  );
 
   if (includeOptionals) {
     await tester.enterText(
@@ -189,19 +195,18 @@ Future<void> _completeEveningDraft(
       _textFieldWithLabel('Specific blocker (optional)'),
       'Exact retry blocker',
     );
-    await tester.tap(find.bySemanticsLabel('make tomorrow gentler'));
-    await tester.pump();
+    await _tapVisible(
+      tester,
+      find.bySemanticsLabel('make tomorrow gentler'),
+    );
   }
 }
 
-Future<void> _chooseAndContinue(
-  WidgetTester tester,
-  String semanticLabel,
-) async {
-  await tester.tap(find.bySemanticsLabel(semanticLabel));
-  await tester.pump();
-  await tester.tap(find.text('Next'));
+Future<void> _tapVisible(WidgetTester tester, Finder finder) async {
+  await tester.ensureVisible(finder);
   await tester.pumpAndSettle();
+  await tester.tap(finder);
+  await tester.pump();
 }
 
 EveningShutdownDraft _eveningDraft({

@@ -244,9 +244,9 @@ class _NotificationsHeader extends StatelessWidget {
               ? 'These are local example items. They are not synced or sent '
                   'as notifications. Up to the latest 30 items are shown; '
                   'the counts cover only the items shown.'
-              : 'Stored inbox items can be marked read or dismissed here. '
-                  'In-app banners require separate consent and appear only '
-                  'while the app is open; no push delivery is enabled. '
+              : 'Saved Inbox items can be marked read or dismissed here. '
+                  'Banners need separate consent and appear only while the '
+                  'app is open. There is no push, email, system, or background delivery. '
                   'Up to the latest 30 items are shown.',
           style: Theme.of(context).textTheme.bodyMedium,
         ),
@@ -592,7 +592,7 @@ class _NotificationCardContent extends StatelessWidget {
               label: notification.isRead ? 'Read' : 'Unread',
             ),
             if (notification.isDeterministicallyGenerated)
-              const _NotificationBadge(label: 'Deterministic · no LLM'),
+              const _NotificationBadge(label: 'Fixed text · not AI-written'),
           ],
         ),
         const SizedBox(height: AppSpacing.md),
@@ -616,7 +616,7 @@ class _NotificationCardContent extends StatelessWidget {
         if (notification.generationProvenance != null) ...[
           const SizedBox(height: AppSpacing.xs),
           Text(
-            'Generated from ${_sourceLabel(notification.generationProvenance!.sourceKind)} '
+            'Based on ${_sourceLabel(notification.generationProvenance!.sourceKind)} '
             'for ${notification.deliveryDate} in '
             '${notification.generationProvenance!.timezone}.',
             key: ValueKey('notification-provenance-${notification.id}'),
@@ -720,10 +720,10 @@ class _NotificationCardContent extends StatelessWidget {
 
   String _sourceLabel(String sourceKind) {
     return switch (sourceKind) {
-      'daily_state' => 'the current Daily State',
-      'daily_briefing' => 'the current Daily Briefing',
+      'daily_state' => 'your current check-in state',
+      'daily_briefing' => 'today\'s current plan',
       'weekly_review' => 'the completed Weekly Review',
-      _ => 'a bounded backend source',
+      _ => 'saved app data',
     };
   }
 }
@@ -759,7 +759,7 @@ class _NotificationActionError extends StatelessWidget {
           children: [
             Text(
               exact
-                  ? 'The action result is unknown. Retry sends the exact same request.'
+                  ? 'The result could not be confirmed. The item is unchanged here; retry without changing the action.'
                   : reloadRequired
                       ? 'This inbox item changed or is no longer available. Reload the inbox before acting again.'
                       : 'The inbox action could not be completed. Reload the inbox before trying again.',
@@ -783,7 +783,7 @@ class _NotificationActionError extends StatelessWidget {
                       ),
                       onPressed: onRetry,
                       icon: const Icon(Icons.refresh),
-                      label: const Text('Retry exact request'),
+                      label: const Text('Retry unchanged'),
                     ),
                   ),
                 Semantics(

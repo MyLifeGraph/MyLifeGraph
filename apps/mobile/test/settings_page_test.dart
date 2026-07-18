@@ -42,18 +42,14 @@ void main() {
     );
     expect(find.text('Local guest'), findsOneWidget);
     expect(find.text('Setup and commitments'), findsOneWidget);
-    expect(find.text('In-app notifications'), findsOneWidget);
+    expect(find.text('In-app reminders'), findsOneWidget);
     await tester.scrollUntilVisible(
       find.text('Calendar import (optional)'),
       180,
       scrollable: find.byType(Scrollable).first,
     );
     expect(find.text('Calendar import (optional)'), findsOneWidget);
-    expect(find.text('Coach'), findsOneWidget);
-    expect(
-      find.text('Ask for bounded guidance and manage Coach data use.'),
-      findsOneWidget,
-    );
+    expect(find.textContaining('Coach'), findsNothing);
     expect(
       find.text('Import a selected .ics file as a read-only local copy.'),
       findsOneWidget,

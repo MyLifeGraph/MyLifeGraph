@@ -8,6 +8,7 @@ import '../../features/auth/presentation/pages/password_recovery_page.dart';
 import '../../features/auth/presentation/providers/auth_providers.dart';
 import '../../features/calendar_integration/presentation/pages/calendar_integration_page.dart';
 import '../../features/coach/presentation/pages/coach_page.dart';
+import '../../features/deadline_plans/presentation/pages/deadline_plans_page.dart';
 import '../../features/dashboard/presentation/pages/dashboard_page.dart';
 import '../../features/focus/domain/focus_session.dart';
 import '../../features/focus/presentation/pages/focus_session_page.dart';
@@ -32,6 +33,7 @@ const _postAuthContinuationPaths = <String>{
   AppRoutes.settings,
   AppRoutes.notificationSettings,
   AppRoutes.calendarIntegration,
+  AppRoutes.preparationPlans,
   AppRoutes.insights,
   AppRoutes.quickAction,
   AppRoutes.quickMoodCheckIn,
@@ -157,6 +159,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             builder: (context, state) => const CalendarIntegrationPage(),
           ),
           GoRoute(
+            path: AppRoutes.preparationPlans,
+            builder: (context, state) => DeadlinePlansPage(
+              initialPlanId: state.uri.queryParameters['plan_id'],
+              sourceCalendarEventId:
+                  state.uri.queryParameters['calendar_event_id'],
+            ),
+          ),
+          GoRoute(
             path: AppRoutes.insights,
             builder: (context, state) => const InsightsPage(),
           ),
@@ -211,6 +221,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                 state.uri.queryParameters['target_kind'],
               ),
               initialTargetId: state.uri.queryParameters['target_id'],
+              initialPlannedMinutes: _focusMinutes(
+                state.uri.queryParameters['planned_minutes'],
+              ),
             ),
           ),
           GoRoute(
@@ -235,6 +248,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   ref.onDispose(router.dispose);
   return router;
 });
+
+int? _focusMinutes(String? value) {
+  if (value == null || !RegExp(r'^\d{1,3}$').hasMatch(value)) return null;
+  final minutes = int.tryParse(value);
+  return minutes != null && minutes >= 5 && minutes <= 240 ? minutes : null;
+}
 
 String _authLocationFor(Uri intendedLocation) {
   return Uri(

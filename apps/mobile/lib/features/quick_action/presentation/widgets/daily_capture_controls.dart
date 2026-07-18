@@ -104,7 +104,7 @@ class CaptureRatingControl extends StatelessWidget {
               Text(
                 value == null
                     ? 'Choose a value to continue.'
-                    : 'This exact value will be saved.',
+                    : 'This selected value will be saved.',
                 style: Theme.of(context).textTheme.bodyMedium,
               ),
             ],

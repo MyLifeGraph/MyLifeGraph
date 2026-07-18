@@ -39,6 +39,13 @@ Read these files before making changes:
 14. `docs/notification-delivery-v1-contract.md` before changing notification
     consent, deterministic generation, quiet hours, category/cap enforcement,
     local scheduling, foreground delivery, or delivery provenance
+15. `docs/deadline-planner-v1-contract.md` before changing exam/assignment
+    preparation estimates, plan revisions, dated blocks, managed plan tasks,
+    calendar-derived availability, or tracked-focus progress
+16. `docs/ui-language-and-copy-contract.md` before changing student-facing
+    names, capability claims, retry copy, localization, or large-text behavior
+17. `docs/product-review-handoff.md` when starting a fresh whole-product review
+    of Deadline Planner and the current usability-polish slice
 
 ## Current State
 
@@ -69,6 +76,8 @@ databases may still contain legacy CamelCase tables such as `"User"`,
 - `calendar_connections`, `calendar_imports`, `calendar_events`
 - `calendar_request_identities`
 - `coach_requests`, `coach_usage_events`, `coach_memory_selections`
+- `deadline_plans`, `deadline_plan_revisions`, `deadline_plan_blocks`
+- `deadline_plan_request_identities`
 
 The migration
 `supabase/migrations/20260618170000_create_canonical_app_schema.sql` creates the
@@ -192,7 +201,7 @@ or updated rows without assuming old remote rows are already clean.
 The migration
 `supabase/migrations/20260714110000_account_export_lifestyle_entries_grant.sql`
 restores the one missing backend `SELECT` grant required by the existing
-28-table Account Export V1 contract. It grants only `service_role` read access
+31-table Account Export V1 contract. It grants only `service_role` read access
 to `lifestyle_entries`; it adds no guest or authenticated-user authority.
 The migration
 `supabase/migrations/20260714130000_notification_delivery_v1.sql` adds
@@ -239,6 +248,9 @@ and keeps `updated_at` monotone and no earlier than retained consent timestamps.
   local runner behavior, and foreground at-most-once delivery.
 - `docs/v1-account-controls-contract.md` - authenticated timezone, bounded JSON
   export, password recovery, and permanent account deletion boundary.
+- `docs/deadline-planner-v1-contract.md` - explicit user-estimated exam/
+  assignment preparation, staged dated blocks, confirmation, progress, calendar
+  isolation, retry identity, and non-automation boundary.
 - `README.md` - high-level project overview.
 
 ## Next Implementation Direction
@@ -278,6 +290,19 @@ Phase 9 adds one optional explicitly consented `ical_file` connection and
 bounded deliberate `.ics` import. Dedicated imported rows retain stable
 read-only provenance; disconnect and local imported-data deletion remain
 separate and never mutate `schedule_items` or a source calendar.
+Deadline Planner V1 builds on, but does not weaken, those boundaries. A real
+authenticated user explicitly enters an exam or assignment, their own total
+active-preparation estimate, and prior credit. A deliberate proposal persists
+one immutable staged revision with deterministic dated blocks; only explicit
+confirmation activates it and creates the stable managed task. Completed
+post-activation focus linked to that task contributes measured progress but
+never completes the plan. Planning is bounded to 366 days. Calendar-event source
+and current-import busy-time use are separate explicit choices; title inference,
+provider writes, notifications, LLM use, background sync, and hidden generation
+remain absent. Read
+`docs/deadline-planner-v1-contract.md` before extending this slice.
+The managed task remains planner-owned: generic Task mutations/editor paths are
+forbidden, while starting focus on the open task remains allowed.
 These phases do not claim deployed cron wiring. Notification Delivery V1 below
 separately adds only consented local deterministic rows and foreground banners,
 not push/system delivery.
@@ -543,6 +568,16 @@ privacy-safe provenance, acknowledged banner display, and fresh Inbox display.
 That run proves only this local fake-provider stack; it adds no push/system,
 background-mobile, deployed scheduler, remote Supabase, or live-provider claim.
 
+Deadline Planner V1's final local migration/rollback smoke and the full
+non-reset combined current-checkout browser journey passed on 2026-07-18. The
+browser run reported
+`E2E browser smoke passed for e2e-1784390610@example.test` and exercised manual
+and selected-calendar proposals, draft discard, confirmation/replanning,
+managed-task focus progress, bounded Dashboard reads, Calendar non-mutation,
+RLS/ledger isolation, Account Export/deletion, and guest zero-call. This remains
+a local fake-provider claim, not a remote migration, installed-device,
+long-term-outcome, provider-calendar, push, or background-replanning claim.
+
 The implemented post-intake refresh is backend-only and best-effort:
 
 - `GET /v1/intake/setup` derives `user_id` from the verified Supabase bearer
@@ -718,6 +753,12 @@ Manual smoke test after schema or Supabase-client changes:
   outcome while preserving Setup ownership.
 - Start and finish or abandon a linked focus session without completing its
   target automatically.
+- Create a manual exam/assignment preparation proposal with an explicit total
+  estimate and prior credit, review its staged blocks, confirm it, and verify
+  linked completed focus changes progress without completing the plan.
+- If Calendar Import is connected, select one event deliberately and verify
+  that optional busy-time use neither infers a deadline nor writes to the
+  source calendar.
 - Open dashboard.
 - Open Inbox (`/alerts`); exercise read/unread/dismiss lifecycle and keep
   generation/delivery explicitly unclaimed.

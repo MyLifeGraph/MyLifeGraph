@@ -50,10 +50,6 @@ class InsightsSupabaseDataSource {
       startDate: requestedStartDate,
       endDate: endDate,
     );
-    if (typedDailyRows.isEmpty) {
-      return const [];
-    }
-
     final effectiveStartDate = requestedStartDate;
     final effectiveWindowDays = habitCalendarDayDifference(
           DateTime.parse(endDate),
@@ -74,17 +70,28 @@ class InsightsSupabaseDataSource {
         startDate: effectiveStartDate,
         endDate: endDate,
       ),
+      _fetchFocusRows(
+        userId: userId,
+        startDate: effectiveStartDate,
+        endDate: endDate,
+      ),
     ]);
     final taskRows = relatedRows[0];
     final scheduleRows = relatedRows[1];
     final habitRows = relatedRows[2];
     final habitLogRows = relatedRows[3];
+    final focusRows = relatedRows[4];
 
-    final workloadByDate = _workloadByDate(
+    final plannedMinutesByDate = _plannedMinutesByDate(
       taskRows: taskRows,
       scheduleRows: scheduleRows,
       startDate: DateTime.parse(effectiveStartDate),
       windowDays: effectiveWindowDays,
+    );
+    final focusMinutesByDate = _focusMinutesByDate(
+      focusRows,
+      startDate: effectiveStartDate,
+      endDate: endDate,
     );
     final habitCompletionByDate = _habitCompletionByDate(
       habitRows: habitRows,
@@ -93,28 +100,36 @@ class InsightsSupabaseDataSource {
       windowDays: effectiveWindowDays,
     );
 
-    return typedDailyRows.map((row) {
-      final entryDate = '${row['entry_date']}';
-      final values = <String, double>{};
-      _addNumeric(values, 'sleep_hours', row['sleep_hours']);
-      _addNumeric(values, 'focus_minutes', row['focus_minutes']);
-      _addNumeric(values, 'stress_level', row['stress_level']);
-      _addNumeric(values, 'energy_level', row['energy_level']);
-      _addNumeric(values, 'mood_score', row['mood_score']);
-      _addNumeric(values, 'screen_time_hours', row['screen_time_hours']);
-      _addNumeric(values, 'activity_level', row['activity_level']);
-      _addNumeric(values, 'steps', row['steps']);
+    final dailyRowsByDate = {
+      for (final row in typedDailyRows) '${row['entry_date']}': row,
+    };
+    final availableDates = <String>{
+      ...dailyRowsByDate.keys,
+      ...focusMinutesByDate.keys,
+      ...habitCompletionByDate.keys,
+      ...plannedMinutesByDate.keys,
+    }.toList()
+      ..sort();
 
-      final sleep = values['sleep_hours'];
-      final energy = values['energy_level'];
-      if (sleep != null && energy != null) {
-        values['recovery_score'] = ((sleep / 8 * 70) + (energy / 10 * 30))
-            .roundToDouble()
-            .clamp(0, 100);
+    return availableDates.map((entryDate) {
+      final row = dailyRowsByDate[entryDate];
+      final values = <String, double>{};
+      if (row != null) {
+        _addNumeric(values, 'sleep_hours', row['sleep_hours']);
+        _addNumeric(values, 'stress_level', row['stress_level']);
+        _addNumeric(values, 'energy_level', row['energy_level']);
+        _addNumeric(values, 'mood_score', row['mood_score']);
+        _addNumeric(values, 'screen_time_hours', row['screen_time_hours']);
+        _addNumeric(values, 'activity_level', row['activity_level']);
+        _addNumeric(values, 'steps', row['steps']);
       }
-      final workload = workloadByDate[entryDate];
-      if (workload != null) {
-        values['workload_score'] = workload;
+      final focusMinutes = focusMinutesByDate[entryDate];
+      if (focusMinutes != null) {
+        values['focus_minutes'] = focusMinutes;
+      }
+      final plannedMinutes = plannedMinutesByDate[entryDate];
+      if (plannedMinutes != null) {
+        values['planned_minutes'] = plannedMinutes;
       }
       final habitCompletion = habitCompletionByDate[entryDate];
       if (habitCompletion != null) {
@@ -158,7 +173,7 @@ class InsightsSupabaseDataSource {
     return _paginator.load((from, to) async {
       return _client
           .from(SupabaseTables.tasks)
-          .select('id,deadline,status,priority')
+          .select('id,deadline,status,estimated_minutes')
           .eq('user_id', userId)
           .gte('deadline', deadlineRange.startInclusive.toIso8601String())
           .lt('deadline', deadlineRange.endExclusive.toIso8601String())
@@ -174,7 +189,7 @@ class InsightsSupabaseDataSource {
     return _paginator.load((from, to) async {
       return _client
           .from(SupabaseTables.scheduleItems)
-          .select('id,weekday')
+          .select('id,weekday,starts_at,ends_at')
           .eq('user_id', userId)
           .order('weekday', ascending: true)
           .order('id', ascending: true)
@@ -215,26 +230,55 @@ class InsightsSupabaseDataSource {
     });
   }
 
-  Map<String, double> _workloadByDate({
+  Future<List<Map<String, dynamic>>> _fetchFocusRows({
+    required String userId,
+    required String startDate,
+    required String endDate,
+  }) {
+    final start = DateTime.parse(startDate)
+        .subtract(const Duration(days: 1))
+        .toUtc()
+        .toIso8601String();
+    final end = DateTime.parse(endDate)
+        .add(const Duration(days: 2))
+        .toUtc()
+        .toIso8601String();
+    return _paginator.load((from, to) async {
+      return _client
+          .from(SupabaseTables.focusSessions)
+          .select('id,status,started_at,actual_minutes,metadata')
+          .eq('user_id', userId)
+          .gte('started_at', start)
+          .lt('started_at', end)
+          .order('started_at', ascending: true)
+          .order('id', ascending: true)
+          .range(from, to);
+    });
+  }
+
+  Map<String, double> _plannedMinutesByDate({
     required List<Map<String, dynamic>> taskRows,
     required List<Map<String, dynamic>> scheduleRows,
     required DateTime startDate,
     required int windowDays,
   }) {
-    final scheduleCountByWeekday = <int, int>{};
+    final scheduleMinutesByWeekday = <int, int>{};
     for (final row in scheduleRows) {
       final weekday = (row['weekday'] as num?)?.toInt();
-      if (weekday != null) {
-        scheduleCountByWeekday[weekday] =
-            (scheduleCountByWeekday[weekday] ?? 0) + 1;
+      final minutes = _timeRangeMinutes(row['starts_at'], row['ends_at']);
+      if (weekday != null && minutes != null) {
+        scheduleMinutesByWeekday[weekday] =
+            (scheduleMinutesByWeekday[weekday] ?? 0) + minutes;
       }
     }
 
-    final workload = <String, double>{};
+    final planned = <String, double>{};
     for (var offset = 0; offset < windowDays; offset++) {
       final date = habitAddCalendarDays(startDate, offset);
-      final scheduleLoad = (scheduleCountByWeekday[date.weekday] ?? 0) * 8.0;
-      workload[_dateOnly(date)] = scheduleLoad.clamp(0, 45);
+      final scheduleMinutes = scheduleMinutesByWeekday[date.weekday] ?? 0;
+      if (scheduleMinutes > 0) {
+        planned[_dateOnly(date)] = scheduleMinutes.toDouble();
+      }
     }
 
     for (final row in taskRows) {
@@ -246,20 +290,39 @@ class InsightsSupabaseDataSource {
       if (status == 'archived' || status == 'cancelled') {
         continue;
       }
-      final priority = '${row['priority']}'.toLowerCase();
-      final weight = switch (priority) {
-        'critical' => 32.0,
-        'high' => 24.0,
-        'medium' => 16.0,
-        _ => 10.0,
-      };
-      final statusMultiplier = status == 'done' ? 0.4 : 1.0;
+      final estimate = row['estimated_minutes'];
+      if (estimate is! num || estimate <= 0 || estimate != estimate.toInt()) {
+        continue;
+      }
       final key = _localDates.taskDeadlineDateKey(deadline);
-      workload[key] =
-          ((workload[key] ?? 0) + weight * statusMultiplier).clamp(0, 100);
+      planned[key] = (planned[key] ?? 0) + estimate.toDouble();
     }
 
-    return workload;
+    return planned;
+  }
+
+  Map<String, double> _focusMinutesByDate(
+    List<Map<String, dynamic>> rows, {
+    required String startDate,
+    required String endDate,
+  }) {
+    final totals = <String, double>{};
+    for (final row in rows) {
+      if (row['status'] != 'completed') continue;
+      final actual = row['actual_minutes'];
+      final metadata = row['metadata'];
+      final entryDate = metadata is Map ? metadata['entry_date'] : null;
+      if (actual is! num ||
+          actual < 0 ||
+          entryDate is! String ||
+          entryDate.compareTo(startDate) < 0 ||
+          entryDate.compareTo(endDate) > 0 ||
+          !_isDateKey(entryDate)) {
+        continue;
+      }
+      totals[entryDate] = (totals[entryDate] ?? 0) + actual.toDouble();
+    }
+    return totals;
   }
 
   Map<String, double> _habitCompletionByDate({
@@ -353,6 +416,36 @@ class InsightsSupabaseDataSource {
     }
     final local = _localDates.toLocal(created);
     return DateTime(local.year, local.month, local.day);
+  }
+
+  int? _timeRangeMinutes(Object? startsAt, Object? endsAt) {
+    int? minutes(Object? value) {
+      if (value is! String) return null;
+      final parts = value.split(':');
+      if (parts.length < 2) return null;
+      final hour = int.tryParse(parts[0]);
+      final minute = int.tryParse(parts[1]);
+      if (hour == null ||
+          minute == null ||
+          hour < 0 ||
+          hour > 23 ||
+          minute < 0 ||
+          minute > 59) {
+        return null;
+      }
+      return hour * 60 + minute;
+    }
+
+    final start = minutes(startsAt);
+    final end = minutes(endsAt);
+    if (start == null || end == null || end <= start) return null;
+    return end - start;
+  }
+
+  bool _isDateKey(String value) {
+    if (!RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(value)) return false;
+    final parsed = DateTime.tryParse(value);
+    return parsed != null && _dateOnly(parsed) == value;
   }
 
   void _addNumeric(Map<String, double> values, String key, Object? raw) {

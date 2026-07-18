@@ -117,6 +117,23 @@ void main() {
     expect(result.coefficient, isNull);
   });
 
+  test('does not offer metrics that were never measured', () {
+    final report = analyzer.analyze(
+      windowDays: 7,
+      metrics: _testMetrics,
+      points: _points([
+        (1, 2),
+        (2, 4),
+        (3, 6),
+        (4, 8),
+        (5, 10),
+      ]),
+    );
+
+    expect(report.metrics.map((metric) => metric.id), ['a', 'b']);
+    expect(report.resultFor('a', 'c'), isNull);
+  });
+
   test('ranked results ignore weak relationships', () {
     final report = CorrelationReport(
       windowDays: 7,

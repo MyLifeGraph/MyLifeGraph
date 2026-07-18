@@ -16,4 +16,8 @@ class SupabaseTables {
   static const skillsetProfiles = 'skillset_profiles';
   static const recommendations = 'recommendations';
   static const notificationPreferences = 'notification_preferences';
+  static const deadlinePlans = 'deadline_plans';
+  static const deadlinePlanBlocks = 'deadline_plan_blocks';
+  static const calendarConnections = 'calendar_connections';
+  static const calendarEvents = 'calendar_events';
 }

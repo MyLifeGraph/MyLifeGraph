@@ -26,14 +26,32 @@ void main() {
     );
   });
 
-  test('an exact explicit value may opt the surface in or out', () {
+  test('development may opt in but production and release cannot', () {
     expect(
       resolveCoachSurfaceEnabled(
-        environment: 'production',
-        releaseMode: true,
+        environment: 'development',
+        releaseMode: false,
         explicitValue: 'true',
       ),
       isTrue,
+    );
+    for (final environment in ['production', ' PRODUCTION ']) {
+      expect(
+        resolveCoachSurfaceEnabled(
+          environment: environment,
+          releaseMode: false,
+          explicitValue: 'true',
+        ),
+        isFalse,
+      );
+    }
+    expect(
+      resolveCoachSurfaceEnabled(
+        environment: 'development',
+        releaseMode: true,
+        explicitValue: 'true',
+      ),
+      isFalse,
     );
     for (final value in ['false', 'TRUE', '1', 'invalid']) {
       expect(

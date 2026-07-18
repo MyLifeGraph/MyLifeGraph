@@ -514,6 +514,63 @@ def test_unknown_future_metadata_is_ignored_without_changing_valid_state() -> No
     assert result.signals["quality_issues"] == []
 
 
+def test_low_stress_evening_accepts_minimal_two_page_contract() -> None:
+    evening = evening_capture()
+    for optional_key in (
+        "stress_source",
+        "stress_controllability",
+        "focus_band",
+        "tomorrow_priority",
+        "reflection_note",
+        "specific_blocker",
+    ):
+        evening.pop(optional_key)
+    result = build_state(
+        daily_logs=[
+            capture_row(
+                row_id="minimal-evening",
+                entry_date=EVENING_DATE,
+                evening=evening,
+            ),
+            capture_row(
+                row_id="current-morning",
+                entry_date=TARGET_DATE,
+                morning=morning_capture(),
+            ),
+        ],
+    )
+
+    assert result.summary["data_quality"] == "current"
+    assert result.summary["context"]["stress"] == {
+        "intensity": 3,
+        "intensity_label": "low",
+        "source": None,
+        "controllability": None,
+    }
+    assert result.summary["context"]["focus_band"] is None
+    assert result.signals["quality_issues"] == []
+
+
+def test_medium_stress_still_requires_source_and_controllability() -> None:
+    evening = evening_capture(stress_intensity=6)
+    evening.pop("stress_source")
+    evening.pop("stress_controllability")
+    result = build_state(
+        daily_logs=[
+            capture_row(
+                row_id="incomplete-stress-context",
+                entry_date=EVENING_DATE,
+                evening=evening,
+            ),
+        ],
+    )
+
+    assert result.summary["data_quality"] == "partial"
+    assert "evening.missing_stress_context" in result.signals[
+        "quality_issues"
+    ]
+
+
 def test_mismatched_stress_label_is_not_trusted_and_downgrades_quality() -> None:
     result = build_state(
         daily_logs=current_rows(

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../../core/constants/app_spacing.dart';
+import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_page.dart';
 import '../../application/calendar_ics_file_picker.dart';
@@ -119,7 +121,7 @@ class _ReadOnlyPromiseCard extends StatelessWidget {
           ),
           SizedBox(height: AppSpacing.sm),
           Text(
-            'You choose one UTF-8 .ics file. MyLifeGraph stores only bounded event basics, never writes to a calendar provider, and never sends imported content to an LLM.',
+            'You choose one UTF-8 .ics file. MyLifeGraph stores only essential event details, never changes the source calendar, and never sends imported content to AI.',
           ),
         ],
       ),
@@ -175,7 +177,7 @@ class _ConnectionSetupCard extends StatelessWidget {
                 : (value) => controller.setConsentAccepted(value ?? false),
             title: const Text('I consent to this read-only import'),
             subtitle: const Text(
-              'Read calendar events and store event basics only. Provider writes and LLM processing remain off.',
+              'Read calendar events and store event basics only. MyLifeGraph will not change the source calendar or send event text to AI.',
             ),
             controlAffinity: ListTileControlAffinity.leading,
           ),
@@ -192,7 +194,7 @@ class _ConnectionSetupCard extends StatelessWidget {
               state.operation == CalendarIntegrationOperation.creating
                   ? 'Creating…'
                   : state.retryKind == CalendarIntegrationRetryKind.create
-                      ? 'Retry exact connection'
+                      ? 'Retry unchanged'
                       : 'Create read-only source',
             ),
           ),
@@ -228,7 +230,7 @@ class _ConnectionStatusCard extends StatelessWidget {
                     ? 'Connected'
                     : lastImport == null
                         ? 'Disconnected'
-                        : 'Disconnected · stale',
+                        : 'Disconnected · may be out of date',
               ),
             ],
           ),
@@ -238,7 +240,7 @@ class _ConnectionStatusCard extends StatelessWidget {
                 ? 'This file source accepts deliberate imports. It has no live provider access.'
                 : lastImport == null
                     ? 'Further imports are disabled. No file was imported; clear this empty source before creating another.'
-                    : 'Further imports are disabled. The retained local copy remains read-only and stale until you delete it.',
+                    : 'Further imports are off. The saved read-only copy may become out of date and remains until you delete it.',
           ),
           if (lastImport != null) ...[
             const SizedBox(height: AppSpacing.md),
@@ -287,7 +289,7 @@ class _ImportFileCard extends StatelessWidget {
           Text('Import a file', style: Theme.of(context).textTheme.titleLarge),
           const SizedBox(height: AppSpacing.sm),
           const Text(
-            'Maximum 512 KiB. A complete valid import atomically replaces the current bounded imported copy.',
+            'Maximum 512 KiB. A complete valid import replaces the current saved copy in one step.',
           ),
           const SizedBox(height: AppSpacing.md),
           OutlinedButton.icon(
@@ -337,7 +339,7 @@ class _ImportFileCard extends StatelessWidget {
                 state.operation == CalendarIntegrationOperation.importing
                     ? 'Importing…'
                     : state.retryKind == CalendarIntegrationRetryKind.import
-                        ? 'Retry exact import'
+                        ? 'Retry unchanged'
                         : 'Import selected file',
               ),
             ),
@@ -385,7 +387,10 @@ class _ImportedEventsCard extends StatelessWidget {
             const Text('No events in this import window.')
           else ...[
             for (final event in state.events) ...[
-              _ImportedEventTile(event: event),
+              _ImportedEventTile(
+                event: event,
+                canPlanPreparation: connection.isConnected,
+              ),
               const Divider(),
             ],
             if (state.nextCursor != null)
@@ -408,12 +413,18 @@ class _ImportedEventsCard extends StatelessWidget {
 }
 
 class _ImportedEventTile extends StatelessWidget {
-  const _ImportedEventTile({required this.event});
+  const _ImportedEventTile({
+    required this.event,
+    required this.canPlanPreparation,
+  });
 
   final CalendarImportedEvent event;
+  final bool canPlanPreparation;
 
   @override
   Widget build(BuildContext context) {
+    final preparationLocation = calendarPreparationPlanLocation(event);
+    final canPlan = canPlanPreparation && preparationLocation != null;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
       child: Column(
@@ -426,10 +437,45 @@ class _ImportedEventTile extends StatelessWidget {
           Text('${event.displayDate} · ${event.displayTime}'),
           Text('${event.eventTimezone} · ${event.provenance.sourceLabel}'),
           if (event.location != null) Text(event.location!),
+          if (canPlan) ...[
+            const SizedBox(height: AppSpacing.sm),
+            OutlinedButton.icon(
+              key: ValueKey('plan-preparation-${event.id}'),
+              onPressed: () {
+                context.go(preparationLocation.toString());
+              },
+              icon: const Icon(Icons.event_available_outlined),
+              label: const Text('Plan preparation'),
+            ),
+          ],
         ],
       ),
     );
   }
+}
+
+Uri? calendarPreparationPlanLocation(
+  CalendarImportedEvent event, {
+  DateTime? now,
+}) {
+  final current = now ?? DateTime.now();
+  if (event.kind == CalendarEventKind.timed) {
+    final deadline = DateTime.tryParse(event.startsAt ?? '');
+    if (deadline == null || !deadline.isAfter(current)) return null;
+    return Uri(
+      path: AppRoutes.preparationPlans,
+      queryParameters: {'calendar_event_id': event.id},
+    );
+  }
+  final date = DateTime.tryParse(event.startsOn ?? '');
+  if (date == null) return null;
+  final today = DateTime(current.year, current.month, current.day);
+  final sourceDate = DateTime(date.year, date.month, date.day);
+  if (sourceDate.isBefore(today)) return null;
+  return Uri(
+    path: AppRoutes.preparationPlans,
+    queryParameters: {'calendar_event_id': event.id},
+  );
 }
 
 class _SourceControlsCard extends StatelessWidget {
@@ -468,7 +514,7 @@ class _SourceControlsCard extends StatelessWidget {
               icon: const Icon(Icons.link_off),
               label: Text(
                 state.retryKind == CalendarIntegrationRetryKind.disconnect
-                    ? 'Retry exact disconnect'
+                    ? 'Retry unchanged'
                     : 'Disconnect source',
               ),
             )
@@ -485,7 +531,7 @@ class _SourceControlsCard extends StatelessWidget {
               icon: const Icon(Icons.delete_outline),
               label: Text(
                 state.retryKind == CalendarIntegrationRetryKind.delete
-                    ? 'Retry exact deletion'
+                    ? 'Retry unchanged'
                     : 'Delete imported data',
               ),
             ),
@@ -500,7 +546,7 @@ class _SourceControlsCard extends StatelessWidget {
           builder: (context) => AlertDialog(
             title: const Text('Disconnect calendar source?'),
             content: const Text(
-              'Further imports will stop. The imported local copy remains visible as stale, and the source calendar is not changed.',
+              'Further imports will stop. The saved read-only copy remains visible but may become out of date. The source calendar is not changed.',
             ),
             actions: [
               TextButton(
@@ -556,8 +602,8 @@ class _OperationErrorCard extends StatelessWidget {
         children: [
           Text(
             exact
-                ? 'Calendar operation result uncertain'
-                : 'Calendar operation failed',
+                ? 'Could not confirm the calendar change'
+                : 'Could not update the calendar copy',
             style: Theme.of(context).textTheme.titleMedium?.copyWith(
                   color: Theme.of(context).colorScheme.error,
                 ),
@@ -565,7 +611,7 @@ class _OperationErrorCard extends StatelessWidget {
           const SizedBox(height: AppSpacing.sm),
           Text(
             exact
-                ? 'Retry the exact unchanged request or reload server state. Submitted values or file, where applicable, and the request identity were retained.'
+                ? 'The result could not be confirmed. Your submitted values or file are still here. Retry unchanged or load the latest calendar state.'
                 : _errorMessage(state.operationError!),
           ),
           if (exact) ...[
@@ -573,7 +619,7 @@ class _OperationErrorCard extends StatelessWidget {
             OutlinedButton.icon(
               onPressed: state.isBusy ? null : controller.load,
               icon: const Icon(Icons.refresh),
-              label: const Text('Reload server state'),
+              label: const Text('Load latest calendar state'),
             ),
           ],
         ],

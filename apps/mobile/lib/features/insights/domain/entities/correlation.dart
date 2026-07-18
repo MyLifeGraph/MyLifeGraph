@@ -171,9 +171,9 @@ const correlationMetrics = [
     higherIsPositive: true,
   ),
   CorrelationMetric(
-    id: 'workload_score',
-    label: 'Workload',
-    unit: 'score',
+    id: 'planned_minutes',
+    label: 'Planned load',
+    unit: 'min',
     category: 'Work',
     higherIsPositive: false,
   ),
@@ -224,13 +224,6 @@ const correlationMetrics = [
     label: 'Habits',
     unit: '%',
     category: 'Routine',
-    higherIsPositive: true,
-  ),
-  CorrelationMetric(
-    id: 'recovery_score',
-    label: 'Recovery',
-    unit: 'score',
-    category: 'Recovery',
     higherIsPositive: true,
   ),
 ];

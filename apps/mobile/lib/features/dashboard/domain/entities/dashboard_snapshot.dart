@@ -8,6 +8,7 @@ class DashboardSnapshot {
     required this.checkInStreakDays,
     required this.todayPlan,
     required this.scheduleDays,
+    this.preparationScheduleError,
   });
 
   factory DashboardSnapshot.empty({
@@ -30,6 +31,7 @@ class DashboardSnapshot {
   final int checkInStreakDays;
   final List<PlanItem> todayPlan;
   final List<ScheduleDay> scheduleDays;
+  final String? preparationScheduleError;
 }
 
 class DashboardCheckIn {
@@ -90,6 +92,8 @@ class PlanItem {
     this.deadline,
     this.description,
     this.estimatedMinutes,
+    this.source,
+    this.deadlinePlanId,
   });
 
   final String id;
@@ -100,6 +104,11 @@ class PlanItem {
   final DateTime? deadline;
   final String? description;
   final int? estimatedMinutes;
+  final String? source;
+  final String? deadlinePlanId;
+
+  bool get isDeadlinePlanManaged =>
+      source == 'deadline-plan-v1' && deadlinePlanId == id;
 }
 
 class ScheduleDay {
@@ -107,21 +116,40 @@ class ScheduleDay {
     required this.label,
     required this.dateLabel,
     required this.events,
+    this.date,
   });
 
   final String label;
   final String dateLabel;
   final List<ScheduleEvent> events;
+  final DateTime? date;
 }
+
+enum ScheduleEventOrigin { commitment, deadlinePreparation }
 
 class ScheduleEvent {
   const ScheduleEvent({
     required this.title,
     required this.time,
+    this.origin = ScheduleEventOrigin.commitment,
+    this.provenanceLabel,
+    this.deadlinePlanId,
+    this.deadlinePlanBlockId,
+    this.state,
+    this.sortMinutes,
   });
 
   final String title;
   final String time;
+  final ScheduleEventOrigin origin;
+  final String? provenanceLabel;
+  final String? deadlinePlanId;
+  final String? deadlinePlanBlockId;
+  final String? state;
+  final int? sortMinutes;
+
+  bool get isDeadlinePreparation =>
+      origin == ScheduleEventOrigin.deadlinePreparation;
 }
 
 class DashboardUnavailableException implements Exception {

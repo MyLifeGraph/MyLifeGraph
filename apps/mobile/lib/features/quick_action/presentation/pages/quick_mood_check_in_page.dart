@@ -33,59 +33,17 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
 
   static const _steps = <_EveningStep>[
     _EveningStep(
-      eyebrow: 'EVENING · MOOD',
-      title: 'How did today feel?',
-      subtitle: 'Choose the mood value that best matches the day.',
-      kind: _EveningStepKind.mood,
+      eyebrow: 'EVENING · CHECK-IN',
+      title: 'Close today in under a minute',
+      subtitle: 'Three quick ratings are enough for today\'s state.',
+      kind: _EveningStepKind.checkIn,
     ),
     _EveningStep(
-      eyebrow: 'EVENING · ENERGY',
-      title: 'How much energy was left?',
-      subtitle: 'Use your end-of-day energy, not tomorrow\'s estimate.',
-      kind: _EveningStepKind.energy,
-    ),
-    _EveningStep(
-      eyebrow: 'EVENING · STRESS',
-      title: 'How intense was the stress?',
-      subtitle: 'The number stays separate from its source and control.',
-      kind: _EveningStepKind.stress,
-    ),
-    _EveningStep(
-      eyebrow: 'STRESS SOURCE',
-      title: 'What drove the pressure?',
-      subtitle: 'Choose the main source. Different causes need different care.',
-      kind: _EveningStepKind.stressSource,
-    ),
-    _EveningStep(
-      eyebrow: 'CONTROLLABILITY',
-      title: 'How much could you influence it?',
-      subtitle: 'Low control is context, not a personal failure.',
-      kind: _EveningStepKind.stressControllability,
-    ),
-    _EveningStep(
-      eyebrow: 'FOCUS BAND',
-      title: 'How much focused time happened?',
+      eyebrow: 'EVENING · CONTEXT',
+      title: 'What should tomorrow know?',
       subtitle:
-          'A rough band is enough. It is not converted into fake minutes.',
-      kind: _EveningStepKind.focusBand,
-    ),
-    _EveningStep(
-      eyebrow: 'MAIN FRICTION',
-      title: 'What got in the way most?',
-      subtitle: 'Choose one structured friction signal for today.',
-      kind: _EveningStepKind.mainFriction,
-    ),
-    _EveningStep(
-      eyebrow: 'TOMORROW',
-      title: 'What is one likely priority?',
-      subtitle: 'Name one realistic priority. This does not create a task.',
-      kind: _EveningStepKind.tomorrowPriority,
-    ),
-    _EveningStep(
-      eyebrow: 'OPTIONAL DETAIL',
-      title: 'Anything worth carrying forward?',
-      subtitle: 'Leave every field blank if there is nothing more to add.',
-      kind: _EveningStepKind.optionalDetail,
+          'Choose the main friction. Everything else appears only when useful.',
+      kind: _EveningStepKind.context,
     ),
   ];
 
@@ -117,9 +75,9 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
       isLastStep: _stepIndex == _steps.length - 1,
       isLoading: _isLoading,
       isSaving: _isSaving,
-      saveLabel: 'Save evening shutdown',
+      saveLabel: 'Save evening check-in',
       statusMessage: _loadedSavedCapture
-          ? 'Today\'s Evening Shutdown is loaded. Saving replaces only its evening state.'
+          ? 'Today\'s evening check-in is loaded. Saving updates only these evening answers.'
           : _loadError,
       errorMessage: _saveError,
       onClose: () => context.go(AppRoutes.quickAction),
@@ -131,75 +89,63 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
 
   Widget _buildStep(_EveningStepKind kind) {
     return switch (kind) {
-      _EveningStepKind.mood => CaptureRatingControl(
+      _EveningStepKind.checkIn => _buildCheckInStep(),
+      _EveningStepKind.context => _buildContextStep(),
+    };
+  }
+
+  Widget _buildCheckInStep() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text('Mood', style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: AppSpacing.sm),
+        CaptureRatingControl(
           value: _draft.mood,
           semanticPrefix: 'evening mood',
           onChanged: (value) => setState(
             () => _draft = _draft.copyWith(mood: value),
           ),
         ),
-      _EveningStepKind.energy => CaptureRatingControl(
+        const SizedBox(height: AppSpacing.lg),
+        Text('Energy left', style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: AppSpacing.sm),
+        CaptureRatingControl(
           value: _draft.energy,
           semanticPrefix: 'evening energy',
           onChanged: (value) => setState(
             () => _draft = _draft.copyWith(energy: value),
           ),
         ),
-      _EveningStepKind.stress => CaptureRatingControl(
+        const SizedBox(height: AppSpacing.lg),
+        Text('Stress', style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: AppSpacing.sm),
+        CaptureRatingControl(
           value: _draft.stress,
           semanticPrefix: 'evening stress',
-          onChanged: (value) => setState(
-            () => _draft = _draft.copyWith(stress: value),
-          ),
+          onChanged: (value) => setState(() {
+            _draft = _draft.copyWith(
+              stress: value,
+              stressSource: value < 5 ? null : _draft.stressSource,
+              stressControllability:
+                  value < 5 ? null : _draft.stressControllability,
+            );
+          }),
         ),
-      _EveningStepKind.stressSource => CaptureChoiceControl<StressSource>(
-          value: _draft.stressSource,
-          choices: StressSource.values
-              .map(
-                (value) => CaptureChoice(
-                  value: value,
-                  label: _stressSourceLabel(value),
-                  semanticLabel: 'stress source ${value.code}',
-                  description: _stressSourceDescription(value),
-                ),
-              )
-              .toList(),
-          onChanged: (value) => setState(
-            () => _draft = _draft.copyWith(stressSource: value),
-          ),
+      ],
+    );
+  }
+
+  Widget _buildContextStep() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          'Main friction',
+          style: Theme.of(context).textTheme.titleMedium,
         ),
-      _EveningStepKind.stressControllability =>
-        CaptureChoiceControl<StressControllability>(
-          value: _draft.stressControllability,
-          choices: StressControllability.values
-              .map(
-                (value) => CaptureChoice(
-                  value: value,
-                  label: _stressControllabilityLabel(value),
-                  semanticLabel: 'stress controllability ${value.code}',
-                ),
-              )
-              .toList(),
-          onChanged: (value) => setState(
-            () => _draft = _draft.copyWith(stressControllability: value),
-          ),
-        ),
-      _EveningStepKind.focusBand => CaptureChoiceControl<FocusBand>(
-          value: _draft.focusBand,
-          choices: FocusBand.values
-              .map(
-                (value) => CaptureChoice(
-                  value: value,
-                  label: _focusBandLabel(value),
-                  semanticLabel: 'focus band ${value.code}',
-                ),
-              )
-              .toList(),
-          onChanged: (value) => setState(
-            () => _draft = _draft.copyWith(focusBand: value),
-          ),
-        ),
-      _EveningStepKind.mainFriction => CaptureChoiceControl<MainFriction>(
+        const SizedBox(height: AppSpacing.sm),
+        CaptureChoiceControl<MainFriction>(
           value: _draft.mainFriction,
           choices: MainFriction.values
               .map(
@@ -214,70 +160,112 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
             () => _draft = _draft.copyWith(mainFriction: value),
           ),
         ),
-      _EveningStepKind.tomorrowPriority => TextField(
+        if (_draft.requiresStressContext) ...[
+          const SizedBox(height: AppSpacing.lg),
+          Text(
+            'What drove the pressure?',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          CaptureChoiceControl<StressSource>(
+            value: _draft.stressSource,
+            choices: StressSource.values
+                .map(
+                  (value) => CaptureChoice(
+                    value: value,
+                    label: _stressSourceLabel(value),
+                    semanticLabel: 'stress source ${value.code}',
+                    description: _stressSourceDescription(value),
+                  ),
+                )
+                .toList(),
+            onChanged: (value) => setState(
+              () => _draft = _draft.copyWith(stressSource: value),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          Text(
+            'How much could you influence it?',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          CaptureChoiceControl<StressControllability>(
+            value: _draft.stressControllability,
+            choices: StressControllability.values
+                .map(
+                  (value) => CaptureChoice(
+                    value: value,
+                    label: _stressControllabilityLabel(value),
+                    semanticLabel: 'stress influence ${value.code}',
+                  ),
+                )
+                .toList(),
+            onChanged: (value) => setState(
+              () => _draft = _draft.copyWith(stressControllability: value),
+            ),
+          ),
+        ],
+        const SizedBox(height: AppSpacing.lg),
+        TextField(
           controller: _tomorrowPriorityController,
           maxLength: 160,
-          maxLines: 3,
-          onChanged: (_) => setState(() {}),
+          maxLines: 2,
           decoration: const InputDecoration(
-            labelText: 'Tomorrow priority',
+            labelText: 'Possible priority tomorrow (optional)',
             hintText: 'For example: Finish the first project draft',
-            helperText: 'Saved as capture context only; no task is created.',
+            helperText: 'Context only; this does not create a task.',
           ),
         ),
-      _EveningStepKind.optionalDetail => Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            TextField(
-              controller: _reflectionController,
-              maxLength: 500,
-              maxLines: 4,
-              decoration: const InputDecoration(
-                labelText: 'Reflection (optional)',
-                hintText: 'A short observation, if useful',
-              ),
-            ),
-            const SizedBox(height: AppSpacing.md),
-            TextField(
-              controller: _blockerController,
-              maxLength: 240,
-              maxLines: 3,
-              decoration: const InputDecoration(
-                labelText: 'Specific blocker (optional)',
-                hintText: 'Leave blank if there was no specific blocker',
-              ),
-            ),
-            const SizedBox(height: AppSpacing.md),
-            Semantics(
-              button: true,
-              selected: _draft.makeTomorrowGentler,
-              label: 'make tomorrow gentler',
-              onTap: () => setState(
-                () => _draft = _draft.copyWith(
-                  makeTomorrowGentler: !_draft.makeTomorrowGentler,
-                ),
-              ),
-              child: ExcludeSemantics(
-                child: FilterChip(
-                  selected: _draft.makeTomorrowGentler,
-                  onSelected: (selected) => setState(
-                    () => _draft = _draft.copyWith(
-                      makeTomorrowGentler: selected,
-                    ),
-                  ),
-                  avatar: const Icon(Icons.spa_outlined),
-                  label: const Text('Make tomorrow gentler'),
-                ),
-              ),
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            Text(
-              'Optional blanks stay absent. They do not become tasks, memories, or recommendations.',
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-          ],
+        const SizedBox(height: AppSpacing.md),
+        TextField(
+          controller: _reflectionController,
+          maxLength: 500,
+          maxLines: 4,
+          decoration: const InputDecoration(
+            labelText: 'Reflection (optional)',
+            hintText: 'A short observation, if useful',
+          ),
         ),
-    };
+        const SizedBox(height: AppSpacing.md),
+        TextField(
+          controller: _blockerController,
+          maxLength: 240,
+          maxLines: 3,
+          decoration: const InputDecoration(
+            labelText: 'Specific blocker (optional)',
+            hintText: 'Leave blank if there was no specific blocker',
+          ),
+        ),
+        const SizedBox(height: AppSpacing.md),
+        Semantics(
+          button: true,
+          selected: _draft.makeTomorrowGentler,
+          label: 'make tomorrow gentler',
+          onTap: () => setState(
+            () => _draft = _draft.copyWith(
+              makeTomorrowGentler: !_draft.makeTomorrowGentler,
+            ),
+          ),
+          child: ExcludeSemantics(
+            child: FilterChip(
+              selected: _draft.makeTomorrowGentler,
+              onSelected: (selected) => setState(
+                () => _draft = _draft.copyWith(
+                  makeTomorrowGentler: selected,
+                ),
+              ),
+              avatar: const Icon(Icons.spa_outlined),
+              label: const Text('Make tomorrow gentler'),
+            ),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        Text(
+          'Optional blanks stay absent. They do not become tasks, memories, or recommendations.',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+      ],
+    );
   }
 
   bool get _canContinue {
@@ -285,17 +273,10 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
       return false;
     }
     return switch (_steps[_stepIndex].kind) {
-      _EveningStepKind.mood => _draft.mood != null,
-      _EveningStepKind.energy => _draft.energy != null,
-      _EveningStepKind.stress => _draft.stress != null,
-      _EveningStepKind.stressSource => _draft.stressSource != null,
-      _EveningStepKind.stressControllability =>
-        _draft.stressControllability != null,
-      _EveningStepKind.focusBand => _draft.focusBand != null,
-      _EveningStepKind.mainFriction => _draft.mainFriction != null,
-      _EveningStepKind.tomorrowPriority =>
-        _tomorrowPriorityController.text.trim().isNotEmpty,
-      _EveningStepKind.optionalDetail => true,
+      _EveningStepKind.checkIn =>
+        _draft.mood != null && _draft.energy != null && _draft.stress != null,
+      _EveningStepKind.context =>
+        _draft.mainFriction != null && _draft.hasConsistentStressContext,
     };
   }
 
@@ -345,8 +326,8 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
       }
       _showMessage(
         store.target == QuickCheckInSaveTarget.guest
-            ? 'Evening Shutdown saved locally.'
-            : 'Evening Shutdown saved.',
+            ? 'Evening check-in saved on this device.'
+            : 'Evening check-in saved.',
       );
       context.go(AppRoutes.dashboard);
     } catch (error) {
@@ -355,7 +336,7 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
       }
       final message = error is QuickCheckInUnavailableException
           ? error.message
-          : 'Could not save. Your exact Evening Shutdown is still here. Try again.';
+          : 'Could not save. Your answers are still here. Try again.';
       setState(() => _saveError = message);
       _showMessage(message);
     } finally {
@@ -422,17 +403,9 @@ String _stressSourceDescription(StressSource value) => switch (value) {
 
 String _stressControllabilityLabel(StressControllability value) =>
     switch (value) {
-      StressControllability.hardlyControllable => 'Hardly controllable',
-      StressControllability.partlyControllable => 'Partly controllable',
-      StressControllability.mostlyControllable => 'Mostly controllable',
-    };
-
-String _focusBandLabel(FocusBand value) => switch (value) {
-      FocusBand.none => 'None',
-      FocusBand.underThirtyMinutes => 'Under 30 minutes',
-      FocusBand.thirtyToSixtyMinutes => '30 to 60 minutes',
-      FocusBand.oneToTwoHours => '1 to 2 hours',
-      FocusBand.overTwoHours => 'Over 2 hours',
+      StressControllability.hardlyControllable => 'Little influence',
+      StressControllability.partlyControllable => 'Some influence',
+      StressControllability.mostlyControllable => 'Mostly within my influence',
     };
 
 String _mainFrictionLabel(MainFriction value) => switch (value) {
@@ -447,15 +420,8 @@ String _mainFrictionLabel(MainFriction value) => switch (value) {
     };
 
 enum _EveningStepKind {
-  mood,
-  energy,
-  stress,
-  stressSource,
-  stressControllability,
-  focusBand,
-  mainFriction,
-  tomorrowPriority,
-  optionalDetail,
+  checkIn,
+  context,
 }
 
 class _EveningStep {

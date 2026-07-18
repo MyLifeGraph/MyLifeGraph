@@ -61,7 +61,7 @@ class MainShell extends ConsumerWidget {
                   Text(notification.body),
                   const SizedBox(height: 4),
                   const Text(
-                    'In-app · deterministic · no LLM',
+                    'In-app · fixed text · not AI-written',
                     style: TextStyle(fontSize: 12),
                   ),
                 ],
@@ -88,6 +88,8 @@ class MainShell extends ConsumerWidget {
       final path when path.startsWith(AppRoutes.weeklyReview) =>
         AppRoutes.dashboard,
       final path when path.startsWith(AppRoutes.deepWork) =>
+        AppRoutes.quickAction,
+      final path when path.startsWith(AppRoutes.preparationPlans) =>
         AppRoutes.quickAction,
       final path when path.startsWith(AppRoutes.calendarIntegration) =>
         AppRoutes.settings,
@@ -266,7 +268,7 @@ class _FloatingBottomNav extends StatelessWidget {
                             onTap: () => onDestinationSelected(1),
                           ),
                           _CompactNavLabel(
-                            label: 'Add signal',
+                            label: 'Quick actions',
                             isSelected: selectedIndex == 2,
                             selectedColor: selectedColor,
                             idleColor: idleColor,
@@ -329,7 +331,7 @@ class _CompactNavLabel extends StatelessWidget {
           child: Text(
             label,
             key: ValueKey('main-nav-label-$normalizedLabel'),
-            maxLines: 1,
+            maxLines: 2,
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.labelMedium?.copyWith(
                   color: isSelected ? selectedColor : idleColor,
@@ -503,14 +505,14 @@ class _QuickActionButtonState extends State<_QuickActionButton> {
         : primary.withValues(alpha: 0.08);
 
     return Tooltip(
-      message: 'Add signal',
+      message: 'Quick actions',
       excludeFromSemantics: true,
       child: Semantics(
         key: const ValueKey('main-shell-add-signal'),
         container: true,
         button: true,
         selected: widget.isSelected,
-        label: 'Add signal',
+        label: 'Quick actions',
         onTap: widget.onTap,
         child: ExcludeSemantics(
           child: Material(

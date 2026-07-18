@@ -72,6 +72,10 @@ The app table constants live in
 | `calendar_imports` | Immutable retry-safe `.ics` import identity, bounded window/counts, and canonical input/request fingerprints. |
 | `calendar_events` | Current whitelisted imported event copy with stable single/recurrence identity and explicit imported/read-only provenance. |
 | `calendar_request_identities` | Minimal global UUID/owner/connection/operation registry enforcing stable identity across calendar lifecycle mutations; forced RLS and service-role insert/select only, with no content fingerprint. |
+| `deadline_plans` | Owner-scoped exam/assignment lifecycle with immutable original estimate/prior credit, one stable managed-task identity after first confirmation, and active/pending revision projections. |
+| `deadline_plan_revisions` | Immutable proposed, active, or superseded preparation inputs/results, including proposal-time focus credit, exact remaining/planned/unscheduled totals, source provenance, and lifecycle timestamps. |
+| `deadline_plan_blocks` | Bounded immutable dated app-owned preparation reservations for one revision; they remain separate from `schedule_items` and imported calendar events. |
+| `deadline_plan_request_identities` | Backend-only global request UUID/owner/plan/operation/payload identity for exact replay and conflict detection; never exposed through Account Export. |
 | `coach_requests` | Backend-only retry/lease/terminal ledger. Pending rows store only a SHA-256 message fingerprint; completed rows store the strict response/manifest; deleted rows are content-free tombstones. |
 | `coach_usage_events` | Backend-only append-only one-row-per-request outcome/counter ledger retained across conversation deletion and used with request rows for the profile-local daily attempt budget. |
 | `coach_memory_selections` | Explicit owner-scoped selection of at most eight eligible `memory_entries` for Coach context, stored separately from memory ownership/content. |
@@ -304,6 +308,51 @@ only immutable select/insert access, and stores no imported content or content/
 source fingerprint. The migration also replaces application-conflict SQLSTATEs
 with PostgREST `PT409` and restricts import replay to an exact-input import that
 is still connected and current.
+
+## Deadline Planner V1
+
+Deadline Planner V1 persists explicit preparation work separately from imported
+calendar rows and ordinary schedule items. The user supplies the exam or
+assignment type, deadline, total active-preparation estimate, prior credit, and
+session constraints within a 366-day horizon. A deliberate proposal stores one immutable revision and
+its deterministic blocks; it does not replace an active revision until an exact
+confirm command succeeds.
+
+`deadline_plans` owns the plan lifecycle and immutable original estimate/prior
+credit plus separate current/latest revision counters. `deadline_plan_revisions` freezes every proposal's inputs, source and
+planning fingerprints, proposal-time completed-focus total, exact remaining,
+planned and unscheduled minutes, and activation/supersession provenance.
+`deadline_plan_blocks` owns at most 120 bounded dated blocks per revision.
+`deadline_plan_request_identities` is the minimal global anti-replay ledger for
+proposal, confirm, complete, and cancel operations.
+
+All four tables use forced RLS. Authenticated owners receive only the intended
+plan/revision/block read projection and no direct mutation authority. The
+request ledger is service-role-only. Backend mutations derive the owner from a
+verified bearer, take the shared owner advisory lock, and atomically reconcile
+request identity, revisions/blocks, plan projections, and first-confirm task
+creation. Composite ownership references prevent cross-owner plan, task,
+calendar-event, revision, and block linkage.
+
+The first confirmation creates exactly one planner-managed task with
+`task.id = deadline_plan.id`; subsequent revisions keep that identity and may
+change only title/deadline/update time while it remains open. Generic Task
+mutations/editor paths reject the managed source; focus may target the open task,
+and only plan complete/cancel owns its atomic matching terminal projection. A
+completed linked focus session after activation contributes only derived
+progress and never completes a task or plan. Imported events remain read-only:
+one explicitly selected current event may be pinned as proposal provenance,
+and optional busy-time use may read owner-scoped busy rows only from a
+connected, non-deleted source's non-null current import,
+but no planner operation changes an import, `schedule_items`, or a source
+calendar.
+
+Account Export V1 includes bounded owner rows from `deadline_plans`,
+`deadline_plan_revisions`, and `deadline_plan_blocks`; it names
+`deadline_plan_request_identities` as an omitted backend anti-replay ledger.
+Full-account deletion cascades all four tables. See
+`docs/deadline-planner-v1-contract.md` for the exact HTTP, revision, progress,
+source, and non-claim boundary.
 
 ## Phase 10 Controlled Coach
 

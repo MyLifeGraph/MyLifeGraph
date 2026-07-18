@@ -251,7 +251,7 @@ void main() {
     expect(find.byKey(const ValueKey('notification-$id')), findsOneWidget);
     expect(
       find.text(
-        'The action result is unknown. Retry sends the exact same request.',
+        'The result could not be confirmed. The item is unchanged here; retry without changing the action.',
       ),
       findsOneWidget,
     );
@@ -443,7 +443,7 @@ void main() {
     expect(find.text('Inbox'), findsOneWidget);
     expect(
       find.text(
-        'Stored inbox items can be marked read or dismissed here. In-app banners require separate consent and appear only while the app is open; no push delivery is enabled. Up to the latest 30 items are shown.',
+        'Saved Inbox items can be marked read or dismissed here. Banners need separate consent and appear only while the app is open. There is no push, email, system, or background delivery. Up to the latest 30 items are shown.',
       ),
       findsOneWidget,
     );
@@ -494,9 +494,10 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.drag(
-      find.byType(CustomScrollView),
-      const Offset(0, -340),
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('notifications-unread-count')),
+      160,
+      scrollable: find.byType(Scrollable).first,
     );
     await tester.pumpAndSettle();
 

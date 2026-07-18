@@ -21,19 +21,19 @@ class QuickActionPage extends ConsumerWidget {
     final capabilities = ref.watch(appSurfaceCapabilitiesProvider);
 
     return AppPage(
-      title: 'Add signal',
-      subtitle: 'Capture the context your future recommendations need',
+      title: 'Quick actions',
+      subtitle: 'Add a check-in or start something you planned',
       children: [
         _ActionTile(
           icon: Icons.nights_stay_outlined,
-          title: 'Evening Shutdown',
-          subtitle: 'Close today with stress context and tomorrow priority',
+          title: 'Evening check-in',
+          subtitle: 'Close today with three ratings and useful context',
           onTap: () => context.go(AppRoutes.quickMoodCheckIn),
         ),
         _ActionTile(
           icon: Icons.wb_sunny_outlined,
-          title: 'Morning Calibration',
-          subtitle: 'Sleep, current energy, and day shape',
+          title: 'Morning check-in',
+          subtitle: 'Add sleep, current energy, and today\'s shape',
           onTap: () => context.go(AppRoutes.morningCalibration),
         ),
         ...latestCheckIn.when(
@@ -70,6 +70,12 @@ class QuickActionPage extends ConsumerWidget {
             title: 'Focus session',
             subtitle: 'Start a real timed block linked to a task or habit',
             onTap: () => context.go(AppRoutes.deepWork),
+          ),
+          _ActionTile(
+            icon: Icons.event_available_outlined,
+            title: 'Plan exam or assignment',
+            subtitle: 'Estimate the work and reserve preparation blocks',
+            onTap: () => context.go(AppRoutes.preparationPlans),
           ),
         ],
       ],
@@ -150,8 +156,8 @@ class _SavedCheckInSummary extends StatelessWidget {
           if (draft.evening?.stressSource != null) ...[
             const SizedBox(height: AppSpacing.xs),
             Text(
-              'Stress: ${_readableCode(draft.evening!.stressSource!.code)} · '
-              '${_readableCode(draft.evening!.stressControllability!.code)}',
+              'Stress source: ${_readableCode(draft.evening!.stressSource!.code)} · '
+              'influence: ${_stressInfluenceCode(draft.evening!.stressControllability!.code)}',
               style: Theme.of(context).textTheme.bodySmall,
             ),
           ],
@@ -187,6 +193,13 @@ class _CaptureStatus extends StatelessWidget {
 }
 
 String _readableCode(String value) => value.replaceAll('_', ' ');
+
+String _stressInfluenceCode(String value) => switch (value) {
+      'hardly_controllable' => 'little',
+      'partly_controllable' => 'some',
+      'mostly_controllable' => 'mostly within your influence',
+      _ => _readableCode(value),
+    };
 
 class _SavedCheckInError extends StatelessWidget {
   const _SavedCheckInError({required this.onRetry});

@@ -27,13 +27,14 @@ way to explore the product today is the Flutter app in mock-data guest mode.
   instant, resolves each onboarded non-guest profile's local date, and prepares
   missing daily snapshots plus missing or snapshot-stale persisted briefings
   without an LLM.
-- Insights includes deterministic correlation exploration for sleep, workload,
-  stress, energy, mood, screen time, activity, steps, habits, recovery, and
-  focus. It computes bounded 7/14/30/90-day relationships in Flutter from
-  paginated Supabase rows or local mock time series, without LLM usage. Its generated
-  Skillset section independently loads the latest strict `skillset_profiles`
-  row and exposes missing, malformed, loading, and retry states without a real-
-  account demo substitute.
+- Insights includes deterministic correlation exploration for available sleep,
+  planned minutes, stress, energy, mood, screen time, activity, steps, habits,
+  and completed focus minutes. Missing metrics are hidden, focus comes from real
+  sessions, and the primary observation requires 14 shared days. It computes
+  bounded 7/14/30/90-day relationships in Flutter from paginated Supabase rows
+  or local mock time series, without LLM usage. Real accounts do not show the
+  unproduced Skillset surface; local demo mode labels its Skill profile as
+  example data only and never presents it as learned user evidence.
 - Real authenticated accounts now have durable timezone editing, a strict
   bounded `account-export-v1` JSON portability export, password reset/confirmation-email
   recovery, and confirmed permanent account deletion. The deletion is one
@@ -76,6 +77,18 @@ way to explore the product today is the Flutter app in mock-data guest mode.
   disconnect retains the local copy, while a separate confirmed delete removes
   only imported local data. No provider credential, URL fetch, provider write,
   background sync, LLM processing, or `schedule_items` mutation is introduced.
+  Deadline Planner V1 adds a separate explicit planning loop for exams and
+  assignments: the user supplies total active preparation time and prior
+  credit, reviews deterministic dated blocks, and confirms one immutable
+  revision before it becomes active. First confirmation creates one stable
+  managed task; completed post-activation focus linked to that task contributes
+  measured progress without completing the task or plan. A manual deadline or
+  one deliberately selected imported event may be used, and imported busy time
+  is an optional per-plan input only from a connected, non-deleted current
+  import. Planning is bounded to 366 days. There is no title inference,
+  calendar write, notification, LLM call, background sync, or hidden proposal.
+  The managed task accepts focus while open, but all edit/lifecycle authority
+  remains in the preparation plan instead of generic Task controls.
   The repository does not configure a deployed cron. Notification Delivery V1
   can create bounded local deterministic Inbox rows only after separate in-app
   consent; it still adds no provider/system delivery channel.
@@ -86,7 +99,9 @@ way to explore the product today is the Flutter app in mock-data guest mode.
   suggestion. Capability/history/memory reads never call a model; guest/mock is
   zero-call; Coach cannot mutate tasks, habits, goals, schedules, briefings,
   reviews, memory content, or calendar data. Standard tests use the deterministic
-  fake provider. The real-model adapter is intentionally local-development-only:
+  fake provider. The Coach UI is hard-hidden in release builds and whenever
+  `APP_ENV=production`; a Flutter define cannot override that boundary. The
+  real-model adapter is intentionally local-development-only:
   FastAPI invokes an explicitly enabled Codex CLI already authenticated by the
   current Linux/WSL user, so local subscription testing needs no application API
   key and shares no OAuth files. It prefers the explicitly configured `gpt-5.5`
@@ -116,8 +131,9 @@ way to explore the product today is the Flutter app in mock-data guest mode.
   See
   `docs/phase-3-executable-actions-contract.md` and
   `docs/phase-8-weekly-review-contract.md`, and
-  `docs/phase-9-calendar-import-contract.md`. The exact next-slice decisions
-  live in `docs/phase-10-controlled-coach-plan.md`.
+  `docs/phase-9-calendar-import-contract.md`. Deadline planning is specified in
+  `docs/deadline-planner-v1-contract.md`; the controlled Coach boundary lives
+  in `docs/phase-10-controlled-coach-plan.md`.
 - Repository docs and scripts should be treated as the shared team source of
   truth. Do not depend on user-local Codex skills or machine-specific paths.
 
@@ -287,10 +303,12 @@ Supabase is the intended auth and persistence backend. The current app supports:
   reload. Timeouts, 5xx failures, and invalid success envelopes have an unknown
   durable result, so the exact submitted draft is locked for unchanged retry or
   explicit reload.
-- Evening Shutdown captures explicit mood, energy, stress intensity/source/
-  controllability, focus band, main friction, tomorrow priority, and optional
-  reflection, blocker, and gentle-tomorrow intent. Morning Calibration is a
-  separate short flow for sleep hours, current energy, and day shape.
+- Evening check-in is a two-page flow for mood, energy, stress, and friction.
+  Stress source/influence is requested only from medium stress upward;
+  tomorrow priority, reflection, blocker, and gentle-tomorrow intent are
+  optional. It no longer asks users to estimate focus that completed Focus
+  sessions can measure. Morning check-in remains a separate short flow for
+  sleep hours, current energy, and day shape.
 - Both captures merge under `daily_logs.metadata.captures` for the same user and
   date. Morning energy owns the compatible `energy_level` projection when
   present; Evening owns mood and stress, and Morning owns sleep. Linked
@@ -312,6 +330,11 @@ Supabase is the intended auth and persistence backend. The current app supports:
   cadence-aware progress/streaks. `/deep-work` is now a real authenticated focus
   flow with one active session per user, optional owned task/habit linkage, and
   finish/abandon transitions that never complete the target implicitly.
+  The Focus surface reconstructs a live countdown after reload, accepts custom
+  duration, reuses the latest planned duration, and may suggest a median only
+  after five completed sessions without changing it automatically. Dashboard
+  keeps briefing, next block, capture status, Focus/Habits, and tasks prominent;
+  signal detail, secondary suggestions, and the full week are collapsed.
 - Every task update, including direct undo, and every manual habit
   edit/lifecycle update accepts a committed response loss only when an
   owner-scoped readback matches the exact mutation timestamp and requested
@@ -372,6 +395,15 @@ Supabase is the intended auth and persistence backend. The current app supports:
   import is a deliberate retry-safe POST, event pages are read-only, and
   disconnect/delete have separate local semantics. Imported events never become
   app-authored commitments or provider writes.
+- `/v1/deadline-plans` exposes the authenticated `deadline-plan-v1` boundary.
+  GET is read-only; deliberate proposal/confirm/complete/cancel commands use
+  stable request identities and separate latest/current optimistic revisions.
+  The user's explicit estimate owns the budget, staged blocks do not replace an
+  active revision, and first confirmation creates the stable managed task.
+  Generic task mutations are rejected; plan completion/cancellation atomically
+  projects matching task terminal state. Both require an active revision.
+  Calendar-event selection and current-import availability use are explicit and
+  never write back.
 - `/v1/coach/capabilities`, `/v1/coach/history`, and `/v1/coach/memories` are
   authenticated read/control boundaries that do not generate a reply.
   `POST /v1/coach/respond` is the only deliberate model-call path. Completed
@@ -397,7 +429,7 @@ keeps the preference revision monotone. The preceding Notification Delivery
 migration adds explicit consent, deterministic generation, and foreground
 receipts. The earlier Account Export
 grant restores only FastAPI's service-role read access to `lifestyle_entries`,
-which is required by the existing 28-table Account Export V1 contract. Phase 3 adds task
+which is required by the current 31-table Account Export V1 contract. Phase 3 adds task
 estimates/terminal times, locked cadence-aware habit outcomes, immutable linked
 focus history, and restricted target deletion without replacing existing RLS
 or table grants.
@@ -547,6 +579,13 @@ passed non-destructively against local Supabase in the 2026-07-13 current
 checkout; the full run reported
 `E2E browser smoke passed for e2e-1783947134@example.test`.
 
+After Deadline Planner V1 was added, the full non-reset combined journey passed
+again on 2026-07-18 after the product-polish slice. It reported
+`E2E browser smoke passed for e2e-1784404040@example.test` and included the
+two-page Evening flow, compact Dashboard expansions, Monday-only weekly entry,
+planner lifecycle/projection, Calendar isolation, focus progress, RLS, Account
+Export, account deletion, and guest zero-call checks.
+
 With a fresh local database:
 
 ```bash
@@ -571,6 +610,17 @@ has the nvm bin directory on `PATH`.
   proposals, freshness, ownership, and confirmed habit adaptation.
 - `docs/phase-9-calendar-import-contract.md` - Explicit `.ics` consent,
   bounded retry-safe import, read-only provenance, and disconnect/delete rules.
+- `docs/deadline-planner-v1-contract.md` - Explicit exam/assignment estimates,
+  staged deterministic blocks, revision confirmation, focus progress, calendar
+  isolation, and retry-safe ownership.
+- `docs/product-polish-follow-up.md` - Completion status for capability-truth
+  and plain-language polish, with the manual student study still explicit.
+- `docs/ui-language-and-copy-contract.md` - English V1 language decision,
+  canonical surface names, capability wording, and accessibility copy gate.
+- `docs/student-usability-test-script.md` - Ready-to-run five-student journey,
+  evidence template, and honest not-yet-run status.
+- `docs/product-review-handoff.md` - Self-contained review scope, invariants,
+  verification checklist, and prompt for a fresh review chat.
 - `docs/phase-10-controlled-coach-plan.md` - Implemented bounded Coach contract,
   local subscription-backed Codex OAuth adapter, privacy limits, and separate
   live-verification criteria.
@@ -585,8 +635,8 @@ has the nvm bin directory on `PATH`.
 - `docs/local-product-completion-handoff.md` - Ordered local completion plan for
   the real Coach, notifications, scheduling, visible actions, full-stack startup,
   and release-candidate verification before Android production work.
-- `docs/next-chat-prompt.md` - Ready-to-use prompt for continuing the next
-  implementation slice in a new chat.
+- `docs/next-chat-prompt.md` - Ready-to-use prompt for the next critical review
+  and test pass.
 - `apps/mobile/README.md` - Flutter app commands and configuration.
 - `services/ai_service/README.md` - FastAPI service setup and endpoints.
 - `AGENTS.md` - Instructions for agents working in this repo.

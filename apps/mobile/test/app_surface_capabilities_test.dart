@@ -109,6 +109,7 @@ void main() {
       ),
       useMockData: false,
       hasSupabaseClient: true,
+      coachSurfaceEnabled: true,
     );
 
     expect(capabilities.isLocalDemo, isFalse);

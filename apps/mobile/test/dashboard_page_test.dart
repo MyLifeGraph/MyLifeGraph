@@ -54,12 +54,32 @@ void main() {
       ),
     );
 
+    await _expandDashboardSection(
+      tester,
+      const ValueKey('dashboard-saved-signals'),
+    );
+
+    final compactSections = tester.widgetList<ExpansionTile>(
+      find.byType(ExpansionTile),
+    );
+    expect(compactSections, hasLength(3));
+    for (final section in compactSections) {
+      expect(section.shape, isNotNull);
+      expect(section.collapsedShape, isNotNull);
+    }
+    expect(tester.takeException(), isNull);
+
     expect(find.text('Latest check-in'), findsOneWidget);
     expect(find.text('2/10'), findsOneWidget);
     expect(find.text('9/10'), findsOneWidget);
     expect(find.text('5.5 h'), findsOneWidget);
     expect(find.text('8/10'), findsOneWidget);
-    expect(find.text('Demo recommendations'), findsOneWidget);
+    await _expandDashboardSection(
+      tester,
+      const ValueKey('dashboard-supporting-suggestions'),
+    );
+    expect(tester.takeException(), isNull);
+    expect(find.text('Example suggestions'), findsOneWidget);
     expect(find.text('Demo next action'), findsOneWidget);
     expect(find.text("Today's wellness score"), findsNothing);
     expect(find.text('Hydration'), findsNothing);
@@ -79,12 +99,17 @@ void main() {
       feed: _failingFeed(),
     );
 
+    await _expandDashboardSection(
+      tester,
+      const ValueKey('dashboard-supporting-suggestions'),
+    );
+
     expect(find.text('Recommendations unavailable'), findsOneWidget);
     expect(
       find.text('Your account data was not replaced with demo content.'),
       findsOneWidget,
     );
-    expect(find.text('Demo recommendations'), findsNothing);
+    expect(find.text('Example suggestions'), findsNothing);
   });
 
   testWidgets('dashboard load error is distinct from an empty snapshot',
@@ -133,6 +158,11 @@ void main() {
       snapshotRefreshService: _NoopSnapshotRefreshService(),
     );
 
+    await _expandDashboardSection(
+      tester,
+      const ValueKey('dashboard-supporting-suggestions'),
+    );
+
     await tester.tap(find.text('Refresh recommendations'));
     await tester.pumpAndSettle();
 
@@ -150,7 +180,7 @@ void main() {
       snapshot: Future.value(
         DashboardSnapshot.empty(
           origin: DashboardOrigin.localDemo,
-          loadedAt: DateTime.now(),
+          loadedAt: DateTime(2026, 7, 13),
         ),
       ),
       feed: Future.value(RecommendationFeed.demo(const [])),
@@ -162,7 +192,7 @@ void main() {
       snapshot: Future.value(
         DashboardSnapshot.empty(
           origin: DashboardOrigin.account,
-          loadedAt: DateTime.now(),
+          loadedAt: DateTime(2026, 7, 13),
         ),
       ),
       feed: Future.value(RecommendationFeed.demo(const [])),
@@ -175,6 +205,16 @@ void main() {
     );
     expect(find.text('Review your week'), findsOneWidget);
   });
+}
+
+Future<void> _expandDashboardSection(
+  WidgetTester tester,
+  ValueKey<String> key,
+) async {
+  final section = find.byKey(key);
+  await tester.ensureVisible(section);
+  await tester.tap(section);
+  await tester.pumpAndSettle();
 }
 
 Future<RecommendationFeed> _failingFeed() async {
