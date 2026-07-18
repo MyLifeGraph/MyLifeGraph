@@ -619,6 +619,9 @@ has the nvm bin directory on `PATH`.
   canonical surface names, capability wording, and accessibility copy gate.
 - `docs/student-usability-test-script.md` - Ready-to-run five-student journey,
   evidence template, and honest not-yet-run status.
+- `docs/student-usability-study/` - Recruitment copy, facilitator runbook,
+  anonymized per-session note template, and synthesis template for the
+  still-manual study.
 - `docs/product-review-handoff.md` - Self-contained review scope, invariants,
   verification checklist, and prompt for a fresh review chat.
 - `docs/phase-10-controlled-coach-plan.md` - Implemented bounded Coach contract,

@@ -1,8 +1,9 @@
 # Product Polish Follow-up
 
 Status: implemented on 2026-07-18, with the manual five-student usability study
-still pending. The runnable study plan and evidence template are in
-`docs/student-usability-test-script.md`.
+still pending. The runnable protocol is in
+`docs/student-usability-test-script.md`; recruitment, facilitation, notes, and
+synthesis templates are in `docs/student-usability-study/`.
 
 ## 6. Remove Or Finish Unproven Product Promises
 
@@ -48,6 +49,8 @@ Implemented:
   notification surfaces, Insights, and the compact main navigation. The main
   student journeys remain scrollable rather than shrinking or clipping text.
 
-The remaining acceptance activity is a real unmoderated usability study with
-five relevant students. It must not be reported as complete until participant
-evidence and results are recorded in the study template.
+The remaining acceptance activity is a real moderated think-aloud usability
+study with five relevant students. It uses a second short contact after a real
+confirmed block has passed so missed-block recovery is observed without a fake
+state. It must not be reported as complete until participant evidence and
+results are recorded in the study templates.

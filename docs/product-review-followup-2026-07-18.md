@@ -148,9 +148,11 @@ All results below are from this local checkout on 2026-07-18:
 
 ## Remaining manual or external validation
 
-1. Run the prepared five-student usability study and report only observed
-   results, especially estimate comprehension, clear-day meaning, Weekly review
-   discoverability outside Monday, and repeated missed-block replanning.
+1. Run the prepared five-student usability study with
+   `docs/student-usability-study/facilitator-runbook.md` and report only
+   observed results, especially estimate comprehension, clear-day meaning,
+   Weekly review discoverability outside Monday, and repeated missed-block
+   replanning.
 2. Test representative physical phones and desktop browsers with OS-level 200%
    text, keyboard-only navigation, VoiceOver/TalkBack, reduced motion, and real
    network transitions. Widget/headless coverage is not installed-device

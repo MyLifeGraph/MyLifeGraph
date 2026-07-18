@@ -57,8 +57,9 @@ retry, fingerprint, and database rules are in
 - English is the only supported interface language in V1. German localization
   remains future work and must be implemented end-to-end before being claimed.
 - The five-student test is prepared in
-  `docs/student-usability-test-script.md`, but is not yet run and must not be
-  presented as completed evidence.
+  `docs/student-usability-test-script.md`, with its execution kit in
+  `docs/student-usability-study/`, but is not yet run and must not be presented
+  as completed evidence.
 
 ## Review Questions
 
