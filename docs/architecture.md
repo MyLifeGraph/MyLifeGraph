@@ -308,6 +308,16 @@ provider state, task estimates, and Focus history, so the UI labels the latter
 as weekly Setup commitments and does not present the projection as total free
 time. Both this projection and block allocation remain deterministic/no-LLM.
 
+The compatible `preparation-workload-detail-v1` read is requested only after a
+student expands one date from that summary. It accepts only a date in the
+current profile-local seven-day window and aggregates active blocks by their
+owner-scoped plan id. The response exposes only plan title, date-reserved
+minutes, and block count, with exact sum/budget invariants; it does not return
+block times or calendar content. Today and Preparation plans use the same
+detail boundary. Review navigation opens the existing plan, while replanning
+opens the existing editor and remains preview/confirmation based. Neither GET
+route has mutation or LLM authority.
+
 ## Authentication
 
 The current auth modes are:

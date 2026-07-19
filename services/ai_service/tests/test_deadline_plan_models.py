@@ -8,6 +8,7 @@ from pydantic import ValidationError
 
 from app.models.deadline_plans import (
     DeadlinePlanProposalRequest,
+    PreparationWorkloadDetailResponse,
     PreparationWorkloadResponse,
 )
 
@@ -124,3 +125,51 @@ def test_workload_contract_requires_seven_consecutive_consistent_days() -> None:
         mutate(invalid)
         with pytest.raises(ValidationError):
             PreparationWorkloadResponse.model_validate_json(json.dumps(invalid))
+
+
+def test_workload_detail_contract_requires_exact_unique_contributions() -> None:
+    payload = {
+        "contract_version": "preparation-workload-detail-v1",
+        "origin": "authenticated_backend",
+        "generated_at": "2026-07-20T08:00:00Z",
+        "timezone": "Europe/Berlin",
+        "local_date": "2026-07-20",
+        "daily_preparation_budget_minutes": 120,
+        "reserved_preparation_minutes": 140,
+        "remaining_budget_minutes": 0,
+        "over_budget_minutes": 20,
+        "contributions": [
+            {
+                "plan_id": "22222222-2222-4222-8222-222222222222",
+                "title": "Algorithms exam",
+                "reserved_preparation_minutes": 80,
+                "block_count": 2,
+            },
+            {
+                "plan_id": "33333333-3333-4333-8333-333333333333",
+                "title": "History paper",
+                "reserved_preparation_minutes": 60,
+                "block_count": 1,
+            },
+        ],
+    }
+
+    parsed = PreparationWorkloadDetailResponse.model_validate_json(
+        json.dumps(payload),
+    )
+    assert parsed.over_budget_minutes == 20
+
+    for mutate in (
+        lambda value: value.update(extra="not-v1"),
+        lambda value: value.update(reserved_preparation_minutes=139),
+        lambda value: value["contributions"][1].update(
+            plan_id=value["contributions"][0]["plan_id"],
+        ),
+        lambda value: value["contributions"][0].update(title=" Algorithms exam"),
+    ):
+        invalid = deepcopy(payload)
+        mutate(invalid)
+        with pytest.raises(ValidationError):
+            PreparationWorkloadDetailResponse.model_validate_json(
+                json.dumps(invalid),
+            )

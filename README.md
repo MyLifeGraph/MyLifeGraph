@@ -410,7 +410,11 @@ Supabase is the intended auth and persistence backend. The current app supports:
   projects matching task terminal state. Both require an active revision.
   Calendar-event selection and current-import availability use are explicit and
   never write back. `GET /v1/deadline-plans/workload` returns the strict side-
-  effect-free seven-day reservation/Setup-commitment projection. The optional
+  effect-free seven-day reservation/Setup-commitment projection. Expanding one
+  of those dates calls the separate compatible
+  `GET /v1/deadline-plans/workload/{local_date}`
+  `preparation-workload-detail-v1` read, which explains the owner-scoped plan
+  minute/block contributions without choosing or changing a plan. The optional
   account rule is set through `PATCH /v1/account/preparation-budget`; `null`
   retains per-plan-only capacity, while `25..480` five-minute values cap total
   confirmed preparation per local date for new confirmations.
@@ -607,6 +611,14 @@ changed-budget confirmation conflict, Today/Preparation-plans UI, cross-owner
 isolation, export, and guest zero-call assertions. This is not evidence of a
 remote migration, installed device, production provider, participant study, or
 long-term outcome.
+
+The subsequent actionable workload-day follow-up passed the standard gate and
+non-reset Supabase verification with `608` Flutter tests, the complete FastAPI
+suite with `766 passed, 1 skipped`, and the final full browser journey with
+`E2E browser smoke passed for e2e-1784465767@example.test`. The browser pass
+includes strict per-day plan contributions, cross-owner isolation, staged
+replan navigation, and the root-modal fix that keeps `Cancel` on Preparation
+plans. It remains local evidence and does not change the non-claims above.
 
 With a fresh local database:
 

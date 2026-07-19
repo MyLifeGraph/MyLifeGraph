@@ -225,6 +225,14 @@ seven consecutive profile-local dates, strict arithmetic and provenance, active
 confirmed-reservation totals, distinct active-plan counts, merged recurring
 Setup commitments, and honest no-budget/over-budget/error states without
 implying imported calendar or AI coverage.
+`preparation-workload-detail-v1` coverage must independently require a date in
+that current seven-day profile-local window; exact owner/date active-block
+filters; at most 50 unique plan/title/minute/block contributions whose sum
+equals the total; strict budget arithmetic and response keys; an empty
+cross-owner projection; honest loading, retry, and changed-summary states; and
+320 px/200-percent text plus browser navigation into review/replanning without
+an automatic proposal or mutation. The original seven-day response shape must
+remain unchanged.
 Service and
 migration tests must cover first-confirm managed-task creation, stable task
 identity, generic task mutation/editor rejection and redirect, allowed open-task
@@ -1037,6 +1045,19 @@ cross-owner isolation, export, and guest zero-call. This remains local evidence;
 the five-student study is still unrun and no remote, installed-device,
 background-delivery, production-provider, localization, or longitudinal claim
 is added.
+
+The compatible actionable workload-day follow-up also completed locally on
+2026-07-19. Its focused backend suite reported `27 passed`; the complete FastAPI
+suite reported `766 passed, 1 skipped`. After a browser-discovered nested-modal
+navigation defect was fixed, the standard gate and non-reset local Supabase
+verification each passed all `608` Flutter tests with clean analysis and
+matching migration history. The final full non-reset browser journey reported
+`E2E browser smoke passed for e2e-1784465767@example.test`. It covered strict
+owner/date detail arithmetic, cross-owner emptiness, on-demand Flutter detail,
+exact overage copy, staged replan entry, and a root modal barrier that prevents
+Shell navigation from stealing `Cancel`. This is local evidence only; the
+five-student study and all remote, installed-device, background-delivery,
+production-provider, localization, and longitudinal checks remain unrun.
 
 Phase 10 has focused fake-provider/process-runner, strict contract, service,
 migration, repository, controller, and widget tests in the checkout. Its

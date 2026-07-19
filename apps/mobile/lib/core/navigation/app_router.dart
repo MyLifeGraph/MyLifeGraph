@@ -162,6 +162,8 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             path: AppRoutes.preparationPlans,
             builder: (context, state) => DeadlinePlansPage(
               initialPlanId: state.uri.queryParameters['plan_id'],
+              openInitialReplan:
+                  state.uri.queryParameters['action'] == 'replan',
               sourceCalendarEventId:
                   state.uri.queryParameters['calendar_event_id'],
             ),

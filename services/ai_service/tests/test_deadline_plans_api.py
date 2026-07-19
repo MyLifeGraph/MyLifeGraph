@@ -11,7 +11,9 @@ from app.models.deadline_plans import (
     DeadlinePlanProgress,
     DeadlinePlanResponse,
     DeadlinePlansResponse,
+    PreparationWorkloadContribution,
     PreparationWorkloadDay,
+    PreparationWorkloadDetailResponse,
     PreparationWorkloadResponse,
 )
 from app.services.deadline_plan_service import DeadlinePlanConflictError
@@ -64,6 +66,28 @@ class Service:
                     fixed_commitment_minutes=0,
                 )
                 for offset in range(7)
+            ],
+        )
+
+    async def get_workload_detail(self, *, user_id, local_date):
+        self.calls.append(("workload-detail", user_id, local_date))
+        return PreparationWorkloadDetailResponse(
+            contract_version="preparation-workload-detail-v1",
+            origin="authenticated_backend",
+            generated_at=NOW,
+            timezone="UTC",
+            local_date=local_date,
+            daily_preparation_budget_minutes=120,
+            reserved_preparation_minutes=80,
+            remaining_budget_minutes=40,
+            over_budget_minutes=0,
+            contributions=[
+                PreparationWorkloadContribution(
+                    plan_id=PLAN_ID,
+                    title="Mathematics",
+                    reserved_preparation_minutes=80,
+                    block_count=2,
+                ),
             ],
         )
 
@@ -174,6 +198,25 @@ def test_deadline_routes_derive_owner_and_keep_exact_envelopes() -> None:
     assert workload.json()["contract_version"] == "preparation-workload-v1"
     assert len(workload.json()["days"]) == 7
     assert workload_service.calls == [("workload", USER_ID)]
+
+    workload_detail, detail_service = asyncio.run(
+        _request("GET", "/v1/deadline-plans/workload/2026-07-20"),
+    )
+    assert workload_detail.status_code == 200
+    assert (
+        workload_detail.json()["contract_version"]
+        == "preparation-workload-detail-v1"
+    )
+    assert workload_detail.json()["contributions"][0]["plan_id"] == str(PLAN_ID)
+    assert detail_service.calls == [
+        ("workload-detail", USER_ID, date(2026, 7, 20)),
+    ]
+
+    invalid_detail, invalid_detail_service = asyncio.run(
+        _request("GET", "/v1/deadline-plans/workload/not-a-date"),
+    )
+    assert invalid_detail.status_code == 422
+    assert invalid_detail_service.calls == []
 
 
 def test_proposal_route_is_strict_and_maps_conflict() -> None:

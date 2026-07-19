@@ -314,6 +314,10 @@ shared owner lock. Earlier same-day reservations still consume that date's
 capacity. Budget changes never rewrite active revisions; the seven-day Today/
 Preparation plans projection reports confirmed reservations and separately
 labelled weekly Setup commitments, not complete calendar availability.
+Expanding a date uses the separate strict read-only
+`preparation-workload-detail-v1` contract. It groups only that owner's active
+plan reservations, states exact date overage, and may open existing review or
+staged replanning UI without choosing a plan or mutating data.
 The managed task remains planner-owned: generic Task mutations/editor paths are
 forbidden, while starting focus on the open task remains allowed.
 These phases do not claim deployed cron wiring. Notification Delivery V1 below
@@ -602,6 +606,18 @@ budget confirmation conflict, cross-owner isolation, and guest zero-call. This
 is local evidence only and makes no remote migration, installed-device,
 participant-study, long-term-outcome, provider-calendar, push/background, or
 production-Coach claim.
+
+The compatible actionable workload-day follow-up then completed locally on
+2026-07-19 without another migration. The complete FastAPI suite reported
+`766 passed, 1 skipped`; the standard gate and non-reset Supabase verification
+each passed all `608` Flutter tests with clean analysis and matching history.
+The final full browser journey reported
+`E2E browser smoke passed for e2e-1784465767@example.test` after exposing and
+fixing a nested Bottom Sheet whose barrier did not cover Shell navigation. The
+passing run covers strict owner/date detail, cross-owner emptiness, deliberate
+review/replan navigation, and modal cancellation without mutation. It adds no
+remote, installed-device, participant, background, provider, localization, or
+longitudinal claim.
 
 The implemented post-intake refresh is backend-only and best-effort:
 

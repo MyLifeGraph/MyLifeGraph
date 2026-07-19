@@ -1507,6 +1507,10 @@ Contract:
   complete/cancel atomically own its matching terminal state.
 - GET and all unrelated product paths are side-effect free. There is no LLM,
   notification, provider write, background sync, or hidden generation.
+- The compatible on-demand workload-day detail is limited to the current
+  seven-day profile-local view. It explains active plan minute/block
+  contributions and exact overage without selecting a plan; review and replan
+  remain deliberate existing flows.
 
 Evaluation:
 

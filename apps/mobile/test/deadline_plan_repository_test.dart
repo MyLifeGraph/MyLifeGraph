@@ -14,6 +14,8 @@ void main() {
       getResponses: {
         '/v1/deadline-plans': deadlinePlanFeed(),
         '/v1/deadline-plans/workload': preparationWorkloadEnvelope(),
+        '/v1/deadline-plans/workload/2026-07-20':
+            preparationWorkloadDetailEnvelope(),
       },
       postResponses: {
         '/v1/deadline-plans/proposals': deadlinePlanEnvelope(status: 'draft'),
@@ -24,6 +26,7 @@ void main() {
 
     final feed = await repository.getPlans();
     final workload = await repository.getWorkload();
+    final workloadDetail = await repository.getWorkloadDetail('2026-07-20');
     final proposed = await repository.propose(
       requestId: deadlineRequestId,
       draft: draft,
@@ -31,10 +34,15 @@ void main() {
 
     expect(feed.plans, hasLength(1));
     expect(workload.dailyPreparationBudgetMinutes, 120);
+    expect(workloadDetail.contributions, hasLength(2));
     expect(proposed.isDraft, isTrue);
     expect(
       client.getCalls,
-      ['/v1/deadline-plans', '/v1/deadline-plans/workload'],
+      [
+        '/v1/deadline-plans',
+        '/v1/deadline-plans/workload',
+        '/v1/deadline-plans/workload/2026-07-20',
+      ],
     );
     expect(client.postCalls, ['/v1/deadline-plans/proposals']);
     expect(client.headersByPath['/v1/deadline-plans'], {
@@ -43,6 +51,10 @@ void main() {
     expect(client.headersByPath['/v1/deadline-plans/workload'], {
       'Authorization': 'Bearer account-token',
     });
+    expect(
+      client.headersByPath['/v1/deadline-plans/workload/2026-07-20'],
+      {'Authorization': 'Bearer account-token'},
+    );
     expect(client.bodyByPath['/v1/deadline-plans/proposals'], {
       'request_id': deadlineRequestId,
       'plan_id': deadlinePlanId,
@@ -59,6 +71,27 @@ void main() {
       'source_kind': 'manual',
       'use_calendar_availability': false,
     });
+  });
+
+  test('workload detail rejects an invalid or mismatched date', () async {
+    final mismatched = preparationWorkloadDetailEnvelope()
+      ..['local_date'] = '2026-07-21';
+    final repository = _repository(
+      _TrackingApiClient(
+        getResponses: {
+          '/v1/deadline-plans/workload/2026-07-20': mismatched,
+        },
+      ),
+    );
+
+    await expectLater(
+      repository.getWorkloadDetail('not-a-date'),
+      throwsA(isA<DeadlinePlanAccessException>()),
+    );
+    await expectLater(
+      repository.getWorkloadDetail('2026-07-20'),
+      throwsA(isA<DeadlinePlanContractException>()),
+    );
   });
 
   test('lifecycle uses exact expected revision only', () async {
@@ -146,7 +179,15 @@ void main() {
       throwsA(isA<DeadlinePlanAccessException>()),
     );
     await expectLater(
+      nonSynced.getWorkloadDetail('2026-07-20'),
+      throwsA(isA<DeadlinePlanAccessException>()),
+    );
+    await expectLater(
       noToken.getPlans(),
+      throwsA(isA<DeadlinePlanAccessException>()),
+    );
+    await expectLater(
+      noToken.getWorkloadDetail('2026-07-20'),
       throwsA(isA<DeadlinePlanAccessException>()),
     );
     expect(client.totalCalls, 0);

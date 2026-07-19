@@ -57,7 +57,11 @@ into a primary title, button, field label, or first-line error.
   there. The optional `Daily preparation budget` is described as an explicit
   account-wide transparent rule, not an AI estimate or inferred free time.
   Existing over-budget reservations say `Needs review` because changing the
-  setting does not mutate them.
+  setting does not mutate them. Expanding that date may say `At least N must be
+  redistributed on this date`; this is the exact rule overage, not an automatic
+  choice of plan. `Review plan` navigates to saved details, while `Replan
+  remaining time` only opens the existing staged flow. The detail must also say
+  that nothing changes automatically.
 - State whether a change is automatic, requires confirmation, or cannot change
   data. Do not imply that a preview or recommendation already changed a plan.
 - Keep provider names, model names, contract versions, source manifests, and

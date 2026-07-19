@@ -26,6 +26,8 @@ class Client:
             return []
         if table == "deadline_plan_blocks":
             return []
+        if table == "deadline_plans":
+            return []
         if table == "calendar_connections":
             if params.get("id"):
                 return [
@@ -148,6 +150,59 @@ def test_workload_context_is_owner_scoped_to_profile_local_seven_days() -> None:
     )
     assert block_call["limit"] == "1000"
     assert block_call["offset"] == "0"
+
+
+class WorkloadDetailClient(Client):
+    async def select(self, table, *, params):
+        self.calls.append((table, params))
+        if table == "profiles":
+            return [
+                {
+                    "timezone": "Europe/Berlin",
+                    "daily_preparation_budget_minutes": 120,
+                },
+            ]
+        if table == "deadline_plan_blocks":
+            return [
+                {
+                    "id": "11111111-1111-4111-8111-111111111111",
+                    "plan_id": str(PLAN_ID),
+                    "local_date": "2026-07-20",
+                    "planned_minutes": 80,
+                    "starts_at": "2026-07-20T08:00:00+02:00",
+                    "ends_at": "2026-07-20T09:20:00+02:00",
+                },
+            ]
+        if table == "deadline_plans":
+            return [{"id": str(PLAN_ID), "title": "Mathematics"}]
+        raise AssertionError((table, params))
+
+
+def test_workload_detail_context_is_owner_and_exact_date_scoped() -> None:
+    client = WorkloadDetailClient()
+    repository = SupabaseDeadlinePlanRepository(client)
+
+    context = asyncio.run(
+        repository.load_workload_detail_context(
+            user_id=USER_ID,
+            local_date=date(2026, 7, 20),
+        ),
+    )
+
+    assert context.daily_preparation_budget_minutes == 120
+    block_call = next(
+        params
+        for table, params in client.calls
+        if table == "deadline_plan_blocks"
+    )
+    assert block_call["user_id"] == f"eq.{USER_ID}"
+    assert block_call["local_date"] == "eq.2026-07-20"
+    assert block_call["reservation_state"] == "eq.active"
+    plan_call = next(
+        params for table, params in client.calls if table == "deadline_plans"
+    )
+    assert plan_call["user_id"] == f"eq.{USER_ID}"
+    assert plan_call["id"] == f"in.({PLAN_ID})"
 
 
 def test_focus_query_is_activation_bounded_and_has_overflow_sentinel() -> None:

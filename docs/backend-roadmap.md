@@ -1030,6 +1030,10 @@ lives in `docs/phase-9-calendar-import-contract.md`.
   a connected source with a non-null current import.
 - Uses forced-RLS backend-owned persistence and one global retry ledger; plan,
   revision, and block rows enter Account Export while the ledger is omitted.
+- Keeps the strict seven-day preparation summary compatible and exposes a
+  separate current-date `preparation-workload-detail-v1` read only after
+  deliberate expansion. It groups owner-scoped active blocks by plan and opens
+  existing review/replanning UI without choosing or mutating a plan.
 - Adds no title inference, calendar/provider write, notification, LLM,
   background sync, scheduler job, or hidden generation.
 

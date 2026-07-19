@@ -75,6 +75,9 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
         briefing: briefing,
         workload: workload,
         onRetryWorkload: () => ref.invalidate(preparationWorkloadProvider),
+        onLoadWorkloadDetail: (localDate) => ref
+            .read(deadlinePlanRepositoryProvider)
+            .getWorkloadDetail(localDate),
         isGeneratingBriefing: _isGeneratingBriefing,
         briefingGenerationError: _briefingGenerationError,
         executingBriefingActionIds: _executingBriefingActionIds,
@@ -675,6 +678,7 @@ class _DashboardHome extends StatelessWidget {
     required this.briefing,
     required this.workload,
     required this.onRetryWorkload,
+    required this.onLoadWorkloadDetail,
     required this.isGeneratingBriefing,
     required this.briefingGenerationError,
     required this.executingBriefingActionIds,
@@ -718,6 +722,7 @@ class _DashboardHome extends StatelessWidget {
   final AsyncValue<BriefingFeed> briefing;
   final AsyncValue<PreparationWorkload>? workload;
   final VoidCallback onRetryWorkload;
+  final PreparationWorkloadDetailLoader onLoadWorkloadDetail;
   final bool isGeneratingBriefing;
   final String? briefingGenerationError;
   final Set<String> executingBriefingActionIds;
@@ -827,10 +832,26 @@ class _DashboardHome extends StatelessWidget {
                               value: workload!,
                               compact: true,
                               onRetry: onRetryWorkload,
+                              onLoadDayDetail: onLoadWorkloadDetail,
                               onOpenSettings: () =>
                                   context.go(AppRoutes.settings),
                               onOpenPlans: () =>
                                   context.go(AppRoutes.preparationPlans),
+                              onReviewPlan: (planId) => context.go(
+                                Uri(
+                                  path: AppRoutes.preparationPlans,
+                                  queryParameters: {'plan_id': planId},
+                                ).toString(),
+                              ),
+                              onReplanPlan: (planId) => context.go(
+                                Uri(
+                                  path: AppRoutes.preparationPlans,
+                                  queryParameters: {
+                                    'plan_id': planId,
+                                    'action': 'replan',
+                                  },
+                                ).toString(),
+                              ),
                             ),
                           ],
                           if (canUseWeeklyReview) ...[

@@ -37,6 +37,26 @@ class DeadlinePlanRepositoryImpl implements DeadlinePlanRepository {
   }
 
   @override
+  Future<PreparationWorkloadDetail> getWorkloadDetail(String localDate) async {
+    if (!isDeadlinePlanDate(localDate)) {
+      throw const DeadlinePlanAccessException(
+        'Preparation workload date is invalid.',
+      );
+    }
+    _requireRemote();
+    final detail = await _api.getWorkloadDetail(
+      accessToken: await _requireToken(),
+      localDate: localDate,
+    );
+    if (detail.localDateKey != localDate) {
+      throw const DeadlinePlanContractException(
+        'Preparation workload detail date does not match the request.',
+      );
+    }
+    return detail;
+  }
+
+  @override
   Future<DeadlinePlan> getPlan(String planId) async {
     _requirePlanId(planId);
     _requireRemote();

@@ -1,3 +1,4 @@
+from datetime import date
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -10,6 +11,7 @@ from app.models.deadline_plans import (
     DeadlinePlanProposalRequest,
     DeadlinePlanResponse,
     DeadlinePlansResponse,
+    PreparationWorkloadDetailResponse,
     PreparationWorkloadResponse,
 )
 from app.repositories.deadline_plan_repository import SupabaseDeadlinePlanRepository
@@ -69,6 +71,38 @@ async def get_preparation_workload(
     except DeadlinePlanConflictError as exc:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc),
+        ) from exc
+
+
+@router.get(
+    "/workload/{local_date}",
+    response_model=PreparationWorkloadDetailResponse,
+    response_model_exclude_none=False,
+)
+async def get_preparation_workload_detail(
+    local_date: date,
+    principal: Principal = Depends(get_current_principal),
+    service: DeadlinePlanService = Depends(get_deadline_plan_service),
+) -> PreparationWorkloadDetailResponse:
+    try:
+        return await service.get_workload_detail(
+            user_id=principal.user_id,
+            local_date=local_date,
+        )
+    except DeadlinePlanNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+    except DeadlinePlanConflictError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc),
+        ) from exc
+    except DeadlinePlanValidationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=str(exc),
         ) from exc
 

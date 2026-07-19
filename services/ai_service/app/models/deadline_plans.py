@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 DEADLINE_PLAN_CONTRACT_VERSION = "deadline-plan-v1"
 PREPARATION_WORKLOAD_CONTRACT_VERSION = "preparation-workload-v1"
+PREPARATION_WORKLOAD_DETAIL_CONTRACT_VERSION = "preparation-workload-detail-v1"
 
 DeadlineKind = Literal["exam", "assignment"]
 DeadlinePlanStatus = Literal["draft", "active", "completed", "cancelled"]
@@ -91,6 +92,77 @@ class PreparationWorkloadResponse(BaseModel):
                 raise ValueError(
                     "preparation workload budget arithmetic is inconsistent",
                 )
+        return self
+
+
+class PreparationWorkloadContribution(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+
+    plan_id: UUID = Field(strict=False)
+    title: str = Field(min_length=1, max_length=160)
+    reserved_preparation_minutes: int = Field(ge=5, le=480)
+    block_count: int = Field(ge=1, le=120)
+
+    @field_validator("title")
+    @classmethod
+    def validate_title(cls, value: str) -> str:
+        if value.strip() != value:
+            raise ValueError("preparation workload title must be trimmed")
+        return value
+
+
+class PreparationWorkloadDetailResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+
+    contract_version: Literal["preparation-workload-detail-v1"]
+    origin: Literal["authenticated_backend"]
+    generated_at: datetime
+    timezone: str = Field(min_length=1, max_length=100)
+    local_date: date
+    daily_preparation_budget_minutes: int | None = Field(
+        default=None,
+        ge=25,
+        le=480,
+    )
+    reserved_preparation_minutes: int = Field(ge=0, le=30_000)
+    remaining_budget_minutes: int | None = Field(default=None, ge=0, le=480)
+    over_budget_minutes: int = Field(ge=0, le=30_000)
+    contributions: list[PreparationWorkloadContribution] = Field(max_length=50)
+
+    @model_validator(mode="after")
+    def validate_detail(self) -> Self:
+        if self.generated_at.tzinfo is None:
+            raise ValueError("preparation workload detail timestamp must be aware")
+        try:
+            ZoneInfo(self.timezone)
+        except ZoneInfoNotFoundError as exc:
+            raise ValueError(
+                "preparation workload detail timezone is invalid",
+            ) from exc
+        budget = self.daily_preparation_budget_minutes
+        if budget is None:
+            if (
+                self.remaining_budget_minutes is not None
+                or self.over_budget_minutes != 0
+            ):
+                raise ValueError("unset preparation budget cannot imply capacity")
+        elif (
+            budget % 5 != 0
+            or self.remaining_budget_minutes
+            != max(0, budget - self.reserved_preparation_minutes)
+            or self.over_budget_minutes
+            != max(0, self.reserved_preparation_minutes - budget)
+        ):
+            raise ValueError(
+                "preparation workload detail arithmetic is inconsistent",
+            )
+        plan_ids = [item.plan_id for item in self.contributions]
+        if len(plan_ids) != len(set(plan_ids)):
+            raise ValueError("preparation workload detail plans must be unique")
+        if sum(
+            item.reserved_preparation_minutes for item in self.contributions
+        ) != self.reserved_preparation_minutes:
+            raise ValueError("preparation workload detail total is inconsistent")
         return self
 
 

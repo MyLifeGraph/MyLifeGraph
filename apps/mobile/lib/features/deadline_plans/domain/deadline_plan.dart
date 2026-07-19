@@ -1,5 +1,7 @@
 const deadlinePlanContractVersion = 'deadline-plan-v1';
 const preparationWorkloadContractVersion = 'preparation-workload-v1';
+const preparationWorkloadDetailContractVersion =
+    'preparation-workload-detail-v1';
 
 enum DeadlinePlanKind {
   exam('exam'),
@@ -281,6 +283,194 @@ class PreparationWorkloadDay {
   final int overBudgetMinutes;
   final int activePlanCount;
   final int fixedCommitmentMinutes;
+
+  String get localDateKey => _dateOnlyKey(localDate);
+}
+
+class PreparationWorkloadDetail {
+  PreparationWorkloadDetail({
+    required this.generatedAt,
+    required this.timezone,
+    required this.localDate,
+    required this.dailyPreparationBudgetMinutes,
+    required this.reservedPreparationMinutes,
+    required this.remainingBudgetMinutes,
+    required this.overBudgetMinutes,
+    required List<PreparationWorkloadContribution> contributions,
+  }) : contributions = List.unmodifiable(contributions) {
+    final budget = dailyPreparationBudgetMinutes;
+    if (budget != null && (budget < 25 || budget > 480 || budget % 5 != 0) ||
+        reservedPreparationMinutes < 0 ||
+        reservedPreparationMinutes > 30000 ||
+        remainingBudgetMinutes != null &&
+            (remainingBudgetMinutes! < 0 || remainingBudgetMinutes! > 480) ||
+        overBudgetMinutes < 0 ||
+        overBudgetMinutes > 30000 ||
+        contributions.length > 50) {
+      throw const DeadlinePlanContractException(
+        'Preparation workload detail values are invalid.',
+      );
+    }
+    if (budget == null) {
+      if (remainingBudgetMinutes != null || overBudgetMinutes != 0) {
+        throw const DeadlinePlanContractException(
+          'Preparation workload detail without a budget is inconsistent.',
+        );
+      }
+    } else if (remainingBudgetMinutes !=
+            (budget - reservedPreparationMinutes).clamp(0, budget) ||
+        overBudgetMinutes !=
+            (reservedPreparationMinutes - budget).clamp(0, 30000)) {
+      throw const DeadlinePlanContractException(
+        'Preparation workload detail arithmetic is inconsistent.',
+      );
+    }
+    if (contributions.map((item) => item.planId).toSet().length !=
+            contributions.length ||
+        contributions.fold<int>(
+              0,
+              (total, item) => total + item.reservedPreparationMinutes,
+            ) !=
+            reservedPreparationMinutes) {
+      throw const DeadlinePlanContractException(
+        'Preparation workload detail contributions are inconsistent.',
+      );
+    }
+  }
+
+  factory PreparationWorkloadDetail.fromJson(Map<String, dynamic> json) {
+    _expectExactKeys(
+      json,
+      const {
+        'contract_version',
+        'origin',
+        'generated_at',
+        'timezone',
+        'local_date',
+        'daily_preparation_budget_minutes',
+        'reserved_preparation_minutes',
+        'remaining_budget_minutes',
+        'over_budget_minutes',
+        'contributions',
+      },
+      'preparation workload detail',
+    );
+    if (json['contract_version'] != preparationWorkloadDetailContractVersion ||
+        json['origin'] != 'authenticated_backend') {
+      throw const DeadlinePlanContractException(
+        'Preparation workload detail provenance is invalid.',
+      );
+    }
+    final rawBudget = json['daily_preparation_budget_minutes'];
+    final rawRemaining = json['remaining_budget_minutes'];
+    final rawContributions = json['contributions'];
+    if (rawBudget != null && rawBudget is! int ||
+        rawRemaining != null && rawRemaining is! int ||
+        rawContributions is! List ||
+        rawContributions.length > 50) {
+      throw const DeadlinePlanContractException(
+        'Preparation workload detail fields are invalid.',
+      );
+    }
+    final dateText = _requiredDate(
+      json['local_date'],
+      'workload_detail.local_date',
+    );
+    return PreparationWorkloadDetail(
+      generatedAt: _requiredAwareDateTime(
+        json['generated_at'],
+        'workload_detail.generated_at',
+      ),
+      timezone: _requiredString(
+        json['timezone'],
+        'workload_detail.timezone',
+        maxLength: 100,
+      ),
+      localDate: DateTime.parse('${dateText}T00:00:00Z'),
+      dailyPreparationBudgetMinutes: rawBudget as int?,
+      reservedPreparationMinutes: _requiredInt(
+        json['reserved_preparation_minutes'],
+        'workload_detail.reserved_preparation_minutes',
+      ),
+      remainingBudgetMinutes: rawRemaining as int?,
+      overBudgetMinutes: _requiredInt(
+        json['over_budget_minutes'],
+        'workload_detail.over_budget_minutes',
+      ),
+      contributions: rawContributions
+          .map(
+            (value) => PreparationWorkloadContribution.fromJson(
+              _requiredStringMap(value, 'workload detail contribution'),
+            ),
+          )
+          .toList(growable: false),
+    );
+  }
+
+  final DateTime generatedAt;
+  final String timezone;
+  final DateTime localDate;
+  final int? dailyPreparationBudgetMinutes;
+  final int reservedPreparationMinutes;
+  final int? remainingBudgetMinutes;
+  final int overBudgetMinutes;
+  final List<PreparationWorkloadContribution> contributions;
+
+  String get localDateKey => _dateOnlyKey(localDate);
+}
+
+class PreparationWorkloadContribution {
+  const PreparationWorkloadContribution({
+    required this.planId,
+    required this.title,
+    required this.reservedPreparationMinutes,
+    required this.blockCount,
+  });
+
+  factory PreparationWorkloadContribution.fromJson(
+    Map<String, dynamic> json,
+  ) {
+    _expectExactKeys(
+      json,
+      const {
+        'plan_id',
+        'title',
+        'reserved_preparation_minutes',
+        'block_count',
+      },
+      'preparation workload contribution',
+    );
+    final contribution = PreparationWorkloadContribution(
+      planId: _requiredUuid(json['plan_id'], 'workload_detail.plan_id'),
+      title: _requiredString(
+        json['title'],
+        'workload_detail.title',
+        maxLength: 160,
+      ),
+      reservedPreparationMinutes: _requiredInt(
+        json['reserved_preparation_minutes'],
+        'workload_detail.reserved_preparation_minutes',
+      ),
+      blockCount: _requiredInt(
+        json['block_count'],
+        'workload_detail.block_count',
+      ),
+    );
+    if (contribution.reservedPreparationMinutes < 5 ||
+        contribution.reservedPreparationMinutes > 480 ||
+        contribution.blockCount < 1 ||
+        contribution.blockCount > 120) {
+      throw const DeadlinePlanContractException(
+        'Preparation workload contribution values are invalid.',
+      );
+    }
+    return contribution;
+  }
+
+  final String planId;
+  final String title;
+  final int reservedPreparationMinutes;
+  final int blockCount;
 }
 
 class DeadlinePlanFeed {
@@ -1113,6 +1303,8 @@ final _awarePattern = RegExp(
 
 bool isDeadlinePlanUuid(String value) => _uuidPattern.hasMatch(value);
 
+bool isDeadlinePlanDate(String value) => _isDate(value);
+
 void _expectEnvelope(Map<String, dynamic> json) {
   if (json['contract_version'] != deadlinePlanContractVersion ||
       json['origin'] != 'authenticated_backend') {
@@ -1218,6 +1410,12 @@ bool _isDate(String value) {
       parsed.year.toString().padLeft(4, '0') == value.substring(0, 4) &&
       parsed.month.toString().padLeft(2, '0') == value.substring(5, 7) &&
       parsed.day.toString().padLeft(2, '0') == value.substring(8, 10);
+}
+
+String _dateOnlyKey(DateTime value) {
+  final month = value.month.toString().padLeft(2, '0');
+  final day = value.day.toString().padLeft(2, '0');
+  return '${value.year.toString().padLeft(4, '0')}-$month-$day';
 }
 
 String _requiredTime(Object? value, String field) {

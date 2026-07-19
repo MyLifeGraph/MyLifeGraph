@@ -8,6 +8,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from app.models.deadline_plans import (
     DEADLINE_PLAN_CONTRACT_VERSION,
+    PREPARATION_WORKLOAD_DETAIL_CONTRACT_VERSION,
     PREPARATION_WORKLOAD_CONTRACT_VERSION,
     DeadlinePlanBlock,
     DeadlinePlanDetail,
@@ -19,6 +20,8 @@ from app.models.deadline_plans import (
     DeadlinePlanRevision,
     DeadlinePlansResponse,
     PreparationWorkloadDay,
+    PreparationWorkloadContribution,
+    PreparationWorkloadDetailResponse,
     PreparationWorkloadResponse,
 )
 from app.repositories.deadline_plan_repository import (
@@ -178,6 +181,100 @@ class DeadlinePlanService:
             timezone=context.timezone,
             daily_preparation_budget_minutes=budget,
             days=days,
+        )
+
+    async def get_workload_detail(
+        self,
+        *,
+        user_id: str,
+        local_date: date,
+    ) -> PreparationWorkloadDetailResponse:
+        generated_at = _aware_utc(self._now())
+        try:
+            context = await self._repository.load_workload_detail_context(
+                user_id=user_id,
+                local_date=local_date,
+            )
+        except DeadlinePlanPersistenceNotFound as exc:
+            raise DeadlinePlanNotFoundError(str(exc)) from exc
+        zone = _zone(context.timezone)
+        starts_on = generated_at.astimezone(zone).date()
+        if local_date < starts_on or local_date > starts_on + timedelta(days=6):
+            raise DeadlinePlanValidationError(
+                "Workload date must be within the current seven-day view.",
+            )
+        if len(context.confirmed_blocks) > 6_000:
+            raise DeadlinePlanConflictError(
+                "Preparation reservations exceed the workload bound.",
+            )
+        if len(context.plans) > 50:
+            raise DeadlinePlanConflictError(
+                "Active preparation plans exceed the workload bound.",
+            )
+
+        titles: dict[str, str] = {}
+        for row in context.plans:
+            plan_id = str(UUID(str(row.get("id"))))
+            title = row.get("title")
+            if (
+                not isinstance(title, str)
+                or not title
+                or title.strip() != title
+                or plan_id in titles
+            ):
+                raise ValueError("Preparation workload plan projection is invalid.")
+            titles[plan_id] = title
+
+        grouped: dict[str, tuple[int, int]] = {}
+        for row in context.confirmed_blocks:
+            if _date(row.get("local_date")) != local_date:
+                raise ValueError("Preparation workload block date is invalid.")
+            plan_id = str(UUID(str(row.get("plan_id"))))
+            minutes = _int(row.get("planned_minutes"))
+            if minutes < 5 or minutes > 240:
+                raise ValueError("Preparation workload block duration is invalid.")
+            total, count = grouped.get(plan_id, (0, 0))
+            grouped[plan_id] = (total + minutes, count + 1)
+
+        if set(grouped) != set(titles):
+            raise DeadlinePlanConflictError(
+                "Preparation reservations changed. Retry the day breakdown.",
+            )
+        contributions = [
+            PreparationWorkloadContribution(
+                plan_id=UUID(plan_id),
+                title=titles[plan_id],
+                reserved_preparation_minutes=total,
+                block_count=count,
+            )
+            for plan_id, (total, count) in grouped.items()
+        ]
+        contributions.sort(
+            key=lambda item: (
+                -item.reserved_preparation_minutes,
+                item.title.casefold(),
+                str(item.plan_id),
+            ),
+        )
+        reserved = sum(
+            item.reserved_preparation_minutes for item in contributions
+        )
+        budget = context.daily_preparation_budget_minutes
+        return PreparationWorkloadDetailResponse(
+            contract_version=PREPARATION_WORKLOAD_DETAIL_CONTRACT_VERSION,
+            origin="authenticated_backend",
+            generated_at=generated_at,
+            timezone=context.timezone,
+            local_date=local_date,
+            daily_preparation_budget_minutes=budget,
+            reserved_preparation_minutes=reserved,
+            remaining_budget_minutes=(
+                None if budget is None else max(0, budget - reserved)
+            ),
+            over_budget_minutes=(
+                0 if budget is None else max(0, reserved - budget)
+            ),
+            contributions=contributions,
         )
 
     async def propose(

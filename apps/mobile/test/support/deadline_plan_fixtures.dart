@@ -7,6 +7,7 @@ const deadlineFingerprint =
 Map<String, dynamic> preparationWorkloadEnvelope({
   int? budget = 120,
   int firstDayReservedMinutes = 50,
+  int firstDayActivePlanCount = 1,
 }) =>
     {
       'contract_version': 'preparation-workload-v1',
@@ -31,9 +32,41 @@ Map<String, dynamic> preparationWorkloadEnvelope({
                 ? 0
                 : ((offset == 0 ? firstDayReservedMinutes : 0) - budget)
                     .clamp(0, 30000),
-            'active_plan_count': offset == 0 ? 1 : 0,
+            'active_plan_count': offset == 0 ? firstDayActivePlanCount : 0,
             'fixed_commitment_minutes': offset == 0 ? 90 : 0,
           },
+      ],
+    };
+
+Map<String, dynamic> preparationWorkloadDetailEnvelope({
+  int? budget = 120,
+  int reservedMinutes = 140,
+}) =>
+    {
+      'contract_version': 'preparation-workload-detail-v1',
+      'origin': 'authenticated_backend',
+      'generated_at': '2026-07-20T08:01:00Z',
+      'timezone': 'Europe/Berlin',
+      'local_date': '2026-07-20',
+      'daily_preparation_budget_minutes': budget,
+      'reserved_preparation_minutes': reservedMinutes,
+      'remaining_budget_minutes':
+          budget == null ? null : (budget - reservedMinutes).clamp(0, budget),
+      'over_budget_minutes':
+          budget == null ? 0 : (reservedMinutes - budget).clamp(0, 30000),
+      'contributions': [
+        {
+          'plan_id': deadlinePlanId,
+          'title': 'Algorithms exam',
+          'reserved_preparation_minutes': 80,
+          'block_count': 2,
+        },
+        {
+          'plan_id': '44444444-4444-4444-8444-444444444444',
+          'title': 'History paper',
+          'reserved_preparation_minutes': reservedMinutes - 80,
+          'block_count': 1,
+        },
       ],
     };
 

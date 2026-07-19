@@ -41,6 +41,14 @@ class PreparationWorkloadContext:
 
 
 @dataclass(frozen=True)
+class PreparationWorkloadDetailContext:
+    timezone: str
+    daily_preparation_budget_minutes: int | None
+    confirmed_blocks: list[dict[str, Any]]
+    plans: list[dict[str, Any]]
+
+
+@dataclass(frozen=True)
 class DeadlinePlanProjection:
     plans: list[dict[str, Any]]
     revisions: list[dict[str, Any]]
@@ -106,6 +114,13 @@ class DeadlinePlanRepository(Protocol):
         user_id: str,
         generated_at: datetime,
     ) -> PreparationWorkloadContext: ...
+
+    async def load_workload_detail_context(
+        self,
+        *,
+        user_id: str,
+        local_date: date,
+    ) -> PreparationWorkloadDetailContext: ...
 
     async def load_planning_context(
         self,
@@ -365,6 +380,60 @@ class SupabaseDeadlinePlanRepository:
             daily_preparation_budget_minutes=budget,
             schedule_items=schedule_items,
             confirmed_blocks=confirmed_blocks,
+        )
+
+    async def load_workload_detail_context(
+        self,
+        *,
+        user_id: str,
+        local_date: date,
+    ) -> PreparationWorkloadDetailContext:
+        profile_rows = await self._client.select(
+            "profiles",
+            params={
+                "select": "timezone,daily_preparation_budget_minutes",
+                "id": f"eq.{user_id}",
+                "limit": "1",
+            },
+        )
+        if not profile_rows:
+            raise DeadlinePlanPersistenceNotFound("Profile is unavailable.")
+        timezone = _profile_timezone(profile_rows[0])
+        budget = _profile_daily_preparation_budget(profile_rows[0])
+        confirmed_blocks = await self._select_pages(
+            "deadline_plan_blocks",
+            params={
+                "select": "id,plan_id,local_date,planned_minutes,starts_at,ends_at",
+                "user_id": f"eq.{user_id}",
+                "reservation_state": "eq.active",
+                "local_date": f"eq.{local_date.isoformat()}",
+                "order": "starts_at.asc,id.asc",
+            },
+            max_rows=6_001,
+        )
+        plan_ids = sorted(
+            {
+                str(UUID(str(row.get("plan_id"))))
+                for row in confirmed_blocks
+            },
+        )
+        plans: list[dict[str, Any]] = []
+        if plan_ids:
+            plans = await self._select_pages(
+                "deadline_plans",
+                params={
+                    "select": "id,title",
+                    "user_id": f"eq.{user_id}",
+                    "id": f"in.({','.join(plan_ids)})",
+                    "order": "id.asc",
+                },
+                max_rows=51,
+            )
+        return PreparationWorkloadDetailContext(
+            timezone=timezone,
+            daily_preparation_budget_minutes=budget,
+            confirmed_blocks=confirmed_blocks,
+            plans=plans,
         )
 
     async def load_planning_context(

@@ -6609,6 +6609,7 @@ async function assertDeadlinePlanner(page, userId) {
 
   await assertDeadlinePlannerFlutterSurface({
     page,
+    accessToken,
     planId,
     title,
     activeRevision: confirmed.active_revision,
@@ -7355,6 +7356,36 @@ async function assertPreparationBudgetConfirmationGuard({
       `Lowering the budget hid existing over-budget reservations: ${loweredWorkloadResult.text}`,
     );
   }
+  const overloadedDay = loweredWorkload.days.find(
+    (day) => day.over_budget_minutes > 0,
+  );
+  const workloadDetailResult = await deadlinePlanApiRequest(
+    `/v1/deadline-plans/workload/${overloadedDay.local_date}`,
+    accessToken,
+  );
+  assertDeadlinePlanApiStatus(
+    workloadDetailResult,
+    200,
+    'over-budget preparation workload detail',
+  );
+  const workloadDetail = assertPreparationWorkloadDetail(
+    workloadDetailResult.json,
+    {
+      budget: 25,
+      localDate: overloadedDay.local_date,
+      context: 'over-budget preparation workload detail',
+    },
+  );
+  if (
+    workloadDetail.reserved_preparation_minutes !==
+      overloadedDay.reserved_preparation_minutes ||
+    workloadDetail.over_budget_minutes !== overloadedDay.over_budget_minutes ||
+    workloadDetail.contributions.length !== overloadedDay.active_plan_count
+  ) {
+    throw new Error(
+      `Preparation workload detail did not explain the seven-day total: ${workloadDetailResult.text}`,
+    );
+  }
 
   const confirmResult = await deadlinePlanApiRequest(
     `/v1/deadline-plans/${planId}/confirm`,
@@ -7420,10 +7451,45 @@ async function assertPreparationBudgetConfirmationGuard({
 
 async function assertDeadlinePlannerFlutterSurface({
   page,
+  accessToken,
   planId,
   title,
   activeRevision,
 }) {
+  const lowered = await deadlinePlanApiRequest(
+    '/v1/account/preparation-budget',
+    accessToken,
+    {
+      method: 'PATCH',
+      body: { daily_preparation_budget_minutes: 25 },
+    },
+  );
+  assertDeadlinePlanApiStatus(
+    lowered,
+    200,
+    'Flutter workload-detail budget setup',
+  );
+  const workloadResult = await deadlinePlanApiRequest(
+    '/v1/deadline-plans/workload',
+    accessToken,
+  );
+  assertDeadlinePlanApiStatus(
+    workloadResult,
+    200,
+    'Flutter workload-detail baseline',
+  );
+  const workload = assertPreparationWorkload(workloadResult.json, {
+    budget: 25,
+    context: 'Flutter workload-detail baseline',
+  });
+  const overloadedDay = workload.days.find(
+    (day) => day.over_budget_minutes > 0,
+  );
+  if (!overloadedDay) {
+    throw new Error(
+      `Flutter workload-detail setup has no review day: ${workloadResult.text}`,
+    );
+  }
   const planPageLoad = page.waitForResponse(
     (response) =>
       response.url() === `${aiServiceBaseUrl}/v1/deadline-plans` &&
@@ -7444,7 +7510,79 @@ async function assertDeadlinePlannerFlutterSurface({
   await enableFlutterSemantics(page);
   await expectText(page, 'Preparation plans');
   await expectText(page, 'Your next 7 days');
-  await expectText(page, '2h total preparation per day across confirmed plans.');
+  await expectText(
+    page,
+    '25 min total preparation per day across confirmed plans.',
+  );
+  const workloadDetailLoad = page.waitForResponse(
+    (response) =>
+      response.url() ===
+        `${aiServiceBaseUrl}/v1/deadline-plans/workload/${overloadedDay.local_date}` &&
+      response.request().method() === 'GET',
+    { timeout: 45000 },
+  );
+  const dayLabel = new Intl.DateTimeFormat('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'UTC',
+  }).format(new Date(`${overloadedDay.local_date}T12:00:00Z`));
+  const workloadDay = await scrollUntilTextInViewport(page, dayLabel, {
+    maxSteps: 16,
+    buttonFirst: true,
+  });
+  await workloadDay.click({ force: true });
+  const workloadDetailResponse = await workloadDetailLoad;
+  if (!workloadDetailResponse.ok()) {
+    throw new Error(
+      `Flutter workload detail failed to load: ${workloadDetailResponse.status()} ${await workloadDetailResponse.text()}`,
+    );
+  }
+  assertPreparationWorkloadDetail(await workloadDetailResponse.json(), {
+    budget: 25,
+    localDate: overloadedDay.local_date,
+    context: 'Flutter preparation workload detail',
+  });
+  await expectText(page, 'At least');
+  await expectText(page, 'nothing changes automatically');
+  await expectText(page, 'Review plan');
+  await scrollUntilTextInViewport(page, 'Replan remaining time', {
+    maxSteps: 8,
+    buttonFirst: true,
+  });
+  await clickByText(page, 'Replan remaining time');
+  await expectText(page, 'Step 1 of 3');
+  await expectText(page, 'Adjust preparation plan');
+  const editorCancel = page.getByRole('button', {
+    name: 'Cancel',
+    exact: true,
+  });
+  if ((await editorCancel.count()) !== 1) {
+    throw new Error(
+      'Preparation replan editor did not expose one exact Cancel button.',
+    );
+  }
+  await editorCancel.click();
+  await page.waitForFunction(
+    () => window.location.hash.startsWith('#/preparation-plans'),
+    null,
+    { timeout: 10000 },
+  );
+  await expectText(page, 'Preparation plans');
+
+  const restored = await deadlinePlanApiRequest(
+    '/v1/account/preparation-budget',
+    accessToken,
+    {
+      method: 'PATCH',
+      body: { daily_preparation_budget_minutes: 120 },
+    },
+  );
+  assertDeadlinePlanApiStatus(
+    restored,
+    200,
+    'Flutter workload-detail budget cleanup',
+  );
   await scrollUntilTextInViewport(page, title, { maxSteps: 16 });
   await expectText(page, 'Active');
   await scrollUntilTextInViewport(page, 'Reserved in MyLifeGraph only', {
@@ -7726,6 +7864,31 @@ async function assertDeadlinePlannerRls({
   ) {
     throw new Error(
       `Preparation workload exposed another owner's reservations: ${secondaryWorkloadResult.text}`,
+    );
+  }
+  const secondaryDetailResult = await deadlinePlanApiRequest(
+    `/v1/deadline-plans/workload/${secondaryWorkload.days[0].local_date}`,
+    secondaryToken,
+  );
+  assertDeadlinePlanApiStatus(
+    secondaryDetailResult,
+    200,
+    'cross-owner preparation workload detail',
+  );
+  const secondaryDetail = assertPreparationWorkloadDetail(
+    secondaryDetailResult.json,
+    {
+      budget: null,
+      localDate: secondaryWorkload.days[0].local_date,
+      context: 'cross-owner preparation workload detail',
+    },
+  );
+  if (
+    secondaryDetail.reserved_preparation_minutes !== 0 ||
+    secondaryDetail.contributions.length !== 0
+  ) {
+    throw new Error(
+      `Preparation workload detail exposed another owner's reservations: ${secondaryDetailResult.text}`,
     );
   }
   for (const [table, filter] of [
@@ -11009,6 +11172,93 @@ function assertPreparationWorkload(payload, { budget, context }) {
         `${context} day ${index + 1} is inconsistent: ${stableJson(day)}`,
       );
     }
+  }
+  return payload;
+}
+
+function assertPreparationWorkloadDetail(
+  payload,
+  { budget, localDate, context },
+) {
+  assertExactDeadlineKeys(
+    payload,
+    [
+      'contract_version',
+      'origin',
+      'generated_at',
+      'timezone',
+      'local_date',
+      'daily_preparation_budget_minutes',
+      'reserved_preparation_minutes',
+      'remaining_budget_minutes',
+      'over_budget_minutes',
+      'contributions',
+    ],
+    context,
+  );
+  if (
+    payload.contract_version !== 'preparation-workload-detail-v1' ||
+    payload.origin !== 'authenticated_backend' ||
+    !isIsoTimestamp(payload.generated_at) ||
+    typeof payload.timezone !== 'string' ||
+    payload.local_date !== localDate ||
+    payload.daily_preparation_budget_minutes !== budget ||
+    !Number.isInteger(payload.reserved_preparation_minutes) ||
+    payload.reserved_preparation_minutes < 0 ||
+    !Number.isInteger(payload.over_budget_minutes) ||
+    payload.over_budget_minutes < 0 ||
+    !Array.isArray(payload.contributions) ||
+    payload.contributions.length > 50 ||
+    (budget === null
+      ? payload.remaining_budget_minutes !== null ||
+        payload.over_budget_minutes !== 0
+      : payload.remaining_budget_minutes !==
+          Math.max(0, budget - payload.reserved_preparation_minutes) ||
+        payload.over_budget_minutes !==
+          Math.max(0, payload.reserved_preparation_minutes - budget))
+  ) {
+    throw new Error(
+      `${context} has invalid detail provenance or arithmetic: ${stableJson(payload)}`,
+    );
+  }
+  const planIds = new Set();
+  let contributionTotal = 0;
+  for (const [index, contribution] of payload.contributions.entries()) {
+    assertExactDeadlineKeys(
+      contribution,
+      [
+        'plan_id',
+        'title',
+        'reserved_preparation_minutes',
+        'block_count',
+      ],
+      `${context} contribution ${index + 1}`,
+    );
+    if (
+      !isCanonicalUuid(contribution.plan_id) ||
+      planIds.has(contribution.plan_id) ||
+      typeof contribution.title !== 'string' ||
+      contribution.title.trim() !== contribution.title ||
+      [...contribution.title].length < 1 ||
+      [...contribution.title].length > 160 ||
+      !Number.isInteger(contribution.reserved_preparation_minutes) ||
+      contribution.reserved_preparation_minutes < 5 ||
+      contribution.reserved_preparation_minutes > 480 ||
+      !Number.isInteger(contribution.block_count) ||
+      contribution.block_count < 1 ||
+      contribution.block_count > 120
+    ) {
+      throw new Error(
+        `${context} contribution ${index + 1} is invalid: ${stableJson(contribution)}`,
+      );
+    }
+    planIds.add(contribution.plan_id);
+    contributionTotal += contribution.reserved_preparation_minutes;
+  }
+  if (contributionTotal !== payload.reserved_preparation_minutes) {
+    throw new Error(
+      `${context} contribution total is inconsistent: ${stableJson(payload)}`,
+    );
   }
   return payload;
 }

@@ -288,3 +288,87 @@ several overlapping plans over weeks or months. Remote migration/RLS state,
 deployed scheduling, push/background notification delivery, a production Coach
 provider, German localization, and long-term learning benefit also remain
 unverified and are not claimed here.
+
+## Actionable Workload-Day Follow-Up — 2026-07-19
+
+The seven-day totals now have a separate compatible
+`preparation-workload-detail-v1` read for one current profile-local date. The
+existing strict summary response was not extended. The detail groups active
+confirmed blocks by owner-scoped plan, exposes only title/minutes/block count,
+and rejects dates outside the current seven-day view. Over-budget UI copy states
+the exact minimum amount that must leave that date while explicitly refusing to
+choose a plan or change data automatically.
+
+Today and Preparation plans load a breakdown only after deliberate expansion.
+They retain independent loading, retry, and changed-since-summary truth. Each
+contribution can open the existing plan or the existing replan editor; merely
+opening either performs no mutation, and a completed editor still creates only
+a staged preview. Focus credit, proposal calculation, confirmation locking,
+calendar isolation, and database schema are unchanged. No LLM is involved.
+
+### Additional findings, ordered by severity
+
+#### Critical or high
+
+No reproducible critical or high-severity defect remained after the final local
+verification. This is not evidence about remote state or real student outcomes.
+
+#### Medium — fixed
+
+1. **`Needs review` identified an overloaded date but not the plans that made it
+   overloaded.** The student could not tell where the minimum excess came from
+   without manually opening every plan. The on-demand detail now shows the
+   exact contributing plans, minutes, and block counts, plus deliberate review
+   and staged-replan actions. It never chooses what to remove.
+2. **The replan Bottom Sheet initially left the Shell navigation interactive.**
+   The first full browser run proved that closing the editor could activate the
+   underlying desktop `Insights` destination and lose the student's place. The
+   editor now uses the root navigator, so its modal barrier covers the entire
+   shell. A router regression test and the final browser journey verify both
+   blocked shell navigation and `Cancel` remaining on Preparation plans.
+
+#### Low — fixed
+
+1. **A lazily loaded detail could be combined with a summary from a different
+   budget/timezone state.** The card now detects changed total, contribution
+   count, budget, or timezone and asks for a seven-day reload instead of
+   presenting mixed arithmetic as current truth.
+2. **A plan-title read could race a reservation change.** The backend now fails
+   closed with an explicit retry conflict rather than omitting a contribution
+   or fabricating a title.
+
+### Verification results
+
+All results below are local to this checkout on 2026-07-19:
+
+- Focused workload-detail model/service/repository/API suite: `27 passed`.
+- Complete FastAPI suite: `766 passed, 1 skipped`.
+- Final focused Deadline Plans page suite, including the Shell modal regression:
+  `20 passed`.
+- Standard source gate: migration/start-stack guards passed, Flutter analysis
+  reported no issues, all `608` Flutter tests passed, Python application sources
+  compiled, and the diff check passed at that gate.
+- Non-reset local Supabase verification: repository/database migration history
+  matched through `20260719120000_account_preparation_budget_v1.sql` and all
+  `608` Flutter tests passed.
+- JavaScript syntax checking for `e2e/web/smoke.mjs` passed.
+- Full non-reset Flutter/FastAPI/Supabase browser journey: exit code `0`,
+  `E2E browser smoke passed for e2e-1784465767@example.test`. It exercised the
+  strict detail API, overage arithmetic, cross-owner empty detail, expansion,
+  honest copy, direct staged replanning, and the corrected modal navigation.
+
+The first full browser attempt exposed the Shell navigation defect above; only
+the passing rerun after its fix is the final result.
+
+### Remaining manual or external validation
+
+The prepared five-student study remains deliberately skipped and unrun. Physical
+phone/desktop acceptance with keyboard, screen reader, OS-level 200-percent
+text, reduced motion, and real offline transitions is still useful. So are real
+travel/device-versus-profile-timezone checks around midnight and both DST
+transitions, plus observed use of several overlapping plans over weeks or
+months.
+
+Remote migration/RLS state, deployed scheduling, push/background delivery, a
+production Coach provider, German localization, and long-term learning benefit
+remain unverified and are not claimed here.

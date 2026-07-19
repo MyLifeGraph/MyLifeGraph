@@ -255,6 +255,25 @@ Focus history, imported calendar busy rows, and live provider availability are
 not included. The response therefore does not claim to be a complete free-time
 or total-workload calculation.
 
+`GET /v1/deadline-plans/workload/{local_date}` is a separate strict read under
+`contract_version=preparation-workload-detail-v1`. Keeping it separate leaves
+the exact `preparation-workload-v1` response compatible with existing strict
+clients. `local_date` must be one of the current seven profile-local dates;
+another date is `422` and does not broaden the projection into history. The
+detail returns the current budget arithmetic plus at most 50 unique active-plan
+contributions. Each contribution contains only the owner-scoped plan id,
+current confirmed title, reserved minutes on that date, and active block count.
+Contributions are ordered by reserved minutes descending, then case-insensitive
+title and plan id. Their minute sum must equal the detail total.
+
+For an over-budget date, `over_budget_minutes` is the exact minimum amount that
+must leave that date to fit the current account rule. It does not prescribe
+which plan to change or promise that a valid replan can move exactly that amount
+without other changes: session size, busy intervals, buffers, and deadlines
+still govern a new proposal. The read excludes proposed blocks, Focus history,
+weekly Setup commitments, and imported-calendar availability. It performs no
+mutation, recommendation, or LLM call.
+
 ## HTTP Boundary
 
 All routes require the normal verified Supabase bearer token and derive the
@@ -263,6 +282,7 @@ owner only from that principal:
 ```text
 GET  /v1/deadline-plans
 GET  /v1/deadline-plans/workload
+GET  /v1/deadline-plans/workload/{local_date}
 GET  /v1/deadline-plans/{plan_id}
 POST /v1/deadline-plans/proposals
 POST /v1/deadline-plans/{plan_id}/confirm
@@ -299,7 +319,7 @@ conflict.
 An ambiguous Flutter result retains the exact submitted request for unchanged
 retry or explicit reload. A stale base revision never overwrites newer state.
 
-The workload route uses the separate strict response described above. The
+The workload routes use the separate strict responses described above. The
 strict detail response exposes exactly one plan identity with both revision
 counters, nullable
 `active_revision`, nullable `pending_revision`, and derived `progress`, wrapped
@@ -358,8 +378,15 @@ and estimate.
 Settings exposes the optional account-wide daily budget with explicit rule-based
 copy and no AI claim. Today and Preparation plans show the authenticated seven-
 day workload, including honest loading, unavailable, over-budget, and no-budget
-states; guest/mock makes zero workload calls. The preview shows total estimate,
-prior spent, currently qualifying focus time,
+states; guest/mock makes zero workload calls. A date with confirmed plans can
+be expanded deliberately. Its independently loaded detail keeps loading,
+failure, and changed-since-summary states visible, lists the contributing plans,
+and states the exact minimum date overage when present. `Review plan` opens the
+existing owner-scoped plan surface. `Replan remaining time` opens the existing
+editor with saved values; it neither moves blocks nor creates a proposal until
+the student completes that flow, and a resulting proposal remains staged until
+confirmation. The UI never chooses which plan to sacrifice. The preview shows
+total estimate, prior spent, currently qualifying focus time,
 remaining minutes, dated staged blocks, optional busy-time provenance, and any
 unallocated deficit before confirmation. It names the fixed planning windows,
 the per-plan daily cap, the optional account budget, and the manually imported
@@ -426,6 +453,10 @@ Focused backend, Flutter, migration, and browser coverage must prove:
 - strict consecutive seven-day workload arithmetic, owner-local dates, merged
   recurring commitments, honest overage/no-budget/error states, and no imported-
   calendar or AI implication;
+- strict `preparation-workload-detail-v1` parsing, current-seven-day bounds,
+  owner/date-scoped active-block aggregation, exact contribution sums/order,
+  cross-owner empty results, read-only retry/error/stale-summary behavior, and
+  direct review/replan navigation without an automatic proposal or mutation;
 - account export inclusion for plan/revision/block rows, explicit ledger
   omission, and full-account cascade; and
 - usable retained drafts, review-before-confirmation, semantic controls, and
@@ -451,3 +482,13 @@ history. The final combined browser run reported
 local deterministic/RLS boundary described above and does not change any remote,
 provider-calendar, installed-device, participant-study, notification, or long-
 term-outcome non-claim.
+
+The compatible workload-day detail follow-up completed locally on 2026-07-19
+without a schema change. The complete FastAPI suite reported
+`766 passed, 1 skipped`; the standard gate and non-reset Supabase verification
+each passed `608` Flutter tests with clean analysis and matching migration
+history. After the first browser attempt exposed and fixed an inner-Shell modal
+barrier defect, the final combined run reported
+`E2E browser smoke passed for e2e-1784465767@example.test`. This verifies only
+the local strict detail/navigation boundary and does not alter the non-claims
+above.

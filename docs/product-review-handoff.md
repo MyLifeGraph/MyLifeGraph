@@ -39,6 +39,10 @@ imported event may seed the plan. Optional imported busy time is read-only. A
 student may now set a nullable account-wide daily preparation budget in
 Settings; it constrains new cross-plan reservations without rewriting existing
 plans, while Today and Preparation plans expose a truthful seven-day view.
+Dates with confirmed plans can be expanded into an owner-scoped read-only
+breakdown. Over-budget details state the exact minimum date overage and provide
+explicit review/replanning entry points, but never choose a plan or move a
+reservation automatically.
 There is no title inference, source-calendar write, autonomous mutation, hidden
 proposal, LLM call, push notification, or background sync. The exact ownership,
 retry, fingerprint, and database rules are in

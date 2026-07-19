@@ -352,6 +352,13 @@ minutes exceed the current profile budget. Lowering a budget never rewrites
 existing active rows; the read-only seven-day workload projection reports any
 resulting overage for explicit replanning.
 
+The separate `preparation-workload-detail-v1` FastAPI read adds no schema or
+grant. It derives the principal from the bearer and explicitly filters
+`profiles`, active `deadline_plan_blocks`, and `deadline_plans` by that owner
+plus one current-seven-day local date. Authenticated Data API access continues
+to use the existing forced owner RLS, while the backend's service-role reads do
+not treat that bypass as ownership authority.
+
 The first confirmation creates exactly one planner-managed task with
 `task.id = deadline_plan.id`; subsequent revisions keep that identity and may
 change only title/deadline/update time while it remains open. Generic Task

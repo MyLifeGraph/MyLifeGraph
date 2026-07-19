@@ -5,6 +5,8 @@ abstract interface class DeadlinePlanRepository {
 
   Future<PreparationWorkload> getWorkload();
 
+  Future<PreparationWorkloadDetail> getWorkloadDetail(String localDate);
+
   Future<DeadlinePlan> getPlan(String planId);
 
   Future<DeadlinePlan> propose({

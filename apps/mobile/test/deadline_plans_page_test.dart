@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:my_life_graph/core/capabilities/app_surface_capabilities.dart';
 import 'package:my_life_graph/core/errors/app_exception.dart';
 import 'package:my_life_graph/features/deadline_plans/data/deadline_calendar_prefill_data_source.dart';
@@ -541,6 +542,107 @@ void main() {
     expect(find.text('Show history details'), findsOneWidget);
   });
 
+  testWidgets('deep-linked replan opens review without changing reservations',
+      (tester) async {
+    final repository = _FakeDeadlinePlanRepository(
+      feeds: [
+        DeadlinePlanFeed(plans: [_plan()]),
+      ],
+    );
+    await _pumpPage(
+      tester,
+      repository: repository,
+      page: const DeadlinePlansPage(
+        initialPlanId: deadlinePlanId,
+        openInitialReplan: true,
+      ),
+    );
+
+    expect(find.text('Step 1 of 3'), findsOneWidget);
+    expect(find.byKey(const ValueKey('deadline-plan-title')), findsOneWidget);
+    expect(repository.proposalDrafts, isEmpty);
+  });
+
+  testWidgets('replan editor blocks shell navigation and cancel stays on page',
+      (tester) async {
+    final repository = _FakeDeadlinePlanRepository(
+      feeds: [
+        DeadlinePlanFeed(plans: [_plan()]),
+      ],
+    );
+    final router = GoRouter(
+      initialLocation: '/insights',
+      routes: [
+        ShellRoute(
+          builder: (context, state, child) => Scaffold(
+            body: child,
+            bottomNavigationBar: TextButton(
+              onPressed: () => context.go('/insights'),
+              child: const Text('Shell Insights'),
+            ),
+          ),
+          routes: [
+            GoRoute(
+              path: '/insights',
+              builder: (context, state) => const Text('Insights route'),
+            ),
+            GoRoute(
+              path: '/preparation-plans',
+              builder: (context, state) => DeadlinePlansPage(
+                currentTime: now,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+    addTearDown(router.dispose);
+    tester.view.physicalSize = const Size(1200, 1800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          appSurfaceCapabilitiesProvider.overrideWithValue(
+            const AppSurfaceCapabilities(
+              isLocalDemo: false,
+              canUseSyncedHabits: true,
+              canUseSyncedExecution: true,
+              canUseDeadlinePlanner: true,
+            ),
+          ),
+          deadlinePlanRepositoryProvider.overrideWithValue(repository),
+        ],
+        child: MaterialApp.router(routerConfig: router),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    router.go('/preparation-plans');
+    await tester.pumpAndSettle();
+    await _tap(tester, find.text('Adjust estimate or plan'));
+    expect(find.text('Adjust preparation plan'), findsOneWidget);
+
+    await tester.tap(find.text('Shell Insights'), warnIfMissed: false);
+    await tester.pumpAndSettle();
+    expect(
+      router.routeInformationProvider.value.uri.path,
+      '/preparation-plans',
+    );
+    expect(find.text('Preparation plans'), findsOneWidget);
+    expect(find.text('Adjust preparation plan'), findsOneWidget);
+
+    await _tap(tester, find.text('Cancel'));
+    expect(
+      router.routeInformationProvider.value.uri.path,
+      '/preparation-plans',
+    );
+    expect(find.text('Preparation plans'), findsOneWidget);
+  });
+
   testWidgets('failed targeted plan read stays account-scoped and retryable',
       (tester) async {
     final repository = _FakeDeadlinePlanRepository(
@@ -768,6 +870,13 @@ class _FakeDeadlinePlanRepository implements DeadlinePlanRepository {
 
   @override
   Future<PreparationWorkload> getWorkload() async => _workload();
+
+  @override
+  Future<PreparationWorkloadDetail> getWorkloadDetail(String localDate) async {
+    return PreparationWorkloadDetail.fromJson(
+      preparationWorkloadDetailEnvelope(),
+    );
+  }
 
   @override
   Future<DeadlinePlanFeed> getPlans() async {

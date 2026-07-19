@@ -4,14 +4,18 @@ from datetime import UTC, date, datetime, timedelta
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
+import pytest
+
 from app.models.deadline_plans import DeadlinePlanProposalRequest
 from app.repositories.deadline_plan_repository import (
     DeadlinePlanProjection,
     DeadlinePlanningContext,
     PreparationWorkloadContext,
+    PreparationWorkloadDetailContext,
 )
 from app.services.deadline_plan_service import (
     DeadlinePlanService,
+    DeadlinePlanValidationError,
     _fingerprint,
     _plan_blocks,
 )
@@ -214,6 +218,78 @@ def test_workload_reports_exact_seven_days_and_marks_existing_overage() -> None:
     assert result.days[0].over_budget_minutes == 20
     assert result.days[0].active_plan_count == 2
     assert result.days[0].fixed_commitment_minutes == 180
+
+
+class WorkloadDetailRepository:
+    async def load_workload_detail_context(self, *, user_id, local_date):
+        assert user_id == "owner"
+        assert local_date in {date(2026, 7, 20), date(2026, 7, 27)}
+        return PreparationWorkloadDetailContext(
+            timezone="UTC",
+            daily_preparation_budget_minutes=120,
+            confirmed_blocks=[
+                {
+                    "plan_id": "33333333-3333-4333-8333-333333333333",
+                    "local_date": local_date.isoformat(),
+                    "planned_minutes": 60,
+                },
+                {
+                    "plan_id": "22222222-2222-4222-8222-222222222222",
+                    "local_date": local_date.isoformat(),
+                    "planned_minutes": 50,
+                },
+                {
+                    "plan_id": "22222222-2222-4222-8222-222222222222",
+                    "local_date": local_date.isoformat(),
+                    "planned_minutes": 30,
+                },
+            ],
+            plans=[
+                {
+                    "id": "33333333-3333-4333-8333-333333333333",
+                    "title": "History paper",
+                },
+                {
+                    "id": "22222222-2222-4222-8222-222222222222",
+                    "title": "Algorithms exam",
+                },
+            ],
+        )
+
+
+def test_workload_detail_explains_exact_plan_contributions_and_overage() -> None:
+    service = DeadlinePlanService(
+        repository=WorkloadDetailRepository(),
+        now=lambda: NOW,
+    )
+
+    result = asyncio.run(
+        service.get_workload_detail(
+            user_id="owner",
+            local_date=date(2026, 7, 20),
+        ),
+    )
+
+    assert result.contract_version == "preparation-workload-detail-v1"
+    assert result.reserved_preparation_minutes == 140
+    assert result.over_budget_minutes == 20
+    assert [item.title for item in result.contributions] == [
+        "Algorithms exam",
+        "History paper",
+    ]
+    assert result.contributions[0].block_count == 2
+    assert result.contributions[0].reserved_preparation_minutes == 80
+
+    with pytest.raises(
+        DeadlinePlanValidationError,
+        match="current seven-day view",
+    ):
+        asyncio.run(
+            service.get_workload_detail(
+                user_id="owner",
+                local_date=date(2026, 7, 27),
+            ),
+        )
 
 
 def test_zero_buffer_can_use_deadline_day_but_never_pass_deadline_instant() -> None:

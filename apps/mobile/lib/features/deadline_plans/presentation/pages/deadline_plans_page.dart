@@ -27,6 +27,7 @@ class DeadlinePlansPage extends ConsumerStatefulWidget {
     this.initialDeadlineAt,
     this.initialDeadlineOn,
     this.initialPlanId,
+    this.openInitialReplan = false,
     this.currentTime,
   });
 
@@ -35,6 +36,7 @@ class DeadlinePlansPage extends ConsumerStatefulWidget {
   final DateTime? initialDeadlineAt;
   final String? initialDeadlineOn;
   final String? initialPlanId;
+  final bool openInitialReplan;
   final DateTime? currentTime;
 
   @override
@@ -46,8 +48,22 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
   bool _editorOpen = false;
   bool _targetPlanRequested = false;
   bool _targetPlanLoading = false;
+  bool _initialReplanOpened = false;
   Object? _targetPlanError;
   DeadlinePlanProposalDraft? _retainedDraft;
+
+  @override
+  void didUpdateWidget(covariant DeadlinePlansPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.initialPlanId != widget.initialPlanId) {
+      _targetPlanRequested = false;
+      _targetPlanLoading = false;
+      _targetPlanError = null;
+      _initialReplanOpened = false;
+    } else if (oldWidget.openInitialReplan != widget.openInitialReplan) {
+      _initialReplanOpened = false;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -76,6 +92,7 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
           );
     _openSourceEditorAfterBuild(state, sourcePrefill);
     _loadTargetPlanAfterBuild(state);
+    _openInitialReplanAfterBuild(state);
 
     return AppPage(
       title: 'Preparation plans',
@@ -169,6 +186,11 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
         value: workload,
         onRetry: () => ref.invalidate(preparationWorkloadProvider),
         onOpenSettings: () => context.go(AppRoutes.settings),
+        onLoadDayDetail: (localDate) => ref
+            .read(deadlinePlanRepositoryProvider)
+            .getWorkloadDetail(localDate),
+        onReviewPlan: _reviewPlanFromWorkload,
+        onReplanPlan: _replanFromWorkload,
       ),
       AppCard(
         child: Column(
@@ -256,6 +278,61 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _loadTargetPlan(planId);
     });
+  }
+
+  void _openInitialReplanAfterBuild(DeadlinePlanState state) {
+    final planId = widget.initialPlanId;
+    if (!widget.openInitialReplan ||
+        _initialReplanOpened ||
+        planId == null ||
+        state.isLoading ||
+        state.loadError != null ||
+        state.isBusy ||
+        state.requiresExactRetry) {
+      return;
+    }
+    final plan = _planById(state.plans, planId);
+    if (plan == null) return;
+    _initialReplanOpened = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (plan.isTerminal) {
+        _showMessage(
+          'This preparation plan is already closed and cannot be replanned.',
+        );
+        return;
+      }
+      _openEditor(plan: plan);
+    });
+  }
+
+  void _reviewPlanFromWorkload(String planId) {
+    final query = Uri(
+      path: AppRoutes.preparationPlans,
+      queryParameters: {'plan_id': planId},
+    );
+    if (widget.initialPlanId == planId) {
+      _showMessage(
+        'This plan is listed first below. No reservations were changed.',
+      );
+      return;
+    }
+    context.go(query.toString());
+  }
+
+  void _replanFromWorkload(String planId) {
+    final state = ref.read(deadlinePlanControllerProvider);
+    final plan = _planById(state.plans, planId);
+    if (plan != null && !plan.isTerminal) {
+      _openEditor(plan: plan);
+      return;
+    }
+    context.go(
+      Uri(
+        path: AppRoutes.preparationPlans,
+        queryParameters: {'plan_id': planId, 'action': 'replan'},
+      ).toString(),
+    );
   }
 
   Future<void> _loadTargetPlan(String planId) async {
@@ -430,6 +507,7 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
       draft = await showModalBottomSheet<DeadlinePlanProposalDraft>(
         context: context,
         isScrollControlled: true,
+        useRootNavigator: true,
         useSafeArea: true,
         builder: (_) => _DeadlinePlanEditorSheet(
           planId: sourcePlan?.id ?? retainedDraft?.planId ?? newClientUuid(),

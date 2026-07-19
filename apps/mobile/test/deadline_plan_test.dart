@@ -73,6 +73,31 @@ void main() {
     );
   });
 
+  test('workload detail strictly explains unique plan contributions', () {
+    final detail = PreparationWorkloadDetail.fromJson(
+      preparationWorkloadDetailEnvelope(),
+    );
+
+    expect(detail.localDateKey, '2026-07-20');
+    expect(detail.overBudgetMinutes, 20);
+    expect(detail.contributions, hasLength(2));
+    expect(detail.contributions.first.blockCount, 2);
+
+    final wrongTotal = preparationWorkloadDetailEnvelope()
+      ..['reserved_preparation_minutes'] = 139;
+    final duplicatePlans = preparationWorkloadDetailEnvelope();
+    final contributions = duplicatePlans['contributions'] as List;
+    (contributions.last as Map<String, dynamic>)['plan_id'] = deadlinePlanId;
+    final unknown = preparationWorkloadDetailEnvelope()..['extra'] = true;
+
+    for (final invalid in [wrongTotal, duplicatePlans, unknown]) {
+      expect(
+        () => PreparationWorkloadDetail.fromJson(invalid),
+        throwsA(isA<DeadlinePlanContractException>()),
+      );
+    }
+  });
+
   test('proposal payload has exact keys and permits explicit busy periods', () {
     final draft = DeadlinePlanProposalDraft(
       planId: deadlinePlanId,
