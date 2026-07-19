@@ -60,8 +60,13 @@ into a primary title, button, field label, or first-line error.
   setting does not mutate them. Expanding that date may say `At least N must be
   redistributed on this date`; this is the exact rule overage, not an automatic
   choice of plan. `Review plan` navigates to saved details, while `Replan
-  remaining time` only opens the existing staged flow. The detail must also say
-  that nothing changes automatically.
+  remaining time` only opens the existing staged flow. For an active plan with
+  no pending preview, its compact review uses `Replan remaining preparation`,
+  `Create preview with these values`, and `Change values`. It states that the
+  current reservations remain active until confirmation and that the
+  calculation is rule-based rather than AI-generated. A stale source or passed
+  finish-by time must explain why the compact action is unavailable. The detail
+  must also say that nothing changes automatically.
 - State whether a change is automatic, requires confirmation, or cannot change
   data. Do not imply that a preview or recommendation already changed a plan.
 - Keep provider names, model names, contract versions, source manifests, and

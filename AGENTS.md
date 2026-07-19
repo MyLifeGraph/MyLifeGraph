@@ -318,6 +318,11 @@ Expanding a date uses the separate strict read-only
 `preparation-workload-detail-v1` contract. It groups only that owner's active
 plan reservations, states exact date overage, and may open existing review or
 staged replanning UI without choosing a plan or mutating data.
+For an active plan without a pending preview, replanning first shows a compact
+saved-value review. Opening it performs no request; its explicit primary action
+uses the existing proposal contract and remains staged, while `Change values`
+opens the full editor. Pending previews and retained conflict drafts keep the
+full-editor path, and current reservations remain active until confirmation.
 The managed task remains planner-owned: generic Task mutations/editor paths are
 forbidden, while starting focus on the open task remains allowed.
 These phases do not claim deployed cron wiring. Notification Delivery V1 below
@@ -618,6 +623,17 @@ passing run covers strict owner/date detail, cross-owner emptiness, deliberate
 review/replan navigation, and modal cancellation without mutation. It adds no
 remote, installed-device, participant, background, provider, localization, or
 longitudinal claim.
+
+The compatible compact existing-plan replan follow-up also completed locally
+on 2026-07-19 without backend, schema, RLS, or calculation changes. The focused
+Deadline Plans page suite passed `22` tests, the standard gate passed all `610`
+Flutter tests with clean analysis, and the final full browser journey reported
+`E2E browser smoke passed for e2e-1784475200@example.test`. Two earlier attempts
+exposed and led to hardening of the shared Flutter-Web exact-input helper; only
+the passing post-fix run is final evidence. It verifies the compact zero-request
+review, full-editor transition/cancel path, existing planner/RLS lifecycle, and
+exact input persistence. It adds no remote, installed-device, participant,
+background, provider, localization, or longitudinal claim.
 
 The implemented post-intake refresh is backend-only and best-effort:
 

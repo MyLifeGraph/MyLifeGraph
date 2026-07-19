@@ -94,7 +94,10 @@ way to explore the product today is the Flutter app in mock-data guest mode.
   under the owner lock. Today and Preparation plans show a strict seven-day
   view of confirmed preparation plus separately labelled weekly Setup
   commitments. This remains a transparent deterministic rule, not an AI effort
-  estimate or a complete calendar/free-time model.
+  estimate or a complete calendar/free-time model. Replanning an active plan
+  without a pending preview now starts with a compact saved-value review and one
+  deliberate staged-preview action; changing values still uses the full editor,
+  and current reservations remain active until confirmation.
   The repository does not configure a deployed cron. Notification Delivery V1
   can create bounded local deterministic Inbox rows only after separate in-app
   consent; it still adds no provider/system delivery channel.
@@ -619,6 +622,14 @@ suite with `766 passed, 1 skipped`, and the final full browser journey with
 includes strict per-day plan contributions, cross-owner isolation, staged
 replan navigation, and the root-modal fix that keeps `Cancel` on Preparation
 plans. It remains local evidence and does not change the non-claims above.
+
+The compact existing-plan replanning follow-up then passed the standard gate
+with `610` Flutter tests and the final full non-reset browser journey with
+`E2E browser smoke passed for e2e-1784475200@example.test`. The final run covers
+the compact zero-request review, deliberate full-editor transition, cancellation,
+existing planner/RLS lifecycle, and strengthened exact Flutter-Web input
+checks. It remains local automated evidence and adds no participant, remote,
+installed-device, background, provider, localization, or outcome claim.
 
 With a fresh local database:
 

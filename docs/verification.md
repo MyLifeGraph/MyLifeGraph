@@ -659,11 +659,16 @@ Deadline Planner interaction coverage is currently split honestly across two
 layers. Flutter widget tests drive the calendar prefill and three-step wizard,
 require explicit exam/assignment and distinctive total/prior inputs, inspect the
 staged preview, confirm explicitly, retain and rebase a draft after `409`, and
-exercise the narrow/large-text layout. They additionally cover Settings budget
-save/removal, the 320-pixel/200-percent dialog and seven-day card, account-cap
-deduction, and truthful loading/error/overage states. The browser/database
-journey creates and
-activates the lifecycle through the authenticated API, then verifies the real
+exercise the narrow/large-text layout. They also prove that an active plan with
+no pending preview first opens a zero-request compact review, copies every saved
+proposal value while normalizing a historical start to today, preserves current
+reservations until confirmation, rejects passed deadlines and stale calendar
+sources, and exposes the full editor deliberately. Pending previews and retained
+conflict drafts remain on the full-editor path. They additionally cover Settings
+budget save/removal, the 320-pixel/200-percent dialog and seven-day card,
+account-cap deduction, and truthful loading/error/overage states. The
+browser/database journey creates and activates the lifecycle through the
+authenticated API, then verifies the real
 Flutter active-plan surface, managed-task/focus behavior, no `schedule_items` or
 imported-event mutation, owner/cross-owner authority, Account Export inclusion/
 cascade, and guest zero-call. It also sets and reads the budget through the
@@ -671,9 +676,11 @@ authenticated product boundary, rejects direct profile mutation and request-
 provided identity, validates the strict seven-day workload, proves a stale
 preview cannot confirm after the budget is lowered, restores the setting, and
 checks Today/Preparation plans without broadening calendar claims. It does not
-currently claim that Playwright drives
-the wizard itself; a single end-to-end browser wizard journey remains additional
-coverage rather than evidence already supplied by the API-seeded journey.
+currently claim that Playwright submits the wizard itself. It does verify the
+compact replan review, its no-automatic-change copy, the deliberate transition
+to the full editor, and modal cancellation; a single end-to-end browser wizard
+submission remains additional coverage rather than evidence already supplied by
+the API-seeded journey.
 
 The Phase 10 source portion uses only the deterministic fake provider. It is
 designed to assert read-only capability/history/memory calls, explicit memory
@@ -1058,6 +1065,20 @@ exact overage copy, staged replan entry, and a root modal barrier that prevents
 Shell navigation from stealing `Cancel`. This is local evidence only; the
 five-student study and all remote, installed-device, background-delivery,
 production-provider, localization, and longitudinal checks remain unrun.
+
+The compact existing-plan replanning follow-up completed locally on 2026-07-19
+without backend or schema changes. The focused Deadline Plans page suite passed
+`22` tests; the standard gate passed all `610` Flutter tests with clean
+analysis; and the final full non-reset browser journey reported
+`E2E browser smoke passed for e2e-1784475200@example.test`. Two preceding
+attempts exposed Flutter Web text input racing ahead of app-state propagation;
+the shared browser helper was hardened to commit clearing, pace retries, and
+verify two blur/refocus cycles before the final passing run. The final journey
+covered the compact no-request review, deliberate full-editor transition,
+cancel behavior, exact input persistence, and the existing planner/RLS
+lifecycle. This remains local automated evidence; the participant study and
+all remote, device, delivery, production-provider, localization, and
+longitudinal checks remain unrun.
 
 Phase 10 has focused fake-provider/process-runner, strict contract, service,
 migration, repository, controller, and widget tests in the checkout. Its

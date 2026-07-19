@@ -372,3 +372,79 @@ months.
 Remote migration/RLS state, deployed scheduling, push/background delivery, a
 production Coach provider, German localization, and long-term learning benefit
 remain unverified and are not claimed here.
+
+## Compact Existing-Plan Replanning — 2026-07-19
+
+This compatible usability follow-up reduces work inside the existing Deadline
+Planner instead of adding another planning feature. A new plan still uses the
+explicit three-step editor. An active plan with no pending preview now opens a
+compact review of its saved estimate, credits, current tracked Focus, remaining
+effort, deadline, split preferences, normalized start, imported-busy-time
+choice, and account budget. Opening it sends no request. The student can create
+one staged preview with those values or deliberately enter the unchanged full
+editor through `Change values`. Existing reservations remain active until
+confirmation. Pending previews and retained conflict/ambiguous-response drafts
+continue directly in the full editor.
+
+No API, schema, RLS policy, planner arithmetic, focus-credit rule, calendar
+availability rule, request-id behavior, or LLM boundary changed. The compact
+path uses the existing proposal controller and contract. Its copy explicitly
+calls the calculation rule-based rather than AI-generated. A stale/unavailable
+calendar source or passed finish-by time disables the shortcut and requires a
+full value review.
+
+### Additional findings, ordered by severity
+
+#### Critical or high
+
+No reproducible critical or high-severity defect was found in this slice. This
+is local automated evidence only, not a participant or longitudinal result.
+
+#### Medium — fixed
+
+1. **Reusing an active plan's unchanged values required traversing all three
+   editor steps.** This repeated already-saved decisions during missed-block and
+   overloaded-day recovery. The compact review removes that friction without
+   hiding values or weakening staged confirmation.
+
+#### Low — fixed
+
+1. **The final submit relied on an earlier deadline check.** A finish-by time
+   could pass while the editor remained open. Submission now rechecks both the
+   future-time and 366-day bounds immediately before constructing the draft.
+2. **Fast browser typing could outrun Flutter Web field-state propagation.** In
+   two initial full E2E attempts, exact-value assertions caught `14:15` becoming
+   `4:15` and an Evening edit mixing old and new text. The shared E2E input
+   helper now waits for clearing to commit, retries with paced keyboard input,
+   and verifies the value across two blur/refocus cycles. Existing exact UI and
+   persisted-database assertions remain the regression boundary.
+
+### Verification results
+
+All results below are local to this checkout on 2026-07-19:
+
+- Focused Deadline Plans page suite: `22 passed`.
+- JavaScript syntax check for `e2e/web/smoke.mjs`: passed.
+- Standard source gate: migration/start-stack guards passed, Flutter analysis
+  reported no issues, all `610` Flutter tests passed, Python application sources
+  compiled, and the diff check passed.
+- Full non-reset Flutter/FastAPI/Supabase browser journey: exit code `0`,
+  `E2E browser smoke passed for e2e-1784475200@example.test`. Its preflight
+  confirmed that local migration history matches the repository. The journey
+  covered the compact no-mutation review, deliberate transition to the full
+  editor, cancellation, existing planner lifecycle/conflict/RLS paths, and the
+  strengthened exact-input assertions.
+
+The first two browser attempts exposed the input-timing issue above; only the
+passing run after the helper fix is reported as final evidence.
+
+### Remaining manual or external validation
+
+The five-student study remains deliberately skipped and unrun. Physical-device
+keyboard and screen-reader acceptance, OS-level 200-percent text, real offline
+transitions, travel/device-versus-profile-timezone checks near midnight and DST,
+and observed multi-plan use over weeks or months remain useful.
+
+No remote migration state, deployed scheduling, push/background delivery,
+production Coach provider, German localization, or long-term learning benefit
+is claimed.

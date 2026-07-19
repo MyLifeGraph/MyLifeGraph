@@ -2634,24 +2634,37 @@ async function expectFieldValue(page, label, value, fallbackIndex) {
 }
 
 async function fillLocatorWithValue(page, locator, value) {
-  try {
-    await fillFocusedLocator(page, locator);
-    await page.keyboard.type(value, { delay: 2 });
-    await page.waitForTimeout(100);
-    await page.keyboard.press('Tab');
-    await page.waitForTimeout(100);
-    await locator.click({ timeout: 2500 });
-    if (await locatorHasValue(page, locator, value)) {
-      return;
+  for (const delay of [15, 30]) {
+    try {
+      await fillFocusedLocator(page, locator);
+      await page.waitForTimeout(150);
+      await page.keyboard.type(value, { delay });
+      await page.waitForTimeout(200);
+      if (await locatorRetainsValueAfterBlur(page, locator, value)) {
+        return;
+      }
+    } catch (_) {
+      // Retry once more slowly before trying a directly fillable input.
     }
-  } catch (_) {
-    // Try a directly fillable input next.
   }
 
   await locator.fill(value, { timeout: 2500 });
-  if (!(await locatorHasValue(page, locator, value))) {
+  await page.waitForTimeout(200);
+  if (!(await locatorRetainsValueAfterBlur(page, locator, value))) {
     throw new Error('Focused element did not receive text input');
   }
+}
+
+async function locatorRetainsValueAfterBlur(page, locator, value) {
+  for (let check = 0; check < 2; check += 1) {
+    await page.keyboard.press('Tab');
+    await page.waitForTimeout(250);
+    await locator.click({ timeout: 2500 });
+    if (!(await locatorHasValue(page, locator, value))) {
+      return false;
+    }
+  }
+  return true;
 }
 
 async function fillFocusedLocator(page, locator) {
@@ -7551,6 +7564,10 @@ async function assertDeadlinePlannerFlutterSurface({
     buttonFirst: true,
   });
   await clickByText(page, 'Replan remaining time');
+  await expectText(page, 'Replan remaining preparation');
+  await expectText(page, 'Create preview with these values');
+  await expectText(page, 'Nothing changes automatically');
+  await clickByText(page, 'Change values');
   await expectText(page, 'Step 1 of 3');
   await expectText(page, 'Adjust preparation plan');
   const editorCancel = page.getByRole('button', {

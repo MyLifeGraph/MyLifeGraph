@@ -382,16 +382,24 @@ states; guest/mock makes zero workload calls. A date with confirmed plans can
 be expanded deliberately. Its independently loaded detail keeps loading,
 failure, and changed-since-summary states visible, lists the contributing plans,
 and states the exact minimum date overage when present. `Review plan` opens the
-existing owner-scoped plan surface. `Replan remaining time` opens the existing
-editor with saved values; it neither moves blocks nor creates a proposal until
-the student completes that flow, and a resulting proposal remains staged until
-confirmation. The UI never chooses which plan to sacrifice. The preview shows
-total estimate, prior spent, currently qualifying focus time,
-remaining minutes, dated staged blocks, optional busy-time provenance, and any
-unallocated deficit before confirmation. It names the fixed planning windows,
-the per-plan daily cap, the optional account budget, and the manually imported
-availability boundary. Guest/mock shows honest unavailability and makes zero
-planner calls.
+existing owner-scoped plan surface. For an active plan without a pending
+revision, `Replan remaining time` first opens a compact review of the active
+revision's saved estimate, credit, current tracked Focus, remaining effort,
+deadline, split preferences, normalized planning start, imported-busy-time
+choice, and current account budget. Opening this review sends no proposal and
+moves no block. `Create preview with these values` deliberately sends the same
+versioned proposal used by the full editor; the active reservations remain in
+force until explicit confirmation. `Change values` reveals the existing
+three-step editor. A stale or unavailable imported source or a passed deadline
+disables the compact submit and requires that full review. Draft plans, plans
+that already have a pending revision, and values retained after an ambiguous or
+conflicting response continue directly in the full editor. The UI never chooses
+which plan to sacrifice. The resulting preview shows total estimate, prior
+spent, currently qualifying focus time, remaining minutes, dated staged blocks,
+optional busy-time provenance, and any unallocated deficit before confirmation.
+It names the fixed planning windows, the per-plan daily cap, the optional
+account budget, and the manually imported availability boundary. Guest/mock
+shows honest unavailability and makes zero planner calls.
 
 An active plan with passed `missed` blocks shows the number of affected blocks
 and still-uncredited minutes. `Replan remaining time` opens the existing staged
@@ -457,10 +465,16 @@ Focused backend, Flutter, migration, and browser coverage must prove:
   owner/date-scoped active-block aggregation, exact contribution sums/order,
   cross-owner empty results, read-only retry/error/stale-summary behavior, and
   direct review/replan navigation without an automatic proposal or mutation;
+- compact active-plan replanning without an open-time request, exact saved-value
+  transfer with a today-normalized historical start, retained active
+  reservations until confirmation, stale-source/passed-deadline guards,
+  pending/retained-draft fallback to the full editor, and a deliberate
+  `Change values` path;
 - account export inclusion for plan/revision/block rows, explicit ledger
   omission, and full-account cascade; and
 - usable retained drafts, review-before-confirmation, semantic controls, and
-  narrow-screen/large-text layout for both the planner and budget dialog/card.
+  narrow-screen/large-text layout for the wizard, compact replan review, and
+  budget dialog/card.
 
 These requirements define the verification boundary. Documentation or source
 coverage alone is not a claim that the current checkout, local Supabase stack,
@@ -492,3 +506,12 @@ barrier defect, the final combined run reported
 `E2E browser smoke passed for e2e-1784465767@example.test`. This verifies only
 the local strict detail/navigation boundary and does not alter the non-claims
 above.
+
+The compatible compact-replanning follow-up also completed locally on
+2026-07-19 without an API, schema, RLS, or calculation change. The focused
+Deadline Plans page suite reported `22 passed`; the standard gate passed all
+`610` Flutter tests with clean analysis; and the final combined browser journey
+reported `E2E browser smoke passed for e2e-1784475200@example.test`. It verifies
+the compact zero-request review, full-editor escape path, staged semantics, and
+the existing local planner/RLS lifecycle only. It is not participant, remote,
+installed-device, provider-calendar, notification, or longitudinal evidence.

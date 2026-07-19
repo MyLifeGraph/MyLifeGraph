@@ -232,6 +232,10 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
             isBusy: state.isBusy,
             exactRetryLocked: state.requiresExactRetry,
             onAdjust: () => _openEditor(plan: plan),
+            onReplanMissed: () => _openEditor(
+              plan: plan,
+              replanContext: _DeadlineReplanContext.missed,
+            ),
             onConfirm: () => _confirmPlan(plan),
             onComplete: () => _completePlan(plan),
             onCancel: () => _cancelPlan(plan),
@@ -302,7 +306,10 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
         );
         return;
       }
-      _openEditor(plan: plan);
+      _openEditor(
+        plan: plan,
+        replanContext: _DeadlineReplanContext.workload,
+      );
     });
   }
 
@@ -324,7 +331,10 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
     final state = ref.read(deadlinePlanControllerProvider);
     final plan = _planById(state.plans, planId);
     if (plan != null && !plan.isTerminal) {
-      _openEditor(plan: plan);
+      _openEditor(
+        plan: plan,
+        replanContext: _DeadlineReplanContext.workload,
+      );
       return;
     }
     context.go(
@@ -473,6 +483,7 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
     DeadlinePlanProposalDraft? retainedDraft,
     DeadlineCalendarPrefill? sourcePrefill,
     bool forceManualSource = false,
+    _DeadlineReplanContext replanContext = _DeadlineReplanContext.general,
   }) async {
     final state = ref.read(deadlinePlanControllerProvider);
     if (state.isBusy || state.requiresExactRetry || _editorOpen) return;
@@ -549,6 +560,10 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
                       _ => DeadlinePlanSourceStatus.unavailable,
                     }
                   : DeadlinePlanSourceStatus.notApplicable),
+          startWithExistingSummary: sourcePlan?.isActive == true &&
+              sourcePlan?.pendingRevision == null &&
+              retainedDraft == null,
+          replanContext: replanContext,
           currentTime: widget.currentTime,
         ),
       );
@@ -722,6 +737,7 @@ class _DeadlinePlanCard extends StatefulWidget {
     required this.isBusy,
     required this.exactRetryLocked,
     required this.onAdjust,
+    required this.onReplanMissed,
     required this.onConfirm,
     required this.onComplete,
     required this.onCancel,
@@ -732,6 +748,7 @@ class _DeadlinePlanCard extends StatefulWidget {
   final bool isBusy;
   final bool exactRetryLocked;
   final VoidCallback onAdjust;
+  final VoidCallback onReplanMissed;
   final VoidCallback onConfirm;
   final VoidCallback onComplete;
   final VoidCallback onCancel;
@@ -754,6 +771,7 @@ class _DeadlinePlanCardState extends State<_DeadlinePlanCard> {
     final isBusy = widget.isBusy;
     final exactRetryLocked = widget.exactRetryLocked;
     final onAdjust = widget.onAdjust;
+    final onReplanMissed = widget.onReplanMissed;
     final onConfirm = widget.onConfirm;
     final onComplete = widget.onComplete;
     final onCancel = widget.onCancel;
@@ -970,7 +988,7 @@ class _DeadlinePlanCardState extends State<_DeadlinePlanCard> {
                   const SizedBox(height: AppSpacing.sm),
                   FilledButton.icon(
                     key: ValueKey('deadline-replan-missed-${plan.id}'),
-                    onPressed: canMutate ? onAdjust : null,
+                    onPressed: canMutate ? onReplanMissed : null,
                     icon: const Icon(Icons.autorenew),
                     label: const Text('Replan remaining time'),
                   ),
@@ -1134,6 +1152,8 @@ class _DeadlineBlockTile extends StatelessWidget {
   }
 }
 
+enum _DeadlineReplanContext { general, workload, missed }
+
 class _DeadlinePlanEditorSheet extends StatefulWidget {
   const _DeadlinePlanEditorSheet({
     required this.planId,
@@ -1150,6 +1170,8 @@ class _DeadlinePlanEditorSheet extends StatefulWidget {
     required this.sourceCalendarEventId,
     required this.sourceCalendarEventFingerprint,
     required this.initialSourceStatus,
+    required this.startWithExistingSummary,
+    required this.replanContext,
     required this.currentTime,
   });
 
@@ -1167,6 +1189,8 @@ class _DeadlinePlanEditorSheet extends StatefulWidget {
   final String? sourceCalendarEventId;
   final String? sourceCalendarEventFingerprint;
   final DeadlinePlanSourceStatus initialSourceStatus;
+  final bool startWithExistingSummary;
+  final _DeadlineReplanContext replanContext;
   final DateTime? currentTime;
 
   @override
@@ -1190,6 +1214,7 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
   int _bufferDays = 1;
   late DateTime _planningStart;
   late DeadlinePlanSourceKind _sourceKind;
+  late bool _showExistingSummary;
   bool _useCalendarAvailability = false;
 
   @override
@@ -1242,6 +1267,7 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
       _bufferDays = 0;
     }
     _sourceKind = widget.sourceKind;
+    _showExistingSummary = widget.startWithExistingSummary;
     final today = DateTime(now.year, now.month, now.day);
     final savedPlanningStart = DateTime.tryParse(
       retained?.planningStartOn ?? existing?.planningStartOn ?? '',
@@ -1275,6 +1301,9 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
 
   @override
   Widget build(BuildContext context) {
+    if (_showExistingSummary) {
+      return _buildExistingSummary(context);
+    }
     return SingleChildScrollView(
       padding: EdgeInsets.fromLTRB(
         AppSpacing.lg,
@@ -1301,6 +1330,149 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
           _buildNavigation(context),
         ],
       ),
+    );
+  }
+
+  Widget _buildExistingSummary(BuildContext context) {
+    final revision = widget.existing!;
+    final total = revision.estimatedTotalMinutes;
+    final prior = revision.creditedPriorMinutes;
+    final tracked = widget.trackedFocusMinutes;
+    final remaining = (total - prior - tracked).clamp(0, total).toInt();
+    final sourceCurrent =
+        revision.sourceKind == DeadlinePlanSourceKind.manual ||
+            revision.sourceStatus == DeadlinePlanSourceStatus.current;
+    final deadlineFuture = revision.deadlineAt.isAfter(_now);
+    final canCreatePreview = sourceCurrent && deadlineFuture;
+    final contextCopy = switch (widget.replanContext) {
+      _DeadlineReplanContext.workload =>
+        'You opened this from a daily workload that needs review. A fresh preview applies the current account budget again.',
+      _DeadlineReplanContext.missed =>
+        'This plan has missed, uncredited preparation. A fresh preview starts no earlier than today, while completed linked Focus remains counted.',
+      _DeadlineReplanContext.general => null,
+    };
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Replan remaining preparation',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          const Text(
+            'Review the saved values below. You only need the full editor when one of them should change.',
+          ),
+          if (contextCopy != null) ...[
+            const SizedBox(height: AppSpacing.md),
+            Text(contextCopy),
+          ],
+          const SizedBox(height: AppSpacing.lg),
+          Text(revision.title, style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            '${revision.kind == DeadlinePlanKind.exam ? 'Exam' : 'Assignment'} · '
+            'finish by ${DateFormat.yMMMd().add_Hm().format(revision.deadlineAt.toLocal())} · device time',
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Wrap(
+            spacing: AppSpacing.lg,
+            runSpacing: AppSpacing.sm,
+            children: [
+              _ProgressValue(label: 'Estimate', value: _duration(total)),
+              _ProgressValue(
+                label: 'Entered prior credit',
+                value: _duration(prior),
+              ),
+              _ProgressValue(
+                label: 'Tracked focus',
+                value: _duration(tracked),
+              ),
+              _ProgressValue(
+                label: 'Remaining',
+                value: _duration(remaining),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Text(
+            '${_duration(revision.preferredSessionMinutes)} preferred blocks · '
+            '${_duration(revision.maxDailyMinutes)} maximum per day · '
+            '${revision.bufferDays} ${revision.bufferDays == 1 ? 'clear day' : 'clear days'}',
+          ),
+          Text(
+            'Plan from ${DateFormat.yMMMd().format(_planningStart)} · '
+            '${revision.useCalendarAvailability ? 'use latest imported busy times' : 'do not use imported busy times'}',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            !widget.accountDailyPreparationBudgetKnown
+                ? 'The account-wide budget could not be read here. The backend will still apply any saved total budget.'
+                : widget.accountDailyPreparationBudgetMinutes == null
+                    ? 'No account-wide daily preparation budget is set.'
+                    : 'Current account-wide budget: ${_duration(widget.accountDailyPreparationBudgetMinutes!)} per day.',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          if (!sourceCurrent) ...[
+            const SizedBox(height: AppSpacing.md),
+            const Text(
+              'The imported source changed or became unavailable. Change values and review the source before creating another preview.',
+            ),
+          ] else if (!deadlineFuture) ...[
+            const SizedBox(height: AppSpacing.md),
+            const Text(
+              'The saved finish-by time has passed. Change values before creating another preview.',
+            ),
+          ],
+          const SizedBox(height: AppSpacing.lg),
+          const Text(
+            'Creating a preview stores a staged replacement. Your current reservations stay active until you confirm it. Nothing changes automatically, and the calculation is rule-based rather than AI-generated.',
+          ),
+          const SizedBox(height: AppSpacing.md),
+          _buildExistingSummaryActions(context, canCreatePreview),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildExistingSummaryActions(
+    BuildContext context,
+    bool canCreatePreview,
+  ) {
+    final create = FilledButton.icon(
+      key: const ValueKey('deadline-create-preview-existing'),
+      onPressed: canCreatePreview ? _submit : null,
+      icon: const Icon(Icons.event_repeat_outlined),
+      label: const Text('Create preview with these values'),
+    );
+    final change = OutlinedButton(
+      key: const ValueKey('deadline-change-existing-values'),
+      onPressed: () => setState(() => _showExistingSummary = false),
+      child: const Text('Change values'),
+    );
+    final cancel = TextButton(
+      onPressed: () => Navigator.of(context).pop(),
+      child: const Text('Cancel'),
+    );
+    if (_choiceDirection(context) == Axis.vertical) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          create,
+          const SizedBox(height: AppSpacing.sm),
+          change,
+          const SizedBox(height: AppSpacing.xs),
+          cancel,
+        ],
+      );
+    }
+    return Wrap(
+      spacing: AppSpacing.sm,
+      runSpacing: AppSpacing.sm,
+      children: [create, change, cancel],
     );
   }
 
@@ -1738,6 +1910,14 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
         _kind == null ||
         _deadline == null) {
       _showValidation('Review all required plan values.');
+      return;
+    }
+    if (!_deadline!.isAfter(_now)) {
+      _showValidation('The finish-by time must be in the future.');
+      return;
+    }
+    if (_deadline!.difference(_now).inDays > 366) {
+      _showValidation('Choose a finish-by time within the next 366 days.');
       return;
     }
     final deadlineDate = DateTime(
