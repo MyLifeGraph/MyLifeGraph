@@ -60,6 +60,53 @@ class AccountApiDataSource {
     return returnedTimezone;
   }
 
+  Future<int?> updateDailyPreparationBudget({
+    required String accessToken,
+    required int? minutes,
+  }) async {
+    if (!isValidDailyPreparationBudget(minutes)) {
+      throw const AccountSettingsContractException(
+        'Choose 25 to 480 minutes in five-minute steps.',
+      );
+    }
+    late final Map<String, dynamic> json;
+    try {
+      json = await _client.patchJson(
+        '/v1/account/preparation-budget',
+        headers: _headers(accessToken),
+        body: {'daily_preparation_budget_minutes': minutes},
+      );
+    } on AppException catch (error) {
+      final cause = error.cause;
+      if (cause is DioException && cause.response?.statusCode == 422) {
+        throw const AccountPreparationBudgetRejectedException(
+          'The backend rejected that daily preparation budget.',
+        );
+      }
+      if (cause is DioException &&
+          ((cause.response?.statusCode ?? 0) >= 500 ||
+              cause.response == null)) {
+        throw const AccountPreparationBudgetUpdateOutcomeUnknownException(
+          'Preparation budget update outcome could not be confirmed.',
+        );
+      }
+      rethrow;
+    }
+    if (json.length != 1 ||
+        !json.containsKey('daily_preparation_budget_minutes')) {
+      throw const AccountPreparationBudgetUpdateOutcomeUnknownException(
+        'Preparation budget update returned an invalid result.',
+      );
+    }
+    final returned = json['daily_preparation_budget_minutes'];
+    if ((returned != null && returned is! int) || returned != minutes) {
+      throw const AccountPreparationBudgetUpdateOutcomeUnknownException(
+        'Preparation budget update returned a mismatched result.',
+      );
+    }
+    return returned as int?;
+  }
+
   Future<AccountExportEnvelope> exportAccount({
     required String accessToken,
   }) async {

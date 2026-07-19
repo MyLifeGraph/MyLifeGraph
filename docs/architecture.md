@@ -290,6 +290,24 @@ import. Imported content stays read-only, and normal GET, calendar import,
 Dashboard, scheduler, and focus completion paths never generate a proposal.
 The full contract is in `docs/deadline-planner-v1-contract.md`.
 
+An optional nullable account-wide preparation budget lives on `profiles` and is
+set only through a bearer-derived FastAPI account route plus service-role-only
+RPC. Proposal generation deducts active blocks from other plans on every
+profile-local date while retaining each revision's own daily cap. Budget writes
+and plan mutations share the owner advisory lock; a database trigger rechecks
+aggregate candidate-date minutes during proposed-to-active confirmation. A
+changed budget can therefore reject confirmation without mutating the staged or
+active revision. Existing active blocks are never silently moved when the
+setting changes.
+
+The side-effect-free `preparation-workload-v1` read projects seven consecutive
+profile-local dates for Today and Preparation plans. It reports active confirmed
+preparation reservations and merged weekly `schedule_items` duration as separate
+facts. It deliberately excludes proposed blocks, imported busy rows, live
+provider state, task estimates, and Focus history, so the UI labels the latter
+as weekly Setup commitments and does not present the projection as total free
+time. Both this projection and block allocation remain deterministic/no-LLM.
+
 ## Authentication
 
 The current auth modes are:
@@ -686,9 +704,9 @@ developer's account.
 ### V1 Account Controls
 
 The exact boundary is `docs/v1-account-controls-contract.md`. Real authenticated
-accounts use bearer-derived FastAPI routes for durable IANA timezone changes, a
-strict bounded `account-export-v1` JSON portability export, and permanent
-deletion.
+accounts use bearer-derived FastAPI routes for durable IANA timezone changes,
+an optional bounded account-wide daily preparation rule, a strict bounded
+`account-export-v1` JSON portability export, and permanent deletion.
 Password reset and confirmation resend remain Supabase Auth operations with a
 dedicated recovery-event route in Flutter. Guest/mock sessions make no account
 API calls.
@@ -738,7 +756,10 @@ all-time result.
   routes derive the owner from the bearer principal; owner-locked RPCs bind
   global request identity, payload fingerprint, plan revision, blocks, and the
   first managed task atomically. Authenticated direct writes and request-ledger
-  reads are forbidden.
+  reads are forbidden. The optional profile preparation-budget column is also
+  authenticated read-only; its service-role-only setter and proposed-to-active
+  block trigger use the same owner lock to prevent concurrent aggregate-cap
+  bypass.
 - `notifications` remains authenticated read-only through the Data API.
   Lifecycle DML is available only through bearer-derived FastAPI and the
   owner-locked service-role `apply_notification_action_v1` RPC; its retry

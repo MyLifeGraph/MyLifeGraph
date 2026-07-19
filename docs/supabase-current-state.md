@@ -46,7 +46,7 @@ The app table constants live in
 
 | Table | Current app use |
 | --- | --- |
-| `profiles` | Canonical auth profile projection. Identity/authority (`role`, `auth_provider`) and onboarding eligibility are backend-owned; authenticated edits are limited to non-authority fields, and `setup_revision` remains a monotonic backend projection guard. |
+| `profiles` | Canonical auth profile projection. Identity/authority (`role`, `auth_provider`) and onboarding eligibility are backend-owned; authenticated edits are limited to explicitly granted non-authority fields, `setup_revision` remains a monotonic backend projection guard, and the nullable account-wide preparation budget is read-only to application roles. |
 | `daily_logs` | One canonical daily row whose V2 metadata owns separate Evening/Morning captures plus direct nullable numeric Dashboard projections; the Dashboard does not synthesize proxy scores. |
 | `behavioral_events` | Granular AI signal stream; canonical capture writes a dynamic deterministic maximum of four current events linked to its `daily_logs` row. |
 | `tasks` | Owner-scoped executable tasks with create/edit/complete/postpone/cancel/restore/undo, optional 5-480 minute estimates, and explicit completion/cancellation timestamps. |
@@ -333,6 +333,24 @@ verified bearer, take the shared owner advisory lock, and atomically reconcile
 request identity, revisions/blocks, plan projections, and first-confirm task
 creation. Composite ownership references prevent cross-owner plan, task,
 calendar-event, revision, and block linkage.
+
+`20260719120000_account_preparation_budget_v1.sql` adds nullable
+`profiles.daily_preparation_budget_minutes`, constrained to `25..480` in
+five-minute increments. Existing null rows retain the per-plan-only behavior.
+Application roles may read the owner profile through existing RLS but cannot
+write this column. The service-role-only
+`set_daily_preparation_budget_v1(uuid,int)` RPC takes the same owner advisory
+lock as planner mutations and returns only the exact nullable value.
+
+Proposal calculation subtracts confirmed blocks from other plans on each
+profile-local planning date, including earlier reservations on the current
+date. The `deadline_plan_blocks_enforce_account_budget` trigger independently
+checks the candidate revision plus active other-plan blocks on only that
+candidate revision's dates during proposed-to-active transition. It raises a
+PostgREST `PT409` conflict without changing the active revision when aggregate
+minutes exceed the current profile budget. Lowering a budget never rewrites
+existing active rows; the read-only seven-day workload projection reports any
+resulting overage for explicit replanning.
 
 The first confirmation creates exactly one planner-managed task with
 `task.id = deadline_plan.id`; subsequent revisions keep that identity and may
@@ -741,7 +759,7 @@ RESET_DB=true FLUTTER_BIN=/path/to/flutter scripts/verify_supabase_local.sh
 ```
 
 The reset form should apply all migrations through
-`20260714103000_application_table_privilege_guard.sql`; expected legacy-table
+`20260719120000_account_preparation_budget_v1.sql`; expected legacy-table
 skip notices may be emitted for missing CamelCase tables. Use reset when proving
 the full migration/backfill/constraint chain from a fresh local database, not
 merely because a reviewed migration is pending.
@@ -804,7 +822,13 @@ smoke first passed in the Phase 9 implementation checkout. In the 2026-07-13
 current checkout, a focused Phase 10 rerun and the subsequent full combined
 journey passed non-destructively against local Supabase with the deterministic
 fake provider. This establishes neither remote migration/RLS state nor
-production readiness. Later changes must establish a new full pass. Do not run
+production readiness. On 2026-07-19 the reviewed account-wide preparation-
+capacity migration was explicitly applied locally without a reset; history
+matched through `20260719120000_account_preparation_budget_v1.sql`, the non-reset
+preflight passed all `601` Flutter tests, and the full browser journey reported
+`E2E browser smoke passed for e2e-1784448992@example.test`. That remains local
+evidence and establishes no remote database state. Later changes must establish
+a new full pass. Do not run
 destructive reset commands against a remote database.
 
 For manual local product exploration, `npm run seed:demo` creates repeatable

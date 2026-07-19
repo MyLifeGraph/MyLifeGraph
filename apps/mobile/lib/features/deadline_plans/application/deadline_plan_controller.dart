@@ -21,6 +21,7 @@ enum DeadlinePlanConflictKind {
   activeFocus,
   calendarContext,
   stalePreview,
+  accountBudget,
   openPlanCap,
   unknown,
 }
@@ -353,6 +354,10 @@ DeadlinePlanConflictKind deadlinePlanConflictKind(Object error) {
   if (_stalePreviewConflictDetails.contains(detail)) {
     return DeadlinePlanConflictKind.stalePreview;
   }
+  if (detail ==
+      'Daily preparation budget is exceeded. Create a fresh preview.') {
+    return DeadlinePlanConflictKind.accountBudget;
+  }
   if (detail == 'You already have 50 open deadline plans.') {
     return DeadlinePlanConflictKind.openPlanCap;
   }
@@ -368,6 +373,8 @@ String? deadlinePlanConflictGuidance(Object error) {
       'Calendar data changed. Review the plan, unlink the imported event or turn off imported busy times, then create a fresh preview.',
     DeadlinePlanConflictKind.stalePreview =>
       'This preview no longer matches current time, Focus progress, or reservations. Adjust the plan to create a fresh preview.',
+    DeadlinePlanConflictKind.accountBudget =>
+      'Your total daily preparation budget or another confirmed plan changed. Adjust this plan to create a fresh preview.',
     DeadlinePlanConflictKind.openPlanCap =>
       'Close or cancel one open preparation plan before creating another.',
     DeadlinePlanConflictKind.revision =>

@@ -2713,7 +2713,24 @@ async function clickByText(page, text, options = {}) {
       await buttonTarget.click({ timeout: 2500, force: true });
       return;
     } catch (_) {
-      // Fall back to text matching for non-button controls and Flutter variants.
+      // Flutter can merge a ListTile title and subtitle into one button name.
+    }
+  }
+
+  const partialButton = page.getByRole('button', {
+    name: new RegExp(escapeRegExp(text), 'i'),
+  });
+  const partialButtonTarget =
+    match === 'last' ? partialButton.last() : partialButton.first();
+  try {
+    await partialButtonTarget.click({ timeout: 5000 });
+    return;
+  } catch (_) {
+    try {
+      await partialButtonTarget.click({ timeout: 2500, force: true });
+      return;
+    } catch (_) {
+      // Fall back to text matching for non-button controls.
     }
   }
 
@@ -2740,9 +2757,13 @@ async function clickByText(page, text, options = {}) {
 }
 
 async function textLocatorInViewport(page, text, { buttonFirst = false } = {}) {
+  const partialButton = page.getByRole('button', {
+    name: new RegExp(escapeRegExp(text), 'i'),
+  });
   const candidates = buttonFirst
     ? [
         page.getByRole('button', { name: text, exact: true }),
+        partialButton,
         page.getByText(text, { exact: true }),
         page.getByLabel(text, { exact: false }),
       ]
@@ -2750,6 +2771,7 @@ async function textLocatorInViewport(page, text, { buttonFirst = false } = {}) {
         page.getByText(text, { exact: true }),
         page.getByLabel(text, { exact: false }),
         page.getByRole('button', { name: text, exact: true }),
+        partialButton,
       ];
   const viewport = page.viewportSize();
   for (const candidate of candidates) {
@@ -5003,6 +5025,7 @@ function assertDisposableAccountExportPayload(
   if (
     profileRows.length !== 1 ||
     profileRows[0].id !== userId ||
+    profileRows[0].daily_preparation_budget_minutes !== null ||
     preferenceRows.length !== 1 ||
     preferenceRows[0].user_id !== userId ||
     taskRows.length !== 2 ||
@@ -6027,6 +6050,98 @@ async function assertDeadlinePlanner(page, userId) {
   );
   const scheduleBefore = await calendarScheduleSnapshot(userId);
 
+  const initialWorkloadResult = await deadlinePlanApiRequest(
+    '/v1/deadline-plans/workload',
+    accessToken,
+  );
+  assertDeadlinePlanApiStatus(
+    initialWorkloadResult,
+    200,
+    'initial preparation workload',
+  );
+  assertPreparationWorkload(initialWorkloadResult.json, {
+    budget: null,
+    context: 'initial preparation workload',
+  });
+
+  await page.goto(appRoute('/settings'), { waitUntil: 'domcontentloaded' });
+  await waitForFlutterShell(page);
+  await enableFlutterSemantics(page);
+  await scrollUntilTextInViewport(page, 'Daily preparation budget', {
+    maxSteps: 12,
+  });
+  await clickByText(page, 'Daily preparation budget');
+  await expectText(page, 'This is a transparent rule, not an AI estimate.');
+  await fillByLabelOrPlaceholder(
+    page,
+    'Total preparation minutes per day',
+    '120',
+    0,
+  );
+  const budgetSavePromise = page.waitForResponse(
+    (candidate) =>
+      candidate.url() ===
+        `${aiServiceBaseUrl}/v1/account/preparation-budget` &&
+      candidate.request().method() === 'PATCH',
+    { timeout: 45000 },
+  );
+  await clickByText(page, 'Save budget');
+  const budgetSaveResponse = await budgetSavePromise;
+  if (!budgetSaveResponse.ok()) {
+    throw new Error(
+      `Preparation budget save failed: ${budgetSaveResponse.status()} ${await budgetSaveResponse.text()}`,
+    );
+  }
+  const budgetSaveBody = budgetSaveResponse.request().postDataJSON();
+  const budgetSaveResult = await budgetSaveResponse.json();
+  if (
+    stableJson(budgetSaveBody) !==
+      stableJson({ daily_preparation_budget_minutes: 120 }) ||
+    stableJson(budgetSaveResult) !==
+      stableJson({ daily_preparation_budget_minutes: 120 })
+  ) {
+    throw new Error(
+      `Preparation budget transport was not exact: ${stableJson({ budgetSaveBody, budgetSaveResult })}`,
+    );
+  }
+  await expectText(
+    page,
+    '2h total per day across confirmed preparation plans.',
+  );
+  await assertRows(
+    `profiles?select=id,daily_preparation_budget_minutes&id=eq.${userId}`,
+    (rows) =>
+      rows.length === 1 &&
+      rows[0].daily_preparation_budget_minutes === 120,
+    'saved account-wide preparation budget',
+  );
+  const directBudgetWrite = await authenticatedRestRequest(
+    `profiles?id=eq.${userId}`,
+    accessToken,
+    {
+      method: 'PATCH',
+      body: { daily_preparation_budget_minutes: 480 },
+    },
+  );
+  if (directBudgetWrite.response.ok) {
+    throw new Error(
+      `Authenticated direct preparation-budget write was accepted: ${directBudgetWrite.text}`,
+    );
+  }
+  const savedWorkloadResult = await deadlinePlanApiRequest(
+    '/v1/deadline-plans/workload',
+    accessToken,
+  );
+  assertDeadlinePlanApiStatus(
+    savedWorkloadResult,
+    200,
+    'saved preparation workload',
+  );
+  assertPreparationWorkload(savedWorkloadResult.json, {
+    budget: 120,
+    context: 'saved preparation workload',
+  });
+
   const initial = await deadlinePlanApiRequest(
     '/v1/deadline-plans',
     accessToken,
@@ -6485,6 +6600,12 @@ async function assertDeadlinePlanner(page, userId) {
       `Deadline Planner managed task projection is invalid: ${JSON.stringify(managedTasks)}`,
     );
   }
+
+  const budgetConflictPlanId = await assertPreparationBudgetConfirmationGuard({
+    accessToken,
+    userId,
+    proposalBody,
+  });
 
   await assertDeadlinePlannerFlutterSurface({
     page,
@@ -7092,10 +7213,12 @@ async function assertDeadlinePlanner(page, userId) {
     finalFeed.plans.map((detail) => [detail.plan.id, detail]),
   );
   if (
-    finalFeed.plans.length !== 2 ||
+    finalFeed.plans.length !== 3 ||
     finalPlansById.get(planId)?.plan.status !== 'completed' ||
     finalPlansById.get(cancelledDraftPlanId)?.plan.status !== 'cancelled' ||
-    finalPlansById.get(cancelledDraftPlanId)?.plan.current_revision !== 0
+    finalPlansById.get(cancelledDraftPlanId)?.plan.current_revision !== 0 ||
+    finalPlansById.get(budgetConflictPlanId)?.plan.status !== 'cancelled' ||
+    finalPlansById.get(budgetConflictPlanId)?.plan.current_revision !== 0
   ) {
     throw new Error(
       `Deadline Planner collection lost terminal plan truth: ${finalFeedResult.text}`,
@@ -7118,6 +7241,181 @@ async function assertDeadlinePlanner(page, userId) {
       `Deadline Planner did not retain exactly one stable managed task: ${JSON.stringify(finalTasks)}`,
     );
   }
+}
+
+async function assertPreparationBudgetConfirmationGuard({
+  accessToken,
+  userId,
+  proposalBody,
+}) {
+  const planId = crypto.randomUUID();
+  const proposal = {
+    ...proposalBody,
+    request_id: crypto.randomUUID(),
+    plan_id: planId,
+    kind: 'assignment',
+    title: `E2E account capacity preview ${runId}`,
+    estimated_total_minutes: 120,
+    credited_prior_minutes: 0,
+    preferred_session_minutes: 50,
+    max_daily_minutes: 100,
+  };
+  const proposedResult = await deadlinePlanApiRequest(
+    '/v1/deadline-plans/proposals',
+    accessToken,
+    { method: 'POST', body: proposal },
+  );
+  assertDeadlinePlanApiStatus(
+    proposedResult,
+    200,
+    'account-capacity proposal',
+  );
+  const proposed = assertDeadlinePlanEnvelope(
+    proposedResult.json,
+    'account-capacity proposal',
+  );
+  if (
+    proposed.plan.status !== 'draft' ||
+    proposed.pending_revision?.blocks.length < 1
+  ) {
+    throw new Error(
+      `Account-capacity proposal has no staged blocks: ${proposedResult.text}`,
+    );
+  }
+  const activeRows = await fetchRows(
+    `deadline_plan_blocks?select=local_date,planned_minutes&user_id=eq.${userId}&reservation_state=eq.active`,
+    'active preparation capacity baseline',
+  );
+  const activeByDay = new Map();
+  for (const row of activeRows) {
+    activeByDay.set(
+      row.local_date,
+      (activeByDay.get(row.local_date) ?? 0) + row.planned_minutes,
+    );
+  }
+  const candidateByDay = new Map();
+  for (const block of proposed.pending_revision.blocks) {
+    candidateByDay.set(
+      block.local_date,
+      (candidateByDay.get(block.local_date) ?? 0) + block.planned_minutes,
+    );
+  }
+  for (const [localDate, candidateMinutes] of candidateByDay) {
+    const total = (activeByDay.get(localDate) ?? 0) + candidateMinutes;
+    if (total > 120) {
+      throw new Error(
+        `Proposal exceeded the account-wide daily preparation budget on ${localDate}: ${total}`,
+      );
+    }
+  }
+
+  const ownerFieldRejected = await deadlinePlanApiRequest(
+    '/v1/account/preparation-budget',
+    accessToken,
+    {
+      method: 'PATCH',
+      body: {
+        daily_preparation_budget_minutes: 25,
+        user_id: userId,
+      },
+    },
+  );
+  assertDeadlinePlanApiStatus(
+    ownerFieldRejected,
+    422,
+    'request-provided preparation-budget owner',
+  );
+  const lowered = await deadlinePlanApiRequest(
+    '/v1/account/preparation-budget',
+    accessToken,
+    {
+      method: 'PATCH',
+      body: { daily_preparation_budget_minutes: 25 },
+    },
+  );
+  assertDeadlinePlanApiStatus(lowered, 200, 'lowered preparation budget');
+  if (lowered.json?.daily_preparation_budget_minutes !== 25) {
+    throw new Error(`Lowered budget result is invalid: ${lowered.text}`);
+  }
+  const loweredWorkloadResult = await deadlinePlanApiRequest(
+    '/v1/deadline-plans/workload',
+    accessToken,
+  );
+  assertDeadlinePlanApiStatus(
+    loweredWorkloadResult,
+    200,
+    'lowered preparation workload',
+  );
+  const loweredWorkload = assertPreparationWorkload(
+    loweredWorkloadResult.json,
+    { budget: 25, context: 'lowered preparation workload' },
+  );
+  if (!loweredWorkload.days.some((day) => day.over_budget_minutes > 0)) {
+    throw new Error(
+      `Lowering the budget hid existing over-budget reservations: ${loweredWorkloadResult.text}`,
+    );
+  }
+
+  const confirmResult = await deadlinePlanApiRequest(
+    `/v1/deadline-plans/${planId}/confirm`,
+    accessToken,
+    {
+      method: 'POST',
+      body: { request_id: crypto.randomUUID(), expected_revision: 1 },
+    },
+  );
+  assertDeadlinePlanApiStatus(
+    confirmResult,
+    409,
+    'budget-changed confirmation',
+  );
+  if (
+    confirmResult.json?.detail !==
+    'Daily preparation budget is exceeded. Create a fresh preview.'
+  ) {
+    throw new Error(
+      `Budget confirmation returned unsafe guidance: ${confirmResult.text}`,
+    );
+  }
+  await assertRows(
+    `tasks?select=id&user_id=eq.${userId}&id=eq.${planId}`,
+    (rows) => rows.length === 0,
+    'rejected account-capacity confirmation creates no task',
+  );
+  await assertRows(
+    `deadline_plan_blocks?select=id,reservation_state&user_id=eq.${userId}&plan_id=eq.${planId}`,
+    (rows) =>
+      rows.length === proposed.pending_revision.blocks.length &&
+      rows.every((row) => row.reservation_state === 'proposed'),
+    'rejected account-capacity confirmation retains staged blocks',
+  );
+
+  const cancelled = await deadlinePlanApiRequest(
+    `/v1/deadline-plans/${planId}/cancel`,
+    accessToken,
+    {
+      method: 'POST',
+      body: { request_id: crypto.randomUUID(), expected_revision: 1 },
+    },
+  );
+  assertDeadlinePlanApiStatus(
+    cancelled,
+    200,
+    'account-capacity draft cleanup',
+  );
+  const restored = await deadlinePlanApiRequest(
+    '/v1/account/preparation-budget',
+    accessToken,
+    {
+      method: 'PATCH',
+      body: { daily_preparation_budget_minutes: 120 },
+    },
+  );
+  assertDeadlinePlanApiStatus(restored, 200, 'restored preparation budget');
+  if (restored.json?.daily_preparation_budget_minutes !== 120) {
+    throw new Error(`Restored budget result is invalid: ${restored.text}`);
+  }
+  return planId;
 }
 
 async function assertDeadlinePlannerFlutterSurface({
@@ -7145,6 +7443,8 @@ async function assertDeadlinePlannerFlutterSurface({
   await waitForFlutterShell(page);
   await enableFlutterSemantics(page);
   await expectText(page, 'Preparation plans');
+  await expectText(page, 'Your next 7 days');
+  await expectText(page, '2h total preparation per day across confirmed plans.');
   await scrollUntilTextInViewport(page, title, { maxSteps: 16 });
   await expectText(page, 'Active');
   await scrollUntilTextInViewport(page, 'Reserved in MyLifeGraph only', {
@@ -7205,25 +7505,57 @@ async function assertDeadlinePlannerFlutterSurface({
       response.request().method() === 'GET',
     { timeout: 45000 },
   );
+  const dashboardWorkloadLoad = page.waitForResponse(
+    (response) =>
+      response.url() === `${aiServiceBaseUrl}/v1/deadline-plans/workload` &&
+      response.request().method() === 'GET',
+    { timeout: 45000 },
+  );
   // Hash navigation retains Riverpod's non-autoDispose Dashboard projection.
   // A real reload proves the current database reservations instead of reusing
   // the snapshot that Flutter loaded before the Node-side Planner mutations.
   await page.reload({ waitUntil: 'domcontentloaded' });
-  const dashboardBlockResponse = await dashboardBlockLoad;
+  const [dashboardBlockResponse, dashboardWorkloadResponse] =
+    await Promise.all([dashboardBlockLoad, dashboardWorkloadLoad]);
   if (!dashboardBlockResponse.ok()) {
     throw new Error(
       `Dashboard preparation block projection failed to load: ${dashboardBlockResponse.status()} ${await dashboardBlockResponse.text()}`,
     );
   }
+  if (!dashboardWorkloadResponse.ok()) {
+    throw new Error(
+      `Dashboard preparation workload failed to load: ${dashboardWorkloadResponse.status()} ${await dashboardWorkloadResponse.text()}`,
+    );
+  }
+  assertPreparationWorkload(await dashboardWorkloadResponse.json(), {
+    budget: 120,
+    context: 'Dashboard preparation workload',
+  });
   await waitForFlutterShell(page);
   await enableFlutterSemantics(page);
+  await scrollUntilTextInViewport(page, '7-day preparation load', {
+    maxSteps: 30,
+  });
+  await expectText(page, '7-day preparation load');
   await scrollFlutterPage(page, 20000);
   await clickChoiceChip(page, 'Full week');
   await scrollUntilTextInViewport(page, 'Commitments', { maxSteps: 30 });
   page.off('request', captureDashboardRequest);
-  if (dashboardPlanApiRequests.length !== 0) {
+  const unexpectedDashboardPlanRequests = dashboardPlanApiRequests.filter(
+    (request) =>
+      request.method !== 'GET' ||
+      request.url !== `${aiServiceBaseUrl}/v1/deadline-plans/workload`,
+  );
+  if (
+    !dashboardPlanApiRequests.some(
+      (request) =>
+        request.method === 'GET' &&
+        request.url === `${aiServiceBaseUrl}/v1/deadline-plans/workload`,
+    ) ||
+    unexpectedDashboardPlanRequests.length !== 0
+  ) {
     throw new Error(
-      `Dashboard called the preparation-plan API instead of remaining on its read-only bounded Supabase projection: ${JSON.stringify(dashboardPlanApiRequests)}`,
+      `Dashboard preparation requests exceeded the read-only workload plus bounded Supabase projections: ${JSON.stringify(dashboardPlanApiRequests)}`,
     );
   }
   if (currentWeekBlock) {
@@ -7370,6 +7702,30 @@ async function assertDeadlinePlannerRls({
   if (secondaryFeed.plans.length !== 0) {
     throw new Error(
       `Deadline Planner collection exposed another owner's plan: ${crossOwnerFeed.text}`,
+    );
+  }
+  const secondaryWorkloadResult = await deadlinePlanApiRequest(
+    '/v1/deadline-plans/workload',
+    secondaryToken,
+  );
+  assertDeadlinePlanApiStatus(
+    secondaryWorkloadResult,
+    200,
+    'cross-owner preparation workload',
+  );
+  const secondaryWorkload = assertPreparationWorkload(
+    secondaryWorkloadResult.json,
+    { budget: null, context: 'cross-owner preparation workload' },
+  );
+  if (
+    secondaryWorkload.days.some(
+      (day) =>
+        day.reserved_preparation_minutes !== 0 ||
+        day.active_plan_count !== 0,
+    )
+  ) {
+    throw new Error(
+      `Preparation workload exposed another owner's reservations: ${secondaryWorkloadResult.text}`,
     );
   }
   for (const [table, filter] of [
@@ -10588,6 +10944,73 @@ function assertDeadlinePlanApiStatus(result, expectedStatus, context) {
       `${context} returned ${result.response.status}, expected ${expectedStatus}: ${result.text}`,
     );
   }
+}
+
+function assertPreparationWorkload(payload, { budget, context }) {
+  assertExactDeadlineKeys(
+    payload,
+    [
+      'contract_version',
+      'origin',
+      'generated_at',
+      'timezone',
+      'daily_preparation_budget_minutes',
+      'days',
+    ],
+    context,
+  );
+  if (
+    payload.contract_version !== 'preparation-workload-v1' ||
+    payload.origin !== 'authenticated_backend' ||
+    !isIsoTimestamp(payload.generated_at) ||
+    typeof payload.timezone !== 'string' ||
+    payload.daily_preparation_budget_minutes !== budget ||
+    !Array.isArray(payload.days) ||
+    payload.days.length !== 7
+  ) {
+    throw new Error(
+      `${context} has invalid workload provenance or bounds: ${stableJson(payload)}`,
+    );
+  }
+  for (const [index, day] of payload.days.entries()) {
+    assertExactDeadlineKeys(
+      day,
+      [
+        'local_date',
+        'reserved_preparation_minutes',
+        'remaining_budget_minutes',
+        'over_budget_minutes',
+        'active_plan_count',
+        'fixed_commitment_minutes',
+      ],
+      `${context} day ${index + 1}`,
+    );
+    const previous = payload.days[index - 1];
+    if (
+      !/^\d{4}-\d{2}-\d{2}$/.test(day.local_date) ||
+      (previous &&
+        Date.parse(`${day.local_date}T00:00:00Z`) -
+          Date.parse(`${previous.local_date}T00:00:00Z`) !==
+          86_400_000) ||
+      !Number.isInteger(day.reserved_preparation_minutes) ||
+      day.reserved_preparation_minutes < 0 ||
+      !Number.isInteger(day.over_budget_minutes) ||
+      !Number.isInteger(day.active_plan_count) ||
+      !Number.isInteger(day.fixed_commitment_minutes) ||
+      (budget === null
+        ? day.remaining_budget_minutes !== null ||
+          day.over_budget_minutes !== 0
+        : day.remaining_budget_minutes !==
+            Math.max(0, budget - day.reserved_preparation_minutes) ||
+          day.over_budget_minutes !==
+            Math.max(0, day.reserved_preparation_minutes - budget))
+    ) {
+      throw new Error(
+        `${context} day ${index + 1} is inconsistent: ${stableJson(day)}`,
+      );
+    }
+  }
+  return payload;
 }
 
 function assertDeadlinePlanCollection(payload, context) {

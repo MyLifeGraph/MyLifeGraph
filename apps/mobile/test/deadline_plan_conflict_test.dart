@@ -18,6 +18,8 @@ void main() {
           DeadlinePlanConflictKind.stalePreview,
       'Focus progress changed; replan before confirmation.':
           DeadlinePlanConflictKind.stalePreview,
+      'Daily preparation budget is exceeded. Create a fresh preview.':
+          DeadlinePlanConflictKind.accountBudget,
       'You already have 50 open deadline plans.':
           DeadlinePlanConflictKind.openPlanCap,
       'Deadline plan changed. Reload before replanning.':
@@ -43,6 +45,12 @@ void main() {
       ),
       contains('Finish or abandon'),
     );
+    expect(
+      deadlinePlanConflictGuidance(
+        _error('Daily preparation budget is exceeded. Create a fresh preview.'),
+      ),
+      contains('total daily preparation budget'),
+    );
   });
 
   test('only revision and unknown conflicts force reload', () {
@@ -55,6 +63,14 @@ void main() {
     expect(
       deadlinePlanMutationSuggestsReload(
         _error('Calendar availability is no longer current.'),
+      ),
+      isFalse,
+    );
+    expect(
+      deadlinePlanMutationSuggestsReload(
+        _error(
+          'Daily preparation budget is exceeded. Create a fresh preview.',
+        ),
       ),
       isFalse,
     );

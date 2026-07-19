@@ -35,7 +35,10 @@ time and enter prior completed work. It proposes dated blocks, shows the staged
 revision before applying anything, activates only after explicit confirmation,
 creates one stable managed task, credits completed linked Focus sessions, and
 can replan remaining work. A manual deadline or one deliberately selected
-imported event may seed the plan. Optional imported busy time is read-only.
+imported event may seed the plan. Optional imported busy time is read-only. A
+student may now set a nullable account-wide daily preparation budget in
+Settings; it constrains new cross-plan reservations without rewriting existing
+plans, while Today and Preparation plans expose a truthful seven-day view.
 There is no title inference, source-calendar write, autonomous mutation, hidden
 proposal, LLM call, push notification, or background sync. The exact ownership,
 retry, fingerprint, and database rules are in
@@ -49,6 +52,10 @@ retry, fingerprint, and database rules are in
 - Rule-based Daily State, briefings, reviews, plan blocks, Focus suggestions,
   and reminder copy do not need an LLM. LLM output may explain a result but must
   not become calculation or mutation authority.
+- The daily preparation budget is explicit student input and the workload card
+  is a deterministic reservation projection. Weekly Setup commitments are shown
+  separately; neither surface claims inferred free time or full imported-
+  calendar coverage.
 - Controlled Coach cannot mutate product data. It is hidden in production and
   release builds; local Codex is a development-only, per-machine adapter.
 - Notification Delivery V1 means stored Inbox rows plus acknowledged foreground
@@ -75,6 +82,9 @@ Review code and behavior, not only screenshots:
 - Are total preparation minutes, prior credit, block allocation, busy-period
   avoidance, focus credit, progress, missed-block recovery, and deadline edge
   cases internally consistent across Flutter, FastAPI, and PostgreSQL?
+- Do multiple active plans respect an optional account-wide local-date budget,
+  including earlier same-day reservations and a budget change between preview
+  and confirmation, without silently rewriting existing plans?
 - Do retries preserve exact request identity without duplicating a plan, task,
   block, outcome, or Focus session? Do reload/conflict paths avoid overwriting
   newer state?

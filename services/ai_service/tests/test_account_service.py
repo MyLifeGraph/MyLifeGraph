@@ -21,6 +21,7 @@ from app.repositories.account_repository import (
     AccountExportSourceTooLargeError,
     AccountExportTable,
     AccountPersistenceError,
+    StoredPreparationBudget,
 )
 from app.services.account_service import (
     ACCOUNT_EXPORT_PAGE_SIZE,
@@ -28,6 +29,7 @@ from app.services.account_service import (
     AccountExportTooLargeError,
     AccountService,
     InvalidAccountTimezoneError,
+    InvalidPreparationBudgetError,
 )
 
 
@@ -38,6 +40,8 @@ class Repository:
     def __init__(self) -> None:
         self.timezone_result: str | None = "Europe/Berlin"
         self.update_calls: list[tuple[str, str]] = []
+        self.preparation_budget_result = StoredPreparationBudget(minutes=120)
+        self.preparation_budget_calls: list[tuple[str, int | None]] = []
         self.export_calls: list[
             tuple[str, AccountExportTable, str | None, str, int, int]
         ] = []
@@ -49,6 +53,10 @@ class Repository:
     async def update_timezone(self, *, user_id: str, timezone: str):
         self.update_calls.append((user_id, timezone))
         return self.timezone_result
+
+    async def update_preparation_budget(self, *, user_id: str, minutes: int | None):
+        self.preparation_budget_calls.append((user_id, minutes))
+        return self.preparation_budget_result
 
     async def list_export_rows(
         self,
@@ -135,6 +143,28 @@ def test_timezone_update_rejects_unstable_or_unknown_zone(timezone: str) -> None
         asyncio.run(service.update_timezone(user_id="owner-1", timezone=timezone))
 
     assert repository.update_calls == []
+
+
+def test_preparation_budget_validates_rule_and_returns_stored_value() -> None:
+    repository = Repository()
+    service = AccountService(repository=repository)
+
+    result = asyncio.run(
+        service.update_preparation_budget(user_id="owner-1", minutes=120),
+    )
+
+    assert result.model_dump() == {"daily_preparation_budget_minutes": 120}
+    assert repository.preparation_budget_calls == [("owner-1", 120)]
+
+    for invalid in (24, 26, 481, True):
+        with pytest.raises(InvalidPreparationBudgetError):
+            asyncio.run(
+                service.update_preparation_budget(
+                    user_id="owner-1",
+                    minutes=invalid,  # type: ignore[arg-type]
+                ),
+            )
+    assert repository.preparation_budget_calls == [("owner-1", 120)]
 
 
 def test_export_is_owner_scoped_versioned_complete_and_sanitizes_ledgers() -> None:

@@ -22,6 +22,10 @@ class AccountProfileUpdateOutcomeUnknownError(RuntimeError):
     pass
 
 
+class AccountPreparationBudgetUpdateOutcomeUnknownError(RuntimeError):
+    pass
+
+
 class AccountExportSourceTooLargeError(RuntimeError):
     pass
 
@@ -35,6 +39,11 @@ class AccountExportTable:
     watermark_column: str
 
 
+@dataclass(frozen=True)
+class StoredPreparationBudget:
+    minutes: int | None
+
+
 class AccountRepository(Protocol):
     async def update_timezone(
         self,
@@ -42,6 +51,14 @@ class AccountRepository(Protocol):
         user_id: str,
         timezone: str,
     ) -> str | None:
+        pass
+
+    async def update_preparation_budget(
+        self,
+        *,
+        user_id: str,
+        minutes: int | None,
+    ) -> StoredPreparationBudget | None:
         pass
 
     async def list_export_rows(
@@ -133,6 +150,120 @@ class SupabaseAccountRepository:
                 ),
             )
         return timezone
+
+    async def update_preparation_budget(
+        self,
+        *,
+        user_id: str,
+        minutes: int | None,
+    ) -> StoredPreparationBudget | None:
+        try:
+            result = await self._client.rpc(
+                "set_daily_preparation_budget_v1",
+                params={
+                    "p_user_id": user_id,
+                    "p_daily_preparation_budget_minutes": minutes,
+                },
+            )
+        except httpx.HTTPStatusError as exc:
+            if _response_error_code(exc.response) == "PT404":
+                return None
+            if exc.response.status_code < 500:
+                raise AccountPersistenceError(
+                    "Preparation budget persistence is unavailable.",
+                ) from exc
+            return await self._reconcile_ambiguous_preparation_budget_update(
+                user_id=user_id,
+                minutes=minutes,
+                ambiguous_error=exc,
+            )
+        except (httpx.HTTPError, ValueError) as exc:
+            return await self._reconcile_ambiguous_preparation_budget_update(
+                user_id=user_id,
+                minutes=minutes,
+                ambiguous_error=exc,
+            )
+        if not _is_exact_preparation_budget_result(result=result, minutes=minutes):
+            return await self._reconcile_ambiguous_preparation_budget_update(
+                user_id=user_id,
+                minutes=minutes,
+                ambiguous_error=ValueError(
+                    "Preparation budget persistence returned an invalid result.",
+                ),
+            )
+        return StoredPreparationBudget(minutes=minutes)
+
+    async def _reconcile_ambiguous_preparation_budget_update(
+        self,
+        *,
+        user_id: str,
+        minutes: int | None,
+        ambiguous_error: Exception,
+    ) -> StoredPreparationBudget | None:
+        # The RPC takes the same owner lock as plan confirmation and setting the
+        # same nullable value is idempotent. Replaying serializes behind a first
+        # request that may still be committing.
+        try:
+            result = await self._client.rpc(
+                "set_daily_preparation_budget_v1",
+                params={
+                    "p_user_id": user_id,
+                    "p_daily_preparation_budget_minutes": minutes,
+                },
+            )
+        except httpx.HTTPStatusError as exc:
+            if _response_error_code(exc.response) == "PT404":
+                return None
+            if exc.response.status_code < 500:
+                raise AccountPersistenceError(
+                    "Preparation budget persistence is unavailable.",
+                ) from exc
+            return await self._read_ambiguous_preparation_budget_result(
+                user_id=user_id,
+                minutes=minutes,
+                ambiguous_error=ambiguous_error,
+            )
+        except (httpx.HTTPError, ValueError):
+            return await self._read_ambiguous_preparation_budget_result(
+                user_id=user_id,
+                minutes=minutes,
+                ambiguous_error=ambiguous_error,
+            )
+        if _is_exact_preparation_budget_result(result=result, minutes=minutes):
+            return StoredPreparationBudget(minutes=minutes)
+        return await self._read_ambiguous_preparation_budget_result(
+            user_id=user_id,
+            minutes=minutes,
+            ambiguous_error=ambiguous_error,
+        )
+
+    async def _read_ambiguous_preparation_budget_result(
+        self,
+        *,
+        user_id: str,
+        minutes: int | None,
+        ambiguous_error: Exception,
+    ) -> StoredPreparationBudget | None:
+        try:
+            rows = await self._client.select(
+                "profiles",
+                params={
+                    "select": "daily_preparation_budget_minutes",
+                    "id": f"eq.{user_id}",
+                    "limit": "1",
+                },
+            )
+        except (httpx.HTTPError, ValueError) as exc:
+            raise AccountPreparationBudgetUpdateOutcomeUnknownError(
+                "Preparation budget update outcome could not be determined.",
+            ) from exc
+        if rows == []:
+            return None
+        if _is_exact_preparation_budget_rows(rows=rows, minutes=minutes):
+            return StoredPreparationBudget(minutes=minutes)
+        raise AccountPreparationBudgetUpdateOutcomeUnknownError(
+            "Preparation budget update outcome could not be determined.",
+        ) from ambiguous_error
 
     async def _reconcile_ambiguous_timezone_update(
         self,
@@ -384,3 +515,34 @@ def _is_exact_timezone_result(*, rows: object, timezone: str) -> bool:
         and set(rows[0]) == {"timezone"}
         and rows[0]["timezone"] == timezone
     )
+
+
+def _is_exact_preparation_budget_result(*, result: object, minutes: int | None) -> bool:
+    return (
+        isinstance(result, dict)
+        and set(result) == {"daily_preparation_budget_minutes"}
+        and result["daily_preparation_budget_minutes"] == minutes
+        and (
+            result["daily_preparation_budget_minutes"] is None
+            or type(result["daily_preparation_budget_minutes"]) is int
+        )
+    )
+
+
+def _is_exact_preparation_budget_rows(*, rows: object, minutes: int | None) -> bool:
+    return (
+        isinstance(rows, list)
+        and len(rows) == 1
+        and _is_exact_preparation_budget_result(result=rows[0], minutes=minutes)
+    )
+
+
+def _response_error_code(response: httpx.Response) -> str | None:
+    try:
+        payload = response.json()
+    except ValueError:
+        return None
+    if not isinstance(payload, dict):
+        return None
+    code = payload.get("code")
+    return code if isinstance(code, str) else None

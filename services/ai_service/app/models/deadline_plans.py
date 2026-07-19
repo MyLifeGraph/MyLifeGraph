@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 
 DEADLINE_PLAN_CONTRACT_VERSION = "deadline-plan-v1"
+PREPARATION_WORKLOAD_CONTRACT_VERSION = "preparation-workload-v1"
 
 DeadlineKind = Literal["exam", "assignment"]
 DeadlinePlanStatus = Literal["draft", "active", "completed", "cancelled"]
@@ -28,6 +29,69 @@ EnergyWindow = Literal[
     "evening",
     "variable",
 ]
+
+
+class PreparationWorkloadDay(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+
+    local_date: date
+    reserved_preparation_minutes: int = Field(ge=0, le=30_000)
+    remaining_budget_minutes: int | None = Field(default=None, ge=0, le=480)
+    over_budget_minutes: int = Field(ge=0, le=30_000)
+    active_plan_count: int = Field(ge=0, le=50)
+    fixed_commitment_minutes: int = Field(ge=0, le=1_440)
+
+
+class PreparationWorkloadResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+
+    contract_version: Literal["preparation-workload-v1"]
+    origin: Literal["authenticated_backend"]
+    generated_at: datetime
+    timezone: str = Field(min_length=1, max_length=100)
+    daily_preparation_budget_minutes: int | None = Field(
+        default=None,
+        ge=25,
+        le=480,
+    )
+    days: list[PreparationWorkloadDay] = Field(min_length=7, max_length=7)
+
+    @model_validator(mode="after")
+    def validate_workload(self) -> Self:
+        if self.generated_at.tzinfo is None:
+            raise ValueError("preparation workload timestamp must be timezone-aware")
+        try:
+            ZoneInfo(self.timezone)
+        except ZoneInfoNotFoundError as exc:
+            raise ValueError("preparation workload timezone is invalid") from exc
+        if (
+            self.daily_preparation_budget_minutes is not None
+            and self.daily_preparation_budget_minutes % 5 != 0
+        ):
+            raise ValueError("preparation workload budget must use five-minute steps")
+        for index, day in enumerate(self.days):
+            if (
+                index > 0
+                and (day.local_date - self.days[index - 1].local_date).days != 1
+            ):
+                raise ValueError("preparation workload days must be consecutive")
+            budget = self.daily_preparation_budget_minutes
+            if budget is None:
+                if (
+                    day.remaining_budget_minutes is not None
+                    or day.over_budget_minutes != 0
+                ):
+                    raise ValueError("unset preparation budget cannot imply capacity")
+            elif (
+                day.remaining_budget_minutes
+                != max(0, budget - day.reserved_preparation_minutes)
+                or day.over_budget_minutes
+                != max(0, day.reserved_preparation_minutes - budget)
+            ):
+                raise ValueError(
+                    "preparation workload budget arithmetic is inconsistent",
+                )
+        return self
 
 
 class DeadlinePlanProposalRequest(BaseModel):

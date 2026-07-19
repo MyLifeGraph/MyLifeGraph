@@ -1,7 +1,8 @@
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Any, Protocol
 from uuid import UUID
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 import httpx
 
@@ -28,6 +29,15 @@ class DeadlinePlanningContext:
     calendar_availability_current: bool
     availability_connection_id: UUID | None
     availability_import_id: UUID | None
+    daily_preparation_budget_minutes: int | None = None
+
+
+@dataclass(frozen=True)
+class PreparationWorkloadContext:
+    timezone: str
+    daily_preparation_budget_minutes: int | None
+    schedule_items: list[dict[str, Any]]
+    confirmed_blocks: list[dict[str, Any]]
 
 
 @dataclass(frozen=True)
@@ -89,6 +99,13 @@ class DeadlinePlanRepository(Protocol):
         user_id: str,
         event_id: UUID,
     ) -> dict[str, Any] | None: ...
+
+    async def load_workload_context(
+        self,
+        *,
+        user_id: str,
+        generated_at: datetime,
+    ) -> PreparationWorkloadContext: ...
 
     async def load_planning_context(
         self,
@@ -296,6 +313,60 @@ class SupabaseDeadlinePlanRepository:
             return None
         return await self._with_connection_state(rows[0])
 
+    async def load_workload_context(
+        self,
+        *,
+        user_id: str,
+        generated_at: datetime,
+    ) -> PreparationWorkloadContext:
+        profile_rows = await self._client.select(
+            "profiles",
+            params={
+                "select": "timezone,daily_preparation_budget_minutes",
+                "id": f"eq.{user_id}",
+                "limit": "1",
+            },
+        )
+        if not profile_rows:
+            raise DeadlinePlanPersistenceNotFound("Profile is unavailable.")
+        timezone = _profile_timezone(profile_rows[0])
+        budget = _profile_daily_preparation_budget(profile_rows[0])
+        try:
+            zone = ZoneInfo(timezone)
+        except ZoneInfoNotFoundError as exc:
+            raise ValueError("Profile timezone is invalid.") from exc
+        starts_on = generated_at.astimezone(zone).date()
+        ends_on = starts_on + timedelta(days=6)
+        schedule_items = await self._select_pages(
+            "schedule_items",
+            params={
+                "select": "id,weekday,starts_at,ends_at",
+                "user_id": f"eq.{user_id}",
+                "order": "weekday.asc,starts_at.asc,id.asc",
+            },
+            max_rows=1_001,
+        )
+        confirmed_blocks = await self._select_pages(
+            "deadline_plan_blocks",
+            params={
+                "select": "id,plan_id,local_date,planned_minutes,starts_at,ends_at",
+                "user_id": f"eq.{user_id}",
+                "reservation_state": "eq.active",
+                "and": (
+                    f"(local_date.gte.{starts_on.isoformat()},"
+                    f"local_date.lte.{ends_on.isoformat()})"
+                ),
+                "order": "local_date.asc,starts_at.asc,id.asc",
+            },
+            max_rows=6_001,
+        )
+        return PreparationWorkloadContext(
+            timezone=timezone,
+            daily_preparation_budget_minutes=budget,
+            schedule_items=schedule_items,
+            confirmed_blocks=confirmed_blocks,
+        )
+
     async def load_planning_context(
         self,
         *,
@@ -310,16 +381,26 @@ class SupabaseDeadlinePlanRepository:
         profile_rows = await self._client.select(
             "profiles",
             params={
-                "select": "timezone",
+                "select": "timezone,daily_preparation_budget_minutes",
                 "id": f"eq.{user_id}",
                 "limit": "1",
             },
         )
         if not profile_rows:
             raise DeadlinePlanPersistenceNotFound("Profile is unavailable.")
-        timezone = profile_rows[0].get("timezone")
-        if not isinstance(timezone, str) or not timezone:
-            raise ValueError("Profile timezone is invalid.")
+        timezone = _profile_timezone(profile_rows[0])
+        daily_preparation_budget_minutes = _profile_daily_preparation_budget(
+            profile_rows[0],
+        )
+        try:
+            profile_zone = ZoneInfo(timezone)
+        except ZoneInfoNotFoundError as exc:
+            raise ValueError("Profile timezone is invalid.") from exc
+        context_starts_on = max(
+            starts_on,
+            range_starts_at.astimezone(profile_zone).date(),
+        )
+        context_ends_on = range_ends_at.astimezone(profile_zone).date()
 
         intake_rows = await self._client.select(
             "intake_responses",
@@ -356,12 +437,14 @@ class SupabaseDeadlinePlanRepository:
         confirmed_blocks = await self._select_pages(
             "deadline_plan_blocks",
             params={
-                "select": "id,plan_id,starts_at,ends_at",
+                "select": "id,plan_id,local_date,planned_minutes,starts_at,ends_at",
                 "user_id": f"eq.{user_id}",
                 "plan_id": f"neq.{plan_id}",
                 "reservation_state": "eq.active",
-                "ends_at": f"gt.{range_starts_at.isoformat()}",
-                "starts_at": f"lt.{range_ends_at.isoformat()}",
+                "and": (
+                    f"(local_date.gte.{context_starts_on.isoformat()},"
+                    f"local_date.lte.{context_ends_on.isoformat()})"
+                ),
                 "order": "starts_at.asc,id.asc",
             },
             max_rows=6_000,
@@ -456,6 +539,7 @@ class SupabaseDeadlinePlanRepository:
                 if include_calendar_availability and calendar_availability_current
                 else None
             ),
+            daily_preparation_budget_minutes=daily_preparation_budget_minutes,
         )
 
     async def _with_connection_state(
@@ -575,6 +659,27 @@ class SupabaseDeadlinePlanRepository:
         if not isinstance(result, dict):
             raise ValueError(f"Deadline plan RPC {function} returned a non-object.")
         return result
+
+
+def _profile_timezone(row: dict[str, Any]) -> str:
+    timezone = row.get("timezone")
+    if not isinstance(timezone, str) or not timezone:
+        raise ValueError("Profile timezone is invalid.")
+    return timezone
+
+
+def _profile_daily_preparation_budget(row: dict[str, Any]) -> int | None:
+    value = row.get("daily_preparation_budget_minutes")
+    if value is None:
+        return None
+    if (
+        type(value) is not int
+        or value < 25
+        or value > 480
+        or value % 5 != 0
+    ):
+        raise ValueError("Profile daily preparation budget is invalid.")
+    return value
 
 
 def _postgres_error(exc: httpx.HTTPStatusError) -> tuple[str | None, str]:

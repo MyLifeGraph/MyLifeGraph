@@ -101,6 +101,53 @@ def test_planning_context_reads_only_current_minimal_calendar_projection() -> No
             assert params["import_id"] == f"eq.{IMPORT_ID}"
     assert context.calendar_availability_current is True
     assert str(context.availability_import_id) == IMPORT_ID
+    block_call = next(
+        params
+        for table, params in client.calls
+        if table == "deadline_plan_blocks"
+    )
+    assert block_call["user_id"] == f"eq.{USER_ID}"
+    assert block_call["plan_id"] == f"neq.{PLAN_ID}"
+    assert block_call["and"] == (
+        "(local_date.gte.2026-07-20,local_date.lte.2026-08-01)"
+    )
+    assert "ends_at" not in block_call
+    assert "starts_at" not in block_call
+
+
+def test_workload_context_is_owner_scoped_to_profile_local_seven_days() -> None:
+    client = Client()
+    repository = SupabaseDeadlinePlanRepository(client)
+
+    context = asyncio.run(
+        repository.load_workload_context(
+            user_id=USER_ID,
+            generated_at=datetime(2026, 7, 19, 23, tzinfo=UTC),
+        ),
+    )
+
+    assert context.timezone == "Europe/Berlin"
+    assert context.daily_preparation_budget_minutes is None
+    profile_call = next(
+        params for table, params in client.calls if table == "profiles"
+    )
+    assert profile_call == {
+        "select": "timezone,daily_preparation_budget_minutes",
+        "id": f"eq.{USER_ID}",
+        "limit": "1",
+    }
+    block_call = next(
+        params
+        for table, params in client.calls
+        if table == "deadline_plan_blocks"
+    )
+    assert block_call["user_id"] == f"eq.{USER_ID}"
+    assert block_call["reservation_state"] == "eq.active"
+    assert block_call["and"] == (
+        "(local_date.gte.2026-07-20,local_date.lte.2026-07-26)"
+    )
+    assert block_call["limit"] == "1000"
+    assert block_call["offset"] == "0"
 
 
 def test_focus_query_is_activation_bounded_and_has_overflow_sentinel() -> None:

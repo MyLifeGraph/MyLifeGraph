@@ -337,6 +337,74 @@ void main() {
     );
   });
 
+  test('daily preparation budget uses strict nullable owner endpoint',
+      () async {
+    for (final minutes in <int?>[120, null]) {
+      final client = _TrackingApiClient(
+        patchResponse: {
+          'daily_preparation_budget_minutes': minutes,
+        },
+      );
+      final repository = AccountSettingsRepositoryImpl(
+        config: config,
+        apiDataSource: AccountApiDataSource(client),
+        accessTokenProvider: () => ' account-token ',
+        canUseSyncedAccount: true,
+      );
+
+      expect(await repository.updateDailyPreparationBudget(minutes), minutes);
+      expect(client.patchCalls, ['/v1/account/preparation-budget']);
+      expect(client.bodyByPath['/v1/account/preparation-budget'], {
+        'daily_preparation_budget_minutes': minutes,
+      });
+      expect(client.headersByPath['/v1/account/preparation-budget'], {
+        'Authorization': 'Bearer account-token',
+      });
+    }
+
+    final invalidClient = _TrackingApiClient();
+    final invalidRepository = AccountSettingsRepositoryImpl(
+      config: config,
+      apiDataSource: AccountApiDataSource(invalidClient),
+      accessTokenProvider: () => 'token',
+      canUseSyncedAccount: true,
+    );
+    for (final minutes in [24, 26, 481]) {
+      await expectLater(
+        invalidRepository.updateDailyPreparationBudget(minutes),
+        throwsA(isA<AccountSettingsContractException>()),
+      );
+    }
+    expect(invalidClient.totalCalls, 0);
+  });
+
+  test('daily preparation budget rejects mismatches and ambiguous outcomes',
+      () async {
+    await expectLater(
+      AccountApiDataSource(
+        _TrackingApiClient(
+          patchResponse: const {'daily_preparation_budget_minutes': 90},
+        ),
+      ).updateDailyPreparationBudget(accessToken: 'token', minutes: 120),
+      throwsA(isA<AccountPreparationBudgetUpdateOutcomeUnknownException>()),
+    );
+
+    final unknownResponse = DioException(
+      requestOptions: RequestOptions(path: '/v1/account/preparation-budget'),
+      response: Response<void>(
+        requestOptions: RequestOptions(path: '/v1/account/preparation-budget'),
+        statusCode: 502,
+      ),
+      type: DioExceptionType.badResponse,
+    );
+    await expectLater(
+      AccountApiDataSource(
+        _TrackingApiClient(patchError: unknownResponse),
+      ).updateDailyPreparationBudget(accessToken: 'token', minutes: 120),
+      throwsA(isA<AccountPreparationBudgetUpdateOutcomeUnknownException>()),
+    );
+  });
+
   test('guest, missing config, and missing token remain zero-call', () async {
     for (final repository in [
       AccountSettingsRepositoryImpl(
@@ -366,6 +434,10 @@ void main() {
     ]) {
       await expectLater(
         repository.exportAccount(),
+        throwsA(isA<AccountSettingsAccessException>()),
+      );
+      await expectLater(
+        repository.updateDailyPreparationBudget(120),
         throwsA(isA<AccountSettingsAccessException>()),
       );
       await expectLater(

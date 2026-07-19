@@ -15,17 +15,20 @@ from app.models.account import (
     AccountExportLedgerPolicy,
     AccountExportLimits,
     AccountExportResponse,
+    AccountPreparationBudgetResponse,
     AccountProfileResponse,
 )
 from app.repositories.account_repository import (
     AccountDeletionOutcomeUnknownError,
     AccountNotFoundError,
     AccountPersistenceError,
+    AccountPreparationBudgetUpdateOutcomeUnknownError,
     AccountProfileUpdateOutcomeUnknownError,
 )
 from app.services.account_service import (
     AccountExportTooLargeError,
     InvalidAccountTimezoneError,
+    InvalidPreparationBudgetError,
     PreparedAccountExport,
 )
 
@@ -66,6 +69,7 @@ class Service:
     def __init__(self) -> None:
         self.calls = []
         self.profile_error: Exception | None = None
+        self.preparation_budget_error: Exception | None = None
         self.export_error: Exception | None = None
         self.delete_error: Exception | None = None
 
@@ -74,6 +78,14 @@ class Service:
         if self.profile_error is not None:
             raise self.profile_error
         return AccountProfileResponse(timezone=timezone)
+
+    async def update_preparation_budget(self, *, user_id: str, minutes: int | None):
+        self.calls.append(("preparation_budget", user_id, minutes))
+        if self.preparation_budget_error is not None:
+            raise self.preparation_budget_error
+        return AccountPreparationBudgetResponse(
+            daily_preparation_budget_minutes=minutes,
+        )
 
     async def export_account(self, *, user_id: str):
         self.calls.append(("export", user_id))
@@ -178,6 +190,64 @@ def test_patch_maps_timezone_missing_and_persistence_errors_safely() -> None:
         )
         assert response.status_code == expected_status
         assert "internal" not in response.text
+
+
+def test_patch_preparation_budget_is_strict_owner_derived_and_nullable() -> None:
+    for minutes in (120, None):
+        response, service = asyncio.run(
+            _request(
+                "PATCH",
+                "/v1/account/preparation-budget",
+                json={"daily_preparation_budget_minutes": minutes},
+            ),
+        )
+
+        assert response.status_code == 200
+        assert response.json() == {
+            "daily_preparation_budget_minutes": minutes,
+        }
+        assert service.calls == [("preparation_budget", USER_ID, minutes)]
+
+    for invalid_body in [
+        {"daily_preparation_budget_minutes": 24},
+        {"daily_preparation_budget_minutes": 26},
+        {"daily_preparation_budget_minutes": 481},
+        {"daily_preparation_budget_minutes": True},
+        {"daily_preparation_budget_minutes": "120"},
+        {"daily_preparation_budget_minutes": 120, "user_id": "other"},
+        {},
+    ]:
+        invalid, invalid_service = asyncio.run(
+            _request(
+                "PATCH",
+                "/v1/account/preparation-budget",
+                json=invalid_body,
+            ),
+        )
+        assert invalid.status_code == 422
+        assert invalid_service.calls == []
+
+
+def test_patch_preparation_budget_maps_failures_without_leaking_details() -> None:
+    cases = [
+        (InvalidPreparationBudgetError("invalid rule"), 422),
+        (AccountNotFoundError("private owner"), 404),
+        (AccountPreparationBudgetUpdateOutcomeUnknownError("private result"), 502),
+        (AccountPersistenceError("private upstream"), 503),
+    ]
+    for error, expected_status in cases:
+        service = Service()
+        service.preparation_budget_error = error
+        response, _ = asyncio.run(
+            _request(
+                "PATCH",
+                "/v1/account/preparation-budget",
+                json={"daily_preparation_budget_minutes": 120},
+                service=service,
+            ),
+        )
+        assert response.status_code == expected_status
+        assert "private" not in response.text
 
 
 def test_export_returns_download_ready_versioned_json_and_maps_limits() -> None:

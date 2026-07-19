@@ -55,6 +55,43 @@ void main() {
     expect(find.textContaining('there is no background sync'), findsOneWidget);
   });
 
+  testWidgets('shows account-wide seven-day load and explains plan deduction',
+      (tester) async {
+    final repository = _FakeDeadlinePlanRepository();
+    await _pumpPage(
+      tester,
+      repository: repository,
+      page: DeadlinePlansPage(
+        initialTitle: 'Algorithms exam',
+        initialDeadlineAt: DateTime(2026, 7, 18, 18),
+        currentTime: now,
+      ),
+    );
+
+    expect(find.text('Your next 7 days'), findsOneWidget);
+    expect(
+      find.text('2h total preparation per day across confirmed plans.'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('50 min reserved'), findsOneWidget);
+
+    await _tap(tester, find.text('Plan preparation'));
+    await _tap(tester, find.text('Exam'));
+    await _tap(tester, find.text('Continue'));
+    await _tap(tester, find.byKey(const ValueKey('deadline-estimate-5h')));
+    await _tap(tester, find.text('No additional prior work'));
+    await _tap(tester, find.text('Continue'));
+
+    expect(
+      find.textContaining('Account-wide budget: 2 h per day'),
+      findsOneWidget,
+    );
+    expect(
+      find.textContaining('Confirmed blocks from other plans are deducted'),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('three-step same-day preview needs explicit confirmation',
       (tester) async {
     final repository = _FakeDeadlinePlanRepository(
@@ -349,7 +386,16 @@ void main() {
     );
     await _tap(tester, find.text('Load latest plan'));
     expect(find.text('Entered plan values kept'), findsOneWidget);
-    await _tap(tester, find.text('Review entered values'));
+    await tester.dragUntilVisible(
+      find.text('Review entered values'),
+      find.byType(CustomScrollView),
+      const Offset(0, -400),
+    );
+    await tester.pumpAndSettle();
+    final reviewValues = find.text('Review entered values').hitTestable();
+    expect(reviewValues, findsOneWidget);
+    await tester.tap(reviewValues);
+    await tester.pumpAndSettle();
     await _tap(tester, find.text('Continue'));
     await _tap(tester, find.text('Continue'));
     await _tap(tester, find.text('Create preview'));
@@ -721,6 +767,9 @@ class _FakeDeadlinePlanRepository implements DeadlinePlanRepository {
   int getPlanCalls = 0;
 
   @override
+  Future<PreparationWorkload> getWorkload() async => _workload();
+
+  @override
   Future<DeadlinePlanFeed> getPlans() async {
     final index = feedCalls.clamp(0, feeds.length - 1);
     feedCalls++;
@@ -772,6 +821,24 @@ class _FakeDeadlinePlanRepository implements DeadlinePlanRepository {
   }) async =>
       _plan(status: 'cancelled');
 }
+
+PreparationWorkload _workload({int? budget = 120}) => PreparationWorkload(
+      generatedAt: DateTime.parse('2026-07-18T08:00:00Z'),
+      timezone: 'Europe/Berlin',
+      dailyPreparationBudgetMinutes: budget,
+      days: [
+        for (var day = 0; day < 7; day++)
+          PreparationWorkloadDay(
+            localDate: DateTime(2026, 7, 18 + day),
+            reservedPreparationMinutes: day == 0 ? 50 : 0,
+            remainingBudgetMinutes:
+                budget == null ? null : budget - (day == 0 ? 50 : 0),
+            overBudgetMinutes: 0,
+            activePlanCount: day == 0 ? 1 : 0,
+            fixedCommitmentMinutes: day == 0 ? 90 : 0,
+          ),
+      ],
+    );
 
 class _FakeCalendarPrefillDataSource
     implements DeadlineCalendarPrefillDataSource {

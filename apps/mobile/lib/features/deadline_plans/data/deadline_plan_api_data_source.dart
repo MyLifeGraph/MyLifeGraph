@@ -14,6 +14,16 @@ class DeadlinePlanApiDataSource {
     return DeadlinePlanFeed.fromJson(json);
   }
 
+  Future<PreparationWorkload> getWorkload({
+    required String accessToken,
+  }) async {
+    final json = await _client.getJson(
+      '/v1/deadline-plans/workload',
+      headers: _headers(accessToken),
+    );
+    return PreparationWorkload.fromJson(json);
+  }
+
   Future<DeadlinePlan> getPlan({
     required String accessToken,
     required String planId,

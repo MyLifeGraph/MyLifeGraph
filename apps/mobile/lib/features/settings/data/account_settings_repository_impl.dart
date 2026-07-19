@@ -36,6 +36,19 @@ class AccountSettingsRepositoryImpl implements AccountSettingsRepository {
   }
 
   @override
+  Future<int?> updateDailyPreparationBudget(int? minutes) async {
+    if (!isValidDailyPreparationBudget(minutes)) {
+      throw const AccountSettingsContractException(
+        'Choose 25 to 480 minutes in five-minute steps.',
+      );
+    }
+    return _apiDataSource.updateDailyPreparationBudget(
+      accessToken: _requireAccessToken(),
+      minutes: minutes,
+    );
+  }
+
+  @override
   Future<AccountExportEnvelope> exportAccount() async {
     return _apiDataSource.exportAccount(accessToken: _requireAccessToken());
   }

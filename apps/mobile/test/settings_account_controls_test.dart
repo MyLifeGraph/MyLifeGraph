@@ -61,12 +61,22 @@ void main() {
     final container = ProviderScope.containerOf(
       tester.element(find.text('Synced account')),
     );
+    await tester.scrollUntilVisible(
+      find.text('In-app reminders'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
     expect(find.text('In-app reminders'), findsOneWidget);
     expect(
       find.text(
         'Allow banners while the app is open and choose what may appear.',
       ),
       findsOneWidget,
+    );
+    await tester.scrollUntilVisible(
+      find.text('Change timezone'),
+      -200,
+      scrollable: find.byType(Scrollable).first,
     );
     await tester.tap(find.text('Change timezone'));
     await tester.pumpAndSettle();
@@ -257,6 +267,140 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(accountRepository.timezoneCalls, ['Africa/Johannesburg']);
+  });
+
+  testWidgets('daily preparation budget can be saved and removed explicitly',
+      (tester) async {
+    final authRepository = _SettingsAuthRepository();
+    final accountRepository = _FakeAccountSettingsRepository();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authRepositoryProvider.overrideWithValue(authRepository),
+          appSurfaceCapabilitiesProvider.overrideWithValue(
+            const AppSurfaceCapabilities(
+              isLocalDemo: false,
+              canUseSyncedHabits: true,
+              canUseSyncedExecution: true,
+            ),
+          ),
+          accountSettingsRepositoryProvider.overrideWithValue(
+            accountRepository,
+          ),
+        ],
+        child: const MaterialApp(home: Scaffold(body: SettingsPage())),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final setting = find.byKey(
+      const ValueKey('daily-preparation-budget-setting'),
+    );
+    await tester.dragUntilVisible(
+      setting,
+      find.byType(CustomScrollView),
+      const Offset(0, -200),
+    );
+    await tester.pumpAndSettle();
+    expect(setting.hitTestable(), findsOneWidget);
+    await tester.tap(setting.hitTestable());
+    await tester.pumpAndSettle();
+    expect(
+      find.textContaining('transparent rule, not an AI estimate'),
+      findsOneWidget,
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('daily-preparation-budget-input')),
+      '120',
+    );
+    await tester.pump();
+    await tester.tap(find.widgetWithText(FilledButton, 'Save budget'));
+    await tester.pumpAndSettle();
+
+    expect(accountRepository.preparationBudgetCalls, [120]);
+    expect(
+      find.text('2h total per day across confirmed preparation plans.'),
+      findsOneWidget,
+    );
+
+    await tester.dragUntilVisible(
+      setting,
+      find.byType(CustomScrollView),
+      const Offset(0, -200),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(setting.hitTestable());
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Remove budget'));
+    await tester.pumpAndSettle();
+
+    expect(accountRepository.preparationBudgetCalls, [120, null]);
+    expect(
+      find.text('Not set. Existing per-plan limits still apply.'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('preparation budget dialog stays usable at 320px and 200% text',
+      (tester) async {
+    tester.view.physicalSize = const Size(320, 568);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final authRepository = _SettingsAuthRepository();
+    final accountRepository = _FakeAccountSettingsRepository();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          authRepositoryProvider.overrideWithValue(authRepository),
+          appSurfaceCapabilitiesProvider.overrideWithValue(
+            const AppSurfaceCapabilities(
+              isLocalDemo: false,
+              canUseSyncedHabits: true,
+              canUseSyncedExecution: true,
+            ),
+          ),
+          accountSettingsRepositoryProvider.overrideWithValue(
+            accountRepository,
+          ),
+        ],
+        child: MaterialApp(
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(context).copyWith(
+              textScaler: const TextScaler.linear(2),
+            ),
+            child: child!,
+          ),
+          home: const Scaffold(body: SettingsPage()),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final setting = find.byKey(
+      const ValueKey('daily-preparation-budget-setting'),
+    );
+    await tester.dragUntilVisible(
+      setting,
+      find.byType(CustomScrollView),
+      const Offset(0, -200),
+    );
+    await tester.pumpAndSettle();
+    expect(setting.hitTestable(), findsOneWidget);
+    await tester.tap(setting.hitTestable());
+    await tester.pumpAndSettle();
+    final dialog = find.byType(AlertDialog);
+    expect(tester.widget<AlertDialog>(dialog).scrollable, isTrue);
+    await tester.enterText(
+      find.byKey(const ValueKey('daily-preparation-budget-input')),
+      '120',
+    );
+    await tester.pump();
+    final save = find.widgetWithText(FilledButton, 'Save budget');
+    await tester.ensureVisible(save);
+    await tester.pumpAndSettle();
+    expect(save.hitTestable(), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('pending account export does not hand off after navigation',
@@ -721,6 +865,7 @@ class _FakeAccountSettingsRepository implements AccountSettingsRepository {
   Object? deleteError;
   Completer<void>? deleteCompleter;
   final List<String> timezoneCalls = [];
+  final List<int?> preparationBudgetCalls = [];
   int exportCalls = 0;
   Object? exportError;
   Completer<void>? exportCompleter;
@@ -737,6 +882,12 @@ class _FakeAccountSettingsRepository implements AccountSettingsRepository {
     timezoneError = null;
     if (error != null) throw error;
     return timezone;
+  }
+
+  @override
+  Future<int?> updateDailyPreparationBudget(int? minutes) async {
+    preparationBudgetCalls.add(minutes);
+    return minutes;
   }
 
   @override

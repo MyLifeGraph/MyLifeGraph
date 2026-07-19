@@ -8,6 +8,8 @@ from app.core.config import settings
 from app.models.account import (
     AccountDeleteRequest,
     AccountExportResponse,
+    AccountPreparationBudgetResponse,
+    AccountPreparationBudgetUpdateRequest,
     AccountProfileResponse,
     AccountProfileUpdateRequest,
 )
@@ -15,6 +17,7 @@ from app.repositories.account_repository import (
     AccountDeletionOutcomeUnknownError,
     AccountNotFoundError,
     AccountPersistenceError,
+    AccountPreparationBudgetUpdateOutcomeUnknownError,
     AccountProfileUpdateOutcomeUnknownError,
     SupabaseAccountRepository,
 )
@@ -22,6 +25,7 @@ from app.services.account_service import (
     AccountExportTooLargeError,
     AccountService,
     InvalidAccountTimezoneError,
+    InvalidPreparationBudgetError,
 )
 
 
@@ -104,6 +108,42 @@ async def update_account_profile(
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Account profile could not be updated.",
+        ) from exc
+
+
+@router.patch(
+    "/preparation-budget",
+    response_model=AccountPreparationBudgetResponse,
+)
+async def update_account_preparation_budget(
+    body: AccountPreparationBudgetUpdateRequest,
+    principal: Principal = Depends(get_current_principal),
+    service: AccountService = Depends(get_account_service),
+) -> AccountPreparationBudgetResponse:
+    try:
+        return await service.update_preparation_budget(
+            user_id=principal.user_id,
+            minutes=body.daily_preparation_budget_minutes,
+        )
+    except InvalidPreparationBudgetError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=str(exc),
+        ) from exc
+    except AccountNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Account profile is unavailable.",
+        ) from exc
+    except AccountPreparationBudgetUpdateOutcomeUnknownError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Preparation budget update outcome could not be determined.",
+        ) from exc
+    except AccountPersistenceError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Preparation budget could not be updated.",
         ) from exc
 
 

@@ -220,7 +220,11 @@ prove deterministic timezone-aware blocks, honest unscheduled minutes, staged-
 versus-active revisions, the 366-day horizon, separate latest/current revision
 semantics, task-free draft cancellation, and exact retry/conflict behavior,
 including replay returning a newer current detail projection without repeating
-the original mutation.
+the original mutation. `preparation-workload-v1` coverage must require exactly
+seven consecutive profile-local dates, strict arithmetic and provenance, active
+confirmed-reservation totals, distinct active-plan counts, merged recurring
+Setup commitments, and honest no-budget/over-budget/error states without
+implying imported calendar or AI coverage.
 Service and
 migration tests must cover first-confirm managed-task creation, stable task
 identity, generic task mutation/editor rejection and redirect, allowed open-task
@@ -229,7 +233,11 @@ completed-focus progress without implicit completion, optional calendar busy-
 time use, stale selected-event fingerprints, forced RLS, global
 request identity, conflict instead of empty availability for disconnected/
 deleted/missing-current imports, account cascade, export inclusion, and omitted
-ledger policy.
+ledger policy. They must also cover nullable account-budget bounds and five-
+minute increments, exact save/removal and response-loss reconciliation, owner-
+derived persistence, authenticated direct-write denial, the shared owner lock,
+other-plan deduction including earlier same-day confirmed blocks, and
+confirmation conflict when capacity changed after preview.
 Normal GET, import, Dashboard, scheduler, and focus-completion paths must remain
 free of hidden proposal writes.
 Phase 10 focused backend source coverage is split across strict model/API,
@@ -643,11 +651,19 @@ Deadline Planner interaction coverage is currently split honestly across two
 layers. Flutter widget tests drive the calendar prefill and three-step wizard,
 require explicit exam/assignment and distinctive total/prior inputs, inspect the
 staged preview, confirm explicitly, retain and rebase a draft after `409`, and
-exercise the narrow/large-text layout. The browser/database journey creates and
+exercise the narrow/large-text layout. They additionally cover Settings budget
+save/removal, the 320-pixel/200-percent dialog and seven-day card, account-cap
+deduction, and truthful loading/error/overage states. The browser/database
+journey creates and
 activates the lifecycle through the authenticated API, then verifies the real
 Flutter active-plan surface, managed-task/focus behavior, no `schedule_items` or
 imported-event mutation, owner/cross-owner authority, Account Export inclusion/
-cascade, and guest zero-call. It does not currently claim that Playwright drives
+cascade, and guest zero-call. It also sets and reads the budget through the
+authenticated product boundary, rejects direct profile mutation and request-
+provided identity, validates the strict seven-day workload, proves a stale
+preview cannot confirm after the budget is lowered, restores the setting, and
+checks Today/Preparation plans without broadening calendar claims. It does not
+currently claim that Playwright drives
 the wizard itself; a single end-to-end browser wizard journey remains additional
 coverage rather than evidence already supplied by the API-seeded journey.
 
@@ -1006,6 +1022,21 @@ each passed all `591` Flutter tests with clean analysis and matching local
 migration history. The full non-reset browser journey reported
 `E2E browser smoke passed for e2e-1784413991@example.test`. These results apply
 only to this local checkout and do not change the manual/external gaps below.
+
+The optional account-wide preparation-capacity follow-up completed on
+2026-07-19. The complete FastAPI suite reported `763 passed, 1 skipped`; the
+standard gate and subsequent non-reset local Supabase preflight each passed all
+`601` Flutter tests with clean analysis and matching migration history through
+`20260719120000_account_preparation_budget_v1.sql`. The full non-reset browser
+journey reported
+`E2E browser smoke passed for e2e-1784448992@example.test`. It covered the exact
+budget Settings request, authenticated direct-write rejection, strict seven-day
+workload, cross-plan deduction, a budget change between preview and confirm,
+retained staged state after exact `409`, Today/Preparation-plans rendering,
+cross-owner isolation, export, and guest zero-call. This remains local evidence;
+the five-student study is still unrun and no remote, installed-device,
+background-delivery, production-provider, localization, or longitudinal claim
+is added.
 
 Phase 10 has focused fake-provider/process-runner, strict contract, service,
 migration, repository, controller, and widget tests in the checkout. Its

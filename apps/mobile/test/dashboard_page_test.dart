@@ -10,6 +10,8 @@ import 'package:my_life_graph/features/briefings/presentation/providers/briefing
 import 'package:my_life_graph/features/dashboard/domain/entities/dashboard_snapshot.dart';
 import 'package:my_life_graph/features/dashboard/presentation/pages/dashboard_page.dart';
 import 'package:my_life_graph/features/dashboard/presentation/providers/dashboard_providers.dart';
+import 'package:my_life_graph/features/deadline_plans/domain/deadline_plan.dart';
+import 'package:my_life_graph/features/deadline_plans/presentation/providers/deadline_plan_providers.dart';
 import 'package:my_life_graph/features/optimization/application/optimization_service.dart';
 import 'package:my_life_graph/features/optimization/domain/entities/recommendation.dart';
 import 'package:my_life_graph/features/optimization/domain/entities/recommendation_feed.dart';
@@ -19,6 +21,8 @@ import 'package:my_life_graph/features/optimization/presentation/providers/optim
 import 'package:my_life_graph/features/snapshots/application/snapshot_refresh_service.dart';
 import 'package:my_life_graph/features/snapshots/data/snapshot_api_data_source.dart';
 import 'package:my_life_graph/features/snapshots/presentation/providers/snapshot_providers.dart';
+
+import 'support/deadline_plan_fixtures.dart';
 
 void main() {
   testWidgets('shows exact saved signals and no proxy metrics', (tester) async {
@@ -255,6 +259,44 @@ void main() {
     expect(find.text('Later lab'), findsNothing);
   });
 
+  testWidgets('account Today exposes confirmed seven-day preparation load',
+      (tester) async {
+    final snapshot = DashboardSnapshot.empty(
+      origin: DashboardOrigin.account,
+      loadedAt: DateTime(2026, 7, 20, 10),
+    );
+    await _pumpDashboard(
+      tester,
+      snapshot: Future.value(snapshot),
+      feed: Future.value(RecommendationFeed.demo(const [])),
+      workload: Future.value(
+        PreparationWorkload.fromJson(preparationWorkloadEnvelope()),
+      ),
+      capabilities: const AppSurfaceCapabilities(
+        isLocalDemo: false,
+        canUseSyncedHabits: true,
+        canUseSyncedExecution: true,
+        canUseDeadlinePlanner: true,
+      ),
+    );
+
+    expect(find.text('7-day preparation load'), findsOneWidget);
+    expect(find.text('50 min confirmed'), findsOneWidget);
+    await _expandDashboardSection(
+      tester,
+      const ValueKey('today-preparation-workload'),
+    );
+    expect(
+      find.text('2h total preparation per day across confirmed plans.'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('50 min reserved'), findsOneWidget);
+    expect(
+      find.text('1h 30m weekly setup commitments'),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('weekly review entry is account-only and available after Monday',
       (tester) async {
     await _pumpDashboard(
@@ -315,6 +357,7 @@ Future<void> _pumpDashboard(
   required Future<RecommendationFeed> feed,
   OptimizationService? optimizationService,
   SnapshotRefreshService? snapshotRefreshService,
+  Future<PreparationWorkload>? workload,
   AppSurfaceCapabilities capabilities = const AppSurfaceCapabilities(
     isLocalDemo: true,
     canUseSyncedHabits: false,
@@ -340,6 +383,8 @@ Future<void> _pumpDashboard(
           ),
         ),
         recommendationFeedProvider.overrideWith((ref) => feed),
+        if (workload != null)
+          preparationWorkloadProvider.overrideWith((ref) => workload),
         if (optimizationService != null)
           optimizationServiceProvider.overrideWithValue(optimizationService),
         if (snapshotRefreshService != null)

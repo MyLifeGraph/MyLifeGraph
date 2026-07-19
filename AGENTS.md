@@ -216,6 +216,12 @@ The follow-up migration
 binds Settings replay to the complete request payload and expected revision,
 invalidates that identity when Setup changes the shared preference projection,
 and keeps `updated_at` monotone and no earlier than retained consent timestamps.
+The migration
+`supabase/migrations/20260719120000_account_preparation_budget_v1.sql` adds the
+nullable `25..480` five-minute account-wide preparation rule, revokes direct
+application-role writes to that profile column, and exposes only an owner-
+locked service-role setter. Deadline-plan confirmation rechecks aggregate active
+minutes on the candidate revision's local dates at the database boundary.
 
 ## Important Docs
 
@@ -301,6 +307,13 @@ and current-import busy-time use are separate explicit choices; title inference,
 provider writes, notifications, LLM use, background sync, and hidden generation
 remain absent. Read
 `docs/deadline-planner-v1-contract.md` before extending this slice.
+The optional account-wide daily preparation budget is explicit user input, not
+an AI estimate. When present, proposals deduct confirmed other-plan blocks on
+each profile-local date and confirmation rechecks the current rule under the
+shared owner lock. Earlier same-day reservations still consume that date's
+capacity. Budget changes never rewrite active revisions; the seven-day Today/
+Preparation plans projection reports confirmed reservations and separately
+labelled weekly Setup commitments, not complete calendar availability.
 The managed task remains planner-owned: generic Task mutations/editor paths are
 forbidden, while starting focus on the open task remains allowed.
 These phases do not claim deployed cron wiring. Notification Delivery V1 below
@@ -577,6 +590,18 @@ managed-task focus progress, bounded Dashboard reads, Calendar non-mutation,
 RLS/ledger isolation, Account Export/deletion, and guest zero-call. This remains
 a local fake-provider claim, not a remote migration, installed-device,
 long-term-outcome, provider-calendar, push, or background-replanning claim.
+
+After explicit local authorization, the account-wide preparation-capacity
+migration was applied without a reset on 2026-07-19. The final local history
+matched the repository; the complete FastAPI suite reported
+`763 passed, 1 skipped`, the standard gate and non-reset Supabase preflight each
+passed all `601` Flutter tests with clean analysis, and the full browser journey
+reported `E2E browser smoke passed for e2e-1784448992@example.test`. It exercised
+the exact Settings save, direct-write denial, seven-day projection, changed-
+budget confirmation conflict, cross-owner isolation, and guest zero-call. This
+is local evidence only and makes no remote migration, installed-device,
+participant-study, long-term-outcome, provider-calendar, push/background, or
+production-Coach claim.
 
 The implemented post-intake refresh is backend-only and best-effort:
 

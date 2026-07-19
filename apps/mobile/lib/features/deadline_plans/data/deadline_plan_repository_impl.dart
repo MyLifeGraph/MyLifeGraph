@@ -31,6 +31,12 @@ class DeadlinePlanRepositoryImpl implements DeadlinePlanRepository {
   }
 
   @override
+  Future<PreparationWorkload> getWorkload() async {
+    _requireRemote();
+    return _api.getWorkload(accessToken: await _requireToken());
+  }
+
+  @override
   Future<DeadlinePlan> getPlan(String planId) async {
     _requirePlanId(planId);
     _requireRemote();

@@ -3,6 +3,8 @@ import 'deadline_plan.dart';
 abstract interface class DeadlinePlanRepository {
   Future<DeadlinePlanFeed> getPlans();
 
+  Future<PreparationWorkload> getWorkload();
+
   Future<DeadlinePlan> getPlan(String planId);
 
   Future<DeadlinePlan> propose({

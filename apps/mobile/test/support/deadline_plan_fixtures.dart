@@ -4,6 +4,39 @@ const deadlineRequestId = '33333333-3333-4333-8333-333333333333';
 const deadlineFingerprint =
     'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 
+Map<String, dynamic> preparationWorkloadEnvelope({
+  int? budget = 120,
+  int firstDayReservedMinutes = 50,
+}) =>
+    {
+      'contract_version': 'preparation-workload-v1',
+      'origin': 'authenticated_backend',
+      'generated_at': '2026-07-20T08:00:00Z',
+      'timezone': 'Europe/Berlin',
+      'daily_preparation_budget_minutes': budget,
+      'days': [
+        for (var offset = 0; offset < 7; offset++)
+          {
+            'local_date': DateTime(2026, 7, 20 + offset)
+                .toIso8601String()
+                .split('T')
+                .first,
+            'reserved_preparation_minutes':
+                offset == 0 ? firstDayReservedMinutes : 0,
+            'remaining_budget_minutes': budget == null
+                ? null
+                : (budget - (offset == 0 ? firstDayReservedMinutes : 0))
+                    .clamp(0, budget),
+            'over_budget_minutes': budget == null
+                ? 0
+                : ((offset == 0 ? firstDayReservedMinutes : 0) - budget)
+                    .clamp(0, 30000),
+            'active_plan_count': offset == 0 ? 1 : 0,
+            'fixed_commitment_minutes': offset == 0 ? 90 : 0,
+          },
+      ],
+    };
+
 Map<String, dynamic> deadlinePlanEnvelope({
   String status = 'active',
   bool pending = false,

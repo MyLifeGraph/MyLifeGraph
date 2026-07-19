@@ -11,7 +11,10 @@ import 'support/deadline_plan_fixtures.dart';
 void main() {
   test('read and proposal use exact endpoints, bearer, and body', () async {
     final client = _TrackingApiClient(
-      getResponses: {'/v1/deadline-plans': deadlinePlanFeed()},
+      getResponses: {
+        '/v1/deadline-plans': deadlinePlanFeed(),
+        '/v1/deadline-plans/workload': preparationWorkloadEnvelope(),
+      },
       postResponses: {
         '/v1/deadline-plans/proposals': deadlinePlanEnvelope(status: 'draft'),
       },
@@ -20,16 +23,24 @@ void main() {
     final draft = _draft();
 
     final feed = await repository.getPlans();
+    final workload = await repository.getWorkload();
     final proposed = await repository.propose(
       requestId: deadlineRequestId,
       draft: draft,
     );
 
     expect(feed.plans, hasLength(1));
+    expect(workload.dailyPreparationBudgetMinutes, 120);
     expect(proposed.isDraft, isTrue);
-    expect(client.getCalls, ['/v1/deadline-plans']);
+    expect(
+      client.getCalls,
+      ['/v1/deadline-plans', '/v1/deadline-plans/workload'],
+    );
     expect(client.postCalls, ['/v1/deadline-plans/proposals']);
     expect(client.headersByPath['/v1/deadline-plans'], {
+      'Authorization': 'Bearer account-token',
+    });
+    expect(client.headersByPath['/v1/deadline-plans/workload'], {
       'Authorization': 'Bearer account-token',
     });
     expect(client.bodyByPath['/v1/deadline-plans/proposals'], {
@@ -128,6 +139,10 @@ void main() {
 
     await expectLater(
       nonSynced.getPlans(),
+      throwsA(isA<DeadlinePlanAccessException>()),
+    );
+    await expectLater(
+      nonSynced.getWorkload(),
       throwsA(isA<DeadlinePlanAccessException>()),
     );
     await expectLater(

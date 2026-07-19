@@ -51,6 +51,13 @@ into a primary title, button, field label, or first-line error.
   saved schedule durations, task estimates, and active preparation reservations,
   and because active revisions can replace the projection; it is not presented
   as immutable historical load.
+- The Deadline Planner's separate `Your next 7 days` card names only confirmed
+  preparation reservations as preparation load. Recurring `schedule_items` are
+  labelled `weekly setup commitments`; imported calendar busy time is not shown
+  there. The optional `Daily preparation budget` is described as an explicit
+  account-wide transparent rule, not an AI estimate or inferred free time.
+  Existing over-budget reservations say `Needs review` because changing the
+  setting does not mutate them.
 - State whether a change is automatic, requires confirmation, or cannot change
   data. Do not imply that a preview or recommendation already changed a plan.
 - Keep provider names, model names, contract versions, source manifests, and

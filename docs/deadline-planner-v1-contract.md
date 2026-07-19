@@ -183,10 +183,15 @@ respects:
 - fixed app commitments and confirmed preparation blocks; and
 - current imported busy intervals only when explicitly enabled.
 
-`max_daily_minutes` is a cap for this plan revision, not an account-wide cap
-across multiple active plans. Confirmed blocks from other plans still occupy
-time and cannot overlap, but two plans may together reserve more minutes on one
-date than either plan's individual cap.
+`max_daily_minutes` is always the cap for this plan revision. The user may also
+set one nullable account-wide daily preparation budget in Settings. Without
+that setting, the previous per-plan-only behavior remains unchanged. With it,
+each new proposal subtracts every confirmed block from other plans on the same
+profile-local date and may use only the smaller of the remaining account
+capacity and this plan's remaining per-plan capacity. Confirmed blocks earlier
+on the current local date still consume capacity even when their time interval
+has already ended. Blocks from every plan remain non-overlapping independently
+of either minute cap.
 
 The ordered rule-based planning windows are frozen by
 `best_energy_window`:
@@ -216,6 +221,40 @@ bounded input and deterministic planning fingerprint are the persisted truth.
 Normal reads, calendar imports, Dashboard loads, scheduled refreshes, and focus
 completion never generate or revise a plan.
 
+## Account-Wide Capacity And Seven-Day Workload
+
+The nullable `profiles.daily_preparation_budget_minutes` is explicit user input
+from 25 through 480 in five-minute increments. It is a transparent scheduling
+rule, not an effort estimate, inferred availability, recommendation, or LLM
+output. `null` removes only the account-wide rule; every revision's explicit
+`max_daily_minutes` still applies.
+
+Changing the setting takes the same owner advisory lock as Deadline Planner
+mutations. Confirmation rechecks the candidate revision plus active blocks from
+other plans on each candidate local date while that lock is held. If the budget
+or another plan changed after preview, confirmation fails with exact `409`
+detail `Daily preparation budget is exceeded. Create a fresh preview.` and
+retains the staged revision for review or cancellation. The user must create a
+fresh preview; the backend does not silently shrink or move blocks.
+
+Lowering or removing a budget never edits an existing active revision. Existing
+dates above a newly lowered budget remain truthful overages marked `Needs
+review`; explicit replanning is the only way to replace them. Qualifying Focus
+time continues to reduce the plan's remaining effort at the next proposal, but
+it does not silently release or rewrite an already confirmed reservation.
+
+`GET /v1/deadline-plans/workload` is side-effect free and returns exactly seven
+consecutive profile-local dates starting today under
+`contract_version=preparation-workload-v1` and
+`origin=authenticated_backend`. Each day reports active confirmed preparation
+minutes, distinct active-plan count, nullable remaining account capacity,
+explicit overage, and merged recurring `schedule_items` duration for that ISO
+weekday. The latter is labelled `weekly setup commitments`: it is context, not
+part of the preparation-budget arithmetic. Proposed blocks, task estimates,
+Focus history, imported calendar busy rows, and live provider availability are
+not included. The response therefore does not claim to be a complete free-time
+or total-workload calculation.
+
 ## HTTP Boundary
 
 All routes require the normal verified Supabase bearer token and derive the
@@ -223,6 +262,7 @@ owner only from that principal:
 
 ```text
 GET  /v1/deadline-plans
+GET  /v1/deadline-plans/workload
 GET  /v1/deadline-plans/{plan_id}
 POST /v1/deadline-plans/proposals
 POST /v1/deadline-plans/{plan_id}/confirm
@@ -259,7 +299,8 @@ conflict.
 An ambiguous Flutter result retains the exact submitted request for unchanged
 retry or explicit reload. A stale base revision never overwrites newer state.
 
-The strict detail response exposes exactly one plan identity with both revision
+The workload route uses the separate strict response described above. The
+strict detail response exposes exactly one plan identity with both revision
 counters, nullable
 `active_revision`, nullable `pending_revision`, and derived `progress`, wrapped
 with `contract_version=deadline-plan-v1` and
@@ -271,7 +312,7 @@ at most 50 details and fabricates neither an active nor a pending revision.
 
 ## Persistence And Authority
 
-The canonical tables are:
+The canonical planning tables are:
 
 - `deadline_plans`: owner, source, immutable original estimate and credited
   prior time, current lifecycle, managed-task identity, and active/pending
@@ -286,6 +327,13 @@ The mutation RPCs take the shared owner advisory lock and apply request claim,
 revision/block writes, first-confirm task creation, and plan projection changes
 atomically. Composite owner references and database checks prevent cross-owner
 plan, revision, block, task, or calendar linkage.
+
+The optional account rule is stored on the owner profile. Only the verified
+FastAPI/service-role path may call `set_daily_preparation_budget_v1`; direct
+anonymous or authenticated updates to that profile column are revoked. The
+confirmation trigger provides a database-boundary recheck under the same owner
+lock, so concurrent plan confirmations or a concurrent budget update cannot
+bypass the aggregate cap.
 
 All four tables use forced RLS. Authenticated owners may read the intended plan,
 revision, and block projections but cannot mutate them directly. The request
@@ -307,11 +355,16 @@ title, time, and source fingerprint through owner-scoped Calendar RLS before
 prefilling them; the wizard still requires the user's explicit classification
 and estimate.
 
-The preview shows total estimate, prior spent, currently qualifying focus time,
+Settings exposes the optional account-wide daily budget with explicit rule-based
+copy and no AI claim. Today and Preparation plans show the authenticated seven-
+day workload, including honest loading, unavailable, over-budget, and no-budget
+states; guest/mock makes zero workload calls. The preview shows total estimate,
+prior spent, currently qualifying focus time,
 remaining minutes, dated staged blocks, optional busy-time provenance, and any
 unallocated deficit before confirmation. It names the fixed planning windows,
-the per-plan daily cap, and the manually imported availability boundary.
-Guest/mock shows honest unavailability and makes zero planner calls.
+the per-plan daily cap, the optional account budget, and the manually imported
+availability boundary. Guest/mock shows honest unavailability and makes zero
+planner calls.
 
 An active plan with passed `missed` blocks shows the number of affected blocks
 and still-uncredited minutes. `Replan remaining time` opens the existing staged
@@ -332,7 +385,8 @@ Deadline Planner V1 adds no:
 - automatic task, plan, or block completion from a focus session; or
 - deployed scheduler or background-mobile execution.
 
-It does not claim remote migration state or production calendar availability.
+It does not claim remote migration state, production calendar availability, or
+that the seven-day workload is a complete calendar/free-time model.
 
 ## Verification Contract
 
@@ -343,6 +397,10 @@ Focused backend, Flutter, migration, and browser coverage must prove:
 - deterministic block identity, ordering, totals, timezone/DST behavior,
   conflict avoidance, proposal-time focus accounting, the 366-day horizon,
   bounds, and honest unallocated minutes;
+- nullable account-budget validation, exact idempotent save/removal, ambiguous-
+  response reconciliation, direct-write denial, shared owner locking, other-
+  plan capacity deduction including earlier same-day reservations, and a
+  database confirmation conflict after a changed budget;
 - staged revisions that cannot replace the active revision before confirm;
 - separate current/latest revision counters, latest-based proposal concurrency,
   pending-based confirmation, active-only completion, and cancellation of both
@@ -365,10 +423,13 @@ Focused backend, Flutter, migration, and browser coverage must prove:
   generation from import, Dashboard, scheduler, or focus completion;
 - forced-RLS owner reads, cross-owner isolation, rejected authenticated direct
   writes, backend-only ledger access, and guest/mock zero-call behavior;
+- strict consecutive seven-day workload arithmetic, owner-local dates, merged
+  recurring commitments, honest overage/no-budget/error states, and no imported-
+  calendar or AI implication;
 - account export inclusion for plan/revision/block rows, explicit ledger
   omission, and full-account cascade; and
 - usable retained drafts, review-before-confirmation, semantic controls, and
-  narrow-screen/large-text layout.
+  narrow-screen/large-text layout for both the planner and budget dialog/card.
 
 These requirements define the verification boundary. Documentation or source
 coverage alone is not a claim that the current checkout, local Supabase stack,
@@ -380,3 +441,13 @@ checkout. The browser run reported
 `E2E browser smoke passed for e2e-1784397316@example.test`. This establishes only
 the local deterministic boundary described above; it is not a remote migration,
 provider-calendar, installed-device, notification, or long-term-outcome claim.
+
+On 2026-07-19 the optional account-capacity migration was explicitly applied to
+local Supabase without a reset. The complete FastAPI suite reported
+`763 passed, 1 skipped`; the standard gate and non-reset database preflight each
+passed all `601` Flutter tests with clean analysis and matching migration
+history. The final combined browser run reported
+`E2E browser smoke passed for e2e-1784448992@example.test`. It proves only the
+local deterministic/RLS boundary described above and does not change any remote,
+provider-calendar, installed-device, participant-study, notification, or long-
+term-outcome non-claim.

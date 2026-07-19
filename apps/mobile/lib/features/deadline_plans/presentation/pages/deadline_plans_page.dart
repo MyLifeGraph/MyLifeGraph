@@ -17,6 +17,7 @@ import '../../application/deadline_plan_controller.dart';
 import '../../domain/deadline_calendar_prefill.dart';
 import '../../domain/deadline_plan.dart';
 import '../providers/deadline_plan_providers.dart';
+import '../widgets/preparation_workload_card.dart';
 
 class DeadlinePlansPage extends ConsumerStatefulWidget {
   const DeadlinePlansPage({
@@ -66,6 +67,7 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
       );
     }
     final state = ref.watch(deadlinePlanControllerProvider);
+    final workload = ref.watch(preparationWorkloadProvider);
     final controller = ref.read(deadlinePlanControllerProvider.notifier);
     final sourcePrefill = widget.sourceCalendarEventId == null
         ? null
@@ -81,11 +83,16 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
       actions: [
         IconButton(
           tooltip: 'Reload preparation plans',
-          onPressed: state.isBusy ? null : controller.load,
+          onPressed: state.isBusy
+              ? null
+              : () {
+                  ref.invalidate(preparationWorkloadProvider);
+                  controller.load();
+                },
           icon: const Icon(Icons.refresh),
         ),
       ],
-      children: _children(state, controller, sourcePrefill),
+      children: _children(state, controller, sourcePrefill, workload),
     );
   }
 
@@ -93,6 +100,7 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
     DeadlinePlanState state,
     DeadlinePlanController controller,
     AsyncValue<DeadlineCalendarPrefill>? sourcePrefill,
+    AsyncValue<PreparationWorkload> workload,
   ) {
     if (state.isLoading) {
       return const [
@@ -157,6 +165,11 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
           onAction: _retryTargetPlan,
         ),
       if (sourcePrefill != null) _sourcePrefillCard(sourcePrefill),
+      PreparationWorkloadCard(
+        value: workload,
+        onRetry: () => ref.invalidate(preparationWorkloadProvider),
+        onOpenSettings: () => context.go(AppRoutes.settings),
+      ),
       AppCard(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -412,6 +425,7 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
             ? loadedPrefill?.startsOn
             : null;
     DeadlinePlanProposalDraft? draft;
+    final preparationWorkload = ref.read(preparationWorkloadProvider);
     try {
       draft = await showModalBottomSheet<DeadlinePlanProposalDraft>(
         context: context,
@@ -423,6 +437,9 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
               sourcePlan?.latestRevision ?? retainedDraft?.baseRevision ?? 0,
           existing: existing,
           trackedFocusMinutes: sourcePlan?.progress.trackedFocusMinutes ?? 0,
+          accountDailyPreparationBudgetKnown: preparationWorkload.hasValue,
+          accountDailyPreparationBudgetMinutes:
+              preparationWorkload.valueOrNull?.dailyPreparationBudgetMinutes,
           retainedDraft: retainedDraft,
           initialTitle:
               existing?.title ?? loadedPrefill?.title ?? widget.initialTitle,
@@ -608,6 +625,7 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
     }
     ref.invalidate(dashboardSnapshotProvider);
     ref.invalidate(todayBriefingProvider);
+    ref.invalidate(preparationWorkloadProvider);
   }
 
   void _showMessage(String message) {
@@ -1044,6 +1062,8 @@ class _DeadlinePlanEditorSheet extends StatefulWidget {
     required this.baseRevision,
     required this.existing,
     required this.trackedFocusMinutes,
+    required this.accountDailyPreparationBudgetKnown,
+    required this.accountDailyPreparationBudgetMinutes,
     required this.retainedDraft,
     required this.initialTitle,
     required this.initialDeadlineAt,
@@ -1059,6 +1079,8 @@ class _DeadlinePlanEditorSheet extends StatefulWidget {
   final int baseRevision;
   final DeadlinePlanRevision? existing;
   final int trackedFocusMinutes;
+  final bool accountDailyPreparationBudgetKnown;
+  final int? accountDailyPreparationBudgetMinutes;
   final DeadlinePlanProposalDraft? retainedDraft;
   final String? initialTitle;
   final DateTime? initialDeadlineAt;
@@ -1454,6 +1476,15 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
           decoration: const InputDecoration(
             labelText: 'Maximum preparation minutes per day for this plan',
           ),
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        Text(
+          !widget.accountDailyPreparationBudgetKnown
+              ? 'The account-wide budget could not be read here. The backend will still apply any saved total budget.'
+              : widget.accountDailyPreparationBudgetMinutes == null
+                  ? 'No account-wide budget is set. Only this plan cap applies; you can add a total daily limit in Settings.'
+                  : 'Account-wide budget: ${_duration(widget.accountDailyPreparationBudgetMinutes!)} per day. Confirmed blocks from other plans are deducted before this plan is placed.',
+          style: Theme.of(context).textTheme.bodySmall,
         ),
         const SizedBox(height: AppSpacing.md),
         DropdownButtonFormField<int>(

@@ -9,7 +9,9 @@ from app.repositories.account_repository import (
     AccountExportSourceTooLargeError,
     AccountExportTable,
     AccountPersistenceError,
+    AccountPreparationBudgetUpdateOutcomeUnknownError,
     AccountProfileUpdateOutcomeUnknownError,
+    StoredPreparationBudget,
     SupabaseAccountRepository,
 )
 
@@ -55,12 +57,19 @@ class Client:
         return self.rpc_result
 
 
-def _http_error(status_code: int = 500) -> httpx.HTTPStatusError:
+def _http_error(
+    status_code: int = 500,
+    *,
+    code: str | None = None,
+) -> httpx.HTTPStatusError:
     request = httpx.Request("POST", "http://test/rest/v1/rpc/delete_account_v1")
+    payload = {"message": "secret"}
+    if code is not None:
+        payload["code"] = code
     response = httpx.Response(
         status_code,
         request=request,
-        json={"message": "secret"},
+        json=payload,
     )
     return httpx.HTTPStatusError(
         "secret upstream detail",
@@ -136,6 +145,115 @@ def test_timezone_update_response_loss_converges_by_exact_readback() -> None:
             None,
         ),
     ]
+
+
+@pytest.mark.parametrize("minutes", [120, None])
+def test_preparation_budget_uses_owner_scoped_atomic_rpc(minutes: int | None) -> None:
+    client = Client()
+    client.rpc_result = {"daily_preparation_budget_minutes": minutes}
+    repository = SupabaseAccountRepository(client)  # type: ignore[arg-type]
+
+    result = asyncio.run(
+        repository.update_preparation_budget(user_id="owner-1", minutes=minutes),
+    )
+
+    assert result == StoredPreparationBudget(minutes=minutes)
+    assert client.rpc_calls == [
+        (
+            "set_daily_preparation_budget_v1",
+            {
+                "p_user_id": "owner-1",
+                "p_daily_preparation_budget_minutes": minutes,
+            },
+        ),
+    ]
+
+
+def test_preparation_budget_response_loss_replays_exact_idempotent_rpc() -> None:
+    client = Client()
+    client.rpc_outcomes = [
+        httpx.ReadError("response lost"),
+        {"daily_preparation_budget_minutes": 180},
+    ]
+    repository = SupabaseAccountRepository(client)  # type: ignore[arg-type]
+
+    result = asyncio.run(
+        repository.update_preparation_budget(user_id="owner-1", minutes=180),
+    )
+
+    assert result == StoredPreparationBudget(minutes=180)
+    assert client.rpc_calls == [
+        (
+            "set_daily_preparation_budget_v1",
+            {
+                "p_user_id": "owner-1",
+                "p_daily_preparation_budget_minutes": 180,
+            },
+        ),
+    ] * 2
+    assert client.select_calls == []
+
+
+def test_preparation_budget_ambiguous_result_requires_exact_readback() -> None:
+    client = Client()
+    client.rpc_outcomes = [{"wrong": 120}, {"wrong": 120}]
+    client.select_rows["profiles"] = [
+        {"daily_preparation_budget_minutes": 90},
+    ]
+    repository = SupabaseAccountRepository(client)  # type: ignore[arg-type]
+
+    with pytest.raises(
+        AccountPreparationBudgetUpdateOutcomeUnknownError,
+        match="determined",
+    ):
+        asyncio.run(
+            repository.update_preparation_budget(user_id="owner-1", minutes=120),
+        )
+
+    assert client.select_calls == [
+        (
+            "profiles",
+            {
+                "select": "daily_preparation_budget_minutes",
+                "id": "eq.owner-1",
+                "limit": "1",
+            },
+            None,
+        ),
+    ]
+
+
+def test_preparation_budget_distinguishes_missing_profile_from_missing_rpc() -> None:
+    missing_profile = Client()
+    missing_profile.rpc_error = _http_error(404, code="PT404")
+    repository = SupabaseAccountRepository(  # type: ignore[arg-type]
+        missing_profile,
+    )
+    assert (
+        asyncio.run(
+            repository.update_preparation_budget(
+                user_id="owner-1",
+                minutes=120,
+            ),
+        )
+        is None
+    )
+
+    missing_rpc = Client()
+    missing_rpc.rpc_error = _http_error(404, code="PGRST202")
+    missing_rpc.select_rows["profiles"] = [
+        {"daily_preparation_budget_minutes": 120},
+    ]
+    repository = SupabaseAccountRepository(missing_rpc)  # type: ignore[arg-type]
+    with pytest.raises(AccountPersistenceError, match="unavailable"):
+        asyncio.run(
+            repository.update_preparation_budget(
+                user_id="owner-1",
+                minutes=120,
+            ),
+        )
+    assert len(missing_rpc.rpc_calls) == 1
+    assert missing_rpc.select_calls == []
 
 
 def test_timezone_update_response_loss_has_explicit_unknown_failed_readback() -> None:

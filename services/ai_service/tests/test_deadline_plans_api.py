@@ -1,5 +1,5 @@
 import asyncio
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, timedelta
 from uuid import UUID
 
 import httpx
@@ -11,6 +11,8 @@ from app.models.deadline_plans import (
     DeadlinePlanProgress,
     DeadlinePlanResponse,
     DeadlinePlansResponse,
+    PreparationWorkloadDay,
+    PreparationWorkloadResponse,
 )
 from app.services.deadline_plan_service import DeadlinePlanConflictError
 
@@ -43,6 +45,27 @@ class Service:
     async def get_plan(self, *, user_id, plan_id):
         self.calls.append(("get", user_id, plan_id))
         return _response_envelope()
+
+    async def get_workload(self, *, user_id):
+        self.calls.append(("workload", user_id))
+        return PreparationWorkloadResponse(
+            contract_version="preparation-workload-v1",
+            origin="authenticated_backend",
+            generated_at=NOW,
+            timezone="UTC",
+            daily_preparation_budget_minutes=120,
+            days=[
+                PreparationWorkloadDay(
+                    local_date=date(2026, 7, 20) + timedelta(days=offset),
+                    reserved_preparation_minutes=0,
+                    remaining_budget_minutes=120,
+                    over_budget_minutes=0,
+                    active_plan_count=0,
+                    fixed_commitment_minutes=0,
+                )
+                for offset in range(7)
+            ],
+        )
 
     async def propose(self, *, user_id, request):
         self.calls.append(("proposal", user_id, request))
@@ -143,6 +166,14 @@ def test_deadline_routes_derive_owner_and_keep_exact_envelopes() -> None:
     assert detail.status_code == 200
     assert detail.json()["plan"]["status"] == "cancelled"
     assert detail_service.calls == [("get", USER_ID, PLAN_ID)]
+
+    workload, workload_service = asyncio.run(
+        _request("GET", "/v1/deadline-plans/workload"),
+    )
+    assert workload.status_code == 200
+    assert workload.json()["contract_version"] == "preparation-workload-v1"
+    assert len(workload.json()["days"]) == 7
+    assert workload_service.calls == [("workload", USER_ID)]
 
 
 def test_proposal_route_is_strict_and_maps_conflict() -> None:

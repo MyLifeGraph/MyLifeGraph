@@ -1,6 +1,6 @@
 import asyncio
 import json
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
@@ -8,6 +8,7 @@ from app.models.deadline_plans import DeadlinePlanProposalRequest
 from app.repositories.deadline_plan_repository import (
     DeadlinePlanProjection,
     DeadlinePlanningContext,
+    PreparationWorkloadContext,
 )
 from app.services.deadline_plan_service import (
     DeadlinePlanService,
@@ -49,18 +50,24 @@ def _request(**overrides) -> DeadlinePlanProposalRequest:
     return DeadlinePlanProposalRequest.model_validate_json(json.dumps(values))
 
 
-def _context(*, schedule_items=None) -> DeadlinePlanningContext:
+def _context(
+    *,
+    schedule_items=None,
+    confirmed_blocks=None,
+    daily_preparation_budget_minutes=None,
+) -> DeadlinePlanningContext:
     return DeadlinePlanningContext(
         timezone="UTC",
         best_energy_window="variable",
         schedule_items=schedule_items or [],
-        confirmed_blocks=[],
+        confirmed_blocks=confirmed_blocks or [],
         timed_calendar_events=[],
         all_day_calendar_events=[],
         source_calendar_event=None,
         calendar_availability_current=False,
         availability_connection_id=None,
         availability_import_id=None,
+        daily_preparation_budget_minutes=daily_preparation_budget_minutes,
     )
 
 
@@ -118,6 +125,95 @@ def test_planner_uses_exact_shortfall_instead_of_buffer_or_overlap() -> None:
     # Only July 20-21 are outside the hard one-day buffer; the first is busy.
     assert sum(minutes for _, _, minutes in blocks) == 50
     assert blocks[0][0].date() == date(2026, 7, 21)
+
+
+def test_planner_deducts_other_confirmed_plans_from_account_daily_budget() -> None:
+    request = _request(
+        deadline_at=datetime(2026, 7, 20, 21, tzinfo=UTC),
+        planning_start_on=date(2026, 7, 20),
+        buffer_days=0,
+        estimated_total_minutes=100,
+        max_daily_minutes=100,
+    )
+    context = _context(
+        daily_preparation_budget_minutes=120,
+        confirmed_blocks=[
+            {
+                "plan_id": "another-plan",
+                "local_date": "2026-07-20",
+                "planned_minutes": 80,
+                "starts_at": "2026-07-20T06:00:00+00:00",
+                "ends_at": "2026-07-20T07:20:00+00:00",
+            },
+        ],
+    )
+
+    blocks = _plan_blocks(
+        request=request,
+        context=context,
+        zone=ZoneInfo("UTC"),
+        local_now=NOW,
+        local_deadline=request.deadline_at,
+        effective_start=request.planning_start_on,
+        remaining_minutes=100,
+    )
+
+    assert sum(minutes for _, _, minutes in blocks) == 40
+    assert all(
+        starts_at >= datetime(2026, 7, 20, 9, tzinfo=UTC)
+        for starts_at, _, _ in blocks
+    )
+
+
+class WorkloadRepository:
+    async def load_workload_context(self, *, user_id, generated_at):
+        assert user_id == "owner"
+        assert generated_at == NOW
+        return PreparationWorkloadContext(
+            timezone="UTC",
+            daily_preparation_budget_minutes=120,
+            schedule_items=[
+                {
+                    "weekday": 1,
+                    "starts_at": "09:00:00",
+                    "ends_at": "11:00:00",
+                },
+                {
+                    "weekday": 1,
+                    "starts_at": "10:30:00",
+                    "ends_at": "12:00:00",
+                },
+            ],
+            confirmed_blocks=[
+                {
+                    "plan_id": "plan-a",
+                    "local_date": "2026-07-20",
+                    "planned_minutes": 80,
+                },
+                {
+                    "plan_id": "plan-b",
+                    "local_date": "2026-07-20",
+                    "planned_minutes": 60,
+                },
+            ],
+        )
+
+
+def test_workload_reports_exact_seven_days_and_marks_existing_overage() -> None:
+    service = DeadlinePlanService(repository=WorkloadRepository(), now=lambda: NOW)
+
+    result = asyncio.run(service.get_workload(user_id="owner"))
+
+    assert result.contract_version == "preparation-workload-v1"
+    assert [day.local_date for day in result.days] == [
+        date(2026, 7, 20) + timedelta(days=offset)
+        for offset in range(7)
+    ]
+    assert result.days[0].reserved_preparation_minutes == 140
+    assert result.days[0].remaining_budget_minutes == 0
+    assert result.days[0].over_budget_minutes == 20
+    assert result.days[0].active_plan_count == 2
+    assert result.days[0].fixed_commitment_minutes == 180
 
 
 def test_zero_buffer_can_use_deadline_day_but_never_pass_deadline_instant() -> None:

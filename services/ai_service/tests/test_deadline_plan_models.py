@@ -6,7 +6,10 @@ from uuid import UUID
 import pytest
 from pydantic import ValidationError
 
-from app.models.deadline_plans import DeadlinePlanProposalRequest
+from app.models.deadline_plans import (
+    DeadlinePlanProposalRequest,
+    PreparationWorkloadResponse,
+)
 
 
 def _proposal() -> dict[str, object]:
@@ -86,3 +89,38 @@ def test_proposal_enforces_estimate_and_daily_capacity_relationships() -> None:
     for invalid in (prior_too_large, daily_too_small):
         with pytest.raises(ValidationError):
             DeadlinePlanProposalRequest.model_validate_json(json.dumps(invalid))
+
+
+def test_workload_contract_requires_seven_consecutive_consistent_days() -> None:
+    payload = {
+        "contract_version": "preparation-workload-v1",
+        "origin": "authenticated_backend",
+        "generated_at": "2026-07-20T08:00:00Z",
+        "timezone": "Europe/Berlin",
+        "daily_preparation_budget_minutes": 120,
+        "days": [
+            {
+                "local_date": f"2026-07-{20 + offset:02d}",
+                "reserved_preparation_minutes": 50 if offset == 0 else 0,
+                "remaining_budget_minutes": 70 if offset == 0 else 120,
+                "over_budget_minutes": 0,
+                "active_plan_count": 1 if offset == 0 else 0,
+                "fixed_commitment_minutes": 90 if offset == 0 else 0,
+            }
+            for offset in range(7)
+        ],
+    }
+
+    parsed = PreparationWorkloadResponse.model_validate_json(json.dumps(payload))
+    assert parsed.days[0].remaining_budget_minutes == 70
+
+    for mutate in (
+        lambda value: value.update(daily_preparation_budget_minutes=121),
+        lambda value: value["days"][0].update(remaining_budget_minutes=71),
+        lambda value: value["days"][1].update(local_date="2026-07-23"),
+        lambda value: value.update(extra="not-v1"),
+    ):
+        invalid = deepcopy(payload)
+        mutate(invalid)
+        with pytest.raises(ValidationError):
+            PreparationWorkloadResponse.model_validate_json(json.dumps(invalid))

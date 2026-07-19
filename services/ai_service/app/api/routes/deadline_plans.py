@@ -10,6 +10,7 @@ from app.models.deadline_plans import (
     DeadlinePlanProposalRequest,
     DeadlinePlanResponse,
     DeadlinePlansResponse,
+    PreparationWorkloadResponse,
 )
 from app.repositories.deadline_plan_repository import SupabaseDeadlinePlanRepository
 from app.services.deadline_plan_service import (
@@ -47,6 +48,29 @@ async def list_deadline_plans(
     service: DeadlinePlanService = Depends(get_deadline_plan_service),
 ) -> DeadlinePlansResponse:
     return await service.list_plans(user_id=principal.user_id)
+
+
+@router.get(
+    "/workload",
+    response_model=PreparationWorkloadResponse,
+    response_model_exclude_none=False,
+)
+async def get_preparation_workload(
+    principal: Principal = Depends(get_current_principal),
+    service: DeadlinePlanService = Depends(get_deadline_plan_service),
+) -> PreparationWorkloadResponse:
+    try:
+        return await service.get_workload(user_id=principal.user_id)
+    except DeadlinePlanNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+    except DeadlinePlanConflictError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc),
+        ) from exc
 
 
 @router.get(

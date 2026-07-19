@@ -16,7 +16,10 @@ from app.models.account import (
     AccountExportLedgerPolicy,
     AccountExportLimits,
     AccountExportResponse,
+    AccountPreparationBudgetResponse,
     AccountProfileResponse,
+    DAILY_PREPARATION_BUDGET_MINUTES_MAX,
+    DAILY_PREPARATION_BUDGET_MINUTES_MIN,
 )
 from app.repositories.account_repository import (
     AccountExportSourceTooLargeError,
@@ -33,6 +36,10 @@ ACCOUNT_EXPORT_WATERMARK_MAX_BYTES = 4096
 
 
 class InvalidAccountTimezoneError(ValueError):
+    pass
+
+
+class InvalidPreparationBudgetError(ValueError):
     pass
 
 
@@ -66,7 +73,8 @@ def _table(
 ACCOUNT_EXPORT_TABLES = (
     _table(
         "profiles",
-        "id,email,display_name,timezone,role,auth_provider,"
+        "id,email,display_name,timezone,daily_preparation_budget_minutes,"
+        "role,auth_provider,"
         "onboarding_completed_at,setup_revision,created_at,updated_at",
         owner_column="id",
         cursor_column="id",
@@ -204,6 +212,23 @@ class AccountService:
         if stored is None:
             raise AccountNotFoundError("Account profile is unavailable.")
         return AccountProfileResponse(timezone=stored)
+
+    async def update_preparation_budget(
+        self,
+        *,
+        user_id: str,
+        minutes: int | None,
+    ) -> AccountPreparationBudgetResponse:
+        _validate_preparation_budget(minutes)
+        stored = await self._repository.update_preparation_budget(
+            user_id=user_id,
+            minutes=minutes,
+        )
+        if stored is None:
+            raise AccountNotFoundError("Account profile is unavailable.")
+        return AccountPreparationBudgetResponse(
+            daily_preparation_budget_minutes=stored.minutes,
+        )
 
     async def export_account(self, *, user_id: str) -> PreparedAccountExport:
         _validate_export_configuration()
@@ -363,6 +388,21 @@ def _validate_timezone(value: str) -> None:
         raise InvalidAccountTimezoneError("timezone must be a valid IANA name") from exc
     if zone.key != value:
         raise InvalidAccountTimezoneError("timezone must be a valid IANA name")
+
+
+def _validate_preparation_budget(value: int | None) -> None:
+    if value is None:
+        return
+    if (
+        type(value) is not int
+        or value < DAILY_PREPARATION_BUDGET_MINUTES_MIN
+        or value > DAILY_PREPARATION_BUDGET_MINUTES_MAX
+        or value % 5 != 0
+    ):
+        raise InvalidPreparationBudgetError(
+            "daily preparation budget must be 25 through 480 minutes "
+            "in five-minute increments",
+        )
 
 
 def _validate_export_configuration() -> None:

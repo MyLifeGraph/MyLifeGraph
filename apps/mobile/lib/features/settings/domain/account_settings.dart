@@ -49,6 +49,14 @@ const accountExportV1OmittedTables = <String, String>{
 const accountExportV1MaxRowsPerTable = 10000;
 const accountExportV1MaxTotalRows = 50000;
 const accountExportV1MaxJsonBytes = 8 * 1024 * 1024;
+const dailyPreparationBudgetMinimumMinutes = 25;
+const dailyPreparationBudgetMaximumMinutes = 480;
+
+bool isValidDailyPreparationBudget(int? minutes) =>
+    minutes == null ||
+    minutes >= dailyPreparationBudgetMinimumMinutes &&
+        minutes <= dailyPreparationBudgetMaximumMinutes &&
+        minutes % 5 == 0;
 
 const supportedAccountTimezones = <String>[
   'UTC',
@@ -130,6 +138,16 @@ class AccountProfileUpdateOutcomeUnknownException
 
 class AccountTimezoneRejectedException extends AccountSettingsException {
   const AccountTimezoneRejectedException(super.message);
+}
+
+class AccountPreparationBudgetRejectedException
+    extends AccountSettingsException {
+  const AccountPreparationBudgetRejectedException(super.message);
+}
+
+class AccountPreparationBudgetUpdateOutcomeUnknownException
+    extends AccountSettingsException {
+  const AccountPreparationBudgetUpdateOutcomeUnknownException(super.message);
 }
 
 class AccountExportTooLargeException extends AccountSettingsException {

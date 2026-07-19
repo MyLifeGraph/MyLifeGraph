@@ -1,9 +1,10 @@
 # V1 Account Controls Contract
 
 This document defines the first complete account-management boundary for a
-real authenticated MyLifeGraph account. It covers profile timezone changes,
-portable JSON export, password recovery, and permanent account deletion. Guest
-and mock sessions remain local and never call these endpoints.
+real authenticated MyLifeGraph account. It covers profile timezone changes, an
+optional account-wide daily preparation budget, portable JSON export, password
+recovery, and permanent account deletion. Guest and mock sessions remain local
+and never call these endpoints.
 
 ## Trust Boundary
 
@@ -45,6 +46,39 @@ privilege. New canonical and still-present legacy Auth projections default to
 An ambiguous PATCH is retried once with the same idempotent value. Only an exact
 retry representation or persisted-value readback may then converge to success;
 an unresolved outcome is an explicit `502`.
+
+## Daily Preparation Budget
+
+`PATCH /v1/account/preparation-budget` accepts exactly one nullable field:
+
+```json
+{"daily_preparation_budget_minutes":120}
+```
+
+The value is either `null` or an integer from 25 through 480 in five-minute
+increments. `null` removes the account-wide rule and preserves Deadline
+Planner's per-plan daily caps. Any number is explicit user input: it is neither
+an effort estimate nor inferred availability, and no LLM chooses or changes it.
+The strict response repeats exactly the persisted nullable field.
+
+FastAPI derives the profile id only from the verified bearer and calls the
+service-role-only `set_daily_preparation_budget_v1` RPC. Anonymous and
+authenticated Data API callers cannot update the profile column directly. The
+RPC takes the shared owner advisory lock used by Deadline Planner confirmation,
+making a concurrent budget update and confirmation serializable. The planner's
+database trigger then rechecks aggregate active preparation on the candidate
+revision's local dates before activation.
+
+The setting is idempotent. After a transport, retryable server, or invalid-shape
+result, FastAPI retries the same nullable value once under the owner lock. An
+exact retry result or exact owner-scoped profile readback may converge to
+success; an unresolved result returns explicit outcome-unknown `502` rather
+than claiming the setting was saved. Changing the setting never mutates
+existing plan revisions. A lower value can therefore expose truthful `Needs
+review` overages until the student explicitly replans.
+
+The profile field is included in Account Export as part of the existing
+owner-scoped `profiles` row. It grants no new direct profile mutation authority.
 
 ## Account Export
 
@@ -174,17 +208,22 @@ deletion.
   dedicated temporary source best-effort.
 - Account deletion is permanent and has no undo, retention recovery, or remote
   provider-calendar deletion behavior.
+- The preparation budget is a transparent limit over confirmed Deadline
+  Planner reservations, not a prediction of capacity, a complete calendar/free-
+  time calculation, or authority to rewrite existing plans.
 - Guest data has no synced account to export or delete. Guest Setup is not
   silently migrated into a later account.
 
 ## Verification Boundary
 
 Standard tests cover strict models, owner derivation, ambiguous-operation
-replay, streamed export bounds/ownership/keyset behavior, migration grants,
-Calendar/Deadline Planner/focus/legacy lock ordering, planner product-row
-inclusion and ledger omission, full planner cascade, legacy mutation freeze,
-Flutter contract parsing, recovery state, theme persistence, and account-
-control widgets. A live
+replay, exact nullable budget persistence/readback, five-minute bounds, direct
+profile-write denial, shared owner locking, streamed export bounds/ownership/
+keyset behavior, migration grants, Calendar/Deadline Planner/focus/legacy lock
+ordering, planner product-row inclusion and ledger omission, full planner
+cascade, legacy mutation freeze, Flutter contract parsing, recovery state,
+theme persistence, and account-control widgets including 320-pixel/200-percent
+text scaling. A live
 deletion requires an intentionally disposable local account and must never be
 performed as part of a non-destructive audit or against an unconfirmed remote
 project.

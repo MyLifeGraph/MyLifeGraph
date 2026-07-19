@@ -15,6 +15,64 @@ void main() {
     expect(plan.progress.remainingMinutes, 245);
   });
 
+  test('workload requires exact seven-day provenance and budget arithmetic',
+      () {
+    final workload = PreparationWorkload.fromJson(
+      preparationWorkloadEnvelope(firstDayReservedMinutes: 140),
+    );
+
+    expect(workload.days, hasLength(7));
+    expect(workload.days.first.remainingBudgetMinutes, 0);
+    expect(workload.days.first.overBudgetMinutes, 20);
+    expect(workload.daysNeedingReview, 1);
+
+    final invalidCases = [
+      preparationWorkloadEnvelope()..['origin'] = 'local_demo',
+      preparationWorkloadEnvelope()..['daily_preparation_budget_minutes'] = 121,
+      preparationWorkloadEnvelope()
+        ..['days'] = [
+          ...(preparationWorkloadEnvelope()['days'] as List).take(6),
+        ],
+      preparationWorkloadEnvelope()
+        ..['days'] = [
+          for (final day in preparationWorkloadEnvelope()['days'] as List)
+            Map<String, dynamic>.from(day as Map),
+        ],
+    ];
+    ((invalidCases.last['days'] as List).first
+        as Map<String, dynamic>)['remaining_budget_minutes'] = 71;
+
+    for (final invalid in invalidCases) {
+      expect(
+        () => PreparationWorkload.fromJson(invalid),
+        throwsA(isA<DeadlinePlanContractException>()),
+      );
+    }
+  });
+
+  test('workload keeps consecutive profile dates stable across DST', () {
+    final json = preparationWorkloadEnvelope();
+    final days = json['days'] as List;
+    for (var offset = 0; offset < days.length; offset++) {
+      (days[offset] as Map<String, dynamic>)['local_date'] = DateTime.utc(
+        2026,
+        3,
+        27 + offset,
+      ).toIso8601String().split('T').first;
+    }
+
+    final workload = PreparationWorkload.fromJson(json);
+
+    expect(
+      workload.days.map((day) => day.localDate.isUtc),
+      everyElement(isTrue),
+    );
+    expect(
+      workload.days.map((day) => day.localDate.day),
+      orderedEquals([27, 28, 29, 30, 31, 1, 2]),
+    );
+  });
+
   test('proposal payload has exact keys and permits explicit busy periods', () {
     final draft = DeadlinePlanProposalDraft(
       planId: deadlinePlanId,

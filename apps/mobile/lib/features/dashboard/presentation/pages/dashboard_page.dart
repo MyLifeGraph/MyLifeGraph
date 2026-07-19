@@ -16,6 +16,9 @@ import '../../../briefings/domain/daily_briefing.dart';
 import '../../../briefings/domain/decision_feedback.dart';
 import '../../../briefings/presentation/providers/briefing_providers.dart';
 import '../../../briefings/presentation/widgets/today_briefing_section.dart';
+import '../../../deadline_plans/domain/deadline_plan.dart';
+import '../../../deadline_plans/presentation/providers/deadline_plan_providers.dart';
+import '../../../deadline_plans/presentation/widgets/preparation_workload_card.dart';
 import '../../../optimization/domain/entities/recommendation_feed.dart';
 import '../../../optimization/presentation/providers/optimization_providers.dart';
 import '../../../quick_action/data/habit_completion_supabase_data_source.dart';
@@ -57,6 +60,9 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
     final recommendations = ref.watch(recommendationFeedProvider);
     final briefing = ref.watch(todayBriefingProvider);
     final capabilities = ref.watch(appSurfaceCapabilitiesProvider);
+    final workload = capabilities.canUseDeadlinePlanner
+        ? ref.watch(preparationWorkloadProvider)
+        : null;
 
     return snapshot.when(
       loading: () => const Center(child: CircularProgressIndicator()),
@@ -67,6 +73,8 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
         snapshot: data,
         recommendations: recommendations,
         briefing: briefing,
+        workload: workload,
+        onRetryWorkload: () => ref.invalidate(preparationWorkloadProvider),
         isGeneratingBriefing: _isGeneratingBriefing,
         briefingGenerationError: _briefingGenerationError,
         executingBriefingActionIds: _executingBriefingActionIds,
@@ -665,6 +673,8 @@ class _DashboardHome extends StatelessWidget {
     required this.snapshot,
     required this.recommendations,
     required this.briefing,
+    required this.workload,
+    required this.onRetryWorkload,
     required this.isGeneratingBriefing,
     required this.briefingGenerationError,
     required this.executingBriefingActionIds,
@@ -706,6 +716,8 @@ class _DashboardHome extends StatelessWidget {
   final DashboardSnapshot snapshot;
   final AsyncValue<RecommendationFeed> recommendations;
   final AsyncValue<BriefingFeed> briefing;
+  final AsyncValue<PreparationWorkload>? workload;
+  final VoidCallback onRetryWorkload;
   final bool isGeneratingBriefing;
   final String? briefingGenerationError;
   final Set<String> executingBriefingActionIds;
@@ -809,6 +821,18 @@ class _DashboardHome extends StatelessWidget {
                             onAddMorning: onAddMorning,
                             onAddEvening: onAddEvening,
                           ),
+                          if (workload != null) ...[
+                            const SizedBox(height: AppSpacing.md),
+                            PreparationWorkloadCard(
+                              value: workload!,
+                              compact: true,
+                              onRetry: onRetryWorkload,
+                              onOpenSettings: () =>
+                                  context.go(AppRoutes.settings),
+                              onOpenPlans: () =>
+                                  context.go(AppRoutes.preparationPlans),
+                            ),
+                          ],
                           if (canUseWeeklyReview) ...[
                             const SizedBox(height: AppSpacing.md),
                             _WeeklyReviewEntryCard(

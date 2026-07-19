@@ -42,6 +42,15 @@ void main() {
     );
     expect(find.text('Local guest'), findsOneWidget);
     expect(find.text('Setup and commitments'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('daily-preparation-budget-setting')),
+      findsOneWidget,
+    );
+    await tester.scrollUntilVisible(
+      find.text('In-app reminders'),
+      180,
+      scrollable: find.byType(Scrollable).first,
+    );
     expect(find.text('In-app reminders'), findsOneWidget);
     await tester.scrollUntilVisible(
       find.text('Calendar import (optional)'),
@@ -72,7 +81,7 @@ void main() {
     expect(find.text('Delete account'), findsOneWidget);
     expect(
       find.text('Available only for a synced account.'),
-      findsOneWidget,
+      findsNWidgets(2),
     );
     expect(find.text('Alert rules'), findsNothing);
     expect(find.text('Coach behavior'), findsNothing);

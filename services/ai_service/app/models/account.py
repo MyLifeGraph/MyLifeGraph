@@ -53,6 +53,8 @@ ACCOUNT_EXPORT_OMITTED_TABLES = {
 ACCOUNT_EXPORT_MAX_ROWS_PER_TABLE = 10_000
 ACCOUNT_EXPORT_MAX_TOTAL_ROWS = 50_000
 ACCOUNT_EXPORT_MAX_JSON_BYTES = 8 * 1024 * 1024
+DAILY_PREPARATION_BUDGET_MINUTES_MIN = 25
+DAILY_PREPARATION_BUDGET_MINUTES_MAX = 480
 
 
 class AccountProfileUpdateRequest(BaseModel):
@@ -72,6 +74,33 @@ class AccountProfileResponse(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
 
     timezone: str = Field(min_length=1, max_length=100)
+
+
+class AccountPreparationBudgetUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+
+    daily_preparation_budget_minutes: int | None = Field(
+        ge=DAILY_PREPARATION_BUDGET_MINUTES_MIN,
+        le=DAILY_PREPARATION_BUDGET_MINUTES_MAX,
+    )
+
+    @field_validator("daily_preparation_budget_minutes")
+    @classmethod
+    def require_five_minute_increment(cls, value: int | None) -> int | None:
+        if value is not None and value % 5 != 0:
+            raise ValueError(
+                "daily_preparation_budget_minutes must use five-minute increments",
+            )
+        return value
+
+
+class AccountPreparationBudgetResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+
+    daily_preparation_budget_minutes: int | None = Field(
+        ge=DAILY_PREPARATION_BUDGET_MINUTES_MIN,
+        le=DAILY_PREPARATION_BUDGET_MINUTES_MAX,
+    )
 
 
 class AccountDeleteRequest(BaseModel):

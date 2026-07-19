@@ -1,4 +1,5 @@
 const deadlinePlanContractVersion = 'deadline-plan-v1';
+const preparationWorkloadContractVersion = 'preparation-workload-v1';
 
 enum DeadlinePlanKind {
   exam('exam'),
@@ -94,6 +95,192 @@ enum DeadlinePlanBlockState {
     }
     return null;
   }
+}
+
+class PreparationWorkload {
+  PreparationWorkload({
+    required this.generatedAt,
+    required this.timezone,
+    required this.dailyPreparationBudgetMinutes,
+    required List<PreparationWorkloadDay> days,
+  }) : days = List.unmodifiable(days) {
+    if (days.length != 7 ||
+        dailyPreparationBudgetMinutes != null &&
+            (dailyPreparationBudgetMinutes! < 25 ||
+                dailyPreparationBudgetMinutes! > 480 ||
+                dailyPreparationBudgetMinutes! % 5 != 0)) {
+      throw const DeadlinePlanContractException(
+        'Preparation workload values are invalid.',
+      );
+    }
+    for (var index = 0; index < days.length; index++) {
+      final day = days[index];
+      if (index > 0 &&
+          day.localDate.difference(days[index - 1].localDate).inDays != 1) {
+        throw const DeadlinePlanContractException(
+          'Preparation workload dates are invalid.',
+        );
+      }
+      final budget = dailyPreparationBudgetMinutes;
+      if (budget == null) {
+        if (day.remainingBudgetMinutes != null || day.overBudgetMinutes != 0) {
+          throw const DeadlinePlanContractException(
+            'Preparation workload without a budget is inconsistent.',
+          );
+        }
+      } else if (day.remainingBudgetMinutes !=
+              (budget - day.reservedPreparationMinutes).clamp(0, budget) ||
+          day.overBudgetMinutes !=
+              (day.reservedPreparationMinutes - budget).clamp(0, 30000)) {
+        throw const DeadlinePlanContractException(
+          'Preparation workload arithmetic is inconsistent.',
+        );
+      }
+    }
+  }
+
+  factory PreparationWorkload.fromJson(Map<String, dynamic> json) {
+    _expectExactKeys(
+      json,
+      const {
+        'contract_version',
+        'origin',
+        'generated_at',
+        'timezone',
+        'daily_preparation_budget_minutes',
+        'days',
+      },
+      'preparation workload',
+    );
+    if (json['contract_version'] != preparationWorkloadContractVersion ||
+        json['origin'] != 'authenticated_backend') {
+      throw const DeadlinePlanContractException(
+        'Preparation workload provenance is invalid.',
+      );
+    }
+    final rawBudget = json['daily_preparation_budget_minutes'];
+    if (rawBudget != null && rawBudget is! int) {
+      throw const DeadlinePlanContractException(
+        'Preparation workload budget is invalid.',
+      );
+    }
+    final rawDays = json['days'];
+    if (rawDays is! List || rawDays.length != 7) {
+      throw const DeadlinePlanContractException(
+        'Preparation workload days are invalid.',
+      );
+    }
+    return PreparationWorkload(
+      generatedAt: _requiredAwareDateTime(
+        json['generated_at'],
+        'workload.generated_at',
+      ),
+      timezone: _requiredString(
+        json['timezone'],
+        'workload.timezone',
+        maxLength: 100,
+      ),
+      dailyPreparationBudgetMinutes: rawBudget as int?,
+      days: rawDays
+          .map(
+            (value) => PreparationWorkloadDay.fromJson(
+              _requiredStringMap(value, 'workload day'),
+            ),
+          )
+          .toList(growable: false),
+    );
+  }
+
+  final DateTime generatedAt;
+  final String timezone;
+  final int? dailyPreparationBudgetMinutes;
+  final List<PreparationWorkloadDay> days;
+
+  int get totalReservedMinutes => days.fold(
+        0,
+        (total, day) => total + day.reservedPreparationMinutes,
+      );
+  int get daysNeedingReview =>
+      days.where((day) => day.overBudgetMinutes > 0).length;
+}
+
+class PreparationWorkloadDay {
+  const PreparationWorkloadDay({
+    required this.localDate,
+    required this.reservedPreparationMinutes,
+    required this.remainingBudgetMinutes,
+    required this.overBudgetMinutes,
+    required this.activePlanCount,
+    required this.fixedCommitmentMinutes,
+  });
+
+  factory PreparationWorkloadDay.fromJson(Map<String, dynamic> json) {
+    _expectExactKeys(
+      json,
+      const {
+        'local_date',
+        'reserved_preparation_minutes',
+        'remaining_budget_minutes',
+        'over_budget_minutes',
+        'active_plan_count',
+        'fixed_commitment_minutes',
+      },
+      'preparation workload day',
+    );
+    final dateText = _requiredDate(json['local_date'], 'workload.local_date');
+    final rawRemaining = json['remaining_budget_minutes'];
+    if (rawRemaining != null && rawRemaining is! int) {
+      throw const DeadlinePlanContractException(
+        'Preparation workload remaining budget is invalid.',
+      );
+    }
+    final day = PreparationWorkloadDay(
+      // Keep a date-only server fact independent of the device timezone. Local
+      // midnight arithmetic can be 23 or 25 hours across DST and would reject
+      // otherwise consecutive profile-local dates.
+      localDate: DateTime.parse('${dateText}T00:00:00Z'),
+      reservedPreparationMinutes: _requiredInt(
+        json['reserved_preparation_minutes'],
+        'workload.reserved_preparation_minutes',
+      ),
+      remainingBudgetMinutes: rawRemaining as int?,
+      overBudgetMinutes: _requiredInt(
+        json['over_budget_minutes'],
+        'workload.over_budget_minutes',
+      ),
+      activePlanCount: _requiredInt(
+        json['active_plan_count'],
+        'workload.active_plan_count',
+      ),
+      fixedCommitmentMinutes: _requiredInt(
+        json['fixed_commitment_minutes'],
+        'workload.fixed_commitment_minutes',
+      ),
+    );
+    if (day.reservedPreparationMinutes < 0 ||
+        day.reservedPreparationMinutes > 30000 ||
+        day.remainingBudgetMinutes != null &&
+            (day.remainingBudgetMinutes! < 0 ||
+                day.remainingBudgetMinutes! > 480) ||
+        day.overBudgetMinutes < 0 ||
+        day.overBudgetMinutes > 30000 ||
+        day.activePlanCount < 0 ||
+        day.activePlanCount > 50 ||
+        day.fixedCommitmentMinutes < 0 ||
+        day.fixedCommitmentMinutes > 1440) {
+      throw const DeadlinePlanContractException(
+        'Preparation workload day values are invalid.',
+      );
+    }
+    return day;
+  }
+
+  final DateTime localDate;
+  final int reservedPreparationMinutes;
+  final int? remainingBudgetMinutes;
+  final int overBudgetMinutes;
+  final int activePlanCount;
+  final int fixedCommitmentMinutes;
 }
 
 class DeadlinePlanFeed {

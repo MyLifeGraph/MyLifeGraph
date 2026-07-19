@@ -172,3 +172,119 @@ All results below are from this local checkout on 2026-07-18:
 There is still no evidence of remote migration application, push/background
 notifications, a production Coach provider, German localization, or long-term
 learning success.
+
+## Account-wide preparation capacity follow-up — 2026-07-19
+
+This compatible improvement started from clean commit
+`eb0863531a3a944ca03b744b7ece60e7d062490b` on `new_backend_gh`. It did not run
+the deferred five-student study and does not reinterpret the synthetic persona
+walkthrough as participant or two-month evidence.
+
+### Additional findings, ordered by severity
+
+#### Critical or high
+
+No reproducible critical or high-severity defect remained after the final local
+verification. This is not evidence about a remote deployment or longitudinal
+student outcomes.
+
+#### Medium — fixed
+
+1. **Separate plans had no optional aggregate daily limit or compact forward
+   view.** Each revision's daily cap was internally consistent, but several
+   active exams could still create an unrealistic combined day and the student
+   had to inspect plans individually. Settings now offers a nullable explicit
+   `25..480` minute account-wide rule in five-minute increments. Today and
+   Preparation plans show seven profile-local dates with confirmed preparation,
+   active-plan count, remaining capacity/overage, and separately labelled
+   weekly Setup commitments.
+2. **A preview needed a database-boundary capacity recheck.** Proposal-time
+   subtraction alone could be stale after another confirmation or budget edit.
+   Budget writes and planner commands now share the owner lock, and confirmation
+   rejects an over-cap candidate with an exact `409` while retaining the staged
+   preview and active revision.
+3. **Current-day capacity could have ignored an earlier confirmed block.** Time-
+   interval conflict reads may ignore already ended intervals, but a daily
+   minute rule must still count that reservation. Planning context now loads all
+   active other-plan blocks on the relevant profile-local dates. Regression
+   coverage uses an earlier same-day block explicitly.
+4. **The first confirmation trigger draft could have been blocked by an
+   unrelated historical overage.** The final trigger scopes aggregate checks to
+   only the candidate revision's local dates, while still counting every active
+   other-plan block on those dates.
+5. **Date-only workload parsing was device-DST-sensitive.** Flutter initially
+   represented profile-local dates as device-local midnights; consecutive days
+   can then be 23 or 25 hours apart. Workload dates now use timezone-independent
+   UTC calendar identities, with a spring-transition regression test.
+6. **A missing RPC could have been reported as a missing profile.** PostgREST
+   also uses HTTP 404 when a migration/function is unavailable. Budget
+   persistence now treats only exact PostgreSQL `PT404` as an absent profile;
+   `PGRST202` and other definite client errors remain honest persistence
+   failures and cannot converge through an unrelated equal readback.
+
+#### Low — fixed
+
+1. Adding the Settings card invalidated an older widget test's above-the-fold
+   assumption. The test now scrolls and checks the disabled guest control.
+2. Flutter Web merges a clickable Settings tile's title and subtitle into one
+   accessible button name, and the Today workload can sit below a large
+   briefing. Browser helpers now accept the escaped composite button name and
+   scroll to the Today card. No product copy or layout was distorted to satisfy
+   the automation.
+
+### Calculation and authority assessment
+
+The account rule caps confirmed preparation reservations only. New proposals
+use the smaller of the revision's per-plan daily cap and the account capacity
+remaining after other plans. Recurring Setup commitments and explicitly enabled
+current imported busy intervals still remove time windows, but they do not
+pretend to be preparation minutes. The seven-day projection therefore labels
+Setup commitments separately and does not claim complete calendar or free-time
+coverage.
+
+Completed qualifying Focus continues to reduce remaining plan effort on the
+next explicit proposal. It does not silently release an existing reservation,
+and lowering the account rule does not rewrite active blocks; resulting days
+remain visible as `Needs review` until the student replans. These rules are
+deterministic and inspectable. No LLM receives authority over the estimate,
+capacity arithmetic, block placement, confirmation, or product mutation.
+
+### Changes and regression coverage
+
+- Added the owner-locked service-role budget setter, profile constraint/direct-
+  write denial, and confirmation trigger in
+  `20260719120000_account_preparation_budget_v1.sql`.
+- Added strict FastAPI/Flutter budget and `preparation-workload-v1` contracts,
+  other-plan capacity deduction, seven-day aggregation, Settings editing, and
+  Today/Preparation-plans cards with honest loading/error/no-budget/overage
+  states.
+- Added model, service, repository, API, migration, widget, accessibility, DST,
+  conflict, ambiguous-response, owner-isolation, and full browser regression
+  coverage. Account Export includes the nullable profile field.
+
+### Verification results
+
+All results below are local to this checkout on 2026-07-19:
+
+- Complete FastAPI suite: `763 passed, 1 skipped`.
+- Standard source gate: migration/start-stack guards passed, Flutter analysis
+  reported no issues, all `601` Flutter tests passed, Python application sources
+  compiled, and `git diff --check` passed.
+- The reviewed migration was explicitly applied to local Supabase without a
+  reset. A subsequent non-reset preflight confirmed repository/database history
+  equality and all `601` Flutter tests passed.
+- Full non-reset Flutter/FastAPI/Supabase browser journey: exit code `0`,
+  `E2E browser smoke passed for e2e-1784448992@example.test`.
+- JavaScript syntax checking for `e2e/web/smoke.mjs` passed after its final
+  semantic/viewport fixes.
+
+### Remaining manual or external validation
+
+The prepared five-student study remains deliberately skipped and unrun. Useful
+future checks are representative physical-device keyboard, screen-reader,
+200-percent text and offline transitions; real travel/device-versus-profile-
+timezone behavior around midnight and both DST transitions; and observed use of
+several overlapping plans over weeks or months. Remote migration/RLS state,
+deployed scheduling, push/background notification delivery, a production Coach
+provider, German localization, and long-term learning benefit also remain
+unverified and are not claimed here.

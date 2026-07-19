@@ -8,6 +8,7 @@ import '../../application/deadline_plan_controller.dart';
 import '../../data/deadline_calendar_prefill_data_source.dart';
 import '../../data/deadline_plan_api_data_source.dart';
 import '../../data/deadline_plan_repository_impl.dart';
+import '../../domain/deadline_plan.dart';
 import '../../domain/deadline_plan_repository.dart';
 import '../../domain/deadline_calendar_prefill.dart';
 
@@ -37,6 +38,11 @@ final deadlineCalendarPrefillDataSourceProvider =
   return client == null
       ? null
       : DeadlineCalendarPrefillSupabaseDataSource(client);
+});
+
+final preparationWorkloadProvider =
+    FutureProvider.autoDispose<PreparationWorkload>((ref) {
+  return ref.watch(deadlinePlanRepositoryProvider).getWorkload();
 });
 
 final deadlineCalendarPrefillProvider = FutureProvider.autoDispose

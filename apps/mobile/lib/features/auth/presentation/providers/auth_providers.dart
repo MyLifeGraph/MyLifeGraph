@@ -186,6 +186,18 @@ class AuthController extends StateNotifier<AsyncValue<AppSession?>> {
     );
   }
 
+  void updateDailyPreparationBudget(int? minutes) {
+    final session = state.valueOrNull;
+    if (session == null || session.isGuestSession) {
+      throw StateError('A synced account session is required.');
+    }
+    state = AsyncValue.data(
+      AppSession.authenticated(
+        session.profile.withDailyPreparationBudget(minutes),
+      ),
+    );
+  }
+
   Future<void> signOut() async {
     state = const AsyncValue.loading();
     try {

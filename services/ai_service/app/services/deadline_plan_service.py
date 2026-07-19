@@ -8,6 +8,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from app.models.deadline_plans import (
     DEADLINE_PLAN_CONTRACT_VERSION,
+    PREPARATION_WORKLOAD_CONTRACT_VERSION,
     DeadlinePlanBlock,
     DeadlinePlanDetail,
     DeadlinePlanIdentity,
@@ -17,6 +18,8 @@ from app.models.deadline_plans import (
     DeadlinePlanResponse,
     DeadlinePlanRevision,
     DeadlinePlansResponse,
+    PreparationWorkloadDay,
+    PreparationWorkloadResponse,
 )
 from app.repositories.deadline_plan_repository import (
     DeadlinePlanProjection,
@@ -119,6 +122,63 @@ class DeadlinePlanService:
             projection=projection,
         )
         return _response(details[0])
+
+    async def get_workload(self, *, user_id: str) -> PreparationWorkloadResponse:
+        generated_at = _aware_utc(self._now())
+        try:
+            context = await self._repository.load_workload_context(
+                user_id=user_id,
+                generated_at=generated_at,
+            )
+        except DeadlinePlanPersistenceNotFound as exc:
+            raise DeadlinePlanNotFoundError(str(exc)) from exc
+        if len(context.schedule_items) > 1_000:
+            raise DeadlinePlanConflictError(
+                "Schedule context exceeds the workload bound.",
+            )
+        if len(context.confirmed_blocks) > 6_000:
+            raise DeadlinePlanConflictError(
+                "Preparation reservations exceed the workload bound.",
+            )
+        zone = _zone(context.timezone)
+        starts_on = generated_at.astimezone(zone).date()
+        budget = context.daily_preparation_budget_minutes
+        days: list[PreparationWorkloadDay] = []
+        for offset in range(7):
+            local_day = starts_on + timedelta(days=offset)
+            blocks = [
+                row
+                for row in context.confirmed_blocks
+                if _date(row.get("local_date")) == local_day
+            ]
+            reserved = sum(_int(row.get("planned_minutes")) for row in blocks)
+            days.append(
+                PreparationWorkloadDay(
+                    local_date=local_day,
+                    reserved_preparation_minutes=reserved,
+                    remaining_budget_minutes=(
+                        None if budget is None else max(0, budget - reserved)
+                    ),
+                    over_budget_minutes=(
+                        0 if budget is None else max(0, reserved - budget)
+                    ),
+                    active_plan_count=len(
+                        {str(row.get("plan_id")) for row in blocks},
+                    ),
+                    fixed_commitment_minutes=_fixed_commitment_minutes(
+                        context.schedule_items,
+                        weekday=local_day.isoweekday(),
+                    ),
+                ),
+            )
+        return PreparationWorkloadResponse(
+            contract_version=PREPARATION_WORKLOAD_CONTRACT_VERSION,
+            origin="authenticated_backend",
+            generated_at=generated_at,
+            timezone=context.timezone,
+            daily_preparation_budget_minutes=budget,
+            days=days,
+        )
 
     async def propose(
         self,
@@ -702,7 +762,22 @@ def _plan_blocks(
     remaining = remaining_minutes
     target = min(240, request.preferred_session_minutes)
     free_by_day: dict[date, list[list[datetime]]] = {}
-    daily_left = {day: request.max_daily_minutes for day in days}
+    reserved_by_day = _confirmed_preparation_minutes_by_day(context)
+    daily_left = {
+        day: (
+            request.max_daily_minutes
+            if context.daily_preparation_budget_minutes is None
+            else min(
+                request.max_daily_minutes,
+                max(
+                    0,
+                    context.daily_preparation_budget_minutes
+                    - reserved_by_day.get(day, 0),
+                ),
+            )
+        )
+        for day in days
+    }
     for day in days:
         free_by_day[day] = []
         for window_start, window_end in _ENERGY_WINDOWS[context.best_energy_window]:
@@ -879,6 +954,43 @@ def _merge_intervals(
     return merged
 
 
+def _confirmed_preparation_minutes_by_day(
+    context: DeadlinePlanningContext,
+) -> dict[date, int]:
+    totals: dict[date, int] = {}
+    for row in context.confirmed_blocks:
+        local_day = _date(row.get("local_date"))
+        minutes = _int(row.get("planned_minutes"))
+        if minutes < 5 or minutes > 240:
+            raise ValueError("Confirmed preparation duration is invalid.")
+        totals[local_day] = totals.get(local_day, 0) + minutes
+    return totals
+
+
+def _fixed_commitment_minutes(
+    schedule_items: list[dict[str, Any]],
+    *,
+    weekday: int,
+) -> int:
+    intervals: list[tuple[int, int]] = []
+    for row in schedule_items:
+        if _int(row.get("weekday")) != weekday:
+            continue
+        starts = _time(row.get("starts_at"))
+        ends = _time(row.get("ends_at"))
+        start_minute = starts.hour * 60 + starts.minute
+        end_minute = ends.hour * 60 + ends.minute
+        if end_minute > start_minute:
+            intervals.append((start_minute, end_minute))
+    merged: list[tuple[int, int]] = []
+    for starts, ends in sorted(intervals):
+        if not merged or starts > merged[-1][1]:
+            merged.append((starts, ends))
+        else:
+            merged[-1] = (merged[-1][0], max(merged[-1][1], ends))
+    return sum(ends - starts for starts, ends in merged)
+
+
 def _days(starts_on: date, ends_on: date) -> Iterable[date]:
     cursor = starts_on
     while cursor <= ends_on:
@@ -897,6 +1009,9 @@ def _context_fingerprint_input(
     return {
         "timezone": context.timezone,
         "best_energy_window": context.best_energy_window,
+        "daily_preparation_budget_minutes": (
+            context.daily_preparation_budget_minutes
+        ),
         "availability_connection_id": context.availability_connection_id,
         "availability_import_id": context.availability_import_id,
         "effective_start": effective_start.isoformat(),

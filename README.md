@@ -88,7 +88,13 @@ way to explore the product today is the Flutter app in mock-data guest mode.
   import. Planning is bounded to 366 days. There is no title inference,
   calendar write, notification, LLM call, background sync, or hidden proposal.
   The managed task accepts focus while open, but all edit/lifecycle authority
-  remains in the preparation plan instead of generic Task controls.
+  remains in the preparation plan instead of generic Task controls. Settings
+  may add an explicit account-wide daily preparation budget; new proposals
+  deduct confirmed blocks from other plans, and confirmation rechecks the rule
+  under the owner lock. Today and Preparation plans show a strict seven-day
+  view of confirmed preparation plus separately labelled weekly Setup
+  commitments. This remains a transparent deterministic rule, not an AI effort
+  estimate or a complete calendar/free-time model.
   The repository does not configure a deployed cron. Notification Delivery V1
   can create bounded local deterministic Inbox rows only after separate in-app
   consent; it still adds no provider/system delivery channel.
@@ -403,7 +409,11 @@ Supabase is the intended auth and persistence backend. The current app supports:
   Generic task mutations are rejected; plan completion/cancellation atomically
   projects matching task terminal state. Both require an active revision.
   Calendar-event selection and current-import availability use are explicit and
-  never write back.
+  never write back. `GET /v1/deadline-plans/workload` returns the strict side-
+  effect-free seven-day reservation/Setup-commitment projection. The optional
+  account rule is set through `PATCH /v1/account/preparation-budget`; `null`
+  retains per-plan-only capacity, while `25..480` five-minute values cap total
+  confirmed preparation per local date for new confirmations.
 - `/v1/coach/capabilities`, `/v1/coach/history`, and `/v1/coach/memories` are
   authenticated read/control boundaries that do not generate a reply.
   `POST /v1/coach/respond` is the only deliberate model-call path. Completed
@@ -423,7 +433,10 @@ Supabase is the intended auth and persistence backend. The current app supports:
 
 Important current caveat: the Flutter app targets the canonical snake_case
 schema. The migration chain currently ends at
-`20260714143000_notification_delivery_settings_guard.sql`. The follow-up makes
+`20260719120000_account_preparation_budget_v1.sql`. It adds the nullable bounded
+profile rule, service-role-only owner-locked setter, and database-boundary
+confirmation recheck without rewriting existing plans. The earlier
+`20260714143000_notification_delivery_settings_guard.sql` follow-up makes
 Notification Settings replays request-exact across the shared Setup writer and
 keeps the preference revision monotone. The preceding Notification Delivery
 migration adds explicit consent, deterministic generation, and foreground
@@ -586,6 +599,15 @@ two-page Evening flow, compact Dashboard expansions, the weekly-review entry,
 planner lifecycle/projection, Calendar isolation, focus progress, RLS, Account
 Export, account deletion, and guest zero-call checks.
 
+The account-wide preparation-capacity follow-up then passed the full non-reset
+combined journey locally on 2026-07-19:
+`E2E browser smoke passed for e2e-1784448992@example.test`. It adds exact budget
+save/direct-write denial, strict seven-day workload, cross-plan capacity,
+changed-budget confirmation conflict, Today/Preparation-plans UI, cross-owner
+isolation, export, and guest zero-call assertions. This is not evidence of a
+remote migration, installed device, production provider, participant study, or
+long-term outcome.
+
 With a fresh local database:
 
 ```bash
@@ -636,8 +658,9 @@ has the nvm bin directory on `PATH`.
 - `docs/notification-delivery-v1-contract.md` - Explicit foreground consent,
   deterministic generation, timezone/quiet/category/cap/dedupe guards, local
   scheduling, and at-most-once in-app presentation.
-- `docs/v1-account-controls-contract.md` - Authenticated timezone, strict data
-  export, password recovery, and permanent account-deletion contract.
+- `docs/v1-account-controls-contract.md` - Authenticated timezone and daily
+  preparation budget, strict data export, password recovery, and permanent
+  account-deletion contract.
 - `docs/local-product-completion-handoff.md` - Ordered local completion plan for
   the real Coach, notifications, scheduling, visible actions, full-stack startup,
   and release-candidate verification before Android production work.

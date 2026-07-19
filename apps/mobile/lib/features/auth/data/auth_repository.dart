@@ -209,7 +209,8 @@ class AuthRepository {
     final rows = await _client
         .from(SupabaseTables.profiles)
         .select(
-          'id,email,display_name,timezone,auth_provider,'
+          'id,email,display_name,timezone,daily_preparation_budget_minutes,'
+          'auth_provider,'
           'onboarding_completed_at,role',
         )
         .eq('id', id)
@@ -230,6 +231,8 @@ class AuthRepository {
       role: AppRole.fromDatabase(row['role']?.toString()),
       onboardingDone: row['onboarding_completed_at'] != null,
       authProvider: '${row['auth_provider'] ?? 'email'}',
+      dailyPreparationBudgetMinutes:
+          (row['daily_preparation_budget_minutes'] as num?)?.toInt(),
     );
   }
 
