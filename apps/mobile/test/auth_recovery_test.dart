@@ -9,6 +9,7 @@ import 'package:my_life_graph/core/capabilities/app_surface_capabilities.dart';
 import 'package:my_life_graph/core/config/app_config.dart';
 import 'package:my_life_graph/core/navigation/app_router.dart';
 import 'package:my_life_graph/core/navigation/app_routes.dart';
+import 'package:my_life_graph/core/theme/app_theme.dart';
 import 'package:my_life_graph/features/auth/data/auth_repository.dart';
 import 'package:my_life_graph/features/auth/domain/app_session.dart';
 import 'package:my_life_graph/features/auth/presentation/pages/auth_page.dart';
@@ -21,6 +22,64 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 void main() {
   setUp(() {
     SharedPreferences.setMockInitialValues({});
+  });
+
+  testWidgets('auth uses a focused two-column layout on wide screens',
+      (tester) async {
+    tester.view.physicalSize = const Size(1280, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [authRepositoryProvider.overrideWithValue(null)],
+        child: MaterialApp(
+          theme: AppTheme.light,
+          home: const AuthPage(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final intro = find.text('Build your day-aware coach');
+    final email = find.widgetWithText(TextField, 'Email');
+    expect(intro, findsOneWidget);
+    expect(email, findsOneWidget);
+    expect(tester.getCenter(intro).dx, lessThan(tester.getCenter(email).dx));
+    expect(find.text('Continue as guest'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('auth remains usable at 320 px with 200 percent text',
+      (tester) async {
+    tester.view.physicalSize = const Size(320, 568);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [authRepositoryProvider.overrideWithValue(null)],
+        child: MaterialApp(
+          theme: AppTheme.light,
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(context).copyWith(
+              textScaler: const TextScaler.linear(2),
+            ),
+            child: child!,
+          ),
+          home: const AuthPage(),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Build your day-aware coach'), findsOneWidget);
+    await tester.ensureVisible(find.text('Continue as guest'));
+    await tester.pumpAndSettle();
+    expect(find.text('Continue as guest'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('auth help requests reset and confirmation emails honestly',
@@ -45,6 +104,7 @@ void main() {
       find.text('Account and canonical synced data deleted.'),
       findsOneWidget,
     );
+    await tester.ensureVisible(find.text('Dismiss'));
     await tester.tap(find.text('Dismiss'));
     await tester.pump();
     expect(

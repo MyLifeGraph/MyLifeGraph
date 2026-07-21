@@ -140,6 +140,62 @@ void main() {
     );
   });
 
+  testWidgets('wide layouts expose a persistent desktop navigation',
+      (tester) async {
+    tester.view.physicalSize = const Size(1280, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final semantics = tester.ensureSemantics();
+    final router = _router(initialLocation: AppRoutes.dashboard);
+    addTearDown(router.dispose);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          appSurfaceCapabilitiesProvider.overrideWithValue(
+            const AppSurfaceCapabilities(
+              isLocalDemo: false,
+              canUseSyncedHabits: true,
+            ),
+          ),
+        ],
+        child: MaterialApp.router(
+          theme: AppTheme.light,
+          routerConfig: router,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('MyLifeGraph'), findsOneWidget);
+    expect(
+      tester.getCenter(find.text('Home destination')).dx,
+      greaterThan(236),
+    );
+    expect(
+      tester.getSemantics(
+        find.byKey(const ValueKey('main-shell-add-signal')),
+      ),
+      matchesSemantics(
+        label: 'Quick actions',
+        isButton: true,
+        hasSelectedState: true,
+        isSelected: false,
+        hasTapAction: true,
+      ),
+    );
+
+    await tester.tap(
+      find.byKey(const ValueKey('main-nav-insights-control')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Insights destination'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    semantics.dispose();
+  });
+
   for (final textScale in [1.5, 2.0]) {
     testWidgets(
         'compact bottom navigation respects ${textScale}x text and remains selectable',
@@ -175,7 +231,13 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      const labels = ['today', 'insights', 'quick-actions', 'inbox', 'settings'];
+      const labels = [
+        'today',
+        'insights',
+        'quick-actions',
+        'inbox',
+        'settings',
+      ];
       for (final label in labels) {
         final labelFinder = find.byKey(ValueKey('main-nav-label-$label'));
         expect(labelFinder, findsOneWidget);

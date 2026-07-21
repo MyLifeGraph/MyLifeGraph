@@ -5,6 +5,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/capabilities/app_surface_capabilities.dart';
+import '../../../core/constants/app_radii.dart';
+import '../../../core/constants/app_spacing.dart';
 import '../../../core/navigation/app_routes.dart';
 import '../../notifications/domain/entities/notification_action_target.dart';
 import '../../notifications/presentation/providers/notifications_providers.dart';
@@ -103,33 +105,331 @@ class MainShell extends ConsumerWidget {
     );
     final selectedIndex = currentIndex == -1 ? 0 : currentIndex;
 
-    return Scaffold(
-      extendBody: true,
-      body: capabilities.isLocalDemo
-          ? Column(
+    final content = _ShellBody(
+      isLocalDemo: capabilities.isLocalDemo,
+      child: child,
+    );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final desktop = constraints.maxWidth >= 1100;
+        if (desktop) {
+          return Scaffold(
+            body: Row(
               children: [
-                const SafeArea(
-                  bottom: false,
-                  child: _LocalDemoBanner(),
+                _DesktopNavigation(
+                  selectedIndex: selectedIndex,
+                  onDestinationSelected: (index) => context.go(_routes[index]),
                 ),
+                Expanded(child: content),
+              ],
+            ),
+          );
+        }
+
+        return Scaffold(
+          extendBody: true,
+          body: content,
+          floatingActionButton: _QuickActionButton(
+            isSelected: selectedIndex == 2,
+            onTap: () => context.go(AppRoutes.quickAction),
+          ),
+          floatingActionButtonLocation:
+              FloatingActionButtonLocation.centerDocked,
+          bottomNavigationBar: _FloatingBottomNav(
+            selectedIndex: selectedIndex,
+            onDestinationSelected: (index) => context.go(_routes[index]),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _ShellBody extends StatelessWidget {
+  const _ShellBody({required this.isLocalDemo, required this.child});
+
+  final bool isLocalDemo;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!isLocalDemo) return child;
+
+    return Column(
+      children: [
+        const SafeArea(
+          bottom: false,
+          child: _LocalDemoBanner(),
+        ),
+        Expanded(
+          child: MediaQuery.removePadding(
+            context: context,
+            removeTop: true,
+            child: child,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _DesktopNavigation extends StatelessWidget {
+  const _DesktopNavigation({
+    required this.selectedIndex,
+    required this.onDestinationSelected,
+  });
+
+  final int selectedIndex;
+  final ValueChanged<int> onDestinationSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Material(
+      color: colors.surface,
+      child: Container(
+        width: 236,
+        decoration: BoxDecoration(
+          border: Border(
+            right: BorderSide(color: colors.outlineVariant),
+          ),
+        ),
+        child: SafeArea(
+          right: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.md,
+              AppSpacing.lg,
+              AppSpacing.md,
+              AppSpacing.md,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const _DesktopBrand(),
+                const SizedBox(height: AppSpacing.xl),
                 Expanded(
-                  child: MediaQuery.removePadding(
-                    context: context,
-                    removeTop: true,
-                    child: child,
+                  child: SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _DesktopNavItem(
+                          icon: Icons.home_outlined,
+                          selectedIcon: Icons.home_rounded,
+                          label: 'Today',
+                          isSelected: selectedIndex == 0,
+                          onTap: () => onDestinationSelected(0),
+                        ),
+                        const SizedBox(height: AppSpacing.xs),
+                        _DesktopNavItem(
+                          icon: Icons.auto_graph_outlined,
+                          selectedIcon: Icons.auto_graph_rounded,
+                          label: 'Insights',
+                          isSelected: selectedIndex == 1,
+                          onTap: () => onDestinationSelected(1),
+                        ),
+                        const SizedBox(height: AppSpacing.md),
+                        _DesktopNavItem(
+                          icon: Icons.add,
+                          selectedIcon: Icons.add,
+                          label: 'Quick actions',
+                          isSelected: selectedIndex == 2,
+                          emphasized: true,
+                          onTap: () => onDestinationSelected(2),
+                        ),
+                        const SizedBox(height: AppSpacing.md),
+                        _DesktopNavItem(
+                          icon: Icons.notifications_outlined,
+                          selectedIcon: Icons.notifications_rounded,
+                          label: 'Inbox',
+                          isSelected: selectedIndex == 3,
+                          onTap: () => onDestinationSelected(3),
+                        ),
+                        const SizedBox(height: AppSpacing.xs),
+                        _DesktopNavItem(
+                          icon: Icons.settings_outlined,
+                          selectedIcon: Icons.settings_rounded,
+                          label: 'Settings',
+                          isSelected: selectedIndex == 4,
+                          onTap: () => onDestinationSelected(4),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.all(AppSpacing.sm),
+                  child: Text(
+                    'A clear next step, grounded in your day.',
+                    style: Theme.of(context).textTheme.bodySmall,
                   ),
                 ),
               ],
-            )
-          : child,
-      floatingActionButton: _QuickActionButton(
-        isSelected: selectedIndex == 2,
-        onTap: () => context.go(AppRoutes.quickAction),
+            ),
+          ),
+        ),
       ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
-      bottomNavigationBar: _FloatingBottomNav(
-        selectedIndex: selectedIndex,
-        onDestinationSelected: (index) => context.go(_routes[index]),
+    );
+  }
+}
+
+class _DesktopBrand extends StatelessWidget {
+  const _DesktopBrand();
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Row(
+      children: [
+        Container(
+          width: 42,
+          height: 42,
+          decoration: BoxDecoration(
+            color: colors.primaryContainer,
+            borderRadius: BorderRadius.circular(AppRadii.md),
+          ),
+          alignment: Alignment.center,
+          child: Icon(
+            Icons.auto_awesome_rounded,
+            color: colors.onPrimaryContainer,
+            size: 22,
+          ),
+        ),
+        const SizedBox(width: AppSpacing.sm + 2),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'MyLifeGraph',
+                maxLines: 1,
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 2),
+              Text(
+                'Daily coach',
+                style: Theme.of(context).textTheme.labelSmall,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _DesktopNavItem extends StatelessWidget {
+  const _DesktopNavItem({
+    required this.icon,
+    required this.selectedIcon,
+    required this.label,
+    required this.isSelected,
+    required this.onTap,
+    this.emphasized = false,
+  });
+
+  final IconData icon;
+  final IconData selectedIcon;
+  final String label;
+  final bool isSelected;
+  final VoidCallback onTap;
+  final bool emphasized;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final normalizedLabel = label.toLowerCase().replaceAll(' ', '-');
+    final semanticKey = emphasized
+        ? const ValueKey('main-shell-add-signal')
+        : ValueKey('main-nav-${label.toLowerCase()}');
+    final controlKey = emphasized
+        ? const ValueKey('main-shell-add-signal-control')
+        : ValueKey('main-nav-${label.toLowerCase()}-control');
+    final background = emphasized
+        ? colors.primary
+        : isSelected
+            ? colors.primaryContainer
+            : Colors.transparent;
+    final foreground = emphasized
+        ? colors.onPrimary
+        : isSelected
+            ? colors.onPrimaryContainer
+            : colors.onSurfaceVariant;
+
+    return Semantics(
+      key: semanticKey,
+      container: true,
+      button: true,
+      selected: isSelected,
+      label: label,
+      onTap: onTap,
+      child: ExcludeSemantics(
+        child: Material(
+          color: background,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppRadii.md),
+            side: BorderSide(
+              color: emphasized
+                  ? colors.primary
+                  : isSelected
+                      ? colors.primaryContainer
+                      : Colors.transparent,
+            ),
+          ),
+          child: InkWell(
+            key: controlKey,
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(AppRadii.md),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 14,
+                vertical: 13,
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    isSelected ? selectedIcon : icon,
+                    key: emphasized
+                        ? const ValueKey('main-shell-add-signal-icon')
+                        : null,
+                    color: foreground,
+                    size: 22,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: emphasized
+                        ? RichText(
+                            key: ValueKey(
+                              'main-nav-label-$normalizedLabel',
+                            ),
+                            maxLines: 2,
+                            textScaler: MediaQuery.textScalerOf(context),
+                            text: TextSpan(
+                              text: label,
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .labelLarge
+                                  ?.copyWith(color: foreground),
+                            ),
+                          )
+                        : Text(
+                            label,
+                            key: ValueKey(
+                              'main-nav-label-$normalizedLabel',
+                            ),
+                            maxLines: 2,
+                            style: Theme.of(context)
+                                .textTheme
+                                .labelLarge
+                                ?.copyWith(color: foreground),
+                          ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -146,11 +446,7 @@ class _FloatingBottomNav extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isLight = Theme.of(context).brightness == Brightness.light;
-    final background = isLight
-        ? Colors.white.withValues(alpha: 0.9)
-        : const Color(0xFF102025).withValues(alpha: 0.92);
-    final border = isLight ? const Color(0xFFD4E1DF) : const Color(0xFF2A424A);
+    final colors = Theme.of(context).colorScheme;
 
     return SafeArea(
       top: false,
@@ -158,41 +454,40 @@ class _FloatingBottomNav extends StatelessWidget {
         builder: (context, constraints) {
           final scaledLabelSize = MediaQuery.textScalerOf(context).scale(12);
           final compact = constraints.maxWidth < 360 || scaledLabelSize > 16;
-          final itemHeight = compact ? 56.0 : 60.0;
+          final itemHeight = compact ? 52.0 : 56.0;
           int itemFlex(bool selected) => compact
               ? selected
                   ? 4
                   : 3
               : 1;
-          final selectedColor =
-              isLight ? const Color(0xFF063D35) : Colors.white;
-          final idleColor =
-              isLight ? const Color(0xFF607078) : const Color(0xFFA8B5BE);
+          final selectedColor = colors.onPrimaryContainer;
+          final idleColor = colors.onSurfaceVariant;
 
           return Padding(
-            padding:
-                EdgeInsets.fromLTRB(compact ? 8 : 14, 0, compact ? 8 : 14, 10),
+            padding: EdgeInsets.fromLTRB(
+              compact ? 8 : 12,
+              0,
+              compact ? 8 : 12,
+              8,
+            ),
             child: DecoratedBox(
               decoration: BoxDecoration(
-                color: background,
-                borderRadius: BorderRadius.circular(30),
-                border: Border.all(color: border, width: 1.5),
+                color: colors.surface.withValues(alpha: 0.97),
+                borderRadius: BorderRadius.circular(AppRadii.xl),
+                border: Border.all(color: colors.outlineVariant),
                 boxShadow: [
                   BoxShadow(
-                    color: Theme.of(context)
-                        .colorScheme
-                        .primary
-                        .withValues(alpha: isLight ? 0.12 : 0.16),
-                    blurRadius: 24,
-                    spreadRadius: -10,
-                    offset: const Offset(0, 8),
+                    color: Colors.black.withValues(alpha: 0.16),
+                    blurRadius: 22,
+                    spreadRadius: -8,
+                    offset: const Offset(0, 10),
                   ),
                 ],
               ),
               child: Padding(
                 padding: EdgeInsets.symmetric(
                   horizontal: compact ? 0 : 10,
-                  vertical: 8,
+                  vertical: 7,
                 ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -352,8 +647,14 @@ class _LocalDemoBanner extends StatelessWidget {
     final colors = Theme.of(context).colorScheme;
     return Container(
       width: double.infinity,
-      height: 28,
-      color: colors.surfaceContainerHighest,
+      constraints: const BoxConstraints(minHeight: 30),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: colors.surfaceContainer,
+        border: Border(
+          bottom: BorderSide(color: colors.outlineVariant),
+        ),
+      ),
       alignment: Alignment.center,
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -399,13 +700,9 @@ class _FloatingNavItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final primary = Theme.of(context).colorScheme.primary;
-    final selectedColor = Theme.of(context).brightness == Brightness.light
-        ? const Color(0xFF063D35)
-        : Colors.white;
-    final idleColor = Theme.of(context).brightness == Brightness.light
-        ? const Color(0xFF607078)
-        : const Color(0xFFA8B5BE);
+    final colors = Theme.of(context).colorScheme;
+    final selectedColor = colors.onPrimaryContainer;
+    final idleColor = colors.onSurfaceVariant;
 
     return Expanded(
       flex: flex,
@@ -424,19 +721,20 @@ class _FloatingNavItem extends StatelessWidget {
               color: Colors.transparent,
               child: InkWell(
                 key: ValueKey('main-nav-${label.toLowerCase()}-control'),
-                borderRadius: BorderRadius.circular(22),
+                borderRadius: BorderRadius.circular(AppRadii.md),
                 onTap: onTap,
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 180),
+                  curve: Curves.easeOutCubic,
                   height: height,
                   padding: EdgeInsets.symmetric(
                     horizontal: showLabel ? 6 : 0,
                   ),
                   decoration: BoxDecoration(
                     color: isSelected
-                        ? primary.withValues(alpha: 0.22)
+                        ? colors.primaryContainer
                         : Colors.transparent,
-                    borderRadius: BorderRadius.circular(22),
+                    borderRadius: BorderRadius.circular(AppRadii.md),
                   ),
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -495,14 +793,8 @@ class _QuickActionButtonState extends State<_QuickActionButton> {
 
   @override
   Widget build(BuildContext context) {
-    final isLight = Theme.of(context).brightness == Brightness.light;
-    final primary = Theme.of(context).colorScheme.primary;
-    final glowColor = isLight
-        ? const Color(0xFF16C6A8).withValues(alpha: 0.16)
-        : primary.withValues(alpha: 0.2);
-    final haloColor = isLight
-        ? const Color(0xFFB6F3E6).withValues(alpha: 0.24)
-        : primary.withValues(alpha: 0.08);
+    final colors = Theme.of(context).colorScheme;
+    final primary = colors.primary;
 
     return Tooltip(
       message: 'Quick actions',
@@ -526,23 +818,19 @@ class _QuickActionButtonState extends State<_QuickActionButton> {
                 }
               },
               customBorder: const CircleBorder(),
-              radius: 46,
+              radius: 38,
               child: Container(
-                width: 92,
-                height: 92,
+                width: 76,
+                height: 76,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   boxShadow: [
                     BoxShadow(
-                      color: haloColor,
-                      blurRadius: 22,
-                      spreadRadius: 2,
-                    ),
-                    BoxShadow(
-                      color: glowColor,
-                      blurRadius: 12,
-                      spreadRadius: 0,
+                      color: Colors.black.withValues(alpha: 0.22),
+                      blurRadius: 16,
+                      spreadRadius: -4,
+                      offset: const Offset(0, 8),
                     ),
                   ],
                 ),
@@ -551,29 +839,23 @@ class _QuickActionButtonState extends State<_QuickActionButton> {
                   scale: _isPressed ? 0.94 : 1,
                   child: AnimatedContainer(
                     duration: const Duration(milliseconds: 90),
-                    width: 64,
-                    height: 64,
+                    width: 56,
+                    height: 56,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       color: _isPressed
-                          ? Color.lerp(
-                              primary,
-                              Colors.black,
-                              isLight ? 0.08 : 0.16,
-                            )
+                          ? Color.lerp(primary, Colors.black, 0.12)
                           : primary,
                       border: Border.all(
-                        color: isLight
-                            ? Colors.white.withValues(alpha: 0.72)
-                            : Colors.black.withValues(alpha: 0.22),
-                        width: 1.4,
+                        color: colors.surface,
+                        width: 2,
                       ),
                     ),
                     child: Icon(
                       Icons.add,
                       key: const ValueKey('main-shell-add-signal-icon'),
-                      color: Theme.of(context).colorScheme.onPrimary,
-                      size: 34,
+                      color: colors.onPrimary,
+                      size: 30,
                     ),
                   ),
                 ),

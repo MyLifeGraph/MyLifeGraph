@@ -784,6 +784,8 @@ class _DashboardHome extends StatelessWidget {
         builder: (context, constraints) {
           final horizontalPadding =
               constraints.maxWidth < 600 ? AppSpacing.md : AppSpacing.xl;
+          final desktopShell = MediaQuery.sizeOf(context).width >= 1100;
+          final bottomPadding = desktopShell ? AppSpacing.xxl : 116.0;
           return CustomScrollView(
             slivers: [
               SliverPadding(
@@ -791,7 +793,7 @@ class _DashboardHome extends StatelessWidget {
                   horizontalPadding,
                   AppSpacing.md,
                   horizontalPadding,
-                  AppSpacing.xxl,
+                  bottomPadding,
                 ),
                 sliver: SliverToBoxAdapter(
                   child: Center(

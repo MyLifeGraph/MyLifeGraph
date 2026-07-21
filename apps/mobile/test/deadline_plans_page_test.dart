@@ -408,6 +408,8 @@ void main() {
       ),
       findsNothing,
     );
+    await tester.drag(_pageScrollable(), const Offset(0, -240));
+    await tester.pumpAndSettle();
     await _tap(tester, find.text('Show all 8 blocks'));
     expect(
       find.byKey(
@@ -465,6 +467,11 @@ void main() {
       findsOneWidget,
     );
     await _tap(tester, find.text('Load latest plan'));
+    await tester.scrollUntilVisible(
+      find.text('Entered plan values kept'),
+      400,
+      scrollable: _pageScrollable(),
+    );
     expect(find.text('Entered plan values kept'), findsOneWidget);
     await tester.dragUntilVisible(
       find.text('Review entered values'),
@@ -837,6 +844,13 @@ Future<void> _tap(WidgetTester tester, Finder finder) async {
   await tester.tap(finder.first);
   await tester.pumpAndSettle();
 }
+
+Finder _pageScrollable() => find
+    .descendant(
+      of: find.byType(CustomScrollView),
+      matching: find.byType(Scrollable),
+    )
+    .first;
 
 Future<void> _pumpPage(
   WidgetTester tester, {

@@ -31,6 +31,12 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    final pageScrollable = find
+        .descendant(
+          of: find.byType(CustomScrollView),
+          matching: find.byType(Scrollable),
+        )
+        .first;
 
     expect(find.text('Review Guest'), findsOneWidget);
     expect(find.text('guest@personal-coach.local'), findsOneWidget);
@@ -46,17 +52,9 @@ void main() {
       find.byKey(const ValueKey('daily-preparation-budget-setting')),
       findsOneWidget,
     );
-    await tester.scrollUntilVisible(
-      find.text('In-app reminders'),
-      180,
-      scrollable: find.byType(Scrollable).first,
-    );
+    await _revealText(tester, 'In-app reminders', pageScrollable);
     expect(find.text('In-app reminders'), findsOneWidget);
-    await tester.scrollUntilVisible(
-      find.text('Calendar import (optional)'),
-      180,
-      scrollable: find.byType(Scrollable).first,
-    );
+    await _revealText(tester, 'Calendar import (optional)', pageScrollable);
     expect(find.text('Calendar import (optional)'), findsOneWidget);
     expect(find.textContaining('Coach'), findsNothing);
     expect(
@@ -66,21 +64,20 @@ void main() {
     expect(
       find.text(
         'Review goals, routine candidates, and fixed commitments.',
+        skipOffstage: false,
       ),
       findsOneWidget,
     );
 
-    await tester.scrollUntilVisible(
-      find.text('Export data'),
-      180,
-      scrollable: find.byType(Scrollable).first,
-    );
+    await _revealText(tester, 'Export data', pageScrollable);
     expect(find.text('Export data'), findsOneWidget);
-    await tester.ensureVisible(find.text('Delete account'));
-    await tester.pumpAndSettle();
+    await _revealText(tester, 'Delete account', pageScrollable);
     expect(find.text('Delete account'), findsOneWidget);
     expect(
-      find.text('Available only for a synced account.'),
+      find.text(
+        'Available only for a synced account.',
+        skipOffstage: false,
+      ),
       findsNWidgets(2),
     );
     expect(find.text('Alert rules'), findsNothing);
@@ -88,11 +85,7 @@ void main() {
     expect(find.text('Personal memory'), findsNothing);
     expect(find.text('Biometric app lock'), findsNothing);
 
-    await tester.scrollUntilVisible(
-      find.text('Light mode'),
-      200,
-      scrollable: find.byType(Scrollable).first,
-    );
+    await _revealText(tester, 'Light mode', pageScrollable);
     expect(find.text('Saved on this device.'), findsOneWidget);
 
     expect(tester.widget<Switch>(find.byType(Switch)).value, isFalse);
@@ -102,15 +95,31 @@ void main() {
     final preferencesAfterTheme = await SharedPreferences.getInstance();
     expect(preferencesAfterTheme.getString('app_theme_mode'), 'light');
 
-    await tester.scrollUntilVisible(
-      find.text('Sign out'),
-      200,
-      scrollable: find.byType(Scrollable).first,
-    );
+    await _revealText(tester, 'Sign out', pageScrollable);
     expect(find.text('Sign out'), findsOneWidget);
     await tester.tap(find.text('Sign out'));
     await tester.pumpAndSettle();
     final preferences = await SharedPreferences.getInstance();
     expect(preferences.getBool('auth_guest_active'), isFalse);
   });
+}
+
+Future<void> _revealText(
+  WidgetTester tester,
+  String text,
+  Finder pageScrollable,
+) async {
+  final target = find.text(text, skipOffstage: false);
+  if (target.evaluate().isEmpty) {
+    await tester.scrollUntilVisible(
+      target,
+      180,
+      scrollable: pageScrollable,
+    );
+  }
+  await Scrollable.ensureVisible(
+    tester.element(target),
+    alignment: 0.5,
+  );
+  await tester.pumpAndSettle();
 }
