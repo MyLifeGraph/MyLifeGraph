@@ -494,11 +494,14 @@ npm run seed:demo
 ```
 
 The script starts local Supabase if needed, refuses non-local Supabase URLs, and
-creates repeatable student, worker, and recovery scenarios. Its typed Setup
-rows include valid applied revisions with intentionally empty Setup-owned
-optional collections; separately seeded scenario goals, habits, and commitments
-remain `demo_seed` data. All demo accounts use the local-only password
-`DemoPass123!`.
+replaces only the three local demo accounts with repeatable student, worker,
+and recovery scenarios. Its typed Setup rows include valid applied revisions
+with intentionally empty Setup-owned optional collections; separately seeded
+scenario goals, habits, and commitments remain `demo_seed` data. The student
+scenario is additionally enriched through the real backend services with
+current Today/Weekly Review output, all three Habit cadences, Focus history,
+Calendar Import, Preparation Plans, notification consent, and validated Coach
+history. All demo accounts use the local-only password `DemoPass123!`.
 
 ## Verification
 
@@ -643,6 +646,9 @@ has the nvm bin directory on `PATH`.
 
 ## Documentation Map
 
+- `docs/current-product-guide.md` - Concrete German map of the current product,
+  navigation, features, data, learning behavior, dashboards, core concepts,
+  Coach limits, and present information-architecture friction.
 - `docs/local-dev.md` - Full local setup and troubleshooting.
 - `docs/architecture.md` - Current architecture and data-flow overview.
 - `docs/backend-roadmap.md` - Target backend flow, product agents, data model
