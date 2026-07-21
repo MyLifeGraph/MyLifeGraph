@@ -948,14 +948,18 @@ The script:
   printing it;
 - refuses to run unless the API URL is `http://127.0.0.1:54321` or
   `http://localhost:54321`;
-- creates or updates three confirmed local Auth users;
+- deletes and recreates only the three confirmed local demo Auth users through
+  the full-account cascade, so a rerun also resets immutable local retry and
+  usage ledgers (and signs out an open demo session);
 - writes one typed applied Setup revision per user with a stable request UUID
   and intentionally empty optional Setup-owned collections, while leaving
   separately seeded `demo_seed` objects non-Setup-owned;
-- replaces their demo app rows in `daily_logs`, `behavioral_events`, `tasks`,
-  `schedule_items`, `habits`, `habit_logs`, `notifications`, `ai_insights`,
-  `memory_entries`, `recommendations`, `coach_messages`,
-  `intake_responses`, and `user_state_snapshots`.
+- replaces their base demo app rows, then enriches `student@example.test`
+  through the real FastAPI service classes with current snapshots/briefings,
+  feedback, Weekly Review, Calendar Import, Preparation Plans, foreground
+  notification consent/generation, and fake-provider Coach persistence;
+- verifies the student coverage before reporting success. This enrichment
+  requires `services/ai_service/.venv`, or an equivalent `PYTHON_BIN`.
 
 Demo logins:
 
@@ -982,10 +986,14 @@ scripts/start_frontend.sh
 ```
 
 Open `http://127.0.0.1:7357`, sign in with one of the demo accounts, and compare
-Dashboard, Inbox, Insights, and Habits across scenarios. Deep Work is
-available in authenticated real-data mode. Coach is also routed for real
-accounts, but sending remains disabled until FastAPI reports a ready configured
-provider; seeded rows do not imply a live model connection.
+Dashboard, Inbox, Insights, and Habits across scenarios. The student account is
+the broad manual product fixture: Today, all three Habit cadences, resumable
+Deep Work, Weekly Review proposals, Calendar Import, active and staged
+Preparation Plans, capacity, notification consent, and Coach history are
+pre-populated. Mutate these freely and rerun the seed to restore them. Coach
+sending remains disabled unless FastAPI is deliberately started with a ready
+provider; the stored demo turns use the deterministic fake provider and imply
+no live model connection.
 Seeded recommendations are visible through the FastAPI recommendation endpoint
 when the AI service is running with the same local Supabase project settings;
 without FastAPI, an authenticated account shows a recoverable recommendation

@@ -43,9 +43,24 @@ const scenarios = [
       ['Plan exams earlier', 'Move exam preparation into smaller weekday blocks.'],
     ],
     habits: [
-      ['Morning review', 'Review the top three school priorities before class.', [1, 1, 1, 0, 1, 1, 1]],
-      ['Phone away study block', 'Keep the phone out of reach during the first focus block.', [1, 0, 1, 1, 1, 0, 1]],
-      ['Evening shutdown', 'Close school work and screens before quiet hours.', [0, 1, 1, 0, 1, 1, 0]],
+      [
+        'Morning review',
+        'Review the top three school priorities before class.',
+        [1, 1, 0, 1, -1, 1, 0],
+        { kind: 'daily' },
+      ],
+      [
+        'Phone away study block',
+        'Keep the phone out of reach during the first focus block.',
+        [1, 0, 1, -1, 1, 0, 0],
+        { kind: 'weekdays', scheduledWeekdays: [1, 2, 3, 4, 5] },
+      ],
+      [
+        'Evening shutdown',
+        'Close school work and screens before quiet hours.',
+        [1, 0, 1, 0, 1, 0, 0],
+        { kind: 'weekly_target', weeklyTarget: 4 },
+      ],
     ],
     schedule: [
       ['Math', 'Room 204', 1, '08:15', '09:45'],
@@ -55,10 +70,10 @@ const scenarios = [
       ['Recovery walk', 'Outside', 5, '16:00', '16:30'],
     ],
     tasks: [
-      ['Finish math problem set', 'Submit the remaining proofs and review weak steps.', 'todo', 'high', 1],
-      ['Draft history outline', 'Turn the topic list into a two-page outline.', 'in_progress', 'medium', 2],
-      ['Prepare physics lab notes', 'Bring one question for the lab session.', 'todo', 'medium', 3],
-      ['Review flashcards', 'Twenty-minute spaced repetition block.', 'done', 'low', -1],
+      ['Finish math problem set', 'Submit the remaining proofs and review weak steps.', 'todo', 'high', 1, 60],
+      ['Draft history outline', 'Turn the topic list into a two-page outline.', 'in_progress', 'medium', 2, 90],
+      ['Prepare physics lab notes', 'Bring one question for the lab session.', 'cancelled', 'medium', 3, 45],
+      ['Review flashcards', 'Twenty-minute spaced repetition block.', 'done', 'low', -1, 20],
     ],
     recommendations: [
       ['Protect the first study block', 'Your strongest focus signal is before late morning classes.', 'Schedule block', 'focus', 0.86, 'high'],
@@ -70,8 +85,9 @@ const scenarios = [
       ['Late starts increase stress', 'Stress scores rise after days with missed evening shutdown.', 'stress', 0.72],
     ],
     notifications: [
-      ['Focus window approaching', 'Your best study window starts in 20 minutes.', 'reminder', 'high', 0],
-      ['Exam prep check', 'Split the next exam task into a smaller block today.', 'coaching', 'medium', 1],
+      ['Focus window approaching', 'Your best study window starts in 20 minutes.', 'reminder', 'high', 0, '/deep-work', 'unread'],
+      ['Weekly review ready', 'Review the completed week before changing a habit.', 'coaching', 'medium', -1, '/weekly-review', 'read'],
+      ['Earlier planning note', 'This dismissed row remains available to account export.', 'coaching', 'low', -3, '/insights', 'dismissed'],
     ],
     memories: [
       ['goal', 'Primary goal', 'Maya wants protected morning study time.'],
@@ -218,8 +234,13 @@ async function main() {
   const seeded = [];
 
   for (const scenario of scenarios) {
-    const user = await ensureDemoUser(scenario, users);
-    await clearScenarioRows(user.id);
+    const existing = users.find(
+      (user) => user.email?.toLowerCase() === scenario.email.toLowerCase(),
+    );
+    if (existing) {
+      await deleteDemoAccount(existing.id, scenario.email);
+    }
+    const user = await createAdminUser(scenario);
     await seedScenario(user.id, scenario);
     seeded.push(`${scenario.email} (${scenario.displayName})`);
   }
@@ -241,20 +262,6 @@ function assertLocalSupabaseUrl(value) {
       `Refusing to seed non-local Supabase URL: ${value}. Expected http://127.0.0.1:54321 or http://localhost:54321.`,
     );
   }
-}
-
-async function ensureDemoUser(scenario, users) {
-  const existing = users.find(
-    (user) => user.email?.toLowerCase() === scenario.email.toLowerCase(),
-  );
-  if (existing) {
-    await updateAdminUser(existing.id, scenario);
-    return existing;
-  }
-
-  const created = await createAdminUser(scenario);
-  users.push(created);
-  return created;
 }
 
 async function listAdminUsers() {
@@ -293,22 +300,28 @@ async function createAdminUser(scenario) {
   );
 }
 
-async function updateAdminUser(userId, scenario) {
-  await adminRequest(
-    `/auth/v1/admin/users/${userId}`,
+async function deleteDemoAccount(userId, email) {
+  const result = await restRequest(
+    'rpc/delete_account_v1',
     {
-      method: 'PUT',
+      method: 'POST',
       body: JSON.stringify({
-        password: demoPassword,
-        email_confirm: true,
-        user_metadata: {
-          display_name: scenario.displayName,
-          demo_scenario: scenario.key,
-        },
+        p_user_id: userId,
+        p_confirmation: 'DELETE',
       }),
     },
-    `update demo user ${scenario.email}`,
+    `replace local demo account ${email}`,
   );
+  if (
+    !result ||
+    result.deleted !== true ||
+    result.not_found !== false ||
+    result.user_id !== userId
+  ) {
+    throw new Error(
+      `Could not confirm local demo account replacement for ${email}.`,
+    );
+  }
 }
 
 async function adminRequest(path, options, description) {
@@ -327,43 +340,12 @@ async function adminRequest(path, options, description) {
   );
 }
 
-async function clearScenarioRows(userId) {
-  const tables = [
-    'habit_logs',
-    'focus_sessions',
-    'recommendations',
-    'user_state_snapshots',
-    'intake_responses',
-    'behavioral_events',
-    'daily_logs',
-    'tasks',
-    'schedule_items',
-    'notifications',
-    'coach_messages',
-    'memory_entries',
-    'ai_insights',
-    'skillset_profiles',
-    'goals',
-    'habits',
-  ];
-
-  for (const table of tables) {
-    await restRequest(
-      `${table}?user_id=eq.${encodeURIComponent(userId)}`,
-      {
-        method: 'DELETE',
-        headers: { Prefer: 'return=minimal' },
-      },
-      `clear ${table}`,
-    );
-  }
-}
-
 async function seedScenario(userId, scenario) {
   const now = new Date();
   const today = dateOnly(now);
   const weekKey = isoWeekKey(now);
-  const metadata = { source: 'demo_seed_v1', scenario: scenario.key };
+  const reviewWeekStart = addDays(startOfIsoWeek(now), -7);
+  const metadata = { source: 'demo_seed_v2', scenario: scenario.key };
   const intakeRequestId = deterministicUuid(
     `demo-seed:intake-request:${userId}:intake-v1`,
   );
@@ -389,6 +371,7 @@ async function seedScenario(userId, scenario) {
         auth_provider: 'email',
         onboarding_completed_at: now.toISOString(),
         setup_revision: 1,
+        daily_preparation_budget_minutes: null,
         updated_at: now.toISOString(),
       },
     ],
@@ -405,6 +388,13 @@ async function seedScenario(userId, scenario) {
         weekly_summary_enabled: true,
         quiet_hours_start: scenario.quietHoursStart,
         quiet_hours_end: scenario.quietHoursEnd,
+        in_app_delivery_enabled: false,
+        in_app_delivery_consent_version: null,
+        in_app_delivery_consented_at: null,
+        in_app_delivery_disabled_at: null,
+        delivery_settings_request_id: null,
+        delivery_settings_request_fingerprint: null,
+        daily_notification_limit: 2,
         updated_at: now.toISOString(),
       },
     ],
@@ -449,18 +439,19 @@ async function seedScenario(userId, scenario) {
     },
   ]);
 
-  await insertRows(
-    'goals',
-    scenario.goals.map(([title, description], index) => ({
-      user_id: userId,
-      title,
-      description,
-      status: 'active',
-      progress: [35, 20, 10][index] ?? 0,
-      due_date: dateOnly(addDays(now, 21 + index * 7)),
-      metadata,
-    })),
-  );
+  const goalRows = scenario.goals.map(([title, description], index) => ({
+    id: deterministicUuid(`demo-seed:goal:${userId}:${index}`),
+    user_id: userId,
+    title,
+    description,
+    status: 'active',
+    progress: [35, 20, 10][index] ?? 0,
+    due_date: dateOnly(addDays(now, 21 + index * 7)),
+    metadata,
+    created_at: addDays(now, -60 + index).toISOString(),
+    updated_at: addDays(now, -30 + index).toISOString(),
+  }));
+  await insertRows('goals', goalRows);
 
   const dailyLogs = buildDailyLogs(userId, scenario, now, metadata);
   await insertRows('daily_logs', dailyLogs);
@@ -469,25 +460,42 @@ async function seedScenario(userId, scenario) {
     buildBehavioralEvents(userId, scenario, dailyLogs, metadata),
   );
 
-  await insertRows(
-    'tasks',
-    scenario.tasks.map(([title, description, status, priority, offsetDays]) => ({
-      user_id: userId,
-      title,
-      description,
-      status,
-      priority,
-      deadline: atHour(addDays(now, offsetDays), 16, 0),
-      completed_at: status === 'done' ? now.toISOString() : null,
-      cancelled_at: status === 'cancelled' ? now.toISOString() : null,
-      source: 'demo_seed',
-      metadata,
-    })),
+  const taskRows = scenario.tasks.map(
+    (
+      [title, description, status, priority, offsetDays, estimatedMinutes],
+      index,
+    ) => {
+      const terminalAt = atHour(addDays(reviewWeekStart, 1 + index), 16, 0);
+      return {
+        id: deterministicUuid(`demo-seed:task:${userId}:${index}`),
+        user_id: userId,
+        title,
+        description,
+        status,
+        priority,
+        deadline: atHour(addDays(now, offsetDays), 16, 0),
+        estimated_minutes: estimatedMinutes ?? [45, 60, 30, 20][index] ?? 30,
+        completed_at: status === 'done' ? terminalAt : null,
+        cancelled_at: status === 'cancelled' ? terminalAt : null,
+        source: 'demo_seed',
+        metadata: {
+          ...metadata,
+          goal_id: goalRows[index % goalRows.length].id,
+        },
+        created_at: addDays(reviewWeekStart, -10 + index).toISOString(),
+        updated_at:
+          status === 'done' || status === 'cancelled'
+            ? terminalAt
+            : addDays(now, -index).toISOString(),
+      };
+    },
   );
+  await insertRows('tasks', taskRows);
 
   await insertRows(
     'schedule_items',
     scenario.schedule.map(([title, location, weekday, startsAt, endsAt], index) => ({
+      id: deterministicUuid(`demo-seed:schedule:${userId}:${index}`),
       user_id: userId,
       title,
       location,
@@ -501,17 +509,33 @@ async function seedScenario(userId, scenario) {
     })),
   );
 
-  const habitRows = scenario.habits.map(([title, description], index) => ({
-    id: crypto.randomUUID(),
-    user_id: userId,
-    title,
-    description,
-    frequency: 'daily',
-    target: 1,
-    active: true,
-    metadata,
-    updated_at: addDays(now, -index).toISOString(),
-  }));
+  const habitRows = scenario.habits.map(
+    ([title, description, , cadenceConfig], index) => {
+      const cadence = habitCadenceProjection(cadenceConfig);
+      return {
+        id: deterministicUuid(`demo-seed:habit:${userId}:${index}`),
+        user_id: userId,
+        title,
+        description,
+        frequency: cadence.frequency,
+        target: cadence.target,
+        active: true,
+        metadata: {
+          ...metadata,
+          contract_version: 'habit-v1',
+          cadence: cadence.kind,
+          ...(cadence.scheduledWeekdays.length > 0
+            ? { scheduled_weekdays: cadence.scheduledWeekdays }
+            : {}),
+          lifecycle: 'active',
+          started_on: dateOnly(addDays(reviewWeekStart, -45)),
+          goal_id: goalRows[index % goalRows.length].id,
+        },
+        created_at: addDays(reviewWeekStart, -45 + index).toISOString(),
+        updated_at: addDays(reviewWeekStart, -20 + index).toISOString(),
+      };
+    },
+  );
   await insertRows('habits', habitRows);
   await insertRows(
     'habit_logs',
@@ -524,6 +548,10 @@ async function seedScenario(userId, scenario) {
         method: 'PATCH',
         body: JSON.stringify({
           active: false,
+          metadata: {
+            ...habitRows[2].metadata,
+            lifecycle: 'paused',
+          },
           updated_at: now.toISOString(),
         }),
         headers: { Prefer: 'return=minimal' },
@@ -531,14 +559,23 @@ async function seedScenario(userId, scenario) {
       'pause demo habit after inserting its history',
     );
   }
+  if (scenario.key === 'student') {
+    await insertRows(
+      'focus_sessions',
+      buildFocusSessions(userId, taskRows, habitRows, now, reviewWeekStart),
+    );
+  }
 
   await insertRows(
     'notifications',
     scenario.notifications.map(
-      ([title, message, type, priority, offsetDays], index) => {
+      ([title, message, type, priority, offsetDays, actionUrl, lifecycle], index) => {
         const lifecycleTimestamp = addDays(now, -index).toISOString();
-        const isRead = index > 0;
+        const state = lifecycle ?? (index > 0 ? 'read' : 'unread');
+        const isRead = state === 'read' || state === 'dismissed';
+        const isDismissed = state === 'dismissed';
         return {
+          id: deterministicUuid(`demo-seed:notification:${userId}:${index}`),
           user_id: userId,
           title,
           message,
@@ -546,7 +583,8 @@ async function seedScenario(userId, scenario) {
           priority,
           is_read: isRead,
           read_at: isRead ? lifecycleTimestamp : null,
-          action_url: null,
+          dismissed_at: isDismissed ? lifecycleTimestamp : null,
+          action_url: actionUrl ?? null,
           due_at: atHour(addDays(now, offsetDays), 15 + index, 0),
           metadata,
           created_at: lifecycleTimestamp,
@@ -559,6 +597,7 @@ async function seedScenario(userId, scenario) {
   await insertRows(
     'memory_entries',
     scenario.memories.map(([type, title, content], index) => ({
+      id: deterministicUuid(`demo-seed:memory:${userId}:${index}`),
       user_id: userId,
       type,
       title,
@@ -567,12 +606,15 @@ async function seedScenario(userId, scenario) {
       evidence: [{ source: 'demo_seed', scenario: scenario.key }],
       metadata,
       last_seen_at: addDays(now, -index).toISOString(),
+      created_at: addDays(now, -40 + index).toISOString(),
+      updated_at: addDays(now, -index).toISOString(),
     })),
   );
 
   await insertRows(
     'ai_insights',
     scenario.insights.map(([title, description, category, confidence], index) => ({
+      id: deterministicUuid(`demo-seed:insight:${userId}:${index}`),
       user_id: userId,
       title,
       description,
@@ -590,6 +632,7 @@ async function seedScenario(userId, scenario) {
     'recommendations',
     scenario.recommendations.map(
       ([title, reason, actionLabel, category, confidence, priority], index) => ({
+        id: deterministicUuid(`demo-seed:recommendation:${userId}:${index}`),
         user_id: userId,
         title,
         reason,
@@ -611,6 +654,7 @@ async function seedScenario(userId, scenario) {
 
   await insertRows('skillset_profiles', [
     {
+      id: deterministicUuid(`demo-seed:skillset:${userId}:current`),
       user_id: userId,
       overall_score: scenario.overallScore,
       archetype: scenario.archetype,
@@ -626,6 +670,7 @@ async function seedScenario(userId, scenario) {
 
   await insertRows('coach_messages', [
     {
+      id: deterministicUuid(`demo-seed:legacy-coach-message:${userId}:user`),
       user_id: userId,
       role: 'user',
       content: 'What should I pay attention to today?',
@@ -633,6 +678,7 @@ async function seedScenario(userId, scenario) {
       created_at: addDays(now, -1).toISOString(),
     },
     {
+      id: deterministicUuid(`demo-seed:legacy-coach-message:${userId}:assistant`),
       user_id: userId,
       role: 'assistant',
       content: scenario.recommendations[0][1],
@@ -642,79 +688,81 @@ async function seedScenario(userId, scenario) {
   ]);
 
   const snapshotRows = [
-      {
-        id: onboardingSnapshotId,
-        user_id: userId,
-        scope: 'onboarding',
-        period_key: 'setup:intake-v1',
-        summary: {
-          primary_focus_areas: scenario.focusAreas,
-          goals: [],
-          friction_points: setupFrictionPoints,
-          coaching_style: scenario.coachingStyle,
-          best_energy_window: scenario.bestEnergyWindow,
-          reminder_enabled: true,
-          fixed_commitment_count: 0,
-          existing_habit_count: 0,
-          routine_candidate_count: 0,
-          active_habit_count: 0,
-        },
-        signals: {
-          focus_areas: scenario.focusAreas,
-          friction_points: setupFrictionPoints,
-          routine_candidates: [],
-          calendar_connection_intent: 'later',
-        },
-        source: 'backend',
-        metadata: {
-          source: 'intake-v1',
-          managed_by: 'setup',
-          intake_response_id: intakeResponseId,
-          request_id: intakeRequestId,
-          revision: 1,
-        },
-        generated_at: now.toISOString(),
+    {
+      id: onboardingSnapshotId,
+      user_id: userId,
+      scope: 'onboarding',
+      period_key: 'setup:intake-v1',
+      summary: {
+        primary_focus_areas: scenario.focusAreas,
+        goals: [],
+        friction_points: setupFrictionPoints,
+        coaching_style: scenario.coachingStyle,
+        best_energy_window: scenario.bestEnergyWindow,
+        reminder_enabled: true,
+        fixed_commitment_count: 0,
+        existing_habit_count: 0,
+        routine_candidate_count: 0,
+        active_habit_count: 0,
       },
-      {
-        user_id: userId,
-        scope: 'daily',
-        period_key: today,
-        summary: {
-          focus_hint: scenario.recommendations[0][0],
-          recovery_hint: scenario.recommendations[1][0],
-          risk_flags: scenario.baseline.stress >= 7 ? ['deadline_pressure'] : [],
-        },
-        signals: {
-          input_counts: {
-            daily_logs: dailyLogs.length,
-            behavioral_events: dailyLogs.length * 5,
-            tasks: scenario.tasks.length,
-            habits: scenario.habits.length,
-          },
-        },
-        source: 'demo_seed',
-        metadata,
-        generated_at: now.toISOString(),
+      signals: {
+        focus_areas: scenario.focusAreas,
+        friction_points: setupFrictionPoints,
+        routine_candidates: [],
+        calendar_connection_intent: 'later',
       },
-      {
-        user_id: userId,
-        scope: 'weekly',
-        period_key: weekKey,
-        summary: {
-          weekly_theme: scenario.goals[0][0],
-          next_focus: scenario.recommendations[0][0],
-        },
-        signals: {
-          input_counts: {
-            daily_logs: dailyLogs.length,
-            recommendations: scenario.recommendations.length,
-          },
-        },
-        source: 'demo_seed',
-        metadata,
-        generated_at: now.toISOString(),
+      source: 'backend',
+      metadata: {
+        source: 'intake-v1',
+        managed_by: 'setup',
+        intake_response_id: intakeResponseId,
+        request_id: intakeRequestId,
+        revision: 1,
       },
-    ];
+      generated_at: now.toISOString(),
+    },
+    {
+      id: deterministicUuid(`demo-seed:daily-snapshot:${userId}:${today}`),
+      user_id: userId,
+      scope: 'daily',
+      period_key: today,
+      summary: {
+        focus_hint: scenario.recommendations[0][0],
+        recovery_hint: scenario.recommendations[1][0],
+        risk_flags: scenario.baseline.stress >= 7 ? ['deadline_pressure'] : [],
+      },
+      signals: {
+        input_counts: {
+          daily_logs: dailyLogs.length,
+          behavioral_events: dailyLogs.length * 5,
+          tasks: scenario.tasks.length,
+          habits: scenario.habits.length,
+        },
+      },
+      source: 'demo_seed',
+      metadata,
+      generated_at: now.toISOString(),
+    },
+    {
+      id: deterministicUuid(`demo-seed:weekly-snapshot:${userId}:${weekKey}`),
+      user_id: userId,
+      scope: 'weekly',
+      period_key: weekKey,
+      summary: {
+        weekly_theme: scenario.goals[0][0],
+        next_focus: scenario.recommendations[0][0],
+      },
+      signals: {
+        input_counts: {
+          daily_logs: dailyLogs.length,
+          recommendations: scenario.recommendations.length,
+        },
+      },
+      source: 'demo_seed',
+      metadata,
+      generated_at: now.toISOString(),
+    },
+  ];
   await upsertRows(
     'user_state_snapshots',
     [snapshotRows[0]],
@@ -747,10 +795,84 @@ function buildDailyLogs(userId, scenario, now, metadata) {
       240,
     );
     const activity = clampInt(scenario.baseline.activity + Math.sign(variation), 0, 10);
+    const entryDate = dateOnly(date);
+    const id = deterministicUuid(`demo-seed:daily-log:${userId}:${entryDate}`);
+    const useStructuredCapture = scenario.key === 'student' && offset >= -14;
+
+    if (useStructuredCapture) {
+      const structuredSleep = Math.round(sleep * 2) / 2;
+      const morningCapturedAt = atHour(date, 6, 30);
+      const eveningCapturedAt = atHour(date, 20, 30);
+      const eveningCapture = {
+        capture_kind: 'evening',
+        entry_date: entryDate,
+        capture_id: deterministicUuid(
+          `demo-seed:evening-capture:${userId}:${entryDate}`,
+        ),
+        captured_at: eveningCapturedAt,
+        mood,
+        energy,
+        stress_intensity: stress,
+        stress_intensity_label: stressIntensityLabel(stress),
+        stress_source: stress >= 7 ? 'workload' : 'external_environment',
+        stress_controllability:
+          stress >= 7 ? 'partly_controllable' : 'mostly_controllable',
+        focus_band: focusBand(focus),
+        main_friction: stress >= 7 ? 'too_much_to_do' : 'interruptions',
+        tomorrow_priority: scenario.goals[index % scenario.goals.length][0],
+        ...(offset === 0
+          ? {
+              reflection_note:
+                'The first focused block worked better than switching between tasks.',
+              specific_blocker: 'Late messages interrupted the second study block.',
+            }
+          : {}),
+      };
+      const morningCapture = {
+        capture_kind: 'morning',
+        entry_date: entryDate,
+        capture_id: deterministicUuid(
+          `demo-seed:morning-capture:${userId}:${entryDate}`,
+        ),
+        captured_at: morningCapturedAt,
+        sleep_hours: structuredSleep,
+        current_energy: energy,
+        day_shape: stress >= 7 ? 'constrained' : 'normal',
+      };
+      return {
+        id,
+        user_id: userId,
+        entry_date: entryDate,
+        sleep_hours: structuredSleep,
+        steps: null,
+        activity_level: null,
+        screen_time_hours: null,
+        focus_minutes: null,
+        mood_score: mood,
+        mood_label: moodLabel(mood),
+        energy_level: energy,
+        stress_level: stress,
+        nutrition_notes: null,
+        day_focus: null,
+        reflection: null,
+        source: 'quick_check_in',
+        metadata: {
+          ...metadata,
+          capture_version: 'daily-capture-v2',
+          captures: {
+            evening: eveningCapture,
+            morning: morningCapture,
+          },
+        },
+        created_at: morningCapturedAt,
+        updated_at: eveningCapturedAt,
+      };
+    }
 
     return {
+      id,
       user_id: userId,
-      entry_date: dateOnly(date),
+      entry_date: entryDate,
       sleep_hours: Number(sleep.toFixed(1)),
       steps: scenario.baseline.steps + variation * 450 + (index % 3) * 180,
       activity_level: activity,
@@ -776,6 +898,44 @@ function buildDailyLogs(userId, scenario, now, metadata) {
 function buildBehavioralEvents(userId, scenario, dailyLogs, metadata) {
   return dailyLogs.flatMap((log, index) => {
     const date = new Date(`${log.entry_date}T12:00:00.000Z`);
+    const captures = log.metadata?.captures;
+    if (log.metadata?.capture_version === 'daily-capture-v2' && captures) {
+      const evening = captures.evening;
+      const morning = captures.morning;
+      const signals = [
+        ['mood', evening.mood, 'score_0_10', evening, 'evening'],
+        ['energy', morning.current_energy, 'score_0_10', morning, 'morning'],
+        ['stress', evening.stress_intensity, 'score_0_10', evening, 'evening'],
+        ['sleep', morning.sleep_hours, 'hours', morning, 'morning'],
+      ];
+      return signals.map(([eventType, value, unit, capture, captureKind]) => ({
+        id: deterministicUuid(
+          `demo-seed:capture-event:${log.id}:${eventType}`,
+        ),
+        user_id: userId,
+        daily_log_id: log.id,
+        event_type: eventType,
+        value,
+        unit,
+        occurred_at: capture.captured_at,
+        source: 'quick_check_in',
+        metadata: {
+          ...metadata,
+          capture_version: 'daily-capture-v2',
+          capture_kind: captureKind,
+          entry_date: log.entry_date,
+          capture_id: capture.capture_id,
+          captured_at: capture.captured_at,
+          ...(captureKind === 'morning'
+            ? { day_shape: morning.day_shape }
+            : {
+                stress_source: evening.stress_source,
+                stress_controllability: evening.stress_controllability,
+                main_friction: evening.main_friction,
+              }),
+        },
+      }));
+    }
     const base = [
       ['mood_score', log.mood_score, 'score'],
       ['energy_level', log.energy_level, 'score'],
@@ -784,7 +944,9 @@ function buildBehavioralEvents(userId, scenario, dailyLogs, metadata) {
       ['activity_level', log.activity_level, 'score'],
     ];
     return base.map(([eventType, value, unit], eventIndex) => ({
+      id: deterministicUuid(`demo-seed:event:${log.id}:${eventType}`),
       user_id: userId,
+      daily_log_id: log.id,
       event_type: eventType,
       value,
       unit,
@@ -798,21 +960,144 @@ function buildBehavioralEvents(userId, scenario, dailyLogs, metadata) {
 function buildHabitLogs(userId, scenario, habits, now) {
   return habits.flatMap((habit, habitIndex) => {
     const pattern = scenario.habits[habitIndex][2];
-    return pattern
-      .map((value, patternIndex) => {
-        if (value <= 0) {
-          return null;
-        }
-        return {
-          user_id: userId,
-          habit_id: habit.id,
-          entry_date: dateOnly(addDays(now, patternIndex - 6)),
-          value,
-          notes: 'Demo completion',
-        };
-      })
+    const cadence = habitCadenceProjection(scenario.habits[habitIndex][3]);
+    return Array.from({ length: 21 }, (_, index) => {
+      const date = addDays(now, index - 20);
+      const weekday = isoWeekday(date);
+      if (
+        cadence.kind === 'weekdays' &&
+        !cadence.scheduledWeekdays.includes(weekday)
+      ) {
+        return null;
+      }
+      const value = pattern[weekday - 1] ?? 0;
+      if (value === 0) {
+        return null;
+      }
+      const entryDate = dateOnly(date);
+      const completed = value > 0;
+      const timestamp = atHour(date, 19, habitIndex * 5);
+      return {
+        id: deterministicUuid(`demo-seed:habit-log:${habit.id}:${entryDate}`),
+        user_id: userId,
+        habit_id: habit.id,
+        entry_date: entryDate,
+        status: completed ? 'completed' : 'skipped',
+        value: completed ? 1 : 0,
+        notes: completed ? 'Demo completion' : 'Demo intentional skip',
+        created_at: timestamp,
+        updated_at: timestamp,
+      };
+    })
       .filter(Boolean);
   });
+}
+
+function buildFocusSessions(userId, taskRows, habitRows, now, reviewWeekStart) {
+  const openTasks = taskRows.filter((row) =>
+    ['todo', 'in_progress'].includes(row.status),
+  );
+  if (openTasks.length < 2 || habitRows.length === 0) {
+    throw new Error(
+      'Student demo focus history requires two open tasks and a habit.',
+    );
+  }
+  const completedStart = new Date(atHour(addDays(reviewWeekStart, 1), 10, 0));
+  const completedEnd = addMinutes(completedStart, 50);
+  const abandonedStart = new Date(atHour(addDays(reviewWeekStart, 3), 15, 0));
+  const abandonedEnd = addMinutes(abandonedStart, 12);
+  const activeStart = addMinutes(now, -8);
+  return [
+    {
+      id: deterministicUuid(`demo-seed:focus:${userId}:completed`),
+      user_id: userId,
+      started_at: completedStart.toISOString(),
+      ended_at: completedEnd.toISOString(),
+      planned_minutes: 50,
+      actual_minutes: 50,
+      label: 'Math proof practice',
+      distractions: 1,
+      social_media_warning: false,
+      notes: 'Finished one coherent proof set.',
+      status: 'completed',
+      task_id: openTasks[0].id,
+      habit_id: null,
+      metadata: {
+        source: 'demo_seed_v2',
+        entry_date: dateOnly(completedStart),
+      },
+      created_at: completedStart.toISOString(),
+      updated_at: completedEnd.toISOString(),
+    },
+    {
+      id: deterministicUuid(`demo-seed:focus:${userId}:abandoned`),
+      user_id: userId,
+      started_at: abandonedStart.toISOString(),
+      ended_at: abandonedEnd.toISOString(),
+      planned_minutes: 30,
+      actual_minutes: 12,
+      label: 'Phone-away study attempt',
+      distractions: 3,
+      social_media_warning: true,
+      notes: 'Stopped after the environment became too noisy.',
+      status: 'abandoned',
+      task_id: null,
+      habit_id: habitRows[1]?.id ?? habitRows[0].id,
+      metadata: {
+        source: 'demo_seed_v2',
+        entry_date: dateOnly(abandonedStart),
+      },
+      created_at: abandonedStart.toISOString(),
+      updated_at: abandonedEnd.toISOString(),
+    },
+    {
+      id: deterministicUuid(`demo-seed:focus:${userId}:active`),
+      user_id: userId,
+      started_at: activeStart.toISOString(),
+      ended_at: null,
+      planned_minutes: 25,
+      actual_minutes: null,
+      label: 'History outline sprint',
+      distractions: 0,
+      social_media_warning: false,
+      notes: null,
+      status: 'active',
+      task_id: openTasks[1].id,
+      habit_id: null,
+      metadata: {
+        source: 'demo_seed_v2',
+        entry_date: dateOnly(activeStart),
+      },
+      created_at: activeStart.toISOString(),
+      updated_at: activeStart.toISOString(),
+    },
+  ];
+}
+
+function habitCadenceProjection(config) {
+  const kind = config?.kind ?? 'daily';
+  if (kind === 'weekdays') {
+    return {
+      kind,
+      frequency: 'daily',
+      target: 1,
+      scheduledWeekdays: [...config.scheduledWeekdays].sort(),
+    };
+  }
+  if (kind === 'weekly_target') {
+    return {
+      kind,
+      frequency: 'weekly',
+      target: config.weeklyTarget,
+      scheduledWeekdays: [],
+    };
+  }
+  return {
+    kind: 'daily',
+    frequency: 'daily',
+    target: 1,
+    scheduledWeekdays: [],
+  };
 }
 
 async function insertRows(table, rows) {
@@ -898,6 +1183,21 @@ function addDays(baseDate, offset) {
   return date;
 }
 
+function addMinutes(baseDate, offset) {
+  return new Date(baseDate.getTime() + offset * 60_000);
+}
+
+function startOfIsoWeek(date) {
+  const copy = new Date(date);
+  copy.setUTCHours(0, 0, 0, 0);
+  copy.setUTCDate(copy.getUTCDate() - (isoWeekday(copy) - 1));
+  return copy;
+}
+
+function isoWeekday(date) {
+  return date.getUTCDay() || 7;
+}
+
 function dateOnly(date) {
   return date.toISOString().slice(0, 10);
 }
@@ -939,4 +1239,30 @@ function moodLabel(score) {
     return 'low';
   }
   return 'very_low';
+}
+
+function stressIntensityLabel(score) {
+  if (score >= 8) {
+    return 'high';
+  }
+  if (score >= 5) {
+    return 'medium';
+  }
+  return 'low';
+}
+
+function focusBand(minutes) {
+  if (minutes <= 0) {
+    return 'none';
+  }
+  if (minutes < 30) {
+    return 'under_30_minutes';
+  }
+  if (minutes <= 60) {
+    return '30_to_60_minutes';
+  }
+  if (minutes <= 120) {
+    return '1_to_2_hours';
+  }
+  return 'over_2_hours';
 }

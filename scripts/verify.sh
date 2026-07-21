@@ -18,6 +18,7 @@ bash scripts/test_local_supabase_migrations.sh
 bash scripts/test_start_local_stack.sh
 node --check scripts/seed_demo_data.mjs
 node --check e2e/web/smoke.mjs
+python3 -m py_compile scripts/seed_student_feature_data.py
 
 cd "$ROOT_DIR/apps/mobile"
 "$FLUTTER_BIN" pub get

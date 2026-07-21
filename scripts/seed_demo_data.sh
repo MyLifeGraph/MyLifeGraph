@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 NODE_BIN="${NODE_BIN:-node}"
+PYTHON_BIN="${PYTHON_BIN:-$ROOT_DIR/services/ai_service/.venv/bin/python}"
 SUPABASE_HOME="$ROOT_DIR/.tools/supabase-home"
 
 cd "$ROOT_DIR"
@@ -19,6 +20,12 @@ fi
 if ! command -v "$NODE_BIN" >/dev/null 2>&1; then
   echo "Node.js is not available as '$NODE_BIN'." >&2
   echo "Install Node.js in Ubuntu and make 'node --version' work." >&2
+  exit 127
+fi
+
+if [[ ! -x "$PYTHON_BIN" ]]; then
+  echo "The FastAPI virtual environment is not available at '$PYTHON_BIN'." >&2
+  echo "Create services/ai_service/.venv and install its requirements, or set PYTHON_BIN." >&2
   exit 127
 fi
 
@@ -57,3 +64,8 @@ echo "Local service role key: available for demo seeding"
 SUPABASE_URL="$api_url" \
 SUPABASE_SERVICE_ROLE_KEY="$local_service_role_key" \
 "$NODE_BIN" scripts/seed_demo_data.mjs
+
+SUPABASE_URL="$api_url" \
+SUPABASE_SERVICE_ROLE_KEY="$local_service_role_key" \
+PYTHONPATH="$ROOT_DIR/services/ai_service" \
+"$PYTHON_BIN" scripts/seed_student_feature_data.py

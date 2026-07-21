@@ -840,11 +840,15 @@ destructive reset commands against a remote database.
 
 For manual local product exploration, `npm run seed:demo` creates repeatable
 local-only Auth users and app rows for student, worker, and recovery scenarios.
-The seed script uses the local Supabase service-role key from
+It replaces only those three named demo accounts through the full-account
+cascade, so immutable retry and usage rows are reset without weakening their
+normal contracts. The seed script uses the local Supabase service-role key from
 `supabase status -o env`, refuses non-local API URLs, and writes typed applied
 Setup revisions with stable request ids and empty optional Setup-owned
-collections. It does not change the schema or relabel the separately seeded
-`demo_seed` objects as Setup-owned.
+collections. It then uses the existing backend services to enrich and verify
+the student account across Today, Weekly Review, Calendar Import, Deadline
+Planner, notification delivery, and Coach. It does not change the schema or
+relabel the separately seeded `demo_seed` objects as Setup-owned.
 
 See `docs/verification.md` for the current automation boundary.
 

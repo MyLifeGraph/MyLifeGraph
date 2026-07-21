@@ -16,7 +16,7 @@ Use the lowest level that covers the change.
 | Local Supabase reset | `RESET_DB=true FLUTTER_BIN=/path/to/flutter scripts/verify_supabase_local.sh` | Recreates local DB, applies migrations, then runs tests. | Yes, local DB only |
 | Browser E2E | `FLUTTER_BIN=/path/to/flutter bash scripts/e2e_web.sh` | Requires matching local migration history, starts Flutter Web, drives Playwright, and checks uniquely named DB writes. | No reset; writes test rows |
 | Browser E2E with reset | `RESET_DB=true FLUTTER_BIN=/path/to/flutter bash scripts/e2e_web.sh` | Recreates local DB, then runs browser E2E. | Yes, local DB only |
-| Demo seed | `npm run seed:demo` | Starts local Supabase and seeds repeatable demo users/data for manual exploration. | No |
+| Demo seed | `npm run seed:demo` | Starts local Supabase and replaces only the three named local demo accounts with repeatable data. | Demo accounts only |
 
 Do not run destructive Supabase commands against a remote database. These
 scripts are for the local Supabase stack from `supabase/config.toml`.
@@ -31,17 +31,41 @@ npm run seed:demo
 ```
 
 This runs `scripts/seed_demo_data.sh`, which starts local Supabase, reads the
-local service-role key from `supabase status -o env`, and invokes
-`scripts/seed_demo_data.mjs`. The Node script rejects any API URL outside
-`http://127.0.0.1:54321` and `http://localhost:54321`.
+local service-role key from `supabase status -o env`, invokes
+`scripts/seed_demo_data.mjs`, and then enriches the student scenario through
+`scripts/seed_student_feature_data.py`. The Node and Python paths both reject
+any API URL outside `http://127.0.0.1:54321` and
+`http://localhost:54321`. The backend virtual environment must exist at
+`services/ai_service/.venv`, or `PYTHON_BIN` must identify an equivalent
+environment with the service requirements installed.
 
-The seed is idempotent for the demo accounts. It keeps the local Auth users,
-updates their password and metadata, clears their app rows, and recreates the
-scenario data. Each Intake row is a valid applied revision with a stable request
-id and intentionally empty optional Setup-owned collections. Separately seeded
-goals, habits, and schedule rows retain `demo_seed` ownership and are not
-presented as Setup materialization. The default local-only password is
-`DemoPass123!` for:
+The seed is repeatable for the demo identities. It uses the reviewed local
+full-account cascade to delete and recreate only the three named Auth users, so
+immutable retry/usage ledgers cannot leak between runs. Rerunning it invalidates
+an open demo-account session. Each Intake row is a valid applied revision with
+a stable request id and intentionally empty optional Setup-owned collections.
+Separately seeded goals, habits, and schedule rows retain `demo_seed` ownership
+and are not presented as Setup materialization.
+
+The student scenario then uses the production backend service classes to
+persist and validate:
+
+- current V2 Morning/Evening captures, seven historical daily snapshots, eight
+  briefings, and all five decision-feedback outcomes;
+- daily, selected-weekday, and weekly-target habits with complete, skipped,
+  open, and missed opportunities plus completed, abandoned, and active Focus;
+- one current Weekly Review with both a staged replacement and a directly
+  reviewable shrink proposal;
+- one consented current `.ics` import with timed, all-day, busy, free, and
+  unsupported-recurrence coverage;
+- two active Preparation Plans, one pending preview, account-wide capacity,
+  and qualifying planner-linked Focus progress;
+- explicit foreground-notification consent, manual Inbox lifecycle states,
+  and at least one generated pending row; and
+- two validated fake-provider Coach turns with two selected eligible memories.
+
+The seed command verifies those minimums before succeeding. The default
+local-only password is `DemoPass123!` for:
 
 - `student@example.test`
 - `worker@example.test`
@@ -65,6 +89,7 @@ The script runs:
   their hermetic harnesses
 - `bash scripts/test_local_supabase_migrations.sh`
 - `bash scripts/test_start_local_stack.sh`
+- syntax checks for the demo seed, browser smoke, and student feature enricher
 - `flutter pub get`
 - `flutter analyze`
 - `flutter test`
