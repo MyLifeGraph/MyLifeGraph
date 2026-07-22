@@ -13,8 +13,9 @@ IMPORT_ID = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee"
 
 
 class Client:
-    def __init__(self) -> None:
+    def __init__(self, *, planner_use_calendar_busy_time: bool = False) -> None:
         self.calls = []
+        self.planner_use_calendar_busy_time = planner_use_calendar_busy_time
 
     async def select(self, table, *, params):
         self.calls.append((table, params))
@@ -27,6 +28,20 @@ class Client:
         if table == "deadline_plan_blocks":
             return []
         if table == "deadline_plans":
+            return []
+        if table == "planner_preferences":
+            return [
+                {
+                    "use_calendar_busy_time": (
+                        self.planner_use_calendar_busy_time
+                    ),
+                },
+            ]
+        if table in {
+            "planner_task_blocks",
+            "planner_habit_slots",
+            "planner_commitments",
+        }:
             return []
         if table == "calendar_connections":
             if params.get("id"):
@@ -68,7 +83,7 @@ class Client:
 
 
 def test_planning_context_reads_only_current_minimal_calendar_projection() -> None:
-    client = Client()
+    client = Client(planner_use_calendar_busy_time=True)
     repository = SupabaseDeadlinePlanRepository(client)
 
     context = asyncio.run(

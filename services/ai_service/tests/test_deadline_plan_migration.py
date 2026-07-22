@@ -149,8 +149,11 @@ def test_account_export_includes_product_rows_and_omits_request_ledger() -> None
         "deadline_plan_revisions",
         "deadline_plan_blocks",
     )
-    assert ACCOUNT_EXPORT_TABLE_NAMES[-3:] == expected
-    assert tuple(table.name for table in ACCOUNT_EXPORT_TABLES)[-3:] == expected
+    start = ACCOUNT_EXPORT_TABLE_NAMES.index("deadline_plans")
+    assert ACCOUNT_EXPORT_TABLE_NAMES[start : start + 3] == expected
+    exported_names = tuple(table.name for table in ACCOUNT_EXPORT_TABLES)
+    export_start = exported_names.index("deadline_plans")
+    assert exported_names[export_start : export_start + 3] == expected
     assert ACCOUNT_EXPORT_OMITTED_TABLES["deadline_plan_request_identities"] == (
         "backend_only_anti_replay_ledger"
     )

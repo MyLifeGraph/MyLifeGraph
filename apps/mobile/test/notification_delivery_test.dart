@@ -416,7 +416,7 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('In-app · fixed text · not AI-written'), findsOneWidget);
-    expect(find.text("Today's plan is ready"), findsWidgets);
+    expect(find.text("Today's overview is ready"), findsWidgets);
     expect(find.text('Your inbox is empty.'), findsNothing);
     expect(inboxRepository.calls, greaterThanOrEqualTo(2));
     await tester.drag(
@@ -458,8 +458,8 @@ Map<String, dynamic> _settingsJson({
 
 Map<String, dynamic> _generatedRow() => {
       'id': _notificationId,
-      'title': "Today's plan is ready",
-      'message': 'Open Today to review your next step.',
+      'title': "Today's overview is ready",
+      'message': 'Open Today to review your schedule and actions.',
       'type': 'reminder',
       'priority': 'medium',
       'action_url': '/dashboard',
@@ -496,8 +496,8 @@ AppNotification _notification({
       id: id,
       title: category == 'weekly_summary'
           ? 'Your weekly review is ready'
-          : "Today's plan is ready",
-      body: 'Open Today to review your next step.',
+          : "Today's overview is ready",
+      body: 'Open Today to review your schedule and actions.',
       type: 'reminder',
       priority: 'medium',
       actionUrl: '/dashboard',

@@ -1,7 +1,7 @@
 # MyLifeGraph: aktueller Produktleitfaden
 
 Status: Beschreibung des tatsächlich implementierten Repository-Stands vom
-20. Juli 2026. Dieses Dokument beschreibt den Ist-Zustand, nicht die Roadmap.
+22. Juli 2026. Dieses Dokument beschreibt den Ist-Zustand, nicht die Roadmap.
 Die verbindlichen technischen Detailverträge bleiben die am Ende verlinkten
 Contract-Dokumente.
 
@@ -11,8 +11,8 @@ aktuell nicht implementiert.
 
 ## Die Kurzfassung
 
-MyLifeGraph soll aus expliziten Angaben und beobachtbaren Handlungen eine klare
-nächste Entscheidung für den Tag ableiten:
+MyLifeGraph soll explizite Angaben und beobachtbare Handlungen in einen klaren,
+ehrlichen Tagesüberblick und vorsichtige regelbasierte Unterstützung übersetzen:
 
 1. **Setup** beschreibt längerfristigen Kontext: Ziele, Präferenzen, Routinen
    und feste Wochenblöcke.
@@ -21,12 +21,19 @@ nächste Entscheidung für den Tag ableiten:
    wurde.
 4. Ein **regelbasierter Daily State** ordnet diese Signale als `push`, `steady`,
    `recover` oder `plan` ein.
-5. Ein **Daily Briefing** wählt daraus eine primäre und höchstens zwei
-   unterstützende Aktionen für `Today`.
-6. **Feedback, Insights und Weekly Review** machen Reaktionen und Entwicklungen
+5. **Today Overview** zeigt den Both-capture-Streak, exakte Tagesfortschritte,
+   Zeitblöcke, Tasks und Habits, ohne eine Entscheidung für den Nutzer zu
+   behaupten.
+6. Der **Planner** lässt Tasks, Habits, Preparation Plans und feste Termine
+   bewusst als Vorschau planen und reserviert Zeit erst nach Bestätigung.
+7. Ein persistiertes **Daily Briefing** kann intern weiterhin eine primäre und
+   höchstens zwei unterstützende Aktionen ranken. Es dient Scheduler, Reminder,
+   Coach-Kontext und Feedback-Historie, ist aber nicht mehr die primäre
+   Today-Darstellung.
+8. **Feedback, Insights und Weekly Review** machen Reaktionen und Entwicklungen
    sichtbar. Nur das Feedback verändert derzeit automatisch und begrenzt die
    spätere Rangfolge ähnlicher Vorschläge.
-7. Der **Coach** kann diesen Zustand erklären und eine unverbindliche Anregung
+9. Der **Coach** kann diesen Zustand erklären und eine unverbindliche Anregung
    formulieren. Er darf keine Produktdaten ändern.
 
 Der Großteil des Produkts ist bewusst regelbasiert und verwendet **kein LLM**.
@@ -47,33 +54,32 @@ Morning/Evening + Tasks + Habit outcomes + Focus sessions
 Regelbasierter Zustand
 Snapshot → Daily State → Modus, Qualität, Risiken, Begründungen
                          │
+           ┌─────────────┴─────────────┐
+           ▼                           ▼
+Today Overview                  interne Rangfolge
+Streak + Progress +             Recommendations → Daily Briefing
+Agenda + Tasks + Habits         → Reminder/Coach-Kontext/Feedback
+           │                           │
+           ▼                           ▼
+explizite Ausführung            spätere Rangfolge
+Task/Habit/Focus                bleibt begrenzt beeinflussbar
+           └─────────────┬─────────────┘
                          ▼
-Tagesentscheidung
-Recommendations → Daily Briefing → Today
-                         │
-                ┌────────┴────────┐
-                ▼                 ▼
-       explizite Ausführung    Decision feedback
-       Task/Habit/Focus        beeinflusst spätere Rangfolge
-                │                 │
-                └────────┬────────┘
-                         ▼
-Review
-Insights + Weekly Review
+Review: Insights + Weekly Review
 
 Coach: liest einen begrenzten Ausschnitt dieses Modells, erklärt ihn,
        besitzt aber weder Berechnungs- noch Änderungsrechte.
 
 Calendar import: bleibt ein separater, read-only Datenzweig und darf nur auf
-ausdrücklichen Wunsch bei einem Preparation Plan als Deadline oder Busy-Time-
-Quelle verwendet werden.
+ausdrücklichen Wunsch im Planner beziehungsweise bei Preparation als Busy-Time-
+Quelle verwendet werden. Es gibt keinen Live-Sync und keinen Calendar-Write.
 ```
 
 ## Welche Betriebsarten gibt es?
 
 | Modus | Speicherung | Verfügbare Funktionen | Wichtige Grenze |
 | --- | --- | --- | --- |
-| Local guest/demo | Check-ins und ausgewählte Beispieldaten lokal auf dem Gerät | Grundnavigation, Morning/Evening, ehrliche Demo- oder Leerzustände | Keine synchronisierten Tasks, Habits, Focus sessions, Reviews, Kalenderimporte oder Preparation Plans |
+| Local guest/demo | Check-ins und ausgewählte Beispieldaten lokal auf dem Gerät | Grundnavigation, Morning/Evening, ehrliche Demo- oder Leerzustände | Keine synchronisierten Tasks, Habits, Focus sessions, Planner-Pläne, Reviews, Kalenderimporte oder Preparation Plans |
 | Synced account | Supabase Auth und die eigenen, per RLS geschützten Supabase-Daten; abgeleitete Workflows über FastAPI | Der vollständige aktuelle Produktumfang | Fehler werden angezeigt und niemals durch personalisiert wirkende Mock-Daten ersetzt |
 | Coach mit `fake` provider | Wie ein synced account, aber Coach-Antworten sind feste Testantworten | Coach-Vertrag, History, Memories, Limits und UI lassen sich testen | Das ist kein aktives LLM |
 | Coach mit `local_codex_oauth` | Synced account plus explizit aktivierter Codex-CLI-Zugang des lokalen Entwicklers | Ein echter, begrenzter Modellaufruf | Nur lokale Entwicklung; nicht in Release/Produktion verfügbar |
@@ -90,17 +96,19 @@ Die Hauptnavigation hat derzeit genau fünf Ziele.
 
 | Sichtbarer Bereich | Aufgabe | Was dort aktuell zu sehen oder zu tun ist |
 | --- | --- | --- |
-| **Today** | Entscheiden und die wichtigsten Tagesaktionen ausführen | Daily Briefing, aktueller Check-in-Kontext, nächster Termin/Prep-Block, Vorbereitungsauslastung, Weekly-Review-Einstieg, Tasks sowie eingeklappte Empfehlungen und Wochenblöcke |
+| **Today** | Den gespeicherten Tag überblicken und Tagesaktionen ausführen | Check-in-Streak, transparenter Fortschritt, vertikale Setup/Task/Habit/Fixed commitment/Preparation/Calendar/Focus-Agenda, heutige Tasks und Habits sowie eingeklappte unterstützende Details |
 | **Insights** | Entwicklungen untersuchen | Eine vorsichtige Beobachtung, Datenqualität, 7/14/30/90-Tage-Korrelationen, Trends, Matrix und gespeicherte Insight-Notizen |
-| **Quick actions** | Daten erfassen oder eine geplante Aktivität starten | Evening check-in, Morning check-in, Habit completion, Habit management, Focus und Preparation Plans |
-| **Inbox** | Gespeicherte Hinweise bearbeiten | Bis zu 30 fällige, nicht verworfene Hinweise; unread/read/actionable Zähler; read, unread, dismiss und sichere interne Links |
-| **Settings** | Längerfristige Einstellungen und Kontoverwaltung | Profil/Zeitzone, Setup, Preparation Budget, In-app reminders, Calendar import, optionaler Coach, Export, Löschung, Theme und Sign-out |
+| **Quick actions** | Tagesdaten erfassen oder eine Aktivität ausführen | Evening check-in, Morning check-in, Habit completion und Focus |
+| **Planner** | Ziele und feste Zeiten bewusst planen | Task, Habit, Exam, Assignment und Fixed commitment anlegen; Vorschauen bestätigen; sieben Tage, Konflikte, Unscheduled und laufende Preparation verwalten |
+| **Settings** | Längerfristige Einstellungen, Inbox und Kontoverwaltung | Inbox, Profil/Zeitzone, Setup, Preparation Budget, In-app reminders, Calendar import, optionaler Coach, Export, Löschung, Theme und Sign-out |
 
 Weitere Screens sind Unterseiten und keine eigenständigen Hauptbereiche:
 
 - `Weekly review` gehört logisch zu `Today`.
-- `Today habits`, `Habit management`, `Focus` und `Preparation plans` gehören
-  zu `Quick actions`.
+- `Today habits` und `Focus` gehören zur Ausführung unter `Quick actions`.
+- `Habit management` und `Preparation plans` gehören logisch zu `Planner`;
+  die bisherigen Routen bleiben kompatibel.
+- `Inbox` gehört zu `Settings`; `/alerts` bleibt ein kompatibler Link.
 - `Calendar import`, `In-app reminders` und der Entwicklungs-`Coach` gehören
   derzeit zu `Settings`.
 - Es gibt aktuell **keine** separate Goals-, Tasks-, Schedule- oder Memories-
@@ -108,54 +116,57 @@ Weitere Screens sind Unterseiten und keine eigenständigen Hauptbereiche:
 
 ## Welche Dashboards gibt es tatsächlich?
 
-### 1. Today: Entscheidungs- und Ausführungsdashboard
+### 1. Today: Tagesüberblick und Ausführung
 
-`Today` ist das zentrale Dashboard. Die sichtbare Reihenfolge ist absichtlich
-entscheidungslastig:
+`Today` ist das zentrale Dashboard. Es behauptet nicht mehr, eine Entscheidung
+für den Nutzer getroffen zu haben. Die sichtbare Reihenfolge ist:
 
-1. **Daily Briefing**
-   - lokaler Tag und Datenquelle;
-   - Daily Mode: `push`, `steady`, `recover` oder `plan`;
-   - Datenqualität: `missing`, `partial`, `current` oder `stale`;
-   - Freshness und eine verständliche Kapazitätsaussage;
-   - genau eine primäre und höchstens zwei unterstützende Aktionen;
-   - regelbasierte Herkunft und Begründung;
-   - explizite Erstellung/Aktualisierung, falls das Briefing fehlt oder veraltet
-     ist;
-   - Feedback: `done`, `later`, `not_helpful`, `too_much` oder
-     `does_not_fit`.
-2. **Today at a glance**
-   - nächstes wiederkehrendes Commitment oder bestätigter Preparation Block;
-   - ob Morning und Evening bereits gespeichert wurden;
-   - die neuesten vorhandenen Check-in-Werte;
-   - direkte Einstiege in Focus, Habits, Morning und Evening.
-3. **Preparation workload** für einen synced account
-   - die nächsten sieben lokalen Tage;
-   - bestätigte Minuten aus aktiven Preparation Plans;
-   - separat bezeichnete wöchentliche Setup-Commitments;
-   - optionales kontoübergreifendes Daily Preparation Budget;
-   - Hinweise auf eine konkrete Überbuchung und Links zum Review/Replan.
-4. **Weekly review** als Einstieg in die letzte abgeschlossene lokale
-   Kalenderwoche.
-5. **Tasks**
-   - aktive, erledigte und abgebrochene Tasks;
-   - Titel, Beschreibung, Priorität, Deadline und optionale Schätzung;
-   - erstellen, bearbeiten, erledigen, verschieben, abbrechen, wiederherstellen
-     und Focus starten.
-6. **Supporting details**, standardmäßig weniger prominent
+1. **Check-in streak**
+   - ein Tag zählt nur mit gültigem Morning und Evening Check-in;
+   - beide dürfen jederzeit und in beliebiger Reihenfolge gespeichert werden;
+   - ein noch unvollständiger heutiger Tag beendet die bis gestern vollständige
+     Serie nicht.
+2. **Today's progress**
+   - dynamisches `x/y completed` statt einer festen Schrittzahl;
+   - zählt die zwei Check-ins, heutige Tasks, heutige Habits und bestätigte
+     Preparation Blocks dieses Tages;
+   - Calendar, Setup Commitments und tatsächliche Focus Sessions sind Kontext,
+     keine automatisch zu erledigenden Schritte;
+   - wenn eine gezählte Quelle ausfällt, steht dort ehrlich `Progress
+     unavailable`.
+3. **Today at a glance**
+   - vertikale, chronologische Tagesagenda;
+   - verschieden bezeichnete und gefärbte `Setup commitment`, `Preparation`,
+     `Calendar` und `Focus`-Einträge;
+   - ganztägige Events zuerst, überlappende Einträge separat;
+   - Preparation kann den Plan öffnen oder Focus auf dem Managed Task starten.
+4. **Today's tasks**
+   - überfällige/heute fällige, alle laufenden und heute erledigte manuelle
+     Tasks;
+   - inline erledigen, wiederherstellen, bearbeiten und Focus starten;
+   - `Show all tasks` enthält zusätzlich zukünftige, undatierte, erledigte,
+     abgebrochene und planner-managed Tasks.
+5. **Today's habits**
+   - tägliche, am Wochentag geplante und noch offene Weekly-Target Habits;
+   - explizit `Complete`, `Skip` oder `Undo outcome` über Habit V1.
+6. **More**, zunächst geschlossen und lazy geladen
+   - Preparation workload und Weekly review;
    - gespeicherte Check-in-Signale;
-   - einzelne Recommendations;
-   - vollständige Woche aus Schedule Items und bestätigten Preparation Blocks.
+   - regelbasierte Recommendations und Feedback-Historie;
+   - vollständige Woche.
 
 `Today` zeigt nur wirklich gespeicherte Werte. Fehlende Schlaf-, Stimmungs-,
 Energie-, Stress-, Bewegungs-, Screen-Time- oder Focus-Daten werden weder als
 Null noch als erfundener Score dargestellt. Es gibt derzeit bewusst keinen
 allgemeinen Readiness-, Wellness- oder Life-Score für echte Accounts.
 
-Ein normaler Aufruf von `Today` ist read-only: Er erzeugt nicht heimlich ein
-neues Briefing oder neue Recommendations. Ein fehlender oder veralteter Zustand
-bleibt sichtbar, bis der Nutzer die Aktualisierung auslöst oder ein ausdrücklich
-konfigurierter deterministischer Vorbereitungslauf sie erstellt.
+Ein normaler Aufruf von `Today` ist read-only:
+`GET /v1/today/overview-v2` erzeugt
+weder Briefing noch Recommendation und verändert keinen Plan. Das persistierte
+Daily Briefing bleibt für Scheduler, Reminder, Coach-Kontext und historische
+Feedback-Auswertung erhalten, ist aber keine sichtbare angeblich von der App
+getroffene Tagesentscheidung mehr. Die exakten Regeln stehen in
+`docs/today-overview-v1-contract.md`.
 
 ### 2. Insights: Muster- und Korrelationsdashboard
 
@@ -207,6 +218,7 @@ Dashboards:
 
 | Screen | Sichtbare Daten | Wirkung |
 | --- | --- | --- |
+| **Planner** | Add new, Needs attention, sieben lokale Tage, aktive Preparation, Unscheduled und Historie | Vorschläge reservieren nichts; nur `Confirm plan` aktiviert Task-/Habit-Zeiten, feste Termine bleiben autoritativ und Konflikte verschieben nichts automatisch |
 | **Weekly review** | letzte abgeschlossene ISO-Woche, completed/carried/overdue Tasks, completed/skipped/missed/unknown Habit-Möglichkeiten, Focus-Sessions und Minuten, Recovery-Tage, Feedback-Anzahl, Datenqualität und Freshness | erzeugt auf Wunsch höchstens zwei regelbasierte Vorschläge; nur eine bestätigte Änderung an einem manuellen Habit darf direkt angewendet werden |
 | **Preparation plans** | aktive, staged, abgeschlossene oder abgebrochene Pläne; Schätzung, Vorleistung, Deadline, Revisionen, datierte Blöcke, bestätigte Reservierungen, gemessener Focus-Fortschritt und 7-Tage-Auslastung | Vorschlag bleibt Preview; erst Bestätigung aktiviert Blöcke und den verwalteten Task |
 | **Inbox** | Anzahl unread/read/actionable innerhalb der höchstens 30 geladenen Einträge sowie einzelne Hinweise | Lifecycle-Änderungen und sichere interne Navigation; kein Analyse-Dashboard |
@@ -225,6 +237,7 @@ Dashboards:
 | **Tasks** | endliche Aktionen mit Status und optionaler Deadline/Schätzung | direkte Nutzereingabe oder ein vom bestätigten Preparation Plan verwalteter Task | `tasks`; kein LLM |
 | **Habits** | wiederkehrende Ziele mit daily-, weekday- oder weekly-target-Cadence | Definition plus explizites completed/skipped/undo pro lokalem Datum | `habits`, `habit_logs`; kein LLM |
 | **Focus** | echter Timer, optional mit genau einem Task oder Habit verknüpft | gewählte Dauer und gemessene verstrichene Zeit | `focus_sessions`; kein LLM |
+| **Planner** | deterministische Vorschau aus expliziter Dauer/Deadline/Session beziehungsweise Habit-Dauer/Cadence; freie Zeit berücksichtigt bestätigte Belegung und optional consented Calendar busy time | Task/Habit-Eingaben, Setup/manual commitments, Planner/Preparation reservations, aktueller Import | Planner preferences/plans/revisions/blocks/slots/commitments; erst Confirm erstellt/ändert Ziel und Reservierungen; kein LLM, Calendar-Write oder Auto-Replan |
 | **Decision feedback** | Reaktion auf eine konkrete Briefing-Aktion | Aktion, Kontext und Feedback-Typ | append-only `decision_feedback`; beeinflusst begrenzt spätere Rankings, führt die Aktion aber nicht aus |
 | **Weekly review** | deterministische Fakten für die letzte abgeschlossene lokale ISO-Woche | Tasks, Habit-Möglichkeiten/Outcomes, Focus, Daily State und Feedback | `weekly_reviews`; kein LLM; Änderungen nur nach Bestätigung |
 | **Calendar import** | ein bewusst gewähltes UTF-8-`.ics`-File wird begrenzt und read-only importiert | explizite Einwilligung und die gewählte Datei | `calendar_connections`, `calendar_imports`, `calendar_events`; nie an das LLM und nie in `schedule_items` kopiert |
@@ -417,16 +430,18 @@ Eine **Recommendation** ist ein einzelner Vorschlagskandidat mit Grund,
 Kategorie, Priorität, Confidence und optionaler ausführbarer Zielbeschreibung.
 Mehrere Recommendations können gleichzeitig existieren.
 
-Ein **Daily Briefing** ist die redaktionelle Tagesentscheidung über diese und
-weitere zulässige Actions:
+Ein **Daily Briefing** ist ein persistiertes internes Rangfolge-Artefakt über
+diese und weitere zulässige Actions:
 
 - genau eine primäre Aktion;
 - höchstens zwei unterstützende Aktionen;
 - Daily Mode, Kapazität, Freshness und Evidenz;
 - striktes ausführbares Ziel, falls die Aktion wirklich ausgeführt werden kann.
 
-Die Recommendation sagt also „das könnte relevant sein“, das Briefing sagt
-„das ist heute die wichtigste nächste Entscheidung“.
+Die Recommendation sagt also „das könnte relevant sein“, das Briefing speichert
+„dies wurde unter den damaligen Regeln am höchsten gerankt“. Today selbst
+behauptet daraus keine Entscheidung für den Nutzer; Recommendations sind dort
+nur unterstützend unter `More` sichtbar.
 
 ### Decision Feedback
 
@@ -586,8 +601,8 @@ einbezogen oder ausgelassen wurden und wie frisch die Quelle war.
 Der Coach kann keine Goals, Tasks, Habits, Schedule Items, Calendar Events,
 Briefings, Reviews, Memories oder Preparation Plans anlegen, ändern, erledigen
 oder löschen. Er kann auch nicht selbständig im Hintergrund laufen. Daily State
-und Daily Briefing bleiben die Berechnungs- und Entscheidungsquelle; der Coach
-erklärt und reflektiert sie nur.
+und Daily Briefing bleiben begrenzte Berechnungs- und Rangfolgequellen; der
+Coach erklärt und reflektiert sie nur und entscheidet nichts für den Nutzer.
 
 Deterministische Safety-Prüfungen laufen vor und nach dem Provider. Ein akuter
 Risikofall kann den Provider komplett umgehen. Fehlende oder veraltete Daten
@@ -614,10 +629,12 @@ erzwingen sichtbar höhere Unsicherheit.
 | Setup | `intake_responses`, `goals`, `habits`, `schedule_items`, `notification_preferences`, `memory_entries`, Onboarding-`user_state_snapshots` | Setup, Snapshots, Briefings, Coach |
 | Tägliche Erfassung | `daily_logs`, `behavioral_events` | Today, Daily State, Insights |
 | Ausführung | `tasks`, `habit_logs`, `focus_sessions` | Today, Focus/Habits, Snapshot, Weekly Review, Insights |
-| Tagesentscheidung | `user_state_snapshots`, `recommendations`, `daily_briefings`, `decision_feedback` | Today und zukünftige regelbasierte Rangfolge |
+| Tagesüberblick | `daily_logs`, `tasks`, `habits`, `habit_logs`, `schedule_items`, aktive Planner-/Preparation-Blöcke, feste Planner-Commitments, aktueller Calendar Import und `focus_sessions` | `today-overview-v2` und Today; V1 bleibt kompatibel |
+| Interne Tagesrangfolge | `user_state_snapshots`, `recommendations`, `daily_briefings`, `decision_feedback` | Reminder, Coach-Kontext, Historie und zukünftige regelbasierte Rangfolge |
 | Wochenreview | `weekly_reviews` | Weekly Review, Reminder, begrenzter Coach-Kontext |
 | Kalenderimport | `calendar_connections`, `calendar_imports`, `calendar_events`, technische Request-Identitäten | Calendar und optional Preparation Planner; nicht Coach |
 | Vorbereitung | `deadline_plans`, `deadline_plan_revisions`, `deadline_plan_blocks`, technische Request-Identitäten | Preparation Plans, Today workload/week, Focus-Fortschritt |
+| Zentrale Planung | `planner_preferences`, Action Plans/Revisionen, Task Blocks, Habit Slots, Planner Commitments und technische Request-Identitäten | Planner, Today V2 und gemeinsame Availability |
 | Hinweise | `notifications`, `notification_preferences`, Action-Request-Ledger | Inbox und foreground banners |
 | Coach | `coach_requests`, `coach_usage_events`, `coach_memory_selections`, `coach_messages` | Coach-Availability, Context, History und Budget |
 | Weitere Projektionen | `ai_insights`, `skillset_profiles` | gespeicherte Notes bzw. ausschließlich gekennzeichnete lokale Demo-Skillset-Anzeige |
@@ -629,30 +646,32 @@ gelöschte Coach-History kein Budget zurücksetzt. Supabase RLS begrenzt Reads a
 den Eigentümer; besonders sensible oder abgeleitete Writes laufen nur über
 FastAPI und service-role-only RPCs.
 
-## Warum wirkt die Oberfläche derzeit wirr?
+## Wo bleiben bewusste Produktgrenzen sichtbar?
 
-Der Eindruck ist nachvollziehbar und hat konkrete strukturelle Gründe:
+Planner ordnet die frühere Verteilung der Planung neu. Einige Trennlinien sind
+absichtlich weiterhin sichtbar:
 
-1. **`Today` trägt zu viele Rollen.** Es ist Tagesentscheidung, Check-in-
-   Zusammenfassung, Preparation-Auslastung, Weekly-Review-Einstieg, Task-
-   Manager, Recommendation-Liste und Wochenkalender zugleich.
-2. **Längerfristige Objekte haben keinen gemeinsamen Ort.** Goals und feste
-   Commitments stecken in `Settings → Setup`, Tasks auf `Today`, Habits unter
-   `Quick actions` und Preparation Plans ebenfalls unter `Quick actions`.
+1. **`Today` bündelt weiterhin viele Rollen.** Der primäre Bereich ist jetzt
+   klarer als Streak, Fortschritt, Agenda, Tasks und Habits geordnet; unter
+   `More` bleiben aber Preparation-Auslastung, Weekly Review, Recommendations,
+   Feedback-Historie und die volle Woche gebündelt.
+2. **Definition und Zeitplanung sind nicht immer dieselbe Autorität.** Planner
+   verwaltet manuelle Tasks, Habits, Preparation und Commitments. Goals sowie
+   Setup-owned Habit-/Commitment-Definitionen bleiben unter `Settings → Setup`;
+   Planner darf sie nur ausführen beziehungsweise als Busy-Time verwenden.
 3. **Drei Zeitmodelle sehen ähnlich aus.** Wiederkehrende `Schedule Items`,
    importierte `Calendar Events` und datierte `Preparation Blocks` heißen im
    Alltag alle schnell „Kalender“, haben aber völlig andere Rechte und
    Bedeutungen.
-4. **Drei Arten von Ratschlag konkurrieren.** Eine Recommendation ist ein
-   Kandidat, ein Daily Briefing ist die priorisierte Tagesentscheidung und eine
-   Coach-Suggestion ist nur eine unverbindliche sprachliche Reflexion. Diese
-   Hierarchie ist technisch klarer als visuell.
+4. **Mehrere Ratschlagsquellen existieren weiter.** Recommendations liegen
+   bewusst unter `More`, das Daily Briefing ist ein interner regelbasierter
+   Backend-Fakt für Reminder/Coach/Feedback, und eine Coach-Suggestion bleibt
+   nur eine unverbindliche sprachliche Reflexion.
 5. **Setup ist gleichzeitig Onboarding und spätere Verwaltung.** Nutzer erwarten
    dort meist nur den ersten Start, tatsächlich werden dort dauerhaft Goals,
    Setup-Habits und Commitments gepflegt.
-6. **`Quick actions` mischt Erfassung, Ausführung und Planung.** Check-ins,
-   Habit-Definitionen, ein Timer und ein mehrstufiger Prüfungsplan liegen auf
-   derselben Ebene.
+6. **Quick actions bleibt reine Tagesausführung.** Check-ins, Habit Completion
+   und Focus liegen dort; Neuanlage und Verwaltung sind in Planner gebündelt.
 7. **`Insights` mischt aktuelle Berechnung und gespeicherte Notes.** Die
    Korrelationen sind live und regelbasiert; `ai_insights` kann dagegen nur
    Seed- oder anderweitig gespeicherte Zeilen enthalten. Der technische Name
@@ -666,23 +685,22 @@ Bis zu einer späteren Informationsarchitektur kann man die App so lesen:
 
 | Frage | Richtiger Ort |
 | --- | --- |
-| Was ist heute wichtig? | `Today` und sein Daily Briefing |
+| Was ist heute gespeichert und noch offen? | `Today`: Streak, Progress, Agenda, Tasks und Habits |
 | Wie fühle ich mich gerade bzw. wie war der Tag? | `Quick actions → Morning/Evening` |
-| Was will ich einmalig erledigen? | `Today → Tasks` |
-| Was will ich regelmäßig tun? | `Quick actions → Habit management/Today habits` |
+| Was will ich einmalig erledigen oder terminieren? | `Planner → Task` |
+| Was will ich regelmäßig tun oder terminieren? | `Planner → Habit`; Ausführung über `Quick actions → Habit completion` |
 | Woran arbeite ich jetzt messbar? | `Quick actions → Focus` |
-| Welche Prüfung/Abgabe braucht reservierte Lernzeit? | `Quick actions → Preparation plans` |
-| Was ist jede Woche fest belegt? | `Settings → Setup and commitments`; Ansicht auf `Today → Full week` |
+| Welche Prüfung/Abgabe braucht reservierte Lernzeit? | `Planner → Exam/Assignment` |
+| Was ist einmalig oder jede Woche fest belegt? | `Planner → Fixed commitment`; Setup-owned Commitments bleiben unter `Settings → Setup` |
 | Was ist meine längerfristige Richtung? | `Settings → Setup and commitments → Goals` |
 | Was passierte letzte Woche? | `Today → Weekly review` |
 | Welche Zusammenhänge sehe ich über mehrere Tage? | `Insights` |
-| Welche Hinweise warten auf mich? | `Inbox` |
+| Welche Hinweise warten auf mich? | `Settings → Inbox` |
 | Kann mir ein Modell den Zustand erklären? | `Settings → Coach`, nur Development Preview |
 
-Eine spätere UI-Neuordnung sollte sehr wahrscheinlich einen klaren Bereich
-`Plan` für Goals, Tasks, Habits, Commitments und Preparation schaffen und
-`Review` für Insights plus Weekly Review bündeln. Das ist eine Empfehlung aus
-dem aktuellen Modell, noch kein implementierter Navigationsstand.
+Goals und Setup-owned Habit-/Commitment-Definitionen bleiben bewusst unter
+Settings Setup; Planner darf aktive Setup-Habits zeitlich einplanen und zeigt
+Setup-Commitments als belegte Zeit, übernimmt aber nicht deren Definition.
 
 ## Konkreter Testweg mit dem Student-Account
 
@@ -701,21 +719,23 @@ In-app consent, Inbox-Zustände, ausgewählte Memories und Coach-History ab.
 
 Ein sinnvoller manueller Rundgang ist:
 
-1. Auf `Today` Daily Mode, primäre Aktion, Task-Zustände, sieben Tage
-   Preparation Workload und `Supporting details` prüfen.
-2. Einer Briefing-Aktion Feedback geben und danach das Feedback-History-Verhalten
-   prüfen.
+1. Auf `Today` den Both-capture-Streak, die genaue `x/y`-Arithmetik, alle vier
+   Agenda-Kategorien sowie Today/All Tasks und Today Habits prüfen.
+2. `More` öffnen und Preparation Workload, Weekly Review, gespeicherte Signale,
+   Recommendations, vorhandene Feedback-History und Full Week prüfen.
 3. Unter `Quick actions` die aktive Focus Session fortsetzen oder beenden und
-   alle drei Habit-Cadences ansehen.
+   Habit outcomes ausführen.
 4. `Weekly review` öffnen, Fakten und die Änderungsautorität eines Vorschlags
    unterscheiden.
-5. `Preparation plans` öffnen: aktive, staged und historische Zustände sowie
-   Blocks und Progress vergleichen.
+5. `Planner` öffnen: alle fünf Create-Flows, Needs attention, sieben Tage,
+   Unscheduled und aktive Preparation prüfen; einen Task/Habit-Preview erst
+   nach bewusster Bestätigung reservieren.
 6. Unter `Settings → Calendar import` read-only Events und den Einstieg `Plan
    preparation` ansehen.
 7. In `Insights` Observation, Datenfenster, Signalquellen und Advanced-
    Korrelationen prüfen.
-8. In `Inbox` unread/read/dismiss und erlaubte `Open`-Ziele testen.
+8. Unter `Settings → Inbox` unread/read/dismiss und erlaubte `Open`-Ziele
+   testen.
 9. Unter `Settings` Preparation Budget, Reminder-Consent und Coach öffnen. Bei
    `fake` provider sind Antworten absichtlich feste Testdaten und kein LLM-
    Beweis.
@@ -727,7 +747,8 @@ Es ist kein Befehl für eine Remote-Datenbank.
 ## Bewusst nicht implementiert
 
 - deutsche Lokalisierung;
-- allgemeine Goals-, Schedule- oder Memory-Verwaltungsseite;
+- allgemeine Goals- oder Memory-Verwaltungsseite sowie Bearbeitung
+  Setup-owned Definitionen außerhalb von Settings Setup;
 - produktionsfähiger LLM-Provider;
 - ein persönliches trainiertes Modell oder Vector Memory;
 - autonomer Coach oder model-gesteuerte Schreibaktionen;
@@ -743,6 +764,10 @@ Es ist kein Befehl für eine Remote-Datenbank.
 - `docs/architecture.md`: Systemgrenzen und Datenflüsse.
 - `docs/daily-briefing-implementation-plan.md`: Daily State, Briefing, Ranking
   und Feedback.
+- `docs/today-overview-v1-contract.md`: Streak, Progress, Agenda-Quellen,
+  Today-Task/Habit-Auswahl, Teilfehler und Guest-Grenze.
+- `docs/planner-v1-contract.md`: zentrale Planner-Navigation, Availability,
+  Task-/Habit-Previews, Commitments und Today V2.
 - `docs/phase-3-executable-actions-contract.md`: Tasks, Habits, Focus und
   ausführbare Actions.
 - `docs/phase-8-weekly-review-contract.md`: Wochenfakten und bestätigte

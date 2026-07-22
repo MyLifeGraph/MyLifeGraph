@@ -60,22 +60,10 @@ class QuickActionPage extends ConsumerWidget {
             onTap: () => context.go(AppRoutes.habitCompletion),
           ),
           _ActionTile(
-            icon: Icons.repeat_on_outlined,
-            title: 'Habit management',
-            subtitle: 'Create, edit, and pause targets',
-            onTap: () => context.go(AppRoutes.habitManagement),
-          ),
-          _ActionTile(
             icon: Icons.timer_outlined,
             title: 'Focus',
             subtitle: 'Start a real timed block linked to a task or habit',
             onTap: () => context.go(AppRoutes.deepWork),
-          ),
-          _ActionTile(
-            icon: Icons.event_available_outlined,
-            title: 'Plan exam or assignment',
-            subtitle: 'Estimate the work and reserve preparation blocks',
-            onTap: () => context.go(AppRoutes.preparationPlans),
           ),
         ],
       ],

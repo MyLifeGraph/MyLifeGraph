@@ -12,6 +12,42 @@ import 'package:my_life_graph/features/notifications/presentation/pages/notifica
 import 'package:my_life_graph/features/notifications/presentation/providers/notifications_providers.dart';
 
 void main() {
+  test('Inbox reloads after its last route listener leaves', () async {
+    final repository = _PageNotificationsRepository(items: const []);
+    final container = ProviderContainer(
+      overrides: [
+        notificationsRepositoryProvider.overrideWithValue(repository),
+        appSurfaceCapabilitiesProvider.overrideWithValue(
+          const AppSurfaceCapabilities(
+            isLocalDemo: false,
+            canUseSyncedHabits: false,
+          ),
+        ),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final firstListener = container.listen(
+      notificationsProvider,
+      (_, __) {},
+      fireImmediately: true,
+    );
+    await _waitForInboxLoad(container);
+    firstListener.close();
+    await Future<void>.delayed(Duration.zero);
+    await Future<void>.delayed(Duration.zero);
+
+    final secondListener = container.listen(
+      notificationsProvider,
+      (_, __) {},
+      fireImmediately: true,
+    );
+    addTearDown(secondListener.close);
+    await _waitForInboxLoad(container);
+
+    expect(repository.loadCalls, 2);
+  });
+
   testWidgets('shows original fields and source read state without fake claims',
       (tester) async {
     final items = [
@@ -549,6 +585,14 @@ void main() {
     );
     expect(tester.takeException(), isNull);
   });
+}
+
+Future<void> _waitForInboxLoad(ProviderContainer container) async {
+  for (var attempt = 0; attempt < 20; attempt++) {
+    if (!container.read(notificationsProvider).isLoading) return;
+    await Future<void>.delayed(Duration.zero);
+  }
+  throw StateError('Inbox did not finish loading.');
 }
 
 Future<void> _pumpPage(

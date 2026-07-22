@@ -187,11 +187,15 @@ the briefing date; current generation is idempotent; changed snapshots mark a
 briefing stale; recovery/missing-data rules precede overdue pressure; completed
 or unscheduled habits are excluded; and every returned action passes the strict
 `executable-action-v1` model with at most two support actions and no LLM use.
-Phase 5 Flutter tests prove strict response/nested-action parsing, unknown-field
-and freshness-shape rejection, bearer GET versus deliberate force POST,
-guest/mock locality, current/missing/stale/error rendering, stale execution
-disabling, and primary action dispatch. Dashboard tests keep direct source
-metrics and recommendation failure truth intact below the new decision surface.
+Historical Phase 5 tests continue to prove the persisted briefing parser and
+typed executable-action dispatcher independently. Today Overview V1 adds strict
+FastAPI service/API tests for bearer ownership, profile-local dates, streaks
+longer than one page, current-day grace, malformed/legacy capture exclusion,
+task and habit selection, four-source timeline ordering, exact progress
+arithmetic, and isolated source failures. Flutter tests repeat exact response
+and nested-key validation, reject inconsistent progress, prove authenticated
+GET versus local guest zero-call behavior, and cover section order, lazy `More`,
+all-task expansion, source-error truth, and 320-pixel/2.0-text-scale rendering.
 Phase 6 tests cover strict feedback parsing, exact owned-action validation,
 idempotent request replay/conflict, authenticated GET/POST/DELETE, local-demo
 isolation, 28-day context matching, decay/caps, unchanged original reasons, and
@@ -273,6 +277,23 @@ other-plan deduction including earlier same-day confirmed blocks, and
 confirmation conflict when capacity changed after preview.
 Normal GET, import, Dashboard, scheduler, and focus-completion paths must remain
 free of hidden proposal writes.
+Planner V1 focused coverage must prove strict Task/Habit proposal unions,
+explicit scheduling inputs, exact five-minute slotting and unplaced minutes,
+multi-block Tasks, all three Habit cadences over the bounded four-week preview,
+DST-safe profile-local slots, and the shared Availability inputs across
+Planner and Deadline Planner. API/service tests must cover read-only overview
+and detail GETs, seven consecutive local dates, explicit calendar consent and
+current-import fingerprinting, source-stale and reservation conflicts, target
+version conflicts, and preparation/manual/Setup/calendar/action-plan overlap.
+Migration tests must cover forced RLS, owner isolation, global request replay,
+concurrent confirmation, atomic target-plus-reservation activation,
+authoritative commitment conflicts, lifecycle release, restore-without-slot
+revival, and unchanged legacy Tasks/Habits. Flutter tests must cover the five
+main navigation targets, Inbox under Settings, Planner section order, all five
+create flows, preview/confirm, retained drafts, guest zero-call, seven-day and
+preparation projections, and 320 px/200-percent text. Today V2 tests must prove
+the three added block kinds, exact `scheduled_today`, one target per progress
+denominator, and isolated source failures.
 Phase 10 focused backend source coverage is split across strict model/API,
 service, migration, and local-provider tests. It covers exact request/error
 shapes and bearer-derived ownership; completed replay without context/provider;
@@ -492,7 +513,7 @@ supabase db reset
 Expected successful reset output applies migrations through:
 
 ```text
-20260714143000_notification_delivery_settings_guard.sql
+20260722120000_planner_v1.sql
 ```
 
 Expected notices include skipped legacy CamelCase tables and already-existing
@@ -1104,6 +1125,20 @@ cancel behavior, exact input persistence, and the existing planner/RLS
 lifecycle. This remains local automated evidence; the participant study and
 all remote, device, delivery, production-provider, localization, and
 longitudinal checks remain unrun.
+
+Planner V1 completed locally on 2026-07-22. The complete FastAPI suite reported
+`793 passed, 1 skipped`; the final standard source gate passed migration safety,
+clean Flutter analysis, all `632` Flutter tests, Python compilation, and diff
+checks. Local Supabase history matched the repository through
+`20260722120000_planner_v1.sql`. The final non-reset combined browser journey
+reported `E2E browser smoke passed for e2e-1784749089@example.test`. It covered
+split Task and Habit confirmation, one-off and weekly commitments, the Planner
+and Today projections, Inbox only through Settings, central Calendar busy-time
+consent shared with Deadline Planner, strict Account Export inclusion/ledger
+omission, and account deletion. This is local checkout evidence only; it does
+not establish remote migration state, live calendar sync, deployed scheduling,
+background replanning, notifications beyond the existing contract, or manual
+student-usability results.
 
 Phase 10 has focused fake-provider/process-runner, strict contract, service,
 migration, repository, controller, and widget tests in the checkout. Its

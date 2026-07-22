@@ -11,9 +11,11 @@ from app.api.routes import (
     health,
     intake,
     notifications,
+    planner,
     recommendations,
     scheduled,
     snapshots,
+    today,
     weekly_reviews,
 )
 from app.core.config import settings
@@ -42,12 +44,14 @@ def create_app() -> FastAPI:
     app.include_router(notifications.router, prefix=settings.api_prefix)
     app.include_router(recommendations.router, prefix=settings.api_prefix)
     app.include_router(snapshots.router, prefix=settings.api_prefix)
+    app.include_router(today.router, prefix=settings.api_prefix)
     app.include_router(briefings.router, prefix=settings.api_prefix)
     app.include_router(feedback.router, prefix=settings.api_prefix)
     app.include_router(scheduled.router, prefix=settings.api_prefix)
     app.include_router(weekly_reviews.router, prefix=settings.api_prefix)
     app.include_router(calendar_integrations.router, prefix=settings.api_prefix)
     app.include_router(deadline_plans.router, prefix=settings.api_prefix)
+    app.include_router(planner.router, prefix=settings.api_prefix)
     app.include_router(coach.router, prefix=settings.api_prefix)
 
     return app

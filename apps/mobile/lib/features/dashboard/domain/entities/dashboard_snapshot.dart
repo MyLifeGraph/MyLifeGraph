@@ -9,6 +9,15 @@ class DashboardSnapshot {
     required this.todayPlan,
     required this.scheduleDays,
     this.preparationScheduleError,
+    this.localDate,
+    this.timezone,
+    this.checkIns,
+    this.progress,
+    this.todayTasks = const [],
+    this.timeline = const [],
+    this.todayHabits = const [],
+    this.sourceStates,
+    this.isTodayOverview = false,
   });
 
   factory DashboardSnapshot.empty({
@@ -32,6 +41,159 @@ class DashboardSnapshot {
   final List<PlanItem> todayPlan;
   final List<ScheduleDay> scheduleDays;
   final String? preparationScheduleError;
+  final DateTime? localDate;
+  final String? timezone;
+  final TodayCheckIns? checkIns;
+  final TodayProgress? progress;
+  final List<PlanItem> todayTasks;
+  final List<TodayTimelineItem> timeline;
+  final List<TodayHabit> todayHabits;
+  final TodaySourceStates? sourceStates;
+  final bool isTodayOverview;
+
+  List<PlanItem> get allTasks => todayPlan;
+}
+
+class TodayCheckIns {
+  const TodayCheckIns({
+    required this.morningSaved,
+    required this.eveningSaved,
+    required this.completedDaysStreak,
+  });
+
+  final bool morningSaved;
+  final bool eveningSaved;
+  final int completedDaysStreak;
+}
+
+class TodayProgress {
+  const TodayProgress({required this.completed, required this.total});
+
+  final int completed;
+  final int total;
+
+  double get ratio => total == 0 ? 0 : (completed / total).clamp(0, 1);
+}
+
+enum TodayTimelineKind {
+  setupCommitment,
+  preparation,
+  calendarEvent,
+  focusSession,
+  taskBlock,
+  habitSlot,
+  manualCommitment,
+}
+
+class TodayTimelineItem {
+  const TodayTimelineItem({
+    required this.kind,
+    required this.id,
+    required this.title,
+    required this.allDay,
+    this.location,
+    this.startsAt,
+    this.endsAt,
+    this.startsOn,
+    this.endsOn,
+    this.sourceLabel,
+    this.planId,
+    this.blockId,
+    this.managedTaskId,
+    this.state,
+    this.plannedMinutes,
+    this.creditedTrackedMinutes,
+    this.actualMinutes,
+    this.taskId,
+    this.habitId,
+    this.commitmentId,
+  });
+
+  final TodayTimelineKind kind;
+  final String id;
+  final String title;
+  final String? location;
+  final bool allDay;
+  final DateTime? startsAt;
+  final DateTime? endsAt;
+  final DateTime? startsOn;
+  final DateTime? endsOn;
+  final String? sourceLabel;
+  final String? planId;
+  final String? blockId;
+  final String? managedTaskId;
+  final String? state;
+  final int? plannedMinutes;
+  final int? creditedTrackedMinutes;
+  final int? actualMinutes;
+  final String? taskId;
+  final String? habitId;
+  final String? commitmentId;
+}
+
+class TodayHabit {
+  const TodayHabit({
+    required this.id,
+    required this.title,
+    required this.cadence,
+    required this.cadenceLabel,
+    required this.weeklyCompleted,
+    required this.weeklyTarget,
+    required this.setupManaged,
+    this.scheduledToday = false,
+    this.description,
+    this.outcome,
+  });
+
+  final String id;
+  final String title;
+  final String? description;
+  final String cadence;
+  final String cadenceLabel;
+  final String? outcome;
+  final int weeklyCompleted;
+  final int weeklyTarget;
+  final bool setupManaged;
+  final bool scheduledToday;
+}
+
+enum TodaySourceStatus { current, unavailable }
+
+class TodaySourceState {
+  const TodaySourceState({required this.status, this.message});
+
+  final TodaySourceStatus status;
+  final String? message;
+}
+
+class TodaySourceStates {
+  const TodaySourceStates({
+    required this.checkIns,
+    required this.tasks,
+    required this.habits,
+    required this.setupCommitments,
+    required this.preparation,
+    required this.calendarEvents,
+    required this.focusSessions,
+    this.planner,
+  });
+
+  final TodaySourceState checkIns;
+  final TodaySourceState tasks;
+  final TodaySourceState habits;
+  final TodaySourceState setupCommitments;
+  final TodaySourceState preparation;
+  final TodaySourceState calendarEvents;
+  final TodaySourceState focusSessions;
+  final TodaySourceState? planner;
+
+  Iterable<TodaySourceState> get timelineStates => [
+        setupCommitments,
+        preparation,
+        calendarEvents,
+        focusSessions,
+        if (planner case final planner?) planner,
+      ];
 }
 
 class DashboardCheckIn {
@@ -94,6 +256,9 @@ class PlanItem {
     this.estimatedMinutes,
     this.source,
     this.deadlinePlanId,
+    this.completedAt,
+    this.todayReason,
+    this.scheduledToday = false,
   });
 
   final String id;
@@ -106,6 +271,9 @@ class PlanItem {
   final int? estimatedMinutes;
   final String? source;
   final String? deadlinePlanId;
+  final DateTime? completedAt;
+  final String? todayReason;
+  final bool scheduledToday;
 
   bool get isDeadlinePlanManaged =>
       source == 'deadline-plan-v1' && deadlinePlanId == id;

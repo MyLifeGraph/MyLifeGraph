@@ -1340,6 +1340,16 @@ Evaluation:
 - Does action execution reuse durable command contracts without a parallel path?
 - Does mobile and desktop layout preserve readable, non-overlapping actions?
 
+Current presentation update (2026-07-21): the persisted Phase 4 briefing and
+Phase 6 feedback/ranking contracts remain implemented backend inputs, but the
+visible briefing-first card described in this historical phase is superseded by
+`today-overview-v1`. Today no longer labels a ranked recommendation as a
+decision made for the user. `GET /v1/today/overview` now projects the strict
+both-capture streak, transparent dynamic progress, four-source vertical agenda,
+Today Tasks, and Today Habits. Supporting workload, review, saved signals,
+recommendations, feedback history, and full week are lazy under `More`. Read
+`docs/today-overview-v1-contract.md` before changing this surface.
+
 ### Phase 6: Feedback And Useful Insights (Implemented)
 
 Goal:

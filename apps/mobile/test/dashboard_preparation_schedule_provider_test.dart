@@ -8,6 +8,43 @@ import 'package:my_life_graph/features/dashboard/domain/repositories/dashboard_r
 import 'package:my_life_graph/features/dashboard/presentation/providers/dashboard_providers.dart';
 
 void main() {
+  test('Today reloads after its last route listener leaves', () async {
+    final repository = _CountingDashboardRepository(_snapshot());
+    final container = ProviderContainer(
+      overrides: [
+        appSurfaceCapabilitiesProvider.overrideWithValue(
+          const AppSurfaceCapabilities(
+            isLocalDemo: false,
+            canUseSyncedHabits: true,
+            canUseDeadlinePlanner: false,
+          ),
+        ),
+        dashboardRepositoryProvider.overrideWithValue(repository),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final firstListener = container.listen(
+      dashboardSnapshotProvider,
+      (_, __) {},
+      fireImmediately: true,
+    );
+    await container.read(dashboardSnapshotProvider.future);
+    firstListener.close();
+    await Future<void>.delayed(Duration.zero);
+    await Future<void>.delayed(Duration.zero);
+
+    final secondListener = container.listen(
+      dashboardSnapshotProvider,
+      (_, __) {},
+      fireImmediately: true,
+    );
+    addTearDown(secondListener.close);
+    await container.read(dashboardSnapshotProvider.future);
+
+    expect(repository.calls, 2);
+  });
+
   test('dashboard reads only the lightweight displayed-week projection',
       () async {
     final source = _FakePreparationSource(
@@ -96,6 +133,19 @@ class _FakeDashboardRepository implements DashboardRepository {
 
   @override
   Future<DashboardSnapshot> getSnapshot() async => snapshot;
+}
+
+class _CountingDashboardRepository implements DashboardRepository {
+  _CountingDashboardRepository(this.snapshot);
+
+  final DashboardSnapshot snapshot;
+  int calls = 0;
+
+  @override
+  Future<DashboardSnapshot> getSnapshot() async {
+    calls++;
+    return snapshot;
+  }
 }
 
 class _FakePreparationSource implements DeadlinePreparationScheduleDataSource {

@@ -43,7 +43,8 @@ The Flutter app uses feature-first clean architecture:
 - `features/*/presentation` contains pages, widgets, and Riverpod providers.
 
 State management is Riverpod. Navigation is GoRouter. The shell navigation maps
-to Dashboard, Insights, central quick-action, the stored Inbox, and Settings.
+to Today, Insights, central Quick actions, Planner, and Settings. Stored Inbox
+is reached from Settings; `/alerts` remains a compatible Settings-owned route.
 Guest/demo sessions receive one persistent `Local demo` banner. The canned
 Coach preview and direct Supabase message writer have been replaced by a typed
 FastAPI Coach surface at `/coach`; `/more` aliases that route. Guest/mock renders
@@ -170,20 +171,54 @@ invented screen time, hydration estimate, and schedule activity bars are
 removed. Tasks retain their own description, deadline, priority, status, and
 optional estimate; recommendation reasons are no longer copied into unrelated
 task descriptions. Authenticated users can execute typed task commands from the
-existing task section. The decision-first Today area now reads the persisted
-`daily-briefing-v1` contract through FastAPI, shows mode, data quality,
-freshness, capacity note, one primary action, and at most two support actions
-above source metrics, then dispatches current targets through the exhaustive
-Phase 3 action dispatcher. Normal load is GET-only; generation is explicit.
-A compact `Today at a glance` card follows the briefing with the next scheduled
-commitment/preparation block, capture status, and direct Focus/Habit actions.
-Tasks remain the main management section. Saved signal detail, secondary
-recommendations, and the full week stay in collapsed supporting sections. The
-weekly-review entry remains available on Today for authenticated accounts;
-review period selection still comes from the profile-local completed ISO week.
-A local guest dashboard reads the locally saved canonical check-in and otherwise
-shows a real empty state instead of a static fake plan. It labels briefing
-generation unavailable instead of inventing a personalized local decision.
+existing task section. The primary Today area now reads the strict owner-scoped
+`today-overview-v2` contract through `GET /v1/today/overview-v2`; the V1 route
+remains available for existing clients. FastAPI captures
+one UTC instant, resolves the profile-local date, and isolates check-in, task,
+habit, recurring Setup, confirmed Preparation, current imported Calendar, and
+actual Focus reads. Normal load is GET-only and never generates or adjusts a
+briefing or recommendation.
+
+Today leads with a strict both-capture streak and transparent dynamic progress,
+then renders `Today at a glance` as a vertical agenda. Planner Task blocks,
+Habit slots, and fixed commitments extend Setup/Preparation/Calendar/Focus
+without adding block-level completion or duplicate target counts. All-day
+events precede timed entries; overlaps remain separate. Selected Tasks and
+Habits reuse the existing Phase 3 handlers for inline completion, skip, undo,
+and Focus. Deadline Planner-managed tasks stay outside Today progress and
+redirect to their owning Preparation plan. A counted-source failure makes progress explicitly
+unavailable while unaffected agenda/sections remain usable. Workload, Weekly
+review, saved signals, recommendations, decision-feedback history, and the full
+week load lazily under `More`. The exact rules live in
+`docs/today-overview-v1-contract.md`.
+
+## Planner V1
+
+Planner is the authenticated planning home for Tasks, Habits, exam/assignment
+Preparation, and one-off or weekly fixed commitments. Flutter uses a strict
+FastAPI controller/data boundary; guest/demo is a zero-call locked surface.
+Task/Habit proposals are immutable previews and create or update their target
+atomically only on confirmation. Existing targets remain unscheduled until the
+user deliberately supplies the missing values and proposes a revision.
+
+The shared availability service composes Setup commitments, manual commitments,
+active Planner reservations, active Preparation blocks, the current instant,
+profile timezone/energy window, and optionally consented current `.ics` busy
+time. Deadline Planner delegates its slot calculation to the same component and
+reads the same Planner calendar preference. The database owner lock and
+service-role RPCs recheck target version, current import, and every competing
+reservation at confirmation. Fixed commitments are authoritative: conflicts
+become attention facts and never trigger automatic movement.
+
+The additive forced-RLS schema and exact routes are specified in
+`docs/planner-v1-contract.md`.
+
+Persisted `daily-briefing-v1` rows remain deterministic backend inputs for the
+scheduler, reminder generation, Coach context, and historical feedback. The
+Today UI no longer presents their ranking as a decision made for the user. A
+local guest dashboard derives only its real locally saved capture state and
+otherwise shows honest empty sections; it does not call FastAPI/Supabase or
+invent a personalized briefing, task, habit, or schedule.
 
 Authenticated real accounts can open `/weekly-review` from Dashboard or a
 strict `review_plan` action. Flutter reads the latest completed profile-local

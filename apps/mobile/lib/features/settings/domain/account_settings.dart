@@ -33,6 +33,12 @@ const accountExportV1TableNames = <String>[
   'deadline_plans',
   'deadline_plan_revisions',
   'deadline_plan_blocks',
+  'planner_preferences',
+  'planner_action_plans',
+  'planner_action_plan_revisions',
+  'planner_task_blocks',
+  'planner_habit_slots',
+  'planner_commitments',
 ];
 const accountExportV1SanitizedTables = <String>[
   'calendar_connections',
@@ -45,6 +51,7 @@ const accountExportV1OmittedTables = <String, String>{
   'calendar_request_identities': 'backend_only_anti_replay_ledger',
   'notification_action_requests': 'backend_only_anti_replay_ledger',
   'deadline_plan_request_identities': 'backend_only_anti_replay_ledger',
+  'planner_request_identities': 'backend_only_anti_replay_ledger',
 };
 const accountExportV1MaxRowsPerTable = 10000;
 const accountExportV1MaxTotalRows = 50000;

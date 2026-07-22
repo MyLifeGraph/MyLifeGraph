@@ -8,6 +8,7 @@ import '../../features/auth/presentation/pages/password_recovery_page.dart';
 import '../../features/auth/presentation/providers/auth_providers.dart';
 import '../../features/calendar_integration/presentation/pages/calendar_integration_page.dart';
 import '../../features/coach/presentation/pages/coach_page.dart';
+import '../../features/deadline_plans/domain/deadline_plan.dart';
 import '../../features/deadline_plans/presentation/pages/deadline_plans_page.dart';
 import '../../features/dashboard/presentation/pages/dashboard_page.dart';
 import '../../features/focus/domain/focus_session.dart';
@@ -15,6 +16,7 @@ import '../../features/focus/presentation/pages/focus_session_page.dart';
 import '../../features/insights/presentation/pages/insights_page.dart';
 import '../../features/notifications/presentation/pages/notifications_page.dart';
 import '../../features/notifications/presentation/pages/notification_settings_page.dart';
+import '../../features/planner/presentation/pages/planner_page.dart';
 import '../../features/quick_action/presentation/pages/habit_completion_page.dart';
 import '../../features/quick_action/presentation/pages/habit_management_page.dart';
 import '../../features/quick_action/presentation/pages/morning_calibration_page.dart';
@@ -34,6 +36,7 @@ const _postAuthContinuationPaths = <String>{
   AppRoutes.notificationSettings,
   AppRoutes.calendarIntegration,
   AppRoutes.preparationPlans,
+  AppRoutes.planner,
   AppRoutes.insights,
   AppRoutes.quickAction,
   AppRoutes.quickMoodCheckIn,
@@ -161,12 +164,19 @@ final appRouterProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: AppRoutes.preparationPlans,
             builder: (context, state) => DeadlinePlansPage(
+              initialKind: DeadlinePlanKind.fromCode(
+                state.uri.queryParameters['kind'],
+              ),
               initialPlanId: state.uri.queryParameters['plan_id'],
               openInitialReplan:
                   state.uri.queryParameters['action'] == 'replan',
               sourceCalendarEventId:
                   state.uri.queryParameters['calendar_event_id'],
             ),
+          ),
+          GoRoute(
+            path: AppRoutes.planner,
+            builder: (context, state) => const PlannerPage(),
           ),
           GoRoute(
             path: AppRoutes.insights,
@@ -189,7 +199,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             redirect: (context, state) =>
                 ref.read(appSurfaceCapabilitiesProvider).canUseSyncedHabits
                     ? null
-                    : AppRoutes.quickAction,
+                    : AppRoutes.planner,
             builder: (context, state) => const HabitManagementPage(),
           ),
           GoRoute(

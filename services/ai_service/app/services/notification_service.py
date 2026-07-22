@@ -345,9 +345,9 @@ def _generation_candidates(
                         "notification-generation-v1:recovery_prompt:"
                         f"{date_key}"
                     ),
-                    title="A gentler plan is ready",
+                    title="A gentler overview is ready",
                     message=(
-                        "Open Today to review one manageable next step. "
+                        "Open Today to review a manageable schedule and actions. "
                         "No private check-in details are included here."
                     ),
                     notification_type="coaching",
@@ -365,8 +365,8 @@ def _generation_candidates(
             _NotificationCandidate(
                 category="focus_prompt",
                 generation_key=f"notification-generation-v1:focus_prompt:{date_key}",
-                title="Today's plan is ready",
-                message="Open Today to review your next step.",
+                title="Today's overview is ready",
+                message="Open Today to review your schedule and actions.",
                 notification_type="reminder",
                 priority="medium",
                 action_url="/dashboard",

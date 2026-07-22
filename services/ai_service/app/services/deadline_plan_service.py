@@ -31,6 +31,11 @@ from app.repositories.deadline_plan_repository import (
     DeadlinePlanRepository,
     DeadlinePlanningContext,
 )
+from app.services.planning_availability import (
+    ENERGY_WINDOWS as _ENERGY_WINDOWS,
+    BusySources,
+    allocate_task_intervals,
+)
 
 
 class DeadlinePlanConflictError(RuntimeError):
@@ -43,35 +48,6 @@ class DeadlinePlanNotFoundError(RuntimeError):
 
 class DeadlinePlanValidationError(ValueError):
     pass
-
-
-_ENERGY_WINDOWS: dict[str, tuple[tuple[time, time], ...]] = {
-    "early_morning": (
-        (time(6), time(11)),
-        (time(13), time(17)),
-        (time(18), time(21)),
-    ),
-    "morning": (
-        (time(8), time(13)),
-        (time(14), time(18)),
-        (time(18), time(21)),
-    ),
-    "afternoon": (
-        (time(13), time(18)),
-        (time(9), time(12)),
-        (time(18), time(21)),
-    ),
-    "evening": (
-        (time(18), time(23)),
-        (time(14), time(17)),
-        (time(9), time(12)),
-    ),
-    "variable": (
-        (time(9), time(12)),
-        (time(14), time(18)),
-        (time(18), time(21)),
-    ),
-}
 
 
 class DeadlinePlanService:
@@ -363,7 +339,13 @@ class DeadlinePlanService:
             raise DeadlinePlanValidationError(
                 "deadline planning horizon cannot exceed 366 days",
             )
-        if request.use_calendar_availability and not (
+        use_calendar_availability = (
+            profile_probe.planner_use_calendar_busy_time
+            if profile_probe.planner_use_calendar_busy_time is not None
+            else request.use_calendar_availability
+        )
+        planning_input["use_calendar_availability"] = use_calendar_availability
+        if use_calendar_availability and not (
             profile_probe.calendar_availability_current
         ):
             raise DeadlinePlanConflictError(
@@ -840,122 +822,46 @@ def _plan_blocks(
     effective_start: date,
     remaining_minutes: int,
 ) -> list[tuple[datetime, datetime, int]]:
-    if remaining_minutes < 5:
-        return []
     deadline_day = local_deadline.date()
     last_preferred_day = (
         deadline_day
         if request.buffer_days == 0
         else deadline_day - timedelta(days=request.buffer_days + 1)
     )
-    days = list(_days(effective_start, last_preferred_day))
-    busy_by_day = _busy_intervals_by_day(
-        days=days,
-        context=context,
+    reserved_by_day = _confirmed_preparation_minutes_by_day(context)
+    intervals = allocate_task_intervals(
+        starts_on=effective_start,
+        ends_on=last_preferred_day,
+        total_minutes=remaining_minutes,
+        preferred_session_minutes=request.preferred_session_minutes,
+        max_daily_minutes=request.max_daily_minutes,
         zone=zone,
         local_now=local_now,
+        energy_window=context.best_energy_window,
+        busy_sources=BusySources(
+            recurring_commitments=[
+                *context.schedule_items,
+                *(context.planner_recurring_commitments or []),
+            ],
+            timed_intervals=[
+                *context.confirmed_blocks,
+                *(context.planner_timed_intervals or []),
+                *context.timed_calendar_events,
+            ],
+            all_day_intervals=context.all_day_calendar_events,
+        ),
+        deadline_at=local_deadline,
+        daily_reserved_minutes=reserved_by_day,
+        account_daily_budget_minutes=context.daily_preparation_budget_minutes,
+        max_blocks=120,
+        # Deadline Planner V1 permits an exact final minute remainder. Planner
+        # Action V1 below opts into the stricter five-minute duration grid.
+        duration_increment_minutes=1,
     )
-    blocks: list[tuple[datetime, datetime, int]] = []
-    remaining = remaining_minutes
-    target = min(240, request.preferred_session_minutes)
-    free_by_day: dict[date, list[list[datetime]]] = {}
-    reserved_by_day = _confirmed_preparation_minutes_by_day(context)
-    daily_left = {
-        day: (
-            request.max_daily_minutes
-            if context.daily_preparation_budget_minutes is None
-            else min(
-                request.max_daily_minutes,
-                max(
-                    0,
-                    context.daily_preparation_budget_minutes
-                    - reserved_by_day.get(day, 0),
-                ),
-            )
-        )
-        for day in days
-    }
-    for day in days:
-        free_by_day[day] = []
-        for window_start, window_end in _ENERGY_WINDOWS[context.best_energy_window]:
-            start = datetime.combine(day, window_start, tzinfo=zone)
-            end = min(
-                datetime.combine(day, window_end, tzinfo=zone),
-                local_deadline,
-            )
-            if end <= start or not _safe_fixed_offset_interval(start, end, zone):
-                continue
-            for gap_start, gap_end in _subtract_intervals(
-                start,
-                end,
-                busy_by_day.get(day, []),
-            ):
-                normalized_start = _ceil_local_five_minutes(gap_start)
-                normalized_end = _floor_local_five_minutes(gap_end)
-                if _safe_fixed_offset_interval(
-                    normalized_start,
-                    normalized_end,
-                    zone,
-                ):
-                    free_by_day[day].append([normalized_start, normalized_end])
-
-    viable_days = [
-        day
-        for day in days
-        if any(
-            int((gap[1] - gap[0]).total_seconds() // 60) >= 5
-            for gap in free_by_day[day]
-        )
+    return [
+        (interval.starts_at, interval.ends_at, interval.minutes)
+        for interval in intervals
     ]
-    initial_count = min(
-        len(viable_days),
-        (remaining + target - 1) // target,
-    )
-    if initial_count <= 1:
-        first_round_days = viable_days[:initial_count]
-    else:
-        first_round_days = [
-            viable_days[round(index * (len(viable_days) - 1) / (initial_count - 1))]
-            for index in range(initial_count)
-        ]
-
-    # Spread the first set evenly over the runway. Only once every selected
-    # day has one session do additional passes use all viable days.
-    first_round = True
-    while remaining >= 5 and len(blocks) < 120:
-        placed_in_round = False
-        for day in first_round_days if first_round else viable_days:
-            if remaining < 5 or len(blocks) >= 120:
-                break
-            if daily_left[day] < 5:
-                continue
-            for gap in free_by_day[day]:
-                available = int(
-                    (
-                        gap[1].astimezone(UTC) - gap[0].astimezone(UTC)
-                    ).total_seconds()
-                    // 60
-                )
-                duration = min(target, remaining, daily_left[day], available)
-                if duration < 5:
-                    continue
-                block_start = gap[0]
-                block_end = (
-                    block_start.astimezone(UTC) + timedelta(minutes=duration)
-                ).astimezone(zone)
-                blocks.append((block_start, block_end, duration))
-                gap[0] = (
-                    block_end.astimezone(UTC) + timedelta(minutes=5)
-                ).astimezone(zone)
-                remaining -= duration
-                daily_left[day] -= duration
-                placed_in_round = True
-                break
-        first_round = False
-        if not placed_in_round:
-            break
-    blocks.sort(key=lambda value: (value[0], value[1]))
-    return blocks
 
 
 def _busy_intervals_by_day(
@@ -1123,6 +1029,13 @@ def _context_fingerprint_input(
         "timed_calendar_events": context.timed_calendar_events,
         "all_day_calendar_events": context.all_day_calendar_events,
         "source_calendar_event": context.source_calendar_event,
+        "planner_recurring_commitments": (
+            context.planner_recurring_commitments or []
+        ),
+        "planner_timed_intervals": context.planner_timed_intervals or [],
+        "planner_use_calendar_busy_time": (
+            context.planner_use_calendar_busy_time
+        ),
     }
 
 

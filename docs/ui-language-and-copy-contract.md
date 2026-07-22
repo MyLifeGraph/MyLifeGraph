@@ -24,6 +24,7 @@ Use these names in student-facing UI and presentation material:
 | End-of-day capture | Evening check-in |
 | Start-of-day capture | Morning check-in |
 | Timed work | Focus |
+| Central planning | Planner |
 | Exam and assignment preparation | Preparation plans |
 | Weekly reflection | Weekly review |
 | Imported calendar copy | Calendar |
@@ -34,6 +35,44 @@ Use these names in student-facing UI and presentation material:
 
 Versioned API and database names may remain technical. Do not leak those names
 into a primary title, button, field label, or first-line error.
+
+## Today Copy
+
+The primary Today surface uses these exact concepts:
+
+- `Check-in streak` for consecutive dates with both saved check-ins;
+- `Today's progress` and `x/y completed` for the transparent dynamic count;
+- `Today at a glance` for the vertical agenda;
+- `Setup commitment`, `Preparation`, `Calendar`, and `Focus` for agenda source
+  categories;
+- `Today's tasks`, `Show all tasks`, `Today's habits`, and `More` for the
+execution/support boundary.
+
+`today-overview-v2` may additionally label agenda rows `Task`, `Habit`, and
+`Fixed commitment`. A scheduled Task or Habit still appears once in progress;
+multiple blocks never imply multiple required actions.
+
+## Planner Copy
+
+Planner leads with `Add new`, followed by `Needs attention`, the next seven
+days, `Ongoing preparation`, `Unscheduled`, and collapsed history. Use `preview`
+for a staged Action Plan and `Confirm plan` only for the deliberate reservation
+step. Unplaced time must use the exact remaining minutes. Conflicts say which
+saved source now overlaps and that nothing moves automatically.
+
+Task copy must not suggest scheduling unless duration, exact deadline, and
+preferred session length were explicitly entered. Calendar copy must say that
+busy-time use is separately consented, read-only, based on the current imported
+copy, and not live sync. Fixed commitments are authoritative only after the
+user confirms them. Guest/demo copy states that synced Planner is unavailable
+and must not display invented personalized blocks.
+
+Do not title the overview `Today's decision`, label a recommendation `Primary
+action`, claim a fixed number of daily steps, or imply the app chose the user's
+day. A source failure says the affected section or `Progress unavailable` and
+must not replace persisted facts with examples. Notification fixed copy uses
+`Today's overview is ready` and invites the user to review their schedule and
+actions.
 
 ## Plain-language Rules
 

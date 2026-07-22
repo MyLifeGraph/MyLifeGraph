@@ -66,8 +66,8 @@ final inAppNotificationDeliveryProvider = StateNotifierProvider.autoDispose<
   },
 );
 
-final notificationsProvider =
-    StateNotifierProvider<NotificationsController, NotificationsState>(
+final notificationsProvider = StateNotifierProvider.autoDispose<
+    NotificationsController, NotificationsState>(
   (ref) {
     final capabilities = ref.watch(appSurfaceCapabilitiesProvider);
     return NotificationsController(

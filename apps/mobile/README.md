@@ -78,18 +78,24 @@ Supabase is only initialized when both `SUPABASE_URL` and
 
 `USE_MOCK_DATA=true` forces product data surfaces to local/demo sources even
 when an authenticated Supabase session exists. Use `false` for real Setup,
-Evening/Morning capture, Dashboard, Recommendations, Insights, Inbox,
+Evening/Morning capture, Today, Planner, Recommendations, Insights, Inbox,
 synced tasks/habits/focus sessions, Controlled Coach, and snapshot refresh
 behavior. Mock/demo
 auth boot skips remote profile access and overlays the locally applied Setup
 name/completion state, so local Setup survives a browser reload.
 
 For authenticated real accounts, successful Evening/Morning writes refresh the
-backend Daily State best-effort. The decision-first Dashboard reads a separately
-persisted deterministic Today briefing with GET-only normal load; capture itself
+backend Daily State best-effort. Today reads the strict read-only
+`today-overview-v2` projection: both-capture streak, dynamic progress, the
+Setup/Preparation/Calendar/Focus plus Planner Task/Habit/fixed-commitment
+agenda, Tasks, and Habits. The V1 route remains available for older clients.
+Supporting workload,
+reviews, signals, recommendations, feedback history, and the full week remain
+lazy. The persisted deterministic briefing still exists for backend consumers,
+but it is no longer presented as a decision made for the user. Capture itself
 does not generate recommendations or create/change a plan. Morning Calibration
-therefore describes only what that save does. Guest/mock capture remains local
-and makes no snapshot request.
+therefore describes only what that save does. Guest/mock Today and capture stay
+local and make no authenticated request.
 
 ## Auth Modes
 
@@ -155,6 +161,10 @@ and Phase 3 does not rank a briefing or call an LLM. See
 
 ## Main Routes
 
+The five shell destinations are Today, Insights, Quick actions, Planner, and
+Settings. Inbox is reached from Settings; compatible `/alerts` links keep
+Settings selected.
+
 - `/auth`
 - `/auth/recovery` (Supabase password-recovery event only)
 - `/onboarding` (`?edit=1` re-enters the durable Setup flow)
@@ -164,10 +174,15 @@ and Phase 3 does not rank a briefing or call an LLM. See
 - `/quick-mood-check-in` (typed Evening Shutdown)
 - `/morning-calibration` (short typed Morning Calibration)
 - `/habit-completion` (Today Habits for authenticated real accounts)
-- `/habits` (manual Habit V1 management for authenticated real accounts)
+- `/planner` (central authenticated Task/Habit/Preparation/commitment planning;
+  guest/demo remains a zero-call locked surface)
+- `/habits` (compatible manual Habit V1 route with Planner selected)
+- `/preparation-plans` (compatible Preparation route with Planner selected;
+  `?kind=exam|assignment` opens that create flow)
 - `/weekly-review` (authenticated, completed-week review)
-- `/alerts` (stored Inbox with authenticated read/unread/dismiss lifecycle;
-  notification generation and delivery are not implemented)
+- `/alerts` (Settings-owned stored Inbox with authenticated
+  read/unread/dismiss lifecycle; notification generation/delivery contracts are
+  unchanged)
 - `/notifications` (compatibility redirect to `/alerts`)
 - `/daily-check-in` (redirects to Evening Shutdown)
 - `/deep-work` (real focus lifecycle for authenticated real accounts; local

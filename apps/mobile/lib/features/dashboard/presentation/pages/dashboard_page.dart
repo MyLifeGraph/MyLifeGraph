@@ -10,12 +10,8 @@ import '../../../../core/supabase/supabase_providers.dart';
 import '../../../../core/utils/client_uuid.dart';
 import '../../../../core/utils/local_date.dart';
 import '../../../../core/widgets/app_card.dart';
-import '../../../actions/application/executable_action_dispatcher.dart';
-import '../../../actions/domain/executable_action_target.dart';
-import '../../../briefings/domain/daily_briefing.dart';
 import '../../../briefings/domain/decision_feedback.dart';
 import '../../../briefings/presentation/providers/briefing_providers.dart';
-import '../../../briefings/presentation/widgets/today_briefing_section.dart';
 import '../../../deadline_plans/domain/deadline_plan.dart';
 import '../../../deadline_plans/presentation/providers/deadline_plan_providers.dart';
 import '../../../deadline_plans/presentation/widgets/preparation_workload_card.dart';
@@ -44,25 +40,23 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
   final Set<String> _updatingTaskIds = {};
   bool _showCompletedTasks = false;
   bool _showCancelledTasks = false;
+  bool _showAllTasks = false;
+  bool _showMore = false;
   bool _isRefreshingRecommendations = false;
   String? _recommendationRefreshError;
-  bool _isGeneratingBriefing = false;
-  String? _briefingGenerationError;
-  final Set<String> _executingBriefingActionIds = {};
-  bool _isSubmittingFeedback = false;
-  String? _feedbackError;
-  DecisionFeedbackType? _submittedFeedbackType;
-  final Map<String, String> _feedbackRequestIds = {};
+  final Set<String> _updatingHabitIds = {};
 
   @override
   Widget build(BuildContext context) {
     final snapshot = ref.watch(dashboardSnapshotProvider);
-    final recommendations = ref.watch(recommendationFeedProvider);
-    final briefing = ref.watch(todayBriefingProvider);
     final capabilities = ref.watch(appSurfaceCapabilitiesProvider);
-    final workload = capabilities.canUseDeadlinePlanner
+    final recommendations =
+        _showMore ? ref.watch(recommendationFeedProvider) : null;
+    final workload = _showMore && capabilities.canUseDeadlinePlanner
         ? ref.watch(preparationWorkloadProvider)
         : null;
+    final supporting =
+        _showMore ? ref.watch(dashboardSupportingSnapshotProvider) : null;
 
     return snapshot.when(
       loading: () => const Center(child: CircularProgressIndicator()),
@@ -72,27 +66,25 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
       data: (data) => _DashboardHome(
         snapshot: data,
         recommendations: recommendations,
-        briefing: briefing,
         workload: workload,
+        supporting: supporting,
         onRetryWorkload: () => ref.invalidate(preparationWorkloadProvider),
         onLoadWorkloadDetail: (localDate) => ref
             .read(deadlinePlanRepositoryProvider)
             .getWorkloadDetail(localDate),
-        isGeneratingBriefing: _isGeneratingBriefing,
-        briefingGenerationError: _briefingGenerationError,
-        executingBriefingActionIds: _executingBriefingActionIds,
         completedTaskIds: _completedTaskIds,
         restoredTaskIds: _restoredTaskIds,
         deletedTaskIds: _deletedTaskIds,
         updatingTaskIds: _updatingTaskIds,
         showCompletedTasks: _showCompletedTasks,
         showCancelledTasks: _showCancelledTasks,
+        showAllTasks: _showAllTasks,
+        showMore: _showMore,
+        updatingHabitIds: _updatingHabitIds,
         isRefreshingRecommendations: _isRefreshingRecommendations,
         recommendationRefreshError: _recommendationRefreshError,
         onAddEvening: () => context.go(AppRoutes.dailyCheckIn),
         onAddMorning: () => context.go(AppRoutes.morningCalibration),
-        onOpenTodayHabits: () => context.go(AppRoutes.habitCompletion),
-        onOpenFocus: () => context.go(AppRoutes.deepWork),
         canUseWeeklyReview: capabilities.canUseWeeklyReview,
         onOpenWeeklyReview: () => context.go(AppRoutes.weeklyReview),
         onRetryRecommendations: () {
@@ -100,20 +92,8 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
           ref.invalidate(recommendationFeedProvider);
         },
         onRefreshRecommendations: _refreshRecommendations,
-        onRetryBriefing: () => ref.invalidate(todayBriefingProvider),
-        onGenerateBriefing: _generateBriefing,
-        onExecuteBriefingAction: (target) => _executeBriefingAction(
-          target,
-          snapshot: data,
-          canUseSyncedExecution: capabilities.canUseSyncedExecution,
-          canUseWeeklyReview: capabilities.canUseWeeklyReview,
-        ),
-        isSubmittingFeedback: _isSubmittingFeedback,
-        feedbackError: _feedbackError,
-        submittedFeedbackType: _submittedFeedbackType,
-        onSubmitFeedback: _submitFeedback,
         onShowFeedbackHistory: _showFeedbackHistory,
-        onAddTask: () => _openTaskEditor(),
+        onAddTask: () => context.go(AppRoutes.planner),
         onEditTask: _openTaskOrPreparationPlan,
         onCompleteTask: _completeTask,
         onRestoreTask: _restoreTask,
@@ -122,6 +102,30 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
         onStartFocus: (task) => context.go(
           '${AppRoutes.deepWork}?target_kind=task&target_id=${task.id}',
         ),
+        onSetHabitOutcome: (habit, outcome) => _setHabitOutcome(
+          habit,
+          outcome,
+          data.localDate ?? DateTime.now(),
+        ),
+        onUndoHabitOutcome: (habit) => _undoHabitOutcome(
+          habit,
+          data.localDate ?? DateTime.now(),
+        ),
+        onOpenPreparationPlan: (planId) => context.go(
+          Uri(
+            path: AppRoutes.preparationPlans,
+            queryParameters: {'plan_id': planId},
+          ).toString(),
+        ),
+        onStartPreparationFocus: (taskId) => context.go(
+          '${AppRoutes.deepWork}?target_kind=task&target_id=$taskId',
+        ),
+        onToggleAllTasks: () {
+          setState(() => _showAllTasks = !_showAllTasks);
+        },
+        onToggleMore: () {
+          setState(() => _showMore = !_showMore);
+        },
         onToggleCompletedTasks: () {
           setState(() => _showCompletedTasks = !_showCompletedTasks);
         },
@@ -147,7 +151,6 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
           .refreshDailyAfterUserSignal(
             targetDate: localDateKey(DateTime.now()),
           );
-      ref.invalidate(todayBriefingProvider);
       await ref
           .read(optimizationServiceProvider)
           .refreshActionableRecommendations();
@@ -179,80 +182,6 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
     }
   }
 
-  Future<void> _generateBriefing({required bool force}) async {
-    if (_isGeneratingBriefing) {
-      return;
-    }
-    setState(() {
-      _isGeneratingBriefing = true;
-      _briefingGenerationError = null;
-    });
-    try {
-      await ref.read(briefingRepositoryProvider).generateToday(force: force);
-      ref.invalidate(todayBriefingProvider);
-      if (mounted) {
-        setState(() => _submittedFeedbackType = null);
-      }
-      if (mounted) {
-        _showTaskMessage(
-          force ? 'Today\'s plan updated.' : 'Today\'s plan created.',
-        );
-      }
-    } catch (_) {
-      if (mounted) {
-        setState(() {
-          _briefingGenerationError =
-              'Today\'s plan could not be updated. Your existing plan is still here.';
-        });
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isGeneratingBriefing = false);
-      }
-    }
-  }
-
-  Future<void> _submitFeedback(
-    BriefingAction action,
-    DecisionFeedbackType type,
-  ) async {
-    if (_isSubmittingFeedback) return;
-    final feed = ref.read(todayBriefingProvider).value;
-    final briefing = feed?.briefing;
-    if (briefing == null || feed?.freshness != BriefingFreshness.current) {
-      setState(() => _feedbackError = 'Refresh today before saving feedback.');
-      return;
-    }
-    final requestKey = '${briefing.id}:${action.target.id}:${type.code}';
-    final requestId =
-        _feedbackRequestIds.putIfAbsent(requestKey, newClientUuid);
-    setState(() {
-      _isSubmittingFeedback = true;
-      _feedbackError = null;
-    });
-    try {
-      await ref.read(feedbackRepositoryProvider).create(
-            requestId: requestId,
-            briefingId: briefing.id,
-            actionId: action.target.id,
-            feedbackType: type,
-          );
-      _feedbackRequestIds.remove(requestKey);
-      ref.invalidate(decisionFeedbackProvider);
-      if (mounted) {
-        setState(() => _submittedFeedbackType = type);
-      }
-    } catch (_) {
-      if (mounted) {
-        setState(() {
-          _feedbackError = 'Feedback was not confirmed. Retry the same choice.';
-        });
-      }
-    } finally {
-      if (mounted) setState(() => _isSubmittingFeedback = false);
-    }
-  }
-
   Future<void> _showFeedbackHistory() async {
     await showModalBottomSheet<void>(
       context: context,
@@ -261,135 +190,81 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
     );
   }
 
-  Future<void> _executeBriefingAction(
-    ExecutableActionTarget target, {
-    required DashboardSnapshot snapshot,
-    required bool canUseSyncedExecution,
-    required bool canUseWeeklyReview,
-  }) async {
-    if (_executingBriefingActionIds.contains(target.id)) {
-      return;
-    }
-    setState(() => _executingBriefingActionIds.add(target.id));
+  Future<void> _setHabitOutcome(
+    TodayHabit habit,
+    HabitOutcome outcome,
+    DateTime targetDate,
+  ) async {
+    if (_updatingHabitIds.contains(habit.id)) return;
+    setState(() => _updatingHabitIds.add(habit.id));
     try {
-      final dispatcher = ExecutableActionDispatcher(
-        openTask: ({
-          required actionId,
-          required taskId,
-          estimatedMinutes,
-          source,
-        }) async {
-          final matches = snapshot.todayPlan.where((task) => task.id == taskId);
-          if (matches.isEmpty) {
-            throw StateError('The briefing task is no longer available.');
-          }
-          await _openTaskOrPreparationPlan(matches.first);
-        },
-        completeTask: ({
-          required actionId,
-          required taskId,
-          source,
-        }) async {
-          final matches = snapshot.todayPlan.where((task) => task.id == taskId);
-          if (matches.isEmpty) {
-            throw StateError('The briefing task is no longer available.');
-          }
-          await _completeTask(matches.first);
-        },
-        logHabit: ({
-          required actionId,
-          required habitId,
-          entryDate,
-          outcome,
-          source,
-        }) async {
-          final parsedDate = DateTime.tryParse(entryDate ?? '');
-          final selectedOutcome = outcome ?? HabitOutcome.completed;
-          if (parsedDate == null) {
-            throw StateError('The briefing habit date is invalid.');
-          }
-          final client = ref.read(supabaseClientProvider);
-          if (client == null) {
-            throw StateError('Synced habits are unavailable.');
-          }
-          await HabitCompletionSupabaseDataSource(client).setTodayOutcome(
-            habitId: habitId,
-            outcome: selectedOutcome,
-            targetDate: parsedDate,
-          );
-          await ref
-              .read(snapshotRefreshServiceProvider)
-              .refreshDailyAfterHabitChange(
-                targetDate: habitDateKey(parsedDate),
-              );
-          ref.invalidate(dashboardSnapshotProvider);
-          ref.invalidate(todayBriefingProvider);
-          if (mounted) {
-            _showTaskMessage(
-              selectedOutcome == HabitOutcome.completed
-                  ? 'Habit completed.'
-                  : 'Habit intentionally skipped.',
-            );
-          }
-        },
-        startFocus: ({
-          required actionId,
-          targetId,
-          targetKind,
-          plannedMinutes,
-          source,
-        }) async {
-          final query = <String, String>{
-            if (targetKind != null) 'target_kind': targetKind.code,
-            if (targetId != null) 'target_id': targetId,
-          };
-          final suffix = query.isEmpty
-              ? ''
-              : '?${query.entries.map((entry) => '${entry.key}=${Uri.encodeQueryComponent(entry.value)}').join('&')}';
-          if (mounted) {
-            context.go('${AppRoutes.deepWork}$suffix');
-          }
-        },
-        reviewPlan: ({
-          required actionId,
-          reviewId,
-          estimatedMinutes,
-          source,
-        }) async {
-          if (mounted) context.go(AppRoutes.weeklyReview);
-        },
-        openCapture: ({
-          required actionId,
-          required route,
-          entryDate,
-          source,
-        }) async {
-          if (mounted) {
-            context.go(route.path);
-          }
-        },
+      final source = _habitSource();
+      await source.setTodayOutcome(
+        habitId: habit.id,
+        outcome: outcome,
+        targetDate: targetDate,
       );
-      final result = await dispatcher.dispatch(
-        target,
-        canUseSyncedExecution: canUseSyncedExecution,
-        canUseWeeklyReview: canUseWeeklyReview,
-      );
-      if (result is ExecutableActionUnavailable && mounted) {
-        _showTaskMessage(result.reason);
+      await ref
+          .read(snapshotRefreshServiceProvider)
+          .refreshDailyAfterHabitChange(targetDate: habitDateKey(targetDate));
+      ref.invalidate(dashboardSnapshotProvider);
+      ref.invalidate(dashboardSupportingSnapshotProvider);
+      if (mounted) {
+        _showTaskMessage(
+          outcome == HabitOutcome.completed
+              ? 'Habit completed.'
+              : 'Habit intentionally skipped.',
+        );
       }
     } catch (error) {
       if (mounted) {
         _showTaskMessage(
-          error is BriefingContractException
+          error is HabitCommandException
               ? error.message
-              : 'This briefing action is no longer available. Adjust today and retry.',
+              : 'Habit update could not be saved.',
         );
       }
     } finally {
-      if (mounted) {
-        setState(() => _executingBriefingActionIds.remove(target.id));
-      }
+      if (mounted) setState(() => _updatingHabitIds.remove(habit.id));
     }
+  }
+
+  Future<void> _undoHabitOutcome(
+    TodayHabit habit,
+    DateTime targetDate,
+  ) async {
+    if (_updatingHabitIds.contains(habit.id)) return;
+    setState(() => _updatingHabitIds.add(habit.id));
+    try {
+      await _habitSource().undoTodayOutcome(
+        habitId: habit.id,
+        targetDate: targetDate,
+      );
+      await ref
+          .read(snapshotRefreshServiceProvider)
+          .refreshDailyAfterHabitChange(targetDate: habitDateKey(targetDate));
+      ref.invalidate(dashboardSnapshotProvider);
+      ref.invalidate(dashboardSupportingSnapshotProvider);
+      if (mounted) _showTaskMessage('Habit outcome undone.');
+    } catch (error) {
+      if (mounted) {
+        _showTaskMessage(
+          error is HabitCommandException
+              ? error.message
+              : 'Habit undo could not be saved.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _updatingHabitIds.remove(habit.id));
+    }
+  }
+
+  HabitCompletionSupabaseDataSource _habitSource() {
+    final client = ref.read(supabaseClientProvider);
+    if (client == null) {
+      throw const HabitCommandException('Synced habits are unavailable.');
+    }
+    return HabitCompletionSupabaseDataSource(client);
   }
 
   Future<void> _completeTask(PlanItem task) async {
@@ -499,6 +374,21 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
       final source = _taskSource();
       if (task == null) {
         await source.createTask(taskId: id, draft: draft);
+        final overviewDate =
+            ref.read(dashboardSnapshotProvider).value?.localDate;
+        final due = draft.deadline;
+        final qualifiesForToday = due != null &&
+            overviewDate != null &&
+            !DateTime(due.year, due.month, due.day).isAfter(
+              DateTime(
+                overviewDate.year,
+                overviewDate.month,
+                overviewDate.day,
+              ),
+            );
+        if (!qualifiesForToday && mounted) {
+          setState(() => _showAllTasks = true);
+        }
       } else {
         await source.editTask(taskId: task.id, draft: draft);
       }
@@ -647,7 +537,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
         .read(snapshotRefreshServiceProvider)
         .refreshDailyAfterTaskChange(targetDate: localDateKey(DateTime.now()));
     ref.invalidate(dashboardSnapshotProvider);
-    ref.invalidate(todayBriefingProvider);
+    ref.invalidate(dashboardSupportingSnapshotProvider);
   }
 
   void _showTaskMessage(String message) {
@@ -675,36 +565,27 @@ class _DashboardHome extends StatelessWidget {
   const _DashboardHome({
     required this.snapshot,
     required this.recommendations,
-    required this.briefing,
     required this.workload,
+    required this.supporting,
     required this.onRetryWorkload,
     required this.onLoadWorkloadDetail,
-    required this.isGeneratingBriefing,
-    required this.briefingGenerationError,
-    required this.executingBriefingActionIds,
     required this.completedTaskIds,
     required this.restoredTaskIds,
     required this.deletedTaskIds,
     required this.updatingTaskIds,
     required this.showCompletedTasks,
     required this.showCancelledTasks,
+    required this.showAllTasks,
+    required this.showMore,
+    required this.updatingHabitIds,
     required this.isRefreshingRecommendations,
     required this.recommendationRefreshError,
     required this.onAddEvening,
     required this.onAddMorning,
-    required this.onOpenTodayHabits,
-    required this.onOpenFocus,
     required this.canUseWeeklyReview,
     required this.onOpenWeeklyReview,
     required this.onRetryRecommendations,
     required this.onRefreshRecommendations,
-    required this.onRetryBriefing,
-    required this.onGenerateBriefing,
-    required this.onExecuteBriefingAction,
-    required this.isSubmittingFeedback,
-    required this.feedbackError,
-    required this.submittedFeedbackType,
-    required this.onSubmitFeedback,
     required this.onShowFeedbackHistory,
     required this.onAddTask,
     required this.onEditTask,
@@ -713,42 +594,39 @@ class _DashboardHome extends StatelessWidget {
     required this.onCancelTask,
     required this.onPostponeTask,
     required this.onStartFocus,
+    required this.onSetHabitOutcome,
+    required this.onUndoHabitOutcome,
+    required this.onOpenPreparationPlan,
+    required this.onStartPreparationFocus,
+    required this.onToggleAllTasks,
+    required this.onToggleMore,
     required this.onToggleCompletedTasks,
     required this.onToggleCancelledTasks,
   });
 
   final DashboardSnapshot snapshot;
-  final AsyncValue<RecommendationFeed> recommendations;
-  final AsyncValue<BriefingFeed> briefing;
+  final AsyncValue<RecommendationFeed>? recommendations;
   final AsyncValue<PreparationWorkload>? workload;
+  final AsyncValue<DashboardSnapshot>? supporting;
   final VoidCallback onRetryWorkload;
   final PreparationWorkloadDetailLoader onLoadWorkloadDetail;
-  final bool isGeneratingBriefing;
-  final String? briefingGenerationError;
-  final Set<String> executingBriefingActionIds;
   final Set<String> completedTaskIds;
   final Set<String> restoredTaskIds;
   final Set<String> deletedTaskIds;
   final Set<String> updatingTaskIds;
   final bool showCompletedTasks;
   final bool showCancelledTasks;
+  final bool showAllTasks;
+  final bool showMore;
+  final Set<String> updatingHabitIds;
   final bool isRefreshingRecommendations;
   final String? recommendationRefreshError;
   final VoidCallback onAddEvening;
   final VoidCallback onAddMorning;
-  final VoidCallback onOpenTodayHabits;
-  final VoidCallback onOpenFocus;
   final bool canUseWeeklyReview;
   final VoidCallback onOpenWeeklyReview;
   final VoidCallback onRetryRecommendations;
   final VoidCallback onRefreshRecommendations;
-  final VoidCallback onRetryBriefing;
-  final GenerateBriefingCallback onGenerateBriefing;
-  final ExecuteBriefingActionCallback onExecuteBriefingAction;
-  final bool isSubmittingFeedback;
-  final String? feedbackError;
-  final DecisionFeedbackType? submittedFeedbackType;
-  final SubmitFeedbackCallback onSubmitFeedback;
   final VoidCallback onShowFeedbackHistory;
   final VoidCallback onAddTask;
   final ValueChanged<PlanItem> onEditTask;
@@ -757,27 +635,37 @@ class _DashboardHome extends StatelessWidget {
   final ValueChanged<PlanItem> onCancelTask;
   final ValueChanged<PlanItem> onPostponeTask;
   final ValueChanged<PlanItem> onStartFocus;
+  final void Function(TodayHabit habit, HabitOutcome outcome) onSetHabitOutcome;
+  final ValueChanged<TodayHabit> onUndoHabitOutcome;
+  final ValueChanged<String> onOpenPreparationPlan;
+  final ValueChanged<String> onStartPreparationFocus;
+  final VoidCallback onToggleAllTasks;
+  final VoidCallback onToggleMore;
   final VoidCallback onToggleCompletedTasks;
   final VoidCallback onToggleCancelledTasks;
 
   @override
   Widget build(BuildContext context) {
-    final activeTasks = snapshot.todayPlan.where((item) {
+    final allTasks = snapshot.allTasks;
+    final activeTasks = allTasks.where((item) {
       final completed = completedTaskIds.contains(item.id) ||
           (item.isCompleted && !restoredTaskIds.contains(item.id));
       final cancelled = deletedTaskIds.contains(item.id) ||
           (item.status == 'cancelled' && !restoredTaskIds.contains(item.id));
       return !completed && !cancelled;
     }).toList();
-    final cancelledTasks = snapshot.todayPlan.where((item) {
+    final cancelledTasks = allTasks.where((item) {
       return deletedTaskIds.contains(item.id) ||
           (item.status == 'cancelled' && !restoredTaskIds.contains(item.id));
     }).toList();
-    final completedTasks = snapshot.todayPlan.where((item) {
+    final completedTasks = allTasks.where((item) {
       final completed = completedTaskIds.contains(item.id) ||
           (item.isCompleted && !restoredTaskIds.contains(item.id));
       return completed && !deletedTaskIds.contains(item.id);
     }).toList();
+    final selectedTodayTasks =
+        snapshot.isTodayOverview ? snapshot.todayTasks : activeTasks;
+    final canExecute = snapshot.origin == DashboardOrigin.account;
 
     return SafeArea(
       child: LayoutBuilder(
@@ -803,111 +691,98 @@ class _DashboardHome extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           _DashboardHeader(snapshot: snapshot),
-                          const SizedBox(height: AppSpacing.lg),
-                          TodayBriefingSection(
-                            value: briefing,
-                            isGenerating: isGeneratingBriefing,
-                            generationError: briefingGenerationError,
-                            executingActionIds: executingBriefingActionIds,
-                            onRetryRead: onRetryBriefing,
-                            onGenerate: onGenerateBriefing,
-                            onExecute: onExecuteBriefingAction,
-                            isSubmittingFeedback: isSubmittingFeedback,
-                            feedbackError: feedbackError,
-                            submittedFeedbackType: submittedFeedbackType,
-                            onFeedback: onSubmitFeedback,
-                            onShowFeedbackHistory: onShowFeedbackHistory,
-                          ),
                           const SizedBox(height: AppSpacing.md),
-                          _TodayAtAGlanceCard(
+                          _CheckInStreakCard(
                             snapshot: snapshot,
-                            canExecute:
-                                snapshot.origin == DashboardOrigin.account,
-                            onOpenHabits: onOpenTodayHabits,
-                            onOpenFocus: onOpenFocus,
                             onAddMorning: onAddMorning,
                             onAddEvening: onAddEvening,
                           ),
-                          if (workload != null) ...[
-                            const SizedBox(height: AppSpacing.md),
-                            PreparationWorkloadCard(
-                              value: workload!,
-                              compact: true,
-                              onRetry: onRetryWorkload,
-                              onLoadDayDetail: onLoadWorkloadDetail,
-                              onOpenSettings: () =>
-                                  context.go(AppRoutes.settings),
-                              onOpenPlans: () =>
-                                  context.go(AppRoutes.preparationPlans),
-                              onReviewPlan: (planId) => context.go(
-                                Uri(
-                                  path: AppRoutes.preparationPlans,
-                                  queryParameters: {'plan_id': planId},
-                                ).toString(),
-                              ),
-                              onReplanPlan: (planId) => context.go(
-                                Uri(
-                                  path: AppRoutes.preparationPlans,
-                                  queryParameters: {
-                                    'plan_id': planId,
-                                    'action': 'replan',
-                                  },
-                                ).toString(),
-                              ),
-                            ),
-                          ],
-                          if (canUseWeeklyReview) ...[
-                            const SizedBox(height: AppSpacing.md),
-                            _WeeklyReviewEntryCard(
-                              onOpen: onOpenWeeklyReview,
-                            ),
-                          ],
+                          const SizedBox(height: AppSpacing.md),
+                          _TodayProgressCard(snapshot: snapshot),
+                          const SizedBox(height: AppSpacing.lg),
+                          _TodayAgenda(
+                            snapshot: snapshot,
+                            canExecute: canExecute,
+                            onOpenPreparationPlan: onOpenPreparationPlan,
+                            onStartPreparationFocus: onStartPreparationFocus,
+                          ),
                           const SizedBox(height: AppSpacing.xl),
-                          _TasksSection(
-                            activeTasks: activeTasks,
-                            completedTasks: completedTasks,
-                            cancelledTasks: cancelledTasks,
-                            canExecute:
-                                snapshot.origin == DashboardOrigin.account,
+                          _TodayTasksSection(
+                            tasks: selectedTodayTasks,
+                            sourceState: snapshot.sourceStates?.tasks,
+                            canExecute: canExecute,
                             updatingTaskIds: updatingTaskIds,
-                            showCompletedTasks: showCompletedTasks,
-                            showCancelledTasks: showCancelledTasks,
                             onAdd: onAddTask,
                             onEdit: onEditTask,
                             onComplete: onCompleteTask,
                             onRestore: onRestoreTask,
-                            onCancel: onCancelTask,
-                            onPostpone: onPostponeTask,
                             onStartFocus: onStartFocus,
-                            onToggleCompleted: onToggleCompletedTasks,
-                            onToggleCancelled: onToggleCancelledTasks,
+                          ),
+                          const SizedBox(height: AppSpacing.md),
+                          _InlineExpansionCard(
+                            key: const ValueKey('today-all-tasks'),
+                            title: 'Show all tasks',
+                            subtitle:
+                                'Future, undated, completed, and cancelled tasks',
+                            expanded: showAllTasks,
+                            onToggle: onToggleAllTasks,
+                            child: _TasksSection(
+                              activeTasks: activeTasks,
+                              completedTasks: completedTasks,
+                              cancelledTasks: cancelledTasks,
+                              canExecute: canExecute,
+                              updatingTaskIds: updatingTaskIds,
+                              showCompletedTasks: showCompletedTasks,
+                              showCancelledTasks: showCancelledTasks,
+                              onAdd: onAddTask,
+                              onEdit: onEditTask,
+                              onComplete: onCompleteTask,
+                              onRestore: onRestoreTask,
+                              onCancel: onCancelTask,
+                              onPostpone: onPostponeTask,
+                              onStartFocus: onStartFocus,
+                              onToggleCompleted: onToggleCompletedTasks,
+                              onToggleCancelled: onToggleCancelledTasks,
+                            ),
                           ),
                           const SizedBox(height: AppSpacing.xl),
-                          _SupportingDashboardDetails(
-                            latestCheckIn: _LatestCheckInCard(
-                              snapshot: snapshot,
-                              onAddEvening: onAddEvening,
-                              onAddMorning: onAddMorning,
-                            ),
-                            recommendations: _RecommendationsSection(
-                              value: recommendations,
+                          _TodayHabitsSection(
+                            habits: snapshot.todayHabits,
+                            sourceState: snapshot.sourceStates?.habits,
+                            canExecute: canExecute,
+                            updatingHabitIds: updatingHabitIds,
+                            onSetOutcome: onSetHabitOutcome,
+                            onUndo: onUndoHabitOutcome,
+                          ),
+                          const SizedBox(height: AppSpacing.xl),
+                          _InlineExpansionCard(
+                            key: const ValueKey('dashboard-more'),
+                            title: 'More',
+                            subtitle:
+                                'Workload, weekly review, saved signals, recommendations, and full week',
+                            expanded: showMore,
+                            onToggle: onToggleMore,
+                            child: _MoreDashboardContent(
                               accountData:
                                   snapshot.origin == DashboardOrigin.account,
-                              isRefreshing: isRefreshingRecommendations,
-                              refreshError: recommendationRefreshError,
-                              onRetry: onRetryRecommendations,
-                              onRefresh: onRefreshRecommendations,
-                            ),
-                            schedule: _ScheduleSection(
-                              days: snapshot.scheduleDays,
-                              preparationScheduleError:
-                                  snapshot.preparationScheduleError,
-                              onOpenPreparationPlan: (planId) => context.go(
-                                Uri(
-                                  path: AppRoutes.preparationPlans,
-                                  queryParameters: {'plan_id': planId},
-                                ).toString(),
-                              ),
+                              supporting: supporting,
+                              recommendations: recommendations,
+                              workload: workload,
+                              canUseWeeklyReview: canUseWeeklyReview,
+                              isRefreshingRecommendations:
+                                  isRefreshingRecommendations,
+                              recommendationRefreshError:
+                                  recommendationRefreshError,
+                              onRetryWorkload: onRetryWorkload,
+                              onLoadWorkloadDetail: onLoadWorkloadDetail,
+                              onOpenWeeklyReview: onOpenWeeklyReview,
+                              onRetryRecommendations: onRetryRecommendations,
+                              onRefreshRecommendations:
+                                  onRefreshRecommendations,
+                              onShowFeedbackHistory: onShowFeedbackHistory,
+                              onAddMorning: onAddMorning,
+                              onAddEvening: onAddEvening,
+                              onOpenPreparationPlan: onOpenPreparationPlan,
                             ),
                           ),
                         ],
@@ -1024,7 +899,9 @@ class _DashboardHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final date = DateFormat('EEEE, MMMM d').format(DateTime.now());
+    final date = DateFormat(
+      'EEEE, MMMM d',
+    ).format(snapshot.localDate ?? DateTime.now());
     final sourceLabel = snapshot.origin == DashboardOrigin.localDemo
         ? 'Local data'
         : 'Your account data';
@@ -1082,125 +959,598 @@ class _WeeklyReviewEntryCard extends StatelessWidget {
   }
 }
 
-class _TodayAtAGlanceCard extends StatelessWidget {
-  const _TodayAtAGlanceCard({
+class _CheckInStreakCard extends StatelessWidget {
+  const _CheckInStreakCard({
     required this.snapshot,
-    required this.canExecute,
-    required this.onOpenHabits,
-    required this.onOpenFocus,
     required this.onAddMorning,
     required this.onAddEvening,
   });
 
   final DashboardSnapshot snapshot;
-  final bool canExecute;
-  final VoidCallback onOpenHabits;
-  final VoidCallback onOpenFocus;
   final VoidCallback onAddMorning;
   final VoidCallback onAddEvening;
 
   @override
   Widget build(BuildContext context) {
-    final now = snapshot.loadedAt.toLocal();
-    final matchingDays = snapshot.scheduleDays.where((day) {
-      final date = day.date;
-      return date != null &&
-          date.year == now.year &&
-          date.month == now.month &&
-          date.day == now.day;
-    });
-    final today = matchingDays.firstOrNull ??
-        snapshot.scheduleDays
-            .where((day) => day.label.toLowerCase() == 'today')
-            .firstOrNull;
-    final events = today?.events ?? const <ScheduleEvent>[];
-    final currentMinute = now.hour * 60 + now.minute;
-    final nextEvent = events.where((event) {
-      final minute = event.sortMinutes;
-      final endMinute = event.endSortMinutes;
-      if (endMinute != null) return endMinute > currentMinute;
-      return minute == null || minute >= currentMinute;
-    }).firstOrNull;
-    final latestCheckIn = snapshot.latestCheckIn;
-    final checkInDate = latestCheckIn?.entryDate.toLocal();
-    final checkIn = checkInDate != null &&
-            checkInDate.year == now.year &&
-            checkInDate.month == now.month &&
-            checkInDate.day == now.day
-        ? latestCheckIn
-        : null;
-    final morningSaved = checkIn?.hasMorningCapture == true;
-    final eveningSaved = checkIn?.hasEveningCapture == true;
-    final captureStatus = checkIn == null
-        ? 'No signal saved today'
-        : [
-            if (checkIn.hasMorningCapture) 'morning saved',
-            if (checkIn.hasEveningCapture) 'evening saved',
-          ].isEmpty
-            ? 'Daily signal saved'
-            : [
-                if (checkIn.hasMorningCapture) 'morning saved',
-                if (checkIn.hasEveningCapture) 'evening saved',
-              ].join(' · ');
+    final checkIns = snapshot.checkIns;
+    final unavailable =
+        snapshot.sourceStates?.checkIns.status == TodaySourceStatus.unavailable;
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(
+                Icons.local_fire_department_outlined,
+                color: Theme.of(context).colorScheme.primary,
+                size: 30,
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Check-in streak',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                    const SizedBox(height: AppSpacing.xs),
+                    Text(
+                      unavailable
+                          ? 'Streak unavailable'
+                          : '${checkIns?.completedDaysStreak ?? 0} consecutive ${checkIns?.completedDaysStreak == 1 ? 'day' : 'days'}',
+                      style: Theme.of(context).textTheme.headlineSmall,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            unavailable
+                ? snapshot.sourceStates?.checkIns.message ??
+                    'Check-ins could not be loaded.'
+                : 'A day counts when both check-ins are saved. You can enter both at any time today; an unfinished current day does not end the prior streak.',
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Wrap(
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.sm,
+            children: [
+              _CheckInButton(
+                label: 'Morning check-in',
+                saved: checkIns?.morningSaved == true,
+                icon: Icons.wb_sunny_outlined,
+                onPressed: onAddMorning,
+              ),
+              _CheckInButton(
+                label: 'Evening check-in',
+                saved: checkIns?.eveningSaved == true,
+                icon: Icons.nights_stay_outlined,
+                onPressed: onAddEvening,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
 
+class _CheckInButton extends StatelessWidget {
+  const _CheckInButton({
+    required this.label,
+    required this.saved,
+    required this.icon,
+    required this.onPressed,
+  });
+
+  final String label;
+  final bool saved;
+  final IconData icon;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = '${saved ? 'Edit' : 'Add'} $label';
+    return Semantics(
+      button: true,
+      label: '$text. ${saved ? 'Saved' : 'Not saved'} today.',
+      child: saved
+          ? OutlinedButton.icon(
+              onPressed: onPressed,
+              icon: const Icon(Icons.check_circle_outline),
+              label: Text(text),
+            )
+          : FilledButton.tonalIcon(
+              onPressed: onPressed,
+              icon: Icon(icon),
+              label: Text(text),
+            ),
+    );
+  }
+}
+
+class _TodayProgressCard extends StatelessWidget {
+  const _TodayProgressCard({required this.snapshot});
+
+  final DashboardSnapshot snapshot;
+
+  @override
+  Widget build(BuildContext context) {
+    final progress = snapshot.progress;
     return AppCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Today at a glance',
+            'Today\'s progress',
             style: Theme.of(context).textTheme.titleLarge,
           ),
-          const SizedBox(height: AppSpacing.md),
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            leading: Icon(
-              nextEvent?.isDeadlinePreparation == true
-                  ? Icons.school_outlined
-                  : Icons.event_outlined,
+          const SizedBox(height: AppSpacing.sm),
+          if (progress == null) ...[
+            Text(
+              'Progress unavailable',
+              style: Theme.of(context).textTheme.titleMedium,
             ),
-            title: Text(nextEvent?.title ?? 'No more scheduled blocks today'),
-            subtitle: Text(
-              nextEvent == null
-                  ? '${events.length} scheduled today'
-                  : '${nextEvent.time} · ${events.length} scheduled today',
+            const SizedBox(height: AppSpacing.xs),
+            const Text(
+              'At least one counted source could not be verified, so no partial total is shown.',
             ),
+          ] else ...[
+            Semantics(
+              label:
+                  '${progress.completed} of ${progress.total} counted items completed today',
+              child: ExcludeSemantics(
+                child: TweenAnimationBuilder<double>(
+                  tween: Tween(begin: 0, end: progress.ratio),
+                  duration: const Duration(milliseconds: 450),
+                  builder: (context, value, _) => LinearProgressIndicator(
+                    value: value,
+                    minHeight: 12,
+                    borderRadius: BorderRadius.circular(999),
+                    color: Colors.green.shade600,
+                    backgroundColor:
+                        Theme.of(context).colorScheme.surfaceContainerHighest,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              '${progress.completed}/${progress.total} completed',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            const Text(
+              'Includes both check-ins, today\'s tasks and habits, and confirmed preparation blocks. Skipped habits do not count as completed.',
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _TodayAgenda extends StatelessWidget {
+  const _TodayAgenda({
+    required this.snapshot,
+    required this.canExecute,
+    required this.onOpenPreparationPlan,
+    required this.onStartPreparationFocus,
+  });
+
+  final DashboardSnapshot snapshot;
+  final bool canExecute;
+  final ValueChanged<String> onOpenPreparationPlan;
+  final ValueChanged<String> onStartPreparationFocus;
+
+  @override
+  Widget build(BuildContext context) {
+    final sourceErrors = snapshot.sourceStates?.timelineStates
+            .where((state) => state.status == TodaySourceStatus.unavailable)
+            .map((state) => state.message)
+            .whereType<String>()
+            .toList(growable: false) ??
+        const <String>[];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _SectionTitle(
+          title: 'Today at a glance',
+          subtitle: 'Your timed day in one compact agenda.',
+        ),
+        if (sourceErrors.isNotEmpty) ...[
+          const SizedBox(height: AppSpacing.sm),
+          _InlineMessage(
+            icon: Icons.warning_amber_outlined,
+            message: sourceErrors.join(' '),
+            color: Theme.of(context).colorScheme.error,
           ),
-          ListTile(
-            contentPadding: EdgeInsets.zero,
-            leading: const Icon(Icons.monitor_heart_outlined),
-            title: Text(captureStatus),
-            subtitle: const Text('Details stay available below when needed.'),
-            trailing: IconButton(
-              tooltip: !morningSaved
-                  ? 'Add morning check-in'
-                  : eveningSaved
-                      ? 'Edit evening check-in'
-                      : 'Add evening check-in',
-              onPressed: morningSaved ? onAddEvening : onAddMorning,
-              icon: Icon(
-                morningSaved
-                    ? Icons.nights_stay_outlined
-                    : Icons.wb_sunny_outlined,
+        ],
+        const SizedBox(height: AppSpacing.md),
+        if (snapshot.timeline.isEmpty)
+          const _EmptySectionCard(
+            icon: Icons.calendar_today_outlined,
+            message: 'No timed blocks or all-day events are available today.',
+          )
+        else
+          ...snapshot.timeline.map(
+            (item) => Padding(
+              padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+              child: _AgendaItem(
+                item: item,
+                canExecute: canExecute,
+                onOpenPreparationPlan: onOpenPreparationPlan,
+                onStartPreparationFocus: onStartPreparationFocus,
               ),
             ),
           ),
-          if (canExecute) ...[
-            const SizedBox(height: AppSpacing.sm),
+      ],
+    );
+  }
+}
+
+class _AgendaItem extends StatelessWidget {
+  const _AgendaItem({
+    required this.item,
+    required this.canExecute,
+    required this.onOpenPreparationPlan,
+    required this.onStartPreparationFocus,
+  });
+
+  final TodayTimelineItem item;
+  final bool canExecute;
+  final ValueChanged<String> onOpenPreparationPlan;
+  final ValueChanged<String> onStartPreparationFocus;
+
+  @override
+  Widget build(BuildContext context) {
+    final appearance = _agendaAppearance(context, item.kind);
+    final detail = _agendaDetail(item);
+    return Semantics(
+      container: true,
+      label: '${appearance.label}. ${item.title}. ${_agendaTime(item)}.',
+      child: Container(
+        decoration: BoxDecoration(
+          color: appearance.background,
+          borderRadius: BorderRadius.circular(10),
+          border:
+              Border.all(color: appearance.foreground.withValues(alpha: .3)),
+        ),
+        padding: const EdgeInsets.all(AppSpacing.md),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              width: 76,
+              child: Text(
+                _agendaTime(item),
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                      color: appearance.foreground,
+                    ),
+              ),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            Icon(appearance.icon, color: appearance.foreground, size: 21),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    appearance.label,
+                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                          color: appearance.foreground,
+                          fontWeight: FontWeight.w700,
+                        ),
+                  ),
+                  const SizedBox(height: AppSpacing.xs),
+                  Text(
+                    item.title,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          color: appearance.foreground,
+                        ),
+                  ),
+                  if (detail != null) ...[
+                    const SizedBox(height: AppSpacing.xs),
+                    Text(
+                      detail,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: appearance.foreground,
+                          ),
+                    ),
+                  ],
+                  if (item.location != null) ...[
+                    const SizedBox(height: AppSpacing.xs),
+                    Text(
+                      item.location!,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: appearance.foreground,
+                          ),
+                    ),
+                  ],
+                  if (item.kind == TodayTimelineKind.preparation &&
+                      item.planId != null) ...[
+                    const SizedBox(height: AppSpacing.sm),
+                    Wrap(
+                      spacing: AppSpacing.sm,
+                      runSpacing: AppSpacing.sm,
+                      children: [
+                        OutlinedButton(
+                          onPressed: () => onOpenPreparationPlan(item.planId!),
+                          child: const Text('Open plan'),
+                        ),
+                        if (canExecute &&
+                            item.managedTaskId != null &&
+                            const {'upcoming', 'partial'}.contains(item.state))
+                          FilledButton.tonalIcon(
+                            onPressed: () => onStartPreparationFocus(
+                              item.managedTaskId!,
+                            ),
+                            icon: const Icon(Icons.timer_outlined),
+                            label: const Text('Start focus'),
+                          ),
+                      ],
+                    ),
+                  ],
+                  if (canExecute &&
+                      item.kind == TodayTimelineKind.taskBlock &&
+                      item.taskId != null) ...[
+                    const SizedBox(height: AppSpacing.sm),
+                    FilledButton.tonalIcon(
+                      onPressed: () => context.go(
+                        '${AppRoutes.deepWork}?target_kind=task&target_id=${item.taskId}',
+                      ),
+                      icon: const Icon(Icons.timer_outlined),
+                      label: const Text('Start focus'),
+                    ),
+                  ],
+                  if (canExecute &&
+                      item.kind == TodayTimelineKind.habitSlot &&
+                      item.habitId != null) ...[
+                    const SizedBox(height: AppSpacing.sm),
+                    FilledButton.tonalIcon(
+                      onPressed: () => context.go(AppRoutes.habitCompletion),
+                      icon: const Icon(Icons.check_circle_outline),
+                      label: const Text('Log habit'),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TodayTasksSection extends StatelessWidget {
+  const _TodayTasksSection({
+    required this.tasks,
+    required this.sourceState,
+    required this.canExecute,
+    required this.updatingTaskIds,
+    required this.onAdd,
+    required this.onEdit,
+    required this.onComplete,
+    required this.onRestore,
+    required this.onStartFocus,
+  });
+
+  final List<PlanItem> tasks;
+  final TodaySourceState? sourceState;
+  final bool canExecute;
+  final Set<String> updatingTaskIds;
+  final VoidCallback onAdd;
+  final ValueChanged<PlanItem> onEdit;
+  final ValueChanged<PlanItem> onComplete;
+  final ValueChanged<PlanItem> onRestore;
+  final ValueChanged<PlanItem> onStartFocus;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _SectionTitle(
+          title: 'Today\'s tasks',
+          subtitle: 'Due, overdue, in-progress, and completed-today tasks.',
+          trailing: canExecute
+              ? FilledButton.icon(
+                  onPressed: onAdd,
+                  icon: const Icon(Icons.calendar_month_outlined, size: 18),
+                  label: const Text('Open Planner'),
+                )
+              : null,
+        ),
+        const SizedBox(height: AppSpacing.md),
+        if (sourceState?.status == TodaySourceStatus.unavailable)
+          _SectionErrorCard(
+            title: 'Tasks unavailable',
+            message: sourceState?.message ?? 'Tasks could not be loaded.',
+          )
+        else if (tasks.isEmpty)
+          const _EmptySectionCard(
+            icon: Icons.task_alt_outlined,
+            message: 'No due, overdue, or in-progress tasks today.',
+          )
+        else
+          ...tasks.map(
+            (task) => Padding(
+              padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+              child: _TaskCard(
+                task: task,
+                isUpdating: updatingTaskIds.contains(task.id),
+                isCompleted: task.status == 'done',
+                onComplete: canExecute && task.status != 'done'
+                    ? () => onComplete(task)
+                    : null,
+                onRestore: canExecute && task.status == 'done'
+                    ? () => onRestore(task)
+                    : null,
+                onEdit: null,
+                onStartFocus: canExecute && task.status != 'done'
+                    ? () => onStartFocus(task)
+                    : null,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _TodayHabitsSection extends StatelessWidget {
+  const _TodayHabitsSection({
+    required this.habits,
+    required this.sourceState,
+    required this.canExecute,
+    required this.updatingHabitIds,
+    required this.onSetOutcome,
+    required this.onUndo,
+  });
+
+  final List<TodayHabit> habits;
+  final TodaySourceState? sourceState;
+  final bool canExecute;
+  final Set<String> updatingHabitIds;
+  final void Function(TodayHabit habit, HabitOutcome outcome) onSetOutcome;
+  final ValueChanged<TodayHabit> onUndo;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _SectionTitle(
+          title: 'Today\'s habits',
+          subtitle: 'Scheduled habits and still-open weekly targets.',
+        ),
+        const SizedBox(height: AppSpacing.md),
+        if (sourceState?.status == TodaySourceStatus.unavailable)
+          _SectionErrorCard(
+            title: 'Habits unavailable',
+            message: sourceState?.message ?? 'Habits could not be loaded.',
+          )
+        else if (habits.isEmpty)
+          const _EmptySectionCard(
+            icon: Icons.check_circle_outline,
+            message: 'No habits need an outcome today.',
+          )
+        else
+          ...habits.map(
+            (habit) => Padding(
+              padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+              child: _HabitCard(
+                habit: habit,
+                updating: updatingHabitIds.contains(habit.id),
+                canExecute: canExecute,
+                onSetOutcome: onSetOutcome,
+                onUndo: onUndo,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _HabitCard extends StatelessWidget {
+  const _HabitCard({
+    required this.habit,
+    required this.updating,
+    required this.canExecute,
+    required this.onSetOutcome,
+    required this.onUndo,
+  });
+
+  final TodayHabit habit;
+  final bool updating;
+  final bool canExecute;
+  final void Function(TodayHabit habit, HabitOutcome outcome) onSetOutcome;
+  final ValueChanged<TodayHabit> onUndo;
+
+  @override
+  Widget build(BuildContext context) {
+    final completed = habit.outcome == 'completed';
+    final skipped = habit.outcome == 'skipped';
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(
+                completed
+                    ? Icons.check_circle
+                    : skipped
+                        ? Icons.skip_next_outlined
+                        : Icons.radio_button_unchecked,
+                color: completed
+                    ? Colors.green.shade700
+                    : skipped
+                        ? Theme.of(context).colorScheme.tertiary
+                        : null,
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      habit.title,
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: AppSpacing.xs),
+                    Text(
+                      [
+                        habit.cadenceLabel,
+                        if (habit.cadence == 'weekly_target')
+                          '${habit.weeklyCompleted}/${habit.weeklyTarget} this week',
+                        if (habit.setupManaged) 'Managed in Setup',
+                      ].join(' · '),
+                    ),
+                  ],
+                ),
+              ),
+              if (updating)
+                const SizedBox.square(
+                  dimension: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+            ],
+          ),
+          if (canExecute && !updating) ...[
+            const SizedBox(height: AppSpacing.md),
             Wrap(
               spacing: AppSpacing.sm,
               runSpacing: AppSpacing.sm,
               children: [
-                FilledButton.icon(
-                  onPressed: onOpenFocus,
-                  icon: const Icon(Icons.timer_outlined),
-                  label: const Text('Start focus'),
-                ),
-                OutlinedButton.icon(
-                  onPressed: onOpenHabits,
-                  icon: const Icon(Icons.check_circle_outline),
-                  label: const Text('Today habits'),
-                ),
+                if (habit.outcome == null) ...[
+                  FilledButton.tonalIcon(
+                    onPressed: () =>
+                        onSetOutcome(habit, HabitOutcome.completed),
+                    icon: const Icon(Icons.check),
+                    label: const Text('Complete'),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: () => onSetOutcome(habit, HabitOutcome.skipped),
+                    icon: const Icon(Icons.skip_next_outlined),
+                    label: const Text('Skip'),
+                  ),
+                ] else
+                  OutlinedButton.icon(
+                    onPressed: () => onUndo(habit),
+                    icon: const Icon(Icons.undo),
+                    label: const Text('Undo outcome'),
+                  ),
               ],
             ),
           ],
@@ -1210,16 +1560,21 @@ class _TodayAtAGlanceCard extends StatelessWidget {
   }
 }
 
-class _SupportingDashboardDetails extends StatelessWidget {
-  const _SupportingDashboardDetails({
-    required this.latestCheckIn,
-    required this.recommendations,
-    required this.schedule,
+class _InlineExpansionCard extends StatelessWidget {
+  const _InlineExpansionCard({
+    super.key,
+    required this.title,
+    required this.subtitle,
+    required this.expanded,
+    required this.onToggle,
+    required this.child,
   });
 
-  final Widget latestCheckIn;
-  final Widget recommendations;
-  final Widget schedule;
+  final String title;
+  final String subtitle;
+  final bool expanded;
+  final VoidCallback onToggle;
+  final Widget child;
 
   @override
   Widget build(BuildContext context) {
@@ -1227,42 +1582,258 @@ class _SupportingDashboardDetails extends StatelessWidget {
       padding: EdgeInsets.zero,
       child: Column(
         children: [
-          ExpansionTile(
-            key: const ValueKey('dashboard-saved-signals'),
-            shape: const Border(),
-            collapsedShape: const Border(),
-            leading: const Icon(Icons.monitor_heart_outlined),
-            title: const Text('Saved signals'),
-            subtitle: const Text('Check-in values and edit actions'),
-            childrenPadding: const EdgeInsets.all(AppSpacing.md),
-            children: [latestCheckIn],
+          Semantics(
+            button: true,
+            expanded: expanded,
+            child: ListTile(
+              title: Text(title),
+              subtitle: Text(subtitle),
+              trailing: Icon(expanded ? Icons.expand_less : Icons.expand_more),
+              onTap: onToggle,
+            ),
           ),
-          const Divider(height: 1),
-          ExpansionTile(
-            key: const ValueKey('dashboard-supporting-suggestions'),
-            shape: const Border(),
-            collapsedShape: const Border(),
-            leading: const Icon(Icons.lightbulb_outline),
-            title: const Text('Supporting suggestions'),
-            subtitle: const Text('Secondary guidance behind today’s action'),
-            childrenPadding: const EdgeInsets.all(AppSpacing.md),
-            children: [recommendations],
-          ),
-          const Divider(height: 1),
-          ExpansionTile(
-            key: const ValueKey('dashboard-full-week'),
-            shape: const Border(),
-            collapsedShape: const Border(),
-            leading: const Icon(Icons.calendar_view_week_outlined),
-            title: const Text('Full week'),
-            subtitle: const Text('All commitments and preparation blocks'),
-            childrenPadding: const EdgeInsets.all(AppSpacing.md),
-            children: [schedule],
-          ),
+          if (expanded) ...[
+            const Divider(height: 1),
+            Padding(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              child: child,
+            ),
+          ],
         ],
       ),
     );
   }
+}
+
+class _MoreDashboardContent extends StatelessWidget {
+  const _MoreDashboardContent({
+    required this.accountData,
+    required this.supporting,
+    required this.recommendations,
+    required this.workload,
+    required this.canUseWeeklyReview,
+    required this.isRefreshingRecommendations,
+    required this.recommendationRefreshError,
+    required this.onRetryWorkload,
+    required this.onLoadWorkloadDetail,
+    required this.onOpenWeeklyReview,
+    required this.onRetryRecommendations,
+    required this.onRefreshRecommendations,
+    required this.onShowFeedbackHistory,
+    required this.onAddMorning,
+    required this.onAddEvening,
+    required this.onOpenPreparationPlan,
+  });
+
+  final bool accountData;
+  final AsyncValue<DashboardSnapshot>? supporting;
+  final AsyncValue<RecommendationFeed>? recommendations;
+  final AsyncValue<PreparationWorkload>? workload;
+  final bool canUseWeeklyReview;
+  final bool isRefreshingRecommendations;
+  final String? recommendationRefreshError;
+  final VoidCallback onRetryWorkload;
+  final PreparationWorkloadDetailLoader onLoadWorkloadDetail;
+  final VoidCallback onOpenWeeklyReview;
+  final VoidCallback onRetryRecommendations;
+  final VoidCallback onRefreshRecommendations;
+  final VoidCallback onShowFeedbackHistory;
+  final VoidCallback onAddMorning;
+  final VoidCallback onAddEvening;
+  final ValueChanged<String> onOpenPreparationPlan;
+
+  @override
+  Widget build(BuildContext context) {
+    final details = supporting;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (workload != null) ...[
+          PreparationWorkloadCard(
+            value: workload!,
+            compact: true,
+            onRetry: onRetryWorkload,
+            onLoadDayDetail: onLoadWorkloadDetail,
+            onOpenSettings: () => context.go(AppRoutes.settings),
+            onOpenPlans: () => context.go(AppRoutes.preparationPlans),
+            onReviewPlan: onOpenPreparationPlan,
+            onReplanPlan: (planId) => context.go(
+              Uri(
+                path: AppRoutes.preparationPlans,
+                queryParameters: {'plan_id': planId, 'action': 'replan'},
+              ).toString(),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+        ],
+        if (canUseWeeklyReview) ...[
+          _WeeklyReviewEntryCard(onOpen: onOpenWeeklyReview),
+          const SizedBox(height: AppSpacing.md),
+        ],
+        if (details == null)
+          const SizedBox.shrink()
+        else
+          details.when(
+            loading: () => const AppCard(
+              child: Center(child: CircularProgressIndicator()),
+            ),
+            error: (_, __) => const _SectionErrorCard(
+              title: 'Saved details unavailable',
+              message:
+                  'Saved check-in values and the full week could not be loaded.',
+            ),
+            data: (detail) => Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _LatestCheckInCard(
+                  snapshot: detail,
+                  onAddEvening: onAddEvening,
+                  onAddMorning: onAddMorning,
+                ),
+              ],
+            ),
+          ),
+        if (recommendations != null) ...[
+          const SizedBox(height: AppSpacing.lg),
+          _RecommendationsSection(
+            value: recommendations!,
+            accountData: accountData,
+            isRefreshing: isRefreshingRecommendations,
+            refreshError: recommendationRefreshError,
+            onRetry: onRetryRecommendations,
+            onRefresh: onRefreshRecommendations,
+          ),
+        ],
+        const SizedBox(height: AppSpacing.md),
+        AppCard(
+          padding: EdgeInsets.zero,
+          child: ListTile(
+            leading: const Icon(Icons.history_outlined),
+            title: const Text('Decision feedback history'),
+            subtitle:
+                const Text('Inspect or delete previously saved feedback.'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: onShowFeedbackHistory,
+          ),
+        ),
+        if (details != null)
+          details.when(
+            loading: () => const SizedBox.shrink(),
+            error: (_, __) => const SizedBox.shrink(),
+            data: (detail) => Padding(
+              padding: const EdgeInsets.only(top: AppSpacing.lg),
+              child: _ScheduleSection(
+                days: detail.scheduleDays,
+                preparationScheduleError: detail.preparationScheduleError,
+                onOpenPreparationPlan: onOpenPreparationPlan,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+String _agendaTime(TodayTimelineItem item) {
+  if (item.allDay) return 'All day';
+  final startsAt = item.startsAt;
+  final endsAt = item.endsAt;
+  if (startsAt == null || endsAt == null) return 'Time unavailable';
+  return '${DateFormat.Hm().format(startsAt)}–${DateFormat.Hm().format(endsAt)}';
+}
+
+String? _agendaDetail(TodayTimelineItem item) => switch (item.kind) {
+      TodayTimelineKind.setupCommitment => 'Recurring Setup commitment',
+      TodayTimelineKind.preparation => [
+          _preparationStateLabel(item.state ?? ''),
+          if (item.creditedTrackedMinutes != null &&
+              item.plannedMinutes != null)
+            '${item.creditedTrackedMinutes}/${item.plannedMinutes} min tracked',
+        ].join(' · '),
+      TodayTimelineKind.calendarEvent => item.sourceLabel == null
+          ? 'Imported calendar event'
+          : 'Imported from ${item.sourceLabel}',
+      TodayTimelineKind.focusSession => [
+          switch (item.state) {
+            'active' => 'Active',
+            'completed' => 'Completed',
+            'abandoned' => 'Abandoned',
+            _ => 'Focus',
+          },
+          if (item.actualMinutes != null) '${item.actualMinutes} min',
+        ].join(' · '),
+      TodayTimelineKind.taskBlock => '${item.plannedMinutes} min reserved',
+      TodayTimelineKind.habitSlot => '${item.plannedMinutes} min reserved',
+      TodayTimelineKind.manualCommitment => 'Fixed commitment',
+    };
+
+_AgendaAppearance _agendaAppearance(
+  BuildContext context,
+  TodayTimelineKind kind,
+) {
+  final colors = Theme.of(context).colorScheme;
+  return switch (kind) {
+    TodayTimelineKind.setupCommitment => _AgendaAppearance(
+        label: 'Setup commitment',
+        icon: Icons.event_repeat_outlined,
+        background: colors.primaryContainer,
+        foreground: colors.onPrimaryContainer,
+      ),
+    TodayTimelineKind.preparation => _AgendaAppearance(
+        label: 'Preparation',
+        icon: Icons.school_outlined,
+        background: colors.secondaryContainer,
+        foreground: colors.onSecondaryContainer,
+      ),
+    TodayTimelineKind.calendarEvent => _AgendaAppearance(
+        label: 'Calendar',
+        icon: Icons.calendar_month_outlined,
+        background: colors.tertiaryContainer,
+        foreground: colors.onTertiaryContainer,
+      ),
+    TodayTimelineKind.focusSession => _AgendaAppearance(
+        label: 'Focus',
+        icon: Icons.timer_outlined,
+        background: Theme.of(context).brightness == Brightness.dark
+            ? const Color(0xFF49356B)
+            : const Color(0xFFE9DDFF),
+        foreground: Theme.of(context).brightness == Brightness.dark
+            ? const Color(0xFFF0E7FF)
+            : const Color(0xFF35204F),
+      ),
+    TodayTimelineKind.taskBlock => _AgendaAppearance(
+        label: 'Task block',
+        icon: Icons.task_outlined,
+        background: colors.primaryContainer,
+        foreground: colors.onPrimaryContainer,
+      ),
+    TodayTimelineKind.habitSlot => _AgendaAppearance(
+        label: 'Habit slot',
+        icon: Icons.repeat_outlined,
+        background: colors.secondaryContainer,
+        foreground: colors.onSecondaryContainer,
+      ),
+    TodayTimelineKind.manualCommitment => _AgendaAppearance(
+        label: 'Fixed commitment',
+        icon: Icons.event_busy_outlined,
+        background: colors.errorContainer,
+        foreground: colors.onErrorContainer,
+      ),
+  };
+}
+
+class _AgendaAppearance {
+  const _AgendaAppearance({
+    required this.label,
+    required this.icon,
+    required this.background,
+    required this.foreground,
+  });
+
+  final String label;
+  final IconData icon;
+  final Color background;
+  final Color foreground;
 }
 
 class _LatestCheckInCard extends StatelessWidget {
@@ -1308,11 +1879,6 @@ class _LatestCheckInCard extends StatelessWidget {
                   ],
                 ),
               ),
-              if (snapshot.checkInStreakDays > 0)
-                _StatusPill(
-                  icon: Icons.local_fire_department_outlined,
-                  label: '${snapshot.checkInStreakDays} day streak',
-                ),
             ],
           ),
           if (metrics.isEmpty) ...[
@@ -1525,8 +2091,8 @@ class _RecommendationsSection extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _SectionTitle(
-          title: 'Next actions',
-          subtitle: 'A short list ranked from your available signals.',
+          title: 'Recommendations',
+          subtitle: 'Rule-based suggestions from your available signals.',
           trailing: accountData
               ? OutlinedButton.icon(
                   onPressed: isRefreshing ? null : onRefresh,
@@ -1676,8 +2242,8 @@ class _TasksSection extends StatelessWidget {
           trailing: canExecute
               ? FilledButton.icon(
                   onPressed: onAdd,
-                  icon: const Icon(Icons.add, size: 18),
-                  label: const Text('Add task'),
+                  icon: const Icon(Icons.calendar_month_outlined, size: 18),
+                  label: const Text('Open Planner'),
                 )
               : null,
         ),
@@ -1694,10 +2260,10 @@ class _TasksSection extends StatelessWidget {
               child: _TaskCard(
                 task: task,
                 isUpdating: updatingTaskIds.contains(task.id),
-                onEdit: canExecute ? () => onEdit(task) : null,
+                onEdit: null,
                 onComplete: canExecute ? () => onComplete(task) : null,
-                onCancel: canExecute ? () => onCancel(task) : null,
-                onPostpone: canExecute ? () => onPostpone(task) : null,
+                onCancel: null,
+                onPostpone: null,
                 onStartFocus: canExecute ? () => onStartFocus(task) : null,
               ),
             ),
@@ -1720,7 +2286,7 @@ class _TasksSection extends StatelessWidget {
                   isUpdating: updatingTaskIds.contains(task.id),
                   isCompleted: true,
                   onRestore: canExecute ? () => onRestore(task) : null,
-                  onEdit: canExecute ? () => onEdit(task) : null,
+                  onEdit: null,
                 ),
               ),
             ),
@@ -1743,7 +2309,7 @@ class _TasksSection extends StatelessWidget {
                   isUpdating: updatingTaskIds.contains(task.id),
                   isCancelled: true,
                   onRestore: canExecute ? () => onRestore(task) : null,
-                  onEdit: canExecute ? () => onEdit(task) : null,
+                  onEdit: null,
                 ),
               ),
             ),
@@ -2151,8 +2717,8 @@ class _ScheduleSection extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const _SectionTitle(
-          title: 'Commitments',
-          subtitle: 'Schedule entries and confirmed preparation this week.',
+          title: 'Full week',
+          subtitle: 'Recurring commitments and confirmed preparation blocks.',
         ),
         if (preparationScheduleError != null) ...[
           const SizedBox(height: AppSpacing.sm),
@@ -2295,24 +2861,38 @@ class _SectionTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
+    final copy = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Expanded(
-          child: Column(
+        Text(title, style: Theme.of(context).textTheme.titleLarge),
+        const SizedBox(height: AppSpacing.xs),
+        Text(subtitle, style: Theme.of(context).textTheme.bodyMedium),
+      ],
+    );
+    if (trailing == null) return copy;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final stack = constraints.maxWidth < 520 ||
+            MediaQuery.textScalerOf(context).scale(16) >= 24;
+        if (stack) {
+          return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(title, style: Theme.of(context).textTheme.titleLarge),
-              const SizedBox(height: AppSpacing.xs),
-              Text(subtitle, style: Theme.of(context).textTheme.bodyMedium),
+              copy,
+              const SizedBox(height: AppSpacing.sm),
+              trailing!,
             ],
-          ),
-        ),
-        if (trailing != null) ...[
-          const SizedBox(width: AppSpacing.md),
-          trailing!,
-        ],
-      ],
+          );
+        }
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(child: copy),
+            const SizedBox(width: AppSpacing.md),
+            trailing!,
+          ],
+        );
+      },
     );
   }
 }
@@ -2374,12 +2954,12 @@ class _SectionErrorCard extends StatelessWidget {
   const _SectionErrorCard({
     required this.title,
     required this.message,
-    required this.onRetry,
+    this.onRetry,
   });
 
   final String title;
   final String message;
-  final VoidCallback onRetry;
+  final VoidCallback? onRetry;
 
   @override
   Widget build(BuildContext context) {
@@ -2401,11 +2981,12 @@ class _SectionErrorCard extends StatelessWidget {
               ],
             ),
           ),
-          TextButton.icon(
-            onPressed: onRetry,
-            icon: const Icon(Icons.refresh),
-            label: const Text('Retry'),
-          ),
+          if (onRetry != null)
+            TextButton.icon(
+              onPressed: onRetry,
+              icon: const Icon(Icons.refresh),
+              label: const Text('Retry'),
+            ),
         ],
       ),
     );
@@ -2485,8 +3066,4 @@ class _SignalMetric {
   final String label;
   final String value;
   final IconData icon;
-}
-
-extension _FirstOrNull<T> on Iterable<T> {
-  T? get firstOrNull => isEmpty ? null : first;
 }

@@ -1,274 +1,112 @@
-import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_life_graph/core/capabilities/app_surface_capabilities.dart';
-import 'package:my_life_graph/core/config/app_config.dart';
-import 'package:my_life_graph/core/network/api_client.dart';
-import 'package:my_life_graph/features/briefings/domain/daily_briefing.dart';
-import 'package:my_life_graph/features/briefings/presentation/providers/briefing_providers.dart';
 import 'package:my_life_graph/features/dashboard/domain/entities/dashboard_snapshot.dart';
 import 'package:my_life_graph/features/dashboard/presentation/pages/dashboard_page.dart';
 import 'package:my_life_graph/features/dashboard/presentation/providers/dashboard_providers.dart';
 import 'package:my_life_graph/features/deadline_plans/domain/deadline_plan.dart';
 import 'package:my_life_graph/features/deadline_plans/presentation/providers/deadline_plan_providers.dart';
-import 'package:my_life_graph/features/optimization/application/optimization_service.dart';
 import 'package:my_life_graph/features/optimization/domain/entities/recommendation.dart';
 import 'package:my_life_graph/features/optimization/domain/entities/recommendation_feed.dart';
-import 'package:my_life_graph/features/optimization/domain/entities/skillset_profile.dart';
-import 'package:my_life_graph/features/optimization/domain/repositories/optimization_repository.dart';
 import 'package:my_life_graph/features/optimization/presentation/providers/optimization_providers.dart';
-import 'package:my_life_graph/features/snapshots/application/snapshot_refresh_service.dart';
-import 'package:my_life_graph/features/snapshots/data/snapshot_api_data_source.dart';
-import 'package:my_life_graph/features/snapshots/presentation/providers/snapshot_providers.dart';
 
 import 'support/deadline_plan_fixtures.dart';
 
 void main() {
-  testWidgets('shows exact saved signals and no proxy metrics', (tester) async {
-    final snapshot = DashboardSnapshot(
-      origin: DashboardOrigin.localDemo,
-      loadedAt: DateTime.now(),
-      latestCheckIn: DashboardCheckIn(
-        entryDate: DateTime.now(),
-        mood: 2,
-        energy: 9,
-        sleepHours: 5.5,
-        stress: 8,
+  testWidgets('Today uses streak, progress, agenda, tasks, and habits order',
+      (tester) async {
+    await _pumpDashboard(tester, snapshot: _todaySnapshot());
+
+    expect(find.text("Today's decision"), findsNothing);
+    expect(find.text('Check-in streak'), findsOneWidget);
+    expect(find.text('6 consecutive days'), findsOneWidget);
+    expect(find.text("Today's progress"), findsOneWidget);
+    expect(find.text('4/7 completed'), findsOneWidget);
+    expect(find.text('Today at a glance'), findsOneWidget);
+    expect(find.text('Setup commitment'), findsOneWidget);
+    expect(find.text('Preparation'), findsOneWidget);
+    expect(find.text('Calendar'), findsNWidgets(2));
+    expect(find.text('Focus'), findsOneWidget);
+    expect(find.text("Today's tasks"), findsOneWidget);
+    expect(find.text("Today's habits"), findsOneWidget);
+    expect(find.text('More'), findsOneWidget);
+    expect(find.text('Recommendations'), findsNothing);
+
+    final streakY = tester.getTopLeft(find.text('Check-in streak')).dy;
+    final progressY = tester.getTopLeft(find.text("Today's progress")).dy;
+    final agendaY = tester.getTopLeft(find.text('Today at a glance')).dy;
+    final tasksY = tester.getTopLeft(find.text("Today's tasks")).dy;
+    final habitsY = tester.getTopLeft(find.text("Today's habits")).dy;
+    expect(streakY, lessThan(progressY));
+    expect(progressY, lessThan(agendaY));
+    expect(agendaY, lessThan(tasksY));
+    expect(tasksY, lessThan(habitsY));
+  });
+
+  testWidgets('progress failure is honest while the usable agenda remains',
+      (tester) async {
+    final snapshot = _todaySnapshot(
+      progress: null,
+      sourceStates: _sourceStates(
+        tasks: const TodaySourceState(
+          status: TodaySourceStatus.unavailable,
+          message: 'Tasks could not be loaded.',
+        ),
       ),
-      checkInStreakDays: 1,
-      todayPlan: const [],
-      scheduleDays: const [],
+      todayTasks: const [],
+      allTasks: const [],
     );
 
+    await _pumpDashboard(tester, snapshot: snapshot);
+
+    expect(find.text('Progress unavailable'), findsOneWidget);
+    expect(find.text('Tasks unavailable'), findsOneWidget);
+    expect(find.text('Lecture'), findsOneWidget);
+    expect(find.text('Imported seminar'), findsOneWidget);
+    expect(find.text('4/7 completed'), findsNothing);
+  });
+
+  testWidgets('More is lazy and preserves secondary account surfaces',
+      (tester) async {
     await _pumpDashboard(
       tester,
-      snapshot: Future.value(snapshot),
-      feed: Future.value(
+      snapshot: _todaySnapshot(),
+      supporting: DashboardSnapshot(
+        origin: DashboardOrigin.account,
+        loadedAt: DateTime(2026, 7, 21, 10),
+        latestCheckIn: DashboardCheckIn(
+          entryDate: DateTime(2026, 7, 21),
+          mood: 7,
+          energy: 8,
+          hasMorningCapture: true,
+          hasEveningCapture: true,
+        ),
+        checkInStreakDays: 0,
+        todayPlan: const [],
+        scheduleDays: [
+          ScheduleDay(
+            label: 'Tue',
+            dateLabel: 'Jul 21',
+            date: DateTime(2026, 7, 21),
+            events: const [
+              ScheduleEvent(title: 'Full-week lecture', time: '10:00-11:00'),
+            ],
+          ),
+        ],
+      ),
+      recommendations: Future.value(
         RecommendationFeed.demo(const [
           Recommendation(
             id: 'demo-rec',
-            title: 'Demo next action',
-            reason: 'Demo reason',
-            actionLabel: 'Protect ten focused minutes',
-            category: RecommendationCategory.focus,
-            confidence: 0.7,
+            title: 'Rule-based example',
+            reason: 'Available signal.',
+            actionLabel: 'Review it',
+            category: RecommendationCategory.planning,
+            confidence: .7,
           ),
         ]),
       ),
-    );
-
-    await _expandDashboardSection(
-      tester,
-      const ValueKey('dashboard-saved-signals'),
-    );
-
-    final compactSections = tester.widgetList<ExpansionTile>(
-      find.byType(ExpansionTile),
-    );
-    expect(compactSections, hasLength(3));
-    for (final section in compactSections) {
-      expect(section.shape, isNotNull);
-      expect(section.collapsedShape, isNotNull);
-    }
-    expect(tester.takeException(), isNull);
-
-    expect(find.text('Latest check-in'), findsOneWidget);
-    expect(find.text('2/10'), findsOneWidget);
-    expect(find.text('9/10'), findsOneWidget);
-    expect(find.text('5.5 h'), findsOneWidget);
-    expect(find.text('8/10'), findsOneWidget);
-    await _expandDashboardSection(
-      tester,
-      const ValueKey('dashboard-supporting-suggestions'),
-    );
-    expect(tester.takeException(), isNull);
-    expect(find.text('Example suggestions'), findsOneWidget);
-    expect(find.text('Demo next action'), findsOneWidget);
-    expect(find.text("Today's wellness score"), findsNothing);
-    expect(find.text('Hydration'), findsNothing);
-    expect(find.text('Activity score'), findsNothing);
-  });
-
-  testWidgets('real recommendation error is not replaced with demo items',
-      (tester) async {
-    final snapshot = DashboardSnapshot.empty(
-      origin: DashboardOrigin.account,
-      loadedAt: DateTime.now(),
-    );
-
-    await _pumpDashboard(
-      tester,
-      snapshot: Future.value(snapshot),
-      feed: _failingFeed(),
-    );
-
-    await _expandDashboardSection(
-      tester,
-      const ValueKey('dashboard-supporting-suggestions'),
-    );
-
-    expect(find.text('Recommendations unavailable'), findsOneWidget);
-    expect(
-      find.text('Your account data was not replaced with demo content.'),
-      findsOneWidget,
-    );
-    expect(find.text('Example suggestions'), findsNothing);
-  });
-
-  testWidgets('dashboard load error is distinct from an empty snapshot',
-      (tester) async {
-    await _pumpDashboard(
-      tester,
-      snapshot: _failingSnapshot(),
-      feed: Future.value(RecommendationFeed.demo(const [])),
-    );
-
-    expect(find.text('Dashboard unavailable'), findsOneWidget);
-    expect(find.text('Latest check-in'), findsNothing);
-  });
-
-  testWidgets('failed refresh retains the existing real recommendation',
-      (tester) async {
-    final snapshot = DashboardSnapshot.empty(
-      origin: DashboardOrigin.account,
-      loadedAt: DateTime.now(),
-    );
-    final feed = RecommendationFeed(
-      items: const [
-        Recommendation(
-          id: 'real-existing',
-          title: 'Keep this real recommendation',
-          reason: 'Persisted backend evidence.',
-          actionLabel: 'Review the next step',
-          category: RecommendationCategory.planning,
-          confidence: 0.8,
-        ),
-      ],
-      provenance: RecommendationProvenance.authenticatedBackend,
-      freshness: RecommendationFreshness.current,
-      needsGeneration: false,
-      generatedAt: DateTime.utc(2026, 7, 10),
-      periodKey: '2026-W28',
-    );
-
-    await _pumpDashboard(
-      tester,
-      snapshot: Future.value(snapshot),
-      feed: Future.value(feed),
-      optimizationService: OptimizationService(
-        _FailingRefreshOptimizationRepository(),
-      ),
-      snapshotRefreshService: _NoopSnapshotRefreshService(),
-    );
-
-    await _expandDashboardSection(
-      tester,
-      const ValueKey('dashboard-supporting-suggestions'),
-    );
-
-    await tester.tap(find.text('Refresh recommendations'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Keep this real recommendation'), findsOneWidget);
-    expect(
-      find.text('Refresh failed. Existing recommendations were kept.'),
-      findsOneWidget,
-    );
-    expect(find.text('Recommendations checked.'), findsNothing);
-  });
-
-  testWidgets('today capture status ignores an older latest check-in',
-      (tester) async {
-    final snapshot = DashboardSnapshot(
-      origin: DashboardOrigin.account,
-      loadedAt: DateTime(2026, 7, 20, 10),
-      latestCheckIn: DashboardCheckIn(
-        entryDate: DateTime(2026, 7, 19),
-        mood: 7,
-        hasMorningCapture: true,
-        hasEveningCapture: true,
-      ),
-      checkInStreakDays: 1,
-      todayPlan: const [],
-      scheduleDays: const [],
-    );
-
-    await _pumpDashboard(
-      tester,
-      snapshot: Future.value(snapshot),
-      feed: Future.value(RecommendationFeed.demo(const [])),
-    );
-
-    expect(find.text('No signal saved today'), findsOneWidget);
-    expect(find.byTooltip('Add morning check-in'), findsOneWidget);
-    expect(find.byTooltip('Edit evening check-in'), findsNothing);
-
-    await _expandDashboardSection(
-      tester,
-      const ValueKey('dashboard-saved-signals'),
-    );
-    expect(find.text('Latest check-in'), findsOneWidget);
-    expect(find.text('7/10'), findsOneWidget);
-  });
-
-  testWidgets('today card keeps an event visible while it is in progress',
-      (tester) async {
-    final snapshot = DashboardSnapshot(
-      origin: DashboardOrigin.account,
-      loadedAt: DateTime(2026, 7, 20, 10, 30),
-      latestCheckIn: null,
-      checkInStreakDays: 0,
-      todayPlan: const [],
-      scheduleDays: [
-        ScheduleDay(
-          label: 'Mon',
-          dateLabel: 'Jul 20',
-          date: DateTime(2026, 7, 20),
-          events: const [
-            ScheduleEvent(
-              title: 'Finished class',
-              time: '08:00-09:00',
-              sortMinutes: 8 * 60,
-              endSortMinutes: 9 * 60,
-            ),
-            ScheduleEvent(
-              title: 'Current seminar',
-              time: '10:00-11:00',
-              sortMinutes: 10 * 60,
-              endSortMinutes: 11 * 60,
-            ),
-            ScheduleEvent(
-              title: 'Later lab',
-              time: '12:00-13:00',
-              sortMinutes: 12 * 60,
-              endSortMinutes: 13 * 60,
-            ),
-          ],
-        ),
-      ],
-    );
-
-    await _pumpDashboard(
-      tester,
-      snapshot: Future.value(snapshot),
-      feed: Future.value(RecommendationFeed.demo(const [])),
-    );
-
-    expect(find.text('Current seminar'), findsOneWidget);
-    expect(find.text('Later lab'), findsNothing);
-  });
-
-  testWidgets('account Today exposes confirmed seven-day preparation load',
-      (tester) async {
-    final snapshot = DashboardSnapshot.empty(
-      origin: DashboardOrigin.account,
-      loadedAt: DateTime(2026, 7, 20, 10),
-    );
-    await _pumpDashboard(
-      tester,
-      snapshot: Future.value(snapshot),
-      feed: Future.value(RecommendationFeed.demo(const [])),
       workload: Future.value(
         PreparationWorkload.fromJson(preparationWorkloadEnvelope()),
       ),
@@ -277,161 +115,342 @@ void main() {
         canUseSyncedHabits: true,
         canUseSyncedExecution: true,
         canUseDeadlinePlanner: true,
-      ),
-    );
-
-    expect(find.text('7-day preparation load'), findsOneWidget);
-    expect(find.text('50 min confirmed'), findsOneWidget);
-    await _expandDashboardSection(
-      tester,
-      const ValueKey('today-preparation-workload'),
-    );
-    expect(
-      find.text('2h total preparation per day across confirmed plans.'),
-      findsOneWidget,
-    );
-    expect(find.textContaining('50 min reserved'), findsOneWidget);
-    expect(
-      find.text('1h 30m weekly setup commitments'),
-      findsOneWidget,
-    );
-  });
-
-  testWidgets('weekly review entry is account-only and available after Monday',
-      (tester) async {
-    await _pumpDashboard(
-      tester,
-      snapshot: Future.value(
-        DashboardSnapshot.empty(
-          origin: DashboardOrigin.localDemo,
-          loadedAt: DateTime(2026, 7, 14),
-        ),
-      ),
-      feed: Future.value(RecommendationFeed.demo(const [])),
-    );
-    expect(find.text('Review your week'), findsNothing);
-
-    await _pumpDashboard(
-      tester,
-      snapshot: Future.value(
-        DashboardSnapshot.empty(
-          origin: DashboardOrigin.account,
-          loadedAt: DateTime(2026, 7, 14),
-        ),
-      ),
-      feed: Future.value(RecommendationFeed.demo(const [])),
-      capabilities: const AppSurfaceCapabilities(
-        isLocalDemo: false,
-        canUseSyncedHabits: true,
-        canUseSyncedExecution: true,
         canUseWeeklyReview: true,
       ),
     );
+
+    expect(find.text('Rule-based example'), findsNothing);
+    expect(find.text('Review your week'), findsNothing);
+
+    await _tapExpansion(tester, const ValueKey('dashboard-more'));
+
+    expect(find.text('7-day preparation load'), findsOneWidget);
     expect(find.text('Review your week'), findsOneWidget);
+    expect(find.text('Latest check-in'), findsOneWidget);
+    expect(find.text('Recommendations'), findsOneWidget);
+    expect(find.text('Rule-based example'), findsOneWidget);
+    expect(find.text('Decision feedback history'), findsOneWidget);
+    expect(find.text('Full week'), findsOneWidget);
+    expect(find.text('Full-week lecture'), findsOneWidget);
+    expect(find.text('Secondary guidance behind today’s action'), findsNothing);
+  });
+
+  testWidgets('Show all tasks reveals future and planner-managed tasks',
+      (tester) async {
+    await _pumpDashboard(tester, snapshot: _todaySnapshot());
+
+    expect(find.text('Future task'), findsNothing);
+    expect(find.text('Managed preparation task'), findsNothing);
+
+    await _tapExpansion(tester, const ValueKey('today-all-tasks'));
+
+    expect(find.text('Future task'), findsOneWidget);
+    expect(find.text('Managed preparation task'), findsOneWidget);
+    expect(find.text('Managed by a preparation plan'), findsOneWidget);
+  });
+
+  testWidgets('Planner blocks stay agenda-only and keep unique target progress',
+      (tester) async {
+    await _pumpDashboard(
+      tester,
+      snapshot: _todaySnapshot(
+        timeline: [
+          TodayTimelineItem(
+            kind: TodayTimelineKind.taskBlock,
+            id: '90000000-0000-4000-8000-000000000001',
+            title: 'Due task',
+            allDay: false,
+            startsAt: DateTime(2026, 7, 21, 9),
+            endsAt: DateTime(2026, 7, 21, 9, 30),
+            plannedMinutes: 30,
+            taskId: '10000000-0000-4000-8000-000000000001',
+          ),
+          TodayTimelineItem(
+            kind: TodayTimelineKind.taskBlock,
+            id: '90000000-0000-4000-8000-000000000002',
+            title: 'Due task',
+            allDay: false,
+            startsAt: DateTime(2026, 7, 21, 10),
+            endsAt: DateTime(2026, 7, 21, 10, 30),
+            plannedMinutes: 30,
+            taskId: '10000000-0000-4000-8000-000000000001',
+          ),
+          TodayTimelineItem(
+            kind: TodayTimelineKind.habitSlot,
+            id: '90000000-0000-4000-8000-000000000003',
+            title: 'Read',
+            allDay: false,
+            startsAt: DateTime(2026, 7, 21, 11),
+            endsAt: DateTime(2026, 7, 21, 11, 20),
+            plannedMinutes: 20,
+            habitId: '80000000-0000-4000-8000-000000000001',
+          ),
+          TodayTimelineItem(
+            kind: TodayTimelineKind.manualCommitment,
+            id: '90000000-0000-4000-8000-000000000004',
+            title: 'Tutoring',
+            allDay: false,
+            startsAt: DateTime(2026, 7, 21, 12),
+            endsAt: DateTime(2026, 7, 21, 13),
+            commitmentId: '90000000-0000-4000-8000-000000000004',
+          ),
+        ],
+      ),
+    );
+
+    expect(find.text('Task block'), findsNWidgets(2));
+    expect(find.text('Habit slot'), findsOneWidget);
+    expect(find.text('Fixed commitment'), findsNWidgets(2));
+    expect(find.text('4/7 completed'), findsOneWidget);
+    expect(find.text('Due task'), findsNWidgets(3));
+  });
+
+  testWidgets('small width and 200 percent text keep Today scrollable',
+      (tester) async {
+    await _pumpDashboard(
+      tester,
+      snapshot: _todaySnapshot(),
+      size: const Size(320, 760),
+      textScaler: const TextScaler.linear(2),
+    );
+
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, -900));
+    await tester.pumpAndSettle();
+
+    expect(find.text("Today's habits"), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('dashboard load error never substitutes example content',
+      (tester) async {
+    await _pumpDashboard(
+      tester,
+      snapshotFuture: Future<DashboardSnapshot>(
+        () => throw StateError('backend unavailable'),
+      ),
+    );
+
+    expect(find.text('Dashboard unavailable'), findsOneWidget);
+    expect(find.text('Check-in streak'), findsNothing);
   });
 }
 
-Future<void> _expandDashboardSection(
-  WidgetTester tester,
-  ValueKey<String> key,
-) async {
-  final section = find.byKey(key);
-  await tester.ensureVisible(section);
-  await tester.tap(section);
+Future<void> _tapExpansion(WidgetTester tester, ValueKey<String> key) async {
+  final card = find.byKey(key);
+  final tile = find.descendant(of: card, matching: find.byType(ListTile)).first;
+  tester.widget<ListTile>(tile).onTap!();
   await tester.pumpAndSettle();
-}
-
-Future<RecommendationFeed> _failingFeed() async {
-  await Future<void>.delayed(Duration.zero);
-  throw Exception('backend unavailable');
-}
-
-Future<DashboardSnapshot> _failingSnapshot() async {
-  await Future<void>.delayed(Duration.zero);
-  throw Exception('database unavailable');
 }
 
 Future<void> _pumpDashboard(
   WidgetTester tester, {
-  required Future<DashboardSnapshot> snapshot,
-  required Future<RecommendationFeed> feed,
-  OptimizationService? optimizationService,
-  SnapshotRefreshService? snapshotRefreshService,
+  DashboardSnapshot? snapshot,
+  Future<DashboardSnapshot>? snapshotFuture,
+  DashboardSnapshot? supporting,
+  Future<RecommendationFeed>? recommendations,
   Future<PreparationWorkload>? workload,
+  Size size = const Size(900, 1500),
+  TextScaler textScaler = TextScaler.noScaling,
   AppSurfaceCapabilities capabilities = const AppSurfaceCapabilities(
-    isLocalDemo: true,
-    canUseSyncedHabits: false,
+    isLocalDemo: false,
+    canUseSyncedHabits: true,
+    canUseSyncedExecution: true,
   ),
 }) async {
-  tester.view.physicalSize = const Size(1200, 1200);
+  tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
   addTearDown(() {
     tester.view.resetPhysicalSize();
     tester.view.resetDevicePixelRatio();
   });
-
+  final value = snapshotFuture ?? Future.value(snapshot ?? _todaySnapshot());
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
-        appSurfaceCapabilitiesProvider.overrideWithValue(
-          capabilities,
-        ),
-        dashboardSnapshotProvider.overrideWith((ref) => snapshot),
-        todayBriefingProvider.overrideWith(
+        appSurfaceCapabilitiesProvider.overrideWithValue(capabilities),
+        dashboardSnapshotProvider.overrideWith((ref) => value),
+        dashboardSupportingSnapshotProvider.overrideWith(
           (ref) => Future.value(
-            BriefingFeed.localDemo(now: DateTime(2026, 7, 12)),
+            supporting ??
+                DashboardSnapshot.empty(
+                  origin: DashboardOrigin.account,
+                  loadedAt: DateTime(2026, 7, 21, 10),
+                ),
           ),
         ),
-        recommendationFeedProvider.overrideWith((ref) => feed),
+        recommendationFeedProvider.overrideWith(
+          (ref) =>
+              recommendations ??
+              Future.value(RecommendationFeed.demo(const [])),
+        ),
         if (workload != null)
           preparationWorkloadProvider.overrideWith((ref) => workload),
-        if (optimizationService != null)
-          optimizationServiceProvider.overrideWithValue(optimizationService),
-        if (snapshotRefreshService != null)
-          snapshotRefreshServiceProvider.overrideWithValue(
-            snapshotRefreshService,
-          ),
       ],
-      child: const MaterialApp(
-        home: Scaffold(body: DashboardPage()),
+      child: MaterialApp(
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(context).copyWith(textScaler: textScaler),
+          child: child!,
+        ),
+        home: const Scaffold(body: DashboardPage()),
       ),
     ),
   );
   await tester.pumpAndSettle();
 }
 
-class _FailingRefreshOptimizationRepository implements OptimizationRepository {
-  @override
-  Future<SkillsetProfile> getSkillsetProfile() {
-    throw UnsupportedError('Not used in this test.');
-  }
-
-  @override
-  Future<RecommendationFeed> getRecommendations() {
-    throw UnsupportedError('The feed provider is overridden in this test.');
-  }
-
-  @override
-  Future<RecommendationFeed> refreshRecommendations() {
-    throw StateError('Refresh failed.');
-  }
+DashboardSnapshot _todaySnapshot({
+  TodayProgress? progress = const TodayProgress(completed: 4, total: 7),
+  TodaySourceStates? sourceStates,
+  List<PlanItem>? todayTasks,
+  List<PlanItem>? allTasks,
+  List<TodayTimelineItem>? timeline,
+}) {
+  const due = PlanItem(
+    id: '10000000-0000-4000-8000-000000000001',
+    title: 'Due task',
+    priority: 'high',
+    isCompleted: false,
+    status: 'todo',
+    source: 'manual',
+    todayReason: 'due_today',
+  );
+  const done = PlanItem(
+    id: '10000000-0000-4000-8000-000000000002',
+    title: 'Done task',
+    priority: 'medium',
+    isCompleted: true,
+    status: 'done',
+    source: 'manual',
+    todayReason: 'completed_today',
+  );
+  const future = PlanItem(
+    id: '10000000-0000-4000-8000-000000000003',
+    title: 'Future task',
+    priority: 'low',
+    isCompleted: false,
+    status: 'todo',
+    source: 'manual',
+  );
+  const managed = PlanItem(
+    id: '10000000-0000-4000-8000-000000000004',
+    title: 'Managed preparation task',
+    priority: 'medium',
+    isCompleted: false,
+    status: 'in_progress',
+    source: 'deadline-plan-v1',
+    deadlinePlanId: '10000000-0000-4000-8000-000000000004',
+  );
+  final selected = todayTasks ?? const [due, done];
+  final all = allTasks ?? const [due, done, future, managed];
+  return DashboardSnapshot(
+    origin: DashboardOrigin.account,
+    loadedAt: DateTime(2026, 7, 21, 10),
+    latestCheckIn: null,
+    checkInStreakDays: 6,
+    todayPlan: all,
+    scheduleDays: const [],
+    localDate: DateTime(2026, 7, 21),
+    timezone: 'Europe/Berlin',
+    checkIns: const TodayCheckIns(
+      morningSaved: true,
+      eveningSaved: true,
+      completedDaysStreak: 6,
+    ),
+    progress: progress,
+    todayTasks: selected,
+    timeline: timeline ??
+        [
+          TodayTimelineItem(
+            kind: TodayTimelineKind.calendarEvent,
+            id: '20000000-0000-4000-8000-000000000001',
+            title: 'All-day event',
+            allDay: true,
+            startsOn: DateTime(2026, 7, 21),
+            endsOn: DateTime(2026, 7, 22),
+            sourceLabel: 'Studies',
+          ),
+          TodayTimelineItem(
+            kind: TodayTimelineKind.setupCommitment,
+            id: '30000000-0000-5000-8000-000000000001',
+            title: 'Lecture',
+            allDay: false,
+            startsAt: DateTime(2026, 7, 21, 9),
+            endsAt: DateTime(2026, 7, 21, 10),
+          ),
+          TodayTimelineItem(
+            kind: TodayTimelineKind.preparation,
+            id: '40000000-0000-4000-8000-000000000001',
+            title: 'Mathematics',
+            allDay: false,
+            startsAt: DateTime(2026, 7, 21, 10),
+            endsAt: DateTime(2026, 7, 21, 10, 50),
+            planId: '50000000-0000-4000-8000-000000000001',
+            blockId: '40000000-0000-4000-8000-000000000001',
+            managedTaskId: '50000000-0000-4000-8000-000000000001',
+            state: 'partial',
+            plannedMinutes: 50,
+            creditedTrackedMinutes: 20,
+          ),
+          TodayTimelineItem(
+            kind: TodayTimelineKind.calendarEvent,
+            id: '60000000-0000-4000-8000-000000000001',
+            title: 'Imported seminar',
+            allDay: false,
+            startsAt: DateTime(2026, 7, 21, 11),
+            endsAt: DateTime(2026, 7, 21, 12),
+            sourceLabel: 'Studies',
+          ),
+          TodayTimelineItem(
+            kind: TodayTimelineKind.focusSession,
+            id: '70000000-0000-4000-8000-000000000001',
+            title: 'Essay focus',
+            allDay: false,
+            startsAt: DateTime(2026, 7, 21, 12),
+            endsAt: DateTime(2026, 7, 21, 12, 30),
+            state: 'completed',
+            actualMinutes: 30,
+          ),
+        ],
+    todayHabits: const [
+      TodayHabit(
+        id: '80000000-0000-4000-8000-000000000001',
+        title: 'Read',
+        cadence: 'daily',
+        cadenceLabel: 'Daily',
+        weeklyCompleted: 1,
+        weeklyTarget: 1,
+        setupManaged: false,
+        outcome: 'completed',
+      ),
+      TodayHabit(
+        id: '80000000-0000-4000-8000-000000000002',
+        title: 'Exercise',
+        cadence: 'weekly_target',
+        cadenceLabel: '3 times per week',
+        weeklyCompleted: 1,
+        weeklyTarget: 3,
+        setupManaged: true,
+      ),
+    ],
+    sourceStates: sourceStates ?? _sourceStates(),
+    isTodayOverview: true,
+  );
 }
 
-class _NoopSnapshotRefreshService extends SnapshotRefreshService {
-  _NoopSnapshotRefreshService()
-      : super(
-          config: const AppConfig(
-            environment: 'test',
-            supabaseUrl: '',
-            supabaseAnonKey: '',
-            aiServiceBaseUrl: 'http://localhost:8000',
-            useMockData: false,
-          ),
-          apiDataSource: SnapshotApiDataSource(ApiClient(Dio())),
-          accessTokenProvider: () => null,
-          allowRemoteRefresh: false,
-        );
-
-  @override
-  Future<void> refreshDailyAfterUserSignal({String? targetDate}) async {}
+TodaySourceStates _sourceStates({
+  TodaySourceState tasks = const TodaySourceState(
+    status: TodaySourceStatus.current,
+  ),
+}) {
+  const current = TodaySourceState(status: TodaySourceStatus.current);
+  return TodaySourceStates(
+    checkIns: current,
+    tasks: tasks,
+    habits: current,
+    setupCommitments: current,
+    preparation: current,
+    calendarEvents: current,
+    focusSessions: current,
+    planner: current,
+  );
 }

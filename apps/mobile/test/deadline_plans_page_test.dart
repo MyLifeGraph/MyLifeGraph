@@ -19,6 +19,24 @@ import 'support/deadline_plan_fixtures.dart';
 void main() {
   final now = DateTime(2026, 7, 18, 10);
 
+  testWidgets('Planner deep link opens the selected preparation create flow',
+      (tester) async {
+    await _pumpPage(
+      tester,
+      repository: _FakeDeadlinePlanRepository(),
+      page: DeadlinePlansPage(
+        initialKind: DeadlinePlanKind.assignment,
+        currentTime: now,
+      ),
+    );
+
+    expect(find.text('What are you preparing for?'), findsOneWidget);
+    final selector = tester.widget<SegmentedButton<DeadlinePlanKind>>(
+      find.byType(SegmentedButton<DeadlinePlanKind>),
+    );
+    expect(selector.selected, {DeadlinePlanKind.assignment});
+  });
+
   testWidgets('wizard requires an explicit estimate and started answer',
       (tester) async {
     final repository = _FakeDeadlinePlanRepository();

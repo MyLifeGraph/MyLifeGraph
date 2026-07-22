@@ -59,6 +59,15 @@ class DeadlinePlanScheduleMerger {
       todayPlan: snapshot.todayPlan,
       scheduleDays: mergedDays,
       preparationScheduleError: null,
+      localDate: snapshot.localDate,
+      timezone: snapshot.timezone,
+      checkIns: snapshot.checkIns,
+      progress: snapshot.progress,
+      todayTasks: snapshot.todayTasks,
+      timeline: snapshot.timeline,
+      todayHabits: snapshot.todayHabits,
+      sourceStates: snapshot.sourceStates,
+      isTodayOverview: snapshot.isTodayOverview,
     );
   }
 
@@ -75,6 +84,15 @@ class DeadlinePlanScheduleMerger {
       scheduleDays: snapshot.scheduleDays,
       preparationScheduleError:
           'Preparation reservations could not be loaded. Existing commitments are still shown.',
+      localDate: snapshot.localDate,
+      timezone: snapshot.timezone,
+      checkIns: snapshot.checkIns,
+      progress: snapshot.progress,
+      todayTasks: snapshot.todayTasks,
+      timeline: snapshot.timeline,
+      todayHabits: snapshot.todayHabits,
+      sourceStates: snapshot.sourceStates,
+      isTodayOverview: snapshot.isTodayOverview,
     );
   }
 

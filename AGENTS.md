@@ -44,7 +44,13 @@ Read these files before making changes:
     calendar-derived availability, or tracked-focus progress
 16. `docs/ui-language-and-copy-contract.md` before changing student-facing
     names, capability claims, retry copy, localization, or large-text behavior
-17. `docs/product-review-handoff.md` when starting a fresh whole-product review
+17. `docs/today-overview-v1-contract.md` before changing the Today streak,
+    progress arithmetic, timeline sources, task/habit selection, or supporting
+    section boundary
+18. `docs/planner-v1-contract.md` before changing Planner navigation,
+    availability, Action Plans, fixed commitments, calendar busy-time consent,
+    or Today Overview V2
+19. `docs/product-review-handoff.md` when starting a fresh whole-product review
     of Deadline Planner and the current usability-polish slice
 
 ## Current State
@@ -78,6 +84,9 @@ databases may still contain legacy CamelCase tables such as `"User"`,
 - `coach_requests`, `coach_usage_events`, `coach_memory_selections`
 - `deadline_plans`, `deadline_plan_revisions`, `deadline_plan_blocks`
 - `deadline_plan_request_identities`
+- `planner_preferences`, `planner_action_plans`
+- `planner_action_plan_revisions`, `planner_task_blocks`
+- `planner_habit_slots`, `planner_commitments`, `planner_request_identities`
 
 The migration
 `supabase/migrations/20260618170000_create_canonical_app_schema.sql` creates the
@@ -200,8 +209,8 @@ child lookup index and non-validating timestamp-order checks that protect new
 or updated rows without assuming old remote rows are already clean.
 The migration
 `supabase/migrations/20260714110000_account_export_lifestyle_entries_grant.sql`
-restores the one missing backend `SELECT` grant required by the existing
-31-table Account Export V1 contract. It grants only `service_role` read access
+restores the one missing backend `SELECT` grant required by the then-31-table
+Account Export V1 contract. It grants only `service_role` read access
 to `lifestyle_entries`; it adds no guest or authenticated-user authority.
 The migration
 `supabase/migrations/20260714130000_notification_delivery_v1.sql` adds
@@ -222,6 +231,13 @@ nullable `25..480` five-minute account-wide preparation rule, revokes direct
 application-role writes to that profile column, and exposes only an owner-
 locked service-role setter. Deadline-plan confirmation rechecks aggregate active
 minutes on the candidate revision's local dates at the database boundary.
+The migration
+`supabase/migrations/20260722120000_planner_v1.sql` adds the forced-RLS Planner
+preference, Action Plan/revision, dated Task block, recurring Habit slot,
+manual commitment, and backend-only retry-ledger tables. Service-role-only
+owner-locked RPCs stage and atomically confirm or cancel plans, create/update/
+archive authoritative commitments, recheck target/calendar/reservation state,
+and release future reservations when a Task or Habit becomes terminal.
 
 ## Important Docs
 
@@ -231,6 +247,10 @@ minutes on the candidate revision's local dates at the database boundary.
 - `docs/daily-briefing-implementation-plan.md` - current product direction for
   the daily decision loop, lightweight capture cadence, stress taxonomy, Daily
   Mode, briefing service, and next implementation phases.
+- `docs/today-overview-v1-contract.md` - current read-only Today projection,
+  streak/progress arithmetic, timeline sources, selection rules, and UI order.
+- `docs/planner-v1-contract.md` - central Planner navigation, shared
+  availability, staged Task/Habit reservations, commitments, and Today V2.
 - `docs/supabase-current-state.md` - canonical schema, legacy table mapping, and
   migration notes.
 - `docs/local-dev.md` - local runbook for Flutter, Supabase, and FastAPI.
@@ -275,11 +295,22 @@ snapshots and briefings are created, snapshot-stale briefings are refreshed,
 and current pairs are left untouched. Phase 4 persists one strict deterministic
 briefing per profile-local date behind read-only GET and deliberate idempotent
 POST routes.
-Phase 5 now consumes that contract in a decision-first Today Dashboard: normal
-load is GET-only, missing/stale/error truth stays visible, stale actions are
-disabled until deliberate adjustment, and validated primary/support targets
-dispatch through the existing Phase 3 handlers. Guest/mock remains local and
-never fabricates a personalized briefing.
+The later `today-overview-v2` surface supersedes the briefing-first Today
+presentation without removing the persisted briefing backend or the compatible
+V1 read. Normal Today load is one read-only owner-scoped overview, with a strict
+both-capture streak, transparent dynamic progress, Setup/Planner/Preparation/
+Calendar/Focus agenda facts, selected Tasks and Habits without block-based
+double counting, isolated partial failures, and lazy supporting detail.
+Guest/mock stays local and never fabricates a personalized briefing or overview
+fact.
+Planner V1 is the central authenticated planning home. Task/Habit changes use
+immutable deterministic previews and atomically create or update their target
+only at explicit confirmation; Exam/Assignment creation delegates to Deadline
+Planner. Manual one-off/weekly commitments are authoritative and conflicts only
+create attention. Shared Availability considers Setup/manual commitments,
+confirmed Planner and Preparation reservations, and separately consented
+current imported busy time. It never infers missing duration/deadline/cadence,
+moves blocks automatically, writes a calendar, or serves guest/demo fake plans.
 Phase 6 adds exact owned-action feedback with idempotent requests, deletable
 history, a decayed/capped context match under `feedback-ranking-v1`, and one
 cautious default Insight before advanced correlation exploration.
@@ -470,11 +501,14 @@ habit/focus counts and evidence from fully paginated, stably ordered 1,000-row
 action-fact pages, and `explainable-daily-state-v1` remains unchanged.
 Guest/mock sessions expose none of these remote commands.
 
-Phase 5, Decision-First Today Dashboard, is implemented. It consumes the
-persisted Phase 4 briefing without generation on normal load, puts mode,
-capacity, freshness, and one strict primary action above secondary metrics,
-dispatches validated actions through Phase 3, and preserves
-missing/stale/error/demo truth.
+Today Overview V2 supersedes the visible Phase 5 briefing card while preserving
+the V1 read for existing clients. The persisted Phase 4 briefing and Phase 6
+feedback contracts remain backend/history inputs, but the app now reads
+`GET /v1/today/overview-v2` and leads with the both-capture streak, honest `x/y`
+progress, Setup/Planner/Preparation/Calendar/Focus timeline, Today Tasks, and
+Today Habits. Existing Phase 3 commands remain the only execution mutations;
+supporting workload, reviews, signals, recommendations, feedback history, and
+the full week are lazy behind `More`.
 
 Phase 6, Feedback And Useful Insights, is implemented. `done`, `later`,
 `not_helpful`, `too_much`, and `does_not_fit` are additional historical evidence

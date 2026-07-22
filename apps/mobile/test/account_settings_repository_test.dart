@@ -19,6 +19,29 @@ void main() {
     useMockData: false,
   );
 
+  test('export contract includes Planner content and omits its retry ledger',
+      () {
+    expect(
+      accountExportV1TableNames,
+      containsAllInOrder(const [
+        'planner_preferences',
+        'planner_action_plans',
+        'planner_action_plan_revisions',
+        'planner_task_blocks',
+        'planner_habit_slots',
+        'planner_commitments',
+      ]),
+    );
+    expect(
+      accountExportV1OmittedTables['planner_request_identities'],
+      'backend_only_anti_replay_ledger',
+    );
+    expect(
+      accountExportV1TableNames,
+      isNot(contains('planner_request_identities')),
+    );
+  });
+
   test('account operations use exact endpoints, bodies, and bearer', () async {
     final client = _TrackingApiClient(
       patchResponse: const {'timezone': 'Europe/London'},

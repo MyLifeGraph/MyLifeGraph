@@ -179,6 +179,16 @@ ACCOUNT_EXPORT_TABLES = (
         "local_date,local_start_time,local_end_time,planned_minutes,created_at,"
         "updated_at",
     ),
+    _table(
+        "planner_preferences",
+        "user_id,contract_version,use_calendar_busy_time,created_at,updated_at",
+        cursor_column="user_id",
+    ),
+    _table("planner_action_plans", "*"),
+    _table("planner_action_plan_revisions", "*"),
+    _table("planner_task_blocks", "*"),
+    _table("planner_habit_slots", "*"),
+    _table("planner_commitments", "*"),
 )
 
 

@@ -30,6 +30,9 @@ class DeadlinePlanningContext:
     availability_connection_id: UUID | None
     availability_import_id: UUID | None
     daily_preparation_budget_minutes: int | None = None
+    planner_recurring_commitments: list[dict[str, Any]] | None = None
+    planner_timed_intervals: list[dict[str, Any]] | None = None
+    planner_use_calendar_busy_time: bool | None = None
 
 
 @dataclass(frozen=True)
@@ -519,6 +522,88 @@ class SupabaseDeadlinePlanRepository:
             max_rows=6_000,
         )
 
+        preference_rows = await self._client.select(
+            "planner_preferences",
+            params={
+                "select": "use_calendar_busy_time",
+                "user_id": f"eq.{user_id}",
+                "limit": "1",
+            },
+        )
+        planner_use_calendar_busy_time = bool(
+            preference_rows
+            and preference_rows[0].get("use_calendar_busy_time") is True
+        )
+        # Deadline Planner keeps its V1 request field for wire compatibility,
+        # but Planner V1 owns the one explicit account preference.
+        include_calendar_availability = planner_use_calendar_busy_time
+
+        planner_task_blocks = await self._select_pages(
+            "planner_task_blocks",
+            params={
+                "select": "id,plan_id,starts_at,ends_at,local_date,planned_minutes",
+                "user_id": f"eq.{user_id}",
+                "state": "eq.active",
+                "and": (
+                    f"(local_date.gte.{context_starts_on.isoformat()},"
+                    f"local_date.lte.{context_ends_on.isoformat()})"
+                ),
+                "order": "starts_at.asc,id.asc",
+            },
+            max_rows=10_001,
+        )
+        planner_habit_slots = await self._select_pages(
+            "planner_habit_slots",
+            params={
+                "select": "id,plan_id,weekday,starts_at,ends_at,duration_minutes",
+                "user_id": f"eq.{user_id}",
+                "state": "eq.active",
+                "order": "weekday.asc,starts_at.asc,id.asc",
+            },
+            max_rows=1_001,
+        )
+        planner_commitments = await self._select_pages(
+            "planner_commitments",
+            params={
+                "select": "id,recurrence,starts_at,ends_at,weekday,"
+                "local_starts_at,local_ends_at",
+                "user_id": f"eq.{user_id}",
+                "status": "eq.active",
+                "order": "created_at.asc,id.asc",
+            },
+            max_rows=1_001,
+        )
+        planner_recurring_commitments = [
+            {
+                "id": row.get("id"),
+                "weekday": row.get("weekday"),
+                "starts_at": row.get("starts_at"),
+                "ends_at": row.get("ends_at"),
+            }
+            for row in planner_habit_slots
+        ]
+        planner_timed_intervals = list(planner_task_blocks)
+        for row in planner_commitments:
+            if row.get("recurrence") == "weekly":
+                planner_recurring_commitments.append(
+                    {
+                        "id": row.get("id"),
+                        "weekday": row.get("weekday"),
+                        "starts_at": row.get("local_starts_at"),
+                        "ends_at": row.get("local_ends_at"),
+                    },
+                )
+            elif row.get("recurrence") == "one_off":
+                planner_timed_intervals.append(
+                    {
+                        "id": row.get("id"),
+                        "starts_at": row.get("starts_at"),
+                        "ends_at": row.get("ends_at"),
+                    },
+                )
+            else:
+                raise ValueError("Planner commitment recurrence is invalid.")
+
         source_calendar_event = None
         if source_calendar_event_id is not None:
             source_rows = await self._client.select(
@@ -609,6 +694,9 @@ class SupabaseDeadlinePlanRepository:
                 else None
             ),
             daily_preparation_budget_minutes=daily_preparation_budget_minutes,
+            planner_recurring_commitments=planner_recurring_commitments,
+            planner_timed_intervals=planner_timed_intervals,
+            planner_use_calendar_busy_time=planner_use_calendar_busy_time,
         )
 
     async def _with_connection_state(

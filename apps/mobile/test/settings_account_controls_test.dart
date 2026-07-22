@@ -447,6 +447,8 @@ void main() {
       200,
       scrollable: find.byType(Scrollable).first,
     );
+    await tester.ensureVisible(find.text('Export data'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Export data'));
     await tester.pump();
 

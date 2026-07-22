@@ -26,6 +26,7 @@ class DeadlinePlansPage extends ConsumerStatefulWidget {
     this.initialTitle,
     this.initialDeadlineAt,
     this.initialDeadlineOn,
+    this.initialKind,
     this.initialPlanId,
     this.openInitialReplan = false,
     this.currentTime,
@@ -35,6 +36,7 @@ class DeadlinePlansPage extends ConsumerStatefulWidget {
   final String? initialTitle;
   final DateTime? initialDeadlineAt;
   final String? initialDeadlineOn;
+  final DeadlinePlanKind? initialKind;
   final String? initialPlanId;
   final bool openInitialReplan;
   final DateTime? currentTime;
@@ -49,6 +51,7 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
   bool _targetPlanRequested = false;
   bool _targetPlanLoading = false;
   bool _initialReplanOpened = false;
+  bool _initialKindEditorOpened = false;
   Object? _targetPlanError;
   DeadlinePlanProposalDraft? _retainedDraft;
 
@@ -62,6 +65,9 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
       _initialReplanOpened = false;
     } else if (oldWidget.openInitialReplan != widget.openInitialReplan) {
       _initialReplanOpened = false;
+    }
+    if (oldWidget.initialKind != widget.initialKind) {
+      _initialKindEditorOpened = false;
     }
   }
 
@@ -93,6 +99,7 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
     _openSourceEditorAfterBuild(state, sourcePrefill);
     _loadTargetPlanAfterBuild(state);
     _openInitialReplanAfterBuild(state);
+    _openInitialKindEditorAfterBuild(state);
 
     return AppPage(
       title: 'Preparation plans',
@@ -313,6 +320,23 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
     });
   }
 
+  void _openInitialKindEditorAfterBuild(DeadlinePlanState state) {
+    if (widget.initialKind == null ||
+        _initialKindEditorOpened ||
+        widget.initialPlanId != null ||
+        widget.sourceCalendarEventId != null ||
+        state.isLoading ||
+        state.loadError != null ||
+        state.isBusy ||
+        state.requiresExactRetry) {
+      return;
+    }
+    _initialKindEditorOpened = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _openEditor();
+    });
+  }
+
   void _reviewPlanFromWorkload(String planId) {
     final query = Uri(
       path: AppRoutes.preparationPlans,
@@ -530,6 +554,7 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
           accountDailyPreparationBudgetMinutes:
               preparationWorkload.valueOrNull?.dailyPreparationBudgetMinutes,
           retainedDraft: retainedDraft,
+          initialKind: widget.initialKind,
           initialTitle:
               existing?.title ?? loadedPrefill?.title ?? widget.initialTitle,
           initialDeadlineAt: existing?.deadlineAt ??
@@ -1163,6 +1188,7 @@ class _DeadlinePlanEditorSheet extends StatefulWidget {
     required this.accountDailyPreparationBudgetKnown,
     required this.accountDailyPreparationBudgetMinutes,
     required this.retainedDraft,
+    required this.initialKind,
     required this.initialTitle,
     required this.initialDeadlineAt,
     required this.initialDeadlineOn,
@@ -1182,6 +1208,7 @@ class _DeadlinePlanEditorSheet extends StatefulWidget {
   final bool accountDailyPreparationBudgetKnown;
   final int? accountDailyPreparationBudgetMinutes;
   final DeadlinePlanProposalDraft? retainedDraft;
+  final DeadlinePlanKind? initialKind;
   final String? initialTitle;
   final DateTime? initialDeadlineAt;
   final String? initialDeadlineOn;
@@ -1244,7 +1271,7 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
     _dailyCapController = TextEditingController(
       text: '${retained?.maxDailyMinutes ?? existing?.maxDailyMinutes ?? 120}',
     );
-    _kind = retained?.kind ?? existing?.kind;
+    _kind = retained?.kind ?? existing?.kind ?? widget.initialKind;
     _deadline = retained?.deadlineAt ??
         existing?.deadlineAt ??
         widget.initialDeadlineAt;
@@ -1774,15 +1801,19 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
           style: Theme.of(context).textTheme.bodySmall,
         ),
         const SizedBox(height: AppSpacing.sm),
-        SwitchListTile(
+        ListTile(
           contentPadding: EdgeInsets.zero,
-          value: _useCalendarAvailability,
-          onChanged: (value) =>
-              setState(() => _useCalendarAvailability = value),
-          title: const Text('Use imported busy times'),
+          leading: const Icon(Icons.event_busy_outlined),
+          title: const Text('Imported busy times follow Planner'),
           subtitle: const Text(
-            'Uses busy periods from the latest file you imported for this account and requires a connected completed import. Re-import after calendar changes; there is no background sync. Planning is rule-based and event text is not sent to AI.',
+            'The one read-only Planner calendar setting applies here too. Change it in Planner before creating this preview. Re-import after changes; there is no background sync, and no event text is sent to AI.',
           ),
+          trailing: const Icon(Icons.open_in_new_outlined),
+          onTap: () {
+            final router = GoRouter.of(context);
+            Navigator.of(context).pop();
+            router.go(AppRoutes.planner);
+          },
         ),
         const SizedBox(height: AppSpacing.md),
         const Text(

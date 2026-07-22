@@ -16,7 +16,10 @@ The checkout combines Deadline Planner V1 with seven product-polish groups:
 
 1. Evening check-in is a short two-step capture with optional detail and honest
    save recovery.
-2. Today is decision-first and keeps secondary information compact.
+2. Today is an honest daily overview: both-capture streak, transparent dynamic
+   progress, a four-source agenda, executable Tasks/Habits, and lazy supporting
+   information. It no longer presents a recommendation as a decision made for
+   the student.
 3. Insights exposes data sufficiency and sources; correlations require shared
    observations rather than personalized-looking filler.
 4. Focus has a real countdown, explicit finish/abandon behavior, and
@@ -51,8 +54,9 @@ retry, fingerprint, and database rules are in
 ## Important Truth Boundaries
 
 - Guest/demo stays local and must not call authenticated product APIs.
-- A normal Today read does not generate or mutate recommendations, briefings,
-  or preparation plans.
+- A normal Today read uses `today-overview-v1` and does not generate or mutate
+  recommendations, briefings, or preparation plans. A counted-source failure
+  makes progress unavailable without erasing independent usable sections.
 - Rule-based Daily State, briefings, reviews, plan blocks, Focus suggestions,
   and reminder copy do not need an LLM. LLM output may explain a result but must
   not become calculation or mutation authority.
@@ -113,6 +117,7 @@ minimum:
 - `docs/architecture.md`
 - `docs/backend-roadmap.md`
 - `docs/daily-briefing-implementation-plan.md`
+- `docs/today-overview-v1-contract.md`
 - `docs/deadline-planner-v1-contract.md`
 - `docs/ui-language-and-copy-contract.md`
 - `docs/verification.md`

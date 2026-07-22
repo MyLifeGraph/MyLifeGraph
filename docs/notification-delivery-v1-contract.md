@@ -110,6 +110,10 @@ at-most-once presentation rather than inventing delivery.
 
 The banner and Inbox expose deterministic/no-LLM truth. `action_url` still goes
 through the internal allowlist; generated rows use only Today or Weekly Review.
+The fixed generic Today copy is `Today's overview is ready` / `Open Today to
+review your schedule and actions.` Recovery copy similarly describes a gentler
+overview and never exposes private capture details. It does not claim that the
+app created, optimized, or chose a plan.
 
 ## Authority And Data Lifecycle
 

@@ -379,6 +379,35 @@ Full-account deletion cascades all four tables. See
 `docs/deadline-planner-v1-contract.md` for the exact HTTP, revision, progress,
 source, and non-claim boundary.
 
+## Planner V1
+
+`20260722120000_planner_v1.sql` adds the central planning persistence without
+migrating or silently scheduling existing Tasks, Habits, or Deadline Plans.
+`planner_preferences` stores only the explicit owner choice to use current
+imported-calendar busy time. `planner_action_plans` and immutable
+`planner_action_plan_revisions` own staged and active Task/Habit plans;
+`planner_task_blocks` stores dated reservations and `planner_habit_slots`
+stores stable weekly slots. `planner_commitments` owns manually entered
+one-off or weekly authoritative busy time. `planner_request_identities` is the
+backend-only global retry ledger.
+
+All seven tables use forced RLS. Authenticated owners receive read-only access
+to preferences, plans, revisions, blocks, slots, and commitments; they receive
+no direct mutation access and no ledger access. Service-role-only,
+owner-locked RPCs update preferences, stage immutable proposals, atomically
+confirm or cancel a revision, and create/update/archive commitments. Confirm
+rechecks the target version, current calendar-import identity, planning
+fingerprint, and competing Planner/Preparation/Setup/calendar reservations.
+A stale preview raises `PT409` and leaves the active revision unchanged.
+
+Task completion/cancellation and Habit pause/archive release future Planner
+reservations through guarded lifecycle triggers. Restore/undo does not revive
+released slots. The Deadline Planner activation trigger also treats confirmed
+Planner reservations and manual commitments as busy time. Account Export
+includes the six owner-content tables and explicitly omits the retry ledger.
+See `docs/planner-v1-contract.md` for the full HTTP, availability, Today V2,
+and non-automation boundary.
+
 ## Phase 10 Controlled Coach
 
 `20260713200000_phase_10_controlled_coach.sql` adds
@@ -713,12 +742,20 @@ changes the shared preference projection and prevents Setup's earlier captured
 timestamp from regressing `updated_at` below either the prior revision or
 retained consent timestamps.
 
+`20260719120000_account_preparation_budget_v1.sql` adds the optional explicit
+profile-local daily preparation capacity and its owner-locked setter.
+
+`20260722120000_planner_v1.sql` adds the seven forced-RLS Planner tables,
+service-role-only owner-locked preference/action-plan/commitment RPCs,
+lifecycle release triggers, and the Deadline Planner reservation guard. It
+does not migrate or schedule existing targets.
+
 ## Local Verification Workflow
 
 For local Supabase-backed testing, the reset should complete through:
 
 ```text
-20260714143000_notification_delivery_settings_guard.sql
+20260722120000_planner_v1.sql
 ```
 
 Then configure `.env` with:
@@ -881,10 +918,15 @@ The product should standardize on the snake_case schema. CamelCase tables are
 legacy compatibility only and should be dropped in a later dedicated migration
 after data migration and app verification are complete.
 
-The latest schema addition is
-`20260714143000_notification_delivery_settings_guard.sql`. It makes the
-preceding Notification Delivery Settings identity request-exact across the
-shared Intake Setup writer and enforces monotone consent-safe revisions. The
+The latest schema addition is `20260722120000_planner_v1.sql`. It adds additive
+forced-RLS Planner preference, immutable Action Plan revision, Task block,
+Habit slot, manual commitment, and retry-ledger persistence plus service-only
+owner-locked mutations. Existing targets remain unchanged. The preceding
+`20260719120000_account_preparation_budget_v1.sql` adds the explicit optional
+daily preparation-capacity rule. Earlier,
+`20260714143000_notification_delivery_settings_guard.sql` made the
+Notification Delivery Settings identity request-exact across the
+shared Intake Setup writer and enforced monotone consent-safe revisions. The
 preceding `20260714130000_notification_delivery_v1.sql` adds explicit foreground
 consent and deterministic generated-notification/receipt fields without a new
 table, so Account Export V1's table count is unchanged. Its settings,

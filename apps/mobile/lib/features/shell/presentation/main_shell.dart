@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -25,7 +23,7 @@ class MainShell extends ConsumerWidget {
     AppRoutes.dashboard,
     AppRoutes.insights,
     AppRoutes.quickAction,
-    AppRoutes.alerts,
+    AppRoutes.planner,
     AppRoutes.settings,
   ];
 
@@ -37,7 +35,7 @@ class MainShell extends ConsumerWidget {
         return;
       }
       final notification = next.notification!;
-      unawaited(ref.read(notificationsProvider.notifier).load());
+      ref.invalidate(notificationsProvider);
       final target = NotificationActionTargetResolver(
         canUseSyncedHabits: capabilities.canUseSyncedHabits,
         canUseFocusSessions: capabilities.canUseSyncedExecution,
@@ -82,7 +80,7 @@ class MainShell extends ConsumerWidget {
       final path when path.startsWith(AppRoutes.habitCompletion) =>
         AppRoutes.quickAction,
       final path when path.startsWith(AppRoutes.habitManagement) =>
-        AppRoutes.quickAction,
+        AppRoutes.planner,
       final path when path.startsWith(AppRoutes.quickMoodCheckIn) =>
         AppRoutes.quickAction,
       final path when path.startsWith(AppRoutes.dailyCheckIn) =>
@@ -92,7 +90,10 @@ class MainShell extends ConsumerWidget {
       final path when path.startsWith(AppRoutes.deepWork) =>
         AppRoutes.quickAction,
       final path when path.startsWith(AppRoutes.preparationPlans) =>
-        AppRoutes.quickAction,
+        AppRoutes.planner,
+      final path when path.startsWith(AppRoutes.alerts) => AppRoutes.settings,
+      final path when path.startsWith(AppRoutes.notifications) =>
+        AppRoutes.settings,
       final path when path.startsWith(AppRoutes.calendarIntegration) =>
         AppRoutes.settings,
       final path when path.startsWith(AppRoutes.notificationSettings) =>
@@ -240,9 +241,9 @@ class _DesktopNavigation extends StatelessWidget {
                         ),
                         const SizedBox(height: AppSpacing.md),
                         _DesktopNavItem(
-                          icon: Icons.notifications_outlined,
-                          selectedIcon: Icons.notifications_rounded,
-                          label: 'Inbox',
+                          icon: Icons.calendar_view_week_outlined,
+                          selectedIcon: Icons.calendar_view_week_rounded,
+                          label: 'Planner',
                           isSelected: selectedIndex == 3,
                           onTap: () => onDestinationSelected(3),
                         ),
@@ -519,9 +520,9 @@ class _FloatingBottomNav extends StatelessWidget {
                           child: SizedBox(height: itemHeight),
                         ),
                         _FloatingNavItem(
-                          icon: Icons.notifications_outlined,
-                          selectedIcon: Icons.notifications,
-                          label: 'Inbox',
+                          icon: Icons.calendar_view_week_outlined,
+                          selectedIcon: Icons.calendar_view_week,
+                          label: 'Planner',
                           isSelected: selectedIndex == 3,
                           showLabel: !compact,
                           flex: itemFlex(selectedIndex == 3),
@@ -570,7 +571,7 @@ class _FloatingBottomNav extends StatelessWidget {
                             onTap: () => onDestinationSelected(2),
                           ),
                           _CompactNavLabel(
-                            label: 'Inbox',
+                            label: 'Planner',
                             isSelected: selectedIndex == 3,
                             selectedColor: selectedColor,
                             idleColor: idleColor,

@@ -249,6 +249,27 @@ Already implemented:
     plan choice that requires one connected, non-deleted current import. There
     is no inference, provider write, notification, LLM,
     background sync, scheduled generation, or Dashboard-load generation.
+- Planner V1:
+  - Central authenticated read-only overview plus explicit preference,
+    Task/Habit proposal/confirm/cancel, and fixed-commitment commands under
+    `/v1/planner`; guest/demo stays zero-call.
+  - Strict Task/Habit proposal unions require user-entered scheduling facts.
+    Five-minute Task blocks may split; Habit slots follow daily, selected-
+    weekday, or weekly-target cadence over a bounded four-week preview. Exact
+    unplaced minutes remain visible.
+  - A shared deterministic Availability component combines profile-local
+    time/DST, energy window, current time, Setup/manual commitments, active
+    Planner and Preparation reservations, and separately consented current
+    imported busy time. Deadline Planner reuses this component and preference.
+  - Immutable previews reserve nothing. Owner-locked confirmation atomically
+    creates or updates the target and activates its revision only after target,
+    calendar, fingerprint, and collision revalidation. Conflicts return 409;
+    reads never write or replan.
+  - One-off/weekly fixed commitments are authoritative after deliberate save.
+    Target terminal lifecycle releases future slots; undo/restore returns the
+    target to Unscheduled without reviving old reservations.
+  - `today-overview-v2` adds Task/Habit/commitment blocks while keeping V1
+    available and counting each target only once.
 - Phase 10 Controlled Coach:
   - Strict authenticated capability, deliberate response, history/delete, and
     explicit memory-selection contracts with guest/mock zero-call behavior.
@@ -933,6 +954,14 @@ production provider or autonomous agent platform by default.
 
 ### Completed Slice 5: Decision-First Today Dashboard
 
+Historical note: the backend briefing/parser/action contracts below remain
+implemented, but the visible briefing-first presentation was superseded on
+2026-07-21 by `today-overview-v1` and then additively extended by
+`today-overview-v2`. The app consumes the read-only
+streak/progress/agenda/task/habit overview with Planner blocks documented in
+`docs/today-overview-v1-contract.md`; briefings remain internal inputs for
+reminders, Coach context, and feedback history.
+
 - Added strict Flutter `daily-briefing-v1` parsing, authenticated repository and
   provider boundaries, with no privileged API calls in guest/mock mode.
 - Normal Dashboard load calls read-only GET only and preserves loading,
@@ -1040,6 +1069,27 @@ lives in `docs/phase-9-calendar-import-contract.md`.
 The exact contract and required verification live in
 `docs/deadline-planner-v1-contract.md`. Do not claim a current-checkout browser,
 local migration, remote, or installed-device pass without running that boundary.
+
+### Planner V1: Central Explicit Planning
+
+- Replaced Inbox in the five-target shell with Planner; Inbox remains available
+  from Settings and compatible `/alerts` links keep Settings active.
+- Added a strict seven-day overview ordered as Add new, Needs attention, days,
+  Ongoing preparation, Unscheduled, and collapsed history.
+- Added direct Task, Habit, Exam, Assignment, and fixed-commitment create flows.
+  Task/Habit edits retain target versions and ambiguous writes retain exact
+  drafts for retry.
+- Extracted shared deterministic availability from Deadline Planner and added
+  bounded Task splitting and Habit cadence slots without automatic movement,
+  inferred durations, LLM planning, or calendar writes.
+- Added forced-RLS additive persistence, backend-only request identity, and
+  owner-locked atomic commands. Existing Tasks, Habits, and Deadline Plans stay
+  unscheduled/unmigrated.
+- Added the parallel read-only `today-overview-v2` contract for Planner agenda
+  blocks and exact no-double-count progress while preserving the V1 endpoint.
+
+The exact behavior, schema, routes, copy, and verification boundary live in
+`docs/planner-v1-contract.md`.
 
 ### Completed Slice 10: Controlled Coach
 

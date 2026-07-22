@@ -77,6 +77,48 @@ class _Reason:
         }
 
 
+def valid_explicit_capture_kinds(row: dict[str, Any]) -> frozenset[str]:
+    """Return only complete, projection-consistent Daily Capture V2 branches.
+
+    Today streak/progress uses the same capture integrity boundary as Daily
+    State while deliberately excluding legacy numeric rows. A malformed branch
+    is missing evidence, never an inferred completed check-in.
+    """
+
+    row_id = _non_empty_string(row.get("id"), max_length=200)
+    row_date = _safe_date(row.get("entry_date"))
+    metadata = row.get("metadata")
+    if (
+        row_id is None
+        or row_date is None
+        or not isinstance(metadata, dict)
+        or metadata.get("capture_version") != "daily-capture-v2"
+        or not isinstance(metadata.get("captures"), dict)
+    ):
+        return frozenset()
+    captures: dict[CaptureKind, _Capture] = {}
+    raw_captures = metadata["captures"]
+    for kind in ("evening", "morning"):
+        raw = raw_captures.get(kind)
+        if raw is None:
+            continue
+        capture, _ = _parse_v2_capture(
+            kind=kind,
+            raw=raw,
+            row_id=row_id,
+            row_date=row_date,
+        )
+        if capture is not None:
+            captures[kind] = capture
+    if _projection_issues(row, captures):
+        return frozenset()
+    return frozenset(
+        kind
+        for kind, capture in captures.items()
+        if capture.complete and capture.integrity_ok
+    )
+
+
 @dataclass(frozen=True)
 class _Risk:
     code: str

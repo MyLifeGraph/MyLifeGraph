@@ -54,11 +54,17 @@ way to explore the product today is the Flutter app in mock-data guest mode.
   actions remain unavailable to guest/demo sessions. Phase 4 adds persisted,
   deterministic `daily-briefing-v1` output behind read-only
   `GET /v1/briefings/today` and deliberate `POST /v1/briefings/generate`.
-  Phase 5 adds a strict Flutter parser/repository boundary and consumes that
-  briefing above metrics in Today without generation on normal load. Current,
-  missing, stale, error, and local-demo states remain distinct; stale targets
-  require deliberate adjustment, and current targets use the existing action
-  dispatcher. Phase 6 adds retry-safe owner-scoped feedback, bounded 28-day
+  Read-only `GET /v1/today/overview` remains available, while the app consumes
+  additive `GET /v1/today/overview-v2`. Today now leads
+  with a strict both-capture streak, transparent dynamic `x/y` progress, a
+  vertical agenda that also includes Planner Task/Habit/commitment blocks,
+  selected tasks, and selected habits. Multiple blocks never duplicate a
+  target in progress. Counted-source failures make progress explicitly unavailable while
+  independent sections remain usable; guest/demo computes only local facts and
+  makes no authenticated call. Existing execution commands remain authoritative,
+  while workload, Weekly review, saved
+  signals, recommendations, feedback history, and the full week load lazily
+  under `More`. Phase 6 adds retry-safe owner-scoped feedback, bounded 28-day
   context-matched ranking effects with explicit provenance, deletable history,
   and one cautious default Insight before advanced correlation exploration.
   Phase 7 adds bounded scheduled daily preparation: missing prerequisites are
@@ -98,6 +104,14 @@ way to explore the product today is the Flutter app in mock-data guest mode.
   without a pending preview now starts with a compact saved-value review and one
   deliberate staged-preview action; changing values still uses the full editor,
   and current reservations remain active until confirmation.
+  Planner V1 is the central authenticated planning surface for Task/Habit
+  creation and timing, Deadline Planner entry, and one-off or weekly fixed
+  commitments. Its shared deterministic availability engine stages five-minute
+  Task blocks or stable Habit slots and reserves them only after explicit
+  confirmation. One explicit read-only Calendar busy-time preference is shared
+  with Deadline Planner. Current conflicts create attention facts, never hidden
+  or background replanning. Inbox moved from the app shell to Settings without
+  changing notification persistence or delivery.
   The repository does not configure a deployed cron. Notification Delivery V1
   can create bounded local deterministic Inbox rows only after separate in-app
   consent; it still adds no provider/system delivery channel.
@@ -449,7 +463,8 @@ keeps the preference revision monotone. The preceding Notification Delivery
 migration adds explicit consent, deterministic generation, and foreground
 receipts. The earlier Account Export
 grant restores only FastAPI's service-role read access to `lifestyle_entries`,
-which is required by the current 31-table Account Export V1 contract. Phase 3 adds task
+which was required by the then-31-table Account Export V1 contract. Planner V1
+later extends the current export to 37 owner-content tables. Phase 3 adds task
 estimates/terminal times, locked cadence-aware habit outcomes, immutable linked
 focus history, and restricted target deletion without replacing existing RLS
 or table grants.
@@ -655,6 +670,11 @@ has the nvm bin directory on `PATH`.
   direction, LLM cost controls, and next implementation sequence.
 - `docs/supabase-current-state.md` - Supabase auth, schema, RLS, and known gaps.
 - `docs/verification.md` - Automated verification scripts and browser E2E.
+- `docs/today-overview-v1-contract.md` - Read-only Today endpoint, exact
+  streak/progress rules, agenda sources, Task/Habit selection, partial failures,
+  guest boundary, and UI order.
+- `docs/planner-v1-contract.md` - Central Planner navigation, deterministic
+  availability, staged Task/Habit reservations, commitments, and Today V2.
 - `docs/phase-3-executable-actions-contract.md` - Implemented executable task,
   habit, focus, and action-target contract.
 - `docs/phase-8-weekly-review-contract.md` - Bounded ISO-week facts,

@@ -44,9 +44,9 @@ void main() {
       ),
     );
     expect(
-      tester.getSemantics(find.byKey(const ValueKey('main-nav-inbox'))),
+      tester.getSemantics(find.byKey(const ValueKey('main-nav-planner'))),
       matchesSemantics(
-        label: 'Inbox',
+        label: 'Planner',
         isButton: true,
         hasSelectedState: true,
         isSelected: false,
@@ -85,16 +85,18 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final inboxControl = find.byKey(const ValueKey('main-nav-inbox-control'));
-    await _tabUntilFocused(tester, inboxControl);
+    final plannerControl = find.byKey(
+      const ValueKey('main-nav-planner-control'),
+    );
+    await _tabUntilFocused(tester, plannerControl);
     await tester.sendKeyEvent(LogicalKeyboardKey.space);
     await tester.pumpAndSettle();
 
-    expect(find.text('Inbox destination'), findsOneWidget);
+    expect(find.text('Planner destination'), findsOneWidget);
     expect(
-      tester.getSemantics(find.byKey(const ValueKey('main-nav-inbox'))),
+      tester.getSemantics(find.byKey(const ValueKey('main-nav-planner'))),
       matchesSemantics(
-        label: 'Inbox',
+        label: 'Planner',
         isButton: true,
         hasSelectedState: true,
         isSelected: true,
@@ -235,7 +237,7 @@ void main() {
         'today',
         'insights',
         'quick-actions',
-        'inbox',
+        'planner',
         'settings',
       ];
       for (final label in labels) {
@@ -337,6 +339,51 @@ void main() {
     );
     semantics.dispose();
   });
+
+  testWidgets('legacy Inbox route selects Settings, not Planner',
+      (tester) async {
+    final semantics = tester.ensureSemantics();
+    final router = _router(initialLocation: AppRoutes.alerts);
+    addTearDown(router.dispose);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          appSurfaceCapabilitiesProvider.overrideWithValue(
+            const AppSurfaceCapabilities(
+              isLocalDemo: false,
+              canUseSyncedHabits: true,
+            ),
+          ),
+        ],
+        child: MaterialApp.router(routerConfig: router),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Inbox destination'), findsOneWidget);
+    expect(
+      tester.getSemantics(find.byKey(const ValueKey('main-nav-settings'))),
+      matchesSemantics(
+        label: 'Settings',
+        isButton: true,
+        hasSelectedState: true,
+        isSelected: true,
+        hasTapAction: true,
+      ),
+    );
+    expect(
+      tester.getSemantics(find.byKey(const ValueKey('main-nav-planner'))),
+      matchesSemantics(
+        label: 'Planner',
+        isButton: true,
+        hasSelectedState: true,
+        isSelected: false,
+        hasTapAction: true,
+      ),
+    );
+    semantics.dispose();
+  });
 }
 
 double _contrastRatio(Color foreground, Color background) {
@@ -425,6 +472,10 @@ GoRouter _router({String initialLocation = AppRoutes.deepWork}) {
       GoRoute(
         path: AppRoutes.insights,
         builder: (_, __) => shell(AppRoutes.insights, 'Insights destination'),
+      ),
+      GoRoute(
+        path: AppRoutes.planner,
+        builder: (_, __) => shell(AppRoutes.planner, 'Planner destination'),
       ),
       GoRoute(
         path: AppRoutes.alerts,

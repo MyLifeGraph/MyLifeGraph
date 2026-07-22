@@ -37,6 +37,12 @@ ACCOUNT_EXPORT_TABLE_NAMES = (
     "deadline_plans",
     "deadline_plan_revisions",
     "deadline_plan_blocks",
+    "planner_preferences",
+    "planner_action_plans",
+    "planner_action_plan_revisions",
+    "planner_task_blocks",
+    "planner_habit_slots",
+    "planner_commitments",
 )
 ACCOUNT_EXPORT_SANITIZED_TABLES = (
     "calendar_connections",
@@ -49,6 +55,7 @@ ACCOUNT_EXPORT_OMITTED_TABLES = {
     "calendar_request_identities": "backend_only_anti_replay_ledger",
     "notification_action_requests": "backend_only_anti_replay_ledger",
     "deadline_plan_request_identities": "backend_only_anti_replay_ledger",
+    "planner_request_identities": "backend_only_anti_replay_ledger",
 }
 ACCOUNT_EXPORT_MAX_ROWS_PER_TABLE = 10_000
 ACCOUNT_EXPORT_MAX_TOTAL_ROWS = 50_000

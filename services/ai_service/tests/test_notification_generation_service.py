@@ -189,6 +189,8 @@ def test_recovery_mode_suppresses_generic_focus_and_uses_safe_fixed_copy() -> No
     assert write["source_kind"] == "daily_state"
     assert write["source_id"] == SNAPSHOT_ID
     assert write["action_url"] == "/dashboard"
+    assert write["title"] == "A gentler overview is ready"
+    assert "manageable schedule and actions" in write["message"]
     assert "private check-in details" in write["message"]
 
 
@@ -221,6 +223,10 @@ def test_current_monday_review_adds_one_exact_weekly_candidate() -> None:
         "focus_prompt",
         "weekly_summary",
     ]
+    assert repository.write_calls[0]["title"] == "Today's overview is ready"
+    assert repository.write_calls[0]["message"] == (
+        "Open Today to review your schedule and actions."
+    )
     assert repository.write_calls[1]["generation_key"] == (
         "notification-generation-v1:weekly_summary:2026-W28"
     )

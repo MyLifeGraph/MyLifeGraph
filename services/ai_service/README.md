@@ -50,7 +50,11 @@ FastAPI service boundary for recommendation and future ML workflows.
   overdue, workload, and focus-pressure candidates.
 - `GET /v1/briefings/today` reads one persisted `daily-briefing-v1` decision;
   deliberate `POST /v1/briefings/generate` refreshes its exact profile-local
-  date. Normal reads remain generation-free.
+  date. Normal reads remain generation-free. The visible Today surface instead
+  uses read-only `GET /v1/today/overview-v2` for its streak, exact progress,
+  timeline, Tasks, Habits, and confirmed Planner blocks. The V1 route remains
+  available for existing clients; neither read removes the internal briefing
+  contract or writes product state.
 - Phase 7 extends the protected scheduled boundary to prepare daily snapshots
   and briefings for onboarded non-guest profiles. One UTC run instant determines
   each profile-local date; current pairs are write-free, while missing or stale
@@ -64,6 +68,12 @@ FastAPI service boundary for recommendation and future ML workflows.
   request registry prevents UUID reuse across owners or operations. It has no
   provider credential, URL fetch, provider write, background sync, or LLM
   processing.
+- Planner V1 exposes a read-only seven-day overview and detail plus explicit
+  preference, Task/Habit proposal/confirm/cancel, and fixed-commitment commands
+  under `/v1/planner`. Immutable previews use shared deterministic availability
+  with Deadline Planner and reserve nothing until owner-locked confirmation.
+  Existing targets remain unscheduled; GETs never create revisions. See
+  `../../docs/planner-v1-contract.md`.
 - Phase 10 exposes authenticated capability, deliberate response,
   history/delete, and explicit memory-selection contracts. Standard tests use
   the deterministic fake provider. The only real-model adapter is the strictly
@@ -202,7 +212,22 @@ request the persisted target date's refresh best-effort. Habit outcome/undo
 captures one stable target date, while focus transitions use the persisted
 start date. The service does not generate recommendations during these writes.
 
-Read today's persisted briefing without side effects:
+Read the current Today overview without side effects:
+
+```bash
+curl http://localhost:8000/v1/today/overview \
+  -H 'Authorization: Bearer <supabase_access_token>'
+```
+
+The app uses the additive V2 read with confirmed Planner blocks and exact
+scheduled-target selection:
+
+```bash
+curl http://localhost:8000/v1/today/overview-v2 \
+  -H 'Authorization: Bearer <supabase_access_token>'
+```
+
+Read today's persisted internal briefing without side effects:
 
 ```bash
 curl http://localhost:8000/v1/briefings/today \
@@ -220,7 +245,8 @@ curl -X POST http://localhost:8000/v1/briefings/generate \
 
 `force=false` returns a current row unchanged and prepares missing or stale
 state. `force=true` deliberately recomputes the same `(user_id, briefing_date)`
-identity. Dashboard normal load uses GET only.
+identity. Today normal load does not call either briefing route; it uses only
+the overview GET above until a lazy supporting section is opened.
 
 Scheduler-triggered daily preparation uses a backend-only token and never
 belongs in Flutter or browser runtime configuration:

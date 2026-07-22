@@ -386,11 +386,12 @@ void main() {
 
     router.go(AppRoutes.deepWork);
     await tester.pumpAndSettle();
-    expect(find.text('Inbox'), findsWidgets);
+    expect(find.text('Quick actions'), findsOneWidget);
 
     router.go(AppRoutes.habitManagement);
     await tester.pumpAndSettle();
-    expect(find.text('Quick actions'), findsOneWidget);
+    expect(find.text('Synced Planner unavailable'), findsOneWidget);
+    expect(find.byKey(const ValueKey('planner-locked')), findsOneWidget);
     expect(find.text('Habit management'), findsNothing);
 
     router.go(AppRoutes.weeklyReview);
@@ -411,6 +412,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Profile'), findsOneWidget);
+    expect(find.text('Inbox'), findsOneWidget);
     expect(find.text('Guest Coach User'), findsOneWidget);
     expect(find.text('guest@personal-coach.local'), findsOneWidget);
     expect(find.text('Setup and commitments'), findsOneWidget);
@@ -451,13 +453,13 @@ void main() {
     expect(find.text('Personal memory'), findsNothing);
     expect(find.text('Biometric app lock'), findsNothing);
 
+    final setupEntry = find.widgetWithText(ListTile, 'Setup and commitments');
     await tester.scrollUntilVisible(
-      find.text('Setup and commitments'),
+      setupEntry,
       -250,
       scrollable: find.byType(Scrollable).first,
     );
-    await tester.ensureVisible(find.text('Setup and commitments'));
-    await tester.tap(find.text('Setup and commitments'));
+    tester.widget<ListTile>(setupEntry).onTap!.call();
     await tester.pumpAndSettle();
     expect(find.text('Review your setup'), findsOneWidget);
     expect(find.text('Flexible schedule'), findsOneWidget);

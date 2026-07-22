@@ -42,7 +42,6 @@ const legacyExplicitScheduleTitle = `E2E legacy explicit schedule ${runId}`;
 const managedHabitTitle = `E2E managed habit ${runId}`;
 const setupExecutionHabitTitle = `E2E setup execution habit ${runId}`;
 const phase3TaskTitle = `E2E executable task ${runId}`;
-const phase3EditedTaskTitle = `E2E executable task edited ${runId}`;
 const eveningTomorrowPriority = `E2E protect a calm morning ${runId}`;
 const editedEveningTomorrowPriority =
   `E2E finish the smallest useful draft ${runId}`;
@@ -53,6 +52,10 @@ const coachSafetyMessage =
   `E2E safety check ${runId}: I am in immediate danger and might hurt myself.`;
 const notificationLifecycleTitle = `E2E inbox lifecycle ${runId}`;
 const notificationFutureTitle = `E2E future inbox item ${runId}`;
+const plannerTaskTitle = `E2E split Planner task ${runId}`;
+const plannerHabitTitle = `E2E Planner habit ${runId}`;
+const plannerOneOffTitle = `E2E one-time commitment ${runId}`;
+const plannerWeeklyTitle = `E2E weekly commitment ${runId}`;
 const accountExportV1TableNames = [
   'profiles',
   'notification_preferences',
@@ -85,6 +88,12 @@ const accountExportV1TableNames = [
   'deadline_plans',
   'deadline_plan_revisions',
   'deadline_plan_blocks',
+  'planner_preferences',
+  'planner_action_plans',
+  'planner_action_plan_revisions',
+  'planner_task_blocks',
+  'planner_habit_slots',
+  'planner_commitments',
 ];
 const accountExportV1SanitizedTables = [
   'calendar_connections',
@@ -97,6 +106,7 @@ const accountExportV1OmittedTables = {
   calendar_request_identities: 'backend_only_anti_replay_ledger',
   notification_action_requests: 'backend_only_anti_replay_ledger',
   deadline_plan_request_identities: 'backend_only_anti_replay_ledger',
+  planner_request_identities: 'backend_only_anti_replay_ledger',
 };
 
 const browser = await chromium.launch({
@@ -467,6 +477,11 @@ try {
     'Cadence (required before activation)',
     'Weekly',
   );
+  // A Flutter Web dropdown overlay can remain visually open after its
+  // semantics option reports the click. Close any retained overlay before the
+  // adjacent numeric field is focused.
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(150);
   await fillByLabelOrPlaceholder(page, 'Weekly target (1–7)', '3', 4);
   await selectDropdownOption(page, 'Routine status', 'Active');
   await scrollFlutterPage(page, 1000);
@@ -668,10 +683,9 @@ try {
     'profile projection at setup revision 4',
   );
 
-  await page.goto(appRoute('/quick-action'), { waitUntil: 'domcontentloaded' });
+  await page.goto(appRoute('/habits'), { waitUntil: 'domcontentloaded' });
   await waitForFlutterShell(page);
   await enableFlutterSemantics(page);
-  await clickByText(page, 'Habit management');
   await expectText(page, 'Habit management');
   await clickByText(page, 'Add habit');
   await fillByLabelOrPlaceholder(page, 'Title', managedHabitTitle, 0);
@@ -1121,7 +1135,11 @@ try {
     );
   }
   await expectText(page, 'Today at a glance');
-  await clickByText(page, 'Saved signals');
+  await scrollUntilTextInViewport(page, 'More', {
+    deltaY: 500,
+    buttonFirst: true,
+  });
+  await clickByText(page, 'More');
   await expectText(page, 'Latest check-in');
   await expectText(page, 'Morning energy');
   await expectText(page, '4/10');
@@ -1402,51 +1420,23 @@ try {
     'Setup-owned habit outcome undo restores open state',
   );
 
-  await page.goto(appRoute('/dashboard'), { waitUntil: 'domcontentloaded' });
+  await page.goto(appRoute('/planner'), { waitUntil: 'domcontentloaded' });
   await waitForFlutterShell(page);
   await enableFlutterSemantics(page);
-  await scrollFlutterPage(page, 1600);
-  await clickByText(page, 'Add task');
-  await fillByLabelOrPlaceholder(page, 'Task title', phase3TaskTitle, 0);
+  await clickByRoleName(page, 'button', 'Task');
+  await fillByLabelOrPlaceholder(page, 'Title *', phase3TaskTitle, 0);
   await fillByLabelOrPlaceholder(
     page,
-    'Task description optional',
+    'Description (optional)',
     'Distinctive Phase 3 browser task',
     1,
   );
-  await selectDropdownOption(page, 'Task priority', 'High');
-  await fillByLabelOrPlaceholder(
-    page,
-    'Estimate minutes optional (5–480)',
-    '35',
-    2,
-  );
-  let lostTaskCreateResponseCount = 0;
-  const loseCommittedTaskCreateResponse = async (route) => {
-    const request = route.request();
-    if (request.method() !== 'POST' || lostTaskCreateResponseCount > 0) {
-      await route.continue();
-      return;
-    }
-    const committedResponse = await route.fetch();
-    if (!committedResponse.ok()) {
-      throw new Error(
-        `Task response-loss precondition failed: ${committedResponse.status()} ${await committedResponse.text()}`,
-      );
-    }
-    lostTaskCreateResponseCount += 1;
-    await route.abort('failed');
-  };
-  await page.route('**/rest/v1/tasks**', loseCommittedTaskCreateResponse);
-  await clickByText(page, 'Save task');
-  await expectText(page, 'Task could not be added. Your draft is retained.');
-  await clickByText(page, 'Retry');
-  await clickByText(page, 'Save task');
-  await expectText(page, 'Task added.');
-  await page.unroute('**/rest/v1/tasks**', loseCommittedTaskCreateResponse);
-  if (lostTaskCreateResponseCount !== 1) {
-    throw new Error('Task response-loss path was not exercised exactly once.');
-  }
+  await selectDropdownOption(page, 'Priority', 'High');
+  await clickByText(page, 'Save as unscheduled');
+  await expectText(page, 'Review plan preview');
+  await expectText(page, 'No time is reserved in this preview.');
+  await clickByText(page, 'Confirm plan');
+  await expectText(page, 'Saved under Unscheduled.');
   const phase3TaskRows = await waitForRows(
     `tasks?select=id,title,description,status,priority,deadline,estimated_minutes,completed_at,cancelled_at,source,metadata&user_id=eq.${user.id}&title=eq.${encodeURIComponent(phase3TaskTitle)}`,
     (rows) =>
@@ -1455,80 +1445,30 @@ try {
       rows[0].status === 'todo' &&
       rows[0].priority === 'high' &&
       rows[0].deadline === null &&
-      rows[0].estimated_minutes === 35 &&
+      rows[0].estimated_minutes === null &&
       rows[0].completed_at === null &&
       rows[0].cancelled_at === null &&
-      rows[0].source === 'flutter-task-v1' &&
-      rows[0].metadata?.contract_version === 'executable-task-v1',
-    'typed task created from Dashboard',
+      rows[0].source === 'planner-v1' &&
+      rows[0].metadata?.source === 'planner-v1' &&
+      rows[0].metadata?.contract_version === 'executable-task-v1' &&
+      isUuid(rows[0].metadata?.planner_plan_id) &&
+      rows[0].metadata?.preferred_session_minutes === null,
+    'explicitly unscheduled Task confirmed through Planner',
   );
   const phase3TaskId = phase3TaskRows[0].id;
   if (!isUuid(phase3TaskId)) {
     throw new Error(`Task did not use a client-stable UUID: ${phase3TaskId}`);
   }
 
-  await scrollFlutterPage(page, 1600);
-  await clickByRoleName(
-    page,
-    'button',
-    `Task actions for ${phase3TaskTitle}`,
-  );
-  await clickByRoleName(page, 'menuitem', 'Edit task');
-  await fillByLabelOrPlaceholder(page, 'Task title', phase3EditedTaskTitle, 0);
-  await fillByLabelOrPlaceholder(
-    page,
-    'Task description optional',
-    'Edited without replacing identity',
-    1,
-  );
-  await selectDropdownOption(page, 'Task priority', 'Critical');
-  await fillByLabelOrPlaceholder(
-    page,
-    'Estimate minutes optional (5–480)',
-    '50',
-    2,
-  );
-  await clickByText(page, 'Save task');
-  await expectText(page, 'Task updated.');
-  await waitForRows(
-    `tasks?select=id,title,description,status,priority,deadline,estimated_minutes&user_id=eq.${user.id}&id=eq.${phase3TaskId}`,
-    (rows) =>
-      rows.length === 1 &&
-      rows[0].id === phase3TaskId &&
-      rows[0].title === phase3EditedTaskTitle &&
-      rows[0].description === 'Edited without replacing identity' &&
-      rows[0].status === 'todo' &&
-      rows[0].priority === 'critical' &&
-      rows[0].estimated_minutes === 50,
-    'task edit preserves identity and replaces typed fields',
-  );
-
-  await scrollFlutterPage(page, 1600);
-  await clickByRoleName(
-    page,
-    'button',
-    `Task actions for ${phase3EditedTaskTitle}`,
-  );
-  await clickByRoleName(page, 'menuitem', 'Postpone task');
-  await clickByText(page, 'OK');
-  const postponedRows = await waitForRows(
-    `tasks?select=id,status,deadline&user_id=eq.${user.id}&id=eq.${phase3TaskId}`,
-    (rows) =>
-      rows.length === 1 &&
-      rows[0].status === 'todo' &&
-      isIsoTimestamp(rows[0].deadline),
-    'task postpone updates the existing deadline',
-  );
-  const postponedDeadline = postponedRows[0].deadline;
-  await clickByText(page, 'Undo', { match: 'last' });
-  await waitForRows(
-    `tasks?select=id,status,deadline&user_id=eq.${user.id}&id=eq.${phase3TaskId}`,
-    (rows) =>
-      rows.length === 1 &&
-      rows[0].status === 'todo' &&
-      rows[0].deadline === null,
-    `task postpone undo restores null deadline from ${postponedDeadline}`,
-  );
+  await page.goto(appRoute('/dashboard'), { waitUntil: 'domcontentloaded' });
+  await waitForFlutterShell(page);
+  await enableFlutterSemantics(page);
+  await scrollUntilTextInViewport(page, 'Show all tasks', {
+    deltaY: 500,
+    buttonFirst: true,
+  });
+  await clickByText(page, 'Show all tasks');
+  await scrollUntilTextInViewport(page, phase3TaskTitle, { deltaY: 400 });
 
   let lostTaskTransitionResponseCount = 0;
   const loseCommittedTaskTransitionResponse = async (route) => {
@@ -1554,7 +1494,7 @@ try {
   await clickByRoleName(
     page,
     'button',
-    `Complete task ${phase3EditedTaskTitle}`,
+    `Complete task ${phase3TaskTitle}`,
   );
   await expectText(page, 'Task completed.');
   await page.unroute(
@@ -1610,43 +1550,6 @@ try {
     'task completion undo restores todo',
   );
 
-  await scrollFlutterPage(page, 1600);
-  await clickByRoleName(
-    page,
-    'button',
-    `Task actions for ${phase3EditedTaskTitle}`,
-  );
-  await clickByRoleName(page, 'menuitem', 'Cancel task');
-  await clickByText(page, 'Cancel task', { match: 'last' });
-  await waitForRows(
-    `tasks?select=id,status,completed_at,cancelled_at&user_id=eq.${user.id}&id=eq.${phase3TaskId}`,
-    (rows) =>
-      rows.length === 1 &&
-      rows[0].status === 'cancelled' &&
-      rows[0].completed_at === null &&
-      isIsoTimestamp(rows[0].cancelled_at),
-    'task cancellation preserves row and writes terminal timestamp',
-  );
-
-  await page.reload({ waitUntil: 'domcontentloaded' });
-  await waitForFlutterShell(page);
-  await enableFlutterSemantics(page);
-  await scrollFlutterPage(page, 1600);
-  await clickByText(page, 'Cancelled (1)');
-  await clickByRoleName(
-    page,
-    'button',
-    `Restore task ${phase3EditedTaskTitle}`,
-  );
-  await waitForRows(
-    `tasks?select=id,status,completed_at,cancelled_at&user_id=eq.${user.id}&id=eq.${phase3TaskId}`,
-    (rows) =>
-      rows.length === 1 &&
-      rows[0].status === 'todo' &&
-      rows[0].completed_at === null &&
-      rows[0].cancelled_at === null,
-    'durable cancelled-task restore returns the task to todo',
-  );
   await assertInsertRejected(
     'tasks',
     [
@@ -1667,7 +1570,7 @@ try {
   await clickByRoleName(
     page,
     'button',
-    `Focus on ${phase3EditedTaskTitle}`,
+    `Focus on ${phase3TaskTitle}`,
   );
   await page.waitForURL('**/#/deep-work?target_kind=task&target_id=*');
   await expectText(page, 'Focus session');
@@ -1967,7 +1870,8 @@ try {
     'Phase 3 execution leaves the Setup revision unchanged',
   );
 
-  const phaseFourBriefing = await assertDeterministicDailyBriefing(user.id);
+  await assertDeterministicDailyBriefing(user.id);
+  await assertTodayOverview(user.id);
 
   const recommendationsBeforeManualRefresh =
     await activeDeterministicRecommendations(user.id);
@@ -1986,10 +1890,11 @@ try {
   await page.goto(appRoute('/dashboard'), { waitUntil: 'domcontentloaded' });
   await waitForFlutterShell(page);
   await enableFlutterSemantics(page);
-  await expectText(page, "Today's decision");
-  await expectText(page, phaseFourBriefing.briefing.primary_action.title);
-  await expectText(page, 'Up to date');
+  await expectText(page, 'Check-in streak');
+  await expectText(page, "Today's progress");
   await expectText(page, 'Today at a glance');
+  await expectText(page, "Today's tasks");
+  await expectText(page, "Today's habits");
   await page.waitForTimeout(500);
   page.off('request', dashboardBriefingObserver);
   if (dashboardBriefingPosts.length !== 0) {
@@ -1998,108 +1903,19 @@ try {
     );
   }
 
-  const [feedbackResponse] = await Promise.all([
-    waitForAiPost(page, '/v1/feedback', 'primary briefing feedback'),
-    clickChoiceChip(page, 'Too much'),
-  ]);
-  const feedbackPayload = feedbackResponse.request().postDataJSON();
-  if (
-    feedbackPayload.briefing_id !== phaseFourBriefing.briefing.id ||
-    feedbackPayload.action_id !==
-      phaseFourBriefing.briefing.primary_action.target.id ||
-    feedbackPayload.feedback_type !== 'too_much' ||
-    typeof feedbackPayload.request_id !== 'string' ||
-    Object.keys(feedbackPayload).sort().join(',') !==
-      'action_id,briefing_id,feedback_type,request_id'
-  ) {
-    throw new Error(
-      `Today feedback payload is invalid: ${JSON.stringify(feedbackPayload)}`,
-    );
-  }
-  await expectText(page, "Saved. Use Update today's plan");
-  await assertRows(
-    `decision_feedback?select=id,request_id,briefing_id,action_id,action_kind,feedback_type,context_mode,estimated_minutes,rule_key,metadata&user_id=eq.${user.id}`,
-    (rows) =>
-      rows.length === 1 &&
-      rows[0].request_id === feedbackPayload.request_id &&
-      rows[0].briefing_id === phaseFourBriefing.briefing.id &&
-      rows[0].action_id ===
-        phaseFourBriefing.briefing.primary_action.target.id &&
-      rows[0].feedback_type === 'too_much' &&
-      rows[0].context_mode === phaseFourBriefing.briefing.mode &&
-      rows[0].metadata?.contract_version === 'decision-feedback-v1',
-    'owner-scoped Phase 6 feedback history',
-  );
-
-  await assertBriefingPrimaryActionDispatch(
-    page,
-    phaseFourBriefing.briefing.primary_action.target,
-  );
-  const adjustResponsePromise = waitForAiPost(
-    page,
-    '/v1/briefings/generate',
-    'deliberate Today adjustment',
-  );
-  await clickByText(page, "Update today's plan");
-  const adjustResponse = await adjustResponsePromise;
-  assertJsonPayload(
-    adjustResponse.request(),
-    { force: true },
-    'deliberate Today adjustment payload',
-  );
-  const adjustedBriefing = await adjustResponse.json();
-  if (
-    adjustedBriefing?.briefing?.id !== phaseFourBriefing.briefing.id ||
-    adjustedBriefing?.freshness !== 'current' ||
-    adjustedBriefing?.briefing?.provenance?.feedback_ranking
-        ?.contract_version !== 'feedback-ranking-v1' ||
-    adjustedBriefing?.briefing?.provenance?.feedback_ranking?.event_count !== 1
-  ) {
-    throw new Error(
-      `Today adjustment did not preserve current daily identity: ${JSON.stringify(adjustedBriefing)}`,
-    );
-  }
-  await expectText(page, "Today's plan updated.");
-  await expectText(page, adjustedBriefing.briefing.primary_action.title);
-  await clickByText(page, 'Feedback history');
-  await expectText(page, 'Too much today');
-  const deleteFeedbackPromise = page.waitForResponse(
-    (response) =>
-      response.request().method() === 'DELETE' &&
-      response.url().startsWith(`${aiServiceBaseUrl}/v1/feedback/`) &&
-      response.ok(),
-  );
-  await clickByRoleName(page, 'button', 'Delete feedback');
-  await deleteFeedbackPromise;
-  await assertRows(
-    `decision_feedback?select=id&user_id=eq.${user.id}`,
-    (rows) => rows.length === 0,
-    'deleted feedback correction',
-  );
-  await clickByRoleName(page, 'button', 'Close');
-  const correctedAdjustPromise = waitForAiPost(
-    page,
-    '/v1/briefings/generate',
-    'Today adjustment after feedback deletion',
-  );
-  await clickByText(page, "Update today's plan");
-  const correctedAdjust = await correctedAdjustPromise;
-  const correctedBriefing = await correctedAdjust.json();
-  if (
-    correctedBriefing?.briefing?.provenance?.feedback_ranking?.event_count !== 0 ||
-    correctedBriefing?.briefing?.provenance?.feedback_ranking
-        ?.primary_contribution !== 0
-  ) {
-    throw new Error(
-      `Deleted feedback still influenced ranking: ${JSON.stringify(correctedBriefing)}`,
-    );
-  }
   await assertBoundedWeeklyReview(page, user.id);
   await assertDeadlinePlanner(page, user.id);
+  await assertCentralPlanner(page, user.id);
   await assertBoundedCalendarImport(user.id);
   await assertCalendarImportUi(page, user.id);
-  await scrollFlutterPage(page, 20000);
-  await clickChoiceChip(page, 'Supporting suggestions');
+  await page.goto(appRoute('/dashboard'), { waitUntil: 'domcontentloaded' });
+  await waitForFlutterShell(page);
+  await enableFlutterSemantics(page);
+  await scrollUntilTextInViewport(page, 'More', {
+    deltaY: 500,
+    buttonFirst: true,
+  });
+  await clickByText(page, 'More');
   await scrollUntilTextInViewport(page, 'Refresh recommendations', {
     deltaY: 500,
     buttonFirst: true,
@@ -2396,6 +2212,18 @@ async function scrollFlutterPage(page, deltaY) {
     await page.mouse.wheel(0, step);
     await page.waitForTimeout(100);
   }
+}
+
+async function scrollFlutterPagePrecisely(page, deltaY) {
+  const root = page.locator('flt-glass-pane, flutter-view').first();
+  const box = await root.boundingBox();
+  if (box) {
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  } else {
+    await page.mouse.move(640, 480);
+  }
+  await page.mouse.wheel(0, deltaY);
+  await page.waitForTimeout(100);
 }
 
 async function clickChoiceChip(page, label) {
@@ -2778,10 +2606,12 @@ async function textLocatorInViewport(page, text, { buttonFirst = false } = {}) {
         page.getByRole('button', { name: text, exact: true }),
         partialButton,
         page.getByText(text, { exact: true }),
+        page.getByText(text),
         page.getByLabel(text, { exact: false }),
       ]
     : [
         page.getByText(text, { exact: true }),
+        page.getByText(text),
         page.getByLabel(text, { exact: false }),
         page.getByRole('button', { name: text, exact: true }),
         partialButton,
@@ -2808,12 +2638,21 @@ async function textLocatorInViewport(page, text, { buttonFirst = false } = {}) {
 async function scrollUntilTextInViewport(
   page,
   text,
-  { deltaY = 700, maxSteps = 20, buttonFirst = false } = {},
+  {
+    deltaY = 700,
+    maxSteps = 20,
+    buttonFirst = false,
+    precise = false,
+  } = {},
 ) {
   for (let step = 0; step <= maxSteps; step += 1) {
     const locator = await textLocatorInViewport(page, text, { buttonFirst });
     if (locator) return locator;
-    if (step < maxSteps) await scrollFlutterPage(page, deltaY);
+    if (step < maxSteps) {
+      await (precise
+        ? scrollFlutterPagePrecisely(page, deltaY)
+        : scrollFlutterPage(page, deltaY));
+    }
   }
   throw new Error(`Could not bring ${text} into the Flutter viewport.`);
 }
@@ -4096,7 +3935,7 @@ async function assertNotificationDelivery(page, userId) {
       `Foreground Notification receipt was not exact: ${JSON.stringify({ deliveryRequest, receipt })}`,
     );
   }
-  await expectText(page, 'A gentler plan is ready');
+  await expectText(page, 'A gentler overview is ready');
   await expectText(page, 'In-app · fixed text · not AI-written');
 
   const generatedRows = await fetchRows(
@@ -4107,9 +3946,9 @@ async function assertNotificationDelivery(page, userId) {
   if (
     generatedRows.length !== 1 ||
     generatedRow.user_id !== userId ||
-    generatedRow.title !== 'A gentler plan is ready' ||
+    generatedRow.title !== 'A gentler overview is ready' ||
     generatedRow.message !==
-      'Open Today to review one manageable next step. No private check-in details are included here.' ||
+      'Open Today to review a manageable schedule and actions. No private check-in details are included here.' ||
     generatedRow.type !== 'coaching' ||
     generatedRow.priority !== 'medium' ||
     generatedRow.is_read !== false ||
@@ -5449,7 +5288,11 @@ function isoInstantNanoseconds(value) {
 }
 
 async function assertBoundedWeeklyReview(page, userId) {
-  await scrollFlutterPage(page, 500);
+  await scrollUntilTextInViewport(page, 'More', {
+    deltaY: 500,
+    buttonFirst: true,
+  });
+  await clickByText(page, 'More');
   await expectText(page, 'Review your week');
   const timezone = 'Europe/Berlin';
   const period = latestCompletedIsoWeek(timezone);
@@ -7670,6 +7513,13 @@ async function assertDeadlinePlannerFlutterSurface({
   // A real reload proves the current database reservations instead of reusing
   // the snapshot that Flutter loaded before the Node-side Planner mutations.
   await page.reload({ waitUntil: 'domcontentloaded' });
+  await waitForFlutterShell(page);
+  await enableFlutterSemantics(page);
+  await scrollUntilTextInViewport(page, 'More', {
+    maxSteps: 30,
+    buttonFirst: true,
+  });
+  await clickByText(page, 'More');
   const [dashboardBlockResponse, dashboardWorkloadResponse] =
     await Promise.all([dashboardBlockLoad, dashboardWorkloadLoad]);
   if (!dashboardBlockResponse.ok()) {
@@ -7686,15 +7536,15 @@ async function assertDeadlinePlannerFlutterSurface({
     budget: 120,
     context: 'Dashboard preparation workload',
   });
-  await waitForFlutterShell(page);
-  await enableFlutterSemantics(page);
   await scrollUntilTextInViewport(page, '7-day preparation load', {
     maxSteps: 30,
   });
   await expectText(page, '7-day preparation load');
-  await scrollFlutterPage(page, 20000);
-  await clickChoiceChip(page, 'Full week');
-  await scrollUntilTextInViewport(page, 'Commitments', { maxSteps: 30 });
+  await scrollUntilTextInViewport(page, 'Full week', { maxSteps: 40 });
+  await expectText(page, 'Full week');
+  await scrollUntilTextInViewport(page, `Preparation: ${title}`, {
+    maxSteps: 20,
+  });
   page.off('request', captureDashboardRequest);
   const unexpectedDashboardPlanRequests = dashboardPlanApiRequests.filter(
     (request) =>
@@ -7950,6 +7800,41 @@ async function assertDeadlinePlannerUnavailableAvailability({
   accessToken,
   localToday,
 }) {
+  const currentPreferences = await plannerApiRequest(
+    '/v1/planner/preferences',
+    accessToken,
+  );
+  assertPlannerApiStatus(
+    currentPreferences,
+    200,
+    'Planner calendar preference before Deadline availability',
+  );
+  const enabledPreferences = await plannerApiRequest(
+    '/v1/planner/preferences',
+    accessToken,
+    {
+      method: 'PATCH',
+      body: {
+        request_id: crypto.randomUUID(),
+        expected_updated_at: currentPreferences.json?.updated_at ?? null,
+        use_calendar_busy_time: true,
+      },
+    },
+  );
+  assertPlannerApiStatus(
+    enabledPreferences,
+    200,
+    'central Planner calendar consent',
+  );
+  if (
+    enabledPreferences.json?.use_calendar_busy_time !== true ||
+    enabledPreferences.json?.calendar_available !== false ||
+    enabledPreferences.json?.current_calendar_import_id !== null
+  ) {
+    throw new Error(
+      `Central Planner calendar consent hid missing import truth: ${enabledPreferences.text}`,
+    );
+  }
   const planId = crypto.randomUUID();
   const unavailable = await deadlinePlanApiRequest(
     '/v1/deadline-plans/proposals',
@@ -10749,10 +10634,23 @@ async function assertCoachGuestBoundary() {
 
 async function assertDeterministicDailyBriefing(userId) {
   const accessToken = await signInAccessToken('Phase 4 briefing');
-  const rowsBefore = await fetchRows(
+  let rowsBefore = await fetchRows(
     `daily_briefings?select=id&user_id=eq.${userId}`,
     'daily briefings before read-only GET',
   );
+  // A separately running local notification scheduler may prepare this newly
+  // onboarded isolated E2E account before the Phase 4 assertion gets here.
+  // Remove only that test owner's rows, then retain the strict read-only check.
+  if (rowsBefore.length > 0) {
+    await deleteRows(
+      `daily_briefings?user_id=eq.${userId}`,
+      'concurrent scheduler briefings for the isolated E2E owner',
+    );
+    rowsBefore = await fetchRows(
+      `daily_briefings?select=id&user_id=eq.${userId}`,
+      'daily briefings after isolated scheduler cleanup',
+    );
+  }
   if (rowsBefore.length !== 0) {
     throw new Error(
       `Phase 4 precondition expected no briefing rows: ${JSON.stringify(rowsBefore)}`,
@@ -10967,57 +10865,382 @@ async function assertDeterministicDailyBriefing(userId) {
   return generated;
 }
 
-async function assertBriefingPrimaryActionDispatch(page, target) {
-  if (target.command === 'open_task') {
-    await clickByText(page, 'Open task');
-    await expectText(page, 'Edit task');
-    await page.keyboard.press('Escape');
-    await expectText(page, "Today's decision");
-    return;
+async function assertCentralPlanner(page, userId) {
+  const accessToken = await signInAccessToken('Planner V1');
+  if ((await authenticatedUserId(accessToken)) !== userId) {
+    throw new Error('Planner bearer resolved a different owner.');
   }
-  if (target.command === 'log_habit') {
-    await clickByText(page, 'Mark habit done');
-    await expectText(page, 'Habit completed.');
-    await waitForRows(
-      `habit_logs?select=habit_id,entry_date,status&habit_id=eq.${target.target_id}&entry_date=eq.${target.metadata.entry_date}`,
-      (rows) =>
-        rows.length === 1 &&
-        rows[0].status === target.metadata.habit_outcome,
-      'Today primary habit action persisted its exact outcome',
-    );
-    await expectText(page, 'Needs update');
-    return;
+  const initial = await plannerApiRequest('/v1/planner/overview', accessToken);
+  assertPlannerApiStatus(initial, 200, 'initial Planner overview');
+  if (
+    initial.json?.contract_version !== 'planner-v1' ||
+    initial.json?.origin !== 'authenticated_backend' ||
+    !isIsoTimestamp(initial.json?.generated_at) ||
+    !Array.isArray(initial.json?.days) ||
+    initial.json.days.length !== 7 ||
+    initial.json?.preferences?.contract_version !== 'planner-preferences-v1'
+  ) {
+    throw new Error(`Initial Planner overview is invalid: ${initial.text}`);
   }
-  if (target.command === 'open_capture') {
-    await clickByText(page, 'Open check-in');
-    await page.waitForURL(`**/#${target.metadata.route}`);
-    await page.goto(appRoute('/dashboard'), { waitUntil: 'domcontentloaded' });
-    await waitForFlutterShell(page);
-    await enableFlutterSemantics(page);
-    await expectText(page, "Today's decision");
-    return;
-  }
-  if (target.command === 'complete_task') {
-    await clickByText(page, 'Complete task');
-    await expectText(page, 'Task completed.');
-    await assertRows(
-      `tasks?select=id,status&id=eq.${target.target_id}`,
-      (rows) => rows.length === 1 && rows[0].status === 'done',
-      'Today primary task completion persisted',
-    );
-    return;
-  }
-  if (target.command === 'start_focus') {
-    await clickByText(page, 'Start focus');
-    await page.waitForURL('**/#/deep-work**');
-    await page.goto(appRoute('/dashboard'), { waitUntil: 'domcontentloaded' });
-    await waitForFlutterShell(page);
-    await enableFlutterSemantics(page);
-    return;
-  }
-  throw new Error(
-    `Today returned an unsupported primary command: ${JSON.stringify(target)}`,
+  const localDate = initial.json.local_date;
+  const taskPlanId = crypto.randomUUID();
+  const taskId = crypto.randomUUID();
+  const taskProposal = await plannerApiRequest(
+    '/v1/planner/action-plans/proposals',
+    accessToken,
+    {
+      method: 'POST',
+      body: {
+        request_id: crypto.randomUUID(),
+        plan_id: taskPlanId,
+        base_revision: 0,
+        planning_start_on: localDate,
+        target: {
+          kind: 'task',
+          operation: 'create',
+          target_id: taskId,
+          expected_updated_at: null,
+          title: plannerTaskTitle,
+          description: null,
+          priority: 'high',
+          estimated_minutes: 65,
+          deadline_at: `${addUtcDays(localDate, 6)}T12:00:00Z`,
+          preferred_session_minutes: 30,
+        },
+      },
+    },
   );
+  assertPlannerApiStatus(taskProposal, 200, 'split Task Planner proposal');
+  const taskPreview = taskProposal.json?.plan?.pending_revision;
+  if (
+    taskPreview?.target?.title !== plannerTaskTitle ||
+    taskPreview?.planned_minutes + taskPreview?.unscheduled_minutes !== 65 ||
+    !Array.isArray(taskPreview?.task_blocks) ||
+    taskPreview.task_blocks.length < 2 ||
+    taskPreview.task_blocks.some(
+      (block) =>
+        block.state !== 'proposed' ||
+        block.planned_minutes % 5 !== 0,
+    )
+  ) {
+    throw new Error(`Split Task preview is invalid: ${taskProposal.text}`);
+  }
+  const taskConfirmed = await plannerApiRequest(
+    `/v1/planner/action-plans/${taskPlanId}/confirm`,
+    accessToken,
+    {
+      method: 'POST',
+      body: { request_id: crypto.randomUUID(), expected_revision: 1 },
+    },
+  );
+  assertPlannerApiStatus(taskConfirmed, 200, 'split Task Planner confirm');
+  if (
+    taskConfirmed.json?.plan?.status !== 'active' ||
+    taskConfirmed.json?.plan?.active_revision?.task_blocks?.some(
+      (block) => block.state !== 'active',
+    )
+  ) {
+    throw new Error(`Split Task confirmation is invalid: ${taskConfirmed.text}`);
+  }
+
+  const habitDate = addUtcDays(localDate, 1);
+  const habitIsoWeekday = (() => {
+    const day = new Date(`${habitDate}T00:00:00Z`).getUTCDay();
+    return day === 0 ? 7 : day;
+  })();
+  const habitPlanId = crypto.randomUUID();
+  const habitId = crypto.randomUUID();
+  const habitProposal = await plannerApiRequest(
+    '/v1/planner/action-plans/proposals',
+    accessToken,
+    {
+      method: 'POST',
+      body: {
+        request_id: crypto.randomUUID(),
+        plan_id: habitPlanId,
+        base_revision: 0,
+        planning_start_on: localDate,
+        target: {
+          kind: 'habit',
+          operation: 'create',
+          target_id: habitId,
+          expected_updated_at: null,
+          title: plannerHabitTitle,
+          description: null,
+          cadence: {
+            kind: 'weekdays',
+            scheduled_weekdays: [habitIsoWeekday],
+            weekly_target: 1,
+          },
+          duration_minutes: 20,
+        },
+      },
+    },
+  );
+  assertPlannerApiStatus(habitProposal, 200, 'Habit Planner proposal');
+  const habitPreview = habitProposal.json?.plan?.pending_revision;
+  if (
+    habitPreview?.target?.title !== plannerHabitTitle ||
+    !Array.isArray(habitPreview?.habit_slots) ||
+    habitPreview.habit_slots.length !== 1 ||
+    habitPreview.planned_minutes !== 20 ||
+    habitPreview.unscheduled_minutes !== 0
+  ) {
+    throw new Error(`Habit preview is invalid: ${habitProposal.text}`);
+  }
+  const habitConfirmed = await plannerApiRequest(
+    `/v1/planner/action-plans/${habitPlanId}/confirm`,
+    accessToken,
+    {
+      method: 'POST',
+      body: { request_id: crypto.randomUUID(), expected_revision: 1 },
+    },
+  );
+  assertPlannerApiStatus(habitConfirmed, 200, 'Habit Planner confirm');
+  if (habitConfirmed.json?.plan?.status !== 'active') {
+    throw new Error(`Habit confirmation is invalid: ${habitConfirmed.text}`);
+  }
+
+  const oneOffId = crypto.randomUUID();
+  const oneOff = await plannerApiRequest('/v1/planner/commitments', accessToken, {
+    method: 'POST',
+    body: {
+      request_id: crypto.randomUUID(),
+      commitment_id: oneOffId,
+      title: plannerOneOffTitle,
+      location: null,
+      recurrence: 'one_off',
+      starts_at: `${localDate}T12:00:00Z`,
+      ends_at: `${localDate}T13:00:00Z`,
+      weekday: null,
+      local_starts_at: null,
+      local_ends_at: null,
+    },
+  });
+  assertPlannerApiStatus(oneOff, 200, 'one-time Planner commitment');
+
+  const weeklyId = crypto.randomUUID();
+  const weeklyDate = addUtcDays(localDate, 2);
+  const weeklyJsDay = new Date(`${weeklyDate}T00:00:00Z`).getUTCDay();
+  const weeklyWeekday = weeklyJsDay === 0 ? 7 : weeklyJsDay;
+  const weekly = await plannerApiRequest('/v1/planner/commitments', accessToken, {
+    method: 'POST',
+    body: {
+      request_id: crypto.randomUUID(),
+      commitment_id: weeklyId,
+      title: plannerWeeklyTitle,
+      location: null,
+      recurrence: 'weekly',
+      starts_at: null,
+      ends_at: null,
+      weekday: weeklyWeekday,
+      local_starts_at: '21:00:00',
+      local_ends_at: '22:00:00',
+    },
+  });
+  assertPlannerApiStatus(weekly, 200, 'weekly Planner commitment');
+
+  const overview = await plannerApiRequest('/v1/planner/overview', accessToken);
+  assertPlannerApiStatus(overview, 200, 'populated Planner overview');
+  const activePlans = overview.json?.action_plans ?? [];
+  const commitments = overview.json?.commitments ?? [];
+  if (
+    !activePlans.some(
+      (plan) => plan.id === taskPlanId && plan.status === 'active',
+    ) ||
+    !activePlans.some(
+      (plan) => plan.id === habitPlanId && plan.status === 'active',
+    ) ||
+    !commitments.some(
+      (item) => item.id === oneOffId && item.recurrence === 'one_off',
+    ) ||
+    !commitments.some(
+      (item) => item.id === weeklyId && item.recurrence === 'weekly',
+    )
+  ) {
+    throw new Error(`Populated Planner overview lost state: ${overview.text}`);
+  }
+
+  await page.goto(appRoute('/planner'), { waitUntil: 'domcontentloaded' });
+  await waitForFlutterShell(page);
+  await enableFlutterSemantics(page);
+  await expectText(page, 'Add new');
+  await expectText(page, 'Needs attention');
+  await assertFlutterTextAbsent(page, 'Inbox', 'Inbox main navigation target');
+  for (const title of [
+    plannerTaskTitle,
+    plannerHabitTitle,
+    plannerOneOffTitle,
+    plannerWeeklyTitle,
+  ]) {
+    await scrollFlutterPage(page, -20000);
+    await scrollUntilTextInViewport(page, title, {
+      deltaY: 250,
+      maxSteps: 50,
+      precise: true,
+    });
+  }
+
+  const today = await plannerApiRequest('/v1/today/overview-v2', accessToken);
+  assertPlannerApiStatus(today, 200, 'Today V2 after Planner confirmation');
+  if (
+    today.json?.contract_version !== 'today-overview-v2' ||
+    today.json?.source_states?.planner?.status !== 'current' ||
+    !today.json?.timeline?.some(
+      (item) =>
+        item.kind === 'manual_commitment' && item.title === plannerOneOffTitle,
+    )
+  ) {
+    throw new Error(`Today V2 lost Planner agenda truth: ${today.text}`);
+  }
+  const todayTaskBlocks = today.json.timeline.filter(
+    (item) => item.kind === 'task_block' && item.task_id === taskId,
+  );
+  const todayTask = today.json.tasks?.all?.find((item) => item.id === taskId);
+  if (todayTaskBlocks.length > 0 && todayTask?.scheduled_today !== true) {
+    throw new Error('Today V2 did not select its scheduled Planner Task once.');
+  }
+
+  await page.goto(appRoute('/dashboard'), { waitUntil: 'domcontentloaded' });
+  await waitForFlutterShell(page);
+  await enableFlutterSemantics(page);
+  await scrollFlutterPage(page, -20000);
+  await scrollUntilTextInViewport(page, plannerOneOffTitle, {
+    deltaY: 250,
+    maxSteps: 40,
+    precise: true,
+  });
+  await page.goto(appRoute('/settings'), { waitUntil: 'domcontentloaded' });
+  await waitForFlutterShell(page);
+  await enableFlutterSemantics(page);
+  await expectText(page, 'Inbox');
+  await clickByText(page, 'Inbox');
+  await page.waitForURL('**/#/alerts');
+  await expectText(page, 'Inbox');
+}
+
+async function assertTodayOverview(userId) {
+  const accessToken = await signInAccessToken('Today overview');
+  if ((await authenticatedUserId(accessToken)) !== userId) {
+    throw new Error('Today overview bearer resolved a different owner.');
+  }
+  const overview = await briefingRequest('/v1/today/overview', accessToken);
+  const sourceNames = [
+    'check_ins',
+    'tasks',
+    'habits',
+    'setup_commitments',
+    'preparation',
+    'calendar_events',
+    'focus_sessions',
+  ];
+  if (
+    overview.contract_version !== 'today-overview-v1' ||
+    overview.origin !== 'authenticated_backend' ||
+    !isIsoTimestamp(overview.generated_at) ||
+    overview.local_date !==
+      isoDateInTimeZone(overview.generated_at, overview.timezone) ||
+    typeof overview.check_ins?.morning_saved !== 'boolean' ||
+    typeof overview.check_ins?.evening_saved !== 'boolean' ||
+    !Number.isInteger(overview.check_ins?.completed_days_streak) ||
+    overview.check_ins.completed_days_streak < 0 ||
+    !Array.isArray(overview.timeline) ||
+    !Array.isArray(overview.tasks?.today) ||
+    !Array.isArray(overview.tasks?.all) ||
+    !Array.isArray(overview.habits) ||
+    !Array.isArray(overview.progress_unavailable_sources) ||
+    sourceNames.some(
+      (name) =>
+        !['current', 'unavailable'].includes(
+          overview.source_states?.[name]?.status,
+        ),
+    )
+  ) {
+    throw new Error(
+      `Today overview violates its source contract: ${JSON.stringify(overview)}`,
+    );
+  }
+  const allTaskIds = new Set(overview.tasks.all.map((task) => task.id));
+  if (overview.tasks.today.some((task) => !allTaskIds.has(task.id))) {
+    throw new Error('Today tasks are missing from the all-task projection.');
+  }
+  const overviewV2 = await briefingRequest(
+    '/v1/today/overview-v2',
+    accessToken,
+  );
+  const v2SourceNames = [...sourceNames, 'planner'];
+  if (
+    overviewV2.contract_version !== 'today-overview-v2' ||
+    overviewV2.origin !== 'authenticated_backend' ||
+    overviewV2.local_date !== overview.local_date ||
+    !Array.isArray(overviewV2.timeline) ||
+    !Array.isArray(overviewV2.tasks?.today) ||
+    !Array.isArray(overviewV2.tasks?.all) ||
+    !Array.isArray(overviewV2.habits) ||
+    v2SourceNames.some(
+      (name) =>
+        !['current', 'unavailable'].includes(
+          overviewV2.source_states?.[name]?.status,
+        ),
+    )
+  ) {
+    throw new Error(
+      `Today V2 overview violates its source contract: ${JSON.stringify(overviewV2)}`,
+    );
+  }
+  const scheduledTaskIds = overviewV2.timeline
+    .filter((item) => item.kind === 'task_block')
+    .map((item) => item.task_id)
+    .sort();
+  const flaggedTaskIds = overviewV2.tasks.all
+    .filter((task) => task.scheduled_today)
+    .map((task) => task.id)
+    .sort();
+  const scheduledHabitIds = overviewV2.timeline
+    .filter((item) => item.kind === 'habit_slot')
+    .map((item) => item.habit_id)
+    .sort();
+  const flaggedHabitIds = overviewV2.habits
+    .filter((habit) => habit.scheduled_today)
+    .map((habit) => habit.id)
+    .sort();
+  if (
+    stableJson([...new Set(scheduledTaskIds)]) !== stableJson(flaggedTaskIds) ||
+    stableJson([...new Set(scheduledHabitIds)]) !== stableJson(flaggedHabitIds)
+  ) {
+    throw new Error('Today V2 scheduled target flags do not match its agenda.');
+  }
+  const unavailable = ['check_ins', 'tasks', 'habits', 'preparation'].filter(
+    (name) => overview.source_states[name].status === 'unavailable',
+  );
+  if (stableJson(unavailable) !== stableJson(overview.progress_unavailable_sources)) {
+    throw new Error('Today progress source availability is inconsistent.');
+  }
+  if (unavailable.length > 0) {
+    if (overview.progress !== null) {
+      throw new Error('Today progress must be unavailable with a failed source.');
+    }
+    return;
+  }
+  const preparation = overview.timeline.filter(
+    (item) => item.kind === 'preparation',
+  );
+  const expectedTotal =
+    2 + overview.tasks.today.length + overview.habits.length + preparation.length;
+  const expectedCompleted =
+    Number(overview.check_ins.morning_saved) +
+    Number(overview.check_ins.evening_saved) +
+    overview.tasks.today.filter((task) => task.status === 'done').length +
+    overview.habits.filter((habit) => habit.outcome === 'completed').length +
+    preparation.filter((block) => block.state === 'completed').length;
+  if (
+    overview.progress?.total !== expectedTotal ||
+    overview.progress?.completed !== expectedCompleted
+  ) {
+    throw new Error(
+      `Today progress arithmetic is inconsistent: ${JSON.stringify(overview.progress)}`,
+    );
+  }
 }
 
 async function signInAccessToken(context) {
@@ -11116,6 +11339,37 @@ async function deadlinePlanApiRequest(
     // The status assertion reports the raw response body.
   }
   return { response, text, json };
+}
+
+async function plannerApiRequest(
+  path,
+  accessToken,
+  { method = 'GET', body } = {},
+) {
+  const response = await fetch(`${aiServiceBaseUrl}${path}`, {
+    method,
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
+    },
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+  });
+  const text = await response.text();
+  let json = null;
+  try {
+    json = text.length === 0 ? null : JSON.parse(text);
+  } catch (_) {
+    // The status assertion reports the raw response body.
+  }
+  return { response, text, json };
+}
+
+function assertPlannerApiStatus(result, expectedStatus, context) {
+  if (result.response.status !== expectedStatus) {
+    throw new Error(
+      `${context} returned ${result.response.status}, expected ${expectedStatus}: ${result.text}`,
+    );
+  }
 }
 
 function assertDeadlinePlanApiStatus(result, expectedStatus, context) {

@@ -821,6 +821,18 @@ revision, block, and request-identity tables plus service-role-only atomic
 mutation RPCs. Review and apply it through the same explicit migration workflow;
 do not encode dated blocks as recurring `schedule_items`.
 
+The central Planner additionally requires:
+
+```text
+20260722120000_planner_v1.sql
+```
+
+It adds read-only owner projections plus service-role-only, owner-locked
+preference, proposal/confirm/cancel, and commitment commands. Existing Tasks,
+Habits, Deadline Plans, and Setup commitments are not migrated into Action
+Plans. Review and apply it through the same explicit workflow; a normal Planner
+GET must never create a revision or reservation.
+
 Controlled Coach additionally requires:
 
 ```text
@@ -847,9 +859,9 @@ onboarding projection changes; and remove legacy `"User"` fallback from role
 authority. Authenticated profile edits are limited to non-authority fields;
 service role and the atomic Intake apply RPC retain the required backend
 projection authority. A fresh migration-chain verification should end at
-`20260714110000_account_export_lifestyle_entries_grant.sql`. The small final
-grant gives only `service_role` the `lifestyle_entries` read authority required
-by the existing Account Export V1 table set. The account-delete
+`20260722120000_planner_v1.sql`. The earlier small account-export grant gives
+only `service_role` the `lifestyle_entries` read authority required by the
+existing Account Export V1 table set. The account-delete
 migration installs the service-role-only full-account delete transaction; it
 removes restrict-linked focus history before the Auth/profile/product cascade
 without changing normal task or habit deletion. The later Notification
@@ -917,7 +929,8 @@ For local Supabase-backed app testing:
    date, Evening re-entry/edit without losing Morning state, task
    create/edit/postpone/undo/complete/restore/cancel/restore, manual and
    Setup-owned habit complete/skip/undo, focus start/finish/abandon with an owned
-   target, the decision-first Today briefing with deliberate adjustment,
+   target, Today Overview streak/progress arithmetic, all four agenda source
+   categories, Today versus all Tasks, Today Habits, lazy `More`,
    bounded Weekly Review with one cancelled and one confirmed manual Habit V1
    proposal, Inbox (`/alerts`), real Deep Work, and Controlled Coach capability,
    memory selection, deliberate response, history, and confirmed history
