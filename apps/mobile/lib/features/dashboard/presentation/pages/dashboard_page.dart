@@ -1963,6 +1963,12 @@ class _LatestCheckInCard extends StatelessWidget {
           '${_formatDecimal(checkIn.sleepHours!)} h',
           Icons.bedtime_outlined,
         ),
+      if (checkIn.sleepQuality != null)
+        _SignalMetric(
+          'Sleep quality',
+          '${checkIn.sleepQuality}/10',
+          Icons.nights_stay_outlined,
+        ),
       if (checkIn.stress != null)
         _SignalMetric(
           'Stress',

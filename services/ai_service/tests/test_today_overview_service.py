@@ -10,6 +10,7 @@ from app.models.planner import (
     PlannerPreferencesResponse,
 )
 from app.repositories.today_overview_repository import (
+    SupabaseTodayOverviewRepository,
     TodayCalendarRows,
     TodayHabitRows,
 )
@@ -72,6 +73,15 @@ class Repository:
         return self.calendar
 
 
+class SelectClient:
+    def __init__(self) -> None:
+        self.calls = []
+
+    async def select(self, table, *, params):
+        self.calls.append((table, params))
+        return []
+
+
 class DeadlineService:
     async def list_plans(self, *, user_id):
         assert user_id == USER_ID
@@ -88,6 +98,19 @@ def _service(repository: Repository) -> TodayOverviewService:
         deadline_plan_service=DeadlineService(),
         now=lambda: NOW,
     )
+
+
+def test_today_schedule_read_includes_semester_metadata() -> None:
+    client = SelectClient()
+    repository = SupabaseTodayOverviewRepository(client)
+
+    rows = asyncio.run(repository.list_schedule_items(user_id=USER_ID))
+
+    assert rows == []
+    params = next(
+        params for table, params in client.calls if table == "schedule_items"
+    )
+    assert "metadata" in params["select"]
 
 
 def _capture_row(entry_date: date, *, morning=True, evening=True, malformed=False):
@@ -262,6 +285,19 @@ def test_timeline_keeps_overlaps_and_all_day_first_with_distinct_sources() -> No
             "ends_at": "00:30:00",
             "source": "setup",
         },
+        {
+            "id": "20000000-0000-4000-8000-000000000002",
+            "title": "Expired class",
+            "location": "Campus",
+            "weekday": 2,
+            "starts_at": "08:00:00",
+            "ends_at": "09:00:00",
+            "source": "setup",
+            "metadata": {
+                "managed_by": "setup",
+                "valid_until": "2026-07-20",
+            },
+        },
     ]
     repository.calendar = TodayCalendarRows(
         source_label="Studies",
@@ -316,6 +352,7 @@ def test_timeline_keeps_overlaps_and_all_day_first_with_distinct_sources() -> No
         "focus_session",
     ]
     assert response.timeline[2].starts_at == response.timeline[3].starts_at
+    assert all(item.title != "Expired class" for item in response.timeline)
     assert response.progress is not None
     assert response.progress.total == 2  # timeline sources above do not count
 

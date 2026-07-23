@@ -295,6 +295,90 @@ void main() {
       'Pending exact content',
     );
   });
+
+  testWidgets(
+      'Setup offers semester dates and duplicates a weekly block without calendar intent UI',
+      (tester) async {
+    tester.view.physicalSize = const Size(1000, 1800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    const commitmentKey = '69f90455-4c64-45d4-b45e-5ab89b72c5b6';
+    final draft = _requiredDraft().copyWith(
+      calendarConnectionIntent: 'interested',
+      fixedCommitments: [
+        IntakeCommitmentDraft(
+          key: commitmentKey,
+          title: 'Algorithms lecture',
+          location: 'Room 4',
+          weekday: 1,
+          startsAt: '09:00',
+          endsAt: '10:30',
+          validFrom: DateTime.utc(2026, 10, 1),
+          validUntil: DateTime.utc(2027, 2, 15),
+        ),
+      ],
+    );
+    final gateway = _FakeSetupGateway(
+      fetched: IntakeSetupReadState(
+        exists: true,
+        revision: 1,
+        baseRevision: 0,
+        requestId: null,
+        status: 'applied',
+        intakeResponseId: 'intake',
+        snapshotId: 'snapshot',
+        completedAt: DateTime.utc(2026, 7, 10),
+        responses: draft,
+        summary: const {},
+      ),
+    );
+    late SetupController controller;
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          setupControllerProvider.overrideWith((ref) {
+            controller = SetupController(
+              repository: gateway,
+              session: _guestSession(onboardingDone: true),
+              onApplied: (_) {},
+            );
+            return controller;
+          }),
+        ],
+        child: const MaterialApp(
+          home: OnboardingPage(editing: true),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Calendar connection optional'), findsNothing);
+    expect(
+      find.byKey(ValueKey('commitment-valid-from-$commitmentKey')),
+      findsOneWidget,
+    );
+    final duplicate = find.byKey(
+      ValueKey('commitment-duplicate-$commitmentKey'),
+    );
+    await tester.scrollUntilVisible(
+      duplicate,
+      400,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.tap(duplicate);
+    await tester.pumpAndSettle();
+
+    final commitments = controller.state.draft!.fixedCommitments;
+    expect(commitments, hasLength(2));
+    expect(commitments[1].key, isNot(commitmentKey));
+    expect(commitments[1].title, 'Algorithms lecture');
+    expect(commitments[1].weekday, isNull);
+    expect(commitments[1].validFrom, DateTime.utc(2026, 10, 1));
+    expect(commitments[1].validUntil, DateTime.utc(2027, 2, 15));
+    expect(tester.takeException(), isNull);
+  });
 }
 
 Future<void> _settleController() async {

@@ -276,7 +276,7 @@ void main() {
     for (final label in [
       'stress source private_emotional',
       'stress influence hardly_controllable',
-      'main friction emotional_load',
+      'primary friction emotional_load',
     ]) {
       final choice = find.bySemanticsLabel(label);
       await tester.ensureVisible(choice);
@@ -298,6 +298,15 @@ void main() {
     await tester.tap(find.text('Morning check-in'));
     await tester.pumpAndSettle();
     await tester.tap(find.bySemanticsLabel('morning sleep 5.5 h'));
+    await tester.ensureVisible(
+      find.bySemanticsLabel('morning sleep quality 3 of 10'),
+    );
+    await tester.tap(
+      find.bySemanticsLabel('morning sleep quality 3 of 10'),
+    );
+    await tester.ensureVisible(
+      find.bySemanticsLabel('morning energy 4 of 10'),
+    );
     await tester.tap(find.bySemanticsLabel('morning energy 4 of 10'));
     final constrainedDay = find.bySemanticsLabel('day shape constrained');
     await tester.ensureVisible(constrainedDay);
@@ -322,10 +331,12 @@ void main() {
     expect(evening['stress_source'], 'private_emotional');
     expect(evening['stress_controllability'], 'hardly_controllable');
     expect(evening['tomorrow_priority'], 'Protect the guest morning');
+    expect(evening.containsKey('additional_frictions'), isFalse);
     expect(evening.containsKey('reflection_note'), isFalse);
     expect(evening.containsKey('specific_blocker'), isFalse);
     expect(evening.containsKey('gentle_tomorrow'), isFalse);
     expect(morning['sleep_hours'], 5.5);
+    expect(morning['sleep_quality'], 3);
     expect(morning['current_energy'], 4);
     expect(morning['day_shape'], 'constrained');
 
@@ -333,7 +344,9 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Today\'s saved captures'), findsOneWidget);
     expect(
-      find.text('Mood 2 | Energy 4 | Sleep 5.5 h | Stress 8'),
+      find.text(
+        'Mood 2 | Energy 4 | Sleep 5.5 h | Sleep quality 3/10 | Stress 8',
+      ),
       findsOneWidget,
     );
     expect(find.text('Local'), findsOneWidget);

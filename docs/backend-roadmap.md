@@ -55,9 +55,13 @@ Already implemented:
 - Lightweight Evening And Morning Capture:
   - `EveningShutdownDraft` and `MorningCalibrationDraft` merge into one typed
     `DailyCaptureEntry` per local date without one capture erasing the other.
-  - Evening stores exact stress intensity/source/controllability, focus band,
-    friction, tomorrow priority, and only explicitly supplied optional detail;
-    Morning stores sleep hours, current energy, and day shape only.
+  - Evening stores exact stress intensity/source/controllability, one required
+    primary friction (including explicit `no_major_friction`), up to two
+    optional additional frictions, tomorrow priority, and only explicitly
+    supplied optional detail. Daily Mode consumes only the primary friction;
+    Morning stores sleep hours, an independent required `1..10`
+    `sleep_quality` estimate, current energy, and day shape only. Older V2
+    Morning objects without the additive field remain readable.
   - `daily_logs.metadata.captures` owns the two structured states. Numeric
     projections retain existing consumers: Morning energy takes precedence,
     Evening owns mood/stress, and Morning owns sleep.
@@ -261,6 +265,9 @@ Already implemented:
     time/DST, energy window, current time, Setup/manual commitments, active
     Planner and Preparation reservations, and separately consented current
     imported busy time. Deadline Planner reuses this component and preference.
+    Setup recurring commitments may carry inclusive optional semester bounds;
+    the same applicability rule is used across planning, workload, Today, and
+    snapshot facts.
   - Immutable previews reserve nothing. Owner-locked confirmation atomically
     creates or updates the target and activates its revision only after target,
     calendar, fingerprint, and collision revalidation. Conflicts return 409;
@@ -270,6 +277,10 @@ Already implemented:
     target to Unscheduled without reviving old reservations.
   - `today-overview-v2` adds Task/Habit/commitment blocks while keeping V1
     available and counting each target only once.
+  - Setup is the primary manual timetable. Planner warns before automatic
+    planning when no current availability source is visible and allows an
+    explicit honest override. Calendar import remains optional and outside
+    onboarding.
 - Phase 10 Controlled Coach:
   - Strict authenticated capability, deliberate response, history/delete, and
     explicit memory-selection contracts with guest/mock zero-call behavior.
@@ -840,7 +851,9 @@ production provider or autonomous agent platform by default.
 ### Completed Slice 0C: First-Run And Setup Integrity
 
 - Implemented: explicit required selections stay short while goals, routines,
-  context, calendar intent, and timetable detail are progressive and optional.
+  context, and timetable detail are progressive and optional. Weekly timetable
+  blocks support optional inclusive semester dates and duplication across
+  weekdays; calendar import remains a separate optional Settings flow.
 - Implemented: blank optional answers remain blank and create no fallback goal,
   habit, schedule item, friction, or memory row.
 - Implemented: named routines are typed candidates in the intake response until
@@ -869,6 +882,9 @@ production provider or autonomous agent platform by default.
 - Implemented exact numeric projection with Morning energy precedence, Evening
   mood/stress ownership, Morning sleep ownership, and no fabricated focus
   minutes or optional text.
+- Implemented independent bounded Morning sleep quality in capture metadata,
+  mirrored onto existing Morning-origin events without expanding the
+  four-event maximum.
 - Implemented a dynamic maximum of four deterministic mood/energy/stress/sleep
   events with capture-kind metadata and linkage to the single daily row.
 - Implemented guest V2 JSON with legacy V1 read and best-effort authenticated
@@ -897,6 +913,8 @@ production provider or autonomous agent platform by default.
 - Implemented recovery-first `push`, `steady`, `recover`, and `plan`
   classification. Missing, partial, and stale inputs remain conservative, and
   low-control/private-emotional/physical-recovery safeguards prevent push.
+  Very low current sleep quality may select recovery despite sufficient
+  duration; moderately low quality prevents push.
 - Preserved `snapshot-aggregator-v1`, same-period atomic upsert, recommendation
   ranking, guest/mock locality, best-effort Flutter refresh, and the Phase 0C
   Setup contract. Metadata records the Daily State contract and lookback;

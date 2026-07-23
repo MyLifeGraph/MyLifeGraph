@@ -275,7 +275,10 @@ def busy_intervals_by_day(
         starts = exact_time(item.get("starts_at"))
         ends = exact_time(item.get("ends_at"))
         for day in days:
-            if day.isoweekday() != weekday:
+            if (
+                day.isoweekday() != weekday
+                or not recurring_commitment_applies_on(item, day)
+            ):
                 continue
             interval_start = datetime.combine(day, starts, tzinfo=zone)
             interval_end = datetime.combine(day, ends, tzinfo=zone)
@@ -490,6 +493,45 @@ def exact_int(value: object) -> int:
     if isinstance(value, bool) or not isinstance(value, int):
         raise ValueError("Planning integer is invalid.")
     return value
+
+
+def recurring_commitment_applies_on(
+    item: Mapping[str, Any],
+    local_day: date,
+) -> bool:
+    """Return whether a recurring busy row applies on one local date.
+
+    New Setup rows keep optional semester bounds in their owned metadata. Rows
+    from before this additive contract and non-Setup schedule rows remain
+    intentionally unbounded.
+    """
+
+    valid_from, valid_until = recurring_commitment_validity(item)
+    return (valid_from is None or local_day >= valid_from) and (
+        valid_until is None or local_day <= valid_until
+    )
+
+
+def recurring_commitment_validity(
+    item: Mapping[str, Any],
+) -> tuple[date | None, date | None]:
+    metadata = item.get("metadata")
+    if not isinstance(metadata, Mapping) or metadata.get("managed_by") != "setup":
+        return None, None
+
+    valid_from = _optional_exact_date(metadata.get("valid_from"))
+    valid_until = _optional_exact_date(metadata.get("valid_until"))
+    if (
+        valid_from is not None
+        and valid_until is not None
+        and valid_until < valid_from
+    ):
+        raise ValueError("Planning recurring validity range is invalid.")
+    return valid_from, valid_until
+
+
+def _optional_exact_date(value: object) -> date | None:
+    return None if value is None else exact_date(value)
 
 
 def _recurring_candidate(

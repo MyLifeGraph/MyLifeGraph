@@ -23,6 +23,7 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
   PlannerTaskDraft? _retainedTaskDraft;
   PlannerHabitDraft? _retainedHabitDraft;
   PlannerCommitmentDraft? _retainedCommitmentDraft;
+  bool _continuedWithoutAvailability = false;
 
   @override
   Widget build(BuildContext context) {
@@ -40,16 +41,19 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
     final state = ref.watch(plannerControllerProvider);
     final controller = ref.read(plannerControllerProvider.notifier);
     final overview = state.overview;
+    final availabilityIncomplete =
+        overview != null && _availabilityIsIncomplete(overview);
     final children = <Widget>[
       _AddNewSection(
         busy: state.isBusy || state.requiresExactRetry,
         calendarPreference: overview?.preferences,
+        availabilityIncomplete: availabilityIncomplete,
         onTask: _createTask,
         onHabit: _createHabit,
-        onExam: () => context.go('${AppRoutes.preparationPlans}?kind=exam'),
-        onAssignment: () =>
-            context.go('${AppRoutes.preparationPlans}?kind=assignment'),
+        onExam: () => _openPreparationCreation('exam'),
+        onAssignment: () => _openPreparationCreation('assignment'),
         onCommitment: () => _createCommitment(overview),
+        onReviewSetup: () => context.go('${AppRoutes.onboarding}?edit=1'),
         onCalendarPreference: overview == null
             ? null
             : (value) async {
@@ -146,6 +150,10 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
     );
     if (!mounted || draft == null) return;
     _retainedTaskDraft = draft;
+    if (_taskUsesAutomaticPlanning(draft) &&
+        !await _confirmAvailabilityForAutomaticPlanning()) {
+      return;
+    }
     final plan =
         await ref.read(plannerControllerProvider.notifier).proposeTask(draft);
     if (!mounted || plan == null) {
@@ -163,6 +171,7 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
     );
     if (!mounted || draft == null) return;
     _retainedHabitDraft = draft;
+    if (!await _confirmAvailabilityForAutomaticPlanning()) return;
     final plan =
         await ref.read(plannerControllerProvider.notifier).proposeHabit(draft);
     if (!mounted || plan == null) {
@@ -171,6 +180,46 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
     }
     final confirmed = await _showPreview(plan);
     if (confirmed) _retainedHabitDraft = null;
+  }
+
+  Future<void> _openPreparationCreation(String kind) async {
+    if (!await _confirmAvailabilityForAutomaticPlanning() || !mounted) return;
+    context.go('${AppRoutes.preparationPlans}?kind=$kind');
+  }
+
+  Future<bool> _confirmAvailabilityForAutomaticPlanning() async {
+    final overview = ref.read(plannerControllerProvider).overview;
+    if (overview == null ||
+        !_availabilityIsIncomplete(overview) ||
+        _continuedWithoutAvailability) {
+      return true;
+    }
+    final accepted = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            key: const ValueKey('planner-availability-review-dialog'),
+            title: const Text('Review your availability'),
+            content: const Text(
+              'No current weekly schedule, future fixed commitment, or consented calendar busy time is available. A preview may overlap classes or work. Add your schedule first, or continue if these times are genuinely free.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Back'),
+              ),
+              FilledButton(
+                key: const ValueKey('planner-continue-without-availability'),
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Continue anyway'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+    if (accepted && mounted) {
+      setState(() => _continuedWithoutAvailability = true);
+    }
+    return accepted;
   }
 
   Future<bool> _showPreview(PlannerActionPlan plan) async {
@@ -583,21 +632,25 @@ class _AddNewSection extends StatelessWidget {
   const _AddNewSection({
     required this.busy,
     required this.calendarPreference,
+    required this.availabilityIncomplete,
     required this.onTask,
     required this.onHabit,
     required this.onExam,
     required this.onAssignment,
     required this.onCommitment,
+    required this.onReviewSetup,
     required this.onCalendarPreference,
   });
 
   final bool busy;
   final PlannerPreferences? calendarPreference;
+  final bool availabilityIncomplete;
   final VoidCallback onTask;
   final VoidCallback onHabit;
   final VoidCallback onExam;
   final VoidCallback onAssignment;
   final VoidCallback onCommitment;
+  final VoidCallback onReviewSetup;
   final ValueChanged<bool>? onCalendarPreference;
 
   @override
@@ -648,6 +701,52 @@ class _AddNewSection extends StatelessWidget {
                 ),
               ],
             ),
+            if (availabilityIncomplete) ...[
+              const Divider(height: AppSpacing.xl),
+              Container(
+                key: const ValueKey('planner-availability-warning'),
+                width: double.infinity,
+                padding: const EdgeInsets.all(AppSpacing.md),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.secondaryContainer,
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(Icons.event_note_outlined),
+                        const SizedBox(width: AppSpacing.sm),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Availability may be incomplete',
+                                style: Theme.of(context).textTheme.titleMedium,
+                              ),
+                              const SizedBox(height: AppSpacing.xs),
+                              const Text(
+                                'Add recurring classes or work times before the first automatic plan. Calendar import stays optional.',
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    FilledButton.tonalIcon(
+                      key: const ValueKey('planner-review-setup-schedule'),
+                      onPressed: busy ? null : onReviewSetup,
+                      icon: const Icon(Icons.calendar_view_week_outlined),
+                      label: const Text('Add weekly schedule'),
+                    ),
+                  ],
+                ),
+              ),
+            ],
             if (calendarPreference != null) ...[
               const Divider(height: AppSpacing.xl),
               SwitchListTile(
@@ -1696,6 +1795,28 @@ class _CommitmentDialogState extends State<_CommitmentDialog> {
       ),
     );
   }
+}
+
+bool _taskUsesAutomaticPlanning(PlannerTaskDraft draft) =>
+    draft.estimatedMinutes != null &&
+    draft.deadlineAt != null &&
+    draft.preferredSessionMinutes != null;
+
+bool _availabilityIsIncomplete(PlannerOverview overview) {
+  final hasVisibleSetupCommitment = overview.days.any(
+    (day) => day.items.any((item) => item.kind == 'setup_commitment'),
+  );
+  final hasCurrentManualCommitment = overview.commitments.any((commitment) {
+    if (commitment.status != 'active') return false;
+    if (commitment.recurrence == 'weekly') return true;
+    return commitment.endsAt?.isAfter(overview.generatedAt) ?? false;
+  });
+  final hasConsentedCalendarBusyTime =
+      overview.preferences.useCalendarBusyTime &&
+          overview.preferences.calendarAvailable;
+  return !hasVisibleSetupCommitment &&
+      !hasCurrentManualCommitment &&
+      !hasConsentedCalendarBusyTime;
 }
 
 List<String> _overlappingTitles(

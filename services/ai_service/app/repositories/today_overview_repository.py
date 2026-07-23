@@ -157,7 +157,9 @@ class SupabaseTodayOverviewRepository:
         return await self._select_pages(
             "schedule_items",
             params={
-                "select": "id,title,location,weekday,starts_at,ends_at,source",
+                "select": (
+                    "id,title,location,weekday,starts_at,ends_at,source,metadata"
+                ),
                 "user_id": f"eq.{user_id}",
                 "order": "weekday.asc,starts_at.asc,id.asc",
             },

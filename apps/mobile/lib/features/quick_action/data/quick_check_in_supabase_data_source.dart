@@ -298,9 +298,12 @@ class QuickCheckInPayloadBuilder {
       if (evening != null) ...{
         if (evening.focusBand != null) 'focus_band': evening.focusBand!.code,
         'main_friction': evening.mainFriction!.code,
+        if (evening.additionalFrictions.isNotEmpty)
+          'additional_frictions': evening.additionalFrictions
+              .map((friction) => friction.code)
+              .toList(growable: false),
         if (evening.tomorrowPriority.isNotEmpty)
           'tomorrow_priority': evening.tomorrowPriority,
-        if (evening.makeTomorrowGentler) 'gentle_tomorrow': true,
       },
       if (evening != null && type == 'stress') ...{
         'stress_intensity_label': evening.stressIntensityLabel.code,
@@ -309,7 +312,10 @@ class QuickCheckInPayloadBuilder {
         if (evening.stressControllability != null)
           'stress_controllability': evening.stressControllability!.code,
       },
-      if (morning != null) 'day_shape': morning.dayShape!.code,
+      if (morning != null) ...{
+        'day_shape': morning.dayShape!.code,
+        if (morning.sleepQuality != null) 'sleep_quality': morning.sleepQuality,
+      },
     };
   }
 

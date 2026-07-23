@@ -226,8 +226,8 @@ additional habits, free text, and integrations remain progressive setup.
 
 What the user does:
 
-1. Gives current energy, sleep duration, and day shape in 10 to 20
-   seconds.
+1. Gives current energy, sleep duration, estimated sleep quality, and day shape
+   in 10 to 20 seconds.
 2. Reviews today's mode, estimated capacity, primary action, reason, and at most
    two support actions.
 3. Starts the primary action, replaces it, or marks it as inappropriate.
@@ -267,9 +267,11 @@ What the app does:
 What the user does:
 
 1. Confirms what was completed, postponed, or no longer relevant.
-2. Reports mood, energy, stress intensity, and friction. At medium/high stress,
-   the flow also asks source and controllability.
-3. Optionally chooses a likely priority and `make tomorrow gentler`.
+2. Reports mood, energy, stress intensity, and one primary friction, with
+   `No major friction` available as an honest answer. Up to two other frictions
+   may be marked as also present. At medium/high stress, the flow also asks
+   source and controllability.
+3. Optionally records a likely priority, reflection, or specific blocker.
 4. Reviews a provisional tomorrow preview and closes the day.
 
 What the app does:
@@ -286,8 +288,8 @@ What the app does:
 
 What the user does:
 
-- Confirms or corrects the provisional plan with sleep, current energy, and day
-  shape.
+- Confirms or corrects the provisional plan with sleep duration and quality,
+  current energy, and day shape.
 
 What the app does:
 
@@ -374,36 +376,40 @@ Required fields:
 - Energy level.
 - Stress intensity.
 - Mood.
-- Main friction point.
+- One primary friction, including the explicit `No major friction` answer.
 
 Conditional fields at stress `5..10`:
 
 - Stress source.
 - Stress controllability.
-- One likely priority for tomorrow.
 
 Optional fields:
 
+- Up to two unique `Also present` frictions other than the primary answer.
+- One likely priority for tomorrow.
 - Reflection note.
-- "Make tomorrow gentler" preference.
 - Specific blocker.
 
 Current Phase 1 output:
 
 - Persisted current-state context and the user's explicit likely priority.
+- Daily State uses only the primary friction for risks and mode classification;
+  additional frictions remain structured context and do not change Daily Mode.
 - No provisional plan is generated. For authenticated real accounts, Phase 2
   now classifies an explainable backend Daily State best-effort after the
   write; the capture surface does not present that state as a briefing.
 
 ### Morning Calibration
 
-Current goal: record sleep, current energy, and day shape without repeating the
-Evening form. Adjusting a provisional plan begins only after explainable state
-and briefing generation exist.
+Current goal: record sleep duration and independently estimated quality,
+current energy, and day shape without repeating the Evening form. Adjusting a
+provisional plan begins only after explainable state and briefing generation
+exist.
 
 Reasoning:
 
-- Sleep and current readiness are not known at evening shutdown.
+- Sleep duration, sleep quality, and current readiness are not known at evening
+  shutdown.
 - Morning capture must be short or it becomes a source of friction.
 - This is where the app should finalize the daily mode.
 
@@ -823,12 +829,16 @@ screens where the user expects feedback.
 The implemented Evening Shutdown quick action supports:
 
 - Two pages instead of one page per answer.
-- Required energy, mood, stress intensity, and main friction; stress source and
-  controllability are a paired conditional question at stress `5..10`.
+- Required energy, mood, stress intensity, and one primary friction, including
+  `No major friction`; stress source and controllability are a paired
+  conditional question at stress `5..10`.
+- Up to two unique `Also present` frictions may be selected. They are persisted
+  as context, while only the primary friction affects Daily Mode.
 - An optional short tomorrow priority. Measured focus comes from completed
   Focus sessions instead of another self-estimate.
-- Optional reflection, specific blocker, and gentle-tomorrow intent; blank or
-  false optionals are omitted rather than replaced with fallback content.
+- Optional reflection and specific blocker; blank optionals are omitted rather
+  than replaced with fallback content. The former gentle-tomorrow switch is
+  retired and no longer written; legacy metadata containing it stays readable.
 - Prefill and same-kind replacement without erasing a saved Morning
   Calibration.
 - Capture copy that does not claim a learned baseline, ranked plan, diagnosis,
@@ -846,7 +856,8 @@ Reasoning:
 
 The implemented short Morning Calibration surface supports:
 
-- Required sleep hours in half-hour steps, current energy, and day shape.
+- Required sleep hours in half-hour steps, an independent whole-number
+  `1..10` estimated sleep-quality rating, current energy, and day shape.
 - Prefill and same-kind replacement without erasing saved Evening context.
 - Honest current-state copy stating that capture does not generate
   recommendations or create or change a plan. Authenticated real saves may
@@ -956,12 +967,14 @@ Implemented metadata shape, abbreviated:
       "stress_controllability": "hardly_controllable",
       "focus_band": "30_to_60_minutes",
       "main_friction": "emotional_load",
+      "additional_frictions": ["interruptions", "hard_to_start"],
       "tomorrow_priority": "Keep the morning light"
     },
     "morning": {
       "capture_kind": "morning",
       "entry_date": "2026-07-10",
       "sleep_hours": 5.5,
+      "sleep_quality": 3,
       "current_energy": 3,
       "day_shape": "constrained"
     }
@@ -978,6 +991,9 @@ Reasoning:
   invented values.
 - Events are a dynamic maximum of four deterministic current-state rows, not an
   append-only history of repeated same-day retries.
+- Sleep quality is bounded Morning metadata mirrored onto existing
+  Morning-origin events; it does not create a fifth event or overwrite sleep
+  duration.
 
 Phase 2 also reuses the existing `user_state_snapshots` JSONB columns. Its
 abbreviated persisted shape is:
@@ -1152,6 +1168,12 @@ Implemented:
 
 - Separate typed Evening Shutdown and Morning Calibration flows with retained
   drafts, prefill, recoverable save errors, and stable retry identity.
+- Morning requires sleep duration and an independent `1..10` estimated sleep
+  quality. Older V2 Morning branches without the additive field remain
+  readable and require a value only when that Morning capture is resaved.
+- Evening requires one primary friction with an explicit no-major answer,
+  accepts at most two unique additional frictions, and keeps Daily Mode driven
+  solely by the primary selection.
 - Same-day merge ownership: a submitted capture replaces only its own
   `metadata.captures` object and preserves the other kind.
 - Numeric projection keeps Morning energy over Evening energy, Evening mood and
@@ -1195,6 +1217,9 @@ Implemented:
 - Added deterministic, recovery-first `push`, `steady`, `recover`, and `plan`
   classification with machine-stable reasons, user-readable non-clinical copy,
   field-level evidence, provenance, and no learned-baseline claim.
+- Added sleep-quality-aware recovery guards: very low current quality can
+  select `recover` despite sufficient duration, while moderately low quality
+  prevents `push`.
 - Excluded tomorrow-priority, reflection, and blocker text from snapshot
   summary, signals, evidence, quality issues, and metadata.
 - Preserved same-period upsert identity, `snapshot-aggregator-v1`, guest/mock
@@ -1460,7 +1485,8 @@ Goal:
 Implemented first slice:
 
 - One optional authenticated `ical_file` source requires explicit
-  `calendar-import-consent-v1`; Setup calendar interest never counts as consent.
+  `calendar-import-consent-v1`; onboarding does not ask for calendar interest,
+  and any legacy Setup interest value never counts as consent.
 - A deliberate bounded UTF-8 `.ics` upload persists only whitelisted basics in
   dedicated read-only integration rows. Stable connection/import/event and
   recurrence-occurrence identities reconcile retries and duplicate input.

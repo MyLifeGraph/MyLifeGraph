@@ -31,7 +31,10 @@ void main() {
                   'stress_source': 'private_emotional',
                   'stress_controllability': 'hardly_controllable',
                 },
-                'morning': {'day_shape': 'constrained'},
+                'morning': {
+                  'sleep_quality': 3,
+                  'day_shape': 'constrained',
+                },
               },
             },
           },
@@ -75,6 +78,7 @@ void main() {
       expect(snapshot.latestCheckIn?.mood, 2);
       expect(snapshot.latestCheckIn?.energy, 9);
       expect(snapshot.latestCheckIn?.sleepHours, 5.5);
+      expect(snapshot.latestCheckIn?.sleepQuality, 3);
       expect(snapshot.latestCheckIn?.stress, 8);
       expect(snapshot.latestCheckIn?.focusMinutes, 47);
       expect(snapshot.latestCheckIn?.steps, 1111);
@@ -149,6 +153,7 @@ void main() {
             entryDate: entryDate,
             capturedAt: capturedAt,
             sleepHours: 5.5,
+            sleepQuality: 3,
             energy: 4,
             dayShape: DayShape.constrained,
           ),
@@ -162,6 +167,7 @@ void main() {
     expect(snapshot.latestCheckIn?.mood, 2);
     expect(snapshot.latestCheckIn?.energy, 4);
     expect(snapshot.latestCheckIn?.sleepHours, 5.5);
+    expect(snapshot.latestCheckIn?.sleepQuality, 3);
     expect(snapshot.latestCheckIn?.stress, 8);
     expect(snapshot.latestCheckIn?.focusBand, '30_to_60_minutes');
     expect(snapshot.latestCheckIn?.dayShape, 'constrained');

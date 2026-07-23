@@ -165,6 +165,10 @@ def test_workload_context_is_owner_scoped_to_profile_local_seven_days() -> None:
     )
     assert block_call["limit"] == "1000"
     assert block_call["offset"] == "0"
+    schedule_call = next(
+        params for table, params in client.calls if table == "schedule_items"
+    )
+    assert "metadata" in schedule_call["select"]
 
 
 class WorkloadDetailClient(Client):
@@ -325,6 +329,7 @@ def test_planning_context_pages_to_the_schedule_overflow_sentinel() -> None:
     ]
     assert [params["offset"] for params in schedule_calls] == ["0", "1000"]
     assert [params["limit"] for params in schedule_calls] == ["1000", "1"]
+    assert all("metadata" in params["select"] for params in schedule_calls)
 
 
 class BulkClient:

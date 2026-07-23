@@ -411,6 +411,14 @@ def _parse_v2_capture(
                 _append_issue(issues, f"evening.invalid_{field}")
             else:
                 values[field] = value
+        additional_frictions = _additional_friction_values(
+            raw.get("additional_frictions"),
+            main_friction=required["main_friction"],
+        )
+        if additional_frictions is None:
+            _append_issue(issues, "evening.invalid_additional_frictions")
+        else:
+            values["additional_frictions"] = additional_frictions
         stress = values.get("stress_intensity")
         source = _enum_value(raw.get("stress_source"), _STRESS_SOURCES)
         controllability = _enum_value(
@@ -452,12 +460,6 @@ def _parse_v2_capture(
             _append_issue(issues, "evening.invalid_stress_intensity_label")
         elif expected_label is not None:
             values["stress_intensity_label"] = expected_label
-        gentle = raw.get("gentle_tomorrow")
-        if gentle is not None:
-            if isinstance(gentle, bool):
-                values["gentle_tomorrow"] = gentle
-            else:
-                _append_issue(issues, "evening.invalid_gentle_tomorrow")
         complete = all(value is not None for value in required.values()) and (
             stress is not None
             and (stress < 5 or (source is not None and controllability is not None))
@@ -473,6 +475,12 @@ def _parse_v2_capture(
                 _append_issue(issues, f"morning.invalid_{field}")
             else:
                 values[field] = value
+        if "sleep_quality" in raw:
+            sleep_quality = _rating(raw.get("sleep_quality"), minimum=1)
+            if sleep_quality is None:
+                _append_issue(issues, "morning.invalid_sleep_quality")
+            else:
+                values["sleep_quality"] = sleep_quality
         complete = all(value is not None for value in required.values())
 
     return (
@@ -484,10 +492,7 @@ def _parse_v2_capture(
             source_format="explicit_capture_v2",
             values=values,
             complete=complete,
-            integrity_ok=not any(
-                issue != "evening.invalid_gentle_tomorrow"
-                for issue in issues
-            ),
+            integrity_ok=not issues,
         ),
         issues,
     )
@@ -586,6 +591,7 @@ def _build_context(captures: list[_Capture]) -> dict[str, Any]:
     mood = _select(captures, "mood", "mood_score")
     energy = _select(captures, "current_energy", "energy", "energy_level")
     sleep = _select(captures, "sleep_hours")
+    sleep_quality = _select(captures, "sleep_quality")
     stress = _select(captures, "stress_intensity", "stress_level")
 
     stress_source = None
@@ -606,6 +612,9 @@ def _build_context(captures: list[_Capture]) -> dict[str, Any]:
         "mood": mood.value if mood is not None else None,
         "current_energy": energy.value if energy is not None else None,
         "sleep_hours": sleep.value if sleep is not None else None,
+        "sleep_quality": (
+            sleep_quality.value if sleep_quality is not None else None
+        ),
         "stress": {
             "intensity": stress.value if stress is not None else None,
             "intensity_label": stress_label,
@@ -615,6 +624,11 @@ def _build_context(captures: list[_Capture]) -> dict[str, Any]:
         "focus_band": evening.values.get("focus_band") if evening is not None else None,
         "main_friction": (
             evening.values.get("main_friction") if evening is not None else None
+        ),
+        "additional_frictions": (
+            evening.values.get("additional_frictions", [])
+            if evening is not None
+            else []
         ),
         "day_shape": morning.values.get("day_shape") if morning is not None else None,
     }
@@ -634,6 +648,7 @@ def _build_risks(
     controllability = stress.get("controllability")
     energy = _as_float(current_context.get("current_energy"))
     sleep = _as_float(current_context.get("sleep_hours"))
+    sleep_quality = _as_float(current_context.get("sleep_quality"))
     day_shape = current_context.get("day_shape")
     friction = current_context.get("main_friction")
 
@@ -648,6 +663,11 @@ def _build_risks(
         current_values,
         freshness,
         "sleep_hours",
+    )
+    sleep_quality_capture = _selection_capture(
+        current_values,
+        freshness,
+        "sleep_quality",
     )
     stress_capture = _selection_capture(
         current_values,
@@ -684,6 +704,15 @@ def _build_risks(
         add(
             "low_sleep",
             sleep_capture.ref("sleep_hours") if sleep_capture else None,
+        )
+    if sleep_quality is not None and sleep_quality <= 4:
+        add(
+            "low_sleep_quality",
+            (
+                sleep_quality_capture.ref("sleep_quality")
+                if sleep_quality_capture
+                else None
+            ),
         )
     if energy is not None and energy <= 3:
         energy_capture = _selection_capture(
@@ -806,6 +835,7 @@ def _classify_mode(
     controllability = stress.get("controllability")
     energy = _as_float(current_context.get("current_energy"))
     sleep = _as_float(current_context.get("sleep_hours"))
+    sleep_quality = _as_float(current_context.get("sleep_quality"))
     day_shape = current_context.get("day_shape")
     friction = current_context.get("main_friction")
     risk_map = {risk.code: risk for risk in risks}
@@ -823,6 +853,7 @@ def _classify_mode(
         "energy_level",
     )
     sleep_selection = _select(current_values, "sleep_hours")
+    sleep_quality_selection = _select(current_values, "sleep_quality")
     stress_selection = _select(
         current_values,
         "stress_intensity",
@@ -888,10 +919,20 @@ def _classify_mode(
                 "low_sleep",
             ),
         )
+    if sleep_quality is not None and sleep_quality <= 3:
+        recover_reasons.append(
+            _reason_from_risks(
+                "recover_poor_sleep_quality",
+                "Poor sleep quality independently supports a lower-load day.",
+                risk_map,
+                "low_sleep_quality",
+            ),
+        )
     compound_count = sum(
         (
             energy is not None and energy <= 4,
             sleep is not None and sleep < 6.5,
+            sleep_quality is not None and sleep_quality <= 4,
             intensity is not None and intensity >= 8,
         ),
     )
@@ -901,6 +942,12 @@ def _classify_mode(
             compound_refs.append(energy_selection.evidence)
         if sleep is not None and sleep < 6.5 and sleep_selection is not None:
             compound_refs.append(sleep_selection.evidence)
+        if (
+            sleep_quality is not None
+            and sleep_quality <= 4
+            and sleep_quality_selection is not None
+        ):
+            compound_refs.append(sleep_quality_selection.evidence)
         if intensity is not None and intensity >= 8 and intensity_ref is not None:
             compound_refs.append(intensity_ref)
         recover_reasons.append(
@@ -1043,12 +1090,27 @@ def _classify_mode(
     if plan_reasons:
         return "plan", tuple(_dedupe_reasons(plan_reasons)[:3])
 
+    if "low_sleep_quality" in risk_map:
+        return (
+            "steady",
+            (
+                _reason_from_risks(
+                    "steady_low_sleep_quality",
+                    "Lower sleep quality supports a steady day without added "
+                    "load.",
+                    risk_map,
+                    "low_sleep_quality",
+                ),
+            ),
+        )
+
     if (
         data_quality == "current"
         and energy is not None
         and energy >= 7
         and sleep is not None
         and sleep >= 7
+        and (sleep_quality is None or sleep_quality >= 7)
         and intensity is not None
         and intensity <= 4
         and day_shape in {"normal", "flexible"}
@@ -1065,8 +1127,8 @@ def _classify_mode(
             (
                 _Reason(
                     "push_good_current_capacity",
-                    "Current energy, sleep, stress, and day shape support "
-                    "protected focus.",
+                    "Current energy, sleep duration and quality, stress, and "
+                    "day shape support protected focus.",
                     tuple(
                         ref
                         for ref in (
@@ -1078,6 +1140,12 @@ def _classify_mode(
                             (
                                 current_morning.ref("sleep_hours")
                                 if current_morning is not None
+                                else None
+                            ),
+                            (
+                                current_morning.ref("sleep_quality")
+                                if current_morning is not None
+                                and sleep_quality is not None
                                 else None
                             ),
                             (
@@ -1125,6 +1193,12 @@ def _classify_mode(
             (
                 current_morning.ref("sleep_hours")
                 if current_morning is not None
+                else None
+            ),
+            (
+                current_morning.ref("sleep_quality")
+                if current_morning is not None
+                and sleep_quality is not None
                 else None
             ),
             (
@@ -1477,6 +1551,25 @@ def _enum_value(value: Any, allowed: frozenset[str]) -> str | None:
     return value if isinstance(value, str) and value in allowed else None
 
 
+def _additional_friction_values(
+    value: Any,
+    *,
+    main_friction: str | None,
+) -> list[str] | None:
+    if value is None:
+        return []
+    if not isinstance(value, list) or len(value) > 2:
+        return None
+    if any(
+        not isinstance(item, str) or item not in _ADDITIONAL_FRICTIONS
+        for item in value
+    ):
+        return None
+    if len(set(value)) != len(value) or main_friction in value:
+        return None
+    return list(value)
+
+
 def _stress_label(value: Any) -> str | None:
     if not isinstance(value, int):
         return None
@@ -1527,6 +1620,7 @@ _FOCUS_BANDS = frozenset(
 )
 _MAIN_FRICTIONS = frozenset(
     {
+        "no_major_friction",
         "unclear_priorities",
         "too_much_to_do",
         "interruptions",
@@ -1537,5 +1631,6 @@ _MAIN_FRICTIONS = frozenset(
         "external_constraints",
     },
 )
+_ADDITIONAL_FRICTIONS = _MAIN_FRICTIONS - {"no_major_friction"}
 _DAY_SHAPES = frozenset({"normal", "constrained", "flexible"})
 _STRESS_LABELS = frozenset({"low", "medium", "high"})

@@ -176,6 +176,8 @@ class IntakeCommitmentDraft {
     required this.weekday,
     required this.startsAt,
     required this.endsAt,
+    this.validFrom,
+    this.validUntil,
     this.status = IntakeCommitmentStatus.active,
   });
 
@@ -187,6 +189,8 @@ class IntakeCommitmentDraft {
       weekday: _intValue(json['weekday'], field: 'weekday'),
       startsAt: _requiredTime(json, 'starts_at'),
       endsAt: _requiredTime(json, 'ends_at'),
+      validFrom: _optionalCalendarDate(json['valid_from']),
+      validUntil: _optionalCalendarDate(json['valid_until']),
       status: IntakeCommitmentStatus.fromJson(json['status']),
     );
   }
@@ -197,6 +201,8 @@ class IntakeCommitmentDraft {
   final int? weekday;
   final String startsAt;
   final String endsAt;
+  final DateTime? validFrom;
+  final DateTime? validUntil;
   final IntakeCommitmentStatus status;
 
   Map<String, dynamic> toJson() {
@@ -212,6 +218,8 @@ class IntakeCommitmentDraft {
       'weekday': selectedWeekday,
       'starts_at': _normalizedTime(startsAt) ?? startsAt.trim(),
       'ends_at': _normalizedTime(endsAt) ?? endsAt.trim(),
+      if (validFrom != null) 'valid_from': _calendarDate(validFrom!),
+      if (validUntil != null) 'valid_until': _calendarDate(validUntil!),
       'status': status.name,
     };
   }
@@ -223,6 +231,8 @@ class IntakeCommitmentDraft {
     Object? weekday = _unset,
     String? startsAt,
     String? endsAt,
+    Object? validFrom = _unset,
+    Object? validUntil = _unset,
     IntakeCommitmentStatus? status,
   }) {
     return IntakeCommitmentDraft(
@@ -233,6 +243,12 @@ class IntakeCommitmentDraft {
       weekday: identical(weekday, _unset) ? this.weekday : weekday as int?,
       startsAt: startsAt ?? this.startsAt,
       endsAt: endsAt ?? this.endsAt,
+      validFrom: identical(validFrom, _unset)
+          ? this.validFrom
+          : validFrom as DateTime?,
+      validUntil: identical(validUntil, _unset)
+          ? this.validUntil
+          : validUntil as DateTime?,
       status: status ?? this.status,
     );
   }
@@ -597,6 +613,14 @@ class IntakeResponseDraft {
         );
         break;
       }
+      if (commitment.validFrom != null &&
+          commitment.validUntil != null &&
+          commitment.validUntil!.isBefore(commitment.validFrom!)) {
+        errors.add(
+          'A fixed commitment end date cannot be before its start date.',
+        );
+        break;
+      }
     }
     return errors;
   }
@@ -933,6 +957,26 @@ DateTime? _optionalDateTime(Object? value) {
     throw FormatException('Invalid date-time: $text');
   }
   return date;
+}
+
+DateTime? _optionalCalendarDate(Object? value) {
+  final text = _optionalString(value);
+  if (text == null || !RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(text)) {
+    if (text == null) return null;
+    throw FormatException('Invalid calendar date: $text');
+  }
+  final parsed = DateTime.tryParse('${text}T00:00:00Z');
+  if (parsed == null || _calendarDate(parsed) != text) {
+    throw FormatException('Invalid calendar date: $text');
+  }
+  return parsed;
+}
+
+String _calendarDate(DateTime value) {
+  final year = value.year.toString().padLeft(4, '0');
+  final month = value.month.toString().padLeft(2, '0');
+  final day = value.day.toString().padLeft(2, '0');
+  return '$year-$month-$day';
 }
 
 Map<String, dynamic> _requiredMap(Object? value, String field) {

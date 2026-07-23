@@ -10,6 +10,7 @@ from app.models.snapshots import (
     SnapshotScope,
 )
 from app.repositories.snapshot_repository import SnapshotInputRows, SnapshotRepository
+from app.services.planning_availability import recurring_commitment_applies_on
 from app.services.snapshot_daily_state import (
     DAILY_STATE_CONTRACT_VERSION,
     DAILY_STATE_LOOKBACK_DAYS,
@@ -269,7 +270,15 @@ def _filter_window(
             for row in inputs.focus_sessions
             if _is_focus_session_in_window(row, start_date, target_date)
         ],
-        schedule_items=inputs.schedule_items,
+        schedule_items=[
+            row
+            for row in inputs.schedule_items
+            if _recurring_schedule_occurs_in_window(
+                row,
+                start_date=start_date,
+                target_date=target_date,
+            )
+        ],
         memory_entries=inputs.memory_entries,
     )
 
@@ -555,6 +564,26 @@ def _optional_date(value: Any) -> date | None:
 def _is_date_in_window(value: Any, start_date: date, target_date: date) -> bool:
     parsed = _optional_date(value)
     return parsed is not None and start_date <= parsed <= target_date
+
+
+def _recurring_schedule_occurs_in_window(
+    row: dict[str, Any],
+    *,
+    start_date: date,
+    target_date: date,
+) -> bool:
+    weekday = row.get("weekday")
+    if isinstance(weekday, bool) or not isinstance(weekday, int):
+        return False
+    cursor = start_date
+    while cursor <= target_date:
+        if (
+            cursor.isoweekday() == weekday
+            and recurring_commitment_applies_on(row, cursor)
+        ):
+            return True
+        cursor += timedelta(days=1)
+    return False
 
 
 def _is_event_in_window(

@@ -87,6 +87,7 @@ class _SavedCheckInSummary extends StatelessWidget {
       if (draft.energy != null) 'Energy ${draft.energy}',
       if (draft.sleepHours != null)
         'Sleep ${formatCaptureHours(draft.sleepHours!)} h',
+      if (draft.sleepQuality != null) 'Sleep quality ${draft.sleepQuality}/10',
       if (draft.stress != null) 'Stress ${draft.stress}',
     ];
     return AppCard(

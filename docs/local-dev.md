@@ -216,7 +216,7 @@ retrying after a timeout:
 curl -X POST http://localhost:8000/v1/intake/complete \
   -H 'Authorization: Bearer <supabase_access_token>' \
   -H 'Content-Type: application/json' \
-  -d '{"version":"intake-v1","request_id":"11111111-1111-4111-8111-111111111111","base_revision":0,"responses":{"primary_focus_areas":["focus"],"goals":[{"key":"22222222-2222-4222-8222-222222222222","title":"Protect focus time","status":"active"}],"friction_points":[],"weekday_shape":"school_or_work","best_energy_window":"morning","coaching_style":"direct","reminder_preference":{"enabled":true,"quiet_hours":{"starts_at":"21:00","ends_at":"07:00"}},"routines":[{"key":"33333333-3333-4333-8333-333333333333","title":"Walk after lunch","status":"candidate","cadence_confirmed":false,"frequency":null,"target":null}],"fixed_commitments":[],"calendar_connection_intent":"not_now"},"metadata":{"client":"curl"}}'
+  -d '{"version":"intake-v1","request_id":"11111111-1111-4111-8111-111111111111","base_revision":0,"responses":{"primary_focus_areas":["focus"],"goals":[{"key":"22222222-2222-4222-8222-222222222222","title":"Protect focus time","status":"active"}],"friction_points":[],"weekday_shape":"school_or_work","best_energy_window":"morning","coaching_style":"direct","reminder_preference":{"enabled":true,"quiet_hours":{"starts_at":"21:00","ends_at":"07:00"}},"routines":[{"key":"33333333-3333-4333-8333-333333333333","title":"Walk after lunch","status":"candidate","cadence_confirmed":false,"frequency":null,"target":null}],"fixed_commitments":[]},"metadata":{"client":"curl"}}'
 ```
 
 For an edit, load Setup first, send its `revision` as the next request's
@@ -404,8 +404,9 @@ DELETE /v1/calendar-integrations/connections/{connection_id}/imported-data?reque
 
 Disconnect retains the local read-only event copy and rejects future imports.
 Delete is permitted only after disconnect and removes integration event/import
-rows without touching `schedule_items` or any source calendar. Setup's calendar
-interest answer never creates consent. The slice has no OAuth token, provider
+rows without touching `schedule_items` or any source calendar. Onboarding does
+not ask for calendar interest; any legacy Setup interest value never creates
+consent. The slice has no OAuth token, provider
 URL, provider write, background sync, LLM processing, or automatic
 snapshot/briefing input. See `docs/phase-9-calendar-import-contract.md`.
 
@@ -478,7 +479,8 @@ When FastAPI is running and Flutter is in real backend mode, a successful daily
 capture calls the daily snapshot endpoint best-effort with the capture's
 explicit local `target_date`. `/daily-check-in` redirects to the canonical
 Evening Shutdown at `/quick-mood-check-in`; the separate short
-`/morning-calibration` route captures sleep, current energy, and day shape. If
+`/morning-calibration` route captures sleep duration, an independent required
+1–10 estimated sleep quality, current energy, and day shape. If
 FastAPI is down, the durable Supabase capture still succeeds and the snapshot
 refresh is skipped by the client. Normal capture does not generate
 recommendations or create or change a plan. Guest/mock capture remains local.
@@ -490,8 +492,14 @@ row. Phase 1 stores its bounded structured state under
 Morning energy takes precedence when present, while mood and stress come from
 Evening and sleep comes from Morning. The writer reconciles the linked current
 mood, energy, stress, and sleep events without duplicates and mirrors relevant
-capture metadata onto those events. Blank Evening reflection, blocker, and
-gentle-tomorrow answers stay absent and do not create other product records.
+capture metadata onto those events. Sleep quality remains additive Morning
+metadata mirrored onto the existing Morning-origin events, so the maximum stays
+four. Blank Evening reflection, blocker, and
+tomorrow-priority answers stay absent and do not create other product records.
+Evening requires a primary friction (with `no_major_friction` as an explicit
+answer), allows up to two unique additional frictions, and no longer writes the
+retired `gentle_tomorrow` field. Legacy captures containing that field remain
+readable.
 
 Backend-only Supabase configuration for the AI service:
 
@@ -825,6 +833,7 @@ The central Planner additionally requires:
 
 ```text
 20260722120000_planner_v1.sql
+20260722234000_setup_commitment_validity_guards.sql
 ```
 
 It adds read-only owner projections plus service-role-only, owner-locked
@@ -859,7 +868,7 @@ onboarding projection changes; and remove legacy `"User"` fallback from role
 authority. Authenticated profile edits are limited to non-authority fields;
 service role and the atomic Intake apply RPC retain the required backend
 projection authority. A fresh migration-chain verification should end at
-`20260722120000_planner_v1.sql`. The earlier small account-export grant gives
+`20260722234000_setup_commitment_validity_guards.sql`. The earlier small account-export grant gives
 only `service_role` the `lifestyle_entries` read authority required by the
 existing Account Export V1 table set. The account-delete
 migration installs the service-role-only full-account delete transaction; it
@@ -925,8 +934,9 @@ For local Supabase-backed app testing:
    `SUPABASE_ANON_KEY=<local anon key>`.
 5. Start the frontend with `scripts/start_frontend.sh`.
 6. Smoke test registration or sign-in, required-only Setup, Setup re-entry/edit/
-   review, required-only Evening Shutdown, Morning Calibration on the same local
-   date, Evening re-entry/edit without losing Morning state, task
+   review, required-only Evening Shutdown, Morning Calibration with separate
+   duration and quality on the same local date, Evening re-entry/edit without
+   losing Morning state, task
    create/edit/postpone/undo/complete/restore/cancel/restore, manual and
    Setup-owned habit complete/skip/undo, focus start/finish/abandon with an owned
    target, Today Overview streak/progress arithmetic, all four agenda source

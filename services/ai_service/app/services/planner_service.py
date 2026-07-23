@@ -50,6 +50,7 @@ from app.services.planning_availability import (
     BusySources,
     allocate_task_intervals,
     choose_recurring_habit_slots,
+    recurring_commitment_applies_on,
 )
 
 
@@ -1088,6 +1089,7 @@ def _availability_sources(
                 "weekday": row.get("weekday"),
                 "starts_at": row.get("starts_at"),
                 "ends_at": row.get("ends_at"),
+                "metadata": row.get("metadata"),
             },
         )
     for row in context.commitments:
@@ -1174,7 +1176,10 @@ def _add_setup_commitments(
         starts = _time(row.get("starts_at"))
         ends = _time(row.get("ends_at"))
         for day in days:
-            if day.isoweekday() != weekday:
+            if (
+                day.isoweekday() != weekday
+                or not recurring_commitment_applies_on(row, day)
+            ):
                 continue
             starts_at = datetime.combine(day, starts, tzinfo=zone)
             ends_at = datetime.combine(day, ends, tzinfo=zone)
@@ -1588,7 +1593,10 @@ def _authoritative_intervals(
         starts = _time(row.get("starts_at"))
         ends = _time(row.get("ends_at"))
         for day in days:
-            if day.isoweekday() == weekday:
+            if day.isoweekday() == weekday and recurring_commitment_applies_on(
+                row,
+                day,
+            ):
                 intervals.append(
                     (
                         datetime.combine(day, starts, tzinfo=zone),

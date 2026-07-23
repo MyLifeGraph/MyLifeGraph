@@ -202,6 +202,7 @@ class DashboardCheckIn {
     this.mood,
     this.energy,
     this.sleepHours,
+    this.sleepQuality,
     this.stress,
     this.focusMinutes,
     this.steps,
@@ -219,6 +220,7 @@ class DashboardCheckIn {
   final int? mood;
   final int? energy;
   final double? sleepHours;
+  final int? sleepQuality;
   final int? stress;
   final int? focusMinutes;
   final int? steps;
@@ -235,6 +237,7 @@ class DashboardCheckIn {
       mood != null ||
       energy != null ||
       sleepHours != null ||
+      sleepQuality != null ||
       stress != null ||
       focusMinutes != null ||
       steps != null ||

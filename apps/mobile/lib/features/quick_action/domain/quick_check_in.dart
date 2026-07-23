@@ -56,6 +56,7 @@ enum FocusBand {
 }
 
 enum MainFriction {
+  noMajorFriction('no_major_friction'),
   unclearPriorities('unclear_priorities'),
   tooMuchToDo('too_much_to_do'),
   interruptions('interruptions'),
@@ -160,9 +161,9 @@ class EveningShutdownDraft {
     required this.focusBand,
     required this.mainFriction,
     required this.tomorrowPriority,
+    this.additionalFrictions = const <MainFriction>[],
     this.reflectionNote = '',
     this.specificBlocker = '',
-    this.makeTomorrowGentler = false,
   });
 
   factory EveningShutdownDraft.empty(
@@ -218,10 +219,15 @@ class EveningShutdownDraft {
         'focus band',
       ),
       mainFriction: MainFriction.fromCode(json['main_friction']),
+      additionalFrictions: _optionalEnumListFromCodes(
+        MainFriction.values,
+        json['additional_frictions'],
+        (item) => item.code,
+        'additional frictions',
+      ),
       tomorrowPriority: _optionalString(json['tomorrow_priority']) ?? '',
       reflectionNote: _optionalString(json['reflection_note']) ?? '',
       specificBlocker: _optionalString(json['specific_blocker']) ?? '',
-      makeTomorrowGentler: json['gentle_tomorrow'] == true,
     );
     draft.validate();
     final storedLabel = _optionalString(json['stress_intensity_label']);
@@ -235,6 +241,7 @@ class EveningShutdownDraft {
   static const maxTomorrowPriorityLength = 160;
   static const maxReflectionLength = 1000;
   static const maxSpecificBlockerLength = 280;
+  static const maxAdditionalFrictions = 2;
 
   final String captureId;
   final String entryDate;
@@ -246,10 +253,10 @@ class EveningShutdownDraft {
   final StressControllability? stressControllability;
   final FocusBand? focusBand;
   final MainFriction? mainFriction;
+  final List<MainFriction> additionalFrictions;
   final String tomorrowPriority;
   final String reflectionNote;
   final String specificBlocker;
-  final bool makeTomorrowGentler;
 
   bool get requiresStressContext => stress != null && stress! >= 5;
 
@@ -278,10 +285,10 @@ class EveningShutdownDraft {
     Object? stressControllability = _unset,
     Object? focusBand = _unset,
     Object? mainFriction = _unset,
+    List<MainFriction>? additionalFrictions,
     String? tomorrowPriority,
     String? reflectionNote,
     String? specificBlocker,
-    bool? makeTomorrowGentler,
   }) {
     return EveningShutdownDraft(
       captureId: captureId ?? this.captureId,
@@ -302,15 +309,18 @@ class EveningShutdownDraft {
       mainFriction: identical(mainFriction, _unset)
           ? this.mainFriction
           : mainFriction as MainFriction?,
+      additionalFrictions: additionalFrictions ?? this.additionalFrictions,
       tomorrowPriority: tomorrowPriority ?? this.tomorrowPriority,
       reflectionNote: reflectionNote ?? this.reflectionNote,
       specificBlocker: specificBlocker ?? this.specificBlocker,
-      makeTomorrowGentler: makeTomorrowGentler ?? this.makeTomorrowGentler,
     );
   }
 
   EveningShutdownDraft normalized() => copyWith(
         captureId: captureId.trim(),
+        additionalFrictions: List<MainFriction>.unmodifiable(
+          additionalFrictions,
+        ),
         tomorrowPriority: tomorrowPriority.trim(),
         reflectionNote: reflectionNote.trim(),
         specificBlocker: specificBlocker.trim(),
@@ -334,6 +344,24 @@ class EveningShutdownDraft {
       throw const FormatException(
         'Stress source and controllability must be supplied together when '
         'stress is medium or high.',
+      );
+    }
+    if (additionalFrictions.length > maxAdditionalFrictions) {
+      throw const FormatException(
+        'Choose no more than two additional frictions.',
+      );
+    }
+    if (additionalFrictions.toSet().length != additionalFrictions.length) {
+      throw const FormatException('Additional frictions must be unique.');
+    }
+    if (additionalFrictions.contains(MainFriction.noMajorFriction)) {
+      throw const FormatException(
+        'No major friction cannot be an additional friction.',
+      );
+    }
+    if (mainFriction != null && additionalFrictions.contains(mainFriction)) {
+      throw const FormatException(
+        'The primary friction cannot also be an additional friction.',
       );
     }
     _validateBoundedString(
@@ -370,13 +398,16 @@ class EveningShutdownDraft {
         'stress_controllability': value.stressControllability!.code,
       if (value.focusBand != null) 'focus_band': value.focusBand!.code,
       'main_friction': value.mainFriction!.code,
+      if (value.additionalFrictions.isNotEmpty)
+        'additional_frictions': value.additionalFrictions
+            .map((friction) => friction.code)
+            .toList(growable: false),
       if (value.tomorrowPriority.isNotEmpty)
         'tomorrow_priority': value.tomorrowPriority,
       if (value.reflectionNote.isNotEmpty)
         'reflection_note': value.reflectionNote,
       if (value.specificBlocker.isNotEmpty)
         'specific_blocker': value.specificBlocker,
-      if (value.makeTomorrowGentler) 'gentle_tomorrow': true,
     };
   }
 }
@@ -387,6 +418,7 @@ class MorningCalibrationDraft {
     required this.entryDate,
     required this.capturedAt,
     required this.sleepHours,
+    required this.sleepQuality,
     required this.energy,
     required this.dayShape,
   });
@@ -401,6 +433,7 @@ class MorningCalibrationDraft {
       entryDate: date,
       capturedAt: capturedAt,
       sleepHours: null,
+      sleepQuality: null,
       energy: null,
       dayShape: null,
     );
@@ -413,15 +446,22 @@ class MorningCalibrationDraft {
     if (json['capture_kind'] != 'morning' || json['entry_date'] != entryDate) {
       throw const FormatException('Morning capture identity is invalid.');
     }
+    final sleepQuality = json['sleep_quality'];
+    if (json.containsKey('sleep_quality') && sleepQuality is! int) {
+      throw const FormatException('Sleep quality must be a whole number.');
+    }
     final draft = MorningCalibrationDraft(
       captureId: _requiredString(json, 'capture_id'),
       entryDate: entryDate,
       capturedAt: _requiredDateTime(json, 'captured_at'),
       sleepHours: (json['sleep_hours'] as num?)?.toDouble(),
+      sleepQuality: sleepQuality as int?,
       energy: (json['current_energy'] as num?)?.toInt(),
       dayShape: DayShape.fromCode(json['day_shape']),
     );
-    draft.validate();
+    // V2 Morning captures written before sleep quality was introduced remain
+    // readable. A new Morning save still requires an explicit value.
+    draft.validate(requireSleepQuality: false);
     return draft;
   }
 
@@ -431,10 +471,17 @@ class MorningCalibrationDraft {
   final String entryDate;
   final DateTime capturedAt;
   final double? sleepHours;
+  final int? sleepQuality;
   final int? energy;
   final DayShape? dayShape;
 
   bool get isComplete =>
+      sleepHours != null &&
+      sleepQuality != null &&
+      energy != null &&
+      dayShape != null;
+
+  bool get _hasLegacyRequiredAnswers =>
       sleepHours != null && energy != null && dayShape != null;
 
   MorningCalibrationDraft copyWith({
@@ -442,6 +489,7 @@ class MorningCalibrationDraft {
     String? entryDate,
     DateTime? capturedAt,
     Object? sleepHours = _unset,
+    Object? sleepQuality = _unset,
     Object? energy = _unset,
     Object? dayShape = _unset,
   }) {
@@ -452,6 +500,9 @@ class MorningCalibrationDraft {
       sleepHours: identical(sleepHours, _unset)
           ? this.sleepHours
           : sleepHours as double?,
+      sleepQuality: identical(sleepQuality, _unset)
+          ? this.sleepQuality
+          : sleepQuality as int?,
       energy: identical(energy, _unset) ? this.energy : energy as int?,
       dayShape:
           identical(dayShape, _unset) ? this.dayShape : dayShape as DayShape?,
@@ -462,18 +513,22 @@ class MorningCalibrationDraft {
         captureId: captureId.trim(),
       );
 
-  void validate() {
+  void validate({bool requireSleepQuality = true}) {
     _validateCaptureIdentity(
       captureId: captureId,
       entryDate: entryDate,
       maxCaptureIdLength: maxCaptureIdLength,
     );
-    if (!isComplete) {
+    if (!_hasLegacyRequiredAnswers ||
+        (requireSleepQuality && sleepQuality == null)) {
       throw const FormatException(
         'All morning check-in answers must be selected.',
       );
     }
     _validateRating('energy', energy!);
+    if (sleepQuality != null) {
+      _validateRating('sleep quality', sleepQuality!);
+    }
     if (!sleepHours!.isFinite || sleepHours! < 0 || sleepHours! > 12) {
       throw const FormatException('Sleep hours must be between 0 and 12.');
     }
@@ -484,7 +539,9 @@ class MorningCalibrationDraft {
   }
 
   Map<String, dynamic> toMetadataJson() {
-    validate();
+    // This serializer is also used while preserving an older Morning branch
+    // during an Evening-only edit.
+    validate(requireSleepQuality: false);
     final value = normalized();
     return {
       'capture_kind': 'morning',
@@ -492,6 +549,7 @@ class MorningCalibrationDraft {
       'capture_id': value.captureId,
       'captured_at': value.capturedAt.toUtc().toIso8601String(),
       'sleep_hours': value.sleepHours,
+      if (value.sleepQuality != null) 'sleep_quality': value.sleepQuality,
       'current_energy': value.energy,
       'day_shape': value.dayShape!.code,
     };
@@ -636,6 +694,7 @@ class DailyCaptureEntry {
   int? get mood => evening?.mood ?? legacy?.mood;
   int? get energy => morning?.energy ?? evening?.energy ?? legacy?.energy;
   double? get sleepHours => morning?.sleepHours ?? legacy?.sleepHours;
+  int? get sleepQuality => morning?.sleepQuality;
   int? get stress => evening?.stress ?? legacy?.stress;
   String get reflectionNote => evening != null
       ? evening!.reflectionNote.trim()
@@ -890,6 +949,25 @@ T? _optionalEnumFromCode<T>(
     return null;
   }
   return _enumFromCode<T>(values, raw, code, field);
+}
+
+List<T> _optionalEnumListFromCodes<T>(
+  List<T> values,
+  Object? raw,
+  String Function(T value) code,
+  String field,
+) {
+  if (raw == null) {
+    return const [];
+  }
+  if (raw is! List) {
+    throw FormatException('$field must be a list.');
+  }
+  return List<T>.unmodifiable(
+    raw.map(
+      (item) => _enumFromCode<T>(values, item, code, field),
+    ),
+  );
 }
 
 void _validateCaptureIdentity({

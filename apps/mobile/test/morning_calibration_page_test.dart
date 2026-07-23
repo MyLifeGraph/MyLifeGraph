@@ -7,7 +7,7 @@ import 'package:my_life_graph/features/quick_action/presentation/pages/morning_c
 import 'package:my_life_graph/features/quick_action/presentation/providers/quick_check_in_providers.dart';
 
 void main() {
-  testWidgets('morning-only calibration saves three explicit answers',
+  testWidgets('morning-only calibration saves four explicit answers',
       (tester) async {
     final semantics = tester.ensureSemantics();
     final store = _MorningStore();
@@ -19,6 +19,7 @@ void main() {
     expect(saveButton.onPressed, isNull);
 
     await _performSemanticTap(tester, 'morning sleep 5.5 h');
+    await _performSemanticTap(tester, 'morning sleep quality 3 of 10');
     await _performSemanticTap(tester, 'morning energy 4 of 10');
     await _performSemanticTap(tester, 'day shape constrained');
     await tester.pump();
@@ -29,6 +30,7 @@ void main() {
     expect(store.attempts, hasLength(1));
     final draft = store.attempts.single;
     expect(draft.sleepHours, 5.5);
+    expect(draft.sleepQuality, 3);
     expect(draft.energy, 4);
     expect(draft.dayShape, DayShape.constrained);
     semantics.dispose();
@@ -39,10 +41,12 @@ void main() {
     final store = _MorningStore(failOnce: true);
     await _pumpPage(tester, store);
 
-    await tester.tap(find.bySemanticsLabel('morning sleep 5.5 h'));
-    await tester.tap(find.bySemanticsLabel('morning energy 4 of 10'));
-    await tester.tap(find.bySemanticsLabel('day shape constrained'));
+    await _performSemanticTap(tester, 'morning sleep 5.5 h');
+    await _performSemanticTap(tester, 'morning sleep quality 3 of 10');
+    await _performSemanticTap(tester, 'morning energy 4 of 10');
+    await _performSemanticTap(tester, 'day shape constrained');
     await tester.pump();
+    await tester.ensureVisible(find.text('Save morning check-in'));
     await tester.tap(find.text('Save morning check-in'));
     await tester.pumpAndSettle();
 
@@ -52,6 +56,7 @@ void main() {
       ),
       findsWidgets,
     );
+    await tester.ensureVisible(find.text('Save morning check-in'));
     await tester.tap(find.text('Save morning check-in'));
     await tester.pumpAndSettle();
 
@@ -70,6 +75,7 @@ void main() {
       entryDate: dailyCaptureEntryDate(now),
       capturedAt: now,
       sleepHours: 8.5,
+      sleepQuality: 8,
       energy: 7,
       dayShape: DayShape.flexible,
     );
@@ -84,10 +90,12 @@ void main() {
       ),
       findsOneWidget,
     );
+    await tester.ensureVisible(find.text('Save morning check-in'));
     await tester.tap(find.text('Save morning check-in'));
     await tester.pumpAndSettle();
     final written = store.attempts.single;
     expect(written.sleepHours, saved.sleepHours);
+    expect(written.sleepQuality, saved.sleepQuality);
     expect(written.energy, saved.energy);
     expect(written.dayShape, saved.dayShape);
     expect(written.captureId, saved.captureId);
@@ -106,6 +114,7 @@ void main() {
 
     expect(tester.takeException(), isNull);
     await _performSemanticTap(tester, 'morning sleep 7 h');
+    await _performSemanticTap(tester, 'morning sleep quality 7 of 10');
     await _performSemanticTap(tester, 'morning energy 7 of 10');
     await _performSemanticTap(tester, 'day shape flexible');
     final save = find.text('Save morning check-in');
@@ -113,6 +122,38 @@ void main() {
     await tester.pumpAndSettle();
     expect(save.hitTestable(), findsOneWidget);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+      'older morning capture stays readable and requires quality before resave',
+      (tester) async {
+    final now = DateTime.now();
+    final saved = MorningCalibrationDraft(
+      captureId: 'saved-morning-without-quality',
+      entryDate: dailyCaptureEntryDate(now),
+      capturedAt: now,
+      sleepHours: 8,
+      sleepQuality: null,
+      energy: 7,
+      dayShape: DayShape.normal,
+    );
+    final store = _MorningStore(
+      initial: DailyCaptureEntry(entryDate: saved.entryDate, morning: saved),
+    );
+    await _pumpPage(tester, store);
+
+    expect(find.text('Estimated sleep quality'), findsOneWidget);
+    final saveButton = tester.widget<FilledButton>(
+      find.widgetWithText(FilledButton, 'Save morning check-in'),
+    );
+    expect(saveButton.onPressed, isNull);
+
+    await _performSemanticTap(tester, 'morning sleep quality 6 of 10');
+    await tester.ensureVisible(find.text('Save morning check-in'));
+    await tester.tap(find.text('Save morning check-in'));
+    await tester.pumpAndSettle();
+
+    expect(store.attempts.single.sleepQuality, 6);
   });
 }
 
@@ -123,6 +164,7 @@ Future<void> _performSemanticTap(
   await tester.ensureVisible(find.bySemanticsLabel(label));
   await tester.pumpAndSettle();
   final node = tester.getSemantics(find.bySemanticsLabel(label));
+  final isChoice = label.startsWith('day shape ');
   expect(
     node,
     matchesSemantics(
@@ -131,6 +173,10 @@ Future<void> _performSemanticTap(
       hasSelectedState: true,
       isSelected: false,
       hasTapAction: true,
+      hasFocusAction: isChoice,
+      isFocusable: isChoice,
+      hasEnabledState: isChoice,
+      isEnabled: isChoice,
     ),
   );
   await tester.tap(find.bySemanticsLabel(label).hitTestable());

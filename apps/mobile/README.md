@@ -94,8 +94,10 @@ reviews, signals, recommendations, feedback history, and the full week remain
 lazy. The persisted deterministic briefing still exists for backend consumers,
 but it is no longer presented as a decision made for the user. Capture itself
 does not generate recommendations or create/change a plan. Morning Calibration
-therefore describes only what that save does. Guest/mock Today and capture stay
-local and make no authenticated request.
+therefore describes only what that save does. It requires sleep duration and an
+independent `1..10` estimated sleep-quality rating; older saved Morning V2
+objects remain readable until the user explicitly completes that new answer.
+Guest/mock Today and capture stay local and make no authenticated request.
 
 ## Auth Modes
 
@@ -112,8 +114,11 @@ local and make no authenticated request.
   no iOS runner, so native iOS callback support is not claimed.
 
 First-run Setup uses explicit required selections and progressive optional
-goals, routines, context, and fixed commitments. `/onboarding?edit=1` loads the
-saved typed state with loading/error/retry behavior. Authenticated real-mode
+goals, routines, context, and fixed commitments. Weekly commitments can carry
+optional inclusive semester dates and can be duplicated for another weekday;
+without dates they repeat until archived. Calendar import is not asked during
+onboarding and remains an optional Settings integration. `/onboarding?edit=1`
+loads the saved typed state with loading/error/retry behavior. Authenticated real-mode
 reads use `GET /v1/intake/setup`; completion and edits use
 `POST /v1/intake/complete` with a stable request id and base revision. Blank
 optionals create nothing, and

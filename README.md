@@ -108,10 +108,15 @@ way to explore the product today is the Flutter app in mock-data guest mode.
   creation and timing, Deadline Planner entry, and one-off or weekly fixed
   commitments. Its shared deterministic availability engine stages five-minute
   Task blocks or stable Habit slots and reserves them only after explicit
-  confirmation. One explicit read-only Calendar busy-time preference is shared
-  with Deadline Planner. Current conflicts create attention facts, never hidden
-  or background replanning. Inbox moved from the app shell to Settings without
-  changing notification persistence or delivery.
+  confirmation. Setup is the primary availability source: recurring classes,
+  work, and other weekly blocks can have optional inclusive semester dates and
+  can be duplicated across weekdays. Planner warns before automatic planning
+  when no current availability source is visible, while still allowing an
+  explicit continue. Calendar import is not part of onboarding; one optional
+  explicit read-only busy-time preference is shared with Deadline Planner.
+  Current conflicts create attention facts, never hidden or background
+  replanning. Inbox moved from the app shell to Settings without changing
+  notification persistence or delivery.
   The repository does not configure a deployed cron. Notification Delivery V1
   can create bounded local deterministic Inbox rows only after separate in-app
   consent; it still adds no provider/system delivery channel.
@@ -328,16 +333,22 @@ Supabase is the intended auth and persistence backend. The current app supports:
   explicit reload.
 - Evening check-in is a two-page flow for mood, energy, stress, and friction.
   Stress source/influence is requested only from medium stress upward;
-  tomorrow priority, reflection, blocker, and gentle-tomorrow intent are
-  optional. It no longer asks users to estimate focus that completed Focus
-  sessions can measure. Morning check-in remains a separate short flow for
-  sleep hours, current energy, and day shape.
+  the required primary-friction question includes `No major friction`, and up
+  to two different `Also present` frictions are optional. Only the primary
+  friction shapes Daily Mode. Tomorrow priority, reflection, and blocker are
+  optional; the former gentle-tomorrow switch is no longer written. It no
+  longer asks users to estimate focus that completed Focus sessions can
+  measure. Morning check-in remains a separate short flow for sleep hours,
+  an independent required 1–10 estimate of sleep quality, current energy, and
+  day shape.
 - Both captures merge under `daily_logs.metadata.captures` for the same user and
   date. Morning energy owns the compatible `energy_level` projection when
   present; Evening owns mood and stress, and Morning owns sleep. Linked
   `behavioral_events` are a dynamic, deterministically identified set of at
   most mood, energy, stress, and sleep events. Guest storage uses the same V2
-  daily model while retaining V1 read/migration compatibility.
+  daily model while retaining V1 read/migration compatibility. Sleep quality
+  stays in the Morning capture metadata and is mirrored onto its existing
+  Morning-origin events, so it does not create an invented fifth event.
 - The dashboard refresh action first refreshes the daily snapshot best-effort,
   then calls the deterministic recommendation generator with LLM wording
   disabled. Normal dashboard reads still do not generate recommendations.
@@ -388,6 +399,9 @@ Supabase is the intended auth and persistence backend. The current app supports:
   `missing`/`partial`/`current`/`stale` quality, and recovery-first
   `push`/`steady`/`recover`/`plan` classification. It carries bounded evidence
   and provenance but excludes tomorrow-priority, reflection, and blocker text.
+  A very low current sleep-quality estimate can select recovery even after a
+  long night; a moderately low estimate prevents `push` without treating sleep
+  duration and quality as interchangeable.
 - Phase 1 does not assign Daily Mode, rank briefing actions, generate
   recommendations on capture save, or call an LLM. Phase 2 assigns Daily Mode
   only inside persisted backend snapshots. Phase 3 exposes unranked execution
@@ -454,9 +468,13 @@ Supabase is the intended auth and persistence backend. The current app supports:
 
 Important current caveat: the Flutter app targets the canonical snake_case
 schema. The migration chain currently ends at
-`20260719120000_account_preparation_budget_v1.sql`. It adds the nullable bounded
-profile rule, service-role-only owner-locked setter, and database-boundary
-confirmation recheck without rewriting existing plans. The earlier
+`20260722234000_setup_commitment_validity_guards.sql`. It adds no table or
+column; it keeps Planner and Deadline Planner confirmation aligned with the
+optional inclusive Setup semester bounds and fails closed on protected-function
+drift. The preceding Planner migration adds its seven forced-RLS tables. The
+earlier account preparation migration adds the nullable bounded profile rule,
+service-role-only owner-locked setter, and database-boundary confirmation
+recheck without rewriting existing plans. The earlier
 `20260714143000_notification_delivery_settings_guard.sql` follow-up makes
 Notification Settings replays request-exact across the shared Setup writer and
 keeps the preference revision monotone. The preceding Notification Delivery

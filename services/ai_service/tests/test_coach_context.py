@@ -11,7 +11,11 @@ from app.repositories.coach_context_repository import (
     CoachProfileContext,
     CoachRawContext,
 )
-from app.services.coach_context import CoachContextService, _coaching_preference
+from app.services.coach_context import (
+    CoachContextService,
+    _coaching_preference,
+    _safe_daily_context,
+)
 
 
 LOCAL_DATE = date(2026, 7, 13)
@@ -103,6 +107,42 @@ def test_context_uses_freshness_contracts_and_filters_hidden_metadata() -> None:
     assert set(habit["cadence"]) == {"contract_version", "cadence"}
     daily_context = context["sources"]["daily_snapshot"]["daily_state"]["context"]
     assert "context_note" not in daily_context
+    assert daily_context["sleep_quality"] == 3
+    assert daily_context["main_friction"] == "no_major_friction"
+    assert daily_context["additional_frictions"] == [
+        "interruptions",
+        "hard_to_start",
+    ]
+
+
+def test_daily_context_rejects_malformed_additional_frictions() -> None:
+    assert _safe_daily_context(
+        {
+            "main_friction": "no_major_friction",
+            "additional_frictions": [
+                "interruptions",
+                "hard_to_start",
+                "low_energy",
+            ],
+        },
+    )["additional_frictions"] == []
+    assert _safe_daily_context(
+        {
+            "main_friction": "no_major_friction",
+            "additional_frictions": ["interruptions", "interruptions"],
+        },
+    )["additional_frictions"] == []
+    assert _safe_daily_context(
+        {
+            "main_friction": "interruptions",
+            "additional_frictions": ["interruptions"],
+        },
+    )["additional_frictions"] == []
+
+
+@pytest.mark.parametrize("value", [0, 11, True, 3.5, "3"])
+def test_daily_context_rejects_invalid_sleep_quality(value) -> None:
+    assert _safe_daily_context({"sleep_quality": value})["sleep_quality"] is None
 
 
 def test_current_weekly_review_is_included() -> None:
@@ -195,6 +235,12 @@ def _raw_context() -> CoachRawContext:
                         "mood": 6,
                         "current_energy": 5,
                         "sleep_hours": 7.5,
+                        "sleep_quality": 3,
+                        "main_friction": "no_major_friction",
+                        "additional_frictions": [
+                            "interruptions",
+                            "hard_to_start",
+                        ],
                         "context_note": "SECRET_CAPTURE_NOTE",
                     },
                     "risk_flags": [],

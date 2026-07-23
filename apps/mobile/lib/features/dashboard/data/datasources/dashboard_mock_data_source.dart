@@ -46,6 +46,7 @@ class DashboardMockDataSource {
               mood: draft.mood,
               energy: draft.energy,
               sleepHours: draft.sleepHours,
+              sleepQuality: draft.sleepQuality,
               stress: draft.stress,
               hasEveningCapture: draft.evening != null,
               hasMorningCapture: draft.morning != null,

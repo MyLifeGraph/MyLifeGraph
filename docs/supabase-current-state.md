@@ -52,7 +52,7 @@ The app table constants live in
 | `tasks` | Owner-scoped executable tasks with create/edit/complete/postpone/cancel/restore/undo, optional 5-480 minute estimates, and explicit completion/cancellation timestamps. |
 | `notifications` | Authenticated read-only Inbox projection with backend-owned read/unread/dismiss lifecycle plus optional deterministic generation key/category/local-date/provenance and foreground receipt time. A stored row alone does not prove delivery. |
 | `notification_action_requests` | Service-role-only exact retry/result ledger for `notification-lifecycle-v1`; it contains identities and lifecycle projections, not notification copy. |
-| `schedule_items` | Setup-owned confirmed fixed commitments plus preserved manual/other-source dashboard schedule rows. |
+| `schedule_items` | Setup-owned confirmed fixed commitments plus preserved manual/other-source dashboard schedule rows. Setup-owned metadata may add inclusive optional `valid_from`/`valid_until` semester dates; older/undated rows remain unbounded. |
 | `ai_insights` | Insights list. |
 | `coach_messages` | Bounded validated Phase 10 user/assistant history linked to a retry-safe backend request. Authenticated owners can read; only FastAPI can insert/delete V1 turns. Legacy rows remain distinguishable by null request/contract fields. |
 | `memory_entries` | Durable Setup/manual memory content. Authenticated owners can read, but Phase 10 selection is a separate projection and does not transfer Setup ownership or promote check-in/conversation text automatically. Preference rows remain ineligible until a later sensitivity contract can distinguish hidden context safely. |
@@ -85,8 +85,15 @@ Phase 1 canonical capture upserts one `daily_logs` row per user/date with source
 owned `captures.evening` and `captures.morning` objects. Saving one kind replaces
 only that object, preserving the other capture and unrelated metadata. Numeric
 projection keeps existing consumers compatible: Morning energy takes
-precedence, Evening owns mood and stress, and Morning owns sleep. Rough focus is
-kept as a structured band and does not fabricate `focus_minutes`.
+precedence, Evening owns mood and stress, and Morning owns sleep. Evening stores
+one required primary friction (including `no_major_friction`) plus at most two
+unique optional `additional_frictions`; only the primary drives Daily Mode.
+Morning stores an independent whole-number `1..10` `sleep_quality` estimate in
+its JSON object. Older V2 Morning objects without it remain readable; new
+Morning saves require it. No direct compatibility column is added.
+New writes omit the retired `gentle_tomorrow` field, while legacy capture
+objects containing it remain readable. Rough focus is kept as a structured band
+and does not fabricate `focus_minutes`.
 
 After each write Flutter removes the existing `quick_check_in` events linked to
 that `daily_log_id` and upserts the explicit current signals with deterministic
@@ -94,7 +101,9 @@ ids derived from the daily row and event kind. The resulting set is dynamic and
 contains at most mood, energy, stress, and sleep; an Evening-only or
 Morning-only day therefore does not create unanswered events. Event metadata
 mirrors the relevant capture kind, id, local entry date, capture time, and
-bounded context. Repeated same-day saves converge without append-only signal
+bounded context. Sleep quality is mirrored on the existing Morning-origin
+energy and sleep events instead of creating a fifth event. Repeated same-day
+saves converge without append-only signal
 history. Existing columns, grants, and RLS policies are sufficient, so Phase 1
 adds no schema migration.
 
@@ -128,7 +137,9 @@ previous date; Morning is current only from the target date. Strict V2 parsing
 does not fall back to projected columns after a malformed or unsupported V2
 marker. Legacy numeric rows are accepted conservatively only when no V2 marker
 exists. Missing, partial, or stale evidence cannot produce `push`, and recovery
-rules precede planning/productivity rules.
+rules precede planning/productivity rules. Very low current sleep quality may
+select `recover` even with sufficient duration; moderately low quality prevents
+`push`.
 
 The persisted source marker remains `snapshot-aggregator-v1`. Metadata adds
 `daily_state_contract_version` and `state_lookback_days`; existing
@@ -390,6 +401,12 @@ imported-calendar busy time. `planner_action_plans` and immutable
 stores stable weekly slots. `planner_commitments` owns manually entered
 one-off or weekly authoritative busy time. `planner_request_identities` is the
 backend-only global retry ledger.
+
+No additional timetable table is required for bounded Setup commitments. Their
+optional inclusive semester dates are part of Setup-owned `schedule_items`
+metadata and are reconciled atomically with the rest of the Setup projection.
+Planner, Deadline Planner, Today, and snapshots use the same date-applicability
+rule. Calendar import remains separate and optional.
 
 All seven tables use forced RLS. Authenticated owners receive read-only access
 to preferences, plans, revisions, blocks, slots, and commitments; they receive
@@ -750,12 +767,17 @@ service-role-only owner-locked preference/action-plan/commitment RPCs,
 lifecycle release triggers, and the Deadline Planner reservation guard. It
 does not migrate or schedule existing targets.
 
+`20260722234000_setup_commitment_validity_guards.sql` keeps the existing Planner
+and Deadline Planner confirmation RPCs aligned with inclusive optional Setup
+semester bounds. It adds one private non-executable predicate and no table or
+column; guarded replacement aborts if the installed RPC definitions drifted.
+
 ## Local Verification Workflow
 
 For local Supabase-backed testing, the reset should complete through:
 
 ```text
-20260722120000_planner_v1.sql
+20260722234000_setup_commitment_validity_guards.sql
 ```
 
 Then configure `.env` with:
@@ -918,10 +940,14 @@ The product should standardize on the snake_case schema. CamelCase tables are
 legacy compatibility only and should be dropped in a later dedicated migration
 after data migration and app verification are complete.
 
-The latest schema addition is `20260722120000_planner_v1.sql`. It adds additive
-forced-RLS Planner preference, immutable Action Plan revision, Task block,
-Habit slot, manual commitment, and retry-ledger persistence plus service-only
-owner-locked mutations. Existing targets remain unchanged. The preceding
+The latest migration is
+`20260722234000_setup_commitment_validity_guards.sql`. It adds no schema object
+beyond one private helper and keeps Planner/Deadline confirmation aligned with
+optional inclusive Setup semester bounds. The preceding
+`20260722120000_planner_v1.sql` adds additive forced-RLS Planner preference,
+immutable Action Plan revision, Task block, Habit slot, manual commitment, and
+retry-ledger persistence plus service-only owner-locked mutations. Existing
+targets remain unchanged. The earlier
 `20260719120000_account_preparation_budget_v1.sql` adds the explicit optional
 daily preparation-capacity rule. Earlier,
 `20260714143000_notification_delivery_settings_guard.sql` made the

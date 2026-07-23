@@ -32,6 +32,7 @@ FOCUS_BANDS = (
     "over_2_hours",
 )
 MAIN_FRICTIONS = (
+    "no_major_friction",
     "unclear_priorities",
     "too_much_to_do",
     "interruptions",
@@ -103,6 +104,7 @@ def morning_capture(
         "capture_id": f"morning-{entry_date.isoformat()}-fixture",
         "captured_at": f"{entry_date.isoformat()}T06:30:00+00:00",
         "sleep_hours": 8.0,
+        "sleep_quality": 8,
         "current_energy": 8,
         "day_shape": "normal",
     }
@@ -272,6 +274,92 @@ def test_parser_accepts_every_main_friction(code: str) -> None:
     assert "evening.invalid_main_friction" not in result.signals["quality_issues"]
 
 
+def test_parser_accepts_up_to_two_additional_frictions() -> None:
+    result = build_state(
+        daily_logs=current_rows(
+            evening_overrides={
+                "additional_frictions": ["hard_to_start", "low_energy"],
+            },
+        ),
+    )
+
+    assert result.summary["context"]["additional_frictions"] == [
+        "hard_to_start",
+        "low_energy",
+    ]
+    assert "evening.invalid_additional_frictions" not in result.signals[
+        "quality_issues"
+    ]
+
+
+@pytest.mark.parametrize(
+    "additional_frictions",
+    (
+        "interruptions",
+        ["interruptions", "hard_to_start", "low_energy"],
+        ["interruptions", "interruptions"],
+        ["interruptions", "future_friction"],
+        ["interruptions", "no_major_friction"],
+    ),
+)
+def test_invalid_additional_frictions_make_the_evening_branch_untrusted(
+    additional_frictions: object,
+) -> None:
+    result = build_state(
+        daily_logs=current_rows(
+            evening_overrides={
+                "additional_frictions": additional_frictions,
+            },
+        ),
+    )
+
+    assert result.summary["data_quality"] == "partial"
+    assert "evening.invalid_additional_frictions" in result.signals[
+        "quality_issues"
+    ]
+
+
+def test_primary_friction_cannot_be_repeated_as_additional() -> None:
+    result = build_state(
+        daily_logs=current_rows(
+            evening_overrides={
+                "main_friction": "interruptions",
+                "additional_frictions": ["interruptions"],
+            },
+        ),
+    )
+
+    assert result.summary["data_quality"] == "partial"
+    assert "evening.invalid_additional_frictions" in result.signals[
+        "quality_issues"
+    ]
+
+
+def test_only_primary_friction_shapes_daily_mode() -> None:
+    result = build_state(
+        daily_logs=current_rows(
+            evening_overrides={
+                "main_friction": "no_major_friction",
+                "additional_frictions": [
+                    "unclear_priorities",
+                    "hard_to_start",
+                ],
+            },
+        ),
+        tasks=[active_task()],
+    )
+
+    assert result.summary["context"]["main_friction"] == "no_major_friction"
+    assert result.summary["context"]["additional_frictions"] == [
+        "unclear_priorities",
+        "hard_to_start",
+    ]
+    assert result.mode == "push"
+    assert not any(
+        code.startswith("plan_") for code in result.summary["reason_codes"]
+    )
+
+
 @pytest.mark.parametrize("code", DAY_SHAPES)
 def test_parser_accepts_every_day_shape(code: str) -> None:
     result = build_state(
@@ -401,6 +489,37 @@ def test_invalid_morning_sleep_is_partial_and_not_trusted(invalid) -> None:
     assert "low_sleep" not in result.summary["risk_flags"]
 
 
+@pytest.mark.parametrize("invalid", (0, 11, True, "3", 3.5, float("inf")))
+def test_invalid_morning_sleep_quality_is_partial_and_not_trusted(invalid) -> None:
+    result = build_state(
+        daily_logs=current_rows(morning_overrides={"sleep_quality": invalid}),
+    )
+
+    assert result.summary["context"]["sleep_quality"] is None
+    assert result.summary["data_quality"] == "partial"
+    assert "morning.invalid_sleep_quality" in result.signals["quality_issues"]
+    assert "low_sleep_quality" not in result.summary["risk_flags"]
+
+
+def test_older_v2_morning_without_sleep_quality_remains_compatible() -> None:
+    morning = morning_capture()
+    morning.pop("sleep_quality")
+    result = build_state(
+        daily_logs=[
+            capture_row(
+                row_id="older-morning",
+                entry_date=TARGET_DATE,
+                morning=morning,
+            ),
+        ],
+    )
+
+    assert result.summary["freshness"]["morning"]["state"] == "current"
+    assert result.summary["context"]["sleep_hours"] == 8.0
+    assert result.summary["context"]["sleep_quality"] is None
+    assert "morning.invalid_sleep_quality" not in result.signals["quality_issues"]
+
+
 @pytest.mark.parametrize(
     ("branch_update", "issue"),
     (
@@ -472,6 +591,7 @@ def test_malformed_v2_metadata_does_not_fall_back_to_projected_numbers(
         "mood": None,
         "current_energy": None,
         "sleep_hours": None,
+        "sleep_quality": None,
         "stress": {
             "intensity": None,
             "intensity_label": None,
@@ -480,6 +600,7 @@ def test_malformed_v2_metadata_does_not_fall_back_to_projected_numbers(
         },
         "focus_band": None,
         "main_friction": None,
+        "additional_frictions": [],
         "day_shape": None,
     }
     assert issue in result.signals["quality_issues"]
@@ -894,6 +1015,52 @@ def test_recovery_safeguards_override_planning_and_push(
     assert result.summary["load_guidance"] == "reduce"
 
 
+def test_poor_sleep_quality_can_trigger_recovery_despite_eight_hours() -> None:
+    result = build_state(
+        daily_logs=current_rows(
+            morning_overrides={
+                "sleep_hours": 8.0,
+                "sleep_quality": 2,
+                "current_energy": 8,
+                "day_shape": "flexible",
+            },
+        ),
+        tasks=[active_task()],
+    )
+
+    assert result.summary["context"]["sleep_hours"] == 8.0
+    assert result.summary["context"]["sleep_quality"] == 2
+    assert result.mode == "recover"
+    assert result.summary["reason_codes"][0] == "recover_poor_sleep_quality"
+    assert "low_sleep" not in result.summary["risk_flags"]
+    assert "low_sleep_quality" in result.summary["risk_flags"]
+    assert result.signals["risk_evidence"]["low_sleep_quality"] == [
+        {
+            "table": "daily_logs",
+            "id": "log-morning",
+            "field": "metadata.captures.morning.sleep_quality",
+        },
+    ]
+
+
+def test_moderately_low_sleep_quality_blocks_push_without_forcing_recovery() -> None:
+    result = build_state(
+        daily_logs=current_rows(
+            morning_overrides={
+                "sleep_hours": 8.0,
+                "sleep_quality": 4,
+                "current_energy": 8,
+                "day_shape": "flexible",
+            },
+        ),
+        tasks=[active_task()],
+    )
+
+    assert result.mode == "steady"
+    assert result.summary["reason_codes"] == ["steady_low_sleep_quality"]
+    assert result.summary["risk_flags"] == ["low_sleep_quality"]
+
+
 def test_low_intensity_private_context_prevents_push_without_forcing_recover() -> None:
     result = build_state(
         daily_logs=current_rows(
@@ -1230,8 +1397,7 @@ def test_newer_malformed_evening_blocks_older_evening_from_current_state() -> No
     assert "private_emotional_stress" not in result.risk_codes
 
 
-def test_invalid_optional_gentle_flag_is_ignored_without_downgrading_core_state(
-) -> None:
+def test_legacy_gentle_flag_is_ignored_without_downgrading_core_state() -> None:
     result = build_state(
         daily_logs=current_rows(
             evening_overrides={"gentle_tomorrow": "yes"},
@@ -1241,7 +1407,10 @@ def test_invalid_optional_gentle_flag_is_ignored_without_downgrading_core_state(
 
     assert result.summary["data_quality"] == "current"
     assert result.mode == "push"
-    assert "evening.invalid_gentle_tomorrow" in result.signals["quality_issues"]
+    assert "gentle_tomorrow" not in json.dumps(
+        {"summary": result.summary, "signals": result.signals},
+        sort_keys=True,
+    )
 
 
 def test_evening_only_marks_missing_morning_calibration() -> None:
@@ -1502,4 +1671,9 @@ def test_push_reason_references_the_required_active_action_context() -> None:
         "table": "tasks",
         "id": "push-task",
         "field": "status",
+    } in result.signals["reason_evidence"]["push_good_current_capacity"]
+    assert {
+        "table": "daily_logs",
+        "id": "log-morning",
+        "field": "metadata.captures.morning.sleep_quality",
     } in result.signals["reason_evidence"]["push_good_current_capacity"]

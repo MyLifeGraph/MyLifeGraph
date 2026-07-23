@@ -187,6 +187,15 @@ class WorkloadRepository:
                     "starts_at": "10:30:00",
                     "ends_at": "12:00:00",
                 },
+                {
+                    "weekday": 1,
+                    "starts_at": "08:00:00",
+                    "ends_at": "09:00:00",
+                    "metadata": {
+                        "managed_by": "setup",
+                        "valid_until": "2026-07-19",
+                    },
+                },
             ],
             confirmed_blocks=[
                 {

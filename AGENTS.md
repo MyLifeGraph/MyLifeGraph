@@ -238,6 +238,11 @@ manual commitment, and backend-only retry-ledger tables. Service-role-only
 owner-locked RPCs stage and atomically confirm or cancel plans, create/update/
 archive authoritative commitments, recheck target/calendar/reservation state,
 and release future reservations when a Task or Habit becomes terminal.
+The follow-up migration
+`supabase/migrations/20260722234000_setup_commitment_validity_guards.sql`
+keeps Planner and Deadline Planner confirmation aligned with the optional
+inclusive Setup semester bounds. It adds no table or column and fails closed if
+either protected RPC definition has drifted.
 
 ## Important Docs
 
@@ -307,7 +312,10 @@ Planner V1 is the central authenticated planning home. Task/Habit changes use
 immutable deterministic previews and atomically create or update their target
 only at explicit confirmation; Exam/Assignment creation delegates to Deadline
 Planner. Manual one-off/weekly commitments are authoritative and conflicts only
-create attention. Shared Availability considers Setup/manual commitments,
+create attention. Setup is the primary timetable: recurring commitments may
+carry optional inclusive semester dates, onboarding does not ask for calendar
+interest, and Planner warns before automatic planning when no current
+availability source is visible. Shared Availability considers Setup/manual commitments,
 confirmed Planner and Preparation reservations, and separately consented
 current imported busy time. It never infers missing duration/deadline/cadence,
 moves blocks automatically, writes a calendar, or serves guest/demo fake plans.
@@ -432,7 +440,9 @@ setup with loading, error, and retry states. Authenticated saves use
 `request_id` plus `base_revision`, converge safely across retries and edits,
 and never fall back to direct partial profile/timetable completion. Named
 routines remain candidates in the intake response until cadence is explicitly
-confirmed. Setup-owned goals, active habits, and fixed commitments have durable
+confirmed. Weekly fixed commitments support optional inclusive semester dates
+and duplication across weekdays; calendar import stays outside onboarding.
+Setup-owned goals, active habits, and fixed commitments have durable
 review/edit/archive, pause, and removal paths without touching manual rows.
 Setup apply is one database transaction behind a service-role-only RPC. Client
 validation and HTTP 4xx failures leave the draft editable, a 409 suggests
@@ -446,7 +456,15 @@ Shutdown and Morning Calibration are separate typed flows over one
 `DailyCaptureEntry`. Their same-day merge replaces only the submitted capture
 kind under `daily_logs.metadata.captures`, preserves the other kind, and
 projects compatible numeric columns with Morning energy taking precedence over
-Evening energy. Supabase writes rebuild a dynamic set of at most four
+Evening energy. Evening requires one primary friction with an explicit
+`no_major_friction` answer and accepts up to two optional, distinct additional
+frictions; only the primary friction affects Daily Mode. The retired
+`gentle_tomorrow` field is not written by new captures, while legacy capture
+objects containing it remain readable. Morning separately requires sleep
+duration and a `1..10` estimated sleep-quality rating; very low current quality
+can select recovery even when duration was sufficient, while moderately low
+quality prevents `push`. Older V2 Morning objects without the additive field
+remain readable. Supabase writes rebuild a dynamic set of at most four
 deterministically identified current-state events; guest storage uses V2 daily
 JSON while continuing to read and migrate V1 guest check-ins. Real capture
 writes refresh the explicit local `target_date` snapshot best-effort, while the
@@ -750,7 +768,7 @@ you actually intend to run `supabase db reset`.
 `supabase db reset` must complete through:
 
 ```text
-20260714103000_application_table_privilege_guard.sql
+20260722234000_setup_commitment_validity_guards.sql
 ```
 
 Expected local reset notices include skipped legacy CamelCase tables and

@@ -23,9 +23,10 @@ Phase 9 begins with one optional, explicit, read-only calendar source:
 
 The standalone Setup, capture, Today, Weekly Review, Insights, task, habit,
 focus, and preparation-planning loops remain fully useful without this
-integration. Setup's existing
-`calendar_connection_intent` answer is interest only. It is never consent and
-must not create a connection or import data.
+integration. Current onboarding does not ask for calendar interest. The legacy
+optional `calendar_connection_intent` field remains accepted and returned for
+stored-payload compatibility only; it is never consent and must not create a
+connection or import data.
 
 This slice adds no Google/Microsoft/Apple OAuth, provider access or refresh
 token, arbitrary calendar URL fetch, webhook, incremental cursor, background
@@ -49,8 +50,8 @@ The public contract version is `calendar-import-v1`. Consent is the exact
 
 The backend records the server consent time. No omitted, false read/store, true
 provider-write, true LLM-processing, unknown, null, or coerced field is accepted.
-The Flutter consent checkbox starts unchecked even when Setup recorded calendar
-interest.
+The Flutter consent checkbox starts unchecked regardless of any legacy Setup
+calendar-interest value.
 
 Every returned connection and event identifies:
 
@@ -412,7 +413,8 @@ title is classified and no preparation duration is inferred.
 Focused backend, Flutter, migration, and browser coverage must prove:
 
 - bearer-derived ownership and strict consent/request parsing;
-- Setup calendar interest does not connect or consent;
+- onboarding has no calendar-interest prompt, and any legacy Setup interest
+  value does not connect or consent;
 - create/import retry identity and conflict behavior;
 - bounded parsing, timezone/DST and exclusive all-day semantics;
 - stable single/recurrence occurrence ids, duplicate handling, cancellation,

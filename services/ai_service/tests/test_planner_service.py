@@ -12,7 +12,11 @@ from app.repositories.planner_repository import (
     PlannerOverviewContext,
     PlannerProjection,
 )
-from app.services.planner_service import PlannerService, _attention_items
+from app.services.planner_service import (
+    PlannerService,
+    _add_setup_commitments,
+    _attention_items,
+)
 
 
 NOW = datetime(2026, 7, 20, 7, tzinfo=UTC)
@@ -334,3 +338,31 @@ def test_overview_marks_preview_stale_when_calendar_preference_changes() -> None
 
     assert [item.kind for item in attention] == ["stale_preview"]
     assert "calendar setting" in attention[0].detail
+
+
+def test_overview_shows_setup_commitment_only_inside_semester_dates() -> None:
+    days = [date(2026, 7, 20), date(2026, 7, 27)]
+    day_items = {day: [] for day in days}
+
+    _add_setup_commitments(
+        day_items=day_items,
+        rows=[
+            {
+                "id": "90000000-0000-4000-8000-000000000001",
+                "title": "Lecture",
+                "weekday": 1,
+                "starts_at": "09:00:00",
+                "ends_at": "10:30:00",
+                "metadata": {
+                    "managed_by": "setup",
+                    "valid_from": "2026-07-27",
+                    "valid_until": "2026-12-18",
+                },
+            },
+        ],
+        days=days,
+        zone=ZoneInfo("UTC"),
+    )
+
+    assert day_items[date(2026, 7, 20)] == []
+    assert [item.title for item in day_items[date(2026, 7, 27)]] == ["Lecture"]

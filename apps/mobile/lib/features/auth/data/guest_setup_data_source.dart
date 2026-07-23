@@ -133,6 +133,16 @@ class GuestSetupDataSource {
                 'weekday': commitment.weekday,
                 'startsAt': commitment.startsAt,
                 'endsAt': commitment.endsAt,
+                if (commitment.validFrom != null)
+                  'validFrom': commitment.validFrom!
+                      .toUtc()
+                      .toIso8601String()
+                      .substring(0, 10),
+                if (commitment.validUntil != null)
+                  'validUntil': commitment.validUntil!
+                      .toUtc()
+                      .toIso8601String()
+                      .substring(0, 10),
               },
             )
             .toList(growable: false),
@@ -263,6 +273,8 @@ class GuestSetupDataSource {
       final weekday = _legacyWeekday(row['weekday']);
       final startsAt = _legacyTime(row['starts_at'] ?? row['startsAt']);
       final endsAt = _legacyTime(row['ends_at'] ?? row['endsAt']);
+      final validFrom = _legacyDate(row['valid_from'] ?? row['validFrom']);
+      final validUntil = _legacyDate(row['valid_until'] ?? row['validUntil']);
       final rawKey = row['key'];
       final hasStableKey = rawKey is String && rawKey.trim().isNotEmpty;
       final isComplete = weekday != null &&
@@ -290,6 +302,8 @@ class GuestSetupDataSource {
         'weekday': weekday ?? row['weekday'],
         'starts_at': startsAt,
         'ends_at': endsAt,
+        if (validFrom != null) 'valid_from': validFrom,
+        if (validUntil != null) 'valid_until': validUntil,
         'status': row['status'] ?? IntakeCommitmentStatus.active.name,
       });
     }
@@ -336,6 +350,19 @@ class GuestSetupDataSource {
       return _isLegacyTime(normalized) ? normalized : trimmed;
     }
     return trimmed;
+  }
+
+  String? _legacyDate(Object? value) {
+    if (value is! String) return null;
+    final trimmed = value.trim();
+    final candidate = trimmed.length >= 10 ? trimmed.substring(0, 10) : trimmed;
+    if (!RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(candidate)) return null;
+    final parsed = DateTime.tryParse('${candidate}T00:00:00Z');
+    if (parsed == null ||
+        parsed.toIso8601String().substring(0, 10) != candidate) {
+      return null;
+    }
+    return candidate;
   }
 
   bool _isLegacyTime(String? value) {

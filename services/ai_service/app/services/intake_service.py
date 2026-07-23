@@ -538,6 +538,18 @@ def _build_materialization(
                 setup_item_id=commitment.key,
                 revision=revision,
                 setup_state="active",
+                extra={
+                    **(
+                        {"valid_from": commitment.valid_from.isoformat()}
+                        if commitment.valid_from is not None
+                        else {}
+                    ),
+                    **(
+                        {"valid_until": commitment.valid_until.isoformat()}
+                        if commitment.valid_until is not None
+                        else {}
+                    ),
+                },
             ),
             "updated_at": timestamp,
         }

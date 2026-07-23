@@ -72,7 +72,9 @@ FastAPI service boundary for recommendation and future ML workflows.
   preference, Task/Habit proposal/confirm/cancel, and fixed-commitment commands
   under `/v1/planner`. Immutable previews use shared deterministic availability
   with Deadline Planner and reserve nothing until owner-locked confirmation.
-  Existing targets remain unscheduled; GETs never create revisions. See
+  Setup recurring commitments may use optional inclusive `valid_from` and
+  `valid_until` dates. Existing targets remain unscheduled; GETs never create
+  revisions. Calendar import remains optional and outside onboarding. See
   `../../docs/planner-v1-contract.md`.
 - Phase 10 exposes authenticated capability, deliberate response,
   history/delete, and explicit memory-selection contracts. Standard tests use
@@ -145,7 +147,7 @@ curl http://localhost:8000/v1/intake/setup \
 curl -X POST http://localhost:8000/v1/intake/complete \
   -H 'Authorization: Bearer <supabase_access_token>' \
   -H 'Content-Type: application/json' \
-  -d '{"version":"intake-v1","request_id":"11111111-1111-4111-8111-111111111111","base_revision":0,"responses":{"primary_focus_areas":["focus"],"goals":[{"key":"22222222-2222-4222-8222-222222222222","title":"Protect focus time","status":"active"}],"friction_points":[],"weekday_shape":"school_or_work","best_energy_window":"morning","coaching_style":"direct","reminder_preference":{"enabled":true,"quiet_hours":{"starts_at":"21:00","ends_at":"07:00"}},"routines":[],"fixed_commitments":[],"calendar_connection_intent":"not_now"},"metadata":{"client":"curl"}}'
+  -d '{"version":"intake-v1","request_id":"11111111-1111-4111-8111-111111111111","base_revision":0,"responses":{"primary_focus_areas":["focus"],"goals":[{"key":"22222222-2222-4222-8222-222222222222","title":"Protect focus time","status":"active"}],"friction_points":[],"weekday_shape":"school_or_work","best_energy_window":"morning","coaching_style":"direct","reminder_preference":{"enabled":true,"quiet_hours":{"starts_at":"21:00","ends_at":"07:00"}},"routines":[],"fixed_commitments":[]},"metadata":{"client":"curl"}}'
 ```
 
 Reuse `request_id` for a retry. For a new edit, load Setup first, send the
@@ -190,7 +192,10 @@ Morning yields `current`; one usable current branch or current legacy numeric
 input yields `partial`; older usable input yields `stale`; and no trusted input
 yields `missing`. V2 rows are parsed strictly and never fall back to projected
 numbers when their V2 marker or branch is malformed. Legacy numeric fallback is
-used only when no V2 marker exists.
+used only when no V2 marker exists. Current Morning `sleep_quality` is separate
+from `sleep_hours`: a very low `1..10` estimate can select recovery despite
+sufficient duration, and moderately low quality prevents `push`. Older V2
+Morning branches without the additive field remain compatible.
 
 The source marker remains `snapshot-aggregator-v1`. Snapshot metadata adds
 `daily_state_contract_version=explainable-daily-state-v1` and

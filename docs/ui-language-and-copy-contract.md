@@ -36,6 +36,11 @@ Use these names in student-facing UI and presentation material:
 Versioned API and database names may remain technical. Do not leak those names
 into a primary title, button, field label, or first-line error.
 
+Within Morning check-in, use `Sleep hours` for duration and
+`Estimated sleep quality` for the separate required `1..10` subjective
+measurement. Copy must state that quality is judged independently of duration;
+neither value may be inferred from the other.
+
 ## Today Copy
 
 The primary Today surface uses these exact concepts:
@@ -66,6 +71,12 @@ busy-time use is separately consented, read-only, based on the current imported
 copy, and not live sync. Fixed commitments are authoritative only after the
 user confirms them. Guest/demo copy states that synced Planner is unavailable
 and must not display invented personalized blocks.
+
+When no current manual or consented availability source is visible, use
+`Availability may be incomplete`, offer `Add weekly schedule`, and state that
+calendar import stays optional. The automatic-planning interruption uses
+`Review your availability` and `Continue anyway`; it must not claim either that
+the schedule is complete or that an override makes conflicting time safe.
 
 Do not title the overview `Today's decision`, label a recommendation `Primary
 action`, claim a fixed number of daily steps, or imply the app chose the user's

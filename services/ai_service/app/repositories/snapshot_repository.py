@@ -158,7 +158,9 @@ class SupabaseSnapshotRepository:
         schedule_items = await self._client.select(
             "schedule_items",
             params={
-                "select": "id,title,weekday,starts_at,ends_at,source,updated_at",
+                "select": (
+                    "id,title,weekday,starts_at,ends_at,source,updated_at,metadata"
+                ),
                 "user_id": f"eq.{user_id}",
                 "order": "weekday.asc,starts_at.asc",
                 "limit": "50",

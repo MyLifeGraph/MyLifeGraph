@@ -274,6 +274,24 @@ def test_complete_intake_rejects_invalid_commitment_time_range() -> None:
     assert response.status_code == 422
 
 
+def test_complete_intake_rejects_reversed_commitment_validity_range() -> None:
+    payload = valid_payload()
+    commitment = payload["responses"]["fixed_commitments"][0]  # type: ignore[index]
+    commitment["valid_from"] = "2026-10-01"
+    commitment["valid_until"] = "2026-09-30"
+
+    response = asyncio.run(
+        request(
+            "POST",
+            "/v1/intake/complete",
+            headers=auth_headers(),
+            json=payload,
+        ),
+    )
+
+    assert response.status_code == 422
+
+
 def test_complete_intake_rejects_duplicate_keys_across_kinds() -> None:
     payload = valid_payload()
     payload["responses"]["routines"][0]["key"] = GOAL_KEY  # type: ignore[index]

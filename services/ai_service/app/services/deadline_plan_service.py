@@ -35,6 +35,7 @@ from app.services.planning_availability import (
     ENERGY_WINDOWS as _ENERGY_WINDOWS,
     BusySources,
     allocate_task_intervals,
+    recurring_commitment_applies_on,
 )
 
 
@@ -146,7 +147,7 @@ class DeadlinePlanService:
                     ),
                     fixed_commitment_minutes=_fixed_commitment_minutes(
                         context.schedule_items,
-                        weekday=local_day.isoweekday(),
+                        local_day=local_day,
                     ),
                 ),
             )
@@ -888,7 +889,10 @@ def _busy_intervals_by_day(
         if ends <= starts:
             continue
         for day in days:
-            if day.isoweekday() == weekday:
+            if day.isoweekday() == weekday and recurring_commitment_applies_on(
+                item,
+                day,
+            ):
                 result[day].append(
                     (
                         datetime.combine(day, starts, tzinfo=zone),
@@ -973,11 +977,14 @@ def _confirmed_preparation_minutes_by_day(
 def _fixed_commitment_minutes(
     schedule_items: list[dict[str, Any]],
     *,
-    weekday: int,
+    local_day: date,
 ) -> int:
     intervals: list[tuple[int, int]] = []
     for row in schedule_items:
-        if _int(row.get("weekday")) != weekday:
+        if (
+            _int(row.get("weekday")) != local_day.isoweekday()
+            or not recurring_commitment_applies_on(row, local_day)
+        ):
             continue
         starts = _time(row.get("starts_at"))
         ends = _time(row.get("ends_at"))

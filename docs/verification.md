@@ -281,7 +281,11 @@ Planner V1 focused coverage must prove strict Task/Habit proposal unions,
 explicit scheduling inputs, exact five-minute slotting and unplaced minutes,
 multi-block Tasks, all three Habit cadences over the bounded four-week preview,
 DST-safe profile-local slots, and the shared Availability inputs across
-Planner and Deadline Planner. API/service tests must cover read-only overview
+Planner and Deadline Planner. Setup coverage must prove strict inclusive
+semester bounds, persistence in owned schedule metadata, unchanged unbounded
+legacy behavior, duplicate-with-new-identity UI, and exclusion of expired
+commitments from Planner, Preparation workload, Today, and snapshot facts.
+API/service tests must cover read-only overview
 and detail GETs, seven consecutive local dates, explicit calendar consent and
 current-import fingerprinting, source-stale and reservation conflicts, target
 version conflicts, and preparation/manual/Setup/calendar/action-plan overlap.
@@ -291,7 +295,8 @@ authoritative commitment conflicts, lifecycle release, restore-without-slot
 revival, and unchanged legacy Tasks/Habits. Flutter tests must cover the five
 main navigation targets, Inbox under Settings, Planner section order, all five
 create flows, preview/confirm, retained drafts, guest zero-call, seven-day and
-preparation projections, and 320 px/200-percent text. Today V2 tests must prove
+preparation projections, availability-readiness warning plus explicit override,
+calendar-intent omission from onboarding, and 320 px/200-percent text. Today V2 tests must prove
 the three added block kinds, exact `scheduled_today`, one target per progress
 denominator, and isolated source failures.
 Phase 10 focused backend source coverage is split across strict model/API,
@@ -336,9 +341,11 @@ Current Flutter widget tests include:
   409 suggest reload, and lock timeout/5xx/malformed results to exact retry or
   explicit reload.
 - Capture-domain tests cover every bounded stress source, controllability,
-  focus-band, friction, and day-shape value; rating, half-hour sleep, date, and
-  text boundaries; omission of blank Evening optionals; and explicit inclusion
-  of supplied reflection, blocker, and gentle-tomorrow values.
+  focus-band, primary-friction (including `no_major_friction`), and day-shape
+  value; rating, half-hour sleep, date, and text boundaries; at most two unique
+  non-primary additional frictions; omission of blank Evening optionals; and
+  explicit inclusion of supplied reflection and blocker. A compatibility test
+  reads old `gentle_tomorrow` metadata and proves that a new write omits it.
 - Same-day merge tests cover Evening-then-Morning and Morning-then-Evening,
   replacing one branch without erasing the other, Morning-over-Evening energy
   precedence, removal of deliberately cleared optionals, preservation of
@@ -354,7 +361,9 @@ Current Flutter widget tests include:
   recovery from corrupted local JSON.
 - Evening widget tests cover required explicit selections, exact typed draft
   retention after failure, stable retry identity, prefilled re-entry with blank
-  optionals still blank, and suppression of a duplicate in-flight write.
+  optionals still blank, explicit `No major friction`, the two-additional cap,
+  absence of the retired gentler control, and suppression of a duplicate
+  in-flight write.
 - The guest app smoke completes distinctive required-only Evening Shutdown and
   Morning Calibration, persists one local merged day, reads Morning energy over
   Evening energy, and shows the exact saved summary on return.
@@ -513,7 +522,7 @@ supabase db reset
 Expected successful reset output applies migrations through:
 
 ```text
-20260722120000_planner_v1.sql
+20260722234000_setup_commitment_validity_guards.sql
 ```
 
 Expected notices include skipped legacy CamelCase tables and already-existing
@@ -756,19 +765,23 @@ The smoke then creates a habit through Habit Management and follows
 `/daily-check-in` into the canonical Evening Shutdown at
 `/quick-mood-check-in`. It records distinctive mood `2`, Evening energy `9`,
 stress `8`, private/emotional hardly-controllable stress, a focus band,
-friction, and tomorrow priority while leaving reflection, specific blocker, and
-gentle-tomorrow blank. Playwright lets the first `daily_logs` upsert commit but
-drops its browser response, verifies that the exact draft remains available,
-then retries without creating another daily row or event set.
+primary emotional-load friction, additional interruptions and hard-to-start
+frictions, and tomorrow priority while leaving reflection and specific blocker
+blank. The removed gentler control is asserted absent. Playwright lets the
+first `daily_logs` upsert commit but drops its browser response, verifies that
+the exact draft remains available, then retries without creating another daily
+row or event set.
 
 The same browser user then completes `/morning-calibration` with sleep `5.5`,
 Morning energy `4`, and constrained day shape. Database assertions require
 exactly one `(user_id, entry_date)` row with
 `metadata.capture_version=daily-capture-v2`, both nested capture branches,
 absent blank optional keys, mood/stress from Evening, sleep from Morning, and
-Morning energy taking precedence in `energy_level`. The smoke reopens Evening,
-checks its saved state, edits stress to workload/mostly-controllable and the
-priority, and requires the exact Morning capture identity and values to remain.
+Morning energy taking precedence in `energy_level`. It also requires the
+primary and ordered additional-friction values in the daily row, event
+metadata, and Daily State response. The smoke reopens Evening, checks its saved
+state, edits stress to workload/mostly-controllable and the priority, and
+requires the exact Morning capture identity and values to remain.
 
 Linked current-event assertions require three explicit events after
 Evening-only and exactly four after Morning merge and Evening edit. All final
@@ -1139,6 +1152,53 @@ omission, and account deletion. This is local checkout evidence only; it does
 not establish remote migration state, live calendar sync, deployed scheduling,
 background replanning, notifications beyond the existing contract, or manual
 student-usability results.
+
+The manual-timetable-first follow-up completed locally on 2026-07-22 with one
+function-only guard migration and no new table or column. Focused
+Setup/Planner/availability/migration coverage reported `101` backend and `36`
+Flutter tests. The complete FastAPI suite reported `803 passed, 1 skipped`; the
+standard source gate passed clean Flutter analysis, all `635` Flutter tests,
+Python compilation, migration safety, and diff checks. Local Supabase
+verification confirmed repository migration history through
+`20260722234000_setup_commitment_validity_guards.sql` and repeated all `635`
+Flutter tests successfully. Rolled-back SQL smokes proved Task and 28-day Habit
+confirmation change from no conflict to conflict only when the Setup validity
+range applies. The final non-reset browser journey reported
+`E2E browser smoke passed for e2e-1784756190@example.test`; it also asserted the
+Setup semester-date/duplicate controls and absence of the former calendar-intent
+prompt before completing the existing Planner, Today, optional Calendar,
+export, and account-deletion paths. This proves the local checkout only; it does
+not establish remote state or complete real-world timetable data.
+
+The Evening friction follow-up completed locally on 2026-07-23 without a
+schema change. The complete FastAPI suite reported `813 passed, 1 skipped`; the
+standard source gate passed migration safety, clean Flutter analysis, all `637`
+Flutter tests, Python compilation, and diff checks. The final non-reset browser
+journey reported
+`E2E browser smoke passed for e2e-1784801994@example.test`. It asserted the
+removed gentler control, explicit `No major friction`, exactly two selected
+additional frictions through response loss/retry and re-entry/edit, exact daily
+row and event metadata, and the Daily State rule that only the primary friction
+drives mode. Browser-discovered duplicate/stale semantics actions in capture
+chips were removed by merging labels with the native selectable controls. This
+is local checkout evidence only and does not add longitudinal or manual
+student-usability evidence.
+
+The Morning sleep-quality follow-up completed locally on 2026-07-23 without a
+schema change. The focused Daily State and Coach suite reported `140 passed`;
+the complete FastAPI suite reported `827 passed, 1 skipped`, and the standard
+source gate passed migration safety, clean Flutter analysis, all `639` Flutter
+tests, Python compilation, and diff checks. The final non-reset browser journey
+reported
+`E2E browser smoke passed for e2e-1784806592@example.test`. It asserted the
+required independent `Estimated sleep quality` answer, exact merged
+`sleep_quality` metadata and event provenance, dashboard rendering, and a
+separate `low_sleep_quality` Daily State signal. Unit coverage additionally
+proves that eight hours with very poor reported quality still selects recovery,
+while older Morning V2 rows without the additive field remain readable and
+must supply it when explicitly resaved. This remains local checkout evidence;
+it does not infer objective sleep quality, add a wearable source, or establish
+longitudinal or manual student-usability results.
 
 Phase 10 has focused fake-provider/process-runner, strict contract, service,
 migration, repository, controller, and widget tests in the checkout. Its

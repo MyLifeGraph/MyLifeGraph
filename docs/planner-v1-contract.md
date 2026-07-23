@@ -34,6 +34,22 @@ belong to Settings. Exam and Assignment creation continues through the strict
 Deadline Planner V1 flow. Guest/demo renders an explicit unavailable state and
 makes no Planner request or fabricated synchronized projection.
 
+The primary availability path is the weekly schedule entered in Setup. Each
+recurring Setup commitment may carry inclusive optional `valid_from` and
+`valid_until` dates for a semester or other bounded period; rows created before
+this addition and rows without dates remain intentionally unbounded until they
+are archived. Setup can duplicate a block for another weekday without copying
+its identity. Calendar import is not requested during onboarding and remains an
+optional, separate Settings integration.
+
+When the overview has no Setup commitment in its visible week, no active weekly
+or future one-off manual commitment, and no explicitly consented available
+calendar source, Planner shows `Availability may be incomplete`. Before the
+first automatic Task, Habit, Exam, or Assignment plan in that page session, it
+offers Setup review or an explicit `Continue anyway`; unscheduled Task creation
+is never blocked. This is an honest readiness warning, not proof that a
+configured schedule is complete.
+
 ## Read And Mutation Boundary
 
 Authenticated routes are:
@@ -78,6 +94,10 @@ The algorithm uses five-minute block boundaries, never overlaps a busy source,
 never plans before the captured current instant, and is bounded to 366
 profile-local days. It does not inspect Calendar titles or infer duration,
 deadline, cadence, priority, or effort.
+
+Recurring Setup rows apply only on their matching weekday and within their
+inclusive optional validity dates. The same rule is used by Planner,
+Preparation planning and workload, Today, and current snapshot schedule facts.
 
 The Planner calendar preference is a one-time explicit read-only consent. It is
 also the availability preference used by Deadline Planner. A preview records
@@ -144,6 +164,12 @@ that no longer apply.
 - `planner_habit_slots`
 - `planner_commitments`
 - `planner_request_identities`
+
+`20260722234000_setup_commitment_validity_guards.sql` adds the private inclusive
+Setup-date predicate and applies it to the existing Planner Task/Habit and
+Deadline Planner confirmation guards. It adds no table or column. The guarded
+function replacement aborts if an expected protected RPC definition has
+drifted, rather than silently weakening confirmation.
 
 The first six tables are authenticated owner/admin read projections with
 forced RLS and backend-owned writes. The global request ledger is service-role

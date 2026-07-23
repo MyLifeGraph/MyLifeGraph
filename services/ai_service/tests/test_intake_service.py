@@ -1,6 +1,6 @@
 import asyncio
 from copy import deepcopy
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from uuid import NAMESPACE_URL, UUID, uuid5
 
 import pytest
@@ -466,6 +466,30 @@ def test_zero_optional_answers_create_no_optional_commitments() -> None:
     assert repository.intakes[0]["metadata"]["request_metadata"]["source"] == (
         "attacker-controlled"
     )
+
+
+def test_semester_commitment_bounds_round_trip_into_planning_metadata() -> None:
+    repository = FakeIntakeRepository()
+    bounded = {
+        **commitment(),
+        "valid_from": "2026-10-01",
+        "valid_until": "2027-02-15",
+    }
+
+    response = run(
+        IntakeService(repository, now_provider=lambda: NOW).complete_intake(
+            user_id=USER_ID,
+            request=request(commitments=[bounded]),
+        ),
+    )
+
+    assert response.responses is not None
+    saved_commitment = response.responses.fixed_commitments[0]
+    assert saved_commitment.valid_from == date(2026, 10, 1)
+    assert saved_commitment.valid_until == date(2027, 2, 15)
+    schedule_row = next(iter(repository.schedule.values()))
+    assert schedule_row["metadata"]["valid_from"] == "2026-10-01"
+    assert schedule_row["metadata"]["valid_until"] == "2027-02-15"
 
 
 def test_candidate_routine_never_creates_habit_row() -> None:

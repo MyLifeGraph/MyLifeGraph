@@ -400,6 +400,14 @@ Excluded in v1:
   non-sensitive status count;
 - raw deterministic prompt internals or secrets in model-visible provenance.
 
+Allowlisted structured Daily State context is separate from hidden free text.
+It may include the bounded primary-friction code and up to two validated
+additional-friction codes. Those additional codes can help Coach explain
+context, but they do not affect the deterministic Daily Mode classifier. It
+also keeps Morning `sleep_hours` and the independent bounded
+`sleep_quality` rating as separate numeric facts so the Coach cannot equate
+duration with restorativeness.
+
 User text, task titles, goal titles, and memory content are untrusted data, not
 system instructions. Serialize them as typed JSON inside explicit data
 delimiters and keep application instructions outside that data envelope.

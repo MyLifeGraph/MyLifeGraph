@@ -36,29 +36,28 @@ class CaptureChoiceControl<T> extends StatelessWidget {
         final selected = choice.value == value;
         return Padding(
           padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-          child: Semantics(
-            button: true,
-            selected: selected,
-            label: choice.semanticLabel ?? choice.label,
-            onTap: () => onChanged(choice.value),
-            child: ExcludeSemantics(
+          child: MergeSemantics(
+            child: Semantics(
+              label: choice.semanticLabel ?? choice.label,
               child: ChoiceChip(
                 selected: selected,
                 onSelected: (_) => onChanged(choice.value),
-                label: SizedBox(
-                  width: double.infinity,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(choice.label),
-                      if (choice.description != null) ...[
-                        const SizedBox(height: AppSpacing.xs),
-                        Text(
-                          choice.description!,
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
+                label: ExcludeSemantics(
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(choice.label),
+                        if (choice.description != null) ...[
+                          const SizedBox(height: AppSpacing.xs),
+                          Text(
+                            choice.description!,
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ],
                       ],
-                    ],
+                    ),
                   ),
                 ),
                 padding: const EdgeInsets.all(AppSpacing.md),

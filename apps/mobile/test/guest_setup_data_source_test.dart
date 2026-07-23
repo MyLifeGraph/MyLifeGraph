@@ -159,6 +159,8 @@ void main() {
               'weekday': 1,
               'starts_at': '08:15',
               'ends_at': '09:45',
+              'valid_from': '2026-10-01',
+              'valid_until': '2027-02-15',
               'status': 'active',
             },
           ],
@@ -174,6 +176,14 @@ void main() {
     expect(state.responses?.fixedCommitments.single.weekday, 1);
     expect(state.responses?.fixedCommitments.single.startsAt, '08:15');
     expect(state.responses?.fixedCommitments.single.endsAt, '09:45');
+    expect(
+      state.responses?.fixedCommitments.single.validFrom,
+      DateTime.utc(2026, 10, 1),
+    );
+    expect(
+      state.responses?.fixedCommitments.single.validUntil,
+      DateTime.utc(2027, 2, 15),
+    );
   });
 
   test('legacy migration drops incomplete keyless commitments', () async {

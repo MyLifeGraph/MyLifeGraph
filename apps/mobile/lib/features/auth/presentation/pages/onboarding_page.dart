@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 
 import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/navigation/app_routes.dart';
@@ -169,7 +170,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                                 key: const ValueKey('optional-commitments'),
                                 title: 'Fixed commitments',
                                 subtitle:
-                                    'Optional · only real recurring blocks',
+                                    'Optional · recurring classes, work, and other weekly blocks',
                                 initiallyExpanded: widget.editing &&
                                     draft.fixedCommitments.isNotEmpty,
                                 children: [
@@ -189,10 +190,9 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                               _OptionalSetupSection(
                                 key: const ValueKey('optional-context'),
                                 title: 'More context',
-                                subtitle: 'Optional note and calendar intent',
-                                initiallyExpanded: widget.editing &&
-                                    (draft.contextNote != null ||
-                                        draft.calendarConnectionIntent != null),
+                                subtitle: 'Optional note',
+                                initiallyExpanded:
+                                    widget.editing && draft.contextNote != null,
                                 children: [
                                   TextFormField(
                                     key: ValueKey(
@@ -207,23 +207,6 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                                     onChanged: (value) {
                                       _updateDraft(
                                         draft.copyWith(contextNote: value),
-                                      );
-                                    },
-                                  ),
-                                  const SizedBox(height: AppSpacing.md),
-                                  _NullableSelectField<String>(
-                                    label: 'Calendar connection optional',
-                                    value: draft.calendarConnectionIntent,
-                                    values: const {
-                                      'later': 'Maybe later',
-                                      'not_now': 'Not now',
-                                      'interested': 'Interested',
-                                    },
-                                    onChanged: (value) {
-                                      _updateDraft(
-                                        draft.copyWith(
-                                          calendarConnectionIntent: value,
-                                        ),
                                       );
                                     },
                                   ),
@@ -845,7 +828,12 @@ class _CommitmentEditors extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        const Text(
+          'Add the weekly times when planning must stay free. Semester dates are optional; without them, a block repeats until you archive it.',
+        ),
+        const SizedBox(height: AppSpacing.md),
         for (var index = 0; index < commitments.length; index++)
           Padding(
             padding: const EdgeInsets.only(bottom: AppSpacing.md),
@@ -942,6 +930,73 @@ class _CommitmentEditors extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: AppSpacing.md),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'Semester dates optional',
+                      style: Theme.of(context).textTheme.titleSmall,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.xs),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Wrap(
+                      spacing: AppSpacing.sm,
+                      runSpacing: AppSpacing.sm,
+                      children: [
+                        OutlinedButton.icon(
+                          key: ValueKey(
+                            'commitment-valid-from-${commitments[index].key}',
+                          ),
+                          onPressed: () => _pickValidityDate(
+                            context,
+                            index,
+                            pickStart: true,
+                          ),
+                          icon: const Icon(Icons.date_range_outlined),
+                          label: Text(
+                            commitments[index].validFrom == null
+                                ? 'Valid from'
+                                : 'From ${_dateLabel(commitments[index].validFrom!)}',
+                          ),
+                        ),
+                        OutlinedButton.icon(
+                          key: ValueKey(
+                            'commitment-valid-until-${commitments[index].key}',
+                          ),
+                          onPressed: () => _pickValidityDate(
+                            context,
+                            index,
+                            pickStart: false,
+                          ),
+                          icon: const Icon(Icons.event_available_outlined),
+                          label: Text(
+                            commitments[index].validUntil == null
+                                ? 'Valid until'
+                                : 'Until ${_dateLabel(commitments[index].validUntil!)}',
+                          ),
+                        ),
+                        if (commitments[index].validFrom != null ||
+                            commitments[index].validUntil != null)
+                          TextButton(
+                            key: ValueKey(
+                              'commitment-clear-validity-${commitments[index].key}',
+                            ),
+                            onPressed: () {
+                              _replace(
+                                index,
+                                commitments[index].copyWith(
+                                  validFrom: null,
+                                  validUntil: null,
+                                ),
+                              );
+                            },
+                            child: const Text('Clear dates'),
+                          ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
                   _EnumSelectField<IntakeCommitmentStatus>(
                     label: 'Commitment status',
                     value: commitments[index].status,
@@ -956,16 +1011,39 @@ class _CommitmentEditors extends StatelessWidget {
                       );
                     },
                   ),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: TextButton.icon(
-                      onPressed: () {
-                        final updated = [...commitments]..removeAt(index);
-                        onChanged(updated);
-                      },
-                      icon: const Icon(Icons.delete_outline),
-                      label: const Text('Remove from setup'),
-                    ),
+                  Wrap(
+                    alignment: WrapAlignment.end,
+                    spacing: AppSpacing.sm,
+                    runSpacing: AppSpacing.xs,
+                    children: [
+                      TextButton.icon(
+                        key: ValueKey(
+                          'commitment-duplicate-${commitments[index].key}',
+                        ),
+                        onPressed: commitments.length >= 10
+                            ? null
+                            : () {
+                                final updated = [...commitments]..insert(
+                                    index + 1,
+                                    commitments[index].copyWith(
+                                      key: generateSetupUuid(),
+                                      weekday: null,
+                                    ),
+                                  );
+                                onChanged(updated);
+                              },
+                        icon: const Icon(Icons.copy_outlined),
+                        label: const Text('Duplicate for another day'),
+                      ),
+                      TextButton.icon(
+                        onPressed: () {
+                          final updated = [...commitments]..removeAt(index);
+                          onChanged(updated);
+                        },
+                        icon: const Icon(Icons.delete_outline),
+                        label: const Text('Remove from setup'),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -1001,6 +1079,41 @@ class _CommitmentEditors extends StatelessWidget {
     final updated = [...commitments];
     updated[index] = value;
     onChanged(updated);
+  }
+
+  Future<void> _pickValidityDate(
+    BuildContext context,
+    int index, {
+    required bool pickStart,
+  }) async {
+    final commitment = commitments[index];
+    final lowerBound =
+        pickStart ? DateTime(2000) : commitment.validFrom ?? DateTime(2000);
+    final upperBound = pickStart
+        ? commitment.validUntil ?? DateTime(2100, 12, 31)
+        : DateTime(2100, 12, 31);
+    var initialDate = (pickStart
+            ? commitment.validFrom ?? commitment.validUntil
+            : commitment.validUntil ?? commitment.validFrom) ??
+        DateTime.now();
+    if (initialDate.isBefore(lowerBound)) initialDate = lowerBound;
+    if (initialDate.isAfter(upperBound)) initialDate = upperBound;
+    final selected = await showDatePicker(
+      context: context,
+      initialDate: initialDate,
+      firstDate: lowerBound,
+      lastDate: upperBound,
+      helpText: pickStart ? 'SELECT FIRST WEEK' : 'SELECT LAST WEEK',
+    );
+    if (selected == null) return;
+    final normalized =
+        DateTime.utc(selected.year, selected.month, selected.day);
+    _replace(
+      index,
+      pickStart
+          ? commitment.copyWith(validFrom: normalized)
+          : commitment.copyWith(validUntil: normalized),
+    );
   }
 }
 
@@ -1053,7 +1166,7 @@ class _SetupReviewSection extends StatelessWidget {
               _ReviewRow(
                 icon: Icons.schedule,
                 title: commitment.title,
-                status: _statusLabel(commitment.status.name),
+                status: _commitmentReviewStatus(commitment),
               ),
           ],
         ],
@@ -1429,6 +1542,20 @@ String _statusLabel(String value) {
     return value;
   }
   return '${value[0].toUpperCase()}${value.substring(1)}';
+}
+
+String _dateLabel(DateTime value) => DateFormat.yMMMd().format(value);
+
+String _commitmentReviewStatus(IntakeCommitmentDraft commitment) {
+  final status = _statusLabel(commitment.status.name);
+  final validFrom = commitment.validFrom;
+  final validUntil = commitment.validUntil;
+  if (validFrom == null && validUntil == null) return status;
+  if (validFrom != null && validUntil != null) {
+    return '$status · ${_dateLabel(validFrom)}–${_dateLabel(validUntil)}';
+  }
+  if (validFrom != null) return '$status · from ${_dateLabel(validFrom)}';
+  return '$status · until ${_dateLabel(validUntil!)}';
 }
 
 String _errorText(Object? error) {

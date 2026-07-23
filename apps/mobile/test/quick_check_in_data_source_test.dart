@@ -30,13 +30,11 @@ void main() {
       expect(() => DayShape.fromCode('other'), throwsFormatException);
     });
 
-    test('evening metadata omits blank optionals and an unselected gentle flag',
-        () {
+    test('evening metadata omits blank text and keeps bounded frictions', () {
       final metadata = _evening()
           .copyWith(
             reflectionNote: '   ',
             specificBlocker: '',
-            makeTomorrowGentler: false,
           )
           .toMetadataJson();
 
@@ -49,6 +47,10 @@ void main() {
         containsPair('stress_controllability', 'hardly_controllable'),
       );
       expect(metadata, containsPair('main_friction', 'emotional_load'));
+      expect(metadata['additional_frictions'], [
+        'interruptions',
+        'hard_to_start',
+      ]);
       expect(metadata.containsKey('reflection_note'), isFalse);
       expect(metadata.containsKey('specific_blocker'), isFalse);
       expect(metadata.containsKey('gentle_tomorrow'), isFalse);
@@ -59,16 +61,16 @@ void main() {
           .copyWith(
             reflectionNote: '  A real reflection  ',
             specificBlocker: '  Waiting for a reply  ',
-            makeTomorrowGentler: true,
           )
           .toMetadataJson();
 
       expect(metadata['reflection_note'], 'A real reflection');
       expect(metadata['specific_blocker'], 'Waiting for a reply');
-      expect(metadata['gentle_tomorrow'], isTrue);
+      expect(metadata.containsKey('gentle_tomorrow'), isFalse);
     });
 
-    test('strictly validates ratings, half-hour sleep, dates, and text bounds',
+    test(
+        'strictly validates ratings, frictions, half-hour sleep, dates, and text bounds',
         () {
       expect(
         () => _evening().copyWith(stress: 11).validate(),
@@ -86,7 +88,42 @@ void main() {
         throwsFormatException,
       );
       expect(
+        () => _evening().copyWith(
+          additionalFrictions: const [
+            MainFriction.interruptions,
+            MainFriction.hardToStart,
+            MainFriction.lowEnergy,
+          ],
+        ).validate(),
+        throwsFormatException,
+      );
+      expect(
+        () => _evening().copyWith(
+          additionalFrictions: const [
+            MainFriction.interruptions,
+            MainFriction.interruptions,
+          ],
+        ).validate(),
+        throwsFormatException,
+      );
+      expect(
+        () => _evening().copyWith(
+          additionalFrictions: const [MainFriction.emotionalLoad],
+        ).validate(),
+        throwsFormatException,
+      );
+      expect(
+        () => _evening().copyWith(
+          additionalFrictions: const [MainFriction.noMajorFriction],
+        ).validate(),
+        throwsFormatException,
+      );
+      expect(
         () => _morning().copyWith(sleepHours: 6.25).validate(),
+        throwsFormatException,
+      );
+      expect(
+        () => _morning().copyWith(sleepQuality: 0).validate(),
         throwsFormatException,
       );
       expect(
@@ -109,9 +146,11 @@ void main() {
         expect(entry.mood, 2);
         expect(entry.stress, 8);
         expect(entry.sleepHours, 5.5);
+        expect(entry.sleepQuality, 3);
         expect(entry.energy, 4, reason: 'Morning energy owns compatibility');
         final captures = entry.toCaptureMetadata()['captures'] as Map;
         expect(captures.keys, containsAll(['evening', 'morning']));
+        expect((captures['morning'] as Map)['sleep_quality'], 3);
       }
     });
 
@@ -121,7 +160,6 @@ void main() {
             _evening().copyWith(
               reflectionNote: 'Old reflection',
               specificBlocker: 'Old blocker',
-              makeTomorrowGentler: true,
             ),
           )
           .mergeMorning(_morning());
@@ -129,7 +167,6 @@ void main() {
         _evening(captureId: 'evening-edit').copyWith(
           reflectionNote: '',
           specificBlocker: '',
-          makeTomorrowGentler: false,
         ),
       );
 
@@ -139,6 +176,44 @@ void main() {
       expect(evening.containsKey('reflection_note'), isFalse);
       expect(evening.containsKey('specific_blocker'), isFalse);
       expect(evening.containsKey('gentle_tomorrow'), isFalse);
+    });
+
+    test('reads legacy gentle metadata but never writes it again', () {
+      final legacy = {
+        ..._evening().toMetadataJson(),
+        'gentle_tomorrow': true,
+      };
+
+      final parsed = EveningShutdownDraft.fromJson(
+        legacy,
+        entryDate: _entryDate,
+      );
+
+      expect(parsed.additionalFrictions, [
+        MainFriction.interruptions,
+        MainFriction.hardToStart,
+      ]);
+      expect(parsed.toMetadataJson().containsKey('gentle_tomorrow'), isFalse);
+    });
+
+    test('older Morning metadata without sleep quality remains readable', () {
+      final legacyMetadata = Map<String, dynamic>.from(
+        _morning().toMetadataJson(),
+      )..remove('sleep_quality');
+
+      final parsed = MorningCalibrationDraft.fromJson(
+        legacyMetadata,
+        entryDate: _entryDate,
+      );
+
+      expect(parsed.sleepHours, 5.5);
+      expect(parsed.sleepQuality, isNull);
+      expect(parsed.isComplete, isFalse);
+      expect(parsed.toMetadataJson().containsKey('sleep_quality'), isFalse);
+      expect(
+        () => DailyCaptureEntry(entryDate: _entryDate).mergeMorning(parsed),
+        throwsFormatException,
+      );
     });
   });
 
@@ -170,6 +245,7 @@ void main() {
       expect(metadata['foreign_producer'], {'kept': true});
       final captures = metadata['captures'] as Map;
       expect(captures.keys, containsAll(['evening', 'morning']));
+      expect((captures['morning'] as Map)['sleep_quality'], 3);
     });
 
     test('builds only explicit events and mirrors relevant structured context',
@@ -211,12 +287,21 @@ void main() {
         stress['metadata'],
         containsPair('stress_controllability', 'hardly_controllable'),
       );
+      expect(stress['metadata']['additional_frictions'], [
+        'interruptions',
+        'hard_to_start',
+      ]);
       final energy = mergedEvents.singleWhere(
         (event) => event['event_type'] == 'energy',
       );
       expect(energy['value'], 4);
       expect(energy['metadata'], containsPair('capture_kind', 'morning'));
       expect(energy['metadata'], containsPair('day_shape', 'constrained'));
+      expect(energy['metadata'], containsPair('sleep_quality', 3));
+      final sleep = mergedEvents.singleWhere(
+        (event) => event['event_type'] == 'sleep',
+      );
+      expect(sleep['metadata'], containsPair('sleep_quality', 3));
     });
 
     test('event identities and payloads are stable across exact retries', () {
@@ -275,7 +360,12 @@ void main() {
       expect(decoded.morning?.captureId, 'morning-distinctive');
       expect(decoded.energy, 4);
       expect(decoded.sleepHours, 5.5);
+      expect(decoded.sleepQuality, 3);
       expect(decoded.stress, 8);
+      expect(decoded.evening?.additionalFrictions, [
+        MainFriction.interruptions,
+        MainFriction.hardToStart,
+      ]);
     });
   });
 
@@ -297,6 +387,7 @@ void main() {
       expect(values.single.energy, 4);
       expect(values.single.evening?.tomorrowPriority, 'Protect a calm start');
       expect(values.single.morning?.dayShape, DayShape.constrained);
+      expect(values.single.morning?.sleepQuality, 3);
 
       final prefs = await SharedPreferences.getInstance();
       final raw = jsonDecode(
@@ -305,9 +396,11 @@ void main() {
       expect(raw, hasLength(1));
       final captures = (raw.single as Map)['captures'] as Map;
       final evening = captures['evening'] as Map;
+      final morning = captures['morning'] as Map;
       expect(evening.containsKey('reflection_note'), isFalse);
       expect(evening.containsKey('specific_blocker'), isFalse);
       expect(evening.containsKey('gentle_tomorrow'), isFalse);
+      expect(morning['sleep_quality'], 3);
     });
 
     test('reads a V1 guest row with its explicit calendar date unchanged',
@@ -370,6 +463,10 @@ EveningShutdownDraft _evening({
     stressControllability: StressControllability.hardlyControllable,
     focusBand: FocusBand.thirtyToSixtyMinutes,
     mainFriction: MainFriction.emotionalLoad,
+    additionalFrictions: const [
+      MainFriction.interruptions,
+      MainFriction.hardToStart,
+    ],
     tomorrowPriority: 'Protect a calm start',
   );
 }
@@ -380,6 +477,7 @@ MorningCalibrationDraft _morning() {
     entryDate: _entryDate,
     capturedAt: DateTime.parse('2026-07-10T07:15:00+02:00'),
     sleepHours: 5.5,
+    sleepQuality: 3,
     energy: 4,
     dayShape: DayShape.constrained,
   );

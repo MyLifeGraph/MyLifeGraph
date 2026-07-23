@@ -352,7 +352,7 @@ class SupabasePlannerRepository:
         schedule_items = await self._select_pages(
             "schedule_items",
             params={
-                "select": "id,weekday,starts_at,ends_at",
+                "select": "id,weekday,starts_at,ends_at,metadata",
                 "user_id": f"eq.{user_id}",
                 "order": "weekday.asc,starts_at.asc,id.asc",
             },

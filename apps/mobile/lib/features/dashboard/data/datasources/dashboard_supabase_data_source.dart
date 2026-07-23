@@ -106,6 +106,7 @@ class DashboardSnapshotMapper {
       mood: (row['mood_score'] as num?)?.toInt(),
       energy: (row['energy_level'] as num?)?.toInt(),
       sleepHours: (row['sleep_hours'] as num?)?.toDouble(),
+      sleepQuality: (morning?['sleep_quality'] as num?)?.toInt(),
       stress: (row['stress_level'] as num?)?.toInt(),
       focusMinutes: (row['focus_minutes'] as num?)?.toInt(),
       steps: (row['steps'] as num?)?.toInt(),

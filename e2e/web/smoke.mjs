@@ -45,6 +45,7 @@ const phase3TaskTitle = `E2E executable task ${runId}`;
 const eveningTomorrowPriority = `E2E protect a calm morning ${runId}`;
 const editedEveningTomorrowPriority =
   `E2E finish the smallest useful draft ${runId}`;
+const eveningAdditionalFrictions = ['interruptions', 'hard_to_start'];
 const coachMemoryTitle = `E2E bounded Coach memory ${runId}`;
 const coachApiMessage = `E2E explain one bounded next step ${runId}`;
 const coachUiMessage = `E2E UI Coach question ${runId}`;
@@ -310,6 +311,17 @@ try {
   await expectFieldValue(page, 'Location optional', 'Room E2E', 5);
   await expectFieldValue(page, 'Starts (HH:mm)', '14:15', -2);
   await expectFieldValue(page, 'Ends (HH:mm)', '15:45', -1);
+  await expectText(page, 'Semester dates optional');
+  await expectText(page, 'Valid from');
+  await expectText(page, 'Valid until');
+  await expectText(page, 'Duplicate for another day');
+  if (
+    (await page
+      .getByText('Calendar connection optional', { exact: true })
+      .count()) !== 0
+  ) {
+    throw new Error('Setup must not request calendar interest.');
+  }
   await page.keyboard.press('Tab');
   await page.waitForTimeout(250);
   await scrollFlutterPage(page, 1800);
@@ -825,20 +837,45 @@ try {
   await clickByRoleName(page, 'button', 'evening energy 9 of 10');
   await clickByRoleName(page, 'button', 'evening stress 8 of 10');
   await clickByText(page, 'Next');
-  await clickByRoleName(page, 'button', 'main friction emotional_load');
-  await page.waitForTimeout(250);
-  await clickByRoleName(page, 'button', 'stress source private_emotional');
-  await page.waitForTimeout(250);
-  await clickByRoleName(
+  await clickScrolledByLabel(page, 'primary friction emotional_load');
+  await assertFlutterTextAbsent(
     page,
-    'button',
+    'Make tomorrow gentler',
+    'removed Evening gentler control',
+  );
+  await clickScrolledByLabel(page, 'additional friction interruptions');
+  await expectText(page, '1 of 2 selected.');
+  await clickScrolledByLabel(page, 'additional friction hard_to_start');
+  await expectText(
+    page,
+    '2 of 2 selected. Remove one to choose another.',
+  );
+  await clickScrolledByLabel(page, 'stress source private_emotional');
+  await expectText(
+    page,
+    '2 of 2 selected. Remove one to choose another.',
+  );
+  await clickScrolledByLabel(
+    page,
     'stress influence hardly_controllable',
+  );
+  await expectText(
+    page,
+    '2 of 2 selected. Remove one to choose another.',
+  );
+  await stabilizeLabeledControl(
+    page,
+    'Possible priority tomorrow (optional)',
   );
   await fillByLabelOrPlaceholder(
     page,
     'Possible priority tomorrow (optional)',
     `  ${eveningTomorrowPriority}  `,
     0,
+  );
+  await expectText(
+    page,
+    '2 of 2 selected. Remove one to choose another.',
   );
   await clickByText(page, 'Save evening check-in');
   await expectText(
@@ -933,6 +970,8 @@ try {
       stressIntensity: 8,
       stressSource: 'private_emotional',
       stressControllability: 'hardly_controllable',
+      mainFriction: 'emotional_load',
+      additionalFrictions: eveningAdditionalFrictions,
       expectedRisks: [
         'private_emotional_stress',
         'low_controllability',
@@ -966,17 +1005,22 @@ try {
   await clickByRoleNameUntilText(
     page,
     'button',
+    'morning sleep quality 3 of 10',
+    '3 / 10',
+  );
+  await clickByRoleNameUntilText(
+    page,
+    'button',
     'morning energy 4 of 10',
     '4 / 10',
   );
-  await clickByRoleName(page, 'button', 'day shape constrained');
-  const morningSnapshotPromise = waitForAiPost(
+  await clickScrolledByLabel(page, 'day shape constrained');
+  const morningSnapshotResponse = await clickAndWaitForAiPost(
     page,
     '/v1/snapshots/generate',
     'morning check-in snapshot refresh',
+    'Save morning check-in',
   );
-  await clickByText(page, 'Save morning check-in');
-  const morningSnapshotResponse = await morningSnapshotPromise;
   assertJsonPayload(
     morningSnapshotResponse.request(),
     {
@@ -996,13 +1040,17 @@ try {
       stressIntensity: 8,
       stressSource: 'private_emotional',
       stressControllability: 'hardly_controllable',
+      mainFriction: 'emotional_load',
+      additionalFrictions: eveningAdditionalFrictions,
       sleepHours: 5.5,
+      sleepQuality: 3,
       currentEnergy: 4,
       dayShape: 'constrained',
       expectedRisks: [
         'private_emotional_stress',
         'low_controllability',
         'low_sleep',
+        'low_sleep_quality',
         'constrained_capacity',
       ],
       forbiddenRisks: ['workload_pressure'],
@@ -1067,14 +1115,19 @@ try {
     "Today's evening check-in is loaded. Saving updates only these evening answers.",
   );
   await clickByText(page, 'Next');
-  await clickByRoleName(page, 'button', 'stress source workload');
-  await page.waitForTimeout(250);
-  await clickByRoleName(
+  await clickScrolledByLabel(page, 'stress source workload');
+  await clickScrolledByLabel(
     page,
-    'button',
     'stress influence mostly_controllable',
   );
-  await page.waitForTimeout(250);
+  await expectText(
+    page,
+    '2 of 2 selected. Remove one to choose another.',
+  );
+  await stabilizeLabeledControl(
+    page,
+    'Possible priority tomorrow (optional)',
+  );
   await fillByLabelOrPlaceholder(
     page,
     'Possible priority tomorrow (optional)',
@@ -1109,13 +1162,17 @@ try {
       stressIntensity: 8,
       stressSource: 'workload',
       stressControllability: 'mostly_controllable',
+      mainFriction: 'emotional_load',
+      additionalFrictions: eveningAdditionalFrictions,
       sleepHours: 5.5,
+      sleepQuality: 3,
       currentEnergy: 4,
       dayShape: 'constrained',
       expectedRisks: [
         'workload_pressure',
         'high_stress',
         'low_sleep',
+        'low_sleep_quality',
         'constrained_capacity',
       ],
       forbiddenRisks: [
@@ -1144,6 +1201,8 @@ try {
   await expectText(page, 'Morning energy');
   await expectText(page, '4/10');
   await expectText(page, '5.5 h');
+  await expectText(page, 'Sleep quality');
+  await expectText(page, '3/10');
 
   await waitForRows(
     dailyCapturePath,
@@ -1233,9 +1292,13 @@ try {
       rows[0].summary?.daily_state?.context?.stress?.controllability ===
         'mostly_controllable' &&
       rows[0].summary?.daily_state?.context?.sleep_hours === 5.5 &&
+      rows[0].summary?.daily_state?.context?.sleep_quality === 3 &&
       rows[0].summary?.daily_state?.context?.current_energy === 4 &&
       rows[0].summary?.daily_state?.context?.day_shape === 'constrained' &&
       rows[0].summary?.daily_state?.risk_flags?.includes('low_sleep') &&
+      rows[0].summary?.daily_state?.risk_flags?.includes(
+        'low_sleep_quality',
+      ) &&
       rows[0].summary?.daily_state?.risk_flags?.includes(
         'workload_pressure',
       ) &&
@@ -1849,6 +1912,9 @@ try {
           row.summary?.daily_state?.data_quality === 'current' &&
           row.summary?.daily_state?.risk_flags?.includes('low_sleep') &&
           row.summary?.daily_state?.risk_flags?.includes(
+            'low_sleep_quality',
+          ) &&
+          row.summary?.daily_state?.risk_flags?.includes(
             'workload_pressure',
           ) &&
           row.signals?.input_counts?.focus_sessions >= 2 &&
@@ -2424,6 +2490,16 @@ async function fillByLabelOrPlaceholder(page, label, value, fallbackIndex) {
   throw new Error(`Could not fill field: ${label}`);
 }
 
+async function stabilizeLabeledControl(page, label) {
+  const labelPattern = new RegExp(
+    `^${escapeRegExp(label)}(?:$|\\s)`,
+    'i',
+  );
+  const locator = page.getByLabel(labelPattern).first();
+  await locator.scrollIntoViewIfNeeded({ timeout: 5000 });
+  await page.waitForTimeout(500);
+}
+
 async function expectFieldValue(page, label, value, fallbackIndex) {
   const labelPattern = new RegExp(
     `^${escapeRegExp(label)}(?:$|\\s)`,
@@ -2507,6 +2583,46 @@ async function clickByRoleName(page, role, name) {
     await locator.click({ timeout: 5000 });
   } catch (_) {
     await locator.click({ timeout: 2500, force: true });
+  }
+}
+
+async function clickScrolledByLabel(page, name) {
+  const locator = page.getByLabel(name, { exact: true }).first();
+  await locator.scrollIntoViewIfNeeded({ timeout: 5000 });
+  await page.waitForTimeout(350);
+  try {
+    await locator.click({ timeout: 5000 });
+  } catch (_) {
+    await locator.click({ timeout: 2500, force: true });
+  }
+  await page.waitForTimeout(250);
+  const selectableState = await locator.evaluate((element) => ({
+    checked: element.getAttribute('aria-checked'),
+    pressed: element.getAttribute('aria-pressed'),
+    selected: element.getAttribute('aria-selected'),
+  }));
+  const exposesSelection = Object.values(selectableState).some(
+    (value) => value !== null,
+  );
+  if (
+    exposesSelection &&
+    !Object.values(selectableState).some((value) => value === 'true')
+  ) {
+    // Flutter Web can briefly retain an old semantics hit-test rectangle while
+    // a scrolled choice list relayouts. Dispatching the same semantics action
+    // directly is a bounded retry, and the selected-state assertion prevents
+    // the test from silently accepting a neighbouring choice.
+    await locator.evaluate((element) => element.click());
+    await page.waitForTimeout(250);
+    const selected = await locator.evaluate(
+      (element) =>
+        element.getAttribute('aria-checked') === 'true' ||
+        element.getAttribute('aria-pressed') === 'true' ||
+        element.getAttribute('aria-selected') === 'true',
+    );
+    if (!selected) {
+      throw new Error(`Choice ${JSON.stringify(name)} was not selected.`);
+    }
   }
 }
 
@@ -2727,6 +2843,44 @@ async function waitForAiPost(page, path, description) {
   return response;
 }
 
+async function clickAndWaitForAiPost(
+  page,
+  path,
+  description,
+  buttonText,
+) {
+  let lastError;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const responsePromise = page.waitForResponse(
+      (candidate) =>
+        candidate.url() === `${aiServiceBaseUrl}${path}` &&
+        candidate.request().method() === 'POST',
+      { timeout: attempt === 0 ? 15000 : 45000 },
+    );
+    if (attempt === 0) {
+      await clickByText(page, buttonText);
+    } else {
+      const button = page
+        .getByRole('button', { name: buttonText, exact: true })
+        .first();
+      await button.scrollIntoViewIfNeeded({ timeout: 5000 });
+      await button.evaluate((element) => element.click());
+    }
+    try {
+      const response = await responsePromise;
+      if (!response.ok()) {
+        throw new Error(
+          `Unexpected ${description} response: ${response.status()} ${await response.text()}`,
+        );
+      }
+      return response;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError;
+}
+
 async function assertPhaseTwoDailyStateResponse(response, expected) {
   const payload = await response.json();
   const state = payload?.summary?.daily_state;
@@ -2744,7 +2898,10 @@ async function assertPhaseTwoDailyStateResponse(response, expected) {
     stressIntensity: state.context?.stress?.intensity,
     stressSource: state.context?.stress?.source,
     stressControllability: state.context?.stress?.controllability,
+    mainFriction: state.context?.main_friction,
+    additionalFrictions: state.context?.additional_frictions,
     sleepHours: state.context?.sleep_hours,
+    sleepQuality: state.context?.sleep_quality,
     currentEnergy: state.context?.current_energy,
     dayShape: state.context?.day_shape,
   };
@@ -2752,7 +2909,9 @@ async function assertPhaseTwoDailyStateResponse(response, expected) {
     if (
       key in exactValues &&
       expectedValue !== undefined &&
-      exactValues[key] !== expectedValue
+      (Array.isArray(expectedValue)
+        ? !arraysEqual(exactValues[key], expectedValue)
+        : exactValues[key] !== expectedValue)
     ) {
       throw new Error(
         `Unexpected Phase 2 ${key}. Expected ${JSON.stringify(expectedValue)}, got ${JSON.stringify(exactValues[key])}. State: ${JSON.stringify(state)}`,
@@ -2855,6 +3014,7 @@ function hasExactPhaseOneDailyRow(row, expected) {
         morning?.capture_id === expected.morningCaptureId) &&
       isIsoTimestamp(morning?.captured_at) &&
       morning?.sleep_hours === 5.5 &&
+      morning?.sleep_quality === 3 &&
       morning?.current_energy === 4 &&
       morning?.day_shape === 'constrained'
     : morning === undefined;
@@ -2890,6 +3050,10 @@ function hasExactPhaseOneDailyRow(row, expected) {
     evening?.stress_controllability === expected.stressControllability &&
     !Object.hasOwn(evening ?? {}, 'focus_band') &&
     evening?.main_friction === 'emotional_load' &&
+    arraysEqual(
+      evening?.additional_frictions,
+      eveningAdditionalFrictions,
+    ) &&
     evening?.tomorrow_priority === expected.tomorrowPriority &&
     !Object.hasOwn(evening ?? {}, 'reflection_note') &&
     !Object.hasOwn(evening ?? {}, 'specific_blocker') &&
@@ -2957,6 +3121,10 @@ function hasExactCaptureEvents(rows, expected, contract) {
         metadata?.capture_id !== expected.eveningCaptureId ||
         Object.hasOwn(metadata ?? {}, 'focus_band') ||
         metadata?.main_friction !== 'emotional_load' ||
+        !arraysEqual(
+          metadata?.additional_frictions,
+          eveningAdditionalFrictions,
+        ) ||
         metadata?.tomorrow_priority !== expected.tomorrowPriority ||
         Object.hasOwn(metadata ?? {}, 'gentle_tomorrow')
       );
@@ -2983,7 +3151,8 @@ function hasExactCaptureEvents(rows, expected, contract) {
     return (
       metadata?.capture_kind === 'morning' &&
       metadata?.capture_id === expected.morningCaptureId &&
-      metadata?.day_shape === 'constrained'
+      metadata?.day_shape === 'constrained' &&
+      metadata?.sleep_quality === 3
     );
   });
 }

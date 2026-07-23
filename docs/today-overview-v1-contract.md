@@ -57,6 +57,9 @@ identity, enums, numeric bounds, timestamps, and projected numeric-column
 agreement. Legacy numeric rows, malformed V2 metadata, and proxy columns do not
 count. Canonical Morning/Evening persistence merges both kinds into the one
 current daily entry instead of treating separate legacy rows as completion.
+The additive Morning `sleep_quality` rating is validated when present. V2
+Morning captures saved before that field existed remain valid for streak
+compatibility; every new or edited Morning capture requires it in Flutter.
 
 Rows are read newest-first in bounded pages until the first date gap is known;
 the calculation is not capped to a cosmetic 30- or 60-day window. An incomplete
@@ -92,8 +95,9 @@ fixed twelve-step system when the account has a different number of actions.
 
 The compact vertical agenda combines four visibly distinct categories:
 
-- `Setup commitment`: recurring `schedule_items`, including intervals that
-  cross midnight into the local day;
+- `Setup commitment`: recurring `schedule_items` that apply within their
+  optional inclusive Setup validity dates, including intervals that cross
+  midnight into the local day;
 - `Preparation`: blocks from active plans' active confirmed revisions, with
   existing `upcoming`, `partial`, `completed`, or `missed` state and credited
   tracked minutes;

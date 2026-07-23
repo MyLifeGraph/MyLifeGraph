@@ -41,6 +41,7 @@ from app.repositories.today_overview_repository import (
     TodayOverviewRepository,
 )
 from app.services.deadline_plan_service import DeadlinePlanService
+from app.services.planning_availability import recurring_commitment_applies_on
 from app.services.snapshot_daily_state import valid_explicit_capture_kinds
 
 
@@ -595,7 +596,10 @@ class TodayOverviewService:
             start_time = _time(row.get("starts_at"))
             end_time = _time(row.get("ends_at"))
             for occurrence_date in (local_date - timedelta(days=1), local_date):
-                if occurrence_date.isoweekday() != weekday:
+                if (
+                    occurrence_date.isoweekday() != weekday
+                    or not recurring_commitment_applies_on(row, occurrence_date)
+                ):
                     continue
                 starts_at = datetime.combine(occurrence_date, start_time, tzinfo=zone)
                 ends_at = datetime.combine(occurrence_date, end_time, tzinfo=zone)

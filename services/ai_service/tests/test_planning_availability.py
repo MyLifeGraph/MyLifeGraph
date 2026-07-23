@@ -4,6 +4,7 @@ from zoneinfo import ZoneInfo
 from app.services.planning_availability import (
     BusySources,
     allocate_task_intervals,
+    busy_intervals_by_day,
     choose_recurring_habit_slots,
     is_unambiguous_local,
 )
@@ -109,3 +110,37 @@ def test_dst_gap_and_fold_wall_times_are_not_treated_as_safe_slots() -> None:
         datetime(2026, 3, 29, 8, 0, tzinfo=zone),
         zone,
     )
+
+
+def test_setup_recurring_commitment_applies_only_inside_semester_dates() -> None:
+    zone = ZoneInfo("UTC")
+    days = [date(2026, 7, 20), date(2026, 7, 27), date(2026, 8, 3)]
+
+    busy = busy_intervals_by_day(
+        days=days,
+        sources=BusySources(
+            recurring_commitments=[
+                {
+                    "weekday": 1,
+                    "starts_at": "09:00:00",
+                    "ends_at": "10:30:00",
+                    "metadata": {
+                        "managed_by": "setup",
+                        "valid_from": "2026-07-27",
+                        "valid_until": "2026-08-02",
+                    },
+                },
+            ],
+        ),
+        zone=zone,
+        local_now=datetime(2026, 7, 19, 12, tzinfo=UTC),
+    )
+
+    assert busy[date(2026, 7, 20)] == []
+    assert busy[date(2026, 7, 27)] == [
+        (
+            datetime(2026, 7, 27, 9, tzinfo=UTC),
+            datetime(2026, 7, 27, 10, 30, tzinfo=UTC),
+        ),
+    ]
+    assert busy[date(2026, 8, 3)] == []

@@ -301,6 +301,8 @@ void main() {
               'weekday': 2,
               'starts_at': '09:15:00',
               'ends_at': '10:45:00',
+              'valid_from': '2026-10-01',
+              'valid_until': '2027-02-15',
               'status': 'active',
             },
           ],
@@ -312,6 +314,42 @@ void main() {
       expect(read.responses?.reminderPreference?.quietHoursEnd, '07:00');
       expect(read.responses?.fixedCommitments.single.startsAt, '09:15');
       expect(read.responses?.fixedCommitments.single.endsAt, '10:45');
+      expect(
+        read.responses?.fixedCommitments.single.validFrom,
+        DateTime.utc(2026, 10, 1),
+      );
+      expect(
+        read.responses?.fixedCommitments.single.validUntil,
+        DateTime.utc(2027, 2, 15),
+      );
+      expect(
+        read.responses?.fixedCommitments.single.toJson(),
+        containsPair('valid_until', '2027-02-15'),
+      );
+    });
+
+    test('commitment validity rejects an end before its start', () {
+      final draft = _requiredDraft().copyWith(
+        fixedCommitments: [
+          IntakeCommitmentDraft(
+            key: '6ecb196b-0b8c-4849-ac03-5479fe343b2c',
+            title: 'Class',
+            location: null,
+            weekday: 2,
+            startsAt: '09:15',
+            endsAt: '10:45',
+            validFrom: DateTime.utc(2026, 10, 1),
+            validUntil: DateTime.utc(2026, 9, 30),
+          ),
+        ],
+      );
+
+      expect(
+        draft.validationErrors(),
+        contains(
+          'A fixed commitment end date cannot be before its start date.',
+        ),
+      );
     });
   });
 

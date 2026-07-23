@@ -123,15 +123,21 @@ The current capture contract is:
 
 - Typed `EveningShutdownDraft` and `MorningCalibrationDraft` values have stable
   capture ids through retry. `DailyCaptureEntry` is the one same-day aggregate.
-- Evening is a two-page flow. Mood, energy, stress intensity, and main friction
-  are required. Stress source and controllability appear and become required
-  together only at stress `5..10`; tomorrow priority, reflection, a specific
-  blocker, and gentle-tomorrow intent are optional and omitted when blank or
-  false. The form no longer asks the user to estimate a focus band: completed
-  `focus_sessions` are the source of measured focus time.
-- Morning requires sleep hours, current energy, and `normal`, `constrained`, or
+- Evening is a two-page flow. Mood, energy, stress intensity, and one primary
+  friction are required; `no_major_friction` is an explicit valid primary
+  answer. Up to two unique, non-primary `additional_frictions` are optional.
+  Stress source and controllability appear and become required together only
+  at stress `5..10`; tomorrow priority, reflection, and a specific blocker are
+  optional and omitted when blank. New captures do not write the retired
+  `gentle_tomorrow` field, while old capture objects containing it remain
+  readable. The form no longer asks the user to estimate a focus band:
+  completed `focus_sessions` are the source of measured focus time.
+- Morning requires sleep hours, an independent whole-number `1..10`
+  `sleep_quality` estimate, current energy, and `normal`, `constrained`, or
   `flexible` day shape. It does not repeat Evening questions and explicitly
   states that it does not generate recommendations or create or change a plan.
+  Older V2 Morning objects without `sleep_quality` remain readable; editing
+  that Morning capture requires an explicit value before it can be saved.
 - Same-day merge replaces only the submitted `metadata.captures.evening` or
   `.morning` object, preserving the other capture and unrelated metadata.
   Numeric compatibility projects mood and stress from Evening, sleep from
@@ -143,7 +149,8 @@ The current capture contract is:
   a dynamic set of at most four current `behavioral_events`. Mood, energy,
   stress, and sleep receive deterministic ids derived from the daily row and
   event kind, are linked through `daily_log_id`, and mirror relevant structured
-  capture metadata.
+  capture metadata. Sleep quality is mirrored on the existing Morning-origin
+  energy and sleep events instead of creating a fifth event.
 - The upsert clears legacy placeholder-only steps, activity, screen-time, focus,
   nutrition, and day-focus values because the canonical form does not collect
   them. It never converts a subjective focus answer into invented
@@ -159,9 +166,10 @@ The current capture contract is:
 
 `DashboardSnapshot` carries an explicit `localDemo` or `account` origin, load
 time, nullable latest check-in, true check-in streak, task rows, and schedule
-entries. The Supabase mapper preserves stored mood, energy, sleep, stress,
-focus, steps, activity, and screen-time values exactly and reads only persisted
-Evening/Morning flags, focus band, stress context, and day shape from metadata.
+entries. The Supabase mapper preserves stored mood, energy, sleep duration,
+sleep quality, stress, focus, steps, activity, and screen-time values exactly
+and reads only persisted Evening/Morning flags, focus band, stress context, and
+day shape from metadata.
 The guest mapper uses the same merged daily object. The UI shows only fields
 that exist and labels the latest row by its real date; missing values do not
 become zero, a mode, or a derived readiness score.
@@ -209,6 +217,14 @@ reads the same Planner calendar preference. The database owner lock and
 service-role RPCs recheck target version, current import, and every competing
 reservation at confirmation. Fixed commitments are authoritative: conflicts
 become attention facts and never trigger automatic movement.
+
+Setup is the primary timetable input. A recurring Setup commitment may have
+inclusive optional `valid_from`/`valid_until` semester bounds in its owned
+metadata; undated and older rows remain unbounded. Planner surfaces an honest
+readiness warning before automatic planning when it cannot see a weekly Setup
+block, an active future manual commitment, or explicitly consented imported busy
+time. Calendar import remains an optional Settings integration and is not an
+onboarding prerequisite.
 
 The additive forced-RLS schema and exact routes are specified in
 `docs/planner-v1-contract.md`.
@@ -374,9 +390,11 @@ perform no remote profile/data bootstrap.
 Setup is one typed contract across first completion, re-entry, and review:
 
 - Required focus, weekday shape, energy window, coaching style, and reminder
-  choices are explicit. Goals, routines, context, calendar intent, and fixed
-  commitments are progressive optional detail; blank values materialize no
-  owned records.
+  choices are explicit. Goals, routines, context, and fixed commitments are
+  progressive optional detail; blank values materialize no owned records.
+  Weekly commitments may use optional inclusive semester dates and can be
+  duplicated for another weekday. The legacy calendar-intent field remains a
+  payload-compatibility value but is no longer presented in onboarding.
 - Guest/demo sessions read and write the typed setup locally. Authenticated
   real-mode sessions read `GET /v1/intake/setup` and save through
   `POST /v1/intake/complete`; there is no direct Supabase fallback that can mark
@@ -542,8 +560,10 @@ Current responsibilities:
   `missing`, `partial`, `current`, or `stale`.
 - Classify `push`, `steady`, `recover`, or `plan` with recovery safeguards before
   planning or push rules. Persist machine-stable risks/reasons, field-level
-  evidence, deterministic provenance, and no learned-baseline claim. Capture
-  free text is excluded from summary, signals, and snapshot metadata.
+  evidence, deterministic provenance, and no learned-baseline claim. Very low
+  current sleep quality may select recovery despite sufficient duration;
+  moderately low quality prevents `push`. Capture free text is excluded from
+  summary, signals, and snapshot metadata.
 - Load capture metadata with daily rows and events. Event queries use a broadened
   UTC read window, then prefer the explicit local `metadata.entry_date` during
   in-memory filtering and fall back to `occurred_at` for legacy events.

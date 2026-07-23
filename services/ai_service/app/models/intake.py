@@ -1,4 +1,4 @@
-from datetime import datetime, time
+from datetime import date, datetime, time
 from typing import Any, Literal
 from uuid import UUID
 
@@ -101,6 +101,8 @@ class FixedCommitment(BaseModel):
     weekday: int = Field(ge=1, le=7)
     starts_at: time
     ends_at: time
+    valid_from: date | None = None
+    valid_until: date | None = None
     status: CommitmentStatus = "active"
 
     @field_validator("title", mode="before")
@@ -120,6 +122,12 @@ class FixedCommitment(BaseModel):
     def validate_time_range(self) -> "FixedCommitment":
         if self.ends_at <= self.starts_at:
             raise ValueError("ends_at must be later than starts_at")
+        if (
+            self.valid_from is not None
+            and self.valid_until is not None
+            and self.valid_until < self.valid_from
+        ):
+            raise ValueError("valid_until must not be before valid_from")
         return self
 
 

@@ -79,6 +79,7 @@ void main() {
           entryDate: DateTime(2026, 7, 21),
           mood: 7,
           energy: 8,
+          sleepQuality: 6,
           hasMorningCapture: true,
           hasEveningCapture: true,
         ),
@@ -127,6 +128,8 @@ void main() {
     expect(find.text('7-day preparation load'), findsOneWidget);
     expect(find.text('Review your week'), findsOneWidget);
     expect(find.text('Latest check-in'), findsOneWidget);
+    expect(find.text('Sleep quality'), findsOneWidget);
+    expect(find.text('6/10'), findsOneWidget);
     expect(find.text('Recommendations'), findsOneWidget);
     expect(find.text('Rule-based example'), findsOneWidget);
     expect(find.text('Decision feedback history'), findsOneWidget);

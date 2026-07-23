@@ -293,6 +293,36 @@ def _safe_capture_freshness(value: Any) -> dict[str, Any]:
 def _safe_daily_context(value: Any) -> dict[str, Any]:
     if not isinstance(value, dict):
         return {}
+    main_friction = _enum_or_none(
+        value.get("main_friction"),
+        {
+            "no_major_friction",
+            "unclear_priorities",
+            "too_much_to_do",
+            "interruptions",
+            "hard_to_start",
+            "low_energy",
+            "emotional_load",
+            "physical_recovery",
+            "external_constraints",
+        },
+    )
+    additional_frictions = _safe_enum_list(
+        value.get("additional_frictions"),
+        {
+            "unclear_priorities",
+            "too_much_to_do",
+            "interruptions",
+            "hard_to_start",
+            "low_energy",
+            "emotional_load",
+            "physical_recovery",
+            "external_constraints",
+        },
+        limit=2,
+    )
+    if main_friction is None or main_friction in additional_frictions:
+        additional_frictions = []
     stress = value.get("stress")
     safe_stress = {}
     if isinstance(stress, dict):
@@ -326,6 +356,7 @@ def _safe_daily_context(value: Any) -> dict[str, Any]:
         "mood": _safe_number(value.get("mood")),
         "current_energy": _safe_number(value.get("current_energy")),
         "sleep_hours": _safe_number(value.get("sleep_hours")),
+        "sleep_quality": _safe_rating(value.get("sleep_quality")),
         "stress": safe_stress,
         "focus_band": _enum_or_none(
             value.get("focus_band"),
@@ -337,19 +368,8 @@ def _safe_daily_context(value: Any) -> dict[str, Any]:
                 "over_2_hours",
             },
         ),
-        "main_friction": _enum_or_none(
-            value.get("main_friction"),
-            {
-                "unclear_priorities",
-                "too_much_to_do",
-                "interruptions",
-                "hard_to_start",
-                "low_energy",
-                "emotional_load",
-                "physical_recovery",
-                "external_constraints",
-            },
-        ),
+        "main_friction": main_friction,
+        "additional_frictions": additional_frictions,
         "day_shape": _enum_or_none(
             value.get("day_shape"),
             {"normal", "constrained", "flexible"},
@@ -402,6 +422,12 @@ def _safe_number(value: Any) -> int | float | None:
     return None
 
 
+def _safe_rating(value: Any) -> int | None:
+    if isinstance(value, int) and not isinstance(value, bool) and 1 <= value <= 10:
+        return value
+    return None
+
+
 def _optional_bounded_text(value: Any, limit: int) -> str | None:
     return None if value is None else _bounded_text(value, limit)
 
@@ -413,6 +439,21 @@ def _safe_code(value: Any, limit: int) -> str | None:
 
 def _enum_or_none(value: Any, allowed: set[str]) -> str | None:
     return value if isinstance(value, str) and value in allowed else None
+
+
+def _safe_enum_list(
+    value: Any,
+    allowed: set[str],
+    *,
+    limit: int,
+) -> list[str]:
+    if not isinstance(value, list) or len(value) > limit:
+        return []
+    if any(not isinstance(item, str) or item not in allowed for item in value):
+        return []
+    if len(set(value)) != len(value):
+        return []
+    return list(value)
 
 
 def _safe_goal(row: dict[str, Any]) -> dict[str, Any] | None:

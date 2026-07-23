@@ -244,6 +244,15 @@ def sample_inputs() -> SnapshotInputRows:
         ],
         schedule_items=[
             {"id": "schedule-1", "title": "Math", "weekday": 4},
+            {
+                "id": "schedule-expired",
+                "title": "Old class",
+                "weekday": 4,
+                "metadata": {
+                    "managed_by": "setup",
+                    "valid_until": "2026-06-30",
+                },
+            },
         ],
         memory_entries=[
             {"id": "memory-1", "type": "goal", "title": "Goal"},
@@ -322,6 +331,7 @@ def test_generate_daily_snapshot_builds_compact_summary_and_persists_by_principa
         "completed_minutes": 50,
         "abandoned_minutes": 5,
     }
+    assert row["summary"]["schedule"]["fixed_commitment_count"] == 1
     assert row["summary"]["recommended_next_focus"] == "recovery"
     assert row["summary"]["daily_state"]["mode"] == "recover"
     assert row["summary"]["daily_state"]["data_quality"] == "partial"
@@ -338,6 +348,7 @@ def test_generate_daily_snapshot_builds_compact_summary_and_persists_by_principa
     assert row["signals"]["input_counts"]["daily_logs"] == 2
     assert row["signals"]["input_counts"]["habit_logs"] == 2
     assert row["signals"]["input_counts"]["focus_sessions"] == 3
+    assert row["signals"]["input_counts"]["schedule_items"] == 1
     assert row["signals"]["habit_outcome_counts"] == {
         "completed": 1,
         "skipped": 1,
@@ -765,6 +776,7 @@ def test_snapshot_repository_reads_metadata_and_widens_event_utc_bounds():
     event_params = _params_for_table(client, "behavioral_events")
     habit_log_params = _params_for_table(client, "habit_logs")
     focus_params = _params_for_table(client, "focus_sessions")
+    schedule_params = _params_for_table(client, "schedule_items")
     assert _param_values(daily_params, "entry_date") == [
         "gte.2026-06-26",
         "lte.2026-07-02",
@@ -786,6 +798,7 @@ def test_snapshot_repository_reads_metadata_and_widens_event_utc_bounds():
     assert "metadata" in _param_values(focus_params, "select")[0].split(",")
     assert "metadata" in _param_values(daily_params, "select")[0].split(",")
     assert "metadata" in _param_values(event_params, "select")[0].split(",")
+    assert "metadata" in _param_values(schedule_params, "select")[0].split(",")
     assert _param_values(daily_params, "limit") == ["7"]
     assert _param_values(event_params, "limit") == ["200"]
 

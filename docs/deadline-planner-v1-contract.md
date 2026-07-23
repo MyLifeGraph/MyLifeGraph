@@ -250,7 +250,9 @@ consecutive profile-local dates starting today under
 minutes, distinct active-plan count, nullable remaining account capacity,
 explicit overage, and merged recurring `schedule_items` duration for that ISO
 weekday. The latter is labelled `weekly setup commitments`: it is context, not
-part of the preparation-budget arithmetic. Proposed blocks, task estimates,
+part of the preparation-budget arithmetic. A Setup commitment contributes only
+on dates inside its optional inclusive validity range; older and undated rows
+remain unbounded. Proposed blocks, task estimates,
 Focus history, imported calendar busy rows, and live provider availability are
 not included. The response therefore does not claim to be a complete free-time
 or total-workload calculation.

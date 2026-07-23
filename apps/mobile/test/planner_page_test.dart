@@ -64,6 +64,10 @@ void main() {
     ]) {
       expect(find.byKey(ValueKey(key)), findsOneWidget);
     }
+    expect(
+      find.byKey(const ValueKey('planner-availability-warning')),
+      findsNothing,
+    );
     for (final label in const [
       'Setup commitment',
       'Task',
@@ -78,6 +82,38 @@ void main() {
     expect(find.text('Monday, Jul 27'), findsOneWidget);
     expect(find.textContaining('2 h 30 min remaining · next'), findsOneWidget);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('automatic planning warns when no availability source is set',
+      (tester) async {
+    tester.view.physicalSize = const Size(1000, 1600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final backend = _PlannerBackend(incompleteAvailability: true);
+
+    await _pumpPlanner(tester, backend: backend);
+
+    expect(
+      find.byKey(const ValueKey('planner-availability-warning')),
+      findsOneWidget,
+    );
+    expect(
+      find.textContaining('Calendar import stays optional.'),
+      findsOneWidget,
+    );
+    await tester.tap(find.byKey(const ValueKey('planner-add-exam')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Review your availability'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('planner-continue-without-availability')),
+      findsOneWidget,
+    );
+    expect(
+      backend.requests.where((request) => request.path.endsWith('/proposals')),
+      isEmpty,
+    );
   });
 
   testWidgets('Task proposal remains a preview until explicit confirmation',
@@ -259,15 +295,40 @@ class _PlannerRequest {
 }
 
 class _PlannerBackend {
-  _PlannerBackend({this.failNextProposal = false}) {
+  _PlannerBackend({
+    this.failNextProposal = false,
+    this.incompleteAvailability = false,
+  }) {
     dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) {
           requests
               .add(_PlannerRequest(options.method, options.path, options.data));
           if (options.path == '/v1/planner/overview') {
-            return handler
-                .resolve(_response(options, plannerOverviewEnvelope()));
+            final overview = plannerOverviewEnvelope();
+            if (incompleteAvailability) {
+              overview['commitments'] = <dynamic>[];
+              overview['preferences'] = {
+                'contract_version': 'planner-preferences-v1',
+                'origin': 'authenticated_backend',
+                'use_calendar_busy_time': false,
+                'updated_at': null,
+                'current_calendar_import_id': null,
+                'calendar_available': false,
+              };
+              for (final rawDay in overview['days'] as List<dynamic>) {
+                final day = rawDay as Map<String, dynamic>;
+                day['items'] = (day['items'] as List<dynamic>).where((rawItem) {
+                  final item = rawItem as Map<String, dynamic>;
+                  return !{
+                    'setup_commitment',
+                    'manual_commitment',
+                    'calendar_event',
+                  }.contains(item['kind']);
+                }).toList(growable: false);
+              }
+            }
+            return handler.resolve(_response(options, overview));
           }
           if (options.path.endsWith('/proposals')) {
             if (failNextProposal) {
@@ -320,6 +381,7 @@ class _PlannerBackend {
   final Dio dio = Dio(BaseOptions(baseUrl: 'https://planner.test'));
   final List<_PlannerRequest> requests = [];
   bool failNextProposal;
+  final bool incompleteAvailability;
 
   Response<Map<String, dynamic>> _response(
     RequestOptions options,

@@ -42,7 +42,7 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
       eyebrow: 'EVENING · CONTEXT',
       title: 'What should tomorrow know?',
       subtitle:
-          'Choose the main friction. Everything else appears only when useful.',
+          'Choose the primary friction. Everything else appears only when useful.',
       kind: _EveningStepKind.context,
     ),
   ];
@@ -141,8 +141,13 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Text(
-          'Main friction',
+          'Primary friction',
           style: Theme.of(context).textTheme.titleMedium,
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        Text(
+          'Choose what got in the way most, or choose no major friction.',
+          style: Theme.of(context).textTheme.bodySmall,
         ),
         const SizedBox(height: AppSpacing.sm),
         CaptureChoiceControl<MainFriction>(
@@ -152,13 +157,78 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
                 (value) => CaptureChoice(
                   value: value,
                   label: _mainFrictionLabel(value),
-                  semanticLabel: 'main friction ${value.code}',
+                  semanticLabel: 'primary friction ${value.code}',
                 ),
               )
               .toList(),
-          onChanged: (value) => setState(
-            () => _draft = _draft.copyWith(mainFriction: value),
-          ),
+          onChanged: (value) => setState(() {
+            _draft = _draft.copyWith(
+              mainFriction: value,
+              additionalFrictions: _draft.additionalFrictions
+                  .where((friction) => friction != value)
+                  .toList(growable: false),
+            );
+          }),
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        Text(
+          'Also present (optional)',
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        Text(
+          'Choose up to two. Only the primary friction shapes your Daily State.',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        Wrap(
+          spacing: AppSpacing.sm,
+          runSpacing: AppSpacing.sm,
+          children: MainFriction.values
+              .where(
+            (value) => value != MainFriction.noMajorFriction,
+          )
+              .map((value) {
+            final isPrimary = value == _draft.mainFriction;
+            final selected = _draft.additionalFrictions.contains(value);
+            final canSelect = !isPrimary &&
+                (selected ||
+                    _draft.additionalFrictions.length <
+                        EveningShutdownDraft.maxAdditionalFrictions);
+            return MergeSemantics(
+              child: Semantics(
+                label: 'additional friction ${value.code}',
+                child: FilterChip(
+                  selected: selected,
+                  showCheckmark: false,
+                  avatar: Icon(
+                    isPrimary
+                        ? Icons.radio_button_checked
+                        : selected
+                            ? Icons.check
+                            : Icons.add,
+                    size: 18,
+                  ),
+                  onSelected: canSelect
+                      ? (isSelected) =>
+                          _toggleAdditionalFriction(value, isSelected)
+                      : null,
+                  label: ExcludeSemantics(
+                    child: Text(
+                      _mainFrictionLabel(value),
+                    ),
+                  ),
+                ),
+              ),
+            );
+          }).toList(growable: false),
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        Text(
+          '${_draft.additionalFrictions.length} of '
+          '${EveningShutdownDraft.maxAdditionalFrictions} selected'
+          '${_draft.additionalFrictions.length == EveningShutdownDraft.maxAdditionalFrictions ? '. Remove one to choose another.' : '.'}',
+          style: Theme.of(context).textTheme.bodySmall,
         ),
         if (_draft.requiresStressContext) ...[
           const SizedBox(height: AppSpacing.lg),
@@ -236,29 +306,6 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
             hintText: 'Leave blank if there was no specific blocker',
           ),
         ),
-        const SizedBox(height: AppSpacing.md),
-        Semantics(
-          button: true,
-          selected: _draft.makeTomorrowGentler,
-          label: 'make tomorrow gentler',
-          onTap: () => setState(
-            () => _draft = _draft.copyWith(
-              makeTomorrowGentler: !_draft.makeTomorrowGentler,
-            ),
-          ),
-          child: ExcludeSemantics(
-            child: FilterChip(
-              selected: _draft.makeTomorrowGentler,
-              onSelected: (selected) => setState(
-                () => _draft = _draft.copyWith(
-                  makeTomorrowGentler: selected,
-                ),
-              ),
-              avatar: const Icon(Icons.spa_outlined),
-              label: const Text('Make tomorrow gentler'),
-            ),
-          ),
-        ),
         const SizedBox(height: AppSpacing.sm),
         Text(
           'Optional blanks stay absent. They do not become tasks, memories, or recommendations.',
@@ -278,6 +325,30 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
       _EveningStepKind.context =>
         _draft.mainFriction != null && _draft.hasConsistentStressContext,
     };
+  }
+
+  void _toggleAdditionalFriction(MainFriction value, bool selected) {
+    if (value == MainFriction.noMajorFriction || value == _draft.mainFriction) {
+      return;
+    }
+    final additionalFrictions =
+        List<MainFriction>.of(_draft.additionalFrictions);
+    if (selected) {
+      if (additionalFrictions.contains(value) ||
+          additionalFrictions.length >=
+              EveningShutdownDraft.maxAdditionalFrictions) {
+        return;
+      }
+      additionalFrictions.add(value);
+    } else {
+      additionalFrictions.remove(value);
+    }
+    setState(
+      () => _draft = _draft.copyWith(
+        additionalFrictions:
+            List<MainFriction>.unmodifiable(additionalFrictions),
+      ),
+    );
   }
 
   void _previousStep() {
@@ -409,6 +480,7 @@ String _stressControllabilityLabel(StressControllability value) =>
     };
 
 String _mainFrictionLabel(MainFriction value) => switch (value) {
+      MainFriction.noMajorFriction => 'No major friction',
       MainFriction.unclearPriorities => 'Unclear priorities',
       MainFriction.tooMuchToDo => 'Too much to do',
       MainFriction.interruptions => 'Interruptions',

@@ -40,7 +40,7 @@ class _MorningCalibrationPageState
       eyebrow: 'MORNING · CHECK-IN',
       title: 'How are you starting today?',
       subtitle:
-          'Sleep, current energy, and today\'s shape only. Evening context stays untouched.',
+          'Sleep duration and quality, current energy, and today\'s shape. Evening context stays untouched.',
       progress: 1,
       canGoBack: false,
       canContinue: _draft.isComplete,
@@ -72,6 +72,24 @@ class _MorningCalibrationPageState
             value: _draft.sleepHours,
             onChanged: (value) => setState(
               () => _draft = _draft.copyWith(sleepHours: value),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xl),
+          Text(
+            'Estimated sleep quality',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            'How restorative did your sleep feel, independently of how long you slept?',
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+          const SizedBox(height: AppSpacing.md),
+          CaptureRatingControl(
+            value: _draft.sleepQuality,
+            semanticPrefix: 'morning sleep quality',
+            onChanged: (value) => setState(
+              () => _draft = _draft.copyWith(sleepQuality: value),
             ),
           ),
           const SizedBox(height: AppSpacing.xl),
