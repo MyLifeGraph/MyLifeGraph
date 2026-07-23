@@ -226,12 +226,14 @@ Command compatibility:
 | `review_plan` | planning, optional target | Phase 8 opens the real authenticated `/weekly-review` surface; dispatch itself never generates or applies |
 | `open_capture` | capture plus implemented route | Open Evening Shutdown or Morning Calibration only |
 
-Flutter's exhaustive `ExecutableActionDispatcher` accepts only an already
-validated target and delegates supported commands to injected, command-specific
-handlers. Phase 8 adds a typed `review_plan` navigation handler for a real
-authenticated synced session. Guest/mock and other unavailable capability
-states remain explicit, dispatch performs no generation or proposal mutation,
-and handler failures are not swallowed.
+The briefing-first Flutter consumer originally used an exhaustive
+`ExecutableActionDispatcher` for this mapping. Today Overview later superseded
+that card, so the production-unreachable dispatcher and its isolated tests were
+removed. Current Today Task, Habit, Focus, capture, and Weekly Review controls
+call their owning typed controllers or routes directly and retain explicit
+guest/mock capability handling. The strict envelope remains the persisted
+backend briefing boundary and Flutter parser contract; parsing an envelope does
+not generate, execute, or apply a proposal.
 
 The Flutter and FastAPI parsers intentionally enforce the same boundary:
 unknown top-level or metadata fields, null/non-object metadata, explicit-null

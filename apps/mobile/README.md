@@ -166,9 +166,11 @@ and Phase 3 does not rank a briefing or call an LLM. See
 
 ## Main Routes
 
-The five shell destinations are Today, Insights, Quick actions, Planner, and
-Settings. Inbox is reached from Settings; compatible `/alerts` links keep
-Settings selected.
+With the development Coach surface enabled, the five shell destinations are
+Today, Insights, Quick actions, Planner, and Coach. Settings is reached from
+the top-right Today control, and Inbox remains under Settings. A disabled Coach
+gate omits the fifth destination rather than restoring Settings; Settings-owned
+routes such as `/alerts` leave the shell destinations unselected.
 
 - `/auth`
 - `/auth/recovery` (Supabase password-recovery event only)
@@ -264,7 +266,7 @@ for habit/task create, habit outcome/undo, task completion/undo, and focus
 start/finish, plus negative lifecycle/range/cadence and terminal-focus
 `updated_at` assertions in `e2e/web/smoke.mjs`. They must not be claimed as
 passed in a later checkout until that checkout's full run succeeds. In the
-2026-07-13 current checkout, a focused Phase 10 rerun and the subsequent full
+recorded 2026-07-13 checkout, a focused Phase 10 rerun and the subsequent full
 non-destructive local browser journey passed with the fake provider. The
 focused mode is diagnostic only. A separate authenticated Flutter-to-FastAPI-to-
 `local_codex_oauth` live turn also passed on this machine with explicit

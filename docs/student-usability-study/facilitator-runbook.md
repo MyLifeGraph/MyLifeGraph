@@ -122,7 +122,7 @@ After the participant confirms a plan in Part A:
    the miss is instructed and cannot measure natural adherence.
 3. Schedule Part B after the block's end time. Keep the same local account and
    app build.
-4. At Part B, let the participant sign in or reload, then read tasks 8–10 without
+4. At Part B, let the participant sign in or reload, then read tasks 10–12 without
    navigation hints.
 
 If no block was scheduled, the block lies outside the participant's available

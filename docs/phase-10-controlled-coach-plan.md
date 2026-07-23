@@ -4,8 +4,9 @@ Status: implemented at the repository boundary. This document now records the
 locked Phase 10 contract and the separate verification limits. The opt-in
 synthetic local Codex provider smoke passed on 2026-07-13 with explicitly
 requested `gpt-5.5`. A focused Phase 10 fake-provider browser rerun and the
-subsequent full non-destructive local-Supabase journey also passed in the
-current checkout. The first full-product live-account acceptance also passed
+subsequent full non-destructive local-Supabase journey passed in that recorded
+checkout; the 2026-07-23 shell-navigation follow-up did not rerun the full
+browser journey. The first full-product live-account acceptance passed
 non-destructively on 2026-07-13 in the working tree based on `b8c7935`:
 authenticated Flutter -> FastAPI -> `local_codex_oauth` -> the same Linux
 user's logged-in Codex CLI -> validated and persisted `coach-response-v1`.

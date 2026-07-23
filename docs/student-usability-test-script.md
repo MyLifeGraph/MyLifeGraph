@@ -16,11 +16,12 @@ Run this script with:
 
 ## Goal
 
-Test whether a student can understand the core loop without explanation:
-complete Setup, record an evening check-in, start and finish Focus, create and
-confirm an exam or assignment preparation plan, then replan after falling
-behind. The test also checks whether the student can tell what changes
-automatically and what is only a preview.
+Test whether a student can understand the current core loop without explanation:
+complete Setup including optional Study rhythm, record an evening check-in,
+start and finish Focus, use central Planner for an ordinary Task and fixed
+commitment, create and confirm an exam or assignment preparation plan, then
+replan after falling behind. The test also checks whether the student can tell
+what changes automatically and what is only a preview.
 
 ## Study Design
 
@@ -31,7 +32,7 @@ every session summary.
 
 The study has two contacts:
 
-- Part A: 35–45 minutes for Setup, daily use, Focus, plan creation, capability
+- Part A: 45–60 minutes for Setup, daily use, Focus, central Planner, preparation plan creation, capability
   truth, and discovery probes.
 - Part B: 10–15 minutes after the participant's first confirmed preparation
   block has actually ended without linked Focus credit. This is the only honest
@@ -89,18 +90,23 @@ and continue only so later tasks can still be observed.
 
 ### Part A
 
-1. Complete Setup with realistic sleep, workload, routines, and one fixed
-   commitment.
+1. Complete Setup with realistic sleep, workload, routines, one fixed
+   commitment, a focus/recovery rhythm, and one fictional current semester.
 2. Record how today felt using the evening check-in.
-3. Find Focus, choose a useful length, start it, and finish it.
-4. Add an upcoming exam or assignment. Enter the total active preparation time
+3. Find Focus, inspect the configured start checklist and recovery expectation,
+   choose a useful length, start it, and finish it.
+4. In Planner, add an ordinary Task with explicit duration and deadline. Review
+   the proposal, explain what confirmation will change, and confirm it.
+5. Add a manual fixed commitment. Explain whether it changes existing plans or
+   only affects later availability and attention.
+6. Add an upcoming exam or assignment. Enter the total active preparation time
    you believe you need and any work already completed.
-5. Review the proposed preparation blocks. Explain what will and will not
+7. Review the proposed preparation and recovery blocks. Explain what will and will not
    happen before confirmation, then confirm the plan.
-6. Open Inbox and Coach. Explain, in your own words, what kind of notifications
+8. Open Inbox and Coach. Explain, in your own words, what kind of notifications
    and Coach access the current app actually provides.
-7. Without changing anything, show where you would look for a Weekly review, a
-   calendar import, and timezone or account settings.
+9. Without changing anything, show where you would look for a Weekly review, a
+   calendar import, timezone/account settings, and a Study Setup edit.
 
 Record the first confirmed preparation block's end time. Ask the participant
 not to start linked Focus for that block, explain that this is only to create the
@@ -108,11 +114,11 @@ study's recovery state, and schedule Part B after the block ends.
 
 ### Part B
 
-8. Sign in again or reload the app. Without navigation hints, find what happened
+10. Sign in again or reload the app. Without navigation hints, find what happened
    to the passed preparation block.
-9. Explain what remains uncredited, what completed Focus still counts, and what
+11. Explain what remains uncredited, what completed Focus still counts, and what
    will change only as a preview.
-10. Use the recovery path to update the remaining plan, review the new proposal,
+12. Use the recovery path to update the remaining plan, review the new proposal,
     and decide whether to confirm it.
 
 After Part B, or after Part A if Part B cannot be scheduled, ask:
@@ -126,13 +132,13 @@ After Part B, or after Part A if Part B cannot be scheduled, ask:
 
 ## Observation Sheet
 
-| Participant | Setup | Evening | Focus | Plan | Inbox/Coach | Discovery | Replan | Automatic vs preview understood | Main friction | Evidence reference |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| S1 | Not run | Not run | Not run | Not run | Not run | Not run | Not run | Not run | — | — |
-| S2 | Not run | Not run | Not run | Not run | Not run | Not run | Not run | Not run | — | — |
-| S3 | Not run | Not run | Not run | Not run | Not run | Not run | Not run | Not run | — | — |
-| S4 | Not run | Not run | Not run | Not run | Not run | Not run | Not run | Not run | — | — |
-| S5 | Not run | Not run | Not run | Not run | Not run | Not run | Not run | Not run | — | — |
+| Participant | Setup/Study | Evening | Focus | Planner | Preparation | Inbox/Coach | Discovery | Replan | Automatic vs preview understood | Main friction | Evidence reference |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| S1 | Not run | Not run | Not run | Not run | Not run | Not run | Not run | Not run | Not run | — | — |
+| S2 | Not run | Not run | Not run | Not run | Not run | Not run | Not run | Not run | Not run | — | — |
+| S3 | Not run | Not run | Not run | Not run | Not run | Not run | Not run | Not run | Not run | — | — |
+| S4 | Not run | Not run | Not run | Not run | Not run | Not run | Not run | Not run | Not run | — | — |
+| S5 | Not run | Not run | Not run | Not run | Not run | Not run | Not run | Not run | Not run | — | — |
 
 Use `completed`, `completed with hesitation`, `blocked`, or `not observed` for
 each task. `Not observed` is missing evidence, not success or failure. Note the

@@ -10000,10 +10000,9 @@ async function assertControlledCoach(page, userId) {
     'persisted Coach history',
   );
 
-  await page.goto(appRoute('/dashboard'), { waitUntil: 'domcontentloaded' });
+  await page.goto(appRoute('/coach'), { waitUntil: 'domcontentloaded' });
   await waitForFlutterShell(page);
   await enableFlutterSemantics(page);
-  await clickByText(page, 'Coach');
   await page.waitForURL('**/#/coach');
   await expectText(page, 'Development Coach ready');
   await expectText(page, 'Uses fixed test responses. This is not a live assistant.');

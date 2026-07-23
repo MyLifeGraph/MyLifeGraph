@@ -1,191 +1,155 @@
 # Product Review Handoff
 
-Status: review entry point for the checkout containing this document.
+Status: current whole-product review entry point for the checkout containing
+this document, updated through Today Overview V2, Planner V1, Study Setup V1,
+and the Coach-enabled shell navigation on 2026-07-23.
 
 ## Objective
 
-Review the implemented product as a student would experience it from first
-Setup through several months of use. Re-evaluate the usability and calculation
-choices, inspect the complete exam/assignment Preparation Plans contract, and
-test all recent changes before proposing another feature. Fix proved defects in
-the smallest owning contract; do not redesign the whole project by default.
+Review MyLifeGraph as a student would experience it from first Setup through
+repeated daily use, planning, execution, recovery, reflection, and account
+control. Test the implemented boundaries before proposing another feature. Fix
+proved defects in the smallest owning contract; do not redesign the product or
+introduce model authority by default.
 
-## What The Current Slice Implements
+## Current Product Slice
 
-The checkout combines Deadline Planner V1 with seven product-polish groups:
+The current checkout combines these implemented loops:
 
-1. Evening check-in is a short two-step capture with optional detail and honest
-   save recovery.
-2. Today is an honest daily overview: both-capture streak, transparent dynamic
-   progress, a four-source agenda, executable Tasks/Habits, and lazy supporting
-   information. It no longer presents a recommendation as a decision made for
-   the student.
-3. Insights exposes data sufficiency and sources; correlations require shared
-   observations rather than personalized-looking filler.
-4. Focus has a real countdown, explicit finish/abandon behavior, and
-   deterministic duration suggestions based on current state and the selected
-   target.
-5. Missed preparation work has an explicit recovery/replan path.
-6. Unproved promises are absent or constrained: no real-account Skillset card,
-   foreground-only in-app reminder copy, hard production Coach gate, and
-   reminder preference separate from delivery consent.
-7. Primary UI copy is English, student-facing, consistent, and tested at small
-   viewport/large-text boundaries. See
-   `docs/ui-language-and-copy-contract.md`.
-
-Deadline Planner V1 asks the user—not an LLM—to estimate total active study
-time and enter prior completed work. It proposes dated blocks, shows the staged
-revision before applying anything, activates only after explicit confirmation,
-creates one stable managed task, credits completed linked Focus sessions, and
-can replan remaining work. A manual deadline or one deliberately selected
-imported event may seed the plan. Optional imported busy time is read-only. A
-student may now set a nullable account-wide daily preparation budget in
-Settings; it constrains new cross-plan reservations without rewriting existing
-plans, while Today and Preparation plans expose a truthful seven-day view.
-Dates with confirmed plans can be expanded into an owner-scoped read-only
-breakdown. Over-budget details state the exact minimum date overage and provide
-explicit review/replanning entry points, but never choose a plan or move a
-reservation automatically.
-There is no title inference, source-calendar write, autonomous mutation, hidden
-proposal, LLM call, push notification, or background sync. The exact ownership,
-retry, fingerprint, and database rules are in
-`docs/deadline-planner-v1-contract.md`.
+1. Revision-safe Setup owns explicit preferences, optional goals/habits/fixed
+   commitments, and optional Study Setup. Study Setup may define focus/recovery
+   rhythm, a transient start checklist, and current/next semester facts.
+2. Evening Shutdown and Morning Calibration persist explicit typed capture.
+   Deterministic Daily State classifies freshness and capacity without an LLM.
+3. Today Overview V2 is a read-only projection with a strict both-capture
+   streak, transparent progress, Setup/Planner/Preparation/Calendar/Focus
+   timeline facts, selected Tasks/Habits, and isolated partial failures.
+4. Quick actions owns capture, Habit completion, and Focus. Focus has a durable
+   single-session lifecycle and may credit a linked open Task without completing
+   it automatically.
+5. Planner V1 is the authenticated planning home. Task and Habit changes use
+   immutable previews and explicit confirmation; fixed commitments are
+   authoritative; exam/assignment creation delegates to Deadline Planner.
+6. Deadline Planner uses the student's estimate and prior credit to stage dated
+   preparation blocks. Confirmation alone activates the plan and managed Task.
+   Study rhythm adds recovery reservations without counting recovery as study.
+7. Insights, Weekly Review, Inbox lifecycle, foreground-only notification
+   delivery, optional `.ics` import, account controls, and the bounded
+   development Coach retain their separate contracts and authority limits.
+8. With the development Coach gate enabled, Coach is the fifth shell
+   destination. Settings remains available from Today; a disabled gate does not
+   restore a redundant Settings shell item.
 
 ## Important Truth Boundaries
 
 - Guest/demo stays local and must not call authenticated product APIs.
-- A normal Today read uses `today-overview-v1` and does not generate or mutate
-  recommendations, briefings, or preparation plans. A counted-source failure
-  makes progress unavailable without erasing independent usable sections.
-- Rule-based Daily State, briefings, reviews, plan blocks, Focus suggestions,
-  and reminder copy do not need an LLM. LLM output may explain a result but must
-  not become calculation or mutation authority.
-- The daily preparation budget is explicit student input and the workload card
-  is a deterministic reservation projection. Weekly Setup commitments are shown
-  separately; neither surface claims inferred free time or full imported-
-  calendar coverage.
-- Controlled Coach cannot mutate product data. It is hidden in production and
-  release builds; local Codex is a development-only, per-machine adapter.
-- Notification Delivery V1 means stored Inbox rows plus acknowledged foreground
-  banners while the app is open. It is not push, system, email, background, or
-  deployed delivery.
-- English is the only supported interface language in V1. German localization
-  remains future work and must be implemented end-to-end before being claimed.
-- The five-student test is prepared in
-  `docs/student-usability-test-script.md`, with its execution kit in
-  `docs/student-usability-study/`, but was deliberately skipped/deferred and
-  must not be presented as completed evidence. The five-agent compressed
-  walkthrough in
-  `docs/synthetic-student-persona-simulation-2026-07-18.md` is not a substitute
-  for participants or elapsed longitudinal use.
+- Normal Today and Planner reads are side-effect free. Preview, generation,
+  confirmation, delivery acknowledgement, and lifecycle mutation remain
+  separate deliberate commands.
+- Rule-based state, rankings, reviews, plan blocks, focus suggestions, recovery
+  reservations, semester attention, and reminder copy do not require an LLM.
+- Coach cannot mutate product data. Its local Codex adapter is development-only,
+  per-machine, explicitly enabled, and separate from standard fake-provider
+  automation.
+- Imported calendar events are consented, read-only product copies. The app has
+  no live provider OAuth, source-calendar write, hidden sync, or automatic move.
+- Notifications are stored Inbox rows and acknowledged foreground banners while
+  the app is open. They are not push, system, email, or background delivery.
+- Setup semester dates and Study rhythm invalidate or mark affected staged plans
+  honestly; they never silently rewrite active reservations.
+- English is the only supported V1 interface language.
+- The prepared five-student study has not been run. Synthetic personas and test
+  automation are not participant or longitudinal evidence.
 
 ## Review Questions
 
-Review code and behavior, not only screenshots:
-
-- Can a new student understand what to do next in Setup, Today, Quick actions,
-  Focus, Preparation plans, Weekly review, Calendar, Inbox, and Coach?
-- Does every visible action either execute a real typed command, open a real
-  flow, or clearly say that it is a preview?
-- Are total preparation minutes, prior credit, block allocation, busy-period
-  avoidance, focus credit, progress, missed-block recovery, and deadline edge
-  cases internally consistent across Flutter, FastAPI, and PostgreSQL?
-- Do multiple active plans respect an optional account-wide local-date budget,
-  including earlier same-day reservations and a budget change between preview
-  and confirmation, without silently rewriting existing plans?
-- Do retries preserve exact request identity without duplicating a plan, task,
-  block, outcome, or Focus session? Do reload/conflict paths avoid overwriting
-  newer state?
-- Can one user read or mutate another user's plans or request ledger? Can direct
-  application DML bypass backend plan authority?
-- Are stale imported-event fingerprints and disconnected/deleted calendar data
-  rejected before plan creation?
-- Are loading, empty, offline, invalid-data, stale, failure, ambiguous-save, and
-  small-screen states usable and honest?
-- Would a student still find Today, Insights, Inbox, and Weekly review useful
-  after months, or do any surfaces become repetitive or empty?
-- Is an LLM being suggested where a transparent rule is safer, cheaper, and
-  easier to test? Keep calculation authority deterministic unless evidence
-  proves a model is needed.
+- Can a new student understand Setup, optional Study Setup, Today, Quick
+  actions, Planner, Focus, Preparation plans, Weekly Review, Inbox, and Coach?
+- Can the student distinguish a preview from a confirmed mutation everywhere?
+- Do Planner and Deadline Planner agree on Setup commitments, manual
+  commitments, imported busy time, preparation reservations, recovery time,
+  semester bounds, daily capacity, and stale fingerprints?
+- Are Task/Habit lifecycle release, Focus credit, missed-work recovery, and
+  replanning consistent across Flutter, FastAPI, and PostgreSQL?
+- Do retries preserve exact request identity without duplicating targets,
+  revisions, blocks, outcomes, notifications, or Coach turns?
+- Can one owner read or mutate another owner's data, or bypass backend-owned
+  mutation through direct application DML?
+- Are loading, empty, stale, offline, invalid-data, ambiguous-save, small-screen,
+  and large-text states usable and honest?
+- Is any proposed LLM feature replacing a transparent deterministic rule without
+  evidence that the tradeoff is worthwhile?
 
 ## Required Reading And Verification
 
-Start with `AGENTS.md` and all documents it requires. For this review, read at
-minimum:
+Read `AGENTS.md` first and follow its complete document routing. For a current
+whole-product review, the minimum set includes:
 
 - `README.md`
 - `docs/architecture.md`
 - `docs/backend-roadmap.md`
 - `docs/daily-briefing-implementation-plan.md`
 - `docs/today-overview-v1-contract.md`
+- `docs/planner-v1-contract.md`
+- `docs/study-setup-v1-contract.md`
 - `docs/deadline-planner-v1-contract.md`
-- `docs/ui-language-and-copy-contract.md`
-- `docs/verification.md`
-- the Phase 3, Phase 9, Phase 10, notification lifecycle, notification delivery,
-  and account-control contracts named by `AGENTS.md`
+- `docs/phase-3-executable-actions-contract.md`
+- `docs/phase-8-weekly-review-contract.md`
+- `docs/phase-9-calendar-import-contract.md`
+- `docs/phase-10-controlled-coach-plan.md`
+- both notification contracts, the account-control contract, the UI-copy
+  contract, `docs/supabase-current-state.md`, and `docs/verification.md`
 
-Then inspect `git status --short --branch`, the latest commit, its complete diff,
-and every untracked file. Preserve user work and never reset the checkout.
-
-Run the standard source gate:
+Inspect the branch, latest commit, complete working-tree diff, and untracked
+files without discarding user work. Run focused tests first, then the standard
+non-destructive source gate:
 
 ```bash
 FLUTTER_BIN=/home/gregor/tools/flutter/bin/flutter scripts/verify.sh
 ```
 
-Run exact local migration verification and the full browser journey as defined
-in `docs/verification.md`. A reset is appropriate only for a deliberately
-disposable local test database and must never be inferred as permission for a
-remote database. Standard Coach automation uses the fake provider; do not claim
-a live local-Codex result unless it was separately opted into and run on the
-current machine.
+Follow `docs/verification.md` for local migration/advisor checks and browser
+E2E. A database reset is appropriate only for a deliberately disposable local
+test database. Do not infer permission to touch a remote database, deploy,
+push, or run a live model.
 
-## Verification Recorded For This Handoff
+## Evidence Boundary
 
-The local current checkout completed these checks on 2026-07-18 before its
-handoff commit:
+Verification counts in dated contract sections belong to their recorded
+checkout. The 2026-07-23 shell-navigation follow-up passed the source gate and
+all then-current Flutter tests, but did not rerun the full browser journey.
+The subsequent cleanup source gate passed all 642 remaining Flutter tests; the
+FastAPI suite reported 861 passed and 1 skipped, local migration history matched
+through the RLS optimization, and Supabase advisors reported no issue. That
+cleanup's full browser attempt reached the late Coach section before exposing a
+non-addressable Flutter Web shell Semantics selector. The source restored the
+stable direct Coach route and a focused Phase 10 browser rerun passed; the full
+combined journey was not restarted. Record a new commit, exact commands,
+counts, and environment before calling a later checkout fully verified.
 
-- `scripts/verify.sh`: migration/start-stack guards passed, Flutter analysis
-  reported no issues, all `579` Flutter tests passed, and Python application
-  sources compiled.
-- Complete FastAPI suite: `745 passed, 1 skipped`.
-- Local Supabase migration history matched the repository without a reset.
-- Full non-reset Flutter/FastAPI/Supabase browser journey:
-  `E2E browser smoke passed for e2e-1784404040@example.test`.
-
-These are local checkout results, not evidence of remote migration state,
-deployed scheduling, push/background delivery, installed-device acceptance,
-long-term learning benefit, or the still-unrun five-student usability study.
-
-The requested implementation follow-up from this handoff is recorded separately
-in `docs/product-review-followup-2026-07-18.md`; the counts above remain the
-historical pre-handoff results rather than being rewritten after the fact.
-
-## Prompt For A New Chat
+## Prompt For A New Review Chat
 
 ```text
-Work in /home/gregor/projects/ai-personal-coach. First read AGENTS.md completely
-and every required document for the files you may touch, then read
-docs/product-review-handoff.md completely. Inspect the current branch, latest
-commit, full diff, and untracked files without discarding anything.
+Work in /home/gregor/projects/ai-personal-coach. Read AGENTS.md completely and
+every document it requires for the files you may touch, then read
+docs/product-review-handoff.md completely. Inspect the branch, latest commit,
+full diff, and untracked files without discarding anything.
 
 Act as a critical product, UX, Flutter, FastAPI, and PostgreSQL reviewer. Walk
-the app mentally and through tests from Setup to months of student use. Review
-all seven polish groups and Deadline Planner V1, especially estimate capture,
-block calculations, calendar isolation, focus credit, missed-work replanning,
-retry identity, RLS, capability truth, small screens, and ambiguous failures.
-Check whether any LLM addition would actually improve the product without
-making calculation or mutation authority opaque. Prefer small compatible fixes
-over a broad redesign.
+the current product from revision-safe Setup and optional Study Setup through
+Today V2, Quick actions, Planner, Focus, Deadline preparation, recovery,
+Insights, Weekly Review, Inbox, Calendar, Coach, and account controls. Verify
+calculation, authority, retry, RLS, capability-truth, small-screen, large-text,
+and ambiguous-failure boundaries. Prefer small compatible fixes over redesign.
 
-Run focused tests while reviewing, then the repository verification and full
-local browser E2E from docs/verification.md. Fix every proved in-scope defect
-with a regression test and update contract/docs when behavior changes. Do not
-fabricate the five-student usability study, a live provider result, push or
-background delivery, deployed scheduling, remote database state, or German
-localization. Do not reset user work, access remote systems, deploy, push, or
-open a PR unless explicitly requested.
+Run focused tests and the non-destructive source gate. Run the full local
+browser journey only under the explicit local-data conditions in
+docs/verification.md. Fix proved in-scope defects with regression tests and
+update the owning contract when behavior changes. Do not fabricate participant
+evidence, live-provider results, remote state, push/background delivery,
+deployed scheduling, or localization. Do not deploy, push, or open a PR unless
+explicitly requested.
 
-Finish with concrete findings ordered by severity, exact fixes, test results,
-the reviewed commit id, and the remaining manual/external validation items.
+Finish with findings ordered by severity, exact fixes, verification results,
+the reviewed commit id, and remaining manual or external validation.
 ```

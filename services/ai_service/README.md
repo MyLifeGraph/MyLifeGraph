@@ -26,8 +26,9 @@ FastAPI service boundary for recommendation and future ML workflows.
   in parser parity with Flutter. Both reject unknown top-level/metadata fields,
   null/non-object metadata, explicit-null metadata fields, numeric coercion,
   invalid ISO dates, command/kind/target/linkage mismatch, unsupported routes,
-  and per-command metadata leakage. `review_plan` remains explicitly
-  unavailable. See
+  and per-command metadata leakage. `review_plan` is a real authenticated
+  navigation target for the read-only Weekly Review surface; dispatch never
+  generates or applies a proposal. See
   `../../docs/phase-3-executable-actions-contract.md`.
 - With backend Supabase settings configured, bearer tokens are verified through
   Supabase Auth. Setup uses idempotent request ids, optimistic revisions,
@@ -108,8 +109,11 @@ FastAPI service boundary for recommendation and future ML workflows.
 cd services/ai_service
 python -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements-dev.txt
 ```
+
+`requirements.txt` contains runtime packages only; the development file adds
+the test runner. The equivalent project extra is `.[test]`.
 
 Windows PowerShell:
 
@@ -117,7 +121,7 @@ Windows PowerShell:
 cd services\ai_service
 python -m venv .venv
 .venv\Scripts\Activate.ps1
-pip install -r requirements.txt
+pip install -r requirements-dev.txt
 ```
 
 ## Run
@@ -528,7 +532,7 @@ current result.
 Phase 10 tests use fake services/providers/process runners. They do not require
 Codex, OAuth, a subscription, or network access. A focused Phase 10 browser
 rerun and the subsequent full non-destructive local-Supabase journey passed in
-the 2026-07-13 current checkout with the deterministic fake provider. The full
+the recorded 2026-07-13 checkout with the deterministic fake provider. The full
 run reported `E2E browser smoke passed for e2e-1783947134@example.test`; see
 `../../docs/verification.md` for the diagnostic-only focused rerun command.
 The separate synthetic-context live smoke is skipped by default and runs only

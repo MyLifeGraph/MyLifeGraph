@@ -230,6 +230,12 @@ binds Settings replay to the complete request payload and expected revision,
 invalidates that identity when Setup changes the shared preference projection,
 and keeps `updated_at` monotone and no earlier than retained consent timestamps.
 The migration
+`supabase/migrations/20260718120000_deadline_planner_v1.sql` adds the forced-RLS
+Deadline Planner plan, immutable revision, dated block, and global request-
+identity tables plus service-role-only owner-locked proposal, confirmation, and
+lifecycle RPCs. Authenticated clients retain only the intended owner read
+projection.
+The migration
 `supabase/migrations/20260719120000_account_preparation_budget_v1.sql` adds the
 nullable `25..480` five-minute account-wide preparation rule, revokes direct
 application-role writes to that profile column, and exposes only an owner-
@@ -255,6 +261,11 @@ Deadline revisions/blocks with Study revision and recovery-reservation truth.
 It preserves old Intake rows and old zero-recovery blocks, makes Study-bound
 previews stale after a rhythm edit, and prevents confirmation against changed
 settings or overlapping recovery time.
+The migration
+`supabase/migrations/20260723200707_optimize_canonical_rls_policies.sql` removes
+six superseded initial policies and makes the eleven unchanged canonical owner/
+admin predicates initialization-plan safe. It changes no table privilege, RLS
+mode, owner/admin rule, or service-role boundary.
 
 ## Important Docs
 
@@ -646,7 +657,7 @@ answer, prompt, or raw event stream logged. Real local PostgreSQL parallel lock
 smokes also completed without deadlock or timeout and converged the
 claim/completion/deletion outcomes. A focused fake-provider Phase 10 browser
 rerun and the subsequent full non-destructive browser journey both passed on
-the current checkout against local Supabase; the full run reported
+the recorded 2026-07-13 checkout against local Supabase; the full run reported
 `E2E browser smoke passed for e2e-1783947134@example.test`. These checks
 establish only this machine's local/provider boundaries, not remote Supabase,
 production readiness, or a second developer's account. A separate authenticated
@@ -796,7 +807,7 @@ you actually intend to run `supabase db reset`.
 `supabase db reset` must complete through:
 
 ```text
-20260723120000_study_setup_v1.sql
+20260723200707_optimize_canonical_rls_policies.sql
 ```
 
 Expected local reset notices include skipped legacy CamelCase tables and

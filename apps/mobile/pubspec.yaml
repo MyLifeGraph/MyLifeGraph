@@ -9,7 +9,6 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  cupertino_icons: ^1.0.8
   connectivity_plus: ">=6.1.5 <7.0.0"
   dio: ^5.7.0
   # Keep Dart 3.4 resolvable through file_selector 1.0.3; 1.1 needs Dart 3.9.

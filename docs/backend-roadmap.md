@@ -30,10 +30,15 @@ Flutter app
        -> LLM provider only behind budgeted service boundaries
 ```
 
-Flutter may write simple user-owned records directly through Supabase RLS:
-profiles, check-ins, tasks, goals, habits, schedule items, notifications, and
-coach messages. FastAPI owns workflows that need service-role access,
-aggregation, generation, verification, cross-table reasoning, or any LLM call.
+Flutter may write only the explicitly granted user-owned records whose current
+contracts permit direct Data API mutation, such as daily capture and supported
+manual Task, Habit, Goal, schedule, and focus lifecycles. Canonical profile
+identity and authorization, Setup application, notifications, Coach messages,
+backend projections, retry ledgers, and planning confirmation are backend-owned.
+FastAPI owns workflows that need service-role access, aggregation, generation,
+verification, cross-table reasoning, atomic multi-table mutation, or any LLM
+call. RLS is row authorization and never substitutes for the table privilege
+boundary recorded in `docs/supabase-current-state.md`.
 
 ## Current Backend State
 
@@ -281,6 +286,18 @@ Already implemented:
     planning when no current availability source is visible and allows an
     explicit honest override. Calendar import remains optional and outside
     onboarding.
+- Study Setup V1:
+  - The revisioned Intake response optionally projects one current
+    `study_setup_profiles` row with focus/recovery rhythm, ordered preparation
+    checklist items, and current/next semester facts. Omission removes the
+    projection atomically; no defaults are fabricated.
+  - Deadline plans always use a configured rhythm; ordinary Planner Tasks use
+    it only after explicit opt-in and Habits never do. Recovery is reserved busy
+    time but not study time or daily preparation capacity.
+  - Rhythm edits invalidate pending Study-bound previews and mark active plans
+    for review without moving reservations. The next-semester course-selection
+    window creates Planner attention only, never a Task, calendar row,
+    notification, or background command.
 - Phase 10 Controlled Coach:
   - Strict authenticated capability, deliberate response, history/delete, and
     explicit memory-selection contracts with guest/mock zero-call behavior.
@@ -312,7 +329,7 @@ Already implemented:
   the Phase 8 weekly-review contract and confirmed Habit V1 boundary, and Phase
   9 calendar import. Phase 10 browser coverage uses the deterministic fake
   provider; its focused rerun and the subsequent full non-destructive local
-  journey passed in the 2026-07-13 current checkout.
+  journey passed in the recorded 2026-07-13 checkout.
 
 Not yet implemented:
 
@@ -781,12 +798,15 @@ Use these rules before adding any model provider:
 
 The current repository builds on completed Phase 0 product integrity,
 Phase 1 capture, Phase 2 explainable state, Phase 3 executable action targets,
-Phase 4's persisted deterministic briefing contract, Phase 5's decision-first
-Today consumer, Phase 6's bounded feedback/Insight loop, the minimal Phase 7
+Phase 4's persisted deterministic briefing contract, the retired historical
+Phase 5 briefing consumer now superseded by Today Overview, Phase 6's bounded
+feedback/Insight loop, the minimal Phase 7
 scheduled preparation backend, and Phase 8's bounded weekly review plus
 confirmed manual Habit V1 adaptation, Phase 9's bounded `.ics` import, and
-Phase 10 Controlled Coach, and Notification Delivery V1's local foreground
-path. The Coach keeps the deterministic standalone loop as
+Phase 10 Controlled Coach, Notification Delivery V1's local foreground path,
+Deadline Planner V1, central Planner V1 with Today Overview V2, and Study Setup
+V1's optional focus/recovery and semester projection. The Coach keeps the
+deterministic standalone loop as
 the source of truth and uses the development-only local Codex OAuth adapter plus
 the deterministic fake-provider test seam fixed in
 `docs/phase-10-controlled-coach-plan.md`. The next slice must be selected from a

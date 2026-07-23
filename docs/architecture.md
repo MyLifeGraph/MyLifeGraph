@@ -312,14 +312,15 @@ Phase 3 keeps simple user-owned mutations in typed Flutter/Supabase boundaries:
 Flutter and FastAPI share a strict, ranking-independent
 `executable-action-v1` envelope for `open_task`, `complete_task`, `log_habit`,
 `start_focus`, `review_plan`, and `open_capture`. Kind/command/target and bounded
-scalar metadata are validated; unknown combinations are rejected. Flutter's
-`ExecutableActionDispatcher` exhaustively maps validated commands onto injected,
-command-specific handlers and returns an explicit unavailable result before any
-unsupported or unsynced execution. Flutter and FastAPI deliberately reject the
-same unknown top-level/metadata fields, null or non-object metadata, explicit
-null metadata fields, coercible numbers, invalid calendar dates, identifier
-normalization, duration/linkage bounds, and command-specific metadata leakage.
-Phase 8 gives `review_plan` a real authenticated `/weekly-review` navigation
+scalar metadata are validated; unknown combinations are rejected. Flutter and
+FastAPI deliberately reject the same unknown top-level/metadata fields, null or
+non-object metadata, explicit null metadata fields, coercible numbers, invalid
+calendar dates, identifier normalization, duration/linkage bounds, and
+command-specific metadata leakage. The former Flutter briefing dispatcher was
+removed when Today Overview superseded the briefing-first card; current Today
+Task, Habit, Focus, capture, and Weekly Review actions use their owning typed
+controllers and routes directly. Phase 8 gives `review_plan` a real
+authenticated `/weekly-review` navigation
 handler; guest/mock and unsupported sessions stay unavailable, and dispatch
 never generates or mutates. Phase 3 defines executable targets but does not select a primary action,
 persist a briefing, redesign Dashboard as Today, generate recommendations during
@@ -650,8 +651,11 @@ after a best-effort daily snapshot refresh, then reloads persisted
 recommendations. A failed refresh retains the previously displayed feed and
 shows a recoverable failure; local demo sessions do not call the backend.
 Persisted recommendation `action_label` values are rendered as informational
-"Suggested next step" text, not as controls. Executable Today actions come only
-from a validated current `daily-briefing-v1` target and its Phase 3 dispatcher.
+"Suggested next step" text, not as controls. Current Today Overview actions
+come from owner-scoped Today data and invoke the existing Task, Habit, Focus,
+capture, and Weekly Review flows directly. Persisted `daily-briefing-v1`
+targets remain validated backend data but are not rendered as an executable
+briefing card.
 
 Snapshot refresh is a deliberate authenticated backend action through
 `POST /v1/snapshots/generate`. The request can select `daily` or `weekly`
@@ -812,8 +816,9 @@ fallback and without logging the answer, prompt, or raw event stream. Real
 local PostgreSQL parallel lock smokes also completed without deadlock or
 timeout. Those results establish only this machine's provider path and local
 database concurrency contract. A focused Phase 10 fake-provider browser rerun
-and the subsequent full non-destructive local-Supabase journey also passed in
-the current checkout. A separate authenticated Flutter -> FastAPI ->
+and the subsequent full non-destructive local-Supabase journey passed in the
+recorded 2026-07-13 checkout; the 2026-07-23 shell-navigation follow-up did not
+rerun the full browser journey. A separate authenticated Flutter -> FastAPI ->
 `local_codex_oauth` -> same-user Codex CLI product-path turn also passed with
 explicit `gpt-5.5`, strict persisted provenance, and visible UI data-use truth.
 None of these checks establishes remote state, production readiness, or another

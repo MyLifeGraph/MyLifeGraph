@@ -40,19 +40,24 @@ Intervention: `0 none`, `1 neutral`, `2 scenario clarification`,
 
 | Task | Outcome | First wrong turn or hesitation | Intervention | SEQ | Contemporaneous observed facts |
 | --- | --- | --- | --- | --- | --- |
-| 1 Setup | Not run | — | — | — | — |
+| 1 Setup and optional Study Setup | Not run | — | — | — | — |
 | 2 Evening check-in | Not run | — | — | — | — |
 | 3 Focus | Not run | — | — | — | — |
-| 4 Enter preparation estimate | Not run | — | — | — | — |
-| 5 Review and confirm plan | Not run | — | — | — | — |
-| 6 Inbox and Coach truth | Not run | — | — | — | — |
-| 7 Weekly/Calendar/Settings discovery | Not run | — | — | — | — |
-| 8 Find passed block | Not run | — | — | — | — |
-| 9 Explain credit and preview | Not run | — | — | — | — |
-| 10 Replan and decide on confirmation | Not run | — | — | — | — |
+| 4 Create and confirm ordinary Planner Task | Not run | — | — | — | — |
+| 5 Add fixed commitment | Not run | — | — | — | — |
+| 6 Enter preparation estimate | Not run | — | — | — | — |
+| 7 Review and confirm preparation/recovery plan | Not run | — | — | — | — |
+| 8 Inbox and Coach truth | Not run | — | — | — | — |
+| 9 Weekly/Calendar/Settings/Study discovery | Not run | — | — | — | — |
+| 10 Find passed block | Not run | — | — | — | — |
+| 11 Explain credit and preview | Not run | — | — | — | — |
+| 12 Replan and decide on confirmation | Not run | — | — | — | — |
 
 ## Planner facts, not interpretation
 
+- Ordinary Task duration/deadline and confirmed block:
+- Manual fixed commitment and visible conflict/attention result:
+- Configured focus/recovery rhythm and semester:
 - Kind: `exam | assignment`
 - Days until fictional finish-by date:
 - Estimated total active preparation minutes:

@@ -152,7 +152,7 @@ way to explore the product today is the Flutter app in mock-data guest mode.
   machine- and account-specific. A separate authenticated Flutter -> FastAPI ->
   `local_codex_oauth` -> same-user Codex CLI live turn also passed and persisted
   a validated response on this machine with explicit `gpt-5.5`; no prompt or
-  answer content was logged. The current checkout's focused Phase 10 rerun and
+  answer content was logged. The recorded 2026-07-13 checkout's focused Phase 10 rerun and
   subsequent full non-destructive local browser-E2E journey also passed with
   the deterministic fake provider. None of these results establishes a remote/
   production provider or another developer's account; the separate other-Linux-
@@ -192,7 +192,7 @@ way to explore the product today is the Flutter app in mock-data guest mode.
 Prerequisites:
 
 - Flutter SDK available on `PATH`, or set `FLUTTER_BIN=/path/to/flutter`.
-- Python 3.11+ if you want to run the AI service or static web fallback.
+- Python 3.12+ if you want to run the AI service or static web fallback.
 - Node.js 20+ and npm for browser E2E.
 - Supabase CLI and Docker for local Supabase-backed tests and browser E2E.
 - Codex CLI plus a per-user `codex login` only for the opt-in Phase 10
@@ -308,7 +308,7 @@ The AI service is optional for the default mock-data app preview.
 cd services/ai_service
 python -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements-dev.txt
 uvicorn app.main:app --reload --port 8000
 ```
 
@@ -495,7 +495,10 @@ Supabase is the intended auth and persistence backend. The current app supports:
 
 Important current caveat: the Flutter app targets the canonical snake_case
 schema. The migration chain currently ends at
-`20260723120000_study_setup_v1.sql`. It adds the forced-RLS optional Study
+`20260723200707_optimize_canonical_rls_policies.sql`. It removes superseded
+initial policies and makes the unchanged canonical owner/admin predicates
+initialization-plan safe without changing grants. The preceding
+`20260723120000_study_setup_v1.sql` adds the forced-RLS optional Study
 projection, composes it with atomic Intake apply, and extends Planner/Deadline
 revisions and blocks with recovery-reservation and Study-revision truth. The
 preceding Setup guard keeps Planner and Deadline Planner confirmation aligned
@@ -716,6 +719,9 @@ has the nvm bin directory on `PATH`.
 - `docs/architecture.md` - Current architecture and data-flow overview.
 - `docs/backend-roadmap.md` - Target backend flow, product agents, data model
   direction, LLM cost controls, and next implementation sequence.
+- `docs/daily-briefing-implementation-plan.md` - Product decision-loop history,
+  current Today/Planner disposition, and evaluation-oriented implementation
+  phases.
 - `docs/supabase-current-state.md` - Supabase auth, schema, RLS, and known gaps.
 - `docs/verification.md` - Automated verification scripts and browser E2E.
 - `docs/today-overview-v1-contract.md` - Read-only Today endpoint, exact
@@ -723,6 +729,8 @@ has the nvm bin directory on `PATH`.
   guest boundary, and UI order.
 - `docs/planner-v1-contract.md` - Central Planner navigation, deterministic
   availability, staged Task/Habit reservations, commitments, and Today V2.
+- `docs/study-setup-v1-contract.md` - Optional focus/recovery rhythm, transient
+  start ritual, semester planning, recovery reservations, and Setup authority.
 - `docs/phase-3-executable-actions-contract.md` - Implemented executable task,
   habit, focus, and action-target contract.
 - `docs/phase-8-weekly-review-contract.md` - Bounded ISO-week facts,

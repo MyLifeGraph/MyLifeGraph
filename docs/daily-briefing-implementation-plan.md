@@ -1,5 +1,10 @@
 # Daily Briefing Implementation Plan
 
+Status: historical phase plan with a current product-disposition summary,
+updated through Planner V1, Today Overview V2, and Study Setup V1 on
+2026-07-23. Detailed phase sections preserve their original implementation
+reasoning; current surface authority lives in the linked contracts.
+
 This document turns the product idea of a daily decision cockpit into an
 implementation plan. It is intentionally evaluation-oriented: each phase states
 the product goal, the reasoning behind it, the required implementation work, and
@@ -160,7 +165,7 @@ Phase 4's deterministic briefing service.
 | --- | --- | --- |
 | Auth and guest entry | Yes | Local demo is labeled; mock/demo auth skips remote profile/data bootstrap and reloads local Setup, while canonical guest check-ins migrate best-effort only into a real non-demo account |
 | Onboarding / Setup | Yes, Phase 0C complete | Progressive explicit input, typed prefill, atomic revision-safe save, differentiated retry/reload, and durable review are implemented |
-| Dashboard | Yes, Phase 6 complete | Persisted Daily Mode and strict actions appear above metrics; GET-only load, explicit adjustment, feedback history, bounded explainable ranking effects, stale/error/demo truth, and execution/feedback separation are implemented. |
+| Today | Yes, Today Overview V2 current | A read-only owner-scoped overview shows streak, transparent progress, Setup/Planner/Preparation/Calendar/Focus agenda facts, and selected Tasks/Habits. The persisted briefing remains a backend input but its ranked action card is no longer the visible Today authority. |
 | Canonical daily capture | Yes, Phase 1 complete | Evening and Morning are separate typed flows over one ownership-merged daily entry; Phase 2 now interprets their freshness and stress context only inside backend snapshots |
 | Legacy large Daily Check-In | Retired | `/daily-check-in` redirects to the canonical lightweight flow; do not recreate a competing form |
 | Habit management/completion | Yes, authenticated only | Habit V1 cadence, progress, streaks, explicit completion/skip, and undo are implemented; manual lifecycle stays in Habit Management, Setup-owned lifecycle stays in Settings Setup, and daily execution is available from Today Habits |
@@ -168,7 +173,9 @@ Phase 4's deterministic briefing service.
 | Inbox (`/alerts`) | Stored inbox with Lifecycle V1 | Structured internal links are allowlisted; read/unread/dismiss is durable and retry-safe, while stored preferences and rows still do not imply delivery |
 | Deep Work | Yes, authenticated real-data mode | One active session, optional owned task/habit linkage, measured finish/abandon duration, and no implicit target completion are implemented; guest/mock redirects to Quick Action |
 | Coach | Explicitly gated authenticated mode | The route/surface is fail-closed in release/production unless explicitly enabled; capability/history/memory reads are generation-free and backend `ready` gates sending |
-| Settings | Durable V1 controls | Profile, Setup review, account timezone, bounded export, confirmed deletion, device-persisted theme, Calendar Import, gated Coach, and sign-out expose their actual persistence boundaries |
+| Planner | Central authenticated planning home | Deterministic Task/Habit previews, Deadline Planner delegation, manual commitments, shared availability, conflict attention, and explicit confirmation are implemented without hidden scheduling. |
+| Study Setup | Optional Setup projection | Focus/recovery rhythm, preparation checklist, current/next semester, recovery reservations, and course-selection attention are implemented under the revisioned Setup authority. |
+| Settings | Durable V1 controls | Profile, Setup and Study Setup review, account timezone, preparation budget, Inbox, reminders, bounded export, confirmed deletion, device-persisted theme, Calendar Import, and sign-out expose their actual persistence boundaries. Coach is a gated shell destination, not a Settings fallback. |
 
 ## Guiding Principles
 
@@ -1080,10 +1087,11 @@ queried:
 - `stress_intensity_label`
 
 The current recommendation `action_label` is informational suggested-next-step
-copy, not an executable control. Actual Today execution requires a strict
-current briefing target and the Phase 3 dispatcher. Recommendation `status`
-remains historical state; Phase 6's append-only feedback table owns briefing
-outcome evidence across action types.
+copy, not an executable control. Today execution uses the owning Task, Habit,
+Focus, capture, and Weekly Review flows from the read-only overview; persisted
+briefing targets are not rendered as controls. Recommendation `status` remains
+historical state; Phase 6's append-only feedback table owns briefing outcome
+evidence across action types.
 
 Suggested future table:
 
@@ -1288,7 +1296,7 @@ own current-checkout pass before claiming E2E.
 Phase 10 browser source uses the deterministic fake provider and adds bounded
 Coach response/replay/safety/history/memory/RLS/UI assertions. Its focused rerun
 and the subsequent full non-destructive local-Supabase browser journey passed
-in the 2026-07-13 current checkout. The separate opt-in synthetic live-model
+in the recorded 2026-07-13 checkout. The separate opt-in synthetic live-model
 smoke also passed with explicitly requested `gpt-5.5`, no fallback, and no
 answer/prompt/raw event stream logged.
 
@@ -1368,12 +1376,13 @@ Evaluation:
 Current presentation update (2026-07-21): the persisted Phase 4 briefing and
 Phase 6 feedback/ranking contracts remain implemented backend inputs, but the
 visible briefing-first card described in this historical phase is superseded by
-`today-overview-v1`. Today no longer labels a ranked recommendation as a
-decision made for the user. `GET /v1/today/overview` now projects the strict
-both-capture streak, transparent dynamic progress, four-source vertical agenda,
-Today Tasks, and Today Habits. Supporting workload, review, saved signals,
-recommendations, feedback history, and full week are lazy under `More`. Read
-`docs/today-overview-v1-contract.md` before changing this surface.
+Today Overview. Today no longer labels a ranked recommendation as a decision
+made for the user. `GET /v1/today/overview` retains the compatible V1 read;
+Planner adds `GET /v1/today/overview-v2` with Setup, Planner, Preparation,
+Calendar, Focus, Task, Habit, and fixed-commitment facts. Supporting workload,
+review, saved signals, recommendations, feedback history, and full week remain
+lazy. Read `docs/today-overview-v1-contract.md`, `docs/planner-v1-contract.md`,
+and `docs/study-setup-v1-contract.md` before changing this surface.
 
 ### Phase 6: Feedback And Useful Insights (Implemented)
 
@@ -1612,7 +1621,7 @@ and acceptance contract is fixed in
 `docs/phase-10-controlled-coach-plan.md`. Standard verification uses the fake
 provider. The opt-in synthetic local Codex smoke passed on this machine with
 `gpt-5.5`; the focused and full non-destructive local fake-provider browser
-runs also passed in the current checkout. A separate authenticated Flutter-to-
+runs also passed in the recorded 2026-07-13 checkout. A separate authenticated Flutter-to-
 live-Codex product turn passed on this machine with explicit `gpt-5.5`, strict
 persisted provenance, and visible UI data-use/provider truth. These are not
 claims about another account, remote state, or production readiness.
@@ -1657,10 +1666,11 @@ streak length are not sufficient success measures.
 
 ## Current Recommendation
 
-The next two product-polish batches are deliberately recorded in
-`docs/product-polish-follow-up.md`: first remove or finish user-visible promises
-without a current producer/delivery path, then complete the plain-language and
-localization pass. They are not claimed as implemented by this document.
+The capability-truth and plain-language polish batches recorded in
+`docs/product-polish-follow-up.md` are implemented. Today Overview V2, central
+Planner V1, and Study Setup V1 are also implemented. The next product slice
+must come from a newly verified need or the still-unrun moderated student study;
+this historical phase plan does not nominate another feature by default.
 
 **Phase 0A, Phase 0B, Phase 0C, Phase 1, Phase 2, and Phase 3 are complete.**
 Real and demo source states remain distinct; Setup is revision-safe and
@@ -1680,10 +1690,11 @@ validates Daily State only on deliberate generation, ranks strict executable
 targets recovery-first, and carries freshness, provenance, bounded evidence,
 and no-LLM attribution.
 
-Phase 5 is implemented. Flutter strictly parses the persisted briefing, keeps
-normal Dashboard load read-only, places the primary executable action above
-secondary metrics, preserves missing/stale/error/demo truth, disables stale
-targets until deliberate adjustment, and reuses the Phase 3 dispatcher.
+Phase 5's persisted briefing parser and backend contract remain implemented.
+The former Flutter briefing-first card and production-unreachable Phase 3
+dispatcher were retired after Today Overview became the current read-only
+presentation. Current execution uses the owning Task, Habit, Focus, capture,
+and Weekly Review flows directly.
 
 Phase 6 is implemented with retry-safe append-only feedback, owner-scoped
 history deletion, a decayed and capped 28-day context match, additive ranking
@@ -1719,6 +1730,12 @@ confirmation. Calendar source/availability use remains opt-in and availability
 requires a connected current import; focus progress is measured but never
 completes the plan. Its verification requirements are defined in
 `docs/deadline-planner-v1-contract.md`; source text alone is not a passing run.
+
+Planner V1 adds the central explicit Task/Habit/fixed-commitment planning home
+and the additive Today Overview V2 read. Study Setup V1 keeps optional rhythm,
+recovery, checklist, and semester facts under revisioned Setup authority and
+binds them to planning only under the documented opt-in rules. Neither feature
+moves an active reservation or infers missing scheduling input automatically.
 
 Phase 10 is implemented as an authenticated, budgeted, source-aware explanation
 boundary with explicit reviewable memory selection, bounded validated history,

@@ -353,6 +353,12 @@ request identity, revisions/blocks, plan projections, and first-confirm task
 creation. Composite ownership references prevent cross-owner plan, task,
 calendar-event, revision, and block linkage.
 
+`20260718120000_deadline_planner_v1.sql` creates the four forced-RLS Deadline
+Planner tables, their ownership and bounded-value constraints, supporting
+indexes, and the service-role-only proposal/confirmation/lifecycle RPCs. It
+grants authenticated owners only the documented read projection and leaves the
+global request-identity ledger backend-only.
+
 `20260719120000_account_preparation_budget_v1.sql` adds nullable
 `profiles.daily_preparation_budget_minutes`, constrained to `25..480` in
 five-minute increments. Existing null rows retain the per-plan-only behavior.
@@ -821,12 +827,17 @@ and full reserved-end truth; backfills existing blocks as zero recovery; and
 wraps proposal/confirmation with exact current-setting and recovery-conflict
 guards.
 
+`20260723200707_optimize_canonical_rls_policies.sql` removes six superseded
+initial-schema policies and rebuilds the eleven canonical owner/admin policies
+with statement-cached identity and role helpers. It changes no table privilege,
+RLS mode, owner/admin predicate, or service-role boundary.
+
 ## Local Verification Workflow
 
 For local Supabase-backed testing, the reset should complete through:
 
 ```text
-20260723120000_study_setup_v1.sql
+20260723200707_optimize_canonical_rls_policies.sql
 ```
 
 Then configure `.env` with:
@@ -874,7 +885,7 @@ RESET_DB=true FLUTTER_BIN=/path/to/flutter scripts/verify_supabase_local.sh
 ```
 
 The reset form should apply all migrations through
-`20260723120000_study_setup_v1.sql`; expected legacy-table
+`20260723200707_optimize_canonical_rls_policies.sql`; expected legacy-table
 skip notices may be emitted for missing CamelCase tables. Use reset when proving
 the full migration/backfill/constraint chain from a fresh local database, not
 merely because a reviewed migration is pending.
@@ -939,7 +950,7 @@ and calendar import. Phase 10 source starts FastAPI with the deterministic fake
 provider and adds bounded Coach persistence, replay, safety, memory, history,
 RLS, UI, and guest-zero-call assertions. The combined Phase 3 through Phase 9
 smoke first passed in the Phase 9 implementation checkout. In the 2026-07-13
-current checkout, a focused Phase 10 rerun and the subsequent full combined
+recorded 2026-07-13 checkout, a focused Phase 10 rerun and the subsequent full combined
 journey passed non-destructively against local Supabase with the deterministic
 fake provider. This establishes neither remote migration/RLS state nor
 production readiness. On 2026-07-19 the reviewed account-wide preparation-
@@ -994,10 +1005,13 @@ The product should standardize on the snake_case schema. CamelCase tables are
 legacy compatibility only and should be dropped in a later dedicated migration
 after data migration and app verification are complete.
 
-The latest migration is `20260723120000_study_setup_v1.sql`. It adds the
-forced-RLS Study Setup projection, composes it atomically with applied Intake,
-and adds recovery-aware revision/block truth and confirmation guards to Planner
-and Deadline Planner. The preceding
+The latest migration is `20260723200707_optimize_canonical_rls_policies.sql`.
+It removes redundant initial policies and makes the unchanged canonical
+owner/admin predicates initialization-plan safe without changing grants or RLS
+authority. The preceding `20260723120000_study_setup_v1.sql` adds the forced-RLS
+Study Setup projection, composes it atomically with applied Intake, and adds
+recovery-aware revision/block truth and confirmation guards to Planner and
+Deadline Planner. The preceding
 `20260722234000_setup_commitment_validity_guards.sql` adds no schema object
 beyond one private helper and keeps Planner/Deadline confirmation aligned with
 optional inclusive Setup semester bounds. The preceding

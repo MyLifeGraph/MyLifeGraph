@@ -1,6 +1,7 @@
 # Today Overview V1 Contract
 
-Status: implemented as of 2026-07-21.
+Status: implemented through the additive Today Overview V2 Planner projection
+as of 2026-07-23. The V1 endpoint remains available and unchanged.
 
 Today Overview V1 replaces the briefing-first presentation on the `Today`
 surface. It does not remove `daily-briefing-v1`: persisted briefings remain a

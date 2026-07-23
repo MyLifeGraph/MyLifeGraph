@@ -30,13 +30,15 @@ Part B denominators explicitly, for example `3/4 observed`; never count
 
 | Task | Completed | With hesitation | Blocked | Not observed | Median SEQ | Repeated first wrong turn |
 | --- | --- | --- | --- | --- | --- | --- |
-| Setup | — | — | — | — | — | — |
+| Setup and Study Setup | — | — | — | — | — | — |
 | Evening check-in | — | — | — | — | — | — |
 | Focus | — | — | — | — | — | — |
+| Planner Task preview/confirm | — | — | — | — | — | — |
+| Fixed commitment | — | — | — | — | — | — |
 | Preparation estimate | — | — | — | — | — | — |
-| Review and confirm | — | — | — | — | — | — |
+| Review preparation/recovery and confirm | — | — | — | — | — | — |
 | Inbox/Coach truth | — | — | — | — | — | — |
-| Weekly/Calendar/Settings discovery | — | — | — | — | — | — |
+| Weekly/Calendar/Settings/Study discovery | — | — | — | — | — | — |
 | Find passed block | — | — | — | — | — | — |
 | Explain credit and preview | — | — | — | — | — | — |
 | Replan and confirmation decision | — | — | — | — | — | — |

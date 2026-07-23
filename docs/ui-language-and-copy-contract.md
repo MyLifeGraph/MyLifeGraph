@@ -1,6 +1,7 @@
 # UI Language And Copy Contract
 
-Status: implemented V1 product-copy contract as of 2026-07-18.
+Status: implemented V1 product-copy contract, including the current
+Coach-enabled shell terminology, as of 2026-07-23.
 
 ## Supported Language
 

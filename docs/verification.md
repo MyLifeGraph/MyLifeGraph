@@ -187,8 +187,9 @@ the briefing date; current generation is idempotent; changed snapshots mark a
 briefing stale; recovery/missing-data rules precede overdue pressure; completed
 or unscheduled habits are excluded; and every returned action passes the strict
 `executable-action-v1` model with at most two support actions and no LLM use.
-Historical Phase 5 tests continue to prove the persisted briefing parser and
-typed executable-action dispatcher independently. Today Overview V1 adds strict
+Historical Phase 5 tests continue to prove the persisted briefing parser. The
+retired briefing-first widget and production-unreachable dispatcher no longer
+carry isolated Flutter tests. Today Overview V1 adds strict
 FastAPI service/API tests for bearer ownership, profile-local dates, streaks
 longer than one page, current-day grace, malformed/legacy capture exclusion,
 task and habit selection, four-source timeline ordering, exact progress
@@ -451,9 +452,9 @@ Current Flutter widget tests include:
   no implicit target completion, recent history, and snapshot refresh.
 - Executable action-target tests cover every supported kind/command matrix,
   strict top-level/metadata shapes and scalar types, exact ids/dates/durations,
-  task/habit/focus/capture routing, the real synced `review_plan` handler, and
-  unsupported-command behavior. Dispatcher tests prove one typed handler per
-  command, unavailable-before-handler behavior, and failure propagation.
+  task/habit/focus/capture routes, `review_plan` metadata, and unsupported
+  combinations. Current Today execution is covered by the owning feature and
+  navigation tests rather than a dormant briefing dispatcher.
 - Weekly Review tests cover strict nested parsing, `not_ready`/missing/current/
   stale/error/local-demo states, latest GET versus deliberate generate/refresh,
   separate weekly facts, the two-proposal cap, stale disabled controls, exact
@@ -539,13 +540,13 @@ supabase db reset
 Expected successful reset output applies migrations through:
 
 ```text
-20260723120000_study_setup_v1.sql
+20260723200707_optimize_canonical_rls_policies.sql
 ```
 
 Expected notices include skipped legacy CamelCase tables and already-existing
 canonical objects. Those notices are normal. Errors are not normal.
 
-The final privilege-guard migration must leave `anon` with no repo-owned
+The application-table privilege guard must leave `anon` with no repo-owned
 product/ledger table privileges and remove authenticated `TRUNCATE`,
 `REFERENCES`, and `TRIGGER` without erasing intended table-specific DML.
 Backend projections stay authenticated read-only, optional legacy tables stay
@@ -1032,7 +1033,7 @@ Docker access, and a real Ubuntu `supabase` CLI on `PATH`.
 The combined Phase 3/4/5/6/7/8/9 browser journey first passed in the Phase 9
 implementation checkout. A focused Phase 10 run and the subsequent full
 Phase 3-through-10 journey passed without a database reset against local Supabase in
-the 2026-07-13 current checkout. Later changes must establish their own full
+the recorded 2026-07-13 checkout. Later changes must establish their own full
 result with the browser command above; the focused mode is diagnostic only, and
 the `RESET_DB=true` form is reserved for proving the migration chain from a
 fresh database. The full journey
@@ -1099,7 +1100,7 @@ projection without PostgREST truncation. The complete AI-service suite reported
 analysis and `579` passing Flutter tests. The final post-polish non-reset
 combined browser run reported
 `E2E browser smoke passed for e2e-1784404040@example.test`. That is evidence for
-this local current checkout only and does not expand any of the non-claims
+the recorded local 2026-07-18 checkout only and does not expand any of the non-claims
 above. The manual five-student usability study remains not run.
 
 The subsequent five-agent compressed persona walkthrough on 2026-07-18 is
@@ -1243,14 +1244,33 @@ The shell-navigation follow-up completed locally on 2026-07-23 without a
 backend or schema change. The focused Shell/guest suites reported `19` passing
 tests, the final Shell rerun reported `9` passing tests, and the standard
 non-destructive source gate passed migration safety, clean Flutter analysis,
-all `657` Flutter tests, Python compilation, and diff checks. Browser source
-now enters Coach through the gated shell destination, but a new full browser
-journey was not run for this navigation-only follow-up.
+all `657` Flutter tests, Python compilation, and diff checks. Browser source was
+changed to enter Coach through the gated shell destination, but a full browser
+journey had not yet tested that selector.
+
+The repository cleanup follow-up completed locally on 2026-07-23. It removed
+production-unreachable Flutter briefing/dispatcher scaffolding and its isolated
+tests, removed the unused Cupertino icon dependency, aligned current docs, and
+added the no-authority-change RLS performance migration. The standard source
+gate passed migration safety, clean Flutter analysis, all `642` remaining
+Flutter tests, Python compilation, shell/Node syntax, and diff checks. The
+complete FastAPI suite reported `861 passed, 1 skipped`; `pip check` found no
+broken requirements. Local migration history matched through
+`20260723200707_optimize_canonical_rls_policies.sql`, and the local Supabase
+advisor reported no issues after previously reporting 17 Auth-initplan and 60
+duplicate-permissive-policy warnings. A full browser journey subsequently
+reached the late Coach section after exercising the preceding real-account,
+Planner, Calendar, Notification, retry, and RLS paths, then exposed that Flutter
+Web does not publish the persistent shell navigation as Playwright-addressable
+Semantics DOM. The E2E source restored the stable direct `/coach` route while
+the shell behavior remains covered by nine widget/Semantics tests. The focused
+Phase 10 browser rerun then passed for `e2e-1784837771@example.test`; the full
+combined journey was not restarted after that selector-only correction.
 
 Phase 10 has focused fake-provider/process-runner, strict contract, service,
 migration, repository, controller, and widget tests in the checkout. Its
-focused browser path and the subsequent full fake-provider browser journey
-passed locally in this checkout. The development-only local Codex OAuth
+focused browser path and subsequent full fake-provider browser journey passed
+in the recorded 2026-07-13 checkout. The development-only local Codex OAuth
 adapter's opt-in synthetic-context smoke and the separate authenticated
 Flutter-to-live-Codex product path also passed on this machine with explicit
 `gpt-5.5`; these results establish neither remote state, another account's

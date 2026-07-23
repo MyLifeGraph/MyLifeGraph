@@ -6,7 +6,7 @@ does not assume any user-local Codex skills.
 ## Prerequisites
 
 - Flutter SDK. Confirm with `flutter --version`.
-- Python 3.11+ for the AI service and static web fallback.
+- Python 3.12+ for the AI service and static web fallback.
 - Node.js 20+ and npm for browser E2E. Confirm with `node --version` and
   `npm --version` in the Ubuntu shell.
 - Optional: Supabase CLI and Docker for local Supabase work. Install the real
@@ -201,9 +201,12 @@ The AI service is optional for the default mock frontend.
 cd services/ai_service
 python -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements-dev.txt
 uvicorn app.main:app --reload --port 8000
 ```
+
+`requirements.txt` is runtime-only. Local development uses
+`requirements-dev.txt` so the test runner is installed explicitly.
 
 Health check:
 
@@ -674,8 +677,10 @@ synthetic-context smoke completed with the explicitly requested `gpt-5.5`
 model (`1 passed`) and no fallback. That result applies only to the tested
 machine, CLI, login, and account; it does not prove another developer's model
 access or a deployable provider. The focused Phase 10 and subsequent full
-non-destructive local fake-provider browser journeys also passed in the current
-checkout; they do not establish remote state or production readiness.
+  non-destructive local fake-provider browser journeys passed in the recorded
+  2026-07-13 checkout; the 2026-07-23 shell-navigation follow-up did not rerun
+  the full browser journey. These results do not establish remote state or
+  production readiness.
 
 A separate full-product live acceptance also passed on this machine on
 2026-07-13: an existing onboarded local user authenticated through Flutter Web,
@@ -859,6 +864,7 @@ The central Planner additionally requires:
 20260722120000_planner_v1.sql
 20260722234000_setup_commitment_validity_guards.sql
 20260723120000_study_setup_v1.sql
+20260723200707_optimize_canonical_rls_policies.sql
 ```
 
 It adds read-only owner projections plus service-role-only, owner-locked
@@ -1227,7 +1233,7 @@ read-only provenance, all-day/timezone/recurrence/cancellation boundaries,
 disconnect-retains versus delete-local-only behavior, schedule preservation,
 and owner/cross-owner RLS. Phase 10 adds the deterministic fake-provider Coach
 journey. The focused Phase 10 rerun and subsequent full Phase 3-through-10 path
-passed non-destructively in the 2026-07-13 current checkout. Use the complete
+passed non-destructively in the recorded 2026-07-13 checkout. Use the complete
 command above to establish a new result after later changes; the focused mode
 or source coverage alone is not a full-checkout pass.
 
