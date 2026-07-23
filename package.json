@@ -4,6 +4,8 @@
   "type": "module",
   "scripts": {
     "start:local": "bash scripts/start_local_stack.sh",
+    "start:local:coach": "LOCAL_STACK_COACH_PROVIDER=local_codex_oauth bash scripts/start_local_stack.sh",
+    "start:local:coach:fake": "LOCAL_STACK_COACH_PROVIDER=fake bash scripts/start_local_stack.sh",
     "verify": "scripts/verify.sh",
     "verify:local-stack": "bash scripts/test_local_supabase_migrations.sh && bash scripts/test_start_local_stack.sh",
     "verify:supabase": "scripts/verify_supabase_local.sh",

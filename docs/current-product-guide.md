@@ -733,6 +733,18 @@ In-app consent, Inbox-Zustände, ausgewählte Memories und Coach-History ab.
 
 Ein sinnvoller manueller Rundgang ist:
 
+```bash
+# Echte lokale Antworten über den bereits angemeldeten Codex-CLI-Nutzer
+npm run start:local:coach
+
+# Alternativ feste Testantworten ohne Modellaufruf
+npm run start:local:coach:fake
+```
+
+Ein normales `npm run start:local` lässt neue Coach-Antworten bewusst
+deaktiviert; die bereits gespeicherte Coach-History des Student-Accounts bleibt
+dabei lediglich lesbar.
+
 1. Auf `Today` den Both-capture-Streak, die genaue `x/y`-Arithmetik, alle vier
    Agenda-Kategorien sowie Today/All Tasks und Today Habits prüfen.
 2. `More` öffnen und Preparation Workload, Weekly Review, gespeicherte Signale,

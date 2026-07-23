@@ -218,6 +218,20 @@ runner, and Flutter Web), run:
 FLUTTER_BIN=/path/to/flutter scripts/start_local_stack.sh
 ```
 
+For the same stack with real local Coach replies through this Linux user's
+existing Codex login, use the explicit one-command mode:
+
+```bash
+npm run start:local:coach
+```
+
+For UI and persistence testing with fixed deterministic replies and no model
+call, use:
+
+```bash
+npm run start:local:coach:fake
+```
+
 The default command verifies that local database migration history exactly
 matches the repository and exits without applying SQL when it differs. After
 reviewing pending SQL and local rows, opt in explicitly with
@@ -227,7 +241,9 @@ is safely disabled by default. Use
 use `LOCAL_STACK_COACH_PROVIDER=local_codex_oauth` with the current WSL user's
 existing `codex login`. The supervisor is loopback-only, never resets the
 database, does not expose backend keys to Flutter, and stores private logs under
-`.tools/local-stack/`. See `docs/local-dev.md` for the exact boundary.
+`.tools/local-stack/`. Plain `npm run start:local` keeps Coach replies off; the
+two explicit commands above make the intended reply mode visible before
+startup. See `docs/local-dev.md` for the exact boundary.
 
 If Flutter is not on `PATH`:
 

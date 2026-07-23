@@ -394,6 +394,20 @@ unset local_service_role_key scheduler_token status_output
 wait_for_http "Flutter Web" "$APP_URL/" "$FRONTEND_PID"
 printf 'Flutter Web is ready at %s.\n' "$APP_URL"
 printf 'Coach provider: %s\n' "$COACH_PROVIDER_MODE"
+case "$COACH_PROVIDER_MODE" in
+  disabled)
+    printf '%s\n' \
+      'Coach replies are off for this run. Use `npm run start:local:coach` for live local replies or `npm run start:local:coach:fake` for fixed test replies.'
+    ;;
+  fake)
+    printf '%s\n' \
+      'Coach replies use fixed deterministic test content; no live model is contacted.'
+    ;;
+  local_codex_oauth)
+    printf '%s\n' \
+      'Coach replies use this Linux user'\''s explicitly enabled local Codex login.'
+    ;;
+esac
 printf 'Private logs: %s\n' "$LOG_DIR"
 printf 'Press Ctrl+C to stop app processes. Local Supabase will remain running.\n'
 

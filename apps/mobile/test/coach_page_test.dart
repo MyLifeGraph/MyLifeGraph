@@ -75,12 +75,51 @@ void main() {
     expect(find.textContaining('Provider called: yes'), findsOneWidget);
   });
 
+  testWidgets('successful send brings the latest response into view',
+      (tester) async {
+    final repository = _FakeCoachRepository();
+    await _pumpPage(
+      tester,
+      repository,
+      physicalSize: const Size(1200, 600),
+    );
+
+    await _scrollTo(
+      tester,
+      find.byKey(const Key('coach-message-field')),
+    );
+    await tester.enterText(
+      find.byKey(const Key('coach-message-field')),
+      'Show the response without making me search for it.',
+    );
+    await tester.pump();
+    await _scrollTo(
+      tester,
+      find.byKey(const Key('coach-send-button')),
+    );
+    await tester.tap(find.byKey(const Key('coach-send-button')));
+    await tester.pumpAndSettle();
+
+    final responseTitle = find.text('Latest response');
+    expect(responseTitle, findsOneWidget);
+    final titleRect = tester.getRect(responseTitle);
+    expect(titleRect.top, greaterThanOrEqualTo(0));
+    expect(titleRect.top, lessThan(600));
+    expect(
+      find.text('Protect one focused block, then reassess your energy.'),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('provider outage keeps history and memory controls available',
       (tester) async {
     final repository = _FakeCoachRepository(
       capability: CoachCapabilities.fromJson(
         coachCapabilitiesJson(
           state: 'unavailable',
+          provider: 'local_codex_oauth',
+          providerMode: 'local_development_only',
+          modelRequested: 'gpt-5.5',
           reasonCode: 'cli_not_logged_in',
         ),
       ),
@@ -90,6 +129,12 @@ void main() {
     await _pumpPage(tester, repository);
 
     expect(find.text('Coach temporarily unavailable'), findsOneWidget);
+    expect(
+      find.textContaining(
+        'The explicitly enabled local Codex connection is currently unavailable.',
+      ),
+      findsOneWidget,
+    );
     expect(
       tester
           .widget<TextField>(find.byKey(const Key('coach-message-field')))
@@ -212,7 +257,9 @@ void main() {
 
     expect(find.text('Coach unavailable'), findsOneWidget);
     expect(
-      find.text('No Coach provider is connected.'),
+      find.textContaining(
+        'Coach replies are unavailable in guest or local demo mode.',
+      ),
       findsOneWidget,
     );
     expect(find.textContaining('I can help you break that down'), findsNothing);
@@ -230,13 +277,49 @@ void main() {
       findsOneWidget,
     );
   });
+
+  testWidgets('disabled local stack explains both reply-enabled start modes',
+      (tester) async {
+    final repository = _FakeCoachRepository(
+      capability: CoachCapabilities.fromJson(
+        coachCapabilitiesJson(
+          state: 'disabled',
+          provider: 'disabled',
+          providerMode: 'disabled',
+          modelRequested: null,
+          modelSource: 'not_applicable',
+          reasonCode: 'provider_disabled',
+          remainingRequests: 0,
+        ),
+      ),
+    );
+    await _pumpPage(tester, repository);
+
+    expect(find.text('Coach unavailable'), findsOneWidget);
+    expect(
+      find.textContaining('npm run start:local:coach for'),
+      findsOneWidget,
+    );
+    expect(
+      find.textContaining('npm run start:local:coach:fake for'),
+      findsOneWidget,
+    );
+    expect(
+      tester
+          .widget<TextField>(find.byKey(const Key('coach-message-field')))
+          .enabled,
+      isFalse,
+    );
+    expect(repository.respondMessages, isEmpty);
+  });
 }
 
 Future<void> _pumpPage(
   WidgetTester tester,
-  _FakeCoachRepository repository,
-) async {
-  tester.view.physicalSize = const Size(1200, 2000);
+  _FakeCoachRepository repository, {
+  Size physicalSize = const Size(1200, 2000),
+}) async {
+  tester.view.physicalSize = physicalSize;
   tester.view.devicePixelRatio = 1;
   addTearDown(() {
     tester.view.resetPhysicalSize();

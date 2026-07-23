@@ -10885,7 +10885,7 @@ async function assertCoachGuestBoundary() {
     await expectText(guestPage, 'Coach unavailable');
     await expectText(
       guestPage,
-      'No Coach provider is connected.',
+      'Coach replies are unavailable in guest or local demo mode.',
     );
     await guestPage.waitForTimeout(500);
     if (coachRequests.length !== 0) {

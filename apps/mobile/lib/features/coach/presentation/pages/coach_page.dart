@@ -20,6 +20,7 @@ class CoachPage extends ConsumerStatefulWidget {
 
 class _CoachPageState extends ConsumerState<CoachPage> {
   final _messageController = TextEditingController();
+  final _latestResponseKey = GlobalKey();
 
   @override
   void dispose() {
@@ -57,10 +58,15 @@ class _CoachPageState extends ConsumerState<CoachPage> {
           onSend: _send,
         ),
         if (state.latestResponse != null && state.latestMessage != null)
-          _ConversationTurnCard(
-            title: 'Latest response',
-            message: state.latestMessage!,
-            response: state.latestResponse!,
+          Semantics(
+            key: _latestResponseKey,
+            container: true,
+            liveRegion: true,
+            child: _ConversationTurnCard(
+              title: 'Latest response',
+              message: state.latestMessage!,
+              response: state.latestResponse!,
+            ),
           ),
         _MemoriesCard(state: state),
         _HistoryCard(
@@ -75,7 +81,19 @@ class _CoachPageState extends ConsumerState<CoachPage> {
 
   Future<void> _send() async {
     final sent = await ref.read(coachControllerProvider.notifier).send();
-    if (sent && mounted) _messageController.clear();
+    if (!sent || !mounted) return;
+    _messageController.clear();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final responseContext = _latestResponseKey.currentContext;
+      if (responseContext == null) return;
+      Scrollable.ensureVisible(
+        responseContext,
+        alignment: 0.08,
+        duration: const Duration(milliseconds: 320),
+        curve: Curves.easeOutCubic,
+      );
+    });
   }
 
   Future<void> _confirmDeleteHistory() async {
@@ -143,8 +161,6 @@ class _CapabilityCard extends StatelessWidget {
     }
 
     final ready = capability.state == CoachCapabilityState.ready;
-    final localProvider =
-        capability.provider == CoachProviderName.localCodexOauth;
     final title = state.isRateLimited
         ? 'Rate limited'
         : switch (capability.state) {
@@ -172,14 +188,7 @@ class _CapabilityCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: AppSpacing.sm),
-          Text(
-            localProvider
-                ? 'Uses this developer\'s explicitly enabled local Codex login. '
-                    'This is not a production service and may not work on another device or account.'
-                : capability.provider == CoachProviderName.fake
-                    ? 'Uses fixed test responses. This is not a live assistant.'
-                    : 'No Coach provider is connected.',
-          ),
+          Text(_availabilitySummary(capability)),
           if (ready) ...[
             const SizedBox(height: AppSpacing.sm),
             Text(
@@ -214,6 +223,33 @@ class _CapabilityCard extends StatelessWidget {
       ),
     );
   }
+}
+
+String _availabilitySummary(CoachCapabilities capability) {
+  if (capability.reasonCode == 'local_demo') {
+    return 'Coach replies are unavailable in guest or local demo mode. '
+        'Use a locally synced account with a Coach-enabled local stack.';
+  }
+  if (capability.provider == CoachProviderName.disabled) {
+    return 'Local replies are off for this run. Restart with '
+        'npm run start:local:coach for the signed-in local Codex '
+        'connection, or npm run start:local:coach:fake for fixed test '
+        'replies.';
+  }
+  if (capability.provider == CoachProviderName.fake) {
+    return capability.state == CoachCapabilityState.ready
+        ? 'Uses fixed test responses. This is not a live assistant.'
+        : 'The fixed local test provider is currently unavailable.';
+  }
+  if (capability.provider == CoachProviderName.localCodexOauth) {
+    return capability.state == CoachCapabilityState.ready
+        ? 'Uses this developer\'s explicitly enabled local Codex login. '
+            'This is not a production service and may not work on another '
+            'device or account.'
+        : 'The explicitly enabled local Codex connection is currently '
+            'unavailable. Check the reason below, then refresh Coach.';
+  }
+  return 'No Coach response provider is available.';
 }
 
 class _ComposerCard extends StatelessWidget {

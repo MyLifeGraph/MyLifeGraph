@@ -231,6 +231,8 @@ assert_not_contains "$EVENTS" 'command=migration up --local '
 assert_not_contains "$OUTPUT" 'fake-service-key'
 assert_not_contains "$OUTPUT" 'fake-scheduler-token'
 assert_not_contains "$OUTPUT" 'private-preflight-marker'
+assert_contains "$OUTPUT" 'Coach provider: local_codex_oauth'
+assert_contains "$OUTPUT" "Coach replies use this Linux user's explicitly enabled local Codex login."
 
 for log_file in ai-service.log daily-refresh.log flutter-web.log; do
   mode="$(stat -c '%a' "$REPO/.tools/local-stack/$log_file")"

@@ -84,6 +84,12 @@ LOCAL_STACK_COACH_PROVIDER=fake \
 FLUTTER_BIN=/path/to/flutter scripts/start_local_stack.sh
 ```
 
+The equivalent short command is:
+
+```bash
+npm run start:local:coach:fake
+```
+
 The explicitly opt-in real local Coach uses only the current Linux user's
 existing Codex login:
 
@@ -91,6 +97,18 @@ existing Codex login:
 LOCAL_STACK_COACH_PROVIDER=local_codex_oauth \
 FLUTTER_BIN=/path/to/flutter scripts/start_local_stack.sh
 ```
+
+The normal one-command form for that mode is:
+
+```bash
+npm run start:local:coach
+```
+
+Plain `npm run start:local` deliberately keeps replies disabled. Existing
+seeded Coach history remains readable in that mode, but sending is unavailable;
+restart with one of the two reply-enabled commands above to test a new turn
+with `student@example.test` or any other locally authenticated, onboarded
+account.
 
 The supervisor binds only to loopback, keeps the service-role key and scheduler
 token out of Flutter and command arguments, writes private logs under
@@ -623,6 +641,12 @@ For deterministic local automation instead, configure FastAPI with:
 COACH_PROVIDER=fake
 COACH_FAKE_PROVIDER_ENABLED=true
 ```
+
+When using the supported full-stack supervisor, prefer
+`npm run start:local:coach` for the real local connection or
+`npm run start:local:coach:fake` for fixed test replies. Both keep Flutter in
+real Supabase mode, so the Student fixture and other local authenticated
+accounts use their own persisted context and history.
 
 Never enable the fake provider in production or present its fixed response as a
 real model answer.
