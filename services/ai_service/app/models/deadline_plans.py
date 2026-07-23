@@ -1,5 +1,5 @@
 import re
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta
 from typing import Any, Literal, Self
 from uuid import UUID
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -323,17 +323,29 @@ class DeadlinePlanBlock(BaseModel):
     local_start_time: time
     local_end_time: time
     planned_minutes: int = Field(ge=5, le=240)
+    recovery_minutes: int = Field(ge=0, le=60)
+    reserved_ends_at: datetime
     credited_tracked_minutes: int = Field(ge=0, le=240)
     state: DeadlineBlockState
 
     @model_validator(mode="after")
     def validate_block(self) -> Self:
-        if self.starts_at.tzinfo is None or self.ends_at.tzinfo is None:
+        if (
+            self.starts_at.tzinfo is None
+            or self.ends_at.tzinfo is None
+            or self.reserved_ends_at.tzinfo is None
+        ):
             raise ValueError("deadline block instants must be timezone-aware")
         if self.ends_at <= self.starts_at:
             raise ValueError("deadline block must have a positive interval")
         if self.credited_tracked_minutes > self.planned_minutes:
             raise ValueError("block credit cannot exceed planned minutes")
+        if (
+            self.recovery_minutes % 5 != 0
+            or self.reserved_ends_at - self.ends_at
+            != timedelta(minutes=self.recovery_minutes)
+        ):
+            raise ValueError("deadline block recovery is inconsistent")
         return self
 
 
@@ -366,6 +378,8 @@ class DeadlinePlanRevision(BaseModel):
     timezone: str = Field(min_length=1, max_length=100)
     best_energy_window: EnergyWindow
     planning_fingerprint: str = Field(pattern=r"^[0-9a-f]{64}$")
+    study_setup_revision: int | None = Field(default=None, ge=1)
+    recovery_minutes: int = Field(ge=0, le=60)
     tracked_focus_minutes_at_proposal: int = Field(ge=0)
     remaining_minutes_at_proposal: int = Field(ge=0, le=30_000)
     planned_minutes: int = Field(ge=0, le=30_000)
@@ -420,6 +434,26 @@ class DeadlinePlanRevision(BaseModel):
             raise ValueError("deadline revision minute summary is inconsistent")
         if self.planned_minutes != sum(block.planned_minutes for block in self.blocks):
             raise ValueError("deadline block minutes do not match revision summary")
+        if self.study_setup_revision is None:
+            if self.recovery_minutes != 0:
+                raise ValueError("deadline revision cannot invent recovery")
+        elif (
+            self.recovery_minutes < 5
+            or self.recovery_minutes % 5 != 0
+            or any(
+                block.recovery_minutes != self.recovery_minutes
+                or block.planned_minutes > self.preferred_session_minutes
+                for block in self.blocks
+            )
+        ):
+            raise ValueError("deadline Study rhythm is inconsistent")
+        short = [
+            block
+            for block in self.blocks
+            if block.planned_minutes < self.preferred_session_minutes
+        ]
+        if self.study_setup_revision is not None and short and short != self.blocks[-1:]:
+            raise ValueError("only the final deadline Study block may be short")
         try:
             zone = ZoneInfo(self.timezone)
         except ZoneInfoNotFoundError as exc:
@@ -438,6 +472,8 @@ class DeadlinePlanRevision(BaseModel):
             if (
                 block.local_date != starts_local.date()
                 or block.local_date != ends_local.date()
+                or block.local_date
+                != block.reserved_ends_at.astimezone(zone).date()
                 or block.local_start_time != starts_local.time().replace(tzinfo=None)
                 or block.local_end_time != ends_local.time().replace(tzinfo=None)
             ):

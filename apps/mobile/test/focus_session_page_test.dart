@@ -9,9 +9,14 @@ import 'package:my_life_graph/features/focus/domain/focus_session.dart';
 import 'package:my_life_graph/features/focus/presentation/pages/focus_session_page.dart';
 import 'package:my_life_graph/features/snapshots/application/snapshot_refresh_service.dart';
 import 'package:my_life_graph/features/snapshots/presentation/providers/snapshot_providers.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 void main() {
+  setUp(() {
+    SharedPreferences.setMockInitialValues({});
+  });
+
   testWidgets('initial focus read failure stays visible until retry succeeds',
       (tester) async {
     final source = _FailOnceFocusSource();
@@ -42,6 +47,14 @@ void main() {
     expect(find.text('Start a focus block'), findsOneWidget);
     expect(find.text('No finished sessions yet.'), findsOneWidget);
     expect(source.activeLoads, 2);
+    expect(
+      tester
+          .widget<SegmentedButton<int>>(
+            find.byType(SegmentedButton<int>),
+          )
+          .selected,
+      {25},
+    );
   });
 
   testWidgets('active focus actions wrap at 320 pixels with larger text',
@@ -271,6 +284,212 @@ void main() {
     expect(snapshotRefresh.focusCalls, 1);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('planned duration wins over setup and recent-session defaults',
+      (tester) async {
+    final source = _StudyFocusSource();
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          appConfigProvider.overrideWithValue(_realConfig),
+          focusSessionPageDataSourceProvider.overrideWithValue(source),
+          focusStudySettingsDataSourceProvider.overrideWithValue(source),
+        ],
+        child: const MaterialApp(
+          home: Scaffold(
+            body: FocusSessionPage(
+              initialPlannedMinutes: 60,
+              initialRecoveryMinutes: 15,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      tester
+          .widget<SegmentedButton<int>>(
+            find.byType(SegmentedButton<int>),
+          )
+          .selected,
+      {60},
+    );
+    expect(find.text('60 min focus + 15 min recovery'), findsOneWidget);
+  });
+
+  testWidgets(
+      'study default beats recent duration and checklist stays ephemeral',
+      (tester) async {
+    final source = _StudyFocusSource();
+    final snapshotRefresh = _CountingSnapshotRefresh();
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          appConfigProvider.overrideWithValue(_realConfig),
+          focusSessionPageDataSourceProvider.overrideWithValue(source),
+          focusStudySettingsDataSourceProvider.overrideWithValue(source),
+          snapshotRefreshServiceProvider.overrideWithValue(snapshotRefresh),
+        ],
+        child: const MaterialApp(
+          home: Scaffold(body: FocusSessionPage()),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      tester
+          .widget<SegmentedButton<int>>(
+            find.byType(SegmentedButton<int>),
+          )
+          .selected,
+      {45},
+    );
+    expect(find.text('45 min focus + 10 min recovery'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('Start focus session'),
+      250,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.tap(find.text('Start focus session'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Prepare to focus'), findsOneWidget);
+    expect(find.text('Water'), findsOneWidget);
+    expect(find.text('Study materials'), findsOneWidget);
+    expect(source.startCalls, 0);
+    expect(
+      tester
+          .widget<FilledButton>(
+            find.byKey(const ValueKey('focus-preparation-start')),
+          )
+          .onPressed,
+      isNull,
+    );
+
+    await tester.tap(find.text('Ready').first);
+    await tester.pump();
+    expect(
+      tester
+          .widget<FilledButton>(
+            find.byKey(const ValueKey('focus-preparation-start')),
+          )
+          .onPressed,
+      isNull,
+    );
+    await tester.tap(find.text('Not needed today').last);
+    await tester.pump();
+    expect(
+      tester
+          .widget<FilledButton>(
+            find.byKey(const ValueKey('focus-preparation-start')),
+          )
+          .onPressed,
+      isNotNull,
+    );
+    await tester.tap(
+      find.byKey(const ValueKey('focus-preparation-start')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(source.startCalls, 1);
+    expect(source.lastDraft?.plannedMinutes, 45);
+    expect(source.lastDraft?.recoveryMinutes, 10);
+    expect(snapshotRefresh.focusCalls, 1);
+    expect(find.text('Focus active'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('skip remaining starts without persisting ritual choices',
+      (tester) async {
+    final source = _StudyFocusSource();
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          appConfigProvider.overrideWithValue(_realConfig),
+          focusSessionPageDataSourceProvider.overrideWithValue(source),
+          focusStudySettingsDataSourceProvider.overrideWithValue(source),
+          snapshotRefreshServiceProvider.overrideWithValue(
+            _CountingSnapshotRefresh(),
+          ),
+        ],
+        child: const MaterialApp(
+          home: Scaffold(body: FocusSessionPage()),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text('Start focus session'),
+      250,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.tap(find.text('Start focus session'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Ready').first);
+    await tester.pump();
+    await tester.tap(
+      find.byKey(const ValueKey('focus-skip-preparation')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(source.startCalls, 1);
+    expect(source.lastDraft?.plannedMinutes, 45);
+    expect(source.lastDraft?.recoveryMinutes, 10);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('saved local recovery countdown restores and can be skipped',
+      (tester) async {
+    final source = _RecoveryFocusSource();
+    final endsAt = DateTime.now().add(const Duration(minutes: 10));
+    SharedPreferences.setMockInitialValues({
+      'focus-recovery-countdown-v1':
+          'completed-with-recovery|${endsAt.toUtc().toIso8601String()}',
+    });
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          appConfigProvider.overrideWithValue(_realConfig),
+          focusSessionPageDataSourceProvider.overrideWithValue(source),
+          focusStudySettingsDataSourceProvider.overrideWithValue(source),
+        ],
+        child: const MaterialApp(
+          home: Scaffold(body: FocusSessionPage()),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Recovery break'), findsOneWidget);
+    expect(
+      find.textContaining('does not add progress or preparation time'),
+      findsOneWidget,
+    );
+    await tester.tap(find.byKey(const ValueKey('skip-recovery')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Recovery break'), findsNothing);
+    expect(find.text('Start a focus block'), findsOneWidget);
+    expect(
+      tester
+          .widget<SegmentedButton<int>>(
+            find.byType(SegmentedButton<int>),
+          )
+          .selected,
+      {30},
+    );
+    final preferences = await SharedPreferences.getInstance();
+    expect(
+      preferences.getString('focus-recovery-countdown-v1'),
+      isNull,
+    );
+  });
 }
 
 const _realConfig = AppConfig(
@@ -451,6 +670,122 @@ class _PendingStartFocusSource extends FocusSessionSupabaseDataSource {
       ),
     );
   }
+}
+
+class _StudyFocusSource extends FocusSessionSupabaseDataSource {
+  _StudyFocusSource()
+      : super(
+          SupabaseClient(
+            'http://localhost:54321',
+            'test-anon-key',
+            authOptions: const AuthClientOptions(autoRefreshToken: false),
+          ),
+        );
+
+  FocusSession? active;
+  int startCalls = 0;
+  FocusStartDraft? lastDraft;
+
+  @override
+  Future<FocusSession?> fetchActiveSession() async => active;
+
+  @override
+  Future<List<FocusSession>> fetchRecentSessions({int limit = 10}) async {
+    final start = DateTime.utc(2026, 7, 12, 9);
+    return [
+      FocusSession(
+        id: 'recent-completed',
+        status: FocusSessionStatus.completed,
+        startedAt: start,
+        endedAt: start.add(const Duration(minutes: 30)),
+        plannedMinutes: 30,
+        actualMinutes: 30,
+        updatedAt: start.add(const Duration(minutes: 30)),
+      ),
+    ];
+  }
+
+  @override
+  Future<List<FocusTargetOption>> fetchAvailableTargets() async => const [];
+
+  @override
+  Future<StudyFocusSettings?> fetchStudyFocusSettings() async {
+    return StudyFocusSettings(
+      focusMinutes: 45,
+      recoveryMinutes: 10,
+      setupRevision: 3,
+      preparationItems: const [
+        FocusPreparationItem(
+          key: '4abc0000-0000-4000-8000-000000000001',
+          label: 'Water',
+          active: true,
+        ),
+        FocusPreparationItem(
+          key: '5abc0000-0000-4000-8000-000000000002',
+          label: 'Study materials',
+          active: true,
+        ),
+      ],
+    );
+  }
+
+  @override
+  Future<FocusSession> startSession({
+    required String sessionId,
+    required FocusStartDraft draft,
+  }) async {
+    startCalls += 1;
+    lastDraft = draft;
+    final now = DateTime.now();
+    active = FocusSession(
+      id: sessionId,
+      status: FocusSessionStatus.active,
+      startedAt: now,
+      plannedMinutes: draft.plannedMinutes,
+      recoveryMinutes: draft.recoveryMinutes,
+      label: draft.label,
+      updatedAt: now,
+    );
+    return active!;
+  }
+}
+
+class _RecoveryFocusSource extends FocusSessionSupabaseDataSource {
+  _RecoveryFocusSource()
+      : super(
+          SupabaseClient(
+            'http://localhost:54321',
+            'test-anon-key',
+            authOptions: const AuthClientOptions(autoRefreshToken: false),
+          ),
+        );
+
+  @override
+  Future<FocusSession?> fetchActiveSession() async => null;
+
+  @override
+  Future<List<FocusSession>> fetchRecentSessions({int limit = 10}) async {
+    final endedAt = DateTime.now().subtract(const Duration(minutes: 1));
+    final startedAt = endedAt.subtract(const Duration(minutes: 29));
+    return [
+      FocusSession(
+        id: 'completed-with-recovery',
+        status: FocusSessionStatus.completed,
+        startedAt: startedAt,
+        endedAt: endedAt,
+        plannedMinutes: 30,
+        recoveryMinutes: 10,
+        actualMinutes: 29,
+        updatedAt: endedAt,
+      ),
+    ];
+  }
+
+  @override
+  Future<List<FocusTargetOption>> fetchAvailableTargets() async => const [];
+
+  @override
+  Future<StudyFocusSettings?> fetchStudyFocusSettings() async => null;
 }
 
 class _CountingSnapshotRefresh implements SnapshotRefreshService {

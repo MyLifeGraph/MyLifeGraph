@@ -83,23 +83,29 @@ owner-scoped `profiles` row. It grants no new direct profile mutation authority.
 ## Account Export
 
 `GET /v1/account/export` is side-effect free and returns the strict
-`account-export-v1` JSON envelope. It includes bounded owner rows from these 31
+`account-export-v1` JSON envelope. It includes bounded owner rows from these 38
 V1 product tables: `profiles`, `notification_preferences`, `daily_logs`,
 `behavioral_events`, `lifestyle_entries`, `tasks`, `schedule_items`,
 `notifications`, `coach_messages`, `memory_entries`, `ai_insights`,
 `recommendations`, `skillset_profiles`, `goals`, `habits`, `habit_logs`,
-`focus_sessions`, `intake_responses`, `user_state_snapshots`, `daily_briefings`,
-`decision_feedback`, `weekly_reviews`, `calendar_connections`,
+`focus_sessions`, `intake_responses`, `study_setup_profiles`,
+`user_state_snapshots`, `daily_briefings`, `decision_feedback`,
+`weekly_reviews`, `calendar_connections`,
 `calendar_imports`, `calendar_events`, `coach_requests`, `coach_usage_events`,
 `coach_memory_selections`, `deadline_plans`, `deadline_plan_revisions`, and
-`deadline_plan_blocks`. It returns exact per-table record counts, an export
+`deadline_plan_blocks`, `planner_preferences`, `planner_action_plans`,
+`planner_action_plan_revisions`, `planner_task_blocks`, `planner_habit_slots`,
+and `planner_commitments`. It returns exact per-table record counts, an export
 timestamp, bounds, and an explicit ledger policy. Calendar
 connection/import and Coach request/usage rows use field allowlists so
 backend-only details are not leaked. The global `calendar_request_identities`,
-`notification_action_requests`, and `deadline_plan_request_identities` anti-
-replay ledgers are deliberately omitted and named in that policy. Deadline
+`notification_action_requests`, `deadline_plan_request_identities`, and
+`planner_request_identities` anti-replay ledgers are deliberately omitted and
+named in that policy. Deadline
 plan, revision, and block rows remain bounded owner product data; their opaque
-request fingerprints are not part of the export.
+request fingerprints are not part of the export. Study Setup exports the
+current owner projection only; transient preparation-checklist decisions and
+local recovery countdown state do not exist in the export.
 
 `20260714110000_account_export_lifestyle_entries_grant.sql` gives only the
 verified-bearer FastAPI path's `service_role` client the missing `SELECT` grant

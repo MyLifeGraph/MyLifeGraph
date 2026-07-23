@@ -59,6 +59,7 @@ def _context(
     schedule_items=None,
     confirmed_blocks=None,
     daily_preparation_budget_minutes=None,
+    study_setup=None,
 ) -> DeadlinePlanningContext:
     return DeadlinePlanningContext(
         timezone="UTC",
@@ -72,6 +73,7 @@ def _context(
         availability_connection_id=None,
         availability_import_id=None,
         daily_preparation_budget_minutes=daily_preparation_budget_minutes,
+        study_setup=study_setup,
     )
 
 
@@ -96,6 +98,36 @@ def test_planner_spreads_first_sessions_and_treats_buffer_as_hard() -> None:
         for left, right in zip(block_days, block_days[1:])
     )
     assert all(day < date(2026, 7, 29) for day in block_days)
+
+
+def test_deadline_plan_always_uses_configured_study_rhythm_and_recovery() -> None:
+    request = _request(
+        estimated_total_minutes=100,
+        preferred_session_minutes=45,
+    )
+    blocks = _plan_blocks(
+        request=request,
+        context=_context(
+            study_setup={
+                "setup_revision": 4,
+                "focus_minutes": 45,
+                "recovery_minutes": 10,
+            },
+        ),
+        zone=ZoneInfo("UTC"),
+        local_now=NOW,
+        local_deadline=request.deadline_at,
+        effective_start=request.planning_start_on,
+        remaining_minutes=100,
+    )
+
+    assert [block.minutes for block in blocks] == [45, 45, 10]
+    assert all(block.recovery_minutes == 10 for block in blocks)
+    assert all(
+        block.reserved_ends_at == block.ends_at + timedelta(minutes=10)
+        for block in blocks
+    )
+    assert sum(block.minutes for block in blocks) == 100
 
 
 def test_planner_uses_exact_shortfall_instead_of_buffer_or_overlap() -> None:

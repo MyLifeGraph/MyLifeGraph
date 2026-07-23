@@ -379,6 +379,145 @@ void main() {
     expect(commitments[1].validUntil, DateTime.utc(2027, 2, 15));
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('optional study sections start closed and focus enables at 45/10',
+      (tester) async {
+    tester.view.physicalSize = const Size(1000, 1800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final gateway = _FakeSetupGateway(
+      fetched: const IntakeSetupReadState.empty(),
+    );
+    late SetupController controller;
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          setupControllerProvider.overrideWith((ref) {
+            controller = SetupController(
+              repository: gateway,
+              session: _guestSession(onboardingDone: false),
+              onApplied: (_) {},
+            );
+            return controller;
+          }),
+        ],
+        child: const MaterialApp(home: OnboardingPage()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('optional-focus-setup')),
+      450,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(
+      find.byKey(const ValueKey('study-focus-enabled')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('study-semester-enabled')),
+      findsNothing,
+    );
+
+    await tester.tap(find.text('Focus setup'));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('study-focus-enabled')),
+      findsOneWidget,
+    );
+    await tester.tap(find.byKey(const ValueKey('study-focus-enabled')));
+    await tester.pumpAndSettle();
+
+    final rhythm = controller.state.draft?.studySetup?.focusRhythm;
+    expect(rhythm?.focusMinutes, 45);
+    expect(rhythm?.recoveryMinutes, 10);
+    expect(
+      rhythm?.preparationItems.map((item) => item.label),
+      studyPreparationSuggestions,
+    );
+    expect(
+      rhythm?.preparationItems.any(
+        (item) => item.label.toLowerCase().contains('nicotine'),
+      ),
+      isFalse,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('current semester dates prefill only a new commitment',
+      (tester) async {
+    tester.view.physicalSize = const Size(1000, 1800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    const existingKey = '69f90455-4c64-45d4-b45e-5ab89b72c5b6';
+    final draft = _requiredDraft().copyWith(
+      studySetup: _semesterOnlyStudySetup(),
+      fixedCommitments: const [
+        IntakeCommitmentDraft(
+          key: existingKey,
+          title: 'Existing lecture',
+          location: null,
+          weekday: 1,
+          startsAt: '09:00',
+          endsAt: '10:00',
+        ),
+      ],
+    );
+    final gateway = _FakeSetupGateway(
+      fetched: IntakeSetupReadState(
+        exists: true,
+        revision: 1,
+        baseRevision: 0,
+        requestId: null,
+        status: 'applied',
+        intakeResponseId: 'intake',
+        snapshotId: 'snapshot',
+        completedAt: DateTime.utc(2026, 7, 10),
+        responses: draft,
+        summary: const {},
+      ),
+    );
+    late SetupController controller;
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          setupControllerProvider.overrideWith((ref) {
+            controller = SetupController(
+              repository: gateway,
+              session: _guestSession(onboardingDone: true),
+              onApplied: (_) {},
+            );
+            return controller;
+          }),
+        ],
+        child: const MaterialApp(home: OnboardingPage(editing: true)),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final add = find.text('Add fixed commitment');
+    await tester.scrollUntilVisible(
+      add,
+      450,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.tap(add);
+    await tester.pumpAndSettle();
+
+    final commitments = controller.state.draft!.fixedCommitments;
+    expect(commitments, hasLength(2));
+    expect(commitments.first.key, existingKey);
+    expect(commitments.first.validFrom, isNull);
+    expect(commitments.first.validUntil, isNull);
+    expect(commitments.last.validFrom, DateTime.utc(2026, 4));
+    expect(commitments.last.validUntil, DateTime.utc(2026, 9, 30));
+    expect(tester.takeException(), isNull);
+  });
 }
 
 Future<void> _settleController() async {
@@ -486,5 +625,27 @@ IntakeResponseDraft _requiredDraft() {
     fixedCommitments: [],
     contextNote: null,
     calendarConnectionIntent: null,
+  );
+}
+
+StudySetupDraft _semesterOnlyStudySetup() {
+  return StudySetupDraft(
+    focusRhythm: null,
+    semesterPlanning: StudySemesterPlanningDraft(
+      currentSemester: StudySemesterDraft(
+        name: 'Summer 2026',
+        startsOn: DateTime.utc(2026, 4),
+        endsOn: DateTime.utc(2026, 9, 30),
+      ),
+      nextSemester: StudyNextSemesterDraft(
+        name: 'Winter 2026/27',
+        startsOn: DateTime.utc(2026, 10),
+        endsOn: DateTime.utc(2027, 3, 31),
+        courseSelectionStartsOn: DateTime.utc(2026, 8, 15),
+        courseSelectionEndsOn: DateTime.utc(2026, 9, 15),
+        courseNames: const [],
+        courseSelectionCompleted: false,
+      ),
+    ),
   );
 }

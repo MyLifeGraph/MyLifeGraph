@@ -618,12 +618,18 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
   Future<void> _confirmPlan(DeadlinePlan plan) async {
     final revision = plan.pendingRevision;
     if (revision == null) return;
+    final recoveryMinutes = revision.blocks.fold<int>(
+      0,
+      (sum, block) => sum + block.recoveryMinutes,
+    );
     final confirmed = await showDialog<bool>(
           context: context,
           builder: (_) => AlertDialog(
             title: const Text('Reserve these focus blocks?'),
             content: Text(
-              '${_duration(revision.plannedMinutes)} will be reserved in MyLifeGraph only. Your imported or external calendar will not be changed.',
+              '${_duration(revision.plannedMinutes)} of preparation'
+              '${recoveryMinutes > 0 ? ' plus ${_duration(recoveryMinutes)} of recovery buffers' : ''} '
+              'will be reserved in MyLifeGraph only. Recovery does not count as preparation or against the preparation budget. Your imported or external calendar will not be changed.',
             ),
             actions: [
               TextButton(
@@ -726,6 +732,7 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
         'target_kind': 'task',
         'target_id': taskId,
         'planned_minutes': '$remainingMinutes',
+        'recovery_minutes': '${block.recoveryMinutes}',
       },
     );
     context.go(query.toString());
@@ -954,6 +961,15 @@ class _DeadlinePlanCardState extends State<_DeadlinePlanCard> {
             '${_duration(revision.plannedMinutes)} scheduled · ${_duration(revision.unscheduledMinutes)} unscheduled',
             style: Theme.of(context).textTheme.bodyMedium,
           ),
+          if (revision.recoveryMinutes > 0) ...[
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              '${_duration(revision.preferredSessionMinutes)} focus + '
+              '${_duration(revision.recoveryMinutes)} recovery per full block. '
+              'Recovery is reserved but is not learning time, progress, or preparation budget.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ],
           if (revision.unscheduledMinutes > 0) ...[
             const SizedBox(height: AppSpacing.xs),
             Text(
@@ -1163,7 +1179,9 @@ class _DeadlineBlockTile extends StatelessWidget {
         '${block.localDate} · ${block.localStartTime.substring(0, 5)}–${block.localEndTime.substring(0, 5)}',
       ),
       subtitle: Text(
-        '${_duration(block.plannedMinutes)} · ${_blockLabel(block.state)}'
+        '${_duration(block.plannedMinutes)} focus'
+        '${block.recoveryMinutes > 0 ? ' + ${_duration(block.recoveryMinutes)} recovery · reserved until ${DateFormat.Hm().format(block.reservedEndsAt.toLocal())}' : ''}'
+        ' · ${_blockLabel(block.state)}'
         '${block.creditedTrackedMinutes > 0 ? ' · ${_duration(block.creditedTrackedMinutes)} tracked' : ''}',
       ),
       trailing: canStart
@@ -1425,9 +1443,13 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
           ),
           const SizedBox(height: AppSpacing.md),
           Text(
-            '${_duration(revision.preferredSessionMinutes)} preferred blocks · '
-            '${_duration(revision.maxDailyMinutes)} maximum per day · '
-            '${revision.bufferDays} ${revision.bufferDays == 1 ? 'clear day' : 'clear days'}',
+            revision.recoveryMinutes > 0
+                ? '${_duration(revision.preferredSessionMinutes)} focus + '
+                    '${_duration(revision.recoveryMinutes)} recovery · '
+                    'reserved through ${DateFormat.Hm().format(revision.blocks.isEmpty ? revision.deadlineAt.toLocal() : revision.blocks.first.reservedEndsAt.toLocal())} for the first block'
+                : '${_duration(revision.preferredSessionMinutes)} preferred blocks · '
+                    '${_duration(revision.maxDailyMinutes)} maximum per day · '
+                    '${revision.bufferDays} ${revision.bufferDays == 1 ? 'clear day' : 'clear days'}',
           ),
           Text(
             'Plan from ${DateFormat.yMMMd().format(_planningStart)} · '

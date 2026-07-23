@@ -76,6 +76,7 @@ class PlannerAttention {
     required this.kind,
     required this.title,
     required this.detail,
+    required this.target,
     required this.planId,
     required this.unplacedMinutes,
   });
@@ -88,6 +89,7 @@ class PlannerAttention {
         'kind',
         'title',
         'detail',
+        'target',
         'plan_id',
         'unplaced_minutes',
       },
@@ -98,7 +100,19 @@ class PlannerAttention {
       kind: _enumText(
         json['kind'],
         'attention.kind',
-        const {'conflict', 'unscheduled', 'stale_preview'},
+        const {
+          'conflict',
+          'unscheduled',
+          'stale_preview',
+          'study_rhythm_changed',
+          'course_selection_open',
+          'course_selection_overdue',
+        },
+      ),
+      target: _enumText(
+        json['target'],
+        'attention.target',
+        const {'plan', 'study_setup'},
       ),
       title: _text(json['title'], 'attention.title', max: 160),
       detail: _text(json['detail'], 'attention.detail', max: 240),
@@ -115,6 +129,7 @@ class PlannerAttention {
   final String kind;
   final String title;
   final String detail;
+  final String target;
   final String? planId;
   final int unplacedMinutes;
 }
@@ -127,6 +142,8 @@ class PlannerDayItem {
     required this.sourceId,
     required this.startsAt,
     required this.endsAt,
+    required this.recoveryMinutes,
+    required this.reservedEndsAt,
     required this.allDay,
     required this.state,
   });
@@ -141,6 +158,8 @@ class PlannerDayItem {
         'source_id',
         'starts_at',
         'ends_at',
+        'recovery_minutes',
+        'reserved_ends_at',
         'all_day',
         'state',
       },
@@ -149,14 +168,31 @@ class PlannerDayItem {
     final allDay = _bool(json['all_day'], 'day item all_day');
     final starts = _optionalDateTime(json['starts_at'], 'day item starts_at');
     final ends = _optionalDateTime(json['ends_at'], 'day item ends_at');
+    final recoveryMinutes = _int(
+      json['recovery_minutes'],
+      'day item recovery_minutes',
+      min: 0,
+      max: 60,
+    );
+    final reservedEnds = _optionalDateTime(
+      json['reserved_ends_at'],
+      'day item reserved_ends_at',
+    );
     if (allDay
-        ? starts != null || ends != null
-        : starts == null || ends == null) {
+        ? starts != null ||
+            ends != null ||
+            reservedEnds != null ||
+            recoveryMinutes != 0
+        : starts == null || ends == null || reservedEnds == null) {
       throw const PlannerContractException(
         'Planner day item interval is inconsistent.',
       );
     }
-    if (!allDay && !ends!.isAfter(starts!)) {
+    if (!allDay &&
+        (!ends!.isAfter(starts!) ||
+            recoveryMinutes.remainder(5) != 0 ||
+            reservedEnds!.difference(ends) !=
+                Duration(minutes: recoveryMinutes))) {
       throw const PlannerContractException(
         'Planner day item interval is invalid.',
       );
@@ -175,6 +211,8 @@ class PlannerDayItem {
       sourceId: _uuid(json['source_id'], 'day item source_id'),
       startsAt: starts,
       endsAt: ends,
+      recoveryMinutes: recoveryMinutes,
+      reservedEndsAt: reservedEnds,
       allDay: allDay,
       state: _optionalText(json['state'], 'day item state', max: 40),
     );
@@ -186,6 +224,8 @@ class PlannerDayItem {
   final String sourceId;
   final DateTime? startsAt;
   final DateTime? endsAt;
+  final int recoveryMinutes;
+  final DateTime? reservedEndsAt;
   final bool allDay;
   final String? state;
 }
@@ -278,6 +318,7 @@ class PlannerUnscheduled {
     required this.estimatedMinutes,
     required this.deadlineAt,
     required this.preferredSessionMinutes,
+    required this.useStudyRhythm,
     required this.cadenceKind,
     required this.scheduledWeekdays,
     required this.weeklyTarget,
@@ -298,6 +339,7 @@ class PlannerUnscheduled {
         'estimated_minutes',
         'deadline_at',
         'preferred_session_minutes',
+        'use_study_rhythm',
         'cadence',
         'duration_minutes',
       },
@@ -333,6 +375,10 @@ class PlannerUnscheduled {
       'unscheduled duration_minutes',
       min: 5,
       max: 240,
+    );
+    final useStudyRhythm = _bool(
+      json['use_study_rhythm'],
+      'unscheduled use_study_rhythm',
     );
     String? cadenceKind;
     var scheduledWeekdays = const <int>[];
@@ -378,7 +424,8 @@ class PlannerUnscheduled {
         kind == 'task' &&
             (priority == null || cadenceKind != null || duration != null) ||
         kind == 'habit' &&
-            (priority != null ||
+            (useStudyRhythm ||
+                priority != null ||
                 estimated != null ||
                 deadline != null ||
                 session != null ||
@@ -409,6 +456,7 @@ class PlannerUnscheduled {
       estimatedMinutes: estimated,
       deadlineAt: deadline,
       preferredSessionMinutes: session,
+      useStudyRhythm: useStudyRhythm,
       cadenceKind: cadenceKind,
       scheduledWeekdays: scheduledWeekdays,
       weeklyTarget: weeklyTarget,
@@ -426,6 +474,7 @@ class PlannerUnscheduled {
   final int? estimatedMinutes;
   final DateTime? deadlineAt;
   final int? preferredSessionMinutes;
+  final bool useStudyRhythm;
   final String? cadenceKind;
   final List<int> scheduledWeekdays;
   final int? weeklyTarget;
@@ -440,6 +489,8 @@ class PlannerTaskBlock {
     required this.endsAt,
     required this.localDate,
     required this.plannedMinutes,
+    required this.recoveryMinutes,
+    required this.reservedEndsAt,
     required this.state,
   });
 
@@ -453,6 +504,8 @@ class PlannerTaskBlock {
         'ends_at',
         'local_date',
         'planned_minutes',
+        'recovery_minutes',
+        'reserved_ends_at',
         'state',
       },
       'Planner Task block',
@@ -465,9 +518,21 @@ class PlannerTaskBlock {
       min: 5,
       max: 240,
     );
+    final recoveryMinutes = _int(
+      json['recovery_minutes'],
+      'Task block recovery_minutes',
+      min: 0,
+      max: 60,
+    );
+    final reservedEndsAt = _dateTime(
+      json['reserved_ends_at'],
+      'Task block reserved_ends_at',
+    );
     if (!ends.isAfter(starts) ||
         plannedMinutes % 5 != 0 ||
-        ends.difference(starts) != Duration(minutes: plannedMinutes)) {
+        recoveryMinutes % 5 != 0 ||
+        ends.difference(starts) != Duration(minutes: plannedMinutes) ||
+        reservedEndsAt.difference(ends) != Duration(minutes: recoveryMinutes)) {
       throw const PlannerContractException('Planner Task block is invalid.');
     }
     return PlannerTaskBlock(
@@ -477,6 +542,8 @@ class PlannerTaskBlock {
       endsAt: ends,
       localDate: _date(json['local_date'], 'Task block local_date'),
       plannedMinutes: plannedMinutes,
+      recoveryMinutes: recoveryMinutes,
+      reservedEndsAt: reservedEndsAt,
       state: _enumText(json['state'], 'Task block state', const {
         'proposed',
         'active',
@@ -492,6 +559,8 @@ class PlannerTaskBlock {
   final DateTime endsAt;
   final DateTime localDate;
   final int plannedMinutes;
+  final int recoveryMinutes;
+  final DateTime reservedEndsAt;
   final String state;
 }
 
@@ -564,6 +633,8 @@ class PlannerRevision {
     required this.plannedMinutes,
     required this.unscheduledMinutes,
     required this.calendarImportId,
+    required this.studySetupRevision,
+    required this.recoveryMinutes,
     required this.taskBlocks,
     required this.habitSlots,
   });
@@ -581,6 +652,8 @@ class PlannerRevision {
         'planning_start_on',
         'planning_fingerprint',
         'calendar_import_id',
+        'study_setup_revision',
+        'recovery_minutes',
         'planned_minutes',
         'unscheduled_minutes',
         'task_blocks',
@@ -624,6 +697,17 @@ class PlannerRevision {
       'planned_minutes',
       min: 0,
     );
+    final studySetupRevision = _optionalInt(
+      json['study_setup_revision'],
+      'study_setup_revision',
+      min: 1,
+    );
+    final recoveryMinutes = _int(
+      json['recovery_minutes'],
+      'recovery_minutes',
+      min: 0,
+      max: 60,
+    );
     final expectedMinutes = target.kind == 'task'
         ? blocks.fold(0, (sum, value) => sum + value.plannedMinutes)
         : slots.fold(0, (sum, value) => sum + value.durationMinutes);
@@ -632,6 +716,31 @@ class PlannerRevision {
       ...slots.map((value) => value.state),
     ];
     final expectedChildState = state == 'proposed' ? 'proposed' : state;
+    final shortStudyBlockIndexes = target.preferredSessionMinutes == null
+        ? const <int>[]
+        : [
+            for (var index = 0; index < blocks.length; index++)
+              if (blocks[index].plannedMinutes <
+                  target.preferredSessionMinutes!)
+                index,
+          ];
+    final studyProjectionInvalid =
+        target.kind == 'task' && target.useStudyRhythm
+            ? studySetupRevision == null ||
+                recoveryMinutes < 5 ||
+                recoveryMinutes.remainder(5) != 0 ||
+                target.preferredSessionMinutes == null ||
+                blocks.any(
+                  (block) =>
+                      block.recoveryMinutes != recoveryMinutes ||
+                      block.plannedMinutes > target.preferredSessionMinutes!,
+                ) ||
+                shortStudyBlockIndexes.length > 1 ||
+                shortStudyBlockIndexes.isNotEmpty &&
+                    shortStudyBlockIndexes.single != blocks.length - 1
+            : studySetupRevision != null ||
+                recoveryMinutes != 0 ||
+                blocks.any((block) => block.recoveryMinutes != 0);
     if (revision != baseRevision + 1 ||
         blocks.length > 1500 ||
         slots.length > 7 ||
@@ -641,6 +750,7 @@ class PlannerRevision {
         slots.map((value) => value.id).toSet().length != slots.length ||
         slots.map((value) => value.weekday).toSet().length != slots.length ||
         plannedMinutes != expectedMinutes ||
+        studyProjectionInvalid ||
         childStates.any((value) => value != expectedChildState) ||
         (state == 'proposed' &&
             (activatedAt != null || supersededAt != null)) ||
@@ -696,6 +806,8 @@ class PlannerRevision {
         json['calendar_import_id'],
         'calendar_import_id',
       ),
+      studySetupRevision: studySetupRevision,
+      recoveryMinutes: recoveryMinutes,
       taskBlocks: blocks,
       habitSlots: slots,
     );
@@ -710,6 +822,8 @@ class PlannerRevision {
   final int plannedMinutes;
   final int unscheduledMinutes;
   final String? calendarImportId;
+  final int? studySetupRevision;
+  final int recoveryMinutes;
   final List<PlannerTaskBlock> taskBlocks;
   final List<PlannerHabitSlot> habitSlots;
 }
@@ -1109,6 +1223,7 @@ class PlannerTaskDraft {
     required this.estimatedMinutes,
     required this.deadlineAt,
     required this.preferredSessionMinutes,
+    this.useStudyRhythm = false,
     this.targetId,
     this.expectedUpdatedAt,
   });
@@ -1119,6 +1234,7 @@ class PlannerTaskDraft {
   final int? estimatedMinutes;
   final DateTime? deadlineAt;
   final int? preferredSessionMinutes;
+  final bool useStudyRhythm;
   final String? targetId;
   final DateTime? expectedUpdatedAt;
 
@@ -1150,6 +1266,7 @@ class PlannerTaskDraft {
         'estimated_minutes': estimatedMinutes,
         'deadline_at': deadlineAt?.toUtc().toIso8601String(),
         'preferred_session_minutes': preferredSessionMinutes,
+        'use_study_rhythm': useStudyRhythm,
       },
     };
   }
@@ -1264,7 +1381,14 @@ extension _NullableMapLet on Map<String, dynamic> {
   T let<T>(T Function(Map<String, dynamic>) convert) => convert(this);
 }
 
-({String kind, String operation, String id, String title}) _plannerTarget(
+({
+  String kind,
+  String operation,
+  String id,
+  String title,
+  bool useStudyRhythm,
+  int? preferredSessionMinutes,
+}) _plannerTarget(
   Map<String, dynamic> target,
 ) {
   final kind = _enumText(
@@ -1286,6 +1410,7 @@ extension _NullableMapLet on Map<String, dynamic> {
         'estimated_minutes',
         'deadline_at',
         'preferred_session_minutes',
+        'use_study_rhythm',
       },
       'Planner Task target',
     );
@@ -1313,6 +1438,7 @@ extension _NullableMapLet on Map<String, dynamic> {
         'Planner Task session length is invalid.',
       );
     }
+    _bool(target['use_study_rhythm'], 'Task use_study_rhythm');
   } else {
     _expectKeys(
       target,
@@ -1386,6 +1512,16 @@ extension _NullableMapLet on Map<String, dynamic> {
     operation: operation,
     id: _uuid(target['target_id'], 'Planner target id'),
     title: _text(target['title'], 'Planner target title', max: 160),
+    useStudyRhythm:
+        kind == 'task' && _bool(target['use_study_rhythm'], 'use_study_rhythm'),
+    preferredSessionMinutes: kind == 'task'
+        ? _optionalInt(
+            target['preferred_session_minutes'],
+            'Task preferred_session_minutes',
+            min: 5,
+            max: 240,
+          )
+        : null,
   );
 }
 

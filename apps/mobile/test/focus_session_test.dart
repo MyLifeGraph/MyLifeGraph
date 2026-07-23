@@ -84,6 +84,31 @@ void main() {
       expect(session.snapshotEntryDate, '2026-03-29');
     });
 
+    test('parses bounded recovery from existing session metadata', () {
+      final session = FocusSession.fromRow(
+        _activeRow()
+          ..['metadata'] = const {
+            'entry_date': '2026-07-11',
+            'recovery_minutes': 10,
+          },
+      );
+
+      expect(session.recoveryMinutes, 10);
+      expect(FocusSession.fromRow(_activeRow()).recoveryMinutes, 0);
+      for (final value in <Object?>[null, 0, 4, 11, 65, '10', 10.0]) {
+        expect(
+          () => FocusSession.fromRow(
+            _activeRow()
+              ..['metadata'] = {
+                'recovery_minutes': value,
+              },
+          ),
+          throwsA(isA<FocusCommandException>()),
+          reason: '$value must not become a recovery duration',
+        );
+      }
+    });
+
     test('missing or invalid metadata entry dates safely fall back to absent',
         () {
       expect(FocusSession.fromRow(_activeRow()).entryDate, isNull);
@@ -370,6 +395,25 @@ void main() {
       }
     });
 
+    test('allows one-session duration overrides with bounded recovery', () {
+      final draft = FocusStartDraft(
+        plannedMinutes: 37,
+        recoveryMinutes: 10,
+      );
+
+      expect(draft.plannedMinutes, 37);
+      expect(draft.recoveryMinutes, 10);
+      for (final recovery in [-1, 4, 11, 65]) {
+        expect(
+          () => FocusStartDraft(
+            plannedMinutes: 37,
+            recoveryMinutes: recovery,
+          ),
+          throwsA(isA<FocusCommandException>()),
+        );
+      }
+    });
+
     test('requires target kind and id together and rejects blank ids', () {
       expect(
         () => FocusStartDraft(
@@ -420,6 +464,91 @@ void main() {
         ),
         throwsA(isA<FocusCommandException>()),
       );
+    });
+  });
+
+  group('StudyFocusSettings', () {
+    test('parses an ordered exact focus ritual projection', () {
+      final settings = StudyFocusSettings.fromRow({
+        'focus_minutes': 45,
+        'recovery_minutes': 10,
+        'setup_revision': 3,
+        'preparation_items': const [
+          {
+            'key': '4abc0000-0000-4000-8000-000000000001',
+            'label': 'Water',
+            'active': true,
+          },
+          {
+            'key': '5abc0000-0000-4000-8000-000000000002',
+            'label': 'Study materials',
+            'active': false,
+          },
+        ],
+      });
+
+      expect(settings.focusMinutes, 45);
+      expect(settings.recoveryMinutes, 10);
+      expect(settings.setupRevision, 3);
+      expect(
+        settings.preparationItems.map((item) => item.label).toList(),
+        ['Water', 'Study materials'],
+      );
+    });
+
+    test('rejects coercion, noncanonical UUIDs, and duplicate labels', () {
+      final preparationItems = <Map<String, Object>>[
+        {
+          'key': '4abc0000-0000-4000-8000-000000000001',
+          'label': 'Water',
+          'active': true,
+        },
+      ];
+      final valid = <String, dynamic>{
+        'focus_minutes': 45,
+        'recovery_minutes': 10,
+        'setup_revision': 3,
+        'preparation_items': preparationItems,
+      };
+      final invalid = <Map<String, dynamic>>[
+        {...valid, 'focus_minutes': '45'},
+        {
+          ...valid,
+          'preparation_items': [
+            {
+              ...preparationItems.first,
+              'key': '4ABC0000-0000-4000-8000-000000000001',
+            },
+          ],
+        },
+        {
+          ...valid,
+          'preparation_items': [
+            preparationItems.first,
+            {
+              'key': '5abc0000-0000-4000-8000-000000000002',
+              'label': 'water',
+              'active': false,
+            },
+          ],
+        },
+        {
+          ...valid,
+          'preparation_items': [
+            {
+              ...preparationItems.first,
+              'label': ' Water ',
+            },
+          ],
+        },
+      ];
+
+      for (final row in invalid) {
+        expect(
+          () => StudyFocusSettings.fromRow(row),
+          throwsA(isA<FocusCommandException>()),
+        );
+      }
     });
   });
 

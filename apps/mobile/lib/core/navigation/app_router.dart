@@ -125,6 +125,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
         path: AppRoutes.onboarding,
         builder: (context, state) => OnboardingPage(
           editing: state.uri.queryParameters['edit'] == '1',
+          openStudySetup: state.uri.queryParameters['section'] == 'study',
         ),
       ),
       GoRoute(
@@ -236,6 +237,9 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               initialPlannedMinutes: _focusMinutes(
                 state.uri.queryParameters['planned_minutes'],
               ),
+              initialRecoveryMinutes: _recoveryMinutes(
+                state.uri.queryParameters['recovery_minutes'],
+              ),
             ),
           ),
           GoRoute(
@@ -265,6 +269,18 @@ int? _focusMinutes(String? value) {
   if (value == null || !RegExp(r'^\d{1,3}$').hasMatch(value)) return null;
   final minutes = int.tryParse(value);
   return minutes != null && minutes >= 5 && minutes <= 240 ? minutes : null;
+}
+
+int? _recoveryMinutes(String? value) {
+  if (value == null || !RegExp(r'^\d{1,2}$').hasMatch(value)) return null;
+  final minutes = int.tryParse(value);
+  if (minutes == 0) return 0;
+  return minutes != null &&
+          minutes >= 5 &&
+          minutes <= 60 &&
+          minutes.remainder(5) == 0
+      ? minutes
+      : null;
 }
 
 String _authLocationFor(Uri intendedLocation) {

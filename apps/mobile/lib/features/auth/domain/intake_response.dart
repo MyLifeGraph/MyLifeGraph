@@ -71,6 +71,414 @@ enum IntakeCommitmentStatus {
   }
 }
 
+const studyPreparationSuggestions = <String>[
+  'Water',
+  'Small snack',
+  'Bathroom',
+  'Flight or focus mode',
+  'Study materials',
+];
+
+class StudyPreparationItemDraft {
+  const StudyPreparationItemDraft({
+    required this.key,
+    required this.label,
+    required this.active,
+  });
+
+  factory StudyPreparationItemDraft.fromJson(Map<String, dynamic> json) {
+    _expectExactKeys(
+      json,
+      const {'key', 'label', 'active'},
+      'Study preparation item',
+    );
+    final key = _requiredExactText(json['key'], 'preparation item key', 36);
+    if (!isCanonicalStudyUuid(key)) {
+      throw const FormatException(
+        'Study preparation item key must be a UUID.',
+      );
+    }
+    return StudyPreparationItemDraft(
+      key: key,
+      label: _requiredExactText(
+        json['label'],
+        'preparation item label',
+        120,
+      ),
+      active: _requiredBool(json, 'active'),
+    );
+  }
+
+  final String key;
+  final String label;
+  final bool active;
+
+  Map<String, dynamic> toJson() => {
+        'key': key,
+        'label': label.trim(),
+        'active': active,
+      };
+
+  StudyPreparationItemDraft copyWith({
+    String? key,
+    String? label,
+    bool? active,
+  }) {
+    return StudyPreparationItemDraft(
+      key: key ?? this.key,
+      label: label ?? this.label,
+      active: active ?? this.active,
+    );
+  }
+}
+
+class StudyFocusRhythmDraft {
+  StudyFocusRhythmDraft({
+    required this.focusMinutes,
+    required this.recoveryMinutes,
+    required List<StudyPreparationItemDraft> preparationItems,
+  }) : preparationItems = List.unmodifiable(preparationItems);
+
+  factory StudyFocusRhythmDraft.defaults() {
+    return StudyFocusRhythmDraft(
+      focusMinutes: 45,
+      recoveryMinutes: 10,
+      preparationItems: studyPreparationSuggestions
+          .map(
+            (label) => StudyPreparationItemDraft(
+              key: generateSetupUuid(),
+              label: label,
+              active: true,
+            ),
+          )
+          .toList(growable: false),
+    );
+  }
+
+  factory StudyFocusRhythmDraft.fromJson(Map<String, dynamic> json) {
+    _expectExactKeys(
+      json,
+      const {'focus_minutes', 'recovery_minutes', 'preparation_items'},
+      'Study focus rhythm',
+    );
+    return StudyFocusRhythmDraft(
+      focusMinutes: _requiredExactInt(json['focus_minutes'], 'focus_minutes'),
+      recoveryMinutes:
+          _requiredExactInt(json['recovery_minutes'], 'recovery_minutes'),
+      preparationItems: _modelList(
+        json['preparation_items'],
+        modelName: 'Study preparation item',
+        fromJson: StudyPreparationItemDraft.fromJson,
+      ),
+    );
+  }
+
+  final int focusMinutes;
+  final int recoveryMinutes;
+  final List<StudyPreparationItemDraft> preparationItems;
+
+  Map<String, dynamic> toJson() => {
+        'focus_minutes': focusMinutes,
+        'recovery_minutes': recoveryMinutes,
+        'preparation_items': preparationItems
+            .map((item) => item.toJson())
+            .toList(growable: false),
+      };
+
+  StudyFocusRhythmDraft copyWith({
+    int? focusMinutes,
+    int? recoveryMinutes,
+    List<StudyPreparationItemDraft>? preparationItems,
+  }) {
+    return StudyFocusRhythmDraft(
+      focusMinutes: focusMinutes ?? this.focusMinutes,
+      recoveryMinutes: recoveryMinutes ?? this.recoveryMinutes,
+      preparationItems: preparationItems ?? this.preparationItems,
+    );
+  }
+}
+
+class StudySemesterDraft {
+  const StudySemesterDraft({
+    required this.name,
+    required this.startsOn,
+    required this.endsOn,
+  });
+
+  factory StudySemesterDraft.fromJson(Map<String, dynamic> json) {
+    _expectExactKeys(
+      json,
+      const {'name', 'starts_on', 'ends_on'},
+      'Study semester',
+    );
+    return StudySemesterDraft(
+      name: _requiredExactText(json['name'], 'semester name', 120),
+      startsOn: _requiredCalendarDate(json['starts_on'], 'semester starts_on'),
+      endsOn: _requiredCalendarDate(json['ends_on'], 'semester ends_on'),
+    );
+  }
+
+  final String name;
+  final DateTime? startsOn;
+  final DateTime? endsOn;
+
+  Map<String, dynamic> toJson() {
+    final start = startsOn;
+    final end = endsOn;
+    if (name.trim().isEmpty || start == null || end == null) {
+      throw StateError('Complete the current semester name and dates.');
+    }
+    return {
+      'name': name.trim(),
+      'starts_on': _calendarDate(start),
+      'ends_on': _calendarDate(end),
+    };
+  }
+
+  StudySemesterDraft copyWith({
+    String? name,
+    Object? startsOn = _unset,
+    Object? endsOn = _unset,
+  }) {
+    return StudySemesterDraft(
+      name: name ?? this.name,
+      startsOn:
+          identical(startsOn, _unset) ? this.startsOn : startsOn as DateTime?,
+      endsOn: identical(endsOn, _unset) ? this.endsOn : endsOn as DateTime?,
+    );
+  }
+}
+
+class StudyNextSemesterDraft {
+  StudyNextSemesterDraft({
+    required this.name,
+    required this.startsOn,
+    required this.endsOn,
+    required this.courseSelectionStartsOn,
+    required this.courseSelectionEndsOn,
+    required List<String> courseNames,
+    required this.courseSelectionCompleted,
+  }) : courseNames = List.unmodifiable(courseNames);
+
+  factory StudyNextSemesterDraft.fromJson(Map<String, dynamic> json) {
+    _expectExactKeys(
+      json,
+      const {
+        'name',
+        'starts_on',
+        'ends_on',
+        'course_selection_starts_on',
+        'course_selection_ends_on',
+        'course_names',
+        'course_selection_completed',
+      },
+      'Next Study semester',
+    );
+    return StudyNextSemesterDraft(
+      name: _requiredExactText(json['name'], 'next semester name', 120),
+      startsOn:
+          _requiredCalendarDate(json['starts_on'], 'next semester starts_on'),
+      endsOn: _requiredCalendarDate(json['ends_on'], 'next semester ends_on'),
+      courseSelectionStartsOn: _requiredCalendarDate(
+        json['course_selection_starts_on'],
+        'course selection starts_on',
+      ),
+      courseSelectionEndsOn: _requiredCalendarDate(
+        json['course_selection_ends_on'],
+        'course selection ends_on',
+      ),
+      courseNames: _exactTextList(
+        json['course_names'],
+        'course names',
+        maxItems: 12,
+        maxLength: 120,
+      ),
+      courseSelectionCompleted:
+          _requiredBool(json, 'course_selection_completed'),
+    );
+  }
+
+  final String name;
+  final DateTime? startsOn;
+  final DateTime? endsOn;
+  final DateTime? courseSelectionStartsOn;
+  final DateTime? courseSelectionEndsOn;
+  final List<String> courseNames;
+  final bool courseSelectionCompleted;
+
+  Map<String, dynamic> toJson() {
+    final start = startsOn;
+    final end = endsOn;
+    final selectionStart = courseSelectionStartsOn;
+    final selectionEnd = courseSelectionEndsOn;
+    if (name.trim().isEmpty ||
+        start == null ||
+        end == null ||
+        selectionStart == null ||
+        selectionEnd == null) {
+      throw StateError('Complete the next semester and selection dates.');
+    }
+    return {
+      'name': name.trim(),
+      'starts_on': _calendarDate(start),
+      'ends_on': _calendarDate(end),
+      'course_selection_starts_on': _calendarDate(selectionStart),
+      'course_selection_ends_on': _calendarDate(selectionEnd),
+      'course_names': courseNames.map((name) => name.trim()).toList(),
+      'course_selection_completed': courseSelectionCompleted,
+    };
+  }
+
+  StudyNextSemesterDraft copyWith({
+    String? name,
+    Object? startsOn = _unset,
+    Object? endsOn = _unset,
+    Object? courseSelectionStartsOn = _unset,
+    Object? courseSelectionEndsOn = _unset,
+    List<String>? courseNames,
+    bool? courseSelectionCompleted,
+  }) {
+    return StudyNextSemesterDraft(
+      name: name ?? this.name,
+      startsOn:
+          identical(startsOn, _unset) ? this.startsOn : startsOn as DateTime?,
+      endsOn: identical(endsOn, _unset) ? this.endsOn : endsOn as DateTime?,
+      courseSelectionStartsOn: identical(courseSelectionStartsOn, _unset)
+          ? this.courseSelectionStartsOn
+          : courseSelectionStartsOn as DateTime?,
+      courseSelectionEndsOn: identical(courseSelectionEndsOn, _unset)
+          ? this.courseSelectionEndsOn
+          : courseSelectionEndsOn as DateTime?,
+      courseNames: courseNames ?? this.courseNames,
+      courseSelectionCompleted:
+          courseSelectionCompleted ?? this.courseSelectionCompleted,
+    );
+  }
+}
+
+class StudySemesterPlanningDraft {
+  const StudySemesterPlanningDraft({
+    required this.currentSemester,
+    required this.nextSemester,
+  });
+
+  factory StudySemesterPlanningDraft.empty() {
+    return StudySemesterPlanningDraft(
+      currentSemester: const StudySemesterDraft(
+        name: '',
+        startsOn: null,
+        endsOn: null,
+      ),
+      nextSemester: StudyNextSemesterDraft(
+        name: '',
+        startsOn: null,
+        endsOn: null,
+        courseSelectionStartsOn: null,
+        courseSelectionEndsOn: null,
+        courseNames: const [],
+        courseSelectionCompleted: false,
+      ),
+    );
+  }
+
+  factory StudySemesterPlanningDraft.fromJson(Map<String, dynamic> json) {
+    _expectExactKeys(
+      json,
+      const {'current_semester', 'next_semester'},
+      'Study semester planning',
+    );
+    return StudySemesterPlanningDraft(
+      currentSemester: StudySemesterDraft.fromJson(
+        _requiredMap(json['current_semester'], 'current_semester'),
+      ),
+      nextSemester: StudyNextSemesterDraft.fromJson(
+        _requiredMap(json['next_semester'], 'next_semester'),
+      ),
+    );
+  }
+
+  final StudySemesterDraft currentSemester;
+  final StudyNextSemesterDraft nextSemester;
+
+  Map<String, dynamic> toJson() => {
+        'current_semester': currentSemester.toJson(),
+        'next_semester': nextSemester.toJson(),
+      };
+
+  StudySemesterPlanningDraft copyWith({
+    StudySemesterDraft? currentSemester,
+    StudyNextSemesterDraft? nextSemester,
+  }) {
+    return StudySemesterPlanningDraft(
+      currentSemester: currentSemester ?? this.currentSemester,
+      nextSemester: nextSemester ?? this.nextSemester,
+    );
+  }
+}
+
+class StudySetupDraft {
+  const StudySetupDraft({
+    required this.focusRhythm,
+    required this.semesterPlanning,
+  });
+
+  factory StudySetupDraft.fromJson(Map<String, dynamic> json) {
+    _expectExactKeys(
+      json,
+      const {'focus_rhythm', 'semester_planning'},
+      'Study setup',
+      optional: const {'focus_rhythm', 'semester_planning'},
+    );
+    if (json.isEmpty || json.values.any((value) => value == null)) {
+      throw const FormatException(
+        'Study setup must contain a non-null optional section.',
+      );
+    }
+    return StudySetupDraft(
+      focusRhythm: json.containsKey('focus_rhythm')
+          ? StudyFocusRhythmDraft.fromJson(
+              _requiredMap(json['focus_rhythm'], 'focus_rhythm'),
+            )
+          : null,
+      semesterPlanning: json.containsKey('semester_planning')
+          ? StudySemesterPlanningDraft.fromJson(
+              _requiredMap(json['semester_planning'], 'semester_planning'),
+            )
+          : null,
+    );
+  }
+
+  final StudyFocusRhythmDraft? focusRhythm;
+  final StudySemesterPlanningDraft? semesterPlanning;
+
+  bool get isEmpty => focusRhythm == null && semesterPlanning == null;
+
+  Map<String, dynamic> toJson() {
+    if (isEmpty) {
+      throw StateError('Study setup must contain an enabled section.');
+    }
+    return {
+      if (focusRhythm != null) 'focus_rhythm': focusRhythm!.toJson(),
+      if (semesterPlanning != null)
+        'semester_planning': semesterPlanning!.toJson(),
+    };
+  }
+
+  StudySetupDraft copyWith({
+    Object? focusRhythm = _unset,
+    Object? semesterPlanning = _unset,
+  }) {
+    return StudySetupDraft(
+      focusRhythm: identical(focusRhythm, _unset)
+          ? this.focusRhythm
+          : focusRhythm as StudyFocusRhythmDraft?,
+      semesterPlanning: identical(semesterPlanning, _unset)
+          ? this.semesterPlanning
+          : semesterPlanning as StudySemesterPlanningDraft?,
+    );
+  }
+}
+
 class IntakeGoalDraft {
   const IntakeGoalDraft({
     required this.key,
@@ -315,6 +723,7 @@ class IntakeResponseDraft {
     required this.fixedCommitments,
     required this.contextNote,
     required this.calendarConnectionIntent,
+    this.studySetup,
   });
 
   const IntakeResponseDraft.empty({this.displayName})
@@ -328,7 +737,8 @@ class IntakeResponseDraft {
         routines = const [],
         fixedCommitments = const [],
         contextNote = null,
-        calendarConnectionIntent = null;
+        calendarConnectionIntent = null,
+        studySetup = null;
 
   factory IntakeResponseDraft.fromJson(Map<String, dynamic> json) {
     return IntakeResponseDraft(
@@ -361,6 +771,11 @@ class IntakeResponseDraft {
       contextNote: _optionalString(json['context_note']),
       calendarConnectionIntent:
           _optionalString(json['calendar_connection_intent']),
+      studySetup: json.containsKey('study_setup')
+          ? StudySetupDraft.fromJson(
+              _requiredMap(json['study_setup'], 'study_setup'),
+            )
+          : null,
     );
   }
 
@@ -376,6 +791,7 @@ class IntakeResponseDraft {
   final List<IntakeCommitmentDraft> fixedCommitments;
   final String? contextNote;
   final String? calendarConnectionIntent;
+  final StudySetupDraft? studySetup;
 
   Map<String, dynamic> toJson() {
     if (!hasRequiredAnswers) {
@@ -405,6 +821,8 @@ class IntakeResponseDraft {
       if (calendarConnectionIntent != null &&
           calendarConnectionIntent!.trim().isNotEmpty)
         'calendar_connection_intent': calendarConnectionIntent!.trim(),
+      if (studySetup != null && !studySetup!.isEmpty)
+        'study_setup': studySetup!.toJson(),
     };
   }
 
@@ -463,6 +881,7 @@ class IntakeResponseDraft {
       fixedCommitments: normalizedCommitments,
       contextNote: _optionalString(contextNote),
       calendarConnectionIntent: _optionalString(calendarConnectionIntent),
+      studySetup: _normalizedStudySetup(studySetup),
     );
   }
 
@@ -525,6 +944,74 @@ class IntakeResponseDraft {
         !_allowedCalendarIntents.contains(draft.calendarConnectionIntent)) {
       errors.add('Choose a supported calendar connection intent.');
     }
+    final study = draft.studySetup;
+    final rhythm = study?.focusRhythm;
+    if (rhythm != null) {
+      if (rhythm.focusMinutes < 25 ||
+          rhythm.focusMinutes > 180 ||
+          rhythm.focusMinutes % 5 != 0) {
+        errors.add('Focus rhythm must be 25–180 minutes in five-minute steps.');
+      }
+      if (rhythm.recoveryMinutes < 5 ||
+          rhythm.recoveryMinutes > 60 ||
+          rhythm.recoveryMinutes % 5 != 0) {
+        errors.add('Recovery must be 5–60 minutes in five-minute steps.');
+      }
+      if (rhythm.preparationItems.length > 12) {
+        errors.add('Add no more than twelve preparation items.');
+      }
+      final ritualKeys = <String>{};
+      final ritualLabels = <String>{};
+      for (final item in rhythm.preparationItems) {
+        if (!isCanonicalStudyUuid(item.key) ||
+            !ritualKeys.add(item.key.toLowerCase())) {
+          errors.add('Preparation items need unique UUID keys.');
+          break;
+        }
+        final label = item.label.trim();
+        if (label.isEmpty ||
+            _textLength(label) > 120 ||
+            !ritualLabels.add(label.toLowerCase())) {
+          errors.add(
+            'Preparation item labels must be unique and 120 characters or fewer.',
+          );
+          break;
+        }
+      }
+    }
+    final semesters = study?.semesterPlanning;
+    if (semesters != null) {
+      final current = semesters.currentSemester;
+      final next = semesters.nextSemester;
+      if (current.name.trim().isEmpty ||
+          next.name.trim().isEmpty ||
+          _textLength(current.name.trim()) > 120 ||
+          _textLength(next.name.trim()) > 120 ||
+          current.startsOn == null ||
+          current.endsOn == null ||
+          next.startsOn == null ||
+          next.endsOn == null ||
+          next.courseSelectionStartsOn == null ||
+          next.courseSelectionEndsOn == null) {
+        errors.add('Complete both semesters and the course selection window.');
+      } else if (current.endsOn!.isBefore(current.startsOn!) ||
+          !next.startsOn!.isAfter(current.endsOn!) ||
+          next.endsOn!.isBefore(next.startsOn!) ||
+          next.courseSelectionEndsOn!.isBefore(next.courseSelectionStartsOn!)) {
+        errors.add('Semester and course selection dates are out of order.');
+      }
+      if (next.courseNames.length > 12 ||
+          next.courseNames.any(
+            (name) => name.trim().isEmpty || _textLength(name.trim()) > 120,
+          ) ||
+          next.courseNames
+                  .map((name) => name.trim().toLowerCase())
+                  .toSet()
+                  .length !=
+              next.courseNames.length) {
+        errors.add('Course names must be unique and limited to twelve.');
+      }
+    }
     for (final goal in draft.goals) {
       if (_textLength(goal.title) > 200) {
         errors.add('Goal titles must be 200 characters or fewer.');
@@ -550,6 +1037,9 @@ class IntakeResponseDraft {
       ...draft.goals.map((goal) => goal.key),
       ...draft.routines.map((routine) => routine.key),
       ...draft.fixedCommitments.map((commitment) => commitment.key),
+      ...?draft.studySetup?.focusRhythm?.preparationItems.map(
+        (item) => item.key,
+      ),
     ];
     if (allKeys.map((key) => key.toLowerCase()).toSet().length !=
         allKeys.length) {
@@ -638,6 +1128,7 @@ class IntakeResponseDraft {
     List<IntakeCommitmentDraft>? fixedCommitments,
     Object? contextNote = _unset,
     Object? calendarConnectionIntent = _unset,
+    Object? studySetup = _unset,
   }) {
     return IntakeResponseDraft(
       displayName: identical(displayName, _unset)
@@ -666,6 +1157,9 @@ class IntakeResponseDraft {
       calendarConnectionIntent: identical(calendarConnectionIntent, _unset)
           ? this.calendarConnectionIntent
           : calendarConnectionIntent as String?,
+      studySetup: identical(studySetup, _unset)
+          ? this.studySetup
+          : studySetup as StudySetupDraft?,
     );
   }
 }
@@ -871,6 +1365,18 @@ IntakeResponseDraft repairSetupItemKeys(IntakeResponseDraft draft) {
     return generated;
   }
 
+  String repairedStudyKey(String key) {
+    final trimmed = key.trim();
+    if (isCanonicalStudyUuid(trimmed) && seen.add(trimmed.toLowerCase())) {
+      return trimmed;
+    }
+    late String generated;
+    do {
+      generated = generateSetupUuid();
+    } while (!seen.add(generated));
+    return generated;
+  }
+
   return draft.copyWith(
     goals: draft.goals
         .map((goal) => goal.copyWith(key: repairedKey(goal.key)))
@@ -885,6 +1391,47 @@ IntakeResponseDraft repairSetupItemKeys(IntakeResponseDraft draft) {
           ),
         )
         .toList(growable: false),
+    studySetup: draft.studySetup?.focusRhythm == null
+        ? draft.studySetup
+        : draft.studySetup!.copyWith(
+            focusRhythm: draft.studySetup!.focusRhythm!.copyWith(
+              preparationItems: draft.studySetup!.focusRhythm!.preparationItems
+                  .map(
+                    (item) => item.copyWith(key: repairedStudyKey(item.key)),
+                  )
+                  .toList(growable: false),
+            ),
+          ),
+  );
+}
+
+StudySetupDraft? _normalizedStudySetup(StudySetupDraft? value) {
+  if (value == null || value.isEmpty) {
+    return null;
+  }
+  final focus = value.focusRhythm;
+  final semesters = value.semesterPlanning;
+  return value.copyWith(
+    focusRhythm: focus?.copyWith(
+      preparationItems: focus.preparationItems
+          .where((item) => item.label.trim().isNotEmpty)
+          .map(
+            (item) => item.copyWith(
+              key: item.key.trim(),
+              label: item.label.trim(),
+            ),
+          )
+          .toList(growable: false),
+    ),
+    semesterPlanning: semesters?.copyWith(
+      currentSemester: semesters.currentSemester.copyWith(
+        name: semesters.currentSemester.name.trim(),
+      ),
+      nextSemester: semesters.nextSemester.copyWith(
+        name: semesters.nextSemester.name.trim(),
+        courseNames: _cleanStringList(semesters.nextSemester.courseNames),
+      ),
+    ),
   );
 }
 
@@ -892,6 +1439,13 @@ bool isSetupUuid(String value) {
   return RegExp(
     r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-'
     r'[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
+  ).hasMatch(value);
+}
+
+bool isCanonicalStudyUuid(String value) {
+  return RegExp(
+    r'^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-'
+    r'[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
   ).hasMatch(value);
 }
 
@@ -945,6 +1499,58 @@ int? _intValue(Object? value, {required String field}) {
     return value.toInt();
   }
   throw FormatException('Expected an integer $field.');
+}
+
+int _requiredExactInt(Object? value, String field) {
+  if (value is! int) {
+    throw FormatException('Expected an exact integer $field.');
+  }
+  return value;
+}
+
+String _requiredExactText(Object? value, String field, int maxLength) {
+  if (value is! String ||
+      value.isEmpty ||
+      value != value.trim() ||
+      _textLength(value) > maxLength) {
+    throw FormatException('Invalid exact text $field.');
+  }
+  return value;
+}
+
+DateTime _requiredCalendarDate(Object? value, String field) {
+  final parsed = _optionalCalendarDate(value);
+  if (parsed == null) {
+    throw FormatException('Missing calendar date $field.');
+  }
+  return parsed;
+}
+
+List<String> _exactTextList(
+  Object? value,
+  String field, {
+  required int maxItems,
+  required int maxLength,
+}) {
+  if (value is! List || value.length > maxItems) {
+    throw FormatException('Invalid list $field.');
+  }
+  return value
+      .map((item) => _requiredExactText(item, field, maxLength))
+      .toList(growable: false);
+}
+
+void _expectExactKeys(
+  Map<String, dynamic> json,
+  Set<String> allowed,
+  String label, {
+  Set<String> optional = const {},
+}) {
+  final keys = json.keys.toSet();
+  final required = allowed.difference(optional);
+  if (!allowed.containsAll(keys) || !keys.containsAll(required)) {
+    throw FormatException('$label has an invalid field set.');
+  }
 }
 
 DateTime? _optionalDateTime(Object? value) {

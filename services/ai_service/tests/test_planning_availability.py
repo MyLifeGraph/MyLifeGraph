@@ -32,6 +32,95 @@ def test_task_allocation_splits_on_five_minutes_and_reports_exact_remainder() ->
     assert blocks[0].starts_at.date() != blocks[1].starts_at.date()
 
 
+def test_study_blocks_reserve_recovery_without_charging_focus_budget() -> None:
+    zone = ZoneInfo("UTC")
+    blocks = allocate_task_intervals(
+        starts_on=date(2026, 7, 20),
+        ends_on=date(2026, 7, 20),
+        total_minutes=90,
+        preferred_session_minutes=45,
+        max_daily_minutes=90,
+        zone=zone,
+        local_now=datetime(2026, 7, 20, 7, tzinfo=UTC),
+        energy_window="morning",
+        busy_sources=BusySources(),
+        account_daily_budget_minutes=90,
+        duration_increment_minutes=5,
+        recovery_minutes=10,
+        exact_session_blocks=True,
+    )
+
+    assert [block.minutes for block in blocks] == [45, 45]
+    assert all(block.recovery_minutes == 10 for block in blocks)
+    assert all(
+        block.reserved_ends_at == block.ends_at + timedelta(minutes=10)
+        for block in blocks
+    )
+    assert blocks[1].starts_at == blocks[0].reserved_ends_at
+    assert sum(block.minutes for block in blocks) == 90
+
+
+def test_study_block_never_uses_a_gap_that_cannot_hold_full_recovery() -> None:
+    zone = ZoneInfo("UTC")
+    blocks = allocate_task_intervals(
+        starts_on=date(2026, 7, 20),
+        ends_on=date(2026, 7, 20),
+        total_minutes=45,
+        preferred_session_minutes=45,
+        max_daily_minutes=45,
+        zone=zone,
+        local_now=datetime(2026, 7, 20, 7, tzinfo=UTC),
+        energy_window="morning",
+        busy_sources=BusySources(
+            recurring_commitments=[
+                    {
+                        "weekday": 1,
+                        "starts_at": "08:50:00",
+                        "ends_at": "21:00:00",
+                    },
+            ],
+        ),
+        duration_increment_minutes=5,
+        recovery_minutes=10,
+        exact_session_blocks=True,
+    )
+
+    assert blocks == []
+
+
+def test_study_remainder_is_not_backfilled_before_full_blocks() -> None:
+    zone = ZoneInfo("UTC")
+    blocks = allocate_task_intervals(
+        starts_on=date(2026, 7, 20),
+        ends_on=date(2026, 7, 22),
+        total_minutes=120,
+        preferred_session_minutes=45,
+        max_daily_minutes=120,
+        zone=zone,
+        local_now=datetime(2026, 7, 20, 7, tzinfo=UTC),
+        energy_window="morning",
+        busy_sources=BusySources(
+            recurring_commitments=[
+                {
+                    "weekday": 1,
+                    "starts_at": "08:40:00",
+                    "ends_at": "13:00:00",
+                },
+            ],
+        ),
+        duration_increment_minutes=5,
+        recovery_minutes=10,
+        exact_session_blocks=True,
+    )
+
+    assert [block.minutes for block in blocks] == [45, 45, 30]
+    assert blocks[-1].starts_at.date() == date(2026, 7, 22)
+    assert blocks[-1].starts_at >= blocks[-2].reserved_ends_at
+    assert all(
+        block.minutes == 45 for block in blocks[:-1]
+    )
+
+
 def test_all_busy_sources_are_authoritative_and_never_overlap() -> None:
     zone = ZoneInfo("UTC")
     busy = BusySources(

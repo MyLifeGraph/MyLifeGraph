@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta
 from typing import Annotated, Any, Literal, Self
 from uuid import UUID
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -92,6 +92,7 @@ class PlannerTaskTarget(BaseModel):
     estimated_minutes: int | None = Field(default=None, ge=5, le=480)
     deadline_at: datetime | None = Field(default=None, strict=False)
     preferred_session_minutes: int | None = Field(default=None, ge=5, le=240)
+    use_study_rhythm: bool = False
 
     @model_validator(mode="before")
     @classmethod
@@ -210,12 +211,20 @@ class PlannerTaskBlock(BaseModel):
     ends_at: datetime
     local_date: date
     planned_minutes: int = Field(ge=5, le=240)
+    recovery_minutes: int = Field(ge=0, le=60)
+    reserved_ends_at: datetime
     state: Literal["proposed", "active", "released", "superseded"]
 
     @model_validator(mode="after")
     def validate_block(self) -> Self:
         _positive_interval(self.starts_at, self.ends_at, "task block")
-        if self.planned_minutes % 5 != 0:
+        _aware_or_none(self.reserved_ends_at, "task recovery")
+        if (
+            self.planned_minutes % 5 != 0
+            or self.recovery_minutes % 5 != 0
+            or self.reserved_ends_at - self.ends_at
+            != timedelta(minutes=self.recovery_minutes)
+        ):
             raise ValueError("task block must use five-minute increments")
         return self
 
@@ -260,6 +269,8 @@ class PlannerActionRevision(BaseModel):
     planning_start_on: date
     planning_fingerprint: str = Field(pattern=r"^[0-9a-f]{64}$")
     calendar_import_id: UUID | None
+    study_setup_revision: int | None = Field(default=None, ge=1)
+    recovery_minutes: int = Field(ge=0, le=60)
     planned_minutes: int = Field(ge=0)
     unscheduled_minutes: int = Field(ge=0)
     task_blocks: list[PlannerTaskBlock] = Field(default_factory=list, max_length=1_500)
@@ -295,9 +306,35 @@ class PlannerActionRevision(BaseModel):
                 block.planned_minutes for block in self.task_blocks
             ):
                 raise ValueError("task revision planned-minute total is invalid")
+            if self.target.use_study_rhythm:
+                if (
+                    self.study_setup_revision is None
+                    or self.recovery_minutes < 5
+                    or self.recovery_minutes % 5 != 0
+                    or self.target.preferred_session_minutes is None
+                    or any(
+                        block.recovery_minutes != self.recovery_minutes
+                        or block.planned_minutes
+                        > self.target.preferred_session_minutes
+                        for block in self.task_blocks
+                    )
+                ):
+                    raise ValueError("Study Task revision is inconsistent")
+                short = [
+                    block
+                    for block in self.task_blocks
+                    if block.planned_minutes
+                    < self.target.preferred_session_minutes
+                ]
+                if short and short != self.task_blocks[-1:]:
+                    raise ValueError("only the final Study Task block may be short")
+            elif self.study_setup_revision is not None or self.recovery_minutes != 0:
+                raise ValueError("ordinary Task revision cannot reserve recovery")
         else:
             if self.task_blocks:
                 raise ValueError("habit revision cannot contain task blocks")
+            if self.study_setup_revision is not None or self.recovery_minutes != 0:
+                raise ValueError("habit revision cannot use Study rhythm")
             if self.planned_minutes != sum(
                 slot.duration_minutes for slot in self.habit_slots
             ):
@@ -482,6 +519,8 @@ class PlannerDayItem(BaseModel):
     source_id: UUID
     starts_at: datetime | None
     ends_at: datetime | None
+    recovery_minutes: int = Field(ge=0, le=60)
+    reserved_ends_at: datetime | None
     all_day: bool
     state: str | None = Field(default=None, max_length=40)
 
@@ -489,12 +528,28 @@ class PlannerDayItem(BaseModel):
     def validate_item(self) -> Self:
         _trimmed(self.title, "planner day item title")
         if self.all_day:
-            if self.starts_at is not None or self.ends_at is not None:
+            if (
+                self.starts_at is not None
+                or self.ends_at is not None
+                or self.reserved_ends_at is not None
+                or self.recovery_minutes != 0
+            ):
                 raise ValueError("all-day planner item cannot carry timestamps")
         elif self.starts_at is None or self.ends_at is None:
             raise ValueError("timed planner item requires timestamps")
         else:
             _positive_interval(self.starts_at, self.ends_at, "planner day item")
+            if self.reserved_ends_at is None:
+                raise ValueError("timed planner item requires reserved_ends_at")
+            if self.recovery_minutes == 0:
+                if self.reserved_ends_at != self.ends_at:
+                    raise ValueError("ordinary planner item reservation is invalid")
+            elif (
+                self.recovery_minutes % 5 != 0
+                or self.reserved_ends_at - self.ends_at
+                != timedelta(minutes=self.recovery_minutes)
+            ):
+                raise ValueError("planner recovery reservation is invalid")
         return self
 
 
@@ -509,7 +564,15 @@ class PlannerAttentionItem(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
 
     id: str = Field(min_length=1, max_length=200)
-    kind: Literal["conflict", "unscheduled", "stale_preview"]
+    kind: Literal[
+        "conflict",
+        "unscheduled",
+        "stale_preview",
+        "study_rhythm_changed",
+        "course_selection_open",
+        "course_selection_overdue",
+    ]
+    target: Literal["plan", "study_setup"]
     title: str = Field(min_length=1, max_length=160)
     detail: str = Field(min_length=1, max_length=240)
     plan_id: UUID | None
@@ -545,6 +608,7 @@ class PlannerUnscheduledItem(BaseModel):
     estimated_minutes: int | None = Field(default=None, ge=5, le=480)
     deadline_at: datetime | None
     preferred_session_minutes: int | None = Field(default=None, ge=5, le=240)
+    use_study_rhythm: bool
     cadence: PlannerHabitCadence | None
     duration_minutes: int | None = Field(default=None, ge=5, le=240)
 
@@ -567,7 +631,7 @@ class PlannerUnscheduledItem(BaseModel):
                 or self.duration_minutes is not None
             ):
                 raise ValueError("unscheduled task summary is inconsistent")
-        elif any(
+        elif self.use_study_rhythm or any(
             value is not None
             for value in (
                 self.priority,

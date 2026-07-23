@@ -14,8 +14,8 @@ aktuell nicht implementiert.
 MyLifeGraph soll explizite Angaben und beobachtbare Handlungen in einen klaren,
 ehrlichen Tagesüberblick und vorsichtige regelbasierte Unterstützung übersetzen:
 
-1. **Setup** beschreibt längerfristigen Kontext: Ziele, Präferenzen, Routinen
-   und feste Wochenblöcke.
+1. **Setup** beschreibt längerfristigen Kontext: Ziele, Präferenzen, Routinen,
+   feste Wochenblöcke und optional Lernrhythmus sowie Semesterplanung.
 2. **Morning und Evening check-ins** beschreiben den aktuellen Zustand.
 3. **Tasks, Habit outcomes und Focus sessions** zeigen, was tatsächlich getan
    wurde.
@@ -228,7 +228,7 @@ Dashboards:
 | Feature | Wie es funktioniert | Verwendete Daten | Geschriebene Daten / LLM |
 | --- | --- | --- | --- |
 | **Auth und Account** | E-Mail/Passwort, Recovery und optional konfiguriertes Google OAuth über Supabase Auth | Auth-Identität und Profil | `profiles`; kein LLM |
-| **Setup** | erforderliche Auswahlen plus optionale Details; wöchentliche Termine unterstützen optionale Semestergrenzen und Duplizieren auf weitere Wochentage; atomar, revisioniert und retry-sicher | Fokusbereiche, Tagesstruktur, Energiefenster, Coaching-Stil, Reminder-Präferenz, optionale Ziele/Routinen/Commitments; kein Kalenderzwang | `intake_responses`, `goals`, `habits`, `schedule_items`, `memory_entries`, `notification_preferences`, Onboarding-Snapshot; kein LLM |
+| **Setup** | erforderliche Auswahlen plus optionale Details; Focus setup speichert Rhythmus und Start-Ritual, Semester planning genau ein aktuelles/nächstes Semester; wöchentliche Termine unterstützen optionale Semestergrenzen und Duplizieren auf weitere Wochentage; atomar, revisioniert und retry-sicher | Fokusbereiche, Tagesstruktur, Energiefenster, Coaching-Stil, Reminder-Präferenz, optionale Ziele/Routinen/Commitments, Focus/Pause, Ritualpunkte und Kursnamen; kein Kalenderzwang | `intake_responses`, `study_setup_profiles`, `goals`, `habits`, `schedule_items`, `memory_entries`, `notification_preferences`, Onboarding-Snapshot; kein LLM |
 | **Morning check-in** | kurze Eingabe für Schlafdauer, separat geschätzte Schlafqualität (1–10), aktuelle Energie und Tagesform | explizite Auswahl des Nutzers; Qualität wird nicht aus der Dauer abgeleitet | Teil des lokalen Tages in `daily_logs`; Qualität bleibt strukturierte Capture-Metadaten und wird auf bestehende Morning-Events gespiegelt, kein fünftes Event und kein LLM |
 | **Evening check-in** | zwei kurze Schritte für Mood, Energie, Stress, eine Primary Friction (inklusive `No major friction`), bis zu zwei optionale `Also present`-Frictions und optionale Reflexion | explizite Auswahl/Text; bei Stress 5–10 zusätzlich Quelle und Kontrollierbarkeit; nur die Primary Friction beeinflusst den Daily Mode | anderer Teil desselben `daily_logs`-Tages, dazu `behavioral_events`; strukturierte Frictions können in den begrenzten Coach-Kontext gelangen, freie Reflexions-/Blockertexte nicht |
 | **Daily State / Snapshot** | strikte Regeln betrachten einen festen Sieben-Tage-Kontext und klassifizieren Zustand, Risiken und Gründe; sehr schlechte Schlafqualität kann trotz ausreichender Dauer Recovery auslösen, mäßig schlechte Qualität verhindert Push; Action-Facts werden additiv zusammengefasst, verändern aber den Daily-State-Klassifikator nicht | validierte Check-in-Signale für Daily State; zusätzlich Tasks, Goals, Habits, Outcomes, Focus, Schedule und Memories für die übrige Snapshot-Zusammenfassung | `user_state_snapshots`; kein LLM und kein gelernter persönlicher Basiswert |
@@ -236,12 +236,12 @@ Dashboards:
 | **Daily Briefing** | wählt aus zulässigen Kandidaten eine primäre und bis zu zwei unterstützende Aktionen | aktueller Snapshot, Recommendations, Actions, Dringlichkeit, Recovery-Schutz und passendes Feedback | `daily_briefings`; regelbasiert, nicht AI-geschrieben |
 | **Tasks** | endliche Aktionen mit Status und optionaler Deadline/Schätzung | direkte Nutzereingabe oder ein vom bestätigten Preparation Plan verwalteter Task | `tasks`; kein LLM |
 | **Habits** | wiederkehrende Ziele mit daily-, weekday- oder weekly-target-Cadence | Definition plus explizites completed/skipped/undo pro lokalem Datum | `habits`, `habit_logs`; kein LLM |
-| **Focus** | echter Timer, optional mit genau einem Task oder Habit verknüpft | gewählte Dauer und gemessene verstrichene Zeit | `focus_sessions`; kein LLM |
-| **Planner** | deterministische Vorschau aus expliziter Dauer/Deadline/Session beziehungsweise Habit-Dauer/Cadence; freie Zeit berücksichtigt bestätigte Belegung; bei fehlender sichtbarer Verfügbarkeitsquelle warnt die UI vor automatischer Planung | Task/Habit-Eingaben, primär Setup/manual commitments, Planner/Preparation reservations, optional consented aktueller Import | Planner preferences/plans/revisions/blocks/slots/commitments; erst Confirm erstellt/ändert Ziel und Reservierungen; kein LLM, Calendar-Write oder Auto-Replan |
+| **Focus** | echter Timer, optional mit genau einem Task oder Habit verknüpft; gespeicherte Ritualpunkte werden vor Start lokal bestätigt/übersprungen, nach Abschluss kann ein lokaler Recovery-Countdown laufen | geplante Blockdauer oder Study Default, einmalig änderbare Dauer und gemessene verstrichene Zeit; Ritual-Häkchen werden nicht gespeichert | `focus_sessions` inklusive verwendeter Recovery-Minuten; kein eigener Pausendatensatz und kein LLM |
+| **Planner** | deterministische Vorschau aus expliziter Dauer/Deadline/Session beziehungsweise Habit-Dauer/Cadence; normale Tasks können explizit den Study Rhythm verwenden, Habits nicht; freie Zeit berücksichtigt bestätigte Belegung einschließlich Recovery; bei fehlender sichtbarer Verfügbarkeitsquelle warnt die UI vor automatischer Planung | Task/Habit-Eingaben, primär Setup/manual commitments, Study-Revision, Planner/Preparation reservations, optional consented aktueller Import | Planner preferences/plans/revisions/blocks/slots/commitments; erst Confirm erstellt/ändert Ziel und Reservierungen; kein LLM, Calendar-Write oder Auto-Replan |
 | **Decision feedback** | Reaktion auf eine konkrete Briefing-Aktion | Aktion, Kontext und Feedback-Typ | append-only `decision_feedback`; beeinflusst begrenzt spätere Rankings, führt die Aktion aber nicht aus |
 | **Weekly review** | deterministische Fakten für die letzte abgeschlossene lokale ISO-Woche | Tasks, Habit-Möglichkeiten/Outcomes, Focus, Daily State und Feedback | `weekly_reviews`; kein LLM; Änderungen nur nach Bestätigung |
 | **Calendar import** | ein bewusst gewähltes UTF-8-`.ics`-File wird begrenzt und read-only importiert | explizite Einwilligung und die gewählte Datei | `calendar_connections`, `calendar_imports`, `calendar_events`; nie an das LLM und nie in `schedule_items` kopiert |
-| **Preparation plans** | Nutzer schätzt Gesamtaufwand und Vorleistung; Regeln teilen Restzeit in überprüfbare Datumsblöcke | Deadline, eigene Schätzung, bevorzugte Blockgröße, Tageslimit, Puffer, Setup-Commitments und optional aktuelle importierte Busy Times | `deadline_plans`, Revisionen, Blocks und nach Bestätigung ein verwalteter `task`; kein LLM |
+| **Preparation plans** | Nutzer schätzt Gesamtaufwand und Vorleistung; Regeln teilen Restzeit in überprüfbare Datumsblöcke und verwenden einen konfigurierten Study Rhythm verbindlich | Deadline, eigene Schätzung, Study-Revision beziehungsweise sonst bevorzugte Blockgröße, Tageslimit, Puffer, Setup-Commitments und optional aktuelle importierte Busy Times | `deadline_plans`, Revisionen, Focus-/Recovery-Blocks und nach Bestätigung ein verwalteter `task`; Recovery ist Belegung, aber keine Lern-/Budgetminute; kein LLM |
 | **Insights** | Flutter berechnet Korrelationen und eine vorsichtige Beobachtung | vorhandene Tages-, Task-, Schedule-, Plan-, Habit- und Focus-Daten | normalerweise nur Anzeige; kein LLM und keine automatische Produktänderung |
 | **Inbox lifecycle** | fällige gespeicherte Hinweise lesen, unread/read setzen oder dismissen | owner-scoped `notifications` | Lifecycle-Zeitstempel plus Retry-Ledger; kein LLM |
 | **In-app reminders** | nach separater Einwilligung werden höchstens zwei Kandidaten mit fixer Copy regelbasiert erzeugt und bei offener App höchstens einmal als Banner gezeigt | aktueller Recovery-/Briefing-Zustand oder aktuelles Weekly Review, Kategorien, Quiet Hours und Tageslimit | `notification_preferences`, `notifications` und Delivery-Provenance; kein Push, kein Background und kein LLM |
@@ -377,6 +377,12 @@ erledigt, bevorzugte 50-Minuten-Blöcke.
   **Preparation Blocks** und genau einen stabilen verwalteten Task.
 - Replanning erzeugt wieder nur eine staged Revision. Die bisherigen Blöcke
   bleiben aktiv, bis die neue Revision bestätigt wird.
+- Ist ein Study Rhythm gespeichert, sind normale Blöcke exakt so lang; nur der
+  letzte Restblock darf kürzer sein. Die vollständige Recovery-Zeit bleibt
+  reserviert, zählt aber nicht zu Aufwand, Fortschritt oder Tagesbudget.
+- Eine Änderung des Study Rhythm macht eine offene Preview veraltet und zeigt
+  den aktiven Plan unter `Needs attention`; sie verschiebt nie automatisch
+  einen Block.
 - Nur nach Aktivierung abgeschlossene Focus-Sessions am verwalteten Task zählen
   als gemessener Fortschritt. Sie erledigen Plan, Block oder Task nie
   automatisch.
@@ -394,6 +400,14 @@ Eine **Focus Session** misst einen tatsächlichen Ausführungsblock:
 - Abschluss als `completed` oder `abandoned`;
 - `actual_minutes` entstehen aus verstrichener Zeit, nicht aus der Planung;
 - Abschluss verändert den verknüpften Task oder das Habit nicht automatisch.
+- Ein geplanter Block bestimmt zuerst die Dauer, sonst gelten Study Default,
+  letzte Session und schließlich 25 Minuten; eine manuelle Session kann die
+  Dauer einmalig abweichend wählen.
+- Aktive Setup-Ritualpunkte werden als `Ready`/`Not needed today` oder über
+  `Skip remaining and start` erledigt. Diese Auswahl wird nicht gespeichert.
+- Nur eine abgeschlossene Session startet den überspringbaren lokalen
+  Recovery-Countdown. Die Pausenlänge steht in der Session-Metadatenstruktur,
+  erzeugt aber weder Historie noch Fortschritt.
 
 ### Check-in, Daily Log und Behavioral Event
 
@@ -626,7 +640,7 @@ erzwingen sichtbar höhere Unsicherheit.
 | Datenbereich | Zentrale Tabellen bzw. Speicherung | Hauptnutzer |
 | --- | --- | --- |
 | Identität und Profil | Supabase Auth, `profiles` | Routing, lokale Datumslogik, Account controls |
-| Setup | `intake_responses`, `goals`, `habits`, `schedule_items`, `notification_preferences`, `memory_entries`, Onboarding-`user_state_snapshots` | Setup, Snapshots, Briefings, Coach |
+| Setup | `intake_responses`, `study_setup_profiles`, `goals`, `habits`, `schedule_items`, `notification_preferences`, `memory_entries`, Onboarding-`user_state_snapshots` | Setup, Focus Defaults/Ritual, Planner/Preparation, Snapshots, Briefings, Coach |
 | Tägliche Erfassung | `daily_logs`, `behavioral_events` | Today, Daily State, Insights |
 | Ausführung | `tasks`, `habit_logs`, `focus_sessions` | Today, Focus/Habits, Snapshot, Weekly Review, Insights |
 | Tagesüberblick | `daily_logs`, `tasks`, `habits`, `habit_logs`, `schedule_items`, aktive Planner-/Preparation-Blöcke, feste Planner-Commitments, aktueller Calendar Import und `focus_sessions` | `today-overview-v2` und Today; V1 bleibt kompatibel |
@@ -724,12 +738,14 @@ Ein sinnvoller manueller Rundgang ist:
 2. `More` öffnen und Preparation Workload, Weekly Review, gespeicherte Signale,
    Recommendations, vorhandene Feedback-History und Full Week prüfen.
 3. Unter `Quick actions` die aktive Focus Session fortsetzen oder beenden und
-   Habit outcomes ausführen.
+   Habit outcomes ausführen; bei konfiguriertem Study Setup auch Checkliste und
+   lokalen Recovery-Countdown prüfen.
 4. `Weekly review` öffnen, Fakten und die Änderungsautorität eines Vorschlags
    unterscheiden.
 5. `Planner` öffnen: alle fünf Create-Flows, Needs attention, sieben Tage,
    Unscheduled und aktive Preparation prüfen; einen Task/Habit-Preview erst
-   nach bewusster Bestätigung reservieren.
+   nach bewusster Bestätigung reservieren; `Use study rhythm` nur beim Task und
+   offene/überfällige Kurswahl als Link zurück zu Settings prüfen.
 6. Unter `Settings → Calendar import` read-only Events und den Einstieg `Plan
    preparation` ansehen.
 7. In `Insights` Observation, Datenfenster, Signalquellen und Advanced-
@@ -768,6 +784,8 @@ Es ist kein Befehl für eine Remote-Datenbank.
   Today-Task/Habit-Auswahl, Teilfehler und Guest-Grenze.
 - `docs/planner-v1-contract.md`: zentrale Planner-Navigation, Availability,
   Task-/Habit-Previews, Commitments und Today V2.
+- `docs/study-setup-v1-contract.md`: Focus Rhythm, Start-Ritual, Recovery-
+  Reservierungen, Semester und Kurswahlfenster.
 - `docs/phase-3-executable-actions-contract.md`: Tasks, Habits, Focus und
   ausführbare Actions.
 - `docs/phase-8-weekly-review-contract.md`: Wochenfakten und bestätigte

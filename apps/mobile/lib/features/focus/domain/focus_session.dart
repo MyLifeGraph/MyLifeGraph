@@ -41,6 +41,7 @@ class FocusSession {
     required this.status,
     required this.startedAt,
     required this.plannedMinutes,
+    this.recoveryMinutes = 0,
     required this.updatedAt,
     this.entryDate,
     this.endedAt,
@@ -60,6 +61,7 @@ class FocusSession {
     final startedAt = DateTime.tryParse(row['started_at'] as String);
     final updatedAt = DateTime.tryParse(row['updated_at'] as String);
     final entryDate = _optionalEntryDate(row['metadata']);
+    final recoveryMinutes = _optionalRecoveryMinutes(row['metadata']);
     final plannedMinutes = _integer(row['planned_minutes']);
     final endedAt = _optionalTimestamp(row['ended_at']);
     final actualMinutes = _optionalInteger(row['actual_minutes']);
@@ -96,6 +98,7 @@ class FocusSession {
       startedAt: startedAt,
       endedAt: endedAt,
       plannedMinutes: plannedMinutes,
+      recoveryMinutes: recoveryMinutes,
       actualMinutes: actualMinutes,
       label: _optionalText(row['label']),
       targetKind: taskId != null
@@ -114,6 +117,7 @@ class FocusSession {
   final DateTime startedAt;
   final DateTime? endedAt;
   final int plannedMinutes;
+  final int recoveryMinutes;
   final int? actualMinutes;
   final String? label;
   final FocusTargetKind? targetKind;
@@ -184,6 +188,22 @@ class FocusSession {
     return value;
   }
 
+  static int _optionalRecoveryMinutes(Object? metadata) {
+    if (metadata is! Map || !metadata.containsKey('recovery_minutes')) {
+      return 0;
+    }
+    final rawValue = metadata['recovery_minutes'];
+    if (rawValue is! int ||
+        rawValue < 5 ||
+        rawValue > 60 ||
+        rawValue.remainder(5) != 0) {
+      throw const FocusCommandException(
+        'Focus recovery duration is invalid.',
+      );
+    }
+    return rawValue;
+  }
+
   static String? _optionalText(Object? value) {
     if (value == null) {
       return null;
@@ -223,6 +243,7 @@ class FocusTargetOption {
 class FocusStartDraft {
   FocusStartDraft({
     required this.plannedMinutes,
+    this.recoveryMinutes = 0,
     this.targetKind,
     String? targetId,
     String? label,
@@ -233,12 +254,21 @@ class FocusStartDraft {
         'Focus duration must be between 5 and 240 minutes.',
       );
     }
+    if (recoveryMinutes != 0 &&
+        (recoveryMinutes < 5 ||
+            recoveryMinutes > 60 ||
+            recoveryMinutes.remainder(5) != 0)) {
+      throw const FocusCommandException(
+        'Recovery duration must be zero or 5–60 minutes in five-minute steps.',
+      );
+    }
     if ((targetKind == null) != (this.targetId == null)) {
       throw const FocusCommandException('Focus target is invalid.');
     }
   }
 
   final int plannedMinutes;
+  final int recoveryMinutes;
   final FocusTargetKind? targetKind;
   final String? targetId;
   final String? label;
@@ -267,6 +297,120 @@ class FocusStartDraft {
     return id;
   }
 }
+
+class FocusPreparationItem {
+  const FocusPreparationItem({
+    required this.key,
+    required this.label,
+    required this.active,
+  });
+
+  factory FocusPreparationItem.fromJson(Map<String, dynamic> json) {
+    if (json.keys
+            .toSet()
+            .difference(const {'key', 'label', 'active'}).isNotEmpty ||
+        !json.keys.toSet().containsAll(const {'key', 'label', 'active'})) {
+      throw const FocusCommandException(
+        'Study preparation item response is invalid.',
+      );
+    }
+    final key = json['key'];
+    final label = json['label'];
+    final active = json['active'];
+    if (key is! String ||
+        !_uuidPattern.hasMatch(key) ||
+        label is! String ||
+        label.trim().isEmpty ||
+        label != label.trim() ||
+        label.length > 120 ||
+        active is! bool) {
+      throw const FocusCommandException(
+        'Study preparation item response is invalid.',
+      );
+    }
+    return FocusPreparationItem(
+      key: key,
+      label: label,
+      active: active,
+    );
+  }
+
+  final String key;
+  final String label;
+  final bool active;
+}
+
+class StudyFocusSettings {
+  StudyFocusSettings({
+    required this.focusMinutes,
+    required this.recoveryMinutes,
+    required List<FocusPreparationItem> preparationItems,
+    required this.setupRevision,
+  }) : preparationItems = List.unmodifiable(preparationItems) {
+    if (focusMinutes < 25 ||
+        focusMinutes > 180 ||
+        focusMinutes.remainder(5) != 0 ||
+        recoveryMinutes < 5 ||
+        recoveryMinutes > 60 ||
+        recoveryMinutes.remainder(5) != 0 ||
+        setupRevision < 1 ||
+        preparationItems.length > 12 ||
+        preparationItems.map((item) => item.key).toSet().length !=
+            preparationItems.length ||
+        preparationItems
+                .map((item) => item.label.toLowerCase())
+                .toSet()
+                .length !=
+            preparationItems.length) {
+      throw const FocusCommandException(
+        'Study focus settings response is invalid.',
+      );
+    }
+  }
+
+  factory StudyFocusSettings.fromRow(Map<String, dynamic> row) {
+    final focusMinutes =
+        row['focus_minutes'] is int ? row['focus_minutes'] as int : null;
+    final recoveryMinutes =
+        row['recovery_minutes'] is int ? row['recovery_minutes'] as int : null;
+    final setupRevision =
+        row['setup_revision'] is int ? row['setup_revision'] as int : null;
+    final rawItems = row['preparation_items'];
+    if (focusMinutes == null ||
+        recoveryMinutes == null ||
+        setupRevision == null ||
+        rawItems is! List) {
+      throw const FocusCommandException(
+        'Study focus settings response is invalid.',
+      );
+    }
+    return StudyFocusSettings(
+      focusMinutes: focusMinutes,
+      recoveryMinutes: recoveryMinutes,
+      setupRevision: setupRevision,
+      preparationItems: rawItems.map((item) {
+        if (item is! Map) {
+          throw const FocusCommandException(
+            'Study preparation item response is invalid.',
+          );
+        }
+        return FocusPreparationItem.fromJson(
+          Map<String, dynamic>.from(item),
+        );
+      }).toList(growable: false),
+    );
+  }
+
+  final int focusMinutes;
+  final int recoveryMinutes;
+  final List<FocusPreparationItem> preparationItems;
+  final int setupRevision;
+}
+
+final _uuidPattern = RegExp(
+  r'^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-'
+  r'[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
+);
 
 int measuredFocusMinutes({
   required DateTime startedAt,

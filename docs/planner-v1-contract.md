@@ -20,8 +20,9 @@ creation or Habit-definition management.
 Planner renders:
 
 1. `Add new`: Task, Habit, Exam, Assignment, and Fixed commitment;
-2. `Needs attention`: current conflicts, exact unplaced minutes, and stale
-   calendar-bound previews;
+2. `Needs attention`: current conflicts, exact unplaced minutes, stale
+   calendar-bound or Study-bound previews, changed Study rhythms, and
+   open/overdue course selection;
 3. seven consecutive profile-local days;
 4. `Ongoing preparation`;
 5. `Unscheduled`; and
@@ -138,6 +139,22 @@ guards. Undo or restore never resurrects released slots; the target returns to
 `Unscheduled` and requires a new proposal. Explicit Action Plan cancellation
 also releases reservations while retaining an already-created target.
 
+An ordinary Task proposal includes an explicit `use_study_rhythm` boolean,
+defaulting to false. When true, a current Study focus rhythm is required and
+its focus duration replaces the ordinary preferred-session choice. Each normal
+Task block is exactly that duration; only the last remainder may be shorter.
+Every block also reserves the complete Study recovery period. Recovery is busy
+time but is excluded from Task minutes and daily preparation capacity. Habit
+proposals cannot use this option.
+
+A Study-bound revision freezes `study_setup_revision` and
+`recovery_minutes`; its blocks expose `recovery_minutes` and
+`reserved_ends_at`. The fingerprint and confirmation guard cover those values
+and the complete reserved interval. Changing or removing the rhythm invalidates
+a pending preview and marks an active Study Task under `Needs attention`;
+explicit proposal and confirmation are still required before any reservation
+changes.
+
 ## Fixed Commitments And Conflicts
 
 Manual commitments are either one aware start/end interval or one weekly
@@ -171,6 +188,12 @@ Deadline Planner confirmation guards. It adds no table or column. The guarded
 function replacement aborts if an expected protected RPC definition has
 drifted, rather than silently weakening confirmation.
 
+`20260723120000_study_setup_v1.sql` extends immutable Task revisions and blocks
+with Study revision/recovery truth and wraps proposal/confirmation with exact
+rhythm and full-reservation checks. Existing revisions retain null Study
+revision and zero recovery. Existing blocks are backfilled with zero recovery
+and a reserved end equal to their focus end.
+
 The first six tables are authenticated owner/admin read projections with
 forced RLS and backend-owned writes. The global request ledger is service-role
 only. Service-role RPCs take the established owner advisory lock before the
@@ -179,9 +202,16 @@ revision, target, calendar, and competing-reservation preconditions. Existing
 Tasks, Habits, Deadline Plans, Setup commitments, and imported Calendar rows are
 not migrated or automatically scheduled.
 
-Account Export includes the six user-content tables and intentionally omits
-the anti-replay ledger. Profile deletion cascades all Planner state. Direct
-application-role Planner writes remain forbidden.
+Account Export includes the six user-content tables and the separate Study
+Setup projection, while intentionally omitting the anti-replay ledger. Profile
+deletion cascades all Planner and Study state. Direct application-role Planner
+writes remain forbidden.
+
+The overview computes course-selection attention from the profile-local date
+and the next semester's inclusive window. Before the window or after explicit
+semester-wide completion there is no item; during it the item is open and after
+it the item is overdue. Its target is Settings Study Setup. This read creates
+no Task, Today item, Calendar row, or Notification.
 
 ## Today Overview V2
 

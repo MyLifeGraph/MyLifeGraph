@@ -824,6 +824,8 @@ class DeadlinePlanRevision {
     required this.timezone,
     required this.bestEnergyWindow,
     required this.planningFingerprint,
+    required this.studySetupRevision,
+    required this.recoveryMinutes,
     required this.trackedFocusMinutesAtProposal,
     required this.remainingMinutesAtProposal,
     required this.plannedMinutes,
@@ -863,6 +865,34 @@ class DeadlinePlanRevision {
         blocks.map((block) => block.id).toSet().length != blocks.length ||
         blocks.map((block) => block.sequence).toSet().length != blocks.length ||
         !_hasContiguousSequences(blocks) ||
+        (studySetupRevision == null
+            ? recoveryMinutes != 0 ||
+                blocks.any((block) => block.recoveryMinutes != 0)
+            : recoveryMinutes < 5 ||
+                recoveryMinutes > 60 ||
+                recoveryMinutes % 5 != 0 ||
+                blocks.any(
+                  (block) =>
+                      block.recoveryMinutes != recoveryMinutes ||
+                      block.plannedMinutes > preferredSessionMinutes,
+                ) ||
+                blocks
+                        .where(
+                          (block) =>
+                              block.plannedMinutes < preferredSessionMinutes,
+                        )
+                        .length >
+                    1 ||
+                blocks.indexWhere(
+                          (block) =>
+                              block.plannedMinutes < preferredSessionMinutes,
+                        ) >=
+                        0 &&
+                    blocks.indexWhere(
+                          (block) =>
+                              block.plannedMinutes < preferredSessionMinutes,
+                        ) !=
+                        blocks.length - 1) ||
         sourceKind == DeadlinePlanSourceKind.manual &&
             (sourceCalendarEventId != null ||
                 sourceCalendarEventFingerprint != null ||
@@ -907,6 +937,7 @@ class DeadlinePlanRevision {
         'timezone',
         'best_energy_window',
         'planning_fingerprint',
+        'recovery_minutes',
         'tracked_focus_minutes_at_proposal',
         'remaining_minutes_at_proposal',
         'planned_minutes',
@@ -921,6 +952,7 @@ class DeadlinePlanRevision {
         'superseded_at',
         'availability_connection_id',
         'availability_import_id',
+        'study_setup_revision',
       },
       model: 'deadline plan revision',
     );
@@ -1003,6 +1035,11 @@ class DeadlinePlanRevision {
         json['planning_fingerprint'],
         'revision.planning_fingerprint',
       ),
+      studySetupRevision: _optionalInt(json, 'study_setup_revision'),
+      recoveryMinutes: _requiredInt(
+        json['recovery_minutes'],
+        'revision.recovery_minutes',
+      ),
       trackedFocusMinutesAtProposal: _requiredInt(
         json['tracked_focus_minutes_at_proposal'],
         'revision.tracked_focus_minutes_at_proposal',
@@ -1056,6 +1093,8 @@ class DeadlinePlanRevision {
   final String timezone;
   final String bestEnergyWindow;
   final String planningFingerprint;
+  final int? studySetupRevision;
+  final int recoveryMinutes;
   final int trackedFocusMinutesAtProposal;
   final int remainingMinutesAtProposal;
   final int plannedMinutes;
@@ -1085,6 +1124,8 @@ class DeadlinePlanBlock {
     required this.localStartTime,
     required this.localEndTime,
     required this.plannedMinutes,
+    required this.recoveryMinutes,
+    required this.reservedEndsAt,
     required this.creditedTrackedMinutes,
     required this.state,
   }) {
@@ -1094,6 +1135,11 @@ class DeadlinePlanBlock {
         endsAt.difference(startsAt) != Duration(minutes: plannedMinutes) ||
         plannedMinutes < 5 ||
         plannedMinutes > 240 ||
+        recoveryMinutes < 0 ||
+        recoveryMinutes > 60 ||
+        recoveryMinutes % 5 != 0 ||
+        reservedEndsAt.difference(endsAt) !=
+            Duration(minutes: recoveryMinutes) ||
         creditedTrackedMinutes < 0 ||
         creditedTrackedMinutes > plannedMinutes) {
       throw const DeadlinePlanContractException(
@@ -1114,6 +1160,8 @@ class DeadlinePlanBlock {
         'local_start_time',
         'local_end_time',
         'planned_minutes',
+        'recovery_minutes',
+        'reserved_ends_at',
         'credited_tracked_minutes',
         'state',
       },
@@ -1143,6 +1191,14 @@ class DeadlinePlanBlock {
         json['planned_minutes'],
         'block.planned_minutes',
       ),
+      recoveryMinutes: _requiredInt(
+        json['recovery_minutes'],
+        'block.recovery_minutes',
+      ),
+      reservedEndsAt: _requiredAwareDateTime(
+        json['reserved_ends_at'],
+        'block.reserved_ends_at',
+      ),
       creditedTrackedMinutes: _requiredInt(
         json['credited_tracked_minutes'],
         'block.credited_tracked_minutes',
@@ -1159,6 +1215,8 @@ class DeadlinePlanBlock {
   final String localStartTime;
   final String localEndTime;
   final int plannedMinutes;
+  final int recoveryMinutes;
+  final DateTime reservedEndsAt;
   final int creditedTrackedMinutes;
   final DeadlinePlanBlockState state;
 }
@@ -1381,6 +1439,9 @@ int _requiredInt(Object? value, String field) {
   }
   return value;
 }
+
+int? _optionalInt(Map<String, dynamic> json, String key) =>
+    json.containsKey(key) ? _requiredInt(json[key], key) : null;
 
 DateTime _requiredAwareDateTime(Object? value, String field) {
   if (value is! String || !_awarePattern.hasMatch(value)) {

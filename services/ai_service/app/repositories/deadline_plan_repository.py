@@ -33,6 +33,7 @@ class DeadlinePlanningContext:
     planner_recurring_commitments: list[dict[str, Any]] | None = None
     planner_timed_intervals: list[dict[str, Any]] | None = None
     planner_use_calendar_busy_time: bool | None = None
+    study_setup: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -367,7 +368,8 @@ class SupabaseDeadlinePlanRepository:
         confirmed_blocks = await self._select_pages(
             "deadline_plan_blocks",
             params={
-                "select": "id,plan_id,local_date,planned_minutes,starts_at,ends_at",
+                "select": "id,plan_id,local_date,planned_minutes,starts_at,"
+                "ends_at,reserved_ends_at,recovery_minutes",
                 "user_id": f"eq.{user_id}",
                 "reservation_state": "eq.active",
                 "and": (
@@ -406,7 +408,8 @@ class SupabaseDeadlinePlanRepository:
         confirmed_blocks = await self._select_pages(
             "deadline_plan_blocks",
             params={
-                "select": "id,plan_id,local_date,planned_minutes,starts_at,ends_at",
+                "select": "id,plan_id,local_date,planned_minutes,starts_at,"
+                "ends_at,reserved_ends_at,recovery_minutes",
                 "user_id": f"eq.{user_id}",
                 "reservation_state": "eq.active",
                 "local_date": f"eq.{local_date.isoformat()}",
@@ -509,7 +512,8 @@ class SupabaseDeadlinePlanRepository:
         confirmed_blocks = await self._select_pages(
             "deadline_plan_blocks",
             params={
-                "select": "id,plan_id,local_date,planned_minutes,starts_at,ends_at",
+                "select": "id,plan_id,local_date,planned_minutes,starts_at,"
+                "ends_at,reserved_ends_at,recovery_minutes",
                 "user_id": f"eq.{user_id}",
                 "plan_id": f"neq.{plan_id}",
                 "reservation_state": "eq.active",
@@ -541,7 +545,8 @@ class SupabaseDeadlinePlanRepository:
         planner_task_blocks = await self._select_pages(
             "planner_task_blocks",
             params={
-                "select": "id,plan_id,starts_at,ends_at,local_date,planned_minutes",
+                "select": "id,plan_id,starts_at,ends_at,reserved_ends_at,"
+                "local_date,planned_minutes,recovery_minutes",
                 "user_id": f"eq.{user_id}",
                 "state": "eq.active",
                 "and": (
@@ -697,7 +702,20 @@ class SupabaseDeadlinePlanRepository:
             planner_recurring_commitments=planner_recurring_commitments,
             planner_timed_intervals=planner_timed_intervals,
             planner_use_calendar_busy_time=planner_use_calendar_busy_time,
+            study_setup=await self._study_setup(user_id=user_id),
         )
+
+    async def _study_setup(self, *, user_id: str) -> dict[str, Any] | None:
+        rows = await self._client.select(
+            "study_setup_profiles",
+            params={
+                "select": "user_id,focus_minutes,recovery_minutes,"
+                "setup_revision,updated_at",
+                "user_id": f"eq.{user_id}",
+                "limit": "1",
+            },
+        )
+        return rows[0] if rows else None
 
     async def _with_connection_state(
         self,

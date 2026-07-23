@@ -46,6 +46,7 @@ class PlannerOverviewContext:
     tasks: list[dict[str, Any]]
     habits: list[dict[str, Any]]
     plans: PlannerProjection
+    study_setup: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -60,6 +61,7 @@ class PlannerAvailabilityContext:
     habit_slots: list[dict[str, Any]]
     deadline_blocks: list[dict[str, Any]]
     target: dict[str, Any] | None
+    study_setup: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -335,6 +337,7 @@ class SupabasePlannerRepository:
             tasks=tasks,
             habits=habits,
             plans=projection,
+            study_setup=await self._study_setup(user_id=user_id),
         )
 
     async def load_availability_context(
@@ -371,7 +374,11 @@ class SupabasePlannerRepository:
         task_blocks = await self._select_pages(
             "planner_task_blocks",
             params=[
-                ("select", "id,plan_id,starts_at,ends_at,local_date,planned_minutes"),
+                (
+                    "select",
+                    "id,plan_id,starts_at,ends_at,reserved_ends_at,"
+                    "local_date,planned_minutes,recovery_minutes",
+                ),
                 ("user_id", f"eq.{user_id}"),
                 ("state", "eq.active"),
                 ("plan_id", f"neq.{plan_id}"),
@@ -395,7 +402,11 @@ class SupabasePlannerRepository:
         deadline_blocks = await self._select_pages(
             "deadline_plan_blocks",
             params=[
-                ("select", "id,starts_at,ends_at,local_date,planned_minutes"),
+                (
+                    "select",
+                    "id,starts_at,ends_at,reserved_ends_at,local_date,"
+                    "planned_minutes,recovery_minutes",
+                ),
                 ("user_id", f"eq.{user_id}"),
                 ("reservation_state", "eq.active"),
                 ("local_date", f"gte.{starts_on.isoformat()}"),
@@ -430,6 +441,7 @@ class SupabasePlannerRepository:
             habit_slots=habit_slots,
             deadline_blocks=deadline_blocks,
             target=target_rows[0] if target_rows else None,
+            study_setup=await self._study_setup(user_id=user_id),
         )
 
     async def set_preferences(
@@ -599,6 +611,19 @@ class SupabasePlannerRepository:
             "planner_preferences",
             params={
                 "select": "user_id,use_calendar_busy_time,updated_at",
+                "user_id": f"eq.{user_id}",
+                "limit": "1",
+            },
+        )
+        return rows[0] if rows else None
+
+    async def _study_setup(self, *, user_id: str) -> dict[str, Any] | None:
+        rows = await self._client.select(
+            "study_setup_profiles",
+            params={
+                "select": "user_id,focus_minutes,recovery_minutes,"
+                "preparation_items,current_semester,next_semester,"
+                "setup_revision,updated_at",
                 "user_id": f"eq.{user_id}",
                 "limit": "1",
             },

@@ -50,6 +50,18 @@ class PlannedInterval:
     starts_at: datetime
     ends_at: datetime
     minutes: int
+    recovery_minutes: int = 0
+    reserved_ends_at: datetime | None = None
+
+    def __iter__(self):
+        # Preserve the established internal three-value test/helper surface
+        # while exposing the additive recovery fields by name.
+        yield self.starts_at
+        yield self.ends_at
+        yield self.minutes
+
+    def __getitem__(self, index: int):
+        return (self.starts_at, self.ends_at, self.minutes)[index]
 
 
 @dataclass(frozen=True)
@@ -76,6 +88,8 @@ def allocate_task_intervals(
     account_daily_budget_minutes: int | None = None,
     max_blocks: int = 120,
     duration_increment_minutes: int = 1,
+    recovery_minutes: int = 0,
+    exact_session_blocks: bool = False,
 ) -> list[PlannedInterval]:
     """Allocate five-minute task blocks without mutating any source record.
 
@@ -96,6 +110,14 @@ def allocate_task_intervals(
         raise ValueError("Planning block bound is invalid.")
     if duration_increment_minutes < 1 or 60 % duration_increment_minutes != 0:
         raise ValueError("Planning duration increment is invalid.")
+    if (
+        recovery_minutes < 0
+        or recovery_minutes > 60
+        or recovery_minutes % 5 != 0
+    ):
+        raise ValueError("Planning recovery duration is invalid.")
+    if exact_session_blocks and recovery_minutes == 0:
+        raise ValueError("Exact Study blocks require a recovery reservation.")
 
     days = list(calendar_days(starts_on, ends_on))
     busy_by_day = busy_intervals_by_day(
@@ -151,27 +173,61 @@ def allocate_task_intervals(
             if daily_left[day] < 5:
                 continue
             for gap in free_by_day[day]:
-                available = interval_minutes(gap[0], gap[1])
-                duration = min(target, remaining, daily_left[day], available)
-                duration -= duration % duration_increment_minutes
+                block_start = gap[0]
+                if exact_session_blocks and remaining < target and blocks:
+                    # A Study remainder is the final chronological learning
+                    # block. Do not backfill it into an earlier small gap after
+                    # full blocks have already been placed later in the runway.
+                    latest_reserved_end = max(
+                        block.reserved_ends_at or block.ends_at
+                        for block in blocks
+                    )
+                    if block_start < latest_reserved_end:
+                        block_start = latest_reserved_end
+                available = interval_minutes(block_start, gap[1])
+                if exact_session_blocks:
+                    duration = target if remaining >= target else remaining
+                    duration -= duration % duration_increment_minutes
+                    if (
+                        duration < 5
+                        or daily_left[day] < duration
+                        or available < duration + recovery_minutes
+                    ):
+                        continue
+                else:
+                    duration = min(target, remaining, daily_left[day], available)
+                    duration -= duration % duration_increment_minutes
                 if duration < 5:
                     continue
-                block_start = gap[0]
                 block_end = (
                     block_start.astimezone(UTC) + timedelta(minutes=duration)
                 ).astimezone(zone)
-                if not is_unambiguous_local(block_end, zone):
+                reserved_end = (
+                    block_end.astimezone(UTC)
+                    + timedelta(minutes=recovery_minutes)
+                ).astimezone(zone)
+                if (
+                    not is_unambiguous_local(block_end, zone)
+                    or not is_unambiguous_local(reserved_end, zone)
+                    or reserved_end > gap[1]
+                ):
                     continue
                 blocks.append(
                     PlannedInterval(
                         starts_at=block_start,
                         ends_at=block_end,
                         minutes=duration,
+                        recovery_minutes=recovery_minutes,
+                        reserved_ends_at=reserved_end,
                     ),
                 )
                 gap[0] = (
-                    block_end.astimezone(UTC) + timedelta(minutes=5)
-                ).astimezone(zone)
+                    reserved_end
+                    if recovery_minutes > 0
+                    else (
+                        block_end.astimezone(UTC) + timedelta(minutes=5)
+                    ).astimezone(zone)
+                )
                 remaining -= duration
                 daily_left[day] -= duration
                 placed = True
@@ -292,7 +348,9 @@ def busy_intervals_by_day(
 
     for item in sources.timed_intervals:
         starts_at = exact_datetime(item.get("starts_at")).astimezone(zone)
-        ends_at = exact_datetime(item.get("ends_at")).astimezone(zone)
+        ends_at = exact_datetime(
+            item.get("reserved_ends_at", item.get("ends_at")),
+        ).astimezone(zone)
         cursor = starts_at.date()
         while cursor <= ends_at.date():
             if cursor in day_set:

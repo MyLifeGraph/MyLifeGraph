@@ -181,6 +181,20 @@ validation locks the selected task or habit row so availability cannot change
 between validation and the focus write. Application validation provides a
 recoverable error before a write whenever possible.
 
+Study Setup V1 extends only Focus start defaults and metadata, not the Phase 3
+command set or lifecycle. A selected Planner/Preparation block duration takes
+priority, followed by the saved Study duration, the latest terminal session,
+and the 25-minute fallback. Saved active preparation items appear as a
+transient Ready/Not-needed checklist with an explicit skip; choices are never
+stored. A manual session may override its duration once.
+
+The selected recovery duration is copied to
+`focus_sessions.metadata.recovery_minutes`. Completing, but not abandoning, the
+session starts a skippable device-local countdown that can be restored while
+unexpired. There is no recovery row or completion fact, and recovery contributes
+to neither Focus/Task/Deadline progress nor any preparation budget. The exact
+extension is in `docs/study-setup-v1-contract.md`.
+
 ## Executable Action Target V1
 
 The stable, ranking-independent command envelope is:
@@ -275,6 +289,11 @@ validation; all three habit cadences; scheduled opportunity, completion, skip,
 miss, undo, streak, ISO-week, DST-safe calendar arithmetic, `started_on`, parser
 parity, Setup ownership, action dispatch, user scoping, idempotency, snapshot
 refresh, and guest/mock locality.
+
+Study Focus coverage additionally proves duration priority, configured and
+empty checklists, partial/all/remaining skip, absence of ritual history, manual
+duration override, strict recovery metadata, completed-only countdown,
+restoration, expiry, and explicit skip.
 
 The browser E2E source asserts exact database rows for task
 create/edit/postpone/undo, complete/restore, and cancel/restore; manual and

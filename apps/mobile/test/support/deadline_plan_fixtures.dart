@@ -204,6 +204,7 @@ Map<String, dynamic> deadlineRevision({
     'timezone': 'Europe/Berlin',
     'best_energy_window': 'morning',
     'planning_fingerprint': deadlineFingerprint,
+    'recovery_minutes': 0,
     'tracked_focus_minutes_at_proposal': trackedFocusMinutes,
     'remaining_minutes_at_proposal': remaining,
     'planned_minutes': plannedMinutes,
@@ -234,6 +235,8 @@ Map<String, dynamic> deadlineBlock({
       'local_start_time': '10:00:00',
       'local_end_time': '10:50:00',
       'planned_minutes': plannedMinutes,
+      'recovery_minutes': 0,
+      'reserved_ends_at': '2026-07-20T08:50:00Z',
       'credited_tracked_minutes': creditedTrackedMinutes,
       'state': state,
     };

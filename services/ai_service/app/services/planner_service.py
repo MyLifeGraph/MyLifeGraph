@@ -228,6 +228,22 @@ class PlannerService:
         if local_planning_end < effective_start:
             raise PlannerValidationError("The planning window has already ended.")
         _validate_target_projection(request.target, context.target)
+        study_rhythm = _study_rhythm(context.study_setup)
+        use_study_rhythm = (
+            isinstance(request.target, PlannerTaskTarget)
+            and request.target.use_study_rhythm
+        )
+        if use_study_rhythm:
+            if study_rhythm is None:
+                raise PlannerConflictError(
+                    "Configure a Study rhythm before using it for a Task.",
+                )
+            if request.target.preferred_session_minutes != study_rhythm[1]:
+                raise PlannerValidationError(
+                    "The Task session duration must match the current Study rhythm.",
+                )
+        study_setup_revision = study_rhythm[0] if use_study_rhythm else None
+        recovery_minutes = study_rhythm[2] if use_study_rhythm else 0
 
         calendar_enabled = bool(
             context.preference
@@ -280,6 +296,8 @@ class PlannerService:
                     deadline_at=request.target.deadline_at,
                     max_blocks=1_500,
                     duration_increment_minutes=5,
+                    recovery_minutes=recovery_minutes,
+                    exact_session_blocks=use_study_rhythm,
                 )
                 for sequence, interval in enumerate(intervals, start=1):
                     task_blocks.append(
@@ -294,6 +312,10 @@ class PlannerService:
                             "sequence": sequence,
                             "starts_at": interval.starts_at.astimezone(UTC).isoformat(),
                             "ends_at": interval.ends_at.astimezone(UTC).isoformat(),
+                            "recovery_minutes": interval.recovery_minutes,
+                            "reserved_ends_at": (
+                                interval.reserved_ends_at or interval.ends_at
+                            ).astimezone(UTC).isoformat(),
                             "local_date": interval.starts_at.date().isoformat(),
                             "planned_minutes": interval.minutes,
                         },
@@ -358,6 +380,15 @@ class PlannerService:
                     if calendar_enabled
                     else []
                 ),
+                "study_setup": (
+                    {
+                        "setup_revision": study_setup_revision,
+                        "focus_minutes": study_rhythm[1],
+                        "recovery_minutes": recovery_minutes,
+                    }
+                    if use_study_rhythm and study_rhythm is not None
+                    else None
+                ),
             },
         )
         target_payload = request.target.model_dump(mode="json")
@@ -382,6 +413,8 @@ class PlannerService:
                 if calendar_enabled and context.calendar.import_id
                 else None
             ),
+            "study_setup_revision": study_setup_revision,
+            "recovery_minutes": recovery_minutes,
             "planned_minutes": planned_minutes,
             "unscheduled_minutes": unscheduled_minutes,
         }
@@ -681,6 +714,8 @@ class PlannerService:
                             source_id=detail.plan.id,
                             starts_at=block.starts_at,
                             ends_at=block.ends_at,
+                            recovery_minutes=block.recovery_minutes,
+                            reserved_ends_at=block.reserved_ends_at,
                             all_day=False,
                             state=block.state,
                         ),
@@ -910,6 +945,10 @@ def _revision_from_row(
             ends_at=_datetime(block["ends_at"]),
             local_date=_date(block["local_date"]),
             planned_minutes=_int(block["planned_minutes"]),
+            recovery_minutes=_int(block.get("recovery_minutes", 0)),
+            reserved_ends_at=_datetime(
+                block.get("reserved_ends_at", block["ends_at"]),
+            ),
             state=block["state"],
         )
         for block in sorted(
@@ -949,6 +988,12 @@ def _revision_from_row(
             if row.get("calendar_import_id")
             else None
         ),
+        study_setup_revision=(
+            _int(row["study_setup_revision"])
+            if row.get("study_setup_revision") is not None
+            else None
+        ),
+        recovery_minutes=_int(row.get("recovery_minutes", 0)),
         planned_minutes=_int(row["planned_minutes"]),
         unscheduled_minutes=_int(row["unscheduled_minutes"]),
         task_blocks=rendered_blocks,
@@ -1116,7 +1161,11 @@ def _availability_sources(
         for row in context.habit_slots
     )
     timed.extend(
-        {"starts_at": row.get("starts_at"), "ends_at": row.get("ends_at")}
+        {
+            "starts_at": row.get("starts_at"),
+            "ends_at": row.get("ends_at"),
+            "reserved_ends_at": row.get("reserved_ends_at", row.get("ends_at")),
+        }
         for row in [*context.task_blocks, *context.deadline_blocks]
     )
     if calendar_enabled:
@@ -1135,6 +1184,31 @@ def _availability_sources(
         timed_intervals=timed,
         all_day_intervals=all_day,
     )
+
+
+def _study_rhythm(
+    row: Mapping[str, Any] | None,
+) -> tuple[int, int, int] | None:
+    if row is None:
+        return None
+    revision = _int(row.get("setup_revision"))
+    focus = row.get("focus_minutes")
+    recovery = row.get("recovery_minutes")
+    if focus is None and recovery is None:
+        return None
+    focus_minutes = _int(focus)
+    recovery_minutes = _int(recovery)
+    if (
+        revision < 1
+        or focus_minutes < 25
+        or focus_minutes > 180
+        or focus_minutes % 5 != 0
+        or recovery_minutes < 5
+        or recovery_minutes > 60
+        or recovery_minutes % 5 != 0
+    ):
+        raise ValueError("Study Setup rhythm projection is invalid.")
+    return revision, focus_minutes, recovery_minutes
 
 
 def _commitment_payload(
@@ -1194,6 +1268,8 @@ def _add_setup_commitments(
                     source_id=source_id,
                     starts_at=starts_at,
                     ends_at=ends_at,
+                    recovery_minutes=0,
+                    reserved_ends_at=ends_at,
                     all_day=False,
                 ),
             )
@@ -1225,6 +1301,8 @@ def _add_manual_commitments(
                     source_id=source_id,
                     starts_at=starts,
                     ends_at=ends,
+                    recovery_minutes=0,
+                    reserved_ends_at=ends,
                     all_day=False,
                 ),
             )
@@ -1245,6 +1323,8 @@ def _add_manual_commitments(
                     source_id=source_id,
                     starts_at=starts,
                     ends_at=ends,
+                    recovery_minutes=0,
+                    reserved_ends_at=ends,
                     all_day=False,
                 ),
             )
@@ -1277,6 +1357,8 @@ def _add_action_reservations(
                         source_id=plan.target_id,
                         starts_at=block.starts_at,
                         ends_at=block.ends_at,
+                        recovery_minutes=block.recovery_minutes,
+                        reserved_ends_at=block.reserved_ends_at,
                         all_day=False,
                         state=block.state,
                     ),
@@ -1299,6 +1381,8 @@ def _add_action_reservations(
                             source_id=plan.target_id,
                             starts_at=starts,
                             ends_at=ends,
+                            recovery_minutes=0,
+                            reserved_ends_at=ends,
                             all_day=False,
                             state=slot.state,
                         ),
@@ -1328,6 +1412,8 @@ def _add_calendar_items(
                 source_id=source_id,
                 starts_at=starts,
                 ends_at=ends,
+                recovery_minutes=0,
+                reserved_ends_at=ends,
                 all_day=False,
                 state=row.get("busy_status"),
             ),
@@ -1346,6 +1432,8 @@ def _add_calendar_items(
                         source_id=source_id,
                         starts_at=None,
                         ends_at=None,
+                        recovery_minutes=0,
+                        reserved_ends_at=None,
                         all_day=True,
                         state=row.get("busy_status"),
                     ),
@@ -1359,7 +1447,12 @@ def _attention_items(
     days: Sequence[date],
     zone: ZoneInfo,
 ) -> list[PlannerAttentionItem]:
-    result: list[PlannerAttentionItem] = []
+    result = _course_selection_attention(
+        context.study_setup,
+        local_date=days[0],
+    )
+    current_study = _study_rhythm(context.study_setup)
+    current_study_revision = current_study[0] if current_study else None
     calendar_enabled = bool(
         context.preference and context.preference.get("use_calendar_busy_time") is True
     )
@@ -1381,10 +1474,16 @@ def _attention_items(
             )
         )
         for reason in plan.attention_reasons:
+            kind = (
+                "study_rhythm_changed"
+                if reason == "study_rhythm_changed"
+                else "conflict"
+            )
             result.append(
                 PlannerAttentionItem(
                     id=f"{plan.id}:persisted:{reason}",
-                    kind="conflict",
+                    kind=kind,
+                    target="plan",
                     title=title,
                     detail=_attention_detail(reason),
                     plan_id=plan.id,
@@ -1398,6 +1497,7 @@ def _attention_items(
                     PlannerAttentionItem(
                         id=f"{plan.id}:unscheduled:{pending.revision}",
                         kind="unscheduled",
+                        target="plan",
                         title=pending.target.title,
                         detail=(
                             f"{pending.unscheduled_minutes} minutes could not "
@@ -1419,6 +1519,7 @@ def _attention_items(
                     PlannerAttentionItem(
                         id=f"{plan.id}:calendar-stale:{pending.revision}",
                         kind="stale_preview",
+                        target="plan",
                         title=pending.target.title,
                         detail=(
                             "The Planner calendar setting or current import changed. "
@@ -1433,8 +1534,28 @@ def _attention_items(
                     PlannerAttentionItem(
                         id=f"{plan.id}:target-stale:{pending.revision}",
                         kind="stale_preview",
+                        target="plan",
                         title=pending.target.title,
                         detail="The Task or Habit changed. Create a new preview.",
+                        plan_id=plan.id,
+                        unplaced_minutes=0,
+                    ),
+                )
+            if (
+                isinstance(pending.target, PlannerTaskTarget)
+                and pending.target.use_study_rhythm
+                and pending.study_setup_revision != current_study_revision
+            ):
+                result.append(
+                    PlannerAttentionItem(
+                        id=f"{plan.id}:study-stale:{pending.revision}",
+                        kind="stale_preview",
+                        target="plan",
+                        title=pending.target.title,
+                        detail=(
+                            "The Study rhythm changed. Create a new preview "
+                            "before confirming."
+                        ),
                         plan_id=plan.id,
                         unplaced_minutes=0,
                     ),
@@ -1450,8 +1571,30 @@ def _attention_items(
                 PlannerAttentionItem(
                     id=f"{plan.id}:current-conflict:{revision.revision}",
                     kind="conflict",
+                    target="plan",
                     title=title,
                     detail="A current commitment now overlaps this plan.",
+                    plan_id=plan.id,
+                    unplaced_minutes=0,
+                ),
+            )
+        if (
+            revision is not None
+            and isinstance(revision.target, PlannerTaskTarget)
+            and revision.target.use_study_rhythm
+            and revision.study_setup_revision != current_study_revision
+            and "study_rhythm_changed" not in plan.attention_reasons
+        ):
+            result.append(
+                PlannerAttentionItem(
+                    id=f"{plan.id}:study-changed:{revision.revision}",
+                    kind="study_rhythm_changed",
+                    target="plan",
+                    title=title,
+                    detail=(
+                        "The Study rhythm changed. Review and confirm a new "
+                        "preview before reservations change."
+                    ),
                     plan_id=plan.id,
                     unplaced_minutes=0,
                 ),
@@ -1487,6 +1630,47 @@ def _pending_target_is_stale(
         row.get("active") is not True
         or metadata.get("lifecycle", "active") != "active"
     )
+
+
+def _course_selection_attention(
+    study_setup: Mapping[str, Any] | None,
+    *,
+    local_date: date,
+) -> list[PlannerAttentionItem]:
+    if study_setup is None or study_setup.get("next_semester") is None:
+        return []
+    semester = study_setup.get("next_semester")
+    if not isinstance(semester, Mapping):
+        raise ValueError("Next semester projection is invalid.")
+    completed = semester.get("course_selection_completed")
+    if not isinstance(completed, bool):
+        raise ValueError("Course selection state is invalid.")
+    if completed:
+        return []
+    starts_on = _date(semester.get("course_selection_starts_on"))
+    ends_on = _date(semester.get("course_selection_ends_on"))
+    if local_date < starts_on:
+        return []
+    overdue = local_date > ends_on
+    return [
+        PlannerAttentionItem(
+            id=f"study-setup:course-selection:{starts_on.isoformat()}",
+            kind=(
+                "course_selection_overdue"
+                if overdue
+                else "course_selection_open"
+            ),
+            target="study_setup",
+            title="Choose next semester courses",
+            detail=(
+                "The course selection window has ended. Review Study Setup."
+                if overdue
+                else "The course selection window is open. Review Study Setup."
+            ),
+            plan_id=None,
+            unplaced_minutes=0,
+        ),
+    ]
 
 
 def _attention_horizon(
@@ -1551,14 +1735,39 @@ def _preparation_attention_items(
         ),
     )
     result: list[PlannerAttentionItem] = []
+    current_study = _study_rhythm(context.study_setup)
+    current_study_revision = current_study[0] if current_study else None
     for detail in deadline_response.plans:
         revision = detail.active_revision
+        pending = detail.pending_revision
+        if (
+            pending is not None
+            and pending.study_setup_revision != current_study_revision
+        ):
+            result.append(
+                PlannerAttentionItem(
+                    id=(
+                        f"deadline:{detail.plan.id}:study-stale:"
+                        f"{pending.revision}"
+                    ),
+                    kind="stale_preview",
+                    target="plan",
+                    title=detail.plan.title,
+                    detail=(
+                        "The Study rhythm changed. Create a new preparation "
+                        "preview before confirming."
+                    ),
+                    plan_id=detail.plan.id,
+                    unplaced_minutes=0,
+                ),
+            )
         if revision is None:
             continue
         conflicts = any(
-            block.ends_at > generated_at
+            block.reserved_ends_at > generated_at
             and any(
-                max(block.starts_at, starts_at) < min(block.ends_at, ends_at)
+                max(block.starts_at, starts_at)
+                < min(block.reserved_ends_at, ends_at)
                 for starts_at, ends_at in authoritative
             )
             for block in revision.blocks
@@ -1571,8 +1780,27 @@ def _preparation_attention_items(
                         f"{revision.revision}"
                     ),
                     kind="conflict",
+                    target="plan",
                     title=detail.plan.title,
                     detail="A current commitment now overlaps this preparation plan.",
+                    plan_id=detail.plan.id,
+                    unplaced_minutes=0,
+                ),
+            )
+        if revision.study_setup_revision != current_study_revision:
+            result.append(
+                PlannerAttentionItem(
+                    id=(
+                        f"deadline:{detail.plan.id}:study-changed:"
+                        f"{revision.revision}"
+                    ),
+                    kind="study_rhythm_changed",
+                    target="plan",
+                    title=detail.plan.title,
+                    detail=(
+                        "The Study rhythm changed. Review and confirm a new "
+                        "preparation preview before reservations change."
+                    ),
                     plan_id=detail.plan.id,
                     unplaced_minutes=0,
                 ),
@@ -1653,7 +1881,7 @@ def _revision_conflicts(
     del plan_id
     candidates: list[tuple[datetime, datetime]] = []
     candidates.extend(
-        (block.starts_at, block.ends_at)
+        (block.starts_at, block.reserved_ends_at)
         for block in revision.task_blocks
         if block.state == "active" and block.local_date in days
     )
@@ -1775,6 +2003,7 @@ def _target_summary(
             "estimated_minutes": _optional_int(row.get("estimated_minutes")),
             "deadline_at": _optional_datetime(row.get("deadline")),
             "preferred_session_minutes": _optional_int(preferred),
+            "use_study_rhythm": metadata.get("use_study_rhythm") is True,
             "cadence": None,
             "duration_minutes": None,
         }
@@ -1788,6 +2017,7 @@ def _target_summary(
         "estimated_minutes": None,
         "deadline_at": None,
         "preferred_session_minutes": None,
+        "use_study_rhythm": False,
         "cadence": definition["cadence"],
         "duration_minutes": _optional_int(
             metadata.get("planner_duration_minutes"),
@@ -1804,6 +2034,7 @@ def _target_summary_from_target(target: PlannerActionTarget) -> dict[str, Any]:
             "estimated_minutes": target.estimated_minutes,
             "deadline_at": target.deadline_at,
             "preferred_session_minutes": target.preferred_session_minutes,
+            "use_study_rhythm": target.use_study_rhythm,
             "cadence": None,
             "duration_minutes": None,
         }
@@ -1814,6 +2045,7 @@ def _target_summary_from_target(target: PlannerActionTarget) -> dict[str, Any]:
         "estimated_minutes": None,
         "deadline_at": None,
         "preferred_session_minutes": None,
+        "use_study_rhythm": False,
         "cadence": target.cadence,
         "duration_minutes": target.duration_minutes,
     }
@@ -1901,6 +2133,9 @@ def _attention_detail(reason: str) -> str:
         "commitment_conflict": "A fixed commitment overlaps this plan.",
         "target_released": "The target changed and its future slots were released.",
         "calendar_changed": "Calendar busy time changed. Create a new preview.",
+        "study_rhythm_changed": (
+            "The Study rhythm changed. Create and confirm a new preview."
+        ),
     }.get(reason, "This plan needs a new preview before its times can be trusted.")
 
 

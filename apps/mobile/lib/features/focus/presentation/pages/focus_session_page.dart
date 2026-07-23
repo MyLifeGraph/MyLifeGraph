@@ -3,6 +3,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/config/app_config.dart';
@@ -22,17 +24,36 @@ final focusSessionPageDataSourceProvider =
   return client == null ? null : FocusSessionSupabaseDataSource(client);
 });
 
+final focusStudySettingsDataSourceProvider =
+    Provider<FocusSessionSupabaseDataSource?>((ref) {
+  SupabaseClient? client;
+  try {
+    client = ref.watch(supabaseClientProvider);
+  } catch (_) {
+    return null;
+  }
+  return client == null || client.auth.currentUser == null
+      ? null
+      : FocusSessionSupabaseDataSource(client);
+});
+
+const _recoveryPreferenceKey = 'focus-recovery-countdown-v1';
+
+enum _PreparationChoice { ready, notNeeded }
+
 class FocusSessionPage extends ConsumerStatefulWidget {
   const FocusSessionPage({
     super.key,
     this.initialTargetKind,
     this.initialTargetId,
     this.initialPlannedMinutes,
+    this.initialRecoveryMinutes,
   });
 
   final FocusTargetKind? initialTargetKind;
   final String? initialTargetId;
   final int? initialPlannedMinutes;
+  final int? initialRecoveryMinutes;
 
   @override
   ConsumerState<FocusSessionPage> createState() => _FocusSessionPageState();
@@ -46,6 +67,9 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage> {
   bool _initialTargetApplied = false;
   bool _initialDurationApplied = false;
   int _plannedMinutes = 25;
+  int _recoveryMinutes = 0;
+  StudyFocusSettings? _studySettings;
+  DateTime? _recoveryEndsAt;
   DateTime _clockNow = DateTime.now();
   Timer? _ticker;
   bool _isLoading = true;
@@ -106,9 +130,16 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage> {
             onFinish: _finish,
             onAbandon: _abandon,
           )
+        else if (_recoveryEndsAt?.isAfter(_clockNow) == true)
+          _RecoveryCard(
+            endsAt: _recoveryEndsAt!,
+            now: _clockNow,
+            onSkip: _skipRecovery,
+          )
         else
           _StartFocusCard(
             plannedMinutes: _plannedMinutes,
+            recoveryMinutes: _recoveryMinutes,
             suggestion: FocusPreferenceSuggestion.fromSessions(_recent),
             targets: _targets,
             selectedTargetValue: _selectedTargetValue,
@@ -132,6 +163,7 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage> {
     if (!mounted) return;
     final config = ref.read(appConfigProvider);
     final source = ref.read(focusSessionPageDataSourceProvider);
+    final studySource = ref.read(focusStudySettingsDataSourceProvider);
     if (config.useMockData) {
       if (mounted) {
         setState(() {
@@ -159,10 +191,12 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage> {
         source.fetchActiveSession(),
         source.fetchRecentSessions(),
         source.fetchAvailableTargets(),
+        _fetchStudySettings(studySource),
       ]);
       final active = results[0] as FocusSession?;
       final recent = results[1] as List<FocusSession>;
       final targets = results[2] as List<FocusTargetOption>;
+      final studySettings = results[3] as StudyFocusSettings?;
       var selected = _selectedTargetValue;
       final requestedKind = widget.initialTargetKind;
       final requestedId = widget.initialTargetId;
@@ -184,11 +218,23 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage> {
         _initialDurationApplied = true;
         if (widget.initialPlannedMinutes == null && active == null) {
           final terminal = recent.where((session) => !session.isActive);
-          if (terminal.isNotEmpty) {
+          if (studySettings != null) {
+            plannedMinutes = studySettings.focusMinutes;
+          } else if (terminal.isNotEmpty) {
             plannedMinutes = terminal.first.plannedMinutes;
           }
         }
       }
+      final requestedRecovery = widget.initialRecoveryMinutes;
+      final recoveryMinutes = requestedRecovery != null &&
+              (requestedRecovery == 0 ||
+                  requestedRecovery >= 5 &&
+                      requestedRecovery <= 60 &&
+                      requestedRecovery.remainder(5) == 0)
+          ? requestedRecovery
+          : studySettings?.recoveryMinutes ?? 0;
+      final recoveryEndsAt =
+          active == null ? await _restoreRecoveryCountdown(recent) : null;
       if (mounted) {
         setState(() {
           _active = active;
@@ -196,6 +242,9 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage> {
           _targets = targets;
           _selectedTargetValue = selected;
           _plannedMinutes = plannedMinutes;
+          _recoveryMinutes = recoveryMinutes;
+          _studySettings = studySettings;
+          _recoveryEndsAt = recoveryEndsAt;
           _clockNow = DateTime.now();
           _loadError = null;
           _isLoading = false;
@@ -216,11 +265,40 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage> {
   void _syncTicker() {
     _ticker?.cancel();
     _ticker = null;
-    if (_active == null) return;
+    if (_active == null && _recoveryEndsAt?.isAfter(DateTime.now()) != true) {
+      return;
+    }
     _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (!mounted || _active == null) return;
-      setState(() => _clockNow = DateTime.now());
+      if (!mounted) return;
+      final now = DateTime.now();
+      final recoveryEndsAt = _recoveryEndsAt;
+      if (_active == null &&
+          recoveryEndsAt != null &&
+          !recoveryEndsAt.isAfter(now)) {
+        setState(() {
+          _clockNow = now;
+          _recoveryEndsAt = null;
+        });
+        _ticker?.cancel();
+        _ticker = null;
+        unawaited(_clearStoredRecovery());
+        return;
+      }
+      setState(() => _clockNow = now);
     });
+  }
+
+  Future<StudyFocusSettings?> _fetchStudySettings(
+    FocusSessionSupabaseDataSource? source,
+  ) async {
+    if (source == null) return null;
+    try {
+      return await source.fetchStudyFocusSettings();
+    } catch (_) {
+      // Focus execution remains usable when this optional projection is absent
+      // or temporarily unavailable.
+      return null;
+    }
   }
 
   Future<void> _chooseCustomDuration() async {
@@ -267,6 +345,10 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage> {
     if (source == null || _isSaving) {
       return;
     }
+    final prepared = await _confirmPreparation();
+    if (prepared != true || !mounted) {
+      return;
+    }
     final target = _targets
         .where((candidate) => candidate.value == _selectedTargetValue)
         .firstOrNull;
@@ -278,6 +360,7 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage> {
         sessionId: requestId,
         draft: FocusStartDraft(
           plannedMinutes: _plannedMinutes,
+          recoveryMinutes: _recoveryMinutes,
           targetKind: target?.kind,
           targetId: target?.id,
           label: target?.title ?? 'Independent focus block',
@@ -331,15 +414,17 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage> {
     final snapshotRefresh = ref.read(snapshotRefreshServiceProvider);
     setState(() => _isSaving = true);
     try {
-      await source.finishSession(active.id);
+      final finished = await source.finishSession(active.id);
       if (mounted) {
         setState(() => _selectedTargetValue = null);
       }
-      await _afterDurableWrite(active, snapshotRefresh);
+      await _startRecoveryCountdown(finished);
+      await _afterDurableWrite(finished, snapshotRefresh);
       if (mounted) {
         _showMessage(
-          'Focus session finished. Linked tasks and habits were not '
-          'completed automatically.',
+          finished.recoveryMinutes > 0
+              ? 'Focus session finished. Recovery started; linked actions were not completed automatically.'
+              : 'Focus session finished. Linked tasks and habits were not completed automatically.',
         );
       }
     } catch (error) {
@@ -354,6 +439,190 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage> {
       if (mounted) {
         setState(() => _isSaving = false);
       }
+    }
+  }
+
+  Future<bool?> _confirmPreparation() {
+    final items = _studySettings?.preparationItems
+            .where((item) => item.active)
+            .toList(growable: false) ??
+        const <FocusPreparationItem>[];
+    if (items.isEmpty) {
+      return Future.value(true);
+    }
+    final choices = <String, _PreparationChoice?>{
+      for (final item in items) item.key: null,
+    };
+    return showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          final complete = choices.values.every((choice) => choice != null);
+          return AlertDialog(
+            title: const Text('Prepare to focus'),
+            content: SizedBox(
+              width: 520,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'These choices are only for this start. They are not saved or evaluated.',
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    for (final item in items)
+                      Padding(
+                        padding: const EdgeInsets.only(
+                          bottom: AppSpacing.md,
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              item.label,
+                              style: Theme.of(context).textTheme.titleSmall,
+                            ),
+                            const SizedBox(height: AppSpacing.xs),
+                            Wrap(
+                              spacing: AppSpacing.sm,
+                              runSpacing: AppSpacing.xs,
+                              children: [
+                                ChoiceChip(
+                                  label: const Text('Ready'),
+                                  selected: choices[item.key] ==
+                                      _PreparationChoice.ready,
+                                  onSelected: (_) {
+                                    setDialogState(() {
+                                      choices[item.key] =
+                                          _PreparationChoice.ready;
+                                    });
+                                  },
+                                ),
+                                ChoiceChip(
+                                  label: const Text('Not needed today'),
+                                  selected: choices[item.key] ==
+                                      _PreparationChoice.notNeeded,
+                                  onSelected: (_) {
+                                    setDialogState(() {
+                                      choices[item.key] =
+                                          _PreparationChoice.notNeeded;
+                                    });
+                                  },
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(false),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                key: const ValueKey('focus-skip-preparation'),
+                onPressed: () => Navigator.of(dialogContext).pop(true),
+                child: const Text('Skip remaining and start'),
+              ),
+              FilledButton(
+                key: const ValueKey('focus-preparation-start'),
+                onPressed: complete
+                    ? () => Navigator.of(dialogContext).pop(true)
+                    : null,
+                child: const Text('Start'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Future<void> _startRecoveryCountdown(FocusSession session) async {
+    if (session.recoveryMinutes <= 0 ||
+        session.status != FocusSessionStatus.completed) {
+      return;
+    }
+    final startedAt = session.endedAt ?? DateTime.now();
+    final endsAt = startedAt.add(
+      Duration(minutes: session.recoveryMinutes),
+    );
+    try {
+      final preferences = await SharedPreferences.getInstance();
+      await preferences.setString(
+        _recoveryPreferenceKey,
+        '${session.id}|${endsAt.toUtc().toIso8601String()}',
+      );
+    } catch (_) {
+      // The visible countdown still works for this app process.
+    }
+    if (mounted) {
+      setState(() {
+        _clockNow = DateTime.now();
+        _recoveryEndsAt = endsAt;
+      });
+      _syncTicker();
+    }
+  }
+
+  Future<DateTime?> _restoreRecoveryCountdown(
+    List<FocusSession> recent,
+  ) async {
+    final completedRecoveryIds = recent
+        .where(
+          (session) =>
+              session.status == FocusSessionStatus.completed &&
+              session.recoveryMinutes > 0,
+        )
+        .map((session) => session.id)
+        .toSet();
+    if (completedRecoveryIds.isEmpty) {
+      return null;
+    }
+    try {
+      final preferences = await SharedPreferences.getInstance();
+      final raw = preferences.getString(_recoveryPreferenceKey);
+      if (raw == null) return null;
+      final separator = raw.indexOf('|');
+      if (separator <= 0) {
+        await preferences.remove(_recoveryPreferenceKey);
+        return null;
+      }
+      final sessionId = raw.substring(0, separator);
+      final endsAt = DateTime.tryParse(raw.substring(separator + 1));
+      if (!completedRecoveryIds.contains(sessionId) ||
+          endsAt == null ||
+          !endsAt.isAfter(DateTime.now())) {
+        await preferences.remove(_recoveryPreferenceKey);
+        return null;
+      }
+      return endsAt.toLocal();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _skipRecovery() async {
+    await _clearStoredRecovery();
+    if (!mounted) return;
+    setState(() {
+      _recoveryEndsAt = null;
+      _clockNow = DateTime.now();
+    });
+    _syncTicker();
+  }
+
+  Future<void> _clearStoredRecovery() async {
+    try {
+      final preferences = await SharedPreferences.getInstance();
+      await preferences.remove(_recoveryPreferenceKey);
+    } catch (_) {
+      // Local storage availability must not block Focus.
     }
   }
 
@@ -476,6 +745,7 @@ class _FocusLoadErrorCard extends StatelessWidget {
 class _StartFocusCard extends StatelessWidget {
   const _StartFocusCard({
     required this.plannedMinutes,
+    required this.recoveryMinutes,
     required this.suggestion,
     required this.targets,
     required this.selectedTargetValue,
@@ -487,6 +757,7 @@ class _StartFocusCard extends StatelessWidget {
   });
 
   final int plannedMinutes;
+  final int recoveryMinutes;
   final FocusPreferenceSuggestion? suggestion;
   final List<FocusTargetOption> targets;
   final String? selectedTargetValue;
@@ -519,6 +790,14 @@ class _StartFocusCard extends StatelessWidget {
             'Finishing records focused time. It never completes a linked '
             'task or habit automatically.',
           ),
+          if (recoveryMinutes > 0) ...[
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              '$plannedMinutes min focus + $recoveryMinutes min recovery',
+              key: const ValueKey('focus-rhythm-summary'),
+              style: Theme.of(context).textTheme.titleSmall,
+            ),
+          ],
           const SizedBox(height: AppSpacing.lg),
           SegmentedButton<int>(
             direction: _focusChoiceDirection(context),
@@ -672,7 +951,8 @@ class _ActiveFocusCard extends StatelessWidget {
           const SizedBox(height: AppSpacing.xs),
           Text(
             'Started ${DateFormat.Hm().format(session.startedAt.toLocal())} · '
-            '${session.plannedMinutes} planned minutes',
+            '${session.plannedMinutes} planned minutes'
+            '${session.recoveryMinutes > 0 ? ' · ${session.recoveryMinutes} min recovery after completion' : ''}',
             style: Theme.of(context).textTheme.bodySmall,
           ),
           const SizedBox(height: AppSpacing.lg),
@@ -719,6 +999,75 @@ class _ActiveFocusCard extends StatelessWidget {
                 ),
               ),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RecoveryCard extends StatelessWidget {
+  const _RecoveryCard({
+    required this.endsAt,
+    required this.now,
+    required this.onSkip,
+  });
+
+  final DateTime endsAt;
+  final DateTime now;
+  final VoidCallback onSkip;
+
+  @override
+  Widget build(BuildContext context) {
+    final remaining =
+        endsAt.isAfter(now) ? endsAt.difference(now) : Duration.zero;
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.self_improvement_outlined,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Text(
+                  'Recovery break',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          const Text(
+            'This local countdown is not a focus session and does not add progress or preparation time.',
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          Semantics(
+            liveRegion: true,
+            label: '${_focusTimerText(remaining)} recovery remaining',
+            child: Text(
+              _focusTimerText(remaining),
+              key: const ValueKey('recovery-countdown'),
+              style: Theme.of(context).textTheme.displaySmall?.copyWith(
+                fontFeatures: const [FontFeature.tabularFigures()],
+              ),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            'Reserved recovery ends at ${DateFormat.Hm().format(endsAt)}',
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton(
+              key: const ValueKey('skip-recovery'),
+              onPressed: onSkip,
+              child: const Text('Skip recovery'),
+            ),
           ),
         ],
       ),

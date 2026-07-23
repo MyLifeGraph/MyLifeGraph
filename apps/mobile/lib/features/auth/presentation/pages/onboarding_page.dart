@@ -12,9 +12,14 @@ import '../../domain/intake_response.dart';
 import '../providers/setup_providers.dart';
 
 class OnboardingPage extends ConsumerStatefulWidget {
-  const OnboardingPage({super.key, this.editing = false});
+  const OnboardingPage({
+    super.key,
+    this.editing = false,
+    this.openStudySetup = false,
+  });
 
   final bool editing;
+  final bool openStudySetup;
 
   @override
   ConsumerState<OnboardingPage> createState() => _OnboardingPageState();
@@ -167,6 +172,41 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                               ),
                               const SizedBox(height: AppSpacing.md),
                               _OptionalSetupSection(
+                                key: const ValueKey('optional-focus-setup'),
+                                title: 'Focus setup',
+                                subtitle:
+                                    'Optional · rhythm and a local start ritual',
+                                initiallyExpanded: false,
+                                children: [
+                                  _StudyFocusEditor(
+                                    rhythm: draft.studySetup?.focusRhythm,
+                                    onChanged: (rhythm) {
+                                      _updateStudyFocus(draft, rhythm);
+                                    },
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: AppSpacing.md),
+                              _OptionalSetupSection(
+                                key: const ValueKey(
+                                  'optional-semester-planning',
+                                ),
+                                title: 'Semester planning',
+                                subtitle:
+                                    'Optional · current semester and next course selection window',
+                                initiallyExpanded: widget.openStudySetup,
+                                children: [
+                                  _StudySemesterEditor(
+                                    planning:
+                                        draft.studySetup?.semesterPlanning,
+                                    onChanged: (planning) {
+                                      _updateSemesterPlanning(draft, planning);
+                                    },
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: AppSpacing.md),
+                              _OptionalSetupSection(
                                 key: const ValueKey('optional-commitments'),
                                 title: 'Fixed commitments',
                                 subtitle:
@@ -176,6 +216,8 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                                 children: [
                                   _CommitmentEditors(
                                     commitments: draft.fixedCommitments,
+                                    currentSemester: draft.studySetup
+                                        ?.semesterPlanning?.currentSemester,
                                     onChanged: (commitments) {
                                       _updateDraft(
                                         draft.copyWith(
@@ -293,6 +335,32 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
 
   void _updateDraft(IntakeResponseDraft draft) {
     ref.read(setupControllerProvider.notifier).updateDraft(draft);
+  }
+
+  void _updateStudyFocus(
+    IntakeResponseDraft draft,
+    StudyFocusRhythmDraft? rhythm,
+  ) {
+    final study = (draft.studySetup ??
+            const StudySetupDraft(
+              focusRhythm: null,
+              semesterPlanning: null,
+            ))
+        .copyWith(focusRhythm: rhythm);
+    _updateDraft(draft.copyWith(studySetup: study.isEmpty ? null : study));
+  }
+
+  void _updateSemesterPlanning(
+    IntakeResponseDraft draft,
+    StudySemesterPlanningDraft? planning,
+  ) {
+    final study = (draft.studySetup ??
+            const StudySetupDraft(
+              focusRhythm: null,
+              semesterPlanning: null,
+            ))
+        .copyWith(semesterPlanning: planning);
+    _updateDraft(draft.copyWith(studySetup: study.isEmpty ? null : study));
   }
 
   Future<void> _save() async {
@@ -816,13 +884,530 @@ class _RoutineEditors extends StatelessWidget {
   }
 }
 
+class _StudyFocusEditor extends StatelessWidget {
+  const _StudyFocusEditor({
+    required this.rhythm,
+    required this.onChanged,
+  });
+
+  final StudyFocusRhythmDraft? rhythm;
+  final ValueChanged<StudyFocusRhythmDraft?> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final value = rhythm;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SwitchListTile.adaptive(
+          key: const ValueKey('study-focus-enabled'),
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Use a study rhythm'),
+          subtitle: const Text(
+            'New study plans can reserve a full recovery buffer after each focus block.',
+          ),
+          value: value != null,
+          onChanged: (enabled) {
+            onChanged(enabled ? StudyFocusRhythmDraft.defaults() : null);
+          },
+        ),
+        if (value != null) ...[
+          const SizedBox(height: AppSpacing.md),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final fields = [
+                DropdownButtonFormField<int>(
+                  key: const ValueKey('study-focus-minutes'),
+                  initialValue: value.focusMinutes,
+                  decoration: const InputDecoration(
+                    labelText: 'Focus length',
+                    helperText: '25–180 minutes',
+                  ),
+                  items: [
+                    for (var minutes = 25; minutes <= 180; minutes += 5)
+                      DropdownMenuItem(
+                        value: minutes,
+                        child: Text('$minutes minutes'),
+                      ),
+                  ],
+                  onChanged: (minutes) {
+                    if (minutes != null) {
+                      onChanged(value.copyWith(focusMinutes: minutes));
+                    }
+                  },
+                ),
+                DropdownButtonFormField<int>(
+                  key: const ValueKey('study-recovery-minutes'),
+                  initialValue: value.recoveryMinutes,
+                  decoration: const InputDecoration(
+                    labelText: 'Recovery length',
+                    helperText: '5–60 minutes',
+                  ),
+                  items: [
+                    for (var minutes = 5; minutes <= 60; minutes += 5)
+                      DropdownMenuItem(
+                        value: minutes,
+                        child: Text('$minutes minutes'),
+                      ),
+                  ],
+                  onChanged: (minutes) {
+                    if (minutes != null) {
+                      onChanged(value.copyWith(recoveryMinutes: minutes));
+                    }
+                  },
+                ),
+              ];
+              if (constraints.maxWidth < 560) {
+                return Column(
+                  children: [
+                    fields.first,
+                    const SizedBox(height: AppSpacing.md),
+                    fields.last,
+                  ],
+                );
+              }
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: fields.first),
+                  const SizedBox(width: AppSpacing.md),
+                  Expanded(child: fields.last),
+                ],
+              );
+            },
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          Text(
+            'Start ritual',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            'This checklist appears before a focus session. Ready and “not needed today” choices stay on this device only for that start and are never saved or scored.',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: _SetupColors.muted(context),
+                ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          for (var index = 0; index < value.preparationItems.length; index++)
+            Padding(
+              padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+              child: _EditorCard(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: TextFormField(
+                        key: ValueKey(
+                          'study-ritual-${value.preparationItems[index].key}',
+                        ),
+                        initialValue: value.preparationItems[index].label,
+                        maxLength: 120,
+                        decoration: const InputDecoration(
+                          labelText: 'Preparation item',
+                        ),
+                        onChanged: (label) {
+                          _replaceItem(
+                            value,
+                            index,
+                            value.preparationItems[index].copyWith(
+                              label: label,
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.sm),
+                    Column(
+                      children: [
+                        Switch.adaptive(
+                          value: value.preparationItems[index].active,
+                          onChanged: (active) {
+                            _replaceItem(
+                              value,
+                              index,
+                              value.preparationItems[index].copyWith(
+                                active: active,
+                              ),
+                            );
+                          },
+                        ),
+                        Wrap(
+                          spacing: 0,
+                          children: [
+                            IconButton(
+                              tooltip: 'Move up',
+                              onPressed: index == 0
+                                  ? null
+                                  : () => _moveItem(value, index, index - 1),
+                              icon: const Icon(Icons.arrow_upward),
+                            ),
+                            IconButton(
+                              tooltip: 'Move down',
+                              onPressed: index ==
+                                      value.preparationItems.length - 1
+                                  ? null
+                                  : () => _moveItem(value, index, index + 1),
+                              icon: const Icon(Icons.arrow_downward),
+                            ),
+                            IconButton(
+                              tooltip: 'Remove preparation item',
+                              onPressed: () {
+                                final items = [...value.preparationItems]
+                                  ..removeAt(index);
+                                onChanged(
+                                  value.copyWith(preparationItems: items),
+                                );
+                              },
+                              icon: const Icon(Icons.delete_outline),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              key: const ValueKey('study-ritual-add'),
+              onPressed: value.preparationItems.length >= 12
+                  ? null
+                  : () {
+                      onChanged(
+                        value.copyWith(
+                          preparationItems: [
+                            ...value.preparationItems,
+                            StudyPreparationItemDraft(
+                              key: generateSetupUuid(),
+                              label: '',
+                              active: true,
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+              icon: const Icon(Icons.add),
+              label: const Text('Add your own item'),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  void _replaceItem(
+    StudyFocusRhythmDraft value,
+    int index,
+    StudyPreparationItemDraft item,
+  ) {
+    final items = [...value.preparationItems];
+    items[index] = item;
+    onChanged(value.copyWith(preparationItems: items));
+  }
+
+  void _moveItem(StudyFocusRhythmDraft value, int from, int to) {
+    final items = [...value.preparationItems];
+    final item = items.removeAt(from);
+    items.insert(to, item);
+    onChanged(value.copyWith(preparationItems: items));
+  }
+}
+
+class _StudySemesterEditor extends StatelessWidget {
+  const _StudySemesterEditor({
+    required this.planning,
+    required this.onChanged,
+  });
+
+  final StudySemesterPlanningDraft? planning;
+  final ValueChanged<StudySemesterPlanningDraft?> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final value = planning;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SwitchListTile.adaptive(
+          key: const ValueKey('study-semester-enabled'),
+          contentPadding: EdgeInsets.zero,
+          title: const Text('Track semester dates'),
+          subtitle: const Text(
+            'Course selection stays a reminder in Planner. It never creates tasks, changes a calendar, or sends a notification.',
+          ),
+          value: value != null,
+          onChanged: (enabled) {
+            onChanged(
+              enabled ? StudySemesterPlanningDraft.empty() : null,
+            );
+          },
+        ),
+        if (value != null) ...[
+          const SizedBox(height: AppSpacing.md),
+          _EditorCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Current semester',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: AppSpacing.md),
+                TextFormField(
+                  key: const ValueKey('study-current-semester-name'),
+                  initialValue: value.currentSemester.name,
+                  maxLength: 120,
+                  decoration: const InputDecoration(labelText: 'Name'),
+                  onChanged: (name) {
+                    onChanged(
+                      value.copyWith(
+                        currentSemester:
+                            value.currentSemester.copyWith(name: name),
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                _StudyDateButtons(
+                  startKey: const ValueKey('study-current-semester-start'),
+                  endKey: const ValueKey('study-current-semester-end'),
+                  startLabel: 'Starts',
+                  endLabel: 'Ends',
+                  start: value.currentSemester.startsOn,
+                  end: value.currentSemester.endsOn,
+                  onStartChanged: (date) {
+                    onChanged(
+                      value.copyWith(
+                        currentSemester:
+                            value.currentSemester.copyWith(startsOn: date),
+                      ),
+                    );
+                  },
+                  onEndChanged: (date) {
+                    onChanged(
+                      value.copyWith(
+                        currentSemester:
+                            value.currentSemester.copyWith(endsOn: date),
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                Text(
+                  'Only newly added fixed commitments are prefilled with these dates. Existing commitments are never changed.',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: _SetupColors.muted(context),
+                      ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          _EditorCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Next semester',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: AppSpacing.md),
+                TextFormField(
+                  key: const ValueKey('study-next-semester-name'),
+                  initialValue: value.nextSemester.name,
+                  maxLength: 120,
+                  decoration: const InputDecoration(labelText: 'Name'),
+                  onChanged: (name) {
+                    onChanged(
+                      value.copyWith(
+                        nextSemester: value.nextSemester.copyWith(name: name),
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                _StudyDateButtons(
+                  startKey: const ValueKey('study-next-semester-start'),
+                  endKey: const ValueKey('study-next-semester-end'),
+                  startLabel: 'Starts',
+                  endLabel: 'Ends',
+                  start: value.nextSemester.startsOn,
+                  end: value.nextSemester.endsOn,
+                  onStartChanged: (date) {
+                    onChanged(
+                      value.copyWith(
+                        nextSemester:
+                            value.nextSemester.copyWith(startsOn: date),
+                      ),
+                    );
+                  },
+                  onEndChanged: (date) {
+                    onChanged(
+                      value.copyWith(
+                        nextSemester: value.nextSemester.copyWith(endsOn: date),
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                Text(
+                  'Course selection window',
+                  style: Theme.of(context).textTheme.titleSmall,
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                _StudyDateButtons(
+                  startKey: const ValueKey('study-course-selection-start'),
+                  endKey: const ValueKey('study-course-selection-end'),
+                  startLabel: 'Opens',
+                  endLabel: 'Closes',
+                  start: value.nextSemester.courseSelectionStartsOn,
+                  end: value.nextSemester.courseSelectionEndsOn,
+                  onStartChanged: (date) {
+                    onChanged(
+                      value.copyWith(
+                        nextSemester: value.nextSemester.copyWith(
+                          courseSelectionStartsOn: date,
+                        ),
+                      ),
+                    );
+                  },
+                  onEndChanged: (date) {
+                    onChanged(
+                      value.copyWith(
+                        nextSemester: value.nextSemester.copyWith(
+                          courseSelectionEndsOn: date,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+                const SizedBox(height: AppSpacing.md),
+                TextFormField(
+                  key: const ValueKey('study-course-names'),
+                  initialValue: value.nextSemester.courseNames.join('\n'),
+                  minLines: 3,
+                  maxLines: 12,
+                  decoration: const InputDecoration(
+                    labelText: 'Courses optional',
+                    hintText: 'One unique course name per line · up to 12',
+                  ),
+                  onChanged: (text) {
+                    onChanged(
+                      value.copyWith(
+                        nextSemester: value.nextSemester.copyWith(
+                          courseNames: _listFromText(text),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+                SwitchListTile.adaptive(
+                  key: const ValueKey(
+                    'study-course-selection-completed',
+                  ),
+                  contentPadding: EdgeInsets.zero,
+                  title: const Text('Course selection completed'),
+                  subtitle: const Text(
+                    'One status for the full selection window.',
+                  ),
+                  value: value.nextSemester.courseSelectionCompleted,
+                  onChanged: (completed) {
+                    onChanged(
+                      value.copyWith(
+                        nextSemester: value.nextSemester.copyWith(
+                          courseSelectionCompleted: completed,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _StudyDateButtons extends StatelessWidget {
+  const _StudyDateButtons({
+    required this.startKey,
+    required this.endKey,
+    required this.startLabel,
+    required this.endLabel,
+    required this.start,
+    required this.end,
+    required this.onStartChanged,
+    required this.onEndChanged,
+  });
+
+  final Key startKey;
+  final Key endKey;
+  final String startLabel;
+  final String endLabel;
+  final DateTime? start;
+  final DateTime? end;
+  final ValueChanged<DateTime> onStartChanged;
+  final ValueChanged<DateTime> onEndChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: AppSpacing.sm,
+      runSpacing: AppSpacing.sm,
+      children: [
+        OutlinedButton.icon(
+          key: startKey,
+          onPressed: () => _pick(context, start ?? end, onStartChanged),
+          icon: const Icon(Icons.date_range_outlined),
+          label: Text(
+            start == null ? startLabel : '$startLabel ${_dateLabel(start!)}',
+          ),
+        ),
+        OutlinedButton.icon(
+          key: endKey,
+          onPressed: () => _pick(context, end ?? start, onEndChanged),
+          icon: const Icon(Icons.event_available_outlined),
+          label: Text(
+            end == null ? endLabel : '$endLabel ${_dateLabel(end!)}',
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _pick(
+    BuildContext context,
+    DateTime? current,
+    ValueChanged<DateTime> onSelected,
+  ) async {
+    final now = DateTime.now();
+    final initial = current ?? DateTime(now.year, now.month, now.day);
+    final selected = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100, 12, 31),
+    );
+    if (selected != null) {
+      onSelected(DateTime.utc(selected.year, selected.month, selected.day));
+    }
+  }
+}
+
 class _CommitmentEditors extends StatelessWidget {
   const _CommitmentEditors({
     required this.commitments,
+    required this.currentSemester,
     required this.onChanged,
   });
 
   final List<IntakeCommitmentDraft> commitments;
+  final StudySemesterDraft? currentSemester;
   final ValueChanged<List<IntakeCommitmentDraft>> onChanged;
 
   @override
@@ -1064,6 +1649,8 @@ class _CommitmentEditors extends StatelessWidget {
                         weekday: null,
                         startsAt: '',
                         endsAt: '',
+                        validFrom: currentSemester?.startsOn,
+                        validUntil: currentSemester?.endsOn,
                       ),
                     ]);
                   },

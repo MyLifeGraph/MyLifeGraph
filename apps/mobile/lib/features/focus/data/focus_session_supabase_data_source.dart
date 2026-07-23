@@ -76,6 +76,23 @@ class FocusSessionSupabaseDataSource {
     return targets;
   }
 
+  Future<StudyFocusSettings?> fetchStudyFocusSettings() async {
+    final userId = await AppUserResolver(_client).resolveUserId();
+    final row = await _client
+        .from(SupabaseTables.studySetupProfiles)
+        .select(
+          'focus_minutes,recovery_minutes,preparation_items,setup_revision',
+        )
+        .eq('user_id', userId)
+        .maybeSingle();
+    if (row == null ||
+        row['focus_minutes'] == null ||
+        row['recovery_minutes'] == null) {
+      return null;
+    }
+    return StudyFocusSettings.fromRow(Map<String, dynamic>.from(row));
+  }
+
   Future<FocusSession> startSession({
     required String sessionId,
     required FocusStartDraft draft,
@@ -90,6 +107,7 @@ class FocusSessionSupabaseDataSource {
     if (existing != null) {
       if (existing.id == sessionId &&
           existing.plannedMinutes == draft.plannedMinutes &&
+          existing.recoveryMinutes == draft.recoveryMinutes &&
           existing.targetKind == draft.targetKind &&
           existing.targetId == draft.targetId) {
         return existing;
@@ -127,6 +145,8 @@ class FocusSessionSupabaseDataSource {
               'source': 'flutter-focus-v1',
               'contract_version': 'focus-session-v1',
               'entry_date': localDateKey(nowValue),
+              if (draft.recoveryMinutes > 0)
+                'recovery_minutes': draft.recoveryMinutes,
               'action_target': {
                 'contract_version': 'executable-action-v1',
                 'id': 'start_focus:$sessionId',

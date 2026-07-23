@@ -351,6 +351,134 @@ void main() {
         ),
       );
     });
+
+    test('study setup defaults are 45/10 with neutral suggestions only', () {
+      final rhythm = StudyFocusRhythmDraft.defaults();
+
+      expect(rhythm.focusMinutes, 45);
+      expect(rhythm.recoveryMinutes, 10);
+      expect(
+        rhythm.preparationItems.map((item) => item.label),
+        studyPreparationSuggestions,
+      );
+      expect(
+        rhythm.preparationItems.every((item) => item.active),
+        isTrue,
+      );
+      expect(
+        rhythm.preparationItems.every(
+          (item) => isCanonicalStudyUuid(item.key),
+        ),
+        isTrue,
+      );
+      expect(
+        rhythm.preparationItems.any(
+          (item) => item.label.toLowerCase().contains('nicotine'),
+        ),
+        isFalse,
+      );
+    });
+
+    test('exact optional study setup round-trips without coercion', () {
+      final source = {
+        ..._requiredDraft().toJson(),
+        'study_setup': _studySetup().toJson(),
+      };
+
+      final parsed = IntakeResponseDraft.fromJson(source);
+
+      expect(parsed.studySetup?.toJson(), source['study_setup']);
+      expect(parsed.validationErrors(), isEmpty);
+      expect(
+        parsed
+            .studySetup!.semesterPlanning!.nextSemester.courseSelectionStartsOn,
+        DateTime.utc(2026, 8, 15),
+      );
+    });
+
+    test('study setup rejects null, unknown keys, and scalar coercion', () {
+      for (final value in <Map<String, dynamic>>[
+        {'focus_rhythm': null},
+        {'unknown': true},
+        {
+          'focus_rhythm': {
+            ..._studySetup().focusRhythm!.toJson(),
+            'focus_minutes': '45',
+          },
+        },
+        {
+          'focus_rhythm': {
+            ..._studySetup().focusRhythm!.toJson(),
+            'preparation_items': [
+              {
+                ..._studySetup().focusRhythm!.preparationItems.first.toJson(),
+                'active': 1,
+              },
+            ],
+          },
+        },
+      ]) {
+        expect(
+          () => StudySetupDraft.fromJson(value),
+          throwsA(isA<FormatException>()),
+          reason: '$value must be rejected',
+        );
+      }
+    });
+
+    test('study validation catches duplicates, bounds, and date order', () {
+      final duplicateRitual = _studySetup().copyWith(
+        focusRhythm: _studySetup().focusRhythm!.copyWith(
+          preparationItems: const [
+            StudyPreparationItemDraft(
+              key: '4abc0000-0000-4000-8000-000000000001',
+              label: 'Water',
+              active: true,
+            ),
+            StudyPreparationItemDraft(
+              key: '5abc0000-0000-4000-8000-000000000002',
+              label: 'water',
+              active: false,
+            ),
+          ],
+        ),
+      );
+      final invalidDates = _studySetup().copyWith(
+        semesterPlanning: _studySetup().semesterPlanning!.copyWith(
+              nextSemester:
+                  _studySetup().semesterPlanning!.nextSemester.copyWith(
+                        courseSelectionStartsOn: DateTime.utc(2026, 9, 16),
+                        courseSelectionEndsOn: DateTime.utc(2026, 9, 15),
+                      ),
+            ),
+      );
+      final invalidBounds = _studySetup().copyWith(
+        focusRhythm: _studySetup().focusRhythm!.copyWith(
+              focusMinutes: 46,
+              recoveryMinutes: 11,
+            ),
+      );
+
+      expect(
+        _requiredDraft()
+            .copyWith(studySetup: duplicateRitual)
+            .validationErrors(),
+        contains(
+          'Preparation item labels must be unique and 120 characters or fewer.',
+        ),
+      );
+      expect(
+        _requiredDraft().copyWith(studySetup: invalidDates).validationErrors(),
+        contains('Semester and course selection dates are out of order.'),
+      );
+      expect(
+        _requiredDraft().copyWith(studySetup: invalidBounds).validationErrors(),
+        containsAll([
+          'Focus rhythm must be 25–180 minutes in five-minute steps.',
+          'Recovery must be 5–60 minutes in five-minute steps.',
+        ]),
+      );
+    });
   });
 
   test('secure setup uuid has RFC 4122 v4 shape', () {
@@ -385,5 +513,37 @@ IntakeResponseDraft _requiredDraft() {
     fixedCommitments: [],
     contextNote: null,
     calendarConnectionIntent: null,
+  );
+}
+
+StudySetupDraft _studySetup() {
+  return StudySetupDraft(
+    focusRhythm: StudyFocusRhythmDraft(
+      focusMinutes: 45,
+      recoveryMinutes: 10,
+      preparationItems: const [
+        StudyPreparationItemDraft(
+          key: '4abc0000-0000-4000-8000-000000000001',
+          label: 'Water',
+          active: true,
+        ),
+      ],
+    ),
+    semesterPlanning: StudySemesterPlanningDraft(
+      currentSemester: StudySemesterDraft(
+        name: 'Summer 2026',
+        startsOn: DateTime.utc(2026, 4),
+        endsOn: DateTime.utc(2026, 9, 30),
+      ),
+      nextSemester: StudyNextSemesterDraft(
+        name: 'Winter 2026/27',
+        startsOn: DateTime.utc(2026, 10),
+        endsOn: DateTime.utc(2027, 3, 31),
+        courseSelectionStartsOn: DateTime.utc(2026, 8, 15),
+        courseSelectionEndsOn: DateTime.utc(2026, 9, 15),
+        courseNames: const ['Algorithms', 'Linear algebra'],
+        courseSelectionCompleted: false,
+      ),
+    ),
   );
 }

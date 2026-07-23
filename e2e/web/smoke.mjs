@@ -76,6 +76,7 @@ const accountExportV1TableNames = [
   'habit_logs',
   'focus_sessions',
   'intake_responses',
+  'study_setup_profiles',
   'user_state_snapshots',
   'daily_briefings',
   'decision_feedback',
@@ -180,6 +181,19 @@ try {
   await selectDropdownOption(page, 'Best energy window required', 'Morning');
   await selectDropdownOption(page, 'Coaching style required', 'Direct');
   await clickChoiceChip(page, 'Prefer no reminders');
+  await scrollFlutterPage(page, 1100);
+  await toggleSetupSection(page, 'Focus setup', 'Use a study rhythm');
+  await page
+    .getByLabel('Use a study rhythm', { exact: false })
+    .first()
+    .click();
+  await expectText(page, '45 minutes');
+  await expectText(page, '10 minutes');
+  await expectText(page, 'Start ritual');
+  await scrollUntilTextInViewport(page, 'Save setup', {
+    deltaY: 900,
+    buttonFirst: true,
+  });
   await clickByText(page, 'Save setup');
 
   await page.waitForURL('**/#/dashboard');
@@ -202,8 +216,53 @@ try {
       arraysEqual(rows[0].responses?.friction_points, []) &&
       arraysEqual(rows[0].responses?.routines, []) &&
       arraysEqual(rows[0].responses?.fixed_commitments, []) &&
+      rows[0].responses?.study_setup?.focus_rhythm?.focus_minutes === 45 &&
+      rows[0].responses?.study_setup?.focus_rhythm?.recovery_minutes === 10 &&
+      arraysEqual(
+        rows[0].responses?.study_setup?.focus_rhythm?.preparation_items?.map(
+          (item) => item.label,
+        ),
+        [
+          'Water',
+          'Small snack',
+          'Bathroom',
+          'Flight or focus mode',
+          'Study materials',
+        ],
+      ) &&
+      !Object.hasOwn(
+        rows[0].responses?.study_setup ?? {},
+        'semester_planning',
+      ) &&
       !Object.hasOwn(rows[0].responses ?? {}, 'calendar_connection_intent'),
-    'applied revision 1 with exact empty optional setup answers',
+    'applied revision 1 with exact Focus setup defaults',
+  );
+  await waitForRows(
+    `study_setup_profiles?select=user_id,contract_version,focus_minutes,recovery_minutes,preparation_items,current_semester,next_semester,setup_revision&user_id=eq.${user.id}`,
+    (rows) =>
+      rows.length === 1 &&
+      rows[0].contract_version === 'study-setup-v1' &&
+      rows[0].focus_minutes === 45 &&
+      rows[0].recovery_minutes === 10 &&
+      arraysEqual(
+        rows[0].preparation_items?.map((item) => item.label),
+        [
+          'Water',
+          'Small snack',
+          'Bathroom',
+          'Flight or focus mode',
+          'Study materials',
+        ],
+      ) &&
+      rows[0].preparation_items?.every(
+        (item) =>
+          typeof item.key === 'string' &&
+          item.active === true,
+      ) &&
+      rows[0].current_semester === null &&
+      rows[0].next_semester === null &&
+      rows[0].setup_revision === 1,
+    'Study Setup projection at revision 1',
   );
   await waitForRows(
     `user_state_snapshots?select=id,scope,period_key,summary,signals,metadata&user_id=eq.${user.id}&scope=eq.onboarding`,
@@ -1658,6 +1717,12 @@ try {
     loseCommittedFocusStartResponse,
   );
   await clickByText(page, 'Start focus session');
+  await expectText(page, 'Prepare to focus');
+  await expectText(
+    page,
+    'These choices are only for this start. They are not saved or evaluated.',
+  );
+  await clickByText(page, 'Skip remaining and start');
   await expectText(page, 'Focus session started.');
   await page.unroute(
     '**/rest/v1/focus_sessions**',
@@ -1670,19 +1735,21 @@ try {
     `focus_sessions?select=id,status,started_at,ended_at,planned_minutes,actual_minutes,task_id,habit_id,metadata,updated_at&user_id=eq.${user.id}&status=eq.active`,
     (rows) =>
       rows.length === 1 &&
-      rows[0].planned_minutes === 25 &&
+      rows[0].planned_minutes === 45 &&
       rows[0].task_id === phase3TaskId &&
       rows[0].habit_id === null &&
       rows[0].ended_at === null &&
       rows[0].actual_minutes === null &&
+      rows[0].metadata?.recovery_minutes === 10 &&
       rows[0].metadata?.contract_version === 'focus-session-v1' &&
       rows[0].metadata?.action_target?.contract_version ===
         'executable-action-v1' &&
       rows[0].metadata?.action_target?.kind === 'focus' &&
       rows[0].metadata?.action_target?.command === 'start_focus' &&
+      rows[0].metadata?.action_target?.estimated_minutes === 45 &&
       rows[0].metadata?.action_target?.target_id === phase3TaskId &&
       rows[0].metadata?.action_target?.metadata?.target_kind === 'task' &&
-      rows[0].metadata?.action_target?.metadata?.focus_minutes === 25,
+      rows[0].metadata?.action_target?.metadata?.focus_minutes === 45,
     'one task-linked active focus session',
   );
   const completedFocusId = activeFocusRows[0].id;
@@ -1724,7 +1791,12 @@ try {
   await clickByText(page, 'Finish focus session');
   await expectText(
     page,
-    'Focus session finished. Linked tasks and habits were not completed automatically.',
+    'Focus session finished. Recovery started; linked actions were not completed automatically.',
+  );
+  await expectText(page, 'Recovery break');
+  await expectText(
+    page,
+    'This local countdown is not a focus session and does not add progress or preparation time.',
   );
   await page.unroute(
     '**/rest/v1/focus_sessions**',
@@ -1780,14 +1852,19 @@ try {
     'A terminal focus session is immutable.',
   );
 
+  await clickByText(page, 'Skip recovery');
   await expectText(page, 'Independent focus block');
   await clickByText(page, 'Start focus session');
+  await expectText(page, 'Prepare to focus');
+  await clickByText(page, 'Skip remaining and start');
   const secondFocusRows = await waitForRows(
-    `focus_sessions?select=id,status,task_id,habit_id&user_id=eq.${user.id}&status=eq.active`,
+    `focus_sessions?select=id,status,planned_minutes,task_id,habit_id,metadata&user_id=eq.${user.id}&status=eq.active`,
     (rows) =>
       rows.length === 1 &&
+      rows[0].planned_minutes === 45 &&
       rows[0].task_id === null &&
-      rows[0].habit_id === null,
+      rows[0].habit_id === null &&
+      rows[0].metadata?.recovery_minutes === 10,
     'one independent active focus session after prior finish',
   );
   await clickByText(page, 'Abandon');
@@ -2293,12 +2370,18 @@ async function scrollFlutterPagePrecisely(page, deltaY) {
 }
 
 async function clickChoiceChip(page, label) {
-  const labelPattern = new RegExp(escapeRegExp(label), 'i');
+  const labelPattern = new RegExp(
+    `^${escapeRegExp(label)}(?:\\s+(?:selected|not selected|checked|unchecked))?$`,
+    'i',
+  );
   const candidates = [
+    page.getByRole('button', { name: label, exact: true }).first(),
+    page.getByRole('checkbox', { name: label, exact: true }).first(),
+    page.getByLabel(label, { exact: true }).first(),
+    page.getByText(label, { exact: true }).first(),
     page.getByRole('button', { name: labelPattern }).first(),
     page.getByRole('checkbox', { name: labelPattern }).first(),
     page.getByLabel(labelPattern).first(),
-    page.getByText(label, { exact: true }).first(),
   ];
 
   let lastError;
@@ -2314,6 +2397,23 @@ async function clickChoiceChip(page, label) {
   throw new Error(`Could not select choice ${label}: ${lastError}`);
 }
 
+async function checkSemanticCheckbox(page, checkbox, label) {
+  await checkbox.scrollIntoViewIfNeeded({ timeout: 5000 });
+  await page.waitForTimeout(200);
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    if (await checkbox.isChecked()) {
+      return;
+    }
+    // Flutter can rebuild a semantics node between Playwright's actionability
+    // check and its coordinate click. Dispatch the action on the re-resolved
+    // semantic checkbox so a visible, enabled control is not treated as
+    // unclickable merely because its hit-test rectangle went stale.
+    await checkbox.evaluate((element) => element.click());
+    await page.waitForTimeout(250);
+  }
+  throw new Error(`Checkbox ${JSON.stringify(label)} was not checked.`);
+}
+
 async function toggleSetupSection(page, title, expandedControl) {
   const titlePattern = new RegExp(`^${escapeRegExp(title)}`, 'i');
   const candidates = [
@@ -2327,10 +2427,7 @@ async function toggleSetupSection(page, title, expandedControl) {
     try {
       await candidate.click({ timeout: 5000 });
       await page.waitForTimeout(250);
-      await page.getByText(expandedControl, { exact: true }).first().waitFor({
-        state: 'visible',
-        timeout: 1500,
-      });
+      await expectText(page, expandedControl);
       return;
     } catch (error) {
       lastError = error;
@@ -2587,16 +2684,15 @@ async function clickByRoleName(page, role, name) {
 }
 
 async function clickScrolledByLabel(page, name) {
-  const locator = page.getByLabel(name, { exact: true }).first();
-  await locator.scrollIntoViewIfNeeded({ timeout: 5000 });
+  const choice = () => page.getByLabel(name, { exact: true }).first();
+  await choice().scrollIntoViewIfNeeded({ timeout: 5000 });
   await page.waitForTimeout(350);
-  try {
-    await locator.click({ timeout: 5000 });
-  } catch (_) {
-    await locator.click({ timeout: 2500, force: true });
-  }
+  // Dispatch the Flutter semantics action directly. A coordinate click can
+  // briefly use a pre-scroll hit-test rectangle and mutate a neighbouring
+  // choice even though Playwright resolved the intended semantics node.
+  await choice().evaluate((element) => element.click());
   await page.waitForTimeout(250);
-  const selectableState = await locator.evaluate((element) => ({
+  const selectableState = await choice().evaluate((element) => ({
     checked: element.getAttribute('aria-checked'),
     pressed: element.getAttribute('aria-pressed'),
     selected: element.getAttribute('aria-selected'),
@@ -2608,13 +2704,10 @@ async function clickScrolledByLabel(page, name) {
     exposesSelection &&
     !Object.values(selectableState).some((value) => value === 'true')
   ) {
-    // Flutter Web can briefly retain an old semantics hit-test rectangle while
-    // a scrolled choice list relayouts. Dispatching the same semantics action
-    // directly is a bounded retry, and the selected-state assertion prevents
-    // the test from silently accepting a neighbouring choice.
-    await locator.evaluate((element) => element.click());
+    // Re-resolve after the Flutter semantics rebuild, then retry once.
+    await choice().evaluate((element) => element.click());
     await page.waitForTimeout(250);
-    const selected = await locator.evaluate(
+    const selected = await choice().evaluate(
       (element) =>
         element.getAttribute('aria-checked') === 'true' ||
         element.getAttribute('aria-pressed') === 'true' ||
@@ -9264,7 +9357,11 @@ async function assertCalendarImportUi(page, userId) {
     throw new Error('Calendar source creation was enabled before explicit consent.');
   }
   await fillByLabelOrPlaceholder(page, 'Source label', sourceLabel, 0);
-  await clickChoiceChip(page, 'I consent to this read-only import');
+  await checkSemanticCheckbox(
+    page,
+    consent,
+    'I consent to this read-only import',
+  );
   if (!(await createButton.isEnabled())) {
     throw new Error('Calendar source creation stayed disabled after valid consent.');
   }
@@ -11908,6 +12005,7 @@ function assertDeadlinePlanRevision(revision, context) {
     'timezone',
     'best_energy_window',
     'planning_fingerprint',
+    'recovery_minutes',
     'tracked_focus_minutes_at_proposal',
     'remaining_minutes_at_proposal',
     'planned_minutes',
@@ -11920,6 +12018,7 @@ function assertDeadlinePlanRevision(revision, context) {
     'source_calendar_event_fingerprint',
     'availability_connection_id',
     'availability_import_id',
+    'study_setup_revision',
     'activated_at',
     'superseded_at',
   ]) {
@@ -11932,6 +12031,7 @@ function assertDeadlinePlanRevision(revision, context) {
       'source_calendar_event_fingerprint',
       'availability_connection_id',
       'availability_import_id',
+      'study_setup_revision',
       'activated_at',
       'superseded_at',
     ].some((key) => Object.hasOwn(revision, key) && revision[key] === null) ||
@@ -11981,6 +12081,15 @@ function assertDeadlinePlanRevision(revision, context) {
       'variable',
     ].includes(revision.best_energy_window) ||
     !/^[0-9a-f]{64}$/.test(revision.planning_fingerprint ?? '') ||
+    !Number.isInteger(revision.recovery_minutes) ||
+    revision.recovery_minutes < 0 ||
+    revision.recovery_minutes > 60 ||
+    revision.recovery_minutes % 5 !== 0 ||
+    (Object.hasOwn(revision, 'study_setup_revision') &&
+      (!Number.isInteger(revision.study_setup_revision) ||
+        revision.study_setup_revision < 1)) ||
+    (!Object.hasOwn(revision, 'study_setup_revision') &&
+      revision.recovery_minutes !== 0) ||
     !Number.isInteger(revision.tracked_focus_minutes_at_proposal) ||
     revision.tracked_focus_minutes_at_proposal < 0 ||
     !Number.isInteger(revision.remaining_minutes_at_proposal) ||
@@ -12063,6 +12172,28 @@ function assertDeadlinePlanRevision(revision, context) {
     }
     blockIds.add(block.id);
   }
+  if (Object.hasOwn(revision, 'study_setup_revision')) {
+    const shortBlocks = revision.blocks.filter(
+      (block) => block.planned_minutes < revision.preferred_session_minutes,
+    );
+    if (
+      revision.recovery_minutes < 5 ||
+      revision.blocks.some(
+        (block) =>
+          block.recovery_minutes !== revision.recovery_minutes ||
+          block.planned_minutes > revision.preferred_session_minutes,
+      ) ||
+      (shortBlocks.length > 0 &&
+        (shortBlocks.length !== 1 ||
+          shortBlocks[0] !== revision.blocks.at(-1)))
+    ) {
+      throw new Error(`${context} has an inconsistent Study rhythm.`);
+    }
+  } else if (
+    revision.blocks.some((block) => block.recovery_minutes !== 0)
+  ) {
+    throw new Error(`${context} invented block recovery without Study setup.`);
+  }
   if (plannedTotal !== revision.planned_minutes) {
     throw new Error(`${context} block total differs from planned_minutes.`);
   }
@@ -12081,6 +12212,8 @@ function assertDeadlinePlanBlock(block, revision, expectedSequence, context) {
       'local_start_time',
       'local_end_time',
       'planned_minutes',
+      'recovery_minutes',
+      'reserved_ends_at',
       'credited_tracked_minutes',
       'state',
     ],
@@ -12091,7 +12224,9 @@ function assertDeadlinePlanBlock(block, revision, expectedSequence, context) {
     block.sequence !== expectedSequence ||
     !isIsoTimestamp(block.starts_at) ||
     !isIsoTimestamp(block.ends_at) ||
+    !isIsoTimestamp(block.reserved_ends_at) ||
     Date.parse(block.ends_at) <= Date.parse(block.starts_at) ||
+    Date.parse(block.reserved_ends_at) < Date.parse(block.ends_at) ||
     !isCalendarDate(block.local_date) ||
     !isDeadlineLocalTime(block.local_start_time) ||
     !isDeadlineLocalTime(block.local_end_time) ||
@@ -12100,6 +12235,12 @@ function assertDeadlinePlanBlock(block, revision, expectedSequence, context) {
     block.planned_minutes > 240 ||
     (Date.parse(block.ends_at) - Date.parse(block.starts_at)) / 60000 !==
       block.planned_minutes ||
+    !Number.isInteger(block.recovery_minutes) ||
+    block.recovery_minutes < 0 ||
+    block.recovery_minutes > 60 ||
+    block.recovery_minutes % 5 !== 0 ||
+    (Date.parse(block.reserved_ends_at) - Date.parse(block.ends_at)) / 60000 !==
+      block.recovery_minutes ||
     !Number.isInteger(block.credited_tracked_minutes) ||
     block.credited_tracked_minutes < 0 ||
     block.credited_tracked_minutes > block.planned_minutes ||

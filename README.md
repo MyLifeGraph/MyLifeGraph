@@ -117,6 +117,14 @@ way to explore the product today is the Flutter app in mock-data guest mode.
   Current conflicts create attention facts, never hidden or background
   replanning. Inbox moved from the app shell to Settings without changing
   notification persistence or delivery.
+  Study Setup V1 adds two collapsed optional Setup sections for a
+  focus/recovery rhythm with a transient start checklist and for one
+  current/next semester. Deadline plans always use a configured rhythm;
+  ordinary Planner Tasks use it only after explicit opt-in, and Habits do not.
+  Recovery reserves unavailable time without becoming study progress or budget
+  minutes. Rhythm changes make previews stale and active Study plans visible
+  for review without moving them. Course-selection windows create only
+  profile-local Planner attention linked to Settings.
   The repository does not configure a deployed cron. Notification Delivery V1
   can create bounded local deterministic Inbox rows only after separate in-app
   consent; it still adds no provider/system delivery channel.
@@ -468,11 +476,13 @@ Supabase is the intended auth and persistence backend. The current app supports:
 
 Important current caveat: the Flutter app targets the canonical snake_case
 schema. The migration chain currently ends at
-`20260722234000_setup_commitment_validity_guards.sql`. It adds no table or
-column; it keeps Planner and Deadline Planner confirmation aligned with the
-optional inclusive Setup semester bounds and fails closed on protected-function
-drift. The preceding Planner migration adds its seven forced-RLS tables. The
-earlier account preparation migration adds the nullable bounded profile rule,
+`20260723120000_study_setup_v1.sql`. It adds the forced-RLS optional Study
+projection, composes it with atomic Intake apply, and extends Planner/Deadline
+revisions and blocks with recovery-reservation and Study-revision truth. The
+preceding Setup guard keeps Planner and Deadline Planner confirmation aligned
+with optional inclusive Setup semester bounds and fails closed on
+protected-function drift. The earlier Planner migration adds its seven
+forced-RLS tables. The earlier account preparation migration adds the nullable bounded profile rule,
 service-role-only owner-locked setter, and database-boundary confirmation
 recheck without rewriting existing plans. The earlier
 `20260714143000_notification_delivery_settings_guard.sql` follow-up makes
@@ -482,7 +492,8 @@ migration adds explicit consent, deterministic generation, and foreground
 receipts. The earlier Account Export
 grant restores only FastAPI's service-role read access to `lifestyle_entries`,
 which was required by the then-31-table Account Export V1 contract. Planner V1
-later extends the current export to 37 owner-content tables. Phase 3 adds task
+and Study Setup later extend the current export to 38 owner-content tables.
+Phase 3 adds task
 estimates/terminal times, locked cadence-aware habit outcomes, immutable linked
 focus history, and restricted target deletion without replacing existing RLS
 or table grants.

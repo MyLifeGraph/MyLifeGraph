@@ -16,6 +16,7 @@ from app.services.planner_service import (
     PlannerService,
     _add_setup_commitments,
     _attention_items,
+    _course_selection_attention,
 )
 
 
@@ -95,6 +96,8 @@ class Repository:
                     "planning_start_on": revision["planning_start_on"],
                     "planning_fingerprint": revision["planning_fingerprint"],
                     "calendar_import_id": revision["calendar_import_id"],
+                    "study_setup_revision": revision["study_setup_revision"],
+                    "recovery_minutes": revision["recovery_minutes"],
                     "planned_minutes": revision["planned_minutes"],
                     "unscheduled_minutes": revision["unscheduled_minutes"],
                     "created_at": now.isoformat(),
@@ -140,6 +143,7 @@ def _context(
     *,
     preference: dict[str, object] | None = None,
     calendar: PlannerCalendarProjection | None = None,
+    study_setup: dict[str, object] | None = None,
 ) -> PlannerAvailabilityContext:
     return PlannerAvailabilityContext(
         timezone="UTC",
@@ -159,6 +163,7 @@ def _context(
         habit_slots=[],
         deadline_blocks=[],
         target=None,
+        study_setup=study_setup,
     )
 
 
@@ -229,8 +234,93 @@ def test_task_proposal_splits_sessions_and_replays_without_another_write() -> No
     ] == [50, 50, 25]
     assert response.plan.pending_revision.planned_minutes == 125
     assert response.plan.pending_revision.unscheduled_minutes == 0
+    assert response.plan.pending_revision.study_setup_revision is None
+    assert response.plan.pending_revision.recovery_minutes == 0
+    assert all(
+        block.reserved_ends_at == block.ends_at
+        for block in response.plan.pending_revision.task_blocks
+    )
     assert replay == response
     assert repository.persist_calls == 1
+
+
+def test_marked_task_uses_exact_current_study_rhythm_and_recovery() -> None:
+    repository = Repository(
+        _context(
+            study_setup={
+                "setup_revision": 7,
+                "focus_minutes": 45,
+                "recovery_minutes": 10,
+            },
+        ),
+    )
+    service = PlannerService(repository=repository, now=lambda: NOW)
+
+    response = asyncio.run(
+        service.propose(
+            user_id=USER_ID,
+            request=_task_request(
+                preferred_session_minutes=45,
+                use_study_rhythm=True,
+            ),
+        ),
+    )
+
+    revision = response.plan.pending_revision
+    assert revision is not None
+    assert revision.study_setup_revision == 7
+    assert revision.recovery_minutes == 10
+    assert [block.planned_minutes for block in revision.task_blocks] == [
+        45,
+        45,
+        35,
+    ]
+    assert all(block.recovery_minutes == 10 for block in revision.task_blocks)
+    assert all(
+        block.reserved_ends_at == block.ends_at + timedelta(minutes=10)
+        for block in revision.task_blocks
+    )
+    assert revision.planned_minutes == 125
+    assert revision.unscheduled_minutes == 0
+
+
+def test_course_selection_attention_is_local_date_bounded_and_completed() -> None:
+    study_setup = {
+        "next_semester": {
+            "course_selection_starts_on": "2026-08-15",
+            "course_selection_ends_on": "2026-09-15",
+            "course_selection_completed": False,
+        },
+    }
+
+    assert _course_selection_attention(
+        study_setup,
+        local_date=date(2026, 8, 14),
+    ) == []
+    open_items = _course_selection_attention(
+        study_setup,
+        local_date=date(2026, 8, 15),
+    )
+    overdue_items = _course_selection_attention(
+        study_setup,
+        local_date=date(2026, 9, 16),
+    )
+    completed_items = _course_selection_attention(
+        {
+            "next_semester": {
+                **study_setup["next_semester"],
+                "course_selection_completed": True,
+            },
+        },
+        local_date=date(2026, 9, 16),
+    )
+
+    assert [item.kind for item in open_items] == ["course_selection_open"]
+    assert open_items[0].target == "study_setup"
+    assert [item.kind for item in overdue_items] == [
+        "course_selection_overdue",
+    ]
+    assert completed_items == []
 
 
 def test_task_without_all_scheduling_inputs_stays_explicitly_unscheduled() -> None:

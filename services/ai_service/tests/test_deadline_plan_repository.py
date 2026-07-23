@@ -23,6 +23,8 @@ class Client:
             return [{"timezone": "Europe/Berlin"}]
         if table == "intake_responses":
             return [{"responses": {"best_energy_window": "morning"}}]
+        if table == "study_setup_profiles":
+            return []
         if table == "schedule_items":
             return []
         if table == "deadline_plan_blocks":

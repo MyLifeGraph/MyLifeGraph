@@ -106,6 +106,13 @@ ACCOUNT_EXPORT_TABLES = (
     _table("focus_sessions", "*"),
     _table("intake_responses", "*"),
     _table(
+        "study_setup_profiles",
+        "user_id,contract_version,focus_minutes,recovery_minutes,"
+        "preparation_items,current_semester,next_semester,setup_revision,"
+        "created_at,updated_at",
+        cursor_column="user_id",
+    ),
+    _table(
         "user_state_snapshots",
         "*",
         watermark_column="generated_at",
@@ -170,14 +177,15 @@ ACCOUNT_EXPORT_TABLES = (
         "source_calendar_event_id,source_calendar_event_fingerprint,"
         "use_calendar_availability,availability_connection_id,"
         "availability_import_id,timezone,best_energy_window,planning_fingerprint,"
+        "study_setup_revision,recovery_minutes,"
         "tracked_focus_minutes_at_proposal,remaining_minutes_at_proposal,"
         "planned_minutes,unscheduled_minutes,created_at,activated_at,superseded_at",
     ),
     _table(
         "deadline_plan_blocks",
         "id,user_id,plan_id,revision,sequence,reservation_state,starts_at,ends_at,"
-        "local_date,local_start_time,local_end_time,planned_minutes,created_at,"
-        "updated_at",
+        "reserved_ends_at,local_date,local_start_time,local_end_time,"
+        "planned_minutes,recovery_minutes,created_at,updated_at",
     ),
     _table(
         "planner_preferences",

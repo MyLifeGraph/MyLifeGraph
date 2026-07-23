@@ -226,8 +226,17 @@ block, an active future manual commitment, or explicitly consented imported busy
 time. Calendar import remains an optional Settings integration and is not an
 onboarding prerequisite.
 
+Optional Study Setup composes with this availability boundary without widening
+it. A Planner Task uses the configured focus/recovery rhythm only after the
+student explicitly enables `Use study rhythm`; Habits never do. Focus minutes
+retain the existing planned-minute and budget arithmetic, while the full
+recovery interval is unavailable for overlapping reservations. A changed Study
+revision makes a pending rhythm-bound preview stale and marks an active
+rhythm-bound plan for review, but never moves it.
+
 The additive forced-RLS schema and exact routes are specified in
-`docs/planner-v1-contract.md`.
+`docs/planner-v1-contract.md`; the Study extension is specified in
+`docs/study-setup-v1-contract.md`.
 
 Persisted `daily-briefing-v1` rows remain deterministic backend inputs for the
 scheduler, reminder generation, Coach context, and historical feedback. The
@@ -341,6 +350,13 @@ import. Imported content stays read-only, and normal GET, calendar import,
 Dashboard, scheduler, and focus completion paths never generate a proposal.
 The full contract is in `docs/deadline-planner-v1-contract.md`.
 
+When the optional Study focus rhythm exists, every new Deadline Planner
+proposal uses it. Normal blocks have the exact focus duration, only the final
+remainder may be shorter, and each block reserves the complete recovery period
+without counting it as preparation or progress. The proposal freezes the Study
+revision and confirmation rejects changed settings; existing active revisions
+are never rewritten.
+
 An optional nullable account-wide preparation budget lives on `profiles` and is
 set only through a bearer-derived FastAPI account route plus service-role-only
 RPC. Proposal generation deducts active blocks from other plans on every
@@ -395,6 +411,11 @@ Setup is one typed contract across first completion, re-entry, and review:
   Weekly commitments may use optional inclusive semester dates and can be
   duplicated for another weekday. The legacy calendar-intent field remains a
   payload-compatibility value but is no longer presented in onboarding.
+- Focus rhythm/start ritual and current/next semester planning are separate
+  collapsed optional sections. Enabling Focus initializes 45 minutes plus 10
+  minutes recovery and neutral preparation suggestions. New commitments may
+  copy the current semester dates for review; existing commitments are never
+  changed by later semester edits.
 - Guest/demo sessions read and write the typed setup locally. Authenticated
   real-mode sessions read `GET /v1/intake/setup` and save through
   `POST /v1/intake/complete`; there is no direct Supabase fallback that can mark
@@ -436,6 +457,26 @@ Setup is one typed contract across first completion, re-entry, and review:
   invalid success envelope leaves persistence uncertain, so the submitted draft
   is locked for exact unchanged retry or explicit reload.
 
+## Study Setup V1
+
+The optional `responses.study_setup` Intake member is projected only from the
+canonical applied Setup revision. `study_setup_profiles` is a forced-RLS,
+owner-readable, backend-written projection; omitting Study Setup in a newer
+confirmed revision removes it instead of inventing defaults. The same atomic
+Intake RPC reconciles this row together with every existing Setup projection.
+
+Focus start reads the projection directly for its default duration, ordered
+active preparation items, and recovery duration. Checklist choices are
+ephemeral. Recovery minutes are copied into the existing Focus metadata and a
+completed session may start one skippable device-local countdown; there is no
+recovery history table.
+
+Planner derives profile-local open/overdue course-selection attention from the
+next-semester window. That fact links to Settings Setup and does not create a
+Task, Today item, Calendar row, or Notification. Exact shapes, planning
+staleness, export/deletion authority, and non-claims live in
+`docs/study-setup-v1-contract.md`.
+
 ## Supabase
 
 Supabase owns the planned production auth, PostgreSQL persistence, and RLS
@@ -453,6 +494,8 @@ surface. The canonical application schema is now snake_case and centered on:
   habit-outcome, and focus workflows.
 - `intake_responses` and `user_state_snapshots` for revisioned typed Setup
   history and compact backend-owned user state.
+- `study_setup_profiles` for the optional current applied focus/semester Setup
+  projection; authenticated owners read it and only the Intake backend writes.
 - `daily_briefings` for one persisted deterministic decision per user/local
   date; authenticated users may read their row, while FastAPI owns writes.
 - `decision_feedback` for retry-safe owner-scoped outcome/preference events;
@@ -476,6 +519,11 @@ surface. The canonical application schema is now snake_case and centered on:
   owned reservations; `deadline_plan_request_identities` is the backend-only
   global anti-replay ledger. These rows never become provider-calendar writes
   or recurring `schedule_items`.
+- `planner_preferences`, `planner_action_plans`,
+  `planner_action_plan_revisions`, `planner_task_blocks`,
+  `planner_habit_slots`, and `planner_commitments` for the central staged
+  planning surface; `planner_request_identities` is its backend-only replay
+  ledger.
 
 Legacy CamelCase tables such as `"User"`, `"DailyLog"`, and `"Task"` may still
 exist in older remote projects. The canonical migration copies data from those
@@ -776,7 +824,8 @@ Password reset and confirmation resend remain Supabase Auth operations with a
 dedicated recovery-event route in Flutter. Guest/mock sessions make no account
 API calls.
 
-Export reads only owner-filtered canonical product tables, applies field
+Export reads only owner-filtered canonical product tables, including the
+current Study Setup projection, applies field
 allowlists to backend-owned Calendar/Coach ledgers, names the anti-replay ledger
 it omits, includes Deadline Planner plan/revision/block rows while omitting its
 request ledger, and fails rather than truncating at a V1 bound. Flutter validates the

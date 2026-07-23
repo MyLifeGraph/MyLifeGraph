@@ -24,6 +24,7 @@ ACCOUNT_EXPORT_TABLE_NAMES = (
     "habit_logs",
     "focus_sessions",
     "intake_responses",
+    "study_setup_profiles",
     "user_state_snapshots",
     "daily_briefings",
     "decision_feedback",

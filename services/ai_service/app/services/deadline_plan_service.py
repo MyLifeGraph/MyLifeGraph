@@ -34,6 +34,7 @@ from app.repositories.deadline_plan_repository import (
 from app.services.planning_availability import (
     ENERGY_WINDOWS as _ENERGY_WINDOWS,
     BusySources,
+    PlannedInterval,
     allocate_task_intervals,
     recurring_commitment_applies_on,
 )
@@ -353,6 +354,20 @@ class DeadlinePlanService:
                 "Calendar availability is not current. Reconnect or disable it.",
             )
         _require_current_source(request=request, context=profile_probe)
+        study_rhythm = _deadline_study_rhythm(profile_probe.study_setup)
+        effective_request = request
+        study_setup_revision: int | None = None
+        recovery_minutes = 0
+        if study_rhythm is not None:
+            study_setup_revision, focus_minutes, recovery_minutes = study_rhythm
+            if request.max_daily_minutes < focus_minutes:
+                raise DeadlinePlanValidationError(
+                    "The daily preparation limit is shorter than the Study rhythm.",
+                )
+            effective_request = request.model_copy(
+                update={"preferred_session_minutes": focus_minutes},
+            )
+            planning_input["preferred_session_minutes"] = focus_minutes
 
         effective_start = max(request.planning_start_on, local_now.date())
         remaining = max(
@@ -377,7 +392,7 @@ class DeadlinePlanService:
             },
         )
         planned_blocks = _plan_blocks(
-            request=request,
+            request=effective_request,
             context=profile_probe,
             zone=zone,
             local_now=local_now,
@@ -395,19 +410,27 @@ class DeadlinePlanService:
                     ),
                 ),
                 "sequence": index,
-                "starts_at": starts_at.astimezone(UTC).isoformat(),
-                "ends_at": ends_at.astimezone(UTC).isoformat(),
-                "local_date": starts_at.date().isoformat(),
-                "local_start_time": starts_at.time().replace(tzinfo=None).isoformat(),
-                "local_end_time": ends_at.time().replace(tzinfo=None).isoformat(),
-                "planned_minutes": minutes,
+                "starts_at": interval.starts_at.astimezone(UTC).isoformat(),
+                "ends_at": interval.ends_at.astimezone(UTC).isoformat(),
+                "recovery_minutes": interval.recovery_minutes,
+                "reserved_ends_at": (
+                    interval.reserved_ends_at or interval.ends_at
+                ).astimezone(UTC).isoformat(),
+                "local_date": interval.starts_at.date().isoformat(),
+                "local_start_time": (
+                    interval.starts_at.time().replace(tzinfo=None).isoformat()
+                ),
+                "local_end_time": (
+                    interval.ends_at.time().replace(tzinfo=None).isoformat()
+                ),
+                "planned_minutes": interval.minutes,
             }
-            for index, (starts_at, ends_at, minutes) in enumerate(
+            for index, interval in enumerate(
                 planned_blocks,
                 start=1,
             )
         ]
-        planned_minutes = sum(item[2] for item in planned_blocks)
+        planned_minutes = sum(item.minutes for item in planned_blocks)
         proposal = {
             **planning_input,
             "timezone": profile_probe.timezone,
@@ -423,6 +446,8 @@ class DeadlinePlanService:
                 else None
             ),
             "planning_fingerprint": planning_fingerprint,
+            "study_setup_revision": study_setup_revision,
+            "recovery_minutes": recovery_minutes,
             "tracked_focus_minutes_at_proposal": tracked_focus_minutes,
             "remaining_minutes_at_proposal": remaining,
             "planned_minutes": planned_minutes,
@@ -722,6 +747,10 @@ class DeadlinePlanService:
                     local_start_time=_time(block["local_start_time"]),
                     local_end_time=_time(block["local_end_time"]),
                     planned_minutes=planned,
+                    recovery_minutes=_int(block.get("recovery_minutes", 0)),
+                    reserved_ends_at=_datetime(
+                        block.get("reserved_ends_at", block["ends_at"]),
+                    ),
                     credited_tracked_minutes=credit,
                     state=display_state,
                 ),
@@ -780,6 +809,12 @@ class DeadlinePlanService:
             timezone=row["timezone"],
             best_energy_window=row["best_energy_window"],
             planning_fingerprint=row["planning_fingerprint"],
+            study_setup_revision=(
+                _int(row["study_setup_revision"])
+                if row.get("study_setup_revision") is not None
+                else None
+            ),
+            recovery_minutes=_int(row.get("recovery_minutes", 0)),
             tracked_focus_minutes_at_proposal=_int(
                 row["tracked_focus_minutes_at_proposal"],
             ),
@@ -822,7 +857,7 @@ def _plan_blocks(
     local_deadline: datetime,
     effective_start: date,
     remaining_minutes: int,
-) -> list[tuple[datetime, datetime, int]]:
+) -> list[PlannedInterval]:
     deadline_day = local_deadline.date()
     last_preferred_day = (
         deadline_day
@@ -830,6 +865,7 @@ def _plan_blocks(
         else deadline_day - timedelta(days=request.buffer_days + 1)
     )
     reserved_by_day = _confirmed_preparation_minutes_by_day(context)
+    study_rhythm = _deadline_study_rhythm(context.study_setup)
     intervals = allocate_task_intervals(
         starts_on=effective_start,
         ends_on=last_preferred_day,
@@ -858,11 +894,10 @@ def _plan_blocks(
         # Deadline Planner V1 permits an exact final minute remainder. Planner
         # Action V1 below opts into the stricter five-minute duration grid.
         duration_increment_minutes=1,
+        recovery_minutes=study_rhythm[2] if study_rhythm is not None else 0,
+        exact_session_blocks=study_rhythm is not None,
     )
-    return [
-        (interval.starts_at, interval.ends_at, interval.minutes)
-        for interval in intervals
-    ]
+    return intervals
 
 
 def _busy_intervals_by_day(
@@ -1043,7 +1078,33 @@ def _context_fingerprint_input(
         "planner_use_calendar_busy_time": (
             context.planner_use_calendar_busy_time
         ),
+        "study_setup": context.study_setup,
     }
+
+
+def _deadline_study_rhythm(
+    row: dict[str, Any] | None,
+) -> tuple[int, int, int] | None:
+    if row is None:
+        return None
+    revision = _int(row.get("setup_revision"))
+    focus = row.get("focus_minutes")
+    recovery = row.get("recovery_minutes")
+    if focus is None and recovery is None:
+        return None
+    focus_minutes = _int(focus)
+    recovery_minutes = _int(recovery)
+    if (
+        revision < 1
+        or focus_minutes < 25
+        or focus_minutes > 180
+        or focus_minutes % 5 != 0
+        or recovery_minutes < 5
+        or recovery_minutes > 60
+        or recovery_minutes % 5 != 0
+    ):
+        raise ValueError("Deadline Study Setup projection is invalid.")
+    return revision, focus_minutes, recovery_minutes
 
 
 def _require_current_source(

@@ -299,6 +299,20 @@ preparation projections, availability-readiness warning plus explicit override,
 calendar-intent omission from onboarding, and 320 px/200-percent text. Today V2 tests must prove
 the three added block kinds, exact `scheduled_today`, one target per progress
 denominator, and isolated source failures.
+
+Study Setup V1 focused coverage must prove old Intake compatibility and strict
+new focus/semester shapes; collapsed optional onboarding; 45/10 defaults;
+Guest local round-trip; new-commitment-only semester prefill; atomic projection,
+replay, omission, rollback, RLS, export, and deletion. Focus coverage must prove
+planned-block/Study/recent/25-minute priority, transient checklist choices,
+manual duration override, strict recovery metadata, and completed-only
+restorable/skippable local countdown. Planner/Deadline coverage must prove exact
+Study-sized blocks, one final short remainder, honest unscheduled gaps, full
+recovery conflicts, unchanged active-minute/budget arithmetic, Task opt-in,
+Habit exclusion, stale confirmation, active-plan attention, and profile-local
+course-selection states with no Today/Calendar/Notification side effect. The
+exact boundary is `docs/study-setup-v1-contract.md`.
+
 Phase 10 focused backend source coverage is split across strict model/API,
 service, migration, and local-provider tests. It covers exact request/error
 shapes and bearer-derived ownership; completed replay without context/provider;
@@ -522,7 +536,7 @@ supabase db reset
 Expected successful reset output applies migrations through:
 
 ```text
-20260722234000_setup_commitment_validity_guards.sql
+20260723120000_study_setup_v1.sql
 ```
 
 Expected notices include skipped legacy CamelCase tables and already-existing
@@ -1199,6 +1213,28 @@ while older Morning V2 rows without the additive field remain readable and
 must supply it when explicitly resaved. This remains local checkout evidence;
 it does not infer objective sleep quality, add a wearable source, or establish
 longitudinal or manual student-usability results.
+
+Study Setup V1 completed locally on 2026-07-23. A fresh local database reset
+applied the full migration chain through
+`20260723120000_study_setup_v1.sql`; a rollback-only SQL smoke separately
+proved atomic Intake projection and omission, revision replay, Owner RLS,
+service-role authority, stale-setting rejection, and full rollback. The
+complete FastAPI suite reported `857 passed, 1 skipped`; the final standard
+source gate passed migration safety, clean Flutter analysis, all `656` Flutter
+tests, Python compilation, and diff checks. The final combined browser journey
+reported `E2E browser smoke passed for e2e-1784831721@example.test`. It covered
+the collapsed optional Setup sections and 45/10 defaults, exact Guest and
+authenticated persistence, the transient Focus checklist and recovery
+countdown, exact Study-sized Planner/Deadline blocks and a short final
+remainder, recovery conflicts and unchanged study budgets, Study revision
+attention, profile-local course-selection attention and Settings navigation,
+Account Export inclusion, and account deletion. The journey exposed and fixed
+one real allocator defect: a final short remainder could previously backfill
+ahead of full Study blocks and violate recovery ordering. It also hardened
+Flutter Web semantics selection for exact choices and native checkboxes. This
+is local checkout evidence only; it adds no automatic replanning, provider
+calendar write, Notification/Today side effect, installed-device result,
+longitudinal outcome, or manual student-usability evidence.
 
 Phase 10 has focused fake-provider/process-runner, strict contract, service,
 migration, repository, controller, and widget tests in the checkout. Its

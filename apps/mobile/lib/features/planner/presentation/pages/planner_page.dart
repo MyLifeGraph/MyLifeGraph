@@ -385,6 +385,10 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
     PlannerAttention item,
     PlannerOverview overview,
   ) async {
+    if (item.target == 'study_setup') {
+      context.go('${AppRoutes.onboarding}?edit=1&section=study');
+      return;
+    }
     final plan = overview.actionPlans
         .where((value) => value.id == item.planId)
         .firstOrNull;
@@ -426,6 +430,7 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
           estimatedMinutes: item.estimatedMinutes,
           deadlineAt: item.deadlineAt?.toLocal(),
           preferredSessionMinutes: item.preferredSessionMinutes,
+          useStudyRhythm: item.useStudyRhythm,
           targetId: item.id,
           expectedUpdatedAt: item.expectedUpdatedAt,
         ),
@@ -462,7 +467,9 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
     if (!mounted || !execute) return;
     if (kind == 'task') {
       context.go(
-        '${AppRoutes.deepWork}?target_kind=task&target_id=${item.sourceId}',
+        '${AppRoutes.deepWork}?target_kind=task&target_id=${item.sourceId}'
+        '&planned_minutes=${item.endsAt!.difference(item.startsAt!).inMinutes}'
+        '&recovery_minutes=${item.recoveryMinutes}',
       );
     } else {
       context.go(AppRoutes.habitCompletion);
@@ -828,11 +835,15 @@ class _NeedsAttentionSection extends StatelessWidget {
                   title: Text(item.title),
                   subtitle: Text(item.detail),
                   trailing: item.planId == null
-                      ? (item.unplacedMinutes > 0
-                          ? Text('${item.unplacedMinutes} min')
-                          : null)
+                      ? (item.target == 'study_setup'
+                          ? const Icon(Icons.chevron_right)
+                          : item.unplacedMinutes > 0
+                              ? Text('${item.unplacedMinutes} min')
+                              : null)
                       : const Icon(Icons.chevron_right),
-                  onTap: item.planId == null ? null : () => onOpen(item),
+                  onTap: item.planId == null && item.target != 'study_setup'
+                      ? null
+                      : () => onOpen(item),
                 ),
           ],
         ),
@@ -893,8 +904,13 @@ class _PlannerDayItemTile extends StatelessWidget {
     final visual = _visual(item.kind);
     final time = item.allDay
         ? 'All day'
-        : '${DateFormat.Hm().format(item.startsAt!.toLocal())}–'
-            '${DateFormat.Hm().format(item.endsAt!.toLocal())}';
+        : item.recoveryMinutes > 0
+            ? '${DateFormat.Hm().format(item.startsAt!.toLocal())}–'
+                '${DateFormat.Hm().format(item.endsAt!.toLocal())} focus + '
+                '${item.recoveryMinutes} min recovery · reserved until '
+                '${DateFormat.Hm().format(item.reservedEndsAt!.toLocal())}'
+            : '${DateFormat.Hm().format(item.startsAt!.toLocal())}–'
+                '${DateFormat.Hm().format(item.endsAt!.toLocal())}';
     final actionable = {
       'manual_commitment',
       'task_block',
@@ -1138,9 +1154,13 @@ class _PlanPreviewDialog extends StatelessWidget {
                   leading: const Icon(Icons.view_timeline_outlined),
                   title: Text('${block.plannedMinutes} min'),
                   subtitle: Text(
-                    DateFormat.yMMMd()
-                        .add_Hm()
-                        .format(block.startsAt.toLocal()),
+                    block.recoveryMinutes > 0
+                        ? '${DateFormat.yMMMd().add_Hm().format(block.startsAt.toLocal())} · '
+                            '${block.plannedMinutes} min focus + ${block.recoveryMinutes} min recovery · '
+                            'reserved until ${DateFormat.Hm().format(block.reservedEndsAt.toLocal())}'
+                        : DateFormat.yMMMd()
+                            .add_Hm()
+                            .format(block.startsAt.toLocal()),
                   ),
                 ),
               for (final slot in revision.habitSlots)
@@ -1195,6 +1215,7 @@ class _TaskDialogState extends State<_TaskDialog> {
   late final TextEditingController _session;
   late String _priority;
   late bool _schedule;
+  late bool _useStudyRhythm;
   DateTime? _deadline;
   String? _error;
 
@@ -1214,6 +1235,7 @@ class _TaskDialogState extends State<_TaskDialog> {
     _schedule = initial?.estimatedMinutes != null ||
         initial?.deadlineAt != null ||
         initial?.preferredSessionMinutes != null;
+    _useStudyRhythm = initial?.useStudyRhythm ?? false;
   }
 
   @override
@@ -1265,13 +1287,28 @@ class _TaskDialogState extends State<_TaskDialog> {
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
                   value: _schedule,
-                  onChanged: (value) => setState(() => _schedule = value),
+                  onChanged: (value) => setState(() {
+                    _schedule = value;
+                    if (!value) _useStudyRhythm = false;
+                  }),
                   title: const Text('Create a time-block preview'),
                   subtitle: const Text(
                     'Requires your duration, exact deadline, and preferred session length.',
                   ),
                 ),
                 if (_schedule) ...[
+                  SwitchListTile.adaptive(
+                    key: const ValueKey('planner-task-study-rhythm'),
+                    contentPadding: EdgeInsets.zero,
+                    value: _useStudyRhythm,
+                    onChanged: (value) {
+                      setState(() => _useStudyRhythm = value);
+                    },
+                    title: const Text('Use study rhythm'),
+                    subtitle: const Text(
+                      'Uses the exact Focus length and reserves the full recovery buffer from Settings. Habits never use this rule.',
+                    ),
+                  ),
                   TextField(
                     key: const ValueKey('planner-task-duration'),
                     controller: _duration,
@@ -1387,6 +1424,7 @@ class _TaskDialogState extends State<_TaskDialog> {
         estimatedMinutes: duration,
         deadlineAt: _schedule ? _deadline : null,
         preferredSessionMinutes: session,
+        useStudyRhythm: _schedule && _useStudyRhythm,
         targetId: widget.initial?.targetId,
         expectedUpdatedAt: widget.initial?.expectedUpdatedAt,
       ),

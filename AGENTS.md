@@ -50,7 +50,10 @@ Read these files before making changes:
 18. `docs/planner-v1-contract.md` before changing Planner navigation,
     availability, Action Plans, fixed commitments, calendar busy-time consent,
     or Today Overview V2
-19. `docs/product-review-handoff.md` when starting a fresh whole-product review
+19. `docs/study-setup-v1-contract.md` before changing optional Study Setup,
+    focus rhythm, preparation checklist, recovery reservations, semester
+    planning, or course-selection attention
+20. `docs/product-review-handoff.md` when starting a fresh whole-product review
     of Deadline Planner and the current usability-polish slice
 
 ## Current State
@@ -87,6 +90,7 @@ databases may still contain legacy CamelCase tables such as `"User"`,
 - `planner_preferences`, `planner_action_plans`
 - `planner_action_plan_revisions`, `planner_task_blocks`
 - `planner_habit_slots`, `planner_commitments`, `planner_request_identities`
+- `study_setup_profiles`
 
 The migration
 `supabase/migrations/20260618170000_create_canonical_app_schema.sql` creates the
@@ -243,6 +247,14 @@ The follow-up migration
 keeps Planner and Deadline Planner confirmation aligned with the optional
 inclusive Setup semester bounds. It adds no table or column and fails closed if
 either protected RPC definition has drifted.
+The migration
+`supabase/migrations/20260723120000_study_setup_v1.sql` adds the forced-RLS
+Study Setup projection, atomically projects optional focus rhythm and semester
+planning from the canonical applied Intake revision, and extends Planner and
+Deadline revisions/blocks with Study revision and recovery-reservation truth.
+It preserves old Intake rows and old zero-recovery blocks, makes Study-bound
+previews stale after a rhythm edit, and prevents confirmation against changed
+settings or overlapping recovery time.
 
 ## Important Docs
 
@@ -256,6 +268,9 @@ either protected RPC definition has drifted.
   streak/progress arithmetic, timeline sources, selection rules, and UI order.
 - `docs/planner-v1-contract.md` - central Planner navigation, shared
   availability, staged Task/Habit reservations, commitments, and Today V2.
+- `docs/study-setup-v1-contract.md` - optional focus rhythm, transient start
+  ritual, recovery reservations, semester planning, course-selection attention,
+  and the exact Intake/projection authority boundary.
 - `docs/supabase-current-state.md` - canonical schema, legacy table mapping, and
   migration notes.
 - `docs/local-dev.md` - local runbook for Flutter, Supabase, and FastAPI.
@@ -319,6 +334,15 @@ availability source is visible. Shared Availability considers Setup/manual commi
 confirmed Planner and Preparation reservations, and separately consented
 current imported busy time. It never infers missing duration/deadline/cadence,
 moves blocks automatically, writes a calendar, or serves guest/demo fake plans.
+Study Setup V1 adds optional focus/recovery rhythm, a transient Focus-start
+ritual, and exactly one current/next semester through that same revisioned
+Setup. Deadline plans always use a configured rhythm; ordinary Planner Tasks
+use it only after explicit opt-in and Habits never do. Recovery is reserved
+busy time but not study time or preparation capacity. Rhythm edits invalidate
+open previews and mark active Study-bound plans for review without moving them.
+The next semester's profile-local course-selection window creates only Planner
+attention linked to Settings; it creates no Task, Calendar row, Today item, or
+Notification.
 Phase 6 adds exact owned-action feedback with idempotent requests, deletable
 history, a decayed/capped context match under `feedback-ranking-v1`, and one
 cautious default Insight before advanced correlation exploration.
@@ -768,7 +792,7 @@ you actually intend to run `supabase db reset`.
 `supabase db reset` must complete through:
 
 ```text
-20260722234000_setup_commitment_validity_guards.sql
+20260723120000_study_setup_v1.sql
 ```
 
 Expected local reset notices include skipped legacy CamelCase tables and

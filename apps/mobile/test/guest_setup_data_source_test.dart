@@ -80,6 +80,62 @@ void main() {
     );
   });
 
+  test('guest setup preserves the complete optional study payload locally',
+      () async {
+    const store = GuestSetupDataSource();
+    final study = StudySetupDraft(
+      focusRhythm: StudyFocusRhythmDraft(
+        focusMinutes: 45,
+        recoveryMinutes: 10,
+        preparationItems: const [
+          StudyPreparationItemDraft(
+            key: '4abc0000-0000-4000-8000-000000000001',
+            label: 'Water',
+            active: true,
+          ),
+          StudyPreparationItemDraft(
+            key: '5abc0000-0000-4000-8000-000000000002',
+            label: 'My neutral custom item',
+            active: false,
+          ),
+        ],
+      ),
+      semesterPlanning: StudySemesterPlanningDraft(
+        currentSemester: StudySemesterDraft(
+          name: 'Summer 2026',
+          startsOn: DateTime.utc(2026, 4),
+          endsOn: DateTime.utc(2026, 9, 30),
+        ),
+        nextSemester: StudyNextSemesterDraft(
+          name: 'Winter 2026/27',
+          startsOn: DateTime.utc(2026, 10),
+          endsOn: DateTime.utc(2027, 3, 31),
+          courseSelectionStartsOn: DateTime.utc(2026, 8, 15),
+          courseSelectionEndsOn: DateTime.utc(2026, 9, 15),
+          courseNames: const ['Algorithms', 'Linear algebra'],
+          courseSelectionCompleted: false,
+        ),
+      ),
+    );
+    final saved = await store.save(
+      IntakeSetupSaveRequest(
+        requestId: 'f7747bb1-714f-47e5-a36a-dae218573946',
+        baseRevision: 0,
+        responses: _requiredDraft().copyWith(studySetup: study),
+      ),
+    );
+    final reloaded = await store.read();
+
+    expect(saved.responses?.studySetup?.toJson(), study.toJson());
+    expect(reloaded.responses?.studySetup?.toJson(), study.toJson());
+    expect(reloaded.responses?.studySetup?.focusRhythm?.focusMinutes, 45);
+    expect(
+      reloaded
+          .responses?.studySetup?.semesterPlanning?.nextSemester.courseNames,
+      ['Algorithms', 'Linear algebra'],
+    );
+  });
+
   test(
       'same request id rejects changed content instead of silently applying it',
       () async {

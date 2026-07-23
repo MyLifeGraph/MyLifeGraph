@@ -94,6 +94,19 @@ If all requested preparation time cannot fit before the deadline, the proposal
 returns the exact unallocated minutes for explicit review. It never hides the
 deficit, schedules work after the deadline, or fabricates available time.
 
+When the owner has a current Study focus rhythm, Deadline Planner must use it.
+Every normal block is exactly the saved focus duration and only the final
+remaining block may be shorter. A smaller free gap is left unused and its
+minutes remain visibly unscheduled. Each block reserves the full saved recovery
+duration after focus. Preview and agenda projections expose both durations and
+the complete `reserved_ends_at`.
+
+Recovery is not active preparation: it is excluded from `planned_minutes`,
+progress, the revision's per-plan daily cap, and the account-wide preparation
+budget. Availability and database confirmation nevertheless treat
+`[starts_at, reserved_ends_at)` as busy, so another reservation cannot occupy
+the recovery period.
+
 Every revision freezes the focus progress visible when it was proposed as
 `tracked_focus_minutes_at_proposal`. Its proposal budget is exact:
 
@@ -192,6 +205,15 @@ capacity and this plan's remaining per-plan capacity. Confirmed blocks earlier
 on the current local date still consume capacity even when their time interval
 has already ended. Blocks from every plan remain non-overlapping independently
 of either minute cap.
+
+The revision's planning fingerprint also covers the current
+`study_setup_revision` and recovery duration. Confirmation rechecks both under
+the shared owner lock and uses full recovery ends in every competing-reservation
+test. A Study edit makes a pending revision stale and an active plan visible
+under Planner `Needs attention`; it never changes the active revision. Only a
+fresh proposal followed by explicit confirmation can replace reservations.
+When no Study rhythm is configured, all prior block-splitting and zero-recovery
+behavior remains unchanged.
 
 The ordered rule-based planning windows are frozen by
 `best_energy_window`:
@@ -345,6 +367,13 @@ The canonical planning tables are:
 - `deadline_plan_request_identities`: minimal backend anti-replay identity for
   owner, plan, operation, and request fingerprint.
 
+`20260723120000_study_setup_v1.sql` adds nullable
+`study_setup_revision` and zero-or-configured `recovery_minutes` to revisions,
+plus `recovery_minutes` and `reserved_ends_at` to blocks. Existing blocks are
+backfilled with zero recovery and their prior end. Study-aware proposal and
+confirmation wrappers remain service-role-only and preserve the established
+RPC signatures and retry identity.
+
 The mutation RPCs take the shared owner advisory lock and apply request claim,
 revision/block writes, first-confirm task creation, and plan projection changes
 atomically. Composite owner references and database checks prevent cross-owner
@@ -450,6 +479,9 @@ Focused backend, Flutter, migration, and browser coverage must prove:
   plan/task terminal projection;
 - exact replay, request conflict, stale revision, response-loss retry, and
   concurrent-confirm convergence;
+- exact Study-sized blocks, one final short remainder, honest unallocated
+  gaps, full recovery conflicts, unchanged active-minute/budget arithmetic,
+  stale confirmation after a Study edit, and no mutation of an active revision;
 - completed post-activation linked focus progress without implicit completion;
 - stable pagination past a 1,000-row PostgREST response cap for bounded Focus,
   recurring schedule, confirmed-block, and imported-busy projections;

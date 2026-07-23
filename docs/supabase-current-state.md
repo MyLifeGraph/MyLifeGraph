@@ -64,6 +64,7 @@ The app table constants live in
 | `recommendations` | Generated recommendations and user statuses; FastAPI can create first deterministic rows after authenticated Intake V1. |
 | `notification_preferences` | Reminder/category/quiet-hour configuration plus separate fail-closed in-app delivery consent/version/timestamps and a bounded daily cap. Reminder fields alone grant no delivery. |
 | `intake_responses` | Typed Setup history with request identity, optimistic revision, pending/applied state, and structured lifecycle items. |
+| `study_setup_profiles` | Optional `study-setup-v1` projection from the current applied Intake revision: focus/recovery rhythm, ordered preparation-item definitions, current/next semester, and Setup revision. Forced owner-read RLS; only the backend writes. |
 | `user_state_snapshots` | Compact backend-owned onboarding/daily/weekly state; daily and weekly summaries add Phase 2 Daily State plus Phase 3 explicit habit-outcome/focus facts while remaining deterministic recommendation context. |
 | `daily_briefings` | One backend-owned deterministic `daily-briefing-v1` decision per user/profile-local date with strict executable actions, source-snapshot provenance, bounded evidence, and stale detection. |
 | `decision_feedback` | Retry-safe append-only feedback for an exact owned briefing action; authenticated owners can read/delete history and FastAPI owns validated writes. |
@@ -73,9 +74,16 @@ The app table constants live in
 | `calendar_events` | Current whitelisted imported event copy with stable single/recurrence identity and explicit imported/read-only provenance. |
 | `calendar_request_identities` | Minimal global UUID/owner/connection/operation registry enforcing stable identity across calendar lifecycle mutations; forced RLS and service-role insert/select only, with no content fingerprint. |
 | `deadline_plans` | Owner-scoped exam/assignment lifecycle with immutable original estimate/prior credit, one stable managed-task identity after first confirmation, and active/pending revision projections. |
-| `deadline_plan_revisions` | Immutable proposed, active, or superseded preparation inputs/results, including proposal-time focus credit, exact remaining/planned/unscheduled totals, source provenance, and lifecycle timestamps. |
-| `deadline_plan_blocks` | Bounded immutable dated app-owned preparation reservations for one revision; they remain separate from `schedule_items` and imported calendar events. |
+| `deadline_plan_revisions` | Immutable proposed, active, or superseded preparation inputs/results, including proposal-time focus credit, exact remaining/planned/unscheduled totals, source provenance, optional Study Setup revision/recovery truth, and lifecycle timestamps. |
+| `deadline_plan_blocks` | Bounded immutable dated app-owned preparation reservations for one revision, with focus end and full recovery-reserved end kept separate; they remain separate from `schedule_items` and imported calendar events. |
 | `deadline_plan_request_identities` | Backend-only global request UUID/owner/plan/operation/payload identity for exact replay and conflict detection; never exposed through Account Export. |
+| `planner_preferences` | Owner choice for using the current imported-calendar busy projection in deterministic Planner and Preparation availability. |
+| `planner_action_plans` | Owner-scoped staged/active Task or Habit plan identity and lifecycle. |
+| `planner_action_plan_revisions` | Immutable Planner proposal/activation history, including optional Task Study Setup revision/recovery truth. |
+| `planner_task_blocks` | Dated Planner Task focus reservations with a separate full recovery-reserved end. |
+| `planner_habit_slots` | Stable recurring wall-clock slots for planned Habit occurrences; Study rhythm does not apply. |
+| `planner_commitments` | Authoritative owner-created one-off or weekly fixed commitments. |
+| `planner_request_identities` | Backend-only global retry ledger for Planner preferences, plans, and commitments; omitted from Account Export. |
 | `coach_requests` | Backend-only retry/lease/terminal ledger. Pending rows store only a SHA-256 message fingerprint; completed rows store the strict response/manifest; deleted rows are content-free tombstones. |
 | `coach_usage_events` | Backend-only append-only one-row-per-request outcome/counter ledger retained across conversation deletion and used with request rows for the profile-local daily attempt budget. |
 | `coach_memory_selections` | Explicit owner-scoped selection of at most eight eligible `memory_entries` for Coach context, stored separately from memory ownership/content. |
@@ -425,6 +433,40 @@ includes the six owner-content tables and explicitly omits the retry ledger.
 See `docs/planner-v1-contract.md` for the full HTTP, availability, Today V2,
 and non-automation boundary.
 
+## Study Setup V1
+
+`20260723120000_study_setup_v1.sql` adds
+`study_setup_profiles` as the optional current projection of
+`responses.study_setup` from the applied revisioned Intake flow. The row stores
+the exact focus/recovery rhythm, ordered preparation-item definitions, current
+and next semester JSON, source Setup revision, and timestamps. When a newer
+confirmed Setup omits Study Setup, the atomic Intake RPC removes the projection;
+no default row is fabricated.
+
+The table uses forced RLS. Authenticated owners/admins have SELECT only,
+`anon` has no authority, and backend-owned writes remain limited to
+`service_role`. The profile foreign key cascades on deletion. Account Export
+includes the bounded owner row.
+
+The migration preserves the public signatures of the established Intake,
+Deadline Planner, and Planner RPCs by moving their reviewed bodies behind
+ungranted inner functions and installing service-role-only wrappers. The Intake
+wrapper validates and projects the canonical applied response in the same
+transaction. The planning wrappers validate current Study revision, exact
+focus-sized blocks, recovery duration, full `reserved_ends_at`, and all
+competing reservations before persistence or activation.
+
+`deadline_plan_revisions` and `planner_action_plan_revisions` gain nullable
+`study_setup_revision` plus zero-or-configured `recovery_minutes`.
+`deadline_plan_blocks` and `planner_task_blocks` gain
+`recovery_minutes` and non-null `reserved_ends_at`. Existing revisions remain
+null/zero; existing blocks are backfilled with zero recovery and their prior
+end. Active indexes and confirmation conflict checks use the full reserved end,
+while daily preparation arithmetic continues to sum only focus minutes.
+
+The full Intake, Focus, planning, semester-attention, export, and non-claim
+boundary is in `docs/study-setup-v1-contract.md`.
+
 ## Phase 10 Controlled Coach
 
 `20260713200000_phase_10_controlled_coach.sql` adds
@@ -772,12 +814,19 @@ and Deadline Planner confirmation RPCs aligned with inclusive optional Setup
 semester bounds. It adds one private non-executable predicate and no table or
 column; guarded replacement aborts if the installed RPC definitions drifted.
 
+`20260723120000_study_setup_v1.sql` adds the forced-RLS Study Setup projection
+and atomically composes it with the revisioned Intake apply. It extends
+Planner/Deadline revisions and blocks with Study revision, recovery duration,
+and full reserved-end truth; backfills existing blocks as zero recovery; and
+wraps proposal/confirmation with exact current-setting and recovery-conflict
+guards.
+
 ## Local Verification Workflow
 
 For local Supabase-backed testing, the reset should complete through:
 
 ```text
-20260722234000_setup_commitment_validity_guards.sql
+20260723120000_study_setup_v1.sql
 ```
 
 Then configure `.env` with:
@@ -825,7 +874,7 @@ RESET_DB=true FLUTTER_BIN=/path/to/flutter scripts/verify_supabase_local.sh
 ```
 
 The reset form should apply all migrations through
-`20260719120000_account_preparation_budget_v1.sql`; expected legacy-table
+`20260723120000_study_setup_v1.sql`; expected legacy-table
 skip notices may be emitted for missing CamelCase tables. Use reset when proving
 the full migration/backfill/constraint chain from a fresh local database, not
 merely because a reviewed migration is pending.
@@ -836,6 +885,11 @@ Supabase-backed path:
 
 - Register or sign in.
 - Complete required-only Setup, re-enter it, and save an edit.
+- Enable Focus setup and Semester planning, confirm the 45/10 defaults and
+  projection, then verify that a later omitted section is removed only through
+  the revisioned Setup save.
+- Start Focus through a Study-aware block, exercise the transient checklist,
+  complete it, and verify the local recovery countdown without a recovery row.
 - Review/archive or remove one Setup-owned item and preserve a manual row.
 - Save Evening Shutdown through either current route, then save Morning
   Calibration and confirm that the same daily row retains both captures.
@@ -940,8 +994,11 @@ The product should standardize on the snake_case schema. CamelCase tables are
 legacy compatibility only and should be dropped in a later dedicated migration
 after data migration and app verification are complete.
 
-The latest migration is
-`20260722234000_setup_commitment_validity_guards.sql`. It adds no schema object
+The latest migration is `20260723120000_study_setup_v1.sql`. It adds the
+forced-RLS Study Setup projection, composes it atomically with applied Intake,
+and adds recovery-aware revision/block truth and confirmation guards to Planner
+and Deadline Planner. The preceding
+`20260722234000_setup_commitment_validity_guards.sql` adds no schema object
 beyond one private helper and keeps Planner/Deadline confirmation aligned with
 optional inclusive Setup semester bounds. The preceding
 `20260722120000_planner_v1.sql` adds additive forced-RLS Planner preference,

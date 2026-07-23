@@ -834,6 +834,7 @@ The central Planner additionally requires:
 ```text
 20260722120000_planner_v1.sql
 20260722234000_setup_commitment_validity_guards.sql
+20260723120000_study_setup_v1.sql
 ```
 
 It adds read-only owner projections plus service-role-only, owner-locked
@@ -841,6 +842,9 @@ preference, proposal/confirm/cancel, and commitment commands. Existing Tasks,
 Habits, Deadline Plans, and Setup commitments are not migrated into Action
 Plans. Review and apply it through the same explicit workflow; a normal Planner
 GET must never create a revision or reservation.
+The Study migration adds its optional forced-RLS Intake projection and
+recovery-aware Planner/Deadline reservation guards. Existing plans remain
+zero-recovery and are never replanned by migration.
 
 Controlled Coach additionally requires:
 
@@ -868,7 +872,7 @@ onboarding projection changes; and remove legacy `"User"` fallback from role
 authority. Authenticated profile edits are limited to non-authority fields;
 service role and the atomic Intake apply RPC retain the required backend
 projection authority. A fresh migration-chain verification should end at
-`20260722234000_setup_commitment_validity_guards.sql`. The earlier small account-export grant gives
+`20260723120000_study_setup_v1.sql`. The earlier small account-export grant gives
 only `service_role` the `lifestyle_entries` read authority required by the
 existing Account Export V1 table set. The account-delete
 migration installs the service-role-only full-account delete transaction; it
