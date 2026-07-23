@@ -24,7 +24,7 @@ class MainShell extends ConsumerWidget {
     AppRoutes.insights,
     AppRoutes.quickAction,
     AppRoutes.planner,
-    AppRoutes.settings,
+    AppRoutes.coach,
   ];
 
   @override
@@ -98,13 +98,13 @@ class MainShell extends ConsumerWidget {
         AppRoutes.settings,
       final path when path.startsWith(AppRoutes.notificationSettings) =>
         AppRoutes.settings,
-      final path when path.startsWith(AppRoutes.coach) => AppRoutes.settings,
+      final path when path.startsWith(AppRoutes.coach) => AppRoutes.coach,
       _ => currentPath,
     };
     final currentIndex = _routes.indexWhere(
       (route) => effectivePath.startsWith(route),
     );
-    final selectedIndex = currentIndex == -1 ? 0 : currentIndex;
+    final selectedIndex = currentIndex;
 
     final content = _ShellBody(
       isLocalDemo: capabilities.isLocalDemo,
@@ -120,6 +120,7 @@ class MainShell extends ConsumerWidget {
               children: [
                 _DesktopNavigation(
                   selectedIndex: selectedIndex,
+                  showCoach: capabilities.canShowCoachSurface,
                   onDestinationSelected: (index) => context.go(_routes[index]),
                 ),
                 Expanded(child: content),
@@ -139,6 +140,7 @@ class MainShell extends ConsumerWidget {
               FloatingActionButtonLocation.centerDocked,
           bottomNavigationBar: _FloatingBottomNav(
             selectedIndex: selectedIndex,
+            showCoach: capabilities.canShowCoachSurface,
             onDestinationSelected: (index) => context.go(_routes[index]),
           ),
         );
@@ -178,10 +180,12 @@ class _ShellBody extends StatelessWidget {
 class _DesktopNavigation extends StatelessWidget {
   const _DesktopNavigation({
     required this.selectedIndex,
+    required this.showCoach,
     required this.onDestinationSelected,
   });
 
   final int selectedIndex;
+  final bool showCoach;
   final ValueChanged<int> onDestinationSelected;
 
   @override
@@ -248,13 +252,14 @@ class _DesktopNavigation extends StatelessWidget {
                           onTap: () => onDestinationSelected(3),
                         ),
                         const SizedBox(height: AppSpacing.xs),
-                        _DesktopNavItem(
-                          icon: Icons.settings_outlined,
-                          selectedIcon: Icons.settings_rounded,
-                          label: 'Settings',
-                          isSelected: selectedIndex == 4,
-                          onTap: () => onDestinationSelected(4),
-                        ),
+                        if (showCoach)
+                          _DesktopNavItem(
+                            icon: Icons.forum_outlined,
+                            selectedIcon: Icons.forum,
+                            label: 'Coach',
+                            isSelected: selectedIndex == 4,
+                            onTap: () => onDestinationSelected(4),
+                          ),
                       ],
                     ),
                   ),
@@ -439,10 +444,12 @@ class _DesktopNavItem extends StatelessWidget {
 class _FloatingBottomNav extends StatelessWidget {
   const _FloatingBottomNav({
     required this.selectedIndex,
+    required this.showCoach,
     required this.onDestinationSelected,
   });
 
   final int selectedIndex;
+  final bool showCoach;
   final ValueChanged<int> onDestinationSelected;
 
   @override
@@ -519,6 +526,11 @@ class _FloatingBottomNav extends StatelessWidget {
                           flex: compact ? 6 : 1,
                           child: SizedBox(height: itemHeight),
                         ),
+                        if (!showCoach)
+                          Expanded(
+                            flex: itemFlex(false),
+                            child: SizedBox(height: itemHeight),
+                          ),
                         _FloatingNavItem(
                           icon: Icons.calendar_view_week_outlined,
                           selectedIcon: Icons.calendar_view_week,
@@ -529,16 +541,17 @@ class _FloatingBottomNav extends StatelessWidget {
                           height: itemHeight,
                           onTap: () => onDestinationSelected(3),
                         ),
-                        _FloatingNavItem(
-                          icon: Icons.settings_outlined,
-                          selectedIcon: Icons.settings,
-                          label: 'Settings',
-                          isSelected: selectedIndex == 4,
-                          showLabel: !compact,
-                          flex: itemFlex(selectedIndex == 4),
-                          height: itemHeight,
-                          onTap: () => onDestinationSelected(4),
-                        ),
+                        if (showCoach)
+                          _FloatingNavItem(
+                            icon: Icons.forum_outlined,
+                            selectedIcon: Icons.forum,
+                            label: 'Coach',
+                            isSelected: selectedIndex == 4,
+                            showLabel: !compact,
+                            flex: itemFlex(selectedIndex == 4),
+                            height: itemHeight,
+                            onTap: () => onDestinationSelected(4),
+                          ),
                       ],
                     ),
                     if (compact) ...[
@@ -577,13 +590,14 @@ class _FloatingBottomNav extends StatelessWidget {
                             idleColor: idleColor,
                             onTap: () => onDestinationSelected(3),
                           ),
-                          _CompactNavLabel(
-                            label: 'Settings',
-                            isSelected: selectedIndex == 4,
-                            selectedColor: selectedColor,
-                            idleColor: idleColor,
-                            onTap: () => onDestinationSelected(4),
-                          ),
+                          if (showCoach)
+                            _CompactNavLabel(
+                              label: 'Coach',
+                              isSelected: selectedIndex == 4,
+                              selectedColor: selectedColor,
+                              idleColor: idleColor,
+                              onTap: () => onDestinationSelected(4),
+                            ),
                         ],
                       ),
                     ],

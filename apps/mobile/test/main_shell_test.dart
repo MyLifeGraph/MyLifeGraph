@@ -77,6 +77,7 @@ void main() {
             const AppSurfaceCapabilities(
               isLocalDemo: false,
               canUseSyncedHabits: true,
+              canShowCoachSurface: true,
             ),
           ),
         ],
@@ -118,6 +119,7 @@ void main() {
             const AppSurfaceCapabilities(
               isLocalDemo: false,
               canUseSyncedHabits: true,
+              canShowCoachSurface: true,
             ),
           ),
         ],
@@ -159,6 +161,7 @@ void main() {
             const AppSurfaceCapabilities(
               isLocalDemo: false,
               canUseSyncedHabits: true,
+              canShowCoachSurface: true,
             ),
           ),
         ],
@@ -171,6 +174,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('MyLifeGraph'), findsOneWidget);
+    expect(find.byKey(const ValueKey('main-nav-coach')), findsOneWidget);
+    expect(find.byKey(const ValueKey('main-nav-settings')), findsNothing);
     expect(
       tester.getCenter(find.text('Home destination')).dx,
       greaterThan(236),
@@ -217,6 +222,7 @@ void main() {
               const AppSurfaceCapabilities(
                 isLocalDemo: false,
                 canUseSyncedHabits: true,
+                canShowCoachSurface: true,
               ),
             ),
           ],
@@ -238,7 +244,7 @@ void main() {
         'insights',
         'quick-actions',
         'planner',
-        'settings',
+        'coach',
       ];
       for (final label in labels) {
         final labelFinder = find.byKey(ValueKey('main-nav-label-$label'));
@@ -250,9 +256,9 @@ void main() {
         );
       }
       expect(
-        tester.getSemantics(find.byKey(const ValueKey('main-nav-settings'))),
+        tester.getSemantics(find.byKey(const ValueKey('main-nav-coach'))),
         matchesSemantics(
-          label: 'Settings',
+          label: 'Coach',
           isButton: true,
           hasSelectedState: true,
           isSelected: false,
@@ -261,17 +267,17 @@ void main() {
       );
       expect(tester.takeException(), isNull);
 
-      final settingsLabel = find.byKey(
-        const ValueKey('main-nav-label-settings'),
+      final coachLabel = find.byKey(
+        const ValueKey('main-nav-label-coach'),
       );
-      await tester.tap(settingsLabel);
+      await tester.tap(coachLabel);
       await tester.pumpAndSettle();
 
-      expect(find.text('Settings destination'), findsOneWidget);
-      expect(settingsLabel, findsOneWidget);
-      _expectFullyRenderedLabel(tester, settingsLabel);
+      expect(find.text('Coach destination'), findsOneWidget);
+      expect(coachLabel, findsOneWidget);
+      _expectFullyRenderedLabel(tester, coachLabel);
       expect(
-        find.ancestor(of: settingsLabel, matching: find.byType(FittedBox)),
+        find.ancestor(of: coachLabel, matching: find.byType(FittedBox)),
         findsNothing,
       );
       expect(
@@ -279,22 +285,47 @@ void main() {
         findsOneWidget,
       );
       expect(
-        tester.getSemantics(find.byKey(const ValueKey('main-nav-settings'))),
+        tester.getSemantics(find.byKey(const ValueKey('main-nav-coach'))),
         matchesSemantics(
-          label: 'Settings',
+          label: 'Coach',
           isButton: true,
           hasSelectedState: true,
           isSelected: true,
           hasTapAction: true,
         ),
       );
-      expect(find.bySemanticsLabel('Settings'), findsOneWidget);
+      expect(find.bySemanticsLabel('Coach'), findsOneWidget);
+      expect(find.bySemanticsLabel('Settings'), findsNothing);
       expect(tester.takeException(), isNull);
       semantics.dispose();
     });
   }
 
-  testWidgets('calendar integration selects Settings in shell semantics',
+  testWidgets('Coach gate hides the destination without restoring Settings',
+      (tester) async {
+    final router = _router(initialLocation: AppRoutes.dashboard);
+    addTearDown(router.dispose);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          appSurfaceCapabilitiesProvider.overrideWithValue(
+            const AppSurfaceCapabilities(
+              isLocalDemo: false,
+              canUseSyncedHabits: true,
+            ),
+          ),
+        ],
+        child: MaterialApp.router(routerConfig: router),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('main-nav-coach')), findsNothing);
+    expect(find.byKey(const ValueKey('main-nav-settings')), findsNothing);
+  });
+
+  testWidgets('calendar integration leaves shell destinations unselected',
       (tester) async {
     final semantics = tester.ensureSemantics();
     final router = _router(initialLocation: AppRoutes.calendarIntegration);
@@ -308,6 +339,7 @@ void main() {
               isLocalDemo: false,
               canUseSyncedHabits: true,
               canUseCalendarIntegration: true,
+              canShowCoachSurface: true,
             ),
           ),
         ],
@@ -317,13 +349,14 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Calendar destination'), findsOneWidget);
+    expect(find.byKey(const ValueKey('main-nav-settings')), findsNothing);
     expect(
-      tester.getSemantics(find.byKey(const ValueKey('main-nav-settings'))),
+      tester.getSemantics(find.byKey(const ValueKey('main-nav-coach'))),
       matchesSemantics(
-        label: 'Settings',
+        label: 'Coach',
         isButton: true,
         hasSelectedState: true,
-        isSelected: true,
+        isSelected: false,
         hasTapAction: true,
       ),
     );
@@ -340,7 +373,7 @@ void main() {
     semantics.dispose();
   });
 
-  testWidgets('legacy Inbox route selects Settings, not Planner',
+  testWidgets('legacy Inbox route leaves Coach and Planner unselected',
       (tester) async {
     final semantics = tester.ensureSemantics();
     final router = _router(initialLocation: AppRoutes.alerts);
@@ -353,6 +386,7 @@ void main() {
             const AppSurfaceCapabilities(
               isLocalDemo: false,
               canUseSyncedHabits: true,
+              canShowCoachSurface: true,
             ),
           ),
         ],
@@ -362,13 +396,14 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Inbox destination'), findsOneWidget);
+    expect(find.byKey(const ValueKey('main-nav-settings')), findsNothing);
     expect(
-      tester.getSemantics(find.byKey(const ValueKey('main-nav-settings'))),
+      tester.getSemantics(find.byKey(const ValueKey('main-nav-coach'))),
       matchesSemantics(
-        label: 'Settings',
+        label: 'Coach',
         isButton: true,
         hasSelectedState: true,
-        isSelected: true,
+        isSelected: false,
         hasTapAction: true,
       ),
     );
@@ -484,6 +519,10 @@ GoRouter _router({String initialLocation = AppRoutes.deepWork}) {
       GoRoute(
         path: AppRoutes.settings,
         builder: (_, __) => shell(AppRoutes.settings, 'Settings destination'),
+      ),
+      GoRoute(
+        path: AppRoutes.coach,
+        builder: (_, __) => shell(AppRoutes.coach, 'Coach destination'),
       ),
       GoRoute(
         path: AppRoutes.calendarIntegration,

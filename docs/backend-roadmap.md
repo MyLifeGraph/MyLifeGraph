@@ -1091,7 +1091,11 @@ local migration, remote, or installed-device pass without running that boundary.
 ### Planner V1: Central Explicit Planning
 
 - Replaced Inbox in the five-target shell with Planner; Inbox remains available
-  from Settings and compatible `/alerts` links keep Settings active.
+  from Settings.
+- Replaced the redundant Settings shell target with the gated Coach target.
+  Settings remains available from the top-right Today control, Settings-owned
+  routes select no unrelated shell item, and a disabled Coach gate exposes no
+  Coach destination or Settings fallback.
 - Added a strict seven-day overview ordered as Add new, Needs attention, days,
   Ongoing preparation, Unscheduled, and collapsed history.
 - Added direct Task, Habit, Exam, Assignment, and fixed-commitment create flows.

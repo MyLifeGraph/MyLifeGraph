@@ -116,7 +116,10 @@ way to explore the product today is the Flutter app in mock-data guest mode.
   explicit read-only busy-time preference is shared with Deadline Planner.
   Current conflicts create attention facts, never hidden or background
   replanning. Inbox moved from the app shell to Settings without changing
-  notification persistence or delivery.
+  notification persistence or delivery. The redundant Settings shell item is
+  now Coach whenever the development Coach gate is enabled; Settings remains
+  available from the top-right Today control. A gated-off Coach exposes no
+  shell item or Settings fallback.
   Study Setup V1 adds two collapsed optional Setup sections for a
   focus/recovery rhythm with a transient start checklist and for one
   current/next semester. Deadline plans always use a configured rhythm;

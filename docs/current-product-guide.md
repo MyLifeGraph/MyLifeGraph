@@ -1,7 +1,7 @@
 # MyLifeGraph: aktueller Produktleitfaden
 
 Status: Beschreibung des tatsächlich implementierten Repository-Stands vom
-22. Juli 2026. Dieses Dokument beschreibt den Ist-Zustand, nicht die Roadmap.
+23. Juli 2026. Dieses Dokument beschreibt den Ist-Zustand, nicht die Roadmap.
 Die verbindlichen technischen Detailverträge bleiben die am Ende verlinkten
 Contract-Dokumente.
 
@@ -92,7 +92,9 @@ Account erhält keine Daten des `student`-Testusers.
 
 ## Navigation: Was befindet sich wo?
 
-Die Hauptnavigation hat derzeit genau fünf Ziele.
+Mit aktiviertem Development-Coach hat die Hauptnavigation genau fünf Ziele.
+In Release/Produktion oder bei ausgeschaltetem Coach-Gate entfällt `Coach`
+vollständig; `Settings` wird nicht als redundanter Ersatz eingeblendet.
 
 | Sichtbarer Bereich | Aufgabe | Was dort aktuell zu sehen oder zu tun ist |
 | --- | --- | --- |
@@ -100,17 +102,22 @@ Die Hauptnavigation hat derzeit genau fünf Ziele.
 | **Insights** | Entwicklungen untersuchen | Eine vorsichtige Beobachtung, Datenqualität, 7/14/30/90-Tage-Korrelationen, Trends, Matrix und gespeicherte Insight-Notizen |
 | **Quick actions** | Tagesdaten erfassen oder eine Aktivität ausführen | Evening check-in, Morning check-in, Habit completion und Focus |
 | **Planner** | Ziele und feste Zeiten bewusst planen | Task, Habit, Exam, Assignment und Fixed commitment anlegen; Vorschauen bestätigen; sieben Tage, Konflikte, Unscheduled und laufende Preparation verwalten |
-| **Settings** | Längerfristige Einstellungen, Inbox und Kontoverwaltung | Inbox, Profil/Zeitzone, Setup, Preparation Budget, In-app reminders, Calendar import, optionaler Coach, Export, Löschung, Theme und Sign-out |
+| **Coach** | Den aktuellen Zustand bewusst erklären oder reflektieren | Development Preview mit begrenztem Context, sichtbarer Provenance und unverbindlichen, nicht ausführbaren Vorschlägen |
 
 Weitere Screens sind Unterseiten und keine eigenständigen Hauptbereiche:
 
+- `Settings` ist über den Button oben rechts auf `Today` erreichbar und enthält
+  Profil/Zeitzone, Setup, Preparation Budget, Inbox, In-app reminders, Calendar
+  import, Export, Löschung, Theme und Sign-out.
 - `Weekly review` gehört logisch zu `Today`.
 - `Today habits` und `Focus` gehören zur Ausführung unter `Quick actions`.
 - `Habit management` und `Preparation plans` gehören logisch zu `Planner`;
   die bisherigen Routen bleiben kompatibel.
 - `Inbox` gehört zu `Settings`; `/alerts` bleibt ein kompatibler Link.
-- `Calendar import`, `In-app reminders` und der Entwicklungs-`Coach` gehören
-  derzeit zu `Settings`.
+- `Calendar import` und `In-app reminders` gehören zu `Settings`. Der
+  Entwicklungs-`Coach` hat bei aktiviertem Surface-Gate den rechten
+  Hauptnavigationseintrag; der Settings-Eintrag bleibt als sekundärer Zugang
+  erhalten.
 - Es gibt aktuell **keine** separate Goals-, Tasks-, Schedule- oder Memories-
   Hauptseite.
 
@@ -710,7 +717,7 @@ Bis zu einer späteren Informationsarchitektur kann man die App so lesen:
 | Was passierte letzte Woche? | `Today → Weekly review` |
 | Welche Zusammenhänge sehe ich über mehrere Tage? | `Insights` |
 | Welche Hinweise warten auf mich? | `Settings → Inbox` |
-| Kann mir ein Modell den Zustand erklären? | `Settings → Coach`, nur Development Preview |
+| Kann mir ein Modell den Zustand erklären? | `Coach` in der Hauptnavigation, nur Development Preview |
 
 Goals und Setup-owned Habit-/Commitment-Definitionen bleiben bewusst unter
 Settings Setup; Planner darf aktive Setup-Habits zeitlich einplanen und zeigt
@@ -764,9 +771,9 @@ dabei lediglich lesbar.
    Korrelationen prüfen.
 8. Unter `Settings → Inbox` unread/read/dismiss und erlaubte `Open`-Ziele
    testen.
-9. Unter `Settings` Preparation Budget, Reminder-Consent und Coach öffnen. Bei
-   `fake` provider sind Antworten absichtlich feste Testdaten und kein LLM-
-   Beweis.
+9. Unter `Settings` Preparation Budget und Reminder-Consent prüfen. `Coach`
+   über die Hauptnavigation öffnen. Beim `fake` provider sind Antworten
+   absichtlich feste Testdaten und kein LLM-Beweis.
 
 `npm run seed:demo` stellt diese lokale Fixture wieder her, löscht und erzeugt
 dabei aber die drei ausdrücklich benannten **lokalen** Demo-Auth-Accounts neu.

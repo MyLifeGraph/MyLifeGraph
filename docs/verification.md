@@ -293,10 +293,12 @@ Migration tests must cover forced RLS, owner isolation, global request replay,
 concurrent confirmation, atomic target-plus-reservation activation,
 authoritative commitment conflicts, lifecycle release, restore-without-slot
 revival, and unchanged legacy Tasks/Habits. Flutter tests must cover the five
-main navigation targets, Inbox under Settings, Planner section order, all five
-create flows, preview/confirm, retained drafts, guest zero-call, seven-day and
-preparation projections, availability-readiness warning plus explicit override,
-calendar-intent omission from onboarding, and 320 px/200-percent text. Today V2 tests must prove
+Coach-enabled main navigation targets, the hidden Coach/no-Settings-fallback
+gate, Settings through the top-right Today control, Inbox under Settings,
+Planner section order, all five create flows, preview/confirm, retained drafts,
+guest zero-call, seven-day and preparation projections, availability-readiness
+warning plus explicit override, calendar-intent omission from onboarding, and
+320 px/200-percent text. Today V2 tests must prove
 the three added block kinds, exact `scheduled_today`, one target per progress
 denominator, and isolated source failures.
 
@@ -398,7 +400,8 @@ Current Flutter widget tests include:
   empty/error states, local source labels, and the absence of former proxy
   metrics.
 - Capability, Settings, and notification tests cover the real-account Coach
-  route plus guest/mock zero-call boundary, real synced Deep Work versus
+  route plus its gated fifth shell destination, redundant Settings-shell
+  removal, guest/mock zero-call boundary, real synced Deep Work versus
   guest/mock redirect, unavailable guest/mock execution,
   persistent local-demo label, the strict `action_url` allowlist, original
   notification fields/read state, separate real empty/error states, strict
@@ -1235,6 +1238,14 @@ Flutter Web semantics selection for exact choices and native checkboxes. This
 is local checkout evidence only; it adds no automatic replanning, provider
 calendar write, Notification/Today side effect, installed-device result,
 longitudinal outcome, or manual student-usability evidence.
+
+The shell-navigation follow-up completed locally on 2026-07-23 without a
+backend or schema change. The focused Shell/guest suites reported `19` passing
+tests, the final Shell rerun reported `9` passing tests, and the standard
+non-destructive source gate passed migration safety, clean Flutter analysis,
+all `657` Flutter tests, Python compilation, and diff checks. Browser source
+now enters Coach through the gated shell destination, but a new full browser
+journey was not run for this navigation-only follow-up.
 
 Phase 10 has focused fake-provider/process-runner, strict contract, service,
 migration, repository, controller, and widget tests in the checkout. Its

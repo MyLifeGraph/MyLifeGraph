@@ -133,8 +133,10 @@ actions.
   or deployed delivery.
 - A Setup reminder preference is not delivery consent.
 - Coach is a development preview. Release builds and `APP_ENV=production` hide
-  it regardless of Flutter defines. The local Codex path proves one developer
-  machine only and is not a production provider.
+  it regardless of Flutter defines. When enabled, `Coach` is the right shell
+  destination; `Settings` remains the top-right Today control and is not
+  duplicated in the shell. The local Codex path proves one developer machine
+  only and is not a production provider.
 
 ## Accessibility Copy Gate
 

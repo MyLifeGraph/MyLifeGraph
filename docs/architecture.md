@@ -42,9 +42,14 @@ The Flutter app uses feature-first clean architecture:
   widgets.
 - `features/*/presentation` contains pages, widgets, and Riverpod providers.
 
-State management is Riverpod. Navigation is GoRouter. The shell navigation maps
-to Today, Insights, central Quick actions, Planner, and Settings. Stored Inbox
-is reached from Settings; `/alerts` remains a compatible Settings-owned route.
+State management is Riverpod. Navigation is GoRouter. When the development
+Coach surface gate is enabled, the shell navigation maps to Today, Insights,
+central Quick actions, Planner, and Coach. Settings is reached from the
+top-right Today control instead of occupying a redundant shell destination;
+Settings-owned routes do not select an unrelated shell item. When the Coach
+surface gate is off, its destination is omitted rather than replaced by
+Settings. Stored Inbox is reached from Settings; `/alerts` remains a compatible
+Settings-owned route.
 Guest/demo sessions receive one persistent `Local demo` banner. The canned
 Coach preview and direct Supabase message writer have been replaced by a typed
 FastAPI Coach surface at `/coach`; `/more` aliases that route. Guest/mock renders

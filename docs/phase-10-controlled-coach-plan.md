@@ -43,7 +43,10 @@ The current checkout includes:
   review-only suggestions, explicit memory selection, and conversation deletion;
   and
 - an independent Flutter surface gate: release builds and
-  `APP_ENV=production` always hide navigation and redirect `/coach` to Settings;
+  `APP_ENV=production` always hide navigation and redirect `/coach` to Settings.
+  When enabled, Coach occupies the fifth shell destination in place of the
+  redundant Settings item; Settings remains available from Today. A disabled
+  gate does not restore Settings as a shell fallback.
   `COACH_SURFACE_ENABLED` cannot override either production boundary. Exact
   `true` may expose only the UI boundary in a non-production debug/profile
   build; backend capability still controls whether sending is ready.
@@ -502,7 +505,8 @@ rather than merely removing the route redirect.
 
 The first usable surface:
 
-- be exposed only when the independent surface gate is enabled;
+- be exposed only when the independent surface gate is enabled, including its
+  fifth shell destination;
 - let an authenticated real account inspect persisted history and capability
   truth while the provider is disabled or unavailable, while only a backend
   `ready` capability enables sending;

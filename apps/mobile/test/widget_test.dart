@@ -237,7 +237,7 @@ void main() {
       },
     );
 
-    await tester.tap(find.text('Settings'));
+    await tester.tap(find.byTooltip('Settings'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Setup and commitments'));
     await tester.pumpAndSettle();
@@ -374,8 +374,8 @@ void main() {
 
     await _startGuestAndCompleteSetup(tester);
 
-    expect(find.text('Coach'), findsNothing);
-    expect(find.text('Settings'), findsOneWidget);
+    expect(find.text('Coach'), findsOneWidget);
+    expect(find.byTooltip('Settings'), findsOneWidget);
 
     final router = GoRouter.of(
       tester.element(find.text('Today at a glance')),
@@ -421,7 +421,7 @@ void main() {
     );
     expect(find.text('Create read-only source'), findsNothing);
 
-    await tester.tap(find.text('Settings'));
+    router.go(AppRoutes.settings);
     await tester.pumpAndSettle();
 
     expect(find.text('Profile'), findsOneWidget);
@@ -440,7 +440,7 @@ void main() {
       scrollable: find.byType(Scrollable).first,
     );
     expect(find.text('Calendar import (optional)'), findsOneWidget);
-    expect(find.text('Coach'), findsOneWidget);
+    expect(find.text('Coach'), findsNWidgets(2));
     await tester.scrollUntilVisible(
       find.text('Export data'),
       180,

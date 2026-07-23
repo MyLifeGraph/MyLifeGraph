@@ -334,6 +334,10 @@ availability source is visible. Shared Availability considers Setup/manual commi
 confirmed Planner and Preparation reservations, and separately consented
 current imported busy time. It never infers missing duration/deadline/cadence,
 moves blocks automatically, writes a calendar, or serves guest/demo fake plans.
+When its development-only surface gate is enabled, Coach replaces the redundant
+Settings item as the fifth shell destination. Settings remains available from
+the top-right Today control; a gated-off Coach is omitted rather than replaced
+by Settings.
 Study Setup V1 adds optional focus/recovery rhythm, a transient Focus-start
 ritual, and exactly one current/next semester through that same revisioned
 Setup. Deadline plans always use a configured rhythm; ordinary Planner Tasks
