@@ -29,6 +29,17 @@ class GuestQuickCheckInDataSource implements QuickCheckInStore {
     return null;
   }
 
+  @override
+  Future<EveningShutdownDraft?> loadLatestEvening() async {
+    final values = await readAll();
+    for (final value in values.reversed) {
+      if (value.evening?.isV4 == true) {
+        return value.evening;
+      }
+    }
+    return null;
+  }
+
   Future<List<DailyCaptureEntry>> readAll() async {
     final prefs = await _preferencesLoader();
     final raw = prefs.getString(storageKey);

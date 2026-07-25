@@ -205,6 +205,168 @@ String formatCaptureHours(double value) => value == value.roundToDouble()
     ? value.toStringAsFixed(0)
     : value.toStringAsFixed(1);
 
+class CaptureClockControl extends StatelessWidget {
+  const CaptureClockControl({
+    required this.label,
+    required this.semanticLabel,
+    required this.value,
+    required this.onChanged,
+    this.fallback = const TimeOfDay(hour: 23, minute: 0),
+    this.quickValues = const [],
+    super.key,
+  });
+
+  final String label;
+  final String semanticLabel;
+  final String? value;
+  final ValueChanged<String> onChanged;
+  final TimeOfDay fallback;
+  final List<String> quickValues;
+
+  @override
+  Widget build(BuildContext context) {
+    final parsed = _parseTimeOfDay(value);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Semantics(
+          button: true,
+          label: semanticLabel,
+          value: value ?? 'Not set',
+          child: OutlinedButton.icon(
+            onPressed: () async {
+              final selected = await showTimePicker(
+                context: context,
+                initialTime: parsed ?? fallback,
+                helpText: label,
+              );
+              if (selected == null) {
+                return;
+              }
+              onChanged(
+                '${selected.hour.toString().padLeft(2, '0')}:'
+                '${selected.minute.toString().padLeft(2, '0')}',
+              );
+            },
+            icon: const Icon(Icons.schedule),
+            label: Padding(
+              padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(label),
+                  const SizedBox(height: AppSpacing.xs),
+                  Text(
+                    value ?? 'Set time',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        if (quickValues.isNotEmpty) ...[
+          const SizedBox(height: AppSpacing.sm),
+          Wrap(
+            alignment: WrapAlignment.center,
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.sm,
+            children: quickValues.map((quickValue) {
+              assert(_parseTimeOfDay(quickValue) != null);
+              return Semantics(
+                button: true,
+                selected: value == quickValue,
+                label: '$semanticLabel preset $quickValue',
+                onTap: () => onChanged(quickValue),
+                child: ExcludeSemantics(
+                  child: OutlinedButton(
+                    onPressed: () => onChanged(quickValue),
+                    child: Text(quickValue),
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class CaptureSleepTargetControl extends StatelessWidget {
+  const CaptureSleepTargetControl({
+    required this.value,
+    required this.onChanged,
+    super.key,
+  });
+
+  final int? value;
+  final ValueChanged<int> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final selected = value ?? 480;
+    return Column(
+      children: [
+        Text(
+          formatCaptureMinutes(selected),
+          style: Theme.of(context).textTheme.headlineLarge,
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        Semantics(
+          label: 'Sleep target',
+          value: formatCaptureMinutes(selected),
+          child: Slider(
+            value: selected.toDouble(),
+            min: 300,
+            max: 720,
+            divisions: 28,
+            semanticFormatterCallback: (next) =>
+                formatCaptureMinutes(next.round()),
+            onChanged: (next) => onChanged((next / 15).round() * 15),
+          ),
+        ),
+        Wrap(
+          alignment: WrapAlignment.center,
+          spacing: AppSpacing.sm,
+          runSpacing: AppSpacing.sm,
+          children: const [360, 420, 480, 540].map((minutes) {
+            return Semantics(
+              button: true,
+              selected: selected == minutes,
+              label: 'sleep target ${formatCaptureMinutes(minutes)}',
+              child: ExcludeSemantics(
+                child: OutlinedButton(
+                  onPressed: () => onChanged(minutes),
+                  child: Text(formatCaptureMinutes(minutes)),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ],
+    );
+  }
+}
+
+String formatCaptureMinutes(int minutes) {
+  final hours = minutes ~/ 60;
+  final remainder = minutes % 60;
+  if (remainder == 0) {
+    return '$hours h';
+  }
+  return '$hours h ${remainder.toString().padLeft(2, '0')} min';
+}
+
+TimeOfDay? _parseTimeOfDay(String? value) {
+  if (value == null ||
+      !RegExp(r'^(?:[01]\d|2[0-3]):[0-5]\d$').hasMatch(value)) {
+    return null;
+  }
+  final parts = value.split(':');
+  return TimeOfDay(hour: int.parse(parts.first), minute: int.parse(parts.last));
+}
+
 class CaptureFlowScaffold extends StatelessWidget {
   const CaptureFlowScaffold({
     required this.eyebrow,

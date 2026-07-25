@@ -129,22 +129,30 @@ Supabase is not configured.
 `/daily-check-in` route redirects to it. `/morning-calibration` is a separate,
 short Morning Calibration instead of another full daily form.
 
-The current `daily-capture-v3` contract is:
+The current `daily-capture-v4` contract is:
 
 - Typed `EveningShutdownDraft` and `MorningCalibrationDraft` values have stable
   capture ids through retry. `DailyCaptureEntry` is the one same-day aggregate.
-- Evening is a two-page flow. Mood, energy, and stress intensity are required.
+- Evening is a three-page flow. Mood, energy, stress intensity, one local
+  planned sleep start, and one `300..720` minute target on a 15-minute grid are
+  required. The first visible target is 480 minutes; later forms prefill the
+  newest valid Evening V4 plan.
   Stress source and controllability appear and become required together only
   at stress `5..10`; tomorrow priority, reflection, and a specific blocker are
   optional and omitted when blank. Primary and additional friction choices are
-  retired. V2 captures remain readable, but their friction keys are ignored and
-  the next save writes V3. New captures do not write the retired
+  retired. V2/V3 captures remain readable, but their friction keys are ignored.
+  A V4 merge preserves an untouched older opposite branch with its explicit
+  branch version and `compatibility: true`; editing that branch upgrades it and
+  requires its V4 fields. New captures do not write the retired
   `gentle_tomorrow` field, while old capture objects containing it remain
   readable. The form no longer asks the user to estimate a focus band:
   completed `focus_sessions` are the source of measured focus time.
-- Morning requires sleep hours, an independent whole-number `1..10`
-  `sleep_quality` estimate, current energy, and `normal`, `constrained`, or
-  `flexible` day shape. It does not repeat Evening questions and explicitly
+- Morning requires aware estimated sleep-start/wake instants, their exact
+  derived whole-minute duration and compatible sleep hours, the target used for
+  that night, an independent whole-number `1..10` `sleep_quality` estimate,
+  current energy, and `normal`, `constrained`, or `flexible` day shape. The
+  interval is ordered, minute-aligned, and at most 16 hours. It is labelled as
+  an estimated duration, does not repeat Evening questions, and explicitly
   states that it does not generate recommendations or create or change a plan.
   Older V2 Morning objects without `sleep_quality` remain readable; editing
   that Morning capture requires an explicit value before it can be saved.
@@ -152,15 +160,19 @@ The current `daily-capture-v3` contract is:
   `.morning` object, preserving the other capture and unrelated metadata.
   Numeric compatibility projects mood and stress from Evening, sleep from
   Morning, and energy from Morning when present or Evening otherwise.
-- Guest saves use a versioned V3 daily JSON object and remain readable on
-  return. Legacy V1/V2 guest JSON remains readable; a V2 read is sanitized and
-  rewritten without friction data before a later account migration.
+- Guest saves use a versioned V4 daily JSON object and remain readable on
+  return. Legacy V1/V2/V3 guest JSON remains readable and is upgraded only
+  through the same branch-compatible merge.
 - Supabase saves upsert the `(user_id, entry_date)` `daily_logs` row and rebuild
   a dynamic set of at most four current `behavioral_events`. Mood, energy,
   stress, and sleep receive deterministic ids derived from the daily row and
   event kind, are linked through `daily_log_id`, and mirror relevant structured
   capture metadata. Sleep quality is mirrored on the existing Morning-origin
   energy and sleep events instead of creating a fifth event.
+- Planned/estimated raw clocks remain only in Daily Log metadata. The
+  compatible `sleep_hours` column and Sleep event contain the derived duration;
+  event metadata, Daily State, recommendations, notifications, and Coach do not
+  receive raw clocks or sleep-target provenance.
 - The upsert clears legacy placeholder-only steps, activity, screen-time, focus,
   nutrition, and day-focus values because the canonical form does not collect
   them. It never converts a subjective focus answer into invented
@@ -387,6 +399,16 @@ facts. It deliberately excludes proposed blocks, imported busy rows, live
 provider state, task estimates, and Focus history, so the UI labels the latter
 as weekly Setup commitments and does not present the projection as total free
 time. Both this projection and block allocation remain deterministic/no-LLM.
+
+`GET /v1/deadline-plans/exam-week-outlook` adds a separate read-only
+`exam-week-outlook-v1` projection. An active exam with remaining work activates
+`exam_week` at 0..7 local days, `watch` at 8..14, or `overdue`; assignments
+within the horizon consume capacity but never activate it. The service reuses
+the same Availability engine without storing simulated blocks, includes every
+confirmed competing reservation in range, and compares normal capacity with a
+hypothetical recurring busy interval from the newest valid Evening V4 plan.
+The Planner-only card opens existing review/replan routes and cannot create or
+confirm a preview. See `docs/exam-week-outlook-v1-contract.md`.
 
 The compatible `preparation-workload-detail-v1` read is requested only after a
 student expands one date from that summary. It accepts only a date in the

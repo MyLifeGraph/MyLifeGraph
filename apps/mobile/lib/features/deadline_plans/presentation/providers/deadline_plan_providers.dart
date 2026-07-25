@@ -11,6 +11,7 @@ import '../../data/deadline_plan_repository_impl.dart';
 import '../../domain/deadline_plan.dart';
 import '../../domain/deadline_plan_repository.dart';
 import '../../domain/deadline_calendar_prefill.dart';
+import '../../domain/exam_week_outlook.dart';
 
 final deadlinePlanApiDataSourceProvider = Provider<DeadlinePlanApiDataSource>(
   (ref) => DeadlinePlanApiDataSource(ref.watch(apiClientProvider)),
@@ -43,6 +44,24 @@ final deadlineCalendarPrefillDataSourceProvider =
 final preparationWorkloadProvider =
     FutureProvider.autoDispose<PreparationWorkload>((ref) {
   return ref.watch(deadlinePlanRepositoryProvider).getWorkload();
+});
+
+final examWeekOutlookProvider =
+    FutureProvider.autoDispose<ExamWeekOutlook?>((ref) async {
+  final capabilities = ref.watch(appSurfaceCapabilitiesProvider);
+  if (!capabilities.canUseDeadlinePlanner) {
+    return null;
+  }
+  final token =
+      ref.read(supabaseClientProvider)?.auth.currentSession?.accessToken;
+  if (token == null || token.isEmpty) {
+    throw const ExamWeekOutlookContractException(
+      'Exam-week outlook requires an authenticated session.',
+    );
+  }
+  return ref
+      .watch(deadlinePlanApiDataSourceProvider)
+      .getExamWeekOutlook(accessToken: token);
 });
 
 final deadlineCalendarPrefillProvider = FutureProvider.autoDispose

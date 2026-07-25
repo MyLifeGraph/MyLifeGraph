@@ -439,6 +439,30 @@ background, and previously completed qualifying focus remains credited to the
 plan as a whole. The active warning remains visible while a replacement
 revision is only an unconfirmed preview.
 
+## Read-Only Exam-Week Outlook
+
+`GET /v1/deadline-plans/exam-week-outlook` is an additive
+`exam-week-outlook-v1` read over confirmed Deadline Planner state. It does not
+change `deadline-plan-v1`, proposal fingerprints, lifecycle RPCs, or task
+authority.
+
+An active exam with remaining work activates `exam_week` at 0..7 profile-local
+days, `watch` at 8..14, and `overdue` after its date. Assignments do not
+activate the mode but consume the same bounded simulated capacity. For this
+warning only, each exam uses at least one clear buffer day. The saved revision
+and its blocks remain unchanged.
+
+The read reuses deterministic Availability twice: normally, then with the
+newest valid Evening V4 planned sleep interval added as hypothetical busy time.
+It includes all confirmed competing blocks in the simulation range, even when
+their plans' deadlines are outside the card's horizon. Pending revisions remain
+staged and are checked only for a visible sleep overlap. Opening the GET or its
+Planner card never creates a proposal, and an explicit replan still follows the
+existing preview/confirmation flow.
+
+The complete Capture V4, fit, warning, risk, DST, Planner placement, ownership,
+and non-claim rules are in `docs/exam-week-outlook-v1-contract.md`.
+
 ## Explicit Non-Claims
 
 Deadline Planner V1 adds no:

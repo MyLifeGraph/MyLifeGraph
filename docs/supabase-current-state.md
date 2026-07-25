@@ -93,16 +93,18 @@ The app table constants live in
 | `coach_memory_selections` | Explicit owner-scoped selection of at most eight eligible `memory_entries` for Coach context, stored separately from memory ownership/content. |
 
 Phase 1 canonical capture upserts one `daily_logs` row per user/date with source
-`quick_check_in`. `metadata.capture_version=daily-capture-v3` contains separate
+`quick_check_in`. `metadata.capture_version=daily-capture-v4` contains separate
 owned `captures.evening` and `captures.morning` objects. Saving one kind replaces
 only that object, preserving the other capture and unrelated metadata. Numeric
 projection keeps existing consumers compatible: Morning energy takes
 precedence, Evening owns mood and stress, and Morning owns sleep. Evening stores
-no primary/additional friction fields. V2 capture objects remain readable, but
-friction keys are ignored and the next save writes V3. Morning stores an
-independent whole-number `1..10` `sleep_quality` estimate in
-its JSON object. Older V2 Morning objects without it remain readable; new
-Morning saves require it. No direct compatibility column is added.
+no primary/additional friction fields. It requires one planned local sleep
+clock and one bounded target. Morning stores aware estimated start/wake
+instants, their exact derived minutes/compatible hours, the target used,
+optional source Evening id, and an independent whole-number `1..10`
+`sleep_quality` estimate. V2/V3 objects remain readable and may remain explicit
+compatibility branches until edited. No direct compatibility or sleep-profile
+column is added.
 New writes omit the retired `gentle_tomorrow` field, while legacy capture
 objects containing it remain readable. Capture does not ask for a focus band
 and does not fabricate `focus_minutes`.
@@ -114,13 +116,15 @@ contains at most mood, energy, stress, and sleep; an Evening-only or
 Morning-only day therefore does not create unanswered events. Event metadata
 mirrors the relevant capture kind, id, local entry date, capture time, and
 bounded context. Sleep quality is mirrored on the existing Morning-origin
-energy and sleep events instead of creating a fifth event. Repeated same-day
+energy and sleep events instead of creating a fifth event. Raw planned/
+estimated clocks, target, and source Evening id are not mirrored; only the
+derived Sleep value leaves Daily Log metadata. Repeated same-day
 saves converge without append-only signal
-history. Existing columns, grants, and RLS policies are sufficient, so Phase 1
-adds no schema migration.
+history. Existing columns, grants, and RLS policies are sufficient, so Capture
+V4 and the derived read-only Exam-Week Outlook add no schema migration.
 
-Guest capture stores the same ownership model as V3 JSON in
-`shared_preferences`, still reads and sanitizes V1/V2 guest JSON, and keeps the
+Guest capture stores the same ownership model as V4 JSON in
+`shared_preferences`, still reads and sanitizes V1/V2/V3 guest JSON, and keeps the
 existing best-effort check-in migration into a real non-demo account. Guest Setup remains
 separate and is still not migrated automatically. Real capture saves request a
 best-effort daily snapshot for their explicit local `target_date`. FastAPI loads

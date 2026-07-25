@@ -967,6 +967,10 @@ try {
   ) {
     throw new Error('Evening check-in still exposes retired friction choices.');
   }
+  await clickByText(page, '23:00');
+  await clickByText(page, '8 h', { match: 'last' });
+  await expectText(page, '8 h');
+  await clickByText(page, 'Next');
   await clickScrolledByLabel(page, 'stress source private_emotional');
   await clickScrolledByLabel(
     page,
@@ -1104,7 +1108,9 @@ try {
   });
   await waitForFlutterShell(page);
   await enableFlutterSemantics(page);
-  await clickByRoleName(page, 'button', 'morning sleep 5.5 h');
+  await clickByText(page, '00:00');
+  await clickByText(page, '05:30');
+  await expectText(page, '5 h 30 min');
   await clickByRoleNameUntilText(
     page,
     'button',
@@ -1215,6 +1221,9 @@ try {
     page,
     "Today's evening check-in is loaded. Saving updates only these evening answers.",
   );
+  await clickByText(page, 'Next');
+  await expectText(page, '23:00');
+  await expectText(page, '8 h');
   await clickByText(page, 'Next');
   await clickScrolledByLabel(page, 'stress source workload');
   await clickScrolledByLabel(
@@ -2099,6 +2108,10 @@ try {
     deltaY: 500,
     buttonFirst: true,
   });
+  const manualRefreshDateBefore = isoDateInTimeZone(
+    new Date().toISOString(),
+    'Europe/Berlin',
+  );
   const [manualSnapshotResponse, manualRecommendationResponse] =
     await Promise.all([
       waitForAiPost(page, '/v1/snapshots/generate', 'manual snapshot refresh'),
@@ -2109,12 +2122,27 @@ try {
       ),
       clickByText(page, 'Refresh recommendations'),
     ]);
+  const manualRefreshDateAfter = isoDateInTimeZone(
+    new Date().toISOString(),
+    'Europe/Berlin',
+  );
+  const manualSnapshotTargetDate =
+    manualSnapshotResponse.request().postDataJSON()?.target_date;
+  if (
+    ![manualRefreshDateBefore, manualRefreshDateAfter].includes(
+      manualSnapshotTargetDate,
+    )
+  ) {
+    throw new Error(
+      `Manual snapshot refresh did not use the current profile-local date: ${JSON.stringify(manualSnapshotTargetDate)}`,
+    );
+  }
   assertJsonPayload(
     manualSnapshotResponse.request(),
     {
       scope: 'daily',
       window_days: 7,
-      target_date: captureEntryDate,
+      target_date: manualSnapshotTargetDate,
     },
     'manual snapshot refresh payload',
   );
@@ -3146,6 +3174,18 @@ function hasExactPhaseOneDailyRow(row, expected) {
   const expectedCaptureKeys = expected.expectMorning
     ? ['evening', 'morning']
     : ['evening'];
+  const hasV4SleepInterval =
+    expected.expectMorning &&
+    morning?.branch_version === 'daily-capture-v4' &&
+    !Object.hasOwn(morning ?? {}, 'compatibility') &&
+    isIsoTimestamp(morning?.estimated_sleep_started_at) &&
+    isIsoTimestamp(morning?.woke_at) &&
+    Date.parse(morning.woke_at) -
+      Date.parse(morning.estimated_sleep_started_at) ===
+      330 * 60_000 &&
+    morning?.estimated_sleep_minutes === 330 &&
+    morning?.sleep_target_minutes === 480 &&
+    morning?.source_evening_capture_id === expected.eveningCaptureId;
   const hasExpectedMorning = expected.expectMorning
     ? morning?.capture_kind === 'morning' &&
       morning?.entry_date === expected.entryDate &&
@@ -3155,7 +3195,8 @@ function hasExactPhaseOneDailyRow(row, expected) {
       morning?.sleep_hours === 5.5 &&
       morning?.sleep_quality === 3 &&
       morning?.current_energy === 4 &&
-      morning?.day_shape === 'constrained'
+      morning?.day_shape === 'constrained' &&
+      hasV4SleepInterval
     : morning === undefined;
 
   return (
@@ -3174,12 +3215,14 @@ function hasExactPhaseOneDailyRow(row, expected) {
     row.nutrition_notes === null &&
     row.day_focus === null &&
     row.reflection === null &&
-    row.metadata?.capture_version === 'daily-capture-v3' &&
+    row.metadata?.capture_version === 'daily-capture-v4' &&
     !Object.hasOwn(row.metadata ?? {}, 'context_note') &&
     !Object.hasOwn(row.metadata ?? {}, 'main_friction') &&
     !Object.hasOwn(row.metadata ?? {}, 'additional_frictions') &&
     arraysEqual(captureKeys, expectedCaptureKeys) &&
     evening?.capture_kind === 'evening' &&
+    evening?.branch_version === 'daily-capture-v4' &&
+    !Object.hasOwn(evening ?? {}, 'compatibility') &&
     evening?.entry_date === expected.entryDate &&
     evening?.capture_id === expected.eveningCaptureId &&
     isIsoTimestamp(evening?.captured_at) &&
@@ -3189,6 +3232,8 @@ function hasExactPhaseOneDailyRow(row, expected) {
     evening?.stress_intensity_label === 'high' &&
     evening?.stress_source === expected.stressSource &&
     evening?.stress_controllability === expected.stressControllability &&
+    evening?.planned_sleep_time === '23:00' &&
+    evening?.sleep_target_minutes === 480 &&
     !Object.hasOwn(evening ?? {}, 'focus_band') &&
     !Object.hasOwn(evening ?? {}, 'main_friction') &&
     !Object.hasOwn(evening ?? {}, 'additional_frictions') &&
@@ -3224,7 +3269,7 @@ function hasExactCaptureEvents(rows, expected, contract) {
         !row.id ||
         row.daily_log_id !== expected.dailyLogId ||
         row.source !== 'quick_check_in' ||
-        row.metadata?.capture_version !== 'daily-capture-v3' ||
+        row.metadata?.capture_version !== 'daily-capture-v4' ||
         row.metadata?.entry_date !== expected.entryDate ||
         !isIsoTimestamp(row.metadata?.captured_at),
     ) ||
@@ -3287,7 +3332,11 @@ function hasExactCaptureEvents(rows, expected, contract) {
       metadata?.capture_kind === 'morning' &&
       metadata?.capture_id === expected.morningCaptureId &&
       metadata?.day_shape === 'constrained' &&
-      metadata?.sleep_quality === 3
+      metadata?.sleep_quality === 3 &&
+      !Object.hasOwn(metadata ?? {}, 'estimated_sleep_started_at') &&
+      !Object.hasOwn(metadata ?? {}, 'woke_at') &&
+      !Object.hasOwn(metadata ?? {}, 'sleep_target_minutes') &&
+      !Object.hasOwn(metadata ?? {}, 'source_evening_capture_id')
     );
   });
 }
@@ -4448,6 +4497,11 @@ async function assertNotificationDelivery(page, userId) {
   });
 
   await page.goto(appRoute('/alerts'), { waitUntil: 'domcontentloaded' });
+  // Foreground delivery deliberately invalidates the Inbox provider while a
+  // floating banner is still visible. Recreate the document before asserting
+  // the persisted row so an offstage route cannot retain the pre-generation
+  // empty feed or its SnackBar across this navigation.
+  await page.reload({ waitUntil: 'domcontentloaded' });
   await waitForFlutterShell(page);
   await enableFlutterSemantics(page);
   await expectText(page, 'Inbox');
@@ -6209,8 +6263,10 @@ async function assertDeadlinePlanner(page, userId) {
   );
   const planId = crypto.randomUUID();
   const title = `E2E statistics exam ${runId}`;
-  const deadlineDate = addUtcDays(localToday, 12);
+  const deadlineDate = addUtcDays(localToday, 7);
   const deadlineAt = `${deadlineDate}T12:00:00Z`;
+  const outlookAssignmentPlanId = crypto.randomUUID();
+  const outlookAssignmentTitle = `E2E competing assignment ${runId}`;
   const initialTaskRows = await fetchRows(
     `tasks?select=id&user_id=eq.${userId}`,
     'Deadline Planner task baseline',
@@ -6739,6 +6795,44 @@ async function assertDeadlinePlanner(page, userId) {
     409,
     'deadline confirm request-id reinterpretation',
   );
+
+  const outlookAssignment = await createOutlookAssignment({
+    accessToken,
+    planId: outlookAssignmentPlanId,
+    title: outlookAssignmentTitle,
+    deadlineAt,
+    planningStartOn: localToday,
+  });
+  await assertExamWeekOutlookSurface({
+    page,
+    accessToken,
+    userId,
+    examPlanId: planId,
+    examTitle: title,
+    assignmentPlanId: outlookAssignmentPlanId,
+    assignmentTitle: outlookAssignmentTitle,
+  });
+  const outlookAssignmentCancelled = await deadlinePlanApiRequest(
+    `/v1/deadline-plans/${outlookAssignmentPlanId}/cancel`,
+    accessToken,
+    {
+      method: 'POST',
+      body: {
+        request_id: crypto.randomUUID(),
+        expected_revision: outlookAssignment.active_revision.revision,
+      },
+    },
+  );
+  assertDeadlinePlanApiStatus(
+    outlookAssignmentCancelled,
+    200,
+    'exam-week competing assignment cleanup',
+  );
+  if (outlookAssignmentCancelled.json?.plan?.status !== 'cancelled') {
+    throw new Error(
+      `Exam-week competing assignment did not close explicitly: ${outlookAssignmentCancelled.text}`,
+    );
+  }
 
   const managedTasks = await fetchRows(
     `tasks?select=id,user_id,title,status,deadline,estimated_minutes,completed_at,cancelled_at,source,metadata&user_id=eq.${userId}&id=eq.${planId}`,
@@ -7381,8 +7475,10 @@ async function assertDeadlinePlanner(page, userId) {
     finalFeed.plans.map((detail) => [detail.plan.id, detail]),
   );
   if (
-    finalFeed.plans.length !== 3 ||
+    finalFeed.plans.length !== 4 ||
     finalPlansById.get(planId)?.plan.status !== 'completed' ||
+    finalPlansById.get(outlookAssignmentPlanId)?.plan.status !==
+      'cancelled' ||
     finalPlansById.get(cancelledDraftPlanId)?.plan.status !== 'cancelled' ||
     finalPlansById.get(cancelledDraftPlanId)?.plan.current_revision !== 0 ||
     finalPlansById.get(budgetConflictPlanId)?.plan.status !== 'cancelled' ||
@@ -7402,11 +7498,216 @@ async function assertDeadlinePlanner(page, userId) {
     'Deadline Planner final task set',
   );
   if (
-    finalTasks.length !== initialTaskRows.length + 1 ||
-    !finalTasks.some((row) => row.id === planId)
+    finalTasks.length !== initialTaskRows.length + 2 ||
+    !finalTasks.some((row) => row.id === planId) ||
+    !finalTasks.some((row) => row.id === outlookAssignmentPlanId)
   ) {
     throw new Error(
       `Deadline Planner did not retain exactly one stable managed task: ${JSON.stringify(finalTasks)}`,
+    );
+  }
+}
+
+async function createOutlookAssignment({
+  accessToken,
+  planId,
+  title,
+  deadlineAt,
+  planningStartOn,
+}) {
+  const proposal = await deadlinePlanApiRequest(
+    '/v1/deadline-plans/proposals',
+    accessToken,
+    {
+      method: 'POST',
+      body: {
+        request_id: crypto.randomUUID(),
+        plan_id: planId,
+        base_revision: 0,
+        kind: 'assignment',
+        title,
+        deadline_at: deadlineAt,
+        estimated_total_minutes: 60,
+        credited_prior_minutes: 0,
+        preferred_session_minutes: 30,
+        max_daily_minutes: 60,
+        planning_start_on: planningStartOn,
+        buffer_days: 0,
+        source_kind: 'manual',
+        use_calendar_availability: false,
+      },
+    },
+  );
+  assertDeadlinePlanApiStatus(
+    proposal,
+    200,
+    'exam-week competing assignment proposal',
+  );
+  const staged = assertDeadlinePlanEnvelope(
+    proposal.json,
+    'exam-week competing assignment proposal',
+  );
+  if (
+    staged.plan.status !== 'draft' ||
+    staged.pending_revision?.revision !== 1 ||
+    staged.pending_revision?.kind !== 'assignment' ||
+    staged.pending_revision?.planned_minutes !== 60
+  ) {
+    throw new Error(
+      `Competing assignment was not staged exactly: ${proposal.text}`,
+    );
+  }
+  const confirmed = await deadlinePlanApiRequest(
+    `/v1/deadline-plans/${planId}/confirm`,
+    accessToken,
+    {
+      method: 'POST',
+      body: {
+        request_id: crypto.randomUUID(),
+        expected_revision: 1,
+      },
+    },
+  );
+  assertDeadlinePlanApiStatus(
+    confirmed,
+    200,
+    'exam-week competing assignment confirmation',
+  );
+  const active = assertDeadlinePlanEnvelope(
+    confirmed.json,
+    'exam-week competing assignment confirmation',
+  );
+  if (
+    active.plan.status !== 'active' ||
+    active.active_revision?.revision !== 1 ||
+    active.active_revision?.kind !== 'assignment'
+  ) {
+    throw new Error(
+      `Competing assignment did not become active: ${confirmed.text}`,
+    );
+  }
+  return active;
+}
+
+async function examWeekPersistedState(userId, planIds) {
+  const encodedIds = planIds.join(',');
+  const [plans, revisions, blocks] = await Promise.all([
+    fetchRows(
+      `deadline_plans?select=id,status,current_revision,latest_revision,updated_at&user_id=eq.${userId}&id=in.(${encodedIds})&order=id.asc`,
+      'exam-week persisted plans',
+    ),
+    fetchRows(
+      `deadline_plan_revisions?select=plan_id,revision,state,activated_at,superseded_at&user_id=eq.${userId}&plan_id=in.(${encodedIds})&order=plan_id.asc,revision.asc`,
+      'exam-week persisted revisions',
+    ),
+    fetchRows(
+      `deadline_plan_blocks?select=id,plan_id,revision,reservation_state,starts_at,ends_at,reserved_ends_at,planned_minutes&user_id=eq.${userId}&plan_id=in.(${encodedIds})&order=plan_id.asc,revision.asc,sequence.asc`,
+      'exam-week persisted blocks',
+    ),
+  ]);
+  return stableJson({ plans, revisions, blocks });
+}
+
+async function assertExamWeekOutlookSurface({
+  page,
+  accessToken,
+  userId,
+  examPlanId,
+  examTitle,
+  assignmentPlanId,
+  assignmentTitle,
+}) {
+  const planIds = [examPlanId, assignmentPlanId];
+  const before = await examWeekPersistedState(userId, planIds);
+  const result = await deadlinePlanApiRequest(
+    '/v1/deadline-plans/exam-week-outlook',
+    accessToken,
+  );
+  assertDeadlinePlanApiStatus(result, 200, 'exam-week outlook');
+  const outlook = result.json;
+  const exam = outlook?.exams?.find((item) => item.plan_id === examPlanId);
+  const assignment = outlook?.assignments?.find(
+    (item) => item.plan_id === assignmentPlanId,
+  );
+  if (
+    outlook?.contract_version !== 'exam-week-outlook-v1' ||
+    outlook?.origin !== 'authenticated_backend' ||
+    outlook?.mode !== 'exam_week' ||
+    !['on_track', 'attention', 'high', 'critical', 'unknown'].includes(
+      outlook?.risk_level,
+    ) ||
+    ![
+      'fits_with_sleep_protected',
+      'fits_only_using_sleep_window',
+      'does_not_fit_before_buffer',
+      'unknown',
+    ].includes(outlook?.capacity_status) ||
+    outlook?.current_sleep_plan?.planned_sleep_time !== '23:00' ||
+    outlook?.current_sleep_plan?.sleep_target_minutes !== 480 ||
+    !outlook?.recent_sleep_nights?.some(
+      (night) =>
+        night.estimated_sleep_minutes === 330 &&
+        night.sleep_target_minutes === 480,
+    ) ||
+    exam?.active_revision !== 1 ||
+    exam?.days_remaining !== 7 ||
+    assignment?.active_revision !== 1 ||
+    assignment?.remaining_minutes !== 60 ||
+    JSON.stringify(outlook).includes('estimated_sleep_started_at') ||
+    JSON.stringify(outlook).includes('"woke_at"')
+  ) {
+    throw new Error(`Exam-week outlook is invalid: ${result.text}`);
+  }
+
+  await page.goto(appRoute('/dashboard'), { waitUntil: 'domcontentloaded' });
+  await waitForFlutterShell(page);
+  await enableFlutterSemantics(page);
+  await assertFlutterTextAbsent(
+    page,
+    'Exam week',
+    'exam-week status outside Planner',
+  );
+
+  const outlookLoad = page.waitForResponse(
+    (response) =>
+      response.url() ===
+        `${aiServiceBaseUrl}/v1/deadline-plans/exam-week-outlook` &&
+      response.request().method() === 'GET',
+    { timeout: 45000 },
+  );
+  await page.goto(appRoute('/planner'), { waitUntil: 'domcontentloaded' });
+  const outlookResponse = await outlookLoad;
+  if (!outlookResponse.ok()) {
+    throw new Error(
+      `Planner exam-week outlook failed: ${outlookResponse.status()} ${await outlookResponse.text()}`,
+    );
+  }
+  await waitForFlutterShell(page);
+  await enableFlutterSemantics(page);
+  await expectText(page, 'Exam week');
+  await scrollUntilTextInViewport(page, examTitle, { maxSteps: 20 });
+  await expectText(page, assignmentTitle);
+  await expectText(page, 'Assignments counted in capacity');
+  await expectText(page, 'Sleep plan 23:00');
+  await expectText(
+    page,
+    'Read-only outlook. Opening this card neither creates a preview nor changes an active revision.',
+  );
+  await scrollUntilTextInViewport(page, 'Replan remaining time', {
+    maxSteps: 12,
+    buttonFirst: true,
+  });
+  await expectText(page, 'Review plan');
+  await clickByText(page, 'Replan remaining time');
+  await expectText(page, 'Replan remaining preparation');
+  await expectText(page, 'Create preview with these values');
+  await clickByText(page, 'Cancel');
+  await expectText(page, 'Preparation plans');
+
+  const after = await examWeekPersistedState(userId, planIds);
+  if (after !== before) {
+    throw new Error(
+      `Read-only exam-week outlook or replan navigation changed persisted revisions: ${stableJson({ before, after })}`,
     );
   }
 }
@@ -7657,16 +7958,20 @@ async function assertDeadlinePlannerFlutterSurface({
       `Flutter workload-detail setup has no review day: ${workloadResult.text}`,
     );
   }
+  const planPageUrl = appRoute(
+    `/preparation-plans?plan_id=${encodeURIComponent(planId)}`,
+  );
+  await page.goto(planPageUrl, { waitUntil: 'domcontentloaded' });
   const planPageLoad = page.waitForResponse(
     (response) =>
       response.url() === `${aiServiceBaseUrl}/v1/deadline-plans` &&
       response.request().method() === 'GET',
     { timeout: 45000 },
   );
-  await page.goto(
-    appRoute(`/preparation-plans?plan_id=${encodeURIComponent(planId)}`),
-    { waitUntil: 'domcontentloaded' },
-  );
+  // The exam-week card intentionally opens the same preparation route. Force
+  // a new document so Riverpod cannot reuse the already rendered feed after
+  // the API-side budget change above.
+  await page.reload({ waitUntil: 'domcontentloaded' });
   const planPageResponse = await planPageLoad;
   if (!planPageResponse.ok()) {
     throw new Error(

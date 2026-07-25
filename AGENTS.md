@@ -42,18 +42,21 @@ Read these files before making changes:
 15. `docs/deadline-planner-v1-contract.md` before changing exam/assignment
     preparation estimates, plan revisions, dated blocks, managed plan tasks,
     calendar-derived availability, or tracked-focus progress
-16. `docs/ui-language-and-copy-contract.md` before changing student-facing
+16. `docs/exam-week-outlook-v1-contract.md` before changing Daily Capture V4
+    sleep planning, sleep-duration projection, exam-window activation,
+    sleep-protected capacity, or the Planner outlook card
+17. `docs/ui-language-and-copy-contract.md` before changing student-facing
     names, capability claims, retry copy, localization, or large-text behavior
-17. `docs/today-overview-v1-contract.md` before changing the Today streak,
+18. `docs/today-overview-v1-contract.md` before changing the Today streak,
     progress arithmetic, timeline sources, task/habit selection, or supporting
     section boundary
-18. `docs/planner-v1-contract.md` before changing Planner navigation,
+19. `docs/planner-v1-contract.md` before changing Planner navigation,
     availability, Action Plans, fixed commitments, calendar busy-time consent,
     or Today Overview V2
-19. `docs/study-setup-v1-contract.md` before changing optional Study Setup,
+20. `docs/study-setup-v1-contract.md` before changing optional Study Setup,
     focus rhythm, preparation checklist, recovery reservations, semester
     planning, or course-selection attention
-20. `docs/product-review-handoff.md` when starting a fresh whole-product review
+21. `docs/product-review-handoff.md` when starting a fresh whole-product review
     of Deadline Planner and the current usability-polish slice
 
 ## Current State
@@ -308,6 +311,9 @@ mode, owner/admin rule, or service-role boundary.
 - `docs/deadline-planner-v1-contract.md` - explicit user-estimated exam/
   assignment preparation, staged dated blocks, confirmation, progress, calendar
   isolation, retry identity, and non-automation boundary.
+- `docs/exam-week-outlook-v1-contract.md` - Daily Capture V4 sleep estimates,
+  automatic exam-window modes, read-only dual capacity simulation, risk
+  warnings, and the Planner-only presentation boundary.
 - `README.md` - high-level project overview.
 
 ## Next Implementation Direction
@@ -345,6 +351,14 @@ availability source is visible. Shared Availability considers Setup/manual commi
 confirmed Planner and Preparation reservations, and separately consented
 current imported busy time. It never infers missing duration/deadline/cadence,
 moves blocks automatically, writes a calendar, or serves guest/demo fake plans.
+Daily Capture V4 adds a required intended sleep start and explicit duration
+target to Evening plus aware estimated sleep start/wake instants to Morning.
+Only the derived duration leaves `daily_logs.metadata`. The read-only
+`exam-week-outlook-v1` Planner card activates from an active exam at 14 days or
+less, counts competing assignments without letting them activate the mode, and
+compares regular capacity with a hypothetical sleep-protected calculation. It
+creates no preview, Notification, Today item, separate sleep profile, or
+automatic plan change.
 When its development-only surface gate is enabled, Coach replaces the redundant
 Settings item as the fifth shell destination. Settings remains available from
 the top-right Today control; a gated-off Coach is omitted rather than replaced

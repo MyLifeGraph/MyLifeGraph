@@ -8,7 +8,9 @@ from typing import Any, Literal
 
 DAILY_STATE_CONTRACT_VERSION = "explainable-daily-state-v2"
 DAILY_STATE_LOOKBACK_DAYS = 7
-_DAILY_CAPTURE_VERSIONS = frozenset({"daily-capture-v2", "daily-capture-v3"})
+_DAILY_CAPTURE_VERSIONS = frozenset(
+    {"daily-capture-v2", "daily-capture-v3", "daily-capture-v4"},
+)
 
 DataQuality = Literal["missing", "partial", "current", "stale"]
 DailyMode = Literal["push", "steady", "recover", "plan"]
@@ -43,6 +45,7 @@ class _Capture:
     source_format: Literal[
         "explicit_capture_v2",
         "explicit_capture_v3",
+        "explicit_capture_v4",
         "legacy_daily_log",
     ]
     values: dict[str, Any]
@@ -388,6 +391,17 @@ def _parse_v2_capture(
     issues: list[str] = []
     if not isinstance(raw, dict):
         return None, [f"{kind}.invalid_object"]
+    branch_version = capture_version
+    if capture_version == "daily-capture-v4":
+        branch_version = raw.get("branch_version")
+        if branch_version not in _DAILY_CAPTURE_VERSIONS:
+            return None, [f"{kind}.invalid_branch_version"]
+        if branch_version == "daily-capture-v4":
+            compatibility = raw.get("compatibility")
+            if compatibility is not None and compatibility is not False:
+                return None, [f"{kind}.invalid_compatibility"]
+        elif raw.get("compatibility") is not True:
+            return None, [f"{kind}.missing_compatibility"]
     if raw.get("capture_kind") != kind:
         return None, [f"{kind}.invalid_capture_kind"]
     branch_date = _strict_entry_date(raw.get("entry_date"))
@@ -457,9 +471,29 @@ def _parse_v2_capture(
             stress is not None
             and (stress < 5 or (source is not None and controllability is not None))
         )
+        if branch_version == "daily-capture-v4":
+            planned_sleep_time = raw.get("planned_sleep_time")
+            sleep_target_minutes = _sleep_target_minutes(
+                raw.get("sleep_target_minutes"),
+            )
+            if not _is_sleep_clock(planned_sleep_time):
+                _append_issue(issues, "evening.invalid_planned_sleep_time")
+            if sleep_target_minutes is None:
+                _append_issue(issues, "evening.invalid_sleep_target_minutes")
+            complete = (
+                complete
+                and _is_sleep_clock(planned_sleep_time)
+                and sleep_target_minutes is not None
+            )
     else:
+        is_v4 = branch_version == "daily-capture-v4"
+        sleep_hours = _sleep_hours(
+            raw.get("sleep_hours"),
+            half_hours=not is_v4,
+            maximum=16 if is_v4 else 12,
+        )
         required = {
-            "sleep_hours": _sleep_hours(raw.get("sleep_hours"), half_hours=True),
+            "sleep_hours": sleep_hours,
             "current_energy": _rating(raw.get("current_energy"), minimum=1),
             "day_shape": _enum_value(raw.get("day_shape"), _DAY_SHAPES),
         }
@@ -475,6 +509,55 @@ def _parse_v2_capture(
             else:
                 values["sleep_quality"] = sleep_quality
         complete = all(value is not None for value in required.values())
+        if is_v4:
+            started_at = _safe_aware_datetime(
+                raw.get("estimated_sleep_started_at"),
+            )
+            woke_at = _safe_aware_datetime(raw.get("woke_at"))
+            estimated_minutes = _whole_number(raw.get("estimated_sleep_minutes"))
+            target_minutes = _sleep_target_minutes(
+                raw.get("sleep_target_minutes"),
+            )
+            interval_minutes: int | None = None
+            if started_at is None:
+                _append_issue(issues, "morning.invalid_estimated_sleep_started_at")
+            if woke_at is None:
+                _append_issue(issues, "morning.invalid_woke_at")
+            if started_at is not None and woke_at is not None:
+                interval_seconds = (woke_at - started_at).total_seconds()
+                if (
+                    interval_seconds <= 0
+                    or interval_seconds > 16 * 60 * 60
+                    or interval_seconds % 60 != 0
+                ):
+                    _append_issue(issues, "morning.invalid_sleep_interval")
+                else:
+                    interval_minutes = int(interval_seconds // 60)
+            if (
+                estimated_minutes is None
+                or estimated_minutes != interval_minutes
+            ):
+                _append_issue(issues, "morning.invalid_estimated_sleep_minutes")
+            if target_minutes is None:
+                _append_issue(issues, "morning.invalid_sleep_target_minutes")
+            source_evening_id = raw.get("source_evening_capture_id")
+            if (
+                source_evening_id is not None
+                and _non_empty_string(source_evening_id, max_length=160) is None
+            ):
+                _append_issue(issues, "morning.invalid_source_evening_capture_id")
+            if (
+                estimated_minutes is not None
+                and sleep_hours is not None
+                and not _numbers_equal(sleep_hours, estimated_minutes / 60)
+            ):
+                _append_issue(issues, "morning.sleep_duration_mismatch")
+            complete = (
+                complete
+                and interval_minutes is not None
+                and estimated_minutes == interval_minutes
+                and target_minutes is not None
+            )
 
     return (
         _Capture(
@@ -483,9 +566,13 @@ def _parse_v2_capture(
             entry_date=row_date,
             captured_at=captured_at,
             source_format=(
-                "explicit_capture_v3"
-                if capture_version == "daily-capture-v3"
-                else "explicit_capture_v2"
+                "explicit_capture_v4"
+                if branch_version == "daily-capture-v4"
+                else (
+                    "explicit_capture_v3"
+                    if branch_version == "daily-capture-v3"
+                    else "explicit_capture_v2"
+                )
             ),
             values=values,
             complete=complete,
@@ -1322,7 +1409,11 @@ def _basis(captures: list[_Capture]) -> str:
     formats = {capture.source_format for capture in captures}
     if not formats:
         return "none"
-    if formats and formats <= {"explicit_capture_v2", "explicit_capture_v3"}:
+    if formats and formats <= {
+        "explicit_capture_v2",
+        "explicit_capture_v3",
+        "explicit_capture_v4",
+    }:
         return "explicit_capture"
     if formats == {"legacy_daily_log"}:
         return "legacy_numeric"
@@ -1470,15 +1561,46 @@ def _rating(value: Any, *, minimum: int) -> int | None:
     return integer if minimum <= integer <= 10 else None
 
 
-def _sleep_hours(value: Any, *, half_hours: bool) -> float | None:
+def _sleep_hours(
+    value: Any,
+    *,
+    half_hours: bool,
+    maximum: float = 12,
+) -> float | None:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         return None
     numeric = float(value)
-    if not isfinite(numeric) or not 0 <= numeric <= 12:
+    if not isfinite(numeric) or not 0 <= numeric <= maximum:
         return None
     if half_hours and abs(numeric * 2 - round(numeric * 2)) > 0.0001:
         return None
     return numeric
+
+
+def _whole_number(value: Any) -> int | None:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    numeric = float(value)
+    if not isfinite(numeric) or not numeric.is_integer():
+        return None
+    return int(numeric)
+
+
+def _sleep_target_minutes(value: Any) -> int | None:
+    minutes = _whole_number(value)
+    if minutes is None or not 300 <= minutes <= 720 or minutes % 15 != 0:
+        return None
+    return minutes
+
+
+def _is_sleep_clock(value: Any) -> bool:
+    if not isinstance(value, str) or len(value) != 5:
+        return False
+    try:
+        parsed = datetime.strptime(value, "%H:%M")
+    except ValueError:
+        return False
+    return parsed.strftime("%H:%M") == value
 
 
 def _enum_value(value: Any, allowed: frozenset[str]) -> str | None:

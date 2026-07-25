@@ -342,7 +342,7 @@ async def _seed_deadline_plans(
             "kind": "exam",
             "title": "Calculus final exam",
             "deadline_at": _aware_local(
-                today + timedelta(days=18), 12, 0, zone
+                today + timedelta(days=7), 12, 0, zone
             ).isoformat(),
             "estimated_total_minutes": 420,
             "credited_prior_minutes": 60,

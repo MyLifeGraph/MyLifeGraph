@@ -219,6 +219,27 @@ semester-wide completion there is no item; during it the item is open and after
 it the item is overdue. Its target is Settings Study Setup. This read creates
 no Task, Today item, Calendar row, or Notification.
 
+## Exam-Week Outlook
+
+Planner also owns presentation of the separate read-only
+`exam-week-outlook-v1` response. The card is placed after `Add new` and before
+ordinary `Needs attention`; it is absent when `mode=inactive`. Only an active
+exam with remaining work activates `watch`, `exam_week`, or `overdue`.
+Assignments within the horizon are labelled capacity consumers and cannot
+activate the card.
+
+The outlook reuses shared Availability without creating Planner or Preparation
+reservations. It compares regular capacity with the newest Evening V4 sleep
+plan hypothetically protected and reports missing/incomplete inputs rather than
+inventing availability. `Review plan` and `Replan remaining time` reuse the
+existing Preparation routes. Opening either the card or saved-value replan
+review submits no proposal and leaves the active revision unchanged.
+
+Guest/demo does not request or fabricate this projection. It is not a Today,
+course-selection, Inbox, or Notification attention item. The exact derivation,
+warning, risk, DST, privacy, and verification rules live in
+`docs/exam-week-outlook-v1-contract.md`.
+
 ## Today Overview V2
 
 `GET /v1/today/overview` remains `today-overview-v1` for existing clients.

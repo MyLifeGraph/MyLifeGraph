@@ -11,6 +11,7 @@ from app.models.deadline_plans import (
     DeadlinePlanProposalRequest,
     DeadlinePlanResponse,
     DeadlinePlansResponse,
+    ExamWeekOutlookResponse,
     PreparationWorkloadDetailResponse,
     PreparationWorkloadResponse,
 )
@@ -50,6 +51,29 @@ async def list_deadline_plans(
     service: DeadlinePlanService = Depends(get_deadline_plan_service),
 ) -> DeadlinePlansResponse:
     return await service.list_plans(user_id=principal.user_id)
+
+
+@router.get(
+    "/exam-week-outlook",
+    response_model=ExamWeekOutlookResponse,
+    response_model_exclude_none=False,
+)
+async def get_exam_week_outlook(
+    principal: Principal = Depends(get_current_principal),
+    service: DeadlinePlanService = Depends(get_deadline_plan_service),
+) -> ExamWeekOutlookResponse:
+    try:
+        return await service.get_exam_week_outlook(user_id=principal.user_id)
+    except DeadlinePlanNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+    except DeadlinePlanConflictError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc),
+        ) from exc
 
 
 @router.get(

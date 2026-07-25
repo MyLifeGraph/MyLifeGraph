@@ -138,6 +138,12 @@ class DeadlinePlanRepository(Protocol):
         include_calendar_availability: bool,
     ) -> DeadlinePlanningContext: ...
 
+    async def list_sleep_capture_logs(
+        self,
+        *,
+        user_id: str,
+    ) -> list[dict[str, Any]]: ...
+
     async def persist_proposal(
         self,
         *,
@@ -253,6 +259,22 @@ class SupabaseDeadlinePlanRepository:
             },
         )
         return rows[0] if rows else None
+
+    async def list_sleep_capture_logs(
+        self,
+        *,
+        user_id: str,
+    ) -> list[dict[str, Any]]:
+        return await self._select_pages(
+            "daily_logs",
+            params={
+                "select": "id,entry_date,metadata",
+                "user_id": f"eq.{user_id}",
+                "source": "eq.quick_check_in",
+                "order": "entry_date.desc,id.desc",
+            },
+            max_rows=5_001,
+        )
 
     async def list_revisions(
         self,

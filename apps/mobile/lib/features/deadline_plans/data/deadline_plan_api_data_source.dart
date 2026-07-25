@@ -1,5 +1,6 @@
 import '../../../core/network/api_client.dart';
 import '../domain/deadline_plan.dart';
+import '../domain/exam_week_outlook.dart';
 
 class DeadlinePlanApiDataSource {
   const DeadlinePlanApiDataSource(this._client);
@@ -12,6 +13,16 @@ class DeadlinePlanApiDataSource {
       headers: _headers(accessToken),
     );
     return DeadlinePlanFeed.fromJson(json);
+  }
+
+  Future<ExamWeekOutlook> getExamWeekOutlook({
+    required String accessToken,
+  }) async {
+    final json = await _client.getJson(
+      '/v1/deadline-plans/exam-week-outlook',
+      headers: _headers(accessToken),
+    );
+    return ExamWeekOutlook.fromJson(json);
   }
 
   Future<PreparationWorkload> getWorkload({

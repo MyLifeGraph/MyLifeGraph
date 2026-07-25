@@ -198,6 +198,9 @@ class _MemoryCaptureStore implements QuickCheckInStore {
   Future<DailyCaptureEntry?> loadToday(DateTime today) async => value;
 
   @override
+  Future<EveningShutdownDraft?> loadLatestEvening() async => value.evening;
+
+  @override
   Future<void> saveEvening(EveningShutdownDraft draft) async {}
 
   @override

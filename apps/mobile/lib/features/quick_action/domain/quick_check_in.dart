@@ -148,6 +148,52 @@ String dailyCaptureEntryDate(DateTime value) {
   return '${value.year}-$month-$day';
 }
 
+String dailyCaptureClock(DateTime value) {
+  final local = value.toLocal();
+  final hour = local.hour.toString().padLeft(2, '0');
+  final minute = local.minute.toString().padLeft(2, '0');
+  return '$hour:$minute';
+}
+
+({DateTime estimatedSleepStartedAt, DateTime wokeAt})
+    estimatedSleepIntervalForLocalClocks({
+  required String entryDate,
+  required String estimatedSleepStartedAt,
+  required String wokeAt,
+}) {
+  final date = DateTime.parse(_requiredEntryDate(entryDate));
+  _validateSleepClock(estimatedSleepStartedAt);
+  _validateSleepClock(wokeAt);
+  final startParts = estimatedSleepStartedAt.split(':');
+  final wakeParts = wokeAt.split(':');
+  final startMinute =
+      int.parse(startParts.first) * 60 + int.parse(startParts.last);
+  final wakeMinute =
+      int.parse(wakeParts.first) * 60 + int.parse(wakeParts.last);
+  final wake = DateTime(
+    date.year,
+    date.month,
+    date.day,
+    int.parse(wakeParts.first),
+    int.parse(wakeParts.last),
+  );
+  final startDate = startMinute >= wakeMinute
+      ? DateTime(date.year, date.month, date.day - 1)
+      : date;
+  final start = DateTime(
+    startDate.year,
+    startDate.month,
+    startDate.day,
+    int.parse(startParts.first),
+    int.parse(startParts.last),
+  );
+  return (estimatedSleepStartedAt: start, wokeAt: wake);
+}
+
+const dailyCaptureV4 = 'daily-capture-v4';
+const dailyCaptureV3 = 'daily-capture-v3';
+const dailyCaptureV2 = 'daily-capture-v2';
+
 class EveningShutdownDraft {
   const EveningShutdownDraft({
     required this.captureId,
@@ -164,6 +210,10 @@ class EveningShutdownDraft {
     List<MainFriction> additionalFrictions = const <MainFriction>[],
     this.reflectionNote = '',
     this.specificBlocker = '',
+    this.plannedSleepTime,
+    this.sleepTargetMinutes,
+    this.branchVersion = dailyCaptureV3,
+    this.isCompatibilityBranch = false,
   })  : mainFriction = null,
         additionalFrictions = const <MainFriction>[];
 
@@ -184,16 +234,23 @@ class EveningShutdownDraft {
       focusBand: null,
       mainFriction: null,
       tomorrowPriority: '',
+      sleepTargetMinutes: defaultSleepTargetMinutes,
+      branchVersion: dailyCaptureV4,
     );
   }
 
   factory EveningShutdownDraft.fromJson(
     Map<String, dynamic> json, {
     required String entryDate,
+    String containerVersion = dailyCaptureV3,
   }) {
     if (json['capture_kind'] != 'evening' || json['entry_date'] != entryDate) {
       throw const FormatException('Evening capture identity is invalid.');
     }
+    final branch = _captureBranchIdentity(
+      json,
+      containerVersion: containerVersion,
+    );
     final draft = EveningShutdownDraft(
       captureId: _requiredString(json, 'capture_id'),
       entryDate: entryDate,
@@ -222,8 +279,15 @@ class EveningShutdownDraft {
       tomorrowPriority: _optionalString(json['tomorrow_priority']) ?? '',
       reflectionNote: _optionalString(json['reflection_note']) ?? '',
       specificBlocker: _optionalString(json['specific_blocker']) ?? '',
+      plannedSleepTime: _optionalString(json['planned_sleep_time']),
+      sleepTargetMinutes: _optionalWholeNumber(
+        json,
+        'sleep_target_minutes',
+      ),
+      branchVersion: branch.version,
+      isCompatibilityBranch: branch.isCompatibility,
     );
-    draft.validate();
+    draft.validate(preservingCompatibility: true);
     final storedLabel = _optionalString(json['stress_intensity_label']);
     if (storedLabel != null && storedLabel != draft.stressIntensityLabel.code) {
       throw const FormatException('Stress intensity label does not match.');
@@ -235,6 +299,7 @@ class EveningShutdownDraft {
   static const maxTomorrowPriorityLength = 160;
   static const maxReflectionLength = 1000;
   static const maxSpecificBlockerLength = 280;
+  static const defaultSleepTargetMinutes = 480;
 
   final String captureId;
   final String entryDate;
@@ -250,6 +315,12 @@ class EveningShutdownDraft {
   final String tomorrowPriority;
   final String reflectionNote;
   final String specificBlocker;
+  final String? plannedSleepTime;
+  final int? sleepTargetMinutes;
+  final String branchVersion;
+  final bool isCompatibilityBranch;
+
+  bool get isV4 => branchVersion == dailyCaptureV4;
 
   bool get requiresStressContext => stress != null && stress! >= 5;
 
@@ -261,7 +332,8 @@ class EveningShutdownDraft {
       mood != null &&
       energy != null &&
       stress != null &&
-      hasConsistentStressContext;
+      hasConsistentStressContext &&
+      (!isV4 || (plannedSleepTime != null && sleepTargetMinutes != null));
 
   StressIntensityLabel get stressIntensityLabel =>
       stressIntensityLabelFor(stress!);
@@ -281,6 +353,10 @@ class EveningShutdownDraft {
     String? tomorrowPriority,
     String? reflectionNote,
     String? specificBlocker,
+    Object? plannedSleepTime = _unset,
+    Object? sleepTargetMinutes = _unset,
+    String? branchVersion,
+    bool? isCompatibilityBranch,
   }) {
     return EveningShutdownDraft(
       captureId: captureId ?? this.captureId,
@@ -301,6 +377,15 @@ class EveningShutdownDraft {
       tomorrowPriority: tomorrowPriority ?? this.tomorrowPriority,
       reflectionNote: reflectionNote ?? this.reflectionNote,
       specificBlocker: specificBlocker ?? this.specificBlocker,
+      plannedSleepTime: identical(plannedSleepTime, _unset)
+          ? this.plannedSleepTime
+          : plannedSleepTime as String?,
+      sleepTargetMinutes: identical(sleepTargetMinutes, _unset)
+          ? this.sleepTargetMinutes
+          : sleepTargetMinutes as int?,
+      branchVersion: branchVersion ?? this.branchVersion,
+      isCompatibilityBranch:
+          isCompatibilityBranch ?? this.isCompatibilityBranch,
     );
   }
 
@@ -309,13 +394,25 @@ class EveningShutdownDraft {
         tomorrowPriority: tomorrowPriority.trim(),
         reflectionNote: reflectionNote.trim(),
         specificBlocker: specificBlocker.trim(),
+        plannedSleepTime: plannedSleepTime?.trim(),
       );
 
-  void validate() {
+  EveningShutdownDraft forEditing() => copyWith(
+        branchVersion: dailyCaptureV4,
+        isCompatibilityBranch: false,
+        sleepTargetMinutes: sleepTargetMinutes ?? defaultSleepTargetMinutes,
+      );
+
+  void validate({bool preservingCompatibility = false}) {
     _validateCaptureIdentity(
       captureId: captureId,
       entryDate: entryDate,
       maxCaptureIdLength: maxCaptureIdLength,
+    );
+    _validateEditableBranch(
+      branchVersion: branchVersion,
+      isCompatibilityBranch: isCompatibilityBranch,
+      preservingCompatibility: preservingCompatibility,
     );
     if (!isComplete) {
       throw const FormatException(
@@ -346,12 +443,20 @@ class EveningShutdownDraft {
       specificBlocker,
       maxSpecificBlockerLength,
     );
+    if (isV4) {
+      _validateSleepClock(plannedSleepTime);
+      _validateSleepTarget(sleepTargetMinutes);
+    }
   }
 
-  Map<String, dynamic> toMetadataJson() {
-    validate();
+  Map<String, dynamic> toMetadataJson({
+    bool preservingCompatibility = true,
+  }) {
+    validate(preservingCompatibility: preservingCompatibility);
     final value = normalized();
     return {
+      'branch_version': value.branchVersion,
+      if (!value.isV4) 'compatibility': true,
       'capture_kind': 'evening',
       'entry_date': value.entryDate,
       'capture_id': value.captureId,
@@ -370,20 +475,33 @@ class EveningShutdownDraft {
         'reflection_note': value.reflectionNote,
       if (value.specificBlocker.isNotEmpty)
         'specific_blocker': value.specificBlocker,
+      if (value.isV4) ...{
+        'planned_sleep_time': value.plannedSleepTime,
+        'sleep_target_minutes': value.sleepTargetMinutes,
+      },
     };
   }
 }
 
 class MorningCalibrationDraft {
-  const MorningCalibrationDraft({
+  MorningCalibrationDraft({
     required this.captureId,
     required this.entryDate,
     required this.capturedAt,
-    required this.sleepHours,
+    double? sleepHours,
     required this.sleepQuality,
     required this.energy,
     required this.dayShape,
-  });
+    this.estimatedSleepStartedAt,
+    this.wokeAt,
+    this.estimatedSleepMinutes,
+    this.sleepTargetMinutes,
+    this.sourceEveningCaptureId,
+    this.branchVersion = dailyCaptureV3,
+    this.isCompatibilityBranch = false,
+  }) : sleepHours = estimatedSleepMinutes == null
+            ? sleepHours
+            : estimatedSleepMinutes / 60;
 
   factory MorningCalibrationDraft.empty(
     DateTime capturedAt, {
@@ -394,36 +512,73 @@ class MorningCalibrationDraft {
       captureId: 'morning-$date-${capturedAt.toUtc().microsecondsSinceEpoch}',
       entryDate: date,
       capturedAt: capturedAt,
-      sleepHours: null,
       sleepQuality: null,
       energy: null,
       dayShape: null,
+      sleepTargetMinutes: EveningShutdownDraft.defaultSleepTargetMinutes,
+      branchVersion: dailyCaptureV4,
     );
   }
 
   factory MorningCalibrationDraft.fromJson(
     Map<String, dynamic> json, {
     required String entryDate,
+    String containerVersion = dailyCaptureV3,
   }) {
     if (json['capture_kind'] != 'morning' || json['entry_date'] != entryDate) {
       throw const FormatException('Morning capture identity is invalid.');
     }
+    final branch = _captureBranchIdentity(
+      json,
+      containerVersion: containerVersion,
+    );
     final sleepQuality = json['sleep_quality'];
     if (json.containsKey('sleep_quality') && sleepQuality is! int) {
       throw const FormatException('Sleep quality must be a whole number.');
+    }
+    final estimatedSleepMinutes = _optionalWholeNumber(
+      json,
+      'estimated_sleep_minutes',
+    );
+    final storedSleepHours = (json['sleep_hours'] as num?)?.toDouble();
+    if (branch.version == dailyCaptureV4 &&
+        estimatedSleepMinutes != null &&
+        storedSleepHours != null &&
+        (storedSleepHours - estimatedSleepMinutes / 60).abs() > 0.0001) {
+      throw const FormatException(
+        'Estimated sleep minutes do not match sleep hours.',
+      );
     }
     final draft = MorningCalibrationDraft(
       captureId: _requiredString(json, 'capture_id'),
       entryDate: entryDate,
       capturedAt: _requiredDateTime(json, 'captured_at'),
-      sleepHours: (json['sleep_hours'] as num?)?.toDouble(),
+      sleepHours: storedSleepHours,
       sleepQuality: sleepQuality as int?,
       energy: (json['current_energy'] as num?)?.toInt(),
       dayShape: DayShape.fromCode(json['day_shape']),
+      estimatedSleepStartedAt: branch.version == dailyCaptureV4
+          ? _requiredAwareDateTime(json, 'estimated_sleep_started_at')
+          : null,
+      wokeAt: branch.version == dailyCaptureV4
+          ? _requiredAwareDateTime(json, 'woke_at')
+          : null,
+      estimatedSleepMinutes: estimatedSleepMinutes,
+      sleepTargetMinutes: _optionalWholeNumber(
+        json,
+        'sleep_target_minutes',
+      ),
+      sourceEveningCaptureId:
+          _optionalString(json['source_evening_capture_id']),
+      branchVersion: branch.version,
+      isCompatibilityBranch: branch.isCompatibility,
     );
     // V2 Morning captures written before sleep quality was introduced remain
     // readable. A new Morning save still requires an explicit value.
-    draft.validate(requireSleepQuality: false);
+    draft.validate(
+      requireSleepQuality: false,
+      preservingCompatibility: true,
+    );
     return draft;
   }
 
@@ -436,12 +591,26 @@ class MorningCalibrationDraft {
   final int? sleepQuality;
   final int? energy;
   final DayShape? dayShape;
+  final DateTime? estimatedSleepStartedAt;
+  final DateTime? wokeAt;
+  final int? estimatedSleepMinutes;
+  final int? sleepTargetMinutes;
+  final String? sourceEveningCaptureId;
+  final String branchVersion;
+  final bool isCompatibilityBranch;
+
+  bool get isV4 => branchVersion == dailyCaptureV4;
 
   bool get isComplete =>
       sleepHours != null &&
       sleepQuality != null &&
       energy != null &&
-      dayShape != null;
+      dayShape != null &&
+      (!isV4 ||
+          (estimatedSleepStartedAt != null &&
+              wokeAt != null &&
+              estimatedSleepMinutes != null &&
+              sleepTargetMinutes != null));
 
   bool get _hasLegacyRequiredAnswers =>
       sleepHours != null && energy != null && dayShape != null;
@@ -454,32 +623,95 @@ class MorningCalibrationDraft {
     Object? sleepQuality = _unset,
     Object? energy = _unset,
     Object? dayShape = _unset,
+    Object? estimatedSleepStartedAt = _unset,
+    Object? wokeAt = _unset,
+    Object? estimatedSleepMinutes = _unset,
+    Object? sleepTargetMinutes = _unset,
+    Object? sourceEveningCaptureId = _unset,
+    String? branchVersion,
+    bool? isCompatibilityBranch,
   }) {
+    final nextEstimatedMinutes = identical(estimatedSleepMinutes, _unset)
+        ? this.estimatedSleepMinutes
+        : estimatedSleepMinutes as int?;
     return MorningCalibrationDraft(
       captureId: captureId ?? this.captureId,
       entryDate: entryDate ?? this.entryDate,
       capturedAt: capturedAt ?? this.capturedAt,
-      sleepHours: identical(sleepHours, _unset)
-          ? this.sleepHours
-          : sleepHours as double?,
+      sleepHours: nextEstimatedMinutes == null
+          ? (identical(sleepHours, _unset)
+              ? this.sleepHours
+              : sleepHours as double?)
+          : null,
       sleepQuality: identical(sleepQuality, _unset)
           ? this.sleepQuality
           : sleepQuality as int?,
       energy: identical(energy, _unset) ? this.energy : energy as int?,
       dayShape:
           identical(dayShape, _unset) ? this.dayShape : dayShape as DayShape?,
+      estimatedSleepStartedAt: identical(estimatedSleepStartedAt, _unset)
+          ? this.estimatedSleepStartedAt
+          : estimatedSleepStartedAt as DateTime?,
+      wokeAt: identical(wokeAt, _unset) ? this.wokeAt : wokeAt as DateTime?,
+      estimatedSleepMinutes: nextEstimatedMinutes,
+      sleepTargetMinutes: identical(sleepTargetMinutes, _unset)
+          ? this.sleepTargetMinutes
+          : sleepTargetMinutes as int?,
+      sourceEveningCaptureId: identical(sourceEveningCaptureId, _unset)
+          ? this.sourceEveningCaptureId
+          : sourceEveningCaptureId as String?,
+      branchVersion: branchVersion ?? this.branchVersion,
+      isCompatibilityBranch:
+          isCompatibilityBranch ?? this.isCompatibilityBranch,
     );
   }
 
   MorningCalibrationDraft normalized() => copyWith(
         captureId: captureId.trim(),
+        sourceEveningCaptureId: sourceEveningCaptureId?.trim(),
       );
 
-  void validate({bool requireSleepQuality = true}) {
+  MorningCalibrationDraft forEditing({
+    EveningShutdownDraft? sleepPlan,
+  }) =>
+      copyWith(
+        branchVersion: dailyCaptureV4,
+        isCompatibilityBranch: false,
+        sleepTargetMinutes: sleepTargetMinutes ??
+            sleepPlan?.sleepTargetMinutes ??
+            EveningShutdownDraft.defaultSleepTargetMinutes,
+        sourceEveningCaptureId: sourceEveningCaptureId ?? sleepPlan?.captureId,
+      );
+
+  MorningCalibrationDraft withSleepInterval({
+    required DateTime estimatedSleepStartedAt,
+    required DateTime wokeAt,
+  }) {
+    final seconds = wokeAt.difference(estimatedSleepStartedAt).inSeconds;
+    final minutes = seconds > 0 && seconds <= 16 * 60 * 60 && seconds % 60 == 0
+        ? seconds ~/ 60
+        : null;
+    return copyWith(
+      estimatedSleepStartedAt: estimatedSleepStartedAt,
+      wokeAt: wokeAt,
+      estimatedSleepMinutes: minutes,
+      sleepHours: null,
+    );
+  }
+
+  void validate({
+    bool requireSleepQuality = true,
+    bool preservingCompatibility = false,
+  }) {
     _validateCaptureIdentity(
       captureId: captureId,
       entryDate: entryDate,
       maxCaptureIdLength: maxCaptureIdLength,
+    );
+    _validateEditableBranch(
+      branchVersion: branchVersion,
+      isCompatibilityBranch: isCompatibilityBranch,
+      preservingCompatibility: preservingCompatibility,
     );
     if (!_hasLegacyRequiredAnswers ||
         (requireSleepQuality && sleepQuality == null)) {
@@ -491,21 +723,60 @@ class MorningCalibrationDraft {
     if (sleepQuality != null) {
       _validateRating('sleep quality', sleepQuality!);
     }
-    if (!sleepHours!.isFinite || sleepHours! < 0 || sleepHours! > 12) {
-      throw const FormatException('Sleep hours must be between 0 and 12.');
-    }
-    final halfHours = sleepHours! * 2;
-    if ((halfHours - halfHours.round()).abs() > 0.0001) {
-      throw const FormatException('Sleep hours must use half-hour steps.');
+    if (isV4) {
+      _validateSleepTarget(sleepTargetMinutes);
+      final start = estimatedSleepStartedAt;
+      final end = wokeAt;
+      final minutes = estimatedSleepMinutes;
+      if (start == null || end == null || minutes == null) {
+        throw const FormatException(
+          'Estimated sleep start and wake time are required.',
+        );
+      }
+      final seconds = end.difference(start).inSeconds;
+      if (seconds <= 0 || seconds > 16 * 60 * 60 || seconds % 60 != 0) {
+        throw const FormatException(
+          'Estimated sleep must be ordered and no longer than 16 hours.',
+        );
+      }
+      if (minutes != seconds ~/ 60 ||
+          (sleepHours! - minutes / 60).abs() > 0.0001) {
+        throw const FormatException(
+          'Estimated sleep duration does not match its timestamps.',
+        );
+      }
+      if (sourceEveningCaptureId != null) {
+        _validateBoundedString(
+          'source evening capture id',
+          sourceEveningCaptureId!,
+          EveningShutdownDraft.maxCaptureIdLength,
+          required: true,
+        );
+      }
+    } else {
+      if (!sleepHours!.isFinite || sleepHours! < 0 || sleepHours! > 12) {
+        throw const FormatException('Sleep hours must be between 0 and 12.');
+      }
+      final halfHours = sleepHours! * 2;
+      if ((halfHours - halfHours.round()).abs() > 0.0001) {
+        throw const FormatException('Sleep hours must use half-hour steps.');
+      }
     }
   }
 
-  Map<String, dynamic> toMetadataJson() {
+  Map<String, dynamic> toMetadataJson({
+    bool preservingCompatibility = true,
+  }) {
     // This serializer is also used while preserving an older Morning branch
     // during an Evening-only edit.
-    validate(requireSleepQuality: false);
+    validate(
+      requireSleepQuality: false,
+      preservingCompatibility: preservingCompatibility,
+    );
     final value = normalized();
     return {
+      'branch_version': value.branchVersion,
+      if (!value.isV4) 'compatibility': true,
       'capture_kind': 'morning',
       'entry_date': value.entryDate,
       'capture_id': value.captureId,
@@ -514,6 +785,15 @@ class MorningCalibrationDraft {
       if (value.sleepQuality != null) 'sleep_quality': value.sleepQuality,
       'current_energy': value.energy,
       'day_shape': value.dayShape!.code,
+      if (value.isV4) ...{
+        'estimated_sleep_started_at':
+            _awareIso8601String(value.estimatedSleepStartedAt!),
+        'woke_at': _awareIso8601String(value.wokeAt!),
+        'estimated_sleep_minutes': value.estimatedSleepMinutes,
+        'sleep_target_minutes': value.sleepTargetMinutes,
+        if (value.sourceEveningCaptureId != null)
+          'source_evening_capture_id': value.sourceEveningCaptureId,
+      },
     };
   }
 }
@@ -611,8 +891,8 @@ class DailyCaptureEntry {
     if (!json.containsKey('captures') && json['captureVersion'] == null) {
       return DailyCaptureEntry.fromV1GuestJson(json);
     }
-    if (json['captureVersion'] != captureVersion &&
-        json['captureVersion'] != legacyCaptureVersion) {
+    final containerVersion = json['captureVersion'];
+    if (!supportedCaptureVersions.contains(containerVersion)) {
       throw const FormatException('Unsupported daily capture version.');
     }
     final entryDate = _requiredEntryDate(json['entryDate']);
@@ -627,12 +907,14 @@ class DailyCaptureEntry {
           : EveningShutdownDraft.fromJson(
               _stringMap(eveningJson, 'evening capture'),
               entryDate: entryDate,
+              containerVersion: '$containerVersion',
             ),
       morning: morningJson == null
           ? null
           : MorningCalibrationDraft.fromJson(
               _stringMap(morningJson, 'morning capture'),
               entryDate: entryDate,
+              containerVersion: '$containerVersion',
             ),
       legacy: legacyJson == null
           ? null
@@ -646,8 +928,14 @@ class DailyCaptureEntry {
     return entry;
   }
 
-  static const captureVersion = 'daily-capture-v3';
-  static const legacyCaptureVersion = 'daily-capture-v2';
+  static const captureVersion = dailyCaptureV4;
+  static const priorCaptureVersion = dailyCaptureV3;
+  static const legacyCaptureVersion = dailyCaptureV2;
+  static const supportedCaptureVersions = <String>{
+    captureVersion,
+    priorCaptureVersion,
+    legacyCaptureVersion,
+  };
 
   final String entryDate;
   final EveningShutdownDraft? evening;
@@ -737,8 +1025,14 @@ class DailyCaptureEntry {
         ...preservedMetadata,
         'capture_version': captureVersion,
         'captures': {
-          if (evening != null) 'evening': evening!.toMetadataJson(),
-          if (morning != null) 'morning': morning!.toMetadataJson(),
+          if (evening != null)
+            'evening': evening!.toMetadataJson(
+              preservingCompatibility: !evening!.isV4,
+            ),
+          if (morning != null)
+            'morning': morning!.toMetadataJson(
+              preservingCompatibility: !morning!.isV4,
+            ),
         },
       };
 
@@ -746,8 +1040,14 @@ class DailyCaptureEntry {
         'entryDate': entryDate,
         'captureVersion': captureVersion,
         'captures': {
-          if (evening != null) 'evening': evening!.toMetadataJson(),
-          if (morning != null) 'morning': morning!.toMetadataJson(),
+          if (evening != null)
+            'evening': evening!.toMetadataJson(
+              preservingCompatibility: !evening!.isV4,
+            ),
+          if (morning != null)
+            'morning': morning!.toMetadataJson(
+              preservingCompatibility: !morning!.isV4,
+            ),
         },
         if (legacy != null) 'legacy': legacy!.toGuestJson(),
       };
@@ -874,6 +1174,8 @@ abstract interface class QuickCheckInStore {
 
   Future<DailyCaptureEntry?> loadToday(DateTime today);
 
+  Future<EveningShutdownDraft?> loadLatestEvening();
+
   Future<void> saveEvening(EveningShutdownDraft draft);
 
   Future<void> saveMorning(MorningCalibrationDraft draft);
@@ -976,6 +1278,22 @@ String _requiredString(Map<String, dynamic> json, String field) {
   return value;
 }
 
+int? _optionalWholeNumber(
+  Map<String, dynamic> json,
+  String field,
+) {
+  final raw = json[field];
+  if (raw == null) {
+    return null;
+  }
+  if (raw is! num ||
+      !raw.toDouble().isFinite ||
+      raw.toDouble() != raw.toInt()) {
+    throw FormatException('$field must be a whole number.');
+  }
+  return raw.toInt();
+}
+
 DateTime _requiredDateTime(Map<String, dynamic> json, String field) {
   final value = _optionalString(json[field]);
   final parsed = value == null ? null : DateTime.tryParse(value);
@@ -983,6 +1301,115 @@ DateTime _requiredDateTime(Map<String, dynamic> json, String field) {
     throw FormatException('$field must be an ISO-8601 timestamp.');
   }
   return parsed;
+}
+
+DateTime _requiredAwareDateTime(
+  Map<String, dynamic> json,
+  String field,
+) {
+  final value = _optionalString(json[field]);
+  final hasOffset =
+      value != null && RegExp(r'(?:Z|[+-]\d{2}:\d{2})$').hasMatch(value);
+  final parsed = value == null ? null : DateTime.tryParse(value);
+  if (parsed == null || !hasOffset) {
+    throw FormatException(
+      '$field must be an ISO-8601 timestamp with a timezone offset.',
+    );
+  }
+  return parsed;
+}
+
+String _awareIso8601String(DateTime value) {
+  if (value.isUtc) {
+    return value.toIso8601String();
+  }
+  final base = value.toIso8601String();
+  final offset = value.timeZoneOffset;
+  final sign = offset.isNegative ? '-' : '+';
+  final absoluteMinutes = offset.inMinutes.abs();
+  final hours = (absoluteMinutes ~/ 60).toString().padLeft(2, '0');
+  final minutes = (absoluteMinutes % 60).toString().padLeft(2, '0');
+  return '$base$sign$hours:$minutes';
+}
+
+void _validateSleepClock(String? value) {
+  if (value == null ||
+      !RegExp(r'^(?:[01]\d|2[0-3]):[0-5]\d$').hasMatch(value)) {
+    throw const FormatException('Planned sleep time must use HH:mm.');
+  }
+}
+
+void _validateSleepTarget(int? value) {
+  if (value == null || value < 300 || value > 720 || value % 15 != 0) {
+    throw const FormatException(
+      'Sleep target must be 300 to 720 minutes in 15-minute steps.',
+    );
+  }
+}
+
+void _validateEditableBranch({
+  required String branchVersion,
+  required bool isCompatibilityBranch,
+  required bool preservingCompatibility,
+}) {
+  if (!DailyCaptureEntry.supportedCaptureVersions.contains(branchVersion)) {
+    throw const FormatException('Unsupported capture branch version.');
+  }
+  if (branchVersion == dailyCaptureV4) {
+    if (isCompatibilityBranch) {
+      throw const FormatException(
+        'A V4 capture cannot be a compatibility branch.',
+      );
+    }
+    return;
+  }
+  if (!preservingCompatibility) {
+    throw const FormatException(
+      'An edited compatibility capture must be completed as V4.',
+    );
+  }
+}
+
+_CaptureBranchIdentity _captureBranchIdentity(
+  Map<String, dynamic> json, {
+  required String containerVersion,
+}) {
+  if (!DailyCaptureEntry.supportedCaptureVersions.contains(containerVersion)) {
+    throw const FormatException('Unsupported capture container version.');
+  }
+  if (containerVersion != dailyCaptureV4) {
+    return _CaptureBranchIdentity(
+      version: containerVersion,
+      isCompatibility: true,
+    );
+  }
+
+  final version = _optionalString(json['branch_version']);
+  if (version == null ||
+      !DailyCaptureEntry.supportedCaptureVersions.contains(version)) {
+    throw const FormatException('V4 capture branch version is invalid.');
+  }
+  final compatibility = json['compatibility'];
+  if (version == dailyCaptureV4) {
+    if (compatibility != null && compatibility != false) {
+      throw const FormatException(
+        'V4 capture branch cannot be compatibility data.',
+      );
+    }
+    return const _CaptureBranchIdentity(
+      version: dailyCaptureV4,
+      isCompatibility: false,
+    );
+  }
+  if (compatibility != true) {
+    throw const FormatException(
+      'An older branch inside V4 must be explicit compatibility data.',
+    );
+  }
+  return _CaptureBranchIdentity(
+    version: version,
+    isCompatibility: true,
+  );
 }
 
 String? _optionalString(Object? value) {
@@ -1001,3 +1428,13 @@ Map<String, dynamic> _stringMap(Object? value, String field) {
 }
 
 const Object _unset = Object();
+
+class _CaptureBranchIdentity {
+  const _CaptureBranchIdentity({
+    required this.version,
+    required this.isCompatibility,
+  });
+
+  final String version;
+  final bool isCompatibility;
+}

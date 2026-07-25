@@ -2,8 +2,8 @@
 
 Status: current whole-product review entry point for the checkout containing
 this document, updated through Today Overview V2, Planner V1, Study Setup V1,
-the Coach-enabled shell navigation, and Setup personalization retirement on
-2026-07-25.
+the Coach-enabled shell navigation, Setup personalization retirement, Daily
+Capture V4, and Exam-Week Outlook V1 on 2026-07-25.
 
 ## Objective
 
@@ -22,8 +22,10 @@ The current checkout combines these implemented loops:
    Goals and retired personalization answers are absent; Reminder settings are
    independently owned by Settings. Study Setup may define focus/recovery
    rhythm, a transient start checklist, and current/next semester facts.
-2. Evening Shutdown and Morning Calibration persist explicit typed capture.
-   Deterministic Daily State classifies freshness and capacity without an LLM.
+2. Evening Shutdown persists an explicit personal sleep plan; Morning
+   Calibration persists corrected estimated sleep instants and their derived
+   duration under Daily Capture V4. Deterministic Daily State classifies
+   freshness and capacity without an LLM or raw sleep-clock propagation.
 3. Today Overview V2 is a read-only projection with a strict both-capture
    streak, transparent progress, Setup/Planner/Preparation/Calendar/Focus
    timeline facts, selected Tasks/Habits, and isolated partial failures.
@@ -32,7 +34,9 @@ The current checkout combines these implemented loops:
    it automatically.
 5. Planner V1 is the authenticated planning home. Task and Habit changes use
    immutable previews and explicit confirmation; fixed commitments are
-   authoritative; exam/assignment creation delegates to Deadline Planner.
+   authoritative; exam/assignment creation delegates to Deadline Planner. An
+   active exam may add the read-only 14-/7-day sleep-capacity outlook before
+   ordinary attention.
 6. Deadline Planner uses the student's estimate and prior credit to stage dated
    preparation blocks. Confirmation alone activates the plan and managed Task.
    Study rhythm adds recovery reservations without counting recovery as study.
@@ -63,6 +67,9 @@ The current checkout combines these implemented loops:
 - Setup edits never change Reminder consent/categories/quiet hours/daily cap.
   Evening Capture stores no primary/additional friction, and Goals have no
   active product surface or evaluation role.
+- Exam-Week Outlook is a Planner-only read. It does not create a preview,
+  change an active plan, add a Today item, or generate a Notification. Raw
+  sleep instants remain in `daily_logs.metadata`.
 - English is the only supported V1 interface language.
 - The prepared five-student study has not been run. Synthetic personas and test
   automation are not participant or longitudinal evidence.
@@ -77,6 +84,9 @@ The current checkout combines these implemented loops:
 - Do Planner and Deadline Planner agree on Setup commitments, manual
   commitments, imported busy time, preparation reservations, recovery time,
   semester bounds, daily capacity, and stale fingerprints?
+- Does Exam-Week Outlook activate only from exams, count competing assignments,
+  preserve at least one warning buffer day, distinguish unknown capacity, and
+  leave every revision untouched?
 - Are Task/Habit lifecycle release, Focus credit, missed-work recovery, and
   replanning consistent across Flutter, FastAPI, and PostgreSQL?
 - Do retries preserve exact request identity without duplicating targets,
@@ -101,6 +111,7 @@ whole-product review, the minimum set includes:
 - `docs/planner-v1-contract.md`
 - `docs/study-setup-v1-contract.md`
 - `docs/deadline-planner-v1-contract.md`
+- `docs/exam-week-outlook-v1-contract.md`
 - `docs/phase-3-executable-actions-contract.md`
 - `docs/phase-8-weekly-review-contract.md`
 - `docs/phase-9-calendar-import-contract.md`

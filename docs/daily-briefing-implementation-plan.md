@@ -173,14 +173,14 @@ Phase 4's deterministic briefing service.
 | Auth and guest entry | Yes | Local demo is labeled; mock/demo auth skips remote profile/data bootstrap and reloads local Setup, while canonical guest check-ins migrate best-effort only into a real non-demo account |
 | Onboarding / Setup | Yes, Phase 0C complete | Progressive explicit input, typed prefill, atomic revision-safe save, differentiated retry/reload, and durable review are implemented |
 | Today | Yes, Today Overview V2 current | A read-only owner-scoped overview shows streak, transparent progress, Setup/Planner/Preparation/Calendar/Focus agenda facts, and selected Tasks/Habits. The persisted briefing remains a backend input but its ranked action card is no longer the visible Today authority. |
-| Canonical daily capture | Yes, Phase 1 complete | Evening and Morning are separate typed flows over one ownership-merged daily entry; Phase 2 now interprets their freshness and stress context only inside backend snapshots |
+| Canonical daily capture | Yes, Capture V4 current | Evening and Morning are separate typed flows over one ownership-merged daily entry. Evening stores an explicit sleep plan; Morning stores corrected estimated sleep instants and derived duration. Phase 2 interprets freshness/stress/sleep duration only inside backend snapshots. |
 | Legacy large Daily Check-In | Retired | `/daily-check-in` redirects to the canonical lightweight flow; do not recreate a competing form |
 | Habit management/completion | Yes, authenticated only | Habit V1 cadence, progress, streaks, explicit completion/skip, and undo are implemented; manual lifecycle stays in Habit Management, Setup-owned lifecycle stays in Settings Setup, and daily execution is available from Today Habits |
 | Insights correlations | Yes | Default to one cautious observation; advanced correlations expose data sufficiency, source, and independent loading/error truth. Real accounts hide Skillset until a real producer exists; demo data is labelled as an example. |
 | Inbox (`/alerts`) | Stored inbox with Lifecycle V1 | Structured internal links are allowlisted; read/unread/dismiss is durable and retry-safe, while stored preferences and rows still do not imply delivery |
 | Deep Work | Yes, authenticated real-data mode | One active session, optional owned task/habit linkage, measured finish/abandon duration, and no implicit target completion are implemented; guest/mock redirects to Quick Action |
 | Coach | Explicitly gated authenticated mode | The route/surface is fail-closed in release/production unless explicitly enabled; capability/history/memory reads are generation-free and backend `ready` gates sending |
-| Planner | Central authenticated planning home | Deterministic Task/Habit previews, Deadline Planner delegation, manual commitments, shared availability, conflict attention, and explicit confirmation are implemented without hidden scheduling. |
+| Planner | Central authenticated planning home | Deterministic Task/Habit previews, Deadline Planner delegation, manual commitments, shared availability, conflict attention, explicit confirmation, and the read-only Exam-Week Outlook are implemented without hidden scheduling. |
 | Study Setup | Optional Setup projection | Focus/recovery rhythm, preparation checklist, current/next semester, recovery reservations, and course-selection attention are implemented under the revisioned Setup authority. |
 | Settings | Durable V1 controls | Profile, Setup and Study Setup review, account timezone, preparation budget, Inbox, reminders, bounded export, confirmed deletion, device-persisted theme, Calendar Import, and sign-out expose their actual persistence boundaries. Coach is a gated shell destination, not a Settings fallback. |
 
@@ -381,13 +381,15 @@ Reasoning:
 - It gives the backend time to generate the next daily state before the user
   opens the app again.
 
-Target effort: under 60 seconds in two pages.
+Target effort: under 90 seconds across three short pages.
 
 Required fields:
 
 - Energy level.
 - Stress intensity.
 - Mood.
+- Planned local sleep start.
+- Sleep-duration target.
 
 Conditional fields at stress `5..10`:
 
@@ -410,8 +412,9 @@ Current Phase 1 output:
 
 ### Morning Calibration
 
-Current goal: record sleep duration and independently estimated quality,
-current energy, and day shape without repeating the Evening form. Adjusting a
+Current goal: record corrected estimated sleep instants and their derived
+duration plus independently estimated quality, current energy, and day shape
+without repeating the Evening form. Adjusting a
 provisional plan begins only after explainable state and briefing generation
 exist.
 
@@ -426,7 +429,10 @@ Target effort: 10 to 20 seconds.
 
 Required fields:
 
-- Sleep hours in half-hour steps.
+- Estimated sleep start and wake time; their derived interval is positive and
+  at most 16 hours.
+- Sleep target used for this night.
+- Estimated sleep quality, independently selected from `1..10`.
 - Current energy.
 - Day shape: normal, constrained, or flexible.
 
@@ -835,7 +841,7 @@ screens where the user expects feedback.
 
 The implemented Evening Shutdown quick action supports:
 
-- Two pages instead of one page per answer.
+- Three short pages instead of one page per answer.
 - Required energy, mood, and stress intensity; stress source and controllability
   are a paired conditional question at stress `5..10`.
 - An optional short tomorrow priority. Measured focus comes from completed
@@ -843,6 +849,9 @@ The implemented Evening Shutdown quick action supports:
 - Optional reflection and specific blocker; blank optionals are omitted rather
   than replaced with fallback content. The former gentle-tomorrow switch is
   retired and no longer written; legacy metadata containing it stays readable.
+- A required `HH:mm` planned sleep start and `300..720` minute target on a
+  15-minute grid. Eight hours is visible first but becomes personal only on
+  save; the newest valid Evening V4 value prefills later forms.
 - Prefill and same-kind replacement without erasing a saved Morning
   Calibration.
 - Capture copy that does not claim a learned baseline, ranked plan, diagnosis,
@@ -860,8 +869,10 @@ Reasoning:
 
 The implemented short Morning Calibration surface supports:
 
-- Required sleep hours in half-hour steps, an independent whole-number
-  `1..10` estimated sleep-quality rating, current energy, and day shape.
+- Required aware estimated sleep-start/wake instants, exact whole-minute
+  derived duration no longer than 16 hours, the target used for that night, an
+  independent whole-number `1..10` estimated sleep-quality rating, current
+  energy, and day shape.
 - Prefill and same-kind replacement without erasing saved Evening context.
 - Honest current-state copy stating that capture does not generate
   recommendations or create or change a plan. Authenticated real saves may
@@ -960,20 +971,29 @@ Implemented metadata shape, abbreviated:
 
 ```json
 {
-  "capture_version": "daily-capture-v3",
+  "capture_version": "daily-capture-v4",
   "captures": {
     "evening": {
+      "branch_version": "daily-capture-v4",
       "capture_kind": "evening",
       "entry_date": "2026-07-10",
       "stress_intensity": 9,
       "stress_intensity_label": "high",
       "stress_source": "private_emotional",
       "stress_controllability": "hardly_controllable",
+      "planned_sleep_time": "23:00",
+      "sleep_target_minutes": 480,
       "tomorrow_priority": "Keep the morning light"
     },
     "morning": {
+      "branch_version": "daily-capture-v4",
       "capture_kind": "morning",
       "entry_date": "2026-07-10",
+      "estimated_sleep_started_at": "2026-07-09T22:00:00Z",
+      "woke_at": "2026-07-10T03:30:00Z",
+      "estimated_sleep_minutes": 330,
+      "sleep_target_minutes": 480,
+      "source_evening_capture_id": "previous-evening-capture-id",
       "sleep_hours": 5.5,
       "sleep_quality": 3,
       "current_energy": 3,
@@ -1552,6 +1572,12 @@ Contract:
   seven-day profile-local view. It explains active plan minute/block
   contributions and exact overage without selecting a plan; review and replan
   remain deliberate existing flows.
+- The additive Exam-Week Outlook is one Planner-only read: an active exam
+  activates 14-day watch/seven-day exam-week/overdue modes, while assignments
+  only consume capacity. It simulates remaining gaps through shared
+  Availability normally and with the newest saved sleep plan hypothetically
+  protected. Missing or DST-ambiguous sleep context stays unknown. It stores no
+  simulation and opens only the existing explicit replan review.
 
 Evaluation:
 

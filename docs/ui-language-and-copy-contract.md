@@ -37,10 +37,12 @@ Use these names in student-facing UI and presentation material:
 Versioned API and database names may remain technical. Do not leak those names
 into a primary title, button, field label, or first-line error.
 
-Within Morning check-in, use `Sleep hours` for duration and
+Within Morning check-in, use `Estimated sleep duration` for the duration
+derived from the student's corrected estimated start/wake instants and
 `Estimated sleep quality` for the separate required `1..10` subjective
-measurement. Copy must state that quality is judged independently of duration;
-neither value may be inferred from the other.
+measurement. Copy must state that neither is objective measurement, quality is
+judged independently of duration, and neither value may be inferred from the
+other.
 
 ## Today Copy
 
@@ -72,6 +74,16 @@ busy-time use is separately consented, read-only, based on the current imported
 copy, and not live sync. Fixed commitments are authoritative only after the
 user confirms them. Guest/demo copy states that synced Planner is unavailable
 and must not display invented personalized blocks.
+
+When active, the read-only exam card appears after `Add new` and before
+`Needs attention`. Use `Exam watch · next 14 days`, `Exam week`, or
+`Exam plan overdue`; label assignments `Assignments counted in capacity`.
+Capacity copy distinguishes `fits with sleep protected`, `fits only by using
+the sleep window`, `does not fit before the warning buffer`, and `unknown`.
+The sleep copy calls the newest saved value a `Sleep plan`, says protection is
+hypothetical rather than a lock, and never claims fatigue, health, or predicted
+performance. `Review plan` reads saved state; `Replan remaining time` opens a
+review and does not imply that a preview or revision already exists.
 
 When no current manual or consented availability source is visible, use
 `Availability may be incomplete`, offer `Add weekly schedule`, and state that

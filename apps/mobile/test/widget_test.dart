@@ -8,6 +8,7 @@ import 'package:my_life_graph/app.dart';
 import 'package:my_life_graph/core/config/app_config.dart';
 import 'package:my_life_graph/core/navigation/app_routes.dart';
 import 'package:my_life_graph/features/auth/domain/intake_response.dart';
+import 'package:my_life_graph/features/quick_action/domain/quick_check_in.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
@@ -280,6 +281,14 @@ void main() {
     await tester.ensureVisible(find.text('Next'));
     await tester.tap(find.text('Next'));
     await tester.pumpAndSettle();
+    final plannedSleep =
+        find.bySemanticsLabel('planned sleep time preset 23:00');
+    await tester.ensureVisible(plannedSleep);
+    await tester.tap(plannedSleep);
+    await tester.pump();
+    await tester.ensureVisible(find.text('Next'));
+    await tester.tap(find.text('Next'));
+    await tester.pumpAndSettle();
     for (final label in [
       'stress source private_emotional',
       'stress influence hardly_controllable',
@@ -303,7 +312,15 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Morning check-in'));
     await tester.pumpAndSettle();
-    await tester.tap(find.bySemanticsLabel('morning sleep 5.5 h'));
+    for (final label in [
+      'estimated sleep start preset 00:00',
+      'estimated wake time preset 05:30',
+    ]) {
+      final choice = find.bySemanticsLabel(label);
+      await tester.ensureVisible(choice);
+      await tester.tap(choice);
+      await tester.pump();
+    }
     await tester.ensureVisible(
       find.bySemanticsLabel('morning sleep quality 3 of 10'),
     );
@@ -337,6 +354,9 @@ void main() {
     expect(evening['stress_source'], 'private_emotional');
     expect(evening['stress_controllability'], 'hardly_controllable');
     expect(evening['tomorrow_priority'], 'Protect the guest morning');
+    expect(evening['planned_sleep_time'], '23:00');
+    expect(evening['sleep_target_minutes'], 480);
+    expect(evening['branch_version'], dailyCaptureV4);
     expect(evening.containsKey('main_friction'), isFalse);
     expect(evening.containsKey('additional_frictions'), isFalse);
     expect(evening.containsKey('reflection_note'), isFalse);
@@ -346,6 +366,10 @@ void main() {
     expect(morning['sleep_quality'], 3);
     expect(morning['current_energy'], 4);
     expect(morning['day_shape'], 'constrained');
+    expect(morning['estimated_sleep_minutes'], 330);
+    expect(morning['sleep_target_minutes'], 480);
+    expect(morning['source_evening_capture_id'], evening['capture_id']);
+    expect(morning['branch_version'], dailyCaptureV4);
 
     await tester.tap(find.byIcon(Icons.add).last);
     await tester.pumpAndSettle();

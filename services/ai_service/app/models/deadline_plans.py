@@ -10,6 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 DEADLINE_PLAN_CONTRACT_VERSION = "deadline-plan-v1"
 PREPARATION_WORKLOAD_CONTRACT_VERSION = "preparation-workload-v1"
 PREPARATION_WORKLOAD_DETAIL_CONTRACT_VERSION = "preparation-workload-detail-v1"
+EXAM_WEEK_OUTLOOK_CONTRACT_VERSION = "exam-week-outlook-v1"
 
 DeadlineKind = Literal["exam", "assignment"]
 DeadlinePlanStatus = Literal["draft", "active", "completed", "cancelled"]
@@ -29,6 +30,25 @@ EnergyWindow = Literal[
     "afternoon",
     "evening",
     "variable",
+]
+ExamWeekMode = Literal["inactive", "watch", "exam_week", "overdue"]
+ExamWeekRisk = Literal["on_track", "attention", "high", "critical", "unknown"]
+ExamWeekFit = Literal[
+    "fits_with_sleep_protected",
+    "fits_only_using_sleep_window",
+    "does_not_fit_before_buffer",
+    "unknown",
+]
+ExamWeekWarningCode = Literal[
+    "exam_overdue",
+    "missing_recommended_buffer",
+    "missed_preparation_blocks",
+    "remaining_work_does_not_fit",
+    "sleep_capacity_tradeoff",
+    "repeated_sleep_shortfall",
+    "sleep_plan_missing",
+    "capacity_incomplete",
+    "pending_preview_sleep_overlap",
 ]
 
 
@@ -163,6 +183,177 @@ class PreparationWorkloadDetailResponse(BaseModel):
             item.reserved_preparation_minutes for item in self.contributions
         ) != self.reserved_preparation_minutes:
             raise ValueError("preparation workload detail total is inconsistent")
+        return self
+
+
+class ExamWeekSleepPlan(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+
+    capture_id: str = Field(min_length=1, max_length=160)
+    entry_date: date
+    captured_at: datetime
+    planned_sleep_time: str = Field(pattern=r"^(?:[01]\d|2[0-3]):[0-5]\d$")
+    sleep_target_minutes: int = Field(ge=300, le=720)
+
+    @model_validator(mode="after")
+    def validate_sleep_plan(self) -> Self:
+        if self.captured_at.tzinfo is None:
+            raise ValueError("sleep plan capture timestamp must be aware")
+        if self.sleep_target_minutes % 15 != 0:
+            raise ValueError("sleep target must use 15-minute steps")
+        return self
+
+
+class ExamWeekSleepNight(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+
+    entry_date: date
+    estimated_sleep_minutes: int = Field(gt=0, le=960)
+    sleep_target_minutes: int = Field(ge=300, le=720)
+    shortfall_minutes: int = Field(ge=0, le=720)
+    at_least_one_hour_short: bool
+
+    @model_validator(mode="after")
+    def validate_sleep_night(self) -> Self:
+        expected = max(0, self.sleep_target_minutes - self.estimated_sleep_minutes)
+        if (
+            self.sleep_target_minutes % 15 != 0
+            or self.shortfall_minutes != expected
+            or self.at_least_one_hour_short != (expected >= 60)
+        ):
+            raise ValueError("sleep-night arithmetic is inconsistent")
+        return self
+
+
+class ExamWeekPlanOutlook(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+
+    plan_id: UUID = Field(strict=False)
+    kind: DeadlineKind
+    title: str = Field(min_length=1, max_length=160)
+    deadline_at: datetime
+    local_deadline_date: date
+    days_remaining: int = Field(ge=-366, le=366)
+    active_revision: int = Field(ge=1, le=200)
+    pending_revision: int | None = Field(default=None, ge=1, le=200)
+    saved_buffer_days: int = Field(ge=0, le=30)
+    recommended_buffer_days: int = Field(ge=0, le=30)
+    last_preparation_date: date
+    remaining_minutes: int = Field(ge=0, le=30_000)
+    future_scheduled_minutes: int = Field(ge=0, le=30_000)
+    future_minutes_after_buffer: int = Field(ge=0, le=30_000)
+    missed_preparation_minutes: int = Field(ge=0, le=30_000)
+    simulated_regular_minutes: int = Field(ge=0, le=30_000)
+    unscheduled_regular_minutes: int = Field(ge=0, le=30_000)
+    simulated_sleep_protected_minutes: int | None = Field(
+        default=None,
+        ge=0,
+        le=30_000,
+    )
+    unscheduled_sleep_protected_minutes: int | None = Field(
+        default=None,
+        ge=0,
+        le=30_000,
+    )
+    pending_preview_sleep_overlap: bool
+
+    @model_validator(mode="after")
+    def validate_plan_outlook(self) -> Self:
+        if self.deadline_at.tzinfo is None:
+            raise ValueError("exam-week deadline must be timezone-aware")
+        if self.recommended_buffer_days < self.saved_buffer_days:
+            raise ValueError("recommended buffer cannot shrink the saved buffer")
+        additional = max(
+            0,
+            self.remaining_minutes - self.future_scheduled_minutes,
+        )
+        if (
+            self.simulated_regular_minutes + self.unscheduled_regular_minutes
+            != additional
+        ):
+            raise ValueError("regular capacity arithmetic is inconsistent")
+        protected = self.simulated_sleep_protected_minutes
+        protected_missing = self.unscheduled_sleep_protected_minutes
+        if (protected is None) != (protected_missing is None):
+            raise ValueError("protected capacity must be wholly present or absent")
+        if (
+            protected is not None
+            and protected_missing is not None
+            and protected + protected_missing != additional
+        ):
+            raise ValueError("sleep-protected capacity arithmetic is inconsistent")
+        return self
+
+
+class ExamWeekMinuteTotals(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+
+    remaining_minutes: int = Field(ge=0, le=1_500_000)
+    future_scheduled_minutes: int = Field(ge=0, le=1_500_000)
+    missed_preparation_minutes: int = Field(ge=0, le=1_500_000)
+    simulated_regular_minutes: int = Field(ge=0, le=1_500_000)
+    unscheduled_regular_minutes: int = Field(ge=0, le=1_500_000)
+    simulated_sleep_protected_minutes: int | None = Field(
+        default=None,
+        ge=0,
+        le=1_500_000,
+    )
+    unscheduled_sleep_protected_minutes: int | None = Field(
+        default=None,
+        ge=0,
+        le=1_500_000,
+    )
+
+
+class ExamWeekOutlookResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+
+    contract_version: Literal["exam-week-outlook-v1"]
+    origin: Literal["authenticated_backend"]
+    generated_at: datetime
+    timezone: str = Field(min_length=1, max_length=100)
+    local_date: date
+    mode: ExamWeekMode
+    risk_level: ExamWeekRisk
+    capacity_status: ExamWeekFit
+    current_sleep_plan: ExamWeekSleepPlan | None = None
+    recent_sleep_nights: list[ExamWeekSleepNight] = Field(max_length=3)
+    exams: list[ExamWeekPlanOutlook] = Field(max_length=50)
+    assignments: list[ExamWeekPlanOutlook] = Field(max_length=50)
+    warning_codes: list[ExamWeekWarningCode] = Field(max_length=9)
+    minutes: ExamWeekMinuteTotals
+
+    @model_validator(mode="after")
+    def validate_outlook(self) -> Self:
+        if self.generated_at.tzinfo is None:
+            raise ValueError("exam-week outlook timestamp must be aware")
+        try:
+            zone = ZoneInfo(self.timezone)
+        except ZoneInfoNotFoundError as exc:
+            raise ValueError("exam-week outlook timezone is invalid") from exc
+        if self.generated_at.astimezone(zone).date() != self.local_date:
+            raise ValueError("exam-week outlook local date is inconsistent")
+        if any(plan.kind != "exam" for plan in self.exams) or any(
+            plan.kind != "assignment" for plan in self.assignments
+        ):
+            raise ValueError("exam-week plan groups are inconsistent")
+        ids = [plan.plan_id for plan in [*self.exams, *self.assignments]]
+        if len(ids) != len(set(ids)):
+            raise ValueError("exam-week plans must be unique")
+        if len({night.entry_date for night in self.recent_sleep_nights}) != len(
+            self.recent_sleep_nights,
+        ):
+            raise ValueError("exam-week sleep nights must be unique")
+        if self.recent_sleep_nights != sorted(
+            self.recent_sleep_nights,
+            key=lambda item: item.entry_date,
+            reverse=True,
+        ):
+            raise ValueError("exam-week sleep nights must be newest first")
+        if len(self.warning_codes) != len(set(self.warning_codes)):
+            raise ValueError("exam-week warning codes must be unique")
+        if self.mode == "inactive" and self.exams:
+            raise ValueError("inactive exam-week outlook cannot contain exams")
         return self
 
 

@@ -8,6 +8,8 @@ import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_page.dart';
+import '../../../deadline_plans/domain/exam_week_outlook.dart';
+import '../../../deadline_plans/presentation/providers/deadline_plan_providers.dart';
 import '../../application/planner_controller.dart';
 import '../../domain/planner.dart';
 import '../providers/planner_providers.dart';
@@ -39,6 +41,7 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
     }
 
     final state = ref.watch(plannerControllerProvider);
+    final examWeekOutlook = ref.watch(examWeekOutlookProvider);
     final controller = ref.read(plannerControllerProvider.notifier);
     final overview = state.overview;
     final availabilityIncomplete =
@@ -62,6 +65,30 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
               },
       ),
     ];
+    final outlookValue = examWeekOutlook.valueOrNull;
+    if (examWeekOutlook.isLoading ||
+        examWeekOutlook.hasError ||
+        (outlookValue != null && outlookValue.mode != 'inactive')) {
+      children.add(
+        _ExamWeekOutlookSection(
+          value: examWeekOutlook,
+          onRetry: () => ref.invalidate(examWeekOutlookProvider),
+          onEveningCheckIn: () => context.go(AppRoutes.quickMoodCheckIn),
+          onReviewPlan: (planId) => context.go(
+            Uri(
+              path: AppRoutes.preparationPlans,
+              queryParameters: {'plan_id': planId},
+            ).toString(),
+          ),
+          onReplan: (planId) => context.go(
+            Uri(
+              path: AppRoutes.preparationPlans,
+              queryParameters: {'plan_id': planId, 'action': 'replan'},
+            ).toString(),
+          ),
+        ),
+      );
+    }
 
     if (state.requiresExactRetry || state.operationError != null) {
       children.add(
@@ -135,7 +162,12 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
       actions: [
         IconButton(
           tooltip: 'Reload Planner',
-          onPressed: state.isBusy ? null : controller.load,
+          onPressed: state.isBusy
+              ? null
+              : () {
+                  ref.invalidate(examWeekOutlookProvider);
+                  controller.load();
+                },
           icon: const Icon(Icons.refresh),
         ),
       ],
@@ -793,6 +825,383 @@ class _CreateButton extends StatelessWidget {
         icon: Icon(icon),
         label: Text(label),
       );
+}
+
+class _ExamWeekOutlookSection extends StatelessWidget {
+  const _ExamWeekOutlookSection({
+    required this.value,
+    required this.onRetry,
+    required this.onEveningCheckIn,
+    required this.onReviewPlan,
+    required this.onReplan,
+  });
+
+  final AsyncValue<ExamWeekOutlook?> value;
+  final VoidCallback onRetry;
+  final VoidCallback onEveningCheckIn;
+  final ValueChanged<String> onReviewPlan;
+  final ValueChanged<String> onReplan;
+
+  @override
+  Widget build(BuildContext context) => value.when(
+        loading: () => const AppCard(
+          key: ValueKey('planner-exam-week-outlook-loading'),
+          child: Row(
+            children: [
+              SizedBox.square(
+                dimension: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+              SizedBox(width: AppSpacing.md),
+              Expanded(child: Text('Checking the next exam window…')),
+            ],
+          ),
+        ),
+        error: (_, __) => AppCard(
+          key: const ValueKey('planner-exam-week-outlook-error'),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Exam outlook unavailable',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              const Text(
+                'Capacity and sleep context could not be read. No status was inferred or substituted.',
+              ),
+              const SizedBox(height: AppSpacing.md),
+              OutlinedButton.icon(
+                onPressed: onRetry,
+                icon: const Icon(Icons.refresh),
+                label: const Text('Retry outlook'),
+              ),
+            ],
+          ),
+        ),
+        data: (outlook) {
+          if (outlook == null || outlook.mode == 'inactive') {
+            return const SizedBox.shrink();
+          }
+          return _ExamWeekOutlookCard(
+            outlook: outlook,
+            onEveningCheckIn: onEveningCheckIn,
+            onReviewPlan: onReviewPlan,
+            onReplan: onReplan,
+          );
+        },
+      );
+}
+
+class _ExamWeekOutlookCard extends StatelessWidget {
+  const _ExamWeekOutlookCard({
+    required this.outlook,
+    required this.onEveningCheckIn,
+    required this.onReviewPlan,
+    required this.onReplan,
+  });
+
+  final ExamWeekOutlook outlook;
+  final VoidCallback onEveningCheckIn;
+  final ValueChanged<String> onReviewPlan;
+  final ValueChanged<String> onReplan;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final urgent = outlook.mode == 'overdue' ||
+        {'high', 'critical'}.contains(outlook.riskLevel);
+    final accent = urgent ? colors.error : colors.tertiary;
+    final shortNights = outlook.recentSleepNights
+        .where((night) => night.atLeastOneHourShort)
+        .length;
+    return AppCard(
+      key: ValueKey('planner-exam-week-outlook-${outlook.mode}'),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(
+                outlook.mode == 'overdue'
+                    ? Icons.report_gmailerrorred_outlined
+                    : outlook.mode == 'exam_week'
+                        ? Icons.school_outlined
+                        : Icons.visibility_outlined,
+                color: accent,
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _outlookTitle(outlook.mode),
+                      style: Theme.of(context)
+                          .textTheme
+                          .titleLarge
+                          ?.copyWith(color: accent),
+                    ),
+                    const SizedBox(height: AppSpacing.xs),
+                    Text(_outlookSummary(outlook)),
+                  ],
+                ),
+              ),
+              _OutlookRiskChip(
+                label: _riskLabel(outlook.riskLevel),
+                color: accent,
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(AppSpacing.md),
+            decoration: BoxDecoration(
+              color: colors.surfaceContainerHighest,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _capacityLabel(outlook.capacityStatus),
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  '${_minutes(outlook.minutes.remainingMinutes)} remaining · '
+                  '${_minutes(outlook.minutes.futureScheduledMinutes)} already scheduled before the warning buffer',
+                ),
+                if (outlook.minutes.missedPreparationMinutes > 0)
+                  Text(
+                    '${_minutes(outlook.minutes.missedPreparationMinutes)} in missed, uncredited blocks',
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          if (outlook.currentSleepPlan == null) ...[
+            const Text(
+              'No personal sleep plan is saved yet. The protected-capacity comparison remains unknown.',
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            OutlinedButton.icon(
+              key: const ValueKey('exam-outlook-evening-check-in'),
+              onPressed: onEveningCheckIn,
+              icon: const Icon(Icons.bedtime_outlined),
+              label: const Text('Set it in Evening check-in'),
+            ),
+          ] else ...[
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(Icons.bedtime_outlined),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: Text(
+                    'Sleep plan ${outlook.currentSleepPlan!.plannedSleepTime} · '
+                    '${_minutes(outlook.currentSleepPlan!.sleepTargetMinutes)} target. '
+                    'This outlook protects it hypothetically; it does not lock time.',
+                  ),
+                ),
+              ],
+            ),
+            if (shortNights >= 2) ...[
+              const SizedBox(height: AppSpacing.sm),
+              Text(
+                '$shortNights of the last ${outlook.recentSleepNights.length} valid nights were at least one hour below their saved target.',
+                style: TextStyle(color: accent),
+              ),
+            ],
+          ],
+          if (outlook.warningCodes.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.md),
+            Wrap(
+              spacing: AppSpacing.sm,
+              runSpacing: AppSpacing.sm,
+              children: outlook.warningCodes
+                  .map(
+                    (code) => Chip(
+                      avatar: Icon(
+                        Icons.warning_amber_outlined,
+                        size: 18,
+                        color: accent,
+                      ),
+                      label: Text(_warningLabel(code)),
+                    ),
+                  )
+                  .toList(growable: false),
+            ),
+          ],
+          const SizedBox(height: AppSpacing.md),
+          for (final exam in outlook.exams) ...[
+            _OutlookExamRow(
+              exam: exam,
+              onReview: () => onReviewPlan(exam.planId),
+              onReplan: () => onReplan(exam.planId),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+          ],
+          if (outlook.assignments.isNotEmpty) ...[
+            const Divider(),
+            Text(
+              'Assignments counted in capacity',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            for (final assignment in outlook.assignments)
+              Padding(
+                padding: const EdgeInsets.only(bottom: AppSpacing.xs),
+                child: Text(
+                  '${assignment.title} · ${_minutes(assignment.remainingMinutes)} remaining · due ${_outlookDueLabel(assignment)}',
+                ),
+              ),
+          ],
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            'Read-only outlook. Opening this card neither creates a preview nor changes an active revision.',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _OutlookRiskChip extends StatelessWidget {
+  const _OutlookRiskChip({required this.label, required this.color});
+
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.sm,
+          vertical: AppSpacing.xs,
+        ),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Text(
+          label,
+          style: Theme.of(context).textTheme.labelLarge?.copyWith(color: color),
+        ),
+      );
+}
+
+class _OutlookExamRow extends StatelessWidget {
+  const _OutlookExamRow({
+    required this.exam,
+    required this.onReview,
+    required this.onReplan,
+  });
+
+  final ExamWeekPlanOutlook exam;
+  final VoidCallback onReview;
+  final VoidCallback onReplan;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(AppSpacing.md),
+        decoration: BoxDecoration(
+          border:
+              Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(exam.title, style: Theme.of(context).textTheme.titleMedium),
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              '${_outlookDueLabel(exam)} · ${_minutes(exam.remainingMinutes)} remaining',
+            ),
+            if (exam.missedPreparationMinutes > 0)
+              Text(
+                '${_minutes(exam.missedPreparationMinutes)} missed and still uncredited',
+              ),
+            if (exam.pendingPreviewSleepOverlap)
+              const Text(
+                'The staged preview overlaps the saved sleep window. It remains unconfirmed.',
+              ),
+            const SizedBox(height: AppSpacing.sm),
+            Wrap(
+              spacing: AppSpacing.sm,
+              runSpacing: AppSpacing.sm,
+              children: [
+                OutlinedButton(
+                  onPressed: onReview,
+                  child: const Text('Review plan'),
+                ),
+                FilledButton.tonal(
+                  onPressed: onReplan,
+                  child: const Text('Replan remaining time'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      );
+}
+
+String _outlookTitle(String mode) => switch (mode) {
+      'watch' => 'Exam watch · next 14 days',
+      'exam_week' => 'Exam week',
+      'overdue' => 'Exam plan overdue',
+      _ => 'Exam outlook',
+    };
+
+String _outlookSummary(ExamWeekOutlook outlook) => switch (outlook.mode) {
+      'watch' =>
+        '${outlook.exams.length} upcoming exam${outlook.exams.length == 1 ? '' : 's'} now affects the 14-day capacity check.',
+      'exam_week' =>
+        '${outlook.exams.length} exam${outlook.exams.length == 1 ? '' : 's'} falls within seven profile-local days.',
+      'overdue' =>
+        'At least one exam deadline has passed with preparation still remaining.',
+      _ => '',
+    };
+
+String _riskLabel(String risk) => switch (risk) {
+      'on_track' => 'On track',
+      'attention' => 'Attention',
+      'high' => 'High risk',
+      'critical' => 'Critical',
+      _ => 'Unknown',
+    };
+
+String _capacityLabel(String capacity) => switch (capacity) {
+      'fits_with_sleep_protected' => 'Remaining work fits with sleep protected',
+      'fits_only_using_sleep_window' =>
+        'Remaining work fits only by using the sleep window',
+      'does_not_fit_before_buffer' =>
+        'Remaining work does not fit before the warning buffer',
+      _ => 'Capacity is incomplete',
+    };
+
+String _warningLabel(String code) => switch (code) {
+      'exam_overdue' => 'Exam overdue',
+      'missing_recommended_buffer' => 'Missing exam buffer',
+      'missed_preparation_blocks' => 'Missed preparation',
+      'remaining_work_does_not_fit' => 'Remaining work does not fit',
+      'sleep_capacity_tradeoff' => 'Sleep-capacity tradeoff',
+      'repeated_sleep_shortfall' => 'Repeated sleep shortfall',
+      'sleep_plan_missing' => 'Sleep plan missing',
+      'capacity_incomplete' => 'Capacity incomplete',
+      'pending_preview_sleep_overlap' => 'Preview overlaps sleep',
+      _ => code,
+    };
+
+String _outlookDueLabel(ExamWeekPlanOutlook plan) {
+  if (plan.daysRemaining < 0) {
+    return '${-plan.daysRemaining} day${plan.daysRemaining == -1 ? '' : 's'} overdue';
+  }
+  if (plan.daysRemaining == 0) return 'due today';
+  return 'due in ${plan.daysRemaining} day${plan.daysRemaining == 1 ? '' : 's'}';
 }
 
 class _NeedsAttentionSection extends StatelessWidget {

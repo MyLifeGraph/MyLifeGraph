@@ -11,6 +11,8 @@ from app.models.deadline_plans import (
     DeadlinePlanProgress,
     DeadlinePlanResponse,
     DeadlinePlansResponse,
+    ExamWeekMinuteTotals,
+    ExamWeekOutlookResponse,
     PreparationWorkloadContribution,
     PreparationWorkloadDay,
     PreparationWorkloadDetailResponse,
@@ -67,6 +69,33 @@ class Service:
                 )
                 for offset in range(7)
             ],
+        )
+
+    async def get_exam_week_outlook(self, *, user_id):
+        self.calls.append(("exam-week-outlook", user_id))
+        return ExamWeekOutlookResponse(
+            contract_version="exam-week-outlook-v1",
+            origin="authenticated_backend",
+            generated_at=NOW,
+            timezone="UTC",
+            local_date=NOW.date(),
+            mode="inactive",
+            risk_level="on_track",
+            capacity_status="unknown",
+            current_sleep_plan=None,
+            recent_sleep_nights=[],
+            exams=[],
+            assignments=[],
+            warning_codes=[],
+            minutes=ExamWeekMinuteTotals(
+                remaining_minutes=0,
+                future_scheduled_minutes=0,
+                missed_preparation_minutes=0,
+                simulated_regular_minutes=0,
+                unscheduled_regular_minutes=0,
+                simulated_sleep_protected_minutes=None,
+                unscheduled_sleep_protected_minutes=None,
+            ),
         )
 
     async def get_workload_detail(self, *, user_id, local_date):
@@ -198,6 +227,14 @@ def test_deadline_routes_derive_owner_and_keep_exact_envelopes() -> None:
     assert workload.json()["contract_version"] == "preparation-workload-v1"
     assert len(workload.json()["days"]) == 7
     assert workload_service.calls == [("workload", USER_ID)]
+
+    outlook, outlook_service = asyncio.run(
+        _request("GET", "/v1/deadline-plans/exam-week-outlook"),
+    )
+    assert outlook.status_code == 200
+    assert outlook.json()["contract_version"] == "exam-week-outlook-v1"
+    assert outlook.json()["current_sleep_plan"] is None
+    assert outlook_service.calls == [("exam-week-outlook", USER_ID)]
 
     workload_detail, detail_service = asyncio.run(
         _request("GET", "/v1/deadline-plans/workload/2026-07-20"),

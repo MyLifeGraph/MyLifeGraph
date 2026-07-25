@@ -50,8 +50,10 @@ onboarding snapshot contains that energy value plus routine/Habit/commitment
 counters and has no personalization signals. Setup completion does not generate
 Recommendations.
 
-New structured check-ins use `daily-capture-v3`. V2 rows remain readable, but
-friction keys are ignored and the next local or synced save writes V3. New
+The retirement slice first introduced friction-free `daily-capture-v3`; current
+new saves use additive `daily-capture-v4`. V2/V3 rows remain readable, friction
+keys are ignored, and an untouched older opposite branch may remain explicitly
+marked compatible until it is edited. New
 Daily State projections use `explainable-daily-state-v2`; V1 snapshots remain
 readable after sanitization. V2 has no friction context, risk, reason, or
 evidence. Stress, sleep, energy, day shape, workload, and active Tasks continue

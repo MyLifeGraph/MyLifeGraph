@@ -7,7 +7,7 @@ import 'package:my_life_graph/features/quick_action/presentation/pages/morning_c
 import 'package:my_life_graph/features/quick_action/presentation/providers/quick_check_in_providers.dart';
 
 void main() {
-  testWidgets('morning-only calibration saves four explicit answers',
+  testWidgets('morning calibration derives duration from the Evening proposal',
       (tester) async {
     final semantics = tester.ensureSemantics();
     final store = _MorningStore();
@@ -18,7 +18,6 @@ void main() {
     );
     expect(saveButton.onPressed, isNull);
 
-    await _performSemanticTap(tester, 'morning sleep 5.5 h');
     await _performSemanticTap(tester, 'morning sleep quality 3 of 10');
     await _performSemanticTap(tester, 'morning energy 4 of 10');
     await _performSemanticTap(tester, 'day shape constrained');
@@ -29,7 +28,10 @@ void main() {
     expect(find.text('Dashboard destination'), findsOneWidget);
     expect(store.attempts, hasLength(1));
     final draft = store.attempts.single;
-    expect(draft.sleepHours, 5.5);
+    expect(draft.estimatedSleepMinutes, 480);
+    expect(draft.sleepHours, 8);
+    expect(draft.sleepTargetMinutes, 480);
+    expect(draft.sourceEveningCaptureId, 'latest-evening-plan');
     expect(draft.sleepQuality, 3);
     expect(draft.energy, 4);
     expect(draft.dayShape, DayShape.constrained);
@@ -41,7 +43,6 @@ void main() {
     final store = _MorningStore(failOnce: true);
     await _pumpPage(tester, store);
 
-    await _performSemanticTap(tester, 'morning sleep 5.5 h');
     await _performSemanticTap(tester, 'morning sleep quality 3 of 10');
     await _performSemanticTap(tester, 'morning energy 4 of 10');
     await _performSemanticTap(tester, 'day shape constrained');
@@ -70,15 +71,7 @@ void main() {
 
   testWidgets('morning re-entry loads exact saved values', (tester) async {
     final now = DateTime.now();
-    final saved = MorningCalibrationDraft(
-      captureId: 'saved-morning',
-      entryDate: dailyCaptureEntryDate(now),
-      capturedAt: now,
-      sleepHours: 8.5,
-      sleepQuality: 8,
-      energy: 7,
-      dayShape: DayShape.flexible,
-    );
+    final saved = _savedMorning(now, estimatedMinutes: 510);
     final store = _MorningStore(
       initial: DailyCaptureEntry(entryDate: saved.entryDate, morning: saved),
     );
@@ -113,7 +106,6 @@ void main() {
     );
 
     expect(tester.takeException(), isNull);
-    await _performSemanticTap(tester, 'morning sleep 7 h');
     await _performSemanticTap(tester, 'morning sleep quality 7 of 10');
     await _performSemanticTap(tester, 'morning energy 7 of 10');
     await _performSemanticTap(tester, 'day shape flexible');
@@ -136,6 +128,8 @@ void main() {
       sleepQuality: null,
       energy: 7,
       dayShape: DayShape.normal,
+      branchVersion: dailyCaptureV3,
+      isCompatibilityBranch: true,
     );
     final store = _MorningStore(
       initial: DailyCaptureEntry(entryDate: saved.entryDate, morning: saved),
@@ -231,10 +225,15 @@ Future<void> _pumpPage(
 }
 
 class _MorningStore implements QuickCheckInStore {
-  _MorningStore({this.initial, this.failOnce = false});
+  _MorningStore({
+    this.initial,
+    this.failOnce = false,
+    EveningShutdownDraft? sleepPlan,
+  }) : sleepPlan = sleepPlan ?? _latestSleepPlan();
 
   final DailyCaptureEntry? initial;
   final bool failOnce;
+  final EveningShutdownDraft sleepPlan;
   final List<MorningCalibrationDraft> attempts = [];
 
   @override
@@ -242,6 +241,9 @@ class _MorningStore implements QuickCheckInStore {
 
   @override
   Future<DailyCaptureEntry?> loadToday(DateTime today) async => initial;
+
+  @override
+  Future<EveningShutdownDraft?> loadLatestEvening() async => sleepPlan;
 
   @override
   Future<void> saveEvening(EveningShutdownDraft draft) async {}
@@ -253,4 +255,54 @@ class _MorningStore implements QuickCheckInStore {
       throw StateError('planned failure');
     }
   }
+}
+
+EveningShutdownDraft _latestSleepPlan() {
+  final now = DateTime.now();
+  return EveningShutdownDraft(
+    captureId: 'latest-evening-plan',
+    entryDate: dailyCaptureEntryDate(now),
+    capturedAt: now.subtract(const Duration(hours: 10)),
+    mood: 7,
+    energy: 6,
+    stress: 3,
+    stressSource: null,
+    stressControllability: null,
+    focusBand: null,
+    tomorrowPriority: '',
+    plannedSleepTime: dailyCaptureClock(
+      now.subtract(const Duration(hours: 8)),
+    ),
+    sleepTargetMinutes: 480,
+    branchVersion: dailyCaptureV4,
+  );
+}
+
+MorningCalibrationDraft _savedMorning(
+  DateTime now, {
+  required int estimatedMinutes,
+}) {
+  final wokeAt = DateTime(
+    now.year,
+    now.month,
+    now.day,
+    now.hour,
+    now.minute,
+  );
+  return MorningCalibrationDraft(
+    captureId: 'saved-morning',
+    entryDate: dailyCaptureEntryDate(now),
+    capturedAt: now,
+    sleepQuality: 8,
+    energy: 7,
+    dayShape: DayShape.flexible,
+    estimatedSleepStartedAt: wokeAt.subtract(
+      Duration(minutes: estimatedMinutes),
+    ),
+    wokeAt: wokeAt,
+    estimatedSleepMinutes: estimatedMinutes,
+    sleepTargetMinutes: 480,
+    sourceEveningCaptureId: 'latest-evening-plan',
+    branchVersion: dailyCaptureV4,
+  );
 }

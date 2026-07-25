@@ -441,6 +441,17 @@ curl http://localhost:8000/v1/deadline-plans \
   -H 'Authorization: Bearer <supabase_access_token>'
 ```
 
+The Planner exam-window projection is also GET-only:
+
+```bash
+curl http://localhost:8000/v1/deadline-plans/exam-week-outlook \
+  -H 'Authorization: Bearer <supabase_access_token>'
+```
+
+It returns `exam-week-outlook-v1` from bearer-owned plans, Availability, and
+valid Capture V4 sleep facts. Repeating or opening this GET must leave plan,
+revision, block, task, Daily Log, and Notification rows unchanged.
+
 Create a manual staged proposal with one stable client plan id and request id:
 
 ```bash
@@ -503,25 +514,31 @@ capture calls the daily snapshot endpoint best-effort with the capture's
 explicit local `target_date`. `/daily-check-in` redirects to the canonical
 Evening Shutdown at `/quick-mood-check-in`; the separate short
 `/morning-calibration` route captures sleep duration, an independent required
-1–10 estimated sleep quality, current energy, and day shape. If
+1–10 estimated sleep quality, current energy, and day shape. Evening first
+requires an intended local sleep start and a `300..720` minute target on the
+15-minute grid. Morning then records editable aware estimated start/wake
+instants and displays their derived `Estimated sleep duration`. If
 FastAPI is down, the durable Supabase capture still succeeds and the snapshot
 refresh is skipped by the client. Normal capture does not generate
 recommendations or create or change a plan. Guest/mock capture remains local.
 
 Evening and Morning writes merge into one `(user_id, entry_date)` `daily_logs`
 row. Phase 1 stores its bounded structured state under
-`metadata.capture_version=daily-capture-v3` and
+`metadata.capture_version=daily-capture-v4` and
 `metadata.captures.evening|morning`. Direct numeric columns remain compatible:
 Morning energy takes precedence when present, while mood and stress come from
 Evening and sleep comes from Morning. The writer reconciles the linked current
 mood, energy, stress, and sleep events without duplicates and mirrors relevant
 capture metadata onto those events. Sleep quality remains additive Morning
 metadata mirrored onto the existing Morning-origin events, so the maximum stays
-four. Blank Evening reflection, blocker, and
+four. Raw planned/estimated clocks, target, and source Evening identity stay in
+Daily Log metadata and are not copied into event metadata, Daily State, Coach,
+or Notification content. Blank Evening reflection, blocker, and
 tomorrow-priority answers stay absent and do not create other product records.
 Evening has no primary/additional friction selection and no longer writes the
 retired `gentle_tomorrow` field. Legacy V2 captures remain readable, but
-friction keys are ignored and the next save writes V3.
+friction keys are ignored. V2/V3 opposite branches may remain explicit
+compatibility branches until that branch is edited.
 
 Backend-only Supabase configuration for the AI service:
 
@@ -1188,7 +1205,8 @@ Reminder preferences remain unchanged, then walks Evening Shutdown and Morning
 Calibration. Its implemented assertions cover a committed
 `daily_logs` response loss followed by exact retry, same-day Evening/Morning
 merge, Evening re-entry/edit, one `daily_logs` row, nested
-`daily-capture-v3` metadata without friction, absent blank optionals, four deduplicated linked
+`daily-capture-v4` metadata without friction, required Evening sleep plan,
+Morning raw interval/derived duration, absent blank optionals, four deduplicated linked
 current events, Morning-over-Evening numeric energy precedence, capture-scoped
 snapshot refresh with `target_date`, and no recommendation-generate request
 during normal capture. The same responses and persisted row are checked for
@@ -1245,9 +1263,14 @@ Deadline Planner source coverage must additionally prove explicit estimate and
 prior-credit input, deterministic bounded block totals, staged-versus-active
 revision truth, first-confirm task creation, linked-focus progress without
 implicit completion, calendar isolation/optional busy time, exact retry and
-cross-owner RLS, Account Export inclusion, and guest zero-call. This paragraph
-does not claim those assertions or a current browser pass; run the full command
-after the implementation and migration are present.
+cross-owner RLS, Account Export inclusion, and guest zero-call. The same
+journey now saves Evening 23:00 with an eight-hour target, corrects Morning
+start to 00:00 with a 05:30 wake, and verifies the derived 330 minutes plus raw
+field isolation. It confirms an exam seven local days away and a competing
+assignment, reads the Planner-only outlook, opens but does not submit the
+explicit replan path, and compares the persisted active revisions before and
+after. This paragraph describes intended assertions rather than a current pass;
+run the full command after implementation changes.
 
 By default the script starts FastAPI on `http://127.0.0.1:8000`. Useful AI
 service overrides:

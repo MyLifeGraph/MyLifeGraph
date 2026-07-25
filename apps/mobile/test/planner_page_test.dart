@@ -1,9 +1,13 @@
+import 'dart:async';
+
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_life_graph/core/capabilities/app_surface_capabilities.dart';
 import 'package:my_life_graph/core/network/api_client.dart';
+import 'package:my_life_graph/features/deadline_plans/domain/exam_week_outlook.dart';
+import 'package:my_life_graph/features/deadline_plans/presentation/providers/deadline_plan_providers.dart';
 import 'package:my_life_graph/features/planner/application/planner_controller.dart';
 import 'package:my_life_graph/features/planner/data/planner_api_data_source.dart';
 import 'package:my_life_graph/features/planner/presentation/pages/planner_page.dart';
@@ -247,6 +251,107 @@ void main() {
     expect(tester.takeException(), isNull);
     semantics.dispose();
   });
+
+  testWidgets('exam outlook exposes loading and honest error states',
+      (tester) async {
+    final pending = Completer<ExamWeekOutlook?>();
+    await _pumpPlanner(
+      tester,
+      backend: _PlannerBackend(),
+      outlookLoader: () => pending.future,
+      settle: false,
+    );
+    expect(
+      find.byKey(const ValueKey('planner-exam-week-outlook-loading')),
+      findsOneWidget,
+    );
+    pending.complete();
+    await tester.pumpAndSettle();
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump();
+
+    await _pumpPlanner(
+      tester,
+      backend: _PlannerBackend(),
+      outlookLoader: () => Future<ExamWeekOutlook?>.error(StateError('read')),
+    );
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('planner-exam-week-outlook-error')),
+      300,
+    );
+    expect(
+      find.byKey(const ValueKey('planner-exam-week-outlook-error')),
+      findsOneWidget,
+    );
+    expect(
+      find.textContaining('No status was inferred'),
+      findsOneWidget,
+    );
+  });
+
+  for (final mode in const ['watch', 'exam_week', 'overdue']) {
+    testWidgets('Planner renders $mode outlook before Needs attention',
+        (tester) async {
+      tester.view.physicalSize = const Size(1000, 2600);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await _pumpPlanner(
+        tester,
+        backend: _PlannerBackend(),
+        outlookLoader: () async => _outlook(mode: mode),
+      );
+
+      final key = ValueKey('planner-exam-week-outlook-$mode');
+      expect(find.byKey(key), findsOneWidget);
+      expect(
+        tester.getTopLeft(find.byKey(key)).dy,
+        lessThan(
+          tester
+              .getTopLeft(find.byKey(const ValueKey('planner-needs-attention')))
+              .dy,
+        ),
+      );
+      expect(find.text('Review plan'), findsOneWidget);
+      expect(find.text('Replan remaining time'), findsOneWidget);
+      expect(
+        find.textContaining('Read-only outlook'),
+        findsOneWidget,
+      );
+    });
+  }
+
+  testWidgets('unknown exam-week capacity stays explicit at narrow large text',
+      (tester) async {
+    tester.view.physicalSize = const Size(320, 900);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await _pumpPlanner(
+      tester,
+      backend: _PlannerBackend(),
+      textScale: 2,
+      outlookLoader: () async => _outlook(
+        mode: 'exam_week',
+        risk: 'unknown',
+        capacity: 'unknown',
+        includeSleepPlan: false,
+      ),
+    );
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('planner-exam-week-outlook-exam_week')),
+      300,
+    );
+
+    expect(find.text('Unknown'), findsOneWidget);
+    expect(find.text('Capacity is incomplete'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('exam-outlook-evening-check-in')),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
 }
 
 Future<void> _pumpPlanner(
@@ -259,6 +364,8 @@ Future<void> _pumpPlanner(
     canUseDeadlinePlanner: true,
   ),
   double textScale = 1,
+  Future<ExamWeekOutlook?> Function()? outlookLoader,
+  bool settle = true,
 }) async {
   final controller = PlannerController(
     api: PlannerApiDataSource(ApiClient(backend.dio)),
@@ -271,6 +378,9 @@ Future<void> _pumpPlanner(
       overrides: [
         appSurfaceCapabilitiesProvider.overrideWithValue(capabilities),
         plannerControllerProvider.overrideWith((ref) => controller),
+        examWeekOutlookProvider.overrideWith(
+          (ref) => (outlookLoader ?? () async => null)(),
+        ),
       ],
       child: MaterialApp(
         home: const Scaffold(body: PlannerPage()),
@@ -283,7 +393,11 @@ Future<void> _pumpPlanner(
       ),
     ),
   );
-  await tester.pumpAndSettle();
+  if (settle) {
+    await tester.pumpAndSettle();
+  } else {
+    await tester.pump();
+  }
 }
 
 class _PlannerRequest {
@@ -392,6 +506,117 @@ class _PlannerBackend {
         statusCode: 200,
         data: data,
       );
+}
+
+ExamWeekOutlook _outlook({
+  required String mode,
+  String risk = 'attention',
+  String capacity = 'fits_with_sleep_protected',
+  bool includeSleepPlan = true,
+}) {
+  final overdue = mode == 'overdue';
+  final days = overdue
+      ? -1
+      : mode == 'watch'
+          ? 10
+          : 5;
+  return ExamWeekOutlook.fromJson({
+    'contract_version': 'exam-week-outlook-v1',
+    'origin': 'authenticated_backend',
+    'generated_at': '2026-07-21T08:00:00Z',
+    'timezone': 'Europe/Berlin',
+    'local_date': '2026-07-21',
+    'mode': mode,
+    'risk_level': risk,
+    'capacity_status': capacity,
+    'current_sleep_plan': includeSleepPlan
+        ? {
+            'capture_id': 'evening-plan',
+            'entry_date': '2026-07-20',
+            'captured_at': '2026-07-20T19:00:00Z',
+            'planned_sleep_time': '23:00',
+            'sleep_target_minutes': 480,
+          }
+        : null,
+    'recent_sleep_nights': [
+      {
+        'entry_date': '2026-07-21',
+        'estimated_sleep_minutes': 420,
+        'sleep_target_minutes': 480,
+        'shortfall_minutes': 60,
+        'at_least_one_hour_short': true,
+      },
+    ],
+    'exams': [
+      {
+        'plan_id': '60000000-0000-4000-8000-000000000002',
+        'kind': 'exam',
+        'title': 'Mathematics',
+        'deadline_at':
+            overdue ? '2026-07-20T12:00:00Z' : '2026-07-26T12:00:00Z',
+        'local_deadline_date': overdue ? '2026-07-20' : '2026-07-26',
+        'days_remaining': days,
+        'active_revision': 1,
+        'pending_revision': null,
+        'saved_buffer_days': 1,
+        'recommended_buffer_days': 1,
+        'last_preparation_date': overdue ? '2026-07-18' : '2026-07-24',
+        'remaining_minutes': 120,
+        'future_scheduled_minutes': 60,
+        'future_minutes_after_buffer': 0,
+        'missed_preparation_minutes': overdue ? 60 : 0,
+        'simulated_regular_minutes': 60,
+        'unscheduled_regular_minutes': 0,
+        'simulated_sleep_protected_minutes':
+            includeSleepPlan && capacity != 'unknown' ? 60 : null,
+        'unscheduled_sleep_protected_minutes':
+            includeSleepPlan && capacity != 'unknown' ? 0 : null,
+        'pending_preview_sleep_overlap': false,
+      },
+    ],
+    'assignments': [
+      {
+        'plan_id': '70000000-0000-4000-8000-000000000002',
+        'kind': 'assignment',
+        'title': 'History paper',
+        'deadline_at': '2026-07-25T12:00:00Z',
+        'local_deadline_date': '2026-07-25',
+        'days_remaining': 4,
+        'active_revision': 1,
+        'pending_revision': null,
+        'saved_buffer_days': 0,
+        'recommended_buffer_days': 0,
+        'last_preparation_date': '2026-07-25',
+        'remaining_minutes': 60,
+        'future_scheduled_minutes': 0,
+        'future_minutes_after_buffer': 0,
+        'missed_preparation_minutes': 0,
+        'simulated_regular_minutes': 60,
+        'unscheduled_regular_minutes': 0,
+        'simulated_sleep_protected_minutes':
+            includeSleepPlan && capacity != 'unknown' ? 60 : null,
+        'unscheduled_sleep_protected_minutes':
+            includeSleepPlan && capacity != 'unknown' ? 0 : null,
+        'pending_preview_sleep_overlap': false,
+      },
+    ],
+    'warning_codes': [
+      if (overdue) 'exam_overdue',
+      if (!includeSleepPlan) 'sleep_plan_missing',
+      if (capacity == 'unknown') 'capacity_incomplete',
+    ],
+    'minutes': {
+      'remaining_minutes': 180,
+      'future_scheduled_minutes': 60,
+      'missed_preparation_minutes': overdue ? 60 : 0,
+      'simulated_regular_minutes': 120,
+      'unscheduled_regular_minutes': 0,
+      'simulated_sleep_protected_minutes':
+          includeSleepPlan && capacity != 'unknown' ? 120 : null,
+      'unscheduled_sleep_protected_minutes':
+          includeSleepPlan && capacity != 'unknown' ? 0 : null,
+    },
+  });
 }
 
 Map<String, dynamic> _unscheduledTaskPlanEnvelope({bool active = false}) {

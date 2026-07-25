@@ -77,6 +77,8 @@ class Client:
             return []
         if table == "focus_sessions":
             return []
+        if table == "daily_logs":
+            return []
         raise AssertionError((table, params))
 
     async def rpc(self, function, *, params):
@@ -171,6 +173,22 @@ def test_workload_context_is_owner_scoped_to_profile_local_seven_days() -> None:
         params for table, params in client.calls if table == "schedule_items"
     )
     assert "metadata" in schedule_call["select"]
+
+
+def test_exam_week_sleep_capture_read_is_owner_scoped_and_read_only() -> None:
+    client = Client()
+    repository = SupabaseDeadlinePlanRepository(client)
+
+    assert asyncio.run(
+        repository.list_sleep_capture_logs(user_id=USER_ID),
+    ) == []
+
+    call = next(
+        params for table, params in client.calls if table == "daily_logs"
+    )
+    assert call["user_id"] == f"eq.{USER_ID}"
+    assert call["source"] == "eq.quick_check_in"
+    assert call["select"] == "id,entry_date,metadata"
 
 
 class WorkloadDetailClient(Client):

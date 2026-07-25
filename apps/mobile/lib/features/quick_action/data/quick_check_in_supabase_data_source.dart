@@ -34,6 +34,33 @@ class QuickCheckInSupabaseDataSource implements QuickCheckInStore {
   }
 
   @override
+  Future<EveningShutdownDraft?> loadLatestEvening() async {
+    final userId = await AppUserResolver(_client).resolveUserId();
+    final rows = await _client
+        .from(SupabaseTables.dailyLogs)
+        .select(
+          'id,entry_date,sleep_hours,energy_level,stress_level,mood_score,'
+          'reflection,source,metadata,updated_at',
+        )
+        .eq('user_id', userId)
+        .eq('source', source)
+        .order('entry_date', ascending: false)
+        .limit(30);
+    for (final raw in rows) {
+      try {
+        final evening =
+            rowMapper.map(Map<String, dynamic>.from(raw as Map)).evening;
+        if (evening?.isV4 == true) {
+          return evening;
+        }
+      } on FormatException {
+        // A malformed older row cannot become the current sleep plan.
+      }
+    }
+    return null;
+  }
+
+  @override
   Future<void> saveEvening(EveningShutdownDraft draft) async {
     final userId = await AppUserResolver(_client).resolveUserId();
     final existing = await _loadRowForUser(
@@ -149,8 +176,7 @@ class QuickCheckInDailyRowMapper {
     final capturesRaw = metadata['captures'];
     final captureVersion = metadata['capture_version'];
     final supportedCaptureVersion =
-        captureVersion == DailyCaptureEntry.captureVersion ||
-            captureVersion == DailyCaptureEntry.legacyCaptureVersion;
+        DailyCaptureEntry.supportedCaptureVersions.contains(captureVersion);
     if ((supportedCaptureVersion && capturesRaw == null) ||
         (capturesRaw != null && !supportedCaptureVersion)) {
       throw const FormatException('Capture metadata version is invalid.');
@@ -187,12 +213,14 @@ class QuickCheckInDailyRowMapper {
           : EveningShutdownDraft.fromJson(
               _asStringMap(eveningRaw, 'evening capture'),
               entryDate: entryDate,
+              containerVersion: '$captureVersion',
             ),
       morning: morningRaw == null
           ? null
           : MorningCalibrationDraft.fromJson(
               _asStringMap(morningRaw, 'morning capture'),
               entryDate: entryDate,
+              containerVersion: '$captureVersion',
             ),
       legacy:
           legacy.hasAnySignal || legacy.contextNote.isNotEmpty ? legacy : null,

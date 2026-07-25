@@ -68,16 +68,20 @@ Already implemented:
     `DailyCaptureEntry` per local date without one capture erasing the other.
   - Evening stores exact stress intensity/source/controllability, tomorrow
     priority, and only explicitly supplied optional reflection/blocker detail.
-    Primary/additional friction choices are retired. Morning stores sleep hours,
-    an independent required `1..10`
-    `sleep_quality` estimate, current energy, and day shape only. Older V2
-    objects remain readable with friction ignored.
+    Primary/additional friction choices are retired. Evening also stores one
+    required planned local sleep clock and bounded duration target. Morning
+    stores aware estimated start/wake instants, their derived duration, the
+    target used, an independent required `1..10` `sleep_quality` estimate,
+    current energy, and day shape. Older V2/V3 objects remain readable with
+    friction ignored and explicit branch compatibility.
   - `daily_logs.metadata.captures` owns the two structured states. Numeric
     projections retain existing consumers: Morning energy takes precedence,
     Evening owns mood/stress, and Morning owns sleep.
   - Supabase rebuilds a dynamic maximum of four deterministically identified
-    current-state events linked to the daily row. Guest V3 storage keeps the
-    same merge semantics and retains V1/V2 read/auth-migration compatibility.
+    current-state events linked to the daily row. Guest V4 storage keeps the
+    same merge semantics and retains V1/V2/V3 read/auth-migration compatibility.
+    Raw sleep clocks stay in Daily Log metadata; downstream facts receive the
+    derived duration.
   - Successful real captures request the daily snapshot for their explicit
     local `target_date`; backend event filtering prefers metadata entry date in
     a broadened UTC read window. Guest/mock remains entirely local.
@@ -132,9 +136,10 @@ Already implemented:
   - Compact summaries with risk flags, next-focus hints, input counts, and
     evidence references.
   - Additive `summary.daily_state` and `signals.daily_state` under
-    `explainable-daily-state-v2`, with a strict V2/V3 capture parser, friction
-    sanitization, legacy fallback only when no structured marker exists, and a
-    fixed seven-day state lookback separate from the statistics window.
+    `explainable-daily-state-v2`, with a strict V2/V3/V4 branch-compatible
+    capture parser, V4 sleep-interval validation, friction sanitization, legacy
+    fallback only when no structured marker exists, and a fixed seven-day state
+    lookback separate from the statistics window.
   - Explicit Evening/Morning freshness plus `missing`, `partial`, `current`, and
     `stale` quality. Evening may be current from the target date or previous
     date; Morning is current only from the target date.
@@ -264,6 +269,19 @@ Already implemented:
     plan choice that requires one connected, non-deleted current import. There
     is no inference, provider write, notification, LLM,
     background sync, scheduled generation, or Dashboard-load generation.
+- Exam-Week Outlook V1:
+  - `GET /v1/deadline-plans/exam-week-outlook` is bearer-owned and strictly
+    read-only; no table or migration was added.
+  - Active exams activate `exam_week` at 0..7 local days, `watch` at 8..14, or
+    `overdue`. Assignments consume capacity without activating the mode.
+  - The shared Availability engine simulates deterministic remaining gaps
+    normally and with the newest valid Evening V4 sleep window hypothetically
+    protected. Exact fit/risk/warning states expose incomplete inputs, missed
+    work, buffer, pending overlap, and repeated derived sleep shortfall without
+    mutating any revision.
+  - Planner alone renders the card before ordinary attention; Today,
+    Notifications, guest/demo, and background paths do not request or fabricate
+    it.
 - Planner V1:
   - Central authenticated read-only overview plus explicit preference,
     Task/Habit proposal/confirm/cancel, and fixed-commitment commands under
@@ -912,7 +930,7 @@ production provider or autonomous agent platform by default.
   four-event maximum.
 - Implemented a dynamic maximum of four deterministic mood/energy/stress/sleep
   events with capture-kind metadata and linkage to the single daily row.
-- Implemented guest V3 JSON with legacy V1/V2 read, friction sanitization, and
+- Implemented guest V4 JSON with legacy V1/V2/V3 read, friction sanitization, and
   best-effort authenticated migration compatibility; guest/mock paths remain
   off Supabase and FastAPI.
 - Implemented capture-date snapshot refresh plus backend metadata-date filtering
@@ -925,7 +943,7 @@ production provider or autonomous agent platform by default.
 
 - Implemented `summary.daily_state` and `signals.daily_state` under
   `explainable-daily-state-v2` without schema changes.
-- Implemented a strict V2/V3 capture parser that validates capture identity,
+- Implemented a strict V2/V3/V4 capture parser that validates capture identity,
   enums, numbers, timestamps, and numeric projections while ignoring retired
   friction keys. Legacy numeric rows are read only when no structured marker
   exists; malformed structured data never regains trust through projected

@@ -61,8 +61,7 @@ void main() {
       expect(metadata.containsKey('gentle_tomorrow'), isFalse);
     });
 
-    test(
-        'strictly validates ratings, half-hour sleep, dates, and text bounds',
+    test('strictly validates ratings, sleep intervals, targets, and bounds',
         () {
       expect(
         () => _evening().copyWith(stress: 11).validate(),
@@ -80,7 +79,17 @@ void main() {
         throwsFormatException,
       );
       expect(
-        () => _morning().copyWith(sleepHours: 6.25).validate(),
+        () => _morning().copyWith(sleepTargetMinutes: 485).validate(),
+        throwsFormatException,
+      );
+      expect(
+        () => _morning()
+            .withSleepInterval(
+              estimatedSleepStartedAt:
+                  DateTime.parse('2026-07-09T12:00:00+02:00'),
+              wokeAt: DateTime.parse('2026-07-10T07:00:00+02:00'),
+            )
+            .validate(),
         throwsFormatException,
       );
       expect(
@@ -113,6 +122,80 @@ void main() {
         expect(captures.keys, containsAll(['evening', 'morning']));
         expect((captures['morning'] as Map)['sleep_quality'], 3);
       }
+    });
+
+    test('derives 02:00–10:00 and 23:00–07:00 as eight-hour nights', () {
+      final sameDay = estimatedSleepIntervalForLocalClocks(
+        entryDate: _entryDate,
+        estimatedSleepStartedAt: '02:00',
+        wokeAt: '10:00',
+      );
+      final overnight = estimatedSleepIntervalForLocalClocks(
+        entryDate: _entryDate,
+        estimatedSleepStartedAt: '23:00',
+        wokeAt: '07:00',
+      );
+
+      expect(
+        sameDay.wokeAt.difference(sameDay.estimatedSleepStartedAt).inMinutes,
+        480,
+      );
+      expect(
+        overnight.wokeAt
+            .difference(overnight.estimatedSleepStartedAt)
+            .inMinutes,
+        480,
+      );
+      expect(
+        dailyCaptureEntryDate(overnight.estimatedSleepStartedAt),
+        '2026-07-09',
+      );
+    });
+
+    test('accepts only the bounded 15-minute sleep-target grid', () {
+      expect(
+        () => _evening().copyWith(sleepTargetMinutes: 300).validate(),
+        returnsNormally,
+      );
+      expect(
+        () => _evening().copyWith(sleepTargetMinutes: 720).validate(),
+        returnsNormally,
+      );
+      for (final value in [299, 301, 721]) {
+        expect(
+          () => _evening().copyWith(sleepTargetMinutes: value).validate(),
+          throwsFormatException,
+        );
+      }
+    });
+
+    test('V4 merge preserves an untouched V3 branch explicitly', () {
+      final legacyMorning = MorningCalibrationDraft(
+        captureId: 'legacy-morning',
+        entryDate: _entryDate,
+        capturedAt: DateTime.parse('2026-07-10T06:30:00Z'),
+        sleepHours: 7.5,
+        sleepQuality: 6,
+        energy: 6,
+        dayShape: DayShape.normal,
+        branchVersion: dailyCaptureV3,
+        isCompatibilityBranch: true,
+      );
+      final entry = DailyCaptureEntry(
+        entryDate: _entryDate,
+        morning: legacyMorning,
+      ).mergeEvening(_evening());
+
+      final metadata = entry.toCaptureMetadata();
+      final morning = (metadata['captures'] as Map)['morning'] as Map;
+      expect(metadata['capture_version'], dailyCaptureV4);
+      expect(morning['branch_version'], dailyCaptureV3);
+      expect(morning['compatibility'], isTrue);
+      expect(morning, isNot(contains('estimated_sleep_started_at')));
+      expect(
+        () => entry.mergeMorning(legacyMorning),
+        throwsFormatException,
+      );
     });
 
     test('replacing one capture removes its cleared optionals only', () {
@@ -204,7 +287,7 @@ void main() {
       expect(row['source'], 'quick_check_in');
       expect(row['steps'], isNull);
       final metadata = row['metadata'] as Map<String, dynamic>;
-      expect(metadata['capture_version'], 'daily-capture-v3');
+      expect(metadata['capture_version'], 'daily-capture-v4');
       expect(metadata['foreign_producer'], {'kept': true});
       final captures = metadata['captures'] as Map;
       expect(captures.keys, containsAll(['evening', 'morning']));
@@ -263,6 +346,9 @@ void main() {
         (event) => event['event_type'] == 'sleep',
       );
       expect(sleep['metadata'], containsPair('sleep_quality', 3));
+      expect(sleep['metadata'], isNot(contains('estimated_sleep_started_at')));
+      expect(sleep['metadata'], isNot(contains('woke_at')));
+      expect(sleep['metadata'], isNot(contains('sleep_target_minutes')));
     });
 
     test('event identities and payloads are stable across exact retries', () {
@@ -361,7 +447,7 @@ void main() {
       expect(evening.containsKey('gentle_tomorrow'), isFalse);
       expect(evening.containsKey('main_friction'), isFalse);
       expect(evening.containsKey('additional_frictions'), isFalse);
-      expect((raw.single as Map)['captureVersion'], 'daily-capture-v3');
+      expect((raw.single as Map)['captureVersion'], 'daily-capture-v4');
       expect(morning['sleep_quality'], 3);
     });
 
@@ -393,7 +479,7 @@ void main() {
       expect(value?.stress, 5);
     });
 
-    test('reads V2 guest capture and rewrites friction-free V3 storage',
+    test('reads V2 guest capture as an explicit V4 compatibility branch',
         () async {
       final legacyEvening = {
         ..._evening().toMetadataJson(),
@@ -418,7 +504,8 @@ void main() {
 
       expect(values.single.evening?.mainFriction, isNull);
       expect(values.single.evening?.additionalFrictions, isEmpty);
-      expect(rewritten, contains('daily-capture-v3'));
+      expect(rewritten, contains('daily-capture-v4'));
+      expect(rewritten, contains('"compatibility":true'));
       expect(rewritten, isNot(contains('main_friction')));
       expect(rewritten, isNot(contains('additional_frictions')));
     });
@@ -455,6 +542,9 @@ EveningShutdownDraft _evening({
     stressControllability: StressControllability.hardlyControllable,
     focusBand: FocusBand.thirtyToSixtyMinutes,
     tomorrowPriority: 'Protect a calm start',
+    plannedSleepTime: '23:00',
+    sleepTargetMinutes: 480,
+    branchVersion: dailyCaptureV4,
   );
 }
 
@@ -463,10 +553,15 @@ MorningCalibrationDraft _morning() {
     captureId: 'morning-distinctive',
     entryDate: _entryDate,
     capturedAt: DateTime.parse('2026-07-10T07:15:00+02:00'),
-    sleepHours: 5.5,
     sleepQuality: 3,
     energy: 4,
     dayShape: DayShape.constrained,
+    estimatedSleepStartedAt: DateTime.parse('2026-07-09T23:30:00+02:00'),
+    wokeAt: DateTime.parse('2026-07-10T05:00:00+02:00'),
+    estimatedSleepMinutes: 330,
+    sleepTargetMinutes: 480,
+    sourceEveningCaptureId: 'evening-distinctive',
+    branchVersion: dailyCaptureV4,
   );
 }
 

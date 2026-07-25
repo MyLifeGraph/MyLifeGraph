@@ -774,7 +774,13 @@ function buildDailyLogs(userId, scenario, now, metadata) {
       const structuredSleep = Math.round(sleep * 2) / 2;
       const morningCapturedAt = atHour(date, 6, 30);
       const eveningCapturedAt = atHour(date, 20, 30);
+      const estimatedSleepMinutes = structuredSleep * 60;
+      const estimatedSleepStartedAt = new Date(
+        Date.parse(morningCapturedAt) - estimatedSleepMinutes * 60_000,
+      ).toISOString();
+      const previousEntryDate = dateOnly(addDays(date, -1));
       const eveningCapture = {
+        branch_version: 'daily-capture-v4',
         capture_kind: 'evening',
         entry_date: entryDate,
         capture_id: deterministicUuid(
@@ -797,6 +803,8 @@ function buildDailyLogs(userId, scenario, now, metadata) {
             : stress >= 7
               ? 'partly_controllable'
               : 'mostly_controllable',
+        planned_sleep_time: '22:30',
+        sleep_target_minutes: 480,
         focus_band: focusBand(focus),
         tomorrow_priority:
           scenario.priorities[index % scenario.priorities.length][0],
@@ -809,12 +817,24 @@ function buildDailyLogs(userId, scenario, now, metadata) {
           : {}),
       };
       const morningCapture = {
+        branch_version: 'daily-capture-v4',
         capture_kind: 'morning',
         entry_date: entryDate,
         capture_id: deterministicUuid(
           `demo-seed:morning-capture:${userId}:${entryDate}`,
         ),
         captured_at: morningCapturedAt,
+        estimated_sleep_started_at: estimatedSleepStartedAt,
+        woke_at: morningCapturedAt,
+        estimated_sleep_minutes: estimatedSleepMinutes,
+        sleep_target_minutes: 480,
+        ...(offset > -14
+          ? {
+              source_evening_capture_id: deterministicUuid(
+                `demo-seed:evening-capture:${userId}:${previousEntryDate}`,
+              ),
+            }
+          : {}),
         sleep_hours: structuredSleep,
         sleep_quality: clampInt(Math.round(structuredSleep), 1, 10),
         current_energy: energy,
@@ -839,7 +859,7 @@ function buildDailyLogs(userId, scenario, now, metadata) {
         source: 'quick_check_in',
         metadata: {
           ...metadata,
-          capture_version: 'daily-capture-v3',
+          capture_version: 'daily-capture-v4',
           captures: {
             evening: eveningCapture,
             morning: morningCapture,
@@ -880,7 +900,7 @@ function buildBehavioralEvents(userId, scenario, dailyLogs, metadata) {
   return dailyLogs.flatMap((log, index) => {
     const date = new Date(`${log.entry_date}T12:00:00.000Z`);
     const captures = log.metadata?.captures;
-    if (log.metadata?.capture_version === 'daily-capture-v3' && captures) {
+    if (log.metadata?.capture_version === 'daily-capture-v4' && captures) {
       const evening = captures.evening;
       const morning = captures.morning;
       const signals = [
@@ -902,13 +922,16 @@ function buildBehavioralEvents(userId, scenario, dailyLogs, metadata) {
         source: 'quick_check_in',
         metadata: {
           ...metadata,
-          capture_version: 'daily-capture-v3',
+          capture_version: 'daily-capture-v4',
           capture_kind: captureKind,
           entry_date: log.entry_date,
           capture_id: capture.capture_id,
           captured_at: capture.captured_at,
           ...(captureKind === 'morning'
-            ? { day_shape: morning.day_shape }
+            ? {
+                day_shape: morning.day_shape,
+                sleep_quality: morning.sleep_quality,
+              }
             : {
                 stress_source: evening.stress_source,
                 stress_controllability: evening.stress_controllability,

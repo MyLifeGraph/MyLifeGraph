@@ -4,7 +4,10 @@ from datetime import date, datetime, timedelta, timezone
 
 import pytest
 
-from app.services.snapshot_daily_state import build_snapshot_daily_state
+from app.services.snapshot_daily_state import (
+    build_snapshot_daily_state,
+    valid_explicit_capture_kinds,
+)
 
 
 TARGET_DATE = date(2026, 7, 11)
@@ -213,6 +216,116 @@ def current_rows(
             morning=morning,
         ),
     ]
+
+
+def v4_current_rows() -> list[dict]:
+    evening = {
+        **evening_capture(),
+        "branch_version": "daily-capture-v4",
+        "planned_sleep_time": "22:30",
+        "sleep_target_minutes": 480,
+    }
+    morning = {
+        **morning_capture(),
+        "branch_version": "daily-capture-v4",
+        "estimated_sleep_started_at": (
+            f"{(TARGET_DATE - timedelta(days=1)).isoformat()}T22:30:00+00:00"
+        ),
+        "woke_at": f"{TARGET_DATE.isoformat()}T06:30:00+00:00",
+        "estimated_sleep_minutes": 480,
+        "sleep_target_minutes": 480,
+        "source_evening_capture_id": evening["capture_id"],
+    }
+    rows = [
+        capture_row(
+            row_id="log-evening",
+            entry_date=EVENING_DATE,
+            evening=evening,
+            metadata={
+                "capture_version": "daily-capture-v4",
+                "captures": {"evening": evening},
+            },
+        ),
+        capture_row(
+            row_id="log-morning",
+            entry_date=TARGET_DATE,
+            morning=morning,
+            metadata={
+                "capture_version": "daily-capture-v4",
+                "captures": {"morning": morning},
+            },
+        ),
+    ]
+    return rows
+
+
+def test_v4_sleep_duration_preserves_daily_state_v2_classification() -> None:
+    legacy = build_state(daily_logs=current_rows(), tasks=[active_task()])
+    v4 = build_state(daily_logs=v4_current_rows(), tasks=[active_task()])
+
+    assert v4.summary == legacy.summary
+    assert v4.mode == legacy.mode == "push"
+    assert v4.risk_codes == legacy.risk_codes
+    assert v4.signals["contract_version"] == "explainable-daily-state-v2"
+    assert all(
+        item["kind"] == "explicit_capture_v4"
+        for item in v4.signals["provenance"]
+    )
+    serialized = json.dumps(v4.summary)
+    assert "estimated_sleep_started_at" not in serialized
+    assert "woke_at" not in serialized
+    assert "sleep_target_minutes" not in serialized
+    assert valid_explicit_capture_kinds(v4_current_rows()[1]) == frozenset(
+        {"morning"},
+    )
+
+
+def test_v4_rejects_mismatched_derived_duration_and_naive_raw_time() -> None:
+    rows = v4_current_rows()
+    morning = rows[1]["metadata"]["captures"]["morning"]
+    morning["estimated_sleep_minutes"] = 420
+    morning["estimated_sleep_started_at"] = (
+        f"{(TARGET_DATE - timedelta(days=1)).isoformat()}T22:30:00"
+    )
+
+    result = build_state(daily_logs=rows)
+
+    assert result.summary["data_quality"] == "partial"
+    assert result.summary["freshness"]["morning"]["state"] == "current"
+    assert valid_explicit_capture_kinds(rows[1]) == frozenset()
+    assert "morning.invalid_estimated_sleep_started_at" in result.signals[
+        "quality_issues"
+    ]
+    assert "morning.invalid_estimated_sleep_minutes" in result.signals[
+        "quality_issues"
+    ]
+
+
+def test_v4_container_preserves_an_explicit_v3_compatibility_branch() -> None:
+    evening = v4_current_rows()[0]
+    morning = morning_capture()
+    morning.update(
+        {
+            "branch_version": "daily-capture-v3",
+            "compatibility": True,
+        },
+    )
+    mixed = capture_row(
+        row_id="mixed-v4",
+        entry_date=TARGET_DATE,
+        morning=morning,
+        metadata={
+            "capture_version": "daily-capture-v4",
+            "captures": {"morning": morning},
+        },
+    )
+
+    result = build_state(daily_logs=[evening, mixed], tasks=[active_task()])
+
+    assert result.summary["data_quality"] == "current"
+    assert result.summary["context"]["sleep_hours"] == 8.0
+    assert result.mode == "push"
+    assert valid_explicit_capture_kinds(mixed) == frozenset({"morning"})
 
 
 @pytest.mark.parametrize("code", STRESS_SOURCES)
@@ -487,8 +600,11 @@ def test_invalid_evening_identity_drops_the_branch(
     (
         ("not-an-object", "daily_log.invalid_metadata"),
         (
-            {"capture_version": "daily-capture-v4", "captures": {}},
-            "daily_log.unsupported_capture_version",
+            {
+                "capture_version": "daily-capture-v4",
+                "captures": {"morning": morning_capture()},
+            },
+            "morning.invalid_branch_version",
         ),
         (
             {"capture_version": "daily-capture-v2", "captures": []},

@@ -39,6 +39,13 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
       kind: _EveningStepKind.checkIn,
     ),
     _EveningStep(
+      eyebrow: 'EVENING · SLEEP PLAN',
+      title: 'When do you plan to sleep?',
+      subtitle:
+          'Set tonight\'s intended start and your personal duration target.',
+      kind: _EveningStepKind.sleepPlan,
+    ),
+    _EveningStep(
       eyebrow: 'EVENING · CONTEXT',
       title: 'What should tomorrow know?',
       subtitle: 'Add pressure context or optional notes only when useful.',
@@ -89,6 +96,7 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
   Widget _buildStep(_EveningStepKind kind) {
     return switch (kind) {
       _EveningStepKind.checkIn => _buildCheckInStep(),
+      _EveningStepKind.sleepPlan => _buildSleepPlanStep(),
       _EveningStepKind.context => _buildContextStep(),
     };
   }
@@ -130,6 +138,50 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
                   value < 5 ? null : _draft.stressControllability,
             );
           }),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSleepPlanStep() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          'Planned sleep time',
+          style: Theme.of(context).textTheme.titleLarge,
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        Text(
+          'This is your intention for tonight, not an automatic restriction.',
+          style: Theme.of(context).textTheme.bodyMedium,
+        ),
+        const SizedBox(height: AppSpacing.md),
+        CaptureClockControl(
+          label: 'Planned sleep start',
+          semanticLabel: 'planned sleep time',
+          value: _draft.plannedSleepTime,
+          quickValues: const ['22:00', '23:00', '00:00'],
+          onChanged: (value) => setState(
+            () => _draft = _draft.copyWith(plannedSleepTime: value),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.xl),
+        Text(
+          'Sleep duration target',
+          style: Theme.of(context).textTheme.titleLarge,
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        Text(
+          'Eight hours is shown first. It becomes your current sleep plan only when you save.',
+          style: Theme.of(context).textTheme.bodyMedium,
+        ),
+        const SizedBox(height: AppSpacing.md),
+        CaptureSleepTargetControl(
+          value: _draft.sleepTargetMinutes,
+          onChanged: (value) => setState(
+            () => _draft = _draft.copyWith(sleepTargetMinutes: value),
+          ),
         ),
       ],
     );
@@ -230,6 +282,8 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
     return switch (_steps[_stepIndex].kind) {
       _EveningStepKind.checkIn =>
         _draft.mood != null && _draft.energy != null && _draft.stress != null,
+      _EveningStepKind.sleepPlan =>
+        _draft.plannedSleepTime != null && _draft.sleepTargetMinutes != null,
       _EveningStepKind.context => _draft.hasConsistentStressContext,
     };
   }
@@ -302,16 +356,32 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
 
   Future<void> _loadToday() async {
     try {
-      final entry =
-          await ref.read(quickCheckInStoreProvider).loadToday(DateTime.now());
+      final store = ref.read(quickCheckInStoreProvider);
+      final results = await Future.wait<Object?>([
+        store.loadToday(DateTime.now()),
+        store.loadLatestEvening(),
+      ]);
+      final entry = results.first as DailyCaptureEntry?;
+      final sleepPlan = results.last as EveningShutdownDraft?;
       final saved = entry?.evening;
-      if (saved != null && mounted) {
+      if (mounted) {
+        final source = saved?.forEditing() ?? _draft;
+        final next = source.copyWith(
+          capturedAt: saved == null ? null : _draft.capturedAt,
+          plannedSleepTime:
+              source.plannedSleepTime ?? sleepPlan?.plannedSleepTime,
+          sleepTargetMinutes: source.sleepTargetMinutes ??
+              sleepPlan?.sleepTargetMinutes ??
+              EveningShutdownDraft.defaultSleepTargetMinutes,
+        );
         setState(() {
-          _draft = saved.copyWith(capturedAt: _draft.capturedAt);
-          _tomorrowPriorityController.text = saved.tomorrowPriority;
-          _reflectionController.text = saved.reflectionNote;
-          _blockerController.text = saved.specificBlocker;
-          _loadedSavedCapture = true;
+          _draft = next;
+          if (saved != null) {
+            _tomorrowPriorityController.text = saved.tomorrowPriority;
+            _reflectionController.text = saved.reflectionNote;
+            _blockerController.text = saved.specificBlocker;
+            _loadedSavedCapture = true;
+          }
         });
       }
     } catch (_) {
@@ -364,6 +434,7 @@ String _stressControllabilityLabel(StressControllability value) =>
 
 enum _EveningStepKind {
   checkIn,
+  sleepPlan,
   context,
 }
 

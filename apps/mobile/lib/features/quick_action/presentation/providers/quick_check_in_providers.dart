@@ -33,6 +33,9 @@ class _UnavailableQuickCheckInStore implements QuickCheckInStore {
   Future<DailyCaptureEntry?> loadToday(DateTime today) async => null;
 
   @override
+  Future<EveningShutdownDraft?> loadLatestEvening() async => null;
+
+  @override
   Future<void> saveEvening(EveningShutdownDraft draft) {
     throw const QuickCheckInUnavailableException(
       'Supabase is not configured for this account.',

@@ -104,6 +104,13 @@ way to explore the product today is the Flutter app in mock-data guest mode.
   without a pending preview now starts with a compact saved-value review and one
   deliberate staged-preview action; changing values still uses the full editor,
   and current reservations remain active until confirmation.
+  Daily Capture V4 adds an explicit Evening sleep plan and Morning estimated
+  start/wake interval while keeping raw clocks inside `daily_logs.metadata`.
+  Planner reads the side-effect-free `exam-week-outlook-v1` projection: an
+  active exam activates a 14-day watch or seven-day Exam week, assignments
+  consume capacity without activating it, and regular availability is compared
+  with the saved sleep window hypothetically protected. It creates no preview,
+  Notification, Today item, or automatic plan change.
   Planner V1 is the central authenticated planning surface for Task/Habit
   creation and timing, Deadline Planner entry, and one-off or weekly fixed
   commitments. Its shared deterministic availability engine stages five-minute
@@ -370,24 +377,31 @@ Supabase is the intended auth and persistence backend. The current app supports:
   reload. Timeouts, 5xx failures, and invalid success envelopes have an unknown
   durable result, so the exact submitted draft is locked for unchanged retry or
   explicit reload.
-- Evening check-in is a two-page flow for mood, energy, and stress.
+- Evening check-in is a three-page flow for mood, energy, stress, and one
+  explicit sleep plan.
   Stress source/influence is requested only from medium stress upward; primary
   and additional friction are neither requested nor stored. Tomorrow priority,
   reflection, and blocker are optional; the former gentle-tomorrow switch is no
   longer written. It no
   longer asks users to estimate focus that completed Focus sessions can
-  measure. Morning check-in remains a separate short flow for sleep hours,
-  an independent required 1–10 estimate of sleep quality, current energy, and
-  day shape.
+  measure. Evening requires an intended local sleep start plus a `300..720`
+  minute target in 15-minute steps; the first visible value is eight hours and
+  later forms prefill the newest valid Evening plan. Morning remains separate
+  and records an editable estimated sleep-start/wake interval, its derived
+  duration, the target used for that night, an independent required 1–10
+  estimate of sleep quality, current energy, and day shape.
 - Both captures merge under `daily_logs.metadata.captures` for the same user and
   date. Morning energy owns the compatible `energy_level` projection when
   present; Evening owns mood and stress, and Morning owns sleep. Linked
   `behavioral_events` are a dynamic, deterministically identified set of at
   most mood, energy, stress, and sleep events. Guest storage uses
-  `daily-capture-v3`, reads V2 without friction, and rewrites it as V3 on the
-  next save while retaining V1 migration compatibility. Sleep quality
-  stays in the Morning capture metadata and is mirrored onto its existing
-  Morning-origin events, so it does not create an invented fifth event.
+  `daily-capture-v4`, reads V2/V3 as explicit compatibility branches, and
+  upgrades a branch only when it is edited while retaining V1 migration
+  compatibility. Raw planned/estimated clocks stay only in Daily Log metadata;
+  the compatible column, Sleep event, Daily State, recommendations, and Coach
+  receive the derived duration. Sleep quality stays in the Morning capture
+  metadata and is mirrored onto its existing Morning-origin events, so it does
+  not create an invented fifth event.
 - The dashboard refresh action first refreshes the daily snapshot best-effort,
   then calls the deterministic recommendation generator with LLM wording
   disabled. Normal dashboard reads still do not generate recommendations.
@@ -491,6 +505,11 @@ Supabase is the intended auth and persistence backend. The current app supports:
   account rule is set through `PATCH /v1/account/preparation-budget`; `null`
   retains per-plan-only capacity, while `25..480` five-minute values cap total
   confirmed preparation per local date for new confirmations.
+  `GET /v1/deadline-plans/exam-week-outlook` is a separate strictly read-only
+  `exam-week-outlook-v1` projection. It derives mode, bounded warnings, recent
+  sleep-duration facts, and capacity with/without hypothetical sleep protection
+  from bearer-owned state. Opening it never creates or confirms a revision.
+  See `docs/exam-week-outlook-v1-contract.md`.
 - `/v1/coach/capabilities`, `/v1/coach/history`, and `/v1/coach/memories` are
   authenticated read/control boundaries that do not generate a reply.
   `POST /v1/coach/respond` is the only deliberate model-call path. Completed
@@ -582,8 +601,9 @@ runtime Tasks, Habits, and commitments remain `demo_seed` data; no active Goal
 rows are seeded. The student
 scenario is additionally enriched through the real backend services with
 current Today/Weekly Review output, all three Habit cadences, Focus history,
-Calendar Import, Preparation Plans, notification consent, and validated Coach
-history. All demo accounts use the local-only password `DemoPass123!`.
+Calendar Import, Preparation Plans including an active seven-day exam outlook,
+notification consent, and validated Coach history. All demo accounts use the
+local-only password `DemoPass123!`.
 
 ## Verification
 
@@ -687,7 +707,7 @@ checkout; the full run reported
 After Deadline Planner V1 was added, the full non-reset combined journey passed
 again on 2026-07-18 after the product-polish slice. It reported
 `E2E browser smoke passed for e2e-1784404040@example.test` and included the
-two-page Evening flow, compact Dashboard expansions, the weekly-review entry,
+then-current two-page Evening flow, compact Dashboard expansions, the weekly-review entry,
 planner lifecycle/projection, Calendar isolation, focus progress, RLS, Account
 Export, account deletion, and guest zero-call checks.
 
@@ -715,6 +735,18 @@ the compact zero-request review, deliberate full-editor transition, cancellation
 existing planner/RLS lifecycle, and strengthened exact Flutter-Web input
 checks. It remains local automated evidence and adds no participant, remote,
 installed-device, background, provider, localization, or outcome claim.
+
+Daily Capture V4 and Exam-Week Outlook V1 then passed the standard gate with
+`656` Flutter tests, the complete FastAPI suite with
+`865 passed, 1 skipped`, the non-destructive local Supabase preflight, the demo
+seed, and a debug Web build. The final full browser journey reported
+`E2E browser smoke passed for e2e-1785017076@example.test`. It covered a
+23:00/eight-hour Evening plan, a corrected 00:00–05:30 estimated sleep
+interval, a seven-day exam with a competing assignment, Planner-only status,
+explicit replan navigation, and unchanged active revisions before
+confirmation. This remains local deterministic evidence and adds no sleep
+diagnosis, automatic replanning, Notification, Today item, or deployed
+scheduler claim.
 
 With a fresh local database:
 
@@ -747,6 +779,8 @@ has the nvm bin directory on `PATH`.
   availability, staged Task/Habit reservations, commitments, and Today V2.
 - `docs/study-setup-v1-contract.md` - Optional focus/recovery rhythm, transient
   start ritual, semester planning, recovery reservations, and Setup authority.
+- `docs/exam-week-outlook-v1-contract.md` - Daily Capture V4 sleep estimates
+  and the read-only Planner exam/watch/overdue capacity outlook.
 - `docs/phase-3-executable-actions-contract.md` - Implemented executable task,
   habit, focus, and action-target contract.
 - `docs/phase-8-weekly-review-contract.md` - Bounded ISO-week facts,

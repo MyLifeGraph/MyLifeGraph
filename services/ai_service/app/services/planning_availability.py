@@ -85,6 +85,7 @@ def allocate_task_intervals(
     busy_sources: BusySources,
     deadline_at: datetime | None = None,
     daily_reserved_minutes: Mapping[date, int] | None = None,
+    plan_daily_reserved_minutes: Mapping[date, int] | None = None,
     account_daily_budget_minutes: int | None = None,
     max_blocks: int = 120,
     duration_increment_minutes: int = 1,
@@ -134,12 +135,13 @@ def allocate_task_intervals(
         deadline_at=deadline_at,
     )
     reserved = daily_reserved_minutes or {}
+    plan_reserved = plan_daily_reserved_minutes or {}
     daily_left = {
         day: (
-            max_daily_minutes
+            max(0, max_daily_minutes - plan_reserved.get(day, 0))
             if account_daily_budget_minutes is None
             else min(
-                max_daily_minutes,
+                max(0, max_daily_minutes - plan_reserved.get(day, 0)),
                 max(0, account_daily_budget_minutes - reserved.get(day, 0)),
             )
         )

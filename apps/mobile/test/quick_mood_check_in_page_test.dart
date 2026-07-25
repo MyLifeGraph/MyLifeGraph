@@ -15,6 +15,48 @@ import 'package:my_life_graph/features/snapshots/data/snapshot_api_data_source.d
 import 'package:my_life_graph/features/snapshots/presentation/providers/snapshot_providers.dart';
 
 void main() {
+  testWidgets('first Evening value shows eight hours but still requires a time',
+      (tester) async {
+    final store = _NoSleepPlanStore();
+    await _pumpEveningPage(tester, store);
+
+    await tester.tap(find.bySemanticsLabel('evening mood 7 of 10'));
+    await tester.tap(find.bySemanticsLabel('evening energy 7 of 10'));
+    await tester.tap(find.bySemanticsLabel('evening stress 3 of 10'));
+    await tester.pump();
+    await tester.tap(find.text('Next'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('8 h'), findsWidgets);
+    expect(
+      find.textContaining('becomes your current sleep plan'),
+      findsOneWidget,
+    );
+    final next = tester.widget<FilledButton>(
+      find.widgetWithText(FilledButton, 'Next'),
+    );
+    expect(next.onPressed, isNull);
+  });
+
+  testWidgets('latest Evening sleep plan prefills the next save',
+      (tester) async {
+    await _pumpEveningPage(tester, _RecordingCaptureStore());
+
+    await tester.tap(find.bySemanticsLabel('evening mood 7 of 10'));
+    await tester.tap(find.bySemanticsLabel('evening energy 7 of 10'));
+    await tester.tap(find.bySemanticsLabel('evening stress 3 of 10'));
+    await tester.pump();
+    await tester.tap(find.text('Next'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('23:00'), findsWidgets);
+    expect(find.text('8 h'), findsWidgets);
+    final next = tester.widget<FilledButton>(
+      find.widgetWithText(FilledButton, 'Next'),
+    );
+    expect(next.onPressed, isNotNull);
+  });
+
   testWidgets('authenticated evening failure retains exact draft for retry',
       (tester) async {
     final store = _FailOnceCaptureStore();
@@ -47,6 +89,8 @@ void main() {
     expect(first.tomorrowPriority, 'Protect the exact priority');
     expect(first.reflectionNote, 'Exact retry reflection');
     expect(first.specificBlocker, 'Exact retry blocker');
+    expect(first.plannedSleepTime, '23:00');
+    expect(first.sleepTargetMinutes, 480);
     expect(snapshotRefresh.targetDates, isEmpty);
 
     await _tapVisible(tester, find.text('Save evening check-in'));
@@ -79,6 +123,8 @@ void main() {
       ),
       findsOneWidget,
     );
+    await tester.tap(find.text('Next'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Next'));
     await tester.pumpAndSettle();
     expect(
@@ -192,6 +238,9 @@ Future<void> _completeEveningDraft(
   await tester.pump();
   await tester.tap(find.text('Next'));
   await tester.pumpAndSettle();
+  expect(find.text('Planned sleep time'), findsOneWidget);
+  await tester.tap(find.text('Next'));
+  await tester.pumpAndSettle();
 
   await _tapVisible(
     tester,
@@ -244,6 +293,9 @@ EveningShutdownDraft _eveningDraft({
     tomorrowPriority: 'Protect the exact priority',
     reflectionNote: reflectionNote,
     specificBlocker: specificBlocker,
+    plannedSleepTime: '23:00',
+    sleepTargetMinutes: 480,
+    branchVersion: dailyCaptureV4,
   );
 }
 
@@ -265,12 +317,21 @@ class _RecordingCaptureStore implements QuickCheckInStore {
   Future<DailyCaptureEntry?> loadToday(DateTime today) async => initial;
 
   @override
+  Future<EveningShutdownDraft?> loadLatestEvening() async =>
+      initial?.evening ?? _eveningDraft();
+
+  @override
   Future<void> saveEvening(EveningShutdownDraft draft) async {
     eveningAttempts.add(draft.normalized());
   }
 
   @override
   Future<void> saveMorning(MorningCalibrationDraft draft) async {}
+}
+
+class _NoSleepPlanStore extends _RecordingCaptureStore {
+  @override
+  Future<EveningShutdownDraft?> loadLatestEvening() async => null;
 }
 
 class _FailOnceCaptureStore extends _RecordingCaptureStore {

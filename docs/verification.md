@@ -7,7 +7,7 @@ tooling, and what remains future work.
 The current Setup/Goal/friction verification boundary is
 `docs/setup-personalization-retirement-contract.md`. Historical results later in
 this file remain records of their checkout; they do not redefine current
-Capture V3, Daily State V2, or Coach V2 expectations.
+Capture V4, Daily State V2, Exam-Week Outlook V1, or Coach V2 expectations.
 
 ## Verification Levels
 
@@ -55,8 +55,9 @@ retain `demo_seed` ownership and are not presented as Setup materialization.
 The student scenario then uses the production backend service classes to
 persist and validate:
 
-- current V3 Morning/Evening captures without friction, seven historical daily snapshots, eight
-  briefings, and all five decision-feedback outcomes;
+- current V4 Morning/Evening captures with derived sleep intervals and no
+  friction, seven historical daily snapshots, eight briefings, and all five
+  decision-feedback outcomes;
 - daily, selected-weekday, and weekly-target habits with complete, skipped,
   open, and missed opportunities plus completed, abandoned, and active Focus;
 - one current Weekly Review with both a staged replacement and a directly
@@ -141,8 +142,9 @@ accepted then stripped before comparison/storage, notification preferences to
 remain unchanged, Setup-owned Goals to be archived without touching
 manual/foreign Goals, only the intended Setup memories to be removed, and no
 post-Setup Recommendation generation. Daily State V2 tests cover every active
-capture taxonomy code; strict V2/V3 identity, enum, numeric, timestamp, and
-projection validation with friction ignored; unknown future metadata;
+capture taxonomy code; strict V2/V3/V4 branch identity, enum, numeric,
+timestamp, sleep-interval, and projection validation with friction ignored;
+unknown future metadata;
 legacy-only fallback; separate seven-day state versus requested statistics
 windows; Evening target/previous-day and Morning target-day freshness;
 `missing`, `partial`, `current`, and `stale` quality; all four modes and
@@ -266,6 +268,16 @@ seven consecutive profile-local dates, strict arithmetic and provenance, active
 confirmed-reservation totals, distinct active-plan counts, merged recurring
 Setup commitments, and honest no-budget/over-budget/error states without
 implying imported calendar or AI coverage.
+`exam-week-outlook-v1` coverage must separately prove exact profile-local
+`exam_week`/`watch`/`overdue` boundaries, assignments as capacity consumers but
+not activators, one warning-only exam buffer day, missed/future block
+arithmetic, deterministic deadline/exam/id ordering, every confirmed competing
+reservation, per-plan and account budgets, Study recovery, calendar consent,
+regular versus sleep-protected fit, missing sleep plan, DST gap/fold
+incompleteness, two-of-three recent shortfall, pending-preview overlap, bearer
+ownership, and a write-free GET. Flutter must cover loading/error/all modes,
+unknown capacity, card order, guest zero-call, navigation without proposal, and
+320 px/200-percent text.
 `preparation-workload-detail-v1` coverage must independently require a date in
 that current seven-day profile-local window; exact owner/date active-block
 filters; at most 50 unique plan/title/minute/block contributions whose sum
@@ -373,19 +385,23 @@ Current Flutter widget tests include:
   proves a Setup edit leaves consent, categories, quiet hours, and daily cap
   unchanged.
 - Capture-domain tests cover every bounded stress source, controllability,
-  and day-shape value; rating, half-hour sleep, date, and text boundaries;
+  and day-shape value; rating, sleep clock/target/interval, date, and text
+  boundaries; exact 02:00–10:00 and 23:00–07:00 derivation;
   omission of blank Evening optionals; and explicit inclusion of supplied
-  reflection, priority, and blocker. Compatibility tests read V2 friction and
-  old `gentle_tomorrow` metadata, ignore/sanitize them, and prove the next write
-  is friction-free V3.
+  reflection, priority, and blocker. Compatibility tests read V2/V3 friction
+  and old `gentle_tomorrow` metadata, ignore/sanitize them, preserve an
+  untouched older opposite branch explicitly, and require V4 fields when that
+  branch is edited.
 - Same-day merge tests cover Evening-then-Morning and Morning-then-Evening,
   replacing one branch without erasing the other, Morning-over-Evening energy
   precedence, removal of deliberately cleared optionals, preservation of
   foreign top-level metadata, and legacy V1 calendar-date compatibility.
 - Capture payload tests assert one merged `daily_logs` row with
-  `capture_version=daily-capture-v3`, nested `captures.evening|morning`, direct
+  `capture_version=daily-capture-v4`, nested `captures.evening|morning`, direct
   nullable compatibility values, and only explicitly available current
-  `behavioral_events`. Event identities remain stable across exact retry and
+  `behavioral_events`. Raw estimated/planned clocks stay only in Daily Log
+  metadata while `sleep_hours` and the Sleep event use the derived duration.
+  Event identities remain stable across exact retry and
   event metadata mirrors capture kind/date plus the relevant stress, priority,
   and day-shape context without friction.
 - Guest-store tests cover typed Evening/Morning JSON, both-order same-day merge,
@@ -810,10 +826,14 @@ the removed gentler control is asserted absent. Playwright lets the first
 exact draft remains available, then retries without creating another daily row
 or event set.
 
-The same browser user then completes `/morning-calibration` with sleep `5.5`,
-Morning energy `4`, and constrained day shape. Database assertions require
+The browser first saves Evening sleep start `23:00` with an eight-hour target.
+The same user then completes `/morning-calibration` after correcting the
+estimated start to `00:00`, selecting wake `05:30`, and observing the derived
+5.5-hour duration, with Morning energy `4` and constrained day shape. Database assertions require
 exactly one `(user_id, entry_date)` row with
-`metadata.capture_version=daily-capture-v3`, both nested capture branches,
+`metadata.capture_version=daily-capture-v4`, both nested V4 capture branches,
+aware raw Morning instants, exact 330-minute arithmetic, the target/source
+identity, and raw-field absence from linked event metadata,
 absent blank optional keys, mood/stress from Evening, sleep from Morning, and
 Morning energy taking precedence in `energy_level`. It requires every friction
 key to be absent from the daily row, events, Daily State, and Coach context. The
@@ -843,6 +863,12 @@ of current compound signals, and persist exactly one target-period row. The
 assertions require `explainable-daily-state-v2`, deterministic/no-baseline
 provenance, field-level non-friction evidence for the daily log, and absence of
 both original and edited free text from summary and signals.
+
+The Deadline Planner browser lifecycle also confirms one exam seven local days
+away plus one same-window competing assignment. Planner alone must show the
+Exam week/sleep/capacity card. The journey opens `Replan remaining time` only to
+the saved-value review, submits no proposal, and compares plan/revision/block
+state before and after the GET and navigation.
 
 After the Phase 1/2 assertions, the Phase 3 browser journey completes, undoes,
 skips, and undoes a manual habit; completes and undoes an active Setup-owned
@@ -1304,6 +1330,24 @@ The final combined browser journey reported
 reported no finding in the new migration; its remaining output is limited to
 the existing legacy `public."User"` reference and `legacy_index` warnings in
 the account-deletion RPC.
+
+Daily Capture V4 and Exam-Week Outlook V1 completed locally across
+2026-07-25–26 without a schema change. The complete FastAPI suite reported
+`865 passed, 1 skipped`; the standard source gate passed migration safety,
+stack hermeticity, clean Flutter analysis, all `656` Flutter tests, and Python
+compilation. The non-destructive local Supabase preflight confirmed exact
+migration history and repeated all `656` Flutter tests. The demo seed verified
+21 daily logs, eight briefings, four focus sessions, five calendar events,
+three preparation plans, and two Coach turns with Capture V4 sleep facts. A
+debug Flutter Web build succeeded. The final full browser journey reported
+`E2E browser smoke passed for e2e-1785017076@example.test`; it covered exact
+Evening retry identity with a 23:00/eight-hour plan, Morning correction to
+00:00–05:30 and 330 derived minutes, an active exam plus competing assignment,
+Planner-only outlook visibility, explicit replan navigation, and unchanged
+active plan/revision/block rows before confirmation. The GET remained
+read-only and no migration, Notification, Today item, or automatic plan change
+was added. This is local deterministic evidence only; it is not clinical,
+deployed, installed-device, longitudinal, or academic-outcome evidence.
 
 Phase 10 has focused fake-provider/process-runner, strict contract, service,
 migration, repository, controller, and widget tests in the checkout. Its

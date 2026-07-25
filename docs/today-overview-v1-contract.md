@@ -201,3 +201,7 @@ from tracked minutes, write to imported calendars, turn Focus into an
 obligation, learn from check-in free text, generate an AI plan, or claim that
 the app made a daily decision. It is a deterministic read projection over the
 user's saved facts plus existing derived preparation state.
+
+The separate `exam-week-outlook-v1` projection is Planner-only. Today does not
+request it, render its risk/sleep status, add it to progress, or create an
+agenda/Notification fact from it.

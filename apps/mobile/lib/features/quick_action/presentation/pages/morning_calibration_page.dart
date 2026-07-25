@@ -40,7 +40,7 @@ class _MorningCalibrationPageState
       eyebrow: 'MORNING · CHECK-IN',
       title: 'How are you starting today?',
       subtitle:
-          'Sleep duration and quality, current energy, and today\'s shape. Evening context stays untouched.',
+          'Estimate when sleep started and when you woke. Evening context stays untouched.',
       progress: 1,
       canGoBack: false,
       canContinue: _draft.isComplete,
@@ -59,19 +59,80 @@ class _MorningCalibrationPageState
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            'Sleep hours',
+            'Estimated sleep duration',
             style: Theme.of(context).textTheme.titleLarge,
           ),
           const SizedBox(height: AppSpacing.sm),
           Text(
-            'Rough half-hour steps are enough.',
+            'These are your own estimates, not objectively measured sleep.',
             style: Theme.of(context).textTheme.bodyMedium,
           ),
           const SizedBox(height: AppSpacing.md),
-          CaptureSleepHoursControl(
-            value: _draft.sleepHours,
+          Wrap(
+            spacing: AppSpacing.md,
+            runSpacing: AppSpacing.md,
+            children: [
+              SizedBox(
+                width: 260,
+                child: CaptureClockControl(
+                  label: 'Estimated sleep start',
+                  semanticLabel: 'estimated sleep start',
+                  value: _draft.estimatedSleepStartedAt == null
+                      ? null
+                      : dailyCaptureClock(
+                          _draft.estimatedSleepStartedAt!,
+                        ),
+                  quickValues: const ['22:00', '23:00', '00:00'],
+                  onChanged: _setEstimatedSleepStart,
+                ),
+              ),
+              SizedBox(
+                width: 260,
+                child: CaptureClockControl(
+                  label: 'Wake time',
+                  semanticLabel: 'estimated wake time',
+                  value: _draft.wokeAt == null
+                      ? null
+                      : dailyCaptureClock(_draft.wokeAt!),
+                  fallback: TimeOfDay.fromDateTime(DateTime.now()),
+                  quickValues: const ['05:30', '07:00', '08:00'],
+                  onChanged: _setWakeTime,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Container(
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surfaceContainerHighest,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Text(
+              _draft.estimatedSleepMinutes == null
+                  ? 'Choose an ordered interval of no more than 16 hours.'
+                  : formatCaptureMinutes(_draft.estimatedSleepMinutes!),
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.headlineMedium,
+            ),
+          ),
+          const SizedBox(height: AppSpacing.xl),
+          Text(
+            'Sleep target used for this night',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            _draft.sourceEveningCaptureId == null
+                ? 'No saved Evening sleep plan was available. Confirm the target you used.'
+                : 'Loaded from the latest saved Evening plan. You can correct it for this night.',
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+          const SizedBox(height: AppSpacing.md),
+          CaptureSleepTargetControl(
+            value: _draft.sleepTargetMinutes,
             onChanged: (value) => setState(
-              () => _draft = _draft.copyWith(sleepHours: value),
+              () => _draft = _draft.copyWith(sleepTargetMinutes: value),
             ),
           ),
           const SizedBox(height: AppSpacing.xl),
@@ -141,6 +202,56 @@ class _MorningCalibrationPageState
     );
   }
 
+  void _setEstimatedSleepStart(String value) {
+    _applySleepClocks(
+      start: value,
+      wake: _draft.wokeAt == null
+          ? dailyCaptureClock(DateTime.now())
+          : dailyCaptureClock(_draft.wokeAt!),
+    );
+  }
+
+  void _setWakeTime(String value) {
+    final start = _draft.estimatedSleepStartedAt;
+    if (start == null) {
+      setState(() {
+        _draft = _draft.copyWith(
+          wokeAt: _clockOnEntryDate(value),
+          estimatedSleepMinutes: null,
+          sleepHours: null,
+        );
+      });
+      return;
+    }
+    _applySleepClocks(start: dailyCaptureClock(start), wake: value);
+  }
+
+  void _applySleepClocks({
+    required String start,
+    required String wake,
+  }) {
+    final interval = estimatedSleepIntervalForLocalClocks(
+      entryDate: _draft.entryDate,
+      estimatedSleepStartedAt: start,
+      wokeAt: wake,
+    );
+    setState(() {
+      _draft = _draft.withSleepInterval(
+        estimatedSleepStartedAt: interval.estimatedSleepStartedAt,
+        wokeAt: interval.wokeAt,
+      );
+    });
+  }
+
+  DateTime _clockOnEntryDate(String value) {
+    final interval = estimatedSleepIntervalForLocalClocks(
+      entryDate: _draft.entryDate,
+      estimatedSleepStartedAt: '00:00',
+      wokeAt: value,
+    );
+    return interval.wokeAt;
+  }
+
   Future<void> _save() async {
     if (_isSaving || !_draft.isComplete) {
       return;
@@ -188,13 +299,38 @@ class _MorningCalibrationPageState
 
   Future<void> _loadToday() async {
     try {
-      final entry =
-          await ref.read(quickCheckInStoreProvider).loadToday(DateTime.now());
+      final store = ref.read(quickCheckInStoreProvider);
+      final results = await Future.wait<Object?>([
+        store.loadToday(DateTime.now()),
+        store.loadLatestEvening(),
+      ]);
+      final entry = results.first as DailyCaptureEntry?;
+      final sleepPlan = results.last as EveningShutdownDraft?;
       final saved = entry?.morning;
-      if (saved != null && mounted) {
+      if (mounted) {
+        var next = (saved ?? _draft).forEditing(sleepPlan: sleepPlan).copyWith(
+              capturedAt: saved == null ? null : _draft.capturedAt,
+            );
+        if (next.wokeAt == null) {
+          next = next.copyWith(
+            wokeAt: _clockOnEntryDate(dailyCaptureClock(DateTime.now())),
+          );
+        }
+        if (next.estimatedSleepStartedAt == null &&
+            sleepPlan?.plannedSleepTime != null) {
+          final interval = estimatedSleepIntervalForLocalClocks(
+            entryDate: next.entryDate,
+            estimatedSleepStartedAt: sleepPlan!.plannedSleepTime!,
+            wokeAt: dailyCaptureClock(next.wokeAt!),
+          );
+          next = next.withSleepInterval(
+            estimatedSleepStartedAt: interval.estimatedSleepStartedAt,
+            wokeAt: interval.wokeAt,
+          );
+        }
         setState(() {
-          _draft = saved.copyWith(capturedAt: _draft.capturedAt);
-          _loadedSavedCapture = true;
+          _draft = next;
+          _loadedSavedCapture = saved != null;
         });
       }
     } catch (_) {
