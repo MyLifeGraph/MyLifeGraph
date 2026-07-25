@@ -33,9 +33,16 @@ void main() {
     expect(rawIntake, isNotNull);
     final intake = jsonDecode(rawIntake!) as Map<String, dynamic>;
     final responses = intake['responses'] as Map<String, dynamic>;
-    expect(responses['primary_focus_areas'], ['focus']);
-    expect(responses['goals'], isEmpty);
-    expect(responses['friction_points'], isEmpty);
+    for (final retiredKey in const [
+      'primary_focus_areas',
+      'goals',
+      'friction_points',
+      'coaching_style',
+      'reminder_preference',
+      'context_note',
+    ]) {
+      expect(responses, isNot(contains(retiredKey)));
+    }
     expect(responses['routines'], isEmpty);
     expect(responses['fixed_commitments'], isEmpty);
     expect(jsonEncode(responses), isNot(contains('Math')));
@@ -51,7 +58,7 @@ void main() {
     await tester.tap(find.text('Save setup'));
     await tester.pump();
 
-    expect(find.text('Choose at least one focus area.'), findsOneWidget);
+    expect(find.text('Choose a typical weekday shape.'), findsOneWidget);
     expect(find.text('Required setup'), findsOneWidget);
   });
 
@@ -276,7 +283,6 @@ void main() {
     for (final label in [
       'stress source private_emotional',
       'stress influence hardly_controllable',
-      'primary friction emotional_load',
     ]) {
       final choice = find.bySemanticsLabel(label);
       await tester.ensureVisible(choice);
@@ -331,6 +337,7 @@ void main() {
     expect(evening['stress_source'], 'private_emotional');
     expect(evening['stress_controllability'], 'hardly_controllable');
     expect(evening['tomorrow_priority'], 'Protect the guest morning');
+    expect(evening.containsKey('main_friction'), isFalse);
     expect(evening.containsKey('additional_frictions'), isFalse);
     expect(evening.containsKey('reflection_note'), isFalse);
     expect(evening.containsKey('specific_blocker'), isFalse);
@@ -549,16 +556,10 @@ Future<void> _pumpTestApp(
 IntakeResponseDraft _requiredSetupDraft() {
   return const IntakeResponseDraft(
     displayName: null,
-    primaryFocusAreas: ['focus'],
-    goals: [],
-    frictionPoints: [],
     weekdayShape: 'flexible',
     bestEnergyWindow: 'morning',
-    coachingStyle: 'direct',
-    reminderPreference: IntakeReminderPreference(enabled: false),
     routines: [],
     fixedCommitments: [],
-    contextNote: null,
     calendarConnectionIntent: null,
   );
 }
@@ -580,16 +581,8 @@ Future<void> _startGuestAndFillRequiredSetup(WidgetTester tester) async {
   expect(find.text('Math'), findsNothing);
   expect(find.text('Build a steadier weekly routine'), findsNothing);
 
-  await tester.tap(find.widgetWithText(ChoiceChip, 'Focus'));
-  await tester.pump();
   await _selectDropdownValue(tester, 0, 'Flexible schedule');
   await _selectDropdownValue(tester, 1, 'Morning');
-  await _selectDropdownValue(tester, 2, 'Direct');
-  await tester.ensureVisible(
-    find.widgetWithText(ChoiceChip, 'Prefer no reminders'),
-  );
-  await tester.tap(find.widgetWithText(ChoiceChip, 'Prefer no reminders'));
-  await tester.pump();
 }
 
 Future<void> _selectDropdownValue(

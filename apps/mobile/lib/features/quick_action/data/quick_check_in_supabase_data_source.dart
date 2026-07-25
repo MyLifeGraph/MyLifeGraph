@@ -143,13 +143,16 @@ class QuickCheckInDailyRowMapper {
       ..remove('captures')
       ..remove('capture_id')
       ..remove('captured_at')
-      ..remove('context_note');
+      ..remove('context_note')
+      ..remove('main_friction')
+      ..remove('additional_frictions');
     final capturesRaw = metadata['captures'];
     final captureVersion = metadata['capture_version'];
-    if ((captureVersion == DailyCaptureEntry.captureVersion &&
-            capturesRaw == null) ||
-        (capturesRaw != null &&
-            captureVersion != DailyCaptureEntry.captureVersion)) {
+    final supportedCaptureVersion =
+        captureVersion == DailyCaptureEntry.captureVersion ||
+            captureVersion == DailyCaptureEntry.legacyCaptureVersion;
+    if ((supportedCaptureVersion && capturesRaw == null) ||
+        (capturesRaw != null && !supportedCaptureVersion)) {
       throw const FormatException('Capture metadata version is invalid.');
     }
     if (capturesRaw != null && capturesRaw is! Map) {
@@ -297,11 +300,6 @@ class QuickCheckInPayloadBuilder {
         'captured_at': origin.capturedAt!.toUtc().toIso8601String(),
       if (evening != null) ...{
         if (evening.focusBand != null) 'focus_band': evening.focusBand!.code,
-        'main_friction': evening.mainFriction!.code,
-        if (evening.additionalFrictions.isNotEmpty)
-          'additional_frictions': evening.additionalFrictions
-              .map((friction) => friction.code)
-              .toList(growable: false),
         if (evening.tomorrowPriority.isNotEmpty)
           'tomorrow_priority': evening.tomorrowPriority,
       },

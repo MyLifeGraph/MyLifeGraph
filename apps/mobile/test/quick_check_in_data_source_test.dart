@@ -8,8 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   group('Phase 1 capture domain', () {
-    test('accepts every bounded stress, friction, focus, and day-shape code',
-        () {
+    test('accepts every bounded stress, focus, and day-shape code', () {
       for (final value in StressSource.values) {
         expect(StressSource.fromCode(value.code), value);
       }
@@ -19,18 +18,14 @@ void main() {
       for (final value in FocusBand.values) {
         expect(FocusBand.fromCode(value.code), value);
       }
-      for (final value in MainFriction.values) {
-        expect(MainFriction.fromCode(value.code), value);
-      }
       for (final value in DayShape.values) {
         expect(DayShape.fromCode(value.code), value);
       }
       expect(() => StressSource.fromCode('other'), throwsFormatException);
-      expect(() => MainFriction.fromCode('other'), throwsFormatException);
       expect(() => DayShape.fromCode('other'), throwsFormatException);
     });
 
-    test('evening metadata omits blank text and keeps bounded frictions', () {
+    test('evening metadata omits blank text and all friction fields', () {
       final metadata = _evening()
           .copyWith(
             reflectionNote: '   ',
@@ -46,11 +41,8 @@ void main() {
         metadata,
         containsPair('stress_controllability', 'hardly_controllable'),
       );
-      expect(metadata, containsPair('main_friction', 'emotional_load'));
-      expect(metadata['additional_frictions'], [
-        'interruptions',
-        'hard_to_start',
-      ]);
+      expect(metadata, isNot(contains('main_friction')));
+      expect(metadata, isNot(contains('additional_frictions')));
       expect(metadata.containsKey('reflection_note'), isFalse);
       expect(metadata.containsKey('specific_blocker'), isFalse);
       expect(metadata.containsKey('gentle_tomorrow'), isFalse);
@@ -70,7 +62,7 @@ void main() {
     });
 
     test(
-        'strictly validates ratings, frictions, half-hour sleep, dates, and text bounds',
+        'strictly validates ratings, half-hour sleep, dates, and text bounds',
         () {
       expect(
         () => _evening().copyWith(stress: 11).validate(),
@@ -85,37 +77,6 @@ void main() {
               ).join(),
             )
             .validate(),
-        throwsFormatException,
-      );
-      expect(
-        () => _evening().copyWith(
-          additionalFrictions: const [
-            MainFriction.interruptions,
-            MainFriction.hardToStart,
-            MainFriction.lowEnergy,
-          ],
-        ).validate(),
-        throwsFormatException,
-      );
-      expect(
-        () => _evening().copyWith(
-          additionalFrictions: const [
-            MainFriction.interruptions,
-            MainFriction.interruptions,
-          ],
-        ).validate(),
-        throwsFormatException,
-      );
-      expect(
-        () => _evening().copyWith(
-          additionalFrictions: const [MainFriction.emotionalLoad],
-        ).validate(),
-        throwsFormatException,
-      );
-      expect(
-        () => _evening().copyWith(
-          additionalFrictions: const [MainFriction.noMajorFriction],
-        ).validate(),
         throwsFormatException,
       );
       expect(
@@ -178,9 +139,11 @@ void main() {
       expect(evening.containsKey('gentle_tomorrow'), isFalse);
     });
 
-    test('reads legacy gentle metadata but never writes it again', () {
+    test('reads V2 retired fields but rewrites friction-free V3 metadata', () {
       final legacy = {
         ..._evening().toMetadataJson(),
+        'main_friction': 'emotional_load',
+        'additional_frictions': ['interruptions', 'hard_to_start'],
         'gentle_tomorrow': true,
       };
 
@@ -189,10 +152,10 @@ void main() {
         entryDate: _entryDate,
       );
 
-      expect(parsed.additionalFrictions, [
-        MainFriction.interruptions,
-        MainFriction.hardToStart,
-      ]);
+      expect(parsed.mainFriction, isNull);
+      expect(parsed.additionalFrictions, isEmpty);
+      expect(parsed.toMetadataJson(), isNot(contains('main_friction')));
+      expect(parsed.toMetadataJson(), isNot(contains('additional_frictions')));
       expect(parsed.toMetadataJson().containsKey('gentle_tomorrow'), isFalse);
     });
 
@@ -241,7 +204,7 @@ void main() {
       expect(row['source'], 'quick_check_in');
       expect(row['steps'], isNull);
       final metadata = row['metadata'] as Map<String, dynamic>;
-      expect(metadata['capture_version'], 'daily-capture-v2');
+      expect(metadata['capture_version'], 'daily-capture-v3');
       expect(metadata['foreign_producer'], {'kept': true});
       final captures = metadata['captures'] as Map;
       expect(captures.keys, containsAll(['evening', 'morning']));
@@ -287,10 +250,8 @@ void main() {
         stress['metadata'],
         containsPair('stress_controllability', 'hardly_controllable'),
       );
-      expect(stress['metadata']['additional_frictions'], [
-        'interruptions',
-        'hard_to_start',
-      ]);
+      expect(stress['metadata'], isNot(contains('main_friction')));
+      expect(stress['metadata'], isNot(contains('additional_frictions')));
       final energy = mergedEvents.singleWhere(
         (event) => event['event_type'] == 'energy',
       );
@@ -362,10 +323,8 @@ void main() {
       expect(decoded.sleepHours, 5.5);
       expect(decoded.sleepQuality, 3);
       expect(decoded.stress, 8);
-      expect(decoded.evening?.additionalFrictions, [
-        MainFriction.interruptions,
-        MainFriction.hardToStart,
-      ]);
+      expect(decoded.evening?.mainFriction, isNull);
+      expect(decoded.evening?.additionalFrictions, isEmpty);
     });
   });
 
@@ -400,6 +359,9 @@ void main() {
       expect(evening.containsKey('reflection_note'), isFalse);
       expect(evening.containsKey('specific_blocker'), isFalse);
       expect(evening.containsKey('gentle_tomorrow'), isFalse);
+      expect(evening.containsKey('main_friction'), isFalse);
+      expect(evening.containsKey('additional_frictions'), isFalse);
+      expect((raw.single as Map)['captureVersion'], 'daily-capture-v3');
       expect(morning['sleep_quality'], 3);
     });
 
@@ -429,6 +391,36 @@ void main() {
       expect(value?.energy, 6);
       expect(value?.sleepHours, 7.5);
       expect(value?.stress, 5);
+    });
+
+    test('reads V2 guest capture and rewrites friction-free V3 storage',
+        () async {
+      final legacyEvening = {
+        ..._evening().toMetadataJson(),
+        'main_friction': 'emotional_load',
+        'additional_frictions': ['interruptions', 'hard_to_start'],
+      };
+      SharedPreferences.setMockInitialValues({
+        GuestQuickCheckInDataSource.storageKey: jsonEncode([
+          {
+            'entryDate': _entryDate,
+            'captureVersion': 'daily-capture-v2',
+            'captures': {'evening': legacyEvening},
+          },
+        ]),
+      });
+      final store = GuestQuickCheckInDataSource();
+
+      final values = await store.readAll();
+      final prefs = await SharedPreferences.getInstance();
+      final rewritten =
+          prefs.getString(GuestQuickCheckInDataSource.storageKey)!;
+
+      expect(values.single.evening?.mainFriction, isNull);
+      expect(values.single.evening?.additionalFrictions, isEmpty);
+      expect(rewritten, contains('daily-capture-v3'));
+      expect(rewritten, isNot(contains('main_friction')));
+      expect(rewritten, isNot(contains('additional_frictions')));
     });
 
     test('a new save can recover corrupted local storage', () async {
@@ -462,11 +454,6 @@ EveningShutdownDraft _evening({
     stressSource: StressSource.privateEmotional,
     stressControllability: StressControllability.hardlyControllable,
     focusBand: FocusBand.thirtyToSixtyMinutes,
-    mainFriction: MainFriction.emotionalLoad,
-    additionalFrictions: const [
-      MainFriction.interruptions,
-      MainFriction.hardToStart,
-    ],
     tomorrowPriority: 'Protect a calm start',
   );
 }

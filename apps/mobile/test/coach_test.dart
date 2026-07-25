@@ -82,6 +82,26 @@ void main() {
     expect(response.provenance.providerCalled, isTrue);
   });
 
+  test('response accepts paired V1 history and rejects mixed provenance', () {
+    final legacy = _copy(coachResponseJson());
+    final legacyProvenance = legacy['provenance'] as Map<String, dynamic>;
+    legacyProvenance
+      ..['prompt_version'] = 'controlled-coach-prompt-v1'
+      ..['context_version'] = 'coach-context-v1';
+    expect(
+      CoachResponse.fromJson(legacy).provenance.contextVersion,
+      'coach-context-v1',
+    );
+
+    final mixed = _copy(coachResponseJson());
+    (mixed['provenance'] as Map<String, dynamic>)['context_version'] =
+        'coach-context-v1';
+    expect(
+      () => CoachResponse.fromJson(mixed),
+      throwsA(isA<CoachContractException>()),
+    );
+  });
+
   test('response rejects nested extras, coercions, count mismatches, and nulls',
       () {
     final suggestionExtra = _copy(coachResponseJson());

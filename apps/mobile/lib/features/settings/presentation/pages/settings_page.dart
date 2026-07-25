@@ -100,7 +100,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             leading: const Icon(Icons.tune_outlined),
             title: const Text('Setup and commitments'),
             subtitle: const Text(
-              'Review goals, routine candidates, and fixed commitments.',
+              'Review routine candidates, study setup, and fixed commitments.',
             ),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => context.go('${AppRoutes.onboarding}?edit=1'),

@@ -134,16 +134,10 @@ AppProfile _profile({
 IntakeResponseDraft _requiredDraft() {
   return const IntakeResponseDraft(
     displayName: null,
-    primaryFocusAreas: ['focus'],
-    goals: [],
-    frictionPoints: [],
     weekdayShape: 'flexible',
     bestEnergyWindow: 'morning',
-    coachingStyle: 'direct',
-    reminderPreference: IntakeReminderPreference(enabled: false),
     routines: [],
     fixedCommitments: [],
-    contextNote: null,
     calendarConnectionIntent: null,
   );
 }

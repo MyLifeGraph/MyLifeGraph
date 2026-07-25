@@ -21,18 +21,15 @@ void main() {
 
   test('guest save, retry, prefill, and edit are revision-safe', () async {
     const firstRequestId = 'e7747bb1-714f-47e5-a36a-dae218573946';
-    const goalKey = 'e6621043-bdab-432b-ad80-cf53dfef0bd3';
+    const routineKey = '43175389-cb37-478c-b309-b9551b904453';
     const store = GuestSetupDataSource();
     final firstRequest = IntakeSetupSaveRequest(
       requestId: firstRequestId,
       baseRevision: 0,
       responses: _requiredDraft().copyWith(
-        goals: const [
-          IntakeGoalDraft(key: goalKey, title: 'Ship the real setup'),
-        ],
         routines: const [
           IntakeRoutineDraft(
-            key: '43175389-cb37-478c-b309-b9551b904453',
+            key: routineKey,
             title: 'Evening reset',
           ),
         ],
@@ -47,8 +44,8 @@ void main() {
     expect(saved.status, 'applied');
     expect(retry.revision, 1);
     expect(retry.intakeResponseId, saved.intakeResponseId);
-    expect(prefilled.responses?.goals.single.key, goalKey);
-    expect(prefilled.responses?.goals.single.title, 'Ship the real setup');
+    expect(prefilled.responses?.routines.single.key, routineKey);
+    expect(prefilled.responses?.routines.single.title, 'Evening reset');
     expect(
       prefilled.responses?.routines.single.status,
       IntakeRoutineStatus.candidate,
@@ -60,10 +57,10 @@ void main() {
       requestId: 'cc9b4111-04cb-4420-8d76-cc4c718d266b',
       baseRevision: 1,
       responses: prefilled.responses!.copyWith(
-        goals: [
-          prefilled.responses!.goals.single.copyWith(
-            title: 'Ship setup safely',
-            status: IntakeGoalStatus.archived,
+        routines: [
+          prefilled.responses!.routines.single.copyWith(
+            title: 'Reset after dinner',
+            status: IntakeRoutineStatus.archived,
           ),
         ],
       ),
@@ -71,12 +68,12 @@ void main() {
     final edited = await store.save(editRequest);
 
     expect(edited.revision, 2);
-    expect(edited.responses?.goals, hasLength(1));
-    expect(edited.responses?.goals.single.key, goalKey);
-    expect(edited.responses?.goals.single.title, 'Ship setup safely');
+    expect(edited.responses?.routines, hasLength(1));
+    expect(edited.responses?.routines.single.key, routineKey);
+    expect(edited.responses?.routines.single.title, 'Reset after dinner');
     expect(
-      edited.responses?.goals.single.status,
-      IntakeGoalStatus.archived,
+      edited.responses?.routines.single.status,
+      IntakeRoutineStatus.archived,
     );
   });
 
@@ -136,11 +133,30 @@ void main() {
     );
   });
 
-  test(
-      'same request id rejects changed content instead of silently applying it',
-      () async {
+  test('same request id ignores changes to retired content', () async {
     const store = GuestSetupDataSource();
     const requestId = '30c126a8-b8e3-4e8a-9884-ad30bc1dc1de';
+    final request = IntakeSetupSaveRequest(
+      requestId: requestId,
+      baseRevision: 0,
+      responses: _requiredDraft(),
+    );
+    await store.save(request);
+
+    final replay = await store.save(
+      request.copyWith(
+        responses: request.responses.copyWith(
+          contextNote: 'Changed after the request was sent',
+        ),
+      ),
+    );
+    expect(replay.revision, 1);
+    expect(replay.responses?.contextNote, isNull);
+  });
+
+  test('same request id rejects changed active content', () async {
+    const store = GuestSetupDataSource();
+    const requestId = '40c126a8-b8e3-4e8a-9884-ad30bc1dc1de';
     final request = IntakeSetupSaveRequest(
       requestId: requestId,
       baseRevision: 0,
@@ -152,7 +168,7 @@ void main() {
       () => store.save(
         request.copyWith(
           responses: request.responses.copyWith(
-            contextNote: 'Changed after the request was sent',
+            weekdayShape: 'school_or_work',
           ),
         ),
       ),
@@ -183,6 +199,14 @@ void main() {
 
     expect(state.responses?.goals, isEmpty);
     expect(state.responses?.frictionPoints, isEmpty);
+    final preferences = await SharedPreferences.getInstance();
+    final rewritten = preferences.getString(
+      GuestSetupDataSource.legacyIntakeKey,
+    )!;
+    expect(rewritten, isNot(contains('primary_focus_areas')));
+    expect(rewritten, isNot(contains('friction_points')));
+    expect(rewritten, isNot(contains('coaching_style')));
+    expect(rewritten, isNot(contains('reminder_preference')));
   });
 
   test('legacy migration drops only the exact keyless fake commitment',
@@ -304,16 +328,10 @@ void main() {
 IntakeResponseDraft _requiredDraft() {
   return const IntakeResponseDraft(
     displayName: 'Local Review',
-    primaryFocusAreas: ['focus'],
-    goals: [],
-    frictionPoints: [],
     weekdayShape: 'flexible',
     bestEnergyWindow: 'morning',
-    coachingStyle: 'direct',
-    reminderPreference: IntakeReminderPreference(enabled: false),
     routines: [],
     fixedCommitments: [],
-    contextNote: null,
     calendarConnectionIntent: null,
   );
 }

@@ -4,13 +4,17 @@ Status: implementation contract for the bounded deterministic Phase 8 weekly
 review. This contract builds on the Phase 3 Habit V1 command and recovery
 semantics. It is not an autonomous planning contract.
 
+The Goal-retirement rules in
+`docs/setup-personalization-retirement-contract.md` are now part of this
+contract: Weekly Review never loads, attributes, ranks, or proposes a Goal.
+
 ## Scope
 
 Phase 8 turns one explicit, completed profile-local ISO week into a short,
 persisted review. It summarizes only durable facts, produces at most two
 deterministic proposals, and leaves every user-owned goal, habit, task, and
 schedule row unchanged until the user explicitly confirms an already supported
-command.
+command. Retained Goal rows are outside the fact load entirely.
 
 The initial directly applicable proposal surface is deliberately narrow:
 
@@ -22,10 +26,10 @@ The initial directly applicable proposal surface is deliberately narrow:
 
 `keep` is an explanatory non-interactive note and makes no change. `replace`
 and `defer` remain non-interactive staged suggestions on this surface.
-Setup-owned habits and goals deep-link to Settings Setup with explicit no-auto-
-apply copy and without a generic write. Goal, task, schedule, and replacement
-mutations remain unavailable until each has a typed, atomic or otherwise
-recoverable command.
+Setup-owned habits deep-link to Settings Setup with explicit no-auto-apply copy
+and without a generic write. Task, schedule, and replacement mutations remain
+unavailable until each has a typed, atomic or otherwise recoverable command.
+Goals have no active surface or proposal path.
 
 Phase 8 does not add an LLM, Coach, calendar integration, notification,
 background worker, deployed weekly schedule, or autonomous plan rewrite.
@@ -123,7 +127,7 @@ is stored both in the table column and provenance.
 The strict fact object contains exactly these nonnegative counters:
 
 - `tasks`: `completed`, `carried`, `overdue_carried`, `cancelled`,
-  `goal_linked_completed`;
+  `goal_linked_completed`. The retained V1 compatibility field is always `0`;
 - `habits`: `active`, `paused`, `archived`, `stable_definitions`,
   `changed_definitions`, `scheduled_opportunities`, `completed`, `skipped`,
   `missed`, `recovery_open`, `unknown`;
@@ -133,7 +137,7 @@ The strict fact object contains exactly these nonnegative counters:
 - `feedback`: `total`, `done`, `later`, `not_helpful`, `too_much`,
   `does_not_fit`.
 
-### Tasks And Goal Actions
+### Tasks
 
 - A completed task is a currently terminal `done` row whose authoritative
   `completed_at` falls inside the profile-local week.
@@ -141,9 +145,8 @@ The strict fact object contains exactly these nonnegative counters:
   the reviewed week. It is not a claim that the user postponed or ignored it.
 - A task completion that was later restored is absent from current durable
   terminal evidence and cannot be reconstructed.
-- Goal-action attribution is accepted only when bounded task metadata points to
-  a goal owned by the same user. Metadata alone is not trusted as ownership.
-- There is no Phase 8 task-transition or goal-history reconstruction.
+- Goal metadata is ignored. There is no Phase 8 task-transition or Goal-history
+  reconstruction.
 
 ### Habit Opportunities
 
@@ -180,8 +183,9 @@ It is separate explanatory evidence and prevents punitive proposal wording.
 - Focus uses the persisted local `metadata.entry_date`, with the existing UTC
   `started_at` fallback only for legacy or invalid metadata.
 - A recovery day is counted only from a valid persisted daily snapshot whose
-  strict `explainable-daily-state-v1` target date matches that local day and
-  whose mode is `recover`.
+  strict `explainable-daily-state-v1` or current
+  `explainable-daily-state-v2` target date matches that local day and whose mode
+  is `recover`. V1 is read only for compatible historical rows.
 - Missing daily snapshots remain missing evidence; averages do not fabricate a
   recovery day.
 - Decision feedback is historical preference evidence. `feedback_type=done`

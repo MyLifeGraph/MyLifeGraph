@@ -59,12 +59,7 @@ class FakeIntakeService:
 
 def summary() -> SnapshotSummary:
     return SnapshotSummary(
-        primary_focus_areas=["focus", "energy"],
-        goals=["Protect focus time"],
-        friction_points=[],
         best_energy_window="morning",
-        coaching_style="direct",
-        reminder_enabled=True,
         fixed_commitment_count=1,
         existing_habit_count=0,
         routine_candidate_count=1,
@@ -198,7 +193,14 @@ def test_complete_intake_with_principal_returns_canonical_setup_envelope() -> No
     assert body["status"] == "applied"
     assert body["intake_response_id"] == "intake-123"
     assert body["snapshot_id"] == "snapshot-123"
-    assert body["responses"]["goals"][0]["key"] == GOAL_KEY
+    assert {
+        "primary_focus_areas",
+        "goals",
+        "friction_points",
+        "coaching_style",
+        "reminder_preference",
+        "context_note",
+    }.isdisjoint(body["responses"])
     assert body["responses"]["routines"][0]["status"] == "candidate"
     assert body["summary"]["routine_candidate_count"] == 1
     service = response.extensions["app"].state.intake_service
@@ -294,7 +296,7 @@ def test_complete_intake_rejects_reversed_commitment_validity_range() -> None:
 
 def test_complete_intake_rejects_duplicate_keys_across_kinds() -> None:
     payload = valid_payload()
-    payload["responses"]["routines"][0]["key"] = GOAL_KEY  # type: ignore[index]
+    payload["responses"]["routines"][0]["key"] = COMMITMENT_KEY  # type: ignore[index]
 
     response = asyncio.run(
         request(
@@ -308,10 +310,9 @@ def test_complete_intake_rejects_duplicate_keys_across_kinds() -> None:
     assert response.status_code == 422
 
 
-def test_disabled_reminders_may_omit_quiet_hours() -> None:
+def test_legacy_reminder_is_accepted_but_removed_before_validation() -> None:
     payload = valid_payload()
     payload["responses"]["reminder_preference"] = {"enabled": False}  # type: ignore[index]
     parsed = IntakeResponses.model_validate(payload["responses"])
 
-    assert parsed.reminder_preference.enabled is False
-    assert parsed.reminder_preference.quiet_hours is None
+    assert "reminder_preference" not in parsed.model_dump(mode="json")

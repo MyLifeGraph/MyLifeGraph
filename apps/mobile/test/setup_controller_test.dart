@@ -156,18 +156,18 @@ void main() {
     await _settleController();
     final requestId = controller.state.requestId;
     final draft =
-        _requiredDraft().copyWith(contextNote: 'Keep this exact note');
+        _requiredDraft().copyWith(displayName: 'Keep this exact name');
     controller.updateDraft(draft);
 
     expect(await controller.save(), isFalse);
     expect(controller.state.requestId, requestId);
-    expect(controller.state.draft?.contextNote, 'Keep this exact note');
+    expect(controller.state.draft?.displayName, 'Keep this exact name');
     expect(controller.state.saveError, isNotNull);
     expect(controller.state.retryLocked, isTrue);
     controller.updateDraft(
-      draft.copyWith(contextNote: 'A changed payload must be ignored'),
+      draft.copyWith(displayName: 'A changed payload must be ignored'),
     );
-    expect(controller.state.draft?.contextNote, 'Keep this exact note');
+    expect(controller.state.draft?.displayName, 'Keep this exact name');
 
     expect(await controller.save(), isTrue);
     expect(gateway.requests, hasLength(2));
@@ -175,7 +175,7 @@ void main() {
     expect(gateway.requests[0].baseRevision, 0);
     expect(gateway.requests[1].baseRevision, 0);
     expect(gateway.requests[1].toJson(), gateway.requests[0].toJson());
-    expect(applied?.contextNote, 'Keep this exact note');
+    expect(applied?.displayName, 'Keep this exact name');
   });
 
   test('HTTP 422 keeps the draft editable for correction and retry', () async {
@@ -190,20 +190,20 @@ void main() {
     );
     addTearDown(controller.dispose);
     await _settleController();
-    final original = _requiredDraft().copyWith(contextNote: 'Needs fixing');
+    final original = _requiredDraft().copyWith(displayName: 'Needs fixing');
     controller.updateDraft(original);
 
     expect(await controller.save(), isFalse);
     expect(controller.state.retryLocked, isFalse);
     expect(controller.state.reloadSuggested, isFalse);
 
-    final corrected = original.copyWith(contextNote: 'Corrected value');
+    final corrected = original.copyWith(displayName: 'Corrected value');
     controller.updateDraft(corrected);
-    expect(controller.state.draft?.contextNote, 'Corrected value');
+    expect(controller.state.draft?.displayName, 'Corrected value');
     expect(await controller.save(), isTrue);
     expect(gateway.requests, hasLength(2));
-    expect(gateway.requests.first.responses.contextNote, 'Needs fixing');
-    expect(gateway.requests.last.responses.contextNote, 'Corrected value');
+    expect(gateway.requests.first.responses.displayName, 'Needs fixing');
+    expect(gateway.requests.last.responses.displayName, 'Corrected value');
   });
 
   test('HTTP 409 stays editable and prompts a reload', () async {
@@ -218,15 +218,15 @@ void main() {
     );
     addTearDown(controller.dispose);
     await _settleController();
-    final original = _requiredDraft().copyWith(contextNote: 'Stale edit');
+    final original = _requiredDraft().copyWith(displayName: 'Stale edit');
     controller.updateDraft(original);
 
     expect(await controller.save(), isFalse);
     expect(controller.state.retryLocked, isFalse);
     expect(controller.state.reloadSuggested, isTrue);
 
-    controller.updateDraft(original.copyWith(contextNote: 'Still editable'));
-    expect(controller.state.draft?.contextNote, 'Still editable');
+    controller.updateDraft(original.copyWith(displayName: 'Still editable'));
+    expect(controller.state.draft?.displayName, 'Still editable');
     expect(controller.state.reloadSuggested, isTrue);
   });
 
@@ -243,20 +243,20 @@ void main() {
     );
     addTearDown(controller.dispose);
     await _settleController();
-    final submitted = _requiredDraft().copyWith(contextNote: 'Exact payload');
+    final submitted = _requiredDraft().copyWith(displayName: 'Exact payload');
     controller.updateDraft(submitted);
 
     expect(await controller.save(), isFalse);
     expect(controller.state.retryLocked, isTrue);
-    controller.updateDraft(submitted.copyWith(contextNote: 'Ignored edit'));
-    expect(controller.state.draft?.contextNote, 'Exact payload');
+    controller.updateDraft(submitted.copyWith(displayName: 'Ignored edit'));
+    expect(controller.state.draft?.displayName, 'Exact payload');
   });
 
   test('pending setup locks edits and resumes exact request and base revision',
       () async {
     const pendingRequestId = '250028f2-9a68-425a-a7d3-3a65dcaa3be5';
     final pendingDraft = _requiredDraft().copyWith(
-      contextNote: 'Pending exact content',
+      displayName: 'Pending exact name',
     );
     final gateway = _FakeSetupGateway(
       fetched: IntakeSetupReadState(
@@ -283,16 +283,16 @@ void main() {
     expect(controller.state.isPending, isTrue);
     expect(controller.state.requestId, pendingRequestId);
     controller.updateDraft(
-      pendingDraft.copyWith(contextNote: 'This edit must be ignored'),
+      pendingDraft.copyWith(displayName: 'This edit must be ignored'),
     );
-    expect(controller.state.draft?.contextNote, 'Pending exact content');
+    expect(controller.state.draft?.displayName, 'Pending exact name');
 
     expect(await controller.save(), isTrue);
     expect(gateway.requests.single.requestId, pendingRequestId);
     expect(gateway.requests.single.baseRevision, 3);
     expect(
-      gateway.requests.single.responses.contextNote,
-      'Pending exact content',
+      gateway.requests.single.responses.displayName,
+      'Pending exact name',
     );
   });
 
@@ -614,16 +614,10 @@ AppSession _authenticatedUtcSession() {
 IntakeResponseDraft _requiredDraft() {
   return const IntakeResponseDraft(
     displayName: null,
-    primaryFocusAreas: ['focus'],
-    goals: [],
-    frictionPoints: [],
     weekdayShape: 'flexible',
     bestEnergyWindow: 'morning',
-    coachingStyle: 'direct',
-    reminderPreference: IntakeReminderPreference(enabled: false),
     routines: [],
     fixedCommitments: [],
-    contextNote: null,
     calendarConnectionIntent: null,
   );
 }

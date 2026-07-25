@@ -268,7 +268,6 @@ def test_user_context_repository_scopes_every_read_to_explicit_user_id() -> None
         "daily_logs",
         "behavioral_events",
         "tasks",
-        "user_state_snapshots",
     }
     assert all(
         params["user_id"] == "eq.user-test-123"

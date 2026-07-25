@@ -91,6 +91,25 @@ def test_persisted_response_parses_identity_without_content_coercion() -> None:
         CoachResponse.model_validate(invalid)
 
 
+def test_persisted_response_requires_paired_prompt_and_context_versions() -> None:
+    current = _response_json()
+    current["provenance"].update(
+        {
+            "prompt_version": "controlled-coach-prompt-v2",
+            "context_version": "coach-context-v2",
+        },
+    )
+    assert (
+        CoachResponse.model_validate(current).provenance.context_version
+        == "coach-context-v2"
+    )
+
+    mixed = _response_json()
+    mixed["provenance"]["prompt_version"] = "controlled-coach-prompt-v2"
+    with pytest.raises(ValidationError):
+        CoachResponse.model_validate(mixed)
+
+
 @pytest.mark.parametrize("provider_called", [False, True])
 def test_deterministic_safety_provenance_accepts_bypass_and_post_provider_redirect(
     provider_called: bool,

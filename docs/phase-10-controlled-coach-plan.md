@@ -11,6 +11,11 @@ non-destructively on 2026-07-13 in the working tree based on `b8c7935`:
 authenticated Flutter -> FastAPI -> `local_codex_oauth` -> the same Linux
 user's logged-in Codex CLI -> validated and persisted `coach-response-v1`.
 
+New claims now use `coach-context-v2` and `controlled-coach-prompt-v2` under
+`docs/setup-personalization-retirement-contract.md`. Persisted V1 history and
+exact replay remain readable; the historical 2026-07-13 run below remains a V1
+verification record rather than a claim about the new context.
+
 ## Implemented Boundary
 
 The current checkout includes:
@@ -23,10 +28,11 @@ The current checkout includes:
   configuration/rules, read-only sandbox, strict schema, feature disabling,
   allowlisted environment, bounded process I/O/events/time/concurrency, process-
   group termination, sanitized errors, and unexpected tool-event rejection;
-- a deterministic 32 KiB `coach-context-v1` builder over owner-scoped current
-  state, briefing, active goals/tasks/habits/focus, only a current weekly review,
-  up to eight explicitly selected eligible memories, and up to six completed
-  turns, with an exact source/count/freshness manifest;
+- a deterministic 32 KiB `coach-context-v2` builder over owner-scoped sanitized
+  current state, briefing, active Tasks/Habits/focus, only a current weekly
+  review, up to eight explicitly selected eligible memories, and up to six
+  completed turns, with an exact source/count/freshness manifest; Goals,
+  onboarding preferences, coaching style, and friction are excluded;
 - deterministic urgent-risk provider bypass and post-provider safety/
   uncertainty checks;
 - `coach_requests`, `coach_usage_events`, and `coach_memory_selections`, plus
@@ -72,7 +78,10 @@ The additive hardening chain after the base Coach schema is:
   fallback from role authority and revokes authenticated profile deletion; and
 - `20260713230000_phase_10_onboarding_eligibility_guard.sql` revokes
   authenticated `onboarding_completed_at` updates and keeps that projection
-  behind service-role/atomic Intake apply authority.
+  behind service-role/atomic Intake apply authority; and
+- `20260725120000_retire_setup_goals_and_friction.sql` admits paired V2
+  prompt/context provenance for new claims while retaining paired V1
+  history/replay validation.
 
 ## Outcome
 
@@ -90,7 +99,8 @@ must never receive or copy Codex OAuth credentials.
 The implemented slice is deliberately narrow:
 
 - one explicit user submit to an authenticated Coach endpoint;
-- one bounded `coach-context-v1` package built by FastAPI;
+- one bounded `coach-context-v2` package built by FastAPI under
+  `controlled-coach-prompt-v2`;
 - one schema-validated `coach-response-v1` answer;
 - visible data-use, model, prompt, freshness, and uncertainty provenance;
 - no hidden state mutation, background call, or autonomous agent loop.
@@ -128,7 +138,7 @@ The implemented slice is deliberately narrow:
    captures, task/habit/focus writes, scheduled preparation, recommendation
    generation, and weekly review remain no-LLM paths.
 9. Suggestions are review-only. Phase 10 must not directly create, edit,
-   complete, postpone, archive, or delete a task, habit, schedule item, goal,
+   complete, postpone, archive, or delete a task, habit, schedule item,
    memory, briefing, review, or calendar row.
 10. No memory is inferred or promoted automatically. Only explicitly selected,
     reviewable memory may enter context.
@@ -348,8 +358,8 @@ FastAPI attaches request identity and provenance that the model cannot invent:
     "model_requested": null,
     "model_reported": null,
     "model_source": "cli_default|explicit",
-    "prompt_version": "controlled-coach-prompt-v1",
-    "context_version": "coach-context-v1",
+    "prompt_version": "controlled-coach-prompt-v2",
+    "context_version": "coach-context-v2",
     "generated_at": "RFC3339 UTC",
     "provider_called": true
   }
@@ -374,13 +384,14 @@ read-only `CoachContextRepository` that may reach relevant canonical tables for
 the bearer-derived owner, then builds a deterministic compact package. The LLM
 cannot query Supabase itself.
 
-The first `today` package should contain only:
+The current `today` package contains only:
 
-- profile-local date/timezone and explicit coaching preference, without email
-  or auth/provider identifiers;
-- the exact current daily snapshot and `explainable-daily-state-v1` summary;
+- profile-local date/timezone, without email, auth/provider identifiers, or
+  onboarding/coaching preference;
+- the exact current daily snapshot and sanitized
+  `explainable-daily-state-v1|v2` summary;
 - the current persisted `daily-briefing-v1`, including freshness and evidence;
-- bounded active goal, task, habit, and current/recent focus summaries needed
+- bounded active Task, Habit, and current/recent focus summaries needed
   to explain today's decision;
 - the latest completed weekly review only when its freshness is explicit;
 - at most eight explicitly Coach-selected memory entries;
@@ -391,7 +402,7 @@ context should be capped at 32 KiB before provider invocation. When facts do not
 fit, truncate deterministically and disclose counts in `used_context`. Do not
 let the model claim it saw rows that were omitted.
 
-Excluded in v1:
+Excluded in V2:
 
 - Supabase tokens, service-role credentials, email, auth metadata, internal
   roles, or cross-user rows;
@@ -400,27 +411,24 @@ Excluded in v1:
   raw `.ics` content;
 - check-in context notes, intake free text, notification bodies, or other
   hidden free text unless a later explicit consent contract names it;
+- Goals, onboarding preferences, coaching style, and all primary/additional
+  friction fields;
 - archived/deleted objects except when an exact current contract needs a
   non-sensitive status count;
 - raw deterministic prompt internals or secrets in model-visible provenance.
 
 Allowlisted structured Daily State context is separate from hidden free text.
-It may include the bounded primary-friction code and up to two validated
-additional-friction codes. Those additional codes can help Coach explain
-context, but they do not affect the deterministic Daily Mode classifier. It
-also keeps Morning `sleep_hours` and the independent bounded
+It keeps Morning `sleep_hours` and the independent bounded
 `sleep_quality` rating as separate numeric facts so the Coach cannot equate
 duration with restorativeness.
 
-User text, task titles, goal titles, and memory content are untrusted data, not
+User text, Task titles, and memory content are untrusted data, not
 system instructions. Serialize them as typed JSON inside explicit data
 delimiters and keep application instructions outside that data envelope.
 
-The current memory-selection repository excludes every `type=preference` row.
-Intake's hidden context note and coaching-style memory share that type without a
-stable sensitivity discriminator, so Phase 10 does not guess from titles or
-content. The structured coaching preference comes from the bounded onboarding
-snapshot projection instead.
+The current memory-selection repository excludes every `type=preference` or
+`type=goal` row. Retired Setup Goal/style/context memories are removed by the
+migration; Coach does not infer equivalent preferences from titles or content.
 
 Future Coach modes may add bounded historical retrieval across more of the life
 graph. They must add an explicit scope, source allowlist, limits, consent where
@@ -651,5 +659,5 @@ remains open, so Phase 10's full multi-developer acceptance is not complete:
 - vector search or model-controlled database tools;
 - imported calendar content in prompts;
 - automatic memory extraction/promotion;
-- executable task/habit/goal/schedule changes from Coach;
+- executable Task/Habit/schedule changes from Coach;
 - clinical, diagnostic, therapeutic, or emergency-monitoring features.

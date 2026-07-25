@@ -429,7 +429,11 @@ def _valid_daily_state(
     daily_state = summary.get("daily_state")
     if (
         not isinstance(daily_state, dict)
-        or daily_state.get("contract_version") != "explainable-daily-state-v1"
+        or daily_state.get("contract_version")
+        not in {
+            "explainable-daily-state-v1",
+            "explainable-daily-state-v2",
+        }
         or daily_state.get("target_date") != delivery_date.isoformat()
         or daily_state.get("mode") not in {"push", "steady", "recover", "plan"}
     ):

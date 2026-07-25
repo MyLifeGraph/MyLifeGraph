@@ -63,7 +63,7 @@ void main() {
     );
     expect(
       find.text(
-        'Review goals, routine candidates, and fixed commitments.',
+        'Review routine candidates, study setup, and fixed commitments.',
         skipOffstage: false,
       ),
       findsOneWidget,

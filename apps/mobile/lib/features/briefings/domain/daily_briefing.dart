@@ -399,7 +399,10 @@ class BriefingProvenance {
     );
     if (json['engine'] != 'deterministic' ||
         json['contract_version'] != dailyBriefingContractVersion ||
-        json['daily_state_contract_version'] != 'explainable-daily-state-v1' ||
+        !const {
+          'explainable-daily-state-v1',
+          'explainable-daily-state-v2',
+        }.contains(json['daily_state_contract_version']) ||
         json['executable_action_contract_version'] !=
             ExecutableActionTarget.contractVersion ||
         json['baseline'] != 'none' ||

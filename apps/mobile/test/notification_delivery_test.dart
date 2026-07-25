@@ -355,7 +355,7 @@ void main() {
 
     expect(find.text('Allow in-app banners?'), findsOneWidget);
     expect(
-      find.textContaining('Setup preference did not turn these on'),
+      find.textContaining('turn on only with your explicit consent'),
       findsOneWidget,
     );
     expect(repository.updates, isEmpty);

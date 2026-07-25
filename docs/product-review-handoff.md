@@ -2,7 +2,8 @@
 
 Status: current whole-product review entry point for the checkout containing
 this document, updated through Today Overview V2, Planner V1, Study Setup V1,
-and the Coach-enabled shell navigation on 2026-07-23.
+the Coach-enabled shell navigation, and Setup personalization retirement on
+2026-07-25.
 
 ## Objective
 
@@ -16,8 +17,10 @@ introduce model authority by default.
 
 The current checkout combines these implemented loops:
 
-1. Revision-safe Setup owns explicit preferences, optional goals/habits/fixed
-   commitments, and optional Study Setup. Study Setup may define focus/recovery
+1. Revision-safe Setup requires only Typical weekday and Best energy window,
+   with optional name, routines/Habits, fixed commitments, and Study Setup.
+   Goals and retired personalization answers are absent; Reminder settings are
+   independently owned by Settings. Study Setup may define focus/recovery
    rhythm, a transient start checklist, and current/next semester facts.
 2. Evening Shutdown and Morning Calibration persist explicit typed capture.
    Deterministic Daily State classifies freshness and capacity without an LLM.
@@ -57,6 +60,9 @@ The current checkout combines these implemented loops:
   the app is open. They are not push, system, email, or background delivery.
 - Setup semester dates and Study rhythm invalidate or mark affected staged plans
   honestly; they never silently rewrite active reservations.
+- Setup edits never change Reminder consent/categories/quiet hours/daily cap.
+  Evening Capture stores no primary/additional friction, and Goals have no
+  active product surface or evaluation role.
 - English is the only supported V1 interface language.
 - The prepared five-student study has not been run. Synthetic personas and test
   automation are not participant or longitudinal evidence.
@@ -65,6 +71,8 @@ The current checkout combines these implemented loops:
 
 - Can a new student understand Setup, optional Study Setup, Today, Quick
   actions, Planner, Focus, Preparation plans, Weekly Review, Inbox, and Coach?
+- Can Setup be completed with only weekday/energy, and can it be edited without
+  changing independently personalized Reminder settings?
 - Can the student distinguish a preview from a confirmed mutation everywhere?
 - Do Planner and Deadline Planner agree on Setup commitments, manual
   commitments, imported busy time, preparation reservations, recovery time,

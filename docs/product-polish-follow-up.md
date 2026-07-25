@@ -17,8 +17,9 @@ Implemented:
 - Notification settings, Inbox rows, and foreground banners consistently say
   that delivery is in-app while MyLifeGraph is open. They explicitly disclaim
   browser, phone-system, email, push, background-mobile, and deployed delivery.
-- Setup's reminder preference says that it stores a preference only. Enabling
-  foreground banners requires separate consent in Settings.
+- The former Setup Reminder preference has since been removed. Reminder
+  configuration and separate foreground consent belong only to Settings, and a
+  Setup save leaves them unchanged.
 - The Coach route is hard-disabled in release builds and whenever
   `APP_ENV=production`; a Flutter define cannot override that boundary. In a
   non-production debug/profile build it remains an explicit development
@@ -30,7 +31,8 @@ Implemented:
 
 Automated acceptance coverage proves production Coach gating, real-account
 Skillset absence without a data-source read, notification non-claims, and
-separate reminder preference versus foreground consent.
+separate Reminder configuration versus foreground consent; the later Setup
+retirement coverage proves Setup does not mutate either.
 
 ## 7. Plain-language And Localization Pass
 

@@ -61,8 +61,8 @@ integer from 5 through 60 minutes. Both use five-minute increments. The ordered
 preparation list has at most twelve entries. Each entry has one canonical
 lowercase UUID, a trimmed non-empty label of at most 120 characters, and an
 explicit boolean active state. Keys and case-insensitive labels are unique;
-keys are also unique across Setup goals, routines, fixed commitments, and
-preparation items.
+keys are also unique across Setup routines, fixed commitments, and preparation
+items. Retired legacy Goal keys are stripped before current validation.
 
 Semester names and course names are trimmed, non-empty strings of at most 120
 characters. Each semester end is on or after its start, and the next semester

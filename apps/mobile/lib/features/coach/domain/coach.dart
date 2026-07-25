@@ -3,8 +3,10 @@ const coachResponseContractVersion = 'coach-response-v1';
 const coachCapabilitiesContractVersion = 'coach-capabilities-v1';
 const coachHistoryContractVersion = 'coach-history-v1';
 const coachMemorySelectionContractVersion = 'coach-memory-selection-v1';
-const coachPromptVersion = 'controlled-coach-prompt-v1';
-const coachContextVersion = 'coach-context-v1';
+const coachPromptVersion = 'controlled-coach-prompt-v2';
+const coachContextVersion = 'coach-context-v2';
+const _legacyCoachPromptVersion = 'controlled-coach-prompt-v1';
+const _legacyCoachContextVersion = 'coach-context-v1';
 
 const coachMessageCodepoints = 2000;
 const coachContextBytes = 32768;
@@ -483,6 +485,12 @@ class CoachProvenance {
     final providerMode = CoachProviderMode.fromCode(json['provider_mode']);
     final modelSource = CoachModelSource.fromCode(json['model_source']);
     final providerCalled = json['provider_called'];
+    final promptVersion = json['prompt_version'];
+    final contextVersion = json['context_version'];
+    final versionsMatch = (promptVersion == coachPromptVersion &&
+            contextVersion == coachContextVersion) ||
+        (promptVersion == _legacyCoachPromptVersion &&
+            contextVersion == _legacyCoachContextVersion);
     if (source == null ||
         provider == null ||
         providerMode == null ||
@@ -490,8 +498,7 @@ class CoachProvenance {
         providerCalled is! bool ||
         source == CoachProvenanceSource.model && !providerCalled ||
         providerCalled && provider == CoachProviderName.disabled ||
-        json['prompt_version'] != coachPromptVersion ||
-        json['context_version'] != coachContextVersion) {
+        !versionsMatch) {
       throw const CoachContractException('Coach provenance is invalid.');
     }
     return CoachProvenance(
@@ -501,8 +508,8 @@ class CoachProvenance {
       modelRequested: _optionalBoundedText(json['model_requested'], 100),
       modelReported: _optionalBoundedText(json['model_reported'], 100),
       modelSource: modelSource,
-      promptVersion: coachPromptVersion,
-      contextVersion: coachContextVersion,
+      promptVersion: promptVersion as String,
+      contextVersion: contextVersion as String,
       generatedAt: _requiredAwareDateTime(json['generated_at']),
       providerCalled: providerCalled,
     );

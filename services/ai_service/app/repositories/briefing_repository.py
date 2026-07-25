@@ -15,6 +15,7 @@ from app.models.briefings import (
 class BriefingContext:
     snapshot: dict[str, Any]
     tasks: list[dict[str, Any]]
+    # Kept only so older in-process callers can construct the envelope.
     goals: list[dict[str, Any]]
     habits: list[dict[str, Any]]
     habit_logs: list[dict[str, Any]]
@@ -139,16 +140,6 @@ class SupabaseBriefingRepository:
                 "limit": "200",
             },
         )
-        goals = await self._client.select(
-            "goals",
-            params={
-                "select": "id,title,status,due_date,metadata,updated_at",
-                "user_id": f"eq.{user_id}",
-                "status": "eq.active",
-                "order": "updated_at.desc,id.asc",
-                "limit": "100",
-            },
-        )
         habits = await self._client.select(
             "habits",
             params={
@@ -203,7 +194,7 @@ class SupabaseBriefingRepository:
         return BriefingContext(
             snapshot=snapshot,
             tasks=tasks,
-            goals=goals,
+            goals=[],
             habits=habits,
             habit_logs=habit_logs,
             recommendations=recommendations,

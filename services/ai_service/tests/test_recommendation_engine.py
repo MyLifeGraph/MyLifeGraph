@@ -68,7 +68,7 @@ def daily_state_snapshot() -> UserStateSnapshotSignal:
         period_key=TODAY.isoformat(),
         summary={
             "daily_state": {
-                "contract_version": "explainable-daily-state-v1",
+                "contract_version": "explainable-daily-state-v2",
                 "mode": "recover",
                 "data_quality": "current",
                 "risk_flags": ["low_sleep"],
@@ -79,19 +79,12 @@ def daily_state_snapshot() -> UserStateSnapshotSignal:
     )
 
 
-def test_onboarding_snapshot_creates_initial_recommendations() -> None:
+def test_onboarding_snapshot_does_not_create_recommendations() -> None:
     candidates = RecommendationEngine().generate_candidates(
         summary(user_state_snapshots=[onboarding_snapshot()]),
     )
 
-    rule_ids = {candidate.rule_id for candidate in candidates}
-    assert "focus_protection" in rule_ids
-    assert "planning_reset" in rule_ids
-    assert all(
-        candidate.evidence_refs[0].table == "user_state_snapshots"
-        for candidate in candidates
-        if candidate.rule_id in {"focus_protection", "planning_reset"}
-    )
+    assert candidates == []
 
 
 def test_daily_state_snapshot_does_not_change_recommendation_ranking() -> None:

@@ -10,8 +10,8 @@ COACH_RESPONSE_CONTRACT_VERSION = "coach-response-v1"
 COACH_CAPABILITIES_CONTRACT_VERSION = "coach-capabilities-v1"
 COACH_HISTORY_CONTRACT_VERSION = "coach-history-v1"
 COACH_MEMORY_SELECTION_CONTRACT_VERSION = "coach-memory-selection-v1"
-COACH_CONTEXT_VERSION = "coach-context-v1"
-COACH_PROMPT_VERSION = "controlled-coach-prompt-v1"
+COACH_CONTEXT_VERSION = "coach-context-v2"
+COACH_PROMPT_VERSION = "controlled-coach-prompt-v2"
 
 COACH_MESSAGE_CODEPOINTS = 2_000
 COACH_CONTEXT_BYTES = 32_768
@@ -148,8 +148,11 @@ class CoachProvenance(BaseModel):
     model_requested: str | None = Field(default=None, max_length=100)
     model_reported: str | None = Field(default=None, max_length=100)
     model_source: CoachModelSource
-    prompt_version: Literal["controlled-coach-prompt-v1"]
-    context_version: Literal["coach-context-v1"]
+    prompt_version: Literal[
+        "controlled-coach-prompt-v1",
+        "controlled-coach-prompt-v2",
+    ]
+    context_version: Literal["coach-context-v1", "coach-context-v2"]
     generated_at: datetime = Field(strict=False)
     provider_called: bool
 
@@ -157,6 +160,14 @@ class CoachProvenance(BaseModel):
     def validate_provenance(self) -> Self:
         if self.generated_at.tzinfo is None:
             raise ValueError("generated_at must be timezone-aware")
+        if (
+            self.prompt_version,
+            self.context_version,
+        ) not in {
+            ("controlled-coach-prompt-v1", "coach-context-v1"),
+            ("controlled-coach-prompt-v2", "coach-context-v2"),
+        }:
+            raise ValueError("Coach prompt and context versions must match")
         if self.source == "model" and not self.provider_called:
             raise ValueError("model responses must call a provider")
         if self.provider_called and self.provider == "disabled":

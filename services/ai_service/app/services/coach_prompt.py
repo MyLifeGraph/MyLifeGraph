@@ -32,6 +32,8 @@ def build_coach_prompt(
         "professional/human monitoring.\n"
         "- The deterministic Daily State and daily briefing remain authoritative; "
         "do not invent missing facts.\n"
+        "- Do not infer goals, friction categories, or a coaching-style preference; "
+        "those are not Coach context sources.\n"
         "- Any suggestion is review-only. Never claim to create, edit, complete, "
         "postpone, archive, or delete product data.\n"
         "- State uncertainty honestly when context is missing, stale, partial, "

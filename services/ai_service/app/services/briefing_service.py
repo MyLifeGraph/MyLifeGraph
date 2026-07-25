@@ -297,7 +297,7 @@ def _build_briefing_row(
     provenance = BriefingProvenance(
         engine="deterministic",
         contract_version="daily-briefing-v1",
-        daily_state_contract_version="explainable-daily-state-v1",
+        daily_state_contract_version=DAILY_STATE_CONTRACT_VERSION,
         executable_action_contract_version="executable-action-v1",
         source_snapshot_id=str(snapshot["id"]),
         source_snapshot_generated_at=snapshot_generated_at,
@@ -351,7 +351,11 @@ def _daily_state(
     state = summary.get("daily_state") if isinstance(summary, dict) else None
     if not isinstance(state, dict):
         raise ValueError("Daily snapshot has no valid daily state.")
-    if state.get("contract_version") != DAILY_STATE_CONTRACT_VERSION:
+    source_contract = state.get("contract_version")
+    if source_contract not in {
+        "explainable-daily-state-v1",
+        DAILY_STATE_CONTRACT_VERSION,
+    }:
         raise ValueError("Daily snapshot uses an unsupported daily state contract.")
     if state.get("target_date") != briefing_date.isoformat():
         raise ValueError("Daily snapshot target date does not match the briefing.")
@@ -359,7 +363,67 @@ def _daily_state(
         raise ValueError("Daily snapshot mode is invalid.")
     if state.get("data_quality") not in {"missing", "partial", "current", "stale"}:
         raise ValueError("Daily snapshot data quality is invalid.")
-    return state
+    sanitized = dict(state)
+    sanitized["contract_version"] = DAILY_STATE_CONTRACT_VERSION
+    context = state.get("context")
+    if isinstance(context, dict):
+        sanitized["context"] = {
+            key: value
+            for key, value in context.items()
+            if key not in {"main_friction", "additional_frictions"}
+        }
+    sanitized["risk_flags"] = _without_retired_daily_codes(
+        state.get("risk_flags"),
+        source_contract=source_contract,
+    )
+    sanitized["reason_codes"] = _without_retired_daily_codes(
+        state.get("reason_codes"),
+        source_contract=source_contract,
+    )
+    reasons = state.get("reasons")
+    sanitized["reasons"] = [
+        {
+            **reason,
+            "evidence_refs": [
+                ref
+                for ref in reason.get("evidence_refs", [])
+                if isinstance(ref, dict)
+                and ref.get("table") != "goals"
+                and "friction" not in str(ref.get("field") or "")
+            ],
+        }
+        for reason in reasons
+        if isinstance(reason, dict)
+        and not _retired_daily_code(
+            str(reason.get("code") or ""),
+            source_contract=source_contract,
+        )
+    ] if isinstance(reasons, list) else []
+    return sanitized
+
+
+def _without_retired_daily_codes(
+    value: Any,
+    *,
+    source_contract: Any,
+) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [
+        code
+        for code in value
+        if isinstance(code, str)
+        and not _retired_daily_code(code, source_contract=source_contract)
+    ]
+
+
+def _retired_daily_code(code: str, *, source_contract: Any) -> bool:
+    if "friction" in code or code == "plan_unclear_priorities":
+        return True
+    return source_contract == "explainable-daily-state-v1" and code in {
+        "overload",
+        "plan_overload",
+    }
 
 
 def _rank_candidates(
@@ -382,11 +446,6 @@ def _rank_candidates(
             ),
         )
 
-    active_goal_ids = {
-        str(row["id"])
-        for row in context.goals
-        if row.get("id") is not None and row.get("status") == "active"
-    }
     recommendation_by_category = _recommendation_by_category(
         context.recommendations,
     )
@@ -395,7 +454,6 @@ def _rank_candidates(
             task=task,
             briefing_date=briefing_date,
             mode=mode,
-            active_goal_ids=active_goal_ids,
             recommendation=recommendation_by_category.get(
                 "planning" if mode == "plan" else "focus",
             ),
@@ -409,7 +467,6 @@ def _rank_candidates(
             habit=habit,
             briefing_date=briefing_date,
             mode=mode,
-            active_goal_ids=active_goal_ids,
             outcomes=outcomes_by_habit.get(str(habit.get("id")), []),
         )
         if candidate is not None:
@@ -524,7 +581,6 @@ def _task_candidate(
     task: dict[str, Any],
     briefing_date: date,
     mode: str,
-    active_goal_ids: set[str],
     recommendation: dict[str, Any] | None,
 ) -> _Candidate | None:
     task_id = _uuid_string(task.get("id"))
@@ -541,17 +597,12 @@ def _task_candidate(
     priority = str(task.get("priority") or "medium")
     deadline = _parse_optional_date(task.get("deadline"))
     metadata = task.get("metadata") if isinstance(task.get("metadata"), dict) else {}
-    linked_goal = _string(metadata.get("goal_id"))
-    goal_relevant = linked_goal in active_goal_ids if linked_goal else False
-
     score = {"low": 100, "medium": 180, "high": 270, "critical": 360}.get(
         priority,
         150,
     )
     if task.get("status") == "in_progress":
         score += 55
-    if goal_relevant:
-        score += 90
     if deadline is not None:
         days = (deadline - briefing_date).days
         score += 320 if days < 0 else 230 if days == 0 else 140 if days <= 3 else 20
@@ -575,16 +626,11 @@ def _task_candidate(
         evidence.append(
             BriefingEvidenceRef(table="tasks", id=task_id, field="deadline"),
         )
-    if goal_relevant and linked_goal is not None:
-        evidence.append(
-            BriefingEvidenceRef(table="goals", id=linked_goal, field="status"),
-        )
     reason = _task_reason(
         priority=priority,
         deadline=deadline,
         briefing_date=briefing_date,
         estimate=estimate,
-        goal_relevant=goal_relevant,
         mode=mode,
     )
     action = BriefingAction(
@@ -612,7 +658,6 @@ def _habit_candidate(
     habit: dict[str, Any],
     briefing_date: date,
     mode: str,
-    active_goal_ids: set[str],
     outcomes: list[dict[str, Any]],
 ) -> _Candidate | None:
     habit_id = _uuid_string(habit.get("id"))
@@ -649,9 +694,7 @@ def _habit_candidate(
         if completed >= weekly_target:
             return None
 
-    linked_goal = _string(metadata.get("goal_id"))
-    goal_relevant = linked_goal in active_goal_ids if linked_goal else False
-    score = 210 + (80 if goal_relevant else 0)
+    score = 210
     if mode == "recover":
         score += 160
     elif mode == "steady":
@@ -662,10 +705,6 @@ def _habit_candidate(
     evidence = [
         BriefingEvidenceRef(table="habits", id=habit_id, field="metadata.cadence"),
     ]
-    if goal_relevant and linked_goal is not None:
-        evidence.append(
-            BriefingEvidenceRef(table="goals", id=linked_goal, field="status"),
-        )
     action = BriefingAction(
         target=ExecutableActionTarget(
             contract_version="executable-action-v1",
@@ -830,7 +869,6 @@ def _task_reason(
     deadline: date | None,
     briefing_date: date,
     estimate: int | None,
-    goal_relevant: bool,
     mode: str,
 ) -> str:
     if deadline is not None and deadline < briefing_date:
@@ -839,8 +877,6 @@ def _task_reason(
         return "This open task is due today and should be handled before lower urgency work."
     if mode == "recover" and estimate is not None and estimate <= 30:
         return "This is a bounded open task that fits today's reduced load."
-    if goal_relevant:
-        return "This open task is linked to an active goal."
     if priority in {"critical", "high"}:
         return "This is one of the highest-priority open tasks."
     return "This open task is the strongest remaining executable option."

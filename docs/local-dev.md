@@ -217,8 +217,8 @@ curl http://localhost:8000/v1/health
 Recommendation contract endpoints require an authenticated bearer token. PR1
 defined the contract; backend Supabase settings are now required for real
 token verification and recommendation persistence. In real backend mode,
-successful Intake V1 completion or edit also triggers a best-effort deterministic
-recommendation refresh from the constant onboarding snapshot. Read the newest
+successful Intake V1 completion or edit does not generate Recommendations.
+Runtime generation remains an explicit or scheduled action. Read the newest
 Setup row with:
 
 ```bash
@@ -237,7 +237,7 @@ retrying after a timeout:
 curl -X POST http://localhost:8000/v1/intake/complete \
   -H 'Authorization: Bearer <supabase_access_token>' \
   -H 'Content-Type: application/json' \
-  -d '{"version":"intake-v1","request_id":"11111111-1111-4111-8111-111111111111","base_revision":0,"responses":{"primary_focus_areas":["focus"],"goals":[{"key":"22222222-2222-4222-8222-222222222222","title":"Protect focus time","status":"active"}],"friction_points":[],"weekday_shape":"school_or_work","best_energy_window":"morning","coaching_style":"direct","reminder_preference":{"enabled":true,"quiet_hours":{"starts_at":"21:00","ends_at":"07:00"}},"routines":[{"key":"33333333-3333-4333-8333-333333333333","title":"Walk after lunch","status":"candidate","cadence_confirmed":false,"frequency":null,"target":null}],"fixed_commitments":[]},"metadata":{"client":"curl"}}'
+  -d '{"version":"intake-v1","request_id":"11111111-1111-4111-8111-111111111111","base_revision":0,"responses":{"weekday_shape":"school_or_work","best_energy_window":"morning","routines":[{"key":"33333333-3333-4333-8333-333333333333","title":"Walk after lunch","status":"candidate","cadence_confirmed":false,"frequency":null,"target":null}],"fixed_commitments":[]},"metadata":{"client":"curl"}}'
 ```
 
 For an edit, load Setup first, send its `revision` as the next request's
@@ -274,18 +274,19 @@ The snapshot endpoint also accepts `"scope":"weekly"` and an optional
 uses the backend service-role key only inside FastAPI.
 
 Daily and weekly responses add `summary.daily_state` and
-`signals.daily_state` under `explainable-daily-state-v1`. `window_days` remains
+`signals.daily_state` under `explainable-daily-state-v2`. `window_days` remains
 the statistics window; the Daily State parser always loads a separate fixed
 seven-day lookback. Evening is current on the target date or previous date,
 while Morning is current only on the target date. The resulting quality is
 `missing`, `partial`, `current`, or `stale`, and recovery safeguards precede
 `plan`, `push`, and the conservative `steady` fallback.
 
-V2 capture metadata is trusted only after strict identity, enum, numeric,
-timestamp, and projection checks. A malformed V2 row never falls back to its
-projected numeric columns. Numeric legacy fallback is available only when the
-row has no V2 marker. The source remains `snapshot-aggregator-v1`; metadata
-records `daily_state_contract_version=explainable-daily-state-v1` and
+V2/V3 capture metadata is trusted only after strict identity, enum, numeric,
+timestamp, and projection checks; friction keys are ignored. A malformed
+structured row never falls back to its projected numeric columns. Numeric
+legacy fallback is available only when the row has no V2/V3 marker. The source
+remains `snapshot-aggregator-v1`; metadata records
+`daily_state_contract_version=explainable-daily-state-v2` and
 `state_lookback_days=7`. Top-level `summary.risk_flags` aliases the current
 Daily State codes, while the older statistics-window flags remain separately in
 `summary.window_risk_flags`. `recommended_next_focus` is derived recovery-first
@@ -387,8 +388,9 @@ The response preserves `not_ready`, missing, current, or stale truth. Generation
 persists one backend-owned derived review and never applies its proposals. In
 Flutter, only an eligible manual Habit V1 shrink/pause/archive proposal can be
 confirmed through the existing exact timestamp/readback command. Setup-owned
-changes return to Setup; replace/defer and goal/task/schedule proposals remain
-staged. Guest/mock does not call this API or fabricate a local review.
+changes return to Setup; replace/defer and task/schedule proposals remain
+staged. Goals are not loaded, and `goal_linked_completed` remains zero.
+Guest/mock does not call this API or fabricate a local review.
 
 Phase 9 calendar import is also authenticated and optional. Read the current
 connection state without importing:
@@ -508,7 +510,7 @@ recommendations or create or change a plan. Guest/mock capture remains local.
 
 Evening and Morning writes merge into one `(user_id, entry_date)` `daily_logs`
 row. Phase 1 stores its bounded structured state under
-`metadata.capture_version=daily-capture-v2` and
+`metadata.capture_version=daily-capture-v3` and
 `metadata.captures.evening|morning`. Direct numeric columns remain compatible:
 Morning energy takes precedence when present, while mood and stress come from
 Evening and sleep comes from Morning. The writer reconciles the linked current
@@ -517,10 +519,9 @@ capture metadata onto those events. Sleep quality remains additive Morning
 metadata mirrored onto the existing Morning-origin events, so the maximum stays
 four. Blank Evening reflection, blocker, and
 tomorrow-priority answers stay absent and do not create other product records.
-Evening requires a primary friction (with `no_major_friction` as an explicit
-answer), allows up to two unique additional frictions, and no longer writes the
-retired `gentle_tomorrow` field. Legacy captures containing that field remain
-readable.
+Evening has no primary/additional friction selection and no longer writes the
+retired `gentle_tomorrow` field. Legacy V2 captures remain readable, but
+friction keys are ignored and the next save writes V3.
 
 Backend-only Supabase configuration for the AI service:
 
@@ -585,7 +586,7 @@ Dashboard loads remain GET-only, and this repository still contains no deployed
 cron, push, browser, Android, email, or background-mobile delivery wiring.
 
 Manage the separate foreground permission at Settings -> In-app reminders.
-The old Setup reminder preference is not permission. A manual local one-shot
+Setup never reads or changes Reminder consent/preferences. A manual local one-shot
 uses the same safe runner payload:
 
 ```bash
@@ -938,9 +939,11 @@ fabricating an intentional skip. Existing table RLS/grants remain.
 The earlier `20260710180000_atomic_intake_v1_setup_apply.sql` migration installs
 the service-role-only
 `apply_intake_v1_setup_revision` RPC. It serializes apply per user with a
-transaction advisory lock and atomically commits preferences, Setup-owned
-goals/habits/schedule/memory reconciliation, the canonical onboarding snapshot,
-applied intake state, and profile projection. During schedule reconciliation it
+transaction advisory lock. The current compatibility migration keeps the
+signature but ignores Goal and notification-preference arguments, archives
+Setup-owned Goals, and atomically reconciles only Habits, schedule/Study rows,
+the best-energy memory, the canonical onboarding snapshot, applied intake
+state, and profile projection. During schedule reconciliation it
 removes only the exact unmarked legacy onboarding placeholder `Math`,
 `Room 204`, Monday `08:15`-`09:45`; other manual or unmarked onboarding rows are
 preserved.
@@ -1180,15 +1183,16 @@ The E2E script starts local Supabase, starts the FastAPI AI service with the
 local Supabase backend settings and deterministic fake Coach provider, starts Flutter Web on `http://127.0.0.1:7357`,
 creates a confirmed local test user through the local Supabase admin API, signs
 in through the app, completes required-only Setup, exercises retry/edit/review
-and ownership-safe reconciliation, then walks Phase 1 Evening Shutdown and
-Morning Calibration. Its implemented assertions cover a committed
+and ownership-safe reconciliation, proves retired Setup fields stay absent and
+Reminder preferences remain unchanged, then walks Evening Shutdown and Morning
+Calibration. Its implemented assertions cover a committed
 `daily_logs` response loss followed by exact retry, same-day Evening/Morning
 merge, Evening re-entry/edit, one `daily_logs` row, nested
-`daily-capture-v2` metadata, absent blank optionals, four deduplicated linked
+`daily-capture-v3` metadata without friction, absent blank optionals, four deduplicated linked
 current events, Morning-over-Evening numeric energy precedence, capture-scoped
 snapshot refresh with `target_date`, and no recommendation-generate request
 during normal capture. The same responses and persisted row are checked for
-Phase 2 partial/current quality, recovery-first classification, exact stress/
+Daily State V2 partial/current quality, recovery-first classification, exact stress/
 sleep/energy/day-shape context, source-risk replacement after an Evening edit,
 stable same-period snapshot identity, field-level evidence, deterministic
 provenance, and capture free-text exclusion. It then continues through habit

@@ -21,14 +21,20 @@ void main() {
 
       final json = draft.toJson();
 
-      expect(json['goals'], isEmpty);
-      expect(json['friction_points'], isEmpty);
       expect(json['routines'], isEmpty);
       expect(json['fixed_commitments'], isEmpty);
-      expect(json, isNot(contains('context_note')));
+      for (final retiredKey in const [
+        'primary_focus_areas',
+        'goals',
+        'friction_points',
+        'coaching_style',
+        'reminder_preference',
+        'context_note',
+      ]) {
+        expect(json, isNot(contains(retiredKey)));
+      }
       expect(json, isNot(contains('calendar_connection_intent')));
       expect(json, isNot(contains('display_name')));
-      expect(json['reminder_preference'], {'enabled': false});
     });
 
     test('candidate remains inactive and has no implicit cadence or target',
@@ -92,11 +98,18 @@ void main() {
     test('stable keys must be unique across different setup item kinds', () {
       const duplicateKey = '3709c7bd-5828-440a-964f-130465a5f13c';
       final draft = _requiredDraft().copyWith(
-        goals: const [
-          IntakeGoalDraft(key: duplicateKey, title: 'One goal'),
-        ],
         routines: const [
           IntakeRoutineDraft(key: duplicateKey, title: 'One routine'),
+        ],
+        fixedCommitments: const [
+          IntakeCommitmentDraft(
+            key: duplicateKey,
+            title: 'One commitment',
+            location: null,
+            weekday: 1,
+            startsAt: '08:00',
+            endsAt: '09:00',
+          ),
         ],
       );
 
@@ -137,12 +150,6 @@ void main() {
       final draft = _requiredDraft().copyWith(
         displayName: _textOfLength(120),
         weekdayShape: _textOfLength(500),
-        goals: [
-          IntakeGoalDraft(
-            key: 'a26ef957-c789-49f3-af61-1c71a2549a61',
-            title: _textOfLength(200),
-          ),
-        ],
         routines: [
           IntakeRoutineDraft(
             key: 'b0d76c46-ed92-486c-857f-f2cfd5bb20e4',
@@ -159,7 +166,6 @@ void main() {
             endsAt: '09:45',
           ),
         ],
-        contextNote: _textOfLength(1000),
       );
 
       expect(draft.validationErrors(), isEmpty);
@@ -169,12 +175,6 @@ void main() {
       final draft = _requiredDraft().copyWith(
         displayName: _textOfLength(121),
         weekdayShape: _textOfLength(501),
-        goals: [
-          IntakeGoalDraft(
-            key: '88d225e1-7906-499e-8604-39cf2c2c6b44',
-            title: _textOfLength(201),
-          ),
-        ],
         routines: [
           IntakeRoutineDraft(
             key: '67c32972-4b67-4d3f-b01c-11a60601bf59',
@@ -191,7 +191,6 @@ void main() {
             endsAt: '09:45',
           ),
         ],
-        contextNote: _textOfLength(1001),
       );
 
       expect(
@@ -199,34 +198,28 @@ void main() {
         containsAll(<String>[
           'Display name must be 120 characters or fewer.',
           'Weekday shape must be 500 characters or fewer.',
-          'Goal titles must be 200 characters or fewer.',
           'Routine titles must be 200 characters or fewer.',
           'Commitment titles must be 120 characters or fewer.',
           'Commitment locations must be 120 characters or fewer.',
-          'Context note must be 1000 characters or fewer.',
         ]),
       );
     });
 
     test('backend literals and item UUIDs are validated before save', () {
       final draft = _requiredDraft().copyWith(
-        primaryFocusAreas: const ['unsupported_focus'],
         bestEnergyWindow: 'whenever',
-        coachingStyle: 'mystery',
         calendarConnectionIntent: 'someday',
-        goals: const [
-          IntakeGoalDraft(key: 'not-a-uuid', title: 'A goal'),
+        routines: const [
+          IntakeRoutineDraft(key: 'not-a-uuid', title: 'A routine'),
         ],
       );
 
       expect(
         draft.validationErrors(),
         containsAll(<String>[
-          'Focus areas must use supported values.',
           'Choose a supported energy window.',
-          'Choose a supported coaching style.',
           'Choose a supported calendar connection intent.',
-          'Every goal requires a valid UUID key.',
+          'Every routine requires a valid UUID key.',
         ]),
       );
     });
@@ -235,11 +228,8 @@ void main() {
       const duplicateKey = '4625887d-b9df-4d4d-9593-8d07441ec4bd';
       final repaired = repairSetupItemKeys(
         _requiredDraft().copyWith(
-          goals: const [
-            IntakeGoalDraft(key: 'legacy-key', title: 'Goal'),
-          ],
           routines: const [
-            IntakeRoutineDraft(key: duplicateKey, title: 'Routine'),
+            IntakeRoutineDraft(key: 'legacy-key', title: 'Routine'),
           ],
           fixedCommitments: const [
             IntakeCommitmentDraft(
@@ -254,15 +244,14 @@ void main() {
         ),
       );
       final keys = [
-        repaired.goals.single.key,
         repaired.routines.single.key,
         repaired.fixedCommitments.single.key,
       ];
 
       expect(keys.every(isSetupUuid), isTrue);
-      expect(keys.toSet(), hasLength(3));
-      expect(repaired.goals.single.title, 'Goal');
-      expect(repaired.routines.single.key, duplicateKey);
+      expect(keys.toSet(), hasLength(2));
+      expect(repaired.routines.single.title, 'Routine');
+      expect(repaired.fixedCommitments.single.key, duplicateKey);
     });
 
     test('request serialization rejects a non-UUID request id', () {
@@ -310,8 +299,11 @@ void main() {
         'summary': <String, dynamic>{},
       });
 
-      expect(read.responses?.reminderPreference?.quietHoursStart, '21:00');
-      expect(read.responses?.reminderPreference?.quietHoursEnd, '07:00');
+      expect(read.responses?.reminderPreference, isNull);
+      expect(
+        read.responses?.toJson(),
+        isNot(contains('reminder_preference')),
+      );
       expect(read.responses?.fixedCommitments.single.startsAt, '09:15');
       expect(read.responses?.fixedCommitments.single.endsAt, '10:45');
       expect(
@@ -502,16 +494,10 @@ String _textOfLength(int length) => List.filled(length, 'x').join();
 IntakeResponseDraft _requiredDraft() {
   return const IntakeResponseDraft(
     displayName: null,
-    primaryFocusAreas: ['focus'],
-    goals: [],
-    frictionPoints: [],
     weekdayShape: 'flexible',
     bestEnergyWindow: 'morning',
-    coachingStyle: 'direct',
-    reminderPreference: IntakeReminderPreference(enabled: false),
     routines: [],
     fixedCommitments: [],
-    contextNote: null,
     calendarConnectionIntent: null,
   );
 }

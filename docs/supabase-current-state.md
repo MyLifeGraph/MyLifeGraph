@@ -4,6 +4,10 @@ This document captures the repository state, not the live remote Supabase
 project state. The repo does not contain credentials, so a live remote database
 must be inspected through the Supabase dashboard or CLI by someone with access.
 
+The current Setup/Goal/friction cleanup and compatibility boundary is recorded
+in `docs/setup-personalization-retirement-contract.md` and migration
+`20260725120000_retire_setup_goals_and_friction.sql`.
+
 ## Runtime Activation
 
 The Flutter app initializes Supabase only when both values are non-empty:
@@ -47,7 +51,7 @@ The app table constants live in
 | Table | Current app use |
 | --- | --- |
 | `profiles` | Canonical auth profile projection. Identity/authority (`role`, `auth_provider`) and onboarding eligibility are backend-owned; authenticated edits are limited to explicitly granted non-authority fields, `setup_revision` remains a monotonic backend projection guard, and the nullable account-wide preparation budget is read-only to application roles. |
-| `daily_logs` | One canonical daily row whose V2 metadata owns separate Evening/Morning captures plus direct nullable numeric Dashboard projections; the Dashboard does not synthesize proxy scores. |
+| `daily_logs` | One canonical daily row whose V3 metadata owns separate Evening/Morning captures plus direct nullable numeric Dashboard projections; V1/V2 remain readable with friction sanitized, and the Dashboard does not synthesize proxy scores. |
 | `behavioral_events` | Granular AI signal stream; canonical capture writes a dynamic deterministic maximum of four current events linked to its `daily_logs` row. |
 | `tasks` | Owner-scoped executable tasks with create/edit/complete/postpone/cancel/restore/undo, optional 5-480 minute estimates, and explicit completion/cancellation timestamps. |
 | `notifications` | Authenticated read-only Inbox projection with backend-owned read/unread/dismiss lifecycle plus optional deterministic generation key/category/local-date/provenance and foreground receipt time. A stored row alone does not prove delivery. |
@@ -57,13 +61,13 @@ The app table constants live in
 | `coach_messages` | Bounded validated Phase 10 user/assistant history linked to a retry-safe backend request. Authenticated owners can read; only FastAPI can insert/delete V1 turns. Legacy rows remain distinguishable by null request/contract fields. |
 | `memory_entries` | Durable Setup/manual memory content. Authenticated owners can read, but Phase 10 selection is a separate projection and does not transfer Setup ownership or promote check-in/conversation text automatically. Preference rows remain ineligible until a later sensitivity contract can distinguish hidden context safely. |
 | `focus_sessions` | Real one-active-session Deep Work lifecycle with bounded planned/measured duration, fully immutable terminal history, persisted local start date, and at most one owned task or active-habit target whose deletion is restricted. |
-| `goals` | User goals, including deterministically identified Setup-owned rows with archive lifecycle. |
+| `goals` | Retained compatibility and Account Export storage. Setup-owned rows are archived; manual/foreign-managed rows are preserved, and no active product service evaluates them. |
 | `habits` | Habit V1 daily, selected-ISO-weekday, or weekly-target cadence plus active/paused/archived manual lifecycle; Setup owns definition/lifecycle for its rows while active rows share execution. |
 | `habit_logs` | One explicit `completed` or `skipped` outcome per habit/local date, with checked 1/0 compatibility value; open and missed opportunities are derived and progress/streaks are cadence-aware. |
 | `skillset_profiles` | Generated coaching/skill profile snapshots. |
-| `recommendations` | Generated recommendations and user statuses; FastAPI can create first deterministic rows after authenticated Intake V1. |
+| `recommendations` | Generated recommendations and user statuses from explicit/scheduled runtime refresh; Intake V1 completion does not generate them. |
 | `notification_preferences` | Reminder/category/quiet-hour configuration plus separate fail-closed in-app delivery consent/version/timestamps and a bounded daily cap. Reminder fields alone grant no delivery. |
-| `intake_responses` | Typed Setup history with request identity, optimistic revision, pending/applied state, and structured lifecycle items. |
+| `intake_responses` | Typed Setup history with request identity, optimistic revision, pending/applied state, and structured routine/commitment/Study lifecycle items. Retired personalization keys are stripped. |
 | `study_setup_profiles` | Optional `study-setup-v1` projection from the current applied Intake revision: focus/recovery rhythm, ordered preparation-item definitions, current/next semester, and Setup revision. Forced owner-read RLS; only the backend writes. |
 | `user_state_snapshots` | Compact backend-owned onboarding/daily/weekly state; daily and weekly summaries add Phase 2 Daily State plus Phase 3 explicit habit-outcome/focus facts while remaining deterministic recommendation context. |
 | `daily_briefings` | One backend-owned deterministic `daily-briefing-v1` decision per user/profile-local date with strict executable actions, source-snapshot provenance, bounded evidence, and stale detection. |
@@ -89,18 +93,18 @@ The app table constants live in
 | `coach_memory_selections` | Explicit owner-scoped selection of at most eight eligible `memory_entries` for Coach context, stored separately from memory ownership/content. |
 
 Phase 1 canonical capture upserts one `daily_logs` row per user/date with source
-`quick_check_in`. `metadata.capture_version=daily-capture-v2` contains separate
+`quick_check_in`. `metadata.capture_version=daily-capture-v3` contains separate
 owned `captures.evening` and `captures.morning` objects. Saving one kind replaces
 only that object, preserving the other capture and unrelated metadata. Numeric
 projection keeps existing consumers compatible: Morning energy takes
 precedence, Evening owns mood and stress, and Morning owns sleep. Evening stores
-one required primary friction (including `no_major_friction`) plus at most two
-unique optional `additional_frictions`; only the primary drives Daily Mode.
-Morning stores an independent whole-number `1..10` `sleep_quality` estimate in
+no primary/additional friction fields. V2 capture objects remain readable, but
+friction keys are ignored and the next save writes V3. Morning stores an
+independent whole-number `1..10` `sleep_quality` estimate in
 its JSON object. Older V2 Morning objects without it remain readable; new
 Morning saves require it. No direct compatibility column is added.
 New writes omit the retired `gentle_tomorrow` field, while legacy capture
-objects containing it remain readable. Rough focus is kept as a structured band
+objects containing it remain readable. Capture does not ask for a focus band
 and does not fabricate `focus_minutes`.
 
 After each write Flutter removes the existing `quick_check_in` events linked to
@@ -115,9 +119,9 @@ saves converge without append-only signal
 history. Existing columns, grants, and RLS policies are sufficient, so Phase 1
 adds no schema migration.
 
-Guest capture stores the same ownership model as V2 JSON in
-`shared_preferences`, still reads V1 guest JSON, and keeps the existing
-best-effort check-in migration into a real non-demo account. Guest Setup remains
+Guest capture stores the same ownership model as V3 JSON in
+`shared_preferences`, still reads and sanitizes V1/V2 guest JSON, and keeps the
+existing best-effort check-in migration into a real non-demo account. Guest Setup remains
 separate and is still not migrated automatically. Real capture saves request a
 best-effort daily snapshot for their explicit local `target_date`. FastAPI loads
 daily/event metadata, widens the UTC event query by one calendar day on both
@@ -131,7 +135,7 @@ Phase 0C revision tables, profile guard, or atomic Setup RPC.
 
 Phase 2 also requires no migration. FastAPI extends existing daily and weekly
 snapshot JSON additively under `summary.daily_state` and
-`signals.daily_state`, with contract version `explainable-daily-state-v1`.
+`signals.daily_state`, with contract version `explainable-daily-state-v2`.
 `summary.daily_state` contains target date, `push|steady|recover|plan` mode,
 `missing|partial|current|stale` quality, per-kind freshness, bounded structured
 context, current risk/reason codes, readable explanations, load guidance, and
@@ -141,11 +145,12 @@ codes. Capture free text is excluded.
 
 Daily State always uses a fixed seven-day lookback even when the caller requests
 a different statistics window. Evening is current from the target date or
-previous date; Morning is current only from the target date. Strict V2 parsing
-does not fall back to projected columns after a malformed or unsupported V2
-marker. Legacy numeric rows are accepted conservatively only when no V2 marker
-exists. Missing, partial, or stale evidence cannot produce `push`, and recovery
-rules precede planning/productivity rules. Very low current sleep quality may
+previous date; Morning is current only from the target date. Strict V2/V3
+capture parsing ignores friction and does not fall back to projected columns
+after a malformed structured marker. Legacy numeric rows are accepted
+conservatively only when no V2/V3 marker exists. Missing, partial, or stale
+evidence cannot produce `push`; current `push` also requires an active Task, and
+recovery rules precede planning/productivity rules. Very low current sleep quality may
 select `recover` even with sufficient duration; moderately low quality prevents
 `push`.
 
@@ -194,7 +199,7 @@ that same date. Focus finish/abandon uses exact terminal readback.
 The snapshot aggregator now reads explicit `habit_logs` and `focus_sessions`
 and adds bounded action summaries, counts, minutes, and evidence. These facts do
 not change `summary.daily_state`, `signals.daily_state`, the
-`explainable-daily-state-v1` classifier, or `snapshot-aggregator-v1`. Successful
+`explainable-daily-state-v2` classifier, or `snapshot-aggregator-v1`. Successful
 real task, habit, and focus writes request snapshot refresh best-effort; they do
 not generate recommendations or call an LLM. Focus start persists
 `metadata.entry_date`; all focus transitions refresh the persisted start day.
@@ -214,8 +219,9 @@ Lifecycle V1 later added the separate durable backend-owned
 read/unread/dismiss command without broadening direct authenticated table DML.
 
 Phase 0C adds the revision history contract to `intake_responses` and the
-monotonic projection revision to `profiles`. Setup-created goals, habits,
-schedule items, and memories reuse their existing primary keys and metadata:
+monotonic projection revision to `profiles`. Current Setup-created habits,
+schedule items, Study Setup, and the energy memory reuse existing primary keys
+and metadata:
 FastAPI derives deterministic UUIDv5 ids and writes `managed_by`,
 `setup_item_id`, revision, lifecycle, and `source=intake-v1` metadata. This
 makes ownership queryable without claiming manual or `demo_seed` rows. Candidate
@@ -223,6 +229,11 @@ routines do not create a `habits` row until cadence is confirmed. The apply RPC
 preserves unmarked onboarding schedule rows except for the exact historical
 placeholder `Math`, `Room 204`, Monday `08:15`-`09:45` with empty metadata,
 which is removed when omitted.
+
+The 2026-07-25 compatibility migration keeps the Setup Apply RPC signature but
+ignores `p_notification_preferences` and `p_goals`. It leaves
+`notification_preferences` byte-for-byte unchanged, archives Setup-owned Goals,
+retains manual/foreign Goals, and reconciles only the active Setup projections.
 
 ## Phase 7 Scheduled Daily Preparation
 
@@ -281,7 +292,8 @@ rows cannot recreate prior cadence/lifecycle definitions. Phase 8 keeps those
 limitations explicit, marks affected opportunity math unknown, and does not
 infer an adaptation from misses alone. Direct application remains limited to
 confirmed manual Habit V1 shrink/pause/archive. Setup-owned changes stay in
-Setup; replacement and goal/task/schedule changes remain staged.
+Setup; replacement/task/schedule changes remain staged. Weekly Review does not
+load Goals, and the retained V1 `goal_linked_completed` field is always zero.
 
 ## Phase 9 Bounded Calendar File Import
 
@@ -497,9 +509,9 @@ terminalizes an expired lease.
 
 Memory selection uses a composite `(memory_id, user_id)` ownership foreign key,
 an owner-level advisory lock, and a maximum of eight rows. It excludes every
-`type='preference'` memory because current Intake hidden context and coaching
-style share that type without a stable sensitivity discriminator. Selection
-never changes the underlying memory row or its Setup metadata.
+`type='preference'` or `type='goal'` memory. Retired Intake context/style/Goal
+memories are removed by the cleanup migration. Selection never changes the
+underlying memory row or its Setup metadata.
 
 RLS is forced on the new tables plus hardened `coach_messages` and
 `memory_entries`. Authenticated users receive owner/admin SELECT only for
@@ -674,9 +686,11 @@ not change RLS policies or grants.
 `apply_intake_v1_setup_revision` RPC with its final 13-parameter signature. It
 revokes execute from `public`, `anon`, and `authenticated`, granting it only to
 `service_role`. The function obtains a transaction-scoped advisory lock derived
-from `user_id`, locks and validates the claimed canonical `intake-v1` row, then
-atomically upserts notification preferences; reconciles Setup-owned goals,
-habits, schedule items, and memories; upserts the canonical
+from `user_id` and locks and validates the claimed canonical `intake-v1` row.
+Its original materialization included notification preferences and Setup Goals;
+the 2026-07-25 compatibility wrapper now ignores both retained parameters,
+archives Setup-owned Goals, and reconciles only Habits, schedule/Study rows, and
+the energy memory. It then upserts the canonical
 `(user, onboarding, setup:intake-v1)` snapshot; marks the intake applied; and
 projects profile completion, explicit display name, and `setup_revision`.
 Ownership collisions or any failed assertion roll back the whole apply. An
@@ -885,7 +899,7 @@ RESET_DB=true FLUTTER_BIN=/path/to/flutter scripts/verify_supabase_local.sh
 ```
 
 The reset form should apply all migrations through
-`20260723200707_optimize_canonical_rls_policies.sql`; expected legacy-table
+`20260725120000_retire_setup_goals_and_friction.sql`; expected legacy-table
 skip notices may be emitted for missing CamelCase tables. Use reset when proving
 the full migration/backfill/constraint chain from a fresh local database, not
 merely because a reviewed migration is pending.
@@ -895,15 +909,19 @@ frontend with `scripts/start_frontend.sh` and manually verify the
 Supabase-backed path:
 
 - Register or sign in.
-- Complete required-only Setup, re-enter it, and save an edit.
+- Complete Setup with only Typical weekday and Best energy, re-enter it, and
+  save an edit. Confirm retired personalization controls/keys stay absent and a
+  customized `notification_preferences` row remains exactly unchanged.
 - Enable Focus setup and Semester planning, confirm the 45/10 defaults and
   projection, then verify that a later omitted section is removed only through
   the revisioned Setup save.
 - Start Focus through a Study-aware block, exercise the transient checklist,
   complete it, and verify the local recovery countdown without a recovery row.
-- Review/archive or remove one Setup-owned item and preserve a manual row.
+- Review/archive or remove one Setup-owned Habit/commitment, confirm a legacy
+  Setup-owned Goal is archived, and preserve manual Goal/memory rows.
 - Save Evening Shutdown through either current route, then save Morning
-  Calibration and confirm that the same daily row retains both captures.
+  Calibration and confirm that the same daily row retains both V3 captures
+  without friction keys.
 - From Dashboard, create/edit/postpone/undo/complete/restore/cancel/restore a
   task and confirm estimates and terminal timestamps remain coherent.
 - Complete, skip, and undo one manual habit and one active Setup-owned habit;
@@ -937,8 +955,9 @@ snake_case table mappings work together. The repository provides
 `scripts/e2e_web.sh` for browser automation of this Supabase-backed flow. The
 browser smoke starts the AI service with backend local Supabase settings and
 asserts revisioned Intake V1 rows, ownership-scoped Setup reconciliation,
-onboarding and daily `user_state_snapshots`, post-intake deterministic
-`recommendations`, exact Phase 2 recomputation, and direct app writes. Phase 3
+onboarding and daily `user_state_snapshots`, absence of post-intake
+Recommendations, explicit runtime Recommendation refresh, exact Daily State V2
+recomputation, and direct app writes. Phase 3
 browser completion additionally requires exact task transition/undo rows,
 manual and Setup habit completion/skip/undo without duplicates, and focus
 start/finish/abandon with owned linkage and no implicit target mutation. The
@@ -1005,10 +1024,18 @@ The product should standardize on the snake_case schema. CamelCase tables are
 legacy compatibility only and should be dropped in a later dedicated migration
 after data migration and app verification are complete.
 
-The latest migration is `20260723200707_optimize_canonical_rls_policies.sql`.
-It removes redundant initial policies and makes the unchanged canonical
-owner/admin predicates initialization-plan safe without changing grants or RLS
-authority. The preceding `20260723120000_study_setup_v1.sql` adds the forced-RLS
+The latest migration is
+`20260725120000_retire_setup_goals_and_friction.sql`. Its idempotent cleanup
+strips retired Setup/friction JSON, archives only Setup-owned Goals, deletes
+only retired Setup-derived memories, invalidates reproducible derived output
+that references those fields, and performs no regeneration. Its compatibility
+wrappers leave the Setup Apply signature intact while ignoring Goal/Reminder
+arguments and admit paired Coach prompt/context V2 provenance while preserving
+V1 history. The preceding
+`20260723200707_optimize_canonical_rls_policies.sql` removes redundant initial
+policies and makes the unchanged canonical owner/admin predicates
+initialization-plan safe without changing grants or RLS authority. The
+preceding `20260723120000_study_setup_v1.sql` adds the forced-RLS
 Study Setup projection, composes it atomically with applied Intake, and adds
 recovery-aware revision/block truth and confirmation guards to Planner and
 Deadline Planner. The preceding
@@ -1084,10 +1111,11 @@ grants while adding explicit fields, checks, ownership/transition triggers, and
 the one-active-focus index required by the runtime contract. Locked habit
 eligibility, immutable focus history, and restricted target FKs protect the
 contract against stale/concurrent client state. The earlier Phase
-0C service-role-only atomic Setup RPC, revision contract, and monotonic profile
-guard remain unchanged. Phase 1 changes only typed capture metadata and
-client/backend mapping; Phase 2 consumes that data inside existing snapshot
-JSON; Phase 3 adds action facts without changing Phase 2 classification; and
+0C service-role-only atomic Setup RPC signature, revision contract, and
+monotonic profile guard remain compatible. Current Capture V3 changes only
+typed metadata and client/backend mapping; Daily State V2 consumes sanitized
+data inside existing snapshot JSON; Phase 3 adds action facts without changing
+Daily State classification; and
 Phase 4 persists deterministic briefing decisions without changing either
 contract; Phase 6 adds feedback as separate evidence and never rewrites those
 persisted reasons. Phase 7 adds no schema object; it prepares the existing

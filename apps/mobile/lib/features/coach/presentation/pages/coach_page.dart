@@ -103,7 +103,7 @@ class _CoachPageState extends ConsumerState<CoachPage> {
         title: const Text('Delete conversation?'),
         content: const Text(
           'This removes the saved Coach conversation. It does not delete '
-          'your goals, tasks, check-ins, or memories.',
+          'your tasks, check-ins, or memories.',
         ),
         actions: [
           TextButton(
@@ -282,7 +282,7 @@ class _ComposerCard extends StatelessWidget {
           const SizedBox(height: AppSpacing.xs),
           const Text(
             'Coach can explain and suggest. Every change remains a preview. It cannot apply changes to your '
-            'tasks, habits, goals, or schedule.',
+            'tasks, habits, or schedule.',
           ),
           const SizedBox(height: AppSpacing.md),
           TextField(

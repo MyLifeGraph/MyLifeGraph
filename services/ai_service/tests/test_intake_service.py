@@ -151,10 +151,6 @@ class FakeIntakeRepository:
             before = self._transaction_state()
             try:
                 self._assert_no_ownership_collisions(apply.materialization)
-                self.preferences[user_id] = {
-                    "user_id": user_id,
-                    **deepcopy(apply.notification_preferences),
-                }
                 if self.fail_atomic_once_after_preferences:
                     self.fail_atomic_once_after_preferences = False
                     raise RuntimeError("simulated atomic backend failure")
@@ -274,19 +270,6 @@ class FakeIntakeRepository:
         return deepcopy(rows[-1]) if rows else None
 
 
-class FakeRecommendationResponse:
-    items: list = []
-
-
-class FakeRecommendationEngine:
-    def __init__(self) -> None:
-        self.calls: list[tuple[str, object]] = []
-
-    async def generate_recommendations(self, *, user_id: str, request):
-        self.calls.append((user_id, request))
-        return FakeRecommendationResponse()
-
-
 def _is_setup(row: dict) -> bool:
     metadata = row.get("metadata", {})
     return metadata.get("managed_by") == "setup" or metadata.get("source") == "intake-v1"
@@ -371,6 +354,7 @@ def payload(
     calendar_connection_intent: str | None = None,
     reminders_enabled: bool = True,
     display_name: str = "Ada",
+    weekday_shape: str = "Mornings are structured; afternoons are flexible.",
 ) -> dict:
     reminder: dict = {"enabled": reminders_enabled}
     if reminders_enabled:
@@ -380,7 +364,7 @@ def payload(
         "primary_focus_areas": ["focus", "planning"],
         "goals": goals or [],
         "friction_points": friction_points or [],
-        "weekday_shape": "Mornings are structured; afternoons are flexible.",
+        "weekday_shape": weekday_shape,
         "best_energy_window": "morning",
         "coaching_style": "analytical",
         "reminder_preference": reminder,
@@ -417,10 +401,14 @@ def candidate_routine() -> dict:
     }
 
 
-def active_routine(status: str = "active") -> dict:
+def active_routine(
+    status: str = "active",
+    *,
+    title: str = "Walk after lunch",
+) -> dict:
     return {
         "key": ROUTINE_KEY,
-        "title": "Walk after lunch",
+        "title": title,
         "status": status,
         "cadence_confirmed": True,
         "frequency": "weekly",
@@ -451,17 +439,24 @@ def test_zero_optional_answers_create_no_optional_commitments() -> None:
 
     assert response.exists is True
     assert response.revision == 1
-    assert response.responses.goals == []
-    assert response.responses.friction_points == []
+    assert "goals" not in response.responses.model_dump(mode="json")
+    assert "friction_points" not in response.responses.model_dump(mode="json")
     assert response.responses.calendar_connection_intent is None
     assert repository.goals == {}
     assert repository.habits == {}
     assert repository.schedule == {}
     assert {row["title"] for row in repository.memories.values()} == {
-        "Preferred coaching style",
         "Best energy window",
     }
-    assert repository.preferences[USER_ID]["quiet_hours_start"] is None
+    assert repository.preferences == {}
+    assert {
+        "primary_focus_areas",
+        "goals",
+        "friction_points",
+        "coaching_style",
+        "reminder_preference",
+        "context_note",
+    }.isdisjoint(repository.intakes[0]["responses"])
     assert repository.intakes[0]["metadata"]["source"] == "onboarding"
     assert repository.intakes[0]["metadata"]["request_metadata"]["source"] == (
         "attacker-controlled"
@@ -555,12 +550,7 @@ def test_archived_routine_is_not_counted_as_existing_habit() -> None:
 
 def test_same_request_twice_returns_same_ids_without_duplicates() -> None:
     repository = FakeIntakeRepository()
-    recommendation_engine = FakeRecommendationEngine()
-    service = IntakeService(
-        repository,
-        recommendation_engine=recommendation_engine,
-        now_provider=lambda: NOW,
-    )
+    service = IntakeService(repository, now_provider=lambda: NOW)
     intake_request = request(
         goals=[goal()],
         routines=[active_routine()],
@@ -574,11 +564,11 @@ def test_same_request_twice_returns_same_ids_without_duplicates() -> None:
     assert first.snapshot_id == second.snapshot_id
     assert first.revision == second.revision == 1
     assert len(repository.intakes) == 1
-    assert len(repository.goals) == 1
+    assert repository.goals == {}
     assert len(repository.habits) == 1
     assert len(repository.schedule) == 1
     assert len(repository.snapshots) == 1
-    assert len(recommendation_engine.calls) == 2
+    assert first.recommendations == second.recommendations == []
 
 
 def test_parallel_same_request_workers_converge_through_atomic_apply() -> None:
@@ -615,7 +605,7 @@ def test_parallel_same_request_workers_converge_through_atomic_apply() -> None:
     assert first.revision == second.revision == 1
     assert len(repository.atomic_apply_calls) == 2
     assert len(repository.intakes) == 1
-    assert len(repository.goals) == 1
+    assert repository.goals == {}
     assert len(repository.habits) == 1
     assert len(repository.schedule) == 1
     assert len(repository.snapshots) == 1
@@ -631,7 +621,7 @@ def test_later_revision_cannot_claim_while_atomic_apply_is_in_flight() -> None:
         first_task = asyncio.create_task(
             service.complete_intake(
                 user_id=USER_ID,
-                request=request(goals=[goal("Revision 1")]),
+                request=request(display_name="Revision 1"),
             ),
         )
         await repository.apply_entered.wait()
@@ -641,7 +631,7 @@ def test_later_revision_cannot_claim_while_atomic_apply_is_in_flight() -> None:
                 request=request(
                     request_id=REQUEST_2,
                     base_revision=1,
-                    goals=[goal("Revision 2")],
+                    display_name="Revision 2",
                 ),
             )
         repository.release_apply.set()
@@ -654,37 +644,58 @@ def test_later_revision_cannot_claim_while_atomic_apply_is_in_flight() -> None:
     assert conflict.current_revision == 0
     assert conflict.pending_request_id == REQUEST_1
     assert len(repository.intakes) == 1
-    assert repository.goals[next(iter(repository.goals))]["title"] == "Revision 1"
+    assert repository.goals == {}
 
 
-def test_reusing_request_id_with_changed_payload_is_rejected() -> None:
+def test_reusing_request_id_with_only_retired_changes_replays_canonical_payload() -> None:
     repository = FakeIntakeRepository()
     service = IntakeService(repository, now_provider=lambda: NOW)
-    run(service.complete_intake(user_id=USER_ID, request=request(goals=[goal()])))
-    before = deepcopy(repository.goals)
+    first = run(
+        service.complete_intake(user_id=USER_ID, request=request(goals=[goal()])),
+    )
+    replay = run(
+        service.complete_intake(
+            user_id=USER_ID,
+            request=request(
+                goals=[goal("Changed under the same request id")],
+                friction_points=["time"],
+                context_note="Retired change",
+                reminders_enabled=False,
+            ),
+        ),
+    )
+
+    assert replay.intake_response_id == first.intake_response_id
+    assert repository.goals == {}
+    assert len(repository.intakes) == 1
+
+
+def test_reusing_request_id_with_changed_active_payload_is_rejected() -> None:
+    repository = FakeIntakeRepository()
+    service = IntakeService(repository, now_provider=lambda: NOW)
+    run(service.complete_intake(user_id=USER_ID, request=request()))
 
     with pytest.raises(IntakeRevisionConflict, match="different setup payload"):
         run(
             service.complete_intake(
                 user_id=USER_ID,
-                request=request(goals=[goal("Changed under the same request id")]),
+                request=request(weekday_shape="Evenings are more structured."),
             ),
         )
 
-    assert repository.goals == before
     assert len(repository.intakes) == 1
 
 
-def test_edit_keeps_stable_goal_id_and_updates_title() -> None:
+def test_edit_keeps_stable_habit_id_and_updates_title() -> None:
     repository = FakeIntakeRepository()
     service = IntakeService(repository, now_provider=lambda: NOW)
     first = run(
         service.complete_intake(
             user_id=USER_ID,
-            request=request(goals=[goal()]),
+            request=request(routines=[active_routine()]),
         ),
     )
-    record_id = next(iter(repository.goals))
+    record_id = next(iter(repository.habits))
 
     second = run(
         service.complete_intake(
@@ -692,15 +703,19 @@ def test_edit_keeps_stable_goal_id_and_updates_title() -> None:
             request=request(
                 request_id=REQUEST_2,
                 base_revision=1,
-                goals=[goal("Protect two focus blocks")],
+                routines=[
+                    active_routine(title="Take a longer walk after lunch"),
+                ],
             ),
         ),
     )
 
     assert first.revision == 1
     assert second.revision == 2
-    assert list(repository.goals) == [record_id]
-    assert repository.goals[record_id]["title"] == "Protect two focus blocks"
+    assert list(repository.habits) == [record_id]
+    assert repository.habits[record_id]["title"] == (
+        "Take a longer walk after lunch"
+    )
     assert second.snapshot_id == first.snapshot_id
 
 
@@ -810,6 +825,25 @@ def test_stale_duplicate_worker_cannot_reapply_after_newer_revision() -> None:
 
 def test_omission_archives_or_deletes_only_setup_owned_rows() -> None:
     repository = FakeIntakeRepository()
+    setup_goal_id = "retired-setup-goal"
+    repository.goals[setup_goal_id] = {
+        "id": setup_goal_id,
+        "user_id": USER_ID,
+        "title": "Retired Setup goal",
+        "status": "active",
+        "metadata": {"managed_by": "setup", "source": "intake-v1"},
+    }
+    for row_id, title in (
+        ("retired-goal-memory", "Goal: Retired Setup goal"),
+        ("retired-style-memory", "Preferred coaching style"),
+        ("retired-context-memory", "Intake context note"),
+    ):
+        repository.memories[row_id] = {
+            "id": row_id,
+            "user_id": USER_ID,
+            "title": title,
+            "metadata": {"managed_by": "setup", "source": "intake-v1"},
+        }
     service = IntakeService(repository, now_provider=lambda: NOW)
     run(
         service.complete_intake(
@@ -822,7 +856,6 @@ def test_omission_archives_or_deletes_only_setup_owned_rows() -> None:
             ),
         ),
     )
-    setup_goal_id = next(iter(repository.goals))
     setup_habit_id = next(iter(repository.habits))
     repository.goals["manual-goal"] = {
         "id": "manual-goal",
@@ -864,6 +897,10 @@ def test_omission_archives_or_deletes_only_setup_owned_rows() -> None:
     assert repository.habits["manual-habit"]["active"] is True
     assert list(repository.schedule) == ["manual-schedule"]
     assert "manual-memory" in repository.memories
+    assert {row["title"] for row in repository.memories.values()} == {
+        "Best energy window",
+        "Manual",
+    }
     assert all(
         row["title"] != "Intake context note"
         for row in repository.memories.values()
@@ -872,14 +909,14 @@ def test_omission_archives_or_deletes_only_setup_owned_rows() -> None:
 
 def test_manual_stable_id_collision_rolls_back_every_atomic_effect() -> None:
     repository = FakeIntakeRepository()
-    stable_goal_id = str(
-        uuid5(NAMESPACE_URL, f"mylifegraph:{USER_ID}:goal:{GOAL_KEY}"),
+    stable_habit_id = str(
+        uuid5(NAMESPACE_URL, f"mylifegraph:{USER_ID}:habit:{ROUTINE_KEY}"),
     )
-    repository.goals[stable_goal_id] = {
-        "id": stable_goal_id,
+    repository.habits[stable_habit_id] = {
+        "id": stable_habit_id,
         "user_id": USER_ID,
         "title": "Manual row at colliding id",
-        "status": "active",
+        "active": True,
         "metadata": {"source": "manual"},
     }
 
@@ -887,16 +924,16 @@ def test_manual_stable_id_collision_rolls_back_every_atomic_effect() -> None:
         run(
             IntakeService(repository, now_provider=lambda: NOW).complete_intake(
                 user_id=USER_ID,
-                request=request(goals=[goal()]),
+                request=request(routines=[active_routine()]),
             ),
         )
 
-    assert repository.goals == {
-        stable_goal_id: {
-            "id": stable_goal_id,
+    assert repository.habits == {
+        stable_habit_id: {
+            "id": stable_habit_id,
             "user_id": USER_ID,
             "title": "Manual row at colliding id",
-            "status": "active",
+            "active": True,
             "metadata": {"source": "manual"},
         },
     }
@@ -953,8 +990,13 @@ def test_legacy_schedule_cleanup_matches_only_exact_empty_metadata_signature() -
 def test_stale_revision_conflict_does_not_mutate_state() -> None:
     repository = FakeIntakeRepository()
     service = IntakeService(repository, now_provider=lambda: NOW)
-    run(service.complete_intake(user_id=USER_ID, request=request(goals=[goal()])))
-    before = deepcopy(repository.goals)
+    run(
+        service.complete_intake(
+            user_id=USER_ID,
+            request=request(routines=[active_routine()]),
+        ),
+    )
+    before = deepcopy(repository.habits)
 
     with pytest.raises(IntakeRevisionConflict) as error:
         run(
@@ -963,13 +1005,13 @@ def test_stale_revision_conflict_does_not_mutate_state() -> None:
                 request=request(
                     request_id=REQUEST_2,
                     base_revision=0,
-                    goals=[goal("Stale edit")],
+                    routines=[active_routine(title="Stale edit")],
                 ),
             ),
         )
 
     assert error.value.current_revision == 1
-    assert repository.goals == before
+    assert repository.habits == before
     assert len(repository.intakes) == 1
 
 
@@ -977,7 +1019,7 @@ def test_pending_revision_is_readable_and_same_request_resumes() -> None:
     repository = FakeIntakeRepository()
     repository.fail_atomic_once_after_preferences = True
     service = IntakeService(repository, now_provider=lambda: NOW)
-    intake_request = request(goals=[goal()])
+    intake_request = request(routines=[active_routine()])
 
     with pytest.raises(RuntimeError, match="simulated atomic"):
         run(service.complete_intake(user_id=USER_ID, request=intake_request))
@@ -995,8 +1037,34 @@ def test_pending_revision_is_readable_and_same_request_resumes() -> None:
     applied = run(service.complete_intake(user_id=USER_ID, request=intake_request))
     assert applied.status == "applied"
     assert len(repository.intakes) == 1
-    assert len(repository.goals) == 1
+    assert repository.goals == {}
+    assert len(repository.habits) == 1
     assert repository.profile_updates[-1][0] == USER_ID
+
+
+def test_setup_does_not_mutate_existing_notification_preferences() -> None:
+    repository = FakeIntakeRepository()
+    repository.preferences[USER_ID] = {
+        "user_id": USER_ID,
+        "in_app_enabled": True,
+        "briefing_enabled": False,
+        "recovery_enabled": True,
+        "weekly_review_enabled": False,
+        "daily_cap": 1,
+        "quiet_hours_start": "22:15",
+        "quiet_hours_end": "06:45",
+        "revision": 7,
+    }
+    before = deepcopy(repository.preferences)
+
+    run(
+        IntakeService(repository, now_provider=lambda: NOW).complete_intake(
+            user_id=USER_ID,
+            request=request(reminders_enabled=False),
+        ),
+    )
+
+    assert repository.preferences == before
 
 
 def test_get_setup_without_state_is_explicit_empty_read_model() -> None:

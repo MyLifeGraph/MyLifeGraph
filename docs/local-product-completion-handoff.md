@@ -7,6 +7,8 @@ tree statements in this file. Internal contract
 names such as `intake-v1`, `habit-v1`, or `coach-response-v1` are versioned API
 and persistence contracts; they do not mean a demo, cheap edition, or reduced
 quality target.
+The later `docs/setup-personalization-retirement-contract.md` also supersedes
+historical Goal/friction/Setup-preference references below.
 
 ## Objective
 
@@ -300,12 +302,13 @@ visible button, menu entry, proposal, and setting, prove one of:
 
 Pay particular attention to:
 
-- Weekly Review replacement, defer, goal, task, and schedule proposals;
+- Weekly Review replacement, defer, task, and schedule proposals;
 - Coach review-only suggestions;
 - Calendar imported/read-only controls;
 - recommendation feedback versus executable Today actions;
 - account export/share cancellation and permanent deletion;
-- Setup ownership versus generic Habit/Goal management.
+- Setup ownership versus generic Habit management; Goals are inactive
+  compatibility/export data.
 
 If the product displays a proposal as something the user can apply, add a
 confirmed exact command with ownership, concurrency, rollback/readback, and E2E

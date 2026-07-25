@@ -145,7 +145,6 @@ void main() {
             stressSource: StressSource.privateEmotional,
             stressControllability: StressControllability.hardlyControllable,
             focusBand: FocusBand.thirtyToSixtyMinutes,
-            mainFriction: MainFriction.emotionalLoad,
             tomorrowPriority: 'Protect tomorrow',
           ),
           morning: MorningCalibrationDraft(

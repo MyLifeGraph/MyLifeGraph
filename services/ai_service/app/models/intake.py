@@ -12,8 +12,6 @@ from pydantic import (
 )
 
 
-FocusArea = Literal["focus", "energy", "sleep", "stress", "planning", "movement"]
-CoachingStyle = Literal["direct", "gentle", "analytical", "accountability"]
 EnergyWindow = Literal[
     "early_morning",
     "morning",
@@ -22,7 +20,6 @@ EnergyWindow = Literal[
     "variable",
 ]
 CalendarConnectionIntent = Literal["not_now", "later", "interested"]
-GoalStatus = Literal["active", "paused", "archived"]
 RoutineStatus = Literal["candidate", "active", "paused", "archived"]
 CommitmentStatus = Literal["active", "archived"]
 IntakeState = Literal["pending", "applied"]
@@ -189,39 +186,6 @@ class StudySetup(BaseModel):
         return self
 
 
-class ReminderQuietHours(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    starts_at: time
-    ends_at: time
-
-
-class ReminderPreference(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    enabled: bool
-    quiet_hours: ReminderQuietHours | None = None
-
-    @model_validator(mode="after")
-    def validate_quiet_hours(self) -> "ReminderPreference":
-        if self.enabled and self.quiet_hours is None:
-            raise ValueError("enabled reminders require quiet_hours")
-        return self
-
-
-class SetupGoal(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    key: UUID
-    title: str = Field(min_length=1, max_length=200)
-    status: GoalStatus = "active"
-
-    @field_validator("title", mode="before")
-    @classmethod
-    def trim_title(cls, value: object) -> object:
-        return value.strip() if isinstance(value, str) else value
-
-
 class SetupRoutine(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -297,25 +261,30 @@ class IntakeResponses(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     display_name: str | None = Field(default=None, max_length=120)
-    primary_focus_areas: list[FocusArea] = Field(min_length=1, max_length=6)
-    goals: list[SetupGoal] = Field(default_factory=list, max_length=3)
-    friction_points: list[str] = Field(default_factory=list, max_length=5)
     weekday_shape: str = Field(min_length=1, max_length=500)
     best_energy_window: EnergyWindow
-    coaching_style: CoachingStyle
-    reminder_preference: ReminderPreference
     routines: list[SetupRoutine] = Field(default_factory=list, max_length=5)
     fixed_commitments: list[FixedCommitment] = Field(
         default_factory=list,
         max_length=10,
     )
-    context_note: str | None = Field(default=None, max_length=1000)
     calendar_connection_intent: CalendarConnectionIntent | None = None
     study_setup: StudySetup | None = None
 
     @model_validator(mode="before")
     @classmethod
-    def reject_null_study_setup(cls, value: Any) -> Any:
+    def normalize_compatible_payload(cls, value: Any) -> Any:
+        if isinstance(value, dict):
+            value = dict(value)
+            for retired_key in (
+                "primary_focus_areas",
+                "goals",
+                "friction_points",
+                "coaching_style",
+                "reminder_preference",
+                "context_note",
+            ):
+                value.pop(retired_key, None)
         if (
             isinstance(value, dict)
             and "study_setup" in value
@@ -324,7 +293,7 @@ class IntakeResponses(BaseModel):
             raise ValueError("study_setup must be omitted rather than null")
         return value
 
-    @field_validator("display_name", "context_note", mode="before")
+    @field_validator("display_name", mode="before")
     @classmethod
     def trim_optional_text(cls, value: object) -> object:
         if isinstance(value, str):
@@ -337,23 +306,9 @@ class IntakeResponses(BaseModel):
     def trim_required_text(cls, value: object) -> object:
         return value.strip() if isinstance(value, str) else value
 
-    @field_validator("friction_points", mode="before")
-    @classmethod
-    def trim_string_list(cls, value: object) -> object:
-        if not isinstance(value, list):
-            return value
-        normalized: list[str] = []
-        for item in value:
-            if not isinstance(item, str):
-                raise ValueError("friction_points items must be strings")
-            if stripped := item.strip():
-                normalized.append(stripped)
-        return normalized
-
     @model_validator(mode="after")
     def validate_unique_item_keys(self) -> "IntakeResponses":
         keys = [
-            *(item.key for item in self.goals),
             *(item.key for item in self.routines),
             *(item.key for item in self.fixed_commitments),
             *(
@@ -368,8 +323,6 @@ class IntakeResponses(BaseModel):
         ]
         if len(keys) != len(set(keys)):
             raise ValueError("setup item keys must be unique across the intake")
-        if len(self.primary_focus_areas) != len(set(self.primary_focus_areas)):
-            raise ValueError("primary_focus_areas must not contain duplicates")
         return self
 
 
@@ -397,12 +350,7 @@ class IntakeCompleteRequest(BaseModel):
 class SnapshotSummary(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    primary_focus_areas: list[FocusArea]
-    goals: list[str]
-    friction_points: list[str]
     best_energy_window: EnergyWindow
-    coaching_style: CoachingStyle
-    reminder_enabled: bool
     fixed_commitment_count: int
     existing_habit_count: int
     routine_candidate_count: int

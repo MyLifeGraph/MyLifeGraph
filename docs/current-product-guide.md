@@ -1,7 +1,7 @@
 # MyLifeGraph: aktueller Produktleitfaden
 
 Status: Beschreibung des tatsächlich implementierten Repository-Stands vom
-23. Juli 2026. Dieses Dokument beschreibt den Ist-Zustand, nicht die Roadmap.
+25. Juli 2026. Dieses Dokument beschreibt den Ist-Zustand, nicht die Roadmap.
 Die verbindlichen technischen Detailverträge bleiben die am Ende verlinkten
 Contract-Dokumente.
 
@@ -14,8 +14,9 @@ aktuell nicht implementiert.
 MyLifeGraph soll explizite Angaben und beobachtbare Handlungen in einen klaren,
 ehrlichen Tagesüberblick und vorsichtige regelbasierte Unterstützung übersetzen:
 
-1. **Setup** beschreibt längerfristigen Kontext: Ziele, Präferenzen, Routinen,
-   feste Wochenblöcke und optional Lernrhythmus sowie Semesterplanung.
+1. **Setup** erfasst optional den Namen, verpflichtend Typical weekday und Best
+   energy window sowie optional Routinen, feste Wochenblöcke, Lernrhythmus und
+   Semesterplanung.
 2. **Morning und Evening check-ins** beschreiben den aktuellen Zustand.
 3. **Tasks, Habit outcomes und Focus sessions** zeigen, was tatsächlich getan
    wurde.
@@ -44,7 +45,7 @@ Entwicklungsumgebung ein echtes Sprachmodell aufrufen kann.
 
 ```text
 Längerfristiger Kontext
-Profile + Setup + Goals + Habits + feste Commitments
+Profile + schlankes Setup + Habits + feste Commitments
                          │
                          ▼
 Aktuelle Signale
@@ -87,7 +88,8 @@ Quelle verwendet werden. Es gibt keinen Live-Sync und keinen Calendar-Write.
 Ein neu registrierter echter Account erhält seine Auth-Identität und sein
 kanonisches Profil in Supabase. Danach erzwingt die App das Setup. Erst dessen
 explizite Bestätigung materialisiert die gewählten Setup-Daten. Leere optionale
-Felder erzeugen keine Goals, Habits oder Schedule Items. Ein echter neuer
+Felder erzeugen keine Habits oder Schedule Items. Setup verändert niemals die
+separat in Settings gespeicherten Reminder-Einstellungen. Ein echter neuer
 Account erhält keine Daten des `student`-Testusers.
 
 ## Navigation: Was befindet sich wo?
@@ -101,7 +103,7 @@ vollständig; `Settings` wird nicht als redundanter Ersatz eingeblendet.
 | **Today** | Den gespeicherten Tag überblicken und Tagesaktionen ausführen | Check-in-Streak, transparenter Fortschritt, vertikale Setup/Task/Habit/Fixed commitment/Preparation/Calendar/Focus-Agenda, heutige Tasks und Habits sowie eingeklappte unterstützende Details |
 | **Insights** | Entwicklungen untersuchen | Eine vorsichtige Beobachtung, Datenqualität, 7/14/30/90-Tage-Korrelationen, Trends, Matrix und gespeicherte Insight-Notizen |
 | **Quick actions** | Tagesdaten erfassen oder eine Aktivität ausführen | Evening check-in, Morning check-in, Habit completion und Focus |
-| **Planner** | Ziele und feste Zeiten bewusst planen | Task, Habit, Exam, Assignment und Fixed commitment anlegen; Vorschauen bestätigen; sieben Tage, Konflikte, Unscheduled und laufende Preparation verwalten |
+| **Planner** | Aufgaben, Routinen und feste Zeiten bewusst planen | Task, Habit, Exam, Assignment und Fixed commitment anlegen; Vorschauen bestätigen; sieben Tage, Konflikte, Unscheduled und laufende Preparation verwalten |
 | **Coach** | Den aktuellen Zustand bewusst erklären oder reflektieren | Development Preview mit begrenztem Context, sichtbarer Provenance und unverbindlichen, nicht ausführbaren Vorschlägen |
 
 Weitere Screens sind Unterseiten und keine eigenständigen Hauptbereiche:
@@ -118,8 +120,9 @@ Weitere Screens sind Unterseiten und keine eigenständigen Hauptbereiche:
   Entwicklungs-`Coach` hat bei aktiviertem Surface-Gate den rechten
   Hauptnavigationseintrag; der Settings-Eintrag bleibt als sekundärer Zugang
   erhalten.
-- Es gibt aktuell **keine** separate Goals-, Tasks-, Schedule- oder Memories-
-  Hauptseite.
+- Goals sind vollständig stillgelegt. Die Tabelle bleibt nur für Kompatibilität
+  und Export; es gibt keine Goal-Oberfläche oder aktive Auswertung. Außerdem
+  gibt es keine separate Tasks-, Schedule- oder Memories-Hauptseite.
 
 ## Welche Dashboards gibt es tatsächlich?
 
@@ -235,14 +238,14 @@ Dashboards:
 | Feature | Wie es funktioniert | Verwendete Daten | Geschriebene Daten / LLM |
 | --- | --- | --- | --- |
 | **Auth und Account** | E-Mail/Passwort, Recovery und optional konfiguriertes Google OAuth über Supabase Auth | Auth-Identität und Profil | `profiles`; kein LLM |
-| **Setup** | erforderliche Auswahlen plus optionale Details; Focus setup speichert Rhythmus und Start-Ritual, Semester planning genau ein aktuelles/nächstes Semester; wöchentliche Termine unterstützen optionale Semestergrenzen und Duplizieren auf weitere Wochentage; atomar, revisioniert und retry-sicher | Fokusbereiche, Tagesstruktur, Energiefenster, Coaching-Stil, Reminder-Präferenz, optionale Ziele/Routinen/Commitments, Focus/Pause, Ritualpunkte und Kursnamen; kein Kalenderzwang | `intake_responses`, `study_setup_profiles`, `goals`, `habits`, `schedule_items`, `memory_entries`, `notification_preferences`, Onboarding-Snapshot; kein LLM |
+| **Setup** | nur Typical weekday und Best energy window sind erforderlich; Name, Routinen, Commitments und Study Setup sind optional; Focus setup speichert Rhythmus und Start-Ritual, Semester planning genau ein aktuelles/nächstes Semester; atomar, revisioniert und retry-sicher | explizite Tagesstruktur/Energiefenster sowie optionale Routine-, Commitment-, Focus-/Pausen-, Ritual- und Semesterangaben; keine Focus Areas, Goals, Frictions, Coaching-Style-, Reminder- oder Context-Frage | `intake_responses`, `study_setup_profiles`, `habits`, `schedule_items`, die Best-Energy-`memory_entries` und Onboarding-Snapshot; Setup-owned Goals werden archiviert, `notification_preferences` bleibt vollständig unverändert; kein LLM |
 | **Morning check-in** | kurze Eingabe für Schlafdauer, separat geschätzte Schlafqualität (1–10), aktuelle Energie und Tagesform | explizite Auswahl des Nutzers; Qualität wird nicht aus der Dauer abgeleitet | Teil des lokalen Tages in `daily_logs`; Qualität bleibt strukturierte Capture-Metadaten und wird auf bestehende Morning-Events gespiegelt, kein fünftes Event und kein LLM |
-| **Evening check-in** | zwei kurze Schritte für Mood, Energie, Stress, eine Primary Friction (inklusive `No major friction`), bis zu zwei optionale `Also present`-Frictions und optionale Reflexion | explizite Auswahl/Text; bei Stress 5–10 zusätzlich Quelle und Kontrollierbarkeit; nur die Primary Friction beeinflusst den Daily Mode | anderer Teil desselben `daily_logs`-Tages, dazu `behavioral_events`; strukturierte Frictions können in den begrenzten Coach-Kontext gelangen, freie Reflexions-/Blockertexte nicht |
-| **Daily State / Snapshot** | strikte Regeln betrachten einen festen Sieben-Tage-Kontext und klassifizieren Zustand, Risiken und Gründe; sehr schlechte Schlafqualität kann trotz ausreichender Dauer Recovery auslösen, mäßig schlechte Qualität verhindert Push; Action-Facts werden additiv zusammengefasst, verändern aber den Daily-State-Klassifikator nicht | validierte Check-in-Signale für Daily State; zusätzlich Tasks, Goals, Habits, Outcomes, Focus, Schedule und Memories für die übrige Snapshot-Zusammenfassung | `user_state_snapshots`; kein LLM und kein gelernter persönlicher Basiswert |
-| **Recommendations** | einzelne regelbasierte Kandidaten werden explizit erzeugt/aktualisiert | Snapshot, Setup, offene Tasks, aktive Goals/Habits und verfügbare Feedback-Signale | `recommendations`; LLM-Wording ist im aktuellen Produktpfad deaktiviert |
+| **Evening check-in** | zwei kurze Schritte für Mood, Energie, Stress und optionale Reflection, Possible Priority sowie Specific Blocker; keine Friction-Auswahl | explizite Auswahl/Text; bei Stress 5–10 zusätzlich Quelle und Kontrollierbarkeit | `daily-capture-v3` im selben `daily_logs`-Tag plus `behavioral_events`; V2 bleibt lesbar, Friction-Schlüssel werden ignoriert; freie Reflection-/Blockertexte gelangen nicht in Snapshot oder Coach |
+| **Daily State / Snapshot** | `explainable-daily-state-v2` betrachtet einen festen Sieben-Tage-Kontext und klassifiziert Zustand, Risiken und Gründe ohne Friction; sehr schlechte Schlafqualität kann trotz ausreichender Dauer Recovery auslösen, mäßig schlechte Qualität verhindert Push, und Push benötigt einen aktiven Task | validierte Stress-, Schlaf-, Energie- und Day-Shape-Signale plus Workload/Tasks; Habits, Outcomes, Focus, Schedule und Memories ergänzen die übrige Snapshot-Zusammenfassung; keine Goals | `user_state_snapshots`; kein LLM und kein gelernter persönlicher Basiswert |
+| **Recommendations** | einzelne regelbasierte Kandidaten werden explizit oder geplant erzeugt/aktualisiert; Setup erzeugt keine Recommendation | Snapshot, echte Check-ins, offene Tasks, Habits und verfügbare Feedback-Signale; keine Goals oder retired Onboarding-Personalisierung | `recommendations`; LLM-Wording ist im aktuellen Produktpfad deaktiviert |
 | **Daily Briefing** | wählt aus zulässigen Kandidaten eine primäre und bis zu zwei unterstützende Aktionen | aktueller Snapshot, Recommendations, Actions, Dringlichkeit, Recovery-Schutz und passendes Feedback | `daily_briefings`; regelbasiert, nicht AI-geschrieben |
 | **Tasks** | endliche Aktionen mit Status und optionaler Deadline/Schätzung | direkte Nutzereingabe oder ein vom bestätigten Preparation Plan verwalteter Task | `tasks`; kein LLM |
-| **Habits** | wiederkehrende Ziele mit daily-, weekday- oder weekly-target-Cadence | Definition plus explizites completed/skipped/undo pro lokalem Datum | `habits`, `habit_logs`; kein LLM |
+| **Habits** | wiederkehrende Routinen mit daily-, weekday- oder weekly-target-Cadence | Definition plus explizites completed/skipped/undo pro lokalem Datum | `habits`, `habit_logs`; kein LLM |
 | **Focus** | echter Timer, optional mit genau einem Task oder Habit verknüpft; gespeicherte Ritualpunkte werden vor Start lokal bestätigt/übersprungen, nach Abschluss kann ein lokaler Recovery-Countdown laufen | geplante Blockdauer oder Study Default, einmalig änderbare Dauer und gemessene verstrichene Zeit; Ritual-Häkchen werden nicht gespeichert | `focus_sessions` inklusive verwendeter Recovery-Minuten; kein eigener Pausendatensatz und kein LLM |
 | **Planner** | deterministische Vorschau aus expliziter Dauer/Deadline/Session beziehungsweise Habit-Dauer/Cadence; normale Tasks können explizit den Study Rhythm verwenden, Habits nicht; freie Zeit berücksichtigt bestätigte Belegung einschließlich Recovery; bei fehlender sichtbarer Verfügbarkeitsquelle warnt die UI vor automatischer Planung | Task/Habit-Eingaben, primär Setup/manual commitments, Study-Revision, Planner/Preparation reservations, optional consented aktueller Import | Planner preferences/plans/revisions/blocks/slots/commitments; erst Confirm erstellt/ändert Ziel und Reservierungen; kein LLM, Calendar-Write oder Auto-Replan |
 | **Decision feedback** | Reaktion auf eine konkrete Briefing-Aktion | Aktion, Kontext und Feedback-Typ | append-only `decision_feedback`; beeinflusst begrenzt spätere Rankings, führt die Aktion aber nicht aus |
@@ -261,7 +264,6 @@ Dashboards:
 
 | Objekt | Kernfrage | Zeitmodell | Wird „erledigt“? | Aktueller Verwaltungsort |
 | --- | --- | --- | --- | --- |
-| **Goal** | Wohin will ich? | längerfristig, optional mit Zieltag | nicht als heutige Aktion | Setup; keine allgemeine Goals-Seite |
 | **Task** | Was kann ich einmalig abschließen? | optionaler Deadline-Zeitpunkt | ja | Today |
 | **Habit** | Was will ich regelmäßig wiederholen? | täglich, gewählte Wochentage oder Wochenziel | Outcome pro lokalem Tag | Quick actions / Setup bei Setup-owned Habits |
 | **Schedule Item** | Wann bin ich jede Woche fest gebunden? | wiederkehrender Wochentag mit Start/Ende | nein | Setup; Ansicht in Today |
@@ -269,26 +271,13 @@ Dashboards:
 | **Preparation Block** | Wann reserviere ich einen Teil meiner Prüfungsvorbereitung? | konkretes lokales Datum im bestätigten Plan | nicht einzeln; Fortschritt kommt aus Focus | Preparation plans; Ansicht auch in Today |
 | **Focus Session** | Woran arbeite ich jetzt tatsächlich? | gemessener Timerblock | completed oder abandoned | Quick actions → Focus |
 
-### Goal
+### Goals (stillgelegt)
 
-Ein **Goal** beschreibt eine Richtung oder ein gewünschtes Ergebnis, nicht die
-nächste ausführbare Handlung.
-
-Beispiel: `Plan exams earlier`.
-
-- typische Frage: **Wohin will ich mich entwickeln?**
-- Felder: Titel, optionale Beschreibung, Status, optional Fortschritt und
-  Zieltermin;
-- Setup-Status: `active`, `paused` oder `archived`; die kanonische Tabelle
-  erlaubt zusätzlich `completed` für andere Quellen, hat dafür aber noch keine
-  allgemeine UI;
-- Verwendung: Kontext für Snapshots, Recommendations, Briefings und Coach;
-- aktuelle UI: Setup verwaltet bis zu drei Setup-Ziele. Es gibt keine allgemeine
-  Goals-Seite für frei angelegte Goals.
-
-Ein Goal wird nicht direkt „heute erledigt“. Ein Task oder Habit kann intern auf
-ein Goal verweisen, aber diese Beziehung wird in der Oberfläche noch nicht als
-klares Goal-Plan-System dargestellt.
+**Goals sind stillgelegt.** Die kanonische Tabelle bleibt ausschließlich für
+Kompatibilität und Account Export erhalten. Die Migration archiviert nur
+Setup-owned Goal-Zeilen und lässt manuelle oder fremd verwaltete Zeilen
+unverändert. Setup, Snapshot, Recommendations, Briefing, Weekly Review und Coach
+laden oder gewichten Goals nicht mehr; es gibt keine Goal-Oberfläche.
 
 ### Task
 
@@ -481,16 +470,17 @@ Dringlichkeitsschutz können nicht dadurch ausgehebelt werden.
 
 ### Memory
 
-Eine **Memory Entry** ist eine dauerhafte, überprüfbare Notiz, etwa zu Goal,
-Habit, Pattern oder wiederkehrendem Problem. Setup kann solche Notizen aus
-expliziten Angaben materialisieren. Der Coach darf höchstens acht geeignete
-Memories verwenden, und auch nur nach separater Auswahl im Coach-Screen.
+Eine **Memory Entry** ist eine dauerhafte, überprüfbare Notiz, etwa zu Habit,
+Pattern oder wiederkehrendem Problem. Setup materialisiert nur noch `Best
+energy window`; manuelle oder anderweitig erzeugte Memories bleiben erhalten.
+Der Coach darf höchstens acht geeignete Memories verwenden, und auch nur nach
+separater Auswahl im Coach-Screen.
 
 Aktuell gilt:
 
 - keine automatische Extraktion aus Gesprächen;
 - keine automatische Änderung von Stärke oder Evidenz;
-- preference-Memories sind für Coach V1 ausgeschlossen;
+- preference- und goal-Memories sind für Coach ausgeschlossen;
 - Setup-owned Inhalt wird in Setup geändert;
 - es gibt noch keine eigenständige allgemeine Memory-Verwaltung.
 
@@ -511,11 +501,12 @@ kein Beweis, dass eine System- oder Push-Benachrichtigung zugestellt wurde.
 Das Wort „lernen“ bezeichnet aktuell mehrere unterschiedliche Mechanismen. Nur
 einer davon passt zukünftige Entscheidungen automatisch an.
 
-### 1. Explizite Personalisierung aus Setup
+### 1. Expliziter Setup-Kontext
 
-Die App kennt Fokusbereiche, Day Shape, bestes Energiefenster, Coaching-Stil,
-Goals, bestätigte Habits und feste Commitments, weil der Nutzer sie angegeben
-hat. Das ist gespeicherter Kontext, kein maschinelles Lernen.
+Die App kennt Typical weekday, bestes Energiefenster, bestätigte Habits, feste
+Commitments und optional Study Setup, weil der Nutzer sie angegeben hat. Das ist
+gespeicherter Kontext, kein maschinelles Lernen. Reminder-Einstellungen bleiben
+ein separater Settings-Vertrag.
 
 ### 2. Regelbasierte Zustandsableitung
 
@@ -528,7 +519,7 @@ dieselben Ergebnisse. Ein LLM entscheidet diese Ergebnisse nicht.
 Completed/cancelled Tasks, completed/skipped Habits und completed/abandoned
 Focus-Sessions liefern belastbarere Fakten als eine weitere Selbsteinschätzung.
 Sie fließen in Snapshots, Wochenfakten und Insights ein, ändern aber nicht
-heimlich Definitionen oder Ziele.
+heimlich Definitionen.
 
 ### 4. Begrenztes adaptives Ranking durch Feedback
 
@@ -563,7 +554,7 @@ oder öffnet Setup.
 - keine Embeddings und keine Vector Search;
 - keine automatische Memory-Extraktion aus Check-ins oder Coach-Chats;
 - keine autonomen Agents oder model-gesteuerten Tools;
-- keine versteckten Änderungen an Goals, Tasks, Habits, Schedule oder Plänen;
+- keine versteckten Änderungen an Tasks, Habits, Schedule oder Plänen;
 - keine automatische Kalender-Synchronisation;
 - keine kausalen Gesundheits- oder Leistungsbehauptungen.
 
@@ -587,10 +578,10 @@ Der Screen heißt bewusst `Coach preview`.
 Für eine bewusst gesendete Nachricht baut FastAPI ein deterministisches Paket
 von höchstens 32 KiB. Es kann enthalten:
 
-- lokales Datum, Profil-Zeitzone und strukturierten Coaching-Stil;
-- aktuellen Daily-State-Snapshot;
+- lokales Datum und Profil-Zeitzone;
+- aktuellen, sanitisierten Daily-State-Snapshot;
 - aktuelles persistiertes Daily Briefing inklusive Freshness;
-- begrenzte aktive Goals, Tasks, Habits und aktuelle/letzte Focus-Sessions;
+- begrenzte aktive Tasks, Habits und aktuelle/letzte Focus-Sessions;
 - das letzte abgeschlossene Weekly Review mit sichtbarer Freshness;
 - höchstens acht ausdrücklich ausgewählte Memories;
 - höchstens sechs abgeschlossene frühere Coach-Turns, nochmals nach Zeichen
@@ -607,6 +598,7 @@ einbezogen oder ausgelassen wurden und wie frisch die Quelle war.
   Rohinhalt;
 - Check-in-Notizen, Intake-Freitext, Notification-Texte oder andere versteckte
   Freitexte;
+- Goals, Onboarding-Präferenzen, Coaching-Stil und Friction-Felder;
 - nicht ausgewählte Memories oder unbegrenzte Historie.
 
 ### Was er ausgeben darf
@@ -619,7 +611,7 @@ einbezogen oder ausgelassen wurden und wie frisch die Quelle war.
 
 ### Was er nicht tun darf
 
-Der Coach kann keine Goals, Tasks, Habits, Schedule Items, Calendar Events,
+Der Coach kann keine Tasks, Habits, Schedule Items, Calendar Events,
 Briefings, Reviews, Memories oder Preparation Plans anlegen, ändern, erledigen
 oder löschen. Er kann auch nicht selbständig im Hintergrund laufen. Daily State
 und Daily Briefing bleiben begrenzte Berechnungs- und Rangfolgequellen; der
@@ -647,7 +639,7 @@ erzwingen sichtbar höhere Unsicherheit.
 | Datenbereich | Zentrale Tabellen bzw. Speicherung | Hauptnutzer |
 | --- | --- | --- |
 | Identität und Profil | Supabase Auth, `profiles` | Routing, lokale Datumslogik, Account controls |
-| Setup | `intake_responses`, `study_setup_profiles`, `goals`, `habits`, `schedule_items`, `notification_preferences`, `memory_entries`, Onboarding-`user_state_snapshots` | Setup, Focus Defaults/Ritual, Planner/Preparation, Snapshots, Briefings, Coach |
+| Setup | `intake_responses`, `study_setup_profiles`, `habits`, `schedule_items`, Best-Energy-`memory_entries`, Onboarding-`user_state_snapshots`; `goals` nur archivierte Kompatibilität | Setup, Focus Defaults/Ritual und Planner/Preparation; keine Reminder-Mutation |
 | Tägliche Erfassung | `daily_logs`, `behavioral_events` | Today, Daily State, Insights |
 | Ausführung | `tasks`, `habit_logs`, `focus_sessions` | Today, Focus/Habits, Snapshot, Weekly Review, Insights |
 | Tagesüberblick | `daily_logs`, `tasks`, `habits`, `habit_logs`, `schedule_items`, aktive Planner-/Preparation-Blöcke, feste Planner-Commitments, aktueller Calendar Import und `focus_sessions` | `today-overview-v2` und Today; V1 bleibt kompatibel |
@@ -677,8 +669,8 @@ absichtlich weiterhin sichtbar:
    `More` bleiben aber Preparation-Auslastung, Weekly Review, Recommendations,
    Feedback-Historie und die volle Woche gebündelt.
 2. **Definition und Zeitplanung sind nicht immer dieselbe Autorität.** Planner
-   verwaltet manuelle Tasks, Habits, Preparation und Commitments. Goals sowie
-   Setup-owned Habit-/Commitment-Definitionen bleiben unter `Settings → Setup`;
+   verwaltet manuelle Tasks, Habits, Preparation und Commitments. Setup-owned
+   Habit-/Commitment-Definitionen bleiben unter `Settings → Setup`;
    Planner darf sie nur ausführen beziehungsweise als Busy-Time verwenden.
 3. **Drei Zeitmodelle sehen ähnlich aus.** Wiederkehrende `Schedule Items`,
    importierte `Calendar Events` und datierte `Preparation Blocks` heißen im
@@ -689,8 +681,8 @@ absichtlich weiterhin sichtbar:
    Backend-Fakt für Reminder/Coach/Feedback, und eine Coach-Suggestion bleibt
    nur eine unverbindliche sprachliche Reflexion.
 5. **Setup ist gleichzeitig Onboarding und spätere Verwaltung.** Nutzer erwarten
-   dort meist nur den ersten Start, tatsächlich werden dort dauerhaft Goals,
-   Setup-Habits und Commitments gepflegt.
+   dort meist nur den ersten Start; tatsächlich werden dort dauerhaft
+   Setup-Habits, Commitments und Study Setup gepflegt.
 6. **Quick actions bleibt reine Tagesausführung.** Check-ins, Habit Completion
    und Focus liegen dort; Neuanlage und Verwaltung sind in Planner gebündelt.
 7. **`Insights` mischt aktuelle Berechnung und gespeicherte Notes.** Die
@@ -713,14 +705,13 @@ Bis zu einer späteren Informationsarchitektur kann man die App so lesen:
 | Woran arbeite ich jetzt messbar? | `Quick actions → Focus` |
 | Welche Prüfung/Abgabe braucht reservierte Lernzeit? | `Planner → Exam/Assignment` |
 | Was ist einmalig oder jede Woche fest belegt? | `Planner → Fixed commitment`; Setup-owned Commitments bleiben unter `Settings → Setup` |
-| Was ist meine längerfristige Richtung? | `Settings → Setup and commitments → Goals` |
 | Was passierte letzte Woche? | `Today → Weekly review` |
 | Welche Zusammenhänge sehe ich über mehrere Tage? | `Insights` |
 | Welche Hinweise warten auf mich? | `Settings → Inbox` |
 | Kann mir ein Modell den Zustand erklären? | `Coach` in der Hauptnavigation, nur Development Preview |
 
-Goals und Setup-owned Habit-/Commitment-Definitionen bleiben bewusst unter
-Settings Setup; Planner darf aktive Setup-Habits zeitlich einplanen und zeigt
+Setup-owned Habit-/Commitment-Definitionen bleiben bewusst unter Settings
+Setup; Planner darf aktive Setup-Habits zeitlich einplanen und zeigt
 Setup-Commitments als belegte Zeit, übernimmt aber nicht deren Definition.
 
 ## Konkreter Testweg mit dem Student-Account
@@ -782,8 +773,8 @@ Es ist kein Befehl für eine Remote-Datenbank.
 ## Bewusst nicht implementiert
 
 - deutsche Lokalisierung;
-- allgemeine Goals- oder Memory-Verwaltungsseite sowie Bearbeitung
-  Setup-owned Definitionen außerhalb von Settings Setup;
+- aktive Goals-Oberfläche oder Goal-Auswertung sowie eine allgemeine
+  Memory-Verwaltungsseite;
 - produktionsfähiger LLM-Provider;
 - ein persönliches trainiertes Modell oder Vector Memory;
 - autonomer Coach oder model-gesteuerte Schreibaktionen;
@@ -791,11 +782,13 @@ Es ist kein Befehl für eine Remote-Datenbank.
 - Browser-, System-, Push-, E-Mail- oder Background-Notifications;
 - deployter Cron/Scheduler;
 - automatische Prüfungsaufwandsschätzung oder Calendar-Titel-Inferenz;
-- automatische Plan-, Goal-, Task- oder Habit-Änderungen;
+- automatische Plan-, Task- oder Habit-Änderungen;
 - belastbarer Skillset-Score für echte Accounts.
 
 ## Vertiefende technische Dokumente
 
+- `docs/setup-personalization-retirement-contract.md`: schlankes Setup,
+  Goal-/Friction-Stilllegung, Kompatibilität und Datenbereinigung.
 - `docs/architecture.md`: Systemgrenzen und Datenflüsse.
 - `docs/daily-briefing-implementation-plan.md`: Daily State, Briefing, Ranking
   und Feedback.

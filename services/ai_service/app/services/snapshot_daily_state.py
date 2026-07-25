@@ -6,8 +6,9 @@ from math import isfinite
 from typing import Any, Literal
 
 
-DAILY_STATE_CONTRACT_VERSION = "explainable-daily-state-v1"
+DAILY_STATE_CONTRACT_VERSION = "explainable-daily-state-v2"
 DAILY_STATE_LOOKBACK_DAYS = 7
+_DAILY_CAPTURE_VERSIONS = frozenset({"daily-capture-v2", "daily-capture-v3"})
 
 DataQuality = Literal["missing", "partial", "current", "stale"]
 DailyMode = Literal["push", "steady", "recover", "plan"]
@@ -39,7 +40,11 @@ class _Capture:
     row_id: str
     entry_date: date
     captured_at: datetime | None
-    source_format: Literal["explicit_capture_v2", "legacy_daily_log"]
+    source_format: Literal[
+        "explicit_capture_v2",
+        "explicit_capture_v3",
+        "legacy_daily_log",
+    ]
     values: dict[str, Any]
     complete: bool
     integrity_ok: bool = True
@@ -78,7 +83,7 @@ class _Reason:
 
 
 def valid_explicit_capture_kinds(row: dict[str, Any]) -> frozenset[str]:
-    """Return only complete, projection-consistent Daily Capture V2 branches.
+    """Return only complete, projection-consistent Daily Capture branches.
 
     Today streak/progress uses the same capture integrity boundary as Daily
     State while deliberately excluding legacy numeric rows. A malformed branch
@@ -92,7 +97,7 @@ def valid_explicit_capture_kinds(row: dict[str, Any]) -> frozenset[str]:
         row_id is None
         or row_date is None
         or not isinstance(metadata, dict)
-        or metadata.get("capture_version") != "daily-capture-v2"
+        or metadata.get("capture_version") not in _DAILY_CAPTURE_VERSIONS
         or not isinstance(metadata.get("captures"), dict)
     ):
         return frozenset()
@@ -107,6 +112,7 @@ def valid_explicit_capture_kinds(row: dict[str, Any]) -> frozenset[str]:
             raw=raw,
             row_id=row_id,
             row_date=row_date,
+            capture_version=str(metadata["capture_version"]),
         )
         if capture is not None:
             captures[kind] = capture
@@ -129,7 +135,7 @@ def build_snapshot_daily_state(
     *,
     daily_logs: list[dict[str, Any]],
     tasks: list[dict[str, Any]],
-    goals: list[dict[str, Any]],
+    goals: list[dict[str, Any]] | None = None,
     target_date: date,
     generated_at: datetime,
 ) -> DailyStateResult:
@@ -200,7 +206,7 @@ def build_snapshot_daily_state(
             if legacy is not None:
                 captures["legacy"].append(legacy)
             continue
-        if capture_version != "daily-capture-v2":
+        if capture_version not in _DAILY_CAPTURE_VERSIONS:
             _append_issue(issues, "daily_log.unsupported_capture_version")
             _block_current_kinds(
                 blocked_current_dates,
@@ -231,6 +237,7 @@ def build_snapshot_daily_state(
                 raw=raw,
                 row_id=row_id,
                 row_date=row_date,
+                capture_version=str(capture_version),
             )
             issues.extend(capture_issues)
             if capture is None:
@@ -286,11 +293,6 @@ def build_snapshot_daily_state(
         for row in tasks
         if _task_is_active(row) and _non_empty_string(row.get("id"), max_length=200)
     ]
-    active_goals = [
-        row
-        for row in goals
-        if _goal_is_active(row) and _non_empty_string(row.get("id"), max_length=200)
-    ]
     risks = _build_risks(
         data_quality=data_quality,
         current_context=current_context,
@@ -304,7 +306,6 @@ def build_snapshot_daily_state(
         risks=risks,
         overdue_tasks=overdue_tasks,
         active_tasks=active_tasks,
-        active_goals=active_goals,
         latest=latest,
         freshness=freshness,
     )
@@ -382,6 +383,7 @@ def _parse_v2_capture(
     raw: Any,
     row_id: str,
     row_date: date,
+    capture_version: str,
 ) -> tuple[_Capture | None, list[str]]:
     issues: list[str] = []
     if not isinstance(raw, dict):
@@ -404,21 +406,12 @@ def _parse_v2_capture(
             "mood": _rating(raw.get("mood"), minimum=1),
             "energy": _rating(raw.get("energy"), minimum=1),
             "stress_intensity": _rating(raw.get("stress_intensity"), minimum=1),
-            "main_friction": _enum_value(raw.get("main_friction"), _MAIN_FRICTIONS),
         }
         for field, value in required.items():
             if value is None:
                 _append_issue(issues, f"evening.invalid_{field}")
             else:
                 values[field] = value
-        additional_frictions = _additional_friction_values(
-            raw.get("additional_frictions"),
-            main_friction=required["main_friction"],
-        )
-        if additional_frictions is None:
-            _append_issue(issues, "evening.invalid_additional_frictions")
-        else:
-            values["additional_frictions"] = additional_frictions
         stress = values.get("stress_intensity")
         source = _enum_value(raw.get("stress_source"), _STRESS_SOURCES)
         controllability = _enum_value(
@@ -489,7 +482,11 @@ def _parse_v2_capture(
             row_id=row_id,
             entry_date=row_date,
             captured_at=captured_at,
-            source_format="explicit_capture_v2",
+            source_format=(
+                "explicit_capture_v3"
+                if capture_version == "daily-capture-v3"
+                else "explicit_capture_v2"
+            ),
             values=values,
             complete=complete,
             integrity_ok=not issues,
@@ -622,14 +619,6 @@ def _build_context(captures: list[_Capture]) -> dict[str, Any]:
             "controllability": stress_controllability,
         },
         "focus_band": evening.values.get("focus_band") if evening is not None else None,
-        "main_friction": (
-            evening.values.get("main_friction") if evening is not None else None
-        ),
-        "additional_frictions": (
-            evening.values.get("additional_frictions", [])
-            if evening is not None
-            else []
-        ),
         "day_shape": morning.values.get("day_shape") if morning is not None else None,
     }
 
@@ -650,7 +639,6 @@ def _build_risks(
     sleep = _as_float(current_context.get("sleep_hours"))
     sleep_quality = _as_float(current_context.get("sleep_quality"))
     day_shape = current_context.get("day_shape")
-    friction = current_context.get("main_friction")
 
     current_evening = _current_capture(latest, freshness, "evening")
     current_morning = _current_capture(latest, freshness, "morning")
@@ -751,23 +739,13 @@ def _build_risks(
     workload_overload = (
         intensity is not None and intensity >= 8 and source == "workload"
     )
-    friction_overload = (
-        intensity is not None
-        and intensity >= 7
-        and friction == "too_much_to_do"
-    )
-    if workload_overload or friction_overload:
+    if workload_overload:
         add(
             "overload",
             current_evening.ref("stress_intensity") if current_evening else None,
             (
                 current_evening.ref("stress_source")
                 if current_evening and workload_overload
-                else None
-            ),
-            (
-                current_evening.ref("main_friction")
-                if current_evening and friction_overload
                 else None
             ),
         )
@@ -825,7 +803,6 @@ def _classify_mode(
     risks: list[_Risk],
     overdue_tasks: list[dict[str, Any]],
     active_tasks: list[dict[str, Any]],
-    active_goals: list[dict[str, Any]],
     latest: dict[CaptureKind, _Capture | None],
     freshness: dict[CaptureKind, dict[str, Any]],
 ) -> tuple[DailyMode, tuple[_Reason, ...]]:
@@ -837,7 +814,6 @@ def _classify_mode(
     sleep = _as_float(current_context.get("sleep_hours"))
     sleep_quality = _as_float(current_context.get("sleep_quality"))
     day_shape = current_context.get("day_shape")
-    friction = current_context.get("main_friction")
     risk_map = {risk.code: risk for risk in risks}
     current_evening = _current_capture(latest, freshness, "evening")
     current_morning = _current_capture(latest, freshness, "morning")
@@ -1024,36 +1000,14 @@ def _classify_mode(
                 intensity_ref,
             ),
         )
-    if friction == "unclear_priorities":
-        plan_reasons.append(
-            _Reason(
-                "plan_unclear_priorities",
-                "Priorities are unclear, so choosing before executing is more useful.",
-                (
-                    current_evening.ref("main_friction"),
-                )
-                if current_evening is not None
-                else (),
-            ),
-        )
-    if friction == "too_much_to_do" or "overload" in risk_map:
+    if "overload" in risk_map:
         overload_reason = _reason_from_risks(
             "plan_overload",
             "Current load supports reducing scope before execution.",
             risk_map,
             "overload",
         )
-        plan_reasons.append(
-            _with_reason_evidence(
-                overload_reason,
-                (
-                    current_evening.ref("main_friction")
-                    if current_evening is not None
-                    and friction == "too_much_to_do"
-                    else None
-                ),
-            ),
-        )
+        plan_reasons.append(overload_reason)
     if source == "workload" and intensity is not None and intensity >= 7:
         plan_reasons.append(
             _with_reason_evidence(
@@ -1064,18 +1018,6 @@ def _classify_mode(
                     "workload_pressure",
                 ),
                 intensity_ref,
-            ),
-        )
-    if friction == "hard_to_start":
-        plan_reasons.append(
-            _Reason(
-                "plan_start_friction",
-                "Start friction supports making the next step smaller and clearer.",
-                (
-                    current_evening.ref("main_friction"),
-                )
-                if current_evening is not None
-                else (),
             ),
         )
     if overdue_tasks:
@@ -1115,13 +1057,9 @@ def _classify_mode(
         and intensity <= 4
         and day_shape in {"normal", "flexible"}
         and not overdue_tasks
-        and (active_tasks or active_goals)
+        and active_tasks
     ):
-        action_ref = (
-            _EvidenceRef("tasks", str(active_tasks[0]["id"]), "status")
-            if active_tasks
-            else _EvidenceRef("goals", str(active_goals[0]["id"]), "status")
-        )
+        action_ref = _EvidenceRef("tasks", str(active_tasks[0]["id"]), "status")
         return (
             "push",
             (
@@ -1384,7 +1322,7 @@ def _basis(captures: list[_Capture]) -> str:
     formats = {capture.source_format for capture in captures}
     if not formats:
         return "none"
-    if formats == {"explicit_capture_v2"}:
+    if formats and formats <= {"explicit_capture_v2", "explicit_capture_v3"}:
         return "explicit_capture"
     if formats == {"legacy_daily_log"}:
         return "legacy_numeric"
@@ -1407,10 +1345,6 @@ def _overdue_tasks(
 
 def _task_is_active(row: dict[str, Any]) -> bool:
     return str(row.get("status") or "") not in {"done", "cancelled", "archived"}
-
-
-def _goal_is_active(row: dict[str, Any]) -> bool:
-    return str(row.get("status") or "active") == "active"
 
 
 def _reason_from_risks(
@@ -1551,25 +1485,6 @@ def _enum_value(value: Any, allowed: frozenset[str]) -> str | None:
     return value if isinstance(value, str) and value in allowed else None
 
 
-def _additional_friction_values(
-    value: Any,
-    *,
-    main_friction: str | None,
-) -> list[str] | None:
-    if value is None:
-        return []
-    if not isinstance(value, list) or len(value) > 2:
-        return None
-    if any(
-        not isinstance(item, str) or item not in _ADDITIONAL_FRICTIONS
-        for item in value
-    ):
-        return None
-    if len(set(value)) != len(value) or main_friction in value:
-        return None
-    return list(value)
-
-
 def _stress_label(value: Any) -> str | None:
     if not isinstance(value, int):
         return None
@@ -1618,19 +1533,5 @@ _FOCUS_BANDS = frozenset(
         "over_2_hours",
     },
 )
-_MAIN_FRICTIONS = frozenset(
-    {
-        "no_major_friction",
-        "unclear_priorities",
-        "too_much_to_do",
-        "interruptions",
-        "hard_to_start",
-        "low_energy",
-        "emotional_load",
-        "physical_recovery",
-        "external_constraints",
-    },
-)
-_ADDITIONAL_FRICTIONS = _MAIN_FRICTIONS - {"no_major_friction"}
 _DAY_SHAPES = frozenset({"normal", "constrained", "flexible"})
 _STRESS_LABELS = frozenset({"low", "medium", "high"})

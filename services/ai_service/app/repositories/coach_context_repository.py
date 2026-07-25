@@ -28,6 +28,7 @@ class CoachProfileContext:
 @dataclass(frozen=True)
 class CoachRawContext:
     profile: CoachProfileContext
+    # Dormant compatibility fields; the V2 context builder never reads them.
     onboarding_snapshot: dict[str, Any] | None
     daily_snapshot: dict[str, Any] | None
     goals: BoundedRows
@@ -52,7 +53,6 @@ class CoachContextRepository(Protocol):
 
 
 class SupabaseCoachContextRepository:
-    _GOAL_CAP = 6
     _TASK_CAP = 10
     _HABIT_CAP = 8
     _FOCUS_CAP = 6
@@ -96,9 +96,7 @@ class SupabaseCoachContextRepository:
     ) -> CoachRawContext:
         (
             profile,
-            onboarding,
             snapshot,
-            goals,
             tasks,
             habits,
             focus,
@@ -106,18 +104,7 @@ class SupabaseCoachContextRepository:
             history,
         ) = await asyncio.gather(
             self.get_profile(user_id=user_id),
-            self._onboarding_snapshot(user_id=user_id),
             self._daily_snapshot(user_id=user_id, local_date=local_date),
-            self._bounded(
-                "goals",
-                params=[
-                    ("select", "id,title,status,progress,due_date,updated_at"),
-                    ("user_id", f"eq.{user_id}"),
-                    ("status", "eq.active"),
-                    ("order", "updated_at.desc,id.asc"),
-                ],
-                cap=self._GOAL_CAP,
-            ),
             self._bounded(
                 "tasks",
                 params=[
@@ -163,33 +150,15 @@ class SupabaseCoachContextRepository:
         )
         return CoachRawContext(
             profile=profile,
-            onboarding_snapshot=onboarding,
+            onboarding_snapshot=None,
             daily_snapshot=snapshot,
-            goals=goals,
+            goals=BoundedRows(available_count=0, rows=[]),
             tasks=tasks,
             habits=habits,
             focus_sessions=focus,
             selected_memories=memories,
             history=history,
         )
-
-    async def _onboarding_snapshot(
-        self,
-        *,
-        user_id: str,
-    ) -> dict[str, Any] | None:
-        rows = await self._client.select(
-            "user_state_snapshots",
-            params={
-                "select": "summary,generated_at",
-                "user_id": f"eq.{user_id}",
-                "scope": "eq.onboarding",
-                "period_key": "eq.setup:intake-v1",
-                "order": "generated_at.desc,id.desc",
-                "limit": "1",
-            },
-        )
-        return rows[0] if rows else None
 
     async def _daily_snapshot(
         self,
@@ -231,7 +200,7 @@ class SupabaseCoachContextRepository:
             params={
                 "select": "id,type,title,content,metadata,updated_at",
                 "user_id": f"eq.{user_id}",
-                "type": "neq.preference",
+                "type": "not.in.(preference,goal)",
                 "id": f"in.({','.join(ids)})",
                 "limit": str(self._MEMORY_CAP),
             },

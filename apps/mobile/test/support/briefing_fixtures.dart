@@ -44,7 +44,7 @@ Map<String, dynamic> briefingResponseJson({
             'provenance': {
               'engine': 'deterministic',
               'contract_version': dailyBriefingContractVersion,
-              'daily_state_contract_version': 'explainable-daily-state-v1',
+              'daily_state_contract_version': 'explainable-daily-state-v2',
               'executable_action_contract_version': 'executable-action-v1',
               'source_snapshot_id': '33333333-3333-4333-8333-333333333333',
               'source_snapshot_generated_at': '2026-07-12T07:55:00Z',

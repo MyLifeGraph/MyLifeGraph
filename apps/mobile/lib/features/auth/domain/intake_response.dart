@@ -1,25 +1,11 @@
 import 'dart:math';
 
-const _allowedFocusAreas = {
-  'focus',
-  'energy',
-  'sleep',
-  'stress',
-  'planning',
-  'movement',
-};
 const _allowedEnergyWindows = {
   'early_morning',
   'morning',
   'afternoon',
   'evening',
   'variable',
-};
-const _allowedCoachingStyles = {
-  'direct',
-  'gentle',
-  'analytical',
-  'accountability',
 };
 const _allowedCalendarIntents = {'not_now', 'later', 'interested'};
 
@@ -712,19 +698,24 @@ class IntakeReminderPreference {
 class IntakeResponseDraft {
   const IntakeResponseDraft({
     required this.displayName,
-    required this.primaryFocusAreas,
-    required this.goals,
-    required this.frictionPoints,
+    List<String> primaryFocusAreas = const [],
+    List<IntakeGoalDraft> goals = const [],
+    List<String> frictionPoints = const [],
     required this.weekdayShape,
     required this.bestEnergyWindow,
-    required this.coachingStyle,
-    required this.reminderPreference,
+    String? coachingStyle,
+    IntakeReminderPreference? reminderPreference,
     required this.routines,
     required this.fixedCommitments,
-    required this.contextNote,
+    String? contextNote,
     required this.calendarConnectionIntent,
     this.studySetup,
-  });
+  })  : primaryFocusAreas = const [],
+        goals = const [],
+        frictionPoints = const [],
+        coachingStyle = null,
+        reminderPreference = null,
+        contextNote = null;
 
   const IntakeResponseDraft.empty({this.displayName})
       : primaryFocusAreas = const [],
@@ -743,21 +734,8 @@ class IntakeResponseDraft {
   factory IntakeResponseDraft.fromJson(Map<String, dynamic> json) {
     return IntakeResponseDraft(
       displayName: _optionalString(json['display_name']),
-      primaryFocusAreas: _stringList(json['primary_focus_areas']),
-      goals: _modelList(
-        json['goals'],
-        modelName: 'goal',
-        fromJson: IntakeGoalDraft.fromJson,
-      ),
-      frictionPoints: _stringList(json['friction_points']),
       weekdayShape: _optionalString(json['weekday_shape']),
       bestEnergyWindow: _optionalString(json['best_energy_window']),
-      coachingStyle: _optionalString(json['coaching_style']),
-      reminderPreference: json['reminder_preference'] == null
-          ? null
-          : IntakeReminderPreference.fromJson(
-              _requiredMap(json['reminder_preference'], 'reminder_preference'),
-            ),
       routines: _modelList(
         json['routines'],
         modelName: 'routine',
@@ -768,7 +746,6 @@ class IntakeResponseDraft {
         modelName: 'fixed commitment',
         fromJson: IntakeCommitmentDraft.fromJson,
       ),
-      contextNote: _optionalString(json['context_note']),
       calendarConnectionIntent:
           _optionalString(json['calendar_connection_intent']),
       studySetup: json.containsKey('study_setup')
@@ -804,20 +781,13 @@ class IntakeResponseDraft {
     return {
       if (displayName != null && displayName!.trim().isNotEmpty)
         'display_name': displayName!.trim(),
-      'primary_focus_areas': primaryFocusAreas,
-      'goals': goals.map((goal) => goal.toJson()).toList(growable: false),
-      'friction_points': frictionPoints,
       'weekday_shape': weekdayShape,
       'best_energy_window': bestEnergyWindow,
-      'coaching_style': coachingStyle,
-      'reminder_preference': reminderPreference!.toJson(),
       'routines':
           routines.map((habit) => habit.toJson()).toList(growable: false),
       'fixed_commitments': fixedCommitments
           .map((commitment) => commitment.toJson())
           .toList(growable: false),
-      if (contextNote != null && contextNote!.trim().isNotEmpty)
-        'context_note': contextNote!.trim(),
       if (calendarConnectionIntent != null &&
           calendarConnectionIntent!.trim().isNotEmpty)
         'calendar_connection_intent': calendarConnectionIntent!.trim(),
@@ -827,22 +797,9 @@ class IntakeResponseDraft {
   }
 
   bool get hasRequiredAnswers =>
-      primaryFocusAreas.isNotEmpty &&
-      weekdayShape != null &&
-      bestEnergyWindow != null &&
-      coachingStyle != null &&
-      reminderPreference != null;
+      weekdayShape != null && bestEnergyWindow != null;
 
   IntakeResponseDraft normalized() {
-    final normalizedGoals = goals
-        .where((goal) => goal.title.trim().isNotEmpty)
-        .map(
-          (goal) => goal.copyWith(
-            key: goal.key.trim(),
-            title: goal.title.trim(),
-          ),
-        )
-        .toList(growable: false);
     final normalizedHabits = routines
         .where((habit) => habit.title.trim().isNotEmpty)
         .map(
@@ -871,15 +828,10 @@ class IntakeResponseDraft {
 
     return copyWith(
       displayName: _optionalString(displayName),
-      primaryFocusAreas: _cleanStringList(primaryFocusAreas),
-      goals: normalizedGoals,
-      frictionPoints: _cleanStringList(frictionPoints),
       weekdayShape: _optionalString(weekdayShape),
       bestEnergyWindow: _optionalString(bestEnergyWindow),
-      coachingStyle: _optionalString(coachingStyle),
       routines: normalizedHabits,
       fixedCommitments: normalizedCommitments,
-      contextNote: _optionalString(contextNote),
       calendarConnectionIntent: _optionalString(calendarConnectionIntent),
       studySetup: _normalizedStudySetup(studySetup),
     );
@@ -891,17 +843,6 @@ class IntakeResponseDraft {
     if (draft.displayName != null && _textLength(draft.displayName!) > 120) {
       errors.add('Display name must be 120 characters or fewer.');
     }
-    if (draft.primaryFocusAreas.isEmpty) {
-      errors.add('Choose at least one focus area.');
-    }
-    if (draft.primaryFocusAreas.length > 6) {
-      errors.add('Choose no more than six focus areas.');
-    }
-    if (draft.primaryFocusAreas.any(
-      (area) => !_allowedFocusAreas.contains(area),
-    )) {
-      errors.add('Focus areas must use supported values.');
-    }
     if (draft.weekdayShape == null) {
       errors.add('Choose a typical weekday shape.');
     } else if (_textLength(draft.weekdayShape!) > 500) {
@@ -912,33 +853,11 @@ class IntakeResponseDraft {
     } else if (!_allowedEnergyWindows.contains(draft.bestEnergyWindow)) {
       errors.add('Choose a supported energy window.');
     }
-    if (draft.coachingStyle == null) {
-      errors.add('Choose a coaching style.');
-    } else if (!_allowedCoachingStyles.contains(draft.coachingStyle)) {
-      errors.add('Choose a supported coaching style.');
-    }
-    final reminder = draft.reminderPreference;
-    if (reminder == null) {
-      errors.add('Choose whether reminders are enabled.');
-    } else if (reminder.enabled &&
-        (!_isTime(reminder.quietHoursStart) ||
-            !_isTime(reminder.quietHoursEnd))) {
-      errors.add('Enter quiet hours in HH:mm format.');
-    }
-    if (draft.goals.length > 3) {
-      errors.add('Add no more than three goals.');
-    }
-    if (draft.frictionPoints.length > 5) {
-      errors.add('Add no more than five friction points.');
-    }
     if (draft.routines.length > 5) {
       errors.add('Add no more than five routines.');
     }
     if (draft.fixedCommitments.length > 10) {
       errors.add('Add no more than ten fixed commitments.');
-    }
-    if (draft.contextNote != null && _textLength(draft.contextNote!) > 1000) {
-      errors.add('Context note must be 1000 characters or fewer.');
     }
     if (draft.calendarConnectionIntent != null &&
         !_allowedCalendarIntents.contains(draft.calendarConnectionIntent)) {
@@ -1012,17 +931,6 @@ class IntakeResponseDraft {
         errors.add('Course names must be unique and limited to twelve.');
       }
     }
-    for (final goal in draft.goals) {
-      if (_textLength(goal.title) > 200) {
-        errors.add('Goal titles must be 200 characters or fewer.');
-        break;
-      }
-    }
-    _validateUniqueKeys(
-      draft.goals.map((goal) => goal.key),
-      'goal',
-      errors,
-    );
     _validateUniqueKeys(
       draft.routines.map((habit) => habit.key),
       'routine',
@@ -1034,7 +942,6 @@ class IntakeResponseDraft {
       errors,
     );
     final allKeys = [
-      ...draft.goals.map((goal) => goal.key),
       ...draft.routines.map((routine) => routine.key),
       ...draft.fixedCommitments.map((commitment) => commitment.key),
       ...?draft.studySetup?.focusRhythm?.preparationItems.map(
@@ -1134,26 +1041,14 @@ class IntakeResponseDraft {
       displayName: identical(displayName, _unset)
           ? this.displayName
           : displayName as String?,
-      primaryFocusAreas: primaryFocusAreas ?? this.primaryFocusAreas,
-      goals: goals ?? this.goals,
-      frictionPoints: frictionPoints ?? this.frictionPoints,
       weekdayShape: identical(weekdayShape, _unset)
           ? this.weekdayShape
           : weekdayShape as String?,
       bestEnergyWindow: identical(bestEnergyWindow, _unset)
           ? this.bestEnergyWindow
           : bestEnergyWindow as String?,
-      coachingStyle: identical(coachingStyle, _unset)
-          ? this.coachingStyle
-          : coachingStyle as String?,
-      reminderPreference: identical(reminderPreference, _unset)
-          ? this.reminderPreference
-          : reminderPreference as IntakeReminderPreference?,
       routines: routines ?? this.routines,
       fixedCommitments: fixedCommitments ?? this.fixedCommitments,
-      contextNote: identical(contextNote, _unset)
-          ? this.contextNote
-          : contextNote as String?,
       calendarConnectionIntent: identical(calendarConnectionIntent, _unset)
           ? this.calendarConnectionIntent
           : calendarConnectionIntent as String?,
@@ -1378,9 +1273,6 @@ IntakeResponseDraft repairSetupItemKeys(IntakeResponseDraft draft) {
   }
 
   return draft.copyWith(
-    goals: draft.goals
-        .map((goal) => goal.copyWith(key: repairedKey(goal.key)))
-        .toList(growable: false),
     routines: draft.routines
         .map((routine) => routine.copyWith(key: repairedKey(routine.key)))
         .toList(growable: false),
@@ -1600,21 +1492,6 @@ Map<String, dynamic>? _optionalMap(Object? value) {
     return null;
   }
   return _requiredMap(value, 'value');
-}
-
-List<String> _stringList(Object? value) {
-  if (value == null) {
-    return const [];
-  }
-  if (value is! List) {
-    throw const FormatException('Expected a list of strings.');
-  }
-  return value.map((item) {
-    if (item is! String || item.trim().isEmpty) {
-      throw const FormatException('Expected non-empty list strings.');
-    }
-    return item.trim();
-  }).toList(growable: false);
 }
 
 List<T> _modelList<T>(

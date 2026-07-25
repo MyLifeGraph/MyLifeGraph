@@ -137,8 +137,8 @@ request identities in the same owner-locked account-deletion workflow.
 ## Explicit Non-Claims
 
 - This contract does not generate an Inbox row.
-- Existing Setup reminder preferences are not delivery permission and must not
-  silently authorize a future delivery channel.
+- Existing Reminder settings are not delivery permission and must not silently
+  authorize a future delivery channel. Setup neither reads nor writes them.
 - Notification Delivery V1 separately defines explicit in-app consent,
   timezone/quiet/category/cap/dedupe guards, local generation, and foreground
   acknowledgement. This lifecycle contract still implies none of those merely

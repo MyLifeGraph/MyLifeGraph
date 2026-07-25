@@ -467,17 +467,33 @@ async def _seed_feedback(
         None,
     )
     task_actions = [item for item in actions if item[2].target.kind == "task"]
-    if weekly_action is None or other_habit_action is None or not task_actions:
-        raise RuntimeError(
-            "Student briefings did not expose the habit/task feedback coverage."
-        )
-    selections = [
-        ("too_much", weekly_action),
-        ("does_not_fit", other_habit_action),
-        ("done", task_actions[0]),
-        ("later", task_actions[min(1, len(task_actions) - 1)]),
-        ("not_helpful", task_actions[-1]),
+    preferred = [
+        weekly_action,
+        other_habit_action,
+        task_actions[0] if task_actions else None,
+        task_actions[1] if len(task_actions) > 1 else None,
+        task_actions[-1] if task_actions else None,
     ]
+    selected_actions: list[tuple[date, object, object]] = []
+    for preferred_action in preferred:
+        if preferred_action is not None and preferred_action not in selected_actions:
+            selected_actions.append(preferred_action)
+    for action in actions:
+        if action not in selected_actions:
+            selected_actions.append(action)
+        if len(selected_actions) >= 5:
+            break
+    if len(selected_actions) < 5:
+        raise RuntimeError(
+            "Student briefings did not expose five runtime actions for feedback."
+        )
+    selections = list(
+        zip(
+            ["too_much", "does_not_fit", "done", "later", "not_helpful"],
+            selected_actions[:5],
+            strict=True,
+        )
+    )
     zone = ZoneInfo(timezone)
     rows: list[dict[str, object]] = []
     for index, (feedback_type, selected) in enumerate(selections):

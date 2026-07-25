@@ -85,11 +85,9 @@ class CoachContextService:
             raw.daily_snapshot,
             local_date=local_date,
         )
-        preference = _coaching_preference(raw.onboarding_snapshot)
         profile = {
             "local_date": local_date.isoformat(),
             "timezone": _bounded_text(raw.profile.timezone, 100),
-            "coaching_preference": preference,
         }
         briefing_item = briefing.model_dump(mode="json") if briefing.briefing else None
         weekly_item = (
@@ -114,7 +112,6 @@ class CoachContextService:
                 briefing.freshness,
                 singleton=True,
             ),
-            _row_source("goals", raw.goals, _safe_goal),
             _row_source("tasks", raw.tasks, _safe_task),
             _row_source("habits", raw.habits, _safe_habit),
             _row_source("focus_sessions", raw.focus_sessions, _safe_focus),
@@ -146,7 +143,7 @@ def _fit_sources(
     sources: list[_Source],
 ) -> tuple[dict[str, Any], list[CoachUsedContext]]:
     context: dict[str, Any] = {
-        "contract_version": "coach-context-v1",
+        "contract_version": "coach-context-v2",
         "context_scope": "today",
         "local_date": local_date.isoformat(),
         "sources": {},
@@ -203,7 +200,11 @@ def _safe_snapshot(
     daily_state = summary.get("daily_state") if isinstance(summary, dict) else None
     if not isinstance(daily_state, dict):
         return None, "stale", "missing"
-    if daily_state.get("contract_version") != "explainable-daily-state-v1":
+    source_contract = daily_state.get("contract_version")
+    if source_contract not in {
+        "explainable-daily-state-v1",
+        "explainable-daily-state-v2",
+    }:
         return None, "stale", "missing"
     target = daily_state.get("target_date")
     quality = daily_state.get("data_quality")
@@ -223,15 +224,26 @@ def _safe_snapshot(
     if mode not in {"push", "steady", "recover", "plan"}:
         return None, "stale", "missing"
     safe_state = {
-        "contract_version": "explainable-daily-state-v1",
+        "contract_version": "explainable-daily-state-v2",
         "target_date": target,
         "mode": mode,
         "data_quality": quality,
         "freshness": _safe_capture_freshness(daily_state.get("freshness")),
         "context": _safe_daily_context(daily_state.get("context")),
-        "risk_flags": _safe_code_list(daily_state.get("risk_flags"), 20, 100),
-        "reason_codes": _safe_code_list(daily_state.get("reason_codes"), 10, 100),
-        "reasons": _safe_daily_reasons(daily_state.get("reasons")),
+        "risk_flags": _safe_daily_codes(
+            daily_state.get("risk_flags"),
+            source_contract=source_contract,
+            limit=20,
+        ),
+        "reason_codes": _safe_daily_codes(
+            daily_state.get("reason_codes"),
+            source_contract=source_contract,
+            limit=10,
+        ),
+        "reasons": _safe_daily_reasons(
+            daily_state.get("reasons"),
+            source_contract=source_contract,
+        ),
         "load_guidance": (
             daily_state.get("load_guidance")
             if daily_state.get("load_guidance")
@@ -249,20 +261,6 @@ def _safe_snapshot(
         },
         freshness,
         str(quality),
-    )
-
-
-def _coaching_preference(row: dict[str, Any] | None) -> str | None:
-    if not isinstance(row, dict):
-        return None
-    summary = row.get("summary")
-    if not isinstance(summary, dict):
-        return None
-    value = summary.get("coaching_style")
-    return (
-        value
-        if value in {"direct", "gentle", "analytical", "accountability"}
-        else None
     )
 
 
@@ -293,36 +291,6 @@ def _safe_capture_freshness(value: Any) -> dict[str, Any]:
 def _safe_daily_context(value: Any) -> dict[str, Any]:
     if not isinstance(value, dict):
         return {}
-    main_friction = _enum_or_none(
-        value.get("main_friction"),
-        {
-            "no_major_friction",
-            "unclear_priorities",
-            "too_much_to_do",
-            "interruptions",
-            "hard_to_start",
-            "low_energy",
-            "emotional_load",
-            "physical_recovery",
-            "external_constraints",
-        },
-    )
-    additional_frictions = _safe_enum_list(
-        value.get("additional_frictions"),
-        {
-            "unclear_priorities",
-            "too_much_to_do",
-            "interruptions",
-            "hard_to_start",
-            "low_energy",
-            "emotional_load",
-            "physical_recovery",
-            "external_constraints",
-        },
-        limit=2,
-    )
-    if main_friction is None or main_friction in additional_frictions:
-        additional_frictions = []
     stress = value.get("stress")
     safe_stress = {}
     if isinstance(stress, dict):
@@ -368,8 +336,6 @@ def _safe_daily_context(value: Any) -> dict[str, Any]:
                 "over_2_hours",
             },
         ),
-        "main_friction": main_friction,
-        "additional_frictions": additional_frictions,
         "day_shape": _enum_or_none(
             value.get("day_shape"),
             {"normal", "constrained", "flexible"},
@@ -377,7 +343,11 @@ def _safe_daily_context(value: Any) -> dict[str, Any]:
     }
 
 
-def _safe_daily_reasons(value: Any) -> list[dict[str, str]]:
+def _safe_daily_reasons(
+    value: Any,
+    *,
+    source_contract: Any,
+) -> list[dict[str, str]]:
     if not isinstance(value, list):
         return []
     result = []
@@ -385,9 +355,34 @@ def _safe_daily_reasons(value: Any) -> list[dict[str, str]]:
         if not isinstance(raw, dict):
             continue
         code = _safe_code(raw.get("code"), 100)
-        if code is not None:
+        if code is not None and not _retired_daily_code(
+            code,
+            source_contract=source_contract,
+        ):
             result.append({"code": code})
     return result
+
+
+def _safe_daily_codes(
+    value: Any,
+    *,
+    source_contract: Any,
+    limit: int,
+) -> list[str]:
+    return [
+        code
+        for code in _safe_code_list(value, limit, 100)
+        if not _retired_daily_code(code, source_contract=source_contract)
+    ]
+
+
+def _retired_daily_code(code: str, *, source_contract: Any) -> bool:
+    if "friction" in code or code in {"plan_unclear_priorities"}:
+        return True
+    return (
+        source_contract == "explainable-daily-state-v1"
+        and code in {"overload", "plan_overload"}
+    )
 
 
 def _safe_daily_provenance(value: Any) -> dict[str, str]:
@@ -439,35 +434,6 @@ def _safe_code(value: Any, limit: int) -> str | None:
 
 def _enum_or_none(value: Any, allowed: set[str]) -> str | None:
     return value if isinstance(value, str) and value in allowed else None
-
-
-def _safe_enum_list(
-    value: Any,
-    allowed: set[str],
-    *,
-    limit: int,
-) -> list[str]:
-    if not isinstance(value, list) or len(value) > limit:
-        return []
-    if any(not isinstance(item, str) or item not in allowed for item in value):
-        return []
-    if len(set(value)) != len(value):
-        return []
-    return list(value)
-
-
-def _safe_goal(row: dict[str, Any]) -> dict[str, Any] | None:
-    title = _bounded_text(row.get("title"), 160)
-    identifier = _bounded_text(row.get("id"), 200)
-    if title is None or identifier is None:
-        return None
-    return {
-        "id": identifier,
-        "title": title,
-        "status": row.get("status"),
-        "progress": row.get("progress"),
-        "due_date": row.get("due_date"),
-    }
 
 
 def _safe_task(row: dict[str, Any]) -> dict[str, Any] | None:

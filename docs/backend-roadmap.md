@@ -5,6 +5,11 @@ implementation sequence. It describes the target product architecture, the
 background service roles, the data model direction, and how to keep LLM usage
 low enough for multiple users.
 
+The implemented Setup-personalization retirement in
+`docs/setup-personalization-retirement-contract.md` is authoritative wherever
+older roadmap history below mentions Setup Goals, focus/friction/style answers,
+or Setup-owned Reminder preferences.
+
 ## Product Goal
 
 MyLifeGraph should become a personal coaching app that can start with a small
@@ -13,7 +18,7 @@ calling an LLM for every screen load.
 
 The product should not compete as a complete task manager, habit tracker,
 journal, wearable dashboard, and chat assistant at the same time. Its primary
-job is to turn current capacity, goals, commitments, habits, and recent behavior
+job is to turn current capacity, Tasks, commitments, habits, and recent behavior
 into one realistic next action, then learn from the outcome. The detailed user
 operating loop, product object model, habit contract, and maturity gates live in
 `docs/daily-briefing-implementation-plan.md`.
@@ -32,7 +37,8 @@ Flutter app
 
 Flutter may write only the explicitly granted user-owned records whose current
 contracts permit direct Data API mutation, such as daily capture and supported
-manual Task, Habit, Goal, schedule, and focus lifecycles. Canonical profile
+manual Task, Habit, schedule, and focus lifecycles. The retained `goals` table
+has no active product mutation or evaluation path. Canonical profile
 identity and authorization, Setup application, notifications, Coach messages,
 backend projections, retry ledgers, and planning confirmation are backend-owned.
 FastAPI owns workflows that need service-role access, aggregation, generation,
@@ -60,19 +66,18 @@ Already implemented:
 - Lightweight Evening And Morning Capture:
   - `EveningShutdownDraft` and `MorningCalibrationDraft` merge into one typed
     `DailyCaptureEntry` per local date without one capture erasing the other.
-  - Evening stores exact stress intensity/source/controllability, one required
-    primary friction (including explicit `no_major_friction`), up to two
-    optional additional frictions, tomorrow priority, and only explicitly
-    supplied optional detail. Daily Mode consumes only the primary friction;
-    Morning stores sleep hours, an independent required `1..10`
+  - Evening stores exact stress intensity/source/controllability, tomorrow
+    priority, and only explicitly supplied optional reflection/blocker detail.
+    Primary/additional friction choices are retired. Morning stores sleep hours,
+    an independent required `1..10`
     `sleep_quality` estimate, current energy, and day shape only. Older V2
-    Morning objects without the additive field remain readable.
+    objects remain readable with friction ignored.
   - `daily_logs.metadata.captures` owns the two structured states. Numeric
     projections retain existing consumers: Morning energy takes precedence,
     Evening owns mood/stress, and Morning owns sleep.
   - Supabase rebuilds a dynamic maximum of four deterministically identified
-    current-state events linked to the daily row. Guest V2 storage keeps the
-    same merge semantics and retains V1 read/auth-migration compatibility.
+    current-state events linked to the daily row. Guest V3 storage keeps the
+    same merge semantics and retains V1/V2 read/auth-migration compatibility.
   - Successful real captures request the daily snapshot for their explicit
     local `target_date`; backend event filtering prefers metadata entry date in
     a broadened UTC read window. Guest/mock remains entirely local.
@@ -89,7 +94,7 @@ Already implemented:
   `behavioral_events`, `tasks`, and latest `user_state_snapshots`.
 - Recommendation verification, dedupe fingerprints, freshness checks, and
   persistence to `recommendations`.
-- Controlled post-intake recommendation refresh from the onboarding snapshot.
+- Setup completion deliberately performs no Recommendation refresh.
 - Deliberate dashboard recommendation refresh/generate UX that calls the
   deterministic backend generate endpoint with LLM wording disabled.
 - Flutter reads persisted recommendations through FastAPI in real backend mode.
@@ -105,15 +110,16 @@ Already implemented:
   - A backfilled monotonic `profiles.setup_revision` guard prevents an older
     worker from projecting stale profile fields over a newer applied revision.
   - A service-role-only PostgreSQL RPC uses a per-user transaction advisory lock
-    and atomically applies preferences, owned records, onboarding snapshot,
-    intake state, and profile projection.
+    and atomically applies Habit/commitment/Study/energy-memory projections,
+    the onboarding snapshot, intake state, and profile projection. Its retained
+    Goal and notification-preference parameters are ignored.
   - Optional blanks create no owned row. Named routines remain response-only
     candidates until cadence confirmation; manual/other-source rows are never
     archived or removed by Setup, apart from one exact known legacy
     `Math`/`Room 204`/Monday `08:15`-`09:45` placeholder.
-  - Durable goal archive, habit pause/archive, fixed-commitment removal, one
-    constant-period onboarding snapshot upsert, and first deterministic
-    recommendations from explicit structured answers.
+  - Setup-owned Goals are archived while manual/foreign Goals remain untouched;
+    Habit pause/archive, fixed-commitment removal, and one compact
+    constant-period onboarding snapshot upsert remain.
   - Setup-owned habits are managed through Settings Setup but remain available
     in Habit Completion when active; generic Habit Management excludes them.
 - Snapshot Aggregator foundation:
@@ -121,14 +127,14 @@ Already implemented:
   - Authenticated backend snapshot refresh derived from the verified bearer
     token.
   - Deterministic `daily` and `weekly` `user_state_snapshots` from recent
-    check-ins, behavioral events, tasks, goals, habits, explicit habit outcomes,
+    check-ins, behavioral events, tasks, habits, explicit habit outcomes,
     focus sessions, schedule items, and memory entries.
   - Compact summaries with risk flags, next-focus hints, input counts, and
     evidence references.
   - Additive `summary.daily_state` and `signals.daily_state` under
-    `explainable-daily-state-v1`, with a strict V2-only parser, legacy fallback
-    only when no V2 marker exists, and a fixed seven-day state lookback separate
-    from the statistics window.
+    `explainable-daily-state-v2`, with a strict V2/V3 capture parser, friction
+    sanitization, legacy fallback only when no structured marker exists, and a
+    fixed seven-day state lookback separate from the statistics window.
   - Explicit Evening/Morning freshness plus `missing`, `partial`, `current`, and
     `stale` quality. Evening may be current from the target date or previous
     date; Morning is current only from the target date.
@@ -137,7 +143,7 @@ Already implemented:
     learned-baseline claim, and no persisted capture free text.
   - Additive action summaries count explicit completed/skipped habit logs and
     active/completed/abandoned focus sessions with minutes and evidence. They do
-    not change `explainable-daily-state-v1` mode, quality, risks, or reasons.
+    not change `explainable-daily-state-v2` mode, quality, risks, or reasons.
     Backend reads paginate complete action-fact windows in stably ordered
     1,000-row pages rather than accepting a PostgREST-capped first page as the
     full count.
@@ -308,8 +314,8 @@ Already implemented:
   - At most 32 KiB of owner-scoped current context, including current state and
     briefing, bounded active facts, a current weekly review, up to eight
     explicitly selected eligible memories, and up to six completed turns.
-    Imported calendar content, hidden free text, credentials, and cross-user
-    rows remain excluded.
+    Goals, onboarding preferences, coaching style, friction, imported calendar
+    content, hidden free text, credentials, and cross-user rows remain excluded.
   - Message-free pending claims, exact retry replay, one in-flight request per
     owner, retained profile-local daily attempt limits, atomic validated
     user/assistant completion, deterministic safety bypass/post-checks, and
@@ -321,8 +327,8 @@ Already implemented:
     it cannot reset budget or permit request reinterpretation.
 - Browser E2E starts FastAPI with local Supabase backend settings and verifies
   authenticated required-only Setup, retry/edit/review identity and ownership,
-  deterministic post-intake recommendations, backend daily snapshot refresh
-  after check-ins, exact Phase 2 state recomputation, core Supabase-backed app
+  no post-intake Recommendation generation, backend daily snapshot refresh
+  after check-ins, exact Daily State V2 recomputation, core Supabase-backed app
   writes, Phase 4 read-only/generate/idempotent briefing persistence, and Phase
   5 GET-only Today load, deliberate adjustment, primary action dispatch, and
   Phase 6 feedback persistence/ranking/deletion plus useful default Insights,
@@ -377,22 +383,22 @@ repositories, and jobs, not as unconstrained autonomous LLM loops.
 
 | Service | Trigger | Reads | Writes | LLM use |
 | --- | --- | --- | --- | --- |
-| Intake service | First completed onboarding | Intake payload, profile | `intake_responses`, `profiles`, `goals`, `habits`, `schedule_items`, `notification_preferences`, `memory_entries`, `user_state_snapshots` | None for v1 |
-| Signal aggregator | Intake, daily check-in, task/habit/focus changes, scheduled jobs | `daily_logs`, `behavioral_events`, `tasks`, `goals`, `habits`, `habit_logs`, `focus_sessions`, `schedule_items`, `memory_entries` | `user_state_snapshots`, optional `ai_insights` | None by default |
-| Recommendation service | Intake complete, explicit refresh, scheduled refresh | `user_state_snapshots`, `daily_logs`, `behavioral_events`, `tasks`, existing `recommendations` | `recommendations` | Optional wording only later |
+| Intake service | First completed onboarding | Sanitized Intake payload, profile | `intake_responses`, `profiles`, `habits`, `schedule_items`, `study_setup_profiles`, energy `memory_entries`, `user_state_snapshots`; archives Setup-owned `goals` | None for v1 |
+| Signal aggregator | Daily check-in, task/habit/focus changes, scheduled jobs | `daily_logs`, `behavioral_events`, `tasks`, `habits`, `habit_logs`, `focus_sessions`, `schedule_items`, `memory_entries` | `user_state_snapshots`, optional `ai_insights` | None by default |
+| Recommendation service | Explicit refresh, scheduled refresh | `user_state_snapshots`, `daily_logs`, `behavioral_events`, `tasks`, existing `recommendations` | `recommendations` | Optional wording only later |
 | Recommendation verifier | Every generated recommendation | Candidate metadata, active recommendations | Accept/reject result | None |
-| Daily briefing service | Explicit refresh today; protected scheduled daily preparation | `user_state_snapshots`, `recommendations`, goals, tasks, habits, habit outcomes, `decision_feedback` | `daily_briefings` | None for v1 |
-| Weekly review service | Explicit completed-week review read/generation | Profile timezone, weekly snapshot, tasks, goals, habits/outcomes, focus, daily snapshots, `decision_feedback` | `weekly_reviews` derived output only | None for v1 |
+| Daily briefing service | Explicit refresh today; protected scheduled daily preparation | `user_state_snapshots`, `recommendations`, tasks, habits, habit outcomes, `decision_feedback` | `daily_briefings` | None for v1 |
+| Weekly review service | Explicit completed-week review read/generation | Profile timezone, weekly snapshot, tasks, habits/outcomes, focus, daily snapshots, `decision_feedback` | `weekly_reviews` derived output only | None for v1 |
 | Calendar import service | Explicit consent and selected `.ics` upload | Bounded iCalendar text, profile timezone, owned connection | `calendar_connections`, `calendar_imports`, `calendar_events`, opaque `calendar_request_identities` | None |
 | Deadline planning service | Explicit user proposal/confirmation/lifecycle command | User-entered estimate, profile timezone/energy window, app commitments, confirmed blocks, optional current imported busy time | `deadline_plans`, immutable revisions/blocks, one first-confirm managed task, opaque request identities | None |
 | Coach service | Deliberate authenticated user send | Current snapshot/briefing, bounded active facts, selected memory, recent completed turns | Validated `coach_messages`, compact provenance/usage only | One configured provider call, budgeted |
 | Memory selection service | Explicit user inspect/select/deselect | Owner-scoped eligible `memory_entries` plus Setup ownership | Separate Coach selection projection; content changes only through its owning contract | None for Phase 10 v1 |
-| Planning service | Weekly review, user request | Goals, tasks, habits, schedule, snapshots | `tasks`, `schedule_items`, `recommendations`, `coach_messages` | Optional for complex plans |
+| Planning service | Weekly review, user request | Tasks, habits, schedule, snapshots | `tasks`, `schedule_items`, `recommendations`, `coach_messages` | Optional for complex plans |
 | Notification lifecycle service | Deliberate authenticated Inbox action | One owner-scoped stored notification plus retry identity | Read/unread/dismiss projection and `notification_action_requests` result ledger | None |
 | Notification generation service | Protected current-day local scheduler run | Explicit delivery consent, profile timezone, current snapshot/briefing, exact completed weekly review | Bounded deduplicated `notifications` rows with strict provenance | None |
 | In-app delivery service | Foreground authenticated Flutter poll | Current consent/category/quiet settings plus one due generated row | At-most-once `in_app_delivered_at` receipt | None |
 
-The intake foundation, controlled post-intake recommendation refresh, first
+The intake foundation, retired post-intake recommendation side effect, first
 authenticated snapshot aggregator endpoint, deliberate dashboard refresh UX,
 the Phase 3 task/habit/focus execution contracts, scheduler-triggered daily
 refresh endpoint, and deterministic Insights correlation exploration now
@@ -420,16 +426,16 @@ detail can be added progressively. The intended first-run flow is:
 
 1. Register, sign in, or continue as guest.
 2. Complete a short guided intake using explicit answers only.
-3. Pick current focus areas and describe the typical day.
-4. Optionally add up to three named goals, routines, or fixed commitments.
-5. Set basic reminder preferences.
+3. Describe the typical weekday and choose the best energy window.
+4. Optionally add named routines, fixed commitments, or Study Setup.
+5. Configure Reminder consent and delivery preferences separately in Settings.
 6. Optionally connect a calendar later.
-7. Land on an intake-based starting briefing or one missing calibration question.
+7. Land on Today without hidden Recommendation generation.
 
-The app must not create fallback goals, habits, or timetable blocks for blank
+The app must not create fallback habits or timetable blocks for blank
 answers. Existing routines collected during intake should remain candidates
-until the user confirms their cadence. First-day output must say that it is based
-on intake/current calibration and must not imply a learned personal baseline.
+until the user confirms their cadence. First-day output must not imply a learned
+personal baseline.
 
 ## User Operating Loop
 
@@ -467,21 +473,19 @@ Use structured answers rather than free text wherever possible.
 
 Required fields:
 
-- Primary focus areas: `focus`, `energy`, `sleep`, `stress`, `planning`,
-  `movement`.
 - Typical weekday shape.
 - Best energy window.
-- Desired coaching style: direct, gentle, analytical, accountability-focused.
-- Reminder preference and quiet hours.
 
 Optional fields:
 
-- Top 1 to 3 goals.
-- Current friction points.
+- Display name.
 - Existing named routines, initially as candidates.
 - Known fixed commitments.
-- Free-form context note.
-- Calendar connection intent.
+- Study Setup focus rhythm and semester detail.
+
+Focus areas, Goals, friction points, coaching style, Reminder preferences, and
+free-form context are not Intake fields. Reminder delivery settings remain an
+independent Settings-owned contract.
 
 ### Calendar Policy
 
@@ -670,53 +674,48 @@ same operation rather than edit or create another revision.
 1. Verify the bearer token through the existing FastAPI auth dependency.
 2. Derive `user_id` from the verified principal.
 3. Validate `request_id`, `base_revision`, and the typed intake payload with
-   strict Pydantic models.
+   strict Pydantic models after stripping retired personalization keys.
 4. Replay an already-applied matching request id, or reject a stale/conflicting
    base revision instead of appending another completion.
 5. Persist the next revision as `pending` and derive stable UUIDv5 ids for every
    setup item from user, item kind, and stable item key.
 6. Build materialization only from the claimed row's canonical stored responses:
-   explicit active goals, cadence-confirmed active/paused habits, active fixed
-   commitments, preferences, and bounded durable memories. Candidate routines
-   remain only in `responses`.
+   cadence-confirmed active/paused habits, active fixed commitments, optional
+   Study Setup, and the best-energy memory. Candidate routines remain only in
+   `responses`.
 7. Call the service-role-only atomic Setup RPC. Its transaction-scoped per-user
-   advisory lock serializes competing workers. In that transaction it upserts
-   preferences; reconciles only server-owned Setup goals, habits, schedule rows,
-   and memories; upserts `(user, onboarding, setup:intake-v1)`; marks the intake
-   applied; and advances the profile revision, completion time, and explicit
-   display name.
+   advisory lock serializes competing workers. In that transaction it ignores
+   retained Goal/notification parameters; archives Setup-owned Goals; reconciles
+   only server-owned Setup habits, schedule/Study rows, and energy memory;
+   upserts `(user, onboarding, setup:intake-v1)`; marks the intake applied; and
+   advances the profile revision, completion time, and explicit display name.
 8. Preserve all manual/other-source rows. The only narrow legacy cleanup is an
    omitted, unmarked onboarding row exactly matching `Math`, `Room 204`, Monday
    `08:15`-`09:45`; other unmarked onboarding rows are not claimed by Setup. An
    applied replay is side-effect free except that the newest applied revision
    may repair a missing profile projection.
-9. Run the existing best-effort deterministic recommendation refresh and return
-   the applied revision, snapshot summary, and accepted current recommendations.
+9. Return the applied revision and compact onboarding snapshot summary without
+   generating Recommendations.
 
 Flutter keeps all 4xx failures editable; 409 additionally recommends reloading
 the newest server state. Network/transport errors, 5xx responses, and invalid
 success envelopes are ambiguous, so the exact submitted request is locked for
 unchanged retry or explicit reload.
 
-No LLM is required for v1 intake. If free text exists, store it as source
-context and use deterministic categories first.
+No LLM is required for v1 intake. Free-form context is not accepted or stored.
 
 ## Recommendation Flow
 
-Current recommendation v1 exists and is triggered after authenticated Intake V1
-completion:
+Current recommendation v1 exists and is triggered only by explicit or scheduled
+runtime refresh:
 
-1. User completes intake.
-2. Backend creates a user state snapshot.
-3. Recommendation service loads the snapshot plus recent user-owned rows.
-4. Deterministic rules produce candidates.
-5. Verifier rejects weak, duplicate, stale, invalid, or cross-user candidates.
-6. Accepted recommendations are persisted.
-7. Flutter reads them through `GET /v1/recommendations`.
+1. Recommendation service loads the snapshot plus recent user-owned rows.
+2. Deterministic rules produce candidates from runtime data.
+3. Verifier rejects weak, duplicate, stale, invalid, or cross-user candidates.
+4. Accepted recommendations are persisted.
+5. Flutter reads them through `GET /v1/recommendations`.
 
-The refresh is best-effort after intake completion: onboarding stays completed
-if recommendation generation fails, and the dashboard can still read any
-previously persisted active recommendations. The existing explicit generate UX
+Setup completion never enters this flow. The existing explicit generate UX
 calls:
 
 ```text
@@ -744,10 +743,12 @@ Current behavior:
 
 1. Derive the owner from the verified Supabase bearer token and claim a
    retry-safe bounded request identity.
-2. Build `coach-context-v1` from the current snapshot/Daily State, current
-   persisted briefing, bounded active goals/actions/focus facts, an explicitly
-   fresh weekly review when useful, explicitly selected memory, and a small
-   completed-turn window.
+2. Build `coach-context-v2` under `controlled-coach-prompt-v2` from the current
+   sanitized snapshot/Daily State, current persisted briefing, bounded active
+   Task/Habit/focus facts, an explicitly fresh weekly review when useful,
+   explicitly selected memory, and a small completed-turn window. Do not load
+   Goals, Setup preferences, coaching style, or friction fields. Persisted V1
+   history and replay remain readable.
 3. Attach stable caps/order and a user-visible source/count/freshness manifest.
    Never give a model database credentials, arbitrary SQL, full history,
    imported calendar content, hidden free text, or cross-user rows.
@@ -870,12 +871,14 @@ production provider or autonomous agent platform by default.
 
 ### Completed Slice 0C: First-Run And Setup Integrity
 
-- Implemented: explicit required selections stay short while goals, routines,
-  context, and timetable detail are progressive and optional. Weekly timetable
-  blocks support optional inclusive semester dates and duplication across
-  weekdays; calendar import remains a separate optional Settings flow.
-- Implemented: blank optional answers remain blank and create no fallback goal,
-  habit, schedule item, friction, or memory row.
+- Implemented: typical weekday and best energy are the only required answers;
+  display name, routines, timetable detail, and Study Setup are progressive and
+  optional. Weekly timetable blocks support optional inclusive semester dates
+  and duplication across weekdays; calendar import remains a separate optional
+  Settings flow.
+- Implemented: retired focus/Goal/friction/style/Reminder/context keys are
+  stripped from legacy payloads, and blank optional answers create no fallback
+  Habit, schedule item, or memory row.
 - Implemented: named routines are typed candidates in the intake response until
   cadence is explicitly confirmed; candidates do not become active daily habits.
 - Implemented: guest and authenticated Setup re-entry use a typed prefilled read
@@ -886,10 +889,12 @@ production provider or autonomous agent platform by default.
 - Implemented: a per-user advisory-locked, service-role-only database RPC commits
   the full Setup projection atomically; an exact legacy placeholder cleanup does
   not broaden ownership of other unmarked onboarding rows.
-- Implemented: Settings links to durable review/edit actions for Setup goals,
-  activated habits, and fixed commitments, including archive, pause, restore,
-  and removal behavior. Setup-owned habits remain completable through Habit
-  Completion but are excluded from generic Habit Management edits.
+- Implemented: Settings links to durable review/edit actions for activated
+  Setup Habits and fixed commitments, including pause, restore, and removal
+  behavior. Setup-owned Goals are archived, while manual/foreign Goals remain
+  untouched and have no active product surface. Setup-owned habits remain
+  completable through Habit Completion but are excluded from generic Habit
+  Management edits.
 - Implemented: mock/demo auth boot remains local across reload, while 4xx,
   conflict/reload, and ambiguous exact-retry states preserve honest save status.
 
@@ -907,8 +912,9 @@ production provider or autonomous agent platform by default.
   four-event maximum.
 - Implemented a dynamic maximum of four deterministic mood/energy/stress/sleep
   events with capture-kind metadata and linkage to the single daily row.
-- Implemented guest V2 JSON with legacy V1 read and best-effort authenticated
-  migration compatibility; guest/mock paths remain off Supabase and FastAPI.
+- Implemented guest V3 JSON with legacy V1/V2 read, friction sanitization, and
+  best-effort authenticated migration compatibility; guest/mock paths remain
+  off Supabase and FastAPI.
 - Implemented capture-date snapshot refresh plus backend metadata-date filtering
   over a timezone-tolerant UTC read window.
 - Implemented direct nullable Dashboard mapping for capture presence, focus
@@ -918,11 +924,12 @@ production provider or autonomous agent platform by default.
 ### Completed Slice 2: Explainable Daily State
 
 - Implemented `summary.daily_state` and `signals.daily_state` under
-  `explainable-daily-state-v1` without schema changes.
-- Implemented a strict V2 parser that validates capture identity, enums,
-  numbers, timestamps, and numeric projections. Legacy numeric rows are read
-  only when no V2 marker exists; malformed V2 never regains trust through
-  projected columns.
+  `explainable-daily-state-v2` without schema changes.
+- Implemented a strict V2/V3 capture parser that validates capture identity,
+  enums, numbers, timestamps, and numeric projections while ignoring retired
+  friction keys. Legacy numeric rows are read only when no structured marker
+  exists; malformed structured data never regains trust through projected
+  columns.
 - Implemented a fixed seven-day state lookback independent of the requested
   statistical window. Evening target-day or previous-day capture and Morning
   target-day capture form the current-state cadence.
@@ -932,7 +939,8 @@ production provider or autonomous agent platform by default.
   provenance without capture free text or learned-baseline claims.
 - Implemented recovery-first `push`, `steady`, `recover`, and `plan`
   classification. Missing, partial, and stale inputs remain conservative, and
-  low-control/private-emotional/physical-recovery safeguards prevent push.
+  stress, sleep, energy, day shape, workload, and Tasks remain inputs. `push`
+  requires an active Task; no friction risk/reason/evidence is emitted.
   Very low current sleep quality may select recovery despite sufficient
   duration; moderately low quality prevents push.
 - Preserved `snapshot-aggregator-v1`, same-period atomic upsert, recommendation
@@ -1174,9 +1182,8 @@ The detailed implementation order and acceptance criteria live in
 
 ### Completed Slice: Controlled Recommendation Refresh
 
-- Implemented: authenticated Intake V1 completion creates an onboarding
-  snapshot, then triggers deterministic recommendation generation through the
-  existing verifier, fingerprint, and persistence path.
+- Retired: authenticated Intake V1 completion creates the compact onboarding
+  snapshot but no longer triggers Recommendation generation.
 - Implemented: the recommendation context loader reads latest
   `user_state_snapshots` with explicit `user_id` scoping.
 - Implemented: normal dashboard reads still do not auto-generate
@@ -1189,7 +1196,7 @@ The detailed implementation order and acceptance criteria live in
 
 - Implemented: authenticated `POST /v1/snapshots/generate` creates or refreshes
   `daily` and `weekly` `user_state_snapshots` from recent check-ins,
-  behavioral events, tasks, goals, habits, explicit habit outcomes, focus
+  behavioral events, tasks, habits, explicit habit outcomes, focus
   sessions, schedule items, and memory entries.
 - Implemented: snapshots stay compact and avoid reading full user history.
 - Implemented: backend tests cover the strict capture parser, every taxonomy
@@ -1224,8 +1231,9 @@ The detailed implementation order and acceptance criteria live in
 - Implemented: the smoke covers revisioned Setup completion/replay/edit,
   concurrent same-request convergence, candidate cadence, exact ownership
   metadata and stable ids, preservation of manual rows, onboarding snapshots,
-  deterministic post-intake recommendations, backend-refreshed daily snapshots
-  after check-ins, exact Phase 2 partial/current/recovery state and stale-risk
+  absence of post-intake Recommendations, backend-refreshed daily snapshots
+  after check-ins, exact Daily State V2 partial/current/recovery state and
+  stale-risk
   removal after edit, deliberate dashboard recommendation refresh, and core
   direct app writes.
 - Implemented: the guest/mock widget smoke stays fast and separate.

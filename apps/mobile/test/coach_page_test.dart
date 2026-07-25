@@ -11,6 +11,21 @@ import 'package:my_life_graph/features/coach/presentation/providers/coach_provid
 import 'support/coach_fixtures.dart';
 
 void main() {
+  test('legacy V1 Coach provenance remains readable', () {
+    final json = coachResponseJson();
+    final provenance = Map<String, dynamic>.from(
+      json['provenance'] as Map,
+    )
+      ..['prompt_version'] = 'controlled-coach-prompt-v1'
+      ..['context_version'] = 'coach-context-v1';
+    json['provenance'] = provenance;
+
+    final response = CoachResponse.fromJson(json);
+
+    expect(response.provenance.promptVersion, 'controlled-coach-prompt-v1');
+    expect(response.provenance.contextVersion, 'coach-context-v1');
+  });
+
   testWidgets('ready Coach sends deliberately and renders contract truth',
       (tester) async {
     final repository = _FakeCoachRepository();
@@ -65,11 +80,11 @@ void main() {
     await tester.tap(find.text('Provider and model'));
     await tester.pumpAndSettle();
     expect(
-      find.textContaining('Prompt version: controlled-coach-prompt-v1'),
+      find.textContaining('Prompt version: controlled-coach-prompt-v2'),
       findsOneWidget,
     );
     expect(
-      find.textContaining('Context version: coach-context-v1'),
+      find.textContaining('Context version: coach-context-v2'),
       findsOneWidget,
     );
     expect(find.textContaining('Provider called: yes'), findsOneWidget);

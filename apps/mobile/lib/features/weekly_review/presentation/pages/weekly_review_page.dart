@@ -298,7 +298,7 @@ class _MissingReviewCard extends StatelessWidget {
           Text(_periodLabel(feed)),
           const SizedBox(height: AppSpacing.sm),
           const Text(
-            'Create a rule-based review from your saved activity. This does not change any task, habit, goal, or calendar item.',
+            'Create a rule-based review from your saved activity. This does not change any task, habit, or calendar item.',
           ),
           if (generationError != null) ...[
             const SizedBox(height: AppSpacing.sm),

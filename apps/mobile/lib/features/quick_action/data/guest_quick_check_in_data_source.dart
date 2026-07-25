@@ -41,12 +41,23 @@ class GuestQuickCheckInDataSource implements QuickCheckInStore {
       throw const FormatException('Guest check-in storage is not a list.');
     }
 
-    return decoded.map((value) {
-      if (value is! Map<String, dynamic>) {
+    final entries = decoded.map((value) {
+      if (value is! Map) {
         throw const FormatException('Guest check-in entry is invalid.');
       }
-      return DailyCaptureEntry.fromGuestJson(value);
+      return DailyCaptureEntry.fromGuestJson(
+        Map<String, dynamic>.from(value),
+      );
     }).toList();
+    final sanitized = jsonEncode(
+      entries.map((value) => value.toGuestJson()).toList(growable: false),
+    );
+    if (sanitized != raw && !await prefs.setString(storageKey, sanitized)) {
+      throw const QuickCheckInUnavailableException(
+        'The local check-in could not be sanitized.',
+      );
+    }
+    return entries;
   }
 
   @override

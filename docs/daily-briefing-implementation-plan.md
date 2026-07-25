@@ -1,9 +1,15 @@
 # Daily Briefing Implementation Plan
 
 Status: historical phase plan with a current product-disposition summary,
-updated through Planner V1, Today Overview V2, and Study Setup V1 on
-2026-07-23. Detailed phase sections preserve their original implementation
-reasoning; current surface authority lives in the linked contracts.
+updated through Planner V1, Today Overview V2, Study Setup V1, and the Setup
+personalization retirement on 2026-07-25. Detailed phase sections preserve
+their original implementation reasoning; current surface authority lives in
+the linked contracts.
+
+`docs/setup-personalization-retirement-contract.md` is authoritative wherever
+historical sections below mention Goals as an active product object, Setup
+focus/friction/style/Reminder/context questions, Capture V2 output, or Daily
+State V1 output.
 
 This document turns the product idea of a daily decision cockpit into an
 implementation plan. It is intentionally evaluation-oriented: each phase states
@@ -15,7 +21,7 @@ the criteria for deciding whether the next step is worth building.
 MyLifeGraph should not become only a habit tracker, task list, or chat surface.
 The core product value should be:
 
-> Help the user decide what to do today by combining goals, energy, stress,
+> Help the user decide what to do today by combining Tasks, energy, stress,
 > recovery, tasks, habits, and recent behavior into a small number of concrete
 > next actions.
 
@@ -42,7 +48,7 @@ The differentiating promise is:
 This positioning has practical consequences:
 
 - The dashboard is a decision and execution surface, not a metric gallery.
-- Habits support goals and the daily plan; they are not the product center.
+- Habits support the daily plan; they are not the product center.
 - Insights should lead to a small experiment or changed decision, not only a
   chart.
 - Coach chat explains or adapts an existing plan after the deterministic loop is
@@ -57,7 +63,6 @@ Today UI presents them together:
 
 | Concept | Meaning | Lifetime | Expected user action |
 | --- | --- | --- | --- |
-| Goal | A desired outcome or direction | Weeks to months | Review, refine, complete, archive |
 | Task | A finite action with an optional deadline and estimate | Hours to weeks | Start, complete, postpone, cancel |
 | Habit | A recurring behavior with a cadence and flexible execution window | Weeks to months | Complete, skip intentionally, pause, adapt |
 | Schedule item | A fixed commitment or reserved block | One occurrence or recurring | Attend, edit, remove |
@@ -83,8 +88,9 @@ Rules:
 The repository already contains most of the foundation needed for this slice:
 
 - Structured onboarding through Intake V1.
-- Canonical Supabase tables for logs, events, tasks, goals, habits, schedule
-  items, recommendations, and user state snapshots.
+- Canonical Supabase tables for logs, events, tasks, habits, schedule items,
+  recommendations, and user state snapshots. `goals` remains compatibility/
+  export storage only.
 - Deterministic `daily` and `weekly` snapshot generation in FastAPI.
 - Deterministic recommendation generation and persistence.
 - Best-effort snapshot refresh after key Supabase-backed writes.
@@ -132,16 +138,17 @@ Phase 1 now supplies the missing daily context. A typed Evening Shutdown and a
 separate short Morning Calibration merge by ownership into one local-date
 `DailyCaptureEntry`, persist structured state under
 `daily_logs.metadata.captures`, retain numeric compatibility, and rebuild at
-most four deterministic current-state events. Guest V2 storage preserves the
-same contract while reading legacy V1 entries, authenticated capture refreshes
-the explicit local snapshot date, and Dashboard mapping remains direct and
-nullable. Phase 1 deliberately does not assign Daily Mode, rank actions,
+most four deterministic current-state events. Guest V3 storage preserves the
+same contract while reading and sanitizing legacy V1/V2 entries; authenticated
+capture refreshes the explicit local snapshot date, and Dashboard mapping
+remains direct and nullable. Phase 1 deliberately does not assign Daily Mode, rank actions,
 persist a briefing, generate recommendations on save, or call an LLM. The next
 gap was Phase 2's explainable deterministic daily state.
 
-Phase 2 now interprets that context inside backend-owned snapshots. Its
-additive `explainable-daily-state-v1` contract uses strict V2 parsing, a fixed
-seven-day state lookback independent of the statistics window, cadence-aware
+Phase 2 now interprets that context inside backend-owned snapshots. Its current
+`explainable-daily-state-v2` contract uses strict V2/V3 capture parsing with
+friction sanitization, a fixed seven-day state lookback independent of the
+statistics window, cadence-aware
 Evening/Morning freshness, explicit `missing`/`partial`/`current`/`stale`
 quality, and recovery-first `push`/`steady`/`recover`/`plan` classification.
 Risks and reasons carry field-level evidence and deterministic provenance;
@@ -211,23 +218,23 @@ What the user does:
 1. Chooses a real account or an explicitly labeled local demo/guest experience.
 2. Sees what will be stored, what remains local, and that calendar/wearables are
    optional.
-3. Completes a short progressive intake: current goal direction, main friction,
-   typical day shape, energy window, and coaching preference.
-4. Optionally names existing routines and fixed commitments.
+3. Completes a short progressive intake with typical weekday and best energy
+   window.
+4. Optionally adds a display name, routines, fixed commitments, or Study Setup.
 
 What the app does:
 
 - Stores only answers the user actually supplied; empty fields must not create
-  invented goals, habits, or timetable blocks.
+  invented Habits or timetable blocks.
 - Treats named existing habits as reviewable candidates before activating them.
-- Creates an onboarding snapshot and conservative first recommendations from
-  explicit answers only.
-- Labels the first result as intake-based rather than implying learned history.
-- Lands on a useful starting briefing or asks for one missing calibration signal;
-  it does not land on an unexplained score or empty dashboard.
+- Creates a compact onboarding snapshot without generating Recommendations.
+- Lands on Today and asks for runtime calibration only where the product
+  explicitly needs it; it does not present an intake-derived score.
 
 Target effort: under three minutes for the required path. Timetable detail,
-additional habits, free text, and integrations remain progressive setup.
+additional habits, Study Setup, and integrations remain progressive setup.
+Reminder consent and delivery preferences remain independently owned by
+Settings.
 
 ### First Useful Day
 
@@ -274,10 +281,8 @@ What the app does:
 What the user does:
 
 1. Confirms what was completed, postponed, or no longer relevant.
-2. Reports mood, energy, stress intensity, and one primary friction, with
-   `No major friction` available as an honest answer. Up to two other frictions
-   may be marked as also present. At medium/high stress, the flow also asks
-   source and controllability.
+2. Reports mood, energy, and stress intensity. At medium/high stress, the flow
+   also asks source and controllability.
 3. Optionally records a likely priority, reflection, or specific blocker.
 4. Reviews a provisional tomorrow preview and closes the day.
 
@@ -342,10 +347,10 @@ learned baseline before one exists.
 
 | Stage | Available evidence | What the app may do | What it must not claim |
 | --- | --- | --- | --- |
-| Start | Intake and current calibration | Intake-based recommendations, conservative Daily Mode, one explicit next action | Personal baseline, trend, correlation, optimized score |
+| Start | Setup and current calibration | Conservative Daily Mode from runtime signals and one explicit next action when available | Personal baseline, trend, correlation, optimized score |
 | First week | Several check-ins and action outcomes | Recency-based adjustments, scheduled habit progress, simple workload and recovery flags | Stable long-term pattern or causal insight |
 | Two-plus weeks | Repeated comparable signals | Emerging patterns with visible sample size and low/medium confidence | Medical conclusion or certainty from correlation |
-| One-plus month | Daily and weekly outcomes plus feedback | Personal baselines, weekly adaptation, stronger ranking, habit change proposals | Unreviewed autonomous schedule or goal changes |
+| One-plus month | Daily and weekly outcomes plus feedback | Personal baselines, weekly adaptation, stronger ranking, habit change proposals | Unreviewed autonomous schedule changes |
 | Integration stage | Calendar or wearable data with consent | Lower-friction capture, better capacity estimates, conflict-aware proposals | Hidden provider writes or opaque data use |
 | Coach stage | Stable snapshots, feedback, controlled memory | Explain, compare, answer follow-ups, stage bounded changes for approval | Acting as a doctor, therapist, or unrestricted autonomous agent |
 
@@ -369,8 +374,8 @@ tomorrow.
 
 Reasoning:
 
-- The user can accurately report stress, mood, friction, focus, task reality,
-  and unfinished work after living the day.
+- The user can accurately report stress, mood, task reality, and unfinished
+  work after living the day.
 - Evening capture can prepare tomorrow without forcing a planning session in the
   morning.
 - It gives the backend time to generate the next daily state before the user
@@ -383,7 +388,6 @@ Required fields:
 - Energy level.
 - Stress intensity.
 - Mood.
-- One primary friction, including the explicit `No major friction` answer.
 
 Conditional fields at stress `5..10`:
 
@@ -392,7 +396,6 @@ Conditional fields at stress `5..10`:
 
 Optional fields:
 
-- Up to two unique `Also present` frictions other than the primary answer.
 - One likely priority for tomorrow.
 - Reflection note.
 - Specific blocker.
@@ -400,8 +403,7 @@ Optional fields:
 Current Phase 1 output:
 
 - Persisted current-state context and the user's explicit likely priority.
-- Daily State uses only the primary friction for risks and mode classification;
-  additional frictions remain structured context and do not change Daily Mode.
+- No primary/additional friction field is persisted or evaluated.
 - No provisional plan is generated. For authenticated real accounts, Phase 2
   now classifies an explainable backend Daily State best-effort after the
   write; the capture surface does not present that state as a briefing.
@@ -535,7 +537,7 @@ Reasoning:
 ## Habit Product Contract
 
 Habits are useful only when they reduce decision friction and support a real
-goal or recovery need. They should not become a second task list or a source of
+routine or recovery need. They should not become a second task list or a source of
 streak pressure.
 
 ### Habit V1 Scope
@@ -552,9 +554,8 @@ cadence:
   open opportunity is derived as missed.
 - Same-day undo for an accidental completion or skip.
 
-Optional linked goals, minimum versions, and preferred execution windows remain
-future extensions; Phase 3 does not imply that those fields are already part of
-the validated Habit V1 contract.
+Minimum versions and preferred execution windows remain future extensions;
+Goal linking is retired and is not part of the validated Habit V1 contract.
 
 Do not expose quantity targets such as glasses, pages, repetitions, or minutes
 until `habit_logs` and progress calculations support them end to end. The current
@@ -785,14 +786,13 @@ Inputs:
 - Current daily snapshot.
 - Latest onboarding and weekly snapshots.
 - Open tasks.
-- Active goals.
 - Habit gaps.
 - Recent stress source and controllability.
 - Existing recommendation status and feedback.
 
 Candidate score dimensions:
 
-- Goal relevance.
+- Task relevance.
 - Urgency.
 - Energy fit.
 - Available time fit.
@@ -836,11 +836,8 @@ screens where the user expects feedback.
 The implemented Evening Shutdown quick action supports:
 
 - Two pages instead of one page per answer.
-- Required energy, mood, stress intensity, and one primary friction, including
-  `No major friction`; stress source and controllability are a paired
-  conditional question at stress `5..10`.
-- Up to two unique `Also present` frictions may be selected. They are persisted
-  as context, while only the primary friction affects Daily Mode.
+- Required energy, mood, and stress intensity; stress source and controllability
+  are a paired conditional question at stress `5..10`.
 - An optional short tomorrow priority. Measured focus comes from completed
   Focus sessions instead of another self-estimate.
 - Optional reflection and specific blocker; blank optionals are omitted rather
@@ -963,7 +960,7 @@ Implemented metadata shape, abbreviated:
 
 ```json
 {
-  "capture_version": "daily-capture-v2",
+  "capture_version": "daily-capture-v3",
   "captures": {
     "evening": {
       "capture_kind": "evening",
@@ -972,9 +969,6 @@ Implemented metadata shape, abbreviated:
       "stress_intensity_label": "high",
       "stress_source": "private_emotional",
       "stress_controllability": "hardly_controllable",
-      "focus_band": "30_to_60_minutes",
-      "main_friction": "emotional_load",
-      "additional_frictions": ["interruptions", "hard_to_start"],
       "tomorrow_priority": "Keep the morning light"
     },
     "morning": {
@@ -1009,7 +1003,7 @@ abbreviated persisted shape is:
 {
   "summary": {
     "daily_state": {
-      "contract_version": "explainable-daily-state-v1",
+      "contract_version": "explainable-daily-state-v2",
       "target_date": "2026-07-11",
       "mode": "recover",
       "data_quality": "current",
@@ -1030,7 +1024,7 @@ abbreviated persisted shape is:
   },
   "signals": {
     "daily_state": {
-      "contract_version": "explainable-daily-state-v1",
+      "contract_version": "explainable-daily-state-v2",
       "risk_evidence": {
         "private_emotional_stress": [{
           "table": "daily_logs",
@@ -1050,7 +1044,7 @@ abbreviated persisted shape is:
   },
   "metadata": {
     "source": "snapshot-aggregator-v1",
-    "daily_state_contract_version": "explainable-daily-state-v1",
+    "daily_state_contract_version": "explainable-daily-state-v2",
     "state_lookback_days": 7,
     "window_days": 7
   }
@@ -1148,10 +1142,11 @@ Work:
   Today plan depends on it.
 - Keep Setup re-entry prefilled and idempotent. Blank answers create no fallback
   records, and named routines remain candidates until cadence is confirmed.
-- Keep Setup-created goals, cadence-confirmed habits, and fixed commitments
-  reviewable, editable, pausable/archivable, and removable before Daily Mode uses
-  them; atomic reconciliation must continue to preserve manual rows. Keep
-  Setup-owned habit editing in Settings Setup while allowing active completion.
+- Keep Setup-created cadence-confirmed habits and fixed commitments reviewable,
+  editable, pausable/archivable, and removable before Daily Mode uses them;
+  atomic reconciliation must continue to preserve manual rows. Archive
+  Setup-owned Goals without touching manual/foreign Goal rows. Keep Setup-owned
+  habit editing in Settings Setup while allowing active completion.
 - Define mock/guest behavior separately from real-backend empty/error behavior.
 
 Evaluation:
@@ -1162,7 +1157,8 @@ Evaluation:
 - Does a failed save preserve the draft, and can retry complete without a
   duplicate daily record?
 - Do widget and browser tests verify values and outcomes, not only navigation?
-- Can the user revisit setup without duplicate goals, habits, or commitments?
+- Can the user revisit setup without duplicate habits or commitments and
+  without changing Reminder settings?
 - Can a developer explain the object and action contracts without reading UI
   implementation details?
 
@@ -1179,17 +1175,16 @@ Implemented:
 - Morning requires sleep duration and an independent `1..10` estimated sleep
   quality. Older V2 Morning branches without the additive field remain
   readable and require a value only when that Morning capture is resaved.
-- Evening requires one primary friction with an explicit no-major answer,
-  accepts at most two unique additional frictions, and keeps Daily Mode driven
-  solely by the primary selection.
+- Evening requires mood, energy, and stress, conditionally requires stress
+  source/controllability, and stores no friction-selection fields.
 - Same-day merge ownership: a submitted capture replaces only its own
   `metadata.captures` object and preserves the other kind.
 - Numeric projection keeps Morning energy over Evening energy, Evening mood and
   stress, Morning sleep, and nullable unmeasured focus minutes.
 - Supabase replaces the linked source-owned event set with a dynamic maximum of
   four deterministic mood/energy/stress/sleep ids and mirrored bounded metadata.
-- Guest storage writes V2 daily JSON, reads V1 JSON, changes later guest reads,
-  and retains the existing best-effort migration into a real non-demo account.
+- Guest storage writes V3 daily JSON, sanitizes V1/V2 JSON on read, and retains
+  the existing best-effort migration into a real non-demo account.
 - Authenticated writes refresh the exact local `target_date`; backend event
   filtering prefers `metadata.entry_date` after a broadened UTC read and falls
   back to the timestamp for legacy rows.
@@ -1213,10 +1208,11 @@ Goal:
 Implemented:
 
 - Added `summary.daily_state` and `signals.daily_state` under
-  `explainable-daily-state-v1` without changing schema or capture ownership.
-- Added strict V2 parsing for capture identity, types, enums, bounded numbers,
-  timestamps, and numeric projections. Legacy numeric fallback is accepted only
-  when no V2 marker exists; malformed V2 does not regain trust through columns.
+  `explainable-daily-state-v2` without changing schema or capture ownership.
+- Added strict V2/V3 capture parsing for identity, types, enums, bounded
+  numbers, timestamps, and numeric projections. Friction fields are ignored.
+  Legacy numeric fallback is accepted only when no structured marker exists;
+  malformed structured capture does not regain trust through columns.
 - Added a fixed seven-day state lookback independent of the requested
   statistics window. Evening is current from the target date or previous date;
   Morning only from the target date.
@@ -1595,9 +1591,11 @@ Implemented:
   local OAuth transport, not a reason to select a coding-focused Spark model.
   Keep unavailable-model truth explicit and require deliberate overrides.
 - Gives FastAPI owner-scoped reach to relevant life-graph facts while disclosing
-  only a bounded `coach-context-v1` package. The model receives neither direct
-  database/tool access nor a full-history dump. Imported calendar content and
-  hidden free text remain excluded.
+  only a bounded `coach-context-v2` package under
+  `controlled-coach-prompt-v2`. Goals, onboarding preferences, coaching style,
+  friction, imported calendar content, and hidden free text remain excluded.
+  The model receives neither direct database/tool access nor a full-history
+  dump; persisted V1 history remains readable.
 - Replaces the gated canned Coach and direct Flutter inserts with strict typed
   FastAPI request/history/memory boundaries, honest unavailable states, and a
   fake provider for all normal automation.

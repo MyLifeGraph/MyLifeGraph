@@ -86,8 +86,8 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                       const SizedBox(height: AppSpacing.sm),
                       Text(
                         widget.editing
-                            ? 'Update explicit answers and review only the goals, routines, and fixed commitments created by setup.'
-                            : 'Start with the required choices. Goals, routines, commitments, and notes are optional and can be added later.',
+                            ? 'Update your weekday and energy window, then review setup-owned routines and fixed commitments.'
+                            : 'Choose your typical weekday and best energy window. Routines, commitments, and study setup stay optional.',
                         style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                               color: _SetupColors.muted(context),
                               height: 1.5,
@@ -110,45 +110,6 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                               _RequiredSetupSection(
                                 draft: draft,
                                 onChanged: _updateDraft,
-                              ),
-                              const SizedBox(height: AppSpacing.lg),
-                              _OptionalSetupSection(
-                                key: const ValueKey('optional-goals'),
-                                title: 'Goals and friction',
-                                subtitle: 'Optional · up to three goals',
-                                initiallyExpanded:
-                                    widget.editing && draft.goals.isNotEmpty,
-                                children: [
-                                  _GoalEditors(
-                                    goals: draft.goals,
-                                    onChanged: (goals) {
-                                      _updateDraft(
-                                        draft.copyWith(goals: goals),
-                                      );
-                                    },
-                                  ),
-                                  const SizedBox(height: AppSpacing.lg),
-                                  TextFormField(
-                                    key: ValueKey(
-                                      'friction-${state.readState?.revision ?? 0}',
-                                    ),
-                                    initialValue:
-                                        draft.frictionPoints.join('\n'),
-                                    minLines: 2,
-                                    maxLines: 5,
-                                    decoration: const InputDecoration(
-                                      labelText: 'Friction points optional',
-                                      hintText: 'One per line',
-                                    ),
-                                    onChanged: (value) {
-                                      _updateDraft(
-                                        draft.copyWith(
-                                          frictionPoints: _listFromText(value),
-                                        ),
-                                      );
-                                    },
-                                  ),
-                                ],
                               ),
                               const SizedBox(height: AppSpacing.md),
                               _OptionalSetupSection(
@@ -228,34 +189,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                                   ),
                                 ],
                               ),
-                              const SizedBox(height: AppSpacing.md),
-                              _OptionalSetupSection(
-                                key: const ValueKey('optional-context'),
-                                title: 'More context',
-                                subtitle: 'Optional note',
-                                initiallyExpanded:
-                                    widget.editing && draft.contextNote != null,
-                                children: [
-                                  TextFormField(
-                                    key: ValueKey(
-                                      'context-${state.readState?.revision ?? 0}',
-                                    ),
-                                    initialValue: draft.contextNote,
-                                    minLines: 2,
-                                    maxLines: 5,
-                                    decoration: const InputDecoration(
-                                      labelText: 'Context note optional',
-                                    ),
-                                    onChanged: (value) {
-                                      _updateDraft(
-                                        draft.copyWith(contextNote: value),
-                                      );
-                                    },
-                                  ),
-                                ],
-                              ),
                               if (widget.editing ||
-                                  draft.goals.isNotEmpty ||
                                   draft.routines.isNotEmpty ||
                                   draft.fixedCommitments.isNotEmpty) ...[
                                 const SizedBox(height: AppSpacing.lg),
@@ -444,14 +378,6 @@ class _RequiredSetupSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const focusValues = {
-      'focus': 'Focus',
-      'energy': 'Energy',
-      'sleep': 'Sleep',
-      'stress': 'Stress',
-      'planning': 'Planning',
-      'movement': 'Movement',
-    };
     final weekdayValues = <String, String>{
       'school_or_work': 'School or work blocks',
       'flexible': 'Flexible schedule',
@@ -484,44 +410,6 @@ class _RequiredSetupSection extends StatelessWidget {
             onChanged: (value) => onChanged(draft.copyWith(displayName: value)),
           ),
           const SizedBox(height: AppSpacing.lg),
-          Text('Focus areas', style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: AppSpacing.sm),
-          Wrap(
-            spacing: AppSpacing.sm,
-            runSpacing: AppSpacing.xs,
-            children: [
-              ...focusValues.entries.map((entry) {
-                final selected = draft.primaryFocusAreas.contains(entry.key);
-                return ChoiceChip(
-                  label: Text(entry.value),
-                  selected: selected,
-                  onSelected: (_) {
-                    final values = {...draft.primaryFocusAreas};
-                    selected ? values.remove(entry.key) : values.add(entry.key);
-                    final sorted = values.toList(growable: false)..sort();
-                    onChanged(draft.copyWith(primaryFocusAreas: sorted));
-                  },
-                );
-              }),
-              ...draft.primaryFocusAreas
-                  .where((value) => !focusValues.containsKey(value))
-                  .map(
-                    (value) => InputChip(
-                      label: Text('Unsupported: $value'),
-                      onDeleted: () {
-                        onChanged(
-                          draft.copyWith(
-                            primaryFocusAreas: draft.primaryFocusAreas
-                                .where((item) => item != value)
-                                .toList(growable: false),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.lg),
           _NullableSelectField<String>(
             label: 'Typical weekday required',
             value: draft.weekdayShape,
@@ -545,186 +433,8 @@ class _RequiredSetupSection extends StatelessWidget {
               onChanged(draft.copyWith(bestEnergyWindow: value));
             },
           ),
-          const SizedBox(height: AppSpacing.md),
-          _NullableSelectField<String>(
-            label: 'Coaching style required',
-            value: draft.coachingStyle,
-            values: const {
-              'direct': 'Direct',
-              'gentle': 'Gentle',
-              'analytical': 'Analytical',
-              'accountability': 'Accountability',
-            },
-            onChanged: (value) {
-              onChanged(draft.copyWith(coachingStyle: value));
-            },
-          ),
-          const SizedBox(height: AppSpacing.lg),
-          Text(
-            'Reminder preference (required)',
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Text(
-            'This only saves what you would prefer. It does not turn on delivery. You can separately allow in-app banners in Settings; they appear only while the app is open.',
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Wrap(
-            spacing: AppSpacing.sm,
-            children: [
-              ChoiceChip(
-                label: const Text('Prefer reminders'),
-                selected: draft.reminderPreference?.enabled == true,
-                onSelected: (_) {
-                  onChanged(
-                    draft.copyWith(
-                      reminderPreference: const IntakeReminderPreference(
-                        enabled: true,
-                      ),
-                    ),
-                  );
-                },
-              ),
-              ChoiceChip(
-                label: const Text('Prefer no reminders'),
-                selected: draft.reminderPreference?.enabled == false,
-                onSelected: (_) {
-                  onChanged(
-                    draft.copyWith(
-                      reminderPreference: const IntakeReminderPreference(
-                        enabled: false,
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ],
-          ),
-          if (draft.reminderPreference?.enabled == true) ...[
-            const SizedBox(height: AppSpacing.md),
-            Row(
-              children: [
-                Expanded(
-                  child: TextFormField(
-                    key: const ValueKey('setup-quiet-start'),
-                    initialValue:
-                        draft.reminderPreference?.quietHoursStart ?? '',
-                    decoration: const InputDecoration(
-                      labelText: 'Quiet starts (HH:mm)',
-                    ),
-                    onChanged: (value) {
-                      onChanged(
-                        draft.copyWith(
-                          reminderPreference:
-                              draft.reminderPreference!.copyWith(
-                            quietHoursStart: value,
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.md),
-                Expanded(
-                  child: TextFormField(
-                    key: const ValueKey('setup-quiet-end'),
-                    initialValue: draft.reminderPreference?.quietHoursEnd ?? '',
-                    decoration: const InputDecoration(
-                      labelText: 'Quiet ends (HH:mm)',
-                    ),
-                    onChanged: (value) {
-                      onChanged(
-                        draft.copyWith(
-                          reminderPreference:
-                              draft.reminderPreference!.copyWith(
-                            quietHoursEnd: value,
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ],
         ],
       ),
-    );
-  }
-}
-
-class _GoalEditors extends StatelessWidget {
-  const _GoalEditors({required this.goals, required this.onChanged});
-
-  final List<IntakeGoalDraft> goals;
-  final ValueChanged<List<IntakeGoalDraft>> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        for (var index = 0; index < goals.length; index++)
-          Padding(
-            padding: const EdgeInsets.only(bottom: AppSpacing.md),
-            child: _EditorCard(
-              child: Column(
-                children: [
-                  TextFormField(
-                    key: ValueKey('goal-title-${goals[index].key}'),
-                    initialValue: goals[index].title,
-                    decoration: const InputDecoration(labelText: 'Goal title'),
-                    onChanged: (value) {
-                      final updated = [...goals];
-                      updated[index] = goals[index].copyWith(title: value);
-                      onChanged(updated);
-                    },
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-                  _EnumSelectField<IntakeGoalStatus>(
-                    label: 'Goal status',
-                    value: goals[index].status,
-                    values: {
-                      for (final status in IntakeGoalStatus.values)
-                        status: _statusLabel(status.name),
-                    },
-                    onChanged: (status) {
-                      final updated = [...goals];
-                      updated[index] = goals[index].copyWith(status: status);
-                      onChanged(updated);
-                    },
-                  ),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: TextButton.icon(
-                      onPressed: () {
-                        final updated = [...goals]..removeAt(index);
-                        onChanged(updated);
-                      },
-                      icon: const Icon(Icons.delete_outline),
-                      label: const Text('Remove from setup'),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        SizedBox(
-          width: double.infinity,
-          child: OutlinedButton.icon(
-            onPressed: goals.length >= 3
-                ? null
-                : () {
-                    onChanged([
-                      ...goals,
-                      IntakeGoalDraft(key: generateSetupUuid(), title: ''),
-                    ]);
-                  },
-            icon: const Icon(Icons.add),
-            label: const Text('Add goal'),
-          ),
-        ),
-      ],
     );
   }
 }
@@ -1711,7 +1421,6 @@ class _SetupReviewSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final goals = draft.goals.where((goal) => goal.title.trim().isNotEmpty);
     final routines =
         draft.routines.where((routine) => routine.title.trim().isNotEmpty);
     final commitments = draft.fixedCommitments
@@ -1732,15 +1441,9 @@ class _SetupReviewSection extends StatelessWidget {
                 ),
           ),
           const SizedBox(height: AppSpacing.md),
-          if (goals.isEmpty && routines.isEmpty && commitments.isEmpty)
+          if (routines.isEmpty && commitments.isEmpty)
             const Text('No optional setup commitments.')
           else ...[
-            for (final goal in goals)
-              _ReviewRow(
-                icon: Icons.flag_outlined,
-                title: goal.title,
-                status: _statusLabel(goal.status.name),
-              ),
             for (final routine in routines)
               _ReviewRow(
                 icon: Icons.repeat,

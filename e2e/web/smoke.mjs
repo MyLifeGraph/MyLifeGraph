@@ -30,8 +30,6 @@ const coachAttemptId = phase10Only
 const artifactDir = process.env.E2E_ARTIFACT_DIR ?? '.tools/e2e';
 const email = `e2e-${runId}@example.test`;
 const password = `E2e-${runId}-password`;
-const setupGoalTitle = `E2E protect focus ${runId}`;
-const editedSetupGoalTitle = `E2E protect focus deeply ${runId}`;
 const setupRoutineTitle = `E2E lunch walk candidate ${runId}`;
 const setupCommitmentTitle = `E2E project lab ${runId}`;
 const editedSetupCommitmentTitle = `E2E project studio ${runId}`;
@@ -45,7 +43,6 @@ const phase3TaskTitle = `E2E executable task ${runId}`;
 const eveningTomorrowPriority = `E2E protect a calm morning ${runId}`;
 const editedEveningTomorrowPriority =
   `E2E finish the smallest useful draft ${runId}`;
-const eveningAdditionalFrictions = ['interruptions', 'hard_to_start'];
 const coachMemoryTitle = `E2E bounded Coach memory ${runId}`;
 const coachApiMessage = `E2E explain one bounded next step ${runId}`;
 const coachUiMessage = `E2E UI Coach question ${runId}`;
@@ -171,16 +168,27 @@ try {
   await clickByText(page, 'Login', { match: 'last' });
 
   await expectText(page, 'Required setup');
-  await clickChoiceChip(page, 'Focus');
-  await clickChoiceChip(page, 'Planning');
+  await assertFlutterTextAbsent(
+    page,
+    'Focus areas',
+    'retired Setup focus areas',
+  );
+  await assertFlutterTextAbsent(
+    page,
+    'Coaching style',
+    'retired Setup coaching style',
+  );
+  await assertFlutterTextAbsent(
+    page,
+    'Reminder preference',
+    'retired Setup reminder preference',
+  );
   await selectDropdownOption(
     page,
     'Typical weekday required',
     'School or work blocks',
   );
   await selectDropdownOption(page, 'Best energy window required', 'Morning');
-  await selectDropdownOption(page, 'Coaching style required', 'Direct');
-  await clickChoiceChip(page, 'Prefer no reminders');
   await scrollFlutterPage(page, 1100);
   await toggleSetupSection(page, 'Focus setup', 'Use a study rhythm');
   await page
@@ -208,14 +216,11 @@ try {
       rows[0].revision === 1 &&
       typeof rows[0].request_id === 'string' &&
       rows[0].metadata?.source === 'onboarding' &&
-      arraysEqual(rows[0].responses?.primary_focus_areas, [
-        'focus',
-        'planning',
-      ]) &&
-      arraysEqual(rows[0].responses?.goals, []) &&
-      arraysEqual(rows[0].responses?.friction_points, []) &&
+      rows[0].responses?.weekday_shape === 'school_or_work' &&
+      rows[0].responses?.best_energy_window === 'morning' &&
       arraysEqual(rows[0].responses?.routines, []) &&
       arraysEqual(rows[0].responses?.fixed_commitments, []) &&
+      !containsRetiredSetupKeys(rows[0].responses) &&
       rows[0].responses?.study_setup?.focus_rhythm?.focus_minutes === 45 &&
       rows[0].responses?.study_setup?.focus_rhythm?.recovery_minutes === 10 &&
       arraysEqual(
@@ -269,9 +274,13 @@ try {
     (rows) =>
       rows.length === 1 &&
       rows[0].period_key === 'setup:intake-v1' &&
-      rows[0].summary?.coaching_style === 'direct' &&
-      arraysEqual(rows[0].summary?.goals, []) &&
-      arraysEqual(rows[0].summary?.friction_points, []) &&
+      rows[0].summary?.best_energy_window === 'morning' &&
+      rows[0].summary?.fixed_commitment_count === 0 &&
+      rows[0].summary?.existing_habit_count === 0 &&
+      rows[0].summary?.routine_candidate_count === 0 &&
+      rows[0].summary?.active_habit_count === 0 &&
+      !containsRetiredSetupKeys(rows[0].summary) &&
+      Object.keys(rows[0].signals ?? {}).length === 0 &&
       rows[0].metadata?.source === 'intake-v1' &&
       rows[0].metadata?.revision === 1,
     'constant onboarding setup snapshot after revision 1',
@@ -285,22 +294,22 @@ try {
     'profile projection at setup revision 1',
   );
   await assertNoSetupOwnedRows(user.id, 'revision 1 empty optionals');
-  await waitForRows(
+  await assertRows(
     `recommendations?select=id,title,category,status,metadata&user_id=eq.${user.id}&status=in.(new,accepted)`,
+    (rows) => rows.length === 0,
+    'no recommendation generation after intake',
+  );
+  await assertRows(
+    `memory_entries?select=id,type,title,content,metadata&user_id=eq.${user.id}`,
     (rows) =>
-      rows.some(
-        (row) =>
-          row.category === 'focus' &&
-          row.metadata?.model === null &&
-          row.metadata?.source_engine_version === 'deterministic-v1',
-      ) &&
-      rows.some(
-        (row) =>
-          row.category === 'planning' &&
-          row.metadata?.model === null &&
-          row.metadata?.source_engine_version === 'deterministic-v1',
-      ),
-    'deterministic recommendations generated after intake',
+      rows.length === 1 &&
+      rows[0].type === 'pattern' &&
+      rows[0].title === 'Best energy window' &&
+      rows[0].content === 'morning' &&
+      rows[0].metadata?.managed_by === 'setup' &&
+      rows[0].metadata?.source === 'intake-v1' &&
+      rows[0].metadata?.setup_state === 'active',
+    'only the Best Energy setup memory is materialized',
   );
 
   await page.goto(appRoute('/settings'), { waitUntil: 'domcontentloaded' });
@@ -310,8 +319,46 @@ try {
   await expectText(page, 'Review your setup');
   await expectText(page, 'School or work blocks');
   await expectText(page, 'Morning');
-  await expectText(page, 'Direct');
-  await expectText(page, 'Prefer no reminders');
+  await assertFlutterTextAbsent(
+    page,
+    'Goals and friction',
+    'retired Setup goals and friction section',
+  );
+  await assertFlutterTextAbsent(
+    page,
+    'More context',
+    'retired Setup context section',
+  );
+
+  const personalizedReminderUpdatedAt = new Date(
+    Date.now() - 60_000,
+  ).toISOString();
+  await upsertRows(
+    'notification_preferences',
+    [
+      {
+        user_id: user.id,
+        focus_prompts_enabled: false,
+        recovery_prompts_enabled: true,
+        weekly_summary_enabled: false,
+        quiet_hours_start: '22:15:00',
+        quiet_hours_end: '06:45:00',
+        in_app_delivery_enabled: true,
+        in_app_delivery_consent_version: 'in-app-notification-consent-v1',
+        in_app_delivery_consented_at: personalizedReminderUpdatedAt,
+        in_app_delivery_disabled_at: null,
+        delivery_settings_request_id: null,
+        delivery_settings_request_fingerprint: null,
+        daily_notification_limit: 1,
+        updated_at: personalizedReminderUpdatedAt,
+      },
+    ],
+    'user_id',
+  );
+  const [reminderPreferencesBeforeSetupEdits] = await fetchRows(
+    `notification_preferences?select=user_id,focus_prompts_enabled,recovery_prompts_enabled,weekly_summary_enabled,quiet_hours_start,quiet_hours_end,in_app_delivery_enabled,in_app_delivery_consent_version,in_app_delivery_consented_at,in_app_delivery_disabled_at,delivery_settings_request_id,delivery_settings_request_fingerprint,daily_notification_limit,updated_at&user_id=eq.${user.id}`,
+    'personalized reminder settings before Setup edits',
+  );
 
   const [legacyDefaultSchedule, legacyExplicitSchedule] = await insertRows(
     'schedule_items',
@@ -338,19 +385,26 @@ try {
       },
     ],
   );
+  const [legacySetupGoal] = await insertRows('goals', [
+    {
+      user_id: user.id,
+      title: `E2E retired Setup goal ${runId}`,
+      status: 'active',
+      metadata: {
+        source: 'intake-v1',
+        managed_by: 'setup',
+        setup_state: 'active',
+        setup_item_id: `retired-goal-${runId}`,
+        revision: 1,
+      },
+    },
+  ]);
 
-  await toggleSetupSection(page, 'Goals and friction', 'Add goal');
-  await clickByText(page, 'Add goal');
-  await fillByLabelOrPlaceholder(page, 'Goal title', setupGoalTitle, 1);
-  await expectFieldValue(page, 'Goal title', setupGoalTitle, 1);
-  await page.keyboard.press('Tab');
-  await page.waitForTimeout(250);
-  await scrollFlutterPage(page, 700);
   await toggleSetupSection(page, 'Routines', 'Add routine candidate');
   await scrollFlutterPage(page, 700);
   await clickByText(page, 'Add routine candidate');
-  await fillByLabelOrPlaceholder(page, 'Routine name', setupRoutineTitle, 3);
-  await expectFieldValue(page, 'Routine name', setupRoutineTitle, 3);
+  await fillByLabelOrPlaceholder(page, 'Routine name', setupRoutineTitle, 1);
+  await expectFieldValue(page, 'Routine name', setupRoutineTitle, 1);
   await page.keyboard.press('Tab');
   await page.waitForTimeout(250);
   await scrollFlutterPage(page, 700);
@@ -361,13 +415,13 @@ try {
   );
   await scrollFlutterPage(page, 700);
   await clickByText(page, 'Add fixed commitment');
-  await fillByLabelOrPlaceholder(page, 'Title', setupCommitmentTitle, 4);
-  await fillByLabelOrPlaceholder(page, 'Location optional', 'Room E2E', 5);
+  await fillByLabelOrPlaceholder(page, 'Title', setupCommitmentTitle, 2);
+  await fillByLabelOrPlaceholder(page, 'Location optional', 'Room E2E', 3);
   await selectDropdownOption(page, 'Weekday', 'Monday');
   await fillByLabelOrPlaceholder(page, 'Starts (HH:mm)', '14:15', -2);
   await fillByLabelOrPlaceholder(page, 'Ends (HH:mm)', '15:45', -1);
-  await expectFieldValue(page, 'Title', setupCommitmentTitle, 4);
-  await expectFieldValue(page, 'Location optional', 'Room E2E', 5);
+  await expectFieldValue(page, 'Title', setupCommitmentTitle, 2);
+  await expectFieldValue(page, 'Location optional', 'Room E2E', 3);
   await expectFieldValue(page, 'Starts (HH:mm)', '14:15', -2);
   await expectFieldValue(page, 'Ends (HH:mm)', '15:45', -1);
   await expectText(page, 'Semester dates optional');
@@ -413,7 +467,7 @@ try {
       rows[1].base_revision === 1 &&
       rows[1].revision === 2 &&
       rows[1].request_id === lostSavePayload?.request_id &&
-      rows[1].responses?.goals?.[0]?.title === setupGoalTitle &&
+      !containsRetiredSetupKeys(rows[1].responses) &&
       rows[1].responses?.routines?.[0]?.title === setupRoutineTitle &&
       rows[1].responses?.routines?.[0]?.status === 'candidate' &&
       rows[1].responses?.routines?.[0]?.cadence_confirmed === false &&
@@ -458,30 +512,26 @@ try {
     );
   }
   const revision2 = revision2Rows.find((row) => row.revision === 2);
-  const goalKey = revision2?.responses?.goals?.[0]?.key;
   const routineKey = revision2?.responses?.routines?.[0]?.key;
   const commitmentKey = revision2?.responses?.fixed_commitments?.[0]?.key;
-  if (!goalKey || !routineKey || !commitmentKey) {
+  if (!routineKey || !commitmentKey) {
     throw new Error(`Revision 2 lost setup keys: ${JSON.stringify(revision2)}`);
   }
   const setupGoalsAtRevision2 = await fetchRows(
     `goals?select=id,title,status,metadata&user_id=eq.${user.id}`,
-    'setup goal at revision 2',
+    'retired Setup goal after revision 2',
   );
   const setupGoalAtRevision2 = setupGoalsAtRevision2.find(
-    (row) => row.metadata?.managed_by === 'setup',
+    (row) => row.id === legacySetupGoal.id,
   );
   if (
     !setupGoalAtRevision2 ||
-    setupGoalAtRevision2.title !== setupGoalTitle ||
-    setupGoalAtRevision2.status !== 'active' ||
-    setupGoalAtRevision2.metadata?.source !== 'intake-v1' ||
-    setupGoalAtRevision2.metadata?.setup_state !== 'active' ||
-    setupGoalAtRevision2.metadata?.setup_item_id !== goalKey ||
+    setupGoalAtRevision2.status !== 'archived' ||
+    setupGoalAtRevision2.metadata?.setup_state !== 'archived' ||
     setupGoalAtRevision2.metadata?.revision !== 2
   ) {
     throw new Error(
-      `Unexpected revision 2 setup goal: ${JSON.stringify(setupGoalsAtRevision2)}`,
+      `Setup did not archive its retired goal: ${JSON.stringify(setupGoalsAtRevision2)}`,
     );
   }
   const setupSchedulesAtRevision2 = await fetchRows(
@@ -531,17 +581,11 @@ try {
 
   await clickByText(page, 'Setup and commitments');
   await expectText(page, 'Review your setup');
-  await expectText(page, setupGoalTitle);
   await scrollFlutterPage(page, 700);
   await expectText(page, setupRoutineTitle);
   await scrollFlutterPage(page, 1400);
   await expectText(page, setupCommitmentTitle);
   await scrollFlutterPage(page, -2800);
-  // Flutter Web does not automatically scroll its internal viewport when
-  // Playwright focuses a semantics node near the fold. Keep the existing goal
-  // editor clear of the required-setup dropdown before editing it.
-  await scrollFlutterPage(page, 500);
-  await fillByLabelOrPlaceholder(page, 'Goal title', editedSetupGoalTitle, 1);
   await scrollFlutterPage(page, 700);
   await selectDropdownOption(
     page,
@@ -574,8 +618,7 @@ try {
       rows[2].state === 'applied' &&
       rows[2].base_revision === 2 &&
       rows[2].revision === 3 &&
-      rows[2].responses?.goals?.[0]?.key === goalKey &&
-      rows[2].responses?.goals?.[0]?.title === editedSetupGoalTitle &&
+      !containsRetiredSetupKeys(rows[2].responses) &&
       rows[2].responses?.routines?.[0]?.key === routineKey &&
       rows[2].responses?.routines?.[0]?.status === 'active' &&
       rows[2].responses?.routines?.[0]?.cadence_confirmed === true &&
@@ -586,13 +629,6 @@ try {
         editedSetupCommitmentTitle,
     'applied setup revision 3 with stable keys and confirmed routine',
   );
-  const setupGoalsAtRevision3 = await fetchRows(
-    `goals?select=id,title,status,metadata&user_id=eq.${user.id}`,
-    'setup goal after revision 3 edit',
-  );
-  const setupGoalAtRevision3 = setupGoalsAtRevision3.find(
-    (row) => row.metadata?.managed_by === 'setup',
-  );
   const setupSchedulesAtRevision3 = await fetchRows(
     `schedule_items?select=id,title,source,metadata&user_id=eq.${user.id}`,
     'setup commitment after revision 3 edit',
@@ -601,13 +637,11 @@ try {
     (row) => row.metadata?.managed_by === 'setup',
   );
   if (
-    setupGoalAtRevision3?.id !== setupGoalAtRevision2.id ||
-    setupGoalAtRevision3?.title !== editedSetupGoalTitle ||
     setupScheduleAtRevision3?.id !== setupScheduleAtRevision2.id ||
     setupScheduleAtRevision3?.title !== editedSetupCommitmentTitle
   ) {
     throw new Error(
-      `Setup edit replaced stable DB identity. Goals ${JSON.stringify(setupGoalsAtRevision3)}, schedules ${JSON.stringify(setupSchedulesAtRevision3)}`,
+      `Setup edit replaced stable schedule identity: ${JSON.stringify(setupSchedulesAtRevision3)}`,
     );
   }
   const setupHabitsAtRevision3 = await fetchRows(
@@ -663,14 +697,11 @@ try {
 
   await clickByText(page, 'Setup and commitments');
   await expectText(page, 'Review your setup');
-  await expectText(page, editedSetupGoalTitle);
   await scrollFlutterPage(page, 700);
   await expectText(page, setupRoutineTitle);
   await scrollFlutterPage(page, 1400);
   await expectText(page, editedSetupCommitmentTitle);
   await scrollFlutterPage(page, -2800);
-  await selectDropdownOption(page, 'Goal status', 'Archived');
-  await scrollFlutterPage(page, 700);
   await selectDropdownOption(page, 'Routine status', 'Archived');
   await scrollFlutterPage(page, 1200);
   await selectDropdownOption(page, 'Commitment status', 'Archived');
@@ -686,7 +717,7 @@ try {
       rows[3].state === 'applied' &&
       rows[3].base_revision === 3 &&
       rows[3].revision === 4 &&
-      rows[3].responses?.goals?.[0]?.status === 'archived' &&
+      !containsRetiredSetupKeys(rows[3].responses) &&
       rows[3].responses?.routines?.[0]?.status === 'archived' &&
       rows[3].responses?.fixed_commitments?.[0]?.status === 'archived',
     'applied revision 4 archives setup-owned records',
@@ -698,8 +729,7 @@ try {
         (row) =>
           row.id === setupGoalAtRevision2.id &&
           row.status === 'archived' &&
-          row.metadata?.setup_state === 'archived' &&
-          row.metadata?.revision === 4,
+          row.metadata?.setup_state === 'archived',
       ) &&
       rows.some(
         (row) =>
@@ -752,6 +782,37 @@ try {
     `profiles?select=id,setup_revision&id=eq.${user.id}`,
     (rows) => rows.length === 1 && rows[0].setup_revision === 4,
     'profile projection at setup revision 4',
+  );
+  const [reminderPreferencesAfterSetupEdits] = await fetchRows(
+    `notification_preferences?select=user_id,focus_prompts_enabled,recovery_prompts_enabled,weekly_summary_enabled,quiet_hours_start,quiet_hours_end,in_app_delivery_enabled,in_app_delivery_consent_version,in_app_delivery_consented_at,in_app_delivery_disabled_at,delivery_settings_request_id,delivery_settings_request_fingerprint,daily_notification_limit,updated_at&user_id=eq.${user.id}`,
+    'personalized reminder settings after Setup edits',
+  );
+  if (
+    stableJson(reminderPreferencesAfterSetupEdits) !==
+    stableJson(reminderPreferencesBeforeSetupEdits)
+  ) {
+    throw new Error(
+      `Setup changed personalized reminder settings. Before ${stableJson(reminderPreferencesBeforeSetupEdits)}, after ${stableJson(reminderPreferencesAfterSetupEdits)}`,
+    );
+  }
+  await patchRows(
+    `notification_preferences?user_id=eq.${user.id}`,
+    {
+      focus_prompts_enabled: true,
+      recovery_prompts_enabled: true,
+      weekly_summary_enabled: true,
+      quiet_hours_start: null,
+      quiet_hours_end: null,
+      in_app_delivery_enabled: false,
+      in_app_delivery_consent_version: null,
+      in_app_delivery_consented_at: null,
+      in_app_delivery_disabled_at: null,
+      delivery_settings_request_id: null,
+      delivery_settings_request_fingerprint: null,
+      daily_notification_limit: 2,
+      updated_at: new Date().toISOString(),
+    },
+    'restore default Reminder settings for Notification Delivery checks',
   );
 
   await page.goto(appRoute('/habits'), { waitUntil: 'domcontentloaded' });
@@ -896,31 +957,20 @@ try {
   await clickByRoleName(page, 'button', 'evening energy 9 of 10');
   await clickByRoleName(page, 'button', 'evening stress 8 of 10');
   await clickByText(page, 'Next');
-  await clickScrolledByLabel(page, 'primary friction emotional_load');
   await assertFlutterTextAbsent(
     page,
     'Make tomorrow gentler',
     'removed Evening gentler control',
   );
-  await clickScrolledByLabel(page, 'additional friction interruptions');
-  await expectText(page, '1 of 2 selected.');
-  await clickScrolledByLabel(page, 'additional friction hard_to_start');
-  await expectText(
-    page,
-    '2 of 2 selected. Remove one to choose another.',
-  );
+  if (
+    (await page.getByLabel(/^(primary|additional) friction /i).count()) !== 0
+  ) {
+    throw new Error('Evening check-in still exposes retired friction choices.');
+  }
   await clickScrolledByLabel(page, 'stress source private_emotional');
-  await expectText(
-    page,
-    '2 of 2 selected. Remove one to choose another.',
-  );
   await clickScrolledByLabel(
     page,
     'stress influence hardly_controllable',
-  );
-  await expectText(
-    page,
-    '2 of 2 selected. Remove one to choose another.',
   );
   await stabilizeLabeledControl(
     page,
@@ -931,10 +981,6 @@ try {
     'Possible priority tomorrow (optional)',
     `  ${eveningTomorrowPriority}  `,
     0,
-  );
-  await expectText(
-    page,
-    '2 of 2 selected. Remove one to choose another.',
   );
   await clickByText(page, 'Save evening check-in');
   await expectText(
@@ -1029,8 +1075,6 @@ try {
       stressIntensity: 8,
       stressSource: 'private_emotional',
       stressControllability: 'hardly_controllable',
-      mainFriction: 'emotional_load',
-      additionalFrictions: eveningAdditionalFrictions,
       expectedRisks: [
         'private_emotional_stress',
         'low_controllability',
@@ -1099,8 +1143,6 @@ try {
       stressIntensity: 8,
       stressSource: 'private_emotional',
       stressControllability: 'hardly_controllable',
-      mainFriction: 'emotional_load',
-      additionalFrictions: eveningAdditionalFrictions,
       sleepHours: 5.5,
       sleepQuality: 3,
       currentEnergy: 4,
@@ -1179,10 +1221,6 @@ try {
     page,
     'stress influence mostly_controllable',
   );
-  await expectText(
-    page,
-    '2 of 2 selected. Remove one to choose another.',
-  );
   await stabilizeLabeledControl(
     page,
     'Possible priority tomorrow (optional)',
@@ -1221,8 +1259,6 @@ try {
       stressIntensity: 8,
       stressSource: 'workload',
       stressControllability: 'mostly_controllable',
-      mainFriction: 'emotional_load',
-      additionalFrictions: eveningAdditionalFrictions,
       sleepHours: 5.5,
       sleepQuality: 3,
       currentEnergy: 4,
@@ -1344,7 +1380,7 @@ try {
       rows.length === 1 &&
       rows[0].metadata?.source === 'snapshot-aggregator-v1' &&
       rows[0].metadata?.daily_state_contract_version ===
-        'explainable-daily-state-v1' &&
+        'explainable-daily-state-v2' &&
       rows[0].summary?.daily_state?.mode === 'recover' &&
       rows[0].summary?.daily_state?.data_quality === 'current' &&
       rows[0].summary?.daily_state?.context?.stress?.source === 'workload' &&
@@ -1984,7 +2020,7 @@ try {
         (row) =>
           row.metadata?.source === 'snapshot-aggregator-v1' &&
           row.metadata?.daily_state_contract_version ===
-            'explainable-daily-state-v1' &&
+            'explainable-daily-state-v2' &&
           row.summary?.daily_state?.mode === 'recover' &&
           row.summary?.daily_state?.data_quality === 'current' &&
           row.summary?.daily_state?.risk_flags?.includes('low_sleep') &&
@@ -2109,17 +2145,20 @@ try {
       rows.length >= recommendationsBeforeManualRefresh.length &&
       rows.some(
         (row) =>
-          row.category === 'focus' &&
-          row.metadata?.model === null &&
-          row.metadata?.source_engine_version === 'deterministic-v1',
-      ) &&
-      rows.some(
-        (row) =>
           row.category === 'planning' &&
           row.metadata?.model === null &&
           row.metadata?.source_engine_version === 'deterministic-v1',
-      ),
-    'deterministic recommendations after manual refresh',
+      ) &&
+      rows.every((row) => {
+        const metadata = JSON.stringify(row.metadata ?? {});
+        return (
+          !metadata.includes('"table":"user_state_snapshots"') &&
+          !/primary_focus_areas|friction_points|main_friction|goal_id/.test(
+            metadata,
+          )
+        );
+      }),
+    'runtime-only deterministic recommendations after manual refresh',
   );
 
   await page.goto(appRoute('/insights'), { waitUntil: 'domcontentloaded' });
@@ -2529,13 +2568,6 @@ function dropdownOptions(label) {
       'Evening',
       'It varies',
     ],
-    'Coaching style required': [
-      'Not set',
-      'Direct',
-      'Gentle',
-      'Analytical',
-      'Accountability',
-    ],
     Weekday: [
       'Not set',
       'Monday',
@@ -2547,7 +2579,6 @@ function dropdownOptions(label) {
       'Sunday',
     ],
     'Cadence (required before activation)': ['Not set', 'Daily', 'Weekly'],
-    'Goal status': ['Active', 'Paused', 'Archived'],
     'Routine status': ['Candidate', 'Active', 'Paused', 'Archived'],
     'Commitment status': ['Active', 'Archived'],
     'Task priority': ['Low', 'Medium', 'High', 'Critical'],
@@ -2991,8 +3022,6 @@ async function assertPhaseTwoDailyStateResponse(response, expected) {
     stressIntensity: state.context?.stress?.intensity,
     stressSource: state.context?.stress?.source,
     stressControllability: state.context?.stress?.controllability,
-    mainFriction: state.context?.main_friction,
-    additionalFrictions: state.context?.additional_frictions,
     sleepHours: state.context?.sleep_hours,
     sleepQuality: state.context?.sleep_quality,
     currentEnergy: state.context?.current_energy,
@@ -3027,10 +3056,13 @@ async function assertPhaseTwoDailyStateResponse(response, expected) {
     }
   }
   if (
-    state.contract_version !== 'explainable-daily-state-v1' ||
-    stateSignals.contract_version !== 'explainable-daily-state-v1' ||
+    state.contract_version !== 'explainable-daily-state-v2' ||
+    stateSignals.contract_version !== 'explainable-daily-state-v2' ||
     state.provenance?.kind !== 'deterministic' ||
-    state.provenance?.baseline !== 'none'
+    state.provenance?.baseline !== 'none' ||
+    Object.hasOwn(state.context ?? {}, 'main_friction') ||
+    Object.hasOwn(state.context ?? {}, 'additional_frictions') ||
+    Object.hasOwn(stateSignals ?? {}, 'friction_evidence')
   ) {
     throw new Error(
       `Unexpected Phase 2 provenance: ${JSON.stringify({ state, stateSignals })}`,
@@ -3085,6 +3117,20 @@ function arraysEqual(actual, expected) {
   );
 }
 
+function containsRetiredSetupKeys(value) {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+  return [
+    'primary_focus_areas',
+    'goals',
+    'friction_points',
+    'coaching_style',
+    'reminder_preference',
+    'context_note',
+  ].some((key) => Object.hasOwn(value, key));
+}
+
 function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -3128,8 +3174,10 @@ function hasExactPhaseOneDailyRow(row, expected) {
     row.nutrition_notes === null &&
     row.day_focus === null &&
     row.reflection === null &&
-    row.metadata?.capture_version === 'daily-capture-v2' &&
+    row.metadata?.capture_version === 'daily-capture-v3' &&
     !Object.hasOwn(row.metadata ?? {}, 'context_note') &&
+    !Object.hasOwn(row.metadata ?? {}, 'main_friction') &&
+    !Object.hasOwn(row.metadata ?? {}, 'additional_frictions') &&
     arraysEqual(captureKeys, expectedCaptureKeys) &&
     evening?.capture_kind === 'evening' &&
     evening?.entry_date === expected.entryDate &&
@@ -3142,11 +3190,8 @@ function hasExactPhaseOneDailyRow(row, expected) {
     evening?.stress_source === expected.stressSource &&
     evening?.stress_controllability === expected.stressControllability &&
     !Object.hasOwn(evening ?? {}, 'focus_band') &&
-    evening?.main_friction === 'emotional_load' &&
-    arraysEqual(
-      evening?.additional_frictions,
-      eveningAdditionalFrictions,
-    ) &&
+    !Object.hasOwn(evening ?? {}, 'main_friction') &&
+    !Object.hasOwn(evening ?? {}, 'additional_frictions') &&
     evening?.tomorrow_priority === expected.tomorrowPriority &&
     !Object.hasOwn(evening ?? {}, 'reflection_note') &&
     !Object.hasOwn(evening ?? {}, 'specific_blocker') &&
@@ -3179,7 +3224,7 @@ function hasExactCaptureEvents(rows, expected, contract) {
         !row.id ||
         row.daily_log_id !== expected.dailyLogId ||
         row.source !== 'quick_check_in' ||
-        row.metadata?.capture_version !== 'daily-capture-v2' ||
+        row.metadata?.capture_version !== 'daily-capture-v3' ||
         row.metadata?.entry_date !== expected.entryDate ||
         !isIsoTimestamp(row.metadata?.captured_at),
     ) ||
@@ -3213,11 +3258,8 @@ function hasExactCaptureEvents(rows, expected, contract) {
         metadata?.capture_kind !== 'evening' ||
         metadata?.capture_id !== expected.eveningCaptureId ||
         Object.hasOwn(metadata ?? {}, 'focus_band') ||
-        metadata?.main_friction !== 'emotional_load' ||
-        !arraysEqual(
-          metadata?.additional_frictions,
-          eveningAdditionalFrictions,
-        ) ||
+        Object.hasOwn(metadata ?? {}, 'main_friction') ||
+        Object.hasOwn(metadata ?? {}, 'additional_frictions') ||
         metadata?.tomorrow_priority !== expected.tomorrowPriority ||
         Object.hasOwn(metadata ?? {}, 'gentle_tomorrow')
       );
@@ -3976,12 +4018,12 @@ async function assertNotificationDelivery(page, userId) {
     replayed: false,
   });
   if (
-    initialSettings.categories.focus_prompt !== false ||
-    initialSettings.categories.recovery_prompt !== false ||
-    initialSettings.categories.weekly_summary !== false
+    initialSettings.categories.focus_prompt !== true ||
+    initialSettings.categories.recovery_prompt !== true ||
+    initialSettings.categories.weekly_summary !== true
   ) {
     throw new Error(
-      `No-reminders Setup preference changed unexpectedly: ${initialText}`,
+      `Default Reminder categories changed unexpectedly: ${initialText}`,
     );
   }
   await assertRows(
@@ -3992,11 +4034,11 @@ async function assertNotificationDelivery(page, userId) {
       rows[0].in_app_delivery_consent_version === null &&
       rows[0].in_app_delivery_consented_at === null &&
       rows[0].in_app_delivery_disabled_at === null &&
-      rows[0].focus_prompts_enabled === false &&
-      rows[0].recovery_prompts_enabled === false &&
-      rows[0].weekly_summary_enabled === false &&
+      rows[0].focus_prompts_enabled === true &&
+      rows[0].recovery_prompts_enabled === true &&
+      rows[0].weekly_summary_enabled === true &&
       rows[0].daily_notification_limit === 2,
-    'fail-closed in-app consent separate from No-reminders Setup preferences',
+    'fail-closed in-app consent with unchanged default Reminder categories',
   );
 
   const settingsGetPromise = page.waitForResponse(
@@ -4016,13 +4058,12 @@ async function assertNotificationDelivery(page, userId) {
   await expectText(page, 'Banners only while the app is open');
   await expectText(
     page,
-    'Shows a banner only while MyLifeGraph is open. This is separate from your saved reminder preference.',
+    'Shows a banner only while MyLifeGraph is open. Categories and quiet hours do not grant consent.',
   );
   await page
     .getByLabel('Allow in-app banners', { exact: false })
     .first()
     .click();
-  await page.getByLabel('Recovery prompt', { exact: false }).first().click();
   await scrollUntilTextInViewport(page, 'Save in-app reminders', {
     deltaY: 650,
     buttonFirst: true,
@@ -4031,7 +4072,7 @@ async function assertNotificationDelivery(page, userId) {
   await expectText(page, 'Allow in-app banners?');
   await expectText(
     page,
-    'Your Setup preference did not turn these on.',
+    'These turn on only with your explicit consent.',
   );
   const settingsPatchPromise = page.waitForResponse(
     (candidate) =>
@@ -4070,9 +4111,9 @@ async function assertNotificationDelivery(page, userId) {
     consentRequest.consent_version !== 'in-app-notification-consent-v1' ||
     stableJson(consentRequest.categories) !==
       stableJson({
-        focus_prompt: false,
+        focus_prompt: true,
         recovery_prompt: true,
-        weekly_summary: false,
+        weekly_summary: true,
       }) ||
     consentRequest.quiet_hours !== null ||
     consentRequest.daily_limit !== 2
@@ -5725,7 +5766,7 @@ async function assertBoundedWeeklyReview(page, userId) {
         period_key: entryDate,
         summary: {
           daily_state: {
-            contract_version: 'explainable-daily-state-v1',
+            contract_version: 'explainable-daily-state-v2',
             target_date: entryDate,
             mode: entryDate === friday ? 'recover' : 'steady',
             data_quality: 'current',
@@ -5736,7 +5777,7 @@ async function assertBoundedWeeklyReview(page, userId) {
         generated_at: isoTimestampOnDate(entryDate, '19:00:00'),
         metadata: {
           source: 'snapshot-aggregator-v1',
-          daily_state_contract_version: 'explainable-daily-state-v1',
+          daily_state_contract_version: 'explainable-daily-state-v2',
           target_date: entryDate,
           window_days: 7,
           state_lookback_days: 7,
@@ -5904,7 +5945,7 @@ async function assertBoundedWeeklyReview(page, userId) {
     review?.facts?.tasks?.completed !== 1 ||
     review?.facts?.tasks?.carried !== 1 ||
     review?.facts?.tasks?.overdue_carried !== 1 ||
-    review?.facts?.tasks?.goal_linked_completed !== 1 ||
+    review?.facts?.tasks?.goal_linked_completed !== 0 ||
     review?.facts?.habits?.scheduled_opportunities !== 8 ||
     review?.facts?.habits?.completed !== 4 ||
     review?.facts?.habits?.skipped !== 0 ||
@@ -6023,6 +6064,10 @@ async function assertBoundedWeeklyReview(page, userId) {
   await enableFlutterSemantics(page);
   await expectText(page, manualHabitTitle);
 
+  await scrollUntilTextInViewport(page, 'Apply change', {
+    deltaY: 600,
+    buttonFirst: true,
+  });
   await clickByText(page, 'Apply change');
   await expectText(page, 'Apply this habit change?');
   await clickByText(page, 'Keep current');
@@ -6052,6 +6097,10 @@ async function assertBoundedWeeklyReview(page, userId) {
     await route.abort('failed');
   };
   await page.route('**/rest/v1/habits**', loseWeeklyHabitPatchResponse);
+  await scrollUntilTextInViewport(page, 'Apply change', {
+    deltaY: 600,
+    buttonFirst: true,
+  });
   await clickByText(page, 'Apply change');
   await expectText(page, 'Apply this habit change?');
   await clickByText(page, 'Apply change', { match: 'last' });
@@ -10435,8 +10484,8 @@ function assertCoachResponse(payload, expected, context) {
     payload.provenance.model_requested !== null ||
     payload.provenance.model_reported !== null ||
     payload.provenance.model_source !== 'not_applicable' ||
-    payload.provenance.prompt_version !== 'controlled-coach-prompt-v1' ||
-    payload.provenance.context_version !== 'coach-context-v1' ||
+    payload.provenance.prompt_version !== 'controlled-coach-prompt-v2' ||
+    payload.provenance.context_version !== 'coach-context-v2' ||
     payload.provenance.provider_called !== expected.providerCalled ||
     Number.isNaN(Date.parse(payload.provenance.generated_at))
   ) {
@@ -10492,7 +10541,6 @@ function assertCoachResponse(payload, expected, context) {
       'profile',
       'daily_snapshot',
       'daily_briefing',
-      'goals',
       'tasks',
       'habits',
       'focus_sessions',
@@ -10619,8 +10667,8 @@ async function assertCoachAtomicPersistence(userId, expected) {
       request.provider_mode !== 'deterministic_test_only' ||
       request.model_requested !== null ||
       request.model_source !== 'not_applicable' ||
-      request.prompt_version !== 'controlled-coach-prompt-v1' ||
-      request.context_version !== 'coach-context-v1' ||
+      request.prompt_version !== 'controlled-coach-prompt-v2' ||
+      request.context_version !== 'coach-context-v2' ||
       !/^[0-9a-f]{64}$/.test(request.message_fingerprint ?? '') ||
       stableJson(request.response) !== stableJson(item.response) ||
       stableJson(request.used_context) !== stableJson(item.response.used_context) ||

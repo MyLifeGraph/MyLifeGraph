@@ -132,7 +132,8 @@ actions.
 - In-app reminders may show a foreground banner only while MyLifeGraph is open.
   The app does not claim browser, phone-system, email, push, background-mobile,
   or deployed delivery.
-- A Setup reminder preference is not delivery consent.
+- Reminder configuration belongs to Settings, is not delivery consent, and is
+  never changed by Setup.
 - Coach is a development preview. Release builds and `APP_ENV=production` hide
   it regardless of Flutter defines. When enabled, `Coach` is the right shell
   destination; `Settings` remains the top-right Today control and is not

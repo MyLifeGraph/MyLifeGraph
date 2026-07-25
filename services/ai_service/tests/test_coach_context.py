@@ -13,7 +13,6 @@ from app.repositories.coach_context_repository import (
 )
 from app.services.coach_context import (
     CoachContextService,
-    _coaching_preference,
     _safe_daily_context,
 )
 
@@ -45,15 +44,6 @@ class Reader:
 class Envelope(SimpleNamespace):
     def model_dump(self, *, mode):
         return self.payload
-
-
-@pytest.mark.parametrize("value", ["direct", "gentle", "analytical", "accountability"])
-def test_structured_intake_coaching_preferences_are_allowlisted(value: str) -> None:
-    assert _coaching_preference({"summary": {"coaching_style": value}}) == value
-
-
-def test_unknown_coaching_preference_is_excluded() -> None:
-    assert _coaching_preference({"summary": {"coaching_style": "hidden text"}}) is None
 
 
 def test_context_uses_freshness_contracts_and_filters_hidden_metadata() -> None:
@@ -88,7 +78,8 @@ def test_context_uses_freshness_contracts_and_filters_hidden_metadata() -> None:
     context = json.loads(package.serialized)
 
     assert package.byte_count <= 32_768
-    assert context["sources"]["profile"]["coaching_preference"] == "analytical"
+    assert context["contract_version"] == "coach-context-v2"
+    assert set(context["sources"]["profile"]) == {"local_date", "timezone"}
     assert context["sources"]["daily_briefing"]["freshness"] == "current"
     assert context["sources"]["weekly_review"] is None
     assert "SECRET" not in package.serialized
@@ -108,36 +99,19 @@ def test_context_uses_freshness_contracts_and_filters_hidden_metadata() -> None:
     daily_context = context["sources"]["daily_snapshot"]["daily_state"]["context"]
     assert "context_note" not in daily_context
     assert daily_context["sleep_quality"] == 3
-    assert daily_context["main_friction"] == "no_major_friction"
-    assert daily_context["additional_frictions"] == [
-        "interruptions",
-        "hard_to_start",
-    ]
+    assert "main_friction" not in daily_context
+    assert "additional_frictions" not in daily_context
 
 
-def test_daily_context_rejects_malformed_additional_frictions() -> None:
-    assert _safe_daily_context(
-        {
-            "main_friction": "no_major_friction",
-            "additional_frictions": [
-                "interruptions",
-                "hard_to_start",
-                "low_energy",
-            ],
-        },
-    )["additional_frictions"] == []
-    assert _safe_daily_context(
-        {
-            "main_friction": "no_major_friction",
-            "additional_frictions": ["interruptions", "interruptions"],
-        },
-    )["additional_frictions"] == []
-    assert _safe_daily_context(
+def test_daily_context_discards_retired_friction_fields() -> None:
+    context = _safe_daily_context(
         {
             "main_friction": "interruptions",
-            "additional_frictions": ["interruptions"],
+            "additional_frictions": ["hard_to_start"],
         },
-    )["additional_frictions"] == []
+    )
+    assert "main_friction" not in context
+    assert "additional_frictions" not in context
 
 
 @pytest.mark.parametrize("value", [0, 11, True, 3.5, "3"])
@@ -215,12 +189,7 @@ def _raw_context() -> CoachRawContext:
     }
     return CoachRawContext(
         profile=CoachProfileContext(timezone="Europe/Berlin"),
-        onboarding_snapshot={
-            "summary": {
-                "coaching_style": "analytical",
-                "context_note": "SECRET_INTAKE_NOTE",
-            },
-        },
+        onboarding_snapshot=None,
         daily_snapshot={
             "id": "snapshot",
             "generated_at": "2026-07-13T06:00:00Z",
@@ -263,10 +232,7 @@ def _raw_context() -> CoachRawContext:
                 },
             },
         },
-        goals=BoundedRows(
-            available_count=1,
-            rows=[{"id": "goal", "title": "Finish report", "status": "active"}],
-        ),
+        goals=BoundedRows(available_count=0, rows=[]),
         tasks=BoundedRows(
             available_count=1,
             rows=[{"id": "task", "title": "Write outline", "status": "todo"}],

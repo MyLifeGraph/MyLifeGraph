@@ -21,6 +21,7 @@ class WeeklyReviewProfile:
 @dataclass(frozen=True)
 class WeeklyReviewContext:
     tasks: list[dict[str, Any]]
+    # Kept only as a dormant envelope field; no Goal rows are loaded or used.
     goals: list[dict[str, Any]]
     habits: list[dict[str, Any]]
     habit_logs: list[dict[str, Any]]
@@ -172,15 +173,6 @@ class SupabaseWeeklyReviewRepository:
             ],
         )
         tasks = _dedupe_rows([*open_tasks, *completed_tasks, *cancelled_tasks])
-        goals = await self._select_all_pages(
-            "goals",
-            params=[
-                ("select", "id,title,status,metadata,created_at,updated_at"),
-                ("user_id", f"eq.{user_id}"),
-                ("created_at", f"lt.{ends_at.isoformat()}"),
-                ("order", "created_at.asc,id.asc"),
-            ],
-        )
         habits = await self._select_all_pages(
             "habits",
             params=[
@@ -253,7 +245,7 @@ class SupabaseWeeklyReviewRepository:
         )
         return WeeklyReviewContext(
             tasks=tasks,
-            goals=goals,
+            goals=[],
             habits=habits,
             habit_logs=habit_logs,
             focus_sessions=focus_sessions,

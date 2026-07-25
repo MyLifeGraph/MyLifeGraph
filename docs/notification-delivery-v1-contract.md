@@ -3,8 +3,8 @@
 Notification Delivery V1 adds explicit consent, deterministic stored-item
 generation, and foreground in-app delivery to the existing Inbox lifecycle. It
 does not add browser, Android, email, push, or operating-system notifications.
-The stored reminder preference from Setup is configuration input only and is
-never interpreted as delivery permission.
+Reminder configuration belongs exclusively to Settings; Setup neither reads
+nor writes it. Configuration is never interpreted as delivery permission.
 
 Read `docs/notification-lifecycle-v1-contract.md` for read/unread/dismiss
 behavior. Delivery acknowledgement never changes those lifecycle fields.
@@ -44,9 +44,11 @@ explicit consent version, the three category flags, an optional complete
 RPC takes the owner advisory lock, rejects stale writes with `PT409`, and replays
 the latest exact request. An ambiguous client result retains that exact request
 for unchanged retry; a definitive conflict disables all edits and saves until a
-successful reload. Intake Setup shares the preference row, so its trigger clears
-the old delivery request identity on a real projection change and keeps
-`updated_at` strictly monotone and no earlier than retained consent timestamps.
+successful reload. The settings RPC keeps `updated_at` strictly monotone and no
+earlier than retained consent timestamps. A historical shared-writer trigger
+still protects any legacy projection change, but the 2026-07-25 Setup
+compatibility wrapper performs no preference write: Setup leaves the row and
+its replay identity untouched.
 
 Disabling delivery does not delete stored Inbox rows. Re-enabling records a new
 consent time. Changing categories while already disabled does not rewrite the

@@ -5,6 +5,11 @@ distinguishes implemented behavior from planned backend integration. For the
 target backend flow, product agents, LLM cost controls, and next implementation
 sequence, see `docs/backend-roadmap.md`.
 
+The current Setup-personalization boundary is defined in
+`docs/setup-personalization-retirement-contract.md`. It supersedes older
+descriptions of Setup Goals, focus areas, friction answers, coaching style, or
+Setup-owned Reminder preferences.
+
 ## High-Level Shape
 
 ```text
@@ -124,16 +129,16 @@ Supabase is not configured.
 `/daily-check-in` route redirects to it. `/morning-calibration` is a separate,
 short Morning Calibration instead of another full daily form.
 
-The current capture contract is:
+The current `daily-capture-v3` contract is:
 
 - Typed `EveningShutdownDraft` and `MorningCalibrationDraft` values have stable
   capture ids through retry. `DailyCaptureEntry` is the one same-day aggregate.
-- Evening is a two-page flow. Mood, energy, stress intensity, and one primary
-  friction are required; `no_major_friction` is an explicit valid primary
-  answer. Up to two unique, non-primary `additional_frictions` are optional.
+- Evening is a two-page flow. Mood, energy, and stress intensity are required.
   Stress source and controllability appear and become required together only
   at stress `5..10`; tomorrow priority, reflection, and a specific blocker are
-  optional and omitted when blank. New captures do not write the retired
+  optional and omitted when blank. Primary and additional friction choices are
+  retired. V2 captures remain readable, but their friction keys are ignored and
+  the next save writes V3. New captures do not write the retired
   `gentle_tomorrow` field, while old capture objects containing it remain
   readable. The form no longer asks the user to estimate a focus band:
   completed `focus_sessions` are the source of measured focus time.
@@ -147,9 +152,9 @@ The current capture contract is:
   `.morning` object, preserving the other capture and unrelated metadata.
   Numeric compatibility projects mood and stress from Evening, sleep from
   Morning, and energy from Morning when present or Evening otherwise.
-- Guest saves use a versioned V2 daily JSON object and remain readable on
-  return. Legacy V1 guest JSON remains readable and is preserved during the
-  existing best-effort guest-to-real-account check-in migration.
+- Guest saves use a versioned V3 daily JSON object and remain readable on
+  return. Legacy V1/V2 guest JSON remains readable; a V2 read is sanitized and
+  rewritten without friction data before a later account migration.
 - Supabase saves upsert the `(user_id, entry_date)` `daily_logs` row and rebuild
   a dynamic set of at most four current `behavioral_events`. Mood, energy,
   stress, and sleep receive deterministic ids derived from the daily row and
@@ -256,8 +261,10 @@ ISO week without generation, preserves `not_ready`, missing, current, stale,
 and error truth, and generates or refreshes only after an explicit control.
 Only a manual Habit V1 shrink/pause/archive proposal can call an existing typed
 Habit V1 command after exact before/after confirmation. Setup-owned changes
-return to Settings Setup; staged replacement, goal, task, or schedule proposals
-do not mutate a record. Guest/mock sessions never call the weekly-review API.
+return to Settings Setup; staged replacement, task, or schedule proposals do
+not mutate a record. The compatible `goal_linked_completed` fact is always
+zero, and no Goal is loaded or proposed. Guest/mock sessions never call the
+weekly-review API.
 
 Insights also uses this boundary for deterministic correlation analysis. In
 mock or guest mode it renders local time series. In real Supabase mode it reads
@@ -411,12 +418,15 @@ perform no remote profile/data bootstrap.
 
 Setup is one typed contract across first completion, re-entry, and review:
 
-- Required focus, weekday shape, energy window, coaching style, and reminder
-  choices are explicit. Goals, routines, context, and fixed commitments are
-  progressive optional detail; blank values materialize no owned records.
-  Weekly commitments may use optional inclusive semester dates and can be
-  duplicated for another weekday. The legacy calendar-intent field remains a
-  payload-compatibility value but is no longer presented in onboarding.
+- Typical weekday and best energy window are the only required answers; display
+  name is optional. Routines, fixed commitments, and Study Setup are progressive
+  optional detail. Focus areas, Goals, friction points, coaching style, Reminder
+  preference, and free-form context are retired. A compatibility normalizer
+  accepts old `intake-v1` payloads but strips those keys before validation,
+  comparison, and persistence. Weekly commitments may use optional inclusive
+  semester dates and can be duplicated for another weekday. The legacy
+  calendar-intent field remains a payload-compatibility value but is no longer
+  presented in onboarding.
 - Focus rhythm/start ritual and current/next semester planning are separate
   collapsed optional sections. Enabling Focus initializes 45 minutes plus 10
   minutes recovery and neutral preparation suggestions. New commitments may
@@ -440,20 +450,23 @@ Setup is one typed contract across first completion, re-entry, and review:
   so stale workers cannot overwrite a newer Setup projection.
 - After the pending revision is claimed, FastAPI calls one service-role-only
   database RPC. A transaction-scoped per-user advisory lock serializes workers;
-  preferences, Setup-owned goal/habit/schedule/memory reconciliation, the
-  canonical onboarding snapshot, applied intake state, and profile projection
-  either commit together or roll back together.
-- Goals, activated habits, schedule items, and durable memories receive
+  Setup-owned Habit/schedule/study/energy-memory reconciliation, the canonical
+  onboarding snapshot, applied intake state, and profile projection either
+  commit together or roll back together. The compatibility RPC parameters for
+  Goals and notification preferences are ignored; Setup never changes or
+  touches the user's Reminder settings.
+- Activated habits, schedule items, and the best-energy memory receive
   deterministic UUIDv5 record ids plus server-authored setup ownership metadata.
-  Reconciliation converges to the submitted applied revision and never archives
-  or removes manual/other-source rows. The only legacy exception deletes the
-  exact unmarked onboarding placeholder `Math`, `Room 204`, Monday
-  `08:15`-`09:45`; other manual and unmarked onboarding rows remain preserved.
+  Reconciliation converges to the submitted applied revision, archives only
+  Setup-owned Goals, and never archives or removes manual/other-source Goals or
+  memories. The only legacy schedule exception deletes the exact unmarked
+  onboarding placeholder `Math`, `Room 204`, Monday `08:15`-`09:45`; other
+  manual and unmarked onboarding rows remain preserved.
 - A named routine stays only in the intake response as a candidate. It becomes
   an active `habits` row only after explicit daily/weekly cadence confirmation.
 - Settings links to the real Setup surface. Re-entry is prefilled and exposes
-  loading, retryable error, edit, goal archive, habit pause/archive, and fixed
-  commitment removal behavior.
+  loading, retryable error, edit, habit pause/archive, and fixed commitment
+  removal behavior.
 - Setup-owned habits are edited, paused, or archived only through this Settings
   Setup surface. Active Setup habits remain visible for completion, intentional
   skip, and undo in Today Habits; generic Habit Management lists only
@@ -496,8 +509,9 @@ surface. The canonical application schema is now snake_case and centered on:
   current product workflows.
 - `memory_entries`, `ai_insights`, `recommendations`, and
   `skillset_profiles` for AI-generated context and output.
-- `goals`, `habits`, `habit_logs`, and `focus_sessions` for executable goal,
-  habit-outcome, and focus workflows.
+- `goals` as a retained compatibility/export table with no active product
+  evaluation; `habits`, `habit_logs`, and `focus_sessions` for executable
+  habit-outcome and focus workflows.
 - `intake_responses` and `user_state_snapshots` for revisioned typed Setup
   history and compact backend-owned user state.
 - `study_setup_profiles` for the optional current applied focus/semester Setup
@@ -579,25 +593,28 @@ Current responsibilities:
   a provider; exact completed replay returns the persisted result without
   another call.
 - Claim a request without storing its message, build at most 32 KiB of bounded
-  owner-scoped `coach-context-v1`, run deterministic safety boundaries, and
+  owner-scoped `coach-context-v2`, run deterministic safety boundaries under
+  `controlled-coach-prompt-v2`, and
   atomically persist a successful user/assistant pair, response manifest, and
-  retained usage event. Failed claims remain terminal; history deletion removes
-  content and tombstones requests without deleting usage or freeing budget.
+  retained usage event. V1 history/replay remains readable. Failed claims remain
+  terminal; history deletion removes content and tombstones requests without
+  deleting usage or freeing budget.
 - Keep recommendation generation behind a service boundary.
 - Verify bearer tokens through an isolated auth verifier when Supabase backend
   settings are configured.
 - Claim revisioned structured intake responses, then call the service-role-only
   `apply_intake_v1_setup_revision` RPC. Its per-user advisory transaction lock
-  atomically writes preferences, reconciles explicit Setup-owned goals,
-  cadence-confirmed habits, schedule items and durable memories, upserts the
-  constant `setup:intake-v1` onboarding snapshot, marks the intake applied, and
-  advances the profile projection only from its canonical stored response.
+  atomically reconciles cadence-confirmed habits, schedule items, Study Setup,
+  and the best-energy memory; archives Setup-owned Goals; upserts the compact
+  `setup:intake-v1` onboarding snapshot; marks the intake applied; and advances
+  the profile projection only from its canonical stored response. It does not
+  change notification preferences.
 - Load recent user-scoped data from `daily_logs`, `behavioral_events`, and
   `tasks` plus latest `user_state_snapshots`, run the deterministic v1
   recommendation engine, and persist verified recommendations to
   `recommendations`.
 - Create or refresh compact `daily` and `weekly` `user_state_snapshots` from
-  recent `daily_logs`, `behavioral_events`, `tasks`, `goals`, `habits`, explicit
+  recent `daily_logs`, `behavioral_events`, `tasks`, `habits`, explicit
   `habit_logs`, `focus_sessions`, `schedule_items`, and `memory_entries` without
   reading full history.
 - Parse the same strict `executable-action-v1` envelope as Flutter so persisted
@@ -605,25 +622,27 @@ Current responsibilities:
   metadata, or unsafe routes. `GET /v1/briefings/today` reads that decision and
   deliberate `POST /v1/briefings/generate` ranks or refreshes it.
 - Add `summary.daily_state` and `signals.daily_state` under the
-  `explainable-daily-state-v1` contract. The parser trusts V2 capture metadata
+  `explainable-daily-state-v2` contract. The parser trusts V2/V3 capture metadata
   only after strict identity, type, enum, numeric, timestamp, and projection
-  checks. Legacy numeric fallback applies only when no V2 marker exists.
+  checks, ignores all friction keys, and sanitizes readable V1 state. Legacy
+  numeric fallback applies only when no V2/V3 marker exists.
 - Compute Daily State from a fixed seven-day lookback independent of the
   requested statistics window. Evening on the target date or previous date is
   current; Morning is current only on the target date. Quality is explicit as
   `missing`, `partial`, `current`, or `stale`.
 - Classify `push`, `steady`, `recover`, or `plan` with recovery safeguards before
-  planning or push rules. Persist machine-stable risks/reasons, field-level
-  evidence, deterministic provenance, and no learned-baseline claim. Very low
+  planning or push rules. `push` requires an active Task. Persist machine-stable
+  non-friction risks/reasons, field-level evidence, deterministic provenance,
+  and no learned-baseline claim. Very low
   current sleep quality may select recovery despite sufficient duration;
   moderately low quality prevents `push`. Capture free text is excluded from
   summary, signals, and snapshot metadata.
 - Load capture metadata with daily rows and events. Event queries use a broadened
   UTC read window, then prefer the explicit local `metadata.entry_date` during
   in-memory filtering and fall back to `occurred_at` for legacy events.
-- Trigger a best-effort deterministic recommendation refresh after authenticated
-  Intake V1 completion so the first real dashboard can read persisted
-  onboarding-derived recommendations.
+- Do not generate Recommendations during Setup completion. Runtime
+  Recommendations remain deliberate and use current Tasks, check-ins, and other
+  live state rather than retired onboarding personalization.
 - Support a deliberate dashboard recommendation refresh action that first
   refreshes the daily snapshot best-effort, then calls the deterministic
   recommendation generate endpoint with LLM wording disabled.
@@ -643,9 +662,9 @@ Guest/mock sessions receive a visibly labeled local demo feed. Missing real
 configuration or auth, network failures, and invalid envelopes propagate as
 errors and never read mock recommendations. Flutter does not automatically call
 `POST /v1/recommendations/generate` during a normal read.
-Authenticated Intake V1 completion calls the same backend generation path after
-the onboarding snapshot is written; normal dashboard reads still never generate
-recommendations. The dashboard refresh command is the explicit user-visible path:
+Authenticated Intake V1 completion writes no Recommendation. Normal dashboard
+reads also never generate recommendations. The dashboard refresh command is the
+explicit user-visible path:
 it calls `POST /v1/recommendations/generate` with `allow_llm_wording=false`
 after a best-effort daily snapshot refresh, then reloads persisted
 recommendations. A failed refresh retains the previously displayed feed and
@@ -785,11 +804,13 @@ production or presented as the deployed LLM architecture.
 
 The context boundary follows "full reach, minimal disclosure": FastAPI may read
 relevant canonical rows for the bearer-derived owner, but sends only a compact
-32 KiB `coach-context-v1` package for the current request. The first package is
-limited to current snapshot/Daily State, current briefing, bounded active
-actions/goals/focus facts, an explicitly fresh weekly review when useful,
-selected reviewable memory, and a small completed-turn window. The model gets
-no database credential, SQL/tool access, cross-user data, imported calendar
+32 KiB `coach-context-v2` package for the current request under
+`controlled-coach-prompt-v2`. It is limited to current sanitized snapshot/Daily
+State, current briefing, bounded active Task/Habit/focus facts, an explicitly
+fresh weekly review when useful, selected reviewable memory, and a small
+completed-turn window. Goals, Setup preferences, coaching style, and friction
+fields are not loaded. Persisted V1 turns remain readable. The model gets no
+database credential, SQL/tool access, cross-user data, imported calendar
 content, or hidden free text. FastAPI attaches the exact used-data manifest;
 the model cannot invent provenance.
 
@@ -962,9 +983,9 @@ all-time result.
 - Phase 8 persists a deterministic weekly review only after explicit
   generation. `review_plan` is a real synced navigation handler, not an enabled
   no-op. Direct apply remains limited to manual Habit V1 shrink/pause/archive.
-  Setup ownership stays in Setup, while replacement and goal/task/schedule
-  changes remain staged. There is no task-transition or habit-definition
-  history claim.
+  Setup ownership stays in Setup, while replacement/task/schedule changes
+  remain staged. Goals are inactive and the retained V1 goal-linked fact is
+  always zero. There is no task-transition or habit-definition history claim.
 - Phase 9 accepts one explicitly consented, user-selected `.ics` source for a
   real account. Connection alone imports nothing; a bounded deliberate import
   reconciles stable event identities and exposes imported/read-only provenance.

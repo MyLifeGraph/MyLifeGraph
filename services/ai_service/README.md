@@ -14,7 +14,7 @@ FastAPI service boundary for recommendation and future ML workflows.
   authenticated backend v1 recommendation contract.
 - `/v1/snapshots/generate` creates or refreshes deterministic `daily` or
   `weekly` user-state snapshots from recent user-owned signals. Their additive
-  `summary.daily_state` uses the `explainable-daily-state-v1` contract for
+  `summary.daily_state` uses the `explainable-daily-state-v2` contract for
   capture freshness, data quality, bounded risks/reasons, evidence, provenance,
   and recovery-first Daily Mode classification.
 - Phase 3 snapshot inputs include explicit `habit_logs` outcomes and
@@ -39,9 +39,11 @@ FastAPI service boundary for recommendation and future ML workflows.
   monotonic `profiles.setup_revision`, so an older worker cannot overwrite a
   newer applied Setup projection. The service passes the claimed canonical row
   into the service-role-only `apply_intake_v1_setup_revision` RPC. A per-user
-  advisory transaction lock serializes workers, while preferences, Setup-owned
-  goal/habit/schedule/memory reconciliation, the constant onboarding snapshot,
-  applied intake state, and profile projection commit atomically. Recommendation
+  advisory transaction lock serializes workers, while Setup-owned
+  Habit/schedule/Study/energy-memory reconciliation, Goal archival, the compact
+  onboarding snapshot, applied intake state, and profile projection commit
+  atomically. Retained Goal and notification-preference RPC parameters are
+  ignored, and Setup completion generates no Recommendation. Recommendation
   endpoints load recent user-scoped app data from canonical snake_case tables,
   verify deterministic recommendations, and persist accepted results to
   `recommendations`. Snapshot generation reuses `user_state_snapshots`, keeps
@@ -83,7 +85,10 @@ FastAPI service boundary for recommendation and future ML workflows.
   development-only `local_codex_oauth`, which invokes the current Linux user's
   manually authenticated Codex CLI without an application API key, tools, or
   model fallback. Only a deliberate Coach send may call it; all other service
-  workflows remain deterministic/no-model. It is not a production provider.
+  workflows remain deterministic/no-model. New requests use
+  `coach-context-v2` and `controlled-coach-prompt-v2` without Goals, onboarding
+  preferences, coaching style, or friction; V1 history remains readable. It is
+  not a production provider.
   See `../../docs/phase-10-controlled-coach-plan.md`.
 - `/v1/account/profile`, `/v1/account/export`, and `/v1/account` expose the
   bearer-derived V1 timezone, bounded JSON portability, and confirmed permanent
@@ -151,7 +156,7 @@ curl http://localhost:8000/v1/intake/setup \
 curl -X POST http://localhost:8000/v1/intake/complete \
   -H 'Authorization: Bearer <supabase_access_token>' \
   -H 'Content-Type: application/json' \
-  -d '{"version":"intake-v1","request_id":"11111111-1111-4111-8111-111111111111","base_revision":0,"responses":{"primary_focus_areas":["focus"],"goals":[{"key":"22222222-2222-4222-8222-222222222222","title":"Protect focus time","status":"active"}],"friction_points":[],"weekday_shape":"school_or_work","best_energy_window":"morning","coaching_style":"direct","reminder_preference":{"enabled":true,"quiet_hours":{"starts_at":"21:00","ends_at":"07:00"}},"routines":[],"fixed_commitments":[]},"metadata":{"client":"curl"}}'
+  -d '{"version":"intake-v1","request_id":"11111111-1111-4111-8111-111111111111","base_revision":0,"responses":{"weekday_shape":"school_or_work","best_energy_window":"morning","routines":[],"fixed_commitments":[]},"metadata":{"client":"curl"}}'
 ```
 
 Reuse `request_id` for a retry. For a new edit, load Setup first, send the
@@ -194,15 +199,16 @@ Evening capture on the target date or previous date as current and a Morning
 capture only on the target date as current. Complete current Evening plus
 Morning yields `current`; one usable current branch or current legacy numeric
 input yields `partial`; older usable input yields `stale`; and no trusted input
-yields `missing`. V2 rows are parsed strictly and never fall back to projected
-numbers when their V2 marker or branch is malformed. Legacy numeric fallback is
-used only when no V2 marker exists. Current Morning `sleep_quality` is separate
+yields `missing`. V2/V3 capture rows are parsed strictly with friction ignored
+and never fall back to projected numbers when their structured marker or branch
+is malformed. Legacy numeric fallback is used only when no V2/V3 marker exists.
+Current Morning `sleep_quality` is separate
 from `sleep_hours`: a very low `1..10` estimate can select recovery despite
 sufficient duration, and moderately low quality prevents `push`. Older V2
 Morning branches without the additive field remain compatible.
 
 The source marker remains `snapshot-aggregator-v1`. Snapshot metadata adds
-`daily_state_contract_version=explainable-daily-state-v1` and
+`daily_state_contract_version=explainable-daily-state-v2` and
 `state_lookback_days=7`. The result stays additive under `summary.daily_state`
 and `signals.daily_state`; no schema migration is required. Top-level
 `summary.risk_flags` aliases the current Daily State codes,
@@ -448,6 +454,11 @@ only legacy cleanup exception removes the exact unmarked onboarding placeholder
 `Math` / `Room 204` / Monday `08:15`-`09:45`; all other unmarked or manual
 schedule rows remain outside Setup ownership.
 
+`20260725120000_retire_setup_goals_and_friction.sql` keeps that public
+signature, ignores its Goal/notification arguments, and performs the idempotent
+stored-data cleanup. It also admits paired Coach V2 provenance while retaining
+paired V1 history validation.
+
 Phase 3 client and snapshot behavior requires
 `20260711120000_phase_3_executable_action_schema.sql`. It adds bounded task
 estimates and terminal timestamps, authoritative completed/skipped habit-log
@@ -514,7 +525,10 @@ verifiers and repositories, so production or remote Supabase credentials are not
 required for the unit test suite. Intake tests cover authenticated read/save,
 blank optional materialization, candidate cadence validation, request replay,
 stale revision conflicts, convergent retry/edit identities, lifecycle removal,
-and preservation of non-Setup-owned rows. Phase 3 tests cover strict executable
+legacy-key stripping, unchanged Reminder preferences, Setup-only Goal/memory
+cleanup, no post-Setup Recommendation generation, and preservation of
+non-Setup-owned rows. Daily State tests cover V2/V3 friction sanitization and
+the V2 output contract. Phase 3 tests cover strict executable
 action parser parity, explicit habit/focus snapshot summaries and local-date
 filtering, preservation of Phase 2 Daily State behavior, and terminal-task
 exclusion from recommendation pressure. Phase 4 through Phase 7 coverage adds

@@ -41,8 +41,7 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
     _EveningStep(
       eyebrow: 'EVENING · CONTEXT',
       title: 'What should tomorrow know?',
-      subtitle:
-          'Choose the primary friction. Everything else appears only when useful.',
+      subtitle: 'Add pressure context or optional notes only when useful.',
       kind: _EveningStepKind.context,
     ),
   ];
@@ -140,98 +139,7 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(
-          'Primary friction',
-          style: Theme.of(context).textTheme.titleMedium,
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        Text(
-          'Choose what got in the way most, or choose no major friction.',
-          style: Theme.of(context).textTheme.bodySmall,
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        CaptureChoiceControl<MainFriction>(
-          value: _draft.mainFriction,
-          choices: MainFriction.values
-              .map(
-                (value) => CaptureChoice(
-                  value: value,
-                  label: _mainFrictionLabel(value),
-                  semanticLabel: 'primary friction ${value.code}',
-                ),
-              )
-              .toList(),
-          onChanged: (value) => setState(() {
-            _draft = _draft.copyWith(
-              mainFriction: value,
-              additionalFrictions: _draft.additionalFrictions
-                  .where((friction) => friction != value)
-                  .toList(growable: false),
-            );
-          }),
-        ),
-        const SizedBox(height: AppSpacing.lg),
-        Text(
-          'Also present (optional)',
-          style: Theme.of(context).textTheme.titleMedium,
-        ),
-        const SizedBox(height: AppSpacing.xs),
-        Text(
-          'Choose up to two. Only the primary friction shapes your Daily State.',
-          style: Theme.of(context).textTheme.bodySmall,
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        Wrap(
-          spacing: AppSpacing.sm,
-          runSpacing: AppSpacing.sm,
-          children: MainFriction.values
-              .where(
-            (value) => value != MainFriction.noMajorFriction,
-          )
-              .map((value) {
-            final isPrimary = value == _draft.mainFriction;
-            final selected = _draft.additionalFrictions.contains(value);
-            final canSelect = !isPrimary &&
-                (selected ||
-                    _draft.additionalFrictions.length <
-                        EveningShutdownDraft.maxAdditionalFrictions);
-            return MergeSemantics(
-              child: Semantics(
-                label: 'additional friction ${value.code}',
-                child: FilterChip(
-                  selected: selected,
-                  showCheckmark: false,
-                  avatar: Icon(
-                    isPrimary
-                        ? Icons.radio_button_checked
-                        : selected
-                            ? Icons.check
-                            : Icons.add,
-                    size: 18,
-                  ),
-                  onSelected: canSelect
-                      ? (isSelected) =>
-                          _toggleAdditionalFriction(value, isSelected)
-                      : null,
-                  label: ExcludeSemantics(
-                    child: Text(
-                      _mainFrictionLabel(value),
-                    ),
-                  ),
-                ),
-              ),
-            );
-          }).toList(growable: false),
-        ),
-        const SizedBox(height: AppSpacing.xs),
-        Text(
-          '${_draft.additionalFrictions.length} of '
-          '${EveningShutdownDraft.maxAdditionalFrictions} selected'
-          '${_draft.additionalFrictions.length == EveningShutdownDraft.maxAdditionalFrictions ? '. Remove one to choose another.' : '.'}',
-          style: Theme.of(context).textTheme.bodySmall,
-        ),
         if (_draft.requiresStressContext) ...[
-          const SizedBox(height: AppSpacing.lg),
           Text(
             'What drove the pressure?',
             style: Theme.of(context).textTheme.titleMedium,
@@ -322,33 +230,8 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
     return switch (_steps[_stepIndex].kind) {
       _EveningStepKind.checkIn =>
         _draft.mood != null && _draft.energy != null && _draft.stress != null,
-      _EveningStepKind.context =>
-        _draft.mainFriction != null && _draft.hasConsistentStressContext,
+      _EveningStepKind.context => _draft.hasConsistentStressContext,
     };
-  }
-
-  void _toggleAdditionalFriction(MainFriction value, bool selected) {
-    if (value == MainFriction.noMajorFriction || value == _draft.mainFriction) {
-      return;
-    }
-    final additionalFrictions =
-        List<MainFriction>.of(_draft.additionalFrictions);
-    if (selected) {
-      if (additionalFrictions.contains(value) ||
-          additionalFrictions.length >=
-              EveningShutdownDraft.maxAdditionalFrictions) {
-        return;
-      }
-      additionalFrictions.add(value);
-    } else {
-      additionalFrictions.remove(value);
-    }
-    setState(
-      () => _draft = _draft.copyWith(
-        additionalFrictions:
-            List<MainFriction>.unmodifiable(additionalFrictions),
-      ),
-    );
   }
 
   void _previousStep() {
@@ -477,18 +360,6 @@ String _stressControllabilityLabel(StressControllability value) =>
       StressControllability.hardlyControllable => 'Little influence',
       StressControllability.partlyControllable => 'Some influence',
       StressControllability.mostlyControllable => 'Mostly within my influence',
-    };
-
-String _mainFrictionLabel(MainFriction value) => switch (value) {
-      MainFriction.noMajorFriction => 'No major friction',
-      MainFriction.unclearPriorities => 'Unclear priorities',
-      MainFriction.tooMuchToDo => 'Too much to do',
-      MainFriction.interruptions => 'Interruptions',
-      MainFriction.hardToStart => 'Hard to start',
-      MainFriction.lowEnergy => 'Low energy',
-      MainFriction.emotionalLoad => 'Emotional load',
-      MainFriction.physicalRecovery => 'Physical recovery',
-      MainFriction.externalConstraints => 'External constraints',
     };
 
 enum _EveningStepKind {

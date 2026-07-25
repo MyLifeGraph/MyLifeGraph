@@ -96,14 +96,16 @@ void main() {
 
     final responses = apiClient.body?['responses'] as Map<String, dynamic>;
     expect(responses['display_name'], 'Alex');
-    expect(responses['primary_focus_areas'], ['energy', 'focus']);
-    expect(responses['goals'], [
-      {
-        'key': '41c31425-baa6-4d58-8ac3-01f41ecb50d6',
-        'title': 'Protect focus time',
-        'status': 'active',
-      },
-    ]);
+    for (final retiredKey in const [
+      'primary_focus_areas',
+      'goals',
+      'friction_points',
+      'coaching_style',
+      'reminder_preference',
+      'context_note',
+    ]) {
+      expect(responses, isNot(contains(retiredKey)));
+    }
     expect(responses['routines'], [
       {
         'key': '950e9a84-9539-41d8-bf89-0b2a9a46cecc',
@@ -123,6 +125,10 @@ void main() {
     expect(result.exists, isTrue);
     expect(result.status, 'applied');
     expect(result.revision, 3);
+    expect(result.responses?.goals, isEmpty);
+    expect(result.responses?.frictionPoints, isEmpty);
+    expect(result.responses?.reminderPreference, isNull);
+    expect(result.responses?.contextNote, isNull);
     expect(result.responses?.fixedCommitments.single.startsAt, '08:15');
   });
 }

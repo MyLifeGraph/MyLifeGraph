@@ -21,11 +21,12 @@ class GuestSetupDataSource {
       if (decoded is! Map) {
         throw const FormatException('Local setup state is not an object.');
       }
-      return IntakeSetupReadState.fromJson(
+      final state = IntakeSetupReadState.fromJson(
         Map<String, dynamic>.from(decoded),
       );
+      return _persistSanitized(preferences, state);
     }
-    return _readLegacy(preferences);
+    return _persistSanitized(preferences, _readLegacy(preferences));
   }
 
   Future<IntakeSetupReadState> save(IntakeSetupSaveRequest request) async {
@@ -69,25 +70,7 @@ class GuestSetupDataSource {
       snapshotId: 'local-snapshot-${request.requestId}',
       completedAt: completedAt,
       responses: responses,
-      summary: {
-        'goal_count': responses.goals
-            .where((goal) => goal.status != IntakeGoalStatus.archived)
-            .length,
-        'routine_candidate_count': responses.routines
-            .where(
-              (routine) => routine.status == IntakeRoutineStatus.candidate,
-            )
-            .length,
-        'active_habit_count': responses.routines
-            .where((routine) => routine.status == IntakeRoutineStatus.active)
-            .length,
-        'fixed_commitment_count': responses.fixedCommitments
-            .where(
-              (commitment) =>
-                  commitment.status == IntakeCommitmentStatus.active,
-            )
-            .length,
-      },
+      summary: _summary(responses),
     );
 
     final saved = await preferences.setString(
@@ -165,17 +148,6 @@ class GuestSetupDataSource {
       throw const FormatException('Legacy local setup has no responses.');
     }
     final responses = Map<String, dynamic>.from(rawResponses);
-    final goals = _legacyStringOrObjectRows(
-      responses['goals'],
-      kind: 'goal',
-      objectBuilder: (key, title) => {
-        'key': key,
-        'title': title,
-        'status': IntakeGoalStatus.active.name,
-      },
-    ).where((goal) {
-      return goal['title'] != 'Build a steadier weekly routine';
-    }).toList(growable: false);
     final routines = _legacyStringOrObjectRows(
       responses['routines'] ?? responses['existing_habits'],
       kind: 'routine',
@@ -187,28 +159,16 @@ class GuestSetupDataSource {
       },
     );
     final commitments = _legacyCommitments(responses['fixed_commitments']);
-    final friction = _legacyStrings(responses['friction_points'])
-        .where((item) => item != 'Unclear priorities')
-        .toList(growable: false);
 
     final translated = <String, dynamic>{
       if (responses['display_name'] != null)
         'display_name': responses['display_name'],
-      'primary_focus_areas': responses['primary_focus_areas'] ?? const [],
-      'goals': goals,
-      'friction_points': friction,
       if (responses['weekday_shape'] != null)
         'weekday_shape': responses['weekday_shape'],
       if (responses['best_energy_window'] != null)
         'best_energy_window': responses['best_energy_window'],
-      if (responses['coaching_style'] != null)
-        'coaching_style': responses['coaching_style'],
-      if (responses['reminder_preference'] != null)
-        'reminder_preference': responses['reminder_preference'],
       'routines': routines,
       'fixed_commitments': commitments,
-      if (responses['context_note'] != null)
-        'context_note': responses['context_note'],
       if (responses['calendar_connection_intent'] != null)
         'calendar_connection_intent': responses['calendar_connection_intent'],
     };
@@ -226,6 +186,64 @@ class GuestSetupDataSource {
       summary: const {},
     );
   }
+
+  Future<IntakeSetupReadState> _persistSanitized(
+    SharedPreferences preferences,
+    IntakeSetupReadState state,
+  ) async {
+    final responses = state.responses?.normalized();
+    final sanitized = state.copyWith(
+      responses: responses,
+      summary: responses == null ? const {} : _summary(responses),
+    );
+    if (sanitized.exists) {
+      final saved = await preferences.setString(
+        storageKey,
+        jsonEncode(sanitized.toJson()),
+      );
+      if (!saved) {
+        throw StateError('Could not sanitize local setup.');
+      }
+    }
+    final legacyRaw = preferences.getString(legacyIntakeKey);
+    if (legacyRaw != null && legacyRaw.trim().isNotEmpty && responses != null) {
+      final decoded = jsonDecode(legacyRaw);
+      if (decoded is Map) {
+        final envelope = Map<String, dynamic>.from(decoded);
+        envelope['responses'] = responses.toJson();
+        await preferences.setString(legacyIntakeKey, jsonEncode(envelope));
+      }
+    }
+    return sanitized;
+  }
+
+  Map<String, dynamic> _summary(IntakeResponseDraft responses) => {
+        'best_energy_window': responses.bestEnergyWindow,
+        'routine_candidate_count': responses.routines
+            .where(
+              (routine) => routine.status == IntakeRoutineStatus.candidate,
+            )
+            .length,
+        'active_habit_count': responses.routines
+            .where((routine) => routine.status == IntakeRoutineStatus.active)
+            .length,
+        'existing_habit_count': responses.routines
+            .where(
+              (routine) =>
+                  routine.cadenceConfirmed &&
+                  {
+                    IntakeRoutineStatus.active,
+                    IntakeRoutineStatus.paused,
+                  }.contains(routine.status),
+            )
+            .length,
+        'fixed_commitment_count': responses.fixedCommitments
+            .where(
+              (commitment) =>
+                  commitment.status == IntakeCommitmentStatus.active,
+            )
+            .length,
+      };
 
   List<Map<String, dynamic>> _legacyStringOrObjectRows(
     Object? value, {
@@ -373,20 +391,6 @@ class GuestSetupDataSource {
     final hour = int.parse(parts[0]);
     final minute = int.parse(parts[1]);
     return hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59;
-  }
-
-  List<String> _legacyStrings(Object? value) {
-    if (value == null) {
-      return const [];
-    }
-    if (value is! List) {
-      throw const FormatException('Legacy values are not a list.');
-    }
-    return value
-        .whereType<String>()
-        .map((item) => item.trim())
-        .where((item) => item.isNotEmpty)
-        .toList(growable: false);
   }
 }
 

@@ -31,17 +31,6 @@ FOCUS_BANDS = (
     "1_to_2_hours",
     "over_2_hours",
 )
-MAIN_FRICTIONS = (
-    "no_major_friction",
-    "unclear_priorities",
-    "too_much_to_do",
-    "interruptions",
-    "hard_to_start",
-    "low_energy",
-    "emotional_load",
-    "physical_recovery",
-    "external_constraints",
-)
 DAY_SHAPES = ("normal", "constrained", "flexible")
 
 SENSITIVE_PRIORITY = "SENSITIVE_PRIORITY_7f31"
@@ -74,7 +63,6 @@ def evening_capture(
         "stress_source": "external_environment",
         "stress_controllability": "mostly_controllable",
         "focus_band": "1_to_2_hours",
-        "main_friction": "interruptions",
         "tomorrow_priority": SENSITIVE_PRIORITY,
         "reflection_note": SENSITIVE_REFLECTION,
         "specific_blocker": SENSITIVE_BLOCKER,
@@ -128,7 +116,7 @@ def capture_row(
         if morning is not None:
             captures["morning"] = morning
         metadata = {
-            "capture_version": "daily-capture-v2",
+            "capture_version": "daily-capture-v3",
             "captures": captures,
         }
 
@@ -264,100 +252,50 @@ def test_parser_accepts_every_focus_band(code: str) -> None:
     assert "evening.invalid_focus_band" not in result.signals["quality_issues"]
 
 
-@pytest.mark.parametrize("code", MAIN_FRICTIONS)
-def test_parser_accepts_every_main_friction(code: str) -> None:
-    result = build_state(
-        daily_logs=current_rows(evening_overrides={"main_friction": code}),
-    )
-
-    assert result.summary["context"]["main_friction"] == code
-    assert "evening.invalid_main_friction" not in result.signals["quality_issues"]
-
-
-def test_parser_accepts_up_to_two_additional_frictions() -> None:
-    result = build_state(
-        daily_logs=current_rows(
-            evening_overrides={
-                "additional_frictions": ["hard_to_start", "low_energy"],
-            },
+def test_v2_retired_friction_fields_are_accepted_but_never_exposed() -> None:
+    row = capture_row(
+        row_id="legacy-v2-evening",
+        entry_date=EVENING_DATE,
+        evening=evening_capture(
+            main_friction="unclear_priorities",
+            additional_frictions=["hard_to_start", "low_energy"],
         ),
     )
+    row["metadata"]["capture_version"] = "daily-capture-v2"
 
-    assert result.summary["context"]["additional_frictions"] == [
-        "hard_to_start",
-        "low_energy",
-    ]
-    assert "evening.invalid_additional_frictions" not in result.signals[
-        "quality_issues"
-    ]
-
-
-@pytest.mark.parametrize(
-    "additional_frictions",
-    (
-        "interruptions",
-        ["interruptions", "hard_to_start", "low_energy"],
-        ["interruptions", "interruptions"],
-        ["interruptions", "future_friction"],
-        ["interruptions", "no_major_friction"],
-    ),
-)
-def test_invalid_additional_frictions_make_the_evening_branch_untrusted(
-    additional_frictions: object,
-) -> None:
-    result = build_state(
-        daily_logs=current_rows(
-            evening_overrides={
-                "additional_frictions": additional_frictions,
-            },
-        ),
+    result = build_state(daily_logs=[row])
+    serialized = json.dumps(
+        {"summary": result.summary, "signals": result.signals},
+        sort_keys=True,
     )
 
     assert result.summary["data_quality"] == "partial"
-    assert "evening.invalid_additional_frictions" in result.signals[
-        "quality_issues"
-    ]
+    assert "main_friction" not in result.summary["context"]
+    assert "additional_frictions" not in result.summary["context"]
+    assert "unclear_priorities" not in serialized
+    assert "hard_to_start" not in serialized
+    assert not any("friction" in issue for issue in result.signals["quality_issues"])
 
 
-def test_primary_friction_cannot_be_repeated_as_additional() -> None:
-    result = build_state(
-        daily_logs=current_rows(
-            evening_overrides={
-                "main_friction": "interruptions",
-                "additional_frictions": ["interruptions"],
-            },
-        ),
+def test_malformed_retired_v2_friction_fields_do_not_downgrade_state() -> None:
+    rows = current_rows(
+        evening_overrides={
+            "main_friction": {"unexpected": "SECRET"},
+            "additional_frictions": "future_friction_SECRET",
+        },
+    )
+    rows[0]["metadata"]["capture_version"] = "daily-capture-v2"
+
+    result = build_state(daily_logs=rows, tasks=[active_task()])
+    serialized = json.dumps(
+        {"summary": result.summary, "signals": result.signals},
+        sort_keys=True,
     )
 
-    assert result.summary["data_quality"] == "partial"
-    assert "evening.invalid_additional_frictions" in result.signals[
-        "quality_issues"
-    ]
-
-
-def test_only_primary_friction_shapes_daily_mode() -> None:
-    result = build_state(
-        daily_logs=current_rows(
-            evening_overrides={
-                "main_friction": "no_major_friction",
-                "additional_frictions": [
-                    "unclear_priorities",
-                    "hard_to_start",
-                ],
-            },
-        ),
-        tasks=[active_task()],
-    )
-
-    assert result.summary["context"]["main_friction"] == "no_major_friction"
-    assert result.summary["context"]["additional_frictions"] == [
-        "unclear_priorities",
-        "hard_to_start",
-    ]
+    assert result.summary["data_quality"] == "current"
     assert result.mode == "push"
-    assert not any(
-        code.startswith("plan_") for code in result.summary["reason_codes"]
-    )
+    assert "friction_SECRET" not in serialized
+    assert not any("friction" in issue for issue in result.signals["quality_issues"])
 
 
 @pytest.mark.parametrize("code", DAY_SHAPES)
@@ -411,12 +349,6 @@ def test_parser_validates_stress_intensity_labels(
             "all_day_SECRET",
             "evening.invalid_focus_band",
             ("focus_band",),
-        ),
-        (
-            "main_friction",
-            "future_friction_SECRET",
-            "evening.invalid_main_friction",
-            ("main_friction",),
         ),
     ),
 )
@@ -504,14 +436,14 @@ def test_invalid_morning_sleep_quality_is_partial_and_not_trusted(invalid) -> No
 def test_older_v2_morning_without_sleep_quality_remains_compatible() -> None:
     morning = morning_capture()
     morning.pop("sleep_quality")
+    row = capture_row(
+        row_id="older-morning",
+        entry_date=TARGET_DATE,
+        morning=morning,
+    )
+    row["metadata"]["capture_version"] = "daily-capture-v2"
     result = build_state(
-        daily_logs=[
-            capture_row(
-                row_id="older-morning",
-                entry_date=TARGET_DATE,
-                morning=morning,
-            ),
-        ],
+        daily_logs=[row],
     )
 
     assert result.summary["freshness"]["morning"]["state"] == "current"
@@ -555,7 +487,7 @@ def test_invalid_evening_identity_drops_the_branch(
     (
         ("not-an-object", "daily_log.invalid_metadata"),
         (
-            {"capture_version": "daily-capture-v3", "captures": {}},
+            {"capture_version": "daily-capture-v4", "captures": {}},
             "daily_log.unsupported_capture_version",
         ),
         (
@@ -599,8 +531,6 @@ def test_malformed_v2_metadata_does_not_fall_back_to_projected_numbers(
             "controllability": None,
         },
         "focus_band": None,
-        "main_friction": None,
-        "additional_frictions": [],
         "day_shape": None,
     }
     assert issue in result.signals["quality_issues"]
@@ -753,7 +683,6 @@ def test_current_legacy_numeric_state_is_partial_without_invented_taxonomy() -> 
         "controllability": None,
     }
     assert result.summary["context"]["focus_band"] is None
-    assert result.summary["context"]["main_friction"] is None
     assert result.summary["context"]["day_shape"] is None
 
 
@@ -903,7 +832,6 @@ def test_local_entry_date_not_utc_calendar_date_controls_freshness() -> None:
                 "stress_intensity": 7,
                 "stress_source": "avoidable_pressure",
                 "stress_controllability": "mostly_controllable",
-                "main_friction": "unclear_priorities",
             },
             {},
             [],
@@ -944,7 +872,6 @@ def test_classifies_all_four_modes(
                 "stress_intensity": 9,
                 "stress_source": "private_emotional",
                 "stress_controllability": "hardly_controllable",
-                "main_friction": "unclear_priorities",
             },
             {"sleep_hours": 8.0, "current_energy": 9, "day_shape": "flexible"},
             "recover_private_emotional_stress",
@@ -954,7 +881,6 @@ def test_classifies_all_four_modes(
                 "stress_intensity": 6,
                 "stress_source": "physical_recovery",
                 "stress_controllability": "mostly_controllable",
-                "main_friction": "unclear_priorities",
             },
             {"sleep_hours": 8.0, "current_energy": 9, "day_shape": "flexible"},
             "recover_physical_recovery_stress",
@@ -973,7 +899,6 @@ def test_classifies_all_four_modes(
                 "stress_intensity": 7,
                 "stress_source": "avoidable_pressure",
                 "stress_controllability": "mostly_controllable",
-                "main_friction": "unclear_priorities",
             },
             {"sleep_hours": 5.5, "current_energy": 9, "day_shape": "flexible"},
             "recover_short_sleep",
@@ -983,7 +908,6 @@ def test_classifies_all_four_modes(
                 "stress_intensity": 7,
                 "stress_source": "avoidable_pressure",
                 "stress_controllability": "mostly_controllable",
-                "main_friction": "unclear_priorities",
             },
             {"sleep_hours": 8.0, "current_energy": 3, "day_shape": "flexible"},
             "recover_low_energy",
@@ -1084,7 +1008,6 @@ def test_stale_recovery_context_does_not_drive_current_mode_or_risks() -> None:
         stress_intensity=10,
         stress_source="private_emotional",
         stress_controllability="hardly_controllable",
-        main_friction="emotional_load",
     )
     result = build_state(
         daily_logs=[
@@ -1203,7 +1126,6 @@ def test_overdue_planning_reason_links_to_the_exact_task() -> None:
             evening_overrides={
                 "stress_intensity": 4,
                 "stress_source": "external_environment",
-                "main_friction": "interruptions",
             },
         ),
         tasks=[task],
@@ -1231,10 +1153,13 @@ def test_overdue_planning_reason_links_to_the_exact_task() -> None:
     (
         ({}, {}, [active_task()], "push_good_current_capacity"),
         (
-            {"main_friction": "unclear_priorities"},
+            {
+                "stress_intensity": 7,
+                "stress_source": "workload",
+            },
             {},
             [],
-            "plan_unclear_priorities",
+            "plan_workload_pressure",
         ),
         (
             {},
@@ -1243,7 +1168,7 @@ def test_overdue_planning_reason_links_to_the_exact_task() -> None:
             "steady_balanced_state",
         ),
     ),
-    ids=("push", "plan-friction", "steady"),
+    ids=("push", "plan-workload", "steady"),
 )
 def test_substantive_mode_reason_has_specific_input_evidence(
     evening_overrides: dict,
@@ -1261,7 +1186,7 @@ def test_substantive_mode_reason_has_specific_input_evidence(
     evidence = result.signals["reason_evidence"][reason_code]
 
     assert evidence
-    assert all(ref["table"] in {"daily_logs", "tasks", "goals"} for ref in evidence)
+    assert all(ref["table"] in {"daily_logs", "tasks"} for ref in evidence)
     assert all(ref["id"] for ref in evidence)
     assert all(ref["field"] for ref in evidence)
     summary_reason = next(
@@ -1293,15 +1218,16 @@ def test_evidence_is_deduplicated_and_only_links_to_known_input_rows() -> None:
             assert all(ref["id"] in known_ids for ref in refs)
 
 
-def test_inputs_are_not_mutated_during_parsing_and_classification() -> None:
+def test_inputs_are_not_mutated_and_goals_cannot_enable_push() -> None:
     logs = current_rows()
-    tasks = [active_task()]
+    tasks: list[dict] = []
     goals = [{"id": "goal-1", "status": "active"}]
     original = deepcopy((logs, tasks, goals))
 
-    build_state(daily_logs=logs, tasks=tasks, goals=goals)
+    result = build_state(daily_logs=logs, tasks=tasks, goals=goals)
 
     assert (logs, tasks, goals) == original
+    assert result.mode == "steady"
 
 
 def test_same_inputs_recompute_to_identical_daily_state() -> None:
@@ -1497,7 +1423,7 @@ def test_captures_without_version_are_malformed_not_legacy_fallback() -> None:
                 "capture_version": "daily-capture-v3",
                 "captures": {"evening": {}},
             },
-            "stale",
+            "partial",
         ),
         ({"captures": {"evening": {}}}, "partial"),
     ),
@@ -1620,14 +1546,6 @@ def test_capture_entry_date_requires_strict_calendar_date() -> None:
             },
             "plan_workload_pressure",
             {"stress_source", "stress_intensity"},
-        ),
-        (
-            {
-                "stress_intensity": 3,
-                "main_friction": "too_much_to_do",
-            },
-            "plan_overload",
-            {"main_friction"},
         ),
     ),
 )

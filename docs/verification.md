@@ -4,6 +4,11 @@ This document is the shared runbook for automated checks. It describes what can
 be verified by agents without manual app exploration, what requires local
 tooling, and what remains future work.
 
+The current Setup/Goal/friction verification boundary is
+`docs/setup-personalization-retirement-contract.md`. Historical results later in
+this file remain records of their checkout; they do not redefine current
+Capture V3, Daily State V2, or Coach V2 expectations.
+
 ## Verification Levels
 
 Use the lowest level that covers the change.
@@ -44,13 +49,13 @@ full-account cascade to delete and recreate only the three named Auth users, so
 immutable retry/usage ledgers cannot leak between runs. Rerunning it invalidates
 an open demo-account session. Each Intake row is a valid applied revision with
 a stable request id and intentionally empty optional Setup-owned collections.
-Separately seeded goals, habits, and schedule rows retain `demo_seed` ownership
-and are not presented as Setup materialization.
+The seed creates no active Goal row. Separately seeded habits and schedule rows
+retain `demo_seed` ownership and are not presented as Setup materialization.
 
 The student scenario then uses the production backend service classes to
 persist and validate:
 
-- current V2 Morning/Evening captures, seven historical daily snapshots, eight
+- current V3 Morning/Evening captures without friction, seven historical daily snapshots, eight
   briefings, and all five decision-feedback outcomes;
 - daily, selected-weekday, and weekly-target habits with complete, skipped,
   open, and missed opportunities plus completed, abandoned, and active Focus;
@@ -131,15 +136,21 @@ Phase 1 capture-date boundary. The snapshot repository reads `metadata` from
 `daily_logs` and `behavioral_events`, widens the UTC event query safely, prefers
 the explicit event `metadata.entry_date` for local-day filtering, excludes the
 following local day, and retains a UTC fallback for legacy events without that
-metadata. Phase 2 tests cover every capture taxonomy code; strict V2 identity,
-enum, numeric, timestamp, and projection validation; unknown future metadata;
+metadata. Current Intake tests additionally require retired legacy keys to be
+accepted then stripped before comparison/storage, notification preferences to
+remain unchanged, Setup-owned Goals to be archived without touching
+manual/foreign Goals, only the intended Setup memories to be removed, and no
+post-Setup Recommendation generation. Daily State V2 tests cover every active
+capture taxonomy code; strict V2/V3 identity, enum, numeric, timestamp, and
+projection validation with friction ignored; unknown future metadata;
 legacy-only fallback; separate seven-day state versus requested statistics
 windows; Evening target/previous-day and Morning target-day freshness;
 `missing`, `partial`, `current`, and `stale` quality; all four modes and
-recovery-first conflict precedence; exact field-level evidence; deterministic
-provenance; capture free-text exclusion; and stable daily/weekly same-period
-recomputation. Recommendation tests prove that adding a Phase 2 daily snapshot
-does not change deterministic candidate ranking. Aggregator assertions also
+recovery-first conflict precedence; the active-Task requirement for `push`;
+absence of friction risks/reasons/evidence; exact field-level evidence;
+deterministic provenance; capture free-text exclusion; and stable daily/weekly
+same-period recomputation. Recommendation tests prove no Goal/onboarding/
+friction rule participates. Aggregator assertions also
 keep `summary.risk_flags` as the current Daily State alias, preserve older
 window flags under `summary.window_risk_flags`, and derive
 `recommended_next_focus` recovery-first from mode.
@@ -342,11 +353,11 @@ Current Flutter widget tests include:
 
 - Auth gate renders.
 - Guest can complete required-only progressive Setup, persist exact empty
-  optionals, and reach the dashboard without an invented goal, friction,
-  routine, note, or commitment.
+  optionals, and reach the dashboard with only Typical weekday and Best energy,
+  without a routine, note, or commitment.
 - Typed Setup model/data-source tests cover stable item keys, candidate versus
   confirmed cadence, `request_id`/`base_revision` request JSON, authenticated
-  setup reads, and invalid response/error propagation.
+  setup reads, legacy-key sanitization, and invalid response/error propagation.
 - Setup widget/repository coverage exercises guest and authenticated prefill,
   loading/error/retry, retained drafts and request ids, edit without duplicate
   records, ambiguous-failure retry locking, review lifecycle actions, and the
@@ -357,30 +368,34 @@ Current Flutter widget tests include:
 - Setup save-state tests keep validation and HTTP 4xx failures editable, make
   409 suggest reload, and lock timeout/5xx/malformed results to exact retry or
   explicit reload.
+- Setup widget tests prove Focus Areas, Goals, Friction Points, Coaching Style,
+  Reminder Preference, and More Context are absent. Repository/browser coverage
+  proves a Setup edit leaves consent, categories, quiet hours, and daily cap
+  unchanged.
 - Capture-domain tests cover every bounded stress source, controllability,
-  focus-band, primary-friction (including `no_major_friction`), and day-shape
-  value; rating, half-hour sleep, date, and text boundaries; at most two unique
-  non-primary additional frictions; omission of blank Evening optionals; and
-  explicit inclusion of supplied reflection and blocker. A compatibility test
-  reads old `gentle_tomorrow` metadata and proves that a new write omits it.
+  and day-shape value; rating, half-hour sleep, date, and text boundaries;
+  omission of blank Evening optionals; and explicit inclusion of supplied
+  reflection, priority, and blocker. Compatibility tests read V2 friction and
+  old `gentle_tomorrow` metadata, ignore/sanitize them, and prove the next write
+  is friction-free V3.
 - Same-day merge tests cover Evening-then-Morning and Morning-then-Evening,
   replacing one branch without erasing the other, Morning-over-Evening energy
   precedence, removal of deliberately cleared optionals, preservation of
   foreign top-level metadata, and legacy V1 calendar-date compatibility.
 - Capture payload tests assert one merged `daily_logs` row with
-  `capture_version=daily-capture-v2`, nested `captures.evening|morning`, direct
+  `capture_version=daily-capture-v3`, nested `captures.evening|morning`, direct
   nullable compatibility values, and only explicitly available current
   `behavioral_events`. Event identities remain stable across exact retry and
-  event metadata mirrors capture kind/date plus the relevant stress, friction,
-  focus, priority, and day-shape context.
+  event metadata mirrors capture kind/date plus the relevant stress, priority,
+  and day-shape context without friction.
 - Guest-store tests cover typed Evening/Morning JSON, both-order same-day merge,
   exact retry deduplication, V1 guest rows with an explicit local date, and
   recovery from corrupted local JSON.
 - Evening widget tests cover required explicit selections, exact typed draft
   retention after failure, stable retry identity, prefilled re-entry with blank
-  optionals still blank, explicit `No major friction`, the two-additional cap,
-  absence of the retired gentler control, and suppression of a duplicate
-  in-flight write.
+  optionals still blank, absence of every friction control and the retired
+  gentler control, preservation of Reflection/Priority/Specific Blocker, and
+  suppression of a duplicate in-flight write.
 - The guest app smoke completes distinctive required-only Evening Shutdown and
   Morning Calibration, persists one local merged day, reads Morning energy over
   Evening energy, and shows the exact saved summary on return.
@@ -668,11 +683,13 @@ of relying on canvas pixels.
 The browser smoke creates a confirmed local Supabase Auth user through the local
 admin API and walks the Phase 0C Setup journeys before continuing through the
 existing product smoke. It covers required-only completion with zero optional
-owned records; one explicit goal, routine candidate, and fixed commitment;
-retry after a response is lost; prefilled edit with stable identity; cadence
-confirmation; and review actions that archive/pause/remove Setup-owned rows.
-Node-side fixtures include manual rows, and database assertions require those
-rows to survive reconciliation unchanged.
+owned records; one routine candidate and fixed commitment; retry after a
+response is lost; prefilled edit with stable identity; cadence confirmation;
+and review actions that pause/remove Setup-owned rows. It asserts the retired
+controls and JSON keys are absent, post-Setup Recommendations remain absent,
+the energy memory is retained, a legacy Setup Goal is archived, and a manual
+Goal survives unchanged. A personalized Reminder row is compared exactly
+before/after Setup edits.
 
 After the Phase 3 action journeys, the smoke also exercises Phase 4 directly
 through authenticated FastAPI calls. It proves that the first briefing GET is
@@ -709,8 +726,9 @@ fingerprint, no-LLM provenance, and at-most-two proposals match the response.
 A repeated read remains write-free. Cancelling the before/after dialog changes
 nothing; confirming the eligible manual weekly-target shrink must preserve the
 habit identity/ownership/logs, use its exact expected timestamp, and make the
-old review stale. Setup-owned review navigation must not write a habit or goal.
-Deliberate refresh reuses the same weekly review identity. Authenticated REST
+old review stale. Setup-owned review navigation must not write a Habit or Goal,
+and the compatible `goal_linked_completed` counter must remain zero. Deliberate
+refresh reuses the same weekly review identity. Authenticated REST
 assertions use a second principal to prove owner-only SELECT and rejection of
 direct review-table writes/cross-owner habit changes.
 
@@ -762,6 +780,9 @@ usage identity, same-id replay without another durable turn, conflicting-id
 rejection, deterministic safety bypass, visible UI provenance and review-only
 suggestion, conversation deletion with retained tombstones/usage, owner-only
 reads and rejected authenticated mutations, plus guest/mock zero Coach calls.
+New claims must record paired `controlled-coach-prompt-v2` and
+`coach-context-v2`, omit Goal/style/friction sources, and still read/replay
+paired V1 history. Mixed prompt/context versions must fail.
 On 2026-07-13 a focused non-reset run with `E2E_RUN_ID=1783945829` passed. The
 subsequent full current-checkout command also passed non-destructively against
 local Supabase with the deterministic fake provider and reported
@@ -782,35 +803,34 @@ than only the in-memory concurrency tests.
 The smoke then creates a habit through Habit Management and follows
 `/daily-check-in` into the canonical Evening Shutdown at
 `/quick-mood-check-in`. It records distinctive mood `2`, Evening energy `9`,
-stress `8`, private/emotional hardly-controllable stress, a focus band,
-primary emotional-load friction, additional interruptions and hard-to-start
-frictions, and tomorrow priority while leaving reflection and specific blocker
-blank. The removed gentler control is asserted absent. Playwright lets the
-first `daily_logs` upsert commit but drops its browser response, verifies that
-the exact draft remains available, then retries without creating another daily
-row or event set.
+stress `8`, private/emotional hardly-controllable stress, tomorrow priority,
+reflection, and specific blocker. Every primary/additional friction control and
+the removed gentler control is asserted absent. Playwright lets the first
+`daily_logs` upsert commit but drops its browser response, verifies that the
+exact draft remains available, then retries without creating another daily row
+or event set.
 
 The same browser user then completes `/morning-calibration` with sleep `5.5`,
 Morning energy `4`, and constrained day shape. Database assertions require
 exactly one `(user_id, entry_date)` row with
-`metadata.capture_version=daily-capture-v2`, both nested capture branches,
+`metadata.capture_version=daily-capture-v3`, both nested capture branches,
 absent blank optional keys, mood/stress from Evening, sleep from Morning, and
-Morning energy taking precedence in `energy_level`. It also requires the
-primary and ordered additional-friction values in the daily row, event
-metadata, and Daily State response. The smoke reopens Evening, checks its saved
-state, edits stress to workload/mostly-controllable and the priority, and
-requires the exact Morning capture identity and values to remain.
+Morning energy taking precedence in `energy_level`. It requires every friction
+key to be absent from the daily row, events, Daily State, and Coach context. The
+smoke reopens Evening, checks its saved state, edits stress to
+workload/mostly-controllable and the priority, and requires the exact Morning
+capture identity and values to remain.
 
 Linked current-event assertions require three explicit events after
 Evening-only and exactly four after Morning merge and Evening edit. All final
 events share the daily-log id, have unique deterministic ids, carry the correct
 numeric value/unit, and mirror their relevant `capture_kind`, `entry_date`,
-capture id/time, stress taxonomy, focus/friction/priority, or day-shape
+capture id/time, stress taxonomy, priority, or day-shape
 metadata. Capture success sends `POST /v1/snapshots/generate` with the explicit
 local `target_date`; the committed-response failure does not. Normal capture is
 also observed to make no browser request to
 `POST /v1/recommendations/generate` and to leave Setup revisions/profile
-projection plus unrelated task, goal, habit, schedule, memory, notification,
+projection plus unrelated task, Goal, habit, schedule, memory, notification,
 and recommendation identities unchanged.
 
 The browser also inspects each Phase 2 snapshot response. Evening-only
@@ -820,9 +840,9 @@ state with exact source risks. Adding target-day Morning sleep `5.5`, energy
 Evening to workload/mostly-controllable must keep the same snapshot id, add
 workload risks, remove stale private/low-control risks, retain recovery because
 of current compound signals, and persist exactly one target-period row. The
-assertions require `explainable-daily-state-v1`, deterministic/no-baseline
-provenance, field-level evidence for the daily log, and absence of both original
-and edited priority text from summary and signals.
+assertions require `explainable-daily-state-v2`, deterministic/no-baseline
+provenance, field-level non-friction evidence for the daily log, and absence of
+both original and edited free text from summary and signals.
 
 After the Phase 1/2 assertions, the Phase 3 browser journey completes, undoes,
 skips, and undoes a manual habit; completes and undoes an active Setup-owned
@@ -1188,8 +1208,10 @@ prompt before completing the existing Planner, Today, optional Calendar,
 export, and account-deletion paths. This proves the local checkout only; it does
 not establish remote state or complete real-world timetable data.
 
-The Evening friction follow-up completed locally on 2026-07-23 without a
-schema change. The complete FastAPI suite reported `813 passed, 1 skipped`; the
+The now-superseded Evening friction follow-up completed locally on 2026-07-23
+without a schema change. It is retained only as historical checkout evidence;
+current tests require friction-free Capture V3. The complete FastAPI suite
+reported `813 passed, 1 skipped`; the
 standard source gate passed migration safety, clean Flutter analysis, all `637`
 Flutter tests, Python compilation, and diff checks. The final non-reset browser
 journey reported
@@ -1266,6 +1288,22 @@ Semantics DOM. The E2E source restored the stable direct `/coach` route while
 the shell behavior remains covered by nine widget/Semantics tests. The focused
 Phase 10 browser rerun then passed for `e2e-1784837771@example.test`; the full
 combined journey was not restarted after that selector-only correction.
+
+The Setup-personalization retirement completed locally on 2026-07-25. A fresh
+database reset applied the full migration chain through
+`20260725120000_retire_setup_goals_and_friction.sql`; all 29 rollback-only
+pgTAP assertions passed, including filled-data cleanup, repeat cleanup,
+Reminder preservation, owner/grant boundaries, and paired Coach V1/V2 replay.
+The complete FastAPI suite reported `848 passed, 1 skipped`; the standard
+source gate passed migration safety, clean Flutter analysis, all `646` Flutter
+tests, Python compilation, and diff checks. The updated demo seed verified 21
+daily logs, eight briefings, four focus sessions, five calendar events, three
+preparation plans, and two Coach turns without retired personalization fields.
+The final combined browser journey reported
+`E2E browser smoke passed for e2e-1784985824@example.test`. Database lint
+reported no finding in the new migration; its remaining output is limited to
+the existing legacy `public."User"` reference and `legacy_index` warnings in
+the account-deletion RPC.
 
 Phase 10 has focused fake-provider/process-runner, strict contract, service,
 migration, repository, controller, and widget tests in the checkout. Its

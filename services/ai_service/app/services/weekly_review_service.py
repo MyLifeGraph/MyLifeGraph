@@ -404,8 +404,7 @@ def _task_facts(
     period: _ReviewPeriod,
     context: WeeklyReviewContext,
 ) -> tuple[WeeklyTaskFacts, list[WeeklyReviewEvidenceRef]]:
-    goal_ids = {str(row["id"]) for row in context.goals if row.get("id") is not None}
-    completed = carried = overdue = cancelled = goal_linked = 0
+    completed = carried = overdue = cancelled = 0
     evidence: list[WeeklyReviewEvidenceRef] = []
     for row in context.tasks:
         row_id = _row_id(row)
@@ -413,11 +412,6 @@ def _task_facts(
         if status == "done" and _instant_in_period(row.get("completed_at"), period):
             completed += 1
             evidence.append(_evidence("tasks", row_id, "completed_at"))
-            metadata = row.get("metadata")
-            goal_id = metadata.get("goal_id") if isinstance(metadata, dict) else None
-            if isinstance(goal_id, str) and goal_id in goal_ids:
-                goal_linked += 1
-                evidence.append(_evidence("goals", goal_id, "id"))
         elif status in {"todo", "in_progress"} and _before_period_end(
             row.get("created_at"),
             period,
@@ -440,7 +434,7 @@ def _task_facts(
             carried=carried,
             overdue_carried=overdue,
             cancelled=cancelled,
-            goal_linked_completed=goal_linked,
+            goal_linked_completed=0,
         ),
         evidence,
     )
@@ -667,7 +661,11 @@ def _daily_modes(
             period_date is None
             or not period.starts_on <= period_date <= period.ends_on
             or not isinstance(state, dict)
-            or state.get("contract_version") != "explainable-daily-state-v1"
+            or state.get("contract_version")
+            not in {
+                "explainable-daily-state-v1",
+                "explainable-daily-state-v2",
+            }
             or state.get("target_date") != period_date.isoformat()
             or state.get("mode") not in {"push", "steady", "recover", "plan"}
             or state.get("data_quality")
@@ -968,23 +966,12 @@ def _source_fingerprint(
     period: _ReviewPeriod,
     context: WeeklyReviewContext,
 ) -> str:
-    used_goal_ids = {
-        str(metadata["goal_id"])
-        for row in context.tasks
-        if isinstance((metadata := row.get("metadata")), dict)
-        and isinstance(metadata.get("goal_id"), str)
-    }
     payload = {
         "period_key": period.period_key,
         "starts_on": period.starts_on.isoformat(),
         "ends_on": period.ends_on.isoformat(),
         "timezone": period.timezone_name,
         "tasks": [_fingerprint_task(row) for row in context.tasks],
-        "goals": [
-            {"id": row.get("id")}
-            for row in context.goals
-            if str(row.get("id")) in used_goal_ids
-        ],
         "habits": [_fingerprint_habit(row) for row in context.habits],
         "habit_logs": [_fingerprint_habit_log(row) for row in context.habit_logs],
         "focus_sessions": [
@@ -1010,7 +997,6 @@ def _source_fingerprint(
 
 
 def _fingerprint_task(row: dict[str, Any]) -> dict[str, Any]:
-    metadata = row.get("metadata")
     return {
         "id": row.get("id"),
         "status": row.get("status"),
@@ -1018,7 +1004,6 @@ def _fingerprint_task(row: dict[str, Any]) -> dict[str, Any]:
         "completed_at": row.get("completed_at"),
         "cancelled_at": row.get("cancelled_at"),
         "created_at": row.get("created_at"),
-        "goal_id": metadata.get("goal_id") if isinstance(metadata, dict) else None,
     }
 
 

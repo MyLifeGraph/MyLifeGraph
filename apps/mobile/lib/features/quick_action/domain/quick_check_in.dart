@@ -159,12 +159,13 @@ class EveningShutdownDraft {
     required this.stressSource,
     required this.stressControllability,
     required this.focusBand,
-    required this.mainFriction,
+    MainFriction? mainFriction,
     required this.tomorrowPriority,
-    this.additionalFrictions = const <MainFriction>[],
+    List<MainFriction> additionalFrictions = const <MainFriction>[],
     this.reflectionNote = '',
     this.specificBlocker = '',
-  });
+  })  : mainFriction = null,
+        additionalFrictions = const <MainFriction>[];
 
   factory EveningShutdownDraft.empty(
     DateTime capturedAt, {
@@ -218,13 +219,6 @@ class EveningShutdownDraft {
         (item) => item.code,
         'focus band',
       ),
-      mainFriction: MainFriction.fromCode(json['main_friction']),
-      additionalFrictions: _optionalEnumListFromCodes(
-        MainFriction.values,
-        json['additional_frictions'],
-        (item) => item.code,
-        'additional frictions',
-      ),
       tomorrowPriority: _optionalString(json['tomorrow_priority']) ?? '',
       reflectionNote: _optionalString(json['reflection_note']) ?? '',
       specificBlocker: _optionalString(json['specific_blocker']) ?? '',
@@ -241,7 +235,6 @@ class EveningShutdownDraft {
   static const maxTomorrowPriorityLength = 160;
   static const maxReflectionLength = 1000;
   static const maxSpecificBlockerLength = 280;
-  static const maxAdditionalFrictions = 2;
 
   final String captureId;
   final String entryDate;
@@ -268,7 +261,6 @@ class EveningShutdownDraft {
       mood != null &&
       energy != null &&
       stress != null &&
-      mainFriction != null &&
       hasConsistentStressContext;
 
   StressIntensityLabel get stressIntensityLabel =>
@@ -306,10 +298,6 @@ class EveningShutdownDraft {
       focusBand: identical(focusBand, _unset)
           ? this.focusBand
           : focusBand as FocusBand?,
-      mainFriction: identical(mainFriction, _unset)
-          ? this.mainFriction
-          : mainFriction as MainFriction?,
-      additionalFrictions: additionalFrictions ?? this.additionalFrictions,
       tomorrowPriority: tomorrowPriority ?? this.tomorrowPriority,
       reflectionNote: reflectionNote ?? this.reflectionNote,
       specificBlocker: specificBlocker ?? this.specificBlocker,
@@ -318,9 +306,6 @@ class EveningShutdownDraft {
 
   EveningShutdownDraft normalized() => copyWith(
         captureId: captureId.trim(),
-        additionalFrictions: List<MainFriction>.unmodifiable(
-          additionalFrictions,
-        ),
         tomorrowPriority: tomorrowPriority.trim(),
         reflectionNote: reflectionNote.trim(),
         specificBlocker: specificBlocker.trim(),
@@ -344,24 +329,6 @@ class EveningShutdownDraft {
       throw const FormatException(
         'Stress source and controllability must be supplied together when '
         'stress is medium or high.',
-      );
-    }
-    if (additionalFrictions.length > maxAdditionalFrictions) {
-      throw const FormatException(
-        'Choose no more than two additional frictions.',
-      );
-    }
-    if (additionalFrictions.toSet().length != additionalFrictions.length) {
-      throw const FormatException('Additional frictions must be unique.');
-    }
-    if (additionalFrictions.contains(MainFriction.noMajorFriction)) {
-      throw const FormatException(
-        'No major friction cannot be an additional friction.',
-      );
-    }
-    if (mainFriction != null && additionalFrictions.contains(mainFriction)) {
-      throw const FormatException(
-        'The primary friction cannot also be an additional friction.',
       );
     }
     _validateBoundedString(
@@ -397,11 +364,6 @@ class EveningShutdownDraft {
       if (value.stressControllability != null)
         'stress_controllability': value.stressControllability!.code,
       if (value.focusBand != null) 'focus_band': value.focusBand!.code,
-      'main_friction': value.mainFriction!.code,
-      if (value.additionalFrictions.isNotEmpty)
-        'additional_frictions': value.additionalFrictions
-            .map((friction) => friction.code)
-            .toList(growable: false),
       if (value.tomorrowPriority.isNotEmpty)
         'tomorrow_priority': value.tomorrowPriority,
       if (value.reflectionNote.isNotEmpty)
@@ -649,7 +611,8 @@ class DailyCaptureEntry {
     if (!json.containsKey('captures') && json['captureVersion'] == null) {
       return DailyCaptureEntry.fromV1GuestJson(json);
     }
-    if (json['captureVersion'] != captureVersion) {
+    if (json['captureVersion'] != captureVersion &&
+        json['captureVersion'] != legacyCaptureVersion) {
       throw const FormatException('Unsupported daily capture version.');
     }
     final entryDate = _requiredEntryDate(json['entryDate']);
@@ -683,7 +646,8 @@ class DailyCaptureEntry {
     return entry;
   }
 
-  static const captureVersion = 'daily-capture-v2';
+  static const captureVersion = 'daily-capture-v3';
+  static const legacyCaptureVersion = 'daily-capture-v2';
 
   final String entryDate;
   final EveningShutdownDraft? evening;
@@ -949,25 +913,6 @@ T? _optionalEnumFromCode<T>(
     return null;
   }
   return _enumFromCode<T>(values, raw, code, field);
-}
-
-List<T> _optionalEnumListFromCodes<T>(
-  List<T> values,
-  Object? raw,
-  String Function(T value) code,
-  String field,
-) {
-  if (raw == null) {
-    return const [];
-  }
-  if (raw is! List) {
-    throw FormatException('$field must be a list.');
-  }
-  return List<T>.unmodifiable(
-    raw.map(
-      (item) => _enumFromCode<T>(values, item, code, field),
-    ),
-  );
 }
 
 void _validateCaptureIdentity({

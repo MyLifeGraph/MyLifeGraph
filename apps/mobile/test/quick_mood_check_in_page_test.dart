@@ -42,11 +42,8 @@ void main() {
       StressControllability.hardlyControllable,
     );
     expect(first.focusBand, isNull);
-    expect(first.mainFriction, MainFriction.emotionalLoad);
-    expect(first.additionalFrictions, [
-      MainFriction.interruptions,
-      MainFriction.hardToStart,
-    ]);
+    expect(first.mainFriction, isNull);
+    expect(first.additionalFrictions, isEmpty);
     expect(first.tomorrowPriority, 'Protect the exact priority');
     expect(first.reflectionNote, 'Exact retry reflection');
     expect(first.specificBlocker, 'Exact retry blocker');
@@ -92,41 +89,35 @@ void main() {
     await tester.pumpAndSettle();
 
     final written = store.eveningAttempts.single.toMetadataJson();
-    expect(written['additional_frictions'], [
-      'interruptions',
-      'hard_to_start',
-    ]);
+    expect(written, isNot(contains('main_friction')));
+    expect(written, isNot(contains('additional_frictions')));
     expect(written, isNot(contains('reflection_note')));
     expect(written, isNot(contains('specific_blocker')));
     expect(written, isNot(contains('gentle_tomorrow')));
   });
 
-  testWidgets('no major friction is valid and additional frictions stop at two',
+  testWidgets('evening omits friction choices but keeps stress and notes',
       (tester) async {
     final store = _RecordingCaptureStore();
     await _pumpEveningPage(tester, store);
 
-    await _completeEveningDraft(
-      tester,
-      includeOptionals: false,
-      primaryFriction: MainFriction.noMajorFriction,
-    );
+    await _completeEveningDraft(tester, includeOptionals: false);
 
     expect(find.text('Make tomorrow gentler'), findsNothing);
-    final thirdFriction = tester.widget<FilterChip>(
-      find.widgetWithText(FilterChip, 'Low energy'),
+    expect(find.textContaining('friction'), findsNothing);
+    expect(find.text('What drove the pressure?'), findsOneWidget);
+    expect(
+      _textFieldWithLabel('Possible priority tomorrow (optional)'),
+      findsOneWidget,
     );
-    expect(thirdFriction.onSelected, isNull);
+    expect(_textFieldWithLabel('Specific blocker (optional)'), findsOneWidget);
     await _tapVisible(tester, find.text('Save evening check-in'));
     await tester.pumpAndSettle();
 
     final saved = store.eveningAttempts.single;
-    expect(saved.mainFriction, MainFriction.noMajorFriction);
-    expect(saved.additionalFrictions, [
-      MainFriction.interruptions,
-      MainFriction.hardToStart,
-    ]);
-    expect(saved.additionalFrictions, isNot(contains(MainFriction.lowEnergy)));
+    expect(saved.mainFriction, isNull);
+    expect(saved.additionalFrictions, isEmpty);
+    expect(saved.stressSource, StressSource.privateEmotional);
   });
 
   testWidgets('saving state prevents a duplicate in-flight evening write',
@@ -192,7 +183,6 @@ Future<void> _pumpEveningPage(
 Future<void> _completeEveningDraft(
   WidgetTester tester, {
   bool includeOptionals = true,
-  MainFriction primaryFriction = MainFriction.emotionalLoad,
 }) async {
   await tester.tap(find.bySemanticsLabel('evening mood 2 of 10'));
   await tester.pump();
@@ -203,18 +193,6 @@ Future<void> _completeEveningDraft(
   await tester.tap(find.text('Next'));
   await tester.pumpAndSettle();
 
-  await _tapVisible(
-    tester,
-    find.bySemanticsLabel('primary friction ${primaryFriction.code}'),
-  );
-  await _tapVisible(
-    tester,
-    find.bySemanticsLabel('additional friction interruptions'),
-  );
-  await _tapVisible(
-    tester,
-    find.bySemanticsLabel('additional friction hard_to_start'),
-  );
   await _tapVisible(
     tester,
     find.bySemanticsLabel('stress source private_emotional'),
@@ -263,11 +241,6 @@ EveningShutdownDraft _eveningDraft({
     stressSource: StressSource.privateEmotional,
     stressControllability: StressControllability.hardlyControllable,
     focusBand: FocusBand.thirtyToSixtyMinutes,
-    mainFriction: MainFriction.emotionalLoad,
-    additionalFrictions: const [
-      MainFriction.interruptions,
-      MainFriction.hardToStart,
-    ],
     tomorrowPriority: 'Protect the exact priority',
     reflectionNote: reflectionNote,
     specificBlocker: specificBlocker,

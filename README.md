@@ -75,8 +75,8 @@ way to explore the product today is the Flutter app in mock-data guest mode.
   remain side-effect free, deliberate generation persists only derived facts
   and at most two proposals, and exact source fingerprints expose staleness.
   Confirmed manual Habit V1 shrink/pause/archive changes reuse Phase 3; Setup
-  changes deep-link to Setup, while replacement and goal/task/schedule changes
-  remain staged. Phase 9 adds one optional authenticated `ical_file` connection
+  changes deep-link to Setup, while replacement/task/schedule changes remain
+  staged. Phase 9 adds one optional authenticated `ical_file` connection
   with explicit read/store consent, deliberate bounded `.ics` import, stable
   connection/import/event identities, and visibly read-only imported events.
   Connect never imports; repeated files reconcile instead of duplicating rows;
@@ -136,8 +136,10 @@ way to explore the product today is the Flutter app in mock-data guest mode.
   provenance, explicit selection of up to eight eligible memories, bounded
   validated history, retained usage accounting, and at most one review-only
   suggestion. Capability/history/memory reads never call a model; guest/mock is
-  zero-call; Coach cannot mutate tasks, habits, goals, schedules, briefings,
-  reviews, memory content, or calendar data. Standard tests use the deterministic
+  zero-call; new turns use Goal/style/friction-free `coach-context-v2` and
+  `controlled-coach-prompt-v2` while V1 history stays readable; Coach cannot
+  mutate tasks, habits, schedules, briefings, reviews, memory content, or
+  calendar data. Standard tests use the deterministic
   fake provider. The Coach UI is hard-hidden in release builds and whenever
   `APP_ENV=production`; a Flutter define cannot override that boundary. The
   real-model adapter is intentionally local-development-only:
@@ -327,6 +329,13 @@ another developer's Codex OAuth state into the repo or `.env`. See
 `docs/phase-10-controlled-coach-plan.md` for the exact boundary and
 `docs/local-dev.md` for the active settings and routes.
 
+Setup personalization was deliberately reduced on 2026-07-25. Focus areas,
+Goals, friction answers, coaching style, Reminder preference, and free-form
+context are no longer active Setup inputs. Daily Capture/State and Coach now use
+their V3/V2 contracts, while old stored shapes remain safely readable. See
+`docs/setup-personalization-retirement-contract.md` for the compatibility and
+cleanup boundary.
+
 See `services/ai_service/README.md` for details.
 
 ## Supabase
@@ -347,8 +356,11 @@ Supabase is the intended auth and persistence backend. The current app supports:
   newly authenticated account loads its own backend Setup; canonical guest
   check-ins are the only guest product data migrated best-effort today, and only
   for a real non-demo account with `USE_MOCK_DATA=false`.
-- Blank optional Setup answers create no goals, habits, schedule items, or
-  memories. Named routines remain candidates until cadence is confirmed;
+- Setup requires only typical weekday and best energy window, with an optional
+  display name. Routines, fixed commitments, and Study Setup remain optional.
+  Setup does not read or write Reminder settings and materializes only confirmed
+  Habits/commitments plus the best-energy memory. Named routines remain
+  candidates until cadence is confirmed;
   setup-owned records use deterministic identities and can be reviewed, edited,
   archived, paused, or removed without reconciling manual rows.
 - Setup-owned habits are edited, paused, or archived through Settings Setup;
@@ -358,12 +370,11 @@ Supabase is the intended auth and persistence backend. The current app supports:
   reload. Timeouts, 5xx failures, and invalid success envelopes have an unknown
   durable result, so the exact submitted draft is locked for unchanged retry or
   explicit reload.
-- Evening check-in is a two-page flow for mood, energy, stress, and friction.
-  Stress source/influence is requested only from medium stress upward;
-  the required primary-friction question includes `No major friction`, and up
-  to two different `Also present` frictions are optional. Only the primary
-  friction shapes Daily Mode. Tomorrow priority, reflection, and blocker are
-  optional; the former gentle-tomorrow switch is no longer written. It no
+- Evening check-in is a two-page flow for mood, energy, and stress.
+  Stress source/influence is requested only from medium stress upward; primary
+  and additional friction are neither requested nor stored. Tomorrow priority,
+  reflection, and blocker are optional; the former gentle-tomorrow switch is no
+  longer written. It no
   longer asks users to estimate focus that completed Focus sessions can
   measure. Morning check-in remains a separate short flow for sleep hours,
   an independent required 1–10 estimate of sleep quality, current energy, and
@@ -372,8 +383,9 @@ Supabase is the intended auth and persistence backend. The current app supports:
   date. Morning energy owns the compatible `energy_level` projection when
   present; Evening owns mood and stress, and Morning owns sleep. Linked
   `behavioral_events` are a dynamic, deterministically identified set of at
-  most mood, energy, stress, and sleep events. Guest storage uses the same V2
-  daily model while retaining V1 read/migration compatibility. Sleep quality
+  most mood, energy, stress, and sleep events. Guest storage uses
+  `daily-capture-v3`, reads V2 without friction, and rewrites it as V3 on the
+  next save while retaining V1 migration compatibility. Sleep quality
   stays in the Morning capture metadata and is mirrored onto its existing
   Morning-origin events, so it does not create an invented fifth event.
 - The dashboard refresh action first refreshes the daily snapshot best-effort,
@@ -421,11 +433,14 @@ Supabase is the intended auth and persistence backend. The current app supports:
   generates or applies a proposal by itself. Guest/mock sessions remain
   unavailable.
 - The additive `summary.daily_state` contract is
-  `explainable-daily-state-v1`. It uses strict V2 parsing, a fixed seven-day
+  `explainable-daily-state-v2`. It reads strict V2/V3 captures, sanitizes
+  historical V1 state, and uses a fixed seven-day
   state lookback separate from the requested statistics window, explicit
   `missing`/`partial`/`current`/`stale` quality, and recovery-first
-  `push`/`steady`/`recover`/`plan` classification. It carries bounded evidence
-  and provenance but excludes tomorrow-priority, reflection, and blocker text.
+  `push`/`steady`/`recover`/`plan` classification. It has no Goal or friction
+  context/evidence, and `push` requires an active Task. It carries bounded
+  evidence and provenance but excludes tomorrow-priority, reflection, and
+  blocker text.
   A very low current sleep-quality estimate can select recovery even after a
   long night; a moderately low estimate prevents `push` without treating sleep
   duration and quality as interchangeable.
@@ -563,7 +578,8 @@ The script starts local Supabase if needed, refuses non-local Supabase URLs, and
 replaces only the three local demo accounts with repeatable student, worker,
 and recovery scenarios. Its typed Setup rows include valid applied revisions
 with intentionally empty Setup-owned optional collections; separately seeded
-scenario goals, habits, and commitments remain `demo_seed` data. The student
+runtime Tasks, Habits, and commitments remain `demo_seed` data; no active Goal
+rows are seeded. The student
 scenario is additionally enriched through the real backend services with
 current Today/Weekly Review output, all three Habit cadences, Focus history,
 Calendar Import, Preparation Plans, notification consent, and validated Coach

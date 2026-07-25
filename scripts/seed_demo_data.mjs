@@ -21,10 +21,8 @@ const scenarios = [
     timezone: 'Europe/Berlin',
     archetype: 'Focused Student',
     overallScore: 78,
-    focusAreas: ['focus', 'energy', 'planning'],
     weekdayShape: 'school_or_work',
     bestEnergyWindow: 'morning',
-    coachingStyle: 'direct',
     quietHoursStart: '21:30',
     quietHoursEnd: '07:00',
     baseline: {
@@ -37,7 +35,7 @@ const scenarios = [
       energy: 7,
       stress: 5,
     },
-    goals: [
+    priorities: [
       ['Protect study focus', 'Keep the first serious study block before messages and social apps.'],
       ['Stabilize school-night sleep', 'Avoid short nights before math-heavy mornings.'],
       ['Plan exams earlier', 'Move exam preparation into smaller weekday blocks.'],
@@ -90,9 +88,8 @@ const scenarios = [
       ['Earlier planning note', 'This dismissed row remains available to account export.', 'coaching', 'low', -3, '/insights', 'dismissed'],
     ],
     memories: [
-      ['goal', 'Primary goal', 'Maya wants protected morning study time.'],
-      ['preference', 'Coaching tone', 'Maya prefers direct coaching and concrete next steps.'],
-      ['recurring_problem', 'Friction pattern', 'Late screen-heavy evenings reduce recovery before school days.'],
+      ['recurring_problem', 'Evening pattern', 'Late screen-heavy evenings reduce recovery before school days.'],
+      ['habit', 'Study pattern', 'The first focused block is easier before late messages arrive.'],
     ],
   },
   {
@@ -102,10 +99,8 @@ const scenarios = [
     timezone: 'Europe/Berlin',
     archetype: 'Busy Operator',
     overallScore: 72,
-    focusAreas: ['focus', 'stress', 'planning'],
     weekdayShape: 'split_day',
     bestEnergyWindow: 'afternoon',
-    coachingStyle: 'analytical',
     quietHoursStart: '22:00',
     quietHoursEnd: '06:30',
     baseline: {
@@ -118,7 +113,7 @@ const scenarios = [
       energy: 6,
       stress: 7,
     },
-    goals: [
+    priorities: [
       ['Make room for deep work', 'Protect non-meeting time before deadline-heavy afternoons.'],
       ['Lower meeting recovery cost', 'Add transition buffers after intense calls.'],
       ['Keep tasks visible', 'Review the top three work commitments daily.'],
@@ -155,9 +150,7 @@ const scenarios = [
       ['Deep work hold', 'You have a 90-minute window available this afternoon.', 'reminder', 'medium', 0],
     ],
     memories: [
-      ['goal', 'Primary goal', 'Jon wants fewer reactive days and more protected project work.'],
       ['pattern', 'Meeting pattern', 'Back-to-back calls usually reduce follow-through on planned work.'],
-      ['preference', 'Coaching tone', 'Jon prefers analytical coaching with explicit tradeoffs.'],
     ],
   },
   {
@@ -167,10 +160,8 @@ const scenarios = [
     timezone: 'Europe/Berlin',
     archetype: 'Recovery Builder',
     overallScore: 68,
-    focusAreas: ['energy', 'sleep', 'movement', 'stress'],
     weekdayShape: 'flexible',
     bestEnergyWindow: 'early_morning',
-    coachingStyle: 'gentle',
     quietHoursStart: '20:45',
     quietHoursEnd: '07:30',
     baseline: {
@@ -183,7 +174,7 @@ const scenarios = [
       energy: 5,
       stress: 4,
     },
-    goals: [
+    priorities: [
       ['Rebuild consistent energy', 'Keep daily expectations realistic while energy stabilizes.'],
       ['Move gently every day', 'Use short walks rather than intense workouts.'],
       ['Protect evening recovery', 'Keep the last hour of the day quiet and predictable.'],
@@ -220,8 +211,6 @@ const scenarios = [
       ['Gentle movement cue', 'A short walk is enough today.', 'coaching', 'low', 0],
     ],
     memories: [
-      ['goal', 'Primary goal', 'Lea wants steady energy without overloading the day.'],
-      ['preference', 'Coaching tone', 'Lea prefers gentle coaching and small next actions.'],
       ['habit', 'Recovery habit', 'Evening shutdown is a strong support signal.'],
     ],
   },
@@ -355,10 +344,6 @@ async function seedScenario(userId, scenario) {
   const onboardingSnapshotId = deterministicUuid(
     `demo-seed:onboarding-snapshot:${userId}:intake-v1`,
   );
-  const setupFrictionPoints = scenario.memories
-    .filter(([type]) => type === 'recurring_problem' || type === 'pattern')
-    .map(([, title]) => title);
-
   await upsertRows(
     'profiles',
     [
@@ -412,22 +397,10 @@ async function seedScenario(userId, scenario) {
       state: 'applied',
       responses: {
         display_name: scenario.displayName,
-        primary_focus_areas: scenario.focusAreas,
-        goals: [],
-        friction_points: setupFrictionPoints,
         weekday_shape: scenario.weekdayShape,
         best_energy_window: scenario.bestEnergyWindow,
-        coaching_style: scenario.coachingStyle,
-        reminder_preference: {
-          enabled: true,
-          quiet_hours: {
-            starts_at: scenario.quietHoursStart,
-            ends_at: scenario.quietHoursEnd,
-          },
-        },
         routines: [],
         fixed_commitments: [],
-        calendar_connection_intent: 'later',
       },
       metadata: {
         source: 'onboarding',
@@ -438,20 +411,6 @@ async function seedScenario(userId, scenario) {
       updated_at: now.toISOString(),
     },
   ]);
-
-  const goalRows = scenario.goals.map(([title, description], index) => ({
-    id: deterministicUuid(`demo-seed:goal:${userId}:${index}`),
-    user_id: userId,
-    title,
-    description,
-    status: 'active',
-    progress: [35, 20, 10][index] ?? 0,
-    due_date: dateOnly(addDays(now, 21 + index * 7)),
-    metadata,
-    created_at: addDays(now, -60 + index).toISOString(),
-    updated_at: addDays(now, -30 + index).toISOString(),
-  }));
-  await insertRows('goals', goalRows);
 
   const dailyLogs = buildDailyLogs(userId, scenario, now, metadata);
   await insertRows('daily_logs', dailyLogs);
@@ -478,10 +437,7 @@ async function seedScenario(userId, scenario) {
         completed_at: status === 'done' ? terminalAt : null,
         cancelled_at: status === 'cancelled' ? terminalAt : null,
         source: 'demo_seed',
-        metadata: {
-          ...metadata,
-          goal_id: goalRows[index % goalRows.length].id,
-        },
+        metadata,
         created_at: addDays(reviewWeekStart, -10 + index).toISOString(),
         updated_at:
           status === 'done' || status === 'cancelled'
@@ -529,7 +485,6 @@ async function seedScenario(userId, scenario) {
             : {}),
           lifecycle: 'active',
           started_on: dateOnly(addDays(reviewWeekStart, -45)),
-          goal_id: goalRows[index % goalRows.length].id,
         },
         created_at: addDays(reviewWeekStart, -45 + index).toISOString(),
         updated_at: addDays(reviewWeekStart, -20 + index).toISOString(),
@@ -596,19 +551,43 @@ async function seedScenario(userId, scenario) {
 
   await insertRows(
     'memory_entries',
-    scenario.memories.map(([type, title, content], index) => ({
-      id: deterministicUuid(`demo-seed:memory:${userId}:${index}`),
-      user_id: userId,
-      type,
-      title,
-      content,
-      strength: 0.78 - index * 0.08,
-      evidence: [{ source: 'demo_seed', scenario: scenario.key }],
-      metadata,
-      last_seen_at: addDays(now, -index).toISOString(),
-      created_at: addDays(now, -40 + index).toISOString(),
-      updated_at: addDays(now, -index).toISOString(),
-    })),
+    [
+      {
+        id: deterministicUuid(`demo-seed:memory:${userId}:setup-energy`),
+        user_id: userId,
+        type: 'pattern',
+        title: 'Best energy window',
+        content: scenario.bestEnergyWindow,
+        strength: 0.8,
+        evidence: [{ source: 'intake-v1', field: 'best_energy_window' }],
+        metadata: {
+          ...metadata,
+          source: 'intake-v1',
+          managed_by: 'setup',
+          setup_state: 'active',
+          setup_item_id: deterministicUuid(
+            `demo-seed:memory-item:${userId}:best-energy-window`,
+          ),
+          revision: 1,
+        },
+        last_seen_at: now.toISOString(),
+        created_at: addDays(now, -40).toISOString(),
+        updated_at: now.toISOString(),
+      },
+      ...scenario.memories.map(([type, title, content], index) => ({
+        id: deterministicUuid(`demo-seed:memory:${userId}:${index}`),
+        user_id: userId,
+        type,
+        title,
+        content,
+        strength: 0.72 - index * 0.08,
+        evidence: [{ source: 'demo_seed', scenario: scenario.key }],
+        metadata,
+        last_seen_at: addDays(now, -index).toISOString(),
+        created_at: addDays(now, -30 + index).toISOString(),
+        updated_at: addDays(now, -index).toISOString(),
+      })),
+    ],
   );
 
   await insertRows(
@@ -694,23 +673,13 @@ async function seedScenario(userId, scenario) {
       scope: 'onboarding',
       period_key: 'setup:intake-v1',
       summary: {
-        primary_focus_areas: scenario.focusAreas,
-        goals: [],
-        friction_points: setupFrictionPoints,
-        coaching_style: scenario.coachingStyle,
         best_energy_window: scenario.bestEnergyWindow,
-        reminder_enabled: true,
         fixed_commitment_count: 0,
         existing_habit_count: 0,
         routine_candidate_count: 0,
         active_habit_count: 0,
       },
-      signals: {
-        focus_areas: scenario.focusAreas,
-        friction_points: setupFrictionPoints,
-        routine_candidates: [],
-        calendar_connection_intent: 'later',
-      },
+      signals: {},
       source: 'backend',
       metadata: {
         source: 'intake-v1',
@@ -749,7 +718,7 @@ async function seedScenario(userId, scenario) {
       scope: 'weekly',
       period_key: weekKey,
       summary: {
-        weekly_theme: scenario.goals[0][0],
+        weekly_theme: scenario.priorities[0][0],
         next_focus: scenario.recommendations[0][0],
       },
       signals: {
@@ -783,11 +752,13 @@ function buildDailyLogs(userId, scenario, now, metadata) {
     const variation = wave[index % wave.length];
     const sleep = clampNumber(scenario.baseline.sleep + variation * 0.25, 4.5, 9.5);
     const energy = clampInt(scenario.baseline.energy + variation, 1, 10);
-    const stress = clampInt(
+    const baselineStress = clampInt(
       scenario.baseline.stress + (index % 5 === 0 ? 1 : 0) - (variation > 0 ? 1 : 0),
       1,
       10,
     );
+    const stress =
+      scenario.key === 'student' && index % 2 === 0 ? 8 : baselineStress;
     const mood = clampInt(scenario.baseline.mood + Math.sign(variation), 1, 10);
     const focus = clampInt(
       scenario.baseline.focus + variation * 12 - (stress > 7 ? 16 : 0),
@@ -814,12 +785,21 @@ function buildDailyLogs(userId, scenario, now, metadata) {
         energy,
         stress_intensity: stress,
         stress_intensity_label: stressIntensityLabel(stress),
-        stress_source: stress >= 7 ? 'workload' : 'external_environment',
+        stress_source:
+          stress >= 7 && scenario.key === 'student'
+            ? 'private_emotional'
+            : stress >= 7
+              ? 'workload'
+              : 'external_environment',
         stress_controllability:
-          stress >= 7 ? 'partly_controllable' : 'mostly_controllable',
+          stress >= 7 && scenario.key === 'student'
+            ? 'hardly_controllable'
+            : stress >= 7
+              ? 'partly_controllable'
+              : 'mostly_controllable',
         focus_band: focusBand(focus),
-        main_friction: stress >= 7 ? 'too_much_to_do' : 'interruptions',
-        tomorrow_priority: scenario.goals[index % scenario.goals.length][0],
+        tomorrow_priority:
+          scenario.priorities[index % scenario.priorities.length][0],
         ...(offset === 0
           ? {
               reflection_note:
@@ -836,6 +816,7 @@ function buildDailyLogs(userId, scenario, now, metadata) {
         ),
         captured_at: morningCapturedAt,
         sleep_hours: structuredSleep,
+        sleep_quality: clampInt(Math.round(structuredSleep), 1, 10),
         current_energy: energy,
         day_shape: stress >= 7 ? 'constrained' : 'normal',
       };
@@ -858,7 +839,7 @@ function buildDailyLogs(userId, scenario, now, metadata) {
         source: 'quick_check_in',
         metadata: {
           ...metadata,
-          capture_version: 'daily-capture-v2',
+          capture_version: 'daily-capture-v3',
           captures: {
             evening: eveningCapture,
             morning: morningCapture,
@@ -885,7 +866,7 @@ function buildDailyLogs(userId, scenario, now, metadata) {
       energy_level: energy,
       stress_level: stress,
       nutrition_notes: index % 4 === 0 ? 'Regular meals, lighter evening.' : null,
-      day_focus: scenario.goals[index % scenario.goals.length][0],
+      day_focus: scenario.priorities[index % scenario.priorities.length][0],
       reflection: `Demo ${scenario.key} signal day ${index + 1}.`,
       source: 'demo_seed',
       metadata,
@@ -899,7 +880,7 @@ function buildBehavioralEvents(userId, scenario, dailyLogs, metadata) {
   return dailyLogs.flatMap((log, index) => {
     const date = new Date(`${log.entry_date}T12:00:00.000Z`);
     const captures = log.metadata?.captures;
-    if (log.metadata?.capture_version === 'daily-capture-v2' && captures) {
+    if (log.metadata?.capture_version === 'daily-capture-v3' && captures) {
       const evening = captures.evening;
       const morning = captures.morning;
       const signals = [
@@ -921,7 +902,7 @@ function buildBehavioralEvents(userId, scenario, dailyLogs, metadata) {
         source: 'quick_check_in',
         metadata: {
           ...metadata,
-          capture_version: 'daily-capture-v2',
+          capture_version: 'daily-capture-v3',
           capture_kind: captureKind,
           entry_date: log.entry_date,
           capture_id: capture.capture_id,
@@ -931,7 +912,6 @@ function buildBehavioralEvents(userId, scenario, dailyLogs, metadata) {
             : {
                 stress_source: evening.stress_source,
                 stress_controllability: evening.stress_controllability,
-                main_friction: evening.main_friction,
               }),
         },
       }));

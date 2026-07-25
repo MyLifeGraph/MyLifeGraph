@@ -61,7 +61,6 @@ class SnapshotAggregator:
         daily_state = build_snapshot_daily_state(
             daily_logs=state_inputs.daily_logs,
             tasks=state_inputs.tasks,
-            goals=state_inputs.goals,
             target_date=target_date,
             generated_at=generated_at,
         )
@@ -154,12 +153,6 @@ def _build_summary(
     completed_tasks = [
         row for row in inputs.tasks if str(row.get("status") or "") == "done"
     ]
-    active_goals = [
-        row for row in inputs.goals if str(row.get("status") or "active") == "active"
-    ]
-    completed_goals = [
-        row for row in inputs.goals if str(row.get("status") or "") == "completed"
-    ]
     active_habits = [
         row for row in inputs.habits if bool(row.get("active", True)) is True
     ]
@@ -215,10 +208,6 @@ def _build_summary(
             "due_soon": len(due_soon_tasks),
             "completed": len(completed_tasks),
         },
-        "goals": {
-            "active": len(active_goals),
-            "completed": len(completed_goals),
-        },
         "habits": {
             "active": len(active_habits),
             "outcome_counts": habit_outcome_counts,
@@ -258,7 +247,7 @@ def _filter_window(
             if _is_event_in_window(row, start_date, target_date)
         ],
         tasks=inputs.tasks,
-        goals=inputs.goals,
+        goals=[],
         habits=inputs.habits,
         habit_logs=[
             row
@@ -296,7 +285,6 @@ def _build_signals(
             "daily_logs": len(inputs.daily_logs),
             "behavioral_events": len(inputs.behavioral_events),
             "tasks": len(inputs.tasks),
-            "goals": len(inputs.goals),
             "habits": len(inputs.habits),
             "habit_logs": len(inputs.habit_logs),
             "focus_sessions": len(inputs.focus_sessions),
@@ -305,7 +293,6 @@ def _build_signals(
         },
         "event_type_counts": _count_values(inputs.behavioral_events, "event_type"),
         "task_status_counts": _count_values(inputs.tasks, "status"),
-        "goal_status_counts": _count_values(inputs.goals, "status"),
         "habit_outcome_counts": _habit_outcome_counts(inputs.habit_logs),
         "focus_session_status_counts": _focus_session_status_counts(
             inputs.focus_sessions,
@@ -413,7 +400,6 @@ def _evidence_refs(inputs: SnapshotInputRows) -> list[dict[str, str]]:
         ("daily_logs", inputs.daily_logs),
         ("behavioral_events", inputs.behavioral_events),
         ("tasks", inputs.tasks),
-        ("goals", inputs.goals),
         ("habits", inputs.habits),
         ("habit_logs", inputs.habit_logs),
         ("focus_sessions", inputs.focus_sessions),

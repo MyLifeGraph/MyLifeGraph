@@ -228,7 +228,7 @@ def test_generate_persists_exact_weekly_review_and_shrink_proposal() -> None:
         "carried": 1,
         "overdue_carried": 1,
         "cancelled": 0,
-        "goal_linked_completed": 1,
+        "goal_linked_completed": 0,
     }
     assert response.review.facts.habits.scheduled_opportunities == 4
     assert response.review.facts.habits.completed == 2

@@ -1,4 +1,3 @@
-import logging
 from collections.abc import Callable
 from datetime import UTC, datetime, time
 from typing import Any
@@ -11,7 +10,6 @@ from app.models.intake import (
     IntakeSetupResponse,
     SnapshotSummary,
 )
-from app.models.recommendations import RecommendationGenerateRequest
 from app.repositories.intake_repository import (
     AtomicSetupApply,
     IntakeApplyConflict,
@@ -19,10 +17,6 @@ from app.repositories.intake_repository import (
     IntakeRepository,
     SetupMaterialization,
 )
-from app.services.recommendation_engine import RecommendationEngine
-
-
-logger = logging.getLogger(__name__)
 _ONBOARDING_PERIOD_KEY = "setup:intake-v1"
 
 
@@ -53,11 +47,9 @@ class IntakeService:
     def __init__(
         self,
         repository: IntakeRepository,
-        recommendation_engine: RecommendationEngine | None = None,
         now_provider: Callable[[], datetime] | None = None,
     ) -> None:
         self._repository = repository
-        self._recommendation_engine = recommendation_engine
         self._now_provider = now_provider or _utc_now
 
     async def get_setup(self, *, user_id: str) -> IntakeSetupResponse:
@@ -87,13 +79,9 @@ class IntakeService:
 
         if str(intake_row.get("state")) == "applied":
             await self._complete_profile_marker(user_id=user_id, row=intake_row)
-            recommendations = await self._generate_initial_recommendations(
-                user_id=user_id,
-            )
             return await self._complete_response_from_row(
                 user_id=user_id,
                 row=intake_row,
-                recommendations=recommendations,
             )
 
         revision = int(intake_row["revision"])
@@ -138,11 +126,9 @@ class IntakeService:
         )
         if applied_row is None or str(applied_row.get("state")) != "applied":
             raise RuntimeError("Atomic Intake V1 apply was not readable after commit.")
-        recommendations = await self._generate_initial_recommendations(user_id=user_id)
         return await self._complete_response_from_row(
             user_id=user_id,
             row=applied_row,
-            recommendations=recommendations,
         )
 
     async def _complete_profile_marker(
@@ -190,6 +176,7 @@ class IntakeService:
         )
         if existing is not None:
             _validate_replayed_request(
+                user_id=user_id,
                 existing=existing,
                 request=request,
                 responses_json=responses_json,
@@ -227,6 +214,7 @@ class IntakeService:
             )
             if concurrent is not None:
                 _validate_replayed_request(
+                    user_id=user_id,
                     existing=concurrent,
                     request=request,
                     responses_json=responses_json,
@@ -277,7 +265,6 @@ class IntakeService:
         *,
         user_id: str,
         row: dict[str, Any],
-        recommendations: list[dict[str, Any]],
     ) -> IntakeCompleteResponse:
         setup = await self._setup_response_from_row(user_id=user_id, row=row)
         if (
@@ -299,29 +286,8 @@ class IntakeService:
             completed_at=setup.completed_at,
             responses=setup.responses,
             summary=setup.summary,
-            recommendations=recommendations,
+            recommendations=[],
         )
-
-    async def _generate_initial_recommendations(
-        self,
-        *,
-        user_id: str,
-    ) -> list[dict[str, Any]]:
-        if self._recommendation_engine is None:
-            return []
-        try:
-            response = await self._recommendation_engine.generate_recommendations(
-                user_id=user_id,
-                request=RecommendationGenerateRequest(
-                    window_days=28,
-                    force=False,
-                    allow_llm_wording=False,
-                ),
-            )
-        except Exception:
-            logger.exception("Post-intake recommendation refresh failed.")
-            return []
-        return [item.model_dump(mode="json") for item in response.items]
 
 
 def _build_atomic_apply(
@@ -333,28 +299,13 @@ def _build_atomic_apply(
 ) -> AtomicSetupApply:
     revision = int(row["revision"])
     request_id = UUID(str(row["request_id"]))
-    reminder = responses.reminder_preference
-    quiet_hours = reminder.quiet_hours
     summary = _build_summary(responses)
-    signals: dict[str, Any] = {
-        "focus_areas": responses.primary_focus_areas,
-        "friction_points": responses.friction_points,
-        "routine_candidates": [
-            str(routine.key)
-            for routine in responses.routines
-            if routine.status == "candidate"
-        ],
-    }
-    if responses.calendar_connection_intent is not None:
-        signals["calendar_connection_intent"] = (
-            responses.calendar_connection_intent
-        )
     snapshot = {
         "user_id": user_id,
         "scope": "onboarding",
         "period_key": _ONBOARDING_PERIOD_KEY,
         "summary": summary.model_dump(mode="json"),
-        "signals": signals,
+        "signals": {},
         "source": "backend",
         "generated_at": completed_at.isoformat(),
         "metadata": {
@@ -371,17 +322,7 @@ def _build_atomic_apply(
         request_metadata = {}
     return AtomicSetupApply(
         completed_at=completed_at.isoformat(),
-        notification_preferences={
-            "focus_prompts_enabled": reminder.enabled,
-            "recovery_prompts_enabled": reminder.enabled,
-            "weekly_summary_enabled": reminder.enabled,
-            "quiet_hours_start": (
-                _format_time(quiet_hours.starts_at) if quiet_hours else None
-            ),
-            "quiet_hours_end": (
-                _format_time(quiet_hours.ends_at) if quiet_hours else None
-            ),
-        },
+        notification_preferences={},
         materialization=_build_materialization(
             user_id=user_id,
             revision=revision,
@@ -400,15 +341,23 @@ def _build_atomic_apply(
 
 def _validate_replayed_request(
     *,
+    user_id: str,
     existing: dict[str, Any],
     request: IntakeCompleteRequest,
     responses_json: dict[str, Any],
     request_metadata: dict[str, Any],
 ) -> None:
+    try:
+        existing_responses = _responses_from_row(
+            user_id=user_id,
+            row=existing,
+        ).model_dump(mode="json", exclude_none=True)
+    except (RuntimeError, ValueError):
+        existing_responses = existing.get("responses")
     same_payload = (
         str(existing.get("version")) == request.version
         and int(existing.get("base_revision") or 0) == request.base_revision
-        and existing.get("responses") == responses_json
+        and existing_responses == responses_json
         and _metadata(existing).get("request_metadata", {}) == request_metadata
     )
     if same_payload:
@@ -451,19 +400,13 @@ def _validate_base_revision(
 
 
 def _build_summary(responses: IntakeResponses) -> SnapshotSummary:
-    active_goals = [goal.title for goal in responses.goals if goal.status == "active"]
     confirmed_routines = [
         routine
         for routine in responses.routines
         if routine.cadence_confirmed and routine.status in {"active", "paused"}
     ]
     return SnapshotSummary(
-        primary_focus_areas=responses.primary_focus_areas,
-        goals=active_goals,
-        friction_points=responses.friction_points,
         best_energy_window=responses.best_energy_window,
-        coaching_style=responses.coaching_style,
-        reminder_enabled=responses.reminder_preference.enabled,
         fixed_commitment_count=sum(
             commitment.status == "active"
             for commitment in responses.fixed_commitments
@@ -487,23 +430,6 @@ def _build_materialization(
     responses: IntakeResponses,
 ) -> SetupMaterialization:
     timestamp = completed_at.isoformat()
-    goal_rows = [
-        {
-            "id": str(_stable_id(user_id, "goal", goal.key)),
-            "user_id": user_id,
-            "title": goal.title,
-            "status": goal.status,
-            "metadata": _setup_metadata(
-                setup_item_id=goal.key,
-                revision=revision,
-                setup_state=goal.status,
-                extra={"focus_areas": responses.primary_focus_areas},
-            ),
-            "updated_at": timestamp,
-        }
-        for goal in responses.goals
-    ]
-
     habit_rows = [
         {
             "id": str(_stable_id(user_id, "habit", routine.key)),
@@ -565,7 +491,7 @@ def _build_materialization(
         responses=responses,
     )
     return SetupMaterialization(
-        goals=goal_rows,
+        goals=[],
         habits=habit_rows,
         schedule_items=schedule_rows,
         memory_entries=memory_rows,
@@ -581,37 +507,6 @@ def _memory_rows(
     responses: IntakeResponses,
 ) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
-    for goal in responses.goals:
-        if goal.status == "archived":
-            continue
-        rows.append(
-            _memory_row(
-                user_id=user_id,
-                setup_item_id=goal.key,
-                record_kind="goal-memory",
-                revision=revision,
-                intake_response_id=intake_response_id,
-                completed_at=completed_at,
-                memory_type="goal",
-                title=f"Goal: {goal.title}",
-                content=goal.title,
-            ),
-        )
-
-    coaching_key = _stable_id(user_id, "memory-key", "coaching-style")
-    rows.append(
-        _memory_row(
-            user_id=user_id,
-            setup_item_id=coaching_key,
-            record_kind="preference-memory",
-            revision=revision,
-            intake_response_id=intake_response_id,
-            completed_at=completed_at,
-            memory_type="preference",
-            title="Preferred coaching style",
-            content=f"{responses.coaching_style} coaching",
-        ),
-    )
     energy_key = _stable_id(user_id, "memory-key", "energy-window")
     rows.append(
         _memory_row(
@@ -626,21 +521,6 @@ def _memory_rows(
             content=responses.best_energy_window,
         ),
     )
-    if responses.context_note:
-        context_key = _stable_id(user_id, "memory-key", "context-note")
-        rows.append(
-            _memory_row(
-                user_id=user_id,
-                setup_item_id=context_key,
-                record_kind="context-memory",
-                revision=revision,
-                intake_response_id=intake_response_id,
-                completed_at=completed_at,
-                memory_type="preference",
-                title="Intake context note",
-                content=responses.context_note,
-            ),
-        )
     return rows
 
 
@@ -703,26 +583,6 @@ def _responses_from_row(*, user_id: str, row: dict[str, Any]) -> IntakeResponses
     if not isinstance(raw, dict):
         raise RuntimeError("Stored intake responses are not an object.")
     normalized = dict(raw)
-    goals = normalized.get("goals", [])
-    if isinstance(goals, list) and any(isinstance(item, str) for item in goals):
-        normalized["goals"] = [
-            {
-                "key": str(_stable_id(user_id, "legacy-goal", f"{index}:{title}")),
-                "title": title,
-                "status": "active",
-            }
-            for index, title in enumerate(goals)
-            if isinstance(title, str)
-            and title.strip()
-            and title.strip() != "Build a steadier weekly routine"
-        ]
-    friction_points = normalized.get("friction_points", [])
-    if isinstance(friction_points, list):
-        normalized["friction_points"] = [
-            item
-            for item in friction_points
-            if not isinstance(item, str) or item.strip() != "Unclear priorities"
-        ]
     if "routines" not in normalized:
         legacy_habits = normalized.pop("existing_habits", [])
         normalized["routines"] = [

@@ -73,7 +73,7 @@ class _NotificationSettingsPageState
                     : null,
                 title: const Text('Allow in-app banners'),
                 subtitle: const Text(
-                  'Shows a banner only while MyLifeGraph is open. This is separate from your saved reminder preference.',
+                  'Shows a banner only while MyLifeGraph is open. Categories and quiet hours do not grant consent.',
                 ),
               ),
               const SizedBox(height: AppSpacing.sm),
@@ -313,7 +313,7 @@ class _NotificationSettingsPageState
         builder: (context) => AlertDialog(
           title: const Text('Allow in-app banners?'),
           content: const Text(
-            'Your Setup preference did not turn these on. MyLifeGraph may show fixed, privacy-safe banners while the app is open. It cannot notify you after you close it.',
+            'These turn on only with your explicit consent. MyLifeGraph may show fixed, privacy-safe banners while the app is open. It cannot notify you after you close it.',
           ),
           actions: [
             TextButton(

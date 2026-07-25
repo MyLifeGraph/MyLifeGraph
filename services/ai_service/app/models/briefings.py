@@ -53,7 +53,10 @@ class BriefingProvenance(BaseModel):
 
     engine: Literal["deterministic"]
     contract_version: Literal["daily-briefing-v1"]
-    daily_state_contract_version: Literal["explainable-daily-state-v1"]
+    daily_state_contract_version: Literal[
+        "explainable-daily-state-v1",
+        "explainable-daily-state-v2",
+    ]
     executable_action_contract_version: Literal["executable-action-v1"]
     source_snapshot_id: str
     source_snapshot_generated_at: datetime
