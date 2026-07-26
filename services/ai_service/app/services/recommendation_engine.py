@@ -1,6 +1,7 @@
 from collections.abc import Callable
 from dataclasses import replace
 from datetime import date, datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 from app.models.recommendation_candidates import (
     DeterministicScores,
@@ -48,18 +49,19 @@ class RecommendationEngine:
         self._user_context_repository = user_context_repository
         self._recommendation_repository = recommendation_repository
         self._verifier = verifier or RecommendationVerifier()
-        self._today_provider = today_provider or date.today
+        self._today_provider = today_provider
         self._now_provider = now_provider or _utc_now
 
     async def list_recommendations(self, user_id: str) -> RecommendationListResponse:
         if self._recommendation_repository is None:
             raise RuntimeError("Recommendation repository is not configured.")
+        today, _ = await self._profile_date(user_id)
         items = await self._recommendation_repository.list_active_recommendations(
             user_id=user_id,
         )
         return _recommendation_response(
             items=items,
-            current_period_key=current_period_key(self._today_provider()),
+            current_period_key=current_period_key(today),
             now=self._now_provider(),
         )
 
@@ -74,7 +76,7 @@ class RecommendationEngine:
         ):
             raise RuntimeError("Recommendation repositories are not configured.")
 
-        today = self._today_provider()
+        today, timezone_name = await self._profile_date(user_id)
         period_key = current_period_key(today)
         fingerprints = (
             await self._recommendation_repository.list_active_fingerprints_for_user(
@@ -83,8 +85,9 @@ class RecommendationEngine:
         )
         summary = await self._user_context_repository.load_recent_context(
             user_id=user_id,
-            window_days=request.window_days,
+            window_days=max(request.window_days, 14),
             today=today,
+            timezone_name=timezone_name,
         )
         verified = []
         for candidate in self.generate_candidates(summary):
@@ -98,11 +101,11 @@ class RecommendationEngine:
                 verified.append(result.recommendation)
                 fingerprints.add(result.recommendation.fingerprint)
 
-        if verified:
-            await self._recommendation_repository.persist_recommendations(
-                user_id=user_id,
-                recommendations=verified,
-            )
+        await self._recommendation_repository.replace_new_recommendations(
+            user_id=user_id,
+            recommendations=verified,
+            refreshed_at=self._now_provider(),
+        )
 
         current_items = (
             await self._recommendation_repository.list_active_recommendations(
@@ -114,6 +117,19 @@ class RecommendationEngine:
             current_period_key=period_key,
             now=self._now_provider(),
         )
+
+    async def _profile_date(self, user_id: str) -> tuple[date, str]:
+        if self._today_provider is not None:
+            return self._today_provider(), "UTC"
+        if self._user_context_repository is None:
+            raise RuntimeError("User context repository is not configured.")
+        timezone_name = await self._user_context_repository.get_profile_timezone(
+            user_id=user_id,
+        )
+        local_now = _ensure_aware(self._now_provider()).astimezone(
+            ZoneInfo(timezone_name),
+        )
+        return local_now.date(), timezone_name
 
     def generate_candidates(
         self,
@@ -180,39 +196,72 @@ class RecommendationEngine:
         self,
         summary: SignalSummary,
     ) -> RecommendationCandidate | None:
-        threshold = 6.5
-        low_sleep_logs = [
+        low_recovery_logs = [
             log
             for log in summary.daily_logs
-            if log.sleep_hours is not None and log.sleep_hours < threshold
+            if (
+                log.sleep_quality is not None
+                and log.sleep_quality <= 4
+            )
+            or (
+                log.sleep_target_deviation_minutes is not None
+                and log.sleep_target_deviation_minutes <= -60
+            )
         ]
-        if len(low_sleep_logs) < 2:
+        if len(low_recovery_logs) < 2:
             return None
 
         severity = _average(
-            min((threshold - (log.sleep_hours or threshold)) / threshold, 1)
-            for log in low_sleep_logs
+            max(
+                _clamp(
+                    (5 - log.sleep_quality) / 4
+                    if log.sleep_quality is not None
+                    else 0,
+                ),
+                _clamp(
+                    -log.sleep_target_deviation_minutes / 180
+                    if log.sleep_target_deviation_minutes is not None
+                    else 0,
+                ),
+            )
+            for log in low_recovery_logs
         )
         evidence_refs = [
-            EvidenceRef(table="daily_logs", id=log.id, field="sleep_hours")
-            for log in low_sleep_logs
+            EvidenceRef(
+                table="daily_logs",
+                id=log.id,
+                field=(
+                    "sleep_quality"
+                    if log.sleep_quality is not None and log.sleep_quality <= 4
+                    else "sleep_target_deviation_minutes"
+                ),
+            )
+            for log in low_recovery_logs
         ]
         scores = _score(
             evidence_count=len(evidence_refs),
             severity=severity,
-            recency=_daily_log_recency(summary, low_sleep_logs),
+            recency=_daily_log_recency(summary, low_recovery_logs),
         )
         return self._candidate(
             summary=summary,
             rule_id=LOW_RECOVERY_SLEEP_RULE_ID,
             title="Protect a sleep recovery window",
-            reason="Recent sleep logs show repeated short nights.",
+            reason=(
+                "At least two recent mornings had sleep quality of 4/10 or "
+                "lower, or estimated sleep at least 60 minutes below your "
+                "stated target."
+            ),
             action_label="Plan recovery time",
             category="recovery",
             priority="high" if len(evidence_refs) >= 3 else "medium",
             evidence_refs=evidence_refs,
             scores=scores,
-            invalidation_dependencies=["daily_logs.sleep_hours"],
+            invalidation_dependencies=[
+                "daily_logs.metadata.morning.sleep_quality",
+                "daily_logs.metadata.morning.sleep_target_minutes",
+                "daily_logs.metadata.morning.estimated_sleep_minutes",
+            ],
         )
 
     def _high_stress_low_energy(
@@ -273,61 +322,43 @@ class RecommendationEngine:
         self,
         summary: SignalSummary,
     ) -> RecommendationCandidate | None:
-        low_focus_logs = [
-            log
-            for log in summary.daily_logs
-            if log.focus_minutes is not None and log.focus_minutes < 60
+        window_start = summary.today - timedelta(days=13)
+        terminal_sessions = [
+            session
+            for session in summary.focus_sessions
+            if window_start <= session.local_date <= summary.today
         ]
-        switch_events = [
-            event
-            for event in summary.behavioral_events
-            if event.event_type in {"context_switch", "interruption", "task_switch"}
+        abandoned_sessions = [
+            session for session in terminal_sessions if session.status == "abandoned"
         ]
-        if len(low_focus_logs) < 2 and len(switch_events) < 3:
+        if len(terminal_sessions) < 3 or len(abandoned_sessions) < 2:
             return None
 
         evidence_refs = [
-            EvidenceRef(table="daily_logs", id=log.id, field="focus_minutes")
-            for log in low_focus_logs
-        ] + [
-            EvidenceRef(table="behavioral_events", id=event.id, field="event_type")
-            for event in switch_events
+            EvidenceRef(table="focus_sessions", id=session.id, field="status")
+            for session in terminal_sessions
         ]
-        focus_severity = _average(
-            (60 - min(log.focus_minutes or 60, 60)) / 60 for log in low_focus_logs
-        )
-        workload_pressure = _clamp(
-            sum(
-                task.workload_score
-                for task in summary.tasks
-                if task.is_active
-            )
-            / 10,
-        )
+        abandonment_rate = len(abandoned_sessions) / len(terminal_sessions)
         scores = _score(
             evidence_count=len(evidence_refs),
-            severity=max(focus_severity, workload_pressure),
-            recency=max(
-                _daily_log_recency(summary, low_focus_logs),
-                _event_recency(summary, switch_events),
-            ),
+            severity=abandonment_rate,
+            recency=_focus_session_recency(summary, terminal_sessions),
         )
-        priority = "high" if workload_pressure >= 0.8 else "medium"
+        priority = "high" if abandonment_rate >= 0.75 else "medium"
         return self._candidate(
             summary=summary,
             rule_id=FOCUS_PROTECTION_RULE_ID,
             title="Protect a focus block",
-            reason="Recent signals suggest focused time is getting squeezed.",
+            reason=(
+                f"{len(abandoned_sessions)} of {len(terminal_sessions)} Focus "
+                "sessions in the last 14 days were abandoned."
+            ),
             action_label="Schedule focus block",
             category="focus",
             priority=priority,
             evidence_refs=evidence_refs,
             scores=scores,
-            invalidation_dependencies=[
-                "daily_logs.focus_minutes",
-                "behavioral_events.event_type",
-                "tasks.workload_score",
-            ],
+            invalidation_dependencies=["focus_sessions.status"],
         )
 
     def _movement_nudge(
@@ -371,7 +402,10 @@ class RecommendationEngine:
             summary=summary,
             rule_id=MOVEMENT_NUDGE_RULE_ID,
             title="Add a small movement reset",
-            reason="Recent activity signals are below your usual baseline.",
+            reason=(
+                "At least three measured days had fewer than 4,000 steps or "
+                "an activity rating of 2/10 or lower."
+            ),
             action_label="Take a short walk",
             category="movement",
             priority="medium" if severity >= 0.5 else "low",
@@ -489,6 +523,15 @@ def _event_recency(summary: SignalSummary, events) -> float:
     newest = max(event.occurred_at.date() for event in event_list)
     days_old = max((summary.today - newest).days, 0)
     return _clamp(1 - days_old / 7)
+
+
+def _focus_session_recency(summary: SignalSummary, sessions) -> float:
+    session_list = list(sessions)
+    if not session_list:
+        return 0
+    newest = max(session.local_date for session in session_list)
+    days_old = max((summary.today - newest).days, 0)
+    return _clamp(1 - days_old / 14)
 
 
 def _task_recency(summary: SignalSummary, tasks) -> float:

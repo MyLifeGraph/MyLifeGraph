@@ -1,22 +1,29 @@
 from datetime import date, datetime, time, timedelta, timezone
 from typing import Any, Protocol
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from app.clients.supabase import SupabaseRestClient
 from app.models.user_context import (
     BehavioralEventSignal,
     DailyLogSignal,
+    FocusSessionSignal,
     SignalSummary,
     TaskSignal,
 )
+from app.services.daily_capture_parser import parse_daily_capture_v4_sleep_episode
 
 
 class UserContextRepository(Protocol):
+    async def get_profile_timezone(self, *, user_id: str) -> str:
+        pass
+
     async def load_recent_context(
         self,
         *,
         user_id: str,
         window_days: int,
         today: date,
+        timezone_name: str = "UTC",
     ) -> SignalSummary:
         pass
 
@@ -25,26 +32,49 @@ class SupabaseUserContextRepository:
     def __init__(self, client: SupabaseRestClient) -> None:
         self._client = client
 
+    async def get_profile_timezone(self, *, user_id: str) -> str:
+        rows = await self._client.select(
+            "profiles",
+            params={
+                "select": "timezone",
+                "id": f"eq.{user_id}",
+                "limit": "1",
+            },
+        )
+        if len(rows) != 1:
+            raise ValueError("Recommendation profile is unavailable.")
+        timezone_name = str(rows[0].get("timezone") or "")
+        try:
+            ZoneInfo(timezone_name)
+        except ZoneInfoNotFoundError as exc:
+            raise ValueError("Recommendation profile timezone is invalid.") from exc
+        return timezone_name
+
     async def load_recent_context(
         self,
         *,
         user_id: str,
         window_days: int,
         today: date,
+        timezone_name: str = "UTC",
     ) -> SignalSummary:
+        try:
+            profile_timezone = ZoneInfo(timezone_name)
+        except ZoneInfoNotFoundError as exc:
+            raise ValueError("Recommendation profile timezone is invalid.") from exc
         start_date = today - timedelta(days=window_days - 1)
         start_datetime = datetime.combine(
             start_date,
             time.min,
-            tzinfo=timezone.utc,
-        )
+            tzinfo=profile_timezone,
+        ).astimezone(timezone.utc)
 
         daily_logs = await self._client.select(
             "daily_logs",
             params={
                 "select": (
                     "id,entry_date,sleep_hours,steps,activity_level,"
-                    "focus_minutes,energy_level,stress_level"
+                    "focus_minutes,energy_level,stress_level,metadata"
                 ),
                 "user_id": f"eq.{user_id}",
                 "entry_date": f"gte.{start_date.isoformat()}",
@@ -62,6 +92,19 @@ class SupabaseUserContextRepository:
                 "limit": "100",
             },
         )
+        focus_sessions = await self._client.select(
+            "focus_sessions",
+            params={
+                "select": (
+                    "id,started_at,ended_at,planned_minutes,actual_minutes,status"
+                ),
+                "user_id": f"eq.{user_id}",
+                "status": "in.(completed,abandoned)",
+                "started_at": f"gte.{start_datetime.isoformat()}",
+                "order": "started_at.desc",
+                "limit": "200",
+            },
+        )
         tasks = await self._client.select(
             "tasks",
             params={
@@ -75,9 +118,14 @@ class SupabaseUserContextRepository:
             user_id=user_id,
             period_key=_current_period_key(today),
             today=today,
+            timezone_name=timezone_name,
             daily_logs=[_daily_log_signal(row) for row in daily_logs],
             behavioral_events=[
                 _behavioral_event_signal(row) for row in behavioral_events
+            ],
+            focus_sessions=[
+                _focus_session_signal(row, profile_timezone=profile_timezone)
+                for row in focus_sessions
             ],
             tasks=[_task_signal(row) for row in tasks],
             user_state_snapshots=[],
@@ -85,15 +133,58 @@ class SupabaseUserContextRepository:
 
 
 def _daily_log_signal(row: dict[str, Any]) -> DailyLogSignal:
+    entry_date = date.fromisoformat(str(row["entry_date"]))
+    metadata = row.get("metadata")
+    metadata = metadata if isinstance(metadata, dict) else {}
+    captures = (
+        metadata.get("captures")
+        if metadata.get("capture_version") == "daily-capture-v4"
+        and isinstance(metadata.get("captures"), dict)
+        else {}
+    )
+    parsed_sleep = parse_daily_capture_v4_sleep_episode(
+        captures.get("morning"),
+        row_date=entry_date,
+    ).value
     return DailyLogSignal(
         id=str(row["id"]),
-        entry_date=date.fromisoformat(str(row["entry_date"])),
-        sleep_hours=_optional_float(row.get("sleep_hours")),
+        entry_date=entry_date,
+        sleep_hours=(
+            parsed_sleep.estimated_sleep_minutes / 60
+            if parsed_sleep is not None
+            else None
+        ),
+        sleep_quality=(
+            parsed_sleep.sleep_quality if parsed_sleep is not None else None
+        ),
+        sleep_target_deviation_minutes=(
+            parsed_sleep.target_deviation_minutes
+            if parsed_sleep is not None
+            else None
+        ),
         energy=_optional_float(row.get("energy_level")),
         stress=_optional_float(row.get("stress_level")),
         focus_minutes=_optional_int(row.get("focus_minutes")),
         steps=_optional_int(row.get("steps")),
         activity_level=_optional_float(row.get("activity_level")),
+    )
+
+
+def _focus_session_signal(
+    row: dict[str, Any],
+    *,
+    profile_timezone: ZoneInfo,
+) -> FocusSessionSignal:
+    started_at = _parse_datetime(str(row["started_at"]))
+    ended_at = _parse_datetime(str(row["ended_at"]))
+    return FocusSessionSignal(
+        id=str(row["id"]),
+        local_date=started_at.astimezone(profile_timezone).date(),
+        started_at=started_at,
+        ended_at=ended_at,
+        planned_minutes=int(row["planned_minutes"]),
+        actual_minutes=int(row["actual_minutes"]),
+        status=str(row["status"]),
     )
 
 

@@ -7,6 +7,7 @@ from app.models.recommendation_candidates import (
 from app.models.user_context import (
     DailyLogSignal,
     EvidenceRef,
+    FocusSessionSignal,
     SignalSummary,
     TaskSignal,
     UserStateSnapshotSignal,
@@ -23,6 +24,7 @@ PERIOD_KEY = current_period_key(TODAY)
 def summary(
     *,
     daily_logs: list[DailyLogSignal] | None = None,
+    focus_sessions: list[FocusSessionSignal] | None = None,
     tasks: list[TaskSignal] | None = None,
     user_state_snapshots: list[UserStateSnapshotSignal] | None = None,
 ) -> SignalSummary:
@@ -31,6 +33,7 @@ def summary(
         period_key=PERIOD_KEY,
         today=TODAY,
         daily_logs=daily_logs or [],
+        focus_sessions=focus_sessions or [],
         tasks=tasks or [],
         user_state_snapshots=user_state_snapshots or [],
     )
@@ -41,6 +44,31 @@ def daily_log(index: int, **kwargs) -> DailyLogSignal:
         id=f"log-{index}",
         entry_date=TODAY - timedelta(days=index),
         **kwargs,
+    )
+
+
+def focus_session(
+    index: int,
+    *,
+    status: str,
+    planned_minutes: int = 45,
+    actual_minutes: int = 45,
+) -> FocusSessionSignal:
+    started_at = datetime(
+        2026,
+        6,
+        22 - index,
+        8,
+        tzinfo=timezone.utc,
+    )
+    return FocusSessionSignal(
+        id=f"focus-{index}",
+        local_date=started_at.date(),
+        started_at=started_at,
+        ended_at=started_at + timedelta(minutes=actual_minutes),
+        planned_minutes=planned_minutes,
+        actual_minutes=actual_minutes,
+        status=status,
     )
 
 
@@ -101,29 +129,58 @@ def test_daily_state_snapshot_does_not_change_recommendation_ranking() -> None:
     assert with_daily_state == onboarding_only
 
 
-def test_low_focus_signal_creates_focus_recommendation() -> None:
+def test_two_abandons_among_three_terminal_sessions_create_focus_warning() -> None:
     candidates = RecommendationEngine().generate_candidates(
         summary(
-            daily_logs=[
-                daily_log(0, focus_minutes=20),
-                daily_log(1, focus_minutes=35),
+            focus_sessions=[
+                focus_session(0, status="abandoned", actual_minutes=5),
+                focus_session(1, status="abandoned", actual_minutes=10),
+                focus_session(
+                    2,
+                    status="completed",
+                    planned_minutes=5,
+                    actual_minutes=5,
+                ),
             ],
         ),
     )
 
     focus = next(candidate for candidate in candidates if candidate.category == "focus")
     assert focus.rule_id == "focus_protection"
-    assert focus.evidence_refs
+    assert len(focus.evidence_refs) == 3
+    assert focus.reason.startswith("2 of 3 Focus sessions")
+    assert all(ref.table == "focus_sessions" for ref in focus.evidence_refs)
     assert focus.fingerprint
 
 
-def test_low_sleep_and_low_energy_create_recovery_recommendations() -> None:
+def test_valid_sleep_quality_or_target_deviation_create_recovery_recommendation() -> None:
     candidates = RecommendationEngine().generate_candidates(
         summary(
             daily_logs=[
-                daily_log(0, sleep_hours=5.5, stress=8, energy=3),
-                daily_log(1, sleep_hours=6.0, stress=8, energy=3),
-                daily_log(2, sleep_hours=6.25, stress=7, energy=4),
+                daily_log(
+                    0,
+                    sleep_hours=7.5,
+                    sleep_quality=4,
+                    sleep_target_deviation_minutes=-30,
+                    stress=8,
+                    energy=3,
+                ),
+                daily_log(
+                    1,
+                    sleep_hours=6.5,
+                    sleep_quality=7,
+                    sleep_target_deviation_minutes=-90,
+                    stress=8,
+                    energy=3,
+                ),
+                daily_log(
+                    2,
+                    sleep_hours=7.0,
+                    sleep_quality=8,
+                    sleep_target_deviation_minutes=0,
+                    stress=7,
+                    energy=4,
+                ),
             ],
         ),
     )
@@ -135,6 +192,22 @@ def test_low_sleep_and_low_energy_create_recovery_recommendations() -> None:
     }
     assert "low_recovery_sleep" in recovery_rule_ids
     assert "high_stress_low_energy" in recovery_rule_ids
+
+
+def test_legacy_sleep_hours_alone_do_not_create_sleep_recommendation() -> None:
+    candidates = RecommendationEngine().generate_candidates(
+        summary(
+            daily_logs=[
+                daily_log(0, sleep_hours=4.0),
+                daily_log(1, sleep_hours=4.5),
+                daily_log(2, sleep_hours=5.0),
+            ],
+        ),
+    )
+
+    assert not any(
+        candidate.rule_id == "low_recovery_sleep" for candidate in candidates
+    )
 
 
 def test_low_movement_creates_movement_recommendation() -> None:
@@ -202,12 +275,28 @@ def test_terminal_tasks_do_not_create_planning_pressure() -> None:
     assert all(not task.is_overdue(TODAY) for task in terminal_tasks)
 
 
-def test_terminal_tasks_do_not_inflate_focus_priority() -> None:
+def test_short_completed_sessions_and_terminal_tasks_do_not_create_focus_warning() -> None:
     candidates = RecommendationEngine().generate_candidates(
         summary(
-            daily_logs=[
-                daily_log(0, focus_minutes=20),
-                daily_log(1, focus_minutes=35),
+            focus_sessions=[
+                focus_session(
+                    0,
+                    status="completed",
+                    planned_minutes=5,
+                    actual_minutes=5,
+                ),
+                focus_session(
+                    1,
+                    status="completed",
+                    planned_minutes=10,
+                    actual_minutes=10,
+                ),
+                focus_session(
+                    2,
+                    status="completed",
+                    planned_minutes=15,
+                    actual_minutes=15,
+                ),
             ],
             tasks=[
                 TaskSignal(
@@ -224,21 +313,19 @@ def test_terminal_tasks_do_not_inflate_focus_priority() -> None:
         ),
     )
 
-    focus = next(candidate for candidate in candidates if candidate.category == "focus")
-    assert focus.priority == "medium"
-    assert all(ref.table == "daily_logs" for ref in focus.evidence_refs)
+    assert not any(candidate.category == "focus" for candidate in candidates)
 
 
 def test_sparse_evidence_rejects_candidate_or_lowers_confidence() -> None:
     sparse_candidates = RecommendationEngine().generate_candidates(
-        summary(daily_logs=[daily_log(0, sleep_hours=5.5)]),
+        summary(daily_logs=[daily_log(0, sleep_quality=2)]),
     )
     stronger_candidates = RecommendationEngine().generate_candidates(
         summary(
             daily_logs=[
-                daily_log(0, sleep_hours=5.5),
-                daily_log(1, sleep_hours=5.75),
-                daily_log(2, sleep_hours=6.0),
+                daily_log(0, sleep_quality=2),
+                daily_log(1, sleep_target_deviation_minutes=-90),
+                daily_log(2, sleep_quality=4),
             ],
         ),
     )
@@ -255,16 +342,36 @@ def test_sparse_evidence_rejects_candidate_or_lowers_confidence() -> None:
 def test_candidates_are_ranked_by_priority_then_confidence() -> None:
     candidates = RecommendationEngine().generate_candidates(
         summary(
-            daily_logs=[
-                daily_log(0, sleep_hours=5.5, focus_minutes=20),
-                daily_log(1, sleep_hours=5.75, focus_minutes=35),
-                daily_log(2, sleep_hours=6.0),
+                daily_logs=[
+                daily_log(0, sleep_quality=2),
+                daily_log(1, sleep_target_deviation_minutes=-120),
+                daily_log(2, sleep_quality=3),
             ],
         ),
     )
 
     assert candidates[0].priority == "high"
     assert candidates[0].rule_id == "low_recovery_sleep"
+
+
+def test_movement_copy_states_fixed_measurement_thresholds() -> None:
+    movement = next(
+        candidate
+        for candidate in RecommendationEngine().generate_candidates(
+            summary(
+                daily_logs=[
+                    daily_log(0, steps=2500),
+                    daily_log(1, steps=3000),
+                    daily_log(2, activity_level=1),
+                ],
+            ),
+        )
+        if candidate.rule_id == "movement_nudge"
+    )
+
+    assert "4,000 steps" in movement.reason
+    assert "2/10" in movement.reason
+    assert "baseline" not in movement.reason.lower()
 
 
 def test_duplicate_fingerprint_is_stable() -> None:

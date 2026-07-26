@@ -1605,7 +1605,7 @@ class _InlineExpansionCard extends StatelessWidget {
   }
 }
 
-class _MoreDashboardContent extends StatelessWidget {
+class _MoreDashboardContent extends ConsumerWidget {
   const _MoreDashboardContent({
     required this.accountData,
     required this.supporting,
@@ -1643,8 +1643,10 @@ class _MoreDashboardContent extends StatelessWidget {
   final ValueChanged<String> onOpenPreparationPlan;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final details = supporting;
+    final hasFeedbackHistory = accountData &&
+        (ref.watch(decisionFeedbackProvider).valueOrNull?.isNotEmpty ?? false);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1704,18 +1706,20 @@ class _MoreDashboardContent extends StatelessWidget {
             onRefresh: onRefreshRecommendations,
           ),
         ],
-        const SizedBox(height: AppSpacing.md),
-        AppCard(
-          padding: EdgeInsets.zero,
-          child: ListTile(
-            leading: const Icon(Icons.history_outlined),
-            title: const Text('Decision feedback history'),
-            subtitle:
-                const Text('Inspect or delete previously saved feedback.'),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: onShowFeedbackHistory,
+        if (hasFeedbackHistory) ...[
+          const SizedBox(height: AppSpacing.md),
+          AppCard(
+            padding: EdgeInsets.zero,
+            child: ListTile(
+              leading: const Icon(Icons.history_outlined),
+              title: const Text('Decision feedback history'),
+              subtitle:
+                  const Text('Inspect or delete previously saved feedback.'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: onShowFeedbackHistory,
+            ),
           ),
-        ),
+        ],
         if (details != null)
           details.when(
             loading: () => const SizedBox.shrink(),

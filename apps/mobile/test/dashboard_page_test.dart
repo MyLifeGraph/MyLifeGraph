@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_life_graph/core/capabilities/app_surface_capabilities.dart';
+import 'package:my_life_graph/features/briefings/domain/decision_feedback.dart';
+import 'package:my_life_graph/features/briefings/presentation/providers/briefing_providers.dart';
 import 'package:my_life_graph/features/dashboard/domain/entities/dashboard_snapshot.dart';
 import 'package:my_life_graph/features/dashboard/presentation/pages/dashboard_page.dart';
 import 'package:my_life_graph/features/dashboard/presentation/providers/dashboard_providers.dart';
@@ -118,6 +120,21 @@ void main() {
         canUseDeadlinePlanner: true,
         canUseWeeklyReview: true,
       ),
+      feedback: [
+        DecisionFeedback(
+          id: 'feedback-1',
+          requestId: 'request-1',
+          briefingId: 'briefing-1',
+          recommendationId: null,
+          actionId: 'action-1',
+          actionKind: 'task',
+          feedbackType: DecisionFeedbackType.later,
+          contextMode: 'balanced',
+          estimatedMinutes: 20,
+          ruleKey: 'rule-1',
+          createdAt: DateTime(2026, 7, 20, 8),
+        ),
+      ],
     );
 
     expect(find.text('Rule-based example'), findsNothing);
@@ -136,6 +153,23 @@ void main() {
     expect(find.text('Full week'), findsOneWidget);
     expect(find.text('Full-week lecture'), findsOneWidget);
     expect(find.text('Secondary guidance behind today’s action'), findsNothing);
+  });
+
+  testWidgets('feedback history entry stays hidden when history is empty',
+      (tester) async {
+    await _pumpDashboard(
+      tester,
+      snapshot: _todaySnapshot(),
+      capabilities: const AppSurfaceCapabilities(
+        isLocalDemo: false,
+        canUseSyncedHabits: true,
+        canUseSyncedExecution: true,
+      ),
+    );
+
+    await _tapExpansion(tester, const ValueKey('dashboard-more'));
+
+    expect(find.text('Decision feedback history'), findsNothing);
   });
 
   testWidgets('Show all tasks reveals future and planner-managed tasks',
@@ -254,6 +288,7 @@ Future<void> _pumpDashboard(
   Future<PreparationWorkload>? workload,
   Size size = const Size(900, 1500),
   TextScaler textScaler = TextScaler.noScaling,
+  List<DecisionFeedback> feedback = const [],
   AppSurfaceCapabilities capabilities = const AppSurfaceCapabilities(
     isLocalDemo: false,
     canUseSyncedHabits: true,
@@ -286,6 +321,7 @@ Future<void> _pumpDashboard(
               recommendations ??
               Future.value(RecommendationFeed.demo(const [])),
         ),
+        decisionFeedbackProvider.overrideWith((ref) => Future.value(feedback)),
         if (workload != null)
           preparationWorkloadProvider.overrideWith((ref) => workload),
       ],

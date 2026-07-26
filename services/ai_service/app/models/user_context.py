@@ -25,6 +25,8 @@ class DailyLogSignal:
     id: str
     entry_date: date
     sleep_hours: float | None = None
+    sleep_quality: int | None = None
+    sleep_target_deviation_minutes: int | None = None
     energy: float | None = None
     stress: float | None = None
     focus_minutes: int | None = None
@@ -38,6 +40,17 @@ class BehavioralEventSignal:
     occurred_at: datetime
     event_type: str
     source: str | None = None
+
+
+@dataclass(frozen=True)
+class FocusSessionSignal:
+    id: str
+    local_date: date
+    started_at: datetime
+    ended_at: datetime
+    planned_minutes: int
+    actual_minutes: int
+    status: str
 
 
 @dataclass(frozen=True)
@@ -74,7 +87,9 @@ class SignalSummary:
     user_id: str
     period_key: str
     today: date
+    timezone_name: str = "UTC"
     daily_logs: list[DailyLogSignal] = field(default_factory=list)
     behavioral_events: list[BehavioralEventSignal] = field(default_factory=list)
+    focus_sessions: list[FocusSessionSignal] = field(default_factory=list)
     tasks: list[TaskSignal] = field(default_factory=list)
     user_state_snapshots: list[UserStateSnapshotSignal] = field(default_factory=list)

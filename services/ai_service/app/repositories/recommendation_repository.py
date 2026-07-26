@@ -24,12 +24,13 @@ class RecommendationRepository(Protocol):
     ) -> set[str]:
         pass
 
-    async def persist_recommendations(
+    async def replace_new_recommendations(
         self,
         *,
         user_id: str,
         recommendations: list[VerifiedRecommendation],
-    ) -> list[RecommendationItem]:
+        refreshed_at: datetime,
+    ) -> None:
         pass
 
 
@@ -67,7 +68,7 @@ class SupabaseRecommendationRepository:
             params={
                 "select": "metadata",
                 "user_id": f"eq.{user_id}",
-                "status": "in.(new,accepted)",
+                "status": "eq.accepted",
                 "order": "generated_at.desc",
             },
         )
@@ -77,18 +78,25 @@ class SupabaseRecommendationRepository:
             if (fingerprint := _metadata_fingerprint(row.get("metadata")))
         }
 
-    async def persist_recommendations(
+    async def replace_new_recommendations(
         self,
         *,
         user_id: str,
         recommendations: list[VerifiedRecommendation],
-    ) -> list[RecommendationItem]:
+        refreshed_at: datetime,
+    ) -> None:
         rows = [
-            _insert_row(user_id=user_id, recommendation=recommendation)
+            _replacement_row(recommendation=recommendation)
             for recommendation in recommendations
         ]
-        inserted = await self._client.insert("recommendations", rows=rows)
-        return [_recommendation_item(row) for row in inserted]
+        await self._client.rpc(
+            "replace_current_recommendations_v2",
+            params={
+                "p_user_id": user_id,
+                "p_rows": rows,
+                "p_refreshed_at": refreshed_at.isoformat(),
+            },
+        )
 
 
 def active_fingerprints(items: list[RecommendationItem]) -> set[str]:
@@ -106,21 +114,18 @@ def _metadata_fingerprint(metadata: Any) -> str:
     return fingerprint if isinstance(fingerprint, str) else ""
 
 
-def _insert_row(
+def _replacement_row(
     *,
-    user_id: str,
     recommendation: VerifiedRecommendation,
 ) -> dict[str, Any]:
     candidate = recommendation.candidate
     return {
-        "user_id": user_id,
         "title": candidate.title,
         "reason": candidate.reason,
         "action_label": candidate.action_label,
         "category": candidate.category,
         "priority": candidate.priority,
         "confidence": candidate.confidence,
-        "status": "new",
         "metadata": {
             "rule_id": candidate.rule_id,
             "fingerprint": recommendation.fingerprint,
