@@ -46,6 +46,13 @@ from app.services.planning_availability import (
     is_unambiguous_local,
     recurring_commitment_applies_on,
 )
+from app.services.daily_capture_parser import (
+    DailyCaptureV4SleepEpisode,
+    DailyCaptureV4SleepPlan,
+    parse_daily_capture_v4_sleep_episode,
+    parse_daily_capture_v4_sleep_plan,
+)
+from app.services.learned_timing import LearnedTimingResolver
 
 
 class DeadlinePlanConflictError(RuntimeError):
@@ -65,9 +72,11 @@ class DeadlinePlanService:
         self,
         *,
         repository: DeadlinePlanRepository,
+        learned_timing: LearnedTimingResolver | None = None,
         now: Callable[[], datetime] | None = None,
     ) -> None:
         self._repository = repository
+        self._learned_timing = learned_timing
         self._now = now or (lambda: datetime.now(UTC))
 
     async def list_plans(self, *, user_id: str) -> DeadlinePlansResponse:
@@ -1440,62 +1449,15 @@ def _parse_v4_sleep_plan(
     *,
     row_date: date,
 ) -> ExamWeekSleepPlan | None:
-    if not _valid_v4_branch(raw, kind="evening", row_date=row_date):
-        return None
-    assert isinstance(raw, dict)
-    captured_at = _optional_aware_datetime(raw.get("captured_at"))
-    capture_id = _bounded_string(raw.get("capture_id"), maximum=160)
-    planned_time = raw.get("planned_sleep_time")
-    target = _bounded_whole_number(
-        raw.get("sleep_target_minutes"),
-        minimum=300,
-        maximum=720,
-    )
-    mood = _bounded_whole_number(raw.get("mood"), minimum=1, maximum=10)
-    energy = _bounded_whole_number(raw.get("energy"), minimum=1, maximum=10)
-    stress = _bounded_whole_number(
-        raw.get("stress_intensity"),
-        minimum=1,
-        maximum=10,
-    )
-    if (
-        captured_at is None
-        or capture_id is None
-        or not _valid_clock(planned_time)
-        or target is None
-        or target % 15 != 0
-        or mood is None
-        or energy is None
-        or stress is None
-    ):
-        return None
-    source = raw.get("stress_source")
-    controllability = raw.get("stress_controllability")
-    if stress >= 5 and (
-        source
-        not in {
-            "workload",
-            "avoidable_pressure",
-            "private_emotional",
-            "physical_recovery",
-            "external_environment",
-        }
-        or controllability
-        not in {
-            "hardly_controllable",
-            "partly_controllable",
-            "mostly_controllable",
-        }
-    ):
-        return None
-    if (source is None) != (controllability is None):
+    parsed = parse_daily_capture_v4_sleep_plan(raw, row_date=row_date).value
+    if not isinstance(parsed, DailyCaptureV4SleepPlan):
         return None
     return ExamWeekSleepPlan(
-        capture_id=capture_id,
+        capture_id=parsed.capture_id,
         entry_date=row_date,
-        captured_at=captured_at,
-        planned_sleep_time=planned_time,
-        sleep_target_minutes=target,
+        captured_at=parsed.captured_at,
+        planned_sleep_time=parsed.planned_sleep_time,
+        sleep_target_minutes=parsed.sleep_target_minutes,
     )
 
 
@@ -1504,66 +1466,17 @@ def _parse_v4_sleep_night(
     *,
     row_date: date,
 ) -> ExamWeekSleepNight | None:
-    if not _valid_v4_branch(raw, kind="morning", row_date=row_date):
+    parsed = parse_daily_capture_v4_sleep_episode(raw, row_date=row_date).value
+    if not isinstance(parsed, DailyCaptureV4SleepEpisode):
         return None
-    assert isinstance(raw, dict)
-    if _optional_aware_datetime(raw.get("captured_at")) is None:
-        return None
-    started_at = _optional_aware_datetime(
-        raw.get("estimated_sleep_started_at"),
+    shortfall = max(
+        0,
+        parsed.sleep_target_minutes - parsed.estimated_sleep_minutes,
     )
-    woke_at = _optional_aware_datetime(raw.get("woke_at"))
-    estimated = _bounded_whole_number(
-        raw.get("estimated_sleep_minutes"),
-        minimum=1,
-        maximum=960,
-    )
-    target = _bounded_whole_number(
-        raw.get("sleep_target_minutes"),
-        minimum=300,
-        maximum=720,
-    )
-    sleep_hours = raw.get("sleep_hours")
-    if (
-        started_at is None
-        or woke_at is None
-        or estimated is None
-        or target is None
-        or target % 15 != 0
-        or isinstance(sleep_hours, bool)
-        or not isinstance(sleep_hours, (int, float))
-        or abs(float(sleep_hours) - estimated / 60) > 0.0001
-        or _bounded_whole_number(
-            raw.get("sleep_quality"),
-            minimum=1,
-            maximum=10,
-        )
-        is None
-        or _bounded_whole_number(
-            raw.get("current_energy"),
-            minimum=1,
-            maximum=10,
-        )
-        is None
-        or raw.get("day_shape") not in {"normal", "constrained", "flexible"}
-    ):
-        return None
-    seconds = (woke_at - started_at).total_seconds()
-    if (
-        seconds <= 0
-        or seconds > 16 * 60 * 60
-        or seconds % 60 != 0
-        or int(seconds // 60) != estimated
-    ):
-        return None
-    source_id = raw.get("source_evening_capture_id")
-    if source_id is not None and _bounded_string(source_id, maximum=160) is None:
-        return None
-    shortfall = max(0, target - estimated)
     return ExamWeekSleepNight(
         entry_date=row_date,
-        estimated_sleep_minutes=estimated,
-        sleep_target_minutes=target,
+        estimated_sleep_minutes=parsed.estimated_sleep_minutes,
+        sleep_target_minutes=parsed.sleep_target_minutes,
         shortfall_minutes=shortfall,
         at_least_one_hour_short=shortfall >= 60,
     )

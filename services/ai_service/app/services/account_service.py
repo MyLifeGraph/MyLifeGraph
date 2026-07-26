@@ -86,6 +86,13 @@ ACCOUNT_EXPORT_TABLES = (
         "created_at,updated_at",
         cursor_column="user_id",
     ),
+    _table(
+        "learning_preferences",
+        "user_id,contract_version,revision,focus_reflection_prompt_enabled,"
+        "personal_pattern_analysis_enabled,learned_focus_planning_enabled,"
+        "created_at,updated_at",
+        cursor_column="user_id",
+    ),
     _table("daily_logs", "*"),
     _table("behavioral_events", "*"),
     _table("lifestyle_entries", "*"),
@@ -104,6 +111,7 @@ ACCOUNT_EXPORT_TABLES = (
     _table("habits", "*"),
     _table("habit_logs", "*"),
     _table("focus_sessions", "*"),
+    _table("focus_session_reflections", "*", cursor_column="focus_session_id"),
     _table("intake_responses", "*"),
     _table(
         "study_setup_profiles",

@@ -10,6 +10,8 @@ from app.api.routes import (
     feedback,
     health,
     intake,
+    insights,
+    learning,
     notifications,
     planner,
     recommendations,
@@ -41,6 +43,8 @@ def create_app() -> FastAPI:
     app.include_router(health.router, prefix=settings.api_prefix)
     app.include_router(account.router, prefix=settings.api_prefix)
     app.include_router(intake.router, prefix=settings.api_prefix)
+    app.include_router(learning.router, prefix=settings.api_prefix)
+    app.include_router(insights.router, prefix=settings.api_prefix)
     app.include_router(notifications.router, prefix=settings.api_prefix)
     app.include_router(recommendations.router, prefix=settings.api_prefix)
     app.include_router(snapshots.router, prefix=settings.api_prefix)

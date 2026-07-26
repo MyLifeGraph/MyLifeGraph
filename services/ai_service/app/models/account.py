@@ -8,6 +8,7 @@ ACCOUNT_EXPORT_CONTRACT_VERSION = "account-export-v1"
 ACCOUNT_EXPORT_TABLE_NAMES = (
     "profiles",
     "notification_preferences",
+    "learning_preferences",
     "daily_logs",
     "behavioral_events",
     "lifestyle_entries",
@@ -23,6 +24,7 @@ ACCOUNT_EXPORT_TABLE_NAMES = (
     "habits",
     "habit_logs",
     "focus_sessions",
+    "focus_session_reflections",
     "intake_responses",
     "study_setup_profiles",
     "user_state_snapshots",
@@ -57,6 +59,7 @@ ACCOUNT_EXPORT_OMITTED_TABLES = {
     "notification_action_requests": "backend_only_anti_replay_ledger",
     "deadline_plan_request_identities": "backend_only_anti_replay_ledger",
     "planner_request_identities": "backend_only_anti_replay_ledger",
+    "learning_request_identities": "backend_only_anti_replay_ledger",
 }
 ACCOUNT_EXPORT_MAX_ROWS_PER_TABLE = 10_000
 ACCOUNT_EXPORT_MAX_TOTAL_ROWS = 50_000

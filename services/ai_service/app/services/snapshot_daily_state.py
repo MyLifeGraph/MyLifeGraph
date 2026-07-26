@@ -5,6 +5,11 @@ from datetime import UTC, date, datetime
 from math import isfinite
 from typing import Any, Literal
 
+from app.services.daily_capture_parser import (
+    parse_daily_capture_v4_sleep_episode,
+    parse_daily_capture_v4_sleep_plan,
+)
+
 
 DAILY_STATE_CONTRACT_VERSION = "explainable-daily-state-v2"
 DAILY_STATE_LOOKBACK_DAYS = 7
@@ -472,19 +477,12 @@ def _parse_v2_capture(
             and (stress < 5 or (source is not None and controllability is not None))
         )
         if branch_version == "daily-capture-v4":
-            planned_sleep_time = raw.get("planned_sleep_time")
-            sleep_target_minutes = _sleep_target_minutes(
-                raw.get("sleep_target_minutes"),
+            sleep_plan = parse_daily_capture_v4_sleep_plan(
+                raw,
+                row_date=row_date,
             )
-            if not _is_sleep_clock(planned_sleep_time):
-                _append_issue(issues, "evening.invalid_planned_sleep_time")
-            if sleep_target_minutes is None:
-                _append_issue(issues, "evening.invalid_sleep_target_minutes")
-            complete = (
-                complete
-                and _is_sleep_clock(planned_sleep_time)
-                and sleep_target_minutes is not None
-            )
+            issues.extend(sleep_plan.issues)
+            complete = complete and sleep_plan.value is not None
     else:
         is_v4 = branch_version == "daily-capture-v4"
         sleep_hours = _sleep_hours(
@@ -510,54 +508,12 @@ def _parse_v2_capture(
                 values["sleep_quality"] = sleep_quality
         complete = all(value is not None for value in required.values())
         if is_v4:
-            started_at = _safe_aware_datetime(
-                raw.get("estimated_sleep_started_at"),
+            sleep_episode = parse_daily_capture_v4_sleep_episode(
+                raw,
+                row_date=row_date,
             )
-            woke_at = _safe_aware_datetime(raw.get("woke_at"))
-            estimated_minutes = _whole_number(raw.get("estimated_sleep_minutes"))
-            target_minutes = _sleep_target_minutes(
-                raw.get("sleep_target_minutes"),
-            )
-            interval_minutes: int | None = None
-            if started_at is None:
-                _append_issue(issues, "morning.invalid_estimated_sleep_started_at")
-            if woke_at is None:
-                _append_issue(issues, "morning.invalid_woke_at")
-            if started_at is not None and woke_at is not None:
-                interval_seconds = (woke_at - started_at).total_seconds()
-                if (
-                    interval_seconds <= 0
-                    or interval_seconds > 16 * 60 * 60
-                    or interval_seconds % 60 != 0
-                ):
-                    _append_issue(issues, "morning.invalid_sleep_interval")
-                else:
-                    interval_minutes = int(interval_seconds // 60)
-            if (
-                estimated_minutes is None
-                or estimated_minutes != interval_minutes
-            ):
-                _append_issue(issues, "morning.invalid_estimated_sleep_minutes")
-            if target_minutes is None:
-                _append_issue(issues, "morning.invalid_sleep_target_minutes")
-            source_evening_id = raw.get("source_evening_capture_id")
-            if (
-                source_evening_id is not None
-                and _non_empty_string(source_evening_id, max_length=160) is None
-            ):
-                _append_issue(issues, "morning.invalid_source_evening_capture_id")
-            if (
-                estimated_minutes is not None
-                and sleep_hours is not None
-                and not _numbers_equal(sleep_hours, estimated_minutes / 60)
-            ):
-                _append_issue(issues, "morning.sleep_duration_mismatch")
-            complete = (
-                complete
-                and interval_minutes is not None
-                and estimated_minutes == interval_minutes
-                and target_minutes is not None
-            )
+            issues.extend(sleep_episode.issues)
+            complete = complete and sleep_episode.value is not None
 
     return (
         _Capture(
