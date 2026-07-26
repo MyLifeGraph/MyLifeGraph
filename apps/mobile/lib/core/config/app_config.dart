@@ -13,6 +13,7 @@ class AppConfig {
     required this.aiServiceBaseUrl,
     required this.useMockData,
     this.coachSurfaceEnabled = false,
+    this.learnedFocusPlanningPilotEnabled = false,
   });
 
   factory AppConfig.fromEnvironment() {
@@ -37,6 +38,10 @@ class AppConfig {
       'COACH_SURFACE_ENABLED',
       defaultValue: '',
     );
+    const learnedFocusPlanningPilotEnabled = bool.fromEnvironment(
+      'LEARNED_FOCUS_PLANNING_PILOT_ENABLED',
+      defaultValue: false,
+    );
     return AppConfig(
       environment: environment,
       supabaseUrl: supabaseUrl,
@@ -51,6 +56,8 @@ class AppConfig {
         releaseMode: kReleaseMode,
         explicitValue: coachSurfaceOverride,
       ),
+      learnedFocusPlanningPilotEnabled:
+          learnedFocusPlanningPilotEnabled && environment != 'production',
     );
   }
 
@@ -60,6 +67,7 @@ class AppConfig {
   final String aiServiceBaseUrl;
   final bool useMockData;
   final bool coachSurfaceEnabled;
+  final bool learnedFocusPlanningPilotEnabled;
 
   bool get isSupabaseConfigured =>
       supabaseUrl.isNotEmpty && supabaseAnonKey.isNotEmpty;

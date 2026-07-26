@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/capabilities/app_surface_capabilities.dart';
 import '../../../../core/supabase/supabase_providers.dart';
+import '../../../focus/data/focus_session_supabase_data_source.dart';
 import '../../data/guest_quick_check_in_data_source.dart';
 import '../../data/quick_check_in_supabase_data_source.dart';
 import '../../domain/quick_check_in.dart';
@@ -21,6 +22,18 @@ final quickCheckInStoreProvider = Provider<QuickCheckInStore>((ref) {
 final latestQuickCheckInProvider =
     FutureProvider.autoDispose<DailyCaptureEntry?>((ref) {
   return ref.watch(quickCheckInStoreProvider).loadToday(DateTime.now());
+});
+
+final eveningFocusReflectionSourceProvider =
+    Provider<FocusSessionSupabaseDataSource?>((ref) {
+  final capabilities = ref.watch(appSurfaceCapabilitiesProvider);
+  final client = ref.watch(supabaseClientProvider);
+  if (capabilities.isLocalDemo ||
+      !capabilities.canUseSyncedExecution ||
+      client?.auth.currentUser == null) {
+    return null;
+  }
+  return FocusSessionSupabaseDataSource(client!);
 });
 
 class _UnavailableQuickCheckInStore implements QuickCheckInStore {

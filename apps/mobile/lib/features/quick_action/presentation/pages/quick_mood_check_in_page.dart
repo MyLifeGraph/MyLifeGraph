@@ -5,6 +5,8 @@ import 'package:go_router/go_router.dart';
 import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/navigation/app_routes.dart';
 import '../../../dashboard/presentation/providers/dashboard_providers.dart';
+import '../../../focus/domain/focus_session.dart';
+import '../../../focus/presentation/widgets/focus_reflection_sheet.dart';
 import '../../../snapshots/presentation/providers/snapshot_providers.dart';
 import '../../domain/quick_check_in.dart';
 import '../providers/quick_check_in_providers.dart';
@@ -30,6 +32,8 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
   var _isSaving = false;
   String? _loadError;
   String? _saveError;
+  List<FocusSession> _todayFocusSessions = const [];
+  Map<String, FocusReflection> _todayFocusReflections = const {};
 
   static const _steps = <_EveningStep>[
     _EveningStep(
@@ -271,6 +275,25 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
           'Optional blanks stay absent. They do not become tasks, memories, or recommendations.',
           style: Theme.of(context).textTheme.bodySmall,
         ),
+        if (_todayFocusSessions.isNotEmpty) ...[
+          const SizedBox(height: AppSpacing.lg),
+          const Divider(),
+          Material(
+            type: MaterialType.transparency,
+            child: ListTile(
+              key: const ValueKey('evening-focus-reflections'),
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.timer_outlined),
+              title: const Text('Today\'s Focus sessions'),
+              subtitle: Text(
+                '${_todayFocusReflections.length} rated · '
+                '${_todayFocusSessions.length - _todayFocusReflections.length} open',
+              ),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: _openTodayFocusReflections,
+            ),
+          ),
+        ],
       ],
     );
   }
@@ -360,9 +383,11 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
       final results = await Future.wait<Object?>([
         store.loadToday(DateTime.now()),
         store.loadLatestEvening(),
+        _loadTodayFocusReflections(),
       ]);
       final entry = results.first as DailyCaptureEntry?;
-      final sleepPlan = results.last as EveningShutdownDraft?;
+      final sleepPlan = results[1] as EveningShutdownDraft?;
+      final focusData = results[2] as _TodayFocusReflectionData?;
       final saved = entry?.evening;
       if (mounted) {
         final source = saved?.forEditing() ?? _draft;
@@ -382,6 +407,8 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
             _blockerController.text = saved.specificBlocker;
             _loadedSavedCapture = true;
           }
+          _todayFocusSessions = focusData?.sessions ?? const [];
+          _todayFocusReflections = focusData?.reflections ?? const {};
         });
       }
     } catch (_) {
@@ -398,11 +425,127 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
     }
   }
 
+  Future<_TodayFocusReflectionData?> _loadTodayFocusReflections() async {
+    try {
+      final source = ref.read(eveningFocusReflectionSourceProvider);
+      if (source == null) return null;
+      final recent = await source.fetchRecentSessions(limit: 50);
+      final today = dailyCaptureEntryDate(DateTime.now());
+      final sessions = recent
+          .where(
+            (session) =>
+                !session.isActive && session.snapshotEntryDate == today,
+          )
+          .toList(growable: false);
+      final reflections = await source.fetchReflectionsForSessions(sessions);
+      return _TodayFocusReflectionData(
+        sessions: sessions,
+        reflections: reflections,
+      );
+    } catch (_) {
+      // The optional Focus row must not block Daily Capture.
+      return null;
+    }
+  }
+
+  Future<void> _openTodayFocusReflections() async {
+    if (_todayFocusSessions.isEmpty) return;
+    final selected = _todayFocusSessions.length == 1
+        ? _todayFocusSessions.single
+        : await showModalBottomSheet<FocusSession>(
+            context: context,
+            showDragHandle: true,
+            builder: (sheetContext) => SafeArea(
+              child: ListView(
+                shrinkWrap: true,
+                padding: const EdgeInsets.all(AppSpacing.lg),
+                children: [
+                  Text(
+                    'Today\'s Focus sessions',
+                    style: Theme.of(sheetContext).textTheme.headlineSmall,
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  for (final session in _todayFocusSessions)
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(
+                        session.status == FocusSessionStatus.completed
+                            ? Icons.check_circle_outline
+                            : Icons.cancel_outlined,
+                      ),
+                      title: Text(session.label ?? 'Focus session'),
+                      subtitle: Text(
+                        '${session.actualMinutes ?? 0} min · '
+                        '${_todayFocusReflections.containsKey(session.id) ? 'rated' : 'open'}',
+                      ),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () => Navigator.of(sheetContext).pop(session),
+                    ),
+                ],
+              ),
+            ),
+          );
+    if (selected == null || !mounted) return;
+    await _openFocusReflection(selected);
+  }
+
+  Future<void> _openFocusReflection(FocusSession session) async {
+    final source = ref.read(eveningFocusReflectionSourceProvider);
+    if (source == null || !mounted) return;
+    final existing = _todayFocusReflections[session.id];
+    final outcome = await showFocusReflectionSheet(
+      context: context,
+      session: session,
+      existing: existing,
+      onSave: (draft) async {
+        final saved = await source.saveReflection(
+          session: session,
+          draft: draft,
+          existing: existing,
+        );
+        if (mounted) {
+          setState(() {
+            _todayFocusReflections = {
+              ..._todayFocusReflections,
+              session.id: saved,
+            };
+          });
+        }
+        return saved;
+      },
+      onDelete: (reflection) async {
+        await source.deleteReflection(reflection);
+        if (mounted) {
+          setState(() {
+            _todayFocusReflections = {..._todayFocusReflections}
+              ..remove(session.id);
+          });
+        }
+      },
+    );
+    if (!mounted) return;
+    if (outcome == FocusReflectionSheetOutcome.saved) {
+      _showMessage('Focus reflection saved.');
+    } else if (outcome == FocusReflectionSheetOutcome.deleted) {
+      _showMessage('Focus reflection deleted.');
+    }
+  }
+
   void _showMessage(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
     );
   }
+}
+
+class _TodayFocusReflectionData {
+  const _TodayFocusReflectionData({
+    required this.sessions,
+    required this.reflections,
+  });
+
+  final List<FocusSession> sessions;
+  final Map<String, FocusReflection> reflections;
 }
 
 String _stressSourceLabel(StressSource value) => switch (value) {

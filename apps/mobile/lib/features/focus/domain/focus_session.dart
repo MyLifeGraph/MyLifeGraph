@@ -35,6 +35,127 @@ enum FocusTargetKind {
   }
 }
 
+enum FocusObstacle {
+  tired('tired', 'Tired'),
+  distracted('distracted', 'Distracted'),
+  interrupted('interrupted', 'Interrupted'),
+  unclearGoal('unclear_goal', 'Unclear goal'),
+  materialTooDifficult('material_too_difficult', 'Material too difficult'),
+  sessionTooLong('session_too_long', 'Session too long'),
+  environment('environment', 'Environment'),
+  other('other', 'Other');
+
+  const FocusObstacle(this.code, this.label);
+
+  final String code;
+  final String label;
+
+  static FocusObstacle? fromCode(Object? value) {
+    for (final obstacle in values) {
+      if (obstacle.code == value) return obstacle;
+    }
+    return null;
+  }
+}
+
+class FocusReflection {
+  const FocusReflection({
+    required this.focusSessionId,
+    required this.focusQuality,
+    required this.usefulProgress,
+    required this.obstacles,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+
+  factory FocusReflection.fromRow(Map<String, dynamic> row) {
+    final focusSessionId = row['focus_session_id'];
+    final focusQuality = row['focus_quality'];
+    final usefulProgress = row['useful_progress'];
+    final rawObstacles = row['obstacles'];
+    final createdAt = row['created_at'];
+    final updatedAt = row['updated_at'];
+    if (row['contract_version'] != 'focus-reflection-v1' ||
+        focusSessionId is! String ||
+        focusSessionId.trim().isEmpty ||
+        focusQuality is! int ||
+        focusQuality < 1 ||
+        focusQuality > 5 ||
+        usefulProgress is! int ||
+        usefulProgress < 1 ||
+        usefulProgress > 5 ||
+        rawObstacles is! List ||
+        rawObstacles.length > 2 ||
+        createdAt is! String ||
+        updatedAt is! String) {
+      throw const FocusCommandException(
+        'Focus reflection response is invalid.',
+      );
+    }
+    final obstacles = <FocusObstacle>[];
+    for (final raw in rawObstacles) {
+      final obstacle = FocusObstacle.fromCode(raw);
+      if (obstacle == null || obstacles.contains(obstacle)) {
+        throw const FocusCommandException(
+          'Focus reflection response is invalid.',
+        );
+      }
+      obstacles.add(obstacle);
+    }
+    final parsedCreatedAt = DateTime.tryParse(createdAt);
+    final parsedUpdatedAt = DateTime.tryParse(updatedAt);
+    if (parsedCreatedAt == null ||
+        parsedUpdatedAt == null ||
+        parsedUpdatedAt.isBefore(parsedCreatedAt)) {
+      throw const FocusCommandException(
+        'Focus reflection response is invalid.',
+      );
+    }
+    return FocusReflection(
+      focusSessionId: focusSessionId.trim(),
+      focusQuality: focusQuality,
+      usefulProgress: usefulProgress,
+      obstacles: List.unmodifiable(obstacles),
+      createdAt: parsedCreatedAt,
+      updatedAt: parsedUpdatedAt,
+    );
+  }
+
+  final String focusSessionId;
+  final int focusQuality;
+  final int usefulProgress;
+  final List<FocusObstacle> obstacles;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+
+  bool matches(FocusReflectionDraft draft) =>
+      focusQuality == draft.focusQuality &&
+      usefulProgress == draft.usefulProgress &&
+      obstacles.length == draft.obstacles.length &&
+      obstacles.toSet().containsAll(draft.obstacles);
+}
+
+class FocusReflectionDraft {
+  FocusReflectionDraft({
+    required this.focusQuality,
+    required this.usefulProgress,
+    Iterable<FocusObstacle> obstacles = const [],
+  }) : obstacles = List.unmodifiable(obstacles) {
+    if (focusQuality < 1 ||
+        focusQuality > 5 ||
+        usefulProgress < 1 ||
+        usefulProgress > 5 ||
+        this.obstacles.length > 2 ||
+        this.obstacles.toSet().length != this.obstacles.length) {
+      throw const FocusCommandException('Focus reflection is invalid.');
+    }
+  }
+
+  final int focusQuality;
+  final int usefulProgress;
+  final List<FocusObstacle> obstacles;
+}
+
 class FocusSession {
   const FocusSession({
     required this.id,
@@ -428,12 +549,10 @@ class FocusPreferenceSuggestion {
   const FocusPreferenceSuggestion({
     required this.durationMinutes,
     required this.evidenceSessions,
-    this.timeWindowLabel,
   });
 
   final int durationMinutes;
   final int evidenceSessions;
-  final String? timeWindowLabel;
 
   static FocusPreferenceSuggestion? fromSessions(
     Iterable<FocusSession> sessions,
@@ -455,30 +574,9 @@ class FocusPreferenceSuggestion {
         : (durations[middle - 1] + durations[middle]) / 2;
     final roundedDuration = ((median / 5).round() * 5).clamp(5, 240);
 
-    final windows = <String, int>{};
-    for (final session in completed) {
-      final hour = session.startedAt.toLocal().hour;
-      final label = switch (hour) {
-        >= 5 && < 12 => 'in the morning',
-        >= 12 && < 17 => 'in the afternoon',
-        >= 17 && < 22 => 'in the evening',
-        _ => 'late at night',
-      };
-      windows[label] = (windows[label] ?? 0) + 1;
-    }
-    final rankedWindows = windows.entries.toList()
-      ..sort((left, right) {
-        final count = right.value.compareTo(left.value);
-        return count != 0 ? count : left.key.compareTo(right.key);
-      });
-    final strongestWindow = rankedWindows.first;
-    final hasUsefulWindow = strongestWindow.value >= 3 &&
-        strongestWindow.value / completed.length >= 0.4;
-
     return FocusPreferenceSuggestion(
       durationMinutes: roundedDuration,
       evidenceSessions: completed.length,
-      timeWindowLabel: hasUsefulWindow ? strongestWindow.key : null,
     );
   }
 }
@@ -490,4 +588,8 @@ class FocusCommandException implements Exception {
 
   @override
   String toString() => message;
+}
+
+class FocusReflectionConflictException extends FocusCommandException {
+  const FocusReflectionConflictException(super.message);
 }

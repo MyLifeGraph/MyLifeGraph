@@ -20,30 +20,24 @@ void main() {
     expect(points.single.values['sleep_hours'], 7.5);
   });
 
-  test('does not substitute mock points for an empty real source', () async {
+  test('real correlation reconstruction is retired in favor of backend points',
+      () async {
     final repository = InsightsRepositoryImpl(
       mockDataSource: const _SentinelMockDataSource(),
       supabaseDataSource: _EmptySupabaseDataSource(),
       allowMockData: false,
     );
 
-    final points = await repository.getCorrelationDataPoints(windowDays: 14);
-
-    expect(points, isEmpty);
-  });
-
-  test('bounds legacy all-time and oversized windows to 90 days', () async {
-    final source = _CapturingSupabaseDataSource();
-    final repository = InsightsRepositoryImpl(
-      mockDataSource: const _SentinelMockDataSource(),
-      supabaseDataSource: source,
-      allowMockData: false,
+    expect(
+      repository.getCorrelationDataPoints(windowDays: 14),
+      throwsA(
+        isA<StateError>().having(
+          (error) => error.message,
+          'message',
+          contains('personal-patterns-v1'),
+        ),
+      ),
     );
-
-    await repository.getCorrelationDataPoints(windowDays: -1);
-    await repository.getCorrelationDataPoints(windowDays: 365);
-
-    expect(source.windowDayRequests, [90, 90]);
   });
 
   test('propagates a real correlation source failure', () async {
@@ -117,124 +111,6 @@ void main() {
       () => mapper.fromRow(_insightRow(confidence: 1.2)),
       throwsFormatException,
     );
-  });
-
-  test('uses local task days for UTC query bounds and deadline buckets', () {
-    const offset = Duration(hours: 2);
-    final localDates = InsightsLocalDatePolicy(
-      localizer: (timestamp) => DateTime.fromMicrosecondsSinceEpoch(
-        timestamp.toUtc().microsecondsSinceEpoch + offset.inMicroseconds,
-        isUtc: true,
-      ),
-      localMidnightToUtc: (localDate) => DateTime.utc(
-        localDate.year,
-        localDate.month,
-        localDate.day,
-      ).subtract(offset),
-    );
-
-    final range = localDates.taskDeadlineUtcRange(
-      startDate: '2026-07-01',
-      endDate: '2026-07-02',
-    );
-
-    expect(range.startInclusive, DateTime.utc(2026, 6, 30, 22));
-    expect(range.endExclusive, DateTime.utc(2026, 7, 2, 22));
-    expect(
-      localDates.taskDeadlineDateKey(DateTime.utc(2026, 7, 1, 21, 59)),
-      '2026-07-01',
-    );
-    expect(
-      localDates.taskDeadlineDateKey(DateTime.utc(2026, 7, 1, 22, 1)),
-      '2026-07-02',
-    );
-  });
-
-  test('legacy focus rows fall back to the UTC start day', () {
-    const mapper = InsightsCorrelationRowMapper();
-
-    final totals = mapper.focusMinutesByDate(
-      [
-        {
-          'status': 'completed',
-          'actual_minutes': 20,
-          'started_at': '2026-07-01T08:00:00Z',
-          'metadata': {'entry_date': '2026-07-02'},
-        },
-        {
-          'status': 'completed',
-          'actual_minutes': 30,
-          'started_at': '2026-07-02T00:30:00+02:00',
-          'metadata': const <String, dynamic>{},
-        },
-        {
-          'status': 'completed',
-          'actual_minutes': 40,
-          'started_at': '2026-07-03T23:30:00-02:00',
-          'metadata': {'entry_date': 'not-a-date'},
-        },
-        {
-          'status': 'active',
-          'actual_minutes': 99,
-          'started_at': '2026-07-01T12:00:00Z',
-          'metadata': const <String, dynamic>{},
-        },
-      ],
-      startDate: '2026-07-01',
-      endDate: '2026-07-04',
-    );
-
-    expect(totals, {
-      '2026-07-01': 30,
-      '2026-07-02': 20,
-      '2026-07-04': 40,
-    });
-  });
-
-  test('planned load includes only confirmed preparation reservations', () {
-    const mapper = InsightsCorrelationRowMapper();
-
-    final totals = mapper.plannedMinutesByDate(
-      taskRows: const [
-        {
-          'deadline': '2026-07-21T12:00:00Z',
-          'status': 'open',
-          'estimated_minutes': 90,
-        },
-      ],
-      scheduleRows: const [
-        {
-          'weekday': DateTime.monday,
-          'starts_at': '09:00:00',
-          'ends_at': '10:00:00',
-        },
-      ],
-      preparationBlockRows: const [
-        {
-          'reservation_state': 'active',
-          'local_date': '2026-07-20',
-          'planned_minutes': 50,
-        },
-        {
-          'reservation_state': 'proposed',
-          'local_date': '2026-07-20',
-          'planned_minutes': 90,
-        },
-        {
-          'reservation_state': 'active',
-          'local_date': '2026-07-22',
-          'planned_minutes': 25,
-        },
-      ],
-      startDate: DateTime(2026, 7, 20),
-      windowDays: 2,
-      localDates: const InsightsLocalDatePolicy(),
-    );
-
-    expect(totals, {
-      '2026-07-20': 110,
-      '2026-07-21': 90,
-    });
   });
 
   test('paginates through every row beyond one response page', () async {
@@ -333,27 +209,6 @@ class _SentinelMockDataSource extends InsightsMockDataSource {
 
 class _EmptySupabaseDataSource extends InsightsSupabaseDataSource {
   _EmptySupabaseDataSource() : super(_testSupabaseClient());
-
-  @override
-  Future<List<CorrelationDataPoint>> getCorrelationDataPoints({
-    required int windowDays,
-  }) async {
-    return const [];
-  }
-}
-
-class _CapturingSupabaseDataSource extends InsightsSupabaseDataSource {
-  _CapturingSupabaseDataSource() : super(_testSupabaseClient());
-
-  final windowDayRequests = <int>[];
-
-  @override
-  Future<List<CorrelationDataPoint>> getCorrelationDataPoints({
-    required int windowDays,
-  }) async {
-    windowDayRequests.add(windowDays);
-    return const [];
-  }
 }
 
 class _ThrowingSupabaseDataSource extends InsightsSupabaseDataSource {
@@ -361,13 +216,6 @@ class _ThrowingSupabaseDataSource extends InsightsSupabaseDataSource {
 
   @override
   Future<List<Insight>> getInsights() async {
-    throw StateError('real source failed');
-  }
-
-  @override
-  Future<List<CorrelationDataPoint>> getCorrelationDataPoints({
-    required int windowDays,
-  }) async {
     throw StateError('real source failed');
   }
 }

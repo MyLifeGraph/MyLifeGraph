@@ -297,7 +297,7 @@ void main() {
       expect(FocusPreferenceSuggestion.fromSessions(sessions), isNull);
     });
 
-    test('uses completed-session median and a repeated time window', () {
+    test('uses only completed-session median without inferring a time', () {
       final sessions = [
         _completedSession(index: 0, actualMinutes: 24),
         _completedSession(index: 1, actualMinutes: 28),
@@ -320,7 +320,103 @@ void main() {
       expect(suggestion, isNotNull);
       expect(suggestion!.durationMinutes, 30);
       expect(suggestion.evidenceSessions, 5);
-      expect(suggestion.timeWindowLabel, 'in the morning');
+    });
+  });
+
+  group('Focus reflection contract', () {
+    test('parses exact ratings, controlled distinct obstacles, and timestamps',
+        () {
+      final reflection = FocusReflection.fromRow({
+        'focus_session_id': 'focus-1',
+        'contract_version': 'focus-reflection-v1',
+        'focus_quality': 2,
+        'useful_progress': 4,
+        'obstacles': ['tired', 'interrupted'],
+        'created_at': '2026-07-26T08:00:00Z',
+        'updated_at': '2026-07-26T08:05:00Z',
+      });
+
+      expect(reflection.focusQuality, 2);
+      expect(reflection.usefulProgress, 4);
+      expect(
+        reflection.obstacles,
+        [FocusObstacle.tired, FocusObstacle.interrupted],
+      );
+      expect(
+        reflection.matches(
+          FocusReflectionDraft(
+            focusQuality: 2,
+            usefulProgress: 4,
+            obstacles: const [
+              FocusObstacle.interrupted,
+              FocusObstacle.tired,
+            ],
+          ),
+        ),
+        isTrue,
+      );
+    });
+
+    test('rejects missing, zero, duplicate, unknown, and excessive evidence',
+        () {
+      final base = {
+        'focus_session_id': 'focus-1',
+        'contract_version': 'focus-reflection-v1',
+        'focus_quality': 2,
+        'useful_progress': 4,
+        'obstacles': <String>[],
+        'created_at': '2026-07-26T08:00:00Z',
+        'updated_at': '2026-07-26T08:05:00Z',
+      };
+      for (final invalid in [
+        {...base, 'focus_quality': 0},
+        {...base, 'useful_progress': null},
+        {
+          ...base,
+          'obstacles': ['tired', 'tired'],
+        },
+        {
+          ...base,
+          'obstacles': ['unknown'],
+        },
+        {
+          ...base,
+          'obstacles': ['tired', 'distracted', 'interrupted'],
+        },
+        {...base, 'contract_version': 'wrong'},
+      ]) {
+        expect(
+          () => FocusReflection.fromRow(invalid),
+          throwsA(isA<FocusCommandException>()),
+        );
+      }
+    });
+
+    test('draft enforces ratings and at most two unique obstacles', () {
+      expect(
+        () => FocusReflectionDraft(focusQuality: 0, usefulProgress: 3),
+        throwsA(isA<FocusCommandException>()),
+      );
+      expect(
+        () => FocusReflectionDraft(
+          focusQuality: 3,
+          usefulProgress: 3,
+          obstacles: const [FocusObstacle.tired, FocusObstacle.tired],
+        ),
+        throwsA(isA<FocusCommandException>()),
+      );
+      expect(
+        () => FocusReflectionDraft(
+          focusQuality: 3,
+          usefulProgress: 3,
+          obstacles: const [
+            FocusObstacle.tired,
+            FocusObstacle.distracted,
+            FocusObstacle.interrupted,
+          ],
+        ),
+        throwsA(isA<FocusCommandException>()),
+      );
     });
   });
 

@@ -14,6 +14,7 @@ import '../../features/dashboard/presentation/pages/dashboard_page.dart';
 import '../../features/focus/domain/focus_session.dart';
 import '../../features/focus/presentation/pages/focus_session_page.dart';
 import '../../features/insights/presentation/pages/insights_page.dart';
+import '../../features/learning/presentation/pages/personal_learning_page.dart';
 import '../../features/notifications/presentation/pages/notifications_page.dart';
 import '../../features/notifications/presentation/pages/notification_settings_page.dart';
 import '../../features/planner/presentation/pages/planner_page.dart';
@@ -34,6 +35,7 @@ const _postAuthContinuationPaths = <String>{
   AppRoutes.onboarding,
   AppRoutes.settings,
   AppRoutes.notificationSettings,
+  AppRoutes.personalLearning,
   AppRoutes.calendarIntegration,
   AppRoutes.preparationPlans,
   AppRoutes.planner,
@@ -157,6 +159,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
                     ? null
                     : AppRoutes.settings,
             builder: (context, state) => const NotificationSettingsPage(),
+          ),
+          GoRoute(
+            path: AppRoutes.personalLearning,
+            redirect: (context, state) =>
+                ref.read(appSurfaceCapabilitiesProvider).canUseSyncedExecution
+                    ? null
+                    : AppRoutes.settings,
+            builder: (context, state) => const PersonalLearningPage(),
           ),
           GoRoute(
             path: AppRoutes.calendarIntegration,

@@ -17,6 +17,9 @@ class FocusSessionSupabaseDataSource {
   static const _columns =
       'id,status,started_at,ended_at,planned_minutes,actual_minutes,label,'
       'task_id,habit_id,metadata,updated_at';
+  static const _reflectionColumns =
+      'focus_session_id,contract_version,focus_quality,useful_progress,'
+      'obstacles,created_at,updated_at';
 
   final SupabaseClient _client;
   final FocusNowProvider _nowProvider;
@@ -45,6 +48,189 @@ class FocusSessionSupabaseDataSource {
     return List<Map<String, dynamic>>.from(rows as List)
         .map(FocusSession.fromRow)
         .toList();
+  }
+
+  Future<Map<String, FocusReflection>> fetchReflectionsForSessions(
+    Iterable<FocusSession> sessions,
+  ) async {
+    final sessionIds = sessions
+        .where((session) => !session.isActive)
+        .map((session) => session.id)
+        .toSet()
+        .toList(growable: false);
+    if (sessionIds.isEmpty) return const {};
+    final userId = await AppUserResolver(_client).resolveUserId();
+    final rows = await _client
+        .from(SupabaseTables.focusSessionReflections)
+        .select(_reflectionColumns)
+        .eq('user_id', userId)
+        .inFilter('focus_session_id', sessionIds);
+    final reflections = <String, FocusReflection>{};
+    for (final raw in List<Map<String, dynamic>>.from(rows as List)) {
+      final reflection = FocusReflection.fromRow(raw);
+      if (!sessionIds.contains(reflection.focusSessionId) ||
+          reflections.containsKey(reflection.focusSessionId)) {
+        throw const FocusCommandException(
+          'Focus reflection response is invalid.',
+        );
+      }
+      reflections[reflection.focusSessionId] = reflection;
+    }
+    return Map.unmodifiable(reflections);
+  }
+
+  Future<bool> fetchFocusReflectionPromptEnabled() async {
+    final userId = await AppUserResolver(_client).resolveUserId();
+    final row = await _client
+        .from(SupabaseTables.learningPreferences)
+        .select('contract_version,focus_reflection_prompt_enabled')
+        .eq('user_id', userId)
+        .maybeSingle();
+    if (row == null) return true;
+    if (row['contract_version'] != 'learning-preferences-v1' ||
+        row['focus_reflection_prompt_enabled'] is! bool) {
+      throw const FocusCommandException(
+        'Personal learning preference response is invalid.',
+      );
+    }
+    return row['focus_reflection_prompt_enabled'] as bool;
+  }
+
+  Future<FocusReflection> saveReflection({
+    required FocusSession session,
+    required FocusReflectionDraft draft,
+    FocusReflection? existing,
+  }) async {
+    if (session.isActive ||
+        existing != null && existing.focusSessionId != session.id) {
+      throw const FocusCommandException(
+        'Only a finished Focus session can be rated.',
+      );
+    }
+    final userId = await AppUserResolver(_client).resolveUserId();
+    final currentSession = await _requireOwnedSession(
+      session.id,
+      userId: userId,
+    );
+    if (currentSession.isActive) {
+      throw const FocusCommandException(
+        'Only a finished Focus session can be rated.',
+      );
+    }
+    final payload = {
+      'focus_quality': draft.focusQuality,
+      'useful_progress': draft.usefulProgress,
+      'obstacles': draft.obstacles.map((value) => value.code).toList(),
+    };
+    if (existing == null) {
+      try {
+        final row = await _client
+            .from(SupabaseTables.focusSessionReflections)
+            .insert({
+              'focus_session_id': session.id,
+              'user_id': userId,
+              'contract_version': 'focus-reflection-v1',
+              ...payload,
+            })
+            .select(_reflectionColumns)
+            .single();
+        final saved = FocusReflection.fromRow(
+          Map<String, dynamic>.from(row),
+        );
+        if (!saved.matches(draft)) {
+          throw const FocusCommandException(
+            'Focus reflection save returned a mismatched result.',
+          );
+        }
+        return saved;
+      } catch (error) {
+        final current = await _fetchReflection(
+          session.id,
+          userId: userId,
+        );
+        if (current?.matches(draft) == true) return current!;
+        if (current != null) {
+          throw const FocusReflectionConflictException(
+            'This Focus reflection changed. Reload before editing it.',
+          );
+        }
+        rethrow;
+      }
+    }
+
+    try {
+      final rows = await _client
+          .from(SupabaseTables.focusSessionReflections)
+          .update(payload)
+          .eq('focus_session_id', session.id)
+          .eq('user_id', userId)
+          .eq('updated_at', existing.updatedAt.toUtc().toIso8601String())
+          .select(_reflectionColumns);
+      final typedRows = List<Map<String, dynamic>>.from(rows as List);
+      if (typedRows.length == 1) {
+        final saved = FocusReflection.fromRow(typedRows.single);
+        if (saved.matches(draft)) return saved;
+      } else if (typedRows.length > 1) {
+        throw const FocusCommandException(
+          'Focus reflection save returned an invalid result.',
+        );
+      }
+    } catch (error) {
+      final current = await _fetchReflection(session.id, userId: userId);
+      if (current?.matches(draft) == true) return current!;
+      if (current != null) {
+        throw const FocusReflectionConflictException(
+          'This Focus reflection changed. Reload before editing it.',
+        );
+      }
+      rethrow;
+    }
+    final current = await _fetchReflection(session.id, userId: userId);
+    if (current?.matches(draft) == true) return current!;
+    throw const FocusReflectionConflictException(
+      'This Focus reflection changed. Reload before editing it.',
+    );
+  }
+
+  Future<void> deleteReflection(FocusReflection reflection) async {
+    final userId = await AppUserResolver(_client).resolveUserId();
+    final rows = await _client
+        .from(SupabaseTables.focusSessionReflections)
+        .delete()
+        .eq('focus_session_id', reflection.focusSessionId)
+        .eq('user_id', userId)
+        .eq('updated_at', reflection.updatedAt.toUtc().toIso8601String())
+        .select('focus_session_id');
+    final typedRows = List<Map<String, dynamic>>.from(rows as List);
+    if (typedRows.length == 1) return;
+    if (typedRows.length > 1) {
+      throw const FocusCommandException(
+        'Focus reflection delete returned an invalid result.',
+      );
+    }
+    final current = await _fetchReflection(
+      reflection.focusSessionId,
+      userId: userId,
+    );
+    if (current == null) return;
+    throw const FocusReflectionConflictException(
+      'This Focus reflection changed. Reload before deleting it.',
+    );
+  }
+
+  Future<FocusReflection?> _fetchReflection(
+    String sessionId, {
+    required String userId,
+  }) async {
+    final row = await _client
+        .from(SupabaseTables.focusSessionReflections)
+        .select(_reflectionColumns)
+        .eq('focus_session_id', sessionId)
+        .eq('user_id', userId)
+        .maybeSingle();
+    return row == null
+        ? null
+        : FocusReflection.fromRow(Map<String, dynamic>.from(row));
   }
 
   Future<List<FocusTargetOption>> fetchAvailableTargets() async {

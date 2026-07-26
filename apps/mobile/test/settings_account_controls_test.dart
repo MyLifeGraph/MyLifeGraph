@@ -73,11 +73,13 @@ void main() {
       ),
       findsOneWidget,
     );
-    await tester.scrollUntilVisible(
-      find.text('Change timezone'),
-      -200,
-      scrollable: find.byType(Scrollable).first,
-    );
+    tester
+        .state<ScrollableState>(find.byType(Scrollable).first)
+        .position
+        .jumpTo(0);
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Change timezone'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Change timezone'));
     await tester.pumpAndSettle();
     expect(

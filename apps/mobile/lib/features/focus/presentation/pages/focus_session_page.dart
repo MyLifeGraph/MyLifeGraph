@@ -17,6 +17,7 @@ import '../../../snapshots/application/snapshot_refresh_service.dart';
 import '../../../snapshots/presentation/providers/snapshot_providers.dart';
 import '../../data/focus_session_supabase_data_source.dart';
 import '../../domain/focus_session.dart';
+import '../widgets/focus_reflection_sheet.dart';
 
 final focusSessionPageDataSourceProvider =
     Provider<FocusSessionSupabaseDataSource?>((ref) {
@@ -62,6 +63,9 @@ class FocusSessionPage extends ConsumerStatefulWidget {
 class _FocusSessionPageState extends ConsumerState<FocusSessionPage> {
   FocusSession? _active;
   List<FocusSession> _recent = const [];
+  Map<String, FocusReflection> _reflections = const {};
+  bool _reflectionPromptEnabled = false;
+  bool _reflectionDataAvailable = true;
   List<FocusTargetOption> _targets = const [];
   String? _selectedTargetValue;
   bool _initialTargetApplied = false;
@@ -154,7 +158,12 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage> {
             onStart: _start,
           ),
         if (!_isLoading && _loadError == null)
-          _FocusHistoryCard(sessions: _recent),
+          _FocusHistoryCard(
+            sessions: _recent,
+            reflections: _reflections,
+            reflectionDataAvailable: _reflectionDataAvailable,
+            onRate: _openReflection,
+          ),
       ],
     );
   }
@@ -197,6 +206,19 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage> {
       final recent = results[1] as List<FocusSession>;
       final targets = results[2] as List<FocusTargetOption>;
       final studySettings = results[3] as StudyFocusSettings?;
+      Map<String, FocusReflection> reflections = const {};
+      var reflectionPromptEnabled = false;
+      var reflectionDataAvailable = true;
+      try {
+        final reflectionResults = await Future.wait([
+          source.fetchReflectionsForSessions(recent),
+          source.fetchFocusReflectionPromptEnabled(),
+        ]);
+        reflections = reflectionResults[0] as Map<String, FocusReflection>;
+        reflectionPromptEnabled = reflectionResults[1] as bool;
+      } catch (_) {
+        reflectionDataAvailable = false;
+      }
       var selected = _selectedTargetValue;
       final requestedKind = widget.initialTargetKind;
       final requestedId = widget.initialTargetId;
@@ -239,6 +261,9 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage> {
         setState(() {
           _active = active;
           _recent = recent;
+          _reflections = reflections;
+          _reflectionPromptEnabled = reflectionPromptEnabled;
+          _reflectionDataAvailable = reflectionDataAvailable;
           _targets = targets;
           _selectedTargetValue = selected;
           _plannedMinutes = plannedMinutes;
@@ -416,10 +441,18 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage> {
     try {
       final finished = await source.finishSession(active.id);
       if (mounted) {
-        setState(() => _selectedTargetValue = null);
+        setState(() {
+          _active = null;
+          _selectedTargetValue = null;
+          _recent = [
+            finished,
+            ..._recent.where((session) => session.id != finished.id),
+          ];
+        });
+        _syncTicker();
       }
       await _startRecoveryCountdown(finished);
-      await _afterDurableWrite(finished, snapshotRefresh);
+      unawaited(_refreshAfterTerminalWrite(finished, snapshotRefresh));
       if (mounted) {
         _showMessage(
           finished.recoveryMinutes > 0
@@ -427,6 +460,8 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage> {
               : 'Focus session finished. Linked tasks and habits were not completed automatically.',
         );
       }
+      await _maybePromptForReflection(finished);
+      if (mounted) await _load();
     } catch (error) {
       if (mounted) {
         _showMessage(
@@ -657,14 +692,24 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage> {
     final snapshotRefresh = ref.read(snapshotRefreshServiceProvider);
     setState(() => _isSaving = true);
     try {
-      await source.abandonSession(active.id);
+      final abandoned = await source.abandonSession(active.id);
       if (mounted) {
-        setState(() => _selectedTargetValue = null);
+        setState(() {
+          _active = null;
+          _selectedTargetValue = null;
+          _recent = [
+            abandoned,
+            ..._recent.where((session) => session.id != abandoned.id),
+          ];
+        });
+        _syncTicker();
       }
-      await _afterDurableWrite(active, snapshotRefresh);
+      unawaited(_refreshAfterTerminalWrite(abandoned, snapshotRefresh));
       if (mounted) {
         _showMessage('Focus session abandoned.');
       }
+      await _maybePromptForReflection(abandoned);
+      if (mounted) await _load();
     } catch (error) {
       if (mounted) {
         _showMessage(
@@ -690,6 +735,76 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage> {
     if (!mounted) return;
     ref.invalidate(dashboardSnapshotProvider);
     await _load();
+  }
+
+  Future<void> _refreshAfterTerminalWrite(
+    FocusSession session,
+    SnapshotRefreshService snapshotRefresh,
+  ) async {
+    try {
+      await snapshotRefresh.refreshDailyAfterFocusChange(
+        targetDate: session.snapshotEntryDate,
+      );
+      if (mounted) {
+        ref.invalidate(dashboardSnapshotProvider);
+      }
+    } catch (_) {
+      // The terminal Focus write remains durable even when its derived
+      // snapshot cannot be refreshed immediately.
+    }
+  }
+
+  Future<void> _maybePromptForReflection(FocusSession session) async {
+    if (!_reflectionPromptEnabled || !_reflectionDataAvailable || !mounted) {
+      return;
+    }
+    await _openReflection(session);
+  }
+
+  Future<void> _openReflection(FocusSession session) async {
+    final source = ref.read(focusSessionPageDataSourceProvider);
+    if (source == null || session.isActive || !mounted) return;
+    final existing = _reflections[session.id];
+    final outcome = await showFocusReflectionSheet(
+      context: context,
+      session: session,
+      existing: existing,
+      onSave: (draft) async {
+        final saved = await source.saveReflection(
+          session: session,
+          draft: draft,
+          existing: existing,
+        );
+        if (mounted) {
+          setState(() {
+            _reflections = {..._reflections, session.id: saved};
+            _reflectionDataAvailable = true;
+          });
+        }
+        return saved;
+      },
+      onDelete: (reflection) async {
+        await source.deleteReflection(reflection);
+        if (mounted) {
+          setState(() {
+            final updated = {..._reflections}..remove(session.id);
+            _reflections = updated;
+          });
+        }
+      },
+    );
+    if (!mounted) return;
+    switch (outcome) {
+      case FocusReflectionSheetOutcome.saved:
+        _showMessage('Focus reflection saved.');
+        break;
+      case FocusReflectionSheetOutcome.deleted:
+        _showMessage('Focus reflection deleted.');
+        break;
+      case FocusReflectionSheetOutcome.skipped:
+      case null:
+        break;
+    }
   }
 
   FocusTargetOption? _targetFor(FocusSession session) {
@@ -837,8 +952,7 @@ class _StartFocusCard extends StatelessWidget {
                   Expanded(
                     child: Text(
                       'Your ${suggestion!.evidenceSessions} recent completed sessions cluster around '
-                      '${suggestion!.durationMinutes} minutes'
-                      '${suggestion!.timeWindowLabel == null ? '' : ' ${suggestion!.timeWindowLabel}'}. '
+                      '${suggestion!.durationMinutes} minutes. '
                       'This is a suggestion, not an automatic setting.',
                     ),
                   ),
@@ -1095,9 +1209,17 @@ String _focusTimerText(Duration duration) {
 }
 
 class _FocusHistoryCard extends StatelessWidget {
-  const _FocusHistoryCard({required this.sessions});
+  const _FocusHistoryCard({
+    required this.sessions,
+    required this.reflections,
+    required this.reflectionDataAvailable,
+    required this.onRate,
+  });
 
   final List<FocusSession> sessions;
+  final Map<String, FocusReflection> reflections;
+  final bool reflectionDataAvailable;
+  final ValueChanged<FocusSession> onRate;
 
   @override
   Widget build(BuildContext context) {
@@ -1123,6 +1245,20 @@ class _FocusHistoryCard extends StatelessWidget {
                 subtitle: Text(
                   '${session.actualMinutes ?? 0} min · ${session.status.code}',
                 ),
+                trailing: reflectionDataAvailable
+                    ? TextButton(
+                        key: ValueKey(
+                          'focus-reflection-${session.id}',
+                        ),
+                        onPressed: () => onRate(session),
+                        child: Text(
+                          reflections.containsKey(session.id) ? 'Edit' : 'Rate',
+                        ),
+                      )
+                    : const Tooltip(
+                        message: 'Reflection history could not be loaded.',
+                        child: Icon(Icons.sync_problem_outlined),
+                      ),
               ),
             ),
         ],

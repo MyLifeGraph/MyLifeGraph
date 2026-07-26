@@ -48,12 +48,15 @@ void main() {
     );
     expect(find.text('Local guest'), findsOneWidget);
     expect(find.text('Setup and commitments'), findsOneWidget);
+    await _revealText(tester, 'Daily preparation budget', pageScrollable);
     expect(
       find.byKey(const ValueKey('daily-preparation-budget-setting')),
       findsOneWidget,
     );
     await _revealText(tester, 'In-app reminders', pageScrollable);
     expect(find.text('In-app reminders'), findsOneWidget);
+    await _revealText(tester, 'Personal learning', pageScrollable);
+    expect(find.text('Personal learning'), findsOneWidget);
     await _revealText(tester, 'Calendar import (optional)', pageScrollable);
     expect(find.text('Calendar import (optional)'), findsOneWidget);
     expect(find.textContaining('Coach'), findsNothing);
@@ -78,7 +81,7 @@ void main() {
         'Available only for a synced account.',
         skipOffstage: false,
       ),
-      findsNWidgets(2),
+      findsNWidgets(3),
     );
     expect(find.text('Alert rules'), findsNothing);
     expect(find.text('Coach behavior'), findsNothing);
@@ -110,15 +113,13 @@ Future<void> _revealText(
   Finder pageScrollable,
 ) async {
   final target = find.text(text, skipOffstage: false);
-  if (target.evaluate().isEmpty) {
-    await tester.scrollUntilVisible(
-      target,
-      180,
-      scrollable: pageScrollable,
-    );
+  for (var attempt = 0; attempt < 12 && target.evaluate().isEmpty; attempt++) {
+    await tester.drag(pageScrollable, const Offset(0, -180));
+    await tester.pump();
   }
+  expect(target, findsWidgets);
   await Scrollable.ensureVisible(
-    tester.element(target),
+    tester.element(target.first),
     alignment: 0.5,
   );
   await tester.pumpAndSettle();

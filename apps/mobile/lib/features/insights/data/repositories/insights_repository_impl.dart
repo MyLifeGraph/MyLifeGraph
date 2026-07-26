@@ -40,11 +40,8 @@ class InsightsRepositoryImpl implements InsightsRepository {
         windowDays: boundedWindowDays,
       );
     }
-    final source = _supabaseDataSource;
-    if (source == null) {
-      throw StateError('Account insight correlations are not configured.');
-    }
-
-    return source.getCorrelationDataPoints(windowDays: boundedWindowDays);
+    throw StateError(
+      'Account correlation points are provided by personal-patterns-v1.',
+    );
   }
 }

@@ -7,6 +7,7 @@ import '../../../../core/capabilities/app_surface_capabilities.dart';
 import '../../../../core/constants/app_spacing.dart';
 import '../../domain/entities/correlation.dart';
 import '../../domain/entities/insight.dart';
+import '../../domain/entities/personal_patterns.dart';
 import '../../domain/services/correlation_analyzer.dart';
 import '../../domain/services/coaching_observation.dart';
 import '../../../optimization/domain/entities/skillset_profile.dart';
@@ -20,8 +21,9 @@ class InsightsPage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final insights = ref.watch(insightsProvider);
     final report = ref.watch(correlationReportProvider);
-    final showExampleSkillset =
-        ref.watch(appSurfaceCapabilitiesProvider).isLocalDemo;
+    final capabilities = ref.watch(appSurfaceCapabilitiesProvider);
+    final showExampleSkillset = capabilities.isLocalDemo;
+    final personalPatterns = ref.watch(personalPatternsProvider);
     final skillset =
         showExampleSkillset ? ref.watch(skillsetProfileProvider) : null;
 
@@ -30,6 +32,7 @@ class InsightsPage extends ConsumerWidget {
         onRetry: () {
           ref.invalidate(insightsProvider);
           ref.invalidate(correlationReportProvider);
+          ref.invalidate(personalPatternsProvider);
         },
       );
     }
@@ -41,6 +44,8 @@ class InsightsPage extends ConsumerWidget {
       insights: insights.requireValue,
       report: report.requireValue,
       skillset: skillset,
+      personalPatterns: personalPatterns,
+      showPersonalPatterns: !showExampleSkillset,
     );
   }
 }
@@ -91,11 +96,15 @@ class _InsightsHome extends ConsumerStatefulWidget {
     required this.insights,
     required this.report,
     required this.skillset,
+    required this.personalPatterns,
+    required this.showPersonalPatterns,
   });
 
   final List<Insight> insights;
   final CorrelationReport report;
   final AsyncValue<SkillsetProfile>? skillset;
+  final AsyncValue<PersonalPatterns?> personalPatterns;
+  final bool showPersonalPatterns;
 
   @override
   ConsumerState<_InsightsHome> createState() => _InsightsHomeState();
@@ -129,9 +138,12 @@ class _InsightsHomeState extends ConsumerState<_InsightsHome> {
         report: widget.report,
         observation: observation,
         skillset: widget.skillset,
+        personalPatterns: widget.personalPatterns,
+        showPersonalPatterns: widget.showPersonalPatterns,
         onRefresh: () {
           ref.invalidate(correlationReportProvider);
           ref.invalidate(insightsProvider);
+          ref.invalidate(personalPatternsProvider);
           if (widget.skillset != null) {
             ref.invalidate(skillsetProfileProvider);
           }
@@ -164,13 +176,20 @@ class _InsightsHomeState extends ConsumerState<_InsightsHome> {
                   onRefresh: () {
                     ref.invalidate(correlationReportProvider);
                     ref.invalidate(insightsProvider);
+                    ref.invalidate(personalPatternsProvider);
                     if (widget.skillset != null) {
                       ref.invalidate(skillsetProfileProvider);
                     }
                   },
                 ),
                 SizedBox(height: isMobile ? AppSpacing.lg : AppSpacing.xl),
-                _CoachingObservationCard(observation: observation),
+                if (widget.showPersonalPatterns)
+                  _PersonalStudyPatternCard(
+                    patterns: widget.personalPatterns,
+                    onRetry: () => ref.invalidate(personalPatternsProvider),
+                  )
+                else
+                  _CoachingObservationCard(observation: observation),
                 SizedBox(height: isMobile ? AppSpacing.md : AppSpacing.lg),
                 if (widget.skillset != null) ...[
                   _SkillsetProfileCard(
@@ -342,6 +361,8 @@ class _SparseInsightsHome extends StatelessWidget {
     required this.report,
     required this.observation,
     required this.skillset,
+    required this.personalPatterns,
+    required this.showPersonalPatterns,
     required this.onRefresh,
   });
 
@@ -349,6 +370,8 @@ class _SparseInsightsHome extends StatelessWidget {
   final CorrelationReport report;
   final CoachingObservation observation;
   final AsyncValue<SkillsetProfile>? skillset;
+  final AsyncValue<PersonalPatterns?> personalPatterns;
+  final bool showPersonalPatterns;
   final VoidCallback onRefresh;
 
   @override
@@ -370,7 +393,13 @@ class _SparseInsightsHome extends StatelessWidget {
               children: [
                 _InsightsHeader(isMobile: isMobile, onRefresh: onRefresh),
                 SizedBox(height: isMobile ? AppSpacing.lg : AppSpacing.xl),
-                _CoachingObservationCard(observation: observation),
+                if (showPersonalPatterns)
+                  _PersonalStudyPatternCard(
+                    patterns: personalPatterns,
+                    onRetry: onRefresh,
+                  )
+                else
+                  _CoachingObservationCard(observation: observation),
                 const SizedBox(height: AppSpacing.md),
                 _InsightsPanel(
                   child: Column(
@@ -436,7 +465,7 @@ class _InsightsHeader extends StatelessWidget {
         ),
         const SizedBox(height: AppSpacing.lg),
         Text(
-          'Start with one cautious observation. Open advanced exploration when you want the underlying correlations.',
+          'Start with transparent personal evidence. Open advanced exploration when you want to inspect individual signals.',
           key: const Key('insights-header-description'),
           style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                 color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -480,6 +509,224 @@ class _InsightsHeader extends StatelessWidget {
         Expanded(child: copy),
         const SizedBox(width: AppSpacing.md),
         action,
+      ],
+    );
+  }
+}
+
+class _PersonalStudyPatternCard extends StatelessWidget {
+  const _PersonalStudyPatternCard({
+    required this.patterns,
+    required this.onRetry,
+  });
+
+  final AsyncValue<PersonalPatterns?> patterns;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return _InsightsPanel(
+      panelKey: const Key('personal-study-pattern-panel'),
+      padding: EdgeInsets.zero,
+      child: Material(
+        type: MaterialType.transparency,
+        child: Semantics(
+          container: true,
+          label: 'Personal study pattern',
+          child: patterns.when(
+            loading: () => const Padding(
+              padding: EdgeInsets.all(AppSpacing.lg),
+              child: Row(
+                children: [
+                  SizedBox.square(
+                    dimension: 22,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                  SizedBox(width: AppSpacing.md),
+                  Expanded(child: Text('Loading personal study pattern…')),
+                ],
+              ),
+            ),
+            error: (error, __) => Padding(
+              key: const Key('personal-study-pattern-error'),
+              padding: const EdgeInsets.all(AppSpacing.lg),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'PERSONAL STUDY PATTERN',
+                    style: Theme.of(context).textTheme.labelLarge,
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  Text(
+                    'Personal evidence is temporarily unavailable.',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  const Text(
+                    'No local estimate was substituted. Your Focus history '
+                    'was not changed.',
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  OutlinedButton.icon(
+                    onPressed: onRetry,
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('Retry personal pattern'),
+                  ),
+                ],
+              ),
+            ),
+            data: (value) {
+              if (value == null) return const SizedBox.shrink();
+              return _PersonalStudyPatternContent(patterns: value);
+            },
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PersonalStudyPatternContent extends StatelessWidget {
+  const _PersonalStudyPatternContent({required this.patterns});
+
+  final PersonalPatterns patterns;
+
+  @override
+  Widget build(BuildContext context) {
+    final status = switch (patterns.status) {
+      PersonalPatternsStatus.disabled => 'Disabled',
+      PersonalPatternsStatus.collecting => 'Collecting',
+      PersonalPatternsStatus.emerging => 'Emerging',
+      PersonalPatternsStatus.stable => 'Stable',
+    };
+    final coverage = (patterns.sample.ratingCoverage * 100).round();
+    final header = Padding(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.lg,
+        AppSpacing.lg,
+        AppSpacing.lg,
+        AppSpacing.md,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'PERSONAL STUDY PATTERN',
+            style: Theme.of(context).textTheme.labelLarge,
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            patterns.summary,
+            key: const Key('personal-study-pattern-summary'),
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Wrap(
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.xs,
+            children: [
+              Chip(label: Text(status)),
+              Chip(
+                label: Text(
+                  '${patterns.sample.ratedSessions} rated sessions',
+                ),
+              ),
+              Chip(label: Text('$coverage% coverage')),
+              const Chip(label: Text('90-day window')),
+            ],
+          ),
+        ],
+      ),
+    );
+    if (patterns.status == PersonalPatternsStatus.disabled) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          header,
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.lg,
+              0,
+              AppSpacing.lg,
+              AppSpacing.lg,
+            ),
+            child: Text(patterns.limitations.first),
+          ),
+        ],
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        header,
+        ExpansionTile(
+          key: const Key('personal-study-pattern-evidence'),
+          title: const Text('Evidence and limits'),
+          subtitle: Text(
+            '${patterns.timezone} · '
+            '${patterns.sample.ratedLocalDays} rated days',
+          ),
+          childrenPadding: const EdgeInsets.fromLTRB(
+            AppSpacing.lg,
+            0,
+            AppSpacing.lg,
+            AppSpacing.lg,
+          ),
+          children: [
+            if (patterns.patterns.isEmpty)
+              const Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'No comparison has enough observations to display yet.',
+                ),
+              )
+            else
+              for (final pattern in patterns.patterns)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: AppSpacing.md),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        pattern.title,
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      const SizedBox(height: AppSpacing.xs),
+                      Text(pattern.summary),
+                      const SizedBox(height: AppSpacing.xs),
+                      Text(
+                        '${pattern.evidence.preferredCount} in '
+                        '${pattern.evidence.preferredGroup} · '
+                        '${pattern.evidence.comparisonCount} in '
+                        '${pattern.evidence.comparisonGroup}',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                      for (final detail in pattern.evidence.details)
+                        Padding(
+                          padding: const EdgeInsets.only(top: AppSpacing.xs),
+                          child: Text(
+                            '• $detail',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+            const Divider(),
+            for (final limitation in patterns.limitations)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Padding(
+                  padding: const EdgeInsets.only(top: AppSpacing.xs),
+                  child: Text(
+                    '• $limitation',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ),
+              ),
+          ],
+        ),
       ],
     );
   }

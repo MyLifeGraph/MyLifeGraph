@@ -490,6 +490,111 @@ void main() {
       isNull,
     );
   });
+
+  testWidgets(
+      'finish is durable and recovery starts before the reflection prompt',
+      (tester) async {
+    final source = _TerminalPromptFocusSource(recoveryMinutes: 10);
+    final snapshotRefresh = _BlockingSnapshotRefresh();
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          appConfigProvider.overrideWithValue(_realConfig),
+          focusSessionPageDataSourceProvider.overrideWithValue(source),
+          snapshotRefreshServiceProvider.overrideWithValue(snapshotRefresh),
+        ],
+        child: const MaterialApp(
+          home: Scaffold(body: FocusSessionPage()),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Focus active'), findsOneWidget);
+
+    await tester.tap(find.text('Finish focus session'));
+    await tester.pumpAndSettle();
+
+    expect(source.finishCalls, 1);
+    expect(
+      find.byKey(const ValueKey('focus-reflection-sheet')),
+      findsOneWidget,
+    );
+    expect(
+      find.textContaining('Recovery continues while you reflect'),
+      findsOneWidget,
+    );
+    expect(find.text('Recovery break'), findsOneWidget);
+    expect(snapshotRefresh.focusCalls, 1);
+
+    await tester.tap(find.byKey(const ValueKey('focus-quality-rating-4')));
+    await tester.tap(find.byKey(const ValueKey('useful-progress-rating-5')));
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('save-focus-reflection')),
+    );
+    await tester.drag(
+      find.byType(SingleChildScrollView).last,
+      const Offset(0, -180),
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('save-focus-reflection')));
+    await tester.pumpAndSettle();
+
+    expect(source.savedDraft?.focusQuality, 4);
+    expect(source.savedDraft?.usefulProgress, 5);
+    expect(find.byKey(const ValueKey('focus-reflection-sheet')), findsNothing);
+    expect(find.text('Recovery break'), findsOneWidget);
+    expect(source.finishCalls, 1);
+  });
+
+  testWidgets('abandon prompts after confirmation and can be skipped',
+      (tester) async {
+    final source = _TerminalPromptFocusSource(recoveryMinutes: 0);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          appConfigProvider.overrideWithValue(_realConfig),
+          focusSessionPageDataSourceProvider.overrideWithValue(source),
+          snapshotRefreshServiceProvider.overrideWithValue(
+            _CountingSnapshotRefresh(),
+          ),
+        ],
+        child: const MaterialApp(
+          home: Scaffold(body: FocusSessionPage()),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Abandon'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Abandon session'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+
+    expect(source.abandonCalls, 1);
+    expect(
+      find.byKey(const ValueKey('focus-reflection-sheet')),
+      findsOneWidget,
+    );
+    expect(
+      find.text('What got in the way? Optional, choose up to two'),
+      findsOneWidget,
+    );
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('skip-focus-reflection')),
+    );
+    await tester.drag(
+      find.byType(SingleChildScrollView).last,
+      const Offset(0, -180),
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('skip-focus-reflection')));
+    await tester.pumpAndSettle();
+    expect(find.text('Start a focus block'), findsOneWidget);
+    expect(source.savedDraft, isNull);
+  });
 }
 
 const _realConfig = AppConfig(
@@ -810,4 +915,120 @@ class _CountingSnapshotRefresh implements SnapshotRefreshService {
 
   @override
   Future<void> refreshDailyAfterUserSignal({String? targetDate}) async {}
+}
+
+class _BlockingSnapshotRefresh extends _CountingSnapshotRefresh {
+  final Completer<void> _completer = Completer<void>();
+
+  @override
+  Future<void> refreshDailyAfterFocusChange({
+    required String targetDate,
+  }) {
+    focusCalls += 1;
+    return _completer.future;
+  }
+}
+
+class _TerminalPromptFocusSource extends FocusSessionSupabaseDataSource {
+  _TerminalPromptFocusSource({required this.recoveryMinutes})
+      : super(
+          SupabaseClient(
+            'http://localhost:54321',
+            'test-anon-key',
+            authOptions: const AuthClientOptions(autoRefreshToken: false),
+          ),
+        ) {
+    final now = DateTime.now().subtract(const Duration(minutes: 25));
+    _active = FocusSession(
+      id: 'prompt-session',
+      status: FocusSessionStatus.active,
+      startedAt: now,
+      plannedMinutes: 25,
+      recoveryMinutes: recoveryMinutes,
+      updatedAt: now,
+    );
+  }
+
+  final int recoveryMinutes;
+  FocusSession? _active;
+  FocusSession? _terminal;
+  FocusReflection? _reflection;
+  int finishCalls = 0;
+  int abandonCalls = 0;
+  FocusReflectionDraft? savedDraft;
+
+  @override
+  Future<FocusSession?> fetchActiveSession() async => _active;
+
+  @override
+  Future<List<FocusSession>> fetchRecentSessions({int limit = 10}) async =>
+      [if (_terminal != null) _terminal!];
+
+  @override
+  Future<List<FocusTargetOption>> fetchAvailableTargets() async => const [];
+
+  @override
+  Future<Map<String, FocusReflection>> fetchReflectionsForSessions(
+    Iterable<FocusSession> sessions,
+  ) async =>
+      _reflection == null
+          ? const {}
+          : {_reflection!.focusSessionId: _reflection!};
+
+  @override
+  Future<bool> fetchFocusReflectionPromptEnabled() async => true;
+
+  @override
+  Future<FocusSession> finishSession(String sessionId) async {
+    finishCalls += 1;
+    return _end(FocusSessionStatus.completed);
+  }
+
+  @override
+  Future<FocusSession> abandonSession(String sessionId) async {
+    abandonCalls += 1;
+    return _end(FocusSessionStatus.abandoned);
+  }
+
+  FocusSession _end(FocusSessionStatus status) {
+    final active = _active!;
+    final endedAt = active.startedAt.add(const Duration(minutes: 25));
+    _terminal = FocusSession(
+      id: active.id,
+      status: status,
+      startedAt: active.startedAt,
+      endedAt: endedAt,
+      plannedMinutes: active.plannedMinutes,
+      recoveryMinutes: active.recoveryMinutes,
+      actualMinutes: 25,
+      label: active.label,
+      updatedAt: endedAt,
+    );
+    _active = null;
+    return _terminal!;
+  }
+
+  @override
+  Future<FocusReflection> saveReflection({
+    required FocusSession session,
+    required FocusReflectionDraft draft,
+    FocusReflection? existing,
+  }) async {
+    savedDraft = draft;
+    final now = DateTime.now();
+    _reflection = FocusReflection(
+      focusSessionId: session.id,
+      focusQuality: draft.focusQuality,
+      usefulProgress: draft.usefulProgress,
+      obstacles: draft.obstacles,
+      createdAt: now,
+      updatedAt: now,
+    );
+    return _reflection!;
+  }
+
+  @override
+  Future<void> deleteReflection(FocusReflection reflection) async {
+    _reflection = null;
+  }
 }

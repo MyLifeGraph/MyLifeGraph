@@ -5,18 +5,36 @@ import 'package:my_life_graph/core/capabilities/app_surface_capabilities.dart';
 import 'package:my_life_graph/core/theme/app_theme.dart';
 import 'package:my_life_graph/features/insights/domain/entities/correlation.dart';
 import 'package:my_life_graph/features/insights/domain/entities/insight.dart';
+import 'package:my_life_graph/features/insights/domain/entities/personal_patterns.dart';
 import 'package:my_life_graph/features/insights/presentation/pages/insights_page.dart';
 import 'package:my_life_graph/features/insights/presentation/providers/insights_providers.dart';
 import 'package:my_life_graph/features/optimization/domain/entities/skillset_profile.dart';
 import 'package:my_life_graph/features/optimization/presentation/providers/optimization_providers.dart';
 
-void main() {
-  test('planned load names the current mutable workload projection', () {
-    final metric = correlationMetrics.singleWhere(
-      (candidate) => candidate.id == 'planned_minutes',
-    );
+const _fingerprint =
+    'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 
-    expect(metric.label, 'Current planned workload');
+void main() {
+  test('advanced metrics omit unversioned plan and habit reconstructions', () {
+    final ids = correlationMetrics.map((candidate) => candidate.id).toSet();
+
+    expect(ids, isNot(contains('planned_minutes')));
+    expect(ids, isNot(contains('habit_completion_rate')));
+    expect(ids, containsAll(['focus_quality', 'useful_progress']));
+  });
+
+  test('backend points aggregate in the profile-local response window', () {
+    final patterns = _personalPatterns();
+
+    final points = patterns.correlationDataPoints(windowDays: 14);
+
+    expect(points, hasLength(1));
+    expect(points.single.date, DateTime.utc(2026, 7, 25));
+    expect(points.single.values['focus_minutes'], 45);
+    expect(points.single.values['focus_quality'], 4);
+    expect(points.single.values['useful_progress'], 5);
+    expect(points.single.values, isNot(contains('planned_minutes')));
+    expect(points.single.values, isNot(contains('habit_completion_rate')));
   });
 
   testWidgets('keeps an account insight failure distinct from empty evidence',
@@ -41,6 +59,9 @@ void main() {
               points: [],
               results: [],
             ),
+          ),
+          personalPatternsProvider.overrideWith(
+            (ref) async => _personalPatterns(),
           ),
           skillsetProfileProvider.overrideWith(
             (ref) async => _skillsetProfile(),
@@ -87,6 +108,9 @@ void main() {
               points: [],
               results: [],
             ),
+          ),
+          personalPatternsProvider.overrideWith(
+            (ref) async => _personalPatterns(),
           ),
           skillsetProfileProvider.overrideWith((ref) async {
             skillsetLoads += 1;
@@ -190,6 +214,9 @@ void main() {
               results: [],
             ),
           ),
+          personalPatternsProvider.overrideWith(
+            (ref) async => _personalPatterns(),
+          ),
           skillsetProfileProvider.overrideWith((ref) async {
             skillsetLoads += 1;
             return _skillsetProfile();
@@ -203,6 +230,87 @@ void main() {
     expect(find.text('EXAMPLE SKILL PROFILE'), findsNothing);
     expect(find.text('Focused Builder · 82 / 100'), findsNothing);
     expect(skillsetLoads, 0);
+    expect(find.text('PERSONAL STUDY PATTERN'), findsOneWidget);
+    expect(find.text('ONE OBSERVATION'), findsNothing);
+  });
+
+  testWidgets('real account shows stable personal evidence and limitations',
+      (tester) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          _realSurfaceOverride(),
+          insightsProvider.overrideWith((ref) async => const []),
+          correlationReportProvider.overrideWith(
+            (ref) async => const CorrelationReport(
+              windowDays: 14,
+              metrics: [],
+              points: [],
+              results: [],
+            ),
+          ),
+          personalPatternsProvider.overrideWith(
+            (ref) async => _personalPatterns(),
+          ),
+        ],
+        child: const MaterialApp(home: Scaffold(body: InsightsPage())),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const Key('personal-study-pattern-panel')),
+      findsOneWidget,
+    );
+    expect(find.textContaining('stable baseline'), findsOneWidget);
+    expect(find.text('Stable'), findsOneWidget);
+    expect(find.text('20 rated sessions'), findsOneWidget);
+    expect(find.text('ONE OBSERVATION'), findsNothing);
+
+    await tester.ensureVisible(find.text('Evidence and limits'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Evidence and limits'));
+    await tester.pumpAndSettle();
+    expect(find.text('Focus timing'), findsOneWidget);
+    expect(
+      find.textContaining('observational associations'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('personal pattern failure stays inside its compact card',
+      (tester) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          _realSurfaceOverride(),
+          insightsProvider.overrideWith((ref) async => const []),
+          correlationReportProvider.overrideWith(
+            (ref) async => const CorrelationReport(
+              windowDays: 14,
+              metrics: [],
+              points: [],
+              results: [],
+            ),
+          ),
+          personalPatternsProvider.overrideWith(
+            (ref) async => throw StateError('patterns unavailable'),
+          ),
+        ],
+        child: const MaterialApp(home: Scaffold(body: InsightsPage())),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('Personal evidence is temporarily unavailable.'),
+      findsOneWidget,
+    );
+    expect(find.text('Could not load account insights.'), findsNothing);
+    expect(
+      find.textContaining('No local estimate was substituted'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('light theme derives panel and header contrast from its scheme',
@@ -477,3 +585,84 @@ SkillsetProfile _skillsetProfile() => SkillsetProfile(
       ],
       updatedAt: DateTime.utc(2026, 7, 13, 10),
     );
+
+PersonalPatterns _personalPatterns() => PersonalPatterns.fromJson({
+      'contract_version': 'personal-patterns-v1',
+      'status': 'stable',
+      'generated_at': '2026-07-26T12:00:00Z',
+      'timezone': 'Europe/Berlin',
+      'window': {
+        'rolling_days': 90,
+        'starts_at': '2026-04-27T12:00:00Z',
+        'ends_at': '2026-07-26T12:00:00Z',
+        'local_starts_on': '2026-04-27',
+        'local_ends_on': '2026-07-26',
+      },
+      'summary':
+          'A stable baseline now covers 20 rated sessions. Morning sessions were associated with higher useful progress.',
+      'sample': {
+        'terminal_sessions': 20,
+        'rated_sessions': 20,
+        'rated_local_days': 20,
+        'rating_coverage': 1.0,
+        'first_rated_local_date': '2026-06-16',
+        'last_rated_local_date': '2026-07-25',
+      },
+      'baseline': {
+        'median_focus_quality': 4.0,
+        'median_useful_progress': 4.0,
+        'completion_rate': 0.9,
+      },
+      'patterns': [
+        {
+          'kind': 'focus_timing',
+          'maturity': 'stable',
+          'title': 'Focus timing',
+          'summary':
+              'Sessions starting 09:00–13:00 were associated with higher median useful progress.',
+          'evidence': {
+            'preferred_group': '09:00–13:00',
+            'comparison_group': 'other daytime windows',
+            'preferred_count': 10,
+            'comparison_count': 10,
+            'useful_progress_median_delta': 1.0,
+            'focus_quality_median_delta': 0.0,
+            'completion_rate_delta': 0.0,
+            'details': [
+              'Median useful progress 5.0 vs 4.0.',
+              '10 preferred-window days and 10 comparison days.',
+            ],
+          },
+        },
+      ],
+      'planner_preference': {
+        'eligible': true,
+        'reason': 'eligible',
+        'window': '09-13',
+        'window_label': '09:00–13:00',
+        'evidence_count': 20,
+        'evidence_starts_on': '2026-06-16',
+        'evidence_ends_on': '2026-07-25',
+        'evidence_fingerprint': _fingerprint,
+      },
+      'limitations': [
+        'These are observational associations and do not show cause.',
+        'Missing reflections are excluded rather than scored as zero.',
+      ],
+      'correlation_points': [
+        {
+          'local_date': '2026-07-25',
+          'local_started_at': '2026-07-25T09:00:00+02:00',
+          'focus_quality': 4,
+          'useful_progress': 5,
+          'planned_focus_minutes': 45,
+          'actual_focus_minutes': 45,
+          'completed': 1,
+          'sleep_hours': 7.5,
+          'sleep_target_deviation_minutes': -30,
+          'sleep_quality': 7,
+          'morning_energy': 6,
+        },
+      ],
+      'evidence_fingerprint': _fingerprint,
+    });

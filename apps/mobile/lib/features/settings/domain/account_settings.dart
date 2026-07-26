@@ -4,6 +4,7 @@ import 'dart:typed_data';
 const accountExportV1TableNames = <String>[
   'profiles',
   'notification_preferences',
+  'learning_preferences',
   'daily_logs',
   'behavioral_events',
   'lifestyle_entries',
@@ -19,6 +20,7 @@ const accountExportV1TableNames = <String>[
   'habits',
   'habit_logs',
   'focus_sessions',
+  'focus_session_reflections',
   'intake_responses',
   'study_setup_profiles',
   'user_state_snapshots',
@@ -53,6 +55,7 @@ const accountExportV1OmittedTables = <String, String>{
   'notification_action_requests': 'backend_only_anti_replay_ledger',
   'deadline_plan_request_identities': 'backend_only_anti_replay_ledger',
   'planner_request_identities': 'backend_only_anti_replay_ledger',
+  'learning_request_identities': 'backend_only_anti_replay_ledger',
 };
 const accountExportV1MaxRowsPerTable = 10000;
 const accountExportV1MaxTotalRows = 50000;

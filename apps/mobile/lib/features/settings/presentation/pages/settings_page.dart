@@ -109,6 +109,24 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         AppCard(
           padding: EdgeInsets.zero,
           child: ListTile(
+            key: const ValueKey('personal-learning-setting-entry'),
+            enabled: syncedAccount,
+            leading: const Icon(Icons.psychology_alt_outlined),
+            title: const Text('Personal learning'),
+            subtitle: Text(
+              syncedAccount
+                  ? 'Control Focus reflection prompts, transparent pattern analysis, and optional new-plan timing.'
+                  : 'Available only for a synced account.',
+            ),
+            trailing: syncedAccount ? const Icon(Icons.chevron_right) : null,
+            onTap: syncedAccount
+                ? () => context.go(AppRoutes.personalLearning)
+                : null,
+          ),
+        ),
+        AppCard(
+          padding: EdgeInsets.zero,
+          child: ListTile(
             key: const ValueKey('daily-preparation-budget-setting'),
             enabled: syncedAccount && !_isSavingPreparationBudget,
             leading: _isSavingPreparationBudget

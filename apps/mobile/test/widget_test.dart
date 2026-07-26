@@ -465,31 +465,27 @@ void main() {
       find.text('In-app banners are available only for a synced account.'),
       findsOneWidget,
     );
-    await tester.scrollUntilVisible(
+    await _scrollSliverUntilVisible(
+      tester,
       find.text('Calendar import (optional)'),
-      180,
-      scrollable: find.byType(Scrollable).first,
     );
     expect(find.text('Calendar import (optional)'), findsOneWidget);
     expect(find.text('Coach'), findsNWidgets(2));
-    await tester.scrollUntilVisible(
+    await _scrollSliverUntilVisible(
+      tester,
       find.text('Export data'),
-      180,
-      scrollable: find.byType(Scrollable).first,
     );
     expect(find.text('Export data'), findsOneWidget);
     expect(find.text('Delete account'), findsOneWidget);
-    await tester.scrollUntilVisible(
+    await _scrollSliverUntilVisible(
+      tester,
       find.text('Light mode'),
-      180,
-      scrollable: find.byType(Scrollable).first,
     );
     expect(find.text('Light mode'), findsOneWidget);
     expect(find.text('Saved on this device.'), findsOneWidget);
-    await tester.scrollUntilVisible(
+    await _scrollSliverUntilVisible(
+      tester,
       find.text('Sign out'),
-      180,
-      scrollable: find.byType(Scrollable).first,
     );
     expect(find.text('Sign out'), findsOneWidget);
     expect(find.text('Alert rules'), findsNothing);
@@ -498,10 +494,10 @@ void main() {
     expect(find.text('Biometric app lock'), findsNothing);
 
     final setupEntry = find.widgetWithText(ListTile, 'Setup and commitments');
-    await tester.scrollUntilVisible(
+    await _scrollSliverUntilVisible(
+      tester,
       setupEntry,
-      -250,
-      scrollable: find.byType(Scrollable).first,
+      down: false,
     );
     tester.widget<ListTile>(setupEntry).onTap!.call();
     await tester.pumpAndSettle();
@@ -620,6 +616,30 @@ Future<void> _selectDropdownValue(
   await tester.pumpAndSettle();
   await tester.tap(find.text(value).last);
   await tester.pumpAndSettle();
+}
+
+Future<void> _scrollSliverUntilVisible(
+  WidgetTester tester,
+  Finder target, {
+  bool down = true,
+}) async {
+  final scrollView = find.byType(CustomScrollView).first;
+  for (var attempt = 0; attempt < 12; attempt += 1) {
+    if (target.evaluate().isNotEmpty) {
+      await tester.ensureVisible(target);
+      await tester.pumpAndSettle();
+      return;
+    }
+    await tester.drag(
+      scrollView,
+      Offset(0, down ? -300 : 300),
+    );
+    await tester.pumpAndSettle();
+  }
+  fail(
+    'Could not reveal ${target.describeMatch(Plurality.one)} '
+    'in the settings sliver.',
+  );
 }
 
 Future<void> _selectLabeledDropdown<T>(
