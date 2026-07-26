@@ -167,6 +167,62 @@ void main() {
     expect(target['preferred_session_minutes'], isNull);
   });
 
+  testWidgets('Task preview explains learned timing evidence', (tester) async {
+    tester.view.physicalSize = const Size(1000, 1600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final backend = _PlannerBackend(learnedTiming: true);
+
+    await _pumpPlanner(tester, backend: backend);
+    await tester.tap(find.byKey(const ValueKey('planner-add-task')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('planner-task-title')),
+      'Read sources',
+    );
+    await tester.tap(find.byKey(const ValueKey('planner-task-preview')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const Key('planner-learned-timing-applied')),
+      findsOneWidget,
+    );
+    expect(
+      find.text('Learned timing applied · 24 rated sessions'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('Task preview labels an actual Setup timing fallback',
+      (tester) async {
+    tester.view.physicalSize = const Size(1000, 1600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final backend = _PlannerBackend(
+      learnedTiming: true,
+      learnedTimingFallback: true,
+    );
+
+    await _pumpPlanner(tester, backend: backend);
+    await tester.tap(find.byKey(const ValueKey('planner-add-task')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('planner-task-title')),
+      'Read sources',
+    );
+    await tester.tap(find.byKey(const ValueKey('planner-task-preview')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text(
+        'Learned timing considered · Setup fallback · 24 rated sessions',
+      ),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('failed proposal retains the exact entered Task draft',
       (tester) async {
     tester.view.physicalSize = const Size(1000, 1600);
@@ -412,6 +468,8 @@ class _PlannerBackend {
   _PlannerBackend({
     this.failNextProposal = false,
     this.incompleteAvailability = false,
+    this.learnedTiming = false,
+    this.learnedTimingFallback = false,
   }) {
     dio.interceptors.add(
       InterceptorsWrapper(
@@ -460,7 +518,13 @@ class _PlannerBackend {
               );
             }
             return handler.resolve(
-              _response(options, _unscheduledTaskPlanEnvelope()),
+              _response(
+                options,
+                _unscheduledTaskPlanEnvelope(
+                  learnedTiming: learnedTiming,
+                  learnedTimingFallback: learnedTimingFallback,
+                ),
+              ),
             );
           }
           if (options.path.endsWith('/confirm')) {
@@ -496,6 +560,8 @@ class _PlannerBackend {
   final List<_PlannerRequest> requests = [];
   bool failNextProposal;
   final bool incompleteAvailability;
+  final bool learnedTiming;
+  final bool learnedTimingFallback;
 
   Response<Map<String, dynamic>> _response(
     RequestOptions options,
@@ -619,7 +685,11 @@ ExamWeekOutlook _outlook({
   });
 }
 
-Map<String, dynamic> _unscheduledTaskPlanEnvelope({bool active = false}) {
+Map<String, dynamic> _unscheduledTaskPlanEnvelope({
+  bool active = false,
+  bool learnedTiming = false,
+  bool learnedTimingFallback = false,
+}) {
   final envelope =
       plannerActionPlanEnvelope(state: active ? 'active' : 'proposed');
   final plan = Map<String, dynamic>.from(envelope['plan'] as Map);
@@ -636,6 +706,18 @@ Map<String, dynamic> _unscheduledTaskPlanEnvelope({bool active = false}) {
     ..['planned_minutes'] = 0
     ..['unscheduled_minutes'] = 0
     ..['task_blocks'] = <dynamic>[];
+  if (learnedTiming) {
+    revision['timing_preference'] = {
+      'source': 'learned_personal_pattern',
+      'window': '09-13',
+      'evidence_count': 24,
+      'evidence_starts_on': '2026-06-01',
+      'evidence_ends_on': '2026-07-20',
+      'evidence_fingerprint': List.filled(64, 'b').join(),
+      'fell_back_to_setup': learnedTimingFallback,
+      'warning': null,
+    };
+  }
   plan[revisionKey] = revision;
   if (active) plan['status'] = 'unscheduled';
   envelope['plan'] = plan;

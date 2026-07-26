@@ -33,6 +33,10 @@ class Settings(BaseSettings):
         alias="SCHEDULED_REFRESH_TOKEN",
     )
     use_mock_data: bool = Field(default=True, alias="USE_MOCK_DATA")
+    learned_focus_planning_pilot_enabled: bool = Field(
+        default=False,
+        alias="LEARNED_FOCUS_PLANNING_PILOT_ENABLED",
+    )
     coach_provider: Literal["disabled", "local_codex_oauth", "fake"] = Field(
         default="disabled",
         alias="COACH_PROVIDER",

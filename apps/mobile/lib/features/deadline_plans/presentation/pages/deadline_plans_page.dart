@@ -929,6 +929,24 @@ class _DeadlinePlanCardState extends State<_DeadlinePlanCard> {
             _planningWindowDescription(revision.bestEnergyWindow),
             style: Theme.of(context).textTheme.bodySmall,
           ),
+          if (pending && revision.timingPreference.usedLearnedPattern)
+            Text(
+              revision.timingPreference.fellBackToSetup
+                  ? 'Learned timing considered · Setup fallback · '
+                      '${revision.timingPreference.evidenceCount} rated sessions'
+                  : 'Learned timing applied · '
+                      '${revision.timingPreference.evidenceCount} rated sessions',
+              key: const Key('deadline-learned-timing-applied'),
+              style: Theme.of(context).textTheme.bodySmall,
+            )
+          else if (pending && revision.timingPreference.warning != null)
+            Text(
+              'Personal pattern unavailable · Setup timing used',
+              key: const Key('deadline-learned-timing-fallback'),
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.error,
+                  ),
+            ),
           const SizedBox(height: AppSpacing.md),
           Wrap(
             spacing: AppSpacing.lg,

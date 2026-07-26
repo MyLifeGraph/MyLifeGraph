@@ -16,12 +16,19 @@ from app.models.deadline_plans import (
     PreparationWorkloadResponse,
 )
 from app.repositories.deadline_plan_repository import SupabaseDeadlinePlanRepository
+from app.repositories.learning_repository import SupabaseLearningRepository
+from app.repositories.personal_patterns_repository import (
+    SupabasePersonalPatternsRepository,
+)
 from app.services.deadline_plan_service import (
     DeadlinePlanConflictError,
     DeadlinePlanNotFoundError,
     DeadlinePlanService,
     DeadlinePlanValidationError,
 )
+from app.services.learned_timing import LearnedTimingResolver
+from app.services.learning_service import LearningService
+from app.services.personal_patterns_service import PersonalPatternsService
 
 
 router = APIRouter(prefix="/deadline-plans", tags=["deadline-plans"])
@@ -38,7 +45,21 @@ async def get_deadline_plan_service(request: Request) -> DeadlinePlanService:
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Deadline plan persistence is not configured.",
         ) from exc
-    return DeadlinePlanService(repository=SupabaseDeadlinePlanRepository(client))
+    learning = LearningService(repository=SupabaseLearningRepository(client))
+    return DeadlinePlanService(
+        repository=SupabaseDeadlinePlanRepository(client),
+        learned_timing=LearnedTimingResolver(
+            learning=learning,
+            patterns=PersonalPatternsService(
+                learning=learning,
+                repository=SupabasePersonalPatternsRepository(client),
+            ),
+            pilot_enabled=(
+                settings.learned_focus_planning_pilot_enabled
+                and settings.app_env != "production"
+            ),
+        ),
+    )
 
 
 @router.get(

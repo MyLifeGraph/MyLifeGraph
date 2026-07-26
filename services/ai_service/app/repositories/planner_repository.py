@@ -481,7 +481,7 @@ class SupabasePlannerRepository:
         now: datetime,
     ) -> dict[str, Any]:
         return await self._rpc(
-            "propose_planner_action_plan_v1",
+            "propose_planner_action_plan_with_timing_v1",
             params={
                 "p_user_id": user_id,
                 "p_request_id": str(request_id),

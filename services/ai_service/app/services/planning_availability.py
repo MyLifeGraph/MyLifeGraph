@@ -35,6 +35,13 @@ ENERGY_WINDOWS: dict[str, tuple[tuple[time, time], ...]] = {
     ),
 }
 
+LEARNED_FOCUS_WINDOWS: dict[str, tuple[time, time]] = {
+    "05-09": (time(5), time(9)),
+    "09-13": (time(9), time(13)),
+    "13-18": (time(13), time(18)),
+    "18-23": (time(18), time(23)),
+}
+
 
 @dataclass(frozen=True)
 class BusySources:
@@ -91,6 +98,7 @@ def allocate_task_intervals(
     duration_increment_minutes: int = 1,
     recovery_minutes: int = 0,
     exact_session_blocks: bool = False,
+    learned_focus_window: str | None = None,
 ) -> list[PlannedInterval]:
     """Allocate five-minute task blocks without mutating any source record.
 
@@ -103,6 +111,11 @@ def allocate_task_intervals(
         return []
     if energy_window not in ENERGY_WINDOWS:
         raise ValueError("Energy window is invalid.")
+    if (
+        learned_focus_window is not None
+        and learned_focus_window not in LEARNED_FOCUS_WINDOWS
+    ):
+        raise ValueError("Learned Focus window is invalid.")
     if preferred_session_minutes < 5 or preferred_session_minutes > 240:
         raise ValueError("Preferred session duration is invalid.")
     if max_daily_minutes < 5 or max_daily_minutes > 480:
@@ -131,6 +144,7 @@ def allocate_task_intervals(
         days=days,
         zone=zone,
         energy_window=energy_window,
+        learned_focus_window=learned_focus_window,
         busy_by_day=busy_by_day,
         deadline_at=deadline_at,
     )
@@ -386,11 +400,15 @@ def free_energy_gaps_by_day(
     energy_window: str,
     busy_by_day: Mapping[date, Sequence[tuple[datetime, datetime]]],
     deadline_at: datetime | None,
+    learned_focus_window: str | None = None,
 ) -> dict[date, list[list[datetime]]]:
     result: dict[date, list[list[datetime]]] = {}
     for day in days:
         gaps: list[list[datetime]] = []
-        for window_start, window_end in ENERGY_WINDOWS[energy_window]:
+        for window_start, window_end in task_preference_windows(
+            energy_window=energy_window,
+            learned_focus_window=learned_focus_window,
+        ):
             starts_at = datetime.combine(day, window_start, tzinfo=zone)
             ends_at = datetime.combine(day, window_end, tzinfo=zone)
             if deadline_at is not None:
@@ -412,6 +430,63 @@ def free_energy_gaps_by_day(
                     gaps.append([normalized_start, normalized_end])
         result[day] = gaps
     return result
+
+
+def task_preference_windows(
+    *,
+    energy_window: str,
+    learned_focus_window: str | None,
+) -> tuple[tuple[time, time], ...]:
+    """Return non-overlapping Task windows in soft preference order."""
+
+    if energy_window not in ENERGY_WINDOWS:
+        raise ValueError("Energy window is invalid.")
+    if learned_focus_window is None:
+        return ENERGY_WINDOWS[energy_window]
+    learned = LEARNED_FOCUS_WINDOWS.get(learned_focus_window)
+    if learned is None:
+        raise ValueError("Learned Focus window is invalid.")
+    ordered: list[tuple[time, time]] = [learned]
+    for candidate in ENERGY_WINDOWS[energy_window]:
+        ordered.extend(_subtract_wall_clock_interval(candidate, learned))
+    return tuple(ordered)
+
+
+def used_setup_timing_fallback(
+    intervals: Sequence[PlannedInterval],
+    *,
+    learned_focus_window: str | None,
+) -> bool:
+    """Return whether any placed Focus time sits outside learned timing."""
+
+    if learned_focus_window is None or not intervals:
+        return False
+    learned = LEARNED_FOCUS_WINDOWS.get(learned_focus_window)
+    if learned is None:
+        raise ValueError("Learned Focus window is invalid.")
+    window_start, window_end = learned
+    return any(
+        interval.starts_at.date() != interval.ends_at.date()
+        or interval.starts_at.timetz().replace(tzinfo=None) < window_start
+        or interval.ends_at.timetz().replace(tzinfo=None) > window_end
+        for interval in intervals
+    )
+
+
+def _subtract_wall_clock_interval(
+    candidate: tuple[time, time],
+    excluded: tuple[time, time],
+) -> list[tuple[time, time]]:
+    start, end = candidate
+    excluded_start, excluded_end = excluded
+    if excluded_end <= start or excluded_start >= end:
+        return [candidate]
+    result: list[tuple[time, time]] = []
+    if start < excluded_start:
+        result.append((start, min(end, excluded_start)))
+    if excluded_end < end:
+        result.append((max(start, excluded_end), end))
+    return [value for value in result if value[0] < value[1]]
 
 
 def subtract_intervals(

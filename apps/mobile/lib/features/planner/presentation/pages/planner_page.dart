@@ -1552,6 +1552,27 @@ class _PlanPreviewDialog extends StatelessWidget {
                 '${revision.plannedMinutes} min placed · '
                 '${revision.unscheduledMinutes} min unplaced',
               ),
+              if (revision.timingPreference.usedLearnedPattern) ...[
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  revision.timingPreference.fellBackToSetup
+                      ? 'Learned timing considered · Setup fallback · '
+                          '${revision.timingPreference.evidenceCount} rated sessions'
+                      : 'Learned timing applied · '
+                          '${revision.timingPreference.evidenceCount} rated sessions',
+                  key: const Key('planner-learned-timing-applied'),
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ] else if (revision.timingPreference.warning != null) ...[
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  'Personal pattern unavailable · Setup timing used',
+                  key: const Key('planner-learned-timing-fallback'),
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.error,
+                      ),
+                ),
+              ],
               const SizedBox(height: AppSpacing.md),
               if (revision.taskBlocks.isEmpty && revision.habitSlots.isEmpty)
                 const Text(

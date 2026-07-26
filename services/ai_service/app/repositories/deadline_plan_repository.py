@@ -780,7 +780,7 @@ class SupabaseDeadlinePlanRepository:
         now: datetime,
     ) -> int:
         result = await self._rpc(
-            "propose_deadline_plan_v1",
+            "propose_deadline_plan_with_timing_v1",
             params={
                 "p_user_id": user_id,
                 "p_request_id": str(request_id),

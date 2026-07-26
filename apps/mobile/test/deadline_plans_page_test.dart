@@ -232,6 +232,50 @@ void main() {
     expect(repository.proposalDrafts, isEmpty);
   });
 
+  testWidgets('preparation preview explains learned timing evidence',
+      (tester) async {
+    final repository = _FakeDeadlinePlanRepository(
+      feeds: [
+        DeadlinePlanFeed(plans: [_learnedPendingPlan()]),
+      ],
+    );
+    await _pumpPage(
+      tester,
+      repository: repository,
+      page: DeadlinePlansPage(currentTime: now),
+    );
+
+    expect(
+      find.byKey(const Key('deadline-learned-timing-applied')),
+      findsOneWidget,
+    );
+    expect(
+      find.text('Learned timing applied · 24 rated sessions'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('preparation preview labels an actual Setup timing fallback',
+      (tester) async {
+    final repository = _FakeDeadlinePlanRepository(
+      feeds: [
+        DeadlinePlanFeed(plans: [_learnedPendingPlan(fellBackToSetup: true)]),
+      ],
+    );
+    await _pumpPage(
+      tester,
+      repository: repository,
+      page: DeadlinePlansPage(currentTime: now),
+    );
+
+    expect(
+      find.text(
+        'Learned timing considered · Setup fallback · 24 rated sessions',
+      ),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('active missed warning remains visible under staged replan',
       (tester) async {
     final repository = _FakeDeadlinePlanRepository(
@@ -941,6 +985,22 @@ DeadlinePlan _pendingPlanWithMissedActiveBlock() {
   final json = deadlinePlanEnvelope(pending: true);
   final revision = json['active_revision'] as Map<String, dynamic>;
   revision['blocks'] = [deadlineBlock(state: 'missed')];
+  return DeadlinePlanResponse.fromJson(json).plan;
+}
+
+DeadlinePlan _learnedPendingPlan({bool fellBackToSetup = false}) {
+  final json = deadlinePlanEnvelope(pending: true);
+  final revision = json['pending_revision'] as Map<String, dynamic>;
+  revision['timing_preference'] = {
+    'source': 'learned_personal_pattern',
+    'window': '09-13',
+    'evidence_count': 24,
+    'evidence_starts_on': '2026-06-01',
+    'evidence_ends_on': '2026-07-20',
+    'evidence_fingerprint': List.filled(64, 'b').join(),
+    'fell_back_to_setup': fellBackToSetup,
+    'warning': null,
+  };
   return DeadlinePlanResponse.fromJson(json).plan;
 }
 

@@ -100,6 +100,51 @@ def test_planner_spreads_first_sessions_and_treats_buffer_as_hard() -> None:
     assert all(day < date(2026, 7, 29) for day in block_days)
 
 
+def test_deadline_preview_prefers_learned_window_then_setup_fallback() -> None:
+    request = _request(
+        deadline_at=datetime(2026, 7, 20, 23, tzinfo=UTC),
+        planning_start_on=date(2026, 7, 20),
+        buffer_days=0,
+        estimated_total_minutes=50,
+    )
+    learned = _plan_blocks(
+        request=request,
+        context=_context(),
+        zone=ZoneInfo("UTC"),
+        local_now=NOW,
+        local_deadline=request.deadline_at,
+        effective_start=request.planning_start_on,
+        remaining_minutes=50,
+        learned_focus_window="18-23",
+    )
+
+    assert learned[0].starts_at.hour == 18
+
+    blocked = _plan_blocks(
+        request=request,
+        context=_context(
+            schedule_items=[
+                {
+                    "id": "evening-class",
+                    "weekday": 1,
+                    "starts_at": "18:00:00",
+                    "ends_at": "23:00:00",
+                    "updated_at": NOW.isoformat(),
+                },
+            ],
+        ),
+        zone=ZoneInfo("UTC"),
+        local_now=NOW,
+        local_deadline=request.deadline_at,
+        effective_start=request.planning_start_on,
+        remaining_minutes=50,
+        learned_focus_window="18-23",
+    )
+
+    assert sum(block.minutes for block in blocked) == 50
+    assert blocked[0].starts_at.hour < 18
+
+
 def test_deadline_plan_always_uses_configured_study_rhythm_and_recovery() -> None:
     request = _request(
         estimated_total_minutes=100,

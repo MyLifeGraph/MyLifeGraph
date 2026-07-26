@@ -31,6 +31,7 @@ from app.models.deadline_plans import (
     PreparationWorkloadDetailResponse,
     PreparationWorkloadResponse,
 )
+from app.models.planning_timing import PlanningTimingProvenance
 from app.repositories.deadline_plan_repository import (
     DeadlinePlanProjection,
     DeadlinePlanPersistenceConflict,
@@ -45,6 +46,7 @@ from app.services.planning_availability import (
     allocate_task_intervals,
     is_unambiguous_local,
     recurring_commitment_applies_on,
+    used_setup_timing_fallback,
 )
 from app.services.daily_capture_parser import (
     DailyCaptureV4SleepEpisode,
@@ -710,6 +712,11 @@ class DeadlinePlanService:
             planning_input["preferred_session_minutes"] = focus_minutes
 
         effective_start = max(request.planning_start_on, local_now.date())
+        timing_preference = (
+            await self._learned_timing.resolve(user_id=user_id)
+            if self._learned_timing is not None
+            else PlanningTimingProvenance(source="setup")
+        )
         remaining = max(
             0,
             request.estimated_total_minutes
@@ -723,14 +730,6 @@ class DeadlinePlanService:
             local_deadline=local_deadline,
             generated_at=generated_at,
         )
-        planning_fingerprint = _fingerprint(
-            {
-                "contract_version": DEADLINE_PLAN_CONTRACT_VERSION,
-                "input": planning_input,
-                "tracked_focus_minutes_at_proposal": tracked_focus_minutes,
-                "context": context_fingerprint_input,
-            },
-        )
         planned_blocks = _plan_blocks(
             request=effective_request,
             context=profile_probe,
@@ -739,6 +738,30 @@ class DeadlinePlanService:
             local_deadline=local_deadline,
             effective_start=effective_start,
             remaining_minutes=remaining,
+            learned_focus_window=(
+                timing_preference.window
+                if timing_preference.source == "learned_personal_pattern"
+                else None
+            ),
+        )
+        if (
+            timing_preference.source == "learned_personal_pattern"
+            and used_setup_timing_fallback(
+                planned_blocks,
+                learned_focus_window=timing_preference.window,
+            )
+        ):
+            timing_preference = timing_preference.model_copy(
+                update={"fell_back_to_setup": True},
+            )
+        planning_fingerprint = _fingerprint(
+            {
+                "contract_version": DEADLINE_PLAN_CONTRACT_VERSION,
+                "input": planning_input,
+                "tracked_focus_minutes_at_proposal": tracked_focus_minutes,
+                "context": context_fingerprint_input,
+                "timing_preference": timing_preference.model_dump(mode="json"),
+            },
         )
         blocks = [
             {
@@ -786,6 +809,7 @@ class DeadlinePlanService:
                 else None
             ),
             "planning_fingerprint": planning_fingerprint,
+            "timing_preference": timing_preference.model_dump(mode="json"),
             "study_setup_revision": study_setup_revision,
             "recovery_minutes": recovery_minutes,
             "tracked_focus_minutes_at_proposal": tracked_focus_minutes,
@@ -873,6 +897,11 @@ class DeadlinePlanService:
         )
         try:
             if operation == "confirm":
+                await self._require_learned_confirmation_allowed(
+                    user_id=user_id,
+                    plan_id=plan_id,
+                    expected_revision=request.expected_revision,
+                )
                 await self._repository.confirm(
                     user_id=user_id,
                     plan_id=plan_id,
@@ -895,6 +924,39 @@ class DeadlinePlanService:
             raise DeadlinePlanConflictError(str(exc)) from exc
         except DeadlinePlanPersistenceNotFound as exc:
             raise DeadlinePlanNotFoundError(str(exc)) from exc
+
+    async def _require_learned_confirmation_allowed(
+        self,
+        *,
+        user_id: str,
+        plan_id: UUID,
+        expected_revision: int,
+    ) -> None:
+        projection = await self._repository.load_projection(
+            user_id=user_id,
+            plan_id=plan_id,
+        )
+        pending = [
+            row
+            for row in projection.revisions
+            if _int(row.get("revision")) == expected_revision
+            and row.get("state") == "proposed"
+        ]
+        if len(pending) != 1:
+            return
+        if (
+            pending[0].get("timing_preference_source", "setup")
+            != "learned_personal_pattern"
+        ):
+            return
+        if self._learned_timing is None or not (
+            await self._learned_timing.learned_confirmation_is_allowed(
+                user_id=user_id,
+            )
+        ):
+            raise DeadlinePlanConflictError(
+                "Learned Focus planning was turned off. Request a new preview.",
+            )
 
     async def _details_from_projection(
         self,
@@ -1149,6 +1211,7 @@ class DeadlinePlanService:
             timezone=row["timezone"],
             best_energy_window=row["best_energy_window"],
             planning_fingerprint=row["planning_fingerprint"],
+            timing_preference=_timing_preference_from_row(row),
             study_setup_revision=(
                 _int(row["study_setup_revision"])
                 if row.get("study_setup_revision") is not None
@@ -1186,6 +1249,29 @@ class DeadlinePlanService:
         if len(rows) > 10_000:
             raise ValueError("Deadline focus history exceeds its V1 bound.")
         return sum(max(0, _int(row.get("actual_minutes"))) for row in rows)
+
+
+def _timing_preference_from_row(
+    row: dict[str, Any],
+) -> PlanningTimingProvenance:
+    return PlanningTimingProvenance(
+        source=row.get("timing_preference_source", "setup"),
+        window=row.get("timing_preference_window"),
+        evidence_count=_int(row.get("timing_evidence_count", 0)),
+        evidence_starts_on=(
+            _date(row["timing_evidence_starts_on"])
+            if row.get("timing_evidence_starts_on") is not None
+            else None
+        ),
+        evidence_ends_on=(
+            _date(row["timing_evidence_ends_on"])
+            if row.get("timing_evidence_ends_on") is not None
+            else None
+        ),
+        evidence_fingerprint=row.get("timing_evidence_fingerprint"),
+        fell_back_to_setup=bool(row.get("timing_fell_back_to_setup", False)),
+        warning=row.get("timing_warning"),
+    )
 
 
 @dataclass
@@ -1609,6 +1695,7 @@ def _plan_blocks(
     local_deadline: datetime,
     effective_start: date,
     remaining_minutes: int,
+    learned_focus_window: str | None = None,
 ) -> list[PlannedInterval]:
     deadline_day = local_deadline.date()
     last_preferred_day = (
@@ -1648,6 +1735,7 @@ def _plan_blocks(
         duration_increment_minutes=1,
         recovery_minutes=study_rhythm[2] if study_rhythm is not None else 0,
         exact_session_blocks=study_rhythm is not None,
+        learned_focus_window=learned_focus_window,
     )
     return intervals
 

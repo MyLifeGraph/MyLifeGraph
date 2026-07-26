@@ -15,6 +15,67 @@ void main() {
     expect(plan.progress.remainingMinutes, 245);
   });
 
+  test('accepts sparse Setup timing from an omit-null Deadline response', () {
+    final json = deadlinePlanEnvelope();
+    final revision = json['active_revision'] as Map<String, dynamic>;
+    revision['timing_preference'] = {
+      'source': 'setup',
+      'evidence_count': 0,
+      'fell_back_to_setup': false,
+    };
+
+    final timing = DeadlinePlanResponse.fromJson(json)
+        .plan
+        .activeRevision!
+        .timingPreference;
+
+    expect(timing.source, 'setup');
+    expect(timing.window, isNull);
+    expect(timing.warning, isNull);
+  });
+
+  test('preserves learned evidence when allocation used Setup fallback', () {
+    final json = deadlinePlanEnvelope();
+    final revision = json['active_revision'] as Map<String, dynamic>;
+    revision['timing_preference'] = {
+      'source': 'learned_personal_pattern',
+      'window': '09-13',
+      'evidence_count': 24,
+      'evidence_starts_on': '2026-06-01',
+      'evidence_ends_on': '2026-07-20',
+      'evidence_fingerprint': List.filled(64, 'b').join(),
+      'fell_back_to_setup': true,
+    };
+
+    final timing = DeadlinePlanResponse.fromJson(json)
+        .plan
+        .activeRevision!
+        .timingPreference;
+
+    expect(timing.usedLearnedPattern, isTrue);
+    expect(timing.fellBackToSetup, isTrue);
+    expect(timing.evidenceCount, 24);
+  });
+
+  test('rejects a reversed learned evidence date range', () {
+    final json = deadlinePlanEnvelope();
+    final revision = json['active_revision'] as Map<String, dynamic>;
+    revision['timing_preference'] = {
+      'source': 'learned_personal_pattern',
+      'window': '09-13',
+      'evidence_count': 24,
+      'evidence_starts_on': '2026-07-20',
+      'evidence_ends_on': '2026-06-01',
+      'evidence_fingerprint': List.filled(64, 'b').join(),
+      'fell_back_to_setup': false,
+    };
+
+    expect(
+      () => DeadlinePlanResponse.fromJson(json),
+      throwsA(isA<DeadlinePlanContractException>()),
+    );
+  });
+
   test('workload requires exact seven-day provenance and budget arithmetic',
       () {
     final workload = PreparationWorkload.fromJson(

@@ -18,8 +18,15 @@ from app.models.planner import (
     PlannerPreferencesUpdateRequest,
 )
 from app.repositories.deadline_plan_repository import SupabaseDeadlinePlanRepository
+from app.repositories.learning_repository import SupabaseLearningRepository
+from app.repositories.personal_patterns_repository import (
+    SupabasePersonalPatternsRepository,
+)
 from app.repositories.planner_repository import SupabasePlannerRepository
 from app.services.deadline_plan_service import DeadlinePlanService
+from app.services.learned_timing import LearnedTimingResolver
+from app.services.learning_service import LearningService
+from app.services.personal_patterns_service import PersonalPatternsService
 from app.services.planner_service import (
     PlannerConflictError,
     PlannerNotFoundError,
@@ -42,10 +49,23 @@ async def get_planner_service(request: Request) -> PlannerService:
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Planner persistence is not configured.",
         ) from exc
+    learning = LearningService(repository=SupabaseLearningRepository(client))
+    personal_patterns = PersonalPatternsService(
+        learning=learning,
+        repository=SupabasePersonalPatternsRepository(client),
+    )
     return PlannerService(
         repository=SupabasePlannerRepository(client),
         deadline_plans=DeadlinePlanService(
             repository=SupabaseDeadlinePlanRepository(client),
+        ),
+        learned_timing=LearnedTimingResolver(
+            learning=learning,
+            patterns=personal_patterns,
+            pilot_enabled=(
+                settings.learned_focus_planning_pilot_enabled
+                and settings.app_env != "production"
+            ),
         ),
     )
 

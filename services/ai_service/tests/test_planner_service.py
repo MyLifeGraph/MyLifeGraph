@@ -6,6 +6,7 @@ from uuid import UUID
 from zoneinfo import ZoneInfo
 
 from app.models.planner import PlannerActionProposalRequest
+from app.models.planning_timing import PlanningTimingProvenance
 from app.repositories.planner_repository import (
     PlannerAvailabilityContext,
     PlannerCalendarProjection,
@@ -13,6 +14,7 @@ from app.repositories.planner_repository import (
     PlannerProjection,
 )
 from app.services.planner_service import (
+    PlannerConflictError,
     PlannerService,
     _add_setup_commitments,
     _attention_items,
@@ -67,6 +69,7 @@ class Repository:
         self.persist_calls += 1
         now = values["now"]
         revision = values["revision_payload"]
+        timing = revision["timing_preference"]
         self.projection = PlannerProjection(
             plans=[
                 {
@@ -95,6 +98,18 @@ class Repository:
                     "best_energy_window": revision["best_energy_window"],
                     "planning_start_on": revision["planning_start_on"],
                     "planning_fingerprint": revision["planning_fingerprint"],
+                    "timing_preference_source": timing["source"],
+                    "timing_preference_window": timing["window"],
+                    "timing_evidence_count": timing["evidence_count"],
+                    "timing_evidence_starts_on": timing["evidence_starts_on"],
+                    "timing_evidence_ends_on": timing["evidence_ends_on"],
+                    "timing_evidence_fingerprint": timing[
+                        "evidence_fingerprint"
+                    ],
+                    "timing_fell_back_to_setup": timing[
+                        "fell_back_to_setup"
+                    ],
+                    "timing_warning": timing["warning"],
                     "calendar_import_id": revision["calendar_import_id"],
                     "study_setup_revision": revision["study_setup_revision"],
                     "recovery_minutes": revision["recovery_minutes"],
@@ -139,11 +154,35 @@ class Repository:
         return {"status": "draft"}
 
 
+class Timing:
+    def __init__(
+        self,
+        provenance: PlanningTimingProvenance,
+        *,
+        confirmation_allowed: bool = True,
+    ) -> None:
+        self.provenance = provenance
+        self.confirmation_allowed = confirmation_allowed
+        self.resolve_calls = 0
+        self.confirm_calls = 0
+
+    async def resolve(self, *, user_id: str) -> PlanningTimingProvenance:
+        assert user_id == USER_ID
+        self.resolve_calls += 1
+        return self.provenance
+
+    async def learned_confirmation_is_allowed(self, *, user_id: str) -> bool:
+        assert user_id == USER_ID
+        self.confirm_calls += 1
+        return self.confirmation_allowed
+
+
 def _context(
     *,
     preference: dict[str, object] | None = None,
     calendar: PlannerCalendarProjection | None = None,
     study_setup: dict[str, object] | None = None,
+    schedule_items: list[dict[str, object]] | None = None,
 ) -> PlannerAvailabilityContext:
     return PlannerAvailabilityContext(
         timezone="UTC",
@@ -157,7 +196,7 @@ def _context(
             timed_events=[],
             all_day_events=[],
         ),
-        schedule_items=[],
+        schedule_items=schedule_items or [],
         commitments=[],
         task_blocks=[],
         habit_slots=[],
@@ -242,6 +281,139 @@ def test_task_proposal_splits_sessions_and_replays_without_another_write() -> No
     )
     assert replay == response
     assert repository.persist_calls == 1
+
+
+def test_task_preview_persists_exact_learned_timing_and_habit_does_not_use_it() -> None:
+    provenance = PlanningTimingProvenance(
+        source="learned_personal_pattern",
+        window="18-23",
+        evidence_count=24,
+        evidence_starts_on=date(2026, 6, 1),
+        evidence_ends_on=date(2026, 7, 19),
+        evidence_fingerprint="a" * 64,
+    )
+    timing = Timing(provenance)
+    repository = Repository(_context())
+    service = PlannerService(
+        repository=repository,
+        learned_timing=timing,
+        now=lambda: NOW,
+    )
+
+    response = asyncio.run(
+        service.propose(
+            user_id=USER_ID,
+            request=_task_request(
+                deadline_at="2026-07-22T23:00:00+00:00",
+            ),
+        ),
+    )
+
+    pending = response.plan.pending_revision
+    assert pending is not None
+    assert pending.timing_preference == provenance
+    assert pending.task_blocks[0].starts_at.hour == 18
+    assert timing.resolve_calls == 1
+
+    habit_timing = Timing(provenance)
+    habit_repository = Repository(_context())
+    habit_service = PlannerService(
+        repository=habit_repository,
+        learned_timing=habit_timing,
+        now=lambda: NOW,
+    )
+    habit_response = asyncio.run(
+        habit_service.propose(user_id=USER_ID, request=_habit_request()),
+    )
+    assert habit_response.plan.pending_revision is not None
+    assert (
+        habit_response.plan.pending_revision.timing_preference.source
+        == "setup"
+    )
+    assert habit_timing.resolve_calls == 0
+
+
+def test_task_preview_records_when_allocation_falls_back_to_setup_timing() -> None:
+    provenance = PlanningTimingProvenance(
+        source="learned_personal_pattern",
+        window="18-23",
+        evidence_count=24,
+        evidence_starts_on=date(2026, 6, 1),
+        evidence_ends_on=date(2026, 7, 19),
+        evidence_fingerprint="a" * 64,
+    )
+    repository = Repository(
+        _context(
+            schedule_items=[
+                {
+                    "weekday": 1,
+                    "starts_at": "18:00:00",
+                    "ends_at": "23:00:00",
+                },
+            ],
+        ),
+    )
+    service = PlannerService(
+        repository=repository,
+        learned_timing=Timing(provenance),
+        now=lambda: NOW,
+    )
+
+    response = asyncio.run(
+        service.propose(
+            user_id=USER_ID,
+            request=_task_request(
+                estimated_minutes=50,
+                deadline_at="2026-07-20T20:00:00+00:00",
+                preferred_session_minutes=50,
+            ),
+        ),
+    )
+
+    pending = response.plan.pending_revision
+    assert pending is not None
+    assert pending.task_blocks[0].starts_at.hour < 18
+    assert pending.timing_preference.source == "learned_personal_pattern"
+    assert pending.timing_preference.window == "18-23"
+    assert pending.timing_preference.fell_back_to_setup is True
+    assert pending.timing_preference.evidence_fingerprint == "a" * 64
+
+
+def test_learned_preview_cannot_confirm_after_permission_is_disabled() -> None:
+    provenance = PlanningTimingProvenance(
+        source="learned_personal_pattern",
+        window="18-23",
+        evidence_count=24,
+        evidence_starts_on=date(2026, 6, 1),
+        evidence_ends_on=date(2026, 7, 19),
+        evidence_fingerprint="a" * 64,
+    )
+    timing = Timing(provenance, confirmation_allowed=False)
+    repository = Repository(_context())
+    service = PlannerService(
+        repository=repository,
+        learned_timing=timing,
+        now=lambda: NOW,
+    )
+    asyncio.run(service.propose(user_id=USER_ID, request=_task_request()))
+
+    request = type(
+        "Mutation",
+        (),
+        {"request_id": REQUEST_ID, "expected_revision": 1},
+    )()
+    try:
+        asyncio.run(
+            service.confirm(
+                user_id=USER_ID,
+                plan_id=PLAN_ID,
+                request=request,
+            ),
+        )
+    except PlannerConflictError as error:
+        assert "turned off" in str(error)
+    else:
+        raise AssertionError("Disabled learned timing confirmation was accepted.")
 
 
 def test_marked_task_uses_exact_current_study_rhythm_and_recovery() -> None:

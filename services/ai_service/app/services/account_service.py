@@ -185,6 +185,9 @@ ACCOUNT_EXPORT_TABLES = (
         "source_calendar_event_id,source_calendar_event_fingerprint,"
         "use_calendar_availability,availability_connection_id,"
         "availability_import_id,timezone,best_energy_window,planning_fingerprint,"
+        "timing_preference_source,timing_preference_window,timing_evidence_count,"
+        "timing_evidence_starts_on,timing_evidence_ends_on,"
+        "timing_evidence_fingerprint,timing_fell_back_to_setup,timing_warning,"
         "study_setup_revision,recovery_minutes,"
         "tracked_focus_minutes_at_proposal,remaining_minutes_at_proposal,"
         "planned_minutes,unscheduled_minutes,created_at,activated_at,superseded_at",

@@ -7,6 +7,7 @@ from app.services.planning_availability import (
     busy_intervals_by_day,
     choose_recurring_habit_slots,
     is_unambiguous_local,
+    used_setup_timing_fallback,
 )
 
 
@@ -233,3 +234,94 @@ def test_setup_recurring_commitment_applies_only_inside_semester_dates() -> None
         ),
     ]
     assert busy[date(2026, 8, 3)] == []
+
+
+def test_learned_window_is_softly_preferred_when_free() -> None:
+    blocks = allocate_task_intervals(
+        starts_on=date(2026, 7, 20),
+        ends_on=date(2026, 7, 20),
+        total_minutes=60,
+        preferred_session_minutes=60,
+        max_daily_minutes=120,
+        zone=ZoneInfo("UTC"),
+        local_now=datetime(2026, 7, 19, 12, tzinfo=UTC),
+        energy_window="morning",
+        learned_focus_window="18-23",
+        busy_sources=BusySources(),
+        duration_increment_minutes=5,
+    )
+
+    assert len(blocks) == 1
+    assert blocks[0].starts_at == datetime(2026, 7, 20, 18, tzinfo=UTC)
+    assert (
+        used_setup_timing_fallback(
+            blocks,
+            learned_focus_window="18-23",
+        )
+        is False
+    )
+
+
+def test_busy_learned_window_falls_back_without_losing_minutes() -> None:
+    blocks = allocate_task_intervals(
+        starts_on=date(2026, 7, 20),
+        ends_on=date(2026, 7, 20),
+        total_minutes=120,
+        preferred_session_minutes=60,
+        max_daily_minutes=120,
+        zone=ZoneInfo("UTC"),
+        local_now=datetime(2026, 7, 19, 12, tzinfo=UTC),
+        energy_window="morning",
+        learned_focus_window="18-23",
+        busy_sources=BusySources(
+            recurring_commitments=[
+                {
+                    "weekday": 1,
+                    "starts_at": "18:00:00",
+                    "ends_at": "23:00:00",
+                },
+            ],
+        ),
+        duration_increment_minutes=5,
+    )
+
+    assert sum(block.minutes for block in blocks) == 120
+    assert all(block.starts_at.hour < 18 for block in blocks)
+    assert (
+        used_setup_timing_fallback(
+            blocks,
+            learned_focus_window="18-23",
+        )
+        is True
+    )
+
+
+def test_learned_window_cannot_override_deadline_budget_or_recovery() -> None:
+    blocks = allocate_task_intervals(
+        starts_on=date(2026, 7, 20),
+        ends_on=date(2026, 7, 20),
+        total_minutes=90,
+        preferred_session_minutes=45,
+        max_daily_minutes=90,
+        zone=ZoneInfo("UTC"),
+        local_now=datetime(2026, 7, 19, 12, tzinfo=UTC),
+        energy_window="morning",
+        learned_focus_window="18-23",
+        busy_sources=BusySources(),
+        deadline_at=datetime(2026, 7, 20, 17, tzinfo=UTC),
+        account_daily_budget_minutes=45,
+        duration_increment_minutes=5,
+        recovery_minutes=10,
+        exact_session_blocks=True,
+    )
+
+    assert [block.minutes for block in blocks] == [45]
+    assert blocks[0].starts_at.hour == 8
+    assert blocks[0].reserved_ends_at == blocks[0].ends_at + timedelta(minutes=10)
+    assert (
+        used_setup_timing_fallback(
+            blocks,
+            learned_focus_window="18-23",
+        )
+        is True
+    )

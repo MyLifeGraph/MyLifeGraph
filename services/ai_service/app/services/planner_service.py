@@ -38,6 +38,7 @@ from app.models.planner import (
     PlannerTaskTarget,
     PlannerUnscheduledItem,
 )
+from app.models.planning_timing import PlanningTimingProvenance
 from app.repositories.planner_repository import (
     PlannerAvailabilityContext,
     PlannerOverviewContext,
@@ -51,7 +52,9 @@ from app.services.planning_availability import (
     allocate_task_intervals,
     choose_recurring_habit_slots,
     recurring_commitment_applies_on,
+    used_setup_timing_fallback,
 )
+from app.services.learned_timing import LearnedTimingResolver
 
 
 class PlannerConflictError(RuntimeError):
@@ -76,10 +79,12 @@ class PlannerService:
         *,
         repository: PlannerRepository,
         deadline_plans: DeadlinePlanReader | None = None,
+        learned_timing: LearnedTimingResolver | None = None,
         now: Callable[[], datetime] | None = None,
     ) -> None:
         self._repository = repository
         self._deadline_plans = deadline_plans
+        self._learned_timing = learned_timing
         self._now = now or (lambda: datetime.now(UTC))
 
     async def get_preferences(self, *, user_id: str) -> PlannerPreferencesResponse:
@@ -261,6 +266,7 @@ class PlannerService:
         habit_slots: list[dict[str, Any]] = []
         planned_minutes = 0
         unscheduled_minutes = 0
+        timing_preference = PlanningTimingProvenance(source="setup")
 
         if isinstance(request.target, PlannerTaskTarget):
             all_scheduling_inputs = all(
@@ -283,6 +289,10 @@ class PlannerService:
                     raise PlannerValidationError(
                         "The task deadline precedes the planning window.",
                     )
+                if self._learned_timing is not None:
+                    timing_preference = await self._learned_timing.resolve(
+                        user_id=user_id,
+                    )
                 intervals = allocate_task_intervals(
                     starts_on=effective_start,
                     ends_on=request.target.deadline_at.astimezone(zone).date(),
@@ -298,7 +308,23 @@ class PlannerService:
                     duration_increment_minutes=5,
                     recovery_minutes=recovery_minutes,
                     exact_session_blocks=use_study_rhythm,
+                    learned_focus_window=(
+                        timing_preference.window
+                        if timing_preference.source
+                        == "learned_personal_pattern"
+                        else None
+                    ),
                 )
+                if (
+                    timing_preference.source == "learned_personal_pattern"
+                    and used_setup_timing_fallback(
+                        intervals,
+                        learned_focus_window=timing_preference.window,
+                    )
+                ):
+                    timing_preference = timing_preference.model_copy(
+                        update={"fell_back_to_setup": True},
+                    )
                 for sequence, interval in enumerate(intervals, start=1):
                     task_blocks.append(
                         {
@@ -389,6 +415,7 @@ class PlannerService:
                     if use_study_rhythm and study_rhythm is not None
                     else None
                 ),
+                "timing_preference": timing_preference.model_dump(mode="json"),
             },
         )
         target_payload = request.target.model_dump(mode="json")
@@ -408,6 +435,7 @@ class PlannerService:
                     "habit_slots": habit_slots,
                 },
             ),
+            "timing_preference": timing_preference.model_dump(mode="json"),
             "calendar_import_id": (
                 str(context.calendar.import_id)
                 if calendar_enabled and context.calendar.import_id
@@ -487,6 +515,11 @@ class PlannerService:
         )
         try:
             if operation == "confirm":
+                await self._require_learned_confirmation_allowed(
+                    user_id=user_id,
+                    plan_id=plan_id,
+                    expected_revision=request.expected_revision,
+                )
                 await self._repository.confirm(
                     user_id=user_id,
                     plan_id=plan_id,
@@ -508,6 +541,39 @@ class PlannerService:
             raise PlannerConflictError(str(exc)) from exc
         except PlannerPersistenceNotFound as exc:
             raise PlannerNotFoundError(str(exc)) from exc
+
+    async def _require_learned_confirmation_allowed(
+        self,
+        *,
+        user_id: str,
+        plan_id: UUID,
+        expected_revision: int,
+    ) -> None:
+        projection = await self._repository.load_projection(
+            user_id=user_id,
+            plan_id=plan_id,
+        )
+        pending = [
+            row
+            for row in projection.revisions
+            if _int(row.get("revision")) == expected_revision
+            and row.get("state") == "proposed"
+        ]
+        if len(pending) != 1:
+            return
+        if (
+            pending[0].get("timing_preference_source", "setup")
+            != "learned_personal_pattern"
+        ):
+            return
+        if self._learned_timing is None or not (
+            await self._learned_timing.learned_confirmation_is_allowed(
+                user_id=user_id,
+            )
+        ):
+            raise PlannerConflictError(
+                "Learned Focus planning was turned off. Request a new preview.",
+            )
 
     async def create_commitment(
         self,
@@ -983,6 +1049,7 @@ def _revision_from_row(
         best_energy_window=row["best_energy_window"],
         planning_start_on=_date(row["planning_start_on"]),
         planning_fingerprint=row["planning_fingerprint"],
+        timing_preference=_timing_preference_from_row(row),
         calendar_import_id=(
             UUID(str(row["calendar_import_id"]))
             if row.get("calendar_import_id")
@@ -1001,6 +1068,29 @@ def _revision_from_row(
         created_at=_datetime(row["created_at"]),
         activated_at=_optional_datetime(row.get("activated_at")),
         superseded_at=_optional_datetime(row.get("superseded_at")),
+    )
+
+
+def _timing_preference_from_row(
+    row: Mapping[str, Any],
+) -> PlanningTimingProvenance:
+    return PlanningTimingProvenance(
+        source=row.get("timing_preference_source", "setup"),
+        window=row.get("timing_preference_window"),
+        evidence_count=_int(row.get("timing_evidence_count", 0)),
+        evidence_starts_on=(
+            _date(row["timing_evidence_starts_on"])
+            if row.get("timing_evidence_starts_on") is not None
+            else None
+        ),
+        evidence_ends_on=(
+            _date(row["timing_evidence_ends_on"])
+            if row.get("timing_evidence_ends_on") is not None
+            else None
+        ),
+        evidence_fingerprint=row.get("timing_evidence_fingerprint"),
+        fell_back_to_setup=bool(row.get("timing_fell_back_to_setup", False)),
+        warning=row.get("timing_warning"),
     )
 
 

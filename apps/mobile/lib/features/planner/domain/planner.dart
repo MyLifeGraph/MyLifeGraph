@@ -1,3 +1,5 @@
+import '../../../core/planning/planning_timing_preference.dart';
+
 class PlannerContractException implements Exception {
   const PlannerContractException(this.message);
 
@@ -635,6 +637,7 @@ class PlannerRevision {
     required this.calendarImportId,
     required this.studySetupRevision,
     required this.recoveryMinutes,
+    required this.timingPreference,
     required this.taskBlocks,
     required this.habitSlots,
   });
@@ -651,6 +654,7 @@ class PlannerRevision {
         'best_energy_window',
         'planning_start_on',
         'planning_fingerprint',
+        'timing_preference',
         'calendar_import_id',
         'study_setup_revision',
         'recovery_minutes',
@@ -708,6 +712,16 @@ class PlannerRevision {
       min: 0,
       max: 60,
     );
+    late final PlanningTimingPreference timingPreference;
+    try {
+      timingPreference = PlanningTimingPreference.fromJson(
+        json['timing_preference'],
+      );
+    } on FormatException {
+      throw const PlannerContractException(
+        'Planner timing preference is invalid.',
+      );
+    }
     final expectedMinutes = target.kind == 'task'
         ? blocks.fold(0, (sum, value) => sum + value.plannedMinutes)
         : slots.fold(0, (sum, value) => sum + value.durationMinutes);
@@ -751,6 +765,7 @@ class PlannerRevision {
         slots.map((value) => value.weekday).toSet().length != slots.length ||
         plannedMinutes != expectedMinutes ||
         studyProjectionInvalid ||
+        target.kind == 'habit' && timingPreference.usedLearnedPattern ||
         childStates.any((value) => value != expectedChildState) ||
         (state == 'proposed' &&
             (activatedAt != null || supersededAt != null)) ||
@@ -808,6 +823,7 @@ class PlannerRevision {
       ),
       studySetupRevision: studySetupRevision,
       recoveryMinutes: recoveryMinutes,
+      timingPreference: timingPreference,
       taskBlocks: blocks,
       habitSlots: slots,
     );
@@ -824,6 +840,7 @@ class PlannerRevision {
   final String? calendarImportId;
   final int? studySetupRevision;
   final int recoveryMinutes;
+  final PlanningTimingPreference timingPreference;
   final List<PlannerTaskBlock> taskBlocks;
   final List<PlannerHabitSlot> habitSlots;
 }

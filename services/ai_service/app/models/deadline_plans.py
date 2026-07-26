@@ -6,6 +6,8 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from app.models.planning_timing import PlanningTimingProvenance
+
 
 DEADLINE_PLAN_CONTRACT_VERSION = "deadline-plan-v1"
 PREPARATION_WORKLOAD_CONTRACT_VERSION = "preparation-workload-v1"
@@ -569,6 +571,9 @@ class DeadlinePlanRevision(BaseModel):
     timezone: str = Field(min_length=1, max_length=100)
     best_energy_window: EnergyWindow
     planning_fingerprint: str = Field(pattern=r"^[0-9a-f]{64}$")
+    timing_preference: PlanningTimingProvenance = PlanningTimingProvenance(
+        source="setup",
+    )
     study_setup_revision: int | None = Field(default=None, ge=1)
     recovery_minutes: int = Field(ge=0, le=60)
     tracked_focus_minutes_at_proposal: int = Field(ge=0)

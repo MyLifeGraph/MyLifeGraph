@@ -8,6 +8,8 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from app.models.planning_timing import PlanningTimingProvenance
+
 
 PLANNER_CONTRACT_VERSION = "planner-v1"
 PLANNER_PREFERENCES_CONTRACT_VERSION = "planner-preferences-v1"
@@ -268,6 +270,9 @@ class PlannerActionRevision(BaseModel):
     ]
     planning_start_on: date
     planning_fingerprint: str = Field(pattern=r"^[0-9a-f]{64}$")
+    timing_preference: PlanningTimingProvenance = PlanningTimingProvenance(
+        source="setup",
+    )
     calendar_import_id: UUID | None
     study_setup_revision: int | None = Field(default=None, ge=1)
     recovery_minutes: int = Field(ge=0, le=60)
@@ -333,6 +338,8 @@ class PlannerActionRevision(BaseModel):
         else:
             if self.task_blocks:
                 raise ValueError("habit revision cannot contain task blocks")
+            if self.timing_preference.source != "setup":
+                raise ValueError("habit revision cannot use learned Focus timing")
             if self.study_setup_revision is not None or self.recovery_minutes != 0:
                 raise ValueError("habit revision cannot use Study rhythm")
             if self.planned_minutes != sum(

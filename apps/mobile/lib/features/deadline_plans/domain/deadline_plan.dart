@@ -1,3 +1,5 @@
+import '../../../core/planning/planning_timing_preference.dart';
+
 const deadlinePlanContractVersion = 'deadline-plan-v1';
 const preparationWorkloadContractVersion = 'preparation-workload-v1';
 const preparationWorkloadDetailContractVersion =
@@ -824,6 +826,7 @@ class DeadlinePlanRevision {
     required this.timezone,
     required this.bestEnergyWindow,
     required this.planningFingerprint,
+    required this.timingPreference,
     required this.studySetupRevision,
     required this.recoveryMinutes,
     required this.trackedFocusMinutesAtProposal,
@@ -937,6 +940,7 @@ class DeadlinePlanRevision {
         'timezone',
         'best_energy_window',
         'planning_fingerprint',
+        'timing_preference',
         'recovery_minutes',
         'tracked_focus_minutes_at_proposal',
         'remaining_minutes_at_proposal',
@@ -971,6 +975,16 @@ class DeadlinePlanRevision {
         rawBlocks is! List) {
       throw const DeadlinePlanContractException(
         'Deadline plan revision fields are invalid.',
+      );
+    }
+    late final PlanningTimingPreference timingPreference;
+    try {
+      timingPreference = PlanningTimingPreference.fromJson(
+        json['timing_preference'],
+      );
+    } on FormatException {
+      throw const DeadlinePlanContractException(
+        'Deadline planning timing is invalid.',
       );
     }
     return DeadlinePlanRevision(
@@ -1035,6 +1049,7 @@ class DeadlinePlanRevision {
         json['planning_fingerprint'],
         'revision.planning_fingerprint',
       ),
+      timingPreference: timingPreference,
       studySetupRevision: _optionalInt(json, 'study_setup_revision'),
       recoveryMinutes: _requiredInt(
         json['recovery_minutes'],
@@ -1093,6 +1108,7 @@ class DeadlinePlanRevision {
   final String timezone;
   final String bestEnergyWindow;
   final String planningFingerprint;
+  final PlanningTimingPreference timingPreference;
   final int? studySetupRevision;
   final int recoveryMinutes;
   final int trackedFocusMinutesAtProposal;

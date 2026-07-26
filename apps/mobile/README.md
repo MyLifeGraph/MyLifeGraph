@@ -72,6 +72,7 @@ The app reads configuration from Dart defines in
 | `SUPABASE_ANON_KEY` | empty | Public anon key for Supabase client. |
 | `AI_SERVICE_BASE_URL` | `http://localhost:8000` | FastAPI service base URL. |
 | `COACH_SURFACE_ENABLED` | unset/fail-closed in release and production | Exact `true` explicitly exposes Coach; backend capability still controls sending. |
+| `LEARNED_FOCUS_PLANNING_PILOT_ENABLED` | `false` | Exact `true` enables the development-only learned-timing Planner pilot; the backend must use the same flag. Production builds stay fail-closed. |
 
 Supabase is only initialized when both `SUPABASE_URL` and
 `SUPABASE_ANON_KEY` are non-empty.
