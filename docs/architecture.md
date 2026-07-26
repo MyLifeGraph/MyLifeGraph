@@ -644,10 +644,11 @@ Current responsibilities:
   metadata, or unsafe routes. `GET /v1/briefings/today` reads that decision and
   deliberate `POST /v1/briefings/generate` ranks or refreshes it.
 - Add `summary.daily_state` and `signals.daily_state` under the
-  `explainable-daily-state-v2` contract. The parser trusts V2/V3 capture metadata
-  only after strict identity, type, enum, numeric, timestamp, and projection
-  checks, ignores all friction keys, and sanitizes readable V1 state. Legacy
-  numeric fallback applies only when no V2/V3 marker exists.
+  `explainable-daily-state-v2` contract. The parser trusts V2/V3/V4 capture
+  metadata only after strict identity, branch-compatibility, type, enum, numeric,
+  timestamp, sleep-interval, and projection checks, ignores all friction keys,
+  and sanitizes readable V1 state. Legacy numeric fallback applies only when no
+  structured capture marker exists.
 - Compute Daily State from a fixed seven-day lookback independent of the
   requested statistics window. Evening on the target date or previous date is
   current; Morning is current only on the target date. Quality is explicit as
@@ -853,19 +854,11 @@ Setup-owned or manual memory content.
 
 All standard tests use an injected fake provider. A live subscription smoke is
 explicitly opt-in and never part of CI, normal verification, or a claim about a
-different developer's account. The synthetic-context smoke completed on
-2026-07-13 with the explicitly requested `gpt-5.5` model (`1 passed`), without
-fallback and without logging the answer, prompt, or raw event stream. Real
-local PostgreSQL parallel lock smokes also completed without deadlock or
-timeout. Those results establish only this machine's provider path and local
-database concurrency contract. A focused Phase 10 fake-provider browser rerun
-and the subsequent full non-destructive local-Supabase journey passed in the
-recorded 2026-07-13 checkout; the 2026-07-23 shell-navigation follow-up did not
-rerun the full browser journey. A separate authenticated Flutter -> FastAPI ->
-`local_codex_oauth` -> same-user Codex CLI product-path turn also passed with
-explicit `gpt-5.5`, strict persisted provenance, and visible UI data-use truth.
-None of these checks establishes remote state, production readiness, or another
-developer's account.
+different developer's account. Exact current results and dated provider
+evidence live in
+[Current Verified Baseline](verification.md#current-verified-baseline) and the
+historical sections of `docs/verification.md`. None of those checks establishes
+remote state, production readiness, or another developer's account.
 
 ### V1 Account Controls
 

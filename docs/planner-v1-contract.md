@@ -1,7 +1,7 @@
 # Planner V1 Contract
 
-Status: implemented, including the Study Setup and shell-navigation follow-ups,
-as of 2026-07-23.
+Status: implemented, including the Study Setup, shell-navigation, and read-only
+Exam-Week Outlook follow-ups, as of 2026-07-26.
 
 Planner V1 is the authenticated, deterministic planning home for Tasks,
 Habits, exam and assignment preparation, and manually fixed commitments. It

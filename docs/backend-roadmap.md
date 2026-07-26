@@ -1185,15 +1185,11 @@ The exact behavior, schema, routes, copy, and verification boundary live in
   onboarding authority. Application roles cannot self-promote, delete/recreate
   the canonical profile, use a legacy role fallback, or opt into backend
   workflows by writing onboarding completion.
-- Verification recorded on 2026-07-13 includes green real local PostgreSQL
-  parallel Coach lifecycle smokes and one opt-in synthetic
-  `local_codex_oauth` call with explicitly requested `gpt-5.5` (`1 passed`), no
-  fallback, and no answer/prompt/raw stream logged. The focused Phase 10 and
-  subsequent full non-destructive local fake-provider browser runs also passed.
-  A separate authenticated Flutter -> FastAPI -> `local_codex_oauth` -> same-
-  user Codex CLI live turn passed with explicit `gpt-5.5`, strict persisted
-  provenance, and visible UI data-use/provider truth. Remote/production state
-  and another developer/account remain unverified.
+- Exact current and dated Coach verification evidence lives in
+  [Current Verified Baseline](verification.md#current-verified-baseline) and
+  the historical sections of `docs/verification.md`. Live-provider results are
+  machine/account-specific; remote/production state and another developer's
+  account remain unverified.
 
 The detailed implementation order and acceptance criteria live in
 `docs/phase-10-controlled-coach-plan.md`.

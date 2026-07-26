@@ -2,14 +2,15 @@
 
 Status: historical phase plan with a current product-disposition summary,
 updated through Planner V1, Today Overview V2, Study Setup V1, and the Setup
-personalization retirement on 2026-07-25. Detailed phase sections preserve
-their original implementation reasoning; current surface authority lives in
-the linked contracts.
+personalization retirement, Daily Capture V4, and Exam-Week Outlook V1 on
+2026-07-26. Detailed phase sections preserve their original implementation
+reasoning; current surface authority lives in the linked contracts.
 
 `docs/setup-personalization-retirement-contract.md` is authoritative wherever
 historical sections below mention Goals as an active product object, Setup
-focus/friction/style/Reminder/context questions, Capture V2 output, or Daily
-State V1 output.
+focus/friction/style/Reminder/context questions, Capture V2/V3 as the current
+output, or Daily State V1 output. `docs/exam-week-outlook-v1-contract.md` is
+authoritative for current Capture V4 sleep fields and the Planner outlook.
 
 This document turns the product idea of a daily decision cockpit into an
 implementation plan. It is intentionally evaluation-oriented: each phase states
@@ -138,19 +139,20 @@ Phase 1 now supplies the missing daily context. A typed Evening Shutdown and a
 separate short Morning Calibration merge by ownership into one local-date
 `DailyCaptureEntry`, persist structured state under
 `daily_logs.metadata.captures`, retain numeric compatibility, and rebuild at
-most four deterministic current-state events. Guest V3 storage preserves the
-same contract while reading and sanitizing legacy V1/V2 entries; authenticated
-capture refreshes the explicit local snapshot date, and Dashboard mapping
-remains direct and nullable. Phase 1 deliberately does not assign Daily Mode, rank actions,
-persist a briefing, generate recommendations on save, or call an LLM. The next
-gap was Phase 2's explainable deterministic daily state.
+most four deterministic current-state events. Guest V4 storage preserves the
+same contract while reading and sanitizing legacy V1/V2/V3 entries;
+authenticated capture refreshes the explicit local snapshot date, and Dashboard
+mapping remains direct and nullable. Phase 1 deliberately does not assign Daily
+Mode, rank actions, persist a briefing, generate recommendations on save, or call
+an LLM. The next gap was Phase 2's explainable deterministic daily state.
 
 Phase 2 now interprets that context inside backend-owned snapshots. Its current
-`explainable-daily-state-v2` contract uses strict V2/V3 capture parsing with
-friction sanitization, a fixed seven-day state lookback independent of the
-statistics window, cadence-aware
-Evening/Morning freshness, explicit `missing`/`partial`/`current`/`stale`
-quality, and recovery-first `push`/`steady`/`recover`/`plan` classification.
+`explainable-daily-state-v2` contract uses strict V2/V3/V4 branch-compatible
+capture parsing with V4 sleep-interval validation and friction sanitization, a
+fixed seven-day state lookback independent of the statistics window,
+cadence-aware Evening/Morning freshness, explicit
+`missing`/`partial`/`current`/`stale` quality, and recovery-first
+`push`/`steady`/`recover`/`plan` classification.
 Risks and reasons carry field-level evidence and deterministic provenance;
 capture free text and learned-baseline claims stay out. It does not rank an
 action, persist a briefing, change the Dashboard into Today, or call an LLM.

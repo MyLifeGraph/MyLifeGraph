@@ -538,38 +538,9 @@ These requirements define the verification boundary. Documentation or source
 coverage alone is not a claim that the current checkout, local Supabase stack,
 browser journey, remote project, or installed device has passed it.
 
-On 2026-07-18 the final local migration/rollback smoke, full backend and Flutter
-suites, and the non-reset combined browser journey completed against this
-checkout. The browser run reported
-`E2E browser smoke passed for e2e-1784397316@example.test`. This establishes only
-the local deterministic boundary described above; it is not a remote migration,
-provider-calendar, installed-device, notification, or long-term-outcome claim.
-
-On 2026-07-19 the optional account-capacity migration was explicitly applied to
-local Supabase without a reset. The complete FastAPI suite reported
-`763 passed, 1 skipped`; the standard gate and non-reset database preflight each
-passed all `601` Flutter tests with clean analysis and matching migration
-history. The final combined browser run reported
-`E2E browser smoke passed for e2e-1784448992@example.test`. It proves only the
-local deterministic/RLS boundary described above and does not change any remote,
-provider-calendar, installed-device, participant-study, notification, or long-
-term-outcome non-claim.
-
-The compatible workload-day detail follow-up completed locally on 2026-07-19
-without a schema change. The complete FastAPI suite reported
-`766 passed, 1 skipped`; the standard gate and non-reset Supabase verification
-each passed `608` Flutter tests with clean analysis and matching migration
-history. After the first browser attempt exposed and fixed an inner-Shell modal
-barrier defect, the final combined run reported
-`E2E browser smoke passed for e2e-1784465767@example.test`. This verifies only
-the local strict detail/navigation boundary and does not alter the non-claims
-above.
-
-The compatible compact-replanning follow-up also completed locally on
-2026-07-19 without an API, schema, RLS, or calculation change. The focused
-Deadline Plans page suite reported `22 passed`; the standard gate passed all
-`610` Flutter tests with clean analysis; and the final combined browser journey
-reported `E2E browser smoke passed for e2e-1784475200@example.test`. It verifies
-the compact zero-request review, full-editor escape path, staged semantics, and
-the existing local planner/RLS lifecycle only. It is not participant, remote,
-installed-device, provider-calendar, notification, or longitudinal evidence.
+Exact current results and dated implementation history live in
+[Current Verified Baseline](verification.md#current-verified-baseline) and the
+historical sections of `docs/verification.md`. Those local deterministic
+records do not establish remote migration state, provider-calendar behavior,
+installed-device behavior, notification delivery, participant evidence, or
+long-term outcomes.

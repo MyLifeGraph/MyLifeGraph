@@ -1,7 +1,7 @@
 # UI Language And Copy Contract
 
 Status: implemented V1 product-copy contract, including the current
-Coach-enabled shell terminology, as of 2026-07-23.
+Coach-enabled shell and Exam-Week Outlook terminology, as of 2026-07-26.
 
 ## Supported Language
 

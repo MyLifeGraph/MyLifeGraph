@@ -1,5 +1,8 @@
 # Synthetic Student Persona Simulation — 2026-07-18
 
+Status: historical checkout report; it does not describe the current product
+or verification baseline.
+
 ## Evidence status
 
 This was a five-agent, source-backed persona walkthrough requested after the

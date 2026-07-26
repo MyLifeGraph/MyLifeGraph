@@ -583,43 +583,16 @@ or a real Codex login. Provide a fake executable/provider fixture that proves:
 The browser journey is configured to use the deterministic fake provider.
 `services/ai_service/tests/test_local_codex_smoke.py` is the separate
 real-subscription smoke; it is skipped unless `RUN_LOCAL_CODEX_SMOKE=true`, uses
-only synthetic context, and must print no prompt or CLI event stream. On
-2026-07-13 that smoke completed against the explicitly requested `gpt-5.5`
-model (`1 passed`), with no fallback and no answer, prompt, or raw event stream
-logged. The result is specific to that machine, CLI, login, and account.
+only synthetic context, and must print no prompt or CLI event stream. Any live
+result is specific to its machine, CLI, login, account, and configured model.
+The first same-machine product-path criterion has been exercised; another Linux
+user's independent clone/login acceptance remains open.
 
-The follow-up lock-order migration also passed real local PostgreSQL parallel
-claim/completion/deletion smokes: the operations converged to the exact message,
-usage, and deletion outcomes without deadlock or timeout.
-
-Browser verification passed in two layers on 2026-07-13. First,
-`E2E_PHASE10_ONLY=true` with the existing `E2E_RUN_ID=1783945829` repeated the
-Coach UI/API/RLS journey as a focused diagnostic. Then the full non-destructive
-current-checkout command ran against local Supabase with the deterministic fake
-provider and reported
-`E2E browser smoke passed for e2e-1783947134@example.test`. The focused mode
-requires an existing eligible E2E principal and omits the earlier product
-phases; it is not a replacement for the full run.
-
-The previously open first live-account product-path criterion passed on
-2026-07-13 with that existing onboarded local E2E principal. FastAPI ran with
-`COACH_PROVIDER=local_codex_oauth`, the fake provider disabled, and explicit
-`LOCAL_CODEX_MODEL=gpt-5.5`; Flutter ran with `USE_MOCK_DATA=false`. The UI
-authenticated, reported the provider ready, deliberately sent one request, and
-rendered the validated answer plus expanded `Data used` and provider/model
-truth. The response recorded `source=model`,
-`provider=local_codex_oauth`, `provider_called=true`, the exact prompt/context
-versions, normal safety, and medium uncertainty. The CLI did not emit a
-reliable `model_reported` field, so that value remained `null`; the exact
-configured request remained `gpt-5.5` with no fallback.
-
-The used-context manifest included profile `1/1`, daily snapshot `1/1`, stale
-daily briefing `1/1`, goals `2/2`, tasks `2/2`, habits `2/2`, and focus sessions
-`3/3`. It excluded the stale weekly review (`0/1`) and had no selected memory or
-prior completed turn (`0/0` each). The authenticated history endpoint returned
-the exact persisted turn. The harness validated reply bounds and UI rendering
-without printing the question, assembled prompt, answer, raw CLI events,
-stderr, account identity, token, path, `.env` value, or Supabase key.
+Exact current results and dated fake/live-provider evidence live in
+[Current Verified Baseline](verification.md#current-verified-baseline) and the
+historical sections of `docs/verification.md`. Those records do not establish a
+deployable provider, a different account's model access, or remote production
+state.
 
 Focused Python and Flutter tests plus migration contract tests exist in the
 checkout, but source coverage is not a pass claim. Record actual commands and

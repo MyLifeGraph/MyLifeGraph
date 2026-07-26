@@ -1,7 +1,7 @@
 # MyLifeGraph: aktueller Produktleitfaden
 
 Status: Beschreibung des tatsächlich implementierten Repository-Stands vom
-25. Juli 2026. Dieses Dokument beschreibt den Ist-Zustand, nicht die Roadmap.
+26. Juli 2026. Dieses Dokument beschreibt den Ist-Zustand, nicht die Roadmap.
 Die verbindlichen technischen Detailverträge bleiben die am Ende verlinkten
 Contract-Dokumente.
 
@@ -755,7 +755,9 @@ dabei lediglich lesbar.
 5. `Planner` öffnen: alle fünf Create-Flows, Needs attention, sieben Tage,
    Unscheduled und aktive Preparation prüfen; einen Task/Habit-Preview erst
    nach bewusster Bestätigung reservieren; `Use study rhythm` nur beim Task und
-   offene/überfällige Kurswahl als Link zurück zu Settings prüfen.
+   offene/überfällige Kurswahl als Link zurück zu Settings prüfen. Bei einer
+   aktiven Klausur zusätzlich den read-only Watch-/Exam-week-/Overdue-Status,
+   Schlafkapazität und explizite Review-/Replan-Navigation prüfen.
 6. Unter `Settings → Calendar import` read-only Events und den Einstieg `Plan
    preparation` ansehen.
 7. In `Insights` Observation, Datenfenster, Signalquellen und Advanced-

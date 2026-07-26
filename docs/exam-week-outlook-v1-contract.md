@@ -1,6 +1,6 @@
 # Exam-Week Outlook V1 Contract
 
-Status: implemented repository boundary as of 2026-07-25.
+Status: implemented repository boundary as of 2026-07-26.
 
 This contract adds two related, deterministic capabilities:
 

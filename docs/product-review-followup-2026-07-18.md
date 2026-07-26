@@ -1,5 +1,8 @@
 # Student Product Review Follow-up — 2026-07-18
 
+Status: historical checkout report; it does not describe the current product
+or verification baseline.
+
 This is the implementation-backed follow-up to
 `docs/product-review-handoff.md`. The reviewed baseline was commit
 `fce17b72a95bb386b2978cb658f06341809fc2bf` on branch `new_backend_gh`. The

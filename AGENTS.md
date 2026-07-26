@@ -45,18 +45,21 @@ Read these files before making changes:
 16. `docs/exam-week-outlook-v1-contract.md` before changing Daily Capture V4
     sleep planning, sleep-duration projection, exam-window activation,
     sleep-protected capacity, or the Planner outlook card
-17. `docs/ui-language-and-copy-contract.md` before changing student-facing
+17. `docs/setup-personalization-retirement-contract.md` before changing Setup
+    inputs, Goal compatibility, friction handling, Daily State capture
+    compatibility, Coach context, or Reminder ownership
+18. `docs/ui-language-and-copy-contract.md` before changing student-facing
     names, capability claims, retry copy, localization, or large-text behavior
-18. `docs/today-overview-v1-contract.md` before changing the Today streak,
+19. `docs/today-overview-v1-contract.md` before changing the Today streak,
     progress arithmetic, timeline sources, task/habit selection, or supporting
     section boundary
-19. `docs/planner-v1-contract.md` before changing Planner navigation,
+20. `docs/planner-v1-contract.md` before changing Planner navigation,
     availability, Action Plans, fixed commitments, calendar busy-time consent,
     or Today Overview V2
-20. `docs/study-setup-v1-contract.md` before changing optional Study Setup,
+21. `docs/study-setup-v1-contract.md` before changing optional Study Setup,
     focus rhythm, preparation checklist, recovery reservations, semester
     planning, or course-selection attention
-21. `docs/product-review-handoff.md` when starting a fresh whole-product review
+22. `docs/product-review-handoff.md` when starting a fresh whole-product review
     of Deadline Planner and the current usability-polish slice
 
 ## Current State
@@ -269,6 +272,14 @@ The migration
 six superseded initial policies and makes the eleven unchanged canonical owner/
 admin predicates initialization-plan safe. It changes no table privilege, RLS
 mode, owner/admin rule, or service-role boundary.
+The migration
+`supabase/migrations/20260725120000_retire_setup_goals_and_friction.sql`
+idempotently strips retired Setup/friction JSON, archives only Setup-owned
+Goals, deletes only retired Setup-derived memories, and invalidates reproducible
+derived output that referenced those fields without regenerating it. Its
+compatibility wrappers keep the Setup Apply signature stable while ignoring
+Goal/Reminder inputs, and admit paired Coach prompt/context V2 provenance while
+preserving readable V1 history.
 
 ## Important Docs
 
@@ -314,6 +325,9 @@ mode, owner/admin rule, or service-role boundary.
 - `docs/exam-week-outlook-v1-contract.md` - Daily Capture V4 sleep estimates,
   automatic exam-window modes, read-only dual capacity simulation, risk
   warnings, and the Planner-only presentation boundary.
+- `docs/setup-personalization-retirement-contract.md` - retired Setup Goals and
+  personalization inputs, friction-free Capture compatibility, Daily State V2,
+  Coach V2, Reminder ownership, and stored-data cleanup.
 - `README.md` - high-level project overview.
 
 ## Next Implementation Direction
@@ -495,8 +509,11 @@ and never fall back to direct partial profile/timetable completion. Named
 routines remain candidates in the intake response until cadence is explicitly
 confirmed. Weekly fixed commitments support optional inclusive semester dates
 and duplication across weekdays; calendar import stays outside onboarding.
-Setup-owned goals, active habits, and fixed commitments have durable
-review/edit/archive, pause, and removal paths without touching manual rows.
+Active Setup-owned habits and fixed commitments have durable review/edit/
+archive, pause, and removal paths without touching manual rows. Goals and
+retired personalization answers have no active Setup surface; legacy Setup-owned
+Goals are archived while manual and foreign-managed Goals remain compatibility
+data.
 Setup apply is one database transaction behind a service-role-only RPC. Client
 validation and HTTP 4xx failures leave the draft editable, a 409 suggests
 reloading server state, and an ambiguous network/5xx/invalid-response result
@@ -509,31 +526,33 @@ Shutdown and Morning Calibration are separate typed flows over one
 `DailyCaptureEntry`. Their same-day merge replaces only the submitted capture
 kind under `daily_logs.metadata.captures`, preserves the other kind, and
 projects compatible numeric columns with Morning energy taking precedence over
-Evening energy. Evening requires one primary friction with an explicit
-`no_major_friction` answer and accepts up to two optional, distinct additional
-frictions; only the primary friction affects Daily Mode. The retired
-`gentle_tomorrow` field is not written by new captures, while legacy capture
-objects containing it remain readable. Morning separately requires sleep
-duration and a `1..10` estimated sleep-quality rating; very low current quality
-can select recovery even when duration was sufficient, while moderately low
-quality prevents `push`. Older V2 Morning objects without the additive field
-remain readable. Supabase writes rebuild a dynamic set of at most four
-deterministically identified current-state events; guest storage uses V2 daily
-JSON while continuing to read and migrate V1 guest check-ins. Real capture
-writes refresh the explicit local `target_date` snapshot best-effort, while the
-backend prefers event `metadata.entry_date` over UTC timestamps when filtering
-the broadened read window. Dashboard reads remain direct and nullable, expose
-only persisted capture context, and never synthesize a mode or score. Phase 1
-does not add Daily Mode, briefing ranking or persistence, recommendation
-generation on save, an LLM, calendar import, or autonomous workers. The Phase
-0C Setup service-role RPC and its retry/revision contract are unchanged.
+Evening energy. Under `daily-capture-v4`, Evening requires mood, energy, stress,
+one planned local sleep time, and a `300..720` minute target on a 15-minute grid;
+stress source and controllability are required together at stress `5..10`.
+Primary/additional friction and `gentle_tomorrow` are not written. Morning
+requires aware estimated sleep-start/wake instants, their derived whole-minute
+duration and compatible hours, the target used for that night, a `1..10`
+estimated sleep-quality rating, current energy, and day shape. Raw sleep clocks,
+target, and source Evening identity remain only in Daily Log metadata; other
+consumers receive the derived duration. V2/V3 branches remain readable and may
+survive as explicit compatibility branches until edited. Supabase writes
+rebuild a dynamic set of at most four deterministically identified current-state
+events; guest storage uses V4 daily JSON while continuing to read V1/V2/V3
+entries. Real capture writes refresh the explicit local `target_date` snapshot
+best-effort, while the backend prefers event `metadata.entry_date` over UTC
+timestamps when filtering the broadened read window. Dashboard reads remain
+direct and nullable, expose only persisted capture context, and never synthesize
+a mode or score. Capture does not rank a briefing, generate a Recommendation,
+call an LLM, change a plan, or create an autonomous workflow.
 
 Phase 2, Explainable Daily State, is implemented. Daily and weekly snapshots
-add `summary.daily_state` under the `explainable-daily-state-v1` contract. A
-strict parser trusts Phase 1 V2 capture metadata only when its identity, enum,
-numeric, timestamp, and numeric-projection invariants hold; legacy numeric
-fallback is allowed only when no V2 marker exists. Daily State uses a fixed
-seven-day state lookback independent of the requested statistics window.
+add `summary.daily_state` under the `explainable-daily-state-v2` contract. A
+strict branch-compatible parser trusts V2/V3/V4 capture metadata only when its
+identity, enum, numeric, timestamp, sleep-interval, and numeric-projection
+invariants hold; legacy numeric fallback is allowed only when no structured
+capture marker exists. Friction is ignored and V1 Daily State is sanitized only
+for readable history. Daily State uses a fixed seven-day state lookback
+independent of the requested statistics window.
 Evening is current on the target date or previous date, Morning only on the
 target date. The result exposes `missing`, `partial`, `current`, or `stale`
 quality; recovery-first `push`, `steady`, `recover`, or `plan` classification;
@@ -569,7 +588,7 @@ New focus rows persist the local start `entry_date`; the
 migration backfills missing legacy values from the UTC date of `started_at`,
 which is also the shared Flutter/FastAPI fallback. Snapshots add bounded
 habit/focus counts and evidence from fully paginated, stably ordered 1,000-row
-action-fact pages, and `explainable-daily-state-v1` remains unchanged.
+action-fact pages, and `explainable-daily-state-v2` remains unchanged.
 Guest/mock sessions expose none of these remote commands.
 
 Today Overview V2 supersedes the visible Phase 5 briefing card while preserving
@@ -627,120 +646,33 @@ Phase 10, Controlled Coach, is implemented through strict authenticated
 `coach-history-v1`, and `coach-memory-selection-v1` boundaries. `/coach` uses
 FastAPI only for a real authenticated account; `/more` is an alias. Guest/mock
 is zero-call and shows honest local unavailability. FastAPI builds at most
-32 KiB of owner-scoped `coach-context-v1` data from current state, briefing,
+32 KiB of owner-scoped `coach-context-v2` data from current state, briefing,
 active facts, a current weekly review, explicitly selected eligible memory, and
 up to six completed turns. Imported calendar content, hidden capture/intake
-free text, credentials, and cross-user rows are excluded. Capability, history,
-and memory reads never call a model; every response is a deliberate, budgeted
-send. Urgent safety may bypass the provider, and no suggestion can execute or
-mutate product state.
+free text, retired Goals/onboarding preferences/coaching style/friction,
+credentials, and cross-user rows are excluded. New requests use
+`controlled-coach-prompt-v2`; persisted V1 history remains readable. Capability,
+history, and memory reads never call a model; every response is a deliberate,
+budgeted send. Urgent safety may bypass the provider, and no suggestion can
+execute or mutate product state.
 
-FastAPI-backed browser E2E coverage for revisioned Setup ownership/retry/edit,
-concurrent same-request convergence, post-intake recommendations, exact Phase 2
-Daily State recomputation, daily snapshot refresh, deliberate dashboard
-recommendation refresh, and Supabase-backed habit management now exists.
-Phase 3 adds focused Flutter/FastAPI tests, but its task/habit/focus database
-journeys are also encoded as exact Playwright/database assertions, including
-committed-response-loss reconciliation for habit/task create, habit
-outcome/undo, task completion/undo, and focus start/finish. Negative writes
-cover lifecycle/range/cadence constraints and every terminal focus update,
-including `updated_at`. Phase 4 adds exact read-only/generate, persisted action,
-and idempotent daily-identity assertions. Phase 5 adds GET-only Dashboard load,
-honest briefing state, deliberate `force=true` adjustment, and real primary
-action dispatch. Phase 6 adds exact feedback create/history/delete, bounded
-ranking provenance, correction back to zero influence, and the cautious default
-Insight before advanced correlations. Phase 7 replaces the first manual briefing
-generation in that journey with a token-protected, single-profile scheduled
-preparation and verifies local-date, snapshot/briefing identity, no-LLM
-provenance, and a write-free retry.
-Phase 8 extends that source journey with read-only missing truth, deliberate
-weekly generation, exact persisted facts/proposals, confirmed manual Habit V1
-adaptation, Setup ownership, stale/refresh behavior, and review-table RLS.
-Phase 9 source assertions extend the journey with consent, connect-without-
-import, retry-safe `.ics` reconciliation, paginated read-only events,
-disconnect-retains, local delete, schedule preservation, and integration-table
-RLS. The combined Phase 3/4/5/6/7/8/9 browser journey passed non-destructively
-in the 2026-07-13 Phase 9 implementation checkout. Later changes must still
-establish their own current-checkout pass before claiming E2E.
-Phase 10 source uses only the deterministic fake provider for deliberate send,
-replay/conflict, safety bypass, exact persistence, memory selection, history
-delete/tombstones, ownership/RLS, UI provenance, and guest zero-call assertions.
-The opt-in synthetic `local_codex_oauth` smoke completed on 2026-07-13 against
-the explicitly requested `gpt-5.5` model (`1 passed`), with no fallback and no
-answer, prompt, or raw event stream logged. Real local PostgreSQL parallel lock
-smokes also completed without deadlock or timeout and converged the
-claim/completion/deletion outcomes. A focused fake-provider Phase 10 browser
-rerun and the subsequent full non-destructive browser journey both passed on
-the recorded 2026-07-13 checkout against local Supabase; the full run reported
-`E2E browser smoke passed for e2e-1783947134@example.test`. These checks
-establish only this machine's local/provider boundaries, not remote Supabase,
-production readiness, or a second developer's account. A separate authenticated
-Flutter -> FastAPI -> `local_codex_oauth` -> same-user Codex CLI live turn also
-passed non-destructively on 2026-07-13 with explicit `gpt-5.5`, strict validated
-and persisted response provenance, visible UI data-use/provider truth, and no
-question/prompt/answer/raw-event logging. The different-Linux-user clone/login
-acceptance remains open.
+FastAPI, Flutter, migration, and browser coverage spans Setup ownership and
+retry, Capture V4, Daily State V2, executable Tasks/Habits/Focus, Today,
+briefings, feedback, Weekly Review, Calendar Import, Notification lifecycle and
+delivery, Planner/Deadline Planner, Exam-Week Outlook, account controls, and the
+fake-provider Coach boundary. The browser source includes exact persistence,
+retry, cross-owner/RLS, read-only, and guest zero-call assertions. Test source
+being present is not evidence that a later checkout passed it.
 
-After explicit local migration authorization, Notification Delivery V1's base
-`20260714130000_notification_delivery_v1.sql` and the reviewed follow-up
-`20260714143000_notification_delivery_settings_guard.sql` were applied to the
-local stack on 2026-07-14; local history matches the repository. A rollback-only
-database smoke verified exact replay, expected-revision conflict, Setup-style
-monotone timestamps, consent ordering, and request-identity invalidation. The
-full non-reset current-checkout browser journey then passed with
-`E2E browser smoke passed for e2e-1784046486@example.test`. It exercised exact
-foreground consent, settings replay/conflict, deterministic scheduler
-generation, category/quiet/cap rejection, UUIDv5 dedupe, receipt replay,
-privacy-safe provenance, acknowledged banner display, and fresh Inbox display.
-That run proves only this local fake-provider stack; it adds no push/system,
-background-mobile, deployed scheduler, remote Supabase, or live-provider claim.
+The sole current exact commit, command counts, E2E identity, and evidence limits
+live in
+[Current Verified Baseline](docs/verification.md#current-verified-baseline).
+Historical results remain in `docs/verification.md` and explicitly historical
+reports; do not copy them into current contracts or runbooks. The opt-in
+`local_codex_oauth` checks remain machine/account-specific and separate from
+standard deterministic verification.
 
-Deadline Planner V1's final local migration/rollback smoke and the full
-non-reset combined current-checkout browser journey passed on 2026-07-18. The
-browser run reported
-`E2E browser smoke passed for e2e-1784390610@example.test` and exercised manual
-and selected-calendar proposals, draft discard, confirmation/replanning,
-managed-task focus progress, bounded Dashboard reads, Calendar non-mutation,
-RLS/ledger isolation, Account Export/deletion, and guest zero-call. This remains
-a local fake-provider claim, not a remote migration, installed-device,
-long-term-outcome, provider-calendar, push, or background-replanning claim.
-
-After explicit local authorization, the account-wide preparation-capacity
-migration was applied without a reset on 2026-07-19. The final local history
-matched the repository; the complete FastAPI suite reported
-`763 passed, 1 skipped`, the standard gate and non-reset Supabase preflight each
-passed all `601` Flutter tests with clean analysis, and the full browser journey
-reported `E2E browser smoke passed for e2e-1784448992@example.test`. It exercised
-the exact Settings save, direct-write denial, seven-day projection, changed-
-budget confirmation conflict, cross-owner isolation, and guest zero-call. This
-is local evidence only and makes no remote migration, installed-device,
-participant-study, long-term-outcome, provider-calendar, push/background, or
-production-Coach claim.
-
-The compatible actionable workload-day follow-up then completed locally on
-2026-07-19 without another migration. The complete FastAPI suite reported
-`766 passed, 1 skipped`; the standard gate and non-reset Supabase verification
-each passed all `608` Flutter tests with clean analysis and matching history.
-The final full browser journey reported
-`E2E browser smoke passed for e2e-1784465767@example.test` after exposing and
-fixing a nested Bottom Sheet whose barrier did not cover Shell navigation. The
-passing run covers strict owner/date detail, cross-owner emptiness, deliberate
-review/replan navigation, and modal cancellation without mutation. It adds no
-remote, installed-device, participant, background, provider, localization, or
-longitudinal claim.
-
-The compatible compact existing-plan replan follow-up also completed locally
-on 2026-07-19 without backend, schema, RLS, or calculation changes. The focused
-Deadline Plans page suite passed `22` tests, the standard gate passed all `610`
-Flutter tests with clean analysis, and the final full browser journey reported
-`E2E browser smoke passed for e2e-1784475200@example.test`. Two earlier attempts
-exposed and led to hardening of the shared Flutter-Web exact-input helper; only
-the passing post-fix run is final evidence. It verifies the compact zero-request
-review, full-editor transition/cancel path, existing planner/RLS lifecycle, and
-exact input persistence. It adds no remote, installed-device, participant,
-background, provider, localization, or longitudinal claim.
-
-The implemented post-intake refresh is backend-only and best-effort:
+The implemented Intake apply and separate refresh boundaries are backend-owned:
 
 - `GET /v1/intake/setup` derives `user_id` from the verified Supabase bearer
   token and returns the newest `intake-v1` Setup row: the latest pending row for
@@ -749,8 +681,9 @@ The implemented post-intake refresh is backend-only and best-effort:
   and acts as both initial completion and revision-checked edit.
 - The intake service writes pending/applied `intake_responses` revisions,
   then calls the service-role-only atomic Setup apply RPC. The RPC takes a
-  per-user transaction advisory lock; reconciles notification preferences and
-  Setup-owned goals, habits, schedule items, and memories; upserts the canonical
+  per-user transaction advisory lock; reconciles Habits, schedule/Study rows,
+  and the best-energy memory; archives legacy Setup-owned Goals; leaves
+  `notification_preferences` byte-for-byte unchanged; upserts the canonical
   `setup:intake-v1` onboarding snapshot; marks the intake applied; and projects
   `profiles.setup_revision`, completion time, and explicit display name in the
   same transaction.
@@ -762,10 +695,11 @@ The implemented post-intake refresh is backend-only and best-effort:
 - One exact legacy placeholder is removed during reconciliation when omitted:
   unmarked onboarding `Math`, `Room 204`, Monday `08:15`-`09:45`. Other manual
   or unmarked onboarding rows remain preserved.
-- It then calls the deterministic recommendation engine with no LLM usage.
-- The recommendation engine reads recent `daily_logs`, `behavioral_events`,
-  `tasks`, and latest `user_state_snapshots`, verifies candidates, dedupes by
-  fingerprint, and persists accepted rows to `recommendations`.
+- Setup completion generates no Recommendation. The separate deterministic
+  recommendation engine reads recent `daily_logs`, `behavioral_events`, `tasks`,
+  and latest `user_state_snapshots`, verifies candidates, dedupes by fingerprint,
+  and persists accepted rows only when its explicit or scheduled boundary is
+  invoked.
 - Normal dashboard reads through `GET /v1/recommendations` must still not
   generate recommendations.
 - The dashboard refresh action is deliberate and calls
@@ -821,7 +755,7 @@ you actually intend to run `supabase db reset`.
 `supabase db reset` must complete through:
 
 ```text
-20260723200707_optimize_canonical_rls_policies.sql
+20260725120000_retire_setup_goals_and_friction.sql
 ```
 
 Expected local reset notices include skipped legacy CamelCase tables and
@@ -965,8 +899,9 @@ FLUTTER_BIN=/home/gregor/tools/flutter/bin/flutter scripts/verify.sh
 ```
 
 `scripts/verify.sh` runs shell syntax checks, the hermetic local-stack
-credential/cleanup harness, Flutter dependency resolution, Flutter analysis,
-Flutter widget tests, Python compile checks, and `git diff --check`.
+credential/cleanup harness, the documentation consistency tests/gate, Flutter
+dependency resolution, Flutter analysis, Flutter widget tests, Python compile
+checks, and `git diff --check`.
 
 For docs and shell scripts:
 
@@ -1054,21 +989,51 @@ docs examples, or chat output.
 
 ## Documentation Requirement
 
-Documentation must stay current. After any significant change to schema,
-startup flow, configuration, architecture, environment variables, deployment, or
-agent workflow, update the relevant docs in the same change.
+Documentation is part of the Definition of Done, not a later cleanup task.
+Before changing behavior, identify the owning contract or runbook from
+`Start Here`; update it in the same change as the implementation. A task is not
+complete while current docs describe an older route, contract version,
+migration boundary, source of truth, UI behavior, command, or verification
+state.
 
-At minimum:
+At minimum, keep these owners aligned:
 
-- Schema or RLS changes: update `docs/supabase-current-state.md`.
-- Backend/frontend boundary changes: update `docs/architecture.md`.
-- Local setup or command changes: update `docs/local-dev.md`.
-- Agent workflow or safety changes: update this `AGENTS.md`.
-- Verification workflow changes: update `docs/verification.md` and link any
-  changed commands from `docs/local-dev.md`.
+- Schema, RLS, grants, RPCs, or migrations: `docs/supabase-current-state.md`
+  and the migration inventory in this file.
+- FastAPI/Flutter data flow or authority boundary: `docs/architecture.md` plus
+  the owning feature contract.
+- Public FastAPI route or payload contract: `services/ai_service/README.md`
+  plus the owning feature contract and affected client docs.
+- Flutter surface, navigation, persistence, or copy: `apps/mobile/README.md`
+  plus the owning feature and copy contracts.
+- Local setup, environment, or command: `docs/local-dev.md`.
+- Agent workflow or safety: this `AGENTS.md`.
+- Verification automation or evidence: `docs/verification.md`; link commands
+  from `docs/local-dev.md` and never treat test-source presence as a pass.
 
-Do not leave future agents to rediscover changed setup steps from terminal
-history.
+`docs/verification.md#current-verified-baseline` is the sole current source for
+exact verification counts, commit ids, and E2E identities. Other current docs
+must link to it rather than copy those values. A dated report may retain its
+checkout-local evidence only when its opening metadata explicitly contains
+`Status: historical`; such evidence never proves the current checkout.
+
+Before handing off any repository change:
+
+1. Review changed code, schema, scripts, tests, and docs together for
+   documentation impact.
+2. Update status dates, compatibility language, examples, and non-claims where
+   behavior changed.
+3. Run `npm run verify:docs`. The check validates links, canonical contract
+   versions, current migration references, documented FastAPI routes,
+   duplicated verification evidence, known stale claims, and changed-file
+   documentation ownership.
+4. Run the relevant product checks and `git diff --check`.
+
+The docs-impact check compares the working tree with `HEAD` by default. The
+GitHub workflow supplies the push or pull-request base through `DOCS_BASE_REF`;
+a manual feature-branch audit should do the same so committed branch changes are
+checked too. Do not leave future agents to reconstruct changed behavior from
+terminal history.
 
 ## Environment And Secrets
 

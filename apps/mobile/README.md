@@ -94,10 +94,22 @@ reviews, signals, recommendations, feedback history, and the full week remain
 lazy. The persisted deterministic briefing still exists for backend consumers,
 but it is no longer presented as a decision made for the user. Capture itself
 does not generate recommendations or create/change a plan. Morning Calibration
-therefore describes only what that save does. It requires sleep duration and an
-independent `1..10` estimated sleep-quality rating; older saved Morning V2
-objects remain readable until the user explicitly completes that new answer.
+therefore describes only what that save does. Under `daily-capture-v4`, Evening
+requires one planned local sleep time and a `300..720` minute target on a
+15-minute grid. Morning records editable aware estimated sleep-start/wake
+instants, derives and labels the `Estimated sleep duration`, retains the target
+used for that night, and separately requires a `1..10` estimated sleep-quality
+rating. V2/V3 branches remain readable and may stay explicit compatibility
+branches until edited; editing a branch requires its V4 fields.
 Guest/mock Today and capture stay local and make no authenticated request.
+
+Planner additionally loads the strictly read-only
+`exam-week-outlook-v1` projection for authenticated real accounts. An active
+exam may show a 14-day watch, seven-day Exam week, or overdue card before
+ordinary attention; assignments consume capacity but do not activate it. The
+card can open existing review/replan navigation but never creates a preview,
+changes a plan, adds a Today item, or generates a Notification. Guest/demo makes
+no outlook request.
 
 ## Auth Modes
 
@@ -113,8 +125,10 @@ Guest/mock Today and capture stay local and make no authenticated request.
   recovery, and OAuth use that same Android callback. This repository contains
   no iOS runner, so native iOS callback support is not claimed.
 
-First-run Setup uses explicit required selections and progressive optional
-goals, routines, context, and fixed commitments. Weekly commitments can carry
+First-run Setup requires only Typical weekday and Best energy window, with an
+optional display name, routines, fixed commitments, and Study Setup. Focus
+areas, Goals, friction, coaching style, Reminder preference, and free-form
+context are retired Setup inputs. Weekly commitments can carry
 optional inclusive semester dates and can be duplicated for another weekday;
 without dates they repeat until archived. Calendar import is not asked during
 onboarding and remains an optional Settings integration. `/onboarding?edit=1`
@@ -198,6 +212,8 @@ routes such as `/alerts` leave the shell destinations unselected.
   unless explicitly enabled; guest/mock makes zero Coach HTTP calls)
 - `/more` (compatibility alias to `/coach`)
 - `/settings`
+- `/settings/notifications` (foreground in-app consent, categories, quiet hours,
+  and daily cap)
 - `/settings/integrations/calendar` (optional authenticated `.ics` import)
 
 The global offline banner reports only that no network transport is available;
@@ -214,9 +230,9 @@ Permanent deletion requires typed confirmation and session-bound Supabase
 sign-in evidence no more than 15 minutes old. A stale or refresh-only session
 stays signed in and receives an explicit sign-out/sign-in instruction.
 
-Insights visibly consumes the strict latest `skillset_profiles` row. Missing or
-malformed real rows remain an explicit retryable state; no demo profile is
-substituted into a real account.
+Insights shows the Skill profile only in explicitly local/demo mode and labels
+it as example data. Real accounts neither load nor render `skillset_profiles`
+because no trusted producer currently exists.
 Correlation exploration offers only bounded 7/14/30/90-day windows and pages
 every contributing Supabase source with a hard explicit row ceiling; it neither
 labels a silently truncated result as all-time nor allocates unbounded history.
@@ -265,15 +281,10 @@ task/habit/focus journeys now include exact rows, committed-response-loss cases
 for habit/task create, habit outcome/undo, task completion/undo, and focus
 start/finish, plus negative lifecycle/range/cadence and terminal-focus
 `updated_at` assertions in `e2e/web/smoke.mjs`. They must not be claimed as
-passed in a later checkout until that checkout's full run succeeds. In the
-recorded 2026-07-13 checkout, a focused Phase 10 rerun and the subsequent full
-non-destructive local browser journey passed with the fake provider. The
-focused mode is diagnostic only. A separate authenticated Flutter-to-FastAPI-to-
-`local_codex_oauth` live turn also passed on this machine with explicit
-`gpt-5.5`, validated UI rendering and provenance, and persisted authenticated
-history; no question, prompt, or answer content was logged. Another Linux
-user's independent clone/login acceptance remains open. See
-`../../docs/verification.md`.
+passed in a later checkout until that checkout's full run succeeds. Exact
+current results and the separate per-machine live-provider boundary live in
+[Current Verified Baseline](../../docs/verification.md#current-verified-baseline).
+Another Linux user's independent clone/login acceptance remains open.
 
 Browser E2E lives at the repository root:
 

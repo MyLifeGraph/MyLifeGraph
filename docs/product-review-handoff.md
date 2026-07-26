@@ -3,7 +3,7 @@
 Status: current whole-product review entry point for the checkout containing
 this document, updated through Today Overview V2, Planner V1, Study Setup V1,
 the Coach-enabled shell navigation, Setup personalization retirement, Daily
-Capture V4, and Exam-Week Outlook V1 on 2026-07-25.
+Capture V4, and Exam-Week Outlook V1 on 2026-07-26.
 
 ## Objective
 
@@ -112,6 +112,7 @@ whole-product review, the minimum set includes:
 - `docs/study-setup-v1-contract.md`
 - `docs/deadline-planner-v1-contract.md`
 - `docs/exam-week-outlook-v1-contract.md`
+- `docs/setup-personalization-retirement-contract.md`
 - `docs/phase-3-executable-actions-contract.md`
 - `docs/phase-8-weekly-review-contract.md`
 - `docs/phase-9-calendar-import-contract.md`
@@ -135,16 +136,12 @@ push, or run a live model.
 ## Evidence Boundary
 
 Verification counts in dated contract sections belong to their recorded
-checkout. The 2026-07-23 shell-navigation follow-up passed the source gate and
-all then-current Flutter tests, but did not rerun the full browser journey.
-The subsequent cleanup source gate passed all 642 remaining Flutter tests; the
-FastAPI suite reported 861 passed and 1 skipped, local migration history matched
-through the RLS optimization, and Supabase advisors reported no issue. That
-cleanup's full browser attempt reached the late Coach section before exposing a
-non-addressable Flutter Web shell Semantics selector. The source restored the
-stable direct Coach route and a focused Phase 10 browser rerun passed; the full
-combined journey was not restarted. Record a new commit, exact commands,
-counts, and environment before calling a later checkout fully verified.
+checkout. Exact current results live only in
+[Current Verified Baseline](verification.md#current-verified-baseline). That
+local deterministic evidence is not remote, installed-device, live-provider,
+clinical, longitudinal, deployed, or participant evidence. Record a new commit,
+exact commands, counts, and environment in `docs/verification.md` before calling
+any later checkout fully verified.
 
 ## Prompt For A New Review Chat
 

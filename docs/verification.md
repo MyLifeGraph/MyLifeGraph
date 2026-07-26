@@ -9,6 +9,30 @@ The current Setup/Goal/friction verification boundary is
 this file remain records of their checkout; they do not redefine current
 Capture V4, Daily State V2, Exam-Week Outlook V1, or Coach V2 expectations.
 
+## Current Verified Baseline
+
+The latest fully verified local product boundary is commit `a14fc5b` from
+2026-07-26. The complete FastAPI suite reported `865 passed, 1 skipped`; the
+standard source gate and non-destructive local Supabase preflight each passed
+all `656` Flutter tests with clean analysis and exact migration history. The
+demo seed, debug Web build, and final full browser journey also passed. The
+browser run used the deterministic fake Coach provider and reported
+`E2E browser smoke passed for e2e-1785017076@example.test`.
+
+That run covered Setup-personalization retirement, Daily Capture V4 sleep
+planning and correction, an active exam with a competing assignment,
+Planner-only Exam-Week Outlook status, explicit replan navigation, and
+unchanged active plan/revision/block rows before confirmation. It is local,
+deterministic checkout evidence only. It does not establish remote migration
+state, installed-device behavior, deployed scheduling, a production model
+provider, clinical or academic outcomes, longitudinal results, or participant
+evidence.
+
+This section is the only source for the repository's current exact verification
+counts, commit id, and E2E identity. Current docs link here instead of copying
+those values. Dated evidence below is historical run history and does not prove
+a later checkout.
+
 ## Verification Levels
 
 Use the lowest level that covers the change.
@@ -90,6 +114,8 @@ FLUTTER_BIN=/path/to/flutter scripts/verify.sh
 
 The script runs:
 
+- `node --test scripts/check_docs_consistency.test.mjs`
+- `node scripts/check_docs_consistency.mjs`
 - `bash -n scripts/start_frontend.sh`
 - syntax checks for the shared migration helper, local-stack supervisor, and
   their hermetic harnesses
@@ -101,6 +127,21 @@ The script runs:
 - `flutter test`
 - `python3 -m compileall services/ai_service/app`
 - `git diff --check`
+
+The fast documentation-only command is:
+
+```bash
+npm run verify:docs
+```
+
+It checks local Markdown links and anchors; code-owned Capture, Daily State,
+Coach, and Exam-Week Outlook versions; the newest migration references;
+documented FastAPI routes; centralized verification evidence; known superseded
+claims; and changed-code ownership by an appropriate contract or runbook.
+Locally it compares uncommitted work with `HEAD`.
+`.github/workflows/docs-consistency.yml` runs the same gate for pushes and pull
+requests with `DOCS_BASE_REF` set to the event's base commit, so committed
+branch changes receive the same docs-impact check.
 
 FastAPI unit tests are run separately:
 
@@ -571,7 +612,7 @@ supabase db reset
 Expected successful reset output applies migrations through:
 
 ```text
-20260723200707_optimize_canonical_rls_policies.sql
+20260725120000_retire_setup_goals_and_friction.sql
 ```
 
 Expected notices include skipped legacy CamelCase tables and already-existing
@@ -1332,22 +1373,12 @@ the existing legacy `public."User"` reference and `legacy_index` warnings in
 the account-deletion RPC.
 
 Daily Capture V4 and Exam-Week Outlook V1 completed locally across
-2026-07-25–26 without a schema change. The complete FastAPI suite reported
-`865 passed, 1 skipped`; the standard source gate passed migration safety,
-stack hermeticity, clean Flutter analysis, all `656` Flutter tests, and Python
-compilation. The non-destructive local Supabase preflight confirmed exact
-migration history and repeated all `656` Flutter tests. The demo seed verified
-21 daily logs, eight briefings, four focus sessions, five calendar events,
-three preparation plans, and two Coach turns with Capture V4 sleep facts. A
-debug Flutter Web build succeeded. The final full browser journey reported
-`E2E browser smoke passed for e2e-1785017076@example.test`; it covered exact
-Evening retry identity with a 23:00/eight-hour plan, Morning correction to
-00:00–05:30 and 330 derived minutes, an active exam plus competing assignment,
-Planner-only outlook visibility, explicit replan navigation, and unchanged
-active plan/revision/block rows before confirmation. The GET remained
-read-only and no migration, Notification, Today item, or automatic plan change
-was added. This is local deterministic evidence only; it is not clinical,
-deployed, installed-device, longitudinal, or academic-outcome evidence.
+2026-07-25–26 without a schema change. The exact final result is retained only
+in [Current Verified Baseline](#current-verified-baseline). The run covered the
+Evening sleep plan, corrected Morning interval, active exam plus competing
+assignment, Planner-only outlook, explicit replan navigation, and unchanged
+active plan/revision/block rows before confirmation. The GET remained read-only
+and no migration, Notification, Today item, or automatic plan change was added.
 
 Phase 10 has focused fake-provider/process-runner, strict contract, service,
 migration, repository, controller, and widget tests in the checkout. Its

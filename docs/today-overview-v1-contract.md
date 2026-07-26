@@ -1,7 +1,8 @@
 # Today Overview V1 Contract
 
 Status: implemented through the additive Today Overview V2 Planner projection
-as of 2026-07-23. The V1 endpoint remains available and unchanged.
+and Daily Capture V4 compatibility as of 2026-07-26. The V1 endpoint remains
+available and unchanged.
 
 Today Overview V1 replaces the briefing-first presentation on the `Today`
 surface. It does not remove `daily-briefing-v1`: persisted briefings remain a
@@ -33,7 +34,7 @@ The response reads only owner-scoped persisted facts:
 
 | Projection | Canonical source |
 | --- | --- |
-| check-ins and streak | `daily_logs` exact Daily Capture V2 metadata |
+| check-ins and streak | `daily_logs` strict Daily Capture V2/V3/V4 metadata |
 | tasks | `tasks` |
 | habits and outcomes | `habits`, `habit_logs` |
 | recurring commitments | `schedule_items` |
@@ -49,18 +50,19 @@ remaining entries. Empty current data and unavailable data are distinct.
 ## Check-In Streak
 
 A completed streak day requires both one valid Morning and one valid Evening
-Daily Capture V2 projection for the same `entry_date`. Both may be entered at
-any time and in either order, including both during the evening. Saving only
-one capture never completes that date.
+Daily Capture V2/V3/V4 branch for the same `entry_date`. Both may be entered at
+any time and in either order, including both during the evening. Saving only one
+capture never completes that date.
 
 The validator reuses the strict Daily State capture parser, including contract
-identity, enums, numeric bounds, timestamps, and projected numeric-column
-agreement. Legacy numeric rows, malformed V2 metadata, and proxy columns do not
-count. Canonical Morning/Evening persistence merges both kinds into the one
-current daily entry instead of treating separate legacy rows as completion.
-The additive Morning `sleep_quality` rating is validated when present. V2
-Morning captures saved before that field existed remain valid for streak
-compatibility; every new or edited Morning capture requires it in Flutter.
+and branch identity, enums, numeric bounds, timestamps, V4 sleep-interval
+integrity, and projected numeric-column agreement. Legacy numeric rows,
+malformed structured metadata, and proxy columns do not count. Canonical
+Morning/Evening persistence merges both kinds into the one current daily entry
+instead of treating separate legacy rows as completion. The additive Morning
+`sleep_quality` rating is validated when present. V2 Morning captures saved
+before that field existed remain valid for streak compatibility; every new or
+edited Morning capture requires it in Flutter.
 
 Rows are read newest-first in bounded pages until the first date gap is known;
 the calculation is not capped to a cosmetic 30- or 60-day window. An incomplete

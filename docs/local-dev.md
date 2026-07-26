@@ -281,11 +281,12 @@ while Morning is current only on the target date. The resulting quality is
 `missing`, `partial`, `current`, or `stale`, and recovery safeguards precede
 `plan`, `push`, and the conservative `steady` fallback.
 
-V2/V3 capture metadata is trusted only after strict identity, enum, numeric,
-timestamp, and projection checks; friction keys are ignored. A malformed
-structured row never falls back to its projected numeric columns. Numeric
-legacy fallback is available only when the row has no V2/V3 marker. The source
-remains `snapshot-aggregator-v1`; metadata records
+V2/V3/V4 capture metadata is trusted only after strict identity, branch-
+compatibility, enum, numeric, timestamp, sleep-interval, and projection checks;
+friction keys are ignored. A malformed structured row never falls back to its
+projected numeric columns. Numeric legacy fallback is available only when the
+row has no structured capture marker. The source remains
+`snapshot-aggregator-v1`; metadata records
 `daily_state_contract_version=explainable-daily-state-v2` and
 `state_lookback_days=7`. Top-level `summary.risk_flags` aliases the current
 Daily State codes, while the older statistics-window flags remain separately in
@@ -690,25 +691,13 @@ RUN_LOCAL_CODEX_SMOKE=true ./.venv/bin/python -m pytest -q \
 
 Run it only after the local provider settings above are enabled and
 `codex login status` succeeds for the same Linux user. It must print no prompt,
-token, OAuth state, answer, or raw CLI event stream. On 2026-07-13 this
-synthetic-context smoke completed with the explicitly requested `gpt-5.5`
-model (`1 passed`) and no fallback. That result applies only to the tested
-machine, CLI, login, and account; it does not prove another developer's model
-access or a deployable provider. The focused Phase 10 and subsequent full
-  non-destructive local fake-provider browser journeys passed in the recorded
-  2026-07-13 checkout; the 2026-07-23 shell-navigation follow-up did not rerun
-  the full browser journey. These results do not establish remote state or
-  production readiness.
-
-A separate full-product live acceptance also passed on this machine on
-2026-07-13: an existing onboarded local user authenticated through Flutter Web,
-FastAPI used `local_codex_oauth` with exact `gpt-5.5`, and the same Linux user's
-Codex login returned one validated, UI-rendered, persisted response. The harness
-logged no question, assembled prompt, answer, raw event stream, stderr, account
-identity, path, token, `.env` value, or Supabase key. This verifies the first
-local live-account product path only; another Linux user must still clone, log
-in with their own eligible account, and repeat the documented setup without
-copied credentials.
+token, OAuth state, answer, or raw CLI event stream. Exact dated provider and
+browser evidence lives in
+[Current Verified Baseline](verification.md#current-verified-baseline) and the
+historical sections of `docs/verification.md`. Any live result applies only to
+the tested machine, CLI, login, and account; another Linux user must still
+clone, log in with their own eligible account, and repeat the documented setup
+without copied credentials.
 
 This local adapter is suitable for developer testing on the machine that owns
 the login. It is not a production deployment mechanism, does not make a mobile
@@ -916,11 +905,12 @@ claim/complete/fail acquire the same owner advisory lock before their existing
 inner bodies, matching history deletion and avoiding inverse lock order.
 The remaining guards persist exact provider-call truth for safety redirects;
 block application-role profile insertion, role/provider changes, deletion, and
-onboarding projection changes; and remove legacy `"User"` fallback from role
+  onboarding projection changes; and remove legacy `"User"` fallback from role
 authority. Authenticated profile edits are limited to non-authority fields;
 service role and the atomic Intake apply RPC retain the required backend
 projection authority. A fresh migration-chain verification should end at
-`20260723120000_study_setup_v1.sql`. The earlier small account-export grant gives
+`20260725120000_retire_setup_goals_and_friction.sql`. The earlier small
+account-export grant gives
 only `service_role` the `lifestyle_entries` read authority required by the
 existing Account Export V1 table set. The account-delete
 migration installs the service-role-only full-account delete transaction; it
@@ -1117,6 +1107,12 @@ All standard non-destructive checks from the repository root:
 FLUTTER_BIN=/path/to/flutter scripts/verify.sh
 ```
 
+Run the fast documentation-only gate with:
+
+```bash
+npm run verify:docs
+```
+
 Non-destructive local Supabase preflight:
 
 ```bash
@@ -1185,10 +1181,9 @@ It does not create the prerequisite user or exercise Setup, capture, action,
 briefing, review, and calendar journeys, so it is a diagnostic/repetition aid,
 never a substitute for the full command above.
 
-On 2026-07-13 the focused non-reset run with `E2E_RUN_ID=1783945829` passed,
-then the full non-destructive current-checkout command passed against local
-Supabase with the deterministic fake Coach provider and reported
-`E2E browser smoke passed for e2e-1783947134@example.test`.
+Exact current results live in
+[Current Verified Baseline](verification.md#current-verified-baseline).
+Documented browser assertions are not a pass claim for a later checkout.
 
 Browser E2E with a fresh local database:
 

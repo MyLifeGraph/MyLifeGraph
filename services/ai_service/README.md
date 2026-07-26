@@ -79,6 +79,15 @@ FastAPI service boundary for recommendation and future ML workflows.
   `valid_until` dates. Existing targets remain unscheduled; GETs never create
   revisions. Calendar import remains optional and outside onboarding. See
   `../../docs/planner-v1-contract.md`.
+- Deadline Planner V1 exposes bearer-owned exam/assignment plan reads,
+  workload/detail reads, and explicit proposal/confirmation/lifecycle commands
+  under `/v1/deadline-plans`. The separate
+  `GET /v1/deadline-plans/exam-week-outlook` is strictly read-only and compares
+  ordinary availability with the newest valid Evening V4 sleep interval
+  hypothetically protected. Assignments consume capacity without activating its
+  watch/exam-week/overdue mode; no read creates a preview or changes a plan. See
+  `../../docs/deadline-planner-v1-contract.md` and
+  `../../docs/exam-week-outlook-v1-contract.md`.
 - Phase 10 exposes authenticated capability, deliberate response,
   history/delete, and explicit memory-selection contracts. Standard tests use
   the deterministic fake provider. The only real-model adapter is the strictly
@@ -90,10 +99,11 @@ FastAPI service boundary for recommendation and future ML workflows.
   preferences, coaching style, or friction; V1 history remains readable. It is
   not a production provider.
   See `../../docs/phase-10-controlled-coach-plan.md`.
-- `/v1/account/profile`, `/v1/account/export`, and `/v1/account` expose the
-  bearer-derived V1 timezone, bounded JSON portability, and confirmed permanent
-  deletion boundary. The client never supplies an owner id. See
-  `../../docs/v1-account-controls-contract.md`.
+- `/v1/account/profile`, `/v1/account/preparation-budget`,
+  `/v1/account/export`, and `/v1/account` expose the bearer-derived V1 timezone,
+  explicit account-wide preparation limit, bounded JSON portability, and
+  confirmed permanent deletion boundary. The client never supplies an owner id.
+  See `../../docs/v1-account-controls-contract.md`.
 - `POST /v1/notifications/{notification_id}/actions` exposes strict,
   bearer-derived `notification-lifecycle-v1` read/unread/dismiss commands
   through a retry-safe service-role RPC. It does not generate or deliver
@@ -199,9 +209,11 @@ Evening capture on the target date or previous date as current and a Morning
 capture only on the target date as current. Complete current Evening plus
 Morning yields `current`; one usable current branch or current legacy numeric
 input yields `partial`; older usable input yields `stale`; and no trusted input
-yields `missing`. V2/V3 capture rows are parsed strictly with friction ignored
-and never fall back to projected numbers when their structured marker or branch
-is malformed. Legacy numeric fallback is used only when no V2/V3 marker exists.
+yields `missing`. V2/V3/V4 capture rows are parsed strictly with friction
+ignored; V4 additionally validates branch compatibility and its sleep-plan/
+estimated-interval projections. A malformed structured marker or branch never
+falls back to projected numbers. Legacy numeric fallback is used only when no
+structured capture marker exists.
 Current Morning `sleep_quality` is separate
 from `sleep_hours`: a very low `1..10` estimate can select recovery despite
 sufficient duration, and moderately low quality prevents `push`. Older V2
@@ -241,6 +253,39 @@ scheduled-target selection:
 curl http://localhost:8000/v1/today/overview-v2 \
   -H 'Authorization: Bearer <supabase_access_token>'
 ```
+
+Planner V1 uses these bearer-authenticated reads and deliberate commands:
+
+```text
+GET    /v1/planner/overview
+GET    /v1/planner/preferences
+PATCH  /v1/planner/preferences
+GET    /v1/planner/action-plans/{plan_id}
+POST   /v1/planner/action-plans/proposals
+POST   /v1/planner/action-plans/{plan_id}/confirm
+POST   /v1/planner/action-plans/{plan_id}/cancel
+POST   /v1/planner/commitments
+PATCH  /v1/planner/commitments/{commitment_id}
+POST   /v1/planner/commitments/{commitment_id}/archive
+```
+
+Deadline Planner and its strictly read-only workload/outlook projections use:
+
+```text
+GET    /v1/deadline-plans
+GET    /v1/deadline-plans/exam-week-outlook
+GET    /v1/deadline-plans/workload
+GET    /v1/deadline-plans/workload/{local_date}
+GET    /v1/deadline-plans/{plan_id}
+POST   /v1/deadline-plans/proposals
+POST   /v1/deadline-plans/{plan_id}/confirm
+POST   /v1/deadline-plans/{plan_id}/complete
+POST   /v1/deadline-plans/{plan_id}/cancel
+```
+
+The outlook GET derives its owner only from the bearer principal and performs no
+write. Planner and Deadline Planner proposals remain staged until their separate
+confirmation command succeeds.
 
 Read today's persisted internal briefing without side effects:
 
@@ -370,6 +415,7 @@ V1 account controls are authenticated and owner-derived:
 
 ```text
 PATCH  /v1/account/profile
+PATCH  /v1/account/preparation-budget
 GET    /v1/account/export
 DELETE /v1/account
 ```
@@ -527,8 +573,9 @@ blank optional materialization, candidate cadence validation, request replay,
 stale revision conflicts, convergent retry/edit identities, lifecycle removal,
 legacy-key stripping, unchanged Reminder preferences, Setup-only Goal/memory
 cleanup, no post-Setup Recommendation generation, and preservation of
-non-Setup-owned rows. Daily State tests cover V2/V3 friction sanitization and
-the V2 output contract. Phase 3 tests cover strict executable
+non-Setup-owned rows. Daily State tests cover strict V2/V3/V4 parsing, explicit
+mixed-branch compatibility, V4 sleep-interval validation, friction sanitization,
+and the V2 output contract. Phase 3 tests cover strict executable
 action parser parity, explicit habit/focus snapshot summaries and local-date
 filtering, preservation of Phase 2 Daily State behavior, and terminal-task
 exclusion from recommendation pressure. Phase 4 through Phase 7 coverage adds
@@ -537,18 +584,17 @@ write behavior, bounded targeted retry, per-user failure isolation, and default
 no-recommendation/no-LLM preparation. Phase 8/9 coverage adds weekly-review
 freshness/proposals plus strict calendar consent, retry-safe `.ics` identity,
 timezone/all-day/recurrence/cancellation handling, stable event pagination,
-disconnect/delete separation, schedule preservation, and RLS ownership. A
-documented test suite alone is not a pass claim. The combined Phase 3 through
-Phase 9 browser journey passed non-destructively in the 2026-07-13 Phase 9
-implementation checkout; run it again after later changes to establish their
-current result.
+disconnect/delete separation, schedule preservation, and RLS ownership.
+Deadline Planner/Planner coverage includes proposal/confirmation/lifecycle,
+workload, preparation-budget, shared Availability, and strict read-only
+Exam-Week Outlook tests. A documented test suite alone is not a pass claim.
+Exact current results live in
+[Current Verified Baseline](../../docs/verification.md#current-verified-baseline).
 
 Phase 10 tests use fake services/providers/process runners. They do not require
-Codex, OAuth, a subscription, or network access. A focused Phase 10 browser
-rerun and the subsequent full non-destructive local-Supabase journey passed in
-the recorded 2026-07-13 checkout with the deterministic fake provider. The full
-run reported `E2E browser smoke passed for e2e-1783947134@example.test`; see
-`../../docs/verification.md` for the diagnostic-only focused rerun command.
+Codex, OAuth, a subscription, or network access. See
+`../../docs/verification.md` for historical deterministic evidence and the
+diagnostic-only focused rerun command.
 The separate synthetic-context live smoke is skipped by default and runs only
 after explicit local-provider setup and login:
 
@@ -557,21 +603,9 @@ RUN_LOCAL_CODEX_SMOKE=true ./.venv/bin/python -m pytest -q \
   tests/test_local_codex_smoke.py
 ```
 
-On 2026-07-13 that smoke completed with the explicitly requested `gpt-5.5`
-model (`1 passed`), with no fallback and no answer, prompt, or raw event stream
-logged. This records only the tested machine/CLI/login/account and is not a
-deployable-provider or another-developer availability claim. The browser
-results likewise establish neither remote Supabase nor production readiness.
-
-The separate authenticated product-path acceptance also passed on this machine
-on 2026-07-13: Flutter Web authenticated an existing onboarded local principal,
-this service reported ready `local_codex_oauth` with explicit `gpt-5.5`, and one
-deliberate send returned and persisted a strict `coach-response-v1` with model
-provenance and `provider_called=true`. No fake provider or fallback was enabled,
-and the harness logged no question, assembled prompt, answer, raw event stream,
-stderr, account identity, path, token, `.env` value, or Supabase key. The CLI
-did not emit a reliable selected-model field, so `model_reported` remained
-`null`. Another Linux user's independent clone/login run remains unverified.
+Any recorded live result is specific to its tested machine, CLI, login, and
+account; it is not a deployable-provider or another-developer availability
+claim. Another Linux user's independent clone/login run remains unverified.
 
 Run service tests with:
 

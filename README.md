@@ -155,17 +155,11 @@ way to explore the product today is the Flutter app in mock-data guest mode.
   key and shares no OAuth files. It prefers the explicitly configured `gpt-5.5`
   setting, reports unavailable login/model/tool-free capability honestly, and
   never silently falls back. Production deployment requires a separate
-  provider/security contract. An opt-in synthetic-context smoke completed on
-  2026-07-13 with the explicitly requested `gpt-5.5` model (`1 passed`), no
-  fallback, and no answer/prompt/raw event stream logged. That result is
-  machine- and account-specific. A separate authenticated Flutter -> FastAPI ->
-  `local_codex_oauth` -> same-user Codex CLI live turn also passed and persisted
-  a validated response on this machine with explicit `gpt-5.5`; no prompt or
-  answer content was logged. The recorded 2026-07-13 checkout's focused Phase 10 rerun and
-  subsequent full non-destructive local browser-E2E journey also passed with
-  the deterministic fake provider. None of these results establishes a remote/
-  production provider or another developer's account; the separate other-Linux-
-  user acceptance remains open.
+  provider/security contract. Per-machine live-provider evidence and the
+  current deterministic checkout result are recorded centrally in
+  [Current Verified Baseline](docs/verification.md#current-verified-baseline).
+  They establish neither a remote/production provider nor another developer's
+  account; the separate other-Linux-user acceptance remains open.
   Notification Lifecycle V1 adds strict stored-Inbox read/unread/dismiss
   tombstones for real authenticated accounts through FastAPI and one
   service-role-only retry ledger. Guest/demo stays local and zero-call, and
@@ -338,8 +332,9 @@ another developer's Codex OAuth state into the repo or `.env`. See
 
 Setup personalization was deliberately reduced on 2026-07-25. Focus areas,
 Goals, friction answers, coaching style, Reminder preference, and free-form
-context are no longer active Setup inputs. Daily Capture/State and Coach now use
-their V3/V2 contracts, while old stored shapes remain safely readable. See
+context are no longer active Setup inputs. Daily Capture now uses V4; Daily State
+and Coach use their V2 contracts, while old stored shapes remain safely
+readable. See
 `docs/setup-personalization-retirement-contract.md` for the compatibility and
 cleanup boundary.
 
@@ -447,9 +442,10 @@ Supabase is the intended auth and persistence backend. The current app supports:
   generates or applies a proposal by itself. Guest/mock sessions remain
   unavailable.
 - The additive `summary.daily_state` contract is
-  `explainable-daily-state-v2`. It reads strict V2/V3 captures, sanitizes
-  historical V1 state, and uses a fixed seven-day
-  state lookback separate from the requested statistics window, explicit
+  `explainable-daily-state-v2`. It reads strict V2/V3/V4 captures with explicit
+  V4 branch compatibility, sanitizes historical V1 state, and uses a fixed
+  seven-day state lookback separate from the requested statistics window,
+  explicit
   `missing`/`partial`/`current`/`stale` quality, and recovery-first
   `push`/`steady`/`recover`/`plan` classification. It has no Goal or friction
   context/evidence, and `push` requires an active Task. It carries bounded
@@ -529,8 +525,11 @@ Supabase is the intended auth and persistence backend. The current app supports:
 
 Important current caveat: the Flutter app targets the canonical snake_case
 schema. The migration chain currently ends at
-`20260723200707_optimize_canonical_rls_policies.sql`. It removes superseded
-initial policies and makes the unchanged canonical owner/admin predicates
+`20260725120000_retire_setup_goals_and_friction.sql`. It removes retired
+Setup/friction state under owner-safe compatibility rules while preserving
+Reminder settings and readable Coach V1 history. The preceding
+`20260723200707_optimize_canonical_rls_policies.sql` removes superseded initial
+policies and makes the unchanged canonical owner/admin predicates
 initialization-plan safe without changing grants. The preceding
 `20260723120000_study_setup_v1.sql` adds the forced-RLS optional Study
 projection, composes it with atomic Intake apply, and extends Planner/Deadline
@@ -613,8 +612,10 @@ Standard non-destructive checks:
 FLUTTER_BIN=/path/to/flutter scripts/verify.sh
 ```
 
-This runs Flutter dependency resolution, analysis, widget tests, Python compile
-checks, shell syntax checks, and whitespace checks.
+This runs the docs-consistency gate, Flutter dependency resolution, analysis,
+widget tests, Python compile checks, shell syntax checks, and whitespace checks.
+Run only the docs gate with `npm run verify:docs`; the GitHub push/pull-request
+workflow runs that same gate against the event base commit.
 
 Flutter app, if running commands manually:
 
@@ -699,54 +700,15 @@ habit adaptation, stale refresh, Setup non-mutation, and review-table RLS. Phase
 9 adds explicit consent, bounded `.ics` reconciliation, paginated imported-only
 events, disconnect/delete separation, schedule preservation, and integration
 RLS. Phase 10 adds fake-provider Coach request/replay/safety/history/memory/RLS/
-UI assertions. A focused Phase 10 rerun and the subsequent full combined journey
-passed non-destructively against local Supabase in the 2026-07-13 current
-checkout; the full run reported
-`E2E browser smoke passed for e2e-1783947134@example.test`.
+UI assertions. Deadline Planner, preparation capacity/detail, Capture V4, and
+Exam-Week Outlook coverage additionally checks strict capacity arithmetic,
+sleep-plan correction, Planner-only status, explicit replan navigation, and no
+automatic mutation.
 
-After Deadline Planner V1 was added, the full non-reset combined journey passed
-again on 2026-07-18 after the product-polish slice. It reported
-`E2E browser smoke passed for e2e-1784404040@example.test` and included the
-then-current two-page Evening flow, compact Dashboard expansions, the weekly-review entry,
-planner lifecycle/projection, Calendar isolation, focus progress, RLS, Account
-Export, account deletion, and guest zero-call checks.
-
-The account-wide preparation-capacity follow-up then passed the full non-reset
-combined journey locally on 2026-07-19:
-`E2E browser smoke passed for e2e-1784448992@example.test`. It adds exact budget
-save/direct-write denial, strict seven-day workload, cross-plan capacity,
-changed-budget confirmation conflict, Today/Preparation-plans UI, cross-owner
-isolation, export, and guest zero-call assertions. This is not evidence of a
-remote migration, installed device, production provider, participant study, or
-long-term outcome.
-
-The subsequent actionable workload-day follow-up passed the standard gate and
-non-reset Supabase verification with `608` Flutter tests, the complete FastAPI
-suite with `766 passed, 1 skipped`, and the final full browser journey with
-`E2E browser smoke passed for e2e-1784465767@example.test`. The browser pass
-includes strict per-day plan contributions, cross-owner isolation, staged
-replan navigation, and the root-modal fix that keeps `Cancel` on Preparation
-plans. It remains local evidence and does not change the non-claims above.
-
-The compact existing-plan replanning follow-up then passed the standard gate
-with `610` Flutter tests and the final full non-reset browser journey with
-`E2E browser smoke passed for e2e-1784475200@example.test`. The final run covers
-the compact zero-request review, deliberate full-editor transition, cancellation,
-existing planner/RLS lifecycle, and strengthened exact Flutter-Web input
-checks. It remains local automated evidence and adds no participant, remote,
-installed-device, background, provider, localization, or outcome claim.
-
-Daily Capture V4 and Exam-Week Outlook V1 then passed the standard gate with
-`656` Flutter tests, the complete FastAPI suite with
-`865 passed, 1 skipped`, the non-destructive local Supabase preflight, the demo
-seed, and a debug Web build. The final full browser journey reported
-`E2E browser smoke passed for e2e-1785017076@example.test`. It covered a
-23:00/eight-hour Evening plan, a corrected 00:00–05:30 estimated sleep
-interval, a seven-day exam with a competing assignment, Planner-only status,
-explicit replan navigation, and unchanged active revisions before
-confirmation. This remains local deterministic evidence and adds no sleep
-diagnosis, automatic replanning, Notification, Today item, or deployed
-scheduler claim.
+Exact current results and dated run history live only in
+[Current Verified Baseline](docs/verification.md#current-verified-baseline) and
+the remainder of `docs/verification.md`. Run the command before claiming that a
+later checkout passes this source coverage.
 
 With a fresh local database:
 

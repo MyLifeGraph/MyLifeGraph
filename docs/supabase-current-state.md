@@ -149,13 +149,14 @@ codes. Capture free text is excluded.
 
 Daily State always uses a fixed seven-day lookback even when the caller requests
 a different statistics window. Evening is current from the target date or
-previous date; Morning is current only from the target date. Strict V2/V3
-capture parsing ignores friction and does not fall back to projected columns
-after a malformed structured marker. Legacy numeric rows are accepted
-conservatively only when no V2/V3 marker exists. Missing, partial, or stale
-evidence cannot produce `push`; current `push` also requires an active Task, and
-recovery rules precede planning/productivity rules. Very low current sleep quality may
-select `recover` even with sufficient duration; moderately low quality prevents
+previous date; Morning is current only from the target date. Strict V2/V3/V4
+capture parsing validates V4 branch compatibility and sleep intervals, ignores
+friction, and does not fall back to projected columns after a malformed
+structured marker. Legacy numeric rows are accepted conservatively only when no
+structured capture marker exists. Missing, partial, or stale evidence cannot
+produce `push`; current `push` also requires an active Task, and recovery rules
+precede planning/productivity rules. Very low current sleep quality may select
+`recover` even with sufficient duration; moderately low quality prevents
 `push`.
 
 The persisted source marker remains `snapshot-aggregator-v1`. Metadata adds
@@ -855,7 +856,7 @@ RLS mode, owner/admin predicate, or service-role boundary.
 For local Supabase-backed testing, the reset should complete through:
 
 ```text
-20260723200707_optimize_canonical_rls_policies.sql
+20260725120000_retire_setup_goals_and_friction.sql
 ```
 
 Then configure `.env` with:
@@ -971,19 +972,12 @@ task/focus/habit lifecycle, duration, active-target, and weekday-cadence writes
 include terminal-focus `updated_at` mutation. Phase 8/9 source adds weekly review
 and calendar import. Phase 10 source starts FastAPI with the deterministic fake
 provider and adds bounded Coach persistence, replay, safety, memory, history,
-RLS, UI, and guest-zero-call assertions. The combined Phase 3 through Phase 9
-smoke first passed in the Phase 9 implementation checkout. In the 2026-07-13
-recorded 2026-07-13 checkout, a focused Phase 10 rerun and the subsequent full combined
-journey passed non-destructively against local Supabase with the deterministic
-fake provider. This establishes neither remote migration/RLS state nor
-production readiness. On 2026-07-19 the reviewed account-wide preparation-
-capacity migration was explicitly applied locally without a reset; history
-matched through `20260719120000_account_preparation_budget_v1.sql`, the non-reset
-preflight passed all `601` Flutter tests, and the full browser journey reported
-`E2E browser smoke passed for e2e-1784448992@example.test`. That remains local
-evidence and establishes no remote database state. Later changes must establish
-a new full pass. Do not run
-destructive reset commands against a remote database.
+RLS, UI, and guest-zero-call assertions. Exact current results and dated run
+history live in
+[Current Verified Baseline](verification.md#current-verified-baseline) and the
+historical sections of `docs/verification.md`. They establish neither remote
+migration/RLS state nor production readiness. Later changes must establish a
+new full pass. Do not run destructive reset commands against a remote database.
 
 For manual local product exploration, `npm run seed:demo` creates repeatable
 local-only Auth users and app rows for student, worker, and recovery scenarios.
@@ -1116,7 +1110,7 @@ the one-active-focus index required by the runtime contract. Locked habit
 eligibility, immutable focus history, and restricted target FKs protect the
 contract against stale/concurrent client state. The earlier Phase
 0C service-role-only atomic Setup RPC signature, revision contract, and
-monotonic profile guard remain compatible. Current Capture V3 changes only
+monotonic profile guard remain compatible. Current Capture V4 changes only
 typed metadata and client/backend mapping; Daily State V2 consumes sanitized
 data inside existing snapshot JSON; Phase 3 adds action facts without changing
 Daily State classification; and
