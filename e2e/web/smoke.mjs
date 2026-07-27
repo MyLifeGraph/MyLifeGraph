@@ -24,6 +24,13 @@ const scheduledRefreshToken = process.env.SCHEDULED_REFRESH_TOKEN;
 const headed = process.env.HEADED === 'true';
 const runId = process.env.E2E_RUN_ID ?? `${Date.now()}`;
 const phase10Only = process.env.E2E_PHASE10_ONLY === 'true';
+const personalLearningOnly =
+  process.env.E2E_PERSONAL_LEARNING_ONLY === 'true';
+if (phase10Only && personalLearningOnly) {
+  throw new Error(
+    'E2E_PHASE10_ONLY and E2E_PERSONAL_LEARNING_ONLY are mutually exclusive.',
+  );
+}
 const coachAttemptId = phase10Only
   ? `${runId}-${process.pid}-${Date.now()}`
   : runId;
@@ -54,8 +61,12 @@ const plannerTaskTitle = `E2E split Planner task ${runId}`;
 const plannerHabitTitle = `E2E Planner habit ${runId}`;
 const plannerOneOffTitle = `E2E one-time commitment ${runId}`;
 const plannerWeeklyTitle = `E2E weekly commitment ${runId}`;
+const learnedPlannerTaskTitle = `E2E learned timing task ${runId}`;
+const learnedPlannerFallbackTitle = `E2E learned timing fallback ${runId}`;
+const learnedPlannerBusyTitle = `E2E learned timing busy window ${runId}`;
 const accountExportV1TableNames = [
   'profiles',
+  'learning_preferences',
   'notification_preferences',
   'daily_logs',
   'behavioral_events',
@@ -72,6 +83,7 @@ const accountExportV1TableNames = [
   'habits',
   'habit_logs',
   'focus_sessions',
+  'focus_session_reflections',
   'intake_responses',
   'study_setup_profiles',
   'user_state_snapshots',
@@ -106,6 +118,7 @@ const accountExportV1OmittedTables = {
   notification_action_requests: 'backend_only_anti_replay_ledger',
   deadline_plan_request_identities: 'backend_only_anti_replay_ledger',
   planner_request_identities: 'backend_only_anti_replay_ledger',
+  learning_request_identities: 'backend_only_anti_replay_ledger',
 };
 
 const browser = await chromium.launch({
@@ -116,7 +129,61 @@ const browser = await chromium.launch({
 let page;
 try {
   await assertAiServiceHealthy();
-  if (phase10Only) {
+  if (personalLearningOnly) {
+    const user = await createConfirmedUser();
+    const accessToken = await signInAccessToken(
+      'focused Personal learning browser run',
+    );
+    await completeFocusedPersonalLearningSetup(accessToken);
+    await patchRows(
+      `profiles?id=eq.${user.id}`,
+      { timezone: 'Europe/Berlin' },
+      'focused Personal learning profile timezone',
+    );
+    page = await browser.newPage({ viewport: { width: 1280, height: 960 } });
+    page.on('pageerror', (error) => {
+      console.error(`[browser page error] ${error.message}`);
+    });
+    page.on('console', (message) => {
+      if (['error', 'warning'].includes(message.type())) {
+        console.error(`[browser ${message.type()}] ${message.text()}`);
+      }
+    });
+    await page.goto(appRoute('/auth'), { waitUntil: 'domcontentloaded' });
+    await waitForFlutterShell(page);
+    await enableFlutterSemantics(page);
+    await fillByLabelOrPlaceholder(page, 'Email', email, 0);
+    await fillByLabelOrPlaceholder(page, 'Password', password, 1);
+    await clickByText(page, 'Login', { match: 'last' });
+    await page.waitForURL('**/#/dashboard', { timeout: 45000 });
+    const focusSessionId = await assertCompactFocusReflectionJourney(
+      page,
+      user.id,
+    );
+    const overview = await plannerApiRequest(
+      '/v1/planner/overview',
+      accessToken,
+    );
+    assertPlannerApiStatus(
+      overview,
+      200,
+      'focused Personal learning Planner overview',
+    );
+    await assertPersonalLearningPlannerLoop({
+      page,
+      userId: user.id,
+      accessToken,
+      localDate: overview.json.local_date,
+    });
+    await assertFocusedLearningDataControls({
+      userId: user.id,
+      accessToken,
+      focusSessionId,
+    });
+    console.log(
+      `Focused Personal learning browser smoke passed for ${email}`,
+    );
+  } else if (phase10Only) {
     const accessToken = await signInAccessToken('focused Phase 10 browser run');
     const userId = await authenticatedUserId(accessToken);
     await resetCoachE2EState(userId);
@@ -417,7 +484,9 @@ try {
   await clickByText(page, 'Add fixed commitment');
   await fillByLabelOrPlaceholder(page, 'Title', setupCommitmentTitle, 2);
   await fillByLabelOrPlaceholder(page, 'Location optional', 'Room E2E', 3);
-  await selectDropdownOption(page, 'Weekday', 'Monday');
+  await selectNextDropdownFromFocusedField(page, 'Weekday', 'Monday', {
+    verifyInPersistedSetup: true,
+  });
   await fillByLabelOrPlaceholder(page, 'Starts (HH:mm)', '14:15', -2);
   await fillByLabelOrPlaceholder(page, 'Ends (HH:mm)', '15:45', -1);
   await expectFieldValue(page, 'Title', setupCommitmentTitle, 2);
@@ -459,6 +528,13 @@ try {
   await clickByText(page, 'Save setup');
   await expectText(page, 'Setup was not saved. Your draft is still here.');
   await page.unroute(intakeCompleteUrl, loseAppliedResponse);
+  if (
+    lostSavePayload?.responses?.fixed_commitments?.[0]?.weekday !== 1
+  ) {
+    throw new Error(
+      `Setup Weekday selection was not preserved in the exact request: ${JSON.stringify(lostSavePayload?.responses?.fixed_commitments?.[0] ?? null)}`,
+    );
+  }
   await waitForRows(
     `intake_responses?select=id,request_id,base_revision,revision,state,responses,metadata&user_id=eq.${user.id}&order=revision.asc`,
     (rows) =>
@@ -587,7 +663,11 @@ try {
   await expectText(page, setupCommitmentTitle);
   await scrollFlutterPage(page, -2800);
   await scrollFlutterPage(page, 700);
-  await selectDropdownOption(
+  await page
+    .getByRole('textbox', { name: /^Routine name(?:$|\s)/i })
+    .first()
+    .click({ timeout: 2500 });
+  await selectNextDropdownFromFocusedField(
     page,
     'Cadence (required before activation)',
     'Weekly',
@@ -598,7 +678,7 @@ try {
   await page.keyboard.press('Escape');
   await page.waitForTimeout(150);
   await fillByLabelOrPlaceholder(page, 'Weekly target (1–7)', '3', 4);
-  await selectDropdownOption(page, 'Routine status', 'Active');
+  await selectNextDropdownFromFocusedField(page, 'Routine status', 'Active');
   await scrollFlutterPage(page, 1000);
   await fillByLabelOrPlaceholder(
     page,
@@ -702,9 +782,27 @@ try {
   await scrollFlutterPage(page, 1400);
   await expectText(page, editedSetupCommitmentTitle);
   await scrollFlutterPage(page, -2800);
-  await selectDropdownOption(page, 'Routine status', 'Archived');
+  await page
+    .getByRole('textbox', { name: /^Routine name(?:$|\s)/i })
+    .first()
+    .click({ timeout: 2500 });
+  await selectNextDropdownFromFocusedField(
+    page,
+    'Routine status',
+    'Archived',
+    { tabCount: 3 },
+  );
   await scrollFlutterPage(page, 1200);
-  await selectDropdownOption(page, 'Commitment status', 'Archived');
+  await page
+    .getByRole('textbox', { name: /^Ends \(HH:mm\)(?:$|\s)/i })
+    .first()
+    .click({ timeout: 2500 });
+  await selectNextDropdownFromFocusedField(
+    page,
+    'Commitment status',
+    'Archived',
+    { tabCount: 3 },
+  );
   await scrollFlutterPage(page, 1600);
   await clickByText(page, 'Save setup');
   await page.waitForURL('**/#/settings');
@@ -1598,7 +1696,9 @@ try {
     'Distinctive Phase 3 browser task',
     1,
   );
-  await selectDropdownOption(page, 'Priority', 'High');
+  await selectNextDropdownFromFocusedField(page, 'Priority', 'High', {
+    currentOption: 'Medium',
+  });
   await clickByText(page, 'Save as unscheduled');
   await expectText(page, 'Review plan preview');
   await expectText(page, 'No time is reserved in this preview.');
@@ -1838,6 +1938,15 @@ try {
     page,
     'Focus session finished. Recovery started; linked actions were not completed automatically.',
   );
+  await expectText(
+    page,
+    'The finished session is already saved. Recovery continues while you reflect.',
+  );
+  await expectText(page, 'How focused did the session feel?');
+  await clickByRoleName(page, 'button', 'Focus quality 4 of 5');
+  await clickByRoleName(page, 'button', 'Useful progress 5 of 5');
+  await clickByText(page, 'Save reflection');
+  await expectText(page, 'Focus reflection saved.');
   await expectText(page, 'Recovery break');
   await expectText(
     page,
@@ -1867,6 +1976,17 @@ try {
     `tasks?select=id,status&user_id=eq.${user.id}&id=eq.${phase3TaskId}`,
     (rows) => rows.length === 1 && rows[0].status === 'todo',
     'focus finish does not complete its linked task',
+  );
+  await assertRows(
+    `focus_session_reflections?select=focus_session_id,user_id,contract_version,focus_quality,useful_progress,obstacles&user_id=eq.${user.id}&focus_session_id=eq.${completedFocusId}`,
+    (rows) =>
+      rows.length === 1 &&
+      rows[0].contract_version === 'focus-reflection-v1' &&
+      rows[0].focus_quality === 4 &&
+      rows[0].useful_progress === 5 &&
+      Array.isArray(rows[0].obstacles) &&
+      rows[0].obstacles.length === 0,
+    'completed Focus reflection',
   );
   await assertPatchRejected(
     `focus_sessions?id=eq.${completedFocusId}`,
@@ -1914,6 +2034,8 @@ try {
   );
   await clickByText(page, 'Abandon');
   await clickByText(page, 'Abandon session');
+  await expectText(page, 'How focused did the session feel?');
+  await clickByText(page, 'Not now');
   await waitForRows(
     `focus_sessions?select=id,status,ended_at,actual_minutes&user_id=eq.${user.id}&id=eq.${secondFocusRows[0].id}`,
     (rows) =>
@@ -1943,6 +2065,30 @@ try {
     ],
     'focus duration below the contract minimum',
     'focus_sessions_planned_minutes_check',
+  );
+
+  await page.goto(appRoute('/quick-mood-check-in'), {
+    waitUntil: 'domcontentloaded',
+  });
+  await expectText(page, 'Evening check-in');
+  await clickByText(page, 'Next');
+  await clickByText(page, 'Next');
+  await expectText(page, "Today's Focus sessions");
+  await expectText(page, '1 rated · 1 open');
+  await clickByText(page, "Today's Focus sessions");
+  await clickByText(page, phase3TaskTitle);
+  await expectText(page, 'Edit Focus reflection');
+  await clickByRoleName(page, 'button', 'Focus quality 5 of 5');
+  await clickByRoleName(page, 'button', 'Useful progress 4 of 5');
+  await clickByText(page, 'Save reflection');
+  await expectText(page, 'Focus reflection saved.');
+  await assertRows(
+    `focus_session_reflections?select=focus_session_id,focus_quality,useful_progress&user_id=eq.${user.id}&focus_session_id=eq.${completedFocusId}`,
+    (rows) =>
+      rows.length === 1 &&
+      rows[0].focus_quality === 5 &&
+      rows[0].useful_progress === 4,
+    'Evening-edited Focus reflection',
   );
 
   const inactiveHabitId = crypto.randomUUID();
@@ -2061,8 +2207,6 @@ try {
   await assertDeterministicDailyBriefing(user.id);
   await assertTodayOverview(user.id);
 
-  const recommendationsBeforeManualRefresh =
-    await activeDeterministicRecommendations(user.id);
   const dailySnapshotBeforeRecommendationRefresh =
     await latestDailySnapshotGeneratedAt(user.id);
   const dashboardBriefingPosts = [];
@@ -2170,7 +2314,6 @@ try {
   await waitForRows(
     `recommendations?select=id,title,category,status,metadata&user_id=eq.${user.id}&status=in.(new,accepted)`,
     (rows) =>
-      rows.length >= recommendationsBeforeManualRefresh.length &&
       rows.some(
         (row) =>
           row.category === 'planning' &&
@@ -2192,8 +2335,13 @@ try {
   await page.goto(appRoute('/insights'), { waitUntil: 'domcontentloaded' });
   await waitForFlutterShell(page);
   await enableFlutterSemantics(page);
-  await expectText(page, 'ONE OBSERVATION');
-  await expectText(page, 'Keep gathering comparable days');
+  await expectText(page, 'PERSONAL STUDY PATTERN');
+  await expectText(page, 'Stable');
+  await assertFlutterTextAbsent(
+    page,
+    'ONE OBSERVATION',
+    'real Insights keeps the generic observation card retired',
+  );
   await expectText(page, 'Advanced correlation exploration');
   await clickByText(page, 'Advanced correlation exploration');
   await expectText(page, 'Compare');
@@ -2508,75 +2656,341 @@ async function selectDropdownOption(page, label, option) {
     `^${escapeRegExp(label)}(?:$|\\s)`,
     'i',
   );
-  const candidates = [
-    page.getByRole('button', { name: labelPattern }).first(),
-    page.getByLabel(labelPattern).first(),
-  ];
-  let opened = false;
-  for (const candidate of candidates) {
-    try {
-      await candidate.click({ timeout: 2500 });
-      opened = true;
-      break;
-    } catch (_) {
-      // Try the next accessible DropdownButton representation.
-    }
-  }
-
-  if (!opened) {
-    const labelNode = page.getByText(label, { exact: true }).first();
-    try {
-      await labelNode.waitFor({ state: 'visible', timeout: 2500 });
-      const followingButton = labelNode.locator(
-        'xpath=following::*[@role="button"][1]',
-      );
-      await followingButton.click({ timeout: 2500 });
-      opened = true;
-    } catch (_) {
-      try {
-        const box = await labelNode.boundingBox({ timeout: 2500 });
-        if (box) {
-          await page.mouse.click(box.x + 24, box.y + box.height + 18);
-          opened = true;
-        }
-      } catch (_) {
-        // The label may be visual-only while the selected value is semantic.
-      }
-    }
-  }
-
-  if (!opened) {
-    throw new Error(`Could not open dropdown: ${label}`);
-  }
-
   const optionPattern = new RegExp(`^${escapeRegExp(option)}$`, 'i');
-  const optionCandidates = [
-    page.getByRole('menuitem', { name: optionPattern }).last(),
-    page.getByRole('option', { name: optionPattern }).last(),
-    page.getByLabel(optionPattern).last(),
-    page.getByText(option, { exact: true }).last(),
-  ];
-  for (const candidate of optionCandidates) {
-    try {
-      await candidate.click({ timeout: 1000 });
-      await page.waitForTimeout(150);
-      return;
-    } catch (_) {
-      // Flutter's open DropdownButton menu may remain canvas-only in semantics.
-    }
-  }
-
   const options = dropdownOptions(label);
   const optionIndex = options.indexOf(option);
   if (optionIndex < 0) {
     throw new Error(`No keyboard option map for ${label}: ${option}`);
   }
-  await page.keyboard.press('Home');
-  for (let index = 0; index < optionIndex; index += 1) {
-    await page.keyboard.press('ArrowDown');
+  const labelNode = page.getByText(label, { exact: true }).first();
+  await labelNode.waitFor({ state: 'visible', timeout: 2500 });
+  await labelNode.scrollIntoViewIfNeeded({ timeout: 2500 });
+  await page.waitForTimeout(200);
+  const labelBox = await labelNode.boundingBox({ timeout: 2500 });
+  if (!labelBox) {
+    throw new Error(`Could not resolve dropdown label: ${label}`);
+  }
+  const semanticMenuOptions = [
+    page.getByRole('menuitem', { name: optionPattern }).last(),
+    page.getByRole('option', { name: optionPattern }).last(),
+  ];
+  const valueNodeNearLabel = async (value) => {
+    // Flutter may expose a selected DropdownButton value as either its own
+    // semantics node or as part of the enclosing field's combined label.
+    // Keep the geometric check below authoritative and require exact semantic
+    // segments so "Morning" cannot accept the distinct "Early morning" value.
+    const normalizedValue = value.trim().replace(/\s+/g, ' ').toLowerCase();
+    const normalizedLabel = label.trim().replace(/\s+/g, ' ').toLowerCase();
+    const valuePattern = new RegExp(`^${escapeRegExp(value)}$`, 'i');
+    const valueSources = [
+      page.getByText(value, { exact: true }),
+      page.getByRole('button', { name: valuePattern }),
+      page.getByLabel(valuePattern),
+    ];
+    const valueNodeIsNearLabel = async (valueNode) => {
+      // Flutter's transparent Semantics overlay can make Playwright report an
+      // otherwise active node as not visible. Its rendered rectangle and CSS
+      // visibility still identify the field reliably.
+      const valueBox = await valueNode
+        .evaluate((element) => {
+          const bounds = element.getBoundingClientRect();
+          const style = window.getComputedStyle(element);
+          return {
+            x: bounds.x,
+            y: bounds.y,
+            width: bounds.width,
+            height: bounds.height,
+            display: style.display,
+            visibility: style.visibility,
+          };
+        })
+        .catch(() => null);
+      return (
+        valueBox != null &&
+        valueBox.width > 0 &&
+        valueBox.height > 0 &&
+        valueBox.display !== 'none' &&
+        valueBox.visibility !== 'hidden' &&
+        valueBox.y >= labelBox.y - 8 &&
+        valueBox.y <= labelBox.y + 80 &&
+        valueBox.x >= labelBox.x - 32 &&
+        valueBox.x <= labelBox.x + 760
+      );
+    };
+    for (const values of valueSources) {
+      const count = await values.count();
+      for (let index = 0; index < count; index += 1) {
+        const valueNode = values.nth(index);
+        if (await valueNodeIsNearLabel(valueNode)) {
+          return valueNode;
+        }
+      }
+    }
+
+    const semanticsNodes = page.locator('flt-semantics');
+    const semanticsCount = await semanticsNodes.count();
+    for (let index = 0; index < semanticsCount; index += 1) {
+      const valueNode = semanticsNodes.nth(index);
+      const semanticsText = await valueNode.textContent().catch(() => null);
+      if (
+        semanticsText?.trim().replace(/\s+/g, ' ').toLowerCase() ===
+          normalizedValue &&
+        (await valueNodeIsNearLabel(valueNode))
+      ) {
+        return valueNode;
+      }
+    }
+
+    const labelledSemantics = page.locator(
+      '[aria-label], [aria-valuetext]',
+    );
+    const labelledCount = await labelledSemantics.count();
+    for (let index = 0; index < labelledCount; index += 1) {
+      const valueNode = labelledSemantics.nth(index);
+      const accessibleName = await valueNode
+        .getAttribute('aria-label')
+        .catch(() => null);
+      const accessibleValue = await valueNode
+        .getAttribute('aria-valuetext')
+        .catch(() => null);
+      const normalizedAccessibleValue = accessibleValue
+        ?.trim()
+        .replace(/\s+/g, ' ')
+        .toLowerCase();
+      if (normalizedAccessibleValue === normalizedValue) {
+        if (await valueNodeIsNearLabel(valueNode)) {
+          return valueNode;
+        }
+        continue;
+      }
+      if (!accessibleName) {
+        continue;
+      }
+      const normalizedName = accessibleName
+        .trim()
+        .replace(/\s+/g, ' ')
+        .toLowerCase();
+      const exactSegments = accessibleName
+        .split(/[\n,;|]+/)
+        .map((segment) => segment.trim().replace(/\s+/g, ' ').toLowerCase());
+      const carriesExactValue =
+        exactSegments.includes(normalizedValue) ||
+        normalizedName === `${normalizedLabel} ${normalizedValue}` ||
+        normalizedName === `${normalizedValue} ${normalizedLabel}`;
+      if (carriesExactValue && (await valueNodeIsNearLabel(valueNode))) {
+        return valueNode;
+      }
+    }
+    return null;
+  };
+  const selectedValueIsNearLabel = async () =>
+    (await valueNodeNearLabel(option)) != null;
+  const waitForSelectedValueNearLabel = async () => {
+    for (let attempt = 0; attempt < 15; attempt += 1) {
+      if (await selectedValueIsNearLabel()) {
+        return true;
+      }
+      await page.waitForTimeout(100);
+    }
+    return false;
+  };
+
+  if (await waitForSelectedValueNearLabel()) {
+    return;
+  }
+
+  const chooseFromOpenMenu = async ({ allowKeyboard }) => {
+    for (const candidate of semanticMenuOptions) {
+      if (!(await candidate.isVisible().catch(() => false))) {
+        continue;
+      }
+      try {
+        await candidate.evaluate((element) => element.click());
+        await page.waitForTimeout(200);
+        await page.keyboard.press('Escape');
+        return waitForSelectedValueNearLabel();
+      } catch (_) {
+        // Fall through to deterministic keyboard selection.
+      }
+    }
+
+    if (!allowKeyboard) {
+      await page.keyboard.press('Escape');
+      return false;
+    }
+    await page.keyboard.press('Home');
+    for (let index = 0; index < optionIndex; index += 1) {
+      await page.keyboard.press('ArrowDown');
+    }
+    await page.keyboard.press('Enter');
+    await page.waitForTimeout(250);
+    await page.keyboard.press('Escape');
+    return waitForSelectedValueNearLabel();
+  };
+
+  for (const currentValue of options) {
+    const currentValueNode = await valueNodeNearLabel(currentValue);
+    if (!currentValueNode) {
+      continue;
+    }
+    try {
+      await currentValueNode.evaluate((element) => element.click());
+      await page.waitForTimeout(250);
+      if (await chooseFromOpenMenu({ allowKeyboard: false })) {
+        return;
+      }
+    } catch (_) {
+      // Try the labelled control and coordinate fallbacks below.
+    }
+  }
+
+  const accessibleControls = [
+    page.getByRole('button', { name: labelPattern }).first(),
+    page.getByLabel(labelPattern).first(),
+  ];
+  for (const control of accessibleControls) {
+    try {
+      await control.click({ timeout: 1500 });
+      await page.waitForTimeout(200);
+      if (await chooseFromOpenMenu({ allowKeyboard: true })) {
+        return;
+      }
+    } catch (_) {
+      // Try the visible InputDecorator control below.
+    }
+  }
+
+  // InputDecorator labels and their DropdownButton can be separated in
+  // Flutter's Semantics DOM. Probe several horizontal points inside the
+  // visible control, but accept the interaction only after its selected value
+  // appears beside the exact label.
+  const viewportWidth = page.viewportSize()?.width ?? 1280;
+  const xOffsets = [
+    Math.max(labelBox.width + 48, 220),
+    500,
+    24,
+  ];
+  for (const offset of xOffsets) {
+    const x = Math.min(labelBox.x + offset, viewportWidth - 24);
+    await page.mouse.click(x, labelBox.y + labelBox.height + 18);
+    await page.waitForTimeout(250);
+    if (await chooseFromOpenMenu({ allowKeyboard: true })) {
+      return;
+    }
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(100);
+  }
+
+  throw new Error(`Could not select ${option} in dropdown: ${label}`);
+}
+
+async function selectNextDropdownFromFocusedField(
+  page,
+  label,
+  option,
+  {
+    tabCount = 1,
+    currentOption,
+    verifyInPersistedSetup = false,
+  } = {},
+) {
+  const options = dropdownOptions(label);
+  const optionIndex = options.indexOf(option);
+  if (optionIndex < 0) {
+    throw new Error(`No keyboard option map for ${label}: ${option}`);
+  }
+  const currentOptionIndex =
+    currentOption == null ? -1 : options.indexOf(currentOption);
+  if (currentOption != null && currentOptionIndex < 0) {
+    throw new Error(
+      `No keyboard option map for current ${label}: ${currentOption}`,
+    );
+  }
+  if (verifyInPersistedSetup && label !== 'Weekday') {
+    throw new Error(
+      `Persisted Setup verification is not defined for ${label}.`,
+    );
+  }
+  // The preceding text-field helper intentionally leaves that exact field
+  // focused after validating its value. Tab therefore reaches the adjacent
+  // DropdownButton without relying on Flutter's separated label semantics.
+  for (let index = 0; index < tabCount; index += 1) {
+    await page.keyboard.press('Tab');
+    await page.waitForTimeout(100);
+  }
+  await page.waitForTimeout(150);
+  await page.keyboard.press('Enter');
+  await page.waitForTimeout(200);
+  if (currentOptionIndex >= 0) {
+    const key =
+      optionIndex >= currentOptionIndex ? 'ArrowDown' : 'ArrowUp';
+    for (
+      let index = 0;
+      index < Math.abs(optionIndex - currentOptionIndex);
+      index += 1
+    ) {
+      await page.keyboard.press(key);
+    }
+  } else if (optionIndex === options.length - 1) {
+    // Repeated ArrowDown is stable even when Flutter keeps the current item
+    // highlighted and ignores Home for an already selected enum value.
+    for (let index = 0; index < options.length; index += 1) {
+      await page.keyboard.press('ArrowDown');
+    }
+  } else {
+    await page.keyboard.press('Home');
+    for (let index = 0; index < optionIndex; index += 1) {
+      await page.keyboard.press('ArrowDown');
+    }
   }
   await page.keyboard.press('Enter');
   await page.waitForTimeout(200);
+  if (await focusedDropdownHasExactValue(page, option)) {
+    return;
+  }
+  if (!verifyInPersistedSetup) {
+    await selectDropdownOption(page, label, option);
+  }
+}
+
+async function focusedDropdownHasExactValue(page, option) {
+  const normalizedOption = option.trim().replace(/\s+/g, ' ').toLowerCase();
+  for (let attempt = 0; attempt < 15; attempt += 1) {
+    const matches = await page.evaluate((expected) => {
+      const activeElement = document.activeElement;
+      if (!(activeElement instanceof HTMLElement)) {
+        return false;
+      }
+      if (activeElement.getAttribute('role') !== 'button') {
+        return false;
+      }
+      const values = [
+        activeElement.textContent,
+        activeElement.getAttribute('aria-label'),
+        activeElement.getAttribute('aria-valuetext'),
+      ];
+      return values.some((value) => {
+        if (!value) {
+          return false;
+        }
+        const normalized = value.trim().replace(/\s+/g, ' ').toLowerCase();
+        if (normalized === expected) {
+          return true;
+        }
+        return value
+          .split(/[\n,;|]+/)
+          .map((segment) =>
+            segment.trim().replace(/\s+/g, ' ').toLowerCase(),
+          )
+          .includes(expected);
+      });
+    }, normalizedOption);
+    if (matches) {
+      return true;
+    }
+    await page.waitForTimeout(100);
+  }
+  return false;
 }
 
 function dropdownOptions(label) {
@@ -2609,7 +3023,7 @@ function dropdownOptions(label) {
     'Cadence (required before activation)': ['Not set', 'Daily', 'Weekly'],
     'Routine status': ['Candidate', 'Active', 'Paused', 'Archived'],
     'Commitment status': ['Active', 'Archived'],
-    'Task priority': ['Low', 'Medium', 'High', 'Critical'],
+    Priority: ['Low', 'Medium', 'High', 'Critical'],
   }[label];
   return values ?? [];
 }
@@ -2740,6 +3154,38 @@ async function clickByRoleName(page, role, name) {
   } catch (_) {
     await locator.click({ timeout: 2500, force: true });
   }
+}
+
+async function clickFlutterSemanticsButton(page, name) {
+  const locator = page.getByRole('button', { name, exact: true }).last();
+  await locator.waitFor({ state: 'visible', timeout: 7500 });
+  await page.waitForTimeout(250);
+  await locator.evaluate((element) => {
+    if (element.getAttribute('aria-disabled') === 'true') {
+      throw new Error('Flutter semantics button is disabled.');
+    }
+    element.click();
+  });
+}
+
+async function clickFlutterSemanticsButtonContaining(page, text) {
+  const label = new RegExp(escapeRegExp(text), 'i');
+  const candidates = [
+    page.getByRole('button', { name: label }).last(),
+    page.getByLabel(label).last(),
+  ];
+  let lastError;
+  for (const locator of candidates) {
+    try {
+      await locator.waitFor({ state: 'visible', timeout: 7500 });
+      await page.waitForTimeout(250);
+      await locator.evaluate((element) => element.click());
+      return;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError;
 }
 
 async function clickScrolledByLabel(page, name) {
@@ -3358,6 +3804,41 @@ function isoDateInTimeZone(value, timeZone) {
       .map((part) => [part.type, part.value]),
   );
   return `${parts.year}-${parts.month}-${parts.day}`;
+}
+
+function localHourInTimeZone(value, timeZone) {
+  if (!isIsoTimestamp(value)) {
+    throw new Error(`Could not resolve a local hour from ${String(value)}.`);
+  }
+  const hour = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    hour: '2-digit',
+    hourCycle: 'h23',
+  })
+    .formatToParts(new Date(value))
+    .find((part) => part.type === 'hour')?.value;
+  const parsed = Number.parseInt(hour ?? '', 10);
+  if (!Number.isInteger(parsed) || parsed < 0 || parsed > 23) {
+    throw new Error(`Could not resolve the local hour for ${value}.`);
+  }
+  return parsed;
+}
+
+function timingMatchesLearnedPreference(
+  timing,
+  preference,
+  { fellBackToSetup },
+) {
+  return (
+    preference?.eligible === true &&
+    timing?.source === 'learned_personal_pattern' &&
+    timing?.window === preference.window &&
+    timing?.evidence_count === preference.evidence_count &&
+    timing?.evidence_starts_on === preference.evidence_starts_on &&
+    timing?.evidence_ends_on === preference.evidence_ends_on &&
+    timing?.evidence_fingerprint === preference.evidence_fingerprint &&
+    timing?.fell_back_to_setup === fellBackToSetup
+  );
 }
 
 function latestCompletedIsoWeek(timeZone) {
@@ -4686,6 +5167,7 @@ async function assertDisposableAccountExportAndDeletion({
   ).toISOString();
   const taskId = crypto.randomUUID();
   const focusId = crypto.randomUUID();
+  const focusReflectionId = focusId;
   const notificationId = crypto.randomUUID();
   const actionRequestId = crypto.randomUUID();
   const taskTitle = `E2E disposable account task ${runId}`;
@@ -4740,6 +5222,16 @@ async function assertDisposableAccountExportAndDeletion({
       },
       created_at: focusStartedAt,
       updated_at: focusEndedAt,
+    },
+  ]);
+  await insertRows('focus_session_reflections', [
+    {
+      focus_session_id: focusReflectionId,
+      user_id: userId,
+      contract_version: 'focus-reflection-v1',
+      focus_quality: 4,
+      useful_progress: 5,
+      obstacles: ['tired'],
     },
   ]);
   const [notification] = await insertRows('notifications', [
@@ -4924,6 +5416,7 @@ async function assertDisposableAccountExportAndDeletion({
       userId,
       taskId,
       focusId,
+      focusReflectionId,
       notificationId,
       dismissed,
       deadlinePlanFixture,
@@ -5046,6 +5539,10 @@ async function assertDisposableAccountExportAndDeletion({
       'deleted disposable Notification preferences',
     ],
     [
+      `learning_preferences?select=user_id&user_id=eq.${userId}`,
+      'deleted disposable Personal learning preferences',
+    ],
+    [
       `tasks?select=id,user_id&id=eq.${taskId}`,
       'deleted disposable task',
     ],
@@ -5056,6 +5553,10 @@ async function assertDisposableAccountExportAndDeletion({
     [
       `focus_sessions?select=id,user_id,task_id&id=eq.${focusId}`,
       'deleted disposable restrict-linked focus history',
+    ],
+    [
+      `focus_session_reflections?select=focus_session_id,user_id&focus_session_id=eq.${focusReflectionId}`,
+      'deleted disposable Focus reflection history',
     ],
     [
       `notifications?select=id,user_id&id=eq.${notificationId}`,
@@ -5122,6 +5623,7 @@ function assertDisposableAccountExportPayload(
     userId,
     taskId,
     focusId,
+    focusReflectionId,
     notificationId,
     dismissed,
     deadlinePlanFixture,
@@ -5141,10 +5643,12 @@ function assertDisposableAccountExportPayload(
   );
   Object.assign(expectedRecordCounts, {
     profiles: 1,
+    learning_preferences: 1,
     notification_preferences: 1,
     tasks: 2,
     notifications: 1,
     focus_sessions: 1,
+    focus_session_reflections: 1,
     deadline_plans: 1,
     deadline_plan_revisions: 1,
     deadline_plan_blocks: deadlinePlanFixture.blockIds.length,
@@ -5214,8 +5718,10 @@ function assertDisposableAccountExportPayload(
 
   const profileRows = payload.data.profiles;
   const preferenceRows = payload.data.notification_preferences;
+  const learningPreferenceRows = payload.data.learning_preferences;
   const taskRows = payload.data.tasks;
   const focusRows = payload.data.focus_sessions;
+  const focusReflectionRows = payload.data.focus_session_reflections;
   const notificationRows = payload.data.notifications;
   const deadlinePlanRows = payload.data.deadline_plans;
   const deadlineRevisionRows = payload.data.deadline_plan_revisions;
@@ -5237,6 +5743,8 @@ function assertDisposableAccountExportPayload(
     profileRows[0].daily_preparation_budget_minutes !== null ||
     preferenceRows.length !== 1 ||
     preferenceRows[0].user_id !== userId ||
+    learningPreferenceRows.length !== 1 ||
+    learningPreferenceRows[0].user_id !== userId ||
     taskRows.length !== 2 ||
     manualTask?.user_id !== userId ||
     managedTask?.user_id !== userId ||
@@ -5253,6 +5761,14 @@ function assertDisposableAccountExportPayload(
     focusRows[0].id !== focusId ||
     focusRows[0].user_id !== userId ||
     focusRows[0].task_id !== taskId ||
+    focusReflectionRows.length !== 1 ||
+    focusReflectionRows[0].focus_session_id !== focusReflectionId ||
+    focusReflectionRows[0].user_id !== userId ||
+    focusReflectionRows[0].contract_version !== 'focus-reflection-v1' ||
+    focusReflectionRows[0].focus_quality !== 4 ||
+    focusReflectionRows[0].useful_progress !== 5 ||
+    stableJson(focusReflectionRows[0].obstacles) !==
+      stableJson(['tired']) ||
     notificationRows.length !== 1 ||
     exportedNotification.id !== notificationId ||
     exportedNotification.user_id !== userId ||
@@ -5294,8 +5810,10 @@ function assertDisposableAccountExportPayload(
       `Account export lost owned rows or Notification lifecycle state: ${JSON.stringify({
         profiles: profileRows,
         notification_preferences: preferenceRows,
+        learning_preferences: learningPreferenceRows,
         tasks: taskRows,
         focus_sessions: focusRows,
+        focus_session_reflections: focusReflectionRows,
         notifications: notificationRows,
         deadline_plans: deadlinePlanRows,
         deadline_plan_revisions: deadlineRevisionRows,
@@ -6256,7 +6774,7 @@ async function assertBoundedWeeklyReview(page, userId) {
 }
 
 async function assertDeadlinePlanner(page, userId) {
-  const accessToken = await signInAccessToken('Deadline Planner V1');
+  let accessToken = await signInAccessToken('Deadline Planner V1');
   const localToday = isoDateInTimeZone(
     new Date().toISOString(),
     'Europe/Berlin',
@@ -6812,6 +7330,12 @@ async function assertDeadlinePlanner(page, userId) {
     assignmentPlanId: outlookAssignmentPlanId,
     assignmentTitle: outlookAssignmentTitle,
   });
+  // This repository-wide smoke can be suspended between the browser surface
+  // and its API cleanup. Re-authenticate the same owner so a wall-clock token
+  // expiry cannot turn the deterministic cleanup into a false product failure.
+  accessToken = await signInAccessToken(
+    'Deadline Planner V1 post-outlook cleanup',
+  );
   const outlookAssignmentCancelled = await deadlinePlanApiRequest(
     `/v1/deadline-plans/${outlookAssignmentPlanId}/cancel`,
     accessToken,
@@ -11502,6 +12026,12 @@ async function assertCentralPlanner(page, userId) {
     throw new Error(`Initial Planner overview is invalid: ${initial.text}`);
   }
   const localDate = initial.json.local_date;
+  await assertPersonalLearningPlannerLoop({
+    page,
+    userId,
+    accessToken,
+    localDate,
+  });
   const taskPlanId = crypto.randomUUID();
   const taskId = crypto.randomUUID();
   const taskProposal = await plannerApiRequest(
@@ -11736,6 +12266,619 @@ async function assertCentralPlanner(page, userId) {
   await clickByText(page, 'Inbox');
   await page.waitForURL('**/#/alerts');
   await expectText(page, 'Inbox');
+}
+
+async function completeFocusedPersonalLearningSetup(accessToken) {
+  const result = await plannerApiRequest(
+    '/v1/intake/complete',
+    accessToken,
+    {
+      method: 'POST',
+      body: {
+        version: 'intake-v1',
+        request_id: crypto.randomUUID(),
+        base_revision: 0,
+        responses: {
+          display_name: 'Focused Personal Learning E2E',
+          weekday_shape: 'School or work blocks',
+          best_energy_window: 'morning',
+          routines: [],
+          fixed_commitments: [],
+        },
+        metadata: {
+          client: 'e2e-personal-learning',
+          source: 'onboarding',
+        },
+      },
+    },
+  );
+  assertPlannerApiStatus(result, 200, 'focused Personal learning Setup');
+  if (
+    result.json?.exists !== true ||
+    result.json?.revision !== 1 ||
+    result.json?.status !== 'applied' ||
+    !isIsoTimestamp(result.json?.completed_at) ||
+    !arraysEqual(result.json?.recommendations, [])
+  ) {
+    throw new Error(
+      `Focused Personal learning Setup is invalid: ${result.text}`,
+    );
+  }
+}
+
+async function assertCompactFocusReflectionJourney(page, userId) {
+  await page.goto(appRoute('/deep-work'), {
+    waitUntil: 'domcontentloaded',
+  });
+  await waitForFlutterShell(page);
+  await enableFlutterSemantics(page);
+  await expectText(page, 'Focus session');
+  await clickByText(page, 'Start focus session');
+  await expectText(page, 'Focus session started.');
+  await clickByText(page, 'Finish focus session');
+  await expectText(page, 'How focused did the session feel?');
+  await clickByRoleName(page, 'button', 'Focus quality 4 of 5');
+  await clickByRoleName(page, 'button', 'Useful progress 5 of 5');
+
+  const completed = await waitForRows(
+    `focus_sessions?select=id,status,ended_at,actual_minutes,label&user_id=eq.${userId}&status=eq.completed&order=created_at.desc&limit=1`,
+    (rows) =>
+      rows.length === 1 &&
+      isCanonicalUuid(rows[0].id) &&
+      rows[0].status === 'completed' &&
+      isIsoTimestamp(rows[0].ended_at) &&
+      Number.isInteger(rows[0].actual_minutes),
+    'focused completed Focus session',
+  );
+  const focusSessionId = completed[0].id;
+  await clickFlutterSemanticsButton(page, 'Save reflection');
+  await waitForRows(
+    `focus_session_reflections?select=focus_session_id,contract_version,focus_quality,useful_progress,obstacles&focus_session_id=eq.${focusSessionId}`,
+    (rows) =>
+      rows.length === 1 &&
+      rows[0].contract_version === 'focus-reflection-v1' &&
+      rows[0].focus_quality === 4 &&
+      rows[0].useful_progress === 5 &&
+      arraysEqual(rows[0].obstacles, []),
+    'focused saved Focus reflection',
+  );
+  await page
+    .getByText('Reflect on this Focus session', { exact: true })
+    .waitFor({ state: 'hidden', timeout: 7500 });
+
+  await page.goto(appRoute('/quick-mood-check-in'), {
+    waitUntil: 'domcontentloaded',
+  });
+  await waitForFlutterShell(page);
+  await enableFlutterSemantics(page);
+  await expectText(page, 'Close today in under a minute');
+  await clickByRoleName(page, 'button', 'evening mood 7 of 10');
+  await clickByRoleName(page, 'button', 'evening energy 6 of 10');
+  await clickByRoleName(page, 'button', 'evening stress 3 of 10');
+  await clickByText(page, 'Next');
+  await expectText(page, 'Planned sleep time');
+  await clickByRoleName(
+    page,
+    'button',
+    'planned sleep time preset 23:00',
+  );
+  await clickByRoleName(page, 'button', 'sleep target 8 h');
+  await clickByText(page, 'Next');
+  await expectText(page, "Today's Focus sessions");
+  await expectText(page, '1 rated · 0 open');
+  await clickFlutterSemanticsButtonContaining(
+    page,
+    "Today's Focus sessions",
+  );
+  const eveningSessionLabel = completed[0].label ?? 'Focus session';
+  await page.waitForTimeout(350);
+  const editAlreadyOpen = await page
+    .getByText('Edit Focus reflection', { exact: true })
+    .isVisible()
+    .catch(() => false);
+  if (!editAlreadyOpen) {
+    await expectText(page, eveningSessionLabel);
+    await clickFlutterSemanticsButtonContaining(
+      page,
+      eveningSessionLabel,
+    );
+  }
+  await expectText(page, 'Edit Focus reflection');
+  await clickByRoleName(page, 'button', 'Focus quality 5 of 5');
+  await clickByRoleName(page, 'button', 'Useful progress 4 of 5');
+  await clickFlutterSemanticsButton(page, 'Save reflection');
+  await waitForRows(
+    `focus_session_reflections?select=focus_session_id,focus_quality,useful_progress&focus_session_id=eq.${focusSessionId}`,
+    (rows) =>
+      rows.length === 1 &&
+      rows[0].focus_quality === 5 &&
+      rows[0].useful_progress === 4,
+    'focused Evening-edited Focus reflection',
+  );
+  await page
+    .getByText('Edit Focus reflection', { exact: true })
+    .waitFor({ state: 'hidden', timeout: 7500 });
+  return focusSessionId;
+}
+
+async function assertFocusedLearningDataControls({
+  userId,
+  accessToken,
+  focusSessionId,
+}) {
+  const exportResponse = await fetch(
+    `${aiServiceBaseUrl}/v1/account/export`,
+    {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    },
+  );
+  const exportText = await exportResponse.text();
+  let exportPayload = null;
+  try {
+    exportPayload = JSON.parse(exportText);
+  } catch (_) {
+    // The exact status assertion below reports the invalid response.
+  }
+  const exportedPreferences = exportPayload?.data?.learning_preferences;
+  const exportedReflections = exportPayload?.data?.focus_session_reflections;
+  if (
+    exportResponse.status !== 200 ||
+    exportPayload?.contract_version !== 'account-export-v1' ||
+    exportPayload?.record_counts?.learning_preferences !== 1 ||
+    exportPayload?.record_counts?.focus_session_reflections < 37 ||
+    !Array.isArray(exportedPreferences) ||
+    exportedPreferences.length !== 1 ||
+    exportedPreferences[0].personal_pattern_analysis_enabled !== true ||
+    exportedPreferences[0].learned_focus_planning_enabled !== true ||
+    !Array.isArray(exportedReflections) ||
+    !exportedReflections.some(
+      (row) =>
+        row.focus_session_id === focusSessionId &&
+        row.focus_quality === 5 &&
+        row.useful_progress === 4,
+    )
+  ) {
+    throw new Error(
+      `Focused Personal learning export is invalid: ${exportText}`,
+    );
+  }
+
+  const preferences = await plannerApiRequest(
+    '/v1/learning/preferences',
+    accessToken,
+  );
+  assertPlannerApiStatus(
+    preferences,
+    200,
+    'focused Personal learning settings before clear',
+  );
+  const clearRequestId = crypto.randomUUID();
+  const clearBody = {
+    request_id: clearRequestId,
+    expected_revision: preferences.json.revision,
+    confirmation: 'CLEAR',
+  };
+  const cleared = await plannerApiRequest(
+    '/v1/learning/focus-reflections/clear',
+    accessToken,
+    { method: 'POST', body: clearBody },
+  );
+  const replayed = await plannerApiRequest(
+    '/v1/learning/focus-reflections/clear',
+    accessToken,
+    { method: 'POST', body: clearBody },
+  );
+  assertPlannerApiStatus(cleared, 200, 'focused reflection history clear');
+  assertPlannerApiStatus(replayed, 200, 'focused reflection clear replay');
+  if (
+    cleared.json?.contract_version !== 'focus-reflection-v1' ||
+    cleared.json?.deleted_count < 37 ||
+    cleared.json?.replayed !== false ||
+    replayed.json?.replayed !== true ||
+    replayed.json?.revision !== cleared.json?.revision ||
+    replayed.json?.deleted_count !== cleared.json?.deleted_count ||
+    !sameInstant(replayed.json?.cleared_at, cleared.json?.cleared_at)
+  ) {
+    throw new Error(
+      `Focused reflection clear/replay is invalid: ${cleared.text} / ${replayed.text}`,
+    );
+  }
+  await assertRows(
+    `focus_session_reflections?select=focus_session_id&user_id=eq.${userId}`,
+    (rows) => rows.length === 0,
+    'focused cleared Focus reflection history',
+  );
+
+  const deletionAccessToken = await signInAccessToken(
+    'focused Personal learning account deletion',
+  );
+  if ((await authenticatedUserId(deletionAccessToken)) !== userId) {
+    throw new Error(
+      'Focused Personal learning deletion reauthentication changed user.',
+    );
+  }
+  const deleted = await fetch(`${aiServiceBaseUrl}/v1/account`, {
+    method: 'DELETE',
+    headers: {
+      Authorization: `Bearer ${deletionAccessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ confirmation: 'DELETE' }),
+  });
+  const deletedBytes = await deleted.arrayBuffer();
+  if (deleted.status !== 204 || deletedBytes.byteLength !== 0) {
+    throw new Error(
+      `Focused account deletion failed: ${deleted.status} ${new TextDecoder().decode(deletedBytes)}`,
+    );
+  }
+  const authUser = await fetch(
+    `${supabaseUrl}/auth/v1/admin/users/${userId}`,
+    {
+      headers: {
+        apikey: serviceRoleKey,
+        Authorization: `Bearer ${serviceRoleKey}`,
+      },
+    },
+  );
+  if (authUser.status !== 404) {
+    throw new Error(
+      `Focused deleted Auth user is still available: ${authUser.status}`,
+    );
+  }
+  for (const [path, description] of [
+    [`profiles?select=id&id=eq.${userId}`, 'focused deleted profile'],
+    [
+      `learning_preferences?select=user_id&user_id=eq.${userId}`,
+      'focused deleted Personal learning settings',
+    ],
+    [
+      `focus_sessions?select=id&user_id=eq.${userId}`,
+      'focused deleted Focus sessions',
+    ],
+    [
+      `focus_session_reflections?select=focus_session_id&user_id=eq.${userId}`,
+      'focused deleted Focus reflections',
+    ],
+  ]) {
+    await assertRows(path, (rows) => rows.length === 0, description);
+  }
+}
+
+async function assertPersonalLearningPlannerLoop({
+  page,
+  userId,
+  accessToken,
+  localDate,
+}) {
+  const sessions = [];
+  const reflections = [];
+  for (let index = 0; index < 36; index += 1) {
+    const localSessionDate = addUtcDays(
+      localDate,
+      -40 + Math.round((index * 39) / 35),
+    );
+    const preferredWindow = index % 2 === 0;
+    const startedAt = isoTimestampOnDate(
+      localSessionDate,
+      preferredWindow ? '12:00:00' : '08:00:00',
+    );
+    const endedAt = new Date(Date.parse(startedAt) + 30 * 60_000).toISOString();
+    const sessionId = crypto.randomUUID();
+    sessions.push({
+      id: sessionId,
+      user_id: userId,
+      task_id: null,
+      habit_id: null,
+      status: 'completed',
+      started_at: startedAt,
+      ended_at: endedAt,
+      planned_minutes: 30,
+      actual_minutes: 30,
+      label: preferredWindow
+        ? 'E2E learned preferred-window evidence'
+        : 'E2E learned comparison-window evidence',
+      metadata: {
+        source: 'e2e-personal-patterns',
+        entry_date: localSessionDate,
+      },
+      created_at: startedAt,
+      updated_at: endedAt,
+    });
+    reflections.push({
+      focus_session_id: sessionId,
+      user_id: userId,
+      contract_version: 'focus-reflection-v1',
+      focus_quality: preferredWindow ? 5 : 4,
+      useful_progress: preferredWindow ? 5 : 3,
+      obstacles: [],
+    });
+  }
+  await insertRows('focus_sessions', sessions);
+  await insertRows('focus_session_reflections', reflections);
+
+  const patterns = await plannerApiRequest(
+    '/v1/insights/personal-patterns',
+    accessToken,
+  );
+  assertPlannerApiStatus(patterns, 200, 'stable personal pattern fixture');
+  const learnedPreference = patterns.json?.planner_preference;
+  if (
+    patterns.json?.contract_version !== 'personal-patterns-v1' ||
+    patterns.json?.status !== 'stable' ||
+    patterns.json?.timezone !== 'Europe/Berlin' ||
+    patterns.json?.window?.rolling_days !== 90 ||
+    patterns.json?.sample?.rated_sessions < 36 ||
+    patterns.json?.sample?.rating_coverage < 0.7 ||
+    learnedPreference?.eligible !== true ||
+    learnedPreference?.reason !== 'eligible' ||
+    learnedPreference?.window !== '13-18' ||
+    learnedPreference?.evidence_count < 36 ||
+    !/^[0-9a-f]{64}$/.test(
+      learnedPreference?.evidence_fingerprint ?? '',
+    )
+  ) {
+    throw new Error(
+      `Personal pattern fixture did not become Planner-ready: ${patterns.text}`,
+    );
+  }
+
+  await page.goto(appRoute('/settings'), { waitUntil: 'domcontentloaded' });
+  await waitForFlutterShell(page);
+  await enableFlutterSemantics(page);
+  await scrollUntilTextInViewport(page, 'Personal learning', {
+    deltaY: 350,
+    buttonFirst: true,
+  });
+  await clickByText(page, 'Personal learning');
+  await page.waitForURL('**/#/settings/personal-learning');
+  await expectText(page, 'Analyze my study patterns');
+  await scrollUntilTextInViewport(
+    page,
+    'Prefer learned Focus times in new plans',
+    { deltaY: 300, buttonFirst: true },
+  );
+  await page
+    .getByLabel('Prefer learned Focus times in new plans', { exact: false })
+    .first()
+    .click();
+  await scrollUntilTextInViewport(page, 'Save Personal learning', {
+    deltaY: 350,
+    buttonFirst: true,
+  });
+  await clickByText(page, 'Save Personal learning');
+  await expectText(page, 'Personal learning settings saved.');
+
+  const preferences = await plannerApiRequest(
+    '/v1/learning/preferences',
+    accessToken,
+  );
+  assertPlannerApiStatus(preferences, 200, 'enabled learning preferences');
+  if (
+    preferences.json?.contract_version !== 'learning-preferences-v1' ||
+    preferences.json?.revision !== 1 ||
+    preferences.json?.focus_reflection_prompt_enabled !== true ||
+    preferences.json?.personal_pattern_analysis_enabled !== true ||
+    preferences.json?.learned_focus_planning_enabled !== true
+  ) {
+    throw new Error(
+      `Personal learning settings were not enabled exactly: ${preferences.text}`,
+    );
+  }
+
+  await page.goto(appRoute('/insights'), { waitUntil: 'domcontentloaded' });
+  await waitForFlutterShell(page);
+  await enableFlutterSemantics(page);
+  await expectText(page, 'PERSONAL STUDY PATTERN');
+  await expectText(page, 'Stable');
+  await expectText(
+    page,
+    `${patterns.json.sample.rated_sessions} rated sessions`,
+  );
+  await clickFlutterSemanticsButtonContaining(page, 'Evidence and limits');
+  await expectText(page, 'Focus timing');
+
+  const freePatternsBefore = await plannerApiRequest(
+    '/v1/insights/personal-patterns',
+    accessToken,
+  );
+  assertPlannerApiStatus(
+    freePatternsBefore,
+    200,
+    'personal pattern evidence before learned proposal',
+  );
+  const freePlanId = crypto.randomUUID();
+  const freeTaskId = crypto.randomUUID();
+  const freeStartsOn = addUtcDays(localDate, 1);
+  const freeProposal = await plannerApiRequest(
+    '/v1/planner/action-plans/proposals',
+    accessToken,
+    {
+      method: 'POST',
+      body: {
+        request_id: crypto.randomUUID(),
+        plan_id: freePlanId,
+        base_revision: 0,
+        planning_start_on: freeStartsOn,
+        target: {
+          kind: 'task',
+          operation: 'create',
+          target_id: freeTaskId,
+          expected_updated_at: null,
+          title: learnedPlannerTaskTitle,
+          description: null,
+          priority: 'medium',
+          estimated_minutes: 30,
+          deadline_at: `${addUtcDays(localDate, 6)}T20:00:00Z`,
+          preferred_session_minutes: 30,
+        },
+      },
+    },
+  );
+  assertPlannerApiStatus(freeProposal, 200, 'learned free-window proposal');
+  const freePatternsAfter = await plannerApiRequest(
+    '/v1/insights/personal-patterns',
+    accessToken,
+  );
+  assertPlannerApiStatus(
+    freePatternsAfter,
+    200,
+    'personal pattern evidence after learned proposal',
+  );
+  const freeRevision = freeProposal.json?.plan?.pending_revision;
+  const freeBlock = freeRevision?.task_blocks?.[0];
+  const freeTiming = freeRevision?.timing_preference;
+  const freeHour = localHourInTimeZone(
+    freeBlock?.starts_at,
+    'Europe/Berlin',
+  );
+  if (
+    ![
+      freePatternsBefore.json?.planner_preference,
+      freePatternsAfter.json?.planner_preference,
+    ].some((preference) =>
+      timingMatchesLearnedPreference(freeTiming, preference, {
+        fellBackToSetup: false,
+      }),
+    ) ||
+    freeRevision?.planned_minutes !== 30 ||
+    freeRevision?.unscheduled_minutes !== 0 ||
+    freeRevision?.task_blocks?.length !== 1 ||
+    freeHour < 13 ||
+    freeHour >= 18
+  ) {
+    throw new Error(
+      `Learned free-window proposal ignored its evidence: ${JSON.stringify({
+        evidence_before: freePatternsBefore.json?.planner_preference,
+        evidence_after: freePatternsAfter.json?.planner_preference,
+        resolved_local_hour: freeHour,
+        proposal: freeProposal.json,
+      })}`,
+    );
+  }
+  const freeCancelled = await plannerApiRequest(
+    `/v1/planner/action-plans/${freePlanId}/cancel`,
+    accessToken,
+    {
+      method: 'POST',
+      body: { request_id: crypto.randomUUID(), expected_revision: 1 },
+    },
+  );
+  assertPlannerApiStatus(freeCancelled, 200, 'learned preview cancellation');
+
+  const fallbackDate = addUtcDays(localDate, 2);
+  const busyCommitment = await plannerApiRequest(
+    '/v1/planner/commitments',
+    accessToken,
+    {
+      method: 'POST',
+      body: {
+        request_id: crypto.randomUUID(),
+        commitment_id: crypto.randomUUID(),
+        title: learnedPlannerBusyTitle,
+        location: null,
+        recurrence: 'one_off',
+        starts_at: `${fallbackDate}T10:00:00Z`,
+        ends_at: `${fallbackDate}T18:00:00Z`,
+        weekday: null,
+        local_starts_at: null,
+        local_ends_at: null,
+      },
+    },
+  );
+  assertPlannerApiStatus(
+    busyCommitment,
+    200,
+    'learned-window busy commitment',
+  );
+
+  const fallbackPatternsBefore = await plannerApiRequest(
+    '/v1/insights/personal-patterns',
+    accessToken,
+  );
+  assertPlannerApiStatus(
+    fallbackPatternsBefore,
+    200,
+    'personal pattern evidence before Setup fallback',
+  );
+  const fallbackPlanId = crypto.randomUUID();
+  const fallbackProposal = await plannerApiRequest(
+    '/v1/planner/action-plans/proposals',
+    accessToken,
+    {
+      method: 'POST',
+      body: {
+        request_id: crypto.randomUUID(),
+        plan_id: fallbackPlanId,
+        base_revision: 0,
+        planning_start_on: fallbackDate,
+        target: {
+          kind: 'task',
+          operation: 'create',
+          target_id: crypto.randomUUID(),
+          expected_updated_at: null,
+          title: learnedPlannerFallbackTitle,
+          description: null,
+          priority: 'medium',
+          estimated_minutes: 30,
+          deadline_at: `${fallbackDate}T21:00:00Z`,
+          preferred_session_minutes: 30,
+        },
+      },
+    },
+  );
+  assertPlannerApiStatus(
+    fallbackProposal,
+    200,
+    'learned busy-window fallback proposal',
+  );
+  const fallbackPatternsAfter = await plannerApiRequest(
+    '/v1/insights/personal-patterns',
+    accessToken,
+  );
+  assertPlannerApiStatus(
+    fallbackPatternsAfter,
+    200,
+    'personal pattern evidence after Setup fallback',
+  );
+  const fallbackRevision = fallbackProposal.json?.plan?.pending_revision;
+  const fallbackBlock = fallbackRevision?.task_blocks?.[0];
+  const fallbackTiming = fallbackRevision?.timing_preference;
+  const fallbackHour = localHourInTimeZone(
+    fallbackBlock?.starts_at,
+    'Europe/Berlin',
+  );
+  if (
+    ![
+      fallbackPatternsBefore.json?.planner_preference,
+      fallbackPatternsAfter.json?.planner_preference,
+    ].some((preference) =>
+      timingMatchesLearnedPreference(fallbackTiming, preference, {
+        fellBackToSetup: true,
+      }),
+    ) ||
+    fallbackRevision?.planned_minutes !== 30 ||
+    fallbackRevision?.unscheduled_minutes !== 0 ||
+    fallbackRevision?.task_blocks?.length !== 1 ||
+    fallbackHour < 8 ||
+    fallbackHour >= 13
+  ) {
+    throw new Error(
+      `Busy learned window did not fall back to Setup timing: ${fallbackProposal.text}`,
+    );
+  }
+  const fallbackCancelled = await plannerApiRequest(
+    `/v1/planner/action-plans/${fallbackPlanId}/cancel`,
+    accessToken,
+    {
+      method: 'POST',
+      body: { request_id: crypto.randomUUID(), expected_revision: 1 },
+    },
+  );
+  assertPlannerApiStatus(
+    fallbackCancelled,
+    200,
+    'learned fallback preview cancellation',
+  );
 }
 
 async function assertTodayOverview(userId) {
@@ -12358,6 +13501,7 @@ function assertDeadlinePlanRevision(revision, context) {
     'timezone',
     'best_energy_window',
     'planning_fingerprint',
+    'timing_preference',
     'recovery_minutes',
     'tracked_focus_minutes_at_proposal',
     'remaining_minutes_at_proposal',
@@ -12378,6 +13522,10 @@ function assertDeadlinePlanRevision(revision, context) {
     if (Object.hasOwn(revision ?? {}, optional)) keys.push(optional);
   }
   assertExactDeadlineKeys(revision, keys, context);
+  assertPlanningTimingPreference(
+    revision.timing_preference,
+    `${context} timing preference`,
+  );
   if (
     [
       'source_calendar_event_id',
@@ -12551,6 +13699,57 @@ function assertDeadlinePlanRevision(revision, context) {
     throw new Error(`${context} block total differs from planned_minutes.`);
   }
   return revision;
+}
+
+function assertPlanningTimingPreference(preference, context) {
+  const required = ['source', 'evidence_count', 'fell_back_to_setup'];
+  const optional = [
+    'window',
+    'evidence_starts_on',
+    'evidence_ends_on',
+    'evidence_fingerprint',
+    'warning',
+  ];
+  if (
+    preference === null ||
+    typeof preference !== 'object' ||
+    Array.isArray(preference) ||
+    required.some((key) => !Object.hasOwn(preference, key)) ||
+    Object.keys(preference).some(
+      (key) => !required.includes(key) && !optional.includes(key),
+    ) ||
+    !['setup', 'learned_personal_pattern'].includes(preference.source) ||
+    !Number.isInteger(preference.evidence_count) ||
+    preference.evidence_count < 0 ||
+    preference.evidence_count > 10000 ||
+    typeof preference.fell_back_to_setup !== 'boolean'
+  ) {
+    throw new Error(`${context} is invalid: ${stableJson(preference)}`);
+  }
+  const learnedFields = [
+    preference.window,
+    preference.evidence_starts_on,
+    preference.evidence_ends_on,
+    preference.evidence_fingerprint,
+  ];
+  if (
+    (preference.source === 'setup' &&
+      (learnedFields.some((value) => value !== undefined && value !== null) ||
+        preference.evidence_count !== 0 ||
+        (preference.warning !== undefined &&
+          preference.warning !== 'personal_patterns_unavailable'))) ||
+    (preference.source === 'learned_personal_pattern' &&
+      (!['05-09', '09-13', '13-18', '18-23'].includes(preference.window) ||
+        !isCalendarDate(preference.evidence_starts_on) ||
+        !isCalendarDate(preference.evidence_ends_on) ||
+        preference.evidence_starts_on > preference.evidence_ends_on ||
+        !/^[0-9a-f]{64}$/.test(preference.evidence_fingerprint ?? '') ||
+        preference.evidence_count < 1 ||
+        preference.warning !== undefined))
+  ) {
+    throw new Error(`${context} has inconsistent evidence: ${stableJson(preference)}`);
+  }
+  return preference;
 }
 
 function assertDeadlinePlanBlock(block, revision, expectedSequence, context) {

@@ -854,6 +854,10 @@ The implemented Evening Shutdown quick action supports:
 - A required `HH:mm` planned sleep start and `300..720` minute target on a
   15-minute grid. Eight hours is visible first but becomes personal only on
   save; the newest valid Evening V4 value prefills later forms.
+- On the last page, an optional `Today's Focus sessions` row reports terminal
+  sessions as rated or still open and reuses the terminal-only Focus reflection
+  sheet for `Rate`/`Edit`. It is supplementary context, not another navigation
+  destination, and guest/demo makes no synced request.
 - Prefill and same-kind replacement without erasing a saved Morning
   Calibration.
 - Capture copy that does not claim a learned baseline, ranked plan, diagnosis,
@@ -1231,8 +1235,11 @@ Implemented:
 
 - Added `summary.daily_state` and `signals.daily_state` under
   `explainable-daily-state-v2` without changing schema or capture ownership.
-- Added strict V2/V3 capture parsing for identity, types, enums, bounded
-  numbers, timestamps, and numeric projections. Friction fields are ignored.
+- Added strict V2/V3/V4 capture parsing for identity, types, enums, bounded
+  numbers, timestamps, interval arithmetic, and numeric projections. The V4
+  sleep branch now uses the same parser module as Exam-Week Outlook and
+  Personal Patterns, so those consumers cannot silently disagree on validity.
+  Friction fields are ignored.
   Legacy numeric fallback is accepted only when no structured marker exists;
   malformed structured capture does not regain trust through columns.
 - Added a fixed seven-day state lookback independent of the requested

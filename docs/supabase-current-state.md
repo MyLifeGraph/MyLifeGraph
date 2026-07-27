@@ -7,6 +7,14 @@ must be inspected through the Supabase dashboard or CLI by someone with access.
 The current Setup/Goal/friction cleanup and compatibility boundary is recorded
 in `docs/setup-personalization-retirement-contract.md` and migration
 `20260725120000_retire_setup_goals_and_friction.sql`.
+The later deterministic learning boundary is recorded in
+`docs/personal-learning-v1-contract.md` and migrations
+`20260726120000_personal_learning_v1.sql`,
+`20260726150000_learned_focus_planning_v1.sql`,
+`20260726170000_recommendation_refresh_v2.sql`,
+`20260726180000_learned_focus_planning_rpc_guard.sql`,
+`20260726190000_planning_confirmation_timestamp_guard.sql`, and
+`20260726200000_learned_timing_setup_fallback_provenance.sql`.
 
 ## Runtime Activation
 
@@ -61,11 +69,14 @@ The app table constants live in
 | `coach_messages` | Bounded validated Phase 10 user/assistant history linked to a retry-safe backend request. Authenticated owners can read; only FastAPI can insert/delete V1 turns. Legacy rows remain distinguishable by null request/contract fields. |
 | `memory_entries` | Durable Setup/manual memory content. Authenticated owners can read, but Phase 10 selection is a separate projection and does not transfer Setup ownership or promote check-in/conversation text automatically. Preference rows remain ineligible until a later sensitivity contract can distinguish hidden context safely. |
 | `focus_sessions` | Real one-active-session Deep Work lifecycle with bounded planned/measured duration, fully immutable terminal history, persisted local start date, and at most one owned task or active-habit target whose deletion is restricted. |
+| `focus_session_reflections` | At most one editable `focus-reflection-v1` rating per owned terminal Focus session, with two bounded scores and up to two controlled obstacles. Forced owner RLS; account deletion cascades it. |
+| `learning_preferences` | One revisioned `learning-preferences-v1` projection per owner for prompt, analysis, and separately gated learned-Planning choices. Learned planning cannot remain enabled while analysis is disabled. |
+| `learning_request_identities` | Backend-only global retry/result ledger for exact preference updates and confirmed reflection-history clearing; omitted from Account Export. |
 | `goals` | Retained compatibility and Account Export storage. Setup-owned rows are archived; manual/foreign-managed rows are preserved, and no active product service evaluates them. |
 | `habits` | Habit V1 daily, selected-ISO-weekday, or weekly-target cadence plus active/paused/archived manual lifecycle; Setup owns definition/lifecycle for its rows while active rows share execution. |
 | `habit_logs` | One explicit `completed` or `skipped` outcome per habit/local date, with checked 1/0 compatibility value; open and missed opportunities are derived and progress/streaks are cadence-aware. |
 | `skillset_profiles` | Generated coaching/skill profile snapshots. |
-| `recommendations` | Generated recommendations and user statuses from explicit/scheduled runtime refresh; Intake V1 completion does not generate them. |
+| `recommendations` | Generated recommendations and user statuses from explicit/scheduled runtime refresh; Intake V1 completion does not generate them. A deliberate refresh atomically retires the prior current `new` set while preserving historical rows. |
 | `notification_preferences` | Reminder/category/quiet-hour configuration plus separate fail-closed in-app delivery consent/version/timestamps and a bounded daily cap. Reminder fields alone grant no delivery. |
 | `intake_responses` | Typed Setup history with request identity, optimistic revision, pending/applied state, and structured routine/commitment/Study lifecycle items. Retired personalization keys are stripped. |
 | `study_setup_profiles` | Optional `study-setup-v1` projection from the current applied Intake revision: focus/recovery rhythm, ordered preparation-item definitions, current/next semester, and Setup revision. Forced owner-read RLS; only the backend writes. |
@@ -78,12 +89,12 @@ The app table constants live in
 | `calendar_events` | Current whitelisted imported event copy with stable single/recurrence identity and explicit imported/read-only provenance. |
 | `calendar_request_identities` | Minimal global UUID/owner/connection/operation registry enforcing stable identity across calendar lifecycle mutations; forced RLS and service-role insert/select only, with no content fingerprint. |
 | `deadline_plans` | Owner-scoped exam/assignment lifecycle with immutable original estimate/prior credit, one stable managed-task identity after first confirmation, and active/pending revision projections. |
-| `deadline_plan_revisions` | Immutable proposed, active, or superseded preparation inputs/results, including proposal-time focus credit, exact remaining/planned/unscheduled totals, source provenance, optional Study Setup revision/recovery truth, and lifecycle timestamps. |
+| `deadline_plan_revisions` | Immutable proposed, active, or superseded preparation inputs/results, including proposal-time focus credit, exact remaining/planned/unscheduled totals, source provenance, optional Study Setup revision/recovery truth, additive learned/setup timing evidence, and lifecycle timestamps. |
 | `deadline_plan_blocks` | Bounded immutable dated app-owned preparation reservations for one revision, with focus end and full recovery-reserved end kept separate; they remain separate from `schedule_items` and imported calendar events. |
 | `deadline_plan_request_identities` | Backend-only global request UUID/owner/plan/operation/payload identity for exact replay and conflict detection; never exposed through Account Export. |
 | `planner_preferences` | Owner choice for using the current imported-calendar busy projection in deterministic Planner and Preparation availability. |
 | `planner_action_plans` | Owner-scoped staged/active Task or Habit plan identity and lifecycle. |
-| `planner_action_plan_revisions` | Immutable Planner proposal/activation history, including optional Task Study Setup revision/recovery truth. |
+| `planner_action_plan_revisions` | Immutable Planner proposal/activation history, including optional Task Study Setup revision/recovery truth and additive learned/setup timing evidence. |
 | `planner_task_blocks` | Dated Planner Task focus reservations with a separate full recovery-reserved end. |
 | `planner_habit_slots` | Stable recurring wall-clock slots for planned Habit occurrences; Study rhythm does not apply. |
 | `planner_commitments` | Authoritative owner-created one-off or weekly fixed commitments. |
@@ -214,6 +225,56 @@ focus-session inputs paginate in stable 1,000-row pages through the complete
 requested window. See
 `docs/phase-3-executable-actions-contract.md` for command, validation, and
 failure semantics.
+
+## Personal Learning V1
+
+`20260726120000_personal_learning_v1.sql` adds one reflection primary key per
+Focus session and a composite `(focus_session_id, user_id)` foreign key back to
+the terminal session owner. A locked trigger rejects active sessions and
+cross-owner linkage without changing terminal Focus immutability. Rating,
+contract-version, distinct-obstacle, obstacle-count, and timestamp checks are
+enforced at the database boundary. Forced RLS grants authenticated owners only
+their intended reflection CRUD; `anon` and cross-owner reads/writes fail
+closed.
+
+The same migration adds default-on reflection prompting and pattern analysis,
+default-off learned Planner use, a monotone revision, and a check that Planner
+use implies analysis. Service-role-only owner-locked RPCs bind request ids to
+the full preference payload or confirmed `CLEAR` command and return exact
+replays. `learning_request_identities` contains no ratings and remains hidden
+from authenticated users and Account Export.
+
+`20260726150000_learned_focus_planning_v1.sql` adds only immutable proposal
+provenance columns: `setup|learned_personal_pattern`, the fixed local window,
+evidence count/date interval/fingerprint, and Setup-fallback state. Planner and
+Deadline confirmation still recheck every prior revision, availability,
+budget, calendar, recovery, and Study rule. A preview that claims learned
+timing also requires the current account permission; changed evidence alone
+does not reinterpret it. Existing active revisions and blocks are backfilled as
+Setup timing and never moved.
+
+`20260726170000_recommendation_refresh_v2.sql` installs the service-role-only
+atomic replacement RPC used by a deliberate deterministic refresh. It marks
+the prior current `new` rows as dismissed history, inserts the verified new
+set, and leaves accepted or already historical rows intact. Empty output
+therefore truthfully clears the current feed without deleting history.
+
+`20260726180000_learned_focus_planning_rpc_guard.sql` removes additive timing
+from the strict established Planner/Deadline payload before delegating, then
+binds exact provenance under the same owner transaction and admits only an
+exact retry. `20260726190000_planning_confirmation_timestamp_guard.sql` keeps
+the existing confirmation signatures while clamping their supplied instant to
+the latest persisted plan/revision/target/block timestamp under the owner lock.
+`20260726200000_learned_timing_setup_fallback_provenance.sql` relaxes only the
+two provenance-shape checks so a learned source can truthfully retain its
+evidence and mark `timing_fell_back_to_setup=true` after allocation uses an
+ordinary Setup window. It changes no grant, active block, or confirmation
+authority.
+
+Account Export now contains exactly 40 owner-content tables, including
+`learning_preferences` and `focus_session_reflections`, and names the learning
+retry ledger under its omission policy. Canonical profile deletion cascades the
+two product projections. See `docs/personal-learning-v1-contract.md`.
 
 Phase 0B did not require a migration. Flutter now treats missing or failing real
 Dashboard/Inbox/Recommendation sources as empty or error according to
@@ -856,7 +917,7 @@ RLS mode, owner/admin predicate, or service-role boundary.
 For local Supabase-backed testing, the reset should complete through:
 
 ```text
-20260725120000_retire_setup_goals_and_friction.sql
+20260726200000_learned_timing_setup_fallback_provenance.sql
 ```
 
 Then configure `.env` with:
@@ -1023,8 +1084,20 @@ legacy compatibility only and should be dropped in a later dedicated migration
 after data migration and app verification are complete.
 
 The latest migration is
-`20260725120000_retire_setup_goals_and_friction.sql`. Its idempotent cleanup
-strips retired Setup/friction JSON, archives only Setup-owned Goals, deletes
+`20260726200000_learned_timing_setup_fallback_provenance.sql`. It preserves
+learned evidence while recording actual Setup allocation fallback. The
+preceding confirmation-time and proposal-RPC guards keep timestamps monotone,
+strict V1 delegation payloads unchanged, and retries exact. The preceding
+Recommendation migration installs atomic current-feed replacement for
+deliberate deterministic refresh while preserving historical decisions. The
+earlier
+`20260726150000_learned_focus_planning_v1.sql` adds immutable learned/setup
+timing provenance and confirmation permission guards without moving active
+plans. The preceding `20260726120000_personal_learning_v1.sql` adds forced-RLS
+Focus reflections, revisioned learning preferences, and their service-only
+retry ledger/RPCs. The earlier
+`20260725120000_retire_setup_goals_and_friction.sql` performs idempotent cleanup:
+it strips retired Setup/friction JSON, archives only Setup-owned Goals, deletes
 only retired Setup-derived memories, invalidates reproducible derived output
 that references those fields, and performs no regeneration. Its compatibility
 wrappers leave the Setup Apply signature intact while ignoring Goal/Reminder

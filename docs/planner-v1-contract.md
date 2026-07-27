@@ -1,7 +1,8 @@
 # Planner V1 Contract
 
-Status: implemented, including the Study Setup, shell-navigation, and read-only
-Exam-Week Outlook follow-ups, as of 2026-07-26.
+Status: implemented, including the Study Setup, shell-navigation, read-only
+Exam-Week Outlook, and optional Personal Learning timing follow-ups, as of
+2026-07-26.
 
 Planner V1 is the authenticated, deterministic planning home for Tasks,
 Habits, exam and assignment preparation, and manually fixed commitments. It
@@ -101,6 +102,24 @@ The algorithm uses five-minute block boundaries, never overlaps a busy source,
 never plans before the captured current instant, and is bounded to 366
 profile-local days. It does not inspect Calendar titles or infer duration,
 deadline, cadence, priority, or effort.
+
+For Task previews only, Personal Learning V1 may add one soft first window
+before the Setup ordering when the user enabled learned planning, the
+development pilot flag is active, and current `personal-patterns-v1` evidence
+is Planner-ready. The fixed learned windows are `05–09`, `09–13`, `13–18`, and
+`18–23`; night can never be selected. Subtracting that learned interval from
+the ordinary Setup sequence retains every fallback, so learned timing cannot
+strand otherwise placeable minutes. Habits and commitments never consume this
+preference.
+
+The immutable Task revision stores `setup|learned_personal_pattern`, the used
+window, evidence count/date interval/fingerprint, whether allocation actually
+used a Setup fallback, and an explicit unavailable-service warning.
+Confirmation rechecks the account permission and deployment gate when the
+preview claims learned timing, but does not recompute or reinterpret its
+evidence. Pattern changes never mark an active plan for attention or move a
+confirmed block. See
+`docs/personal-learning-v1-contract.md`.
 
 Recurring Setup rows apply only on their matching weekday and within their
 inclusive optional validity dates. The same rule is used by Planner,

@@ -127,6 +127,7 @@ USE_MOCK_DATA=true
 SUPABASE_URL=
 SUPABASE_ANON_KEY=
 AI_SERVICE_BASE_URL=http://localhost:8000
+LEARNED_FOCUS_PLANNING_PILOT_ENABLED=false
 ```
 
 The Bash and PowerShell start scripts pass these values into Flutter as Dart
@@ -183,6 +184,18 @@ non-production debug/profile build, exact `true` enables and exact `false`
 disables the surface, with development defaulting to enabled. Exposing the
 Flutter route does not make a provider ready; FastAPI capability remains the
 independent send gate.
+
+`LEARNED_FOCUS_PLANNING_PILOT_ENABLED=true` must be supplied to both FastAPI
+and Flutter for the optional learned-timing control to become actionable.
+`scripts/start_frontend.sh` forwards it as a Dart define. The backend reads the
+same environment name. Flutter also forces the gate off for production builds,
+and the account preference remains off by default. A convenient local
+full-stack invocation is:
+
+```bash
+LEARNED_FOCUS_PLANNING_PILOT_ENABLED=true \
+FLUTTER_BIN=/path/to/flutter scripts/start_local_stack.sh
+```
 
 Windows PowerShell:
 
@@ -324,8 +337,37 @@ the exact terminal result. Habit reads paginate history beginning 370 calendar
 days before today and use `started_on` with DST-safe calendar arithmetic. The
 ranking-independent action envelope has strict Flutter/FastAPI parser parity,
 including explicit-null metadata-field rejection, and is documented in
-`docs/phase-3-executable-actions-contract.md`. Phase 4 wraps only these strict
-targets in persisted deterministic briefings. Read without side effects using:
+`docs/phase-3-executable-actions-contract.md`.
+
+Personal Learning is separately authenticated and deterministic:
+
+```text
+GET   /v1/learning/preferences
+PATCH /v1/learning/preferences
+POST  /v1/learning/focus-reflections/clear
+GET   /v1/insights/personal-patterns
+```
+
+Individual reflection rows use authenticated owner RLS directly from Flutter
+only after a Focus session is terminal. Settings updates and bulk clearing go
+through FastAPI's retry-safe owner-locked commands. The Insights GET uses a
+profile-timezone 90-day window and writes nothing. With analysis disabled, it
+does not load Focus or Capture evidence. See
+`docs/personal-learning-v1-contract.md`.
+
+Read a current pattern without changing history:
+
+```bash
+curl http://localhost:8000/v1/insights/personal-patterns \
+  -H 'Authorization: Bearer <supabase_access_token>'
+```
+
+The E2E runner enables the learned-timing development gate by default so it can
+prove a mature free window and a busy-window Setup fallback. Normal local
+startup remains fail-closed unless the environment flag is set.
+
+Phase 4 wraps only the strict executable targets in persisted deterministic
+briefings. Read without side effects using:
 
 ```bash
 curl http://localhost:8000/v1/briefings/today \
@@ -909,8 +951,14 @@ block application-role profile insertion, role/provider changes, deletion, and
 authority. Authenticated profile edits are limited to non-authority fields;
 service role and the atomic Intake apply RPC retain the required backend
 projection authority. A fresh migration-chain verification should end at
-`20260725120000_retire_setup_goals_and_friction.sql`. The earlier small
-account-export grant gives
+`20260726200000_learned_timing_setup_fallback_provenance.sql`. The final three
+planning guards bind additive timing outside strict V1 payloads, keep
+confirmation timestamps monotone under clock skew, and record actual Setup
+allocation fallback without discarding learned evidence. The earlier Personal
+Learning migration adds the forced-RLS reflection, preference, and
+request-identity boundaries; its learned-planning follow-up adds immutable
+Planner/Deadline evidence provenance, and the Recommendation follow-up installs
+atomic current-feed replacement. The earlier small account-export grant gives
 only `service_role` the `lifestyle_entries` read authority required by the
 existing Account Export V1 table set. The account-delete
 migration installs the service-role-only full-account delete transaction; it
@@ -1249,7 +1297,12 @@ without import, retry-safe `.ics` reconciliation, stable paginated event reads,
 read-only provenance, all-day/timezone/recurrence/cancellation boundaries,
 disconnect-retains versus delete-local-only behavior, schedule preservation,
 and owner/cross-owner RLS. Phase 10 adds the deterministic fake-provider Coach
-journey. The focused Phase 10 rerun and subsequent full Phase 3-through-10 path
+journey. Personal Learning coverage finishes and rates a session, edits it from
+Evening, loads a stable 90-day fixture, enables the separate account
+permission, proves a preferred free Planner window and a busy-window Setup
+fallback, and verifies reflection/preferences export plus account-deletion
+cascade. Guest/demo remains zero-call. The focused Phase 10 rerun and
+subsequent full Phase 3-through-10 path
 passed non-destructively in the recorded 2026-07-13 checkout. Use the complete
 command above to establish a new result after later changes; the focused mode
 or source coverage alone is not a full-checkout pass.

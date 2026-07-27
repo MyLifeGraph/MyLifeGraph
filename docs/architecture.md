@@ -278,18 +278,17 @@ not mutate a record. The compatible `goal_linked_completed` fact is always
 zero, and no Goal is loaded or proposed. Guest/mock sessions never call the
 weekly-review API.
 
-Insights also uses this boundary for deterministic correlation analysis. In
-mock or guest mode it renders local time series. In real Supabase mode it reads
-recent `daily_logs`, `tasks`, `schedule_items`, `habits`, `habit_logs`, and
-completed `focus_sessions`, plus active `deadline_plan_blocks`. The visible
-`Current planned workload` metric is based on real schedule durations, task
-estimates, and currently active confirmed preparation reservations; proposed or
-superseded blocks are excluded. It is not immutable historical planned load.
-Focus uses persisted
-completed minutes and explicit local entry dates, with the documented UTC
-start-day fallback for legacy rows. Metrics without measured values are hidden,
-and the primary observation requires at least 14 shared days. The bounded
-7/14/30/90-day exploration stays in Flutter and does not call FastAPI or an LLM.
+Insights has separate source boundaries. Stored `ai_insights` notes remain an
+owner-scoped Supabase read, and guest/demo exploration uses labelled local
+fixtures. For a real account, however, `Personal study pattern` and the
+profile-local correlation points come only from the read-only
+`GET /v1/insights/personal-patterns` FastAPI contract. Flutter no longer
+reconstructs planned workload or Habit history from current rows. It analyzes
+the returned measured Focus/reflection, preceding valid sleep, and eligible
+Morning-energy points over the bounded 7/14/30/90-day views. Missing metrics
+stay absent. This exploration uses no LLM and has no Planner authority; only the
+separately gated Planner-ready preference in the backend response may influence
+a deliberate new preview.
 
 ## Phase 3 Executable Actions
 
@@ -325,8 +324,8 @@ Phase 3 keeps simple user-owned mutations in typed Flutter/Supabase boundaries:
   `ON DELETE RESTRICT` target FKs preserve their historical linkage. The UI
   reconstructs countdown, progress, and end time from persisted state after a
   reload, offers the latest/custom duration, and only after five completed
-  sessions may show a reviewable median-duration/time-window suggestion. It
-  changes no setting automatically.
+  sessions may show a reviewable median-duration suggestion. It infers no local
+  time-of-day preference and changes no setting automatically.
 
 Flutter and FastAPI share a strict, ranking-independent
 `executable-action-v1` envelope for `open_task`, `complete_task`, `log_habit`,
@@ -871,10 +870,13 @@ dedicated recovery-event route in Flutter. Guest/mock sessions make no account
 API calls.
 
 Export reads only owner-filtered canonical product tables, including the
-current Study Setup projection, applies field
+current Study Setup and Personal Learning projections, applies field
 allowlists to backend-owned Calendar/Coach ledgers, names the anti-replay ledger
 it omits, includes Deadline Planner plan/revision/block rows while omitting its
-request ledger, and fails rather than truncating at a V1 bound. Flutter validates the
+request ledger, and fails rather than truncating at a V1 bound. The exact
+40-table set includes `learning_preferences` and
+`focus_session_reflections`, while the learning request ledger is explicitly
+omitted. Flutter validates the
 entire envelope and counts before saving. Full deletion requires exact typed
 confirmation and one service-role-only database RPC. The RPC locks the existing
 owner workflows, removes restrict-linked focus history, deletes the Auth user,
@@ -882,10 +884,49 @@ and verifies the profile/product cascade in one transaction. The client then
 clears its local session even if the deleted remote session can no longer be
 signed out normally.
 
-Insights correlation exploration is bounded to visible 7/14/30/90-day windows.
-Its six Supabase fact sources use stable pagination and fail explicitly at the
-client row ceiling instead of presenting a silently truncated or unbounded
-all-time result.
+## Personal Learning V1
+
+The exact boundary is `docs/personal-learning-v1-contract.md`. A terminal
+Focus transition commits first; an optional shared Flutter sheet then creates
+or edits one owner-scoped reflection without changing the immutable session.
+Completed-session recovery starts before the sheet and continues behind it.
+Focus history and the last Evening page expose the same reflection record;
+guest/demo paths stay zero-call.
+
+FastAPI owns revisioned learning settings and the side-effect-free
+`GET /v1/insights/personal-patterns` aggregator. When analysis is disabled, it
+returns before loading Focus or Capture evidence. Otherwise it parses a fixed
+rolling 90-day window exclusively in the profile timezone, joins each rated
+terminal session to only a preceding valid V4 sleep episode, collapses repeated
+sleep-episode use, and emits fixed-window observational comparisons with sample,
+coverage, maturity, limits, and deterministic fingerprint. Daily State,
+Exam-Week Outlook, and Personal Patterns share one strict Daily Capture V4
+sleep parser.
+
+Real-account Insights replaces the generic observation with this backend
+contract. Advanced correlation uses the response's profile-local points and no
+longer reconstructs planned-work or Habit history from current rows. Local demo
+keeps bounded labelled mock exploration. Neither surface grants Planner
+authority.
+
+The optional Planner bridge has two gates: the complete account preference and
+`LEARNED_FOCUS_PLANNING_PILOT_ENABLED` in both FastAPI and Flutter. When current
+evidence is Planner-ready, shared availability tries the learned daytime window
+before Setup energy ordering while retaining every ordinary fallback. Busy
+time, current time, deadline, budget, Recovery, Calendar, Study rhythm, and
+reservation constraints remain authoritative. Only deliberate new or replan
+previews for Tasks, Exams, and Assignments carry the immutable evidence
+provenance; that provenance also records when actual allocation had to use a
+Setup window. Habits, commitments, active revisions, and confirmed blocks are
+never changed.
+
+Recommendation generation now loads profile-local structured terminal Focus
+and valid V4 sleep evidence. Focus pressure requires at least three terminal
+sessions and two abandonments in 14 days; intentionally short completed
+sessions are not treated as failure. Movement rules require actual measurements
+and state fixed thresholds. The service-role replacement RPC atomically retires
+the previous `new` feed and inserts the verified current set, preserving
+accepted and historical rows even when the new set is empty.
 
 ## Security Posture
 
@@ -905,6 +946,10 @@ all-time result.
   terminal row; direct helper execution is revoked from app roles. Restricted
   target FKs preserve history, and a partial unique index permits at most one
   active focus session per user.
+- Personal Learning uses a composite session/owner foreign key, a locked
+  terminal-session trigger, forced owner RLS, and service-role-only revisioned
+  settings/clear commands. The retry ledger is not readable by application
+  roles, and raw reflection values are excluded from logs.
 - `weekly_reviews` uses forced RLS, authenticated owner/admin SELECT only, and
   service-role writes. FastAPI scopes every privileged source query by the
   bearer-derived owner. Confirmed manual habit changes reuse authenticated

@@ -61,6 +61,9 @@ Read these files before making changes:
     planning, or course-selection attention
 22. `docs/product-review-handoff.md` when starting a fresh whole-product review
     of Deadline Planner and the current usability-polish slice
+23. `docs/personal-learning-v1-contract.md` before changing Focus reflections,
+    learning preferences, personal patterns, shared sleep parsing, learned
+    Planner timing, or the recommendation-cleanup follow-up
 
 ## Current State
 
@@ -86,6 +89,8 @@ databases may still contain legacy CamelCase tables such as `"User"`,
 - `skillset_profiles`
 - `notification_preferences`
 - `goals`, `habits`, `habit_logs`, `focus_sessions`
+- `focus_session_reflections`, `learning_preferences`
+- `learning_request_identities`
 - `intake_responses`, `user_state_snapshots`
 - `daily_briefings`, `decision_feedback`, `weekly_reviews`
 - `calendar_connections`, `calendar_imports`, `calendar_events`
@@ -280,6 +285,35 @@ derived output that referenced those fields without regenerating it. Its
 compatibility wrappers keep the Setup Apply signature stable while ignoring
 Goal/Reminder inputs, and admit paired Coach prompt/context V2 provenance while
 preserving readable V1 history.
+The migration
+`supabase/migrations/20260726120000_personal_learning_v1.sql` adds the forced-
+RLS Focus reflection and learning-preference projections plus a backend-only
+retry ledger. It enforces terminal-session ownership, controlled ratings and
+obstacles, the analysis/Planner preference dependency, retry-safe preference
+updates, and confirmed reflection-history clearing.
+The migration
+`supabase/migrations/20260726150000_learned_focus_planning_v1.sql` adds immutable
+learned-timing provenance to Planner and Deadline revisions and makes
+confirmation fail closed if a learned preview is no longer permitted. It
+changes no active block and adds no automatic replanning.
+The migration
+`supabase/migrations/20260726170000_recommendation_refresh_v2.sql` makes a
+deliberate Recommendation refresh replace the prior current `new` set
+atomically while retaining dismissed history and accepted decisions.
+The follow-up migration
+`supabase/migrations/20260726180000_learned_focus_planning_rpc_guard.sql`
+keeps additive timing provenance outside the strict established Planner and
+Deadline proposal payloads, then binds it in the same transaction with exact
+replay checks.
+The migration
+`supabase/migrations/20260726190000_planning_confirmation_timestamp_guard.sql`
+normalizes confirmation instants against persisted plan, revision, target, and
+block timestamps under the existing owner lock so clock skew cannot move audit
+timestamps backwards.
+The migration
+`supabase/migrations/20260726200000_learned_timing_setup_fallback_provenance.sql`
+preserves the learned evidence source while permitting immutable provenance to
+record that actual block allocation used the ordinary Setup fallback sequence.
 
 ## Important Docs
 
@@ -328,6 +362,9 @@ preserving readable V1 history.
 - `docs/setup-personalization-retirement-contract.md` - retired Setup Goals and
   personalization inputs, friction-free Capture compatibility, Daily State V2,
   Coach V2, Reminder ownership, and stored-data cleanup.
+- `docs/personal-learning-v1-contract.md` - Focus reflection collection,
+  revisioned learning preferences, deterministic 90-day personal patterns,
+  optional learned Planner timing, and recommendation cleanup boundaries.
 - `README.md` - high-level project overview.
 
 ## Next Implementation Direction
@@ -386,6 +423,18 @@ open previews and mark active Study-bound plans for review without moving them.
 The next semester's profile-local course-selection window creates only Planner
 attention linked to Settings; it creates no Task, Calendar row, Today item, or
 Notification.
+Personal Learning V1 adds one editable reflection per terminal Focus session,
+revisioned Settings controls, and a read-only profile-timezone 90-day pattern
+endpoint. Insights shows transparent sample, coverage, evidence, and
+limitations without causal or medical claims. A mature learned daytime window
+may softly order only newly requested Task, Exam, and Assignment previews when
+both the user preference and the development pilot flag are enabled. Setup
+timing and all existing availability rules remain fallbacks; confirmed plans,
+sleep targets, capacity, Study rhythm, recovery, Habits, and Coach never change
+automatically. Recommendation refresh now uses profile-local structured Focus,
+sleep, and measured movement evidence and atomically retires obsolete current
+cards while preserving history. Read
+`docs/personal-learning-v1-contract.md` before extending this boundary.
 Phase 6 adds exact owned-action feedback with idempotent requests, deletable
 history, a decayed/capped context match under `feedback-ranking-v1`, and one
 cautious default Insight before advanced correlation exploration.
@@ -755,7 +804,7 @@ you actually intend to run `supabase db reset`.
 `supabase db reset` must complete through:
 
 ```text
-20260725120000_retire_setup_goals_and_friction.sql
+20260726200000_learned_timing_setup_fallback_provenance.sql
 ```
 
 Expected local reset notices include skipped legacy CamelCase tables and

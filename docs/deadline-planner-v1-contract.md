@@ -229,6 +229,22 @@ The ordered rule-based planning windows are frozen by
 The planner tries these windows in order after subtracting current time and
 busy intervals. They are deterministic defaults, not AI-selected availability.
 
+Personal Learning V1 may prepend one mature learned daytime window for a newly
+requested or expressly re-requested preview only when both the account setting
+and the development pilot gate are active. Setup windows remain the complete
+fallback sequence, and all deadline, budget, Calendar, Recovery, Study rhythm,
+current-time, and reservation rules remain authoritative. The learned window
+does not change `preferred_session_minutes`, `max_daily_minutes`, or recovery.
+
+Each immutable revision records additive timing provenance: `setup` or
+`learned_personal_pattern`, the fixed window, evidence count/date interval and
+fingerprint, plus whether unavailable evidence selected Setup or actual
+allocation fell back after considering the learned window. Confirmation
+requires the learned-use permission still to be active but deliberately does
+not recalculate evidence; a changed pattern
+affects only the next explicit preview. Confirmed blocks never move and receive
+no pattern-change attention. See `docs/personal-learning-v1-contract.md`.
+
 `buffer_days` counts complete profile-local calendar days that must remain free
 immediately before the deadline day. For example, a value of one leaves the
 whole preceding day clear, so the last preferred preparation day is two dates

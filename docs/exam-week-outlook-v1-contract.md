@@ -78,6 +78,13 @@ duration/quality inputs produce the same classification as their compatible
 older representation. Today streak recognition likewise treats a valid V4
 Morning or Evening branch as an explicit saved capture.
 
+Daily State, this outlook, and `personal-patterns-v1` call the same strict V4
+sleep parser. Personal Patterns may describe an observational sleep range, but
+it cannot change this outlook's sleep target, protected interval, capacity, or
+mode. Optional learned Focus timing affects only a newly requested
+Planner/Deadline preview; this read-only simulation does not reorder or move
+any block.
+
 ## Read-Only Endpoint
 
 The authenticated endpoint is:
@@ -249,8 +256,8 @@ Automated coverage must prove:
   prefill, target grid, interval ordering, 16-hour bound, and 02:00–10:00 plus
   23:00–07:00 derivation;
 - V2/V3/V4 parsing, explicit mixed-branch preservation, edit-time V4 upgrade,
-  guest round-trip, raw-field isolation, compatible projections, and exact
-  retry identity;
+  guest round-trip, raw-field isolation, compatible projections, shared-parser
+  parity with Personal Patterns, and exact retry identity;
 - unchanged Daily State V2 classification for equivalent derived sleep facts
   and V4-compatible Today streak recognition;
 - exact mode boundaries, overdue behavior, assignment capacity, multiple plans,

@@ -83,12 +83,14 @@ owner-scoped `profiles` row. It grants no new direct profile mutation authority.
 ## Account Export
 
 `GET /v1/account/export` is side-effect free and returns the strict
-`account-export-v1` JSON envelope. It includes bounded owner rows from these 38
-V1 product tables: `profiles`, `notification_preferences`, `daily_logs`,
+`account-export-v1` JSON envelope. It includes bounded owner rows from these 40
+V1 product tables: `profiles`, `notification_preferences`,
+`learning_preferences`, `daily_logs`,
 `behavioral_events`, `lifestyle_entries`, `tasks`, `schedule_items`,
 `notifications`, `coach_messages`, `memory_entries`, `ai_insights`,
 `recommendations`, `skillset_profiles`, `goals`, `habits`, `habit_logs`,
-`focus_sessions`, `intake_responses`, `study_setup_profiles`,
+`focus_sessions`, `focus_session_reflections`, `intake_responses`,
+`study_setup_profiles`,
 `user_state_snapshots`, `daily_briefings`, `decision_feedback`,
 `weekly_reviews`, `calendar_connections`,
 `calendar_imports`, `calendar_events`, `coach_requests`, `coach_usage_events`,
@@ -100,12 +102,14 @@ timestamp, bounds, and an explicit ledger policy. Calendar
 connection/import and Coach request/usage rows use field allowlists so
 backend-only details are not leaked. The global `calendar_request_identities`,
 `notification_action_requests`, `deadline_plan_request_identities`, and
-`planner_request_identities` anti-replay ledgers are deliberately omitted and
-named in that policy. Deadline
+`planner_request_identities`, and `learning_request_identities` anti-replay
+ledgers are deliberately omitted and named in that policy. Deadline
 plan, revision, and block rows remain bounded owner product data; their opaque
 request fingerprints are not part of the export. Study Setup exports the
 current owner projection only; transient preparation-checklist decisions and
-local recovery countdown state do not exist in the export.
+local recovery countdown state do not exist in the export. Personal Learning
+exports the current complete preference projection and raw owner reflection
+rows; clearing reflection history removes only those reflection rows.
 
 `20260714110000_account_export_lifestyle_entries_grant.sql` gives only the
 verified-bearer FastAPI path's `service_role` client the missing `SELECT` grant

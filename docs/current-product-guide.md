@@ -101,7 +101,7 @@ vollständig; `Settings` wird nicht als redundanter Ersatz eingeblendet.
 | Sichtbarer Bereich | Aufgabe | Was dort aktuell zu sehen oder zu tun ist |
 | --- | --- | --- |
 | **Today** | Den gespeicherten Tag überblicken und Tagesaktionen ausführen | Check-in-Streak, transparenter Fortschritt, vertikale Setup/Task/Habit/Fixed commitment/Preparation/Calendar/Focus-Agenda, heutige Tasks und Habits sowie eingeklappte unterstützende Details |
-| **Insights** | Entwicklungen untersuchen | Eine vorsichtige Beobachtung, Datenqualität, 7/14/30/90-Tage-Korrelationen, Trends, Matrix und gespeicherte Insight-Notizen |
+| **Insights** | Entwicklungen untersuchen | Für echte Accounts die Backend-Karte `Personal study pattern` mit Stichprobe, Abdeckung und erklärbarer Evidenz; zusätzlich 7/14/30/90-Tage-Korrelationen, Trends, Matrix und gespeicherte Insight-Notizen. Nur Demo zeigt die lokale Beispielbeobachtung. |
 | **Quick actions** | Tagesdaten erfassen oder eine Aktivität ausführen | Evening check-in, Morning check-in, Habit completion und Focus |
 | **Planner** | Aufgaben, Routinen und feste Zeiten bewusst planen | Task, Habit, Exam, Assignment und Fixed commitment anlegen; Vorschauen bestätigen; sieben Tage, Konflikte, Unscheduled und laufende Preparation verwalten |
 | **Coach** | Den aktuellen Zustand bewusst erklären oder reflektieren | Development Preview mit begrenztem Context, sichtbarer Provenance und unverbindlichen, nicht ausführbaren Vorschlägen |
@@ -109,8 +109,8 @@ vollständig; `Settings` wird nicht als redundanter Ersatz eingeblendet.
 Weitere Screens sind Unterseiten und keine eigenständigen Hauptbereiche:
 
 - `Settings` ist über den Button oben rechts auf `Today` erreichbar und enthält
-  Profil/Zeitzone, Setup, Preparation Budget, Inbox, In-app reminders, Calendar
-  import, Export, Löschung, Theme und Sign-out.
+  Profil/Zeitzone, Setup, Personal learning, Preparation Budget, Inbox, In-app
+  reminders, Calendar import, Export, Löschung, Theme und Sign-out.
 - `Weekly review` gehört logisch zu `Today`.
 - `Today habits` und `Focus` gehören zur Ausführung unter `Quick actions`.
 - `Habit management` und `Preparation plans` gehören logisch zu `Planner`;
@@ -180,14 +180,17 @@ getroffene Tagesentscheidung mehr. Die exakten Regeln stehen in
 
 ### 2. Insights: Muster- und Korrelationsdashboard
 
-`Insights` beginnt mit genau einer vorsichtigen, lokal berechneten Beobachtung.
-Sie zeigt:
+Bei echten Accounts beginnt `Insights` mit der read-only Backend-Karte
+`Personal study pattern`. Sie zeigt `Collecting`, `Emerging`, `Stable` oder
+`Disabled`, die bewertete Stichprobe, Abdeckung, das feste 90-Tage-Fenster und
+die Profil-Zeitzone. Ausklappbar folgen höchstens drei rein beobachtende Muster
+in fester Reihenfolge: Focus-Zeit, Schlaf und Sessionlänge beziehungsweise
+Abstand. Fehlende Reflexionen zählen nicht als Null; die Karte behauptet weder
+Ursache noch medizinisches oder akademisches Optimum.
 
-- Aussage und kurze Erklärung;
-- `Insufficient`, `Emerging` oder `Stronger` confidence;
-- Evidenzfenster und Datenqualität;
-- optional ein kleines siebentägiges Experiment, das keine Daten oder Pläne
-  automatisch verändert.
+Nur der klar beschriftete lokale Demo-Modus behält eine vorsichtige lokal
+berechnete Beispielbeobachtung. Diese Demo-Ausgabe verändert keine Daten oder
+Pläne.
 
 Der ausklappbare Bereich `Advanced correlation exploration` enthält:
 
@@ -199,20 +202,24 @@ Der ausklappbare Bereich `Advanced correlation exploration` enthält:
 - eine Korrelationsmatrix;
 - unter `Discovered patterns` gespeicherte `ai_insights`-Notizen.
 
-Verwendbare Metriken erscheinen nur, wenn echte Werte vorhanden sind:
+Für echte Accounts stammen die profilzeitbasierten Punkte aus demselben
+`personal-patterns-v1`-Backendvertrag. Flutter rekonstruiert keine historische
+Planlast oder Habit-Erfüllung aus heutigen Zeilen. Verwendbare Metriken
+erscheinen nur, wenn echte Werte vorhanden sind:
 
 | Metrik | Datenquelle |
 | --- | --- |
-| Sleep, mood, energy, stress | gespeicherte `daily_logs` aus Morning/Evening |
-| Screen time, activity, steps | nur vorhandene ältere oder importierte `daily_logs`; die aktuellen Check-ins fragen diese Werte nicht ab |
-| Focus minutes | tatsächlich abgeschlossene `focus_sessions` |
-| Planned minutes | Task-Schätzungen, Dauer der wöchentlichen Schedule Items und aktive bestätigte Preparation Blocks |
-| Habit completion rate | explizite `habit_logs`, also completed/skipped/offen statt angenommener Erfüllung |
+| Sleep duration, quality, target difference | nur die letzte gültige V4-Schlafepisode vor der Session |
+| Morning energy | nur wenn Morning vor Sessionstart erfasst wurde |
+| Focus minutes and completion | tatsächliche terminale `focus_sessions` |
+| Planned Focus duration | die an der jeweiligen Session gespeicherte geplante Dauer |
+| Focus quality and useful progress | vorhandene `focus-reflection-v1`-Bewertungen |
 
-Eine Korrelation benötigt mindestens fünf gemeinsame Tage. Die prominente
-Beobachtung benötigt mindestens 14 gemeinsame Tage und eine ausreichende
-Effektstärke. Das Ergebnis ist eine **Assoziation, keine Ursache** und verändert
-weder Briefing noch Plan.
+Eine Korrelation benötigt mindestens fünf gemeinsame Tage. Das Ergebnis ist
+eine **Assoziation, keine Ursache**. Die Exploration besitzt keine
+Planner-Autorität. Nur ein separat freigegebenes, Planner-fähiges
+Focus-Zeitfenster aus der kompakten Hauptkarte darf einen neu angeforderten
+Preview weich bevorzugen.
 
 Der technisch benannte Datentyp `ai_insights` ist aktuell kein Beweis für einen
 laufenden AI-Insight-Generator. Beim `student`-Testuser sind solche Zeilen
@@ -252,7 +259,7 @@ Dashboards:
 | **Weekly review** | deterministische Fakten für die letzte abgeschlossene lokale ISO-Woche | Tasks, Habit-Möglichkeiten/Outcomes, Focus, Daily State und Feedback | `weekly_reviews`; kein LLM; Änderungen nur nach Bestätigung |
 | **Calendar import** | ein bewusst gewähltes UTF-8-`.ics`-File wird begrenzt und read-only importiert | explizite Einwilligung und die gewählte Datei | `calendar_connections`, `calendar_imports`, `calendar_events`; nie an das LLM und nie in `schedule_items` kopiert |
 | **Preparation plans** | Nutzer schätzt Gesamtaufwand und Vorleistung; Regeln teilen Restzeit in überprüfbare Datumsblöcke und verwenden einen konfigurierten Study Rhythm verbindlich | Deadline, eigene Schätzung, Study-Revision beziehungsweise sonst bevorzugte Blockgröße, Tageslimit, Puffer, Setup-Commitments und optional aktuelle importierte Busy Times | `deadline_plans`, Revisionen, Focus-/Recovery-Blocks und nach Bestätigung ein verwalteter `task`; Recovery ist Belegung, aber keine Lern-/Budgetminute; kein LLM |
-| **Insights** | Flutter berechnet Korrelationen und eine vorsichtige Beobachtung | vorhandene Tages-, Task-, Schedule-, Plan-, Habit- und Focus-Daten | normalerweise nur Anzeige; kein LLM und keine automatische Produktänderung |
+| **Insights** | `personal-patterns-v1` liefert für echte Accounts die persönliche Musterkarte und profilzeitbasierte Korrelationspunkte; nur Demo berechnet lokal eine vorsichtige Beispielbeobachtung | terminale Focus Sessions mit vorhandenen Reflexionen sowie ausschließlich vor der Session gültige Schlaf-/Morning-Fakten; gespeicherte `ai_insights` bleiben getrennte Notizen | read-only; kein LLM, keine Kausalaussage und keine automatische Produktänderung; Planner-Nutzung nur nach separater Freigabe für neue Previews |
 | **Inbox lifecycle** | fällige gespeicherte Hinweise lesen, unread/read setzen oder dismissen | owner-scoped `notifications` | Lifecycle-Zeitstempel plus Retry-Ledger; kein LLM |
 | **In-app reminders** | nach separater Einwilligung werden höchstens zwei Kandidaten mit fixer Copy regelbasiert erzeugt und bei offener App höchstens einmal als Banner gezeigt | aktueller Recovery-/Briefing-Zustand oder aktuelles Weekly Review, Kategorien, Quiet Hours und Tageslimit | `notification_preferences`, `notifications` und Delivery-Provenance; kein Push, kein Background und kein LLM |
 | **Coach** | bewusste Nachricht, begrenzter Context, Safety-Prüfung und validierte Antwort | ausgewählte aktuelle Produktfakten und Memories | `coach_requests`, `coach_messages`, Usage und Selection; nur dieser Pfad kann lokal ein LLM verwenden |
@@ -642,6 +649,7 @@ erzwingen sichtbar höhere Unsicherheit.
 | Setup | `intake_responses`, `study_setup_profiles`, `habits`, `schedule_items`, Best-Energy-`memory_entries`, Onboarding-`user_state_snapshots`; `goals` nur archivierte Kompatibilität | Setup, Focus Defaults/Ritual und Planner/Preparation; keine Reminder-Mutation |
 | Tägliche Erfassung | `daily_logs`, `behavioral_events` | Today, Daily State, Insights |
 | Ausführung | `tasks`, `habit_logs`, `focus_sessions` | Today, Focus/Habits, Snapshot, Weekly Review, Insights |
+| Persönliches Lernen | `focus_session_reflections`, `learning_preferences`; gelernte Planner-Provenienz additiv in Planner-/Deadline-Revisionen | Focus, Evening, Insights und nach separater Freigabe nur neue Planner-Previews |
 | Tagesüberblick | `daily_logs`, `tasks`, `habits`, `habit_logs`, `schedule_items`, aktive Planner-/Preparation-Blöcke, feste Planner-Commitments, aktueller Calendar Import und `focus_sessions` | `today-overview-v2` und Today; V1 bleibt kompatibel |
 | Interne Tagesrangfolge | `user_state_snapshots`, `recommendations`, `daily_briefings`, `decision_feedback` | Reminder, Coach-Kontext, Historie und zukünftige regelbasierte Rangfolge |
 | Wochenreview | `weekly_reviews` | Weekly Review, Reminder, begrenzter Coach-Kontext |
@@ -760,8 +768,9 @@ dabei lediglich lesbar.
    Schlafkapazität und explizite Review-/Replan-Navigation prüfen.
 6. Unter `Settings → Calendar import` read-only Events und den Einstieg `Plan
    preparation` ansehen.
-7. In `Insights` Observation, Datenfenster, Signalquellen und Advanced-
-   Korrelationen prüfen.
+7. In `Insights` `Personal study pattern`, Stichprobe, Abdeckung,
+   Profil-Zeitzone, Evidenzgrenzen und Advanced-Korrelationen prüfen; im
+   Demo-Modus stattdessen die klar markierte Beispielbeobachtung.
 8. Unter `Settings → Inbox` unread/read/dismiss und erlaubte `Open`-Ziele
    testen.
 9. Unter `Settings` Preparation Budget und Reminder-Consent prüfen. `Coach`

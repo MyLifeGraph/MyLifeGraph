@@ -27,14 +27,15 @@ way to explore the product today is the Flutter app in mock-data guest mode.
   instant, resolves each onboarded non-guest profile's local date, and prepares
   missing daily snapshots plus missing or snapshot-stale persisted briefings
   without an LLM.
-- Insights includes deterministic correlation exploration for available sleep,
-  planned minutes, stress, energy, mood, screen time, activity, steps, habits,
-  and completed focus minutes. Missing metrics are hidden, focus comes from real
-  sessions, and the primary observation requires 14 shared days. It computes
-  bounded 7/14/30/90-day relationships in Flutter from paginated Supabase rows
-  or local mock time series, without LLM usage. Real accounts do not show the
-  unproduced Skillset surface; local demo mode labels its Skill profile as
-  example data only and never presents it as learned user evidence.
+- Real-account Insights starts with deterministic `personal-patterns-v1`
+  evidence from terminal Focus sessions, editable reflections, and valid
+  preceding Daily Capture V4 sleep episodes in the profile timezone. Its
+  fixed 90-day window exposes sample, coverage, maturity, limitations, and at
+  most three non-causal patterns; disabled analysis reads no behavioral
+  evidence. Advanced correlation remains exploratory and consumes the same
+  backend points instead of reconstructing unsupported Planner or Habit
+  history. Local demo keeps its labelled mock time series. No Insights path
+  calls an LLM.
 - Real authenticated accounts now have durable timezone editing, a strict
   bounded `account-export-v1` JSON portability export, password reset/confirmation-email
   recovery, and confirmed permanent account deletion. The deletion is one
@@ -413,8 +414,12 @@ Supabase is the intended auth and persistence backend. The current app supports:
   flow with one active session per user, optional owned task/habit linkage, and
   finish/abandon transitions that never complete the target implicitly.
   The Focus surface reconstructs a live countdown after reload, accepts custom
-  duration, reuses the latest planned duration, and may suggest a median only
-  after five completed sessions without changing it automatically. Dashboard
+  duration, and reuses the latest planned duration. One editable reflection may
+  be attached only after completion or abandonment. The old local few-session
+  time-of-day heuristic is gone; only transparent `personal-patterns-v1`
+  evidence may expose a learned window, and its optional Planner use is
+  separately disabled by default. The existing reviewable median-duration hint
+  remains local and never changes Study rhythm or Planner duration. Dashboard
   keeps briefing, next block, capture status, Focus/Habits, and tasks prominent;
   signal detail, secondary suggestions, and the full week are collapsed.
 - Every task update, including direct undo, and every manual habit
@@ -525,9 +530,18 @@ Supabase is the intended auth and persistence backend. The current app supports:
 
 Important current caveat: the Flutter app targets the canonical snake_case
 schema. The migration chain currently ends at
-`20260725120000_retire_setup_goals_and_friction.sql`. It removes retired
-Setup/friction state under owner-safe compatibility rules while preserving
-Reminder settings and readable Coach V1 history. The preceding
+`20260726200000_learned_timing_setup_fallback_provenance.sql`. It retains
+learned evidence while recording when actual allocation used Setup timing. The
+preceding confirmation-time and proposal-RPC guards preserve monotone audit
+timestamps, strict established payloads, and exact retries. The preceding
+Recommendation migration atomically replaces the current generated set while
+preserving historical decisions. The earlier learned-planning migration adds
+immutable Planner/Deadline timing provenance and confirmation permission
+guards; the Personal Learning migration adds forced-RLS reflections, revisioned
+preferences, and a backend retry ledger. The earlier
+`20260725120000_retire_setup_goals_and_friction.sql` removes retired Setup/
+friction state under owner-safe compatibility rules while preserving Reminder
+settings and readable Coach V1 history. The preceding
 `20260723200707_optimize_canonical_rls_policies.sql` removes superseded initial
 policies and makes the unchanged canonical owner/admin predicates
 initialization-plan safe without changing grants. The preceding
@@ -547,7 +561,8 @@ migration adds explicit consent, deterministic generation, and foreground
 receipts. The earlier Account Export
 grant restores only FastAPI's service-role read access to `lifestyle_entries`,
 which was required by the then-31-table Account Export V1 contract. Planner V1
-and Study Setup later extend the current export to 38 owner-content tables.
+and Study Setup later extended it to 38 tables; Personal Learning now brings
+the current exact owner-content export to 40 tables.
 Phase 3 adds task
 estimates/terminal times, locked cadence-aware habit outcomes, immutable linked
 focus history, and restricted target deletion without replacing existing RLS
@@ -743,6 +758,9 @@ has the nvm bin directory on `PATH`.
   start ritual, semester planning, recovery reservations, and Setup authority.
 - `docs/exam-week-outlook-v1-contract.md` - Daily Capture V4 sleep estimates
   and the read-only Planner exam/watch/overdue capacity outlook.
+- `docs/personal-learning-v1-contract.md` - Focus reflections, revisioned
+  learning controls, deterministic personal patterns, optional learned timing,
+  and the Recommendation cleanup boundary.
 - `docs/phase-3-executable-actions-contract.md` - Implemented executable task,
   habit, focus, and action-target contract.
 - `docs/phase-8-weekly-review-contract.md` - Bounded ISO-week facts,

@@ -12,6 +12,16 @@ FastAPI service boundary for recommendation and future ML workflows.
   and later Setup edits.
 - `/v1/recommendations` and `/v1/recommendations/generate` expose the
   authenticated backend v1 recommendation contract.
+- `GET/PATCH /v1/learning/preferences` exposes the revisioned complete
+  `learning-preferences-v1` state, and
+  `POST /v1/learning/focus-reflections/clear` is the retry-safe confirmed bulk
+  deletion boundary. Individual reflection CRUD remains owner-scoped through
+  Supabase forced RLS.
+- `GET /v1/insights/personal-patterns` returns side-effect-free
+  `personal-patterns-v1` evidence from a fixed profile-timezone 90-day window.
+  It shares strict Daily Capture V4 sleep parsing with Daily State and
+  Exam-Week Outlook, never calls a model, and loads no behavioral evidence when
+  analysis is disabled.
 - `/v1/snapshots/generate` creates or refreshes deterministic `daily` or
   `weekly` user-state snapshots from recent user-owned signals. Their additive
   `summary.daily_state` uses the `explainable-daily-state-v2` contract for
@@ -50,7 +60,12 @@ FastAPI service boundary for recommendation and future ML workflows.
   recommendation rules unchanged, excludes capture free text from Daily State,
   and does not require an LLM provider.
 - Recommendation context ignores terminal done/cancelled/archived tasks for
-  overdue, workload, and focus-pressure candidates.
+  overdue and workload candidates. Focus warnings use real terminal sessions
+  and require at least three sessions plus two abandonments in 14 days; a short
+  completed session is not automatically insufficient. Sleep uses valid V4
+  quality/target deviation, movement requires measured values, and a deliberate
+  refresh atomically replaces the prior current `new` set while retaining
+  history.
 - `GET /v1/briefings/today` reads one persisted `daily-briefing-v1` decision;
   deliberate `POST /v1/briefings/generate` refreshes its exact profile-local
   date. Normal reads remain generation-free. The visible Today surface instead
@@ -77,8 +92,12 @@ FastAPI service boundary for recommendation and future ML workflows.
   with Deadline Planner and reserve nothing until owner-locked confirmation.
   Setup recurring commitments may use optional inclusive `valid_from` and
   `valid_until` dates. Existing targets remain unscheduled; GETs never create
-  revisions. Calendar import remains optional and outside onboarding. See
-  `../../docs/planner-v1-contract.md`.
+  revisions. When both the account choice and development pilot gate are on,
+  mature Personal Learning timing softly precedes Setup timing only for new
+  Task previews; all ordinary availability fallbacks remain. Calendar import
+  remains optional and outside onboarding. See
+  `../../docs/planner-v1-contract.md` and
+  `../../docs/personal-learning-v1-contract.md`.
 - Deadline Planner V1 exposes bearer-owned exam/assignment plan reads,
   workload/detail reads, and explicit proposal/confirmation/lifecycle commands
   under `/v1/deadline-plans`. The separate
@@ -253,6 +272,20 @@ scheduled-target selection:
 curl http://localhost:8000/v1/today/overview-v2 \
   -H 'Authorization: Bearer <supabase_access_token>'
 ```
+
+Personal Learning uses these bearer-authenticated contracts:
+
+```text
+GET    /v1/learning/preferences
+PATCH  /v1/learning/preferences
+POST   /v1/learning/focus-reflections/clear
+GET    /v1/insights/personal-patterns
+```
+
+Set `LEARNED_FOCUS_PLANNING_PILOT_ENABLED=true` in FastAPI and the matching
+Flutter Dart define only for the development pilot. The account Planner switch
+is still independent and default-off. Production Flutter builds stay
+fail-closed.
 
 Planner V1 uses these bearer-authenticated reads and deliberate commands:
 
@@ -505,6 +538,20 @@ signature, ignores its Goal/notification arguments, and performs the idempotent
 stored-data cleanup. It also admits paired Coach V2 provenance while retaining
 paired V1 history validation.
 
+Personal Learning persistence requires
+`20260726120000_personal_learning_v1.sql`, followed by
+`20260726150000_learned_focus_planning_v1.sql`,
+`20260726170000_recommendation_refresh_v2.sql`,
+`20260726180000_learned_focus_planning_rpc_guard.sql`,
+`20260726190000_planning_confirmation_timestamp_guard.sql`, and
+`20260726200000_learned_timing_setup_fallback_provenance.sql`. Together they
+add forced-RLS terminal Focus reflections, revisioned settings and retry
+identities, immutable Planner/Deadline timing provenance, strict replay-safe
+delegation, monotone confirmation timestamps, truthful allocation-fallback
+provenance, and atomic current-Recommendation replacement. Account Export
+includes the two owner-content projections and omits the backend retry ledger
+explicitly.
+
 Phase 3 client and snapshot behavior requires
 `20260711120000_phase_3_executable_action_schema.sql`. It adds bounded task
 estimates and terminal timestamps, authoritative completed/skipped habit-log
@@ -587,7 +634,12 @@ timezone/all-day/recurrence/cancellation handling, stable event pagination,
 disconnect/delete separation, schedule preservation, and RLS ownership.
 Deadline Planner/Planner coverage includes proposal/confirmation/lifecycle,
 workload, preparation-budget, shared Availability, and strict read-only
-Exam-Week Outlook tests. A documented test suite alone is not a pass claim.
+Exam-Week Outlook tests. Personal Learning tests cover terminal reflection
+guards, preference replay/dependency, disabled short-circuit, profile
+timezone/DST, sleep assignment/deduplication, every maturity gate,
+half-consistency, night exclusion, deterministic fingerprints, learned
+free/busy/fallback ordering, confirmation permission, and atomic
+Recommendation replacement. A documented test suite alone is not a pass claim.
 Exact current results live in
 [Current Verified Baseline](../../docs/verification.md#current-verified-baseline).
 

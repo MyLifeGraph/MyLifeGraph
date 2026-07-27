@@ -1,7 +1,8 @@
 # UI Language And Copy Contract
 
 Status: implemented V1 product-copy contract, including the current
-Coach-enabled shell and Exam-Week Outlook terminology, as of 2026-07-26.
+Coach-enabled shell, Exam-Week Outlook, and Personal Learning terminology, as
+of 2026-07-26.
 
 ## Supported Language
 
@@ -98,6 +99,29 @@ must not replace persisted facts with examples. Notification fixed copy uses
 `Today's overview is ready` and invites the user to review their schedule and
 actions.
 
+## Personal Learning Copy
+
+Settings uses one entry titled `Personal learning`; it is not a primary
+navigation destination. The switches are `Ask after Focus sessions`,
+`Analyze my study patterns`, and
+`Prefer learned Focus times in new plans`. The last control must say that it is
+optional, soft, applies only to new previews, and never moves existing plans.
+
+The Focus sheet asks `How focused did the session feel?` and
+`How much useful progress did you make?`, with plain-language anchors rather
+than statistical terminology. `Not now` is neutral and a missing reflection is
+never described as a low score. A failed save says that the terminal session
+was retained and preserves the exact choices for retry.
+
+Insights calls the card `Personal study pattern` and uses `Collecting`,
+`Emerging`, `Stable`, or `Disabled`. Evidence copy always names the rated
+sample, 90-day window, coverage, profile timezone, and limitations. Use
+`associated with` or `observed`; never use `caused`, `optimal`, `ideal`,
+medical advice, or predicted academic performance. Sleep descriptions never
+change or recommend a sleep target. Planner preview provenance uses the compact
+line `Learned timing applied · N rated sessions`; unavailable analysis states
+`Personal pattern unavailable · Setup timing used`.
+
 ## Plain-language Rules
 
 - State the user outcome before implementation detail.
@@ -110,10 +134,9 @@ actions.
   for a staged change that has not been applied.
 - Daily briefings visibly say `Rule-based · not AI-written`. Stored Insight
   rows are called notes unless their individual source proves a narrower AI
-  claim. Preparation load is named `Current planned workload` because it combines
-  saved schedule durations, task estimates, and active preparation reservations,
-  and because active revisions can replace the projection; it is not presented
-  as immutable historical load.
+  claim. The compact Today projection calls confirmed preparation reservations
+  `7-day preparation load`; it does not combine them with current Task
+  estimates or imply an immutable historical workload.
 - The Deadline Planner's separate `Your next 7 days` card names only confirmed
   preparation reservations as preparation load. Recurring `schedule_items` are
   labelled `weekly setup commitments`; imported calendar busy time is not shown

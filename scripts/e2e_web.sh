@@ -15,6 +15,8 @@ AI_SERVICE_BASE_URL="${AI_SERVICE_BASE_URL:-http://$AI_SERVICE_HOST:$AI_SERVICE_
 AI_SERVICE_START="${AI_SERVICE_START-true}"
 HEADED="${HEADED-false}"
 E2E_PHASE10_ONLY="${E2E_PHASE10_ONLY-false}"
+E2E_PERSONAL_LEARNING_ONLY="${E2E_PERSONAL_LEARNING_ONLY-false}"
+LEARNED_FOCUS_PLANNING_PILOT_ENABLED="${LEARNED_FOCUS_PLANNING_PILOT_ENABLED-true}"
 SCHEDULED_REFRESH_TOKEN="${SCHEDULED_REFRESH_TOKEN:-local-e2e-scheduled-refresh-${E2E_RUN_ID:-$$}}"
 RESET_DB="${RESET_DB-false}"
 APPLY_MIGRATIONS="${APPLY_MIGRATIONS-false}"
@@ -31,6 +33,24 @@ local_supabase_validate_migration_flags \
 local_supabase_validate_boolean AI_SERVICE_START "$AI_SERVICE_START" || exit $?
 local_supabase_validate_boolean HEADED "$HEADED" || exit $?
 local_supabase_validate_boolean E2E_PHASE10_ONLY "$E2E_PHASE10_ONLY" || exit $?
+local_supabase_validate_boolean \
+  E2E_PERSONAL_LEARNING_ONLY \
+  "$E2E_PERSONAL_LEARNING_ONLY" || exit $?
+local_supabase_validate_boolean \
+  LEARNED_FOCUS_PLANNING_PILOT_ENABLED \
+  "$LEARNED_FOCUS_PLANNING_PILOT_ENABLED" || exit $?
+
+if [[ "$E2E_PHASE10_ONLY" == "true" &&
+  "$E2E_PERSONAL_LEARNING_ONLY" == "true" ]]; then
+  echo "E2E_PHASE10_ONLY and E2E_PERSONAL_LEARNING_ONLY are mutually exclusive." >&2
+  exit 64
+fi
+
+if [[ "$E2E_PHASE10_ONLY" != "true" &&
+  "$LEARNED_FOCUS_PLANNING_PILOT_ENABLED" != "true" ]]; then
+  echo "Personal Learning browser coverage requires LEARNED_FOCUS_PLANNING_PILOT_ENABLED=true." >&2
+  exit 64
+fi
 
 if command -v supabase >/dev/null 2>&1; then
   SUPABASE_BIN="$(command -v supabase)"
@@ -130,6 +150,7 @@ if [[ "$AI_SERVICE_START" == "true" ]]; then
   SCHEDULED_REFRESH_TOKEN="$SCHEDULED_REFRESH_TOKEN" \
   COACH_PROVIDER=fake \
   COACH_FAKE_PROVIDER_ENABLED=true \
+  LEARNED_FOCUS_PLANNING_PILOT_ENABLED="$LEARNED_FOCUS_PLANNING_PILOT_ENABLED" \
   "$AI_SERVICE_PYTHON" -m uvicorn app.main:app \
     --host "$AI_SERVICE_HOST" \
     --port "$AI_SERVICE_PORT" \
@@ -181,6 +202,7 @@ AI_SERVICE_BASE_URL="$AI_SERVICE_BASE_URL" \
   --dart-define=SUPABASE_ANON_KEY="$local_anon_key" \
   --dart-define=AI_SERVICE_BASE_URL="$AI_SERVICE_BASE_URL" \
   --dart-define=COACH_SURFACE_ENABLED=true \
+  --dart-define=LEARNED_FOCUS_PLANNING_PILOT_ENABLED="$LEARNED_FOCUS_PLANNING_PILOT_ENABLED" \
   --dart-define=E2E_ENABLE_SEMANTICS=true \
   >"$FLUTTER_LOG" 2>&1 &
 FLUTTER_PID="$!"
@@ -214,6 +236,8 @@ SUPABASE_ANON_KEY="$local_anon_key" \
 SUPABASE_SERVICE_ROLE_KEY="$local_service_role_key" \
 AI_SERVICE_BASE_URL="$AI_SERVICE_BASE_URL" \
 SCHEDULED_REFRESH_TOKEN="$SCHEDULED_REFRESH_TOKEN" \
+E2E_PHASE10_ONLY="$E2E_PHASE10_ONLY" \
+E2E_PERSONAL_LEARNING_ONLY="$E2E_PERSONAL_LEARNING_ONLY" \
 E2E_ARTIFACT_DIR="$E2E_LOG_DIR" \
 E2E_RUN_ID="${E2E_RUN_ID:-$(date +%s)}" \
 "$NODE_BIN" e2e/web/smoke.mjs

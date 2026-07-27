@@ -11,27 +11,38 @@ Capture V4, Daily State V2, Exam-Week Outlook V1, or Coach V2 expectations.
 
 ## Current Verified Baseline
 
-The latest fully verified local product boundary is commit `a14fc5b` from
-2026-07-26. The complete FastAPI suite reported `865 passed, 1 skipped`; the
-standard source gate and non-destructive local Supabase preflight each passed
-all `656` Flutter tests with clean analysis and exact migration history. The
-demo seed, debug Web build, and final full browser journey also passed. The
-browser run used the deterministic fake Coach provider and reported
-`E2E browser smoke passed for e2e-1785017076@example.test`.
+The latest fully verified Personal Learning boundary is the commit series
+`0ff4f33` through `de945bb`, together with the verification harness and
+contract documentation recorded by this commit, verified on 2026-07-27. The
+complete FastAPI suite reported `920 passed, 1 skipped`; the final Flutter
+suite passed all `677` tests with clean analysis. A fresh local Supabase reset
+applied the complete repository migration chain and confirmed exact migration
+history. All `50` pgTAP assertions passed, and documentation consistency
+passed across 48 Markdown files and 61 FastAPI routes. The focused browser
+journey reported
+`Focused Personal learning browser smoke passed for
+e2e-1785147001@example.test`, and the full reset-backed browser journey
+reported `E2E browser smoke passed for e2e-1785147601@example.test`.
 
-That run covered Setup-personalization retirement, Daily Capture V4 sleep
-planning and correction, an active exam with a competing assignment,
-Planner-only Exam-Week Outlook status, explicit replan navigation, and
-unchanged active plan/revision/block rows before confirmation. It is local,
-deterministic checkout evidence only. It does not establish remote migration
-state, installed-device behavior, deployed scheduling, a production model
-provider, clinical or academic outcomes, longitudinal results, or participant
-evidence.
+That focused run covered a real terminal Focus session and reflection prompt,
+Evening editing, a stable 37-rating fixture, Insights evidence, a free learned
+time window, an occupied learned window with exact Setup-fallback provenance,
+Account Export, retry-safe reflection-history clearing, and the full
+account-deletion cascade. The full browser journey covered the existing
+repository-wide product flow and that same Personal Learning path after
+recreating the local database from the complete migration chain. This is
+local, deterministic checkout evidence only. It does not establish remote
+migration state, installed-device behavior, deployed scheduling, a production
+model provider, clinical or academic outcomes, longitudinal results, or
+participant evidence.
 
 This section is the only source for the repository's current exact verification
 counts, commit id, and E2E identity. Current docs link here instead of copying
 those values. Dated evidence below is historical run history and does not prove
 a later checkout.
+
+The current repository migration boundary under verification ends at
+`20260726200000_learned_timing_setup_fallback_provenance.sql`.
 
 ## Verification Levels
 
@@ -44,6 +55,7 @@ Use the lowest level that covers the change.
 | Local Supabase migration apply | `APPLY_MIGRATIONS=true FLUTTER_BIN=/path/to/flutter scripts/verify_supabase_local.sh` | Explicitly applies reviewed pending SQL, verifies history, then runs tests. | May change or delete local rows |
 | Local Supabase reset | `RESET_DB=true FLUTTER_BIN=/path/to/flutter scripts/verify_supabase_local.sh` | Recreates local DB, applies migrations, then runs tests. | Yes, local DB only |
 | Browser E2E | `FLUTTER_BIN=/path/to/flutter bash scripts/e2e_web.sh` | Requires matching local migration history, starts Flutter Web, drives Playwright, and checks uniquely named DB writes. | No reset; writes test rows |
+| Personal Learning E2E | `E2E_PERSONAL_LEARNING_ONLY=true FLUTTER_BIN=/path/to/flutter bash scripts/e2e_web.sh` | Runs the focused reflection, Evening edit, pattern, learned-Planner, export, clear, and account-cascade journey. | No reset; writes and then deletes one test account |
 | Browser E2E with reset | `RESET_DB=true FLUTTER_BIN=/path/to/flutter bash scripts/e2e_web.sh` | Recreates local DB, then runs browser E2E. | Yes, local DB only |
 | Demo seed | `npm run seed:demo` | Starts local Supabase and replaces only the three named local demo accounts with repeatable data. | Demo accounts only |
 
@@ -380,6 +392,28 @@ Habit exclusion, stale confirmation, active-plan attention, and profile-local
 course-selection states with no Today/Calendar/Notification side effect. The
 exact boundary is `docs/study-setup-v1-contract.md`.
 
+Personal Learning V1 focused coverage must prove:
+
+- SQL rating/obstacle bounds, one reflection per terminal session, composite
+  owner linkage, active/cross-owner rejection, forced RLS, conflict updates,
+  preference dependency, exact update replay, retry-safe confirmed clear,
+  40-table export inclusion, ledger omission, and account cascade;
+- backend disabled-before-evidence short-circuit, profile timezone and DST,
+  strict shared V4 sleep parsing, sleep-before-session and 36-hour bounds,
+  repeated-episode daily collapse, Morning capture-time ordering, every
+  maturity state, low coverage, mixed halves, night exclusion, alternate safe
+  window selection, and deterministic used-evidence fingerprints;
+- Planner/Deadline learned-window free and busy ordering, Setup fallback on
+  unavailable evidence, unchanged duration/Recovery, deadline/budget/Calendar
+  conflicts, permission disable before confirmation, exact immutable
+  provenance, and unchanged active plans; and
+- Recommendation profile-local windows, real terminal Focus abandonment
+  threshold, valid sleep quality/target-deviation input, measured movement
+  only, and atomic replacement of obsolete current cards while retaining
+  history.
+
+The exact boundary is `docs/personal-learning-v1-contract.md`.
+
 Phase 10 focused backend source coverage is split across strict model/API,
 service, migration, and local-provider tests. It covers exact request/error
 shapes and bearer-derived ownership; completed replay without context/provider;
@@ -521,7 +555,10 @@ Current Flutter widget tests include:
   Europe/Berlin spring/fall DST calendar arithmetic.
 - Focus tests cover planned-duration bounds, one optional owned target, active
   session parsing, measured whole-minute finish/abandon, terminal transitions,
-  no implicit target completion, recent history, and snapshot refresh.
+  no implicit target completion, recent history, snapshot refresh, shared
+  reflection prompting after finish/abandon, recovery continuing behind the
+  prompt, retained retry choices, edit/skip behavior, terminal-only rating,
+  Evening summary, guest zero-call, large text, and semantics.
 - Executable action-target tests cover every supported kind/command matrix,
   strict top-level/metadata shapes and scalar types, exact ids/dates/durations,
   task/habit/focus/capture routes, `review_plan` metadata, and unsupported
@@ -706,6 +743,14 @@ bash scripts/e2e_web.sh
 
 This may change or delete local rows. The script verifies history again before
 starting FastAPI, Flutter, or Playwright.
+
+The full E2E command enables
+`LEARNED_FOCUS_PLANNING_PILOT_ENABLED=true` in both FastAPI and Flutter for the
+test process. It finishes and rates Focus, edits the rating from Evening, loads
+a stable profile-timezone pattern fixture, enables the separate Settings
+permission, proves a learned free window and a busy-window Setup fallback, and
+checks export/deletion. This test-only gate does not change normal or production
+defaults.
 
 Use real Ubuntu-installed Node.js, npm, Supabase CLI, and Docker. If these tools
 are installed through nvm, non-interactive agent shells may need an explicit
