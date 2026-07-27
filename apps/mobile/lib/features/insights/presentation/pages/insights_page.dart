@@ -651,7 +651,18 @@ class _PersonalStudyPatternContent extends StatelessWidget {
               AppSpacing.lg,
               AppSpacing.lg,
             ),
-            child: Text(patterns.limitations.first),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${patterns.timezone} · '
+                  '${patterns.sample.ratedLocalDays} rated days',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                Text(patterns.limitations.first),
+              ],
+            ),
           ),
         ],
       );

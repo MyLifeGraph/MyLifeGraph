@@ -278,6 +278,41 @@ void main() {
     );
   });
 
+  testWidgets('disabled personal analysis still names its evidence context',
+      (tester) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          _realSurfaceOverride(),
+          insightsProvider.overrideWith((ref) async => const []),
+          correlationReportProvider.overrideWith(
+            (ref) async => const CorrelationReport(
+              windowDays: 14,
+              metrics: [],
+              points: [],
+              results: [],
+            ),
+          ),
+          personalPatternsProvider.overrideWith(
+            (ref) async => _disabledPersonalPatterns(),
+          ),
+        ],
+        child: const MaterialApp(home: Scaffold(body: InsightsPage())),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Disabled'), findsOneWidget);
+    expect(find.text('0 rated sessions'), findsOneWidget);
+    expect(find.text('0% coverage'), findsOneWidget);
+    expect(find.text('90-day window'), findsOneWidget);
+    expect(find.text('Europe/Berlin · 0 rated days'), findsOneWidget);
+    expect(
+      find.text('Pattern analysis is turned off in Personal learning.'),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('personal pattern failure stays inside its compact card',
       (tester) async {
     await tester.pumpWidget(
@@ -666,3 +701,37 @@ PersonalPatterns _personalPatterns() => PersonalPatterns.fromJson({
       ],
       'evidence_fingerprint': _fingerprint,
     });
+
+PersonalPatterns _disabledPersonalPatterns() => PersonalPatterns(
+      status: PersonalPatternsStatus.disabled,
+      summary: 'Personal pattern analysis is off.',
+      timezone: 'Europe/Berlin',
+      window: PersonalPatternsWindow(
+        startsAt: DateTime.utc(2026, 4, 27, 12),
+        endsAt: DateTime.utc(2026, 7, 26, 12),
+        localStartsOn: DateTime.utc(2026, 4, 27),
+        localEndsOn: DateTime.utc(2026, 7, 26),
+      ),
+      sample: const PersonalPatternsSample(
+        terminalSessions: 0,
+        ratedSessions: 0,
+        ratedLocalDays: 0,
+        ratingCoverage: 0,
+        firstRatedLocalDate: null,
+        lastRatedLocalDate: null,
+      ),
+      baseline: null,
+      patterns: const [],
+      plannerPreference: const LearnedPlannerPreference(
+        eligible: false,
+        reason: 'analysis_disabled',
+        window: null,
+        windowLabel: null,
+        evidenceCount: 0,
+      ),
+      limitations: const [
+        'Pattern analysis is turned off in Personal learning.',
+      ],
+      correlationPoints: const [],
+      evidenceFingerprint: null,
+    );
