@@ -49,8 +49,14 @@ from app.repositories.coach_repository import SupabaseCoachRepository  # noqa: E
 from app.repositories.deadline_plan_repository import (  # noqa: E402
     SupabaseDeadlinePlanRepository,
 )
+from app.repositories.learning_repository import (  # noqa: E402
+    SupabaseLearningRepository,
+)
 from app.repositories.notification_repository import (  # noqa: E402
     SupabaseNotificationRepository,
+)
+from app.repositories.personal_patterns_repository import (  # noqa: E402
+    SupabasePersonalPatternsRepository,
 )
 from app.repositories.snapshot_repository import (  # noqa: E402
     SupabaseSnapshotRepository,
@@ -65,10 +71,18 @@ from app.services.calendar_integration_service import (  # noqa: E402
 from app.services.coach_context import CoachContextService  # noqa: E402
 from app.services.coach_service import CoachService  # noqa: E402
 from app.services.deadline_plan_service import DeadlinePlanService  # noqa: E402
+from app.services.daily_capture_parser import (  # noqa: E402
+    DailyCaptureV4SleepEpisode,
+    DailyCaptureV4SleepPlan,
+    parse_daily_capture_v4_sleep_episode,
+    parse_daily_capture_v4_sleep_plan,
+)
+from app.services.learning_service import LearningService  # noqa: E402
 from app.services.notification_service import (  # noqa: E402
     NotificationGenerationService,
     NotificationService,
 )
+from app.services.personal_patterns_service import PersonalPatternsService  # noqa: E402
 from app.services.snapshot_aggregator import SnapshotAggregator  # noqa: E402
 from app.services.weekly_review_service import WeeklyReviewService  # noqa: E402
 
@@ -631,11 +645,12 @@ async def _row_count(
     *,
     table: str,
     user_id: str,
+    select_column: str = "id",
 ) -> int:
     rows = await client.select(
         table,
         params={
-            "select": "id",
+            "select": select_column,
             "user_id": f"eq.{user_id}",
             "limit": "1000",
         },
@@ -643,11 +658,136 @@ async def _row_count(
     return len(rows)
 
 
+async def _verify_student_capture_realism(
+    *,
+    client: SupabaseRestClient,
+    user_id: str,
+    today: date,
+) -> None:
+    rows = await client.select(
+        "daily_logs",
+        params={
+            "select": "entry_date,metadata",
+            "user_id": f"eq.{user_id}",
+            "order": "entry_date.asc",
+            "limit": "100",
+        },
+    )
+    if len(rows) != 43:
+        raise RuntimeError(
+            f"Student capture history must contain exactly 43 days, got {len(rows)}."
+        )
+    stress_values: list[int] = []
+    sleep_values: list[int] = []
+    for row in rows:
+        entry_date = date.fromisoformat(str(row["entry_date"]))
+        metadata = row.get("metadata")
+        if (
+            not isinstance(metadata, dict)
+            or metadata.get("capture_version") != "daily-capture-v4"
+            or not isinstance(metadata.get("captures"), dict)
+        ):
+            raise RuntimeError("Student capture history must use Daily Capture V4.")
+        captures = metadata["captures"]
+        morning_result = parse_daily_capture_v4_sleep_episode(
+            captures.get("morning"),
+            row_date=entry_date,
+        )
+        if not isinstance(morning_result.value, DailyCaptureV4SleepEpisode):
+            raise RuntimeError(
+                "Student morning capture is invalid: "
+                f"{entry_date.isoformat()} {morning_result.issues}"
+            )
+        morning = morning_result.value
+        if not (
+            435 <= morning.estimated_sleep_minutes <= 510
+            and 6 <= morning.sleep_quality <= 9
+            and 5 <= morning.current_energy <= 8
+        ):
+            raise RuntimeError(
+                "Student sleep and energy values left their realistic fixture range."
+            )
+        sleep_values.append(morning.estimated_sleep_minutes)
+
+        evening_raw = captures.get("evening")
+        if entry_date == today:
+            if evening_raw is not None:
+                raise RuntimeError(
+                    "Today's Student fixture should leave Evening open for testing."
+                )
+            continue
+        evening_result = parse_daily_capture_v4_sleep_plan(
+            evening_raw,
+            row_date=entry_date,
+        )
+        if not isinstance(evening_result.value, DailyCaptureV4SleepPlan):
+            raise RuntimeError(
+                "Student evening capture is invalid: "
+                f"{entry_date.isoformat()} {evening_result.issues}"
+            )
+        if not isinstance(evening_raw, dict):
+            raise RuntimeError("Student evening capture payload is unavailable.")
+        stress = evening_raw.get("stress_intensity")
+        if (
+            isinstance(stress, bool)
+            or not isinstance(stress, int)
+            or not 3 <= stress <= 8
+        ):
+            raise RuntimeError(
+                "Student stress values left their realistic fixture range."
+            )
+        stress_values.append(stress)
+
+    if any(
+        abs(current - previous) > 3
+        for previous, current in zip(stress_values, stress_values[1:], strict=False)
+    ):
+        raise RuntimeError("Student stress history contains an implausible daily jump.")
+    if any(
+        abs(current - previous) > 60
+        for previous, current in zip(sleep_values, sleep_values[1:], strict=False)
+    ):
+        raise RuntimeError("Student sleep history contains an implausible daily jump.")
+
+
+async def _verify_personal_learning(
+    *,
+    client: SupabaseRestClient,
+    user_id: str,
+    now: datetime,
+) -> object:
+    service = PersonalPatternsService(
+        learning=LearningService(
+            repository=SupabaseLearningRepository(client),
+        ),
+        repository=SupabasePersonalPatternsRepository(client),
+        now=lambda: now,
+    )
+    response = await service.get_patterns(user_id=user_id)
+    if (
+        response.status != "stable"
+        or response.sample.rated_sessions < 36
+        or response.sample.rated_local_days < 36
+        or response.sample.rating_coverage < 0.9
+        or not response.planner_preference.eligible
+        or response.planner_preference.window != "09-13"
+    ):
+        raise RuntimeError(
+            "Student Personal Learning evidence is not stable and Planner-ready: "
+            f"status={response.status}, rated={response.sample.rated_sessions}, "
+            f"coverage={response.sample.rating_coverage:.0%}, "
+            f"window={response.planner_preference.window}, "
+            f"eligible={response.planner_preference.eligible}."
+        )
+    return response
+
+
 async def _verify(
     *,
     client: SupabaseRestClient,
     user_id: str,
     today: date,
+    now: datetime,
     briefing_service: BriefingService,
     weekly_service: WeeklyReviewService,
     calendar_service: CalendarIntegrationService,
@@ -655,16 +795,26 @@ async def _verify(
     coach_service: CoachService,
     notification_service: NotificationService,
 ) -> dict[str, int]:
+    await _verify_student_capture_realism(
+        client=client,
+        user_id=user_id,
+        today=today,
+    )
+    patterns = await _verify_personal_learning(
+        client=client,
+        user_id=user_id,
+        now=now,
+    )
     today_briefing = await briefing_service.get_today(user_id=user_id)
     if today_briefing.freshness != "current" or today_briefing.briefing is None:
         raise RuntimeError("Student Today briefing is not current.")
     weekly = await weekly_service.get_latest(user_id=user_id)
     proposals = weekly.review.proposals if weekly.review else []
     operations = {proposal.operation for proposal in proposals}
-    if weekly.freshness != "current" or not {"replace", "shrink"}.issubset(
-        operations
-    ):
-        raise RuntimeError("Student Weekly Review lacks staged and direct proposals.")
+    if weekly.freshness != "current" or "pause" not in operations:
+        raise RuntimeError(
+            "Student Weekly Review lacks the realistic phone-habit pause proposal."
+        )
     connection = await calendar_service.get_connection(user_id=user_id)
     if connection.connection is None or connection.connection.status != "connected":
         raise RuntimeError("Student Calendar import is not connected.")
@@ -696,12 +846,13 @@ async def _verify(
         raise RuntimeError("Student foreground notification consent is incomplete.")
 
     minimums = {
-        "daily_logs": 21,
-        "behavioral_events": 80,
+        "daily_logs": 43,
+        "behavioral_events": 170,
         "tasks": 6,
         "habits": 3,
         "habit_logs": 15,
-        "focus_sessions": 4,
+        "focus_sessions": 38,
+        "focus_session_reflections": 36,
         "daily_briefings": 8,
         "decision_feedback": 5,
         "weekly_reviews": 1,
@@ -714,7 +865,16 @@ async def _verify(
         "deadline_plan_blocks": 3,
     }
     counts = {
-        table: await _row_count(client, table=table, user_id=user_id)
+        table: await _row_count(
+            client,
+            table=table,
+            user_id=user_id,
+            select_column=(
+                "focus_session_id"
+                if table == "focus_session_reflections"
+                else "id"
+            ),
+        )
         for table in minimums
     }
     failures = {
@@ -749,6 +909,13 @@ async def _verify(
     )
     if not generated:
         raise RuntimeError("Student demo has no pending generated notification.")
+    print(
+        "Personal Learning: "
+        f"{patterns.sample.rated_sessions} rated sessions over "
+        f"{patterns.sample.rated_local_days} local days, "
+        f"{patterns.sample.rating_coverage:.0%} coverage, "
+        f"preferred window {patterns.planner_preference.window}."
+    )
     return counts
 
 
@@ -880,6 +1047,7 @@ async def main() -> None:
         client=client,
         user_id=user_id,
         today=today,
+        now=now,
         briefing_service=briefing_service,
         weekly_service=weekly_service,
         calendar_service=calendar_service,
@@ -893,6 +1061,7 @@ async def main() -> None:
         f"{counts['daily_logs']} daily logs, "
         f"{counts['daily_briefings']} briefings, "
         f"{counts['focus_sessions']} focus sessions, "
+        f"{counts['focus_session_reflections']} Focus reflections, "
         f"{counts['calendar_events']} calendar events, "
         f"{counts['deadline_plans']} preparation plans, "
         f"{counts['coach_requests']} Coach turns."

@@ -732,10 +732,14 @@ Passwort: DemoPass123!
 ```
 
 Er läuft mit `USE_MOCK_DATA=false` gegen die lokale Supabase- und FastAPI-
-Umgebung. Der Seed deckt unter anderem 21+ Daily Logs, drei Habit-Cadences,
-mehrere Task-Status, eine fortsetzbare aktive Focus Session, Briefing-Historie,
-Decision Feedback, Weekly Review, Calendar Import, drei Preparation Plans,
-In-app consent, Inbox-Zustände, ausgewählte Memories und Coach-History ab.
+Umgebung. Der Seed deckt unter anderem 43 profilzeitbasierte Daily-Capture-V4-
+Tage, drei Habit-Cadences, mehrere Task-Status, 36 bewertete Focus-Tage, eine
+fortsetzbare aktive Focus Session, Briefing-Historie, Decision Feedback, Weekly
+Review, Calendar Import, drei Preparation Plans, In-app consent, Inbox-Zustände,
+ausgewählte Memories und Coach-History ab. Schlaf bleibt bei ungefähr
+`7:15–8:30 h`, Schlafqualität bei `6–9`, Energie bei `5–8` und Stress bei
+`3–8`. Die heutige Morning Capture ist vorhanden; Evening bleibt absichtlich
+offen.
 
 Ein sinnvoller manueller Rundgang ist:
 
@@ -745,21 +749,26 @@ npm run start:local:coach
 
 # Alternativ feste Testantworten ohne Modellaufruf
 npm run start:local:coach:fake
+
+# Personal-Learning-Planner zusätzlich freischalten
+LEARNED_FOCUS_PLANNING_PILOT_ENABLED=true npm run start:local:coach:fake
 ```
 
 Ein normales `npm run start:local` lässt neue Coach-Antworten bewusst
 deaktiviert; die bereits gespeicherte Coach-History des Student-Accounts bleibt
 dabei lediglich lesbar.
 
-1. Auf `Today` den Both-capture-Streak, die genaue `x/y`-Arithmetik, alle vier
-   Agenda-Kategorien sowie Today/All Tasks und Today Habits prüfen.
+1. Auf `Today` den bis gestern reichenden Both-capture-Streak, die genaue
+   `x/y`-Arithmetik, alle vier Agenda-Kategorien sowie Today/All Tasks und Today
+   Habits prüfen. Danach den bewusst offenen heutigen Evening-Check-in
+   ausfüllen und kontrollieren, dass Morning erhalten bleibt.
 2. `More` öffnen und Preparation Workload, Weekly Review, gespeicherte Signale,
    Recommendations, vorhandene Feedback-History und Full Week prüfen.
 3. Unter `Quick actions` die aktive Focus Session fortsetzen oder beenden und
    Habit outcomes ausführen; bei konfiguriertem Study Setup auch Checkliste und
    lokalen Recovery-Countdown prüfen.
-4. `Weekly review` öffnen, Fakten und die Änderungsautorität eines Vorschlags
-   unterscheiden.
+4. `Weekly review` öffnen und den nachvollziehbaren Pause-Vorschlag für den
+   wiederholt übersprungenen Phone-away-Habit prüfen.
 5. `Planner` öffnen: alle fünf Create-Flows, Needs attention, sieben Tage,
    Unscheduled und aktive Preparation prüfen; einen Task/Habit-Preview erst
    nach bewusster Bestätigung reservieren; `Use study rhythm` nur beim Task und
@@ -768,12 +777,19 @@ dabei lediglich lesbar.
    Schlafkapazität und explizite Review-/Replan-Navigation prüfen.
 6. Unter `Settings → Calendar import` read-only Events und den Einstieg `Plan
    preparation` ansehen.
-7. In `Insights` `Personal study pattern`, Stichprobe, Abdeckung,
-   Profil-Zeitzone, Evidenzgrenzen und Advanced-Korrelationen prüfen; im
-   Demo-Modus stattdessen die klar markierte Beispielbeobachtung.
-8. Unter `Settings → Inbox` unread/read/dismiss und erlaubte `Open`-Ziele
+7. In `Insights` `Personal study pattern` öffnen. Erwartet werden `Stable`, 36
+   Bewertungen auf 36 lokalen Tagen, ungefähr 97% Abdeckung und das beobachtete
+   Fenster `09:00–13:00`. Unter `Quick actions → Focus` eine historische
+   Bewertung bearbeiten sowie die aktive Session beenden und neu bewerten.
+8. Für Planner-Nutzung die App mit dem obigen Pilot-Flag starten, unter
+   `Settings → Personal learning` den standardmäßig ausgeschalteten Schalter
+   `Prefer learned Focus times in new plans` aktivieren und einen neuen
+   Task-Preview anfordern. Ein freies passendes Ergebnis zeigt
+   `Learned timing applied · 36 rated sessions`; belegte Zeit darf weiterhin
+   einen sichtbaren Setup-Fallback auslösen.
+9. Unter `Settings → Inbox` unread/read/dismiss und erlaubte `Open`-Ziele
    testen.
-9. Unter `Settings` Preparation Budget und Reminder-Consent prüfen. `Coach`
+10. Unter `Settings` Preparation Budget und Reminder-Consent prüfen. `Coach`
    über die Hauptnavigation öffnen. Beim `fake` provider sind Antworten
    absichtlich feste Testdaten und kein LLM-Beweis.
 

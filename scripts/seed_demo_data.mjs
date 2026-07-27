@@ -26,11 +26,11 @@ const scenarios = [
     quietHoursStart: '21:30',
     quietHoursEnd: '07:00',
     baseline: {
-      sleep: 7.1,
+      sleep: 7.8,
       steps: 7600,
       activity: 6,
       screen: 4.8,
-      focus: 115,
+      focus: 95,
       mood: 7,
       energy: 7,
       stress: 5,
@@ -50,7 +50,7 @@ const scenarios = [
       [
         'Phone away study block',
         'Keep the phone out of reach during the first focus block.',
-        [1, 0, 1, -1, 1, 0, 0],
+        [0, -1, 0, -1, 0, 0, 0],
         { kind: 'weekdays', scheduledWeekdays: [1, 2, 3, 4, 5] },
       ],
       [
@@ -74,13 +74,13 @@ const scenarios = [
       ['Review flashcards', 'Twenty-minute spaced repetition block.', 'done', 'low', -1, 20],
     ],
     recommendations: [
-      ['Protect the first study block', 'Your strongest focus signal is before late morning classes.', 'Schedule block', 'focus', 0.86, 'high'],
-      ['Move exam prep earlier', 'Stress rises when review starts after 18:00.', 'Plan prep', 'planning', 0.78, 'medium'],
-      ['Shorten late screen sessions', 'Recovery drops after heavy evening screen time.', 'Create wind-down', 'recovery', 0.73, 'medium'],
+      ['Protect the first study block', 'Your rated Focus sessions show stronger useful progress between 09:00 and 13:00.', 'Schedule block', 'focus', 0.86, 'high'],
+      ['Keep exam preparation distributed', 'The upcoming exam and essay both need several manageable study blocks.', 'Plan prep', 'planning', 0.78, 'medium'],
+      ['Keep the sleep window steady', 'Recent sleep estimates stay close to the saved eight-hour target.', 'Review recovery', 'recovery', 0.73, 'medium'],
     ],
     insights: [
-      ['Morning focus is reliable', 'Focus minutes are highest when the first study block starts before 10:30.', 'focus', 0.84],
-      ['Late starts increase stress', 'Stress scores rise after days with missed evening shutdown.', 'stress', 0.72],
+      ['Morning focus is reliable', 'Rated sessions between 09:00 and 13:00 show higher useful progress in this sample.', 'focus', 0.84],
+      ['Workload pressure is visible', 'Stress is moderately higher during the current exam-preparation week.', 'stress', 0.72],
     ],
     notifications: [
       ['Focus window approaching', 'Your best study window starts in 20 minutes.', 'reminder', 'high', 0, '/deep-work', 'unread'],
@@ -88,8 +88,8 @@ const scenarios = [
       ['Earlier planning note', 'This dismissed row remains available to account export.', 'coaching', 'low', -3, '/insights', 'dismissed'],
     ],
     memories: [
-      ['recurring_problem', 'Evening pattern', 'Late screen-heavy evenings reduce recovery before school days.'],
-      ['habit', 'Study pattern', 'The first focused block is easier before late messages arrive.'],
+      ['recurring_problem', 'Exam-week pressure', 'Dense deadline weeks need smaller preparation blocks and protected breaks.'],
+      ['habit', 'Study pattern', 'The first focused block usually feels easier before lunch.'],
     ],
   },
   {
@@ -515,9 +515,16 @@ async function seedScenario(userId, scenario) {
     );
   }
   if (scenario.key === 'student') {
+    const focusEvidence = buildStudentFocusEvidence(
+      userId,
+      taskRows,
+      habitRows,
+      now,
+    );
+    await insertRows('focus_sessions', focusEvidence.sessions);
     await insertRows(
-      'focus_sessions',
-      buildFocusSessions(userId, taskRows, habitRows, now, reviewWeekStart),
+      'focus_session_reflections',
+      focusEvidence.reflections,
     );
   }
 
@@ -745,6 +752,9 @@ async function seedScenario(userId, scenario) {
 }
 
 function buildDailyLogs(userId, scenario, now, metadata) {
+  if (scenario.key === 'student') {
+    return buildStudentDailyLogs(userId, scenario, now, metadata);
+  }
   const wave = [-1, 0, 1, 0, 2, -1, 1];
   return Array.from({ length: 21 }, (_, index) => {
     const offset = index - 20;
@@ -896,6 +906,146 @@ function buildDailyLogs(userId, scenario, now, metadata) {
   });
 }
 
+function buildStudentDailyLogs(userId, scenario, now, metadata) {
+  const timezone = scenario.timezone;
+  const today = localDateOnly(now, timezone);
+  const sleepMinutesByDay = [465, 480, 450, 495, 475, 505, 490];
+  const weekdayStress = [5, 5, 6, 5, 4, 3, 3];
+
+  return Array.from({ length: 43 }, (_, index) => {
+    const offset = index - 42;
+    const entryDate = addDateOnlyDays(today, offset);
+    const dateAtNoon = new Date(`${entryDate}T12:00:00.000Z`);
+    const weekday = isoWeekday(dateAtNoon);
+    const isWeekend = weekday >= 6;
+    const recentDeadlinePressure = offset >= -8 && !isWeekend ? 1 : 0;
+    const oneBusyDay = index % 13 === 6 ? 1 : 0;
+    const stress = clampInt(
+      weekdayStress[weekday - 1] + recentDeadlinePressure + oneBusyDay,
+      3,
+      8,
+    );
+    const sleepMinutes = clampInt(
+      sleepMinutesByDay[index % sleepMinutesByDay.length] -
+        (stress >= 7 ? 15 : 0),
+      435,
+      510,
+    );
+    const sleepHours = sleepMinutes / 60;
+    const sleepQuality = clampInt(
+      6 + (sleepMinutes - 450) / 30 - (stress >= 7 ? 1 : 0),
+      6,
+      9,
+    );
+    const energy = clampInt(
+      6 + (sleepMinutes - 450) / 45 - (stress >= 7 ? 1 : 0),
+      5,
+      8,
+    );
+    const mood = clampInt(
+      7 + (isWeekend ? 1 : 0) - (stress >= 7 ? 1 : 0),
+      6,
+      8,
+    );
+    const wakeClock = isWeekend
+      ? index % 2 === 0
+        ? '08:00'
+        : '08:20'
+      : ['07:00', '07:10', '07:20'][index % 3];
+    const wokeAt = zonedDateTime(entryDate, wakeClock, timezone);
+    const morningCapturedAt = addMinutes(wokeAt, 10);
+    const estimatedSleepStartedAt = addMinutes(wokeAt, -sleepMinutes);
+    const plannedSleepTime = isWeekend ? '23:30' : '23:00';
+    const eveningCapturedAt = zonedDateTime(entryDate, '21:15', timezone);
+    const id = deterministicUuid(`demo-seed:daily-log:${userId}:${entryDate}`);
+    const morningCaptureId = deterministicUuid(
+      `demo-seed:morning-capture:${userId}:${entryDate}`,
+    );
+    const previousEntryDate = addDateOnlyDays(entryDate, -1);
+    const morningCapture = {
+      branch_version: 'daily-capture-v4',
+      capture_kind: 'morning',
+      entry_date: entryDate,
+      capture_id: morningCaptureId,
+      captured_at: morningCapturedAt.toISOString(),
+      estimated_sleep_started_at: estimatedSleepStartedAt.toISOString(),
+      woke_at: wokeAt.toISOString(),
+      estimated_sleep_minutes: sleepMinutes,
+      sleep_target_minutes: 480,
+      source_evening_capture_id: deterministicUuid(
+        `demo-seed:evening-capture:${userId}:${previousEntryDate}`,
+      ),
+      sleep_hours: sleepHours,
+      sleep_quality: sleepQuality,
+      current_energy: energy,
+      day_shape: stress >= 7 ? 'constrained' : isWeekend ? 'flexible' : 'normal',
+    };
+    const includeEvening = offset < 0;
+    const eveningCapture = includeEvening
+      ? {
+          branch_version: 'daily-capture-v4',
+          capture_kind: 'evening',
+          entry_date: entryDate,
+          capture_id: deterministicUuid(
+            `demo-seed:evening-capture:${userId}:${entryDate}`,
+          ),
+          captured_at: eveningCapturedAt.toISOString(),
+          mood,
+          energy,
+          stress_intensity: stress,
+          stress_intensity_label: stressIntensityLabel(stress),
+          ...(stress >= 5
+            ? {
+                stress_source: 'workload',
+                stress_controllability:
+                  stress >= 7 ? 'partly_controllable' : 'mostly_controllable',
+              }
+            : {}),
+          planned_sleep_time: plannedSleepTime,
+          sleep_target_minutes: 480,
+          tomorrow_priority:
+            scenario.priorities[index % scenario.priorities.length][0],
+          ...(offset === -1
+            ? {
+                reflection_note:
+                  'The morning study block was productive, and the afternoon plan stayed manageable.',
+                specific_blocker:
+                  'A longer campus day made the final review block harder to start.',
+              }
+            : {}),
+        }
+      : null;
+    return {
+      id,
+      user_id: userId,
+      entry_date: entryDate,
+      sleep_hours: sleepHours,
+      steps: null,
+      activity_level: null,
+      screen_time_hours: null,
+      focus_minutes: null,
+      mood_score: eveningCapture ? mood : null,
+      mood_label: eveningCapture ? moodLabel(mood) : null,
+      energy_level: energy,
+      stress_level: eveningCapture ? stress : null,
+      nutrition_notes: null,
+      day_focus: null,
+      reflection: null,
+      source: 'quick_check_in',
+      metadata: {
+        ...metadata,
+        capture_version: 'daily-capture-v4',
+        captures: {
+          morning: morningCapture,
+          ...(eveningCapture ? { evening: eveningCapture } : {}),
+        },
+      },
+      created_at: morningCapturedAt.toISOString(),
+      updated_at: (eveningCapture ?? morningCapture).captured_at,
+    };
+  });
+}
+
 function buildBehavioralEvents(userId, scenario, dailyLogs, metadata) {
   return dailyLogs.flatMap((log, index) => {
     const date = new Date(`${log.entry_date}T12:00:00.000Z`);
@@ -903,12 +1053,19 @@ function buildBehavioralEvents(userId, scenario, dailyLogs, metadata) {
     if (log.metadata?.capture_version === 'daily-capture-v4' && captures) {
       const evening = captures.evening;
       const morning = captures.morning;
-      const signals = [
-        ['mood', evening.mood, 'score_0_10', evening, 'evening'],
-        ['energy', morning.current_energy, 'score_0_10', morning, 'morning'],
-        ['stress', evening.stress_intensity, 'score_0_10', evening, 'evening'],
-        ['sleep', morning.sleep_hours, 'hours', morning, 'morning'],
-      ];
+      const signals = [];
+      if (evening) {
+        signals.push(
+          ['mood', evening.mood, 'score_0_10', evening, 'evening'],
+          ['stress', evening.stress_intensity, 'score_0_10', evening, 'evening'],
+        );
+      }
+      if (morning) {
+        signals.push(
+          ['energy', morning.current_energy, 'score_0_10', morning, 'morning'],
+          ['sleep', morning.sleep_hours, 'hours', morning, 'morning'],
+        );
+      }
       return signals.map(([eventType, value, unit, capture, captureKind]) => ({
         id: deterministicUuid(
           `demo-seed:capture-event:${log.id}:${eventType}`,
@@ -933,8 +1090,12 @@ function buildBehavioralEvents(userId, scenario, dailyLogs, metadata) {
                 sleep_quality: morning.sleep_quality,
               }
             : {
-                stress_source: evening.stress_source,
-                stress_controllability: evening.stress_controllability,
+                ...(evening.stress_source
+                  ? { stress_source: evening.stress_source }
+                  : {}),
+                ...(evening.stress_controllability
+                  ? { stress_controllability: evening.stress_controllability }
+                  : {}),
               }),
         },
       }));
@@ -996,7 +1157,7 @@ function buildHabitLogs(userId, scenario, habits, now) {
   });
 }
 
-function buildFocusSessions(userId, taskRows, habitRows, now, reviewWeekStart) {
+function buildStudentFocusEvidence(userId, taskRows, habitRows, now) {
   const openTasks = taskRows.filter((row) =>
     ['todo', 'in_progress'].includes(row.status),
   );
@@ -1005,76 +1166,125 @@ function buildFocusSessions(userId, taskRows, habitRows, now, reviewWeekStart) {
       'Student demo focus history requires two open tasks and a habit.',
     );
   }
-  const completedStart = new Date(atHour(addDays(reviewWeekStart, 1), 10, 0));
-  const completedEnd = addMinutes(completedStart, 50);
-  const abandonedStart = new Date(atHour(addDays(reviewWeekStart, 3), 15, 0));
-  const abandonedEnd = addMinutes(abandonedStart, 12);
+  const timezone = 'Europe/Berlin';
+  const today = localDateOnly(now, timezone);
+  const historicalDates = [];
+  for (let offset = -42; offset <= -1; offset += 1) {
+    const localDate = addDateOnlyDays(today, offset);
+    if (isoWeekday(new Date(`${localDate}T12:00:00.000Z`)) !== 7) {
+      historicalDates.push(localDate);
+    }
+  }
+  if (historicalDates.length < 36) {
+    throw new Error(
+      'Student Personal Learning history requires 36 distinct study days.',
+    );
+  }
+  const sessions = [];
+  const reflections = [];
+  historicalDates.slice(-36).forEach((localDate, index) => {
+    const preferredWindow = index % 2 === 0;
+    const status =
+      !preferredWindow && [9, 23, 33].includes(index)
+        ? 'abandoned'
+        : 'completed';
+    const startedAt = zonedDateTime(
+      localDate,
+      preferredWindow ? '09:30' : '16:30',
+      timezone,
+    );
+    const plannedMinutes = preferredWindow
+      ? [45, 50, 60][index % 3]
+      : [40, 45, 50][index % 3];
+    const actualMinutes =
+      status === 'abandoned'
+        ? [22, 26, 28][index % 3]
+        : preferredWindow
+          ? [45, 50, 55][index % 3]
+          : [38, 42, 46][index % 3];
+    const endedAt = addMinutes(startedAt, actualMinutes);
+    const sessionId = deterministicUuid(
+      `demo-seed:focus:${userId}:rated:${localDate}`,
+    );
+    sessions.push({
+      id: sessionId,
+      user_id: userId,
+      started_at: startedAt.toISOString(),
+      ended_at: endedAt.toISOString(),
+      planned_minutes: plannedMinutes,
+      actual_minutes: actualMinutes,
+      label: preferredWindow
+        ? 'Morning course review'
+        : 'Afternoon assignment work',
+      distractions: status === 'abandoned' ? 3 : preferredWindow ? 0 : 1,
+      social_media_warning: status === 'abandoned',
+      notes:
+        status === 'abandoned'
+          ? 'Stopped when interruptions made the block unproductive.'
+          : preferredWindow
+            ? 'Made steady progress on one defined study goal.'
+            : 'Completed a useful but more effortful study block.',
+      status,
+      task_id: index % 3 === 0 ? openTasks[index % openTasks.length].id : null,
+      habit_id: null,
+      metadata: {
+        source: 'demo_seed_v3',
+        scenario: 'student',
+        entry_date: localDate,
+      },
+      created_at: startedAt.toISOString(),
+      updated_at: endedAt.toISOString(),
+    });
+    const preferredRatingIndex = Math.floor(index / 2);
+    reflections.push({
+      focus_session_id: sessionId,
+      user_id: userId,
+      contract_version: 'focus-reflection-v1',
+      focus_quality: preferredWindow
+        ? preferredRatingIndex % 3 === 0
+          ? 5
+          : 4
+        : status === 'abandoned'
+          ? 2
+          : 4,
+      useful_progress: preferredWindow
+        ? preferredRatingIndex % 4 === 0
+          ? 5
+          : 4
+        : status === 'abandoned'
+          ? 2
+          : 3,
+      obstacles:
+        status === 'abandoned'
+          ? [index % 2 === 0 ? 'distracted' : 'interrupted']
+          : [],
+    });
+  });
+
   const activeStart = addMinutes(now, -8);
-  return [
-    {
-      id: deterministicUuid(`demo-seed:focus:${userId}:completed`),
-      user_id: userId,
-      started_at: completedStart.toISOString(),
-      ended_at: completedEnd.toISOString(),
-      planned_minutes: 50,
-      actual_minutes: 50,
-      label: 'Math proof practice',
-      distractions: 1,
-      social_media_warning: false,
-      notes: 'Finished one coherent proof set.',
-      status: 'completed',
-      task_id: openTasks[0].id,
-      habit_id: null,
-      metadata: {
-        source: 'demo_seed_v2',
-        entry_date: dateOnly(completedStart),
-      },
-      created_at: completedStart.toISOString(),
-      updated_at: completedEnd.toISOString(),
+  sessions.push({
+    id: deterministicUuid(`demo-seed:focus:${userId}:active`),
+    user_id: userId,
+    started_at: activeStart.toISOString(),
+    ended_at: null,
+    planned_minutes: 25,
+    actual_minutes: null,
+    label: 'History outline sprint',
+    distractions: 0,
+    social_media_warning: false,
+    notes: null,
+    status: 'active',
+    task_id: openTasks[1].id,
+    habit_id: null,
+    metadata: {
+      source: 'demo_seed_v3',
+      scenario: 'student',
+      entry_date: localDateOnly(activeStart, timezone),
     },
-    {
-      id: deterministicUuid(`demo-seed:focus:${userId}:abandoned`),
-      user_id: userId,
-      started_at: abandonedStart.toISOString(),
-      ended_at: abandonedEnd.toISOString(),
-      planned_minutes: 30,
-      actual_minutes: 12,
-      label: 'Phone-away study attempt',
-      distractions: 3,
-      social_media_warning: true,
-      notes: 'Stopped after the environment became too noisy.',
-      status: 'abandoned',
-      task_id: null,
-      habit_id: habitRows[1]?.id ?? habitRows[0].id,
-      metadata: {
-        source: 'demo_seed_v2',
-        entry_date: dateOnly(abandonedStart),
-      },
-      created_at: abandonedStart.toISOString(),
-      updated_at: abandonedEnd.toISOString(),
-    },
-    {
-      id: deterministicUuid(`demo-seed:focus:${userId}:active`),
-      user_id: userId,
-      started_at: activeStart.toISOString(),
-      ended_at: null,
-      planned_minutes: 25,
-      actual_minutes: null,
-      label: 'History outline sprint',
-      distractions: 0,
-      social_media_warning: false,
-      notes: null,
-      status: 'active',
-      task_id: openTasks[1].id,
-      habit_id: null,
-      metadata: {
-        source: 'demo_seed_v2',
-        entry_date: dateOnly(activeStart),
-      },
-      created_at: activeStart.toISOString(),
-      updated_at: activeStart.toISOString(),
-    },
-  ];
+    created_at: activeStart.toISOString(),
+    updated_at: activeStart.toISOString(),
+  });
+  return { sessions, reflections };
 }
 
 function habitCadenceProjection(config) {
@@ -1203,6 +1413,67 @@ function isoWeekday(date) {
 
 function dateOnly(date) {
   return date.toISOString().slice(0, 10);
+}
+
+function localDateOnly(date, timezone) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date);
+  const values = Object.fromEntries(
+    parts
+      .filter((part) => part.type !== 'literal')
+      .map((part) => [part.type, part.value]),
+  );
+  return `${values.year}-${values.month}-${values.day}`;
+}
+
+function addDateOnlyDays(value, offset) {
+  const date = new Date(`${value}T12:00:00.000Z`);
+  date.setUTCDate(date.getUTCDate() + offset);
+  return dateOnly(date);
+}
+
+function zonedDateTime(localDate, localClock, timezone) {
+  const [year, month, day] = localDate.split('-').map(Number);
+  const [hour, minute] = localClock.split(':').map(Number);
+  const desiredAsUtc = Date.UTC(year, month - 1, day, hour, minute, 0, 0);
+  let instant = desiredAsUtc;
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  });
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const parts = Object.fromEntries(
+      formatter
+        .formatToParts(new Date(instant))
+        .filter((part) => part.type !== 'literal')
+        .map((part) => [part.type, part.value]),
+    );
+    const observedAsUtc = Date.UTC(
+      Number(parts.year),
+      Number(parts.month) - 1,
+      Number(parts.day),
+      Number(parts.hour),
+      Number(parts.minute),
+      Number(parts.second),
+      0,
+    );
+    const correction = desiredAsUtc - observedAsUtc;
+    instant += correction;
+    if (correction === 0) {
+      break;
+    }
+  }
+  return new Date(instant);
 }
 
 function atHour(date, hour, minute) {

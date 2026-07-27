@@ -91,13 +91,18 @@ retain `demo_seed` ownership and are not presented as Setup materialization.
 The student scenario then uses the production backend service classes to
 persist and validate:
 
-- current V4 Morning/Evening captures with derived sleep intervals and no
-  friction, seven historical daily snapshots, eight briefings, and all five
+- 43 profile-local V4 capture days with derived sleep intervals and no
+  friction: sleep stays within `435..510` minutes, sleep quality within `6..9`,
+  energy within `5..8`, and stress within `3..8`; today's Morning is present
+  and Evening intentionally remains open;
+- seven historical daily snapshots, eight briefings, and all five
   decision-feedback outcomes;
 - daily, selected-weekday, and weekly-target habits with complete, skipped,
   open, and missed opportunities plus completed, abandoned, and active Focus;
-- one current Weekly Review with both a staged replacement and a directly
-  reviewable shrink proposal;
+- 36 reflections across 36 distinct local Focus days, at least 90% coverage,
+  and a stable Planner-ready `09–13` Personal Learning preference;
+- one current Weekly Review with a directly reviewable pause proposal for the
+  repeatedly skipped phone-away Habit;
 - one consented current `.ics` import with timed, all-day, busy, free, and
   unsupported-recurrence coverage;
 - two active Preparation Plans, one pending preview, account-wide capacity,

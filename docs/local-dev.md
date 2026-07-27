@@ -1071,10 +1071,16 @@ The script:
   separately seeded `demo_seed` objects non-Setup-owned;
 - replaces their base demo app rows, then enriches `student@example.test`
   through the real FastAPI service classes with current snapshots/briefings,
-  feedback, Weekly Review, Calendar Import, Preparation Plans, foreground
-  notification consent/generation, and fake-provider Coach persistence;
-- verifies the student coverage before reporting success. This enrichment
-  requires `services/ai_service/.venv`, or an equivalent `PYTHON_BIN`.
+  feedback, Weekly Review, Personal Learning, Calendar Import, Preparation
+  Plans, foreground notification consent/generation, and fake-provider Coach
+  persistence;
+- verifies the student coverage and realistic Capture bounds before reporting
+  success: 43 profile-local V4 days, estimated sleep between 7 hours 15 minutes
+  and 8 hours 30 minutes, sleep quality `6..9`, energy `5..8`, stress `3..8`,
+  and no abrupt synthetic daily jumps. It also requires 36 rated Focus days,
+  stable `09–13` evidence, and at least 90% reflection coverage. This
+  enrichment requires `services/ai_service/.venv`, or an equivalent
+  `PYTHON_BIN`.
 
 Demo logins:
 
@@ -1103,9 +1109,11 @@ scripts/start_frontend.sh
 Open `http://127.0.0.1:7357`, sign in with one of the demo accounts, and compare
 Dashboard, Inbox, Insights, and Habits across scenarios. The student account is
 the broad manual product fixture: Today, all three Habit cadences, resumable
-Deep Work, Weekly Review proposals, Calendar Import, active and staged
-Preparation Plans, capacity, notification consent, and Coach history are
-pre-populated. Mutate these freely and rerun the seed to restore them. Coach
+Deep Work, a realistic phone-habit pause proposal, stable Personal Learning,
+Calendar Import, active and staged Preparation Plans, capacity, notification
+consent, and Coach history are pre-populated. Today's Morning exists while
+Evening remains deliberately open, so that capture can be completed manually.
+Mutate these freely and rerun the seed to restore them. Coach
 sending remains disabled unless FastAPI is deliberately started with a ready
 provider; the stored demo turns use the deterministic fake provider and imply
 no live model connection.

@@ -614,10 +614,13 @@ with intentionally empty Setup-owned optional collections; separately seeded
 runtime Tasks, Habits, and commitments remain `demo_seed` data; no active Goal
 rows are seeded. The student
 scenario is additionally enriched through the real backend services with
-current Today/Weekly Review output, all three Habit cadences, Focus history,
-Calendar Import, Preparation Plans including an active seven-day exam outlook,
-notification consent, and validated Coach history. All demo accounts use the
-local-only password `DemoPass123!`.
+current Today/Weekly Review output, all three Habit cadences, 43 profile-local
+Daily Capture V4 days, 36 rated Focus days and a stable Personal Learning
+pattern, Calendar Import, Preparation Plans including an active seven-day exam
+outlook, notification consent, and validated Coach history. Its sleep, stress,
+energy, and mood ranges are deliberately bounded and the current Evening
+capture remains open for manual testing. All demo accounts use the local-only
+password `DemoPass123!`.
 
 ## Verification
 
