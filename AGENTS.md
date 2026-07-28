@@ -316,6 +316,18 @@ The migration
 `supabase/migrations/20260726200000_learned_timing_setup_fallback_provenance.sql`
 preserves the learned evidence source while permitting immutable provenance to
 record that actual block allocation used the ordinary Setup fallback sequence.
+The migration
+`supabase/migrations/20260728120000_coach_longitudinal_context_v1.sql`
+additively gives `coach_requests` exact `context_parameters` and adds the
+service-role-only `claim_coach_request_v2` path. Existing V1 claims and rows
+remain limited to `today` with `{}` and their paired V1 or V2 prompt/context
+provenance. V2 uses paired V3 provenance and permits only `today`/`review` with
+`{}`, `patterns` with one bounded horizon, or `focus` with one UUID. Exact
+replay binds the message fingerprint, scope, and parameters while preserving
+the original backend provider, local date, and version truth. The response and
+used-context validators retain V1/V2 compatibility while admitting bounded V3
+per-source provenance, and partial completed/cancelled Task history indexes
+support owner-scoped longitudinal reads.
 
 ## Important Docs
 
@@ -697,18 +709,22 @@ write, background sync, LLM processing, or automatic calendar-derived action.
 
 Phase 10, Controlled Coach, is implemented through strict authenticated
 `coach-request-v1`, `coach-response-v1`, `coach-capabilities-v1`,
-`coach-history-v1`, and `coach-memory-selection-v1` boundaries. `/coach` uses
-FastAPI only for a real authenticated account; `/more` is an alias. Guest/mock
-is zero-call and shows honest local unavailability. FastAPI builds at most
-32 KiB of owner-scoped `coach-context-v2` data from current state, briefing,
-active facts, a current weekly review, explicitly selected eligible memory, and
-up to six completed turns. Imported calendar content, hidden capture/intake
-free text, retired Goals/onboarding preferences/coaching style/friction,
-credentials, and cross-user rows are excluded. New requests use
-`controlled-coach-prompt-v2`; persisted V1 history remains readable. Capability,
-history, and memory reads never call a model; every response is a deliberate,
-budgeted send. Urgent safety may bypass the provider, and no suggestion can
-execute or mutate product state.
+`coach-history-v1`, `coach-memory-selection-v1`, and
+`coach-context-options-v1` boundaries. `/coach` uses FastAPI only for a real
+authenticated account; `/more` is an alias. Guest/mock is zero-call and shows
+honest local unavailability. FastAPI builds at most 32 KiB of owner-scoped
+`coach-context-v3` data for explicit Today, Patterns, Focus, or Review requests
+under `controlled-coach-prompt-v3`. Today uses the established bounded current
+facts; historical modes deterministically fold only allowlisted structured
+Daily Capture, terminal Focus/current reflection, explicit Habit outcomes,
+Decision Feedback, validated Weekly Reviews, and retained terminal Task facts.
+Imported calendar content, Planner/Preparation details, raw history, hidden
+capture/intake free text, retired Goals/onboarding preferences/coaching
+style/friction, credentials, and cross-user rows are excluded. Compatible V1
+Today requests keep paired V2 context/prompt provenance and persisted V1
+history remains readable. Capability, context-options, history, and memory reads
+never call a model; every response is a deliberate, budgeted send. Urgent safety
+may bypass the provider, and no suggestion can execute or mutate product state.
 
 FastAPI, Flutter, migration, and browser coverage spans Setup ownership and
 retry, Capture V4, Daily State V2, executable Tasks/Habits/Focus, Today,
@@ -809,7 +825,7 @@ you actually intend to run `supabase db reset`.
 `supabase db reset` must complete through:
 
 ```text
-20260726200000_learned_timing_setup_fallback_provenance.sql
+20260728120000_coach_longitudinal_context_v1.sql
 ```
 
 Expected local reset notices include skipped legacy CamelCase tables and

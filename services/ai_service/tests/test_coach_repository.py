@@ -91,6 +91,36 @@ def test_claim_uses_exact_rpc_boundary_without_persisting_message() -> None:
     assert "p_message" not in params
 
 
+def test_v2_claim_uses_separate_rpc_and_binds_context_parameters() -> None:
+    client = Client()
+    repository = SupabaseCoachRepository(client)
+
+    asyncio.run(
+        repository.claim_request(
+            contract_version="coach-request-v2",
+            user_id=USER_ID,
+            request_id=REQUEST_ID,
+            message_fingerprint="a" * 64,
+            context_scope="patterns",
+            context_parameters={"horizon": "1_year"},
+            local_date=date(2026, 7, 13),
+            provider="fake",
+            provider_mode="deterministic_test_only",
+            model_requested=None,
+            model_source="not_applicable",
+            prompt_version="controlled-coach-prompt-v3",
+            context_version="coach-context-v3",
+            claimed_at=NOW,
+            lease_expires_at=NOW + timedelta(seconds=100),
+            daily_limit=20,
+        ),
+    )
+
+    function, params = client.rpc_calls[0]
+    assert function == "claim_coach_request_v2"
+    assert params["p_context_parameters"] == {"horizon": "1_year"}
+
+
 def test_memory_preview_keeps_old_selected_memory_visible() -> None:
     client = Client()
     result = asyncio.run(SupabaseCoachRepository(client).list_memories(user_id=USER_ID))
@@ -138,12 +168,14 @@ def test_capability_count_matches_retained_request_budget() -> None:
 
 
 class HistoryClient:
+    def __init__(self) -> None:
+        self.select_calls = []
+        self.count_calls = []
+
     async def select(self, table, *, params):
+        self.select_calls.append((table, params))
         values = dict(params)
         if table == "coach_requests":
-            offset = int(values.get("offset", 0))
-            if offset:
-                return []
             return [
                 {
                     "request_id": f"00000000-0000-4000-8000-{index:012d}",
@@ -160,13 +192,79 @@ class HistoryClient:
             ]
         raise AssertionError(table)
 
+    async def count_exact(self, table, *, params):
+        self.count_calls.append((table, params))
+        return 50
+
 
 def test_context_history_reports_all_available_rows_but_includes_six() -> None:
+    client = HistoryClient()
     result = asyncio.run(
-        SupabaseCoachContextRepository(HistoryClient())._history(user_id=USER_ID),
+        SupabaseCoachContextRepository(client)._history(user_id=USER_ID),
     )
     assert result.available_count == 50
     assert len(result.rows) == 6
+    request_query = next(
+        params
+        for table, params in client.select_calls
+        if table == "coach_requests"
+    )
+    assert dict(request_query)["limit"] == "7"
+    assert "offset" not in dict(request_query)
+    assert client.count_calls == [
+        (
+            "coach_requests",
+            [
+                ("select", "request_id"),
+                ("user_id", f"eq.{USER_ID}"),
+                ("state", "eq.completed"),
+            ],
+        ),
+    ]
+
+
+class BoundedContextClient:
+    def __init__(self) -> None:
+        self.select_calls = []
+        self.count_calls = []
+
+    async def select(self, table, *, params):
+        self.select_calls.append((table, params))
+        return [{"id": str(index)} for index in range(3)]
+
+    async def count_exact(self, table, *, params):
+        self.count_calls.append((table, params))
+        return 900
+
+
+def test_context_source_counts_exactly_only_after_bounded_probe_overflow() -> None:
+    client = BoundedContextClient()
+    result = asyncio.run(
+        SupabaseCoachContextRepository(client)._bounded(
+            "tasks",
+            params=[
+                ("select", "id,status"),
+                ("user_id", f"eq.{USER_ID}"),
+                ("status", "eq.todo"),
+                ("order", "created_at.asc,id.asc"),
+            ],
+            cap=2,
+        ),
+    )
+
+    assert len(result.rows) == 2
+    assert result.available_count == 900
+    assert dict(client.select_calls[0][1])["limit"] == "3"
+    assert client.count_calls == [
+        (
+            "tasks",
+            [
+                ("select", "id"),
+                ("user_id", f"eq.{USER_ID}"),
+                ("status", "eq.todo"),
+            ],
+        ),
+    ]
 
 
 class ContextTablesClient:

@@ -241,13 +241,20 @@ labels a silently truncated result as all-time nor allocates unbounded history.
 Phase 10 replaces the gated canned `MorePage`/direct Supabase message path with
 a typed authenticated FastAPI Coach boundary. Flutter does not handle the
 developer's Codex OAuth login or receive any model credential. It loads
-capability, validated history, and eligible memory without generating; sends
-only a strict deliberate `coach-request-v1`; and shows uncertainty, safety,
-provider/model/prompt/context provenance, exact `Data used` counts/freshness,
-and at most one review-only suggestion. Memory selection/deselection is explicit
-and underlying Setup/manual content stays unchanged. Failed/ambiguous sends keep
-the draft and exact retry identity when needed; double submit is disabled.
-Conversation deletion is explicit. Guest/mock remains zero-call. See
+capability, context options, validated history, and eligible memory without
+generating. Inside the unchanged Coach destination, the user chooses Today,
+Patterns (90 days, one year, or all retained), one of the latest ten terminal
+Focus sessions, or the fixed last-two-complete-weeks Review. Prompt starters
+only fill the draft. A deliberate send uses strict `coach-request-v2`, and the
+page shows uncertainty, safety, provider/model/prompt/context provenance, exact
+`Data used` counts/freshness, and at most one review-only suggestion.
+
+Memory selection/deselection is explicit and underlying Setup/manual content
+stays unchanged. Changing mode, horizon, Focus session, or draft performs no
+remote/model call and preserves scroll position; it also rotates retry identity
+so an ambiguous request can only be retried with the exact original full
+payload. Double submit is disabled. Conversation deletion is explicit.
+Guest/mock remains zero-call. See
 `../../docs/phase-10-controlled-coach-plan.md`.
 
 ## Verify

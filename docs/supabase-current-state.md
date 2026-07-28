@@ -15,6 +15,8 @@ The later deterministic learning boundary is recorded in
 `20260726180000_learned_focus_planning_rpc_guard.sql`,
 `20260726190000_planning_confirmation_timestamp_guard.sql`, and
 `20260726200000_learned_timing_setup_fallback_provenance.sql`.
+The later bounded Coach context-ledger extension is migration
+`20260728120000_coach_longitudinal_context_v1.sql`.
 
 ## Runtime Activation
 
@@ -99,7 +101,7 @@ The app table constants live in
 | `planner_habit_slots` | Stable recurring wall-clock slots for planned Habit occurrences; Study rhythm does not apply. |
 | `planner_commitments` | Authoritative owner-created one-off or weekly fixed commitments. |
 | `planner_request_identities` | Backend-only global retry ledger for Planner preferences, plans, and commitments; omitted from Account Export. |
-| `coach_requests` | Backend-only retry/lease/terminal ledger. Pending rows store only a SHA-256 message fingerprint; completed rows store the strict response/manifest; deleted rows are content-free tombstones. |
+| `coach_requests` | Backend-only retry/lease/terminal ledger. V1 remains `today` with `{}` parameters; V2 stores one exact bounded scope/parameter object for replay. Pending rows store only a SHA-256 message fingerprint; completed rows store the strict response/manifest; deleted rows are content-free tombstones. |
 | `coach_usage_events` | Backend-only append-only one-row-per-request outcome/counter ledger retained across conversation deletion and used with request rows for the profile-local daily attempt budget. |
 | `coach_memory_selections` | Explicit owner-scoped selection of at most eight eligible `memory_entries` for Coach context, stored separately from memory ownership/content. |
 
@@ -614,6 +616,31 @@ authenticated updates to `onboarding_completed_at` and blocks application-role
 identity/eligibility mutation in the profile trigger. Service role and the
 service-role-only atomic Intake apply RPC retain backend projection authority.
 
+`20260728120000_coach_longitudinal_context_v1.sql` additively adds non-null
+`coach_requests.context_parameters` with an exact empty-object default.
+Existing `coach-request-v1` rows and `claim_coach_request_v1` remain unchanged:
+their scope is `today`, their parameters are `{}`, and their prompt/context
+pair is V1 or V2. `coach-request-v2` permits only these exact combinations:
+`today` or `review` with `{}`; `patterns` with only `horizon` set to
+`90_days`, `1_year`, or `all_available`; and `focus` with only a canonical
+`focus_session_id` UUID string. V2 requires
+`controlled-coach-prompt-v3`/`coach-context-v3`.
+
+The new service-role-only `claim_coach_request_v2` keeps the established
+owner-before-request advisory-lock order and the same daily-limit, lease,
+one-pending-request, terminal, and deletion behavior. Its retry identity binds
+the message fingerprint, context scope, and exact parameters while preserving
+the originally claimed local date, provider/model, and version provenance. The
+response validator accepts paired V3 provenance by normalizing it through the
+existing strict V1-only envelope validator, while paired V1 and V2 history
+remain valid. The used-context manifest stays bounded to ten entries and adds
+the per-source names `daily_capture`, `focus_reflections`, `habit_outcomes`,
+`decision_feedback`, `weekly_reviews`, and `task_lifecycle`. Existing
+completion, failure, and deletion RPCs continue to handle both request
+versions. Partial `(user_id, completed_at, id)` and
+`(user_id, cancelled_at, id)` Task indexes accelerate owner-scoped terminal
+history without changing Task lifecycle authority.
+
 ## V1 Account Deletion
 
 `20260713233000_v1_account_delete.sql` adds one
@@ -912,12 +939,16 @@ initial-schema policies and rebuilds the eleven canonical owner/admin policies
 with statement-cached identity and role helpers. It changes no table privilege,
 RLS mode, owner/admin predicate, or service-role boundary.
 
+`20260728120000_coach_longitudinal_context_v1.sql` preserves V1 Coach claims
+while adding exact V2 context parameters/replay, paired V3 provenance
+validation, and partial completed/cancelled Task history indexes.
+
 ## Local Verification Workflow
 
 For local Supabase-backed testing, the reset should complete through:
 
 ```text
-20260726200000_learned_timing_setup_fallback_provenance.sql
+20260728120000_coach_longitudinal_context_v1.sql
 ```
 
 Then configure `.env` with:
@@ -965,7 +996,7 @@ RESET_DB=true FLUTTER_BIN=/path/to/flutter scripts/verify_supabase_local.sh
 ```
 
 The reset form should apply all migrations through
-`20260725120000_retire_setup_goals_and_friction.sql`; expected legacy-table
+`20260728120000_coach_longitudinal_context_v1.sql`; expected legacy-table
 skip notices may be emitted for missing CamelCase tables. Use reset when proving
 the full migration/backfill/constraint chain from a fresh local database, not
 merely because a reviewed migration is pending.
@@ -1089,10 +1120,14 @@ legacy compatibility only and should be dropped in a later dedicated migration
 after data migration and app verification are complete.
 
 The latest migration is
-`20260726200000_learned_timing_setup_fallback_provenance.sql`. It preserves
-learned evidence while recording actual Setup allocation fallback. The
-preceding confirmation-time and proposal-RPC guards keep timestamps monotone,
-strict V1 delegation payloads unchanged, and retries exact. The preceding
+`20260728120000_coach_longitudinal_context_v1.sql`. It preserves V1 Coach claim
+and stored-row compatibility while adding exact V2 scope/parameter replay,
+paired V3 provenance validation, and partial terminal Task history indexes. The
+preceding
+`20260726200000_learned_timing_setup_fallback_provenance.sql` preserves learned
+evidence while recording actual Setup allocation fallback. The earlier
+confirmation-time and proposal-RPC guards keep timestamps monotone, strict V1
+delegation payloads unchanged, and retries exact. The preceding
 Recommendation migration installs atomic current-feed replacement for
 deliberate deterministic refresh while preserving historical decisions. The
 earlier

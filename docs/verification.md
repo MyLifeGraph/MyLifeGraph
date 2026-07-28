@@ -7,31 +7,39 @@ tooling, and what remains future work.
 The current Setup/Goal/friction verification boundary is
 `docs/setup-personalization-retirement-contract.md`. Historical results later in
 this file remain records of their checkout; they do not redefine current
-Capture V4, Daily State V2, Exam-Week Outlook V1, or Coach V2 expectations.
+Capture V4, Daily State V2, Exam-Week Outlook V1, or Coach V3 expectations.
 
 ## Current Verified Baseline
 
-The current working tree was verified on 2026-07-28 after the frontend visual
-follow-up and presentation-demo seed changes. The complete FastAPI suite
-reported `927 passed, 1 skipped`; the standard gate completed clean analysis
-and all `693` Flutter tests. Documentation consistency passed across 50
-Markdown files and 61 FastAPI routes. Local Supabase migration history matched
-the repository, and the final non-reset full browser journey reported
-`E2E browser smoke passed for e2e-1785229855@example.test` with the
+The current working tree was verified on 2026-07-28 after the Coach
+longitudinal-context and Insights overlay-stability changes. The complete
+FastAPI suite reported `978 passed, 1 skipped`; the standard gate completed
+clean Flutter analysis and all `703` Flutter tests. Documentation consistency
+passed across 50 Markdown files and 62 FastAPI routes.
+
+A fresh local database reset rebuilt the complete migration chain through
+`20260728120000_coach_longitudinal_context_v1.sql`. All four pgTAP files passed
+their 65 tests, and local migration history matched the repository. The final
+non-reset full browser journey reported
+`E2E browser smoke passed for e2e-1785248523@example.test` with the
 deterministic fake Coach provider.
 
-The presentation seed then completed successfully for a second time after the
-browser run. It recreated and credential-checked the fresh onboarding account
-plus the three populated identities, verified the fresh profile/default
-projections and empty product/ledger state, and restored the validated Student
-feature fixture. The most recent fresh-database migration-chain and 50-assertion
-pgTAP evidence remains the 2026-07-27 Personal Learning baseline at commit
-series `0ff4f33` through `de945bb`; no migration changed in the 2026-07-28
-working tree.
+The presentation seed then completed successfully twice after the browser run.
+Each pass recreated and credential-checked the fresh onboarding account plus
+the three populated identities, verified the fresh profile/default projections
+and empty product/ledger state, and restored the validated Student feature
+fixture. After the final seed, the current Linux user's valid Codex login
+powered one opt-in Student preflight through `local_codex_oauth`: the prepared
+prompt returned a four-sentence English response with explicit medium
+uncertainty and data-use provenance under requested model `gpt-5.5`,
+`controlled-coach-prompt-v3`, and `coach-context-v3`. The seeded Coach
+conversation was deleted before that call, and the live preflight conversation
+was deleted afterward.
 
-This is local, deterministic working-tree evidence only. It does not establish
-remote migration state, installed-device behavior, deployed scheduling, a
-production model provider, clinical or academic outcomes, longitudinal
+This is local working-tree evidence only; all automation except the named
+opt-in provider preflight was deterministic. It does not establish remote
+migration state, installed-device behavior, deployed scheduling, a production
+or multi-user model provider, clinical or academic outcomes, longitudinal
 results, or participant evidence.
 
 This section is the only source for the repository's current exact verification
@@ -40,7 +48,7 @@ those values. Dated evidence below is historical run history and does not prove
 a later checkout.
 
 The current repository migration boundary under verification ends at
-`20260726200000_learned_timing_setup_fallback_provenance.sql`.
+`20260728120000_coach_longitudinal_context_v1.sql`.
 
 ## Verification Levels
 
@@ -292,6 +300,8 @@ explicit feedback-ranking provenance. Insights tests prove insufficient versus
 emerging/stronger observation labels, visible evidence windows, optional
 bounded experiments, and non-causal copy. They also cover nullable persisted
 confidence without a fabricated fallback, visible 7/14/30/90-day windows,
+every directed switch among those windows with the exploration still open and
+the page scroll position unchanged during and after loading,
 stable pagination across all five Supabase fact sources, the explicit 10,000-row
 per-source client ceiling, missing/error retry truth, and readable Light/Dark
 panel colors.
@@ -458,12 +468,25 @@ provider tests use fake runners to assert fixed argv, stdin-only prompt data,
 allowlisted child environment, temporary-directory cleanup, explicit model
 truth with no fallback, and rejection of tool/command/file events. This source
 coverage is distinct from the opt-in live-Codex pass recorded below.
+The longitudinal extension additionally covers strict V2 scope/parameter
+models, paired V3 provenance, current V2 Today context, exact 90-day/one-year/
+all-retained retrieval boundaries, at-most-24 adaptive buckets, Personal
+Learning opt-out before broad evidence reads, one of the last ten terminal
+Focus sessions, two complete profile-local ISO weeks, deterministic rereads
+after Personal Learning data deletion, owner-scoped bounded pagination, exact
+overflow counts without row transfer, raw-page byte limits, hidden-free-text
+sanitization, and the six-source manifest. The stable
+`focus_reflections` manifest code counts terminal Focus sessions once; an
+optional reflection changes rated coverage rather than adding a second
+available row.
 The follow-up migration contract test also checks that public
 claim/complete/fail wrappers acquire the owner advisory lock before calling
 their ungranted inner bodies, matching history-delete lock order. Additional
 migration tests require exact provider-call safety provenance, backend-owned
 profile identity fields, canonical-only role authority, rejected authenticated
-profile deletion, and backend-owned onboarding eligibility. Real local
+profile deletion, backend-owned onboarding eligibility, and V2 history
+deletion that neutralizes retained scope/parameters to `today` with `{}` so a
+Focus UUID or Patterns horizon is not left in the tombstone. Real local
 PostgreSQL parallel claim/completion/deletion smokes completed on 2026-07-13
 without deadlock or timeout and converged on the expected message, usage, and
 deletion outcomes.
@@ -609,12 +632,15 @@ Current Flutter widget tests include:
   all-day rendering, no event mutation controls, and the distinct disconnect,
   retained-data, delete, empty, and error states.
 - Controlled Coach tests cover strict capability/request/response/history/
-  memory parsing; exact bearer-authenticated GET/POST/DELETE calls; guest/mock
-  zero HTTP; timeout-aware exact retry identity and preserved drafts; duplicate
-  submit prevention; distinct unavailable/rate-limit/error states; visible
-  uncertainty, safety, provider/model/prompt/context provenance and `Data used`
-  counts; review-only suggestions; memory selection/Setup routing; and confirmed
-  conversation deletion without a direct Supabase Coach write.
+  memory/context-options parsing; exact bearer-authenticated GET/POST/DELETE
+  calls; guest/mock zero HTTP; Today/Patterns/Focus/Review controls; all three
+  Pattern horizons; explicit terminal-Focus selection; prompt starters that
+  only fill the draft; timeout-aware full-payload retry identity and preserved
+  drafts; duplicate submit prevention; distinct unavailable/rate-limit/error
+  states; visible uncertainty, safety, provider/model/prompt/context provenance
+  and `Data used` counts; review-only suggestions; memory selection/Setup
+  routing; and confirmed conversation deletion without a direct Supabase Coach
+  write.
 
 These tests cover the default mock/guest product path. They do not prove real
 Supabase registration, RLS, or browser behavior.
@@ -908,15 +934,19 @@ submission remains additional coverage rather than evidence already supplied by
 the API-seeded journey.
 
 The Phase 10 source portion uses only the deterministic fake provider. It is
-designed to assert read-only capability/history/memory calls, explicit memory
-selection, one deliberate bounded response, exact persisted message/request/
-usage identity, same-id replay without another durable turn, conflicting-id
-rejection, deterministic safety bypass, visible UI provenance and review-only
-suggestion, conversation deletion with retained tombstones/usage, owner-only
-reads and rejected authenticated mutations, plus guest/mock zero Coach calls.
-New claims must record paired `controlled-coach-prompt-v2` and
-`coach-context-v2`, omit Goal/style/friction sources, and still read/replay
-paired V1 history. Mixed prompt/context versions must fail.
+designed to assert read-only capability/history/context-options/memory calls,
+explicit memory selection, compatible V1 Today plus current V2 Patterns
+responses, exact V2 one-year UI parameters, exact persisted scope/parameter/
+message/request/usage identity, same-id replay without another durable turn,
+changed-parameter and changed-message conflicts, mixed V1/V2 history,
+deterministic safety bypass, visible UI provenance and review-only suggestion,
+conversation deletion with retained tombstones/usage, owner-only reads and
+rejected authenticated mutations, plus guest/mock zero Coach calls.
+Current V2 claims must record paired `controlled-coach-prompt-v3` and
+`coach-context-v3`; compatible V1 Today claims retain paired
+`controlled-coach-prompt-v2` and `coach-context-v2`. Both omit
+Goal/style/friction sources and still read/replay paired V1 history. Mixed
+prompt/context versions must fail.
 On 2026-07-13 a focused non-reset run with `E2E_RUN_ID=1783945829` passed. The
 subsequent full current-checkout command also passed non-destructively against
 local Supabase with the deterministic fake provider and reported

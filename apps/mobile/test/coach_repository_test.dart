@@ -26,6 +26,7 @@ void main() {
         '/v1/coach/capabilities': coachCapabilitiesJson(),
         '/v1/coach/history': coachHistoryJson(),
         '/v1/coach/memories': coachMemoriesJson(),
+        '/v1/coach/context-options': coachContextOptionsJson(),
       },
       timedPostResponses: {
         '/v1/coach/respond': coachResponseJson(),
@@ -36,30 +37,35 @@ void main() {
     final capability = await repository.getCapabilities();
     final history = await repository.getHistory();
     final memories = await repository.getMemories();
+    final contextOptions = await repository.getContextOptions();
     final response = await repository.respond(
       requestId: coachRequestId,
       message: '  What matters today?  ',
+      context: const CoachContextSelection.today(),
       receiveTimeout: const Duration(seconds: 55),
     );
 
     expect(capability.state, CoachCapabilityState.ready);
     expect(history.turns, hasLength(1));
     expect(memories.memories, hasLength(2));
+    expect(contextOptions.focusOptions, hasLength(2));
     expect(response.requestId, coachRequestId);
     expect(client.getCalls, [
       '/v1/coach/capabilities',
       '/v1/coach/history',
       '/v1/coach/memories',
+      '/v1/coach/context-options',
     ]);
     expect(client.timedPostCalls, ['/v1/coach/respond']);
     expect(client.headersByPath['/v1/coach/respond'], {
       'Authorization': 'Bearer account-token',
     });
     expect(client.bodyByPath['/v1/coach/respond'], {
-      'contract_version': 'coach-request-v1',
+      'contract_version': 'coach-request-v2',
       'request_id': coachRequestId,
       'message': 'What matters today?',
       'context_scope': 'today',
+      'context_parameters': <String, dynamic>{},
     });
     expect(
       client.timeoutByPath['/v1/coach/respond'],
@@ -108,6 +114,33 @@ void main() {
     );
   });
 
+  test('response forwards the selected V2 context without extra fields',
+      () async {
+    final client = _TrackingApiClient(
+      timedPostResponses: {
+        '/v1/coach/respond': coachResponseJson(),
+      },
+    );
+    final repository = _repository(client, config: config);
+
+    await repository.respond(
+      requestId: coachRequestId,
+      message: 'Review the full period.',
+      context: const CoachContextSelection.patterns(
+        CoachPatternHorizon.allAvailable,
+      ),
+      receiveTimeout: const Duration(seconds: 55),
+    );
+
+    expect(client.bodyByPath['/v1/coach/respond'], {
+      'contract_version': 'coach-request-v2',
+      'request_id': coachRequestId,
+      'message': 'Review the full period.',
+      'context_scope': 'patterns',
+      'context_parameters': {'horizon': 'all_available'},
+    });
+  });
+
   test('guest and mock source returns local truth with zero HTTP calls',
       () async {
     final client = _TrackingApiClient(throwOnRequest: true);
@@ -122,15 +155,18 @@ void main() {
     final capability = await repository.getCapabilities();
     final history = await repository.getHistory();
     final memories = await repository.getMemories();
+    final contextOptions = await repository.getContextOptions();
 
     expect(capability.state, CoachCapabilityState.disabled);
     expect(capability.reasonCode, 'local_demo');
     expect(history.turns, isEmpty);
     expect(memories.memories, isEmpty);
+    expect(contextOptions.focusOptions, isEmpty);
     await expectLater(
       repository.respond(
         requestId: coachRequestId,
         message: 'Hello',
+        context: const CoachContextSelection.today(),
         receiveTimeout: const Duration(seconds: 55),
       ),
       throwsA(isA<CoachAccessException>()),
@@ -205,6 +241,7 @@ void main() {
       repository.respond(
         requestId: coachRequestId,
         message: 'Hello',
+        context: const CoachContextSelection.today(),
         receiveTimeout: const Duration(seconds: 55),
       ),
       throwsA(
@@ -233,6 +270,7 @@ void main() {
       repository.respond(
         requestId: coachRequestId,
         message: 'Hello',
+        context: const CoachContextSelection.today(),
         receiveTimeout: const Duration(seconds: 55),
       ),
       throwsA(isA<CoachContractException>()),
@@ -246,6 +284,7 @@ void main() {
     final response = repository.respond(
       requestId: coachRequestId,
       message: 'Wait for this response',
+      context: const CoachContextSelection.today(),
       receiveTimeout: const Duration(seconds: 55),
     );
     await Future<void>.delayed(Duration.zero);

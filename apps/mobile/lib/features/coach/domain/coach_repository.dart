@@ -7,9 +7,12 @@ abstract interface class CoachRepository {
 
   Future<CoachMemorySelection> getMemories();
 
+  Future<CoachContextOptions> getContextOptions();
+
   Future<CoachResponse> respond({
     required String requestId,
     required String message,
+    required CoachContextSelection context,
     required Duration receiveTimeout,
   });
 

@@ -143,10 +143,13 @@ way to explore the product today is the Flutter app in mock-data guest mode.
   32 KiB owner-scoped context cap, visible source/freshness/uncertainty
   provenance, explicit selection of up to eight eligible memories, bounded
   validated history, retained usage accounting, and at most one review-only
-  suggestion. Capability/history/memory reads never call a model; guest/mock is
-  zero-call; new turns use Goal/style/friction-free `coach-context-v2` and
-  `controlled-coach-prompt-v2` while V1 history stays readable; Coach cannot
-  mutate tasks, habits, schedules, briefings, reviews, memory content, or
+  suggestion. Capability/context-options/history/memory reads never call a
+  model; guest/mock is zero-call. New V2 turns use
+  Goal/style/friction-free `coach-context-v3` and
+  `controlled-coach-prompt-v3` for explicit Today, Patterns, Focus, or Review
+  context, while compatible V1 Today turns and history stay readable. Historical
+  modes receive a bounded deterministic digest instead of raw history. Coach
+  cannot mutate tasks, habits, schedules, briefings, reviews, memory content, or
   calendar data. Standard tests use the deterministic
   fake provider. The Coach UI is hard-hidden in release builds and whenever
   `APP_ENV=production`; a Flutter define cannot override that boundary. The
@@ -535,10 +538,17 @@ Supabase is the intended auth and persistence backend. The current app supports:
 
 Important current caveat: the Flutter app targets the canonical snake_case
 schema. The migration chain currently ends at
-`20260726200000_learned_timing_setup_fallback_provenance.sql`. It retains
-learned evidence while recording when actual allocation used Setup timing. The
-preceding confirmation-time and proposal-RPC guards preserve monotone audit
-timestamps, strict established payloads, and exact retries. The preceding
+`20260728120000_coach_longitudinal_context_v1.sql`. It preserves the existing
+V1 Coach claim path and rows while adding exact V2 scope/parameter replay,
+paired V3 prompt/context provenance, and partial completed/cancelled Task
+history indexes. V2 permits only parameter-free `today`/`review`, one bounded
+`patterns` horizon, or one Focus-session UUID; its service-role-only claim
+binds the message fingerprint, scope, and parameters without reinterpreting
+the original provider, local date, or version truth. The preceding learned
+timing migration retains learned evidence while recording when actual
+allocation used Setup timing. The earlier confirmation-time and proposal-RPC
+guards preserve monotone audit timestamps, strict established payloads, and
+exact retries. The preceding
 Recommendation migration atomically replaces the current generated set while
 preserving historical decisions. The earlier learned-planning migration adds
 immutable Planner/Deadline timing provenance and confirmation permission

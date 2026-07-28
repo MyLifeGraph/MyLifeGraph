@@ -40,6 +40,75 @@ def test_request_trims_message_and_counts_unicode_codepoints() -> None:
 
 
 @pytest.mark.parametrize(
+    ("scope", "parameters"),
+    [
+        ("today", {}),
+        ("patterns", {"horizon": "90_days"}),
+        ("patterns", {"horizon": "1_year"}),
+        ("patterns", {"horizon": "all_available"}),
+        (
+            "focus",
+            {"focus_session_id": "11111111-1111-4111-8111-111111111111"},
+        ),
+        ("review", {}),
+    ],
+)
+def test_request_v2_accepts_only_exact_context_parameters(scope, parameters) -> None:
+    request = CoachRequest.model_validate(
+        {
+            "contract_version": "coach-request-v2",
+            "request_id": str(REQUEST_ID),
+            "message": "Compare the evidence.",
+            "context_scope": scope,
+            "context_parameters": parameters,
+        },
+    )
+
+    assert request.is_v2 is True
+    assert request.context_parameters == parameters
+
+
+@pytest.mark.parametrize(
+    ("scope", "parameters"),
+    [
+        ("today", {"horizon": "90_days"}),
+        ("patterns", {}),
+        ("patterns", {"horizon": "90d"}),
+        ("focus", {}),
+        ("focus", {"focus_session_id": "not-a-uuid"}),
+        (
+            "review",
+            {"focus_session_id": "11111111-1111-4111-8111-111111111111"},
+        ),
+    ],
+)
+def test_request_v2_rejects_mismatched_context_parameters(scope, parameters) -> None:
+    with pytest.raises(ValidationError):
+        CoachRequest.model_validate(
+            {
+                "contract_version": "coach-request-v2",
+                "request_id": str(REQUEST_ID),
+                "message": "Compare the evidence.",
+                "context_scope": scope,
+                "context_parameters": parameters,
+            },
+        )
+
+
+def test_request_v1_rejects_context_parameters_even_when_empty() -> None:
+    with pytest.raises(ValidationError):
+        CoachRequest.model_validate(
+            {
+                "contract_version": "coach-request-v1",
+                "request_id": str(REQUEST_ID),
+                "message": "Plan today.",
+                "context_scope": "today",
+                "context_parameters": {},
+            },
+        )
+
+
+@pytest.mark.parametrize(
     "mutation",
     [
         {"user_id": "attacker"},

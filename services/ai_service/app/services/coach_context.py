@@ -5,11 +5,19 @@ from datetime import date
 from typing import Any, Protocol
 
 from app.models.briefings import BriefingReadResponse
-from app.models.coach import COACH_CONTEXT_BYTES, CoachUsedContext
+from app.models.coach import (
+    COACH_CONTEXT_BYTES,
+    COACH_CONTEXT_V3_VERSION,
+    CoachContextOptionsResponse,
+    CoachRequest,
+    CoachUsedContext,
+)
+from app.models.coach_evidence import CoachEvidenceDigest
 from app.models.weekly_reviews import WeeklyReviewReadResponse
 from app.repositories.coach_context_repository import (
     BoundedRows,
     CoachContextRepository,
+    CoachSharedContext,
 )
 
 
@@ -28,12 +36,45 @@ class WeeklyReviewReader(Protocol):
         pass
 
 
+class CoachEvidenceReader(Protocol):
+    async def get_context_options(
+        self,
+        *,
+        user_id: str,
+        timezone: str,
+    ) -> CoachContextOptionsResponse: ...
+
+    async def build_patterns(
+        self,
+        *,
+        user_id: str,
+        timezone: str,
+        horizon: str,
+    ) -> CoachEvidenceDigest: ...
+
+    async def build_focus(
+        self,
+        *,
+        user_id: str,
+        timezone: str,
+        focus_session_id,
+    ) -> CoachEvidenceDigest: ...
+
+    async def build_review(
+        self,
+        *,
+        user_id: str,
+        timezone: str,
+    ) -> CoachEvidenceDigest: ...
+
+
 @dataclass(frozen=True)
 class CoachContextPackage:
     serialized: str
     used_context: list[CoachUsedContext]
     daily_state_freshness: str
     daily_state_quality: str
+    evidence_status: str = "not_applicable"
 
     @property
     def byte_count(self) -> int:
@@ -58,16 +99,81 @@ class CoachContextService:
         repository: CoachContextRepository,
         briefing_reader: BriefingReader,
         weekly_review_reader: WeeklyReviewReader,
+        evidence_reader: CoachEvidenceReader | None = None,
     ) -> None:
         self._repository = repository
         self._briefing_reader = briefing_reader
         self._weekly_review_reader = weekly_review_reader
+        self._evidence_reader = evidence_reader
+
+    async def context_options(
+        self,
+        *,
+        user_id: str,
+        timezone: str,
+    ) -> CoachContextOptionsResponse:
+        if self._evidence_reader is None:
+            raise ValueError("Coach historical evidence is unavailable.")
+        return await self._evidence_reader.get_context_options(
+            user_id=user_id,
+            timezone=timezone,
+        )
+
+    async def build(
+        self,
+        *,
+        user_id: str,
+        local_date: date,
+        request: CoachRequest,
+    ) -> CoachContextPackage:
+        if not request.is_v2:
+            return await self.build_today(
+                user_id=user_id,
+                local_date=local_date,
+            )
+        if request.context_scope == "today":
+            return await self.build_today(
+                user_id=user_id,
+                local_date=local_date,
+                context_version=COACH_CONTEXT_V3_VERSION,
+            )
+        if self._evidence_reader is None:
+            raise ValueError("Coach historical evidence is unavailable.")
+        shared = await self._repository.load_shared_context(user_id=user_id)
+        if request.context_scope == "patterns":
+            horizon = request.patterns_horizon
+            assert horizon is not None
+            evidence = await self._evidence_reader.build_patterns(
+                user_id=user_id,
+                timezone=shared.profile.timezone,
+                horizon=horizon,
+            )
+        elif request.context_scope == "focus":
+            focus_session_id = request.focus_session_id
+            assert focus_session_id is not None
+            evidence = await self._evidence_reader.build_focus(
+                user_id=user_id,
+                timezone=shared.profile.timezone,
+                focus_session_id=focus_session_id,
+            )
+        else:
+            evidence = await self._evidence_reader.build_review(
+                user_id=user_id,
+                timezone=shared.profile.timezone,
+            )
+        return _build_evidence_package(
+            local_date=local_date,
+            request=request,
+            shared=shared,
+            evidence=evidence,
+        )
 
     async def build_today(
         self,
         *,
         user_id: str,
         local_date: date,
+        context_version: str = "coach-context-v2",
     ) -> CoachContextPackage:
         # These three reads are deliberately side-effect free. The established
         # briefing/review readers own freshness instead of Coach reinterpreting it.
@@ -123,9 +229,22 @@ class CoachContextService:
                 singleton=True,
             ),
             _row_source("memories", raw.selected_memories, _safe_memory),
-            _row_source("coach_history", raw.history, _safe_history),
+            _row_source(
+                "coach_history",
+                raw.history,
+                lambda row: _safe_history(
+                    row,
+                    include_context_selection=(
+                        context_version == COACH_CONTEXT_V3_VERSION
+                    ),
+                ),
+            ),
         ]
-        context, manifest = _fit_sources(local_date=local_date, sources=sources)
+        context, manifest = _fit_sources(
+            local_date=local_date,
+            sources=sources,
+            context_version=context_version,
+        )
         serialized = _canonical_json(context)
         if len(serialized.encode("utf-8")) > COACH_CONTEXT_BYTES:
             raise ValueError("Coach context exceeds its byte boundary.")
@@ -134,6 +253,7 @@ class CoachContextService:
             used_context=manifest,
             daily_state_freshness=snapshot_freshness,
             daily_state_quality=state_quality,
+            evidence_status="not_applicable",
         )
 
 
@@ -141,13 +261,16 @@ def _fit_sources(
     *,
     local_date: date,
     sources: list[_Source],
+    context_version: str = "coach-context-v2",
 ) -> tuple[dict[str, Any], list[CoachUsedContext]]:
     context: dict[str, Any] = {
-        "contract_version": "coach-context-v2",
+        "contract_version": context_version,
         "context_scope": "today",
         "local_date": local_date.isoformat(),
         "sources": {},
     }
+    if context_version == "coach-context-v3":
+        context["context_parameters"] = {}
     counts: dict[str, int] = {}
     for source in sources:
         included: list[dict[str, Any]] = []
@@ -173,6 +296,133 @@ def _fit_sources(
         for source in sources
     ]
     return context, manifest
+
+
+def _build_evidence_package(
+    *,
+    local_date: date,
+    request: CoachRequest,
+    shared: CoachSharedContext,
+    evidence: CoachEvidenceDigest,
+) -> CoachContextPackage:
+    context: dict[str, Any] = {
+        "contract_version": "coach-context-v3",
+        "context_scope": request.context_scope,
+        "context_parameters": request.context_parameters,
+        "local_date": local_date.isoformat(),
+        "evidence": evidence.model_dump(mode="json"),
+        "sources": {
+            "profile": {
+                "local_date": local_date.isoformat(),
+                "timezone": _bounded_text(shared.profile.timezone, 100),
+            },
+            "memories": [],
+            "coach_history": [],
+        },
+    }
+    if len(_canonical_json(context).encode("utf-8")) > COACH_CONTEXT_BYTES:
+        raise ValueError("Coach evidence exceeds its context byte boundary.")
+
+    memory_items = [
+        item
+        for row in shared.selected_memories.rows
+        if (item := _safe_memory(row)) is not None
+    ]
+    history_items = [
+        item
+        for row in shared.history.rows
+        if (
+            item := _safe_history(
+                row,
+                include_context_selection=True,
+            )
+        )
+        is not None
+    ]
+    included_counts: dict[str, int] = {"memories": 0, "coach_history": 0}
+    for source_name, items in (
+        ("memories", memory_items),
+        ("coach_history", history_items),
+    ):
+        for item in items:
+            candidate = {
+                **context,
+                "sources": {
+                    **context["sources"],
+                    source_name: [*context["sources"][source_name], item],
+                },
+            }
+            if len(_canonical_json(candidate).encode("utf-8")) > COACH_CONTEXT_BYTES:
+                break
+            context = candidate
+            included_counts[source_name] += 1
+
+    manifest = [
+        CoachUsedContext(
+            source="profile",
+            available_count=1,
+            included_count=1,
+            omitted_count=0,
+            freshness="current",
+        ),
+        *[
+            CoachUsedContext(
+                source=source.source,
+                available_count=source.available_count,
+                included_count=source.included_count,
+                omitted_count=source.available_count - source.included_count,
+                freshness=(
+                    "current"
+                    if source.included_count
+                    else "not_applicable"
+                ),
+            )
+            for source in evidence.sources
+        ],
+        CoachUsedContext(
+            source="memories",
+            available_count=shared.selected_memories.available_count,
+            included_count=included_counts["memories"],
+            omitted_count=(
+                shared.selected_memories.available_count
+                - included_counts["memories"]
+            ),
+            freshness=(
+                "current"
+                if shared.selected_memories.available_count
+                else "not_applicable"
+            ),
+        ),
+        CoachUsedContext(
+            source="coach_history",
+            available_count=shared.history.available_count,
+            included_count=included_counts["coach_history"],
+            omitted_count=(
+                shared.history.available_count
+                - included_counts["coach_history"]
+            ),
+            freshness=(
+                "current"
+                if shared.history.available_count
+                else "not_applicable"
+            ),
+        ),
+    ]
+    serialized = _canonical_json(context)
+    if len(serialized.encode("utf-8")) > COACH_CONTEXT_BYTES:
+        raise ValueError("Coach context exceeds its byte boundary.")
+    return CoachContextPackage(
+        serialized=serialized,
+        used_context=manifest,
+        daily_state_freshness="not_applicable",
+        daily_state_quality="not_applicable",
+        evidence_status=(
+            evidence.status
+            if evidence.status != "available"
+            or sum(source.included_count for source in evidence.sources) >= 3
+            else "sparse"
+        ),
+    )
 
 
 def _row_source(
@@ -510,7 +760,11 @@ def _safe_memory(row: dict[str, Any]) -> dict[str, Any] | None:
     }
 
 
-def _safe_history(row: dict[str, Any]) -> dict[str, Any] | None:
+def _safe_history(
+    row: dict[str, Any],
+    *,
+    include_context_selection: bool = False,
+) -> dict[str, Any] | None:
     request_id = _bounded_text(row.get("request_id"), 100)
     message = _bounded_text(row.get("message"), 600)
     response = row.get("response")
@@ -525,7 +779,7 @@ def _safe_history(row: dict[str, Any]) -> dict[str, Any] | None:
         or not isinstance(safety, dict)
     ):
         return None
-    return {
+    result = {
         "request_id": request_id,
         "message": message,
         "reply": reply,
@@ -536,6 +790,10 @@ def _safe_history(row: dict[str, Any]) -> dict[str, Any] | None:
         "safety": {"classification": safety.get("classification")},
         "completed_at": row.get("completed_at"),
     }
+    if include_context_selection:
+        result["context_scope"] = row.get("context_scope")
+        result["context_parameters"] = row.get("context_parameters") or {}
+    return result
 
 
 def _weekly_freshness(value: str) -> str:

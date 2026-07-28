@@ -56,6 +56,16 @@ class _CoachPageState extends ConsumerState<CoachPage> {
       ],
       children: [
         _CapabilityCard(state: state),
+        _CoachContextCard(
+          state: state,
+          onScopeSelected:
+              ref.read(coachControllerProvider.notifier).selectScope,
+          onPatternHorizonSelected:
+              ref.read(coachControllerProvider.notifier).selectPatternHorizon,
+          onFocusSessionSelected:
+              ref.read(coachControllerProvider.notifier).selectFocusSession,
+          onPromptSelected: _usePromptStarter,
+        ),
         _ComposerCard(
           state: state,
           controller: _messageController,
@@ -99,6 +109,16 @@ class _CoachPageState extends ConsumerState<CoachPage> {
         curve: context.motionTokens.curve,
       );
     });
+  }
+
+  void _usePromptStarter(String prompt) {
+    final state = ref.read(coachControllerProvider);
+    if (state.isSending || !state.contextIsValid) return;
+    _messageController.value = TextEditingValue(
+      text: prompt,
+      selection: TextSelection.collapsed(offset: prompt.length),
+    );
+    ref.read(coachControllerProvider.notifier).updateDraft(prompt);
   }
 
   Future<void> _confirmDeleteHistory() async {
@@ -258,6 +278,415 @@ String _availabilitySummary(CoachCapabilities capability) {
   }
   return 'No Coach response provider is available.';
 }
+
+class _CoachContextCard extends StatelessWidget {
+  const _CoachContextCard({
+    required this.state,
+    required this.onScopeSelected,
+    required this.onPatternHorizonSelected,
+    required this.onFocusSessionSelected,
+    required this.onPromptSelected,
+  });
+
+  final CoachState state;
+  final ValueChanged<CoachContextScope> onScopeSelected;
+  final ValueChanged<CoachPatternHorizon> onPatternHorizonSelected;
+  final ValueChanged<String> onFocusSessionSelected;
+  final ValueChanged<String> onPromptSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final scope = state.selectedScope;
+    final promptsEnabled = state.capabilities?.canRespond == true &&
+        state.contextIsValid &&
+        !state.isSending;
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Choose Coach context',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          const Text(
+            'Coach uses only the bounded, read-only data for the selected '
+            'view. Changing this selection does not change your data.',
+          ),
+          if (state.contextOptionsError != null) ...[
+            const SizedBox(height: AppSpacing.sm),
+            _ErrorText(coachErrorMessage(state.contextOptionsError)),
+          ],
+          const SizedBox(height: AppSpacing.md),
+          Wrap(
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.sm,
+            children: [
+              for (final value in CoachContextScope.values)
+                ChoiceChip(
+                  key: ValueKey('coach-context-${value.code}'),
+                  label: Text(_contextScopeLabel(value)),
+                  selected: scope == value,
+                  onSelected: state.isSending
+                      ? null
+                      : (selected) {
+                          if (selected) onScopeSelected(value);
+                        },
+                ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.md),
+          switch (scope) {
+            CoachContextScope.today => const Text(
+                'Uses today’s bounded state, current actions, recent Focus, '
+                'selected memories, and limited Coach history.',
+              ),
+            CoachContextScope.patterns => _PatternContextControls(
+                state: state,
+                onSelected: onPatternHorizonSelected,
+              ),
+            CoachContextScope.focus => _FocusContextControls(
+                state: state,
+                onSelected: onFocusSessionSelected,
+              ),
+            CoachContextScope.review => const Text(
+                'Compares the last two complete ISO weeks using bounded, '
+                'rule-based evidence.',
+              ),
+          },
+          const SizedBox(height: AppSpacing.md),
+          Text(
+            'Prompt starters',
+            style: Theme.of(context).textTheme.labelLarge,
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Wrap(
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.sm,
+            children: [
+              for (final starter in _promptStarters(scope))
+                ActionChip(
+                  key: ValueKey(
+                    'coach-prompt-${scope.code}-${starter.key}',
+                  ),
+                  label: Text(starter.label),
+                  onPressed: promptsEnabled
+                      ? () => onPromptSelected(starter.prompt)
+                      : null,
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PatternContextControls extends StatelessWidget {
+  const _PatternContextControls({
+    required this.state,
+    required this.onSelected,
+  });
+
+  final CoachState state;
+  final ValueChanged<CoachPatternHorizon> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final enabled = state.contextOptions.personalPatternAnalysisEnabled;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Uses deterministic historical summaries, coverage, changes, '
+          'counterexamples, and limitations—not a raw history dump.',
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: SegmentedButton<CoachPatternHorizon>(
+            key: const ValueKey('coach-pattern-horizon'),
+            segments: const [
+              ButtonSegment(
+                value: CoachPatternHorizon.days90,
+                label: Text('90 days'),
+              ),
+              ButtonSegment(
+                value: CoachPatternHorizon.year1,
+                label: Text('1 year'),
+              ),
+              ButtonSegment(
+                value: CoachPatternHorizon.allAvailable,
+                label: Text('All available'),
+              ),
+            ],
+            selected: {state.patternHorizon},
+            onSelectionChanged: state.isSending
+                ? null
+                : (selection) => onSelected(selection.single),
+          ),
+        ),
+        if (!enabled && state.contextOptionsError == null) ...[
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            'Pattern analysis is off in Personal learning settings. Turn it '
+            'on before asking Coach to use historical study evidence.',
+            key: const ValueKey('coach-pattern-analysis-disabled'),
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Theme.of(context).colorScheme.error,
+                ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _FocusContextControls extends StatelessWidget {
+  const _FocusContextControls({
+    required this.state,
+    required this.onSelected,
+  });
+
+  final CoachState state;
+  final ValueChanged<String> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final options = state.contextOptions.focusOptions;
+    final selected = options.where(
+      (option) => option.focusSessionId == state.selectedFocusSessionId,
+    );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Uses one finished Focus session and its saved reflection when one '
+          'exists. It does not change the session.',
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        if (options.isEmpty)
+          const Text(
+            'No finished Focus sessions are available for Coach yet.',
+            key: ValueKey('coach-focus-options-empty'),
+          )
+        else
+          _FocusOptionPicker(
+            selected: selected.isEmpty ? null : selected.single,
+            options: options,
+            enabled: !state.isSending,
+            onSelected: onSelected,
+          ),
+        if (state.contextOptions.moreFocusOptionsAvailable) ...[
+          const SizedBox(height: AppSpacing.xs),
+          const Text(
+            'Showing the 10 most recent finished Focus sessions.',
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _FocusOptionPicker extends StatelessWidget {
+  const _FocusOptionPicker({
+    required this.selected,
+    required this.options,
+    required this.enabled,
+    required this.onSelected,
+  });
+
+  final CoachFocusOption? selected;
+  final List<CoachFocusOption> options;
+  final bool enabled;
+  final ValueChanged<String> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    final option = selected;
+    return SizedBox(
+      width: double.infinity,
+      child: OutlinedButton(
+        key: const ValueKey('coach-focus-session-picker'),
+        onPressed: enabled ? () => _showPicker(context) : null,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+          child: Row(
+            children: [
+              const Icon(AppIcons.centerFocusStrong),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      option == null
+                          ? 'Choose a Focus session'
+                          : _focusOptionTitle(option),
+                    ),
+                    if (option != null)
+                      Text(
+                        _focusOptionSubtitle(option),
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              const Icon(AppIcons.chevronRight),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showPicker(BuildContext context) async {
+    final selectedId = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => SafeArea(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.sizeOf(context).height * 0.8,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.lg,
+                  AppSpacing.lg,
+                  AppSpacing.lg,
+                  AppSpacing.sm,
+                ),
+                child: Text(
+                  'Choose a Focus session',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+              ),
+              Flexible(
+                child: ListView(
+                  shrinkWrap: true,
+                  children: [
+                    for (final option in options)
+                      ListTile(
+                        key: ValueKey(
+                          'coach-focus-option-${option.focusSessionId}',
+                        ),
+                        title: Text(_focusOptionTitle(option)),
+                        subtitle: Text(_focusOptionSubtitle(option)),
+                        trailing:
+                            option.focusSessionId == selected?.focusSessionId
+                                ? const Icon(AppIcons.check)
+                                : null,
+                        onTap: () => Navigator.of(context).pop(
+                          option.focusSessionId,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (selectedId != null) onSelected(selectedId);
+  }
+}
+
+String _focusOptionTitle(CoachFocusOption option) =>
+    DateFormat('MMM d, y, HH:mm').format(option.localStartedAt);
+
+String _focusOptionSubtitle(CoachFocusOption option) {
+  final status =
+      option.status == CoachFocusStatus.completed ? 'Completed' : 'Abandoned';
+  final reflection = option.hasReflection ? ' · Rated' : '';
+  return '${option.actualMinutes} min actual · '
+      '${option.plannedMinutes} min planned · $status$reflection';
+}
+
+String _contextScopeLabel(CoachContextScope scope) => switch (scope) {
+      CoachContextScope.today => 'Today',
+      CoachContextScope.patterns => 'Patterns',
+      CoachContextScope.focus => 'Focus',
+      CoachContextScope.review => 'Review',
+    };
+
+class _PromptStarter {
+  const _PromptStarter({
+    required this.key,
+    required this.label,
+    required this.prompt,
+  });
+
+  final String key;
+  final String label;
+  final String prompt;
+}
+
+List<_PromptStarter> _promptStarters(CoachContextScope scope) =>
+    switch (scope) {
+      CoachContextScope.today => const [
+          _PromptStarter(
+            key: 'priorities',
+            label: 'Today’s priorities',
+            prompt: 'What are the two most sensible priorities for me today, '
+                'and what are you uncertain about?',
+          ),
+          _PromptStarter(
+            key: 'protect-time',
+            label: 'Protect my time',
+            prompt: 'What should I protect time for today, and why?',
+          ),
+        ],
+      CoachContextScope.patterns => const [
+          _PromptStarter(
+            key: 'changes',
+            label: 'What changed?',
+            prompt: 'What changed in my study patterns over this period, and '
+                'what remains uncertain?',
+          ),
+          _PromptStarter(
+            key: 'obstacles',
+            label: 'Recurring obstacles',
+            prompt: 'Which recurring obstacle is most worth testing next?',
+          ),
+          _PromptStarter(
+            key: 'counterevidence',
+            label: 'Counterevidence',
+            prompt: 'What evidence contradicts the strongest pattern?',
+          ),
+        ],
+      CoachContextScope.focus => const [
+          _PromptStarter(
+            key: 'reflection',
+            label: 'Reflect on this session',
+            prompt: 'What does this Focus session suggest, and what should I '
+                'reflect on next?',
+          ),
+          _PromptStarter(
+            key: 'uncertainty',
+            label: 'What is uncertain?',
+            prompt: 'What are you uncertain about in this Focus session?',
+          ),
+        ],
+      CoachContextScope.review => const [
+          _PromptStarter(
+            key: 'compare',
+            label: 'Compare both weeks',
+            prompt: 'What changed between the last two full weeks, and what '
+                'remains uncertain?',
+          ),
+          _PromptStarter(
+            key: 'experiment',
+            label: 'A small experiment',
+            prompt: 'What is one small experiment worth trying next week?',
+          ),
+        ],
+    };
 
 class _ComposerCard extends StatelessWidget {
   const _ComposerCard({
@@ -733,4 +1162,10 @@ String _coachSourceLabel(CoachContextSource source) => switch (source) {
       CoachContextSource.weeklyReview => 'Weekly review',
       CoachContextSource.memories => 'Selected saved notes',
       CoachContextSource.coachHistory => 'Earlier Coach messages',
+      CoachContextSource.dailyCapture => 'Daily Capture',
+      CoachContextSource.focusReflections => 'Focus sessions and reflections',
+      CoachContextSource.habitOutcomes => 'Habit outcomes',
+      CoachContextSource.decisionFeedback => 'Decision feedback',
+      CoachContextSource.weeklyReviews => 'Weekly reviews',
+      CoachContextSource.taskLifecycle => 'Task lifecycle',
     };

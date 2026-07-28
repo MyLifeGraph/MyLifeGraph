@@ -502,14 +502,14 @@ export function extractCanonicalVersions(root) {
     ),
     coachContextPython: requiredMatch(
       coachPython,
-      /\bCOACH_CONTEXT_VERSION\s*=\s*['"]([^'"]+)['"]/,
-      'FastAPI Coach context version',
+      /\bCOACH_CONTEXT_V3_VERSION\s*=\s*['"]([^'"]+)['"]/,
+      'FastAPI current Coach context version',
       errors,
     ),
     coachPromptPython: requiredMatch(
       coachPython,
-      /\bCOACH_PROMPT_VERSION\s*=\s*['"]([^'"]+)['"]/,
-      'FastAPI Coach prompt version',
+      /\bCOACH_PROMPT_V3_VERSION\s*=\s*['"]([^'"]+)['"]/,
+      'FastAPI current Coach prompt version',
       errors,
     ),
     coachContextDart: requiredMatch(

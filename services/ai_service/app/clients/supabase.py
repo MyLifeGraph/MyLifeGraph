@@ -68,6 +68,49 @@ class SupabaseRestClient:
             raise ValueError(f"Expected list response from Supabase table {table}.")
         return data
 
+    async def count_exact(
+        self,
+        table: str,
+        *,
+        params: QueryParams,
+    ) -> int:
+        """Return PostgREST's exact filtered row count without a response body."""
+
+        async with httpx.AsyncClient(timeout=self._timeout_seconds) as client:
+            response = await client.head(
+                f"{self._url}/rest/v1/{table}",
+                params=params,
+                headers={
+                    **self._rest_headers(),
+                    "Prefer": "count=exact",
+                    "Range-Unit": "items",
+                    "Range": "0-0",
+                },
+            )
+        response.raise_for_status()
+        preference_applied = response.headers.get("Preference-Applied", "")
+        applied = {
+            value.strip()
+            for value in preference_applied.split(",")
+            if value.strip()
+        }
+        if "count=exact" not in applied:
+            raise ValueError(
+                f"Supabase exact count for table {table} was not applied.",
+            )
+        content_range = response.headers.get("Content-Range")
+        if content_range is None:
+            raise ValueError(
+                f"Supabase exact count for table {table} lacks Content-Range.",
+            )
+        _, separator, raw_total = content_range.rpartition("/")
+        raw_total = raw_total.strip()
+        if not separator or not raw_total.isdecimal():
+            raise ValueError(
+                f"Supabase exact count for table {table} is invalid.",
+            )
+        return int(raw_total)
+
     async def _select_bounded(
         self,
         table: str,

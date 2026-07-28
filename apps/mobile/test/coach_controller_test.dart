@@ -11,8 +11,8 @@ import 'support/coach_fixtures.dart';
 
 void main() {
   test(
-      'initial load reads capability, history, and memories without responding',
-      () async {
+      'initial load reads capability, history, memories, and context options '
+      'without responding', () async {
     final repository = _FakeCoachRepository(
       capability: _capability(state: 'unavailable'),
       history: _history(),
@@ -33,6 +33,8 @@ void main() {
     expect(repository.capabilityCalls, 1);
     expect(repository.historyCalls, 1);
     expect(repository.memoryCalls, 1);
+    expect(repository.contextOptionsCalls, 1);
+    expect(controller.state.selectedFocusSessionId, coachFocusSessionId);
     expect(repository.respondRequestIds, isEmpty);
   });
 
@@ -53,6 +55,10 @@ void main() {
     expect(duplicate, isFalse);
     expect(repository.respondRequestIds, [firstRequestId]);
     expect(repository.respondMessages, ['Help me pace today.']);
+    expect(
+      repository.respondContexts,
+      [const CoachContextSelection.today()],
+    );
     expect(repository.responseTimeouts, [const Duration(seconds: 55)]);
 
     responseCompleter.complete(_response(requestId: firstRequestId));
@@ -113,6 +119,56 @@ void main() {
     expect(controller.state.requestId, isNot(requestId));
     expect(controller.state.exactRetryMessage, isNull);
     expect(controller.state.sendError, isNull);
+  });
+
+  test('changing context releases the full-payload exact retry identity',
+      () async {
+    final repository = _FakeCoachRepository(
+      responseErrors: [const CoachContractException('invalid success')],
+    );
+    final controller = CoachController(repository: repository);
+    addTearDown(controller.dispose);
+    await pumpEventQueue();
+    controller.updateDraft('Original payload');
+    final requestId = controller.state.requestId;
+
+    expect(await controller.send(), isFalse);
+    expect(controller.state.requestId, requestId);
+    expect(controller.state.exactRetryPayload, isNotNull);
+
+    controller.selectScope(CoachContextScope.patterns);
+    controller.selectPatternHorizon(CoachPatternHorizon.year1);
+
+    expect(controller.state.requestId, isNot(requestId));
+    expect(controller.state.exactRetryPayload, isNull);
+    expect(controller.state.sendError, isNull);
+    expect(controller.state.draft, 'Original payload');
+    expect(repository.contextOptionsCalls, 1);
+  });
+
+  test('Pattern availability and Focus selection only gate their own modes',
+      () async {
+    final repository = _FakeCoachRepository(
+      contextOptions: CoachContextOptions.fromJson(
+        coachContextOptionsJson(
+          personalPatternAnalysisEnabled: false,
+          focusOptions: [coachFocusOptionJson()],
+        ),
+      ),
+    );
+    final controller = CoachController(repository: repository);
+    addTearDown(controller.dispose);
+    await pumpEventQueue();
+    controller.updateDraft('Use this context');
+
+    expect(controller.state.canSend, isTrue);
+    controller.selectScope(CoachContextScope.patterns);
+    expect(controller.state.canSend, isFalse);
+    controller.selectScope(CoachContextScope.focus);
+    expect(controller.state.canSend, isTrue);
+    controller.selectScope(CoachContextScope.review);
+    expect(controller.state.canSend, isTrue);
+    expect(repository.respondRequestIds, isEmpty);
   });
 
   test('known failures rotate id except retryable in-progress conflict',
@@ -256,25 +312,31 @@ class _FakeCoachRepository implements CoachRepository {
     CoachCapabilities? capability,
     CoachHistory? history,
     CoachMemorySelection? memories,
+    CoachContextOptions? contextOptions,
     List<Object>? responseErrors,
     this.responseCompleter,
   })  : capability = capability ?? _capability(),
         history = history ?? CoachHistory.empty(),
         memories = memories ?? CoachMemorySelection.empty(),
+        contextOptions = contextOptions ??
+            CoachContextOptions.fromJson(coachContextOptionsJson()),
         responseErrors = responseErrors ?? [];
 
   CoachCapabilities capability;
   CoachHistory history;
   CoachMemorySelection memories;
+  CoachContextOptions contextOptions;
   final List<Object> responseErrors;
   final Completer<CoachResponse>? responseCompleter;
   int capabilityCalls = 0;
   int historyCalls = 0;
   int memoryCalls = 0;
+  int contextOptionsCalls = 0;
   int deleteHistoryCalls = 0;
   int cancelCalls = 0;
   final List<String> respondRequestIds = [];
   final List<String> respondMessages = [];
+  final List<CoachContextSelection> respondContexts = [];
   final List<Duration> responseTimeouts = [];
   final List<String> selectedMemoryIds = [];
   final List<String> deselectedMemoryIds = [];
@@ -298,13 +360,21 @@ class _FakeCoachRepository implements CoachRepository {
   }
 
   @override
+  Future<CoachContextOptions> getContextOptions() async {
+    contextOptionsCalls += 1;
+    return contextOptions;
+  }
+
+  @override
   Future<CoachResponse> respond({
     required String requestId,
     required String message,
+    required CoachContextSelection context,
     required Duration receiveTimeout,
   }) async {
     respondRequestIds.add(requestId);
     respondMessages.add(message);
+    respondContexts.add(context);
     responseTimeouts.add(receiveTimeout);
     if (responseErrors.isNotEmpty) throw responseErrors.removeAt(0);
     if (responseCompleter != null && !responseCompleter!.isCompleted) {

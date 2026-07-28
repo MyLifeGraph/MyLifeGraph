@@ -409,7 +409,7 @@ repositories, and jobs, not as unconstrained autonomous LLM loops.
 | Weekly review service | Explicit completed-week review read/generation | Profile timezone, weekly snapshot, tasks, habits/outcomes, focus, daily snapshots, `decision_feedback` | `weekly_reviews` derived output only | None for v1 |
 | Calendar import service | Explicit consent and selected `.ics` upload | Bounded iCalendar text, profile timezone, owned connection | `calendar_connections`, `calendar_imports`, `calendar_events`, opaque `calendar_request_identities` | None |
 | Deadline planning service | Explicit user proposal/confirmation/lifecycle command | User-entered estimate, profile timezone/energy window, app commitments, confirmed blocks, optional current imported busy time | `deadline_plans`, immutable revisions/blocks, one first-confirm managed task, opaque request identities | None |
-| Coach service | Deliberate authenticated user send | Current snapshot/briefing, bounded active facts, selected memory, recent completed turns | Validated `coach_messages`, compact provenance/usage only | One configured provider call, budgeted |
+| Coach service | Deliberate authenticated user send with explicit mode | Current Today package or a deterministic bounded longitudinal digest, selected memory, recent completed turns | Validated `coach_messages`, exact context selection, compact provenance/usage only | One configured provider call, budgeted |
 | Memory selection service | Explicit user inspect/select/deselect | Owner-scoped eligible `memory_entries` plus Setup ownership | Separate Coach selection projection; content changes only through its owning contract | None for Phase 10 v1 |
 | Planning service | Weekly review, user request | Tasks, habits, schedule, snapshots | `tasks`, `schedule_items`, `recommendations`, `coach_messages` | Optional for complex plans |
 | Notification lifecycle service | Deliberate authenticated Inbox action | One owner-scoped stored notification plus retry identity | Read/unread/dismiss projection and `notification_action_requests` result ledger | None |
@@ -749,6 +749,7 @@ Implemented authenticated endpoints:
 
 ```text
 GET /v1/coach/capabilities
+GET /v1/coach/context-options
 POST /v1/coach/respond
 GET /v1/coach/history
 DELETE /v1/coach/history
@@ -760,17 +761,23 @@ Authorization: Bearer <supabase_access_token>
 Current behavior:
 
 1. Derive the owner from the verified Supabase bearer token and claim a
-   retry-safe bounded request identity.
-2. Build `coach-context-v2` under `controlled-coach-prompt-v2` from the current
-   sanitized snapshot/Daily State, current persisted briefing, bounded active
-   Task/Habit/focus facts, an explicitly fresh weekly review when useful,
-   explicitly selected memory, and a small completed-turn window. Do not load
-   Goals, Setup preferences, coaching style, or friction fields. Persisted V1
-   history and replay remain readable.
-3. Attach stable caps/order and a user-visible source/count/freshness manifest.
-   Never give a model database credentials, arbitrary SQL, full history,
-   imported calendar content, hidden free text, or cross-user rows.
-4. Call one explicitly configured provider only after a deliberate Coach send.
+   retry-safe bounded request identity. V2 identity binds message, exact
+   `today|patterns|focus|review` scope, and its complete parameter object.
+2. Keep compatible V1 Today on paired context/prompt V2. Build new
+   `coach-context-v3` under `controlled-coach-prompt-v3`: Today reuses the
+   current sanitized package; Patterns folds 90-day, one-year, or all-retained
+   evidence; Focus uses one explicit terminal session plus a bounded baseline;
+   Review compares the last two complete profile-local ISO weeks.
+3. Page and fold only structured Daily Capture, terminal Focus/current
+   reflection, explicit Habit outcome, Decision Feedback, validated Weekly
+   Review, and retained terminal Task facts. Emit at most 24 adaptive buckets,
+   stable caps/order, partial/coverage/limitation truth, a deterministic
+   fingerprint, and per-source counts. Never give a model database credentials,
+   arbitrary SQL, raw full history, imported calendar content, hidden free
+   text, or cross-user rows.
+4. Build historical evidence under a separate bounded concurrency/timeout,
+   release it, then call one explicitly configured provider only after a
+   deliberate Coach send.
 5. Validate strict model output, then attach backend-owned request, provider,
    model, prompt, context, time, safety, and uncertainty provenance.
 6. Atomically persist only the bounded validated user/assistant pair, compact

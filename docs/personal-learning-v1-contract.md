@@ -7,9 +7,8 @@ terminal Focus sessions. A user may reflect on a completed or abandoned session,
 inspect transparent non-causal patterns, and separately allow a mature learned
 time preference to softly order newly requested planning previews.
 
-This contract does not add an LLM, change Coach, infer a new study rhythm,
-change a sleep target or capacity, move a confirmed block, or make a provider
-write.
+This contract does not itself add an LLM, infer a new study rhythm, change a
+sleep target or capacity, move a confirmed block, or make a provider write.
 
 ## Contract versions
 
@@ -251,5 +250,12 @@ bounded failure stage. They must not contain raw ratings or obstacle values.
 Release order is reflection collection, then read-only Insights, then Planner
 use behind the additional feature flag after a minimum 28-day pilot. Explicit
 crossover experiments, recovery-outcome learning, automatic sleep-target
-changes, historical Habit/workload optimization, and Coach integration are
-outside V1.
+changes, and historical Habit/workload optimization remain outside V1.
+
+The later Controlled Coach longitudinal extension reuses only bounded current
+reflection facts and the existing analysis preference; it does not change this
+90-day Insights contract, learn a Planner preference, or write Personal
+Learning state. Disabling personal pattern analysis blocks broad Coach
+`Patterns`, while an explicit single-session `Focus` or fixed two-week `Review`
+request remains a separate deliberate Coach action. See
+`docs/phase-10-controlled-coach-plan.md`.

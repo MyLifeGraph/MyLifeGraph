@@ -182,6 +182,16 @@ says `Early evidence`.
   destination; `Settings` remains the top-right Today control and is not
   duplicated in the shell. The local Codex path proves one developer machine
   only and is not a production provider.
+- Coach context controls use `Today`, `Patterns`, `Focus`, and `Review`.
+  Pattern horizons use `90 days`, `1 year`, and `All available`; the last label
+  means all retained allowlisted evidence within explicit safety caps, not
+  deleted or silently truncated history. Focus choices distinguish whether a
+  reflection is rated. Review copy says that it compares the last two complete
+  weeks. Mode, horizon, session, and prompt-starter changes never imply a model
+  call.
+- Historical Coach answers use observational language, surface sparse/partial
+  evidence in uncertainty and expandable `Data used`, and never claim
+  causation, automatic changes, generated charts, or script/tool execution.
 
 ## Accessibility Copy Gate
 

@@ -52,9 +52,17 @@ class CoachRepositoryImpl implements CoachRepository {
   }
 
   @override
+  Future<CoachContextOptions> getContextOptions() async {
+    if (_isLocalDemo) return CoachContextOptions.localDemo();
+    _requireRemote();
+    return _api.getContextOptions(accessToken: await _requireToken());
+  }
+
+  @override
   Future<CoachResponse> respond({
     required String requestId,
     required String message,
+    required CoachContextSelection context,
     required Duration receiveTimeout,
   }) async {
     _requireRemote();
@@ -65,7 +73,11 @@ class CoachRepositoryImpl implements CoachRepository {
         receiveTimeout > const Duration(seconds: 130)) {
       throw const CoachInputException('Coach response timeout is invalid.');
     }
-    final request = CoachRequest(requestId: requestId, message: message);
+    final request = CoachRequest(
+      requestId: requestId,
+      message: message,
+      context: context,
+    );
     if (_activeResponseCancellation != null) {
       throw const CoachAccessException(
         'Another Coach response is already in progress.',

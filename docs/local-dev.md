@@ -690,6 +690,8 @@ LOCAL_CODEX_MODEL=gpt-5.5
 LOCAL_CODEX_TIMEOUT_SECONDS=45
 LOCAL_CODEX_MAX_REQUESTS_PER_USER_PER_DAY=20
 LOCAL_CODEX_GLOBAL_CONCURRENCY=2
+COACH_EVIDENCE_TIMEOUT_SECONDS=15
+COACH_EVIDENCE_GLOBAL_CONCURRENCY=4
 ```
 
 Safe defaults remain `COACH_PROVIDER=disabled` and
@@ -756,25 +758,37 @@ curl http://localhost:8000/v1/coach/history \
   -H 'Authorization: Bearer <supabase_access_token>'
 curl http://localhost:8000/v1/coach/memories \
   -H 'Authorization: Bearer <supabase_access_token>'
+curl http://localhost:8000/v1/coach/context-options \
+  -H 'Authorization: Bearer <supabase_access_token>'
 ```
 
-One deliberate send accepts only the strict `today` scope and a stable UUID:
+The current client sends strict V2 scope parameters with a stable UUID. For
+example, a one-year pattern request is:
 
 ```bash
 curl -X POST http://localhost:8000/v1/coach/respond \
   -H 'Authorization: Bearer <supabase_access_token>' \
   -H 'Content-Type: application/json' \
-  -d '{"contract_version":"coach-request-v1","request_id":"11111111-1111-4111-8111-111111111111","message":"What should I protect today?","context_scope":"today"}'
+  -d '{"contract_version":"coach-request-v2","request_id":"11111111-1111-4111-8111-111111111111","message":"What patterns are strongest, and what remains uncertain?","context_scope":"patterns","context_parameters":{"horizon":"1_year"}}'
 ```
 
-Retry an ambiguous result with the exact message and request id. Editing the
-message requires a new id. Completed replay returns the persisted response
-without another provider call; failed and deleted ids remain terminal. Select a
-memory with `POST /v1/coach/memories/{memory_id}/selection` and exact body
+Use `{}` for Today/Review, `{"horizon":"90_days|1_year|all_available"}` for
+Patterns, or `{"focus_session_id":"<uuid>"}` for Focus. Retry an ambiguous
+result with the exact message, scope, parameters, and request id. Editing any
+of them requires a new id. Completed replay returns the persisted response
+without another provider call; failed and deleted ids remain terminal. The
+model-call-free options read supplies the last ten eligible Focus sessions and
+the default selection. Select a memory with
+`POST /v1/coach/memories/{memory_id}/selection` and exact body
 `{"selected":true}`; deselect with a body-free DELETE. `DELETE
 /v1/coach/history` is also body-free. It deletes conversation content but
 retains usage events and request tombstones, so it does not restore the daily
 request budget.
+
+Evidence aggregation is on demand. It pages and deterministically folds
+owner-scoped rows before acquiring provider capacity; no raw history is passed
+to Codex. The evidence concurrency and timeout are process-local pilot guards.
+They do not turn the local OAuth adapter into a production multi-user service.
 
 ## Stored Inbox Lifecycle
 
@@ -951,7 +965,9 @@ block application-role profile insertion, role/provider changes, deletion, and
 authority. Authenticated profile edits are limited to non-authority fields;
 service role and the atomic Intake apply RPC retain the required backend
 projection authority. A fresh migration-chain verification should end at
-`20260726200000_learned_timing_setup_fallback_provenance.sql`. The final three
+`20260728120000_coach_longitudinal_context_v1.sql`. That Coach migration adds
+exact V2 scope parameters, owner-first replay, and paired V3 provenance while
+retaining V1 behavior. The preceding three
 planning guards bind additive timing outside strict V1 payloads, keep
 confirmation timestamps monotone under clock skew, and record actual Setup
 allocation fallback without discarding learned evidence. The earlier Personal

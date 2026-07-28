@@ -1,10 +1,13 @@
-const coachRequestContractVersion = 'coach-request-v1';
+const coachRequestContractVersion = 'coach-request-v2';
 const coachResponseContractVersion = 'coach-response-v1';
 const coachCapabilitiesContractVersion = 'coach-capabilities-v1';
 const coachHistoryContractVersion = 'coach-history-v1';
 const coachMemorySelectionContractVersion = 'coach-memory-selection-v1';
-const coachPromptVersion = 'controlled-coach-prompt-v2';
-const coachContextVersion = 'coach-context-v2';
+const coachContextOptionsContractVersion = 'coach-context-options-v1';
+const coachPromptVersion = 'controlled-coach-prompt-v3';
+const coachContextVersion = 'coach-context-v3';
+const _previousCoachPromptVersion = 'controlled-coach-prompt-v2';
+const _previousCoachContextVersion = 'coach-context-v2';
 const _legacyCoachPromptVersion = 'controlled-coach-prompt-v1';
 const _legacyCoachContextVersion = 'coach-context-v1';
 
@@ -12,6 +15,162 @@ const coachMessageCodepoints = 2000;
 const coachContextBytes = 32768;
 const coachReplyCodepoints = 4000;
 const coachMaxSelectedMemories = 8;
+const coachMaxFocusOptions = 10;
+
+enum CoachContextScope {
+  today('today'),
+  patterns('patterns'),
+  focus('focus'),
+  review('review');
+
+  const CoachContextScope(this.code);
+  final String code;
+
+  static CoachContextScope? fromCode(Object? value) => switch (value) {
+        'today' => today,
+        'patterns' => patterns,
+        'focus' => focus,
+        'review' => review,
+        _ => null,
+      };
+}
+
+enum CoachPatternHorizon {
+  days90('90_days'),
+  year1('1_year'),
+  allAvailable('all_available');
+
+  const CoachPatternHorizon(this.code);
+  final String code;
+
+  static CoachPatternHorizon? fromCode(Object? value) => switch (value) {
+        '90_days' => days90,
+        '1_year' => year1,
+        'all_available' => allAvailable,
+        _ => null,
+      };
+}
+
+class CoachContextSelection {
+  const CoachContextSelection._({
+    required this.scope,
+    this.patternHorizon,
+    this.focusSessionId,
+  });
+
+  const CoachContextSelection.today() : this._(scope: CoachContextScope.today);
+
+  const CoachContextSelection.patterns(CoachPatternHorizon horizon)
+      : this._(
+          scope: CoachContextScope.patterns,
+          patternHorizon: horizon,
+        );
+
+  factory CoachContextSelection.focus(String focusSessionId) {
+    final normalized = focusSessionId.trim().toLowerCase();
+    if (!_uuidPattern.hasMatch(normalized)) {
+      throw const CoachInputException('Coach Focus session id is invalid.');
+    }
+    return CoachContextSelection._(
+      scope: CoachContextScope.focus,
+      focusSessionId: normalized,
+    );
+  }
+
+  const CoachContextSelection.review()
+      : this._(scope: CoachContextScope.review);
+
+  factory CoachContextSelection.fromWire({
+    required Object? scope,
+    required Object? parameters,
+  }) {
+    final parsedScope = CoachContextScope.fromCode(scope);
+    if (parsedScope == null || parameters is! Map) {
+      throw const CoachContractException(
+        'Coach context selection is invalid.',
+      );
+    }
+    final values = _requiredMap(parameters, 'context parameters');
+    return switch (parsedScope) {
+      CoachContextScope.today => _emptySelection(
+          values,
+          const CoachContextSelection.today(),
+        ),
+      CoachContextScope.patterns => _patternsSelection(values),
+      CoachContextScope.focus => _focusSelection(values),
+      CoachContextScope.review => _emptySelection(
+          values,
+          const CoachContextSelection.review(),
+        ),
+    };
+  }
+
+  final CoachContextScope scope;
+  final CoachPatternHorizon? patternHorizon;
+  final String? focusSessionId;
+
+  Map<String, dynamic> get parameters => switch (scope) {
+        CoachContextScope.today ||
+        CoachContextScope.review =>
+          const <String, dynamic>{},
+        CoachContextScope.patterns => {
+            'horizon': patternHorizon!.code,
+          },
+        CoachContextScope.focus => {
+            'focus_session_id': focusSessionId!,
+          },
+      };
+
+  static CoachContextSelection _emptySelection(
+    Map<String, dynamic> values,
+    CoachContextSelection selection,
+  ) {
+    if (values.isNotEmpty) {
+      throw const CoachContractException(
+        'Coach context parameters are invalid.',
+      );
+    }
+    return selection;
+  }
+
+  static CoachContextSelection _patternsSelection(
+    Map<String, dynamic> values,
+  ) {
+    _expectExactKeys(values, const {'horizon'}, 'Coach pattern context');
+    final horizon = CoachPatternHorizon.fromCode(values['horizon']);
+    if (horizon == null) {
+      throw const CoachContractException(
+        'Coach pattern horizon is invalid.',
+      );
+    }
+    return CoachContextSelection.patterns(horizon);
+  }
+
+  static CoachContextSelection _focusSelection(Map<String, dynamic> values) {
+    _expectExactKeys(
+      values,
+      const {'focus_session_id'},
+      'Coach Focus context',
+    );
+    final rawId = values['focus_session_id'];
+    if (rawId is! String || !_uuidPattern.hasMatch(rawId)) {
+      throw const CoachContractException(
+        'Coach Focus context is invalid.',
+      );
+    }
+    return CoachContextSelection.focus(rawId);
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      other is CoachContextSelection &&
+      other.scope == scope &&
+      other.patternHorizon == patternHorizon &&
+      other.focusSessionId == focusSessionId;
+
+  @override
+  int get hashCode => Object.hash(scope, patternHorizon, focusSessionId);
+}
 
 enum CoachCapabilityState {
   disabled('disabled'),
@@ -221,10 +380,170 @@ class CoachCapabilities {
       state == CoachCapabilityState.ready && limits.remainingRequests > 0;
 }
 
-class CoachRequest {
-  CoachRequest._({required this.requestId, required this.message});
+enum CoachFocusStatus {
+  completed('completed'),
+  abandoned('abandoned');
 
-  factory CoachRequest({required String requestId, required String message}) {
+  const CoachFocusStatus(this.code);
+  final String code;
+
+  static CoachFocusStatus? fromCode(Object? value) => switch (value) {
+        'completed' => completed,
+        'abandoned' => abandoned,
+        _ => null,
+      };
+}
+
+class CoachFocusOption {
+  const CoachFocusOption({
+    required this.focusSessionId,
+    required this.status,
+    required this.localStartedAt,
+    required this.plannedMinutes,
+    required this.actualMinutes,
+    required this.hasReflection,
+  });
+
+  factory CoachFocusOption.fromJson(Map<String, dynamic> json) {
+    _expectExactKeys(
+      json,
+      const {
+        'focus_session_id',
+        'status',
+        'local_started_at',
+        'planned_minutes',
+        'actual_minutes',
+        'has_reflection',
+      },
+      'Coach Focus option',
+    );
+    final status = CoachFocusStatus.fromCode(json['status']);
+    final plannedMinutes = _requiredInt(json['planned_minutes']);
+    final actualMinutes = _requiredInt(json['actual_minutes']);
+    final hasReflection = json['has_reflection'];
+    final rawLocalStartedAt = json['local_started_at'];
+    if (status == null ||
+        plannedMinutes < 5 ||
+        plannedMinutes > 240 ||
+        actualMinutes < 0 ||
+        actualMinutes > 90 * 24 * 60 ||
+        hasReflection is! bool ||
+        rawLocalStartedAt is! String) {
+      throw const CoachContractException(
+        'Coach Focus option fields are invalid.',
+      );
+    }
+    _requiredAwareDateTime(rawLocalStartedAt);
+    return CoachFocusOption(
+      focusSessionId: _requiredUuid(json['focus_session_id']),
+      status: status,
+      localStartedAt: _profileLocalWallClock(rawLocalStartedAt),
+      plannedMinutes: plannedMinutes,
+      actualMinutes: actualMinutes,
+      hasReflection: hasReflection,
+    );
+  }
+
+  final String focusSessionId;
+  final CoachFocusStatus status;
+  final DateTime localStartedAt;
+  final int plannedMinutes;
+  final int actualMinutes;
+  final bool hasReflection;
+}
+
+class CoachContextOptions {
+  const CoachContextOptions({
+    required this.timezone,
+    required this.personalPatternAnalysisEnabled,
+    required this.focusOptions,
+    required this.defaultFocusSessionId,
+    required this.moreFocusOptionsAvailable,
+  });
+
+  factory CoachContextOptions.localDemo() => const CoachContextOptions(
+        timezone: 'UTC',
+        personalPatternAnalysisEnabled: false,
+        focusOptions: [],
+        defaultFocusSessionId: null,
+        moreFocusOptionsAvailable: false,
+      );
+
+  factory CoachContextOptions.fromJson(Map<String, dynamic> json) {
+    _expectExactKeys(
+      json,
+      const {
+        'contract_version',
+        'timezone',
+        'personal_pattern_analysis_enabled',
+        'focus_options',
+        'default_focus_session_id',
+        'more_focus_options_available',
+      },
+      'Coach context options',
+    );
+    final analysisEnabled = json['personal_pattern_analysis_enabled'];
+    final rawOptions = json['focus_options'];
+    final moreOptions = json['more_focus_options_available'];
+    final timezone = _boundedText(json['timezone'], 100);
+    if (json['contract_version'] != coachContextOptionsContractVersion ||
+        analysisEnabled is! bool ||
+        rawOptions is! List ||
+        rawOptions.length > coachMaxFocusOptions ||
+        moreOptions is! bool) {
+      throw const CoachContractException(
+        'Coach context options response is invalid.',
+      );
+    }
+    final options = List<CoachFocusOption>.unmodifiable(
+      rawOptions.map(
+        (value) => CoachFocusOption.fromJson(
+          _requiredMap(value, 'Focus option'),
+        ),
+      ),
+    );
+    if (options.map((option) => option.focusSessionId).toSet().length !=
+        options.length) {
+      throw const CoachContractException(
+        'Coach Focus options contain duplicate sessions.',
+      );
+    }
+    final rawDefault = json['default_focus_session_id'];
+    final defaultId = rawDefault == null ? null : _requiredUuid(rawDefault);
+    if (defaultId != null &&
+        !options.any((option) => option.focusSessionId == defaultId)) {
+      throw const CoachContractException(
+        'Coach default Focus option is unavailable.',
+      );
+    }
+    return CoachContextOptions(
+      timezone: timezone,
+      personalPatternAnalysisEnabled: analysisEnabled,
+      focusOptions: options,
+      defaultFocusSessionId: defaultId,
+      moreFocusOptionsAvailable: moreOptions,
+    );
+  }
+
+  final String timezone;
+  final bool personalPatternAnalysisEnabled;
+  final List<CoachFocusOption> focusOptions;
+  final String? defaultFocusSessionId;
+  final bool moreFocusOptionsAvailable;
+}
+
+class CoachRequest {
+  CoachRequest._({
+    required this.requestId,
+    required this.message,
+    required this.context,
+  });
+
+  factory CoachRequest({
+    required String requestId,
+    required String message,
+    required CoachContextSelection context,
+  }) {
     if (!_clientUuidPattern.hasMatch(requestId)) {
       throw const CoachInputException('Coach request id is invalid.');
     }
@@ -235,17 +554,23 @@ class CoachRequest {
         'Coach message must contain 1 to 2,000 Unicode code points.',
       );
     }
-    return CoachRequest._(requestId: requestId, message: normalized);
+    return CoachRequest._(
+      requestId: requestId,
+      message: normalized,
+      context: context,
+    );
   }
 
   final String requestId;
   final String message;
+  final CoachContextSelection context;
 
   Map<String, dynamic> toJson() => {
         'contract_version': coachRequestContractVersion,
         'request_id': requestId,
         'message': message,
-        'context_scope': 'today',
+        'context_scope': context.scope.code,
+        'context_parameters': context.parameters,
       };
 }
 
@@ -345,7 +670,13 @@ enum CoachContextSource {
   focusSessions('focus_sessions'),
   weeklyReview('weekly_review'),
   memories('memories'),
-  coachHistory('coach_history');
+  coachHistory('coach_history'),
+  dailyCapture('daily_capture'),
+  focusReflections('focus_reflections'),
+  habitOutcomes('habit_outcomes'),
+  decisionFeedback('decision_feedback'),
+  weeklyReviews('weekly_reviews'),
+  taskLifecycle('task_lifecycle');
 
   const CoachContextSource(this.code);
   final String code;
@@ -361,6 +692,12 @@ enum CoachContextSource {
         'weekly_review' => weeklyReview,
         'memories' => memories,
         'coach_history' => coachHistory,
+        'daily_capture' => dailyCapture,
+        'focus_reflections' => focusReflections,
+        'habit_outcomes' => habitOutcomes,
+        'decision_feedback' => decisionFeedback,
+        'weekly_reviews' => weeklyReviews,
+        'task_lifecycle' => taskLifecycle,
         _ => null,
       };
 }
@@ -489,6 +826,8 @@ class CoachProvenance {
     final contextVersion = json['context_version'];
     final versionsMatch = (promptVersion == coachPromptVersion &&
             contextVersion == coachContextVersion) ||
+        (promptVersion == _previousCoachPromptVersion &&
+            contextVersion == _previousCoachContextVersion) ||
         (promptVersion == _legacyCoachPromptVersion &&
             contextVersion == _legacyCoachContextVersion);
     if (source == null ||
@@ -614,16 +953,31 @@ class CoachHistoryTurn {
   const CoachHistoryTurn({
     required this.requestId,
     required this.message,
+    required this.context,
     required this.response,
     required this.createdAt,
   });
 
   factory CoachHistoryTurn.fromJson(Map<String, dynamic> json) {
-    _expectExactKeys(
-      json,
-      const {'request_id', 'message', 'response', 'created_at'},
-      'Coach history turn',
-    );
+    const legacyKeys = {'request_id', 'message', 'response', 'created_at'};
+    const currentKeys = {
+      'request_id',
+      'message',
+      'context_scope',
+      'context_parameters',
+      'response',
+      'created_at',
+    };
+    final keys = json.keys.toSet();
+    final isLegacy =
+        keys.length == legacyKeys.length && keys.every(legacyKeys.contains);
+    final isCurrent =
+        keys.length == currentKeys.length && keys.every(currentKeys.contains);
+    if (!isLegacy && !isCurrent) {
+      throw const CoachContractException(
+        'Coach history turn has unexpected or missing fields.',
+      );
+    }
     final requestId = _requiredUuid(json['request_id']);
     final response = CoachResponse.fromJson(
       _requiredMap(json['response'], 'response'),
@@ -636,6 +990,12 @@ class CoachHistoryTurn {
     return CoachHistoryTurn(
       requestId: requestId,
       message: _boundedText(json['message'], coachMessageCodepoints),
+      context: isLegacy
+          ? const CoachContextSelection.today()
+          : CoachContextSelection.fromWire(
+              scope: json['context_scope'],
+              parameters: json['context_parameters'],
+            ),
       response: response,
       createdAt: _requiredAwareDateTime(json['created_at']),
     );
@@ -643,6 +1003,7 @@ class CoachHistoryTurn {
 
   final String requestId;
   final String message;
+  final CoachContextSelection context;
   final CoachResponse response;
   final DateTime createdAt;
 }
@@ -903,6 +1264,9 @@ final _uuidPattern = RegExp(
 );
 final _reasonCodePattern = RegExp(r'^[a-z0-9][a-z0-9_:-]*$');
 final _awareDateTimePattern = RegExp(r'(Z|[+-]\d{2}:\d{2})$');
+final _localDateTimePartsPattern = RegExp(
+  r'^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})',
+);
 
 void _expectExactKeys(
   Map<String, dynamic> json,
@@ -963,4 +1327,31 @@ DateTime _requiredAwareDateTime(Object? value) {
     throw const CoachContractException('Coach timestamp is invalid.');
   }
   return parsed;
+}
+
+DateTime _profileLocalWallClock(String value) {
+  final match = _localDateTimePartsPattern.firstMatch(value);
+  if (match == null) {
+    throw const CoachContractException('Coach local timestamp is invalid.');
+  }
+  final parts = [
+    for (var index = 1; index <= 6; index++) int.parse(match.group(index)!),
+  ];
+  final result = DateTime(
+    parts[0],
+    parts[1],
+    parts[2],
+    parts[3],
+    parts[4],
+    parts[5],
+  );
+  if (result.year != parts[0] ||
+      result.month != parts[1] ||
+      result.day != parts[2] ||
+      result.hour != parts[3] ||
+      result.minute != parts[4] ||
+      result.second != parts[5]) {
+    throw const CoachContractException('Coach local timestamp is invalid.');
+  }
+  return result;
 }

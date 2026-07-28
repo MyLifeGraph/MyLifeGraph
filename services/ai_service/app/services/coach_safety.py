@@ -223,6 +223,39 @@ def force_missing_state_uncertainty(
     )
 
 
+def force_historical_evidence_uncertainty(
+    output: CoachModelOutput,
+    *,
+    evidence_status: str,
+) -> CoachModelOutput:
+    if (
+        output.safety.classification == "safety_redirect"
+        or evidence_status not in {"empty", "sparse", "partial"}
+    ):
+        return output
+    reason = {
+        "empty": (
+            "No eligible historical evidence was available, so this answer must "
+            "remain highly uncertain."
+        ),
+        "sparse": (
+            "Only sparse historical evidence was available, so this answer must "
+            "remain highly uncertain."
+        ),
+        "partial": (
+            "At least one historical source was only partially processed, so this "
+            "answer must remain highly uncertain."
+        ),
+    }[evidence_status]
+    return output.model_copy(
+        update={
+            "uncertainty": output.uncertainty.model_copy(
+                update={"level": "high", "reason": reason},
+            ),
+        },
+    )
+
+
 def _matches_any(value: str, patterns: tuple[str, ...]) -> bool:
     return any(re.search(pattern, value, flags=re.IGNORECASE) for pattern in patterns)
 

@@ -2,6 +2,8 @@ const coachRequestId = '11111111-1111-4111-8111-111111111111';
 const coachSecondRequestId = '22222222-2222-4222-8222-222222222222';
 const coachMemoryId = '33333333-3333-4333-8333-333333333333';
 const coachManualMemoryId = '44444444-4444-4444-8444-444444444444';
+const coachFocusSessionId = '55555555-5555-4555-8555-555555555555';
+const coachSecondFocusSessionId = '66666666-6666-4666-8666-666666666666';
 
 Map<String, dynamic> coachCapabilitiesJson({
   String state = 'ready',
@@ -41,6 +43,8 @@ Map<String, dynamic> coachResponseJson({
   String provenanceSource = 'model',
   bool providerCalled = true,
   List<Map<String, dynamic>>? usedContext,
+  String promptVersion = 'controlled-coach-prompt-v3',
+  String contextVersion = 'coach-context-v3',
 }) =>
     {
       'contract_version': 'coach-response-v1',
@@ -81,8 +85,8 @@ Map<String, dynamic> coachResponseJson({
         'model_requested': 'fake-coach-model',
         'model_reported': providerCalled ? 'fake-coach-model-v1' : null,
         'model_source': 'explicit',
-        'prompt_version': 'controlled-coach-prompt-v2',
-        'context_version': 'coach-context-v2',
+        'prompt_version': promptVersion,
+        'context_version': contextVersion,
         'generated_at': '2026-07-13T10:15:00Z',
         'provider_called': providerCalled,
       },
@@ -90,6 +94,7 @@ Map<String, dynamic> coachResponseJson({
 
 Map<String, dynamic> coachHistoryJson({
   List<Map<String, dynamic>>? turns,
+  bool includeContext = true,
 }) =>
     {
       'contract_version': 'coach-history-v1',
@@ -98,10 +103,58 @@ Map<String, dynamic> coachHistoryJson({
             {
               'request_id': coachRequestId,
               'message': 'How should I pace today?',
+              if (includeContext) ...{
+                'context_scope': 'today',
+                'context_parameters': <String, dynamic>{},
+              },
               'response': coachResponseJson(),
               'created_at': '2026-07-13T10:15:01Z',
             },
           ],
+    };
+
+Map<String, dynamic> coachFocusOptionJson({
+  String focusSessionId = coachFocusSessionId,
+  String status = 'completed',
+  String localStartedAt = '2026-07-27T09:30:00+02:00',
+  int plannedMinutes = 50,
+  int actualMinutes = 47,
+  bool hasReflection = true,
+}) =>
+    {
+      'focus_session_id': focusSessionId,
+      'status': status,
+      'local_started_at': localStartedAt,
+      'planned_minutes': plannedMinutes,
+      'actual_minutes': actualMinutes,
+      'has_reflection': hasReflection,
+    };
+
+Map<String, dynamic> coachContextOptionsJson({
+  String timezone = 'Europe/Berlin',
+  bool personalPatternAnalysisEnabled = true,
+  List<Map<String, dynamic>>? focusOptions,
+  String? defaultFocusSessionId = coachFocusSessionId,
+  bool moreFocusOptionsAvailable = false,
+}) =>
+    {
+      'contract_version': 'coach-context-options-v1',
+      'timezone': timezone,
+      'personal_pattern_analysis_enabled': personalPatternAnalysisEnabled,
+      'focus_options': focusOptions ??
+          [
+            coachFocusOptionJson(),
+            coachFocusOptionJson(
+              focusSessionId: coachSecondFocusSessionId,
+              status: 'abandoned',
+              localStartedAt: '2026-07-25T15:15:00+02:00',
+              plannedMinutes: 25,
+              actualMinutes: 12,
+              hasReflection: false,
+            ),
+          ],
+      'default_focus_session_id': defaultFocusSessionId,
+      'more_focus_options_available': moreFocusOptionsAvailable,
     };
 
 Map<String, dynamic> coachHistoryDeleteJson({bool deleted = true}) => {

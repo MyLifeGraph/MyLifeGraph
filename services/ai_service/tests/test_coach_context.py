@@ -6,10 +6,17 @@ from types import SimpleNamespace
 
 import pytest
 
+from app.models.coach import CoachRequest
+from app.models.coach_evidence import (
+    CoachEvidenceDigest,
+    CoachEvidenceSourceSummary,
+    CoachEvidenceWindow,
+)
 from app.repositories.coach_context_repository import (
     BoundedRows,
     CoachProfileContext,
     CoachRawContext,
+    CoachSharedContext,
 )
 from app.services.coach_context import (
     CoachContextService,
@@ -94,6 +101,10 @@ def test_context_uses_freshness_contracts_and_filters_hidden_metadata() -> None:
     assert manifests["coach_history"].available_count == 50
     assert manifests["coach_history"].included_count == 6
     assert manifests["coach_history"].omitted_count == 44
+    assert all(
+        "context_scope" not in turn and "context_parameters" not in turn
+        for turn in context["sources"]["coach_history"]
+    )
     habit = context["sources"]["habits"][0]
     assert set(habit["cadence"]) == {"contract_version", "cadence"}
     daily_context = context["sources"]["daily_snapshot"]["daily_state"]["context"]
@@ -179,6 +190,115 @@ def test_oversized_unicode_rows_are_omitted_as_whole_items_deterministically() -
         f"memory-{index}" for index in range(manifest.included_count)
     ]
     assert all(item["content"] == "🌱" * 1_000 for item in included)
+
+
+class SharedRepository(Repository):
+    async def load_shared_context(self, **kwargs):
+        return CoachSharedContext(
+            profile=self.raw.profile,
+            selected_memories=self.raw.selected_memories,
+            history=self.raw.history,
+        )
+
+
+class EvidenceReader:
+    async def build_patterns(self, **kwargs):
+        return _evidence()
+
+    async def build_focus(self, **kwargs):
+        return _evidence()
+
+    async def build_review(self, **kwargs):
+        return _evidence()
+
+
+def test_v3_patterns_context_contains_only_digest_and_shared_sources() -> None:
+    raw = _raw_context()
+    service = CoachContextService(
+        repository=SharedRepository(raw),
+        briefing_reader=Reader(Envelope(briefing=None, freshness="missing")),
+        weekly_review_reader=Reader(Envelope(review=None, freshness="missing")),
+        evidence_reader=EvidenceReader(),
+    )
+    request = CoachRequest.model_validate(
+        {
+            "contract_version": "coach-request-v2",
+            "request_id": "11111111-1111-4111-8111-111111111111",
+            "message": "What changed?",
+            "context_scope": "patterns",
+            "context_parameters": {"horizon": "1_year"},
+        },
+    )
+
+    package = asyncio.run(
+        service.build(
+            user_id="owner",
+            local_date=LOCAL_DATE,
+            request=request,
+        ),
+    )
+    context = json.loads(package.serialized)
+
+    assert context["contract_version"] == "coach-context-v3"
+    assert context["context_parameters"] == {"horizon": "1_year"}
+    assert "tasks" not in context["sources"]
+    assert context["evidence"]["evidence_fingerprint"] == "a" * 64
+    assert all(
+        set(turn) >= {"context_scope", "context_parameters"}
+        for turn in context["sources"]["coach_history"]
+    )
+    assert package.byte_count <= 32_768
+    assert {item.source for item in package.used_context} >= {
+        "profile",
+        "daily_capture",
+        "focus_reflections",
+        "habit_outcomes",
+        "decision_feedback",
+        "weekly_reviews",
+        "task_lifecycle",
+        "memories",
+        "coach_history",
+    }
+
+
+def test_v2_today_request_builds_the_current_context_as_v3() -> None:
+    raw = _raw_context()
+    repository = Repository(raw)
+    service = CoachContextService(
+        repository=repository,
+        briefing_reader=Reader(
+            Envelope(briefing=None, freshness="missing", payload={}),
+        ),
+        weekly_review_reader=Reader(
+            Envelope(review=None, freshness="missing", payload={}),
+        ),
+    )
+    request = CoachRequest.model_validate(
+        {
+            "contract_version": "coach-request-v2",
+            "request_id": "11111111-1111-4111-8111-111111111111",
+            "message": "What matters today?",
+            "context_scope": "today",
+            "context_parameters": {},
+        },
+    )
+
+    package = asyncio.run(
+        service.build(
+            user_id="owner",
+            local_date=LOCAL_DATE,
+            request=request,
+        ),
+    )
+    context = json.loads(package.serialized)
+
+    assert context["contract_version"] == "coach-context-v3"
+    assert context["context_scope"] == "today"
+    assert context["context_parameters"] == {}
+    assert package.evidence_status == "not_applicable"
+    assert repository.calls == [
+        {"user_id": "owner", "local_date": LOCAL_DATE.isoformat()},
+    ]
 
 
 def _raw_context() -> CoachRawContext:
@@ -279,4 +399,42 @@ def _raw_context() -> CoachRawContext:
                 for index in range(6)
             ],
         ),
+    )
+
+
+def _evidence() -> CoachEvidenceDigest:
+    source_names = (
+        "daily_capture",
+        "focus_reflections",
+        "habit_outcomes",
+        "decision_feedback",
+        "weekly_reviews",
+        "task_lifecycle",
+    )
+    return CoachEvidenceDigest(
+        contract_version="coach-evidence-v1",
+        mode="patterns",
+        status="empty",
+        generated_at="2026-07-13T08:00:00Z",
+        timezone="Europe/Berlin",
+        window=CoachEvidenceWindow(
+            starts_on=date(2025, 7, 13),
+            ends_on=date(2026, 7, 13),
+            horizon="1_year",
+            granularity="month",
+        ),
+        sources=[
+            CoachEvidenceSourceSummary(
+                source=name,
+                available_count=0,
+                included_count=0,
+                partial=False,
+            )
+            for name in source_names
+        ],
+        buckets=[],
+        summary_metrics={},
+        selected_focus=None,
+        limitations=["No eligible evidence is available."],
+        evidence_fingerprint="a" * 64,
     )

@@ -614,11 +614,13 @@ Current responsibilities:
   a provider; exact completed replay returns the persisted result without
   another call.
 - Claim a request without storing its message, build at most 32 KiB of bounded
-  owner-scoped `coach-context-v2`, run deterministic safety boundaries under
-  `controlled-coach-prompt-v2`, and
+  owner-scoped `coach-context-v3` for current V2 clients, run deterministic
+  safety boundaries under `controlled-coach-prompt-v3`, and
   atomically persist a successful user/assistant pair, response manifest, and
-  retained usage event. V1 history/replay remains readable. Failed claims remain
-  terminal; history deletion removes content and tombstones requests without
+  retained usage event. Compatible V1 Today claims retain paired
+  `coach-context-v2`/`controlled-coach-prompt-v2` provenance and history/replay
+  remains readable. Failed claims remain terminal; history deletion removes
+  content and tombstones requests without
   deleting usage or freeing budget.
 - Keep recommendation generation behind a service boundary.
 - Verify bearer tokens through an isolated auth verifier when Supabase backend
@@ -826,28 +828,41 @@ production or presented as the deployed LLM architecture.
 
 The context boundary follows "full reach, minimal disclosure": FastAPI may read
 relevant canonical rows for the bearer-derived owner, but sends only a compact
-32 KiB `coach-context-v2` package for the current request under
-`controlled-coach-prompt-v2`. It is limited to current sanitized snapshot/Daily
-State, current briefing, bounded active Task/Habit/focus facts, an explicitly
-fresh weekly review when useful, selected reviewable memory, and a small
-completed-turn window. Goals, Setup preferences, coaching style, and friction
-fields are not loaded. Persisted V1 turns remain readable. The model gets no
-database credential, SQL/tool access, cross-user data, imported calendar
-content, or hidden free text. FastAPI attaches the exact used-data manifest;
-the model cannot invent provenance.
+32 KiB package. Compatible V1 Today requests retain
+`coach-context-v2`/`controlled-coach-prompt-v2`; new strict V2 requests use
+paired V3 provenance and select `Today`, `Patterns`, `Focus`, or `Review`.
+Today retains current sanitized snapshot/Daily State, briefing, bounded active
+Task/Habit/focus facts, a fresh weekly review when useful, selected reviewable
+memory, and a small completed-turn window. Historical modes page and
+deterministically fold only allowlisted structured Daily Capture, terminal
+Focus/current reflection, explicit Habit outcome, Decision Feedback, validated
+Weekly Review, and retained terminal Task facts into at most 24 buckets. The
+provider never receives a raw history list.
+
+Planner, Preparation, Calendar, hidden capture text, Goals, Setup preferences,
+coaching style, and friction are excluded from historical evidence. Recent
+Coach turns remain separate conversational context, not longitudinal evidence.
+The model gets no database credential, SQL/tool access, model-controlled
+script/plot tool, cross-user data, imported calendar content, or hidden free
+text. FastAPI attaches exact per-source counts, partial/freshness truth,
+window/granularity, limitations, and an evidence fingerprint; the model cannot
+invent provenance.
 
 Authenticated HTTP separates read/control paths from generation:
 `GET /v1/coach/capabilities`, `GET|DELETE /v1/coach/history`, and
-`GET /v1/coach/memories` plus explicit selection/deselection never call a model.
-`POST /v1/coach/respond` accepts one strict 2,000-code-point message with a
-retry-safe request id and `today` scope. One owner may have one live claim and,
-by default, 20 retained attempts per profile-local day. Successful completion
-atomically writes exactly one bounded user/assistant message pair and an
-append-only usage event. History deletion removes those messages and clears
-message fingerprints, responses, used-context manifests, and errors into
-tombstones. Bounded provider/model/prompt/context accounting metadata, usage
-events, and request identities remain, so deletion cannot reset budget or
-permit request-id reinterpretation.
+`GET /v1/coach/memories`, the model-call-free
+`GET /v1/coach/context-options`, and explicit selection/deselection never call
+a model. `POST /v1/coach/respond` accepts one strict 2,000-code-point message
+with a retry-safe request id bound to its exact scope and parameter object. One
+owner may have one live claim and, by default, 20 retained attempts per
+profile-local day. Historical evidence construction has a separate bounded
+concurrency limit and releases it before provider concurrency is acquired.
+Successful completion atomically writes exactly one bounded user/assistant
+message pair and an append-only usage event. History deletion removes those
+messages and clears message fingerprints, responses, used-context manifests,
+and errors into tombstones. Bounded provider/model/prompt/context accounting
+metadata, usage events, and request identities remain, so deletion cannot
+reset budget or permit request-id reinterpretation.
 Memory selection is a separate projection capped at eight and does not rewrite
 Setup-owned or manual memory content.
 

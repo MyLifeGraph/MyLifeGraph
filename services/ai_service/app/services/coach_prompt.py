@@ -10,6 +10,7 @@ def build_coach_prompt(
     *,
     message: str,
     context: CoachContextPackage,
+    prompt_version: str = "controlled-coach-prompt-v2",
 ) -> str:
     untrusted_data = json.dumps(
         {
@@ -19,6 +20,18 @@ def build_coach_prompt(
         ensure_ascii=False,
         separators=(",", ":"),
         sort_keys=True,
+    )
+    historical_rules = (
+        "- For an ambiguous metric or hypothesis, ask at most one concrete "
+        "clarifying question; never silently choose a metric.\n"
+        "- Historical buckets and summaries are deterministic evidence. Do not "
+        "recalculate from imagined raw rows or claim that omitted rows were seen.\n"
+        "- Treat associations, changes, and counterexamples as observational; "
+        "never claim causation, diagnosis, or an optimum.\n"
+        "- Keep the answer concise. Do not offer or claim to generate charts, "
+        "plots, scripts, or files.\n"
+        if prompt_version == "controlled-coach-prompt-v3"
+        else ""
     )
     prompt = (
         "You are the bounded MyLifeGraph Coach. Provide informational planning "
@@ -38,6 +51,7 @@ def build_coach_prompt(
         "postpone, archive, or delete product data.\n"
         "- State uncertainty honestly when context is missing, stale, partial, "
         "sparse, or conflicting.\n"
+        f"{historical_rules}"
         "- Return exactly one JSON object matching the supplied output schema and "
         "no surrounding prose.\n\n"
         "BEGIN_UNTRUSTED_COACH_DATA\n"

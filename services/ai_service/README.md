@@ -109,14 +109,15 @@ FastAPI service boundary for recommendation and future ML workflows.
   `../../docs/deadline-planner-v1-contract.md` and
   `../../docs/exam-week-outlook-v1-contract.md`.
 - Phase 10 exposes authenticated capability, deliberate response,
-  history/delete, and explicit memory-selection contracts. Standard tests use
-  the deterministic fake provider. The only real-model adapter is the strictly
-  development-only `local_codex_oauth`, which invokes the current Linux user's
-  manually authenticated Codex CLI without an application API key, tools, or
-  model fallback. Only a deliberate Coach send may call it; all other service
-  workflows remain deterministic/no-model. New requests use
-  `coach-context-v2` and `controlled-coach-prompt-v2` without Goals, onboarding
-  preferences, coaching style, or friction; V1 history remains readable. It is
+  history/delete, model-call-free context options, and explicit
+  memory-selection contracts. Standard tests use the deterministic fake
+  provider. The only real-model adapter is the strictly development-only
+  `local_codex_oauth`, which invokes the current Linux user's manually
+  authenticated Codex CLI without an application API key, tools, or model
+  fallback. Only a deliberate Coach send may call it; all other service
+  workflows remain deterministic/no-model. New V2 requests use paired
+  `coach-context-v3` and `controlled-coach-prompt-v3` for Today, Patterns,
+  Focus, or Review; compatible V1 Today requests/history remain readable. It is
   not a production provider.
   See `../../docs/phase-10-controlled-coach-plan.md`.
 - `/v1/account/profile`, `/v1/account/preparation-budget`,
@@ -413,6 +414,7 @@ Phase 10 Coach uses these bearer-authenticated endpoints:
 
 ```text
 GET    /v1/coach/capabilities
+GET    /v1/coach/context-options
 POST   /v1/coach/respond
 GET    /v1/coach/history
 DELETE /v1/coach/history
@@ -461,15 +463,25 @@ refresh-only, or materially future evidence fails closed with `403` before the
 delete service runs. Do not exercise deletion against anything except an
 intentionally disposable account.
 
-Capability, history, and memory operations never call a model. Respond accepts
-only strict `coach-request-v1` with one UUID, a trimmed message of at most 2,000
-Unicode code points, and `context_scope=today`. It builds at most 32 KiB of
-owner-scoped current context, returns strict `coach-response-v1`, and exposes
-exact source counts/freshness plus provider/model/prompt/context provenance.
-Completed same-id replay does not call the provider again; changed input with
-the same id conflicts; failed/deleted ids remain terminal. One owner has at most
-one live claim and the default retained attempt limit is 20 per profile-local
-day.
+Capability, context options, history, and memory operations never call a model.
+Respond accepts strict `coach-request-v2` with one UUID, a trimmed message of at
+most 2,000 Unicode code points, one `today|patterns|focus|review` scope, and its
+exact parameter object. Compatible V1 Today requests remain accepted. V2
+builds at most 32 KiB of current context or a compact deterministic historical
+digest, returns strict `coach-response-v1`, and exposes exact source
+counts/freshness plus provider/model/prompt/context provenance. Completed
+same-id replay does not call the provider again; changed message, scope, or
+parameters with the same id conflict; failed/deleted ids remain terminal. One
+owner has at most one live claim and the default retained attempt limit is 20
+per profile-local day.
+
+Historical digests page bounded owner rows and aggregate at most 24 adaptive
+buckets from structured Daily Capture, terminal Focus/current reflection,
+explicit Habit outcomes, Decision Feedback, validated Weekly Review facts, and
+retained terminal Task timestamps. They never contain raw row history, Planner,
+Preparation, Calendar, Coach conversation evidence, or hidden free text.
+Evidence construction uses its own process-local timeout/concurrency guard and
+releases it before provider capacity is acquired.
 
 Memory selection is explicit, separate from memory content/Setup ownership, and
 capped at eight eligible rows. Conversation deletion is body-free: it removes
@@ -499,6 +511,8 @@ LOCAL_CODEX_MODEL=gpt-5.5
 LOCAL_CODEX_TIMEOUT_SECONDS=45
 LOCAL_CODEX_MAX_REQUESTS_PER_USER_PER_DAY=20
 LOCAL_CODEX_GLOBAL_CONCURRENCY=2
+COACH_EVIDENCE_TIMEOUT_SECONDS=15
+COACH_EVIDENCE_GLOBAL_CONCURRENCY=4
 ```
 
 Do not expose the Supabase service-role key to the Flutter app. It belongs only
@@ -545,11 +559,14 @@ Personal Learning persistence requires
 `20260726170000_recommendation_refresh_v2.sql`,
 `20260726180000_learned_focus_planning_rpc_guard.sql`,
 `20260726190000_planning_confirmation_timestamp_guard.sql`, and
-`20260726200000_learned_timing_setup_fallback_provenance.sql`. Together they
+`20260726200000_learned_timing_setup_fallback_provenance.sql`.
+Controlled Coach longitudinal context then requires
+`20260728120000_coach_longitudinal_context_v1.sql`. Together they
 add forced-RLS terminal Focus reflections, revisioned settings and retry
 identities, immutable Planner/Deadline timing provenance, strict replay-safe
 delegation, monotone confirmation timestamps, truthful allocation-fallback
-provenance, and atomic current-Recommendation replacement. Account Export
+provenance, atomic current-Recommendation replacement, and exact Coach V2
+scope/parameter replay with paired V3 provenance. Account Export
 includes the two owner-content projections and omits the backend retry ledger
 explicitly.
 

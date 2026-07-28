@@ -32,7 +32,8 @@ class InsightsPage extends ConsumerWidget {
     final skillset =
         showExampleSkillset ? ref.watch(skillsetProfileProvider) : null;
 
-    if (insights.hasError || report.hasError) {
+    if ((insights.hasError && !insights.hasValue) ||
+        (report.hasError && !report.hasValue)) {
       return _InsightsLoadError(
         onRetry: () {
           ref.invalidate(insightsProvider);
@@ -41,7 +42,7 @@ class InsightsPage extends ConsumerWidget {
         },
       );
     }
-    if (insights.isLoading || report.isLoading) {
+    if (!insights.hasValue || !report.hasValue) {
       return const Center(child: CircularProgressIndicator());
     }
 

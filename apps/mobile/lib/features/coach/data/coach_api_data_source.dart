@@ -44,6 +44,18 @@ class CoachApiDataSource {
     return CoachMemorySelection.fromJson(json);
   }
 
+  Future<CoachContextOptions> getContextOptions({
+    required String accessToken,
+  }) async {
+    final json = await _guardRemote(
+      () => _client.getJson(
+        '/v1/coach/context-options',
+        headers: _headers(accessToken),
+      ),
+    );
+    return CoachContextOptions.fromJson(json);
+  }
+
   Future<CoachResponse> respond({
     required String accessToken,
     required CoachRequest request,

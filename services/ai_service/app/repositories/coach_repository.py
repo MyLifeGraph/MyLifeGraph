@@ -44,10 +44,12 @@ class CoachRepository(Protocol):
     async def claim_request(
         self,
         *,
+        contract_version: str = "coach-request-v1",
         user_id: str,
         request_id: UUID,
         message_fingerprint: str,
         context_scope: str,
+        context_parameters: dict[str, Any] | None = None,
         local_date: date,
         provider: str,
         provider_mode: str,
@@ -120,10 +122,12 @@ class SupabaseCoachRepository:
     async def claim_request(
         self,
         *,
+        contract_version: str = "coach-request-v1",
         user_id: str,
         request_id: UUID,
         message_fingerprint: str,
         context_scope: str,
+        context_parameters: dict[str, Any] | None = None,
         local_date: date,
         provider: str,
         provider_mode: str,
@@ -135,25 +139,29 @@ class SupabaseCoachRepository:
         lease_expires_at: datetime,
         daily_limit: int,
     ) -> CoachClaimResult:
-        result = await self._rpc(
-            "claim_coach_request_v1",
-            params={
-                "p_user_id": user_id,
-                "p_request_id": str(request_id),
-                "p_message_fingerprint": message_fingerprint,
-                "p_context_scope": context_scope,
-                "p_local_date": local_date.isoformat(),
-                "p_provider": provider,
-                "p_provider_mode": provider_mode,
-                "p_model_requested": model_requested,
-                "p_model_source": model_source,
-                "p_prompt_version": prompt_version,
-                "p_context_version": context_version,
-                "p_claimed_at": claimed_at.isoformat(),
-                "p_lease_expires_at": lease_expires_at.isoformat(),
-                "p_daily_limit": daily_limit,
-            },
-        )
+        params = {
+            "p_user_id": user_id,
+            "p_request_id": str(request_id),
+            "p_message_fingerprint": message_fingerprint,
+            "p_context_scope": context_scope,
+            "p_local_date": local_date.isoformat(),
+            "p_provider": provider,
+            "p_provider_mode": provider_mode,
+            "p_model_requested": model_requested,
+            "p_model_source": model_source,
+            "p_prompt_version": prompt_version,
+            "p_context_version": context_version,
+            "p_claimed_at": claimed_at.isoformat(),
+            "p_lease_expires_at": lease_expires_at.isoformat(),
+            "p_daily_limit": daily_limit,
+        }
+        function = "claim_coach_request_v1"
+        if contract_version == "coach-request-v2":
+            function = "claim_coach_request_v2"
+            params["p_context_parameters"] = context_parameters or {}
+        elif contract_version != "coach-request-v1" or context_parameters:
+            raise ValueError("Coach claim contract is invalid.")
+        result = await self._rpc(function, params=params)
         if set(result) != {"state", "remaining_requests", "response", "error"}:
             raise ValueError("Coach claim RPC returned an invalid envelope.")
         state = result["state"]
@@ -254,7 +262,9 @@ class SupabaseCoachRepository:
         requests = await self._client.select(
             "coach_requests",
             params={
-                "select": "request_id,response,created_at",
+                "select": (
+                    "request_id,context_scope,context_parameters,response,created_at"
+                ),
                 "user_id": f"eq.{user_id}",
                 "state": "eq.completed",
                 "order": "created_at.desc,request_id.asc",
@@ -286,6 +296,8 @@ class SupabaseCoachRepository:
                 {
                     "request_id": request_id,
                     "message": message.get("content"),
+                    "context_scope": row.get("context_scope"),
+                    "context_parameters": row.get("context_parameters") or {},
                     "response": row.get("response"),
                     "created_at": row.get("created_at"),
                 },
@@ -337,7 +349,11 @@ class SupabaseCoachRepository:
             memory_id for memory_id in selected if memory_id not in by_id
         ]
         include_id = str(include_memory_id) if include_memory_id is not None else None
-        if include_id is not None and include_id not in by_id and include_id not in required_ids:
+        if (
+            include_id is not None
+            and include_id not in by_id
+            and include_id not in required_ids
+        ):
             required_ids.append(include_id)
         if required_ids:
             required_rows = await self._client.select(

@@ -1626,11 +1626,13 @@ Implemented:
   local OAuth transport, not a reason to select a coding-focused Spark model.
   Keep unavailable-model truth explicit and require deliberate overrides.
 - Gives FastAPI owner-scoped reach to relevant life-graph facts while disclosing
-  only a bounded `coach-context-v2` package under
-  `controlled-coach-prompt-v2`. Goals, onboarding preferences, coaching style,
-  friction, imported calendar content, and hidden free text remain excluded.
-  The model receives neither direct database/tool access nor a full-history
-  dump; persisted V1 history remains readable.
+  only a bounded `coach-context-v3` package under
+  `controlled-coach-prompt-v3` for current V2 requests. Historical modes receive
+  deterministic aggregates rather than raw history. Goals, onboarding
+  preferences, coaching style, friction, imported calendar content, and hidden
+  free text remain excluded. The model receives neither direct database/tool
+  access nor a full-history dump; compatible V1 Today uses paired V2 provenance
+  and persisted V1 history remains readable.
 - Replaces the gated canned Coach and direct Flutter inserts with strict typed
   FastAPI request/history/memory boundaries, honest unavailable states, and a
   fake provider for all normal automation.

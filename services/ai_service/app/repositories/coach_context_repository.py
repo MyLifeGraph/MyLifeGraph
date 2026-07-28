@@ -39,6 +39,13 @@ class CoachRawContext:
     history: BoundedRows
 
 
+@dataclass(frozen=True)
+class CoachSharedContext:
+    profile: CoachProfileContext
+    selected_memories: BoundedRows
+    history: BoundedRows
+
+
 class CoachContextRepository(Protocol):
     async def get_profile(self, *, user_id: str) -> CoachProfileContext:
         pass
@@ -49,6 +56,13 @@ class CoachContextRepository(Protocol):
         user_id: str,
         local_date: str,
     ) -> CoachRawContext:
+        pass
+
+    async def load_shared_context(
+        self,
+        *,
+        user_id: str,
+    ) -> CoachSharedContext:
         pass
 
 
@@ -160,6 +174,22 @@ class SupabaseCoachContextRepository:
             history=history,
         )
 
+    async def load_shared_context(
+        self,
+        *,
+        user_id: str,
+    ) -> CoachSharedContext:
+        profile, memories, history = await asyncio.gather(
+            self.get_profile(user_id=user_id),
+            self._selected_memories(user_id=user_id),
+            self._history(user_id=user_id),
+        )
+        return CoachSharedContext(
+            profile=profile,
+            selected_memories=memories,
+            history=history,
+        )
+
     async def _daily_snapshot(
         self,
         *,
@@ -214,28 +244,36 @@ class SupabaseCoachContextRepository:
         return BoundedRows(available_count=len(ordered), rows=ordered)
 
     async def _history(self, *, user_id: str) -> BoundedRows:
-        requests: list[dict[str, Any]] = []
-        available_count = 0
-        offset = 0
-        page_size = 200
-        while True:
-            page = await self._client.select(
+        filters = [
+            ("user_id", f"eq.{user_id}"),
+            ("state", "eq.completed"),
+        ]
+        requests = await self._client.select(
+            "coach_requests",
+            params=[
+                (
+                    "select",
+                    "request_id,context_scope,context_parameters,"
+                    "response,completed_at",
+                ),
+                *filters,
+                ("order", "completed_at.desc,request_id.asc"),
+                ("limit", str(self._HISTORY_CAP + 1)),
+            ],
+        )
+        overflow = len(requests) > self._HISTORY_CAP
+        requests = requests[: self._HISTORY_CAP]
+        if overflow:
+            available_count = await self._client.count_exact(
                 "coach_requests",
-                params={
-                    "select": "request_id,response,completed_at",
-                    "user_id": f"eq.{user_id}",
-                    "state": "eq.completed",
-                    "order": "completed_at.desc,request_id.asc",
-                    "limit": str(page_size),
-                    "offset": str(offset),
-                },
+                params=[("select", "request_id"), *filters],
             )
-            available_count += len(page)
-            if len(requests) < self._HISTORY_CAP:
-                requests.extend(page[: self._HISTORY_CAP - len(requests)])
-            if len(page) < page_size:
-                break
-            offset += len(page)
+            if available_count <= self._HISTORY_CAP:
+                raise ValueError(
+                    "Supabase exact count contradicts the bounded history probe.",
+                )
+        else:
+            available_count = len(requests)
         if not requests:
             return BoundedRows(available_count=0, rows=[])
         ids = [str(row.get("request_id")) for row in requests]
@@ -266,23 +304,37 @@ class SupabaseCoachContextRepository:
         params: list[tuple[str, str]],
         cap: int,
     ) -> BoundedRows:
-        rows: list[dict[str, Any]] = []
-        available_count = 0
-        offset = 0
-        page_size = 200
-        while True:
-            page = await self._client.select(
+        rows = await self._client.select(
+            table,
+            params=[
+                *params,
+                ("limit", str(cap + 1)),
+            ],
+        )
+        overflow = len(rows) > cap
+        rows = rows[:cap]
+        if overflow:
+            available_count = await self._client.count_exact(
                 table,
-                params=[
-                    *params,
-                    ("limit", str(page_size)),
-                    ("offset", str(offset)),
-                ],
+                params=_count_filters(params),
             )
-            available_count += len(page)
-            if len(rows) < cap:
-                rows.extend(page[: cap - len(rows)])
-            if len(page) < page_size:
-                break
-            offset += len(page)
+            if available_count <= cap:
+                raise ValueError(
+                    "Supabase exact count contradicts the bounded row probe.",
+                )
+        else:
+            available_count = len(rows)
         return BoundedRows(available_count=available_count, rows=rows)
+
+
+def _count_filters(
+    params: list[tuple[str, str]],
+) -> list[tuple[str, str]]:
+    return [
+        ("select", "id"),
+        *[
+            (key, value)
+            for key, value in params
+            if key not in {"select", "order", "limit", "offset"}
+        ],
+    ]

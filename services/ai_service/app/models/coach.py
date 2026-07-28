@@ -1,17 +1,21 @@
 from datetime import datetime
-from typing import Literal, Self
+from typing import Any, Literal, Self
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 COACH_REQUEST_CONTRACT_VERSION = "coach-request-v1"
+COACH_REQUEST_V2_CONTRACT_VERSION = "coach-request-v2"
 COACH_RESPONSE_CONTRACT_VERSION = "coach-response-v1"
 COACH_CAPABILITIES_CONTRACT_VERSION = "coach-capabilities-v1"
 COACH_HISTORY_CONTRACT_VERSION = "coach-history-v1"
 COACH_MEMORY_SELECTION_CONTRACT_VERSION = "coach-memory-selection-v1"
+COACH_CONTEXT_OPTIONS_CONTRACT_VERSION = "coach-context-options-v1"
 COACH_CONTEXT_VERSION = "coach-context-v2"
 COACH_PROMPT_VERSION = "controlled-coach-prompt-v2"
+COACH_CONTEXT_V3_VERSION = "coach-context-v3"
+COACH_PROMPT_V3_VERSION = "controlled-coach-prompt-v3"
 
 COACH_MESSAGE_CODEPOINTS = 2_000
 COACH_CONTEXT_BYTES = 32_768
@@ -39,7 +43,15 @@ CoachContextSource = Literal[
     "weekly_review",
     "memories",
     "coach_history",
+    "daily_capture",
+    "focus_reflections",
+    "habit_outcomes",
+    "decision_feedback",
+    "weekly_reviews",
+    "task_lifecycle",
 ]
+CoachContextScope = Literal["today", "patterns", "focus", "review"]
+CoachPatternsHorizon = Literal["90_days", "1_year", "all_available"]
 
 
 class CoachErrorDetail(BaseModel):
@@ -77,10 +89,11 @@ class CoachCapabilitiesResponse(BaseModel):
 class CoachRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
-    contract_version: Literal["coach-request-v1"]
+    contract_version: Literal["coach-request-v1", "coach-request-v2"]
     request_id: UUID = Field(strict=False)
     message: str
-    context_scope: Literal["today"]
+    context_scope: CoachContextScope
+    context_parameters: dict[str, Any] | None = None
 
     @field_validator("message")
     @classmethod
@@ -91,6 +104,56 @@ class CoachRequest(BaseModel):
         if len(normalized) > COACH_MESSAGE_CODEPOINTS:
             raise ValueError("message exceeds 2,000 Unicode code points")
         return normalized
+
+    @model_validator(mode="after")
+    def validate_context_selection(self) -> Self:
+        parameters_supplied = "context_parameters" in self.model_fields_set
+        if self.contract_version == COACH_REQUEST_CONTRACT_VERSION:
+            if self.context_scope != "today" or parameters_supplied:
+                raise ValueError("Coach request V1 supports only today's context")
+            return self
+        if not parameters_supplied or not isinstance(self.context_parameters, dict):
+            raise ValueError("Coach request V2 requires context parameters")
+        parameters = self.context_parameters
+        if self.context_scope in {"today", "review"}:
+            if parameters:
+                raise ValueError("this Coach context accepts no parameters")
+            return self
+        if self.context_scope == "patterns":
+            if set(parameters) != {"horizon"} or parameters.get("horizon") not in {
+                "90_days",
+                "1_year",
+                "all_available",
+            }:
+                raise ValueError("Patterns requires one valid horizon")
+            return self
+        if set(parameters) != {"focus_session_id"}:
+            raise ValueError("Focus requires one Focus session id")
+        raw_id = parameters.get("focus_session_id")
+        if not isinstance(raw_id, str):
+            raise ValueError("Focus session id must be a UUID string")
+        try:
+            normalized = str(UUID(raw_id))
+        except ValueError as exc:
+            raise ValueError("Focus session id must be valid") from exc
+        self.context_parameters = {"focus_session_id": normalized}
+        return self
+
+    @property
+    def is_v2(self) -> bool:
+        return self.contract_version == COACH_REQUEST_V2_CONTRACT_VERSION
+
+    @property
+    def patterns_horizon(self) -> CoachPatternsHorizon | None:
+        if self.context_scope != "patterns" or self.context_parameters is None:
+            return None
+        return self.context_parameters["horizon"]
+
+    @property
+    def focus_session_id(self) -> UUID | None:
+        if self.context_scope != "focus" or self.context_parameters is None:
+            return None
+        return UUID(self.context_parameters["focus_session_id"])
 
 
 class CoachUncertainty(BaseModel):
@@ -151,8 +214,13 @@ class CoachProvenance(BaseModel):
     prompt_version: Literal[
         "controlled-coach-prompt-v1",
         "controlled-coach-prompt-v2",
+        "controlled-coach-prompt-v3",
     ]
-    context_version: Literal["coach-context-v1", "coach-context-v2"]
+    context_version: Literal[
+        "coach-context-v1",
+        "coach-context-v2",
+        "coach-context-v3",
+    ]
     generated_at: datetime = Field(strict=False)
     provider_called: bool
 
@@ -166,6 +234,7 @@ class CoachProvenance(BaseModel):
         ) not in {
             ("controlled-coach-prompt-v1", "coach-context-v1"),
             ("controlled-coach-prompt-v2", "coach-context-v2"),
+            ("controlled-coach-prompt-v3", "coach-context-v3"),
         }:
             raise ValueError("Coach prompt and context versions must match")
         if self.source == "model" and not self.provider_called:
@@ -224,6 +293,8 @@ class CoachHistoryTurn(BaseModel):
 
     request_id: UUID = Field(strict=False)
     message: str = Field(min_length=1, max_length=COACH_MESSAGE_CODEPOINTS)
+    context_scope: CoachContextScope
+    context_parameters: dict[str, Any]
     response: CoachResponse
     created_at: datetime = Field(strict=False)
 
@@ -233,6 +304,22 @@ class CoachHistoryTurn(BaseModel):
             raise ValueError("created_at must be timezone-aware")
         if self.response.request_id != self.request_id:
             raise ValueError("history request identity is inconsistent")
+        if self.context_scope in {"today", "review"}:
+            if self.context_parameters:
+                raise ValueError("history context parameters are inconsistent")
+        elif self.context_scope == "patterns":
+            if set(self.context_parameters) != {"horizon"} or (
+                self.context_parameters.get("horizon")
+                not in {"90_days", "1_year", "all_available"}
+            ):
+                raise ValueError("history Patterns parameters are inconsistent")
+        elif set(self.context_parameters) != {"focus_session_id"}:
+            raise ValueError("history Focus parameters are inconsistent")
+        else:
+            try:
+                UUID(str(self.context_parameters["focus_session_id"]))
+            except ValueError as exc:
+                raise ValueError("history Focus id is invalid") from exc
         return self
 
 
@@ -308,6 +395,44 @@ class CoachMemorySelectionResponse(BaseModel):
             raise ValueError("available memory count cannot be smaller than rows")
         if sum(memory.selected for memory in self.memories) > self.max_selected:
             raise ValueError("selected memory limit exceeded")
+        return self
+
+
+class CoachFocusContextOption(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+
+    focus_session_id: UUID = Field(strict=False)
+    status: Literal["completed", "abandoned"]
+    local_started_at: datetime = Field(strict=False)
+    planned_minutes: int = Field(ge=5, le=240)
+    actual_minutes: int = Field(ge=0, le=90 * 24 * 60)
+    has_reflection: bool
+
+    @model_validator(mode="after")
+    def validate_timestamp(self) -> Self:
+        if self.local_started_at.utcoffset() is None:
+            raise ValueError("Focus option timestamp must be timezone-aware")
+        return self
+
+
+class CoachContextOptionsResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+
+    contract_version: Literal["coach-context-options-v1"]
+    timezone: str = Field(min_length=1, max_length=100)
+    personal_pattern_analysis_enabled: bool
+    focus_options: list[CoachFocusContextOption] = Field(max_length=10)
+    default_focus_session_id: UUID | None = Field(default=None, strict=False)
+    more_focus_options_available: bool
+
+    @model_validator(mode="after")
+    def validate_default(self) -> Self:
+        option_ids = {option.focus_session_id for option in self.focus_options}
+        if (
+            self.default_focus_session_id is not None
+            and self.default_focus_session_id not in option_ids
+        ):
+            raise ValueError("default Focus option must be included")
         return self
 
 

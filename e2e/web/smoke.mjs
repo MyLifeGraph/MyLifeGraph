@@ -2691,8 +2691,13 @@ async function selectDropdownOption(page, label, option) {
       // Continue with the labelled-field fallbacks below.
     }
   }
+  // Keyboard focus can occasionally land on an adjacent Flutter dropdown.
+  // Its open route hides the intended field label from the semantics tree,
+  // so close any non-matching menu before resolving that exact label.
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(200);
   const labelNode = page.getByText(label, { exact: true }).first();
-  await labelNode.waitFor({ state: 'visible', timeout: 2500 });
+  await labelNode.waitFor({ state: 'visible', timeout: 5000 });
   await labelNode.scrollIntoViewIfNeeded({ timeout: 2500 });
   await page.waitForTimeout(200);
   const labelBox = await labelNode.boundingBox({ timeout: 2500 });
@@ -10726,9 +10731,34 @@ async function assertControlledCoach(page, userId) {
     [],
     'read-only empty Coach history',
   );
+  const contextOptionsResult = await coachApiRequest(
+    '/v1/coach/context-options',
+    accessToken,
+  );
+  assertCoachApiStatus(
+    contextOptionsResult,
+    200,
+    'read-only Coach context options',
+  );
+  const contextOptions = assertCoachContextOptions(
+    contextOptionsResult.json,
+    'read-only Coach context options',
+  );
+  if (contextOptions.focus_options.length === 0) {
+    throw new Error(
+      'Coach context options did not expose an existing terminal Focus session.',
+    );
+  }
+  if (contextOptions.personal_pattern_analysis_enabled !== true) {
+    throw new Error(
+      'Coach Patterns E2E requires the default enabled Personal learning analysis.',
+    );
+  }
   const persistenceAfterReads = await coachPersistenceSnapshot(userId);
   if (stableJson(persistenceAfterReads) !== stableJson(persistenceBeforeReads)) {
-    throw new Error('Coach capability/history GET created persistence rows.');
+    throw new Error(
+      'Coach capability/history/context-options GET created persistence rows.',
+    );
   }
 
   const coachMemoryId = crypto.randomUUID();
@@ -10817,6 +10847,19 @@ async function assertControlledCoach(page, userId) {
       source: 'model',
       providerCalled: true,
       safety: 'normal',
+      promptVersion: 'controlled-coach-prompt-v2',
+      contextVersion: 'coach-context-v2',
+      contextSources: [
+        'profile',
+        'daily_snapshot',
+        'daily_briefing',
+        'tasks',
+        'habits',
+        'focus_sessions',
+        'weekly_review',
+        'memories',
+        'coach_history',
+      ],
     },
     'first Coach response',
   );
@@ -10837,6 +10880,11 @@ async function assertControlledCoach(page, userId) {
       response: firstResponse,
       outcome: 'completed',
       providerCalled: true,
+      contractVersion: 'coach-request-v1',
+      contextScope: 'today',
+      contextParameters: {},
+      promptVersion: 'controlled-coach-prompt-v2',
+      contextVersion: 'coach-context-v2',
     },
   ]);
 
@@ -10903,6 +10951,9 @@ async function assertControlledCoach(page, userId) {
       source: 'deterministic_safety',
       providerCalled: false,
       safety: 'safety_redirect',
+      promptVersion: 'controlled-coach-prompt-v2',
+      contextVersion: 'coach-context-v2',
+      contextSources: [],
     },
     'deterministic Coach safety response',
   );
@@ -10920,6 +10971,11 @@ async function assertControlledCoach(page, userId) {
       response: firstResponse,
       outcome: 'completed',
       providerCalled: true,
+      contractVersion: 'coach-request-v1',
+      contextScope: 'today',
+      contextParameters: {},
+      promptVersion: 'controlled-coach-prompt-v2',
+      contextVersion: 'coach-context-v2',
     },
     {
       requestId: safetyRequestId,
@@ -10927,6 +10983,11 @@ async function assertControlledCoach(page, userId) {
       response: safetyResponse,
       outcome: 'safety_redirect',
       providerCalled: false,
+      contractVersion: 'coach-request-v1',
+      contextScope: 'today',
+      contextParameters: {},
+      promptVersion: 'controlled-coach-prompt-v2',
+      contextVersion: 'coach-context-v2',
     },
   ]);
 
@@ -10937,7 +10998,22 @@ async function assertControlledCoach(page, userId) {
   assertCoachApiStatus(persistedHistory, 200, 'persisted Coach history');
   assertCoachHistoryEnvelope(
     persistedHistory.json,
-    [firstRequestId, safetyRequestId],
+    [
+      {
+        requestId: firstRequestId,
+        contextScope: 'today',
+        contextParameters: {},
+        promptVersion: 'controlled-coach-prompt-v2',
+        contextVersion: 'coach-context-v2',
+      },
+      {
+        requestId: safetyRequestId,
+        contextScope: 'today',
+        contextParameters: {},
+        promptVersion: 'controlled-coach-prompt-v2',
+        contextVersion: 'coach-context-v2',
+      },
+    ],
     'persisted Coach history',
   );
 
@@ -10947,6 +11023,13 @@ async function assertControlledCoach(page, userId) {
   await page.waitForURL('**/#/coach');
   await expectText(page, 'Development Coach ready');
   await expectText(page, 'Uses fixed test responses. This is not a live assistant.');
+  await expectText(page, 'Choose Coach context');
+  await clickChoiceChip(page, 'Patterns');
+  await expectText(
+    page,
+    'Uses deterministic historical summaries, coverage, changes, counterexamples, and limitations—not a raw history dump.',
+  );
+  await clickChoiceChip(page, '1 year');
   await fillByLabelOrPlaceholder(page, 'Ask Coach', coachUiMessage, -1);
   const uiResponsePromise = waitForAiPost(
     page,
@@ -10958,14 +11041,26 @@ async function assertControlledCoach(page, userId) {
   const uiPayload = uiResponseResult.request().postDataJSON();
   assertExactCoachKeys(
     uiPayload,
-    ['contract_version', 'request_id', 'message', 'context_scope'],
+    [
+      'contract_version',
+      'request_id',
+      'message',
+      'context_scope',
+      'context_parameters',
+    ],
     'Coach UI request',
   );
+  assertExactCoachKeys(
+    uiPayload.context_parameters,
+    ['horizon'],
+    'Coach UI context parameters',
+  );
   if (
-    uiPayload.contract_version !== 'coach-request-v1' ||
+    uiPayload.contract_version !== 'coach-request-v2' ||
     !isUuid(uiPayload.request_id) ||
     uiPayload.message !== coachUiMessage ||
-    uiPayload.context_scope !== 'today'
+    uiPayload.context_scope !== 'patterns' ||
+    uiPayload.context_parameters.horizon !== '1_year'
   ) {
     throw new Error('Coach UI did not send the exact bounded request contract.');
   }
@@ -10976,6 +11071,19 @@ async function assertControlledCoach(page, userId) {
       source: 'model',
       providerCalled: true,
       safety: 'normal',
+      promptVersion: 'controlled-coach-prompt-v3',
+      contextVersion: 'coach-context-v3',
+      contextSources: [
+        'profile',
+        'daily_capture',
+        'focus_reflections',
+        'habit_outcomes',
+        'decision_feedback',
+        'weekly_reviews',
+        'task_lifecycle',
+        'memories',
+        'coach_history',
+      ],
     },
     'Coach UI response',
   );
@@ -11005,6 +11113,50 @@ async function assertControlledCoach(page, userId) {
   // widget test. The browser assertion stays anchored to this unique latest
   // card while the exact API envelope above verifies every underlying value.
 
+  const persistenceBeforeV2Replay = await coachPersistenceSnapshot(userId);
+  const uiReplayResult = await coachApiRequest(
+    '/v1/coach/respond',
+    accessToken,
+    { method: 'POST', body: uiPayload },
+  );
+  assertCoachApiStatus(uiReplayResult, 200, 'same-id Coach V2 replay');
+  if (stableJson(uiReplayResult.json) !== stableJson(uiResponse)) {
+    throw new Error('Same-id Coach V2 replay changed the persisted response.');
+  }
+  if (
+    stableJson(await coachPersistenceSnapshot(userId)) !==
+    stableJson(persistenceBeforeV2Replay)
+  ) {
+    throw new Error('Same-id Coach V2 replay created or changed persistence.');
+  }
+  const v2ContextConflict = await coachApiRequest(
+    '/v1/coach/respond',
+    accessToken,
+    {
+      method: 'POST',
+      body: {
+        ...uiPayload,
+        context_parameters: { horizon: '90_days' },
+      },
+    },
+  );
+  assertCoachApiStatus(
+    v2ContextConflict,
+    409,
+    'same-id Coach V2 context conflict',
+  );
+  if (stableJson(v2ContextConflict.json) !== stableJson(expectedConflict)) {
+    throw new Error(
+      'Same-id Coach V2 parameter reinterpretation was not an exact conflict.',
+    );
+  }
+  if (
+    stableJson(await coachPersistenceSnapshot(userId)) !==
+    stableJson(persistenceBeforeV2Replay)
+  ) {
+    throw new Error('Rejected Coach V2 parameter conflict changed persistence.');
+  }
+
   await assertCoachAtomicPersistence(userId, [
     {
       requestId: firstRequestId,
@@ -11012,6 +11164,11 @@ async function assertControlledCoach(page, userId) {
       response: firstResponse,
       outcome: 'completed',
       providerCalled: true,
+      contractVersion: 'coach-request-v1',
+      contextScope: 'today',
+      contextParameters: {},
+      promptVersion: 'controlled-coach-prompt-v2',
+      contextVersion: 'coach-context-v2',
     },
     {
       requestId: safetyRequestId,
@@ -11019,6 +11176,11 @@ async function assertControlledCoach(page, userId) {
       response: safetyResponse,
       outcome: 'safety_redirect',
       providerCalled: false,
+      contractVersion: 'coach-request-v1',
+      contextScope: 'today',
+      contextParameters: {},
+      promptVersion: 'controlled-coach-prompt-v2',
+      contextVersion: 'coach-context-v2',
     },
     {
       requestId: uiPayload.request_id,
@@ -11026,13 +11188,40 @@ async function assertControlledCoach(page, userId) {
       response: uiResponse,
       outcome: 'completed',
       providerCalled: true,
+      contractVersion: 'coach-request-v2',
+      contextScope: 'patterns',
+      contextParameters: { horizon: '1_year' },
+      promptVersion: 'controlled-coach-prompt-v3',
+      contextVersion: 'coach-context-v3',
     },
   ]);
   const uiHistory = await coachApiRequest('/v1/coach/history', accessToken);
   assertCoachApiStatus(uiHistory, 200, 'Coach history after UI response');
   assertCoachHistoryEnvelope(
     uiHistory.json,
-    [firstRequestId, safetyRequestId, uiPayload.request_id],
+    [
+      {
+        requestId: firstRequestId,
+        contextScope: 'today',
+        contextParameters: {},
+        promptVersion: 'controlled-coach-prompt-v2',
+        contextVersion: 'coach-context-v2',
+      },
+      {
+        requestId: safetyRequestId,
+        contextScope: 'today',
+        contextParameters: {},
+        promptVersion: 'controlled-coach-prompt-v2',
+        contextVersion: 'coach-context-v2',
+      },
+      {
+        requestId: uiPayload.request_id,
+        contextScope: 'patterns',
+        contextParameters: { horizon: '1_year' },
+        promptVersion: 'controlled-coach-prompt-v3',
+        contextVersion: 'coach-context-v3',
+      },
+    ],
     'Coach history after UI response',
   );
 
@@ -11265,6 +11454,85 @@ function assertCoachCapability(payload, context) {
   return payload;
 }
 
+function assertCoachContextOptions(payload, context) {
+  assertExactCoachKeys(
+    payload,
+    [
+      'contract_version',
+      'timezone',
+      'personal_pattern_analysis_enabled',
+      'focus_options',
+      'default_focus_session_id',
+      'more_focus_options_available',
+    ],
+    context,
+  );
+  if (
+    payload.contract_version !== 'coach-context-options-v1' ||
+    typeof payload.timezone !== 'string' ||
+    payload.timezone.length === 0 ||
+    typeof payload.personal_pattern_analysis_enabled !== 'boolean' ||
+    !Array.isArray(payload.focus_options) ||
+    payload.focus_options.length > 10 ||
+    typeof payload.more_focus_options_available !== 'boolean'
+  ) {
+    throw new Error(`${context} has an invalid options envelope.`);
+  }
+  const focusIds = [];
+  for (const option of payload.focus_options) {
+    assertExactCoachKeys(
+      option,
+      [
+        'focus_session_id',
+        'status',
+        'local_started_at',
+        'planned_minutes',
+        'actual_minutes',
+        'has_reflection',
+      ],
+      `${context} Focus option`,
+    );
+    if (
+      !isCanonicalUuid(option.focus_session_id) ||
+      !['completed', 'abandoned'].includes(option.status) ||
+      typeof option.local_started_at !== 'string' ||
+      Number.isNaN(Date.parse(option.local_started_at)) ||
+      !/[+-]\d{2}:\d{2}$|Z$/.test(option.local_started_at) ||
+      !Number.isInteger(option.planned_minutes) ||
+      option.planned_minutes < 5 ||
+      option.planned_minutes > 240 ||
+      !Number.isInteger(option.actual_minutes) ||
+      option.actual_minutes < 0 ||
+      option.actual_minutes > 90 * 24 * 60 ||
+      typeof option.has_reflection !== 'boolean'
+    ) {
+      throw new Error(`${context} contains an invalid Focus option.`);
+    }
+    focusIds.push(option.focus_session_id);
+  }
+  if (new Set(focusIds).size !== focusIds.length) {
+    throw new Error(`${context} repeats a Focus session.`);
+  }
+  if (
+    payload.default_focus_session_id !== null &&
+    (!isCanonicalUuid(payload.default_focus_session_id) ||
+      !focusIds.includes(payload.default_focus_session_id))
+  ) {
+    throw new Error(`${context} has an unavailable default Focus session.`);
+  }
+  const expectedDefault =
+    payload.focus_options.find((option) => option.has_reflection)
+      ?.focus_session_id ??
+    payload.focus_options[0]?.focus_session_id ??
+    null;
+  if (payload.default_focus_session_id !== expectedDefault) {
+    throw new Error(
+      `${context} did not default to the newest rated or terminal Focus session.`,
+    );
+  }
+  return payload;
+}
+
 function assertCoachMemoryEnvelope(payload, context) {
   assertExactCoachKeys(
     payload,
@@ -11376,8 +11644,8 @@ function assertCoachResponse(payload, expected, context) {
     payload.provenance.model_requested !== null ||
     payload.provenance.model_reported !== null ||
     payload.provenance.model_source !== 'not_applicable' ||
-    payload.provenance.prompt_version !== 'controlled-coach-prompt-v2' ||
-    payload.provenance.context_version !== 'coach-context-v2' ||
+    payload.provenance.prompt_version !== expected.promptVersion ||
+    payload.provenance.context_version !== expected.contextVersion ||
     payload.provenance.provider_called !== expected.providerCalled ||
     Number.isNaN(Date.parse(payload.provenance.generated_at))
   ) {
@@ -11428,21 +11696,10 @@ function assertCoachResponse(payload, expected, context) {
   if (new Set(sources).size !== sources.length) {
     throw new Error(`${context} repeats a context source.`);
   }
+  if (stableJson(sources) !== stableJson(expected.contextSources)) {
+    throw new Error(`${context} has an incomplete ordered context manifest.`);
+  }
   if (expected.source === 'model') {
-    const expectedSources = [
-      'profile',
-      'daily_snapshot',
-      'daily_briefing',
-      'tasks',
-      'habits',
-      'focus_sessions',
-      'weekly_review',
-      'memories',
-      'coach_history',
-    ];
-    if (stableJson(sources) !== stableJson(expectedSources)) {
-      throw new Error(`${context} has an incomplete ordered context manifest.`);
-    }
     const expectedReply =
       'Your current plan already contains a clear next step. Keep it small, then reassess your available capacity.';
     if (
@@ -11457,12 +11714,12 @@ function assertCoachResponse(payload, expected, context) {
   return payload;
 }
 
-function assertCoachHistoryEnvelope(payload, expectedRequestIds, context) {
+function assertCoachHistoryEnvelope(payload, expectedTurns, context) {
   assertExactCoachKeys(payload, ['contract_version', 'turns'], context);
   if (
     payload.contract_version !== 'coach-history-v1' ||
     !Array.isArray(payload.turns) ||
-    payload.turns.length !== expectedRequestIds.length
+    payload.turns.length !== expectedTurns.length
   ) {
     throw new Error(`${context} has an invalid history envelope.`);
   }
@@ -11470,18 +11727,59 @@ function assertCoachHistoryEnvelope(payload, expectedRequestIds, context) {
   for (const turn of payload.turns) {
     assertExactCoachKeys(
       turn,
-      ['request_id', 'message', 'response', 'created_at'],
+      [
+        'request_id',
+        'message',
+        'context_scope',
+        'context_parameters',
+        'response',
+        'created_at',
+      ],
       `${context} turn`,
     );
+    const expected = expectedTurns.find(
+      (item) => item.requestId === turn.request_id,
+    );
     if (
+      expected === undefined ||
       !isUuid(turn.request_id) ||
       typeof turn.message !== 'string' ||
       turn.message.length === 0 ||
+      turn.context_scope !== expected.contextScope ||
+      stableJson(turn.context_parameters) !==
+        stableJson(expected.contextParameters) ||
       Number.isNaN(Date.parse(turn.created_at)) ||
       turn.response?.request_id !== turn.request_id
     ) {
       throw new Error(`${context} contains an invalid history turn.`);
     }
+    const contextSources =
+      turn.response.provenance?.source === 'deterministic_safety'
+        ? []
+        : turn.response.provenance?.context_version === 'coach-context-v3' &&
+            turn.context_scope !== 'today'
+          ? [
+              'profile',
+              'daily_capture',
+              'focus_reflections',
+              'habit_outcomes',
+              'decision_feedback',
+              'weekly_reviews',
+              'task_lifecycle',
+              'memories',
+              'coach_history',
+            ]
+          : [
+              'profile',
+              'daily_snapshot',
+              'daily_briefing',
+              'tasks',
+              'habits',
+              'focus_sessions',
+              'weekly_review',
+              'memories',
+              'coach_history',
+            ];
     assertCoachResponse(
       turn.response,
       {
@@ -11489,6 +11787,9 @@ function assertCoachHistoryEnvelope(payload, expectedRequestIds, context) {
         source: turn.response.provenance?.source,
         providerCalled: turn.response.provenance?.provider_called,
         safety: turn.response.safety?.classification,
+        promptVersion: expected.promptVersion,
+        contextVersion: expected.contextVersion,
+        contextSources,
       },
       `${context} persisted response`,
     );
@@ -11496,7 +11797,7 @@ function assertCoachHistoryEnvelope(payload, expectedRequestIds, context) {
   }
   if (
     stableJson([...actualIds].sort()) !==
-    stableJson([...expectedRequestIds].sort())
+    stableJson(expectedTurns.map((item) => item.requestId).sort())
   ) {
     throw new Error(`${context} returned the wrong request identities.`);
   }
@@ -11517,7 +11818,7 @@ function assertExactCoachKeys(value, keys, context) {
 async function coachPersistenceSnapshot(userId) {
   const [requests, messages, usage] = await Promise.all([
     fetchRows(
-      `coach_requests?select=request_id,user_id,contract_version,context_scope,local_date,message_fingerprint,state,lease_expires_at,provider,provider_mode,model_requested,model_reported,model_source,prompt_version,context_version,response,used_context,error,created_at,completed_at,failed_at,deleted_at,updated_at&user_id=eq.${userId}&order=request_id.asc`,
+      `coach_requests?select=request_id,user_id,contract_version,context_scope,context_parameters,local_date,message_fingerprint,state,lease_expires_at,provider,provider_mode,model_requested,model_reported,model_source,prompt_version,context_version,response,used_context,error,created_at,completed_at,failed_at,deleted_at,updated_at&user_id=eq.${userId}&order=request_id.asc`,
       'Phase 10 Coach requests',
     ),
     fetchRows(
@@ -11553,14 +11854,16 @@ async function assertCoachAtomicPersistence(userId, expected) {
     );
     if (
       request?.state !== 'completed' ||
-      request.contract_version !== 'coach-request-v1' ||
-      request.context_scope !== 'today' ||
+      request.contract_version !== item.contractVersion ||
+      request.context_scope !== item.contextScope ||
+      stableJson(request.context_parameters) !==
+        stableJson(item.contextParameters) ||
       request.provider !== 'fake' ||
       request.provider_mode !== 'deterministic_test_only' ||
       request.model_requested !== null ||
       request.model_source !== 'not_applicable' ||
-      request.prompt_version !== 'controlled-coach-prompt-v2' ||
-      request.context_version !== 'coach-context-v2' ||
+      request.prompt_version !== item.promptVersion ||
+      request.context_version !== item.contextVersion ||
       !/^[0-9a-f]{64}$/.test(request.message_fingerprint ?? '') ||
       stableJson(request.response) !== stableJson(item.response) ||
       stableJson(request.used_context) !== stableJson(item.response.used_context) ||

@@ -9,18 +9,27 @@ from app.providers.fake import FakeCoachProvider
 from app.providers.local_codex import LocalCodexCoachProvider
 from app.repositories.briefing_repository import SupabaseBriefingRepository
 from app.repositories.coach_context_repository import SupabaseCoachContextRepository
+from app.repositories.coach_evidence_repository import (
+    SupabaseCoachEvidenceRepository,
+)
 from app.repositories.coach_repository import SupabaseCoachRepository
+from app.repositories.learning_repository import SupabaseLearningRepository
 from app.repositories.snapshot_repository import SupabaseSnapshotRepository
 from app.repositories.weekly_review_repository import SupabaseWeeklyReviewRepository
 from app.services.briefing_service import BriefingService
 from app.services.coach_context import CoachContextService
+from app.services.coach_evidence_service import CoachEvidenceService
 from app.services.coach_service import CoachService
+from app.services.learning_service import LearningService
 from app.services.snapshot_aggregator import SnapshotAggregator
 from app.services.weekly_review_service import WeeklyReviewService
 
 
 _GLOBAL_COACH_SEMAPHORE = asyncio.Semaphore(
     settings.local_codex_global_concurrency,
+)
+_GLOBAL_COACH_EVIDENCE_SEMAPHORE = asyncio.Semaphore(
+    settings.coach_evidence_global_concurrency,
 )
 _GLOBAL_LOCAL_CODEX_PROVIDER = LocalCodexCoachProvider(settings)
 
@@ -42,6 +51,14 @@ async def get_coach_service(request: Request) -> CoachService:
         ) from exc
 
     context_repository = SupabaseCoachContextRepository(client)
+    evidence_service = CoachEvidenceService(
+        repository=SupabaseCoachEvidenceRepository(client),
+        learning=LearningService(
+            repository=SupabaseLearningRepository(client),
+        ),
+        semaphore=_GLOBAL_COACH_EVIDENCE_SEMAPHORE,
+        timeout_seconds=settings.coach_evidence_timeout_seconds,
+    )
     snapshot_aggregator = SnapshotAggregator(
         repository=SupabaseSnapshotRepository(client),
     )
@@ -55,6 +72,7 @@ async def get_coach_service(request: Request) -> CoachService:
             repository=SupabaseWeeklyReviewRepository(client),
             snapshot_aggregator=snapshot_aggregator,
         ),
+        evidence_reader=evidence_service,
     )
     if settings.coach_provider == "local_codex_oauth":
         # Reuse the short-lived CLI capability cache across request-scoped

@@ -9,12 +9,15 @@ from app.api.deps.auth import Principal
 from app.main import create_app
 from app.models.coach import (
     CoachCapabilitiesResponse,
+    CoachContextOptionsResponse,
     CoachHistoryDeleteResponse,
     CoachHistoryResponse,
     CoachLimits,
     CoachMemorySelectionResponse,
     CoachResponse,
 )
+
+
 USER_ID = "coach-owner"
 REQUEST_ID = UUID("11111111-1111-4111-8111-111111111111")
 MEMORY_ID = UUID("22222222-2222-4222-8222-222222222222")
@@ -57,6 +60,26 @@ class Service:
     async def history(self, *, user_id: str):
         self.calls.append(("history", user_id))
         return CoachHistoryResponse(contract_version="coach-history-v1", turns=[])
+
+    async def context_options(self, *, user_id: str):
+        self.calls.append(("context_options", user_id))
+        return CoachContextOptionsResponse(
+            contract_version="coach-context-options-v1",
+            timezone="Europe/Berlin",
+            personal_pattern_analysis_enabled=True,
+            focus_options=[
+                {
+                    "focus_session_id": str(MEMORY_ID),
+                    "status": "completed",
+                    "local_started_at": NOW,
+                    "planned_minutes": 25,
+                    "actual_minutes": 24,
+                    "has_reflection": True,
+                },
+            ],
+            default_focus_session_id=MEMORY_ID,
+            more_focus_options_available=False,
+        )
 
     async def delete_history(self, *, user_id: str):
         self.calls.append(("delete_history", user_id))
@@ -133,6 +156,37 @@ def test_capabilities_and_respond_derive_owner() -> None:
     assert response.json()["request_id"] == str(REQUEST_ID)
     assert service.calls[0][0:2] == ("respond", USER_ID)
     assert service.calls[0][2].message == "Help me plan."
+
+
+def test_context_options_are_authenticated_and_model_call_free() -> None:
+    response, service = asyncio.run(
+        _request("GET", "/v1/coach/context-options"),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["default_focus_session_id"] == str(MEMORY_ID)
+    assert service.calls == [("context_options", USER_ID)]
+
+
+def test_respond_accepts_strict_v2_selection() -> None:
+    response, service = asyncio.run(
+        _request(
+            "POST",
+            "/v1/coach/respond",
+            json_body={
+                "contract_version": "coach-request-v2",
+                "request_id": str(REQUEST_ID),
+                "message": "Compare the year.",
+                "context_scope": "patterns",
+                "context_parameters": {"horizon": "1_year"},
+            },
+        ),
+    )
+
+    assert response.status_code == 200
+    request = service.calls[0][2]
+    assert request.context_scope == "patterns"
+    assert request.context_parameters == {"horizon": "1_year"}
 
 
 def test_respond_validation_always_uses_exact_error_detail() -> None:

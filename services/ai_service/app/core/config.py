@@ -66,6 +66,18 @@ class Settings(BaseSettings):
         le=8,
         alias="LOCAL_CODEX_GLOBAL_CONCURRENCY",
     )
+    coach_evidence_global_concurrency: int = Field(
+        default=4,
+        ge=1,
+        le=16,
+        alias="COACH_EVIDENCE_GLOBAL_CONCURRENCY",
+    )
+    coach_evidence_timeout_seconds: int = Field(
+        default=15,
+        ge=5,
+        le=60,
+        alias="COACH_EVIDENCE_TIMEOUT_SECONDS",
+    )
 
     @property
     def allowed_origins(self) -> list[str]:

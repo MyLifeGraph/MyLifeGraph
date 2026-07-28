@@ -11,10 +11,68 @@ non-destructively on 2026-07-13 in the working tree based on `b8c7935`:
 authenticated Flutter -> FastAPI -> `local_codex_oauth` -> the same Linux
 user's logged-in Codex CLI -> validated and persisted `coach-response-v1`.
 
-New claims now use `coach-context-v2` and `controlled-coach-prompt-v2` under
-`docs/setup-personalization-retirement-contract.md`. Persisted V1 history and
-exact replay remain readable; the historical 2026-07-13 run below remains a V1
-verification record rather than a claim about the new context.
+New `coach-request-v2` claims use `coach-context-v3` and
+`controlled-coach-prompt-v3`. Persisted request V1 with paired context/prompt
+V1 or V2, history, and exact replay remain readable; the historical 2026-07-13
+run below remains a V1 verification record rather than a claim about the new
+context.
+
+## Longitudinal Context V1 Extension
+
+The Coach surface now exposes four deliberate context modes without changing
+shell navigation or any non-Coach page:
+
+- `Today` retains the established bounded current-state context;
+- `Patterns` deterministically summarizes `90_days`, `1_year`, or
+  `all_available` retained evidence;
+- `Focus` analyzes one explicitly selected terminal Focus session against a
+  bounded 90-day baseline; and
+- `Review` compares the last two complete profile-local ISO weeks.
+
+`GET /v1/coach/context-options` is model-call-free. It returns at most ten
+terminal Focus choices, defaults to the newest rated session and otherwise the
+newest terminal session, and reports whether Personal Learning pattern analysis
+is enabled. Turning that preference off blocks only broad `Patterns`; a
+deliberate single-session `Focus` or fixed two-week `Review` remains a separate,
+explicit Coach action.
+
+Historical retrieval is deterministic and read-only. It pages bounded
+owner-scoped rows, folds them into at most 24 adaptive time buckets, and sends
+only a compact digest to the provider. Allowed historical sources are
+structured Daily Capture values, immutable terminal Focus facts plus the
+current optional reflection, explicit Habit outcomes, retained Decision
+Feedback, validated persisted Weekly Review facts, and currently retained
+terminal Task lifecycle facts. Planner, Preparation, imported Calendar content,
+and conversation history are not historical evidence; a small recent
+conversation window remains separate conversational context. No raw historical
+row list, hidden check-in text, task title, habit title, note, calendar field,
+or model-controlled tool enters the digest.
+
+The stable manifest source code `focus_reflections` represents terminal Focus
+sessions with their optional current reflection. Its available/included counts
+count each terminal session once rather than counting a session and its
+reflection as two rows; rated-session count and coverage remain separate digest
+metrics.
+
+Every retrieval page also has a 4 MiB response-byte limit before JSON parsing
+or sanitization. An oversized page fails the request closed instead of allowing
+an owner-controlled metadata value to create unbounded transfer or memory use.
+
+Each digest carries its requested and retained window, timezone, bucket
+granularity, sample/coverage counts, limitations, partial/truncation truth, and
+a deterministic evidence fingerprint. `All available` therefore means all
+retained evidence that fit the documented source safety caps, never deleted
+history or silently truncated infinity. The model may discuss associations and
+counterexamples, but must not claim causation. An ambiguous hypothesis may
+produce at most one clarifying question; the Coach must not silently choose a
+metric.
+
+Evidence construction has a separate configured concurrency limit and timeout,
+then releases that capacity before the existing provider semaphore is acquired.
+The database still enforces one in-flight request per owner and 20 retained
+attempts per profile-local day. This makes on-demand use suitable for a bounded
+local pilot, but the single-user local Codex OAuth adapter and process-local
+limits remain explicitly non-production.
 
 ## Implemented Boundary
 
@@ -28,11 +86,11 @@ The current checkout includes:
   configuration/rules, read-only sandbox, strict schema, feature disabling,
   allowlisted environment, bounded process I/O/events/time/concurrency, process-
   group termination, sanitized errors, and unexpected tool-event rejection;
-- a deterministic 32 KiB `coach-context-v2` builder over owner-scoped sanitized
-  current state, briefing, active Tasks/Habits/focus, only a current weekly
-  review, up to eight explicitly selected eligible memories, and up to six
-  completed turns, with an exact source/count/freshness manifest; Goals,
-  onboarding preferences, coaching style, and friction are excluded;
+- deterministic 32 KiB `coach-context-v2|v3` builders: V2 preserves the
+  compatible current-state request path, while V3 adds the four explicit modes
+  and compact longitudinal evidence described above; both retain selected
+  eligible memories and a small completed-turn window with exact
+  source/count/freshness manifests;
 - deterministic urgent-risk provider bypass and post-provider safety/
   uncertainty checks;
 - `coach_requests`, `coach_usage_events`, and `coach_memory_selections`, plus
@@ -46,9 +104,10 @@ The current checkout includes:
   backend-owned, remove legacy-role fallback and authenticated profile delete,
   and reserve onboarding eligibility projection for the backend Intake RPC;
 - the typed `/coach` Flutter surface, `/more` compatibility alias, visible
-  provider/model/prompt/context/data-use truth, preserved exact retry drafts,
-  review-only suggestions, explicit memory selection, and conversation deletion;
-  and
+  Today/Patterns/Focus/Review selection, prompt starters that never submit,
+  provider/model/prompt/context/data-use truth, preserved full-payload retry
+  identity, review-only suggestions, explicit memory selection, and
+  conversation deletion; and
 - an independent Flutter surface gate: release builds and
   `APP_ENV=production` always hide navigation and redirect `/coach` to Settings.
   When enabled, Coach occupies the fifth shell destination in place of the
@@ -62,7 +121,9 @@ Pending claims store no message, only its fingerprint. Successful completion
 atomically writes the full bounded user/assistant pair. Conversation deletion
 removes messages and request content, leaves content-free request tombstones,
 and retains append-only usage, so it does not reset the daily attempt budget or
-allow request-id reinterpretation.
+allow request-id reinterpretation. For a V2 tombstone it also neutralizes the
+stored scope and parameters to `today` with `{}`, so a deleted Focus UUID or
+Patterns horizon is not retained.
 
 The additive hardening chain after the base Coach schema is:
 
@@ -81,7 +142,12 @@ The additive hardening chain after the base Coach schema is:
   behind service-role/atomic Intake apply authority; and
 - `20260725120000_retire_setup_goals_and_friction.sql` admits paired V2
   prompt/context provenance for new claims while retaining paired V1
-  history/replay validation.
+  history/replay validation; and
+- `20260728120000_coach_longitudinal_context_v1.sql` adds exact V2
+  scope-parameter persistence, a separate owner-first V2 claim RPC, paired V3
+  provenance validation, transparent longitudinal source manifests, a
+  history-delete wrapper that removes V2 context selection from tombstones, and
+  query-driven retained Task lifecycle indexes without weakening V1 replay.
 
 ## Outcome
 
@@ -99,8 +165,8 @@ must never receive or copy Codex OAuth credentials.
 The implemented slice is deliberately narrow:
 
 - one explicit user submit to an authenticated Coach endpoint;
-- one bounded `coach-context-v2` package built by FastAPI under
-  `controlled-coach-prompt-v2`;
+- one bounded `coach-context-v2|v3` package built by FastAPI under its paired
+  prompt contract;
 - one schema-validated `coach-response-v1` answer;
 - visible data-use, model, prompt, freshness, and uncertainty provenance;
 - no hidden state mutation, background call, or autonomous agent loop.
@@ -292,10 +358,11 @@ described as a security control.
 
 ## HTTP Contract
 
-The authenticated, model-call-free capability read is:
+The authenticated, model-call-free reads are:
 
 ```text
 GET /v1/coach/capabilities
+GET /v1/coach/context-options
 ```
 
 It returns one honest state: `disabled`, `unavailable`, or `ready`, plus the
@@ -310,14 +377,17 @@ POST /v1/coach/respond
 Authorization: Bearer <supabase_access_token>
 ```
 
-Initial request shape:
+Current request shape:
 
 ```json
 {
-  "contract_version": "coach-request-v1",
+  "contract_version": "coach-request-v2",
   "request_id": "uuid",
   "message": "bounded user text",
-  "context_scope": "today"
+  "context_scope": "patterns",
+  "context_parameters": {
+    "horizon": "1_year"
+  }
 }
 ```
 
@@ -325,14 +395,20 @@ Rules:
 
 - derive `user_id` exclusively from the verified bearer token;
 - reject a body `user_id` and unknown or explicit-null fields;
-- accept exactly one `today` scope in the first slice;
+- require exact parameters for the selected scope: `{}` for `today` and
+  `review`, one `90_days|1_year|all_available` horizon for `patterns`, or one
+  owner-scoped terminal `focus_session_id` for `focus`;
 - cap `message` at 2,000 Unicode code points after trimming and reject blank
   input;
-- make `request_id` retry-safe. A completed request returns the exact persisted
-  result without a second provider call; an active request reports
-  `in_progress`; a failed request stays failed and an explicit retry uses a new
-  id;
+- make `request_id` retry-safe across message, scope, and the complete parameter
+  object. A completed request returns the exact persisted result without a
+  second provider call; an active request reports `in_progress`; a failed
+  request stays failed and an explicit retry uses a new id;
 - never hold a database transaction open while the CLI runs.
+
+The old exact `coach-request-v1` Today body remains accepted for compatible
+clients and uses paired V2 prompt/context provenance. It cannot be
+reinterpreted as a V2 mode.
 
 The HTTP response is backend-owned. The model returns only its answer fields;
 FastAPI attaches request identity and provenance that the model cannot invent:
@@ -358,8 +434,8 @@ FastAPI attaches request identity and provenance that the model cannot invent:
     "model_requested": null,
     "model_reported": null,
     "model_source": "cli_default|explicit",
-    "prompt_version": "controlled-coach-prompt-v2",
-    "context_version": "coach-context-v2",
+    "prompt_version": "controlled-coach-prompt-v3",
+    "context_version": "coach-context-v3",
     "generated_at": "RFC3339 UTC",
     "provider_called": true
   }
@@ -384,7 +460,7 @@ read-only `CoachContextRepository` that may reach relevant canonical tables for
 the bearer-derived owner, then builds a deterministic compact package. The LLM
 cannot query Supabase itself.
 
-The current `today` package contains only:
+The `today` package contains only:
 
 - profile-local date/timezone, without email, auth/provider identifiers, or
   onboarding/coaching preference;
@@ -401,6 +477,16 @@ Caps and stable ordering must be constants in the contract. The serialized
 context should be capped at 32 KiB before provider invocation. When facts do not
 fit, truncate deterministically and disclose counts in `used_context`. Do not
 let the model claim it saw rows that were omitted.
+
+The V3 historical modes add only the compact digest described in
+[Longitudinal Context V1 Extension](#longitudinal-context-v1-extension).
+Manifest rows disclose the separate `daily_capture`, `focus_reflections`,
+`habit_outcomes`, `decision_feedback`, `weekly_reviews`, and `task_lifecycle`
+contributions. Missing ratings remain missing rather than zero. Habit rows
+support only explicit completed/skipped counts, not reconstructed adherence;
+Task rows support only currently retained terminal timestamps, not a complete
+transition history. Weekly Review facts remain a derived mutable projection and
+are labelled accordingly.
 
 Excluded in V2:
 
@@ -430,10 +516,9 @@ The current memory-selection repository excludes every `type=preference` or
 `type=goal` row. Retired Setup Goal/style/context memories are removed by the
 migration; Coach does not infer equivalent preferences from titles or content.
 
-Future Coach modes may add bounded historical retrieval across more of the life
-graph. They must add an explicit scope, source allowlist, limits, consent where
-needed, and user-visible data-use manifest. Do not solve this with vector search
-or direct model tools in the first slice.
+Any later Coach mode must add an explicit scope, source allowlist, limits,
+consent where needed, and user-visible data-use manifest. Do not solve this with
+vector search or direct model tools.
 
 ## Memory And Retention
 
@@ -523,13 +608,19 @@ The first usable surface:
   development build deliberately exposes the surface;
 - explain that the active provider is a local development connection;
 - load persisted validated history without generating a reply;
-- send only through FastAPI with a fresh retry-safe request id;
+- display Today, Patterns, Focus, and Review inside the existing Coach page,
+  with conditional horizon/session controls and prompt starters that only fill
+  the draft;
+- send only through FastAPI with a fresh retry-safe request id bound to the
+  complete selected context;
 - show the answer, uncertainty, freshness, local-provider/model provenance, and
   expandable `Data used` manifest;
 - show selected memories with inspect/deselect and correct Setup ownership
   routing;
 - present any suggestion as review-only text with no apply action;
-- preserve the draft on timeout/error and prevent double submit;
+- preserve the draft and scroll position across context changes, preserve the
+  exact message plus context after an ambiguous timeout, rotate identity when
+  either changes, and prevent double submit;
 - expose delete-history and memory-control actions;
 - never write directly to `coach_messages` from Flutter.
 
@@ -570,12 +661,16 @@ or a real Codex login. Provide a fake executable/provider fixture that proves:
   non-zero-exit mapping;
 - owner-derived context and zero cross-user data;
 - stable pagination, ordering, caps, manifest counts, and 32 KiB limit;
+- exact V2 mode/parameter replay, 90-day/one-year/all-retained boundaries,
+  terminal Focus ownership/defaulting, two complete ISO-week boundaries,
+  adaptive at-most-24 buckets, partial truth, and deterministic fingerprints;
 - no imported calendar content or hidden capture/intake free text in context;
 - no model call on capabilities, GET/history, Dashboard, capture, CRUD,
   scheduled, recommendation, or weekly-review paths;
 - request replay returns the same completed turn without a second fake call;
 - one in-flight request per user and bounded usage;
-- memory selection, Setup ownership, history deletion, and RLS;
+- memory selection, Setup ownership, history deletion including V2
+  scope/parameter neutralization, and RLS;
 - safety bypass and unsafe/invalid model-output rejection;
 - Flutter guest/mock isolation, honest unavailable/error states, preserved
   draft, provenance/data-use display, and no direct Supabase Coach write.

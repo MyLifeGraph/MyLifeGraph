@@ -8,15 +8,27 @@ import '../domain/coach_repository.dart';
 
 const coachResponseTimeoutMargin = Duration(seconds: 10);
 
+class CoachRetryPayload {
+  const CoachRetryPayload({
+    required this.message,
+    required this.context,
+  });
+
+  final String message;
+  final CoachContextSelection context;
+}
+
 class CoachState {
   const CoachState({
     required this.isLoading,
     required this.capabilities,
     required this.history,
     required this.memories,
+    required this.contextOptions,
     required this.capabilityError,
     required this.historyError,
     required this.memoryError,
+    required this.contextOptionsError,
     required this.isSending,
     required this.isDeletingHistory,
     required this.updatingMemoryId,
@@ -25,7 +37,10 @@ class CoachState {
     required this.memoryActionError,
     required this.draft,
     required this.requestId,
-    required this.exactRetryMessage,
+    required this.exactRetryPayload,
+    required this.selectedScope,
+    required this.patternHorizon,
+    required this.selectedFocusSessionId,
     required this.latestResponse,
     required this.latestMessage,
   });
@@ -35,9 +50,11 @@ class CoachState {
         capabilities: null,
         history: CoachHistory.empty(),
         memories: CoachMemorySelection.empty(),
+        contextOptions: CoachContextOptions.localDemo(),
         capabilityError: null,
         historyError: null,
         memoryError: null,
+        contextOptionsError: null,
         isSending: false,
         isDeletingHistory: false,
         updatingMemoryId: null,
@@ -46,7 +63,10 @@ class CoachState {
         memoryActionError: null,
         draft: '',
         requestId: newClientUuid(),
-        exactRetryMessage: null,
+        exactRetryPayload: null,
+        selectedScope: CoachContextScope.today,
+        patternHorizon: CoachPatternHorizon.days90,
+        selectedFocusSessionId: null,
         latestResponse: null,
         latestMessage: null,
       );
@@ -55,9 +75,11 @@ class CoachState {
   final CoachCapabilities? capabilities;
   final CoachHistory history;
   final CoachMemorySelection memories;
+  final CoachContextOptions contextOptions;
   final Object? capabilityError;
   final Object? historyError;
   final Object? memoryError;
+  final Object? contextOptionsError;
   final bool isSending;
   final bool isDeletingHistory;
   final String? updatingMemoryId;
@@ -66,13 +88,40 @@ class CoachState {
   final Object? memoryActionError;
   final String draft;
   final String requestId;
-  final String? exactRetryMessage;
+  final CoachRetryPayload? exactRetryPayload;
+  final CoachContextScope selectedScope;
+  final CoachPatternHorizon patternHorizon;
+  final String? selectedFocusSessionId;
   final CoachResponse? latestResponse;
   final String? latestMessage;
 
+  String? get exactRetryMessage => exactRetryPayload?.message;
   int get draftCodepoints => draft.trim().runes.length;
   bool get draftIsValid =>
       draftCodepoints > 0 && draftCodepoints <= coachMessageCodepoints;
+  CoachContextSelection? get selectedContext => switch (selectedScope) {
+        CoachContextScope.today => const CoachContextSelection.today(),
+        CoachContextScope.patterns =>
+          CoachContextSelection.patterns(patternHorizon),
+        CoachContextScope.focus => selectedFocusSessionId == null
+            ? null
+            : CoachContextSelection.focus(selectedFocusSessionId!),
+        CoachContextScope.review => const CoachContextSelection.review(),
+      };
+  bool get contextIsValid {
+    final selection = selectedContext;
+    if (selection == null) return false;
+    if (exactRetryPayload?.context == selection) return true;
+    return switch (selectedScope) {
+      CoachContextScope.today || CoachContextScope.review => true,
+      CoachContextScope.patterns =>
+        contextOptions.personalPatternAnalysisEnabled,
+      CoachContextScope.focus => contextOptions.focusOptions.any(
+          (option) => option.focusSessionId == selectedFocusSessionId,
+        ),
+    };
+  }
+
   bool get isRateLimited =>
       capabilities?.state == CoachCapabilityState.ready &&
           capabilities?.limits.remainingRequests == 0 ||
@@ -81,6 +130,7 @@ class CoachState {
   bool get canSend =>
       capabilities?.canRespond == true &&
       draftIsValid &&
+      contextIsValid &&
       !isSending &&
       !isRateLimited;
 
@@ -89,9 +139,11 @@ class CoachState {
     Object? capabilities = _unset,
     CoachHistory? history,
     CoachMemorySelection? memories,
+    CoachContextOptions? contextOptions,
     Object? capabilityError = _unset,
     Object? historyError = _unset,
     Object? memoryError = _unset,
+    Object? contextOptionsError = _unset,
     bool? isSending,
     bool? isDeletingHistory,
     Object? updatingMemoryId = _unset,
@@ -100,7 +152,10 @@ class CoachState {
     Object? memoryActionError = _unset,
     String? draft,
     String? requestId,
-    Object? exactRetryMessage = _unset,
+    Object? exactRetryPayload = _unset,
+    CoachContextScope? selectedScope,
+    CoachPatternHorizon? patternHorizon,
+    Object? selectedFocusSessionId = _unset,
     Object? latestResponse = _unset,
     Object? latestMessage = _unset,
   }) {
@@ -111,6 +166,7 @@ class CoachState {
           : capabilities as CoachCapabilities?,
       history: history ?? this.history,
       memories: memories ?? this.memories,
+      contextOptions: contextOptions ?? this.contextOptions,
       capabilityError: identical(capabilityError, _unset)
           ? this.capabilityError
           : capabilityError,
@@ -118,6 +174,9 @@ class CoachState {
           identical(historyError, _unset) ? this.historyError : historyError,
       memoryError:
           identical(memoryError, _unset) ? this.memoryError : memoryError,
+      contextOptionsError: identical(contextOptionsError, _unset)
+          ? this.contextOptionsError
+          : contextOptionsError,
       isSending: isSending ?? this.isSending,
       isDeletingHistory: isDeletingHistory ?? this.isDeletingHistory,
       updatingMemoryId: identical(updatingMemoryId, _unset)
@@ -132,9 +191,14 @@ class CoachState {
           : memoryActionError,
       draft: draft ?? this.draft,
       requestId: requestId ?? this.requestId,
-      exactRetryMessage: identical(exactRetryMessage, _unset)
-          ? this.exactRetryMessage
-          : exactRetryMessage as String?,
+      exactRetryPayload: identical(exactRetryPayload, _unset)
+          ? this.exactRetryPayload
+          : exactRetryPayload as CoachRetryPayload?,
+      selectedScope: selectedScope ?? this.selectedScope,
+      patternHorizon: patternHorizon ?? this.patternHorizon,
+      selectedFocusSessionId: identical(selectedFocusSessionId, _unset)
+          ? this.selectedFocusSessionId
+          : selectedFocusSessionId as String?,
       latestResponse: identical(latestResponse, _unset)
           ? this.latestResponse
           : latestResponse as CoachResponse?,
@@ -162,15 +226,18 @@ class CoachController extends StateNotifier<CoachState> {
       capabilityError: null,
       historyError: null,
       memoryError: null,
+      contextOptionsError: null,
       sendError: null,
     );
 
     CoachCapabilities? capabilities;
     CoachHistory? history;
     CoachMemorySelection? memories;
+    CoachContextOptions? contextOptions;
     Object? capabilityError;
     Object? historyError;
     Object? memoryError;
+    Object? contextOptionsError;
 
     await Future.wait([
       () async {
@@ -194,28 +261,100 @@ class CoachController extends StateNotifier<CoachState> {
           memoryError = error;
         }
       }(),
+      () async {
+        try {
+          contextOptions = await _repository.getContextOptions();
+        } catch (error) {
+          contextOptionsError = error;
+        }
+      }(),
     ]);
     if (_disposed) return;
+    final resolvedOptions = contextOptions ?? state.contextOptions;
+    var selectedFocusSessionId = state.selectedFocusSessionId;
+    final lockedFocusId = state.exactRetryPayload?.context.focusSessionId;
+    if (lockedFocusId != null) {
+      selectedFocusSessionId = lockedFocusId;
+    } else if (contextOptions != null &&
+        !resolvedOptions.focusOptions.any(
+          (option) => option.focusSessionId == selectedFocusSessionId,
+        )) {
+      selectedFocusSessionId = resolvedOptions.defaultFocusSessionId;
+    }
     state = state.copyWith(
       isLoading: false,
       capabilities: capabilities ?? state.capabilities,
       history: history ?? state.history,
       memories: memories ?? state.memories,
+      contextOptions: resolvedOptions,
       capabilityError: capabilityError,
       historyError: historyError,
       memoryError: memoryError,
+      contextOptionsError: contextOptionsError,
+      selectedFocusSessionId: selectedFocusSessionId,
     );
   }
 
   void updateDraft(String value) {
     if (state.isSending) return;
     final normalized = value.trim();
-    final changedExactPayload = state.exactRetryMessage != null &&
-        normalized != state.exactRetryMessage;
+    final changedExactPayload = state.exactRetryPayload != null &&
+        normalized != state.exactRetryPayload!.message;
     state = state.copyWith(
       draft: value,
       requestId: changedExactPayload ? newClientUuid() : state.requestId,
-      exactRetryMessage: changedExactPayload ? null : state.exactRetryMessage,
+      exactRetryPayload: changedExactPayload ? null : state.exactRetryPayload,
+      sendError: changedExactPayload ? null : state.sendError,
+    );
+  }
+
+  void selectScope(CoachContextScope scope) {
+    _updateContext(scope: scope);
+  }
+
+  void selectPatternHorizon(CoachPatternHorizon horizon) {
+    _updateContext(patternHorizon: horizon);
+  }
+
+  void selectFocusSession(String focusSessionId) {
+    final normalized = focusSessionId.trim().toLowerCase();
+    if (!state.contextOptions.focusOptions.any(
+      (option) => option.focusSessionId == normalized,
+    )) {
+      return;
+    }
+    _updateContext(selectedFocusSessionId: normalized);
+  }
+
+  void _updateContext({
+    CoachContextScope? scope,
+    CoachPatternHorizon? patternHorizon,
+    Object? selectedFocusSessionId = _unset,
+  }) {
+    if (state.isSending) return;
+    final nextScope = scope ?? state.selectedScope;
+    final nextHorizon = patternHorizon ?? state.patternHorizon;
+    final nextFocusId = identical(selectedFocusSessionId, _unset)
+        ? state.selectedFocusSessionId
+        : selectedFocusSessionId as String?;
+    if (nextScope == state.selectedScope &&
+        nextHorizon == state.patternHorizon &&
+        nextFocusId == state.selectedFocusSessionId) {
+      return;
+    }
+    final nextContext = _contextFor(
+      scope: nextScope,
+      patternHorizon: nextHorizon,
+      focusSessionId: nextFocusId,
+    );
+    final changedExactPayload = state.exactRetryPayload != null &&
+        state.exactRetryPayload!.context != nextContext;
+    state = state.copyWith(
+      selectedScope: nextScope,
+      patternHorizon: nextHorizon,
+      selectedFocusSessionId: nextFocusId,
+      requestId: changedExactPayload ? newClientUuid() : state.requestId,
+      exactRetryPayload: changedExactPayload ? null : state.exactRetryPayload,
       sendError: changedExactPayload ? null : state.sendError,
     );
   }
@@ -224,10 +363,19 @@ class CoachController extends StateNotifier<CoachState> {
     if (state.isSending) return false;
     final capabilities = state.capabilities;
     final message = state.draft.trim();
+    final context = state.selectedContext;
     if (message.isEmpty || message.runes.length > coachMessageCodepoints) {
       state = state.copyWith(
         sendError: const CoachInputException(
           'Enter 1 to 2,000 Unicode code points before sending.',
+        ),
+      );
+      return false;
+    }
+    if (context == null || !state.contextIsValid) {
+      state = state.copyWith(
+        sendError: const CoachInputException(
+          'Choose an available Coach context before sending.',
         ),
       );
       return false;
@@ -253,7 +401,9 @@ class CoachController extends StateNotifier<CoachState> {
     }
 
     var requestId = state.requestId;
-    if (state.exactRetryMessage != null && state.exactRetryMessage != message) {
+    final exactRetry = state.exactRetryPayload;
+    if (exactRetry != null &&
+        (exactRetry.message != message || exactRetry.context != context)) {
       requestId = newClientUuid();
     }
     state = state.copyWith(
@@ -265,6 +415,7 @@ class CoachController extends StateNotifier<CoachState> {
       final response = await _repository.respond(
         requestId: requestId,
         message: message,
+        context: context,
         receiveTimeout: Duration(
           seconds: capabilities.limits.timeoutSeconds +
               coachResponseTimeoutMargin.inSeconds,
@@ -277,7 +428,7 @@ class CoachController extends StateNotifier<CoachState> {
         isSending: false,
         draft: '',
         requestId: newClientUuid(),
-        exactRetryMessage: null,
+        exactRetryPayload: null,
         sendError: null,
         latestResponse: response,
         latestMessage: message,
@@ -290,7 +441,9 @@ class CoachController extends StateNotifier<CoachState> {
         isSending: false,
         sendError: error,
         requestId: preserveIdentity ? requestId : newClientUuid(),
-        exactRetryMessage: preserveIdentity ? message : null,
+        exactRetryPayload: preserveIdentity
+            ? CoachRetryPayload(message: message, context: context)
+            : null,
       );
       return false;
     }
@@ -393,6 +546,21 @@ class CoachController extends StateNotifier<CoachState> {
     super.dispose();
   }
 }
+
+CoachContextSelection? _contextFor({
+  required CoachContextScope scope,
+  required CoachPatternHorizon patternHorizon,
+  required String? focusSessionId,
+}) =>
+    switch (scope) {
+      CoachContextScope.today => const CoachContextSelection.today(),
+      CoachContextScope.patterns =>
+        CoachContextSelection.patterns(patternHorizon),
+      CoachContextScope.focus => focusSessionId == null
+          ? null
+          : CoachContextSelection.focus(focusSessionId),
+      CoachContextScope.review => const CoachContextSelection.review(),
+    };
 
 bool coachFailurePreservesRequestIdentity(Object error) {
   if (error is CoachRemoteException) return error.preservesRequestIdentity;

@@ -59,8 +59,10 @@ readable after sanitization. V2 has no friction context, risk, reason, or
 evidence. Stress, sleep, energy, day shape, workload, and active Tasks continue
 to drive classification. `push` requires at least one active Task.
 
-New Coach requests use `controlled-coach-prompt-v2` and `coach-context-v2`.
-They load no Goals, onboarding preference, coaching style, or friction fields.
+Current Coach V2 requests use `controlled-coach-prompt-v3` and
+`coach-context-v3`; compatible V1 Today requests retain paired
+`controlled-coach-prompt-v2` and `coach-context-v2` provenance. Neither path
+loads Goals, onboarding preference, coaching style, or friction fields.
 Persisted V1 Coach responses and history remain readable and replay-compatible.
 
 Briefings and Weekly Reviews do not load Goals. The V1 Weekly Review field

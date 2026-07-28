@@ -9,12 +9,15 @@ from app.core.config import Settings
 from app.models.coach import (
     COACH_CAPABILITIES_CONTRACT_VERSION,
     COACH_CONTEXT_VERSION,
+    COACH_CONTEXT_V3_VERSION,
     COACH_HISTORY_CONTRACT_VERSION,
     COACH_MAX_SELECTED_MEMORIES,
     COACH_MEMORY_SELECTION_CONTRACT_VERSION,
     COACH_PROMPT_VERSION,
+    COACH_PROMPT_V3_VERSION,
     COACH_RESPONSE_CONTRACT_VERSION,
     CoachCapabilitiesResponse,
+    CoachContextOptionsResponse,
     CoachErrorDetail,
     CoachHistoryDeleteResponse,
     CoachHistoryResponse,
@@ -35,9 +38,15 @@ from app.repositories.coach_repository import (
 from app.services.coach_context import CoachContextService
 from app.services.coach_prompt import build_coach_prompt
 from app.services.coach_safety import (
+    force_historical_evidence_uncertainty,
     force_missing_state_uncertainty,
     post_provider_safety,
     pre_provider_safety,
+)
+from app.services.coach_evidence_service import (
+    CoachEvidenceAnalysisDisabled,
+    CoachEvidenceFocusNotFound,
+    CoachEvidenceTimeout,
 )
 
 
@@ -128,6 +137,7 @@ class CoachService:
 
     async def respond(self, *, user_id: str, request: CoachRequest) -> CoachResponse:
         identity = self._configured_identity()
+        prompt_version, context_version = self._versions(request)
         profile = await self._eligible_profile(user_id=user_id)
         try:
             local_date = self._local_date(profile.timezone)
@@ -142,19 +152,21 @@ class CoachService:
         now = self._now()
         try:
             claim = await self._repository.claim_request(
+                contract_version=request.contract_version,
                 user_id=user_id,
                 request_id=request.request_id,
                 message_fingerprint=hashlib.sha256(
                     request.message.encode("utf-8"),
                 ).hexdigest(),
                 context_scope=request.context_scope,
+                context_parameters=request.context_parameters or {},
                 local_date=local_date,
                 provider=identity[0],
                 provider_mode=identity[1],
                 model_requested=identity[2],
                 model_source=identity[3],
-                prompt_version=COACH_PROMPT_VERSION,
-                context_version=COACH_CONTEXT_VERSION,
+                prompt_version=prompt_version,
+                context_version=context_version,
                 claimed_at=now,
                 lease_expires_at=now
                 + timedelta(
@@ -205,6 +217,8 @@ class CoachService:
                 model_reported=None,
                 source="deterministic_safety",
                 provider_called=False,
+                prompt_version=prompt_version,
+                context_version=context_version,
             )
             return await self._complete(
                 user_id=user_id,
@@ -236,11 +250,79 @@ class CoachService:
             )
 
         try:
-            context = await self._context_service.build_today(
-                user_id=user_id,
-                local_date=local_date,
+            context = (
+                await self._context_service.build(
+                    user_id=user_id,
+                    local_date=local_date,
+                    request=request,
+                )
+                if request.is_v2
+                else await self._context_service.build_today(
+                    user_id=user_id,
+                    local_date=local_date,
+                )
             )
-            prompt = build_coach_prompt(message=request.message, context=context)
+            prompt = build_coach_prompt(
+                message=request.message,
+                context=context,
+                prompt_version=prompt_version,
+            )
+        except CoachEvidenceAnalysisDisabled as exc:
+            error = CoachErrorDetail(
+                code="context_failure",
+                message=(
+                    "Personal pattern analysis is disabled in Personal learning."
+                ),
+                retryable=False,
+            )
+            await self._record_failure(
+                user_id=user_id,
+                request_id=request.request_id,
+                error=error,
+                provider_called=False,
+            )
+            raise CoachServiceError(
+                error.code,
+                error.message,
+                retryable=False,
+                status_code=409,
+            ) from exc
+        except CoachEvidenceFocusNotFound as exc:
+            error = CoachErrorDetail(
+                code="context_failure",
+                message="The selected Focus session is unavailable.",
+                retryable=False,
+            )
+            await self._record_failure(
+                user_id=user_id,
+                request_id=request.request_id,
+                error=error,
+                provider_called=False,
+            )
+            raise CoachServiceError(
+                error.code,
+                error.message,
+                retryable=False,
+                status_code=404,
+            ) from exc
+        except CoachEvidenceTimeout as exc:
+            error = CoachErrorDetail(
+                code="context_failure",
+                message="Coach historical evidence timed out.",
+                retryable=True,
+            )
+            await self._record_failure(
+                user_id=user_id,
+                request_id=request.request_id,
+                error=error,
+                provider_called=False,
+            )
+            raise CoachServiceError(
+                error.code,
+                error.message,
+                retryable=True,
+                status_code=503,
+            ) from exc
         except Exception as exc:
             error = CoachErrorDetail(
                 code="context_failure",
@@ -269,9 +351,16 @@ class CoachService:
                 provider_result.output,
                 message=request.message,
             )
-            output = force_missing_state_uncertainty(
-                safety_result.output,
-                daily_state_freshness=context.daily_state_freshness,
+            output = (
+                force_missing_state_uncertainty(
+                    safety_result.output,
+                    daily_state_freshness=context.daily_state_freshness,
+                )
+                if request.context_scope == "today"
+                else force_historical_evidence_uncertainty(
+                    safety_result.output,
+                    evidence_status=context.evidence_status,
+                )
             )
         except CoachProviderError as exc:
             error = CoachErrorDetail(
@@ -343,6 +432,8 @@ class CoachService:
                 else "model"
             ),
             provider_called=True,
+            prompt_version=prompt_version,
+            context_version=context_version,
         )
         return await self._complete(
             user_id=user_id,
@@ -351,6 +442,25 @@ class CoachService:
             prompt_bytes=len(prompt.encode("utf-8")),
             context_bytes=context.byte_count,
         )
+
+    async def context_options(
+        self,
+        *,
+        user_id: str,
+    ) -> CoachContextOptionsResponse:
+        profile = await self._eligible_profile(user_id=user_id)
+        try:
+            return await self._context_service.context_options(
+                user_id=user_id,
+                timezone=profile.timezone,
+            )
+        except Exception as exc:
+            raise CoachServiceError(
+                "context_failure",
+                "Coach context options could not be loaded.",
+                retryable=True,
+                status_code=503,
+            ) from exc
 
     async def history(self, *, user_id: str) -> CoachHistoryResponse:
         await self._eligible_profile(user_id=user_id)
@@ -524,6 +634,8 @@ class CoachService:
         model_reported: str | None,
         source: str,
         provider_called: bool,
+        prompt_version: str,
+        context_version: str,
     ) -> CoachResponse:
         return CoachResponse(
             contract_version=COACH_RESPONSE_CONTRACT_VERSION,
@@ -540,12 +652,18 @@ class CoachService:
                 "model_requested": identity[2],
                 "model_reported": model_reported,
                 "model_source": identity[3],
-                "prompt_version": COACH_PROMPT_VERSION,
-                "context_version": COACH_CONTEXT_VERSION,
+                "prompt_version": prompt_version,
+                "context_version": context_version,
                 "generated_at": self._now(),
                 "provider_called": provider_called,
             },
         )
+
+    @staticmethod
+    def _versions(request: CoachRequest) -> tuple[str, str]:
+        if request.is_v2:
+            return COACH_PROMPT_V3_VERSION, COACH_CONTEXT_V3_VERSION
+        return COACH_PROMPT_VERSION, COACH_CONTEXT_VERSION
 
     def _configured_identity(self) -> tuple[str, str, str | None, str]:
         if self._settings.coach_provider == "local_codex_oauth":

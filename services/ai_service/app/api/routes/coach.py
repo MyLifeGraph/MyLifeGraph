@@ -8,6 +8,7 @@ from app.api.deps.auth import Principal, get_current_principal
 from app.api.deps.coach import get_coach_service
 from app.models.coach import (
     CoachCapabilitiesResponse,
+    CoachContextOptionsResponse,
     CoachErrorDetail,
     CoachHistoryDeleteResponse,
     CoachHistoryResponse,
@@ -45,6 +46,19 @@ async def respond_to_coach(
     request = await _parse_model(http_request, CoachRequest)
     try:
         return await service.respond(user_id=principal.user_id, request=request)
+    except CoachServiceError as exc:
+        raise _http_error(exc) from exc
+    except Exception as exc:
+        raise _generic_error() from exc
+
+
+@router.get("/context-options", response_model=CoachContextOptionsResponse)
+async def get_coach_context_options(
+    principal: Principal = Depends(get_current_principal),
+    service: CoachService = Depends(get_coach_service),
+) -> CoachContextOptionsResponse:
+    try:
+        return await service.context_options(user_id=principal.user_id)
     except CoachServiceError as exc:
         raise _http_error(exc) from exc
     except Exception as exc:

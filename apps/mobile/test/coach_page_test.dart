@@ -33,6 +33,10 @@ void main() {
 
     expect(find.text('Coach preview'), findsOneWidget);
     expect(find.text('Development Coach ready'), findsOneWidget);
+    expect(find.text('Choose Coach context'), findsOneWidget);
+    for (final label in ['Today', 'Patterns', 'Focus', 'Review']) {
+      expect(find.text(label), findsOneWidget);
+    }
     expect(find.text('Ask Coach'), findsNWidgets(2));
     expect(find.text('Conversation history'), findsOneWidget);
     expect(find.text('Selected memories'), findsOneWidget);
@@ -53,6 +57,10 @@ void main() {
 
     expect(repository.respondMessages, ['How should I pace today?']);
     expect(repository.respondRequestIds, hasLength(1));
+    expect(
+      repository.respondContexts.single,
+      const CoachContextSelection.today(),
+    );
     expect(repository.responseTimeouts, [const Duration(seconds: 55)]);
     expect(
       tester
@@ -80,11 +88,11 @@ void main() {
     await tester.tap(find.text('Provider and model'));
     await tester.pumpAndSettle();
     expect(
-      find.textContaining('Prompt version: controlled-coach-prompt-v2'),
+      find.textContaining('Prompt version: controlled-coach-prompt-v3'),
       findsOneWidget,
     );
     expect(
-      find.textContaining('Context version: coach-context-v2'),
+      find.textContaining('Context version: coach-context-v3'),
       findsOneWidget,
     );
     expect(find.textContaining('Provider called: yes'), findsOneWidget);
@@ -124,6 +132,124 @@ void main() {
       find.text('Protect one focused block, then reassess your energy.'),
       findsOneWidget,
     );
+  });
+
+  testWidgets('context controls preserve draft and send exact selected mode',
+      (tester) async {
+    final repository = _FakeCoachRepository();
+    await _pumpPage(tester, repository);
+
+    await tester.enterText(
+      find.byKey(const Key('coach-message-field')),
+      'Keep this draft while the context changes.',
+    );
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('coach-context-patterns')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('90 days'), findsOneWidget);
+    expect(find.text('1 year'), findsOneWidget);
+    expect(find.text('All available'), findsOneWidget);
+    expect(
+      tester
+          .widget<TextField>(find.byKey(const Key('coach-message-field')))
+          .controller!
+          .text,
+      'Keep this draft while the context changes.',
+    );
+
+    await tester.tap(find.text('1 year'));
+    await tester.pump();
+    await _scrollTo(tester, find.text('What changed?'));
+    await tester.tap(find.text('What changed?'));
+    await tester.pump();
+    expect(repository.respondMessages, isEmpty);
+    expect(
+      tester
+          .widget<TextField>(find.byKey(const Key('coach-message-field')))
+          .controller!
+          .text,
+      contains('What changed in my study patterns'),
+    );
+
+    await _scrollTo(tester, find.byKey(const Key('coach-send-button')));
+    await tester.tap(find.byKey(const Key('coach-send-button')));
+    await tester.pumpAndSettle();
+
+    expect(repository.respondContexts, hasLength(1));
+    expect(repository.respondContexts.single.scope, CoachContextScope.patterns);
+    expect(
+      repository.respondContexts.single.patternHorizon,
+      CoachPatternHorizon.year1,
+    );
+  });
+
+  testWidgets('Focus defaults to rated session and permits explicit selection',
+      (tester) async {
+    final repository = _FakeCoachRepository();
+    await _pumpPage(tester, repository);
+
+    await tester.tap(find.byKey(const ValueKey('coach-context-focus')));
+    await tester.pumpAndSettle();
+    expect(find.text('Jul 27, 2026, 09:30'), findsOneWidget);
+    expect(find.textContaining('Rated'), findsOneWidget);
+
+    await tester.tap(
+      find.byKey(const ValueKey('coach-focus-session-picker')),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Choose a Focus session'), findsOneWidget);
+    await tester.tap(find.text('Jul 25, 2026, 15:15'));
+    await tester.pumpAndSettle();
+
+    await _scrollTo(tester, find.byKey(const Key('coach-message-field')));
+    await tester.enterText(
+      find.byKey(const Key('coach-message-field')),
+      'Help me reflect on this session.',
+    );
+    await tester.pump();
+    await _scrollTo(tester, find.byKey(const Key('coach-send-button')));
+    await tester.tap(find.byKey(const Key('coach-send-button')));
+    await tester.pumpAndSettle();
+
+    expect(
+      repository.respondContexts.single.focusSessionId,
+      coachSecondFocusSessionId,
+    );
+  });
+
+  testWidgets('context controls remain usable at 320 pixels and 200% text',
+      (tester) async {
+    final repository = _FakeCoachRepository();
+    await _pumpPage(
+      tester,
+      repository,
+      physicalSize: const Size(320, 1000),
+      textScale: 2,
+    );
+
+    for (final scope in CoachContextScope.values) {
+      final control = find.byKey(ValueKey('coach-context-${scope.code}'));
+      await _scrollTo(tester, control);
+      await tester.tap(control);
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+    }
+    expect(
+      find.byKey(const ValueKey('coach-focus-session-picker')),
+      findsNothing,
+    );
+    await _scrollTo(
+      tester,
+      find.byKey(const ValueKey('coach-context-focus')),
+    );
+    await tester.tap(find.byKey(const ValueKey('coach-context-focus')));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey('coach-focus-session-picker')),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('provider outage keeps history and memory controls available',
@@ -333,6 +459,7 @@ Future<void> _pumpPage(
   WidgetTester tester,
   _FakeCoachRepository repository, {
   Size physicalSize = const Size(1200, 2000),
+  double textScale = 1,
 }) async {
   tester.view.physicalSize = physicalSize;
   tester.view.devicePixelRatio = 1;
@@ -343,7 +470,15 @@ Future<void> _pumpPage(
   await tester.pumpWidget(
     ProviderScope(
       overrides: [coachRepositoryProvider.overrideWithValue(repository)],
-      child: const MaterialApp(home: Scaffold(body: CoachPage())),
+      child: MaterialApp(
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(context).copyWith(
+            textScaler: TextScaler.linear(textScale),
+          ),
+          child: child!,
+        ),
+        home: const Scaffold(body: CoachPage()),
+      ),
     ),
   );
   await tester.pumpAndSettle();
@@ -363,19 +498,24 @@ class _FakeCoachRepository implements CoachRepository {
     CoachCapabilities? capability,
     CoachHistory? history,
     CoachMemorySelection? memories,
+    CoachContextOptions? contextOptions,
     this.respondError,
   })  : capability =
             capability ?? CoachCapabilities.fromJson(coachCapabilitiesJson()),
         history = history ?? CoachHistory.empty(),
-        memories = memories ?? CoachMemorySelection.empty();
+        memories = memories ?? CoachMemorySelection.empty(),
+        contextOptions = contextOptions ??
+            CoachContextOptions.fromJson(coachContextOptionsJson());
 
   CoachCapabilities capability;
   CoachHistory history;
   CoachMemorySelection memories;
+  CoachContextOptions contextOptions;
   final Object? respondError;
   int deleteHistoryCalls = 0;
   final List<String> respondRequestIds = [];
   final List<String> respondMessages = [];
+  final List<CoachContextSelection> respondContexts = [];
   final List<Duration> responseTimeouts = [];
   final List<String> selectedMemoryIds = [];
   final List<String> deselectedMemoryIds = [];
@@ -390,13 +530,18 @@ class _FakeCoachRepository implements CoachRepository {
   Future<CoachMemorySelection> getMemories() async => memories;
 
   @override
+  Future<CoachContextOptions> getContextOptions() async => contextOptions;
+
+  @override
   Future<CoachResponse> respond({
     required String requestId,
     required String message,
+    required CoachContextSelection context,
     required Duration receiveTimeout,
   }) async {
     respondRequestIds.add(requestId);
     respondMessages.add(message);
+    respondContexts.add(context);
     responseTimeouts.add(receiveTimeout);
     if (respondError != null) throw respondError!;
     capability = CoachCapabilities.fromJson(

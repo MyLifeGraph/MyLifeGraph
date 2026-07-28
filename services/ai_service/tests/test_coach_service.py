@@ -125,6 +125,10 @@ class ContextService:
         self.calls.append(kwargs)
         return self.package
 
+    async def build(self, **kwargs):
+        self.calls.append(kwargs)
+        return self.package
+
 
 class Provider:
     def __init__(self, *, error=None) -> None:
@@ -171,6 +175,33 @@ def test_normal_turn_forces_high_uncertainty_for_missing_daily_state() -> None:
     assert completed["usage"]["provider_called"] is True
     assert completed["usage"]["context_bytes"] == context.package.byte_count
     assert completed["usage"]["reply_codepoints"] == len(response.reply)
+
+
+def test_v2_claims_parameters_uses_v3_and_forces_partial_uncertainty() -> None:
+    service, repository, context, _ = _service()
+    context.package = CoachContextPackage(
+        serialized=(
+            '{"context_scope":"patterns","context_parameters":{"horizon":"1_year"},'
+            '"contract_version":"coach-context-v3","sources":{}}'
+        ),
+        used_context=[],
+        daily_state_freshness="not_applicable",
+        daily_state_quality="not_applicable",
+        evidence_status="partial",
+    )
+
+    response = asyncio.run(
+        service.respond(user_id=USER_ID, request=_request_v2()),
+    )
+
+    claim = repository.claim_calls[0]
+    assert claim["contract_version"] == "coach-request-v2"
+    assert claim["context_parameters"] == {"horizon": "1_year"}
+    assert claim["prompt_version"] == "controlled-coach-prompt-v3"
+    assert claim["context_version"] == "coach-context-v3"
+    assert response.provenance.prompt_version == "controlled-coach-prompt-v3"
+    assert response.uncertainty.level == "high"
+    assert "partially processed" in response.uncertainty.reason
 
 
 def test_completed_replay_returns_exact_response_without_context_or_provider() -> None:
@@ -426,4 +457,14 @@ def _request(*, message="Help me plan one step.") -> CoachRequest:
         request_id=REQUEST_ID,
         message=message,
         context_scope="today",
+    )
+
+
+def _request_v2() -> CoachRequest:
+    return CoachRequest(
+        contract_version="coach-request-v2",
+        request_id=REQUEST_ID,
+        message="What changed?",
+        context_scope="patterns",
+        context_parameters={"horizon": "1_year"},
     )

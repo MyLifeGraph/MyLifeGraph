@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -462,6 +464,142 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('Stored insights and previous AI notes'), findsNothing);
+  });
+
+  testWidgets(
+      'every correlation-window switch keeps exploration open and scroll stable',
+      (tester) async {
+    final requestedWindows = <int>[];
+    final pendingWindows = <int>[];
+    final pendingReports = <Completer<CorrelationReport>>[];
+    var isInitialRequest = true;
+
+    CorrelationReport reportFor({
+      required int windowDays,
+      required int sampleSize,
+      required String summary,
+    }) =>
+        CorrelationReport(
+          windowDays: windowDays,
+          metrics: correlationMetrics,
+          points: const [],
+          results: [
+            CorrelationResult(
+              metricAId: 'sleep_hours',
+              metricBId: 'useful_progress',
+              sampleSize: sampleSize,
+              coefficient: 0.42,
+              summary: summary,
+            ),
+          ],
+        );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          _demoSurfaceOverride(),
+          insightsProvider.overrideWith((ref) async => const []),
+          correlationReportProvider.overrideWith((ref) {
+            final windowDays = ref.watch(insightsWindowDaysProvider);
+            requestedWindows.add(windowDays);
+            if (isInitialRequest) {
+              isInitialRequest = false;
+              return Future.value(
+                reportFor(
+                  windowDays: windowDays,
+                  sampleSize: 14,
+                  summary: 'Fourteen-day chart data.',
+                ),
+              );
+            }
+            final pending = Completer<CorrelationReport>();
+            pendingWindows.add(windowDays);
+            pendingReports.add(pending);
+            return pending.future;
+          }),
+          skillsetProfileProvider.overrideWith(
+            (ref) async => _skillsetProfile(),
+          ),
+        ],
+        child: MaterialApp(
+          theme: AppTheme.light,
+          home: const Scaffold(body: InsightsPage()),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.scrollUntilVisible(
+      find.text('Advanced correlation exploration'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.tap(find.text('Advanced correlation exploration'));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text('90d'),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pumpAndSettle();
+
+    final scrollable = tester.state<ScrollableState>(
+      find.byType(Scrollable).first,
+    );
+    final scrollOffsetBefore = scrollable.position.pixels;
+    expect(scrollOffsetBefore, greaterThan(0));
+    expect(find.text('Trend overlay'), findsOneWidget);
+    expect(find.text('Fourteen-day chart data.'), findsOneWidget);
+
+    var visibleSummary = 'Fourteen-day chart data.';
+    Future<void> selectWindow(int windowDays) async {
+      final pendingBefore = pendingReports.length;
+      await tester.tap(find.text('${windowDays}d'));
+      await tester.pump();
+
+      expect(requestedWindows.last, windowDays);
+      expect(pendingReports, hasLength(pendingBefore + 1));
+      expect(pendingWindows.last, windowDays);
+      expect(find.text('Trend overlay'), findsOneWidget);
+      expect(find.text(visibleSummary), findsOneWidget);
+      expect(
+        scrollable.position.pixels,
+        closeTo(scrollOffsetBefore, 0.01),
+      );
+      expect(
+        tester
+            .widget<SegmentedButton<int>>(find.byType(SegmentedButton<int>))
+            .selected,
+        {windowDays},
+      );
+
+      final nextSummary =
+          'Window $windowDays chart data request ${pendingReports.length}.';
+      pendingReports.last.complete(
+        reportFor(
+          windowDays: windowDays,
+          sampleSize: 42,
+          summary: nextSummary,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Trend overlay'), findsOneWidget);
+      expect(find.text(nextSummary), findsOneWidget);
+      expect(
+        scrollable.position.pixels,
+        closeTo(scrollOffsetBefore, 0.01),
+      );
+      visibleSummary = nextSummary;
+    }
+
+    // Starting at 14d, this path exercises every directed switch between the
+    // four available windows exactly once.
+    for (final windowDays in [7, 30, 14, 90, 30, 7, 90, 14, 30, 90, 7, 14]) {
+      await selectWindow(windowDays);
+    }
+
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('matrix cells expose their metric pair, result, and selection',
