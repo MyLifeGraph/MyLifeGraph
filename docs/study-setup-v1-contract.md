@@ -248,3 +248,10 @@ Focused coverage must prove:
 Repository tests and local Supabase/browser verification establish only the
 current local checkout. They do not prove remote migration state, installed-
 device timer behavior, longitudinal study outcomes, or production scheduling.
+
+## Visual presentation
+
+Setup and Study Setup use the shared
+[Frontend Visual System V2](frontend-visual-system-v2.md). The visual migration
+does not change optional fields, revision ownership, recovery reservations,
+semester bounds, or Planner/Deadline confirmation guards.

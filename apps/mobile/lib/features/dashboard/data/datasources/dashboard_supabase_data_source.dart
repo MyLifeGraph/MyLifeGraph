@@ -13,21 +13,16 @@ class DashboardSupabaseDataSource {
   final SupabaseClient _client;
   final Future<String> Function()? _resolveUserId;
 
-  Future<DashboardSnapshot> getSnapshot() async {
+  Future<DashboardSnapshot> getSnapshot({DateTime? throughLocalDate}) async {
     final resolver = _resolveUserId;
     final userId = resolver == null
         ? await AppUserResolver(_client).resolveUserId()
         : await resolver();
     final results = await Future.wait([
-      _client
-          .from(SupabaseTables.dailyLogs)
-          .select(
-            'entry_date,mood_score,energy_level,sleep_hours,stress_level,'
-            'focus_minutes,steps,activity_level,screen_time_hours,metadata',
-          )
-          .eq('user_id', userId)
-          .order('entry_date', ascending: false)
-          .limit(60),
+      _loadDailyLogs(
+        userId: userId,
+        throughLocalDate: throughLocalDate,
+      ),
       _client
           .from(SupabaseTables.tasks)
           .select(
@@ -65,7 +60,33 @@ class DashboardSupabaseDataSource {
       ],
       scheduleRows: List<Map<String, dynamic>>.from(results[3] as List),
       loadedAt: DateTime.now(),
+      throughLocalDate: throughLocalDate,
     );
+  }
+
+  Future<List<Map<String, dynamic>>> _loadDailyLogs({
+    required String userId,
+    DateTime? throughLocalDate,
+  }) async {
+    final query = _client
+        .from(SupabaseTables.dailyLogs)
+        .select(
+          'entry_date,mood_score,energy_level,sleep_hours,stress_level,'
+          'focus_minutes,steps,activity_level,screen_time_hours,metadata',
+        )
+        .eq('user_id', userId);
+    final rows = throughLocalDate == null
+        ? await query.order('entry_date', ascending: false).limit(60)
+        : await query
+            .lte(
+              'entry_date',
+              '${throughLocalDate.year.toString().padLeft(4, '0')}-'
+                  '${throughLocalDate.month.toString().padLeft(2, '0')}-'
+                  '${throughLocalDate.day.toString().padLeft(2, '0')}',
+            )
+            .order('entry_date', ascending: false)
+            .limit(60);
+    return List<Map<String, dynamic>>.from(rows);
   }
 }
 
@@ -77,13 +98,29 @@ class DashboardSnapshotMapper {
     required List<Map<String, dynamic>> taskRows,
     required List<Map<String, dynamic>> scheduleRows,
     required DateTime loadedAt,
+    DateTime? throughLocalDate,
   }) {
+    final allowedDailyLogs = dailyLogs.where((row) {
+      if (throughLocalDate == null) return true;
+      final entryDate = DateTime.tryParse('${row['entry_date'] ?? ''}');
+      if (entryDate == null) return false;
+      final lastAllowed = DateTime(
+        throughLocalDate.year,
+        throughLocalDate.month,
+        throughLocalDate.day,
+      );
+      return !entryDate.isAfter(lastAllowed);
+    }).toList(growable: false);
     return DashboardSnapshot(
       origin: DashboardOrigin.account,
       loadedAt: loadedAt,
-      latestCheckIn:
-          dailyLogs.isEmpty ? null : _checkInFromRow(dailyLogs.first),
-      checkInStreakDays: _streakDays(dailyLogs, loadedAt),
+      latestCheckIn: allowedDailyLogs.isEmpty
+          ? null
+          : _checkInFromRow(allowedDailyLogs.first),
+      checkInStreakDays: _streakDays(
+        allowedDailyLogs,
+        throughLocalDate ?? loadedAt,
+      ),
       todayPlan: taskRows
           .where((row) => _isVisibleTaskStatus('${row['status']}'))
           .map(_taskToPlanItem)

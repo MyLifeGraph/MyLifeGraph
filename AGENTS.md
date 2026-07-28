@@ -64,6 +64,8 @@ Read these files before making changes:
 23. `docs/personal-learning-v1-contract.md` before changing Focus reflections,
     learning preferences, personal patterns, shared sleep parsing, learned
     Planner timing, or the recommendation-cleanup follow-up
+24. `docs/frontend-visual-system-v2.md` before changing Flutter themes,
+    typography, icons, surfaces, motion, brand assets, or presentation styling
 
 ## Current State
 
@@ -365,6 +367,9 @@ record that actual block allocation used the ordinary Setup fallback sequence.
 - `docs/personal-learning-v1-contract.md` - Focus reflection collection,
   revisioned learning preferences, deterministic 90-day personal patterns,
   optional learned Planner timing, and recommendation cleanup boundaries.
+- `docs/frontend-visual-system-v2.md` - Flutter palette, local typography,
+  brand, icon, surface, motion, accessibility, and visual source-guard
+  contract.
 - `README.md` - high-level project overview.
 
 ## Next Implementation Direction

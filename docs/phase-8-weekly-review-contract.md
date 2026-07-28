@@ -293,3 +293,10 @@ Focused backend, Flutter, migration, and browser coverage must prove:
 
 Documentation or source assertions do not establish an E2E pass. Run the
 current-checkout browser command before claiming the Phase 8 journey passed.
+
+## Visual presentation
+
+Weekly Review uses the shared
+[Frontend Visual System V2](frontend-visual-system-v2.md). Its status surfaces
+and icons do not change facts, freshness, proposals, retry behavior, or the
+explicit confirmation boundary.

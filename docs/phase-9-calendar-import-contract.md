@@ -438,3 +438,10 @@ fixture file; it must not require or claim a real provider account. Source or
 documentation assertions alone do not establish a current-checkout E2E pass.
 The complete combined Phase 3 through Phase 9 browser journey passed this
 contract non-destructively in the 2026-07-13 Phase 9 implementation checkout.
+
+## Visual presentation
+
+Calendar surfaces use the shared
+[Frontend Visual System V2](frontend-visual-system-v2.md). This presentation
+migration does not change consent, import identity, disconnect, deletion, or
+provider-write authority in this contract.

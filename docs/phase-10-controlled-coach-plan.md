@@ -634,3 +634,9 @@ remains open, so Phase 10's full multi-developer acceptance is not complete:
 - automatic memory extraction/promotion;
 - executable Task/Habit/schedule changes from Coach;
 - clinical, diagnostic, therapeutic, or emergency-monitoring features.
+
+## Visual presentation
+
+Coach uses the shared [Frontend Visual System V2](frontend-visual-system-v2.md).
+Its iconography, surfaces, and interaction polish do not alter routing, provider
+selection, persisted context, budgets, safety provenance, or mutation authority.

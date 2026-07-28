@@ -1,4 +1,8 @@
 import 'package:flutter/material.dart';
+
+import 'package:my_life_graph/core/constants/app_radii.dart';
+
+import 'package:my_life_graph/core/theme/app_icons.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
@@ -178,7 +182,7 @@ class _CompactWorkload extends StatelessWidget {
       padding: EdgeInsets.zero,
       child: ExpansionTile(
         key: const ValueKey('today-preparation-workload'),
-        leading: const Icon(Icons.stacked_bar_chart_outlined),
+        leading: const Icon(AppIcons.stackedBarChartOutlined),
         title: const Text('7-day preparation load'),
         subtitle: Text(_summary(workload)),
         childrenPadding: const EdgeInsets.fromLTRB(
@@ -215,7 +219,7 @@ class _CompactWorkload extends StatelessWidget {
               width: double.infinity,
               child: OutlinedButton.icon(
                 onPressed: onOpenPlans,
-                icon: const Icon(Icons.calendar_view_week_outlined),
+                icon: const Icon(AppIcons.calendarViewWeekOutlined),
                 label: const Text('Open preparation plans'),
               ),
             ),
@@ -258,7 +262,7 @@ class _ExpandedWorkload extends StatelessWidget {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Icon(Icons.stacked_bar_chart_outlined),
+              const Icon(AppIcons.stackedBarChartOutlined),
               const SizedBox(width: AppSpacing.sm),
               Expanded(
                 child: Column(
@@ -320,7 +324,7 @@ class _BudgetExplanation extends StatelessWidget {
       padding: const EdgeInsets.all(AppSpacing.sm),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(AppRadii.md),
       ),
       child: Wrap(
         alignment: WrapAlignment.spaceBetween,
@@ -538,7 +542,7 @@ class _WorkloadDayDetail extends StatelessWidget {
               color: data.overBudgetMinutes > 0
                   ? Theme.of(context).colorScheme.errorContainer
                   : Theme.of(context).colorScheme.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(AppRadii.sm),
             ),
             child: Text(
               data.overBudgetMinutes > 0
@@ -604,7 +608,7 @@ class _WorkloadContribution extends StatelessWidget {
                 OutlinedButton.icon(
                   key: ValueKey('workload-replan-${contribution.planId}'),
                   onPressed: () => onReplanPlan!(contribution.planId),
-                  icon: const Icon(Icons.autorenew),
+                  icon: const Icon(AppIcons.autorenew),
                   label: const Text('Replan remaining time'),
                 ),
             ],

@@ -11,30 +11,28 @@ Capture V4, Daily State V2, Exam-Week Outlook V1, or Coach V2 expectations.
 
 ## Current Verified Baseline
 
-The latest fully verified Personal Learning boundary is the commit series
-`0ff4f33` through `de945bb`, together with the verification harness and
-contract documentation recorded by this commit, verified on 2026-07-27. The
-complete FastAPI suite reported `920 passed, 1 skipped`; the final Flutter
-suite passed all `677` tests with clean analysis. A fresh local Supabase reset
-applied the complete repository migration chain and confirmed exact migration
-history. All `50` pgTAP assertions passed, and documentation consistency
-passed across 48 Markdown files and 61 FastAPI routes. The focused browser
-journey reported
-`Focused Personal learning browser smoke passed for
-e2e-1785147001@example.test`, and the full reset-backed browser journey
-reported `E2E browser smoke passed for e2e-1785147601@example.test`.
+The current working tree was verified on 2026-07-28 after the frontend visual
+follow-up and presentation-demo seed changes. The complete FastAPI suite
+reported `927 passed, 1 skipped`; the standard gate completed clean analysis
+and all `693` Flutter tests. Documentation consistency passed across 50
+Markdown files and 61 FastAPI routes. Local Supabase migration history matched
+the repository, and the final non-reset full browser journey reported
+`E2E browser smoke passed for e2e-1785229855@example.test` with the
+deterministic fake Coach provider.
 
-That focused run covered a real terminal Focus session and reflection prompt,
-Evening editing, a stable 37-rating fixture, Insights evidence, a free learned
-time window, an occupied learned window with exact Setup-fallback provenance,
-Account Export, retry-safe reflection-history clearing, and the full
-account-deletion cascade. The full browser journey covered the existing
-repository-wide product flow and that same Personal Learning path after
-recreating the local database from the complete migration chain. This is
-local, deterministic checkout evidence only. It does not establish remote
-migration state, installed-device behavior, deployed scheduling, a production
-model provider, clinical or academic outcomes, longitudinal results, or
-participant evidence.
+The presentation seed then completed successfully for a second time after the
+browser run. It recreated and credential-checked the fresh onboarding account
+plus the three populated identities, verified the fresh profile/default
+projections and empty product/ledger state, and restored the validated Student
+feature fixture. The most recent fresh-database migration-chain and 50-assertion
+pgTAP evidence remains the 2026-07-27 Personal Learning baseline at commit
+series `0ff4f33` through `de945bb`; no migration changed in the 2026-07-28
+working tree.
+
+This is local, deterministic working-tree evidence only. It does not establish
+remote migration state, installed-device behavior, deployed scheduling, a
+production model provider, clinical or academic outcomes, longitudinal
+results, or participant evidence.
 
 This section is the only source for the repository's current exact verification
 counts, commit id, and E2E identity. Current docs link here instead of copying
@@ -136,6 +134,8 @@ FLUTTER_BIN=/path/to/flutter scripts/verify.sh
 
 The script runs:
 
+- `node --test scripts/check_frontend_visual_contract.test.mjs`
+- `node scripts/check_frontend_visual_contract.mjs`
 - `node --test scripts/seed_demo_contract.test.mjs`
 - `node --test scripts/check_docs_consistency.test.mjs`
 - `node scripts/check_docs_consistency.mjs`
@@ -156,6 +156,17 @@ The fast documentation-only command is:
 ```bash
 npm run verify:docs
 ```
+
+The frontend-only visual source contract is:
+
+```bash
+npm run verify:visual
+```
+
+It pins the local font/icon/brand foundation and rejects new uncontrolled
+Material icons, gradients, colors, radii, fonts, and route-local text styles.
+It complements rather than replaces viewport screenshots, accessibility
+checks, and human visual review. See `docs/frontend-visual-system-v2.md`.
 
 It checks local Markdown links and anchors; code-owned Capture, Daily State,
 Coach, and Exam-Week Outlook versions; the newest migration references;
@@ -410,7 +421,8 @@ Personal Learning V1 focused coverage must prove:
   preference dependency, exact update replay, retry-safe confirmed clear,
   40-table export inclusion, ledger omission, and account cascade;
 - backend disabled-before-evidence short-circuit, profile timezone and DST,
-  strict shared V4 sleep parsing, sleep-before-session and 36-hour bounds,
+  strict shared V4 sleep parsing, exact local wake/Focus-date matching,
+  sleep-before-session ordering, rejected prior-day 36-hour fallback,
   repeated-episode daily collapse, Morning capture-time ordering, every
   maturity state, low coverage, mixed halves, night exclusion, alternate safe
   window selection, and deterministic used-evidence fingerprints;
@@ -418,10 +430,19 @@ Personal Learning V1 focused coverage must prove:
   unavailable evidence, unchanged duration/Recovery, deadline/budget/Calendar
   conflicts, permission disable before confirmation, exact immutable
   provenance, and unchanged active plans; and
-- Recommendation profile-local windows, real terminal Focus abandonment
-  threshold, valid sleep quality/target-deviation input, measured movement
-  only, and atomic replacement of obsolete current cards while retaining
-  history.
+- Recommendation profile-local windows with future-row exclusion, real terminal
+  Focus abandonment threshold, valid sleep quality/target-deviation input,
+  exact strongest-field sleep/movement provenance, measured movement only, and
+  atomic replacement of obsolete current cards while retaining history.
+
+Flutter Personal Learning coverage additionally proves non-negative shortfall
+derivation, planned/actual rated daily sums, the two centralized overlapping
+pair blocks, exact 7/14-day evidence thresholds, descriptive-only sleep and
+outcome pairs, Trend timing/normalization copy, complete metric labels,
+Dashboard future-check-in exclusion, and the 320-pixel/200%-text matrix.
+Exam-Week Outlook coverage rejects future Evening and Morning rows before
+selection. Daily State regression coverage keeps Morning sleep current only on
+the exact target date.
 
 The exact boundary is `docs/personal-learning-v1-contract.md`.
 

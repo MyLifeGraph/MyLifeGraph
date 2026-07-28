@@ -11,6 +11,17 @@ enum NotificationActionTarget {
   const NotificationActionTarget(this.location);
 
   final String location;
+
+  String get openLabel => switch (this) {
+        NotificationActionTarget.dashboard => 'Open Today',
+        NotificationActionTarget.insights => 'Open Insights',
+        NotificationActionTarget.quickAction => 'Open quick actions',
+        NotificationActionTarget.dailyCheckIn => 'Open check-in',
+        NotificationActionTarget.habitCompletion => 'Open habits',
+        NotificationActionTarget.habitManagement => 'Open habits',
+        NotificationActionTarget.weeklyReview => 'Open Weekly Review',
+        NotificationActionTarget.focusSession => 'Open Focus',
+      };
 }
 
 class NotificationActionTargetResolver {

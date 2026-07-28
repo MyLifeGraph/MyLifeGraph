@@ -5,7 +5,8 @@ import '../entities/correlation.dart';
 class CorrelationAnalyzer {
   const CorrelationAnalyzer();
 
-  static const minimumSampleSize = 5;
+  static const minimumSampleSize = 7;
+  static const matureSampleSize = 14;
 
   CorrelationReport analyze({
     required int windowDays,
@@ -49,6 +50,9 @@ class CorrelationAnalyzer {
     required String metricAId,
     required String metricBId,
   }) {
+    if (const CorrelationPairPolicy().isBlocked(metricAId, metricBId)) {
+      return const [];
+    }
     return points
         .map((point) {
           final valueA = point.values[metricAId];
@@ -79,6 +83,15 @@ class CorrelationAnalyzer {
       metricAId: metricA.id,
       metricBId: metricB.id,
     );
+    if (const CorrelationPairPolicy().isBlocked(metricA.id, metricB.id)) {
+      return CorrelationResult(
+        metricAId: metricA.id,
+        metricBId: metricB.id,
+        sampleSize: 0,
+        status: CorrelationStatus.overlappingSignals,
+        summary: 'Not compared · overlapping signals',
+      );
+    }
 
     if (values.length < minimumSampleSize) {
       return CorrelationResult(
@@ -108,6 +121,9 @@ class CorrelationAnalyzer {
       metricBId: metricB.id,
       sampleSize: values.length,
       coefficient: coefficient,
+      status: values.length < matureSampleSize
+          ? CorrelationStatus.earlyEvidence
+          : CorrelationStatus.ready,
       summary: _summary(metricA, metricB, coefficient),
     );
   }

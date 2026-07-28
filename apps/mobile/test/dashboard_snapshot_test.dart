@@ -126,6 +126,31 @@ void main() {
       expect(snapshot.todayPlan, isEmpty);
       expect(snapshot.scheduleDays.expand((day) => day.events), isEmpty);
     });
+
+    test('ignores check-ins after the authoritative Today local date', () {
+      final snapshot = mapper.map(
+        dailyLogs: [
+          {
+            'entry_date': '2026-07-11',
+            'sleep_hours': 3.0,
+            'metadata': const {},
+          },
+          {
+            'entry_date': '2026-07-10',
+            'sleep_hours': 7.5,
+            'metadata': const {},
+          },
+        ],
+        taskRows: const [],
+        scheduleRows: const [],
+        loadedAt: DateTime(2026, 7, 11, 1),
+        throughLocalDate: DateTime(2026, 7, 10),
+      );
+
+      expect(snapshot.latestCheckIn?.entryDate, DateTime(2026, 7, 10));
+      expect(snapshot.latestCheckIn?.sleepHours, 7.5);
+      expect(snapshot.checkInStreakDays, 1);
+    });
   });
 
   test('local dashboard reads exact guest check-in values', () async {

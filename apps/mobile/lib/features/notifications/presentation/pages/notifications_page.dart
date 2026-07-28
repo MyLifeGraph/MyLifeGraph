@@ -1,10 +1,15 @@
 import 'package:flutter/material.dart';
+
+import 'package:my_life_graph/core/constants/app_radii.dart';
+
+import 'package:my_life_graph/core/theme/app_icons.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../../core/capabilities/app_surface_capabilities.dart';
 import '../../../../core/constants/app_spacing.dart';
+import '../../../../core/theme/app_visual_tokens.dart';
 import '../../application/notifications_controller.dart';
 import '../../domain/entities/app_notification.dart';
 import '../../domain/entities/notification_action_target.dart';
@@ -47,7 +52,7 @@ class NotificationsPage extends ConsumerWidget {
       refreshError: state.loadError,
       canManageLifecycle: state.canManageLifecycle,
       onReload: controller.load,
-      onOpen: (target) => context.go(target.location),
+      onOpen: (target) => GoRouter.of(context).go(target.location),
       onLifecycleAction: controller.performAction,
       onRetryAction: controller.retry,
     );
@@ -67,7 +72,7 @@ class _NotificationsError extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.cloud_off_outlined, size: 36),
+            const Icon(AppIcons.cloudOffOutlined, size: 36),
             const SizedBox(height: AppSpacing.md),
             Text(
               'Could not load inbox.',
@@ -77,7 +82,7 @@ class _NotificationsError extends StatelessWidget {
             const SizedBox(height: AppSpacing.md),
             OutlinedButton.icon(
               onPressed: onRetry,
-              icon: const Icon(Icons.refresh),
+              icon: const Icon(AppIcons.refresh),
               label: const Text('Retry'),
             ),
           ],
@@ -101,7 +106,7 @@ class _NotificationsRefreshError extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Icon(Icons.sync_problem_outlined),
+            const Icon(AppIcons.syncProblemOutlined),
             const SizedBox(width: AppSpacing.md),
             Expanded(
               child: Column(
@@ -116,7 +121,7 @@ class _NotificationsRefreshError extends StatelessWidget {
                   const SizedBox(height: AppSpacing.sm),
                   OutlinedButton.icon(
                     onPressed: onRetry,
-                    icon: const Icon(Icons.refresh),
+                    icon: const Icon(AppIcons.refresh),
                     label: const Text('Reload inbox'),
                   ),
                 ],
@@ -260,7 +265,7 @@ class _NotificationsHeader extends StatelessWidget {
       ),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(AppRadii.sm),
       ),
       child: Text(useDemoData ? 'Demo data' : 'Account data'),
     );
@@ -303,28 +308,28 @@ class _NotificationSummaryGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isLight = Theme.of(context).brightness == Brightness.light;
+    final tokens = context.visualTokens;
     final metrics = [
       _NotificationMetric(
         key: const ValueKey('notifications-unread-count'),
-        icon: Icons.mark_email_unread_outlined,
+        icon: AppIcons.markEmailUnreadOutlined,
         value: '$unreadCount',
         label: 'Unread',
         color: Theme.of(context).colorScheme.primary,
       ),
       _NotificationMetric(
         key: const ValueKey('notifications-read-count'),
-        icon: Icons.drafts_outlined,
+        icon: AppIcons.draftsOutlined,
         value: '$readCount',
         label: 'Read',
-        color: isLight ? const Color(0xFF3F51B5) : const Color(0xFF8EA7FF),
+        color: tokens.info,
       ),
       _NotificationMetric(
         key: const ValueKey('notifications-action-count'),
-        icon: Icons.arrow_forward,
+        icon: AppIcons.arrowForward,
         value: '$actionableCount',
         label: 'Open links',
-        color: isLight ? const Color(0xFF8A4B08) : const Color(0xFFFFA42E),
+        color: tokens.attention,
       ),
     ];
 
@@ -462,7 +467,7 @@ class _NotificationCard extends StatelessWidget {
       height: 48,
       decoration: BoxDecoration(
         color: accent.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(AppRadii.sm),
       ),
       child: ExcludeSemantics(
         child: Icon(
@@ -518,28 +523,21 @@ class _NotificationCard extends StatelessWidget {
 
   IconData _iconForType(String type) {
     return switch (type.toLowerCase()) {
-      'deadline' => Icons.event_busy_outlined,
-      'warning' => Icons.warning_amber_outlined,
-      'summary' => Icons.summarize_outlined,
-      'reminder' => Icons.notifications_none,
-      _ => Icons.info_outline,
+      'deadline' => AppIcons.eventBusyOutlined,
+      'warning' => AppIcons.warningAmberOutlined,
+      'summary' => AppIcons.summarizeOutlined,
+      'reminder' => AppIcons.notificationsNone,
+      _ => AppIcons.infoOutline,
     };
   }
 
   Color _accentForPriority(BuildContext context, String priority) {
-    if (Theme.of(context).brightness == Brightness.light) {
-      return switch (priority.toLowerCase()) {
-        'critical' => const Color(0xFFB3261E),
-        'high' => const Color(0xFF8A4B08),
-        'low' => const Color(0xFF18794E),
-        _ => const Color(0xFF0061A4),
-      };
-    }
+    final tokens = context.visualTokens;
     return switch (priority.toLowerCase()) {
-      'critical' => const Color(0xFFFF6B6B),
-      'high' => const Color(0xFFFFA42E),
-      'low' => const Color(0xFF5BE7C4),
-      _ => const Color(0xFF20B9FF),
+      'critical' => tokens.danger,
+      'high' => tokens.attention,
+      'low' => tokens.success,
+      _ => tokens.info,
     };
   }
 }
@@ -640,8 +638,8 @@ class _NotificationCardContent extends StatelessWidget {
                       : () => onLifecycleAction(readCommand),
                   icon: Icon(
                     notification.isRead
-                        ? Icons.mark_email_unread_outlined
-                        : Icons.drafts_outlined,
+                        ? AppIcons.markEmailUnreadOutlined
+                        : AppIcons.draftsOutlined,
                   ),
                   label: Text(readLabel),
                 ),
@@ -657,7 +655,7 @@ class _NotificationCardContent extends StatelessWidget {
                       : () => onLifecycleAction(
                             NotificationLifecycleCommand.dismiss,
                           ),
-                  icon: const Icon(Icons.close),
+                  icon: const Icon(AppIcons.close),
                   label: const Text('Dismiss'),
                 ),
               ),
@@ -701,8 +699,8 @@ class _NotificationCardContent extends StatelessWidget {
             child: FilledButton.icon(
               key: ValueKey('notification-open-${notification.id}'),
               onPressed: onOpen,
-              icon: const Icon(Icons.arrow_forward),
-              label: const Text('Open'),
+              icon: const Icon(AppIcons.arrowForward),
+              label: Text(alert.target!.openLabel),
             ),
           ),
         ],
@@ -752,7 +750,7 @@ class _NotificationActionError extends StatelessWidget {
         padding: const EdgeInsets.all(AppSpacing.md),
         decoration: BoxDecoration(
           color: Theme.of(context).colorScheme.errorContainer,
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(AppRadii.sm),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -763,9 +761,9 @@ class _NotificationActionError extends StatelessWidget {
                   : reloadRequired
                       ? 'This inbox item changed or is no longer available. Reload the inbox before acting again.'
                       : 'The inbox action could not be completed. Reload the inbox before trying again.',
-              style: TextStyle(
-                color: Theme.of(context).colorScheme.onErrorContainer,
-              ),
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Theme.of(context).colorScheme.onErrorContainer,
+                  ),
             ),
             const SizedBox(height: AppSpacing.sm),
             Wrap(
@@ -782,7 +780,7 @@ class _NotificationActionError extends StatelessWidget {
                         'notification-action-retry-${notification.id}',
                       ),
                       onPressed: onRetry,
-                      icon: const Icon(Icons.refresh),
+                      icon: const Icon(AppIcons.refresh),
                       label: const Text('Retry unchanged'),
                     ),
                   ),
@@ -821,7 +819,7 @@ class _NotificationBadge extends StatelessWidget {
       ),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(AppRadii.sm),
       ),
       child: Text(label, style: Theme.of(context).textTheme.labelMedium),
     );
@@ -844,7 +842,7 @@ class _NotificationsPanel extends StatelessWidget {
       padding: padding,
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(AppRadii.sm),
         border: Border.all(
           color: Theme.of(context).colorScheme.outlineVariant,
         ),

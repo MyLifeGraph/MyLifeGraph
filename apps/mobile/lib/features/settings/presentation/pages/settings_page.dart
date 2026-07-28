@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import 'package:my_life_graph/core/theme/app_icons.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -74,7 +76,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                           dimension: 18,
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
-                      : const Icon(Icons.public_outlined),
+                      : const Icon(AppIcons.publicOutlined),
                   label: Text(
                     syncedAccount
                         ? 'Change timezone'
@@ -97,12 +99,12 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         AppCard(
           padding: EdgeInsets.zero,
           child: ListTile(
-            leading: const Icon(Icons.tune_outlined),
+            leading: const Icon(AppIcons.tuneOutlined),
             title: const Text('Setup and commitments'),
             subtitle: const Text(
               'Review routine candidates, study setup, and fixed commitments.',
             ),
-            trailing: const Icon(Icons.chevron_right),
+            trailing: const Icon(AppIcons.chevronRight),
             onTap: () => context.go('${AppRoutes.onboarding}?edit=1'),
           ),
         ),
@@ -111,14 +113,14 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           child: ListTile(
             key: const ValueKey('personal-learning-setting-entry'),
             enabled: syncedAccount,
-            leading: const Icon(Icons.psychology_alt_outlined),
+            leading: const Icon(AppIcons.psychologyAltOutlined),
             title: const Text('Personal learning'),
             subtitle: Text(
               syncedAccount
                   ? 'Control Focus reflection prompts, transparent pattern analysis, and optional new-plan timing.'
                   : 'Available only for a synced account.',
             ),
-            trailing: syncedAccount ? const Icon(Icons.chevron_right) : null,
+            trailing: syncedAccount ? const Icon(AppIcons.chevronRight) : null,
             onTap: syncedAccount
                 ? () => context.go(AppRoutes.personalLearning)
                 : null,
@@ -134,7 +136,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                     dimension: 24,
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
-                : const Icon(Icons.speed_outlined),
+                : const Icon(AppIcons.speedOutlined),
             title: const Text('Daily preparation budget'),
             subtitle: Text(
               !syncedAccount
@@ -144,7 +146,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                       : '${_formatMinutes(profile!.dailyPreparationBudgetMinutes!)} total per day across confirmed preparation plans.',
             ),
             trailing: syncedAccount && !_isSavingPreparationBudget
-                ? const Icon(Icons.edit_outlined)
+                ? const Icon(AppIcons.editOutlined)
                 : null,
             onTap: syncedAccount && !_isSavingPreparationBudget
                 ? _chooseDailyPreparationBudget
@@ -155,26 +157,26 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           padding: EdgeInsets.zero,
           child: ListTile(
             key: const ValueKey('settings-inbox-entry'),
-            leading: const Icon(Icons.inbox_outlined),
+            leading: const Icon(AppIcons.inboxOutlined),
             title: const Text('Inbox'),
             subtitle: const Text(
               'Read saved notifications and manage their read or dismissed state.',
             ),
-            trailing: const Icon(Icons.chevron_right),
+            trailing: const Icon(AppIcons.chevronRight),
             onTap: () => context.go(AppRoutes.alerts),
           ),
         ),
         AppCard(
           padding: EdgeInsets.zero,
           child: ListTile(
-            leading: const Icon(Icons.notifications_active_outlined),
+            leading: const Icon(AppIcons.notificationsActiveOutlined),
             title: const Text('In-app reminders'),
             subtitle: Text(
               syncedAccount
                   ? 'Allow banners while the app is open and choose what may appear.'
                   : 'In-app banners are available only for a synced account.',
             ),
-            trailing: syncedAccount ? const Icon(Icons.chevron_right) : null,
+            trailing: syncedAccount ? const Icon(AppIcons.chevronRight) : null,
             onTap: syncedAccount
                 ? () => context.go(AppRoutes.notificationSettings)
                 : null,
@@ -184,24 +186,24 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
           AppCard(
             padding: EdgeInsets.zero,
             child: ListTile(
-              leading: const Icon(Icons.forum_outlined),
+              leading: const Icon(AppIcons.forumOutlined),
               title: const Text('Coach'),
               subtitle: const Text(
                 'Development preview only. Cannot change your data.',
               ),
-              trailing: const Icon(Icons.chevron_right),
+              trailing: const Icon(AppIcons.chevronRight),
               onTap: () => context.go(AppRoutes.coach),
             ),
           ),
         AppCard(
           padding: EdgeInsets.zero,
           child: ListTile(
-            leading: const Icon(Icons.calendar_month_outlined),
+            leading: const Icon(AppIcons.calendarMonthOutlined),
             title: const Text('Calendar import (optional)'),
             subtitle: const Text(
               'Import a selected .ics file as a read-only local copy.',
             ),
-            trailing: const Icon(Icons.chevron_right),
+            trailing: const Icon(AppIcons.chevronRight),
             onTap: () => context.go(AppRoutes.calendarIntegration),
           ),
         ),
@@ -216,7 +218,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                         dimension: 24,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
-                    : const Icon(Icons.download_outlined),
+                    : const Icon(AppIcons.downloadOutlined),
                 title: const Text('Export data'),
                 subtitle: Text(
                   syncedAccount
@@ -236,7 +238,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
                     : Icon(
-                        Icons.delete_forever_outlined,
+                        AppIcons.deleteForeverOutlined,
                         color: syncedAccount
                             ? Theme.of(context).colorScheme.error
                             : null,
@@ -261,8 +263,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             onChanged: _setLightMode,
             secondary: Icon(
               lightModeEnabled
-                  ? Icons.light_mode_outlined
-                  : Icons.dark_mode_outlined,
+                  ? AppIcons.lightModeOutlined
+                  : AppIcons.darkModeOutlined,
             ),
             title: const Text('Light mode'),
             subtitle: const Text('Saved on this device.'),
@@ -278,7 +280,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                       dimension: 18,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
-                  : const Icon(Icons.logout_outlined),
+                  : const Icon(AppIcons.logoutOutlined),
               label: const Text('Sign out'),
             ),
           ),

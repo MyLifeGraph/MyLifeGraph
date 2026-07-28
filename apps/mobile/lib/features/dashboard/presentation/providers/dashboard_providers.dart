@@ -94,7 +94,10 @@ final dashboardSupportingSnapshotProvider =
       'Supporting account details are unavailable.',
     );
   }
-  final snapshot = await DashboardSupabaseDataSource(client).getSnapshot();
+  final today = await ref.watch(dashboardSnapshotProvider.future);
+  final snapshot = await DashboardSupabaseDataSource(client).getSnapshot(
+    throughLocalDate: today.localDate,
+  );
   if (!capabilities.canUseDeadlinePlanner) return snapshot;
   final preparation = ref.watch(deadlinePreparationScheduleDataSourceProvider);
   const merger = DeadlinePlanScheduleMerger();

@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:my_life_graph/core/theme/app_icons.dart';
 import 'package:my_life_graph/core/capabilities/app_surface_capabilities.dart';
 import 'package:my_life_graph/core/errors/app_exception.dart';
 import 'package:my_life_graph/core/theme/app_theme.dart';
@@ -433,9 +434,9 @@ void main() {
 
     final background = AppTheme.light.colorScheme.surfaceContainerLow;
     for (final entry in <(String, IconData)>[
-      ('notifications-unread-count', Icons.mark_email_unread_outlined),
-      ('notifications-read-count', Icons.drafts_outlined),
-      ('notifications-action-count', Icons.arrow_forward),
+      ('notifications-unread-count', AppIcons.markEmailUnreadOutlined),
+      ('notifications-read-count', AppIcons.draftsOutlined),
+      ('notifications-action-count', AppIcons.arrowForward),
     ]) {
       final icon = tester.widget<Icon>(
         find.descendant(

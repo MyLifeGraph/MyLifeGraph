@@ -8,6 +8,7 @@
     "start:local:coach:fake": "LOCAL_STACK_COACH_PROVIDER=fake bash scripts/start_local_stack.sh",
     "verify": "scripts/verify.sh",
     "verify:docs": "node --test scripts/check_docs_consistency.test.mjs && node scripts/check_docs_consistency.mjs",
+    "verify:visual": "node --test scripts/check_frontend_visual_contract.test.mjs && node scripts/check_frontend_visual_contract.mjs",
     "verify:local-stack": "bash scripts/test_local_supabase_migrations.sh && bash scripts/test_start_local_stack.sh",
     "verify:supabase": "scripts/verify_supabase_local.sh",
     "e2e:web": "bash scripts/e2e_web.sh",

@@ -15,6 +15,8 @@ void main() {
         (3, 6),
         (4, 8),
         (5, 10),
+        (6, 12),
+        (7, 14),
       ]),
     );
 
@@ -22,7 +24,8 @@ void main() {
 
     expect(result, isNotNull);
     expect(result!.coefficient, closeTo(1, 0.0001));
-    expect(result.strengthLabel, 'Strong positive');
+    expect(result.status, CorrelationStatus.earlyEvidence);
+    expect(result.strengthLabel, 'Early evidence');
   });
 
   test('detects a perfect negative correlation', () {
@@ -35,6 +38,8 @@ void main() {
         (3, 6),
         (4, 4),
         (5, 2),
+        (6, 0),
+        (7, -2),
       ]),
     );
 
@@ -42,7 +47,7 @@ void main() {
 
     expect(result, isNotNull);
     expect(result!.coefficient, closeTo(-1, 0.0001));
-    expect(result.strengthLabel, 'Strong negative');
+    expect(result.strengthLabel, 'Early evidence');
   });
 
   test('ignores missing paired days', () {
@@ -65,6 +70,8 @@ void main() {
             (3, 6),
             (4, 8),
             (5, 10),
+            (6, 12),
+            (7, 14),
           ],
           start: today.add(const Duration(days: 2)),
         ),
@@ -74,11 +81,11 @@ void main() {
     final result = report.resultFor('a', 'b');
 
     expect(result, isNotNull);
-    expect(result!.sampleSize, 5);
+    expect(result!.sampleSize, 7);
     expect(result.coefficient, closeTo(1, 0.0001));
   });
 
-  test('requires at least five shared points', () {
+  test('requires at least seven shared points', () {
     final report = analyzer.analyze(
       windowDays: 7,
       metrics: _testMetrics,
@@ -87,6 +94,8 @@ void main() {
         (2, 4),
         (3, 6),
         (4, 8),
+        (5, 10),
+        (6, 12),
       ]),
     );
 
@@ -107,6 +116,8 @@ void main() {
         (1, 6),
         (1, 8),
         (1, 10),
+        (1, 12),
+        (1, 14),
       ]),
     );
 
@@ -127,6 +138,8 @@ void main() {
         (3, 6),
         (4, 8),
         (5, 10),
+        (6, 12),
+        (7, 14),
       ]),
     );
 
@@ -150,7 +163,7 @@ void main() {
         CorrelationResult(
           metricAId: 'a',
           metricBId: 'c',
-          sampleSize: 7,
+          sampleSize: 14,
           coefficient: -0.41,
           summary: 'Moderate signal',
         ),
@@ -159,6 +172,85 @@ void main() {
 
     expect(report.rankedResults, hasLength(1));
     expect(report.rankedResults.single.metricBId, 'c');
+  });
+
+  test('keeps 7 through 13 days as early evidence and ranks from 14', () {
+    final early = analyzer.analyze(
+      windowDays: 14,
+      metrics: _testMetrics,
+      points: _points([
+        (1, 2),
+        (2, 4),
+        (3, 6),
+        (4, 8),
+        (5, 10),
+        (6, 12),
+        (7, 14),
+        (8, 16),
+        (9, 18),
+        (10, 20),
+        (11, 22),
+        (12, 24),
+        (13, 26),
+      ]),
+    );
+    final mature = analyzer.analyze(
+      windowDays: 14,
+      metrics: _testMetrics,
+      points: _points([
+        for (var day = 1; day <= 14; day++) (day.toDouble(), day * 2.0),
+      ]),
+    );
+
+    expect(early.resultFor('a', 'b')?.status, CorrelationStatus.earlyEvidence);
+    expect(early.rankedResults, isEmpty);
+    expect(mature.resultFor('a', 'b')?.status, CorrelationStatus.ready);
+    expect(mature.rankedResults, isNotEmpty);
+  });
+
+  test('does not compare the two explicitly overlapping signal pairs', () {
+    final points = [
+      for (var day = 0; day < 14; day++)
+        CorrelationDataPoint(
+          date: DateTime(2026, 7, day + 1),
+          values: {
+            'sleep_hours': 7 + day / 10,
+            'sleep_target_deviation_minutes': day.toDouble(),
+            'activity_level': (day % 10).toDouble(),
+            'steps': 3000 + day * 100,
+          },
+        ),
+    ];
+    final report = analyzer.analyze(
+      windowDays: 14,
+      points: points,
+    );
+
+    expect(
+      report.resultFor('sleep_hours', 'sleep_target_deviation_minutes')?.status,
+      CorrelationStatus.overlappingSignals,
+    );
+    expect(
+      report.resultFor('activity_level', 'steps')?.status,
+      CorrelationStatus.overlappingSignals,
+    );
+    expect(
+      report.rankedResults.any(
+        (result) => const CorrelationPairPolicy().isBlocked(
+          result.metricAId,
+          result.metricBId,
+        ),
+      ),
+      isFalse,
+    );
+    expect(
+      analyzer.pairValues(
+        points: points,
+        metricAId: 'activity_level',
+        metricBId: 'steps',
+      ),
+      isEmpty,
+    );
   });
 }
 

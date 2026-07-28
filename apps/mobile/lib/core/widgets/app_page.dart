@@ -30,6 +30,9 @@ class AppPage extends StatelessWidget {
           };
           final desktopShell = MediaQuery.sizeOf(context).width >= 1100;
           final bottomPadding = desktopShell ? AppSpacing.xxl : 116.0;
+          final pageTitleStyle = constraints.maxWidth >= 900
+              ? Theme.of(context).textTheme.headlineLarge
+              : Theme.of(context).textTheme.headlineMedium;
 
           return CustomScrollView(
             slivers: [
@@ -53,9 +56,7 @@ class AppPage extends StatelessWidget {
                               children: [
                                 Text(
                                   title,
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .headlineMedium,
+                                  style: pageTitleStyle,
                                 ),
                                 if (subtitle != null) ...[
                                   const SizedBox(height: AppSpacing.xs),

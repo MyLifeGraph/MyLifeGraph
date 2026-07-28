@@ -109,6 +109,9 @@ The response includes:
 - bounded ordered `warning_codes`; and
 - exact aggregate minute totals.
 
+Evening and Morning rows whose `entry_date` is after the captured profile-local
+`local_date` are excluded before the newest plan or recent nights are selected.
+
 The GET performs only owner-scoped reads. It does not create a plan, revision,
 block, task, preview, notification, briefing, or event, and it does not update a
 last-viewed timestamp.
@@ -264,8 +267,8 @@ Automated coverage must prove:
   one-day exam warning buffer, missed/future blocks, deterministic ordering,
   account/per-plan limits, Study recovery, and all confirmed competitors;
 - both fit simulations, missing sleep plan, DST gap/fold behavior, two-of-three
-  repeated shortfall, incomplete calendar availability, and pending-preview
-  overlap without mutation;
+  repeated shortfall, exclusion of future Evening/Morning rows, incomplete
+  calendar availability, and pending-preview overlap without mutation;
 - strict bearer ownership, cross-owner isolation, a write-free GET, and guest/
   demo zero-call;
 - Planner loading/error/watch/exam-week/overdue/unknown states, placement,
@@ -277,3 +280,10 @@ Automated coverage must prove:
 Passing repository automation proves only this deterministic local boundary. It
 does not prove remote deployment, provider freshness, installed-device
 behavior, clinical value, academic outcomes, or long-term sleep behavior.
+
+## Visual presentation
+
+The outlook card uses the shared
+[Frontend Visual System V2](frontend-visual-system-v2.md). Status colors remain
+paired with text and icons; activation, capacity arithmetic, warnings, and the
+read-only Planner boundary remain unchanged.

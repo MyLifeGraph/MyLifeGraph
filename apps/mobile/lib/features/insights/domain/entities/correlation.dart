@@ -5,6 +5,9 @@ class CorrelationMetric {
     required this.unit,
     required this.category,
     required this.higherIsPositive,
+    this.timing = CorrelationEvidenceTiming.sameLocalDay,
+    this.role = CorrelationMetricRole.context,
+    this.canBeExperimentFactor = false,
   });
 
   final String id;
@@ -12,6 +15,70 @@ class CorrelationMetric {
   final String unit;
   final String category;
   final bool higherIsPositive;
+  final CorrelationEvidenceTiming timing;
+  final CorrelationMetricRole role;
+  final bool canBeExperimentFactor;
+}
+
+enum CorrelationEvidenceTiming {
+  previousNightOnLocalWakeDay,
+  ratedSessionDaily,
+  sameLocalDay,
+}
+
+enum CorrelationMetricRole { factor, outcome, context }
+
+enum CorrelationPairDecision { compare, overlappingSignals }
+
+class CorrelationExperimentPair {
+  const CorrelationExperimentPair({
+    required this.factor,
+    required this.outcome,
+  });
+
+  final CorrelationMetric factor;
+  final CorrelationMetric outcome;
+}
+
+class CorrelationPairPolicy {
+  const CorrelationPairPolicy();
+
+  CorrelationPairDecision decision(String metricAId, String metricBId) {
+    final pair = {metricAId, metricBId};
+    if (_samePair(
+          pair,
+          'sleep_hours',
+          'sleep_target_deviation_minutes',
+        ) ||
+        _samePair(pair, 'activity_level', 'steps')) {
+      return CorrelationPairDecision.overlappingSignals;
+    }
+    return CorrelationPairDecision.compare;
+  }
+
+  bool isBlocked(String metricAId, String metricBId) =>
+      decision(metricAId, metricBId) != CorrelationPairDecision.compare;
+
+  CorrelationExperimentPair? experimentFor(
+    CorrelationMetric metricA,
+    CorrelationMetric metricB,
+  ) {
+    if (isBlocked(metricA.id, metricB.id)) return null;
+    if (metricA.canBeExperimentFactor &&
+        metricA.role == CorrelationMetricRole.factor &&
+        metricB.role == CorrelationMetricRole.outcome) {
+      return CorrelationExperimentPair(factor: metricA, outcome: metricB);
+    }
+    if (metricB.canBeExperimentFactor &&
+        metricB.role == CorrelationMetricRole.factor &&
+        metricA.role == CorrelationMetricRole.outcome) {
+      return CorrelationExperimentPair(factor: metricB, outcome: metricA);
+    }
+    return null;
+  }
+
+  bool _samePair(Set<String> pair, String first, String second) =>
+      pair.length == 2 && pair.contains(first) && pair.contains(second);
 }
 
 const insightsWindowDayOptions = <int>[7, 14, 30, 90];
@@ -77,7 +144,10 @@ class CorrelationReport {
     final ranked = results
         .where(
           (result) =>
-              result.coefficient != null && result.coefficient!.abs() >= 0.2,
+              result.status == CorrelationStatus.ready &&
+              result.sampleSize >= 14 &&
+              result.coefficient != null &&
+              result.coefficient!.abs() >= 0.2,
         )
         .toList(growable: false);
     return ranked
@@ -104,7 +174,12 @@ class CorrelationResult {
   final CorrelationStatus status;
   final String summary;
 
-  bool get isReady => status == CorrelationStatus.ready && coefficient != null;
+  bool get isReady =>
+      coefficient != null &&
+      {
+        CorrelationStatus.ready,
+        CorrelationStatus.earlyEvidence,
+      }.contains(status);
 
   String get coefficientLabel {
     if (coefficient == null) {
@@ -118,8 +193,14 @@ class CorrelationResult {
       return switch (status) {
         CorrelationStatus.notEnoughData => 'Not enough data',
         CorrelationStatus.notEnoughVariation => 'No useful variation',
+        CorrelationStatus.overlappingSignals =>
+          'Not compared · overlapping signals',
+        CorrelationStatus.earlyEvidence => 'Early evidence',
         CorrelationStatus.ready => 'No result',
       };
+    }
+    if (status == CorrelationStatus.earlyEvidence) {
+      return 'Early evidence';
     }
 
     final absValue = coefficient!.abs();
@@ -139,8 +220,10 @@ class CorrelationResult {
 
 enum CorrelationStatus {
   ready,
+  earlyEvidence,
   notEnoughData,
   notEnoughVariation,
+  overlappingSignals,
 }
 
 class MetricPairValues {
@@ -158,59 +241,76 @@ class MetricPairValues {
 const correlationMetrics = [
   CorrelationMetric(
     id: 'sleep_hours',
-    label: 'Sleep',
+    label: 'Previous-night sleep',
     unit: 'h',
     category: 'Recovery',
     higherIsPositive: true,
+    timing: CorrelationEvidenceTiming.previousNightOnLocalWakeDay,
+    role: CorrelationMetricRole.factor,
   ),
   CorrelationMetric(
     id: 'focus_minutes',
-    label: 'Focus',
+    label: 'Rated focus time',
     unit: 'min',
     category: 'Work',
     higherIsPositive: true,
+    timing: CorrelationEvidenceTiming.ratedSessionDaily,
+    role: CorrelationMetricRole.outcome,
   ),
   CorrelationMetric(
     id: 'planned_focus_minutes',
-    label: 'Planned Focus duration',
+    label: 'Planned focus time',
     unit: 'min',
     category: 'Work',
     higherIsPositive: true,
+    timing: CorrelationEvidenceTiming.ratedSessionDaily,
+    role: CorrelationMetricRole.factor,
+    canBeExperimentFactor: true,
   ),
   CorrelationMetric(
     id: 'focus_quality',
-    label: 'Focus quality',
+    label: 'Rated focus quality',
     unit: '/5',
     category: 'Work',
     higherIsPositive: true,
+    timing: CorrelationEvidenceTiming.ratedSessionDaily,
+    role: CorrelationMetricRole.outcome,
   ),
   CorrelationMetric(
     id: 'useful_progress',
-    label: 'Useful progress',
+    label: 'Rated useful progress',
     unit: '/5',
     category: 'Work',
     higherIsPositive: true,
+    timing: CorrelationEvidenceTiming.ratedSessionDaily,
+    role: CorrelationMetricRole.outcome,
   ),
   CorrelationMetric(
     id: 'focus_completion_rate',
-    label: 'Focus completion',
+    label: 'Rated session completion',
     unit: '%',
     category: 'Work',
     higherIsPositive: true,
+    timing: CorrelationEvidenceTiming.ratedSessionDaily,
+    role: CorrelationMetricRole.outcome,
   ),
   CorrelationMetric(
     id: 'sleep_quality',
-    label: 'Sleep quality',
+    label: 'Previous-night sleep quality',
     unit: '/10',
     category: 'Recovery',
     higherIsPositive: true,
+    timing: CorrelationEvidenceTiming.previousNightOnLocalWakeDay,
+    role: CorrelationMetricRole.factor,
   ),
   CorrelationMetric(
     id: 'sleep_target_deviation_minutes',
-    label: 'Sleep target difference',
+    label: 'Sleep shortfall',
     unit: 'min',
     category: 'Recovery',
-    higherIsPositive: true,
+    higherIsPositive: false,
+    timing: CorrelationEvidenceTiming.previousNightOnLocalWakeDay,
+    role: CorrelationMetricRole.factor,
   ),
   CorrelationMetric(
     id: 'stress_level',
@@ -218,6 +318,7 @@ const correlationMetrics = [
     unit: '/10',
     category: 'Recovery',
     higherIsPositive: false,
+    role: CorrelationMetricRole.outcome,
   ),
   CorrelationMetric(
     id: 'energy_level',
@@ -225,6 +326,7 @@ const correlationMetrics = [
     unit: '/10',
     category: 'Recovery',
     higherIsPositive: true,
+    role: CorrelationMetricRole.outcome,
   ),
   CorrelationMetric(
     id: 'mood_score',
@@ -232,6 +334,7 @@ const correlationMetrics = [
     unit: '/10',
     category: 'Mind',
     higherIsPositive: true,
+    role: CorrelationMetricRole.outcome,
   ),
   CorrelationMetric(
     id: 'screen_time_hours',
@@ -239,6 +342,8 @@ const correlationMetrics = [
     unit: 'h',
     category: 'Behavior',
     higherIsPositive: false,
+    role: CorrelationMetricRole.factor,
+    canBeExperimentFactor: true,
   ),
   CorrelationMetric(
     id: 'activity_level',
@@ -246,6 +351,8 @@ const correlationMetrics = [
     unit: '/10',
     category: 'Movement',
     higherIsPositive: true,
+    role: CorrelationMetricRole.factor,
+    canBeExperimentFactor: true,
   ),
   CorrelationMetric(
     id: 'steps',
@@ -253,5 +360,7 @@ const correlationMetrics = [
     unit: 'steps',
     category: 'Movement',
     higherIsPositive: true,
+    role: CorrelationMetricRole.factor,
+    canBeExperimentFactor: true,
   ),
 ];

@@ -1,4 +1,8 @@
 import 'package:flutter/material.dart';
+
+import 'package:my_life_graph/core/constants/app_radii.dart';
+
+import 'package:my_life_graph/core/theme/app_icons.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -80,7 +84,7 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
         subtitle: 'Reserve realistic focus time before an exam or assignment',
         children: [
           _MessageCard(
-            icon: Icons.cloud_off_outlined,
+            icon: AppIcons.cloudOffOutlined,
             title: 'Synced preparation plans unavailable',
             message:
                 'Preparation plans require a signed-in account with synced data. Local demo stays on this device and does not create a pretend plan.',
@@ -113,7 +117,7 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
                   ref.invalidate(preparationWorkloadProvider);
                   controller.load();
                 },
-          icon: const Icon(Icons.refresh),
+          icon: const Icon(AppIcons.refresh),
         ),
       ],
       children: _children(state, controller, sourcePrefill, workload),
@@ -141,7 +145,7 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
     if (state.loadError != null) {
       return [
         _MessageCard(
-          icon: Icons.cloud_off_outlined,
+          icon: AppIcons.cloudOffOutlined,
           title: 'Preparation plans unavailable',
           message:
               'Synced plan state could not be read. It was not replaced with an empty or demo plan.',
@@ -181,7 +185,7 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
         ),
       if (_targetPlanError != null)
         _MessageCard(
-          icon: Icons.search_off_outlined,
+          icon: AppIcons.searchOffOutlined,
           title: 'Requested preparation plan unavailable',
           message:
               'The plan could not be loaded for this account. It may have been removed, or the link may not belong to the signed-in user.',
@@ -218,7 +222,7 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
                       sourcePrefill?.isLoading == true
                   ? null
                   : () => _openEditor(),
-              icon: const Icon(Icons.event_available_outlined),
+              icon: const Icon(AppIcons.eventAvailableOutlined),
               label: const Text('Plan preparation'),
             ),
           ],
@@ -226,7 +230,7 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
       ),
       if (visiblePlans.isEmpty)
         const _MessageCard(
-          icon: Icons.calendar_view_week_outlined,
+          icon: AppIcons.calendarViewWeekOutlined,
           title: 'No preparation plan yet',
           message:
               'Create a staged preview first. Nothing is reserved until you confirm it.',
@@ -252,7 +256,7 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
           state.operationError == null &&
           !state.isBusy)
         _CalendarPrefillCard(
-          icon: Icons.edit_note_outlined,
+          icon: AppIcons.editNoteOutlined,
           title: 'Entered plan values kept',
           message:
               'The latest saved plan was loaded without discarding your inputs. Review both before trying again.',
@@ -415,7 +419,7 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
         ),
       ),
       error: (_, __) => _CalendarPrefillCard(
-        icon: Icons.cloud_off_outlined,
+        icon: AppIcons.cloudOffOutlined,
         title: 'Imported event unavailable',
         message:
             'The owner-scoped imported event could not be loaded. No event details were taken from the URL or replaced with demo data.',
@@ -428,7 +432,7 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
         final future = prefill.hasFutureDeadline(_pageNow);
         if (prefill.status == DeadlineCalendarPrefillStatus.unavailable) {
           return _CalendarPrefillCard(
-            icon: Icons.event_busy_outlined,
+            icon: AppIcons.eventBusyOutlined,
             title: 'Imported event no longer available',
             message:
                 'The event is not available in your current imported data. Create a manual plan or retry after updating the calendar import.',
@@ -440,7 +444,7 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
         }
         if (!future) {
           return _CalendarPrefillCard(
-            icon: Icons.event_busy_outlined,
+            icon: AppIcons.eventBusyOutlined,
             title: 'Imported event deadline has passed',
             message:
                 'The event was loaded from your account, but its date is no longer a future finish-by time.',
@@ -452,7 +456,7 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
         }
         if (prefill.status == DeadlineCalendarPrefillStatus.stale) {
           return _CalendarPrefillCard(
-            icon: Icons.sync_problem_outlined,
+            icon: AppIcons.syncProblemOutlined,
             title: 'Imported event changed or disconnected',
             message:
                 'Its saved basics can be reviewed, but this event is not a current source. Continue only as a manual plan, or retry after a new import.',
@@ -468,7 +472,7 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
           );
         }
         return _CalendarPrefillCard(
-          icon: Icons.event_available_outlined,
+          icon: AppIcons.eventAvailableOutlined,
           title: 'Imported event ready for review',
           message:
               'The event was loaded directly from your owner-scoped calendar data. Its title and time are not carried in the URL.',
@@ -888,7 +892,7 @@ class _DeadlinePlanCardState extends State<_DeadlinePlanCard> {
             TextButton.icon(
               key: ValueKey('deadline-show-history-${plan.id}'),
               onPressed: () => setState(() => _showTerminalDetails = true),
-              icon: const Icon(Icons.expand_more),
+              icon: const Icon(AppIcons.expandMore),
               label: const Text('Show history details'),
             ),
           ],
@@ -1025,7 +1029,7 @@ class _DeadlinePlanCardState extends State<_DeadlinePlanCard> {
               padding: const EdgeInsets.all(AppSpacing.md),
               decoration: BoxDecoration(
                 color: Theme.of(context).colorScheme.errorContainer,
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(AppRadii.sm),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -1048,7 +1052,7 @@ class _DeadlinePlanCardState extends State<_DeadlinePlanCard> {
                   FilledButton.icon(
                     key: ValueKey('deadline-replan-missed-${plan.id}'),
                     onPressed: canMutate ? onReplanMissed : null,
-                    icon: const Icon(Icons.autorenew),
+                    icon: const Icon(AppIcons.autorenew),
                     label: const Text('Replan remaining time'),
                   ),
                 ],
@@ -1076,7 +1080,9 @@ class _DeadlinePlanCardState extends State<_DeadlinePlanCard> {
                 () => _showAllDisplayedBlocks = !_showAllDisplayedBlocks,
               ),
               icon: Icon(
-                _showAllDisplayedBlocks ? Icons.expand_less : Icons.expand_more,
+                _showAllDisplayedBlocks
+                    ? AppIcons.expandLess
+                    : AppIcons.expandMore,
               ),
               label: Text(
                 _showAllDisplayedBlocks
@@ -1118,7 +1124,9 @@ class _DeadlinePlanCardState extends State<_DeadlinePlanCard> {
                   () => _showAllActiveBlocks = !_showAllActiveBlocks,
                 ),
                 icon: Icon(
-                  _showAllActiveBlocks ? Icons.expand_less : Icons.expand_more,
+                  _showAllActiveBlocks
+                      ? AppIcons.expandLess
+                      : AppIcons.expandMore,
                 ),
                 label: Text(
                   _showAllActiveBlocks
@@ -1135,19 +1143,19 @@ class _DeadlinePlanCardState extends State<_DeadlinePlanCard> {
               if (pending)
                 FilledButton.icon(
                   onPressed: canMutate && !sourceNeedsReview ? onConfirm : null,
-                  icon: const Icon(Icons.event_available_outlined),
+                  icon: const Icon(AppIcons.eventAvailableOutlined),
                   label: const Text('Confirm reservations'),
                 ),
               if (!plan.isTerminal)
                 OutlinedButton.icon(
                   onPressed: canMutate ? onAdjust : null,
-                  icon: const Icon(Icons.tune),
+                  icon: const Icon(AppIcons.tune),
                   label: const Text('Adjust estimate or plan'),
                 ),
               if (plan.isActive)
                 OutlinedButton.icon(
                   onPressed: canMutate ? onComplete : null,
-                  icon: const Icon(Icons.check_circle_outline),
+                  icon: const Icon(AppIcons.checkCircleOutline),
                   label: const Text('Mark preparation complete'),
                 ),
               if (plan.isActive || plan.isDraft)
@@ -1159,7 +1167,7 @@ class _DeadlinePlanCardState extends State<_DeadlinePlanCard> {
                 TextButton.icon(
                   key: ValueKey('deadline-hide-history-${plan.id}'),
                   onPressed: () => setState(() => _showTerminalDetails = false),
-                  icon: const Icon(Icons.expand_less),
+                  icon: const Icon(AppIcons.expandLess),
                   label: const Text('Hide history details'),
                 ),
             ],
@@ -1206,7 +1214,7 @@ class _DeadlineBlockTile extends StatelessWidget {
           ? IconButton(
               tooltip: 'Start plan focus with this remaining duration',
               onPressed: onStart,
-              icon: const Icon(Icons.play_arrow),
+              icon: const Icon(AppIcons.playArrow),
             )
           : null,
     );
@@ -1512,7 +1520,7 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
     final create = FilledButton.icon(
       key: const ValueKey('deadline-create-preview-existing'),
       onPressed: canCreatePreview ? _submit : null,
-      icon: const Icon(Icons.event_repeat_outlined),
+      icon: const Icon(AppIcons.eventRepeatOutlined),
       label: const Text('Create preview with these values'),
     );
     final change = OutlinedButton(
@@ -1620,7 +1628,7 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
           width: double.infinity,
           child: OutlinedButton.icon(
             onPressed: _pickDeadline,
-            icon: const Icon(Icons.event_outlined),
+            icon: const Icon(AppIcons.eventOutlined),
             label: Text(
               _deadline == null
                   ? _deadlineDateHint == null
@@ -1830,7 +1838,7 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
         const SizedBox(height: AppSpacing.md),
         OutlinedButton.icon(
           onPressed: _pickPlanningStart,
-          icon: const Icon(Icons.today_outlined),
+          icon: const Icon(AppIcons.todayOutlined),
           label: Text(
             'Start planning ${DateFormat.yMMMd().format(_planningStart)}',
           ),
@@ -1843,12 +1851,12 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
         const SizedBox(height: AppSpacing.sm),
         ListTile(
           contentPadding: EdgeInsets.zero,
-          leading: const Icon(Icons.event_busy_outlined),
+          leading: const Icon(AppIcons.eventBusyOutlined),
           title: const Text('Imported busy times follow Planner'),
           subtitle: const Text(
             'The one read-only Planner calendar setting applies here too. Change it in Planner before creating this preview. Re-import after changes; there is no background sync, and no event text is sent to AI.',
           ),
-          trailing: const Icon(Icons.open_in_new_outlined),
+          trailing: const Icon(AppIcons.openInNewOutlined),
           onTap: () {
             final router = GoRouter.of(context);
             Navigator.of(context).pop();
@@ -2283,7 +2291,7 @@ class _StatusPill extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(999),
+        borderRadius: BorderRadius.circular(AppRadii.pill),
       ),
       child: Text(label, style: Theme.of(context).textTheme.labelMedium),
     );

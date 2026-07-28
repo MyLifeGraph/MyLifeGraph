@@ -1,10 +1,16 @@
 import 'package:flutter/material.dart';
+
+import 'package:my_life_graph/core/constants/app_radii.dart';
+
+import 'package:my_life_graph/core/theme/app_icons.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/navigation/app_routes.dart';
+import '../../../../core/theme/app_visual_tokens.dart';
+import '../../../../core/widgets/app_surface.dart';
 import '../../../dashboard/presentation/providers/dashboard_providers.dart';
 import '../../../optimization/presentation/providers/optimization_providers.dart';
 import '../../domain/app_session.dart';
@@ -48,7 +54,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
               leading: IconButton(
                 tooltip: 'Back to Settings',
                 onPressed: () => context.go(AppRoutes.settings),
-                icon: const Icon(Icons.arrow_back),
+                icon: const Icon(AppIcons.arrowBack),
               ),
             )
           : null,
@@ -215,7 +221,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                                     strokeWidth: 2,
                                   ),
                                 )
-                              : const Icon(Icons.check),
+                              : const Icon(AppIcons.check),
                           label: Text(
                             state.isSaving
                                 ? 'Saving setup...'
@@ -239,7 +245,7 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
                                 : ref
                                     .read(setupControllerProvider.notifier)
                                     .load,
-                            icon: const Icon(Icons.refresh),
+                            icon: const Icon(AppIcons.refresh),
                             label: const Text('Reload saved setup'),
                           ),
                         ),
@@ -557,7 +563,7 @@ class _RoutineEditors extends StatelessWidget {
                         final updated = [...routines]..removeAt(index);
                         onChanged(updated);
                       },
-                      icon: const Icon(Icons.delete_outline),
+                      icon: const Icon(AppIcons.deleteOutline),
                       label: const Text('Remove from setup'),
                     ),
                   ),
@@ -579,7 +585,7 @@ class _RoutineEditors extends StatelessWidget {
                       ),
                     ]);
                   },
-            icon: const Icon(Icons.add),
+            icon: const Icon(AppIcons.add),
             label: const Text('Add routine candidate'),
           ),
         ),
@@ -750,7 +756,7 @@ class _StudyFocusEditor extends StatelessWidget {
                               onPressed: index == 0
                                   ? null
                                   : () => _moveItem(value, index, index - 1),
-                              icon: const Icon(Icons.arrow_upward),
+                              icon: const Icon(AppIcons.arrowUpward),
                             ),
                             IconButton(
                               tooltip: 'Move down',
@@ -758,7 +764,7 @@ class _StudyFocusEditor extends StatelessWidget {
                                       value.preparationItems.length - 1
                                   ? null
                                   : () => _moveItem(value, index, index + 1),
-                              icon: const Icon(Icons.arrow_downward),
+                              icon: const Icon(AppIcons.arrowDownward),
                             ),
                             IconButton(
                               tooltip: 'Remove preparation item',
@@ -769,7 +775,7 @@ class _StudyFocusEditor extends StatelessWidget {
                                   value.copyWith(preparationItems: items),
                                 );
                               },
-                              icon: const Icon(Icons.delete_outline),
+                              icon: const Icon(AppIcons.deleteOutline),
                             ),
                           ],
                         ),
@@ -799,7 +805,7 @@ class _StudyFocusEditor extends StatelessWidget {
                         ),
                       );
                     },
-              icon: const Icon(Icons.add),
+              icon: const Icon(AppIcons.add),
               label: const Text('Add your own item'),
             ),
           ),
@@ -1073,7 +1079,7 @@ class _StudyDateButtons extends StatelessWidget {
         OutlinedButton.icon(
           key: startKey,
           onPressed: () => _pick(context, start ?? end, onStartChanged),
-          icon: const Icon(Icons.date_range_outlined),
+          icon: const Icon(AppIcons.dateRangeOutlined),
           label: Text(
             start == null ? startLabel : '$startLabel ${_dateLabel(start!)}',
           ),
@@ -1081,7 +1087,7 @@ class _StudyDateButtons extends StatelessWidget {
         OutlinedButton.icon(
           key: endKey,
           onPressed: () => _pick(context, end ?? start, onEndChanged),
-          icon: const Icon(Icons.event_available_outlined),
+          icon: const Icon(AppIcons.eventAvailableOutlined),
           label: Text(
             end == null ? endLabel : '$endLabel ${_dateLabel(end!)}',
           ),
@@ -1248,7 +1254,7 @@ class _CommitmentEditors extends StatelessWidget {
                             index,
                             pickStart: true,
                           ),
-                          icon: const Icon(Icons.date_range_outlined),
+                          icon: const Icon(AppIcons.dateRangeOutlined),
                           label: Text(
                             commitments[index].validFrom == null
                                 ? 'Valid from'
@@ -1264,7 +1270,7 @@ class _CommitmentEditors extends StatelessWidget {
                             index,
                             pickStart: false,
                           ),
-                          icon: const Icon(Icons.event_available_outlined),
+                          icon: const Icon(AppIcons.eventAvailableOutlined),
                           label: Text(
                             commitments[index].validUntil == null
                                 ? 'Valid until'
@@ -1327,7 +1333,7 @@ class _CommitmentEditors extends StatelessWidget {
                                   );
                                 onChanged(updated);
                               },
-                        icon: const Icon(Icons.copy_outlined),
+                        icon: const Icon(AppIcons.copyOutlined),
                         label: const Text('Duplicate for another day'),
                       ),
                       TextButton.icon(
@@ -1335,7 +1341,7 @@ class _CommitmentEditors extends StatelessWidget {
                           final updated = [...commitments]..removeAt(index);
                           onChanged(updated);
                         },
-                        icon: const Icon(Icons.delete_outline),
+                        icon: const Icon(AppIcons.deleteOutline),
                         label: const Text('Remove from setup'),
                       ),
                     ],
@@ -1364,7 +1370,7 @@ class _CommitmentEditors extends StatelessWidget {
                       ),
                     ]);
                   },
-            icon: const Icon(Icons.add),
+            icon: const Icon(AppIcons.add),
             label: const Text('Add fixed commitment'),
           ),
         ),
@@ -1446,7 +1452,7 @@ class _SetupReviewSection extends StatelessWidget {
           else ...[
             for (final routine in routines)
               _ReviewRow(
-                icon: Icons.repeat,
+                icon: AppIcons.repeat,
                 title: routine.title,
                 status: routine.status == IntakeRoutineStatus.candidate
                     ? 'Candidate · not active'
@@ -1454,7 +1460,7 @@ class _SetupReviewSection extends StatelessWidget {
               ),
             for (final commitment in commitments)
               _ReviewRow(
-                icon: Icons.schedule,
+                icon: AppIcons.schedule,
                 title: commitment.title,
                 status: _commitmentReviewStatus(commitment),
               ),
@@ -1512,8 +1518,7 @@ class _OptionalSetupSection extends StatelessWidget {
       color: _SetupColors.panel(context),
       clipBehavior: Clip.antiAlias,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(28),
-        side: BorderSide(color: _SetupColors.border(context), width: 2),
+        borderRadius: BorderRadius.circular(AppRadii.xl),
       ),
       child: ExpansionTile(
         initiallyExpanded: initiallyExpanded,
@@ -1625,12 +1630,9 @@ class _EditorCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return AppSurface(
+      variant: AppSurfaceVariant.subtle,
       padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        color: _SetupColors.row(context),
-        borderRadius: BorderRadius.circular(18),
-      ),
       child: child,
     );
   }
@@ -1643,14 +1645,9 @@ class _SetupSurface extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
+    return AppSurface(
+      variant: AppSurfaceVariant.raised,
       padding: const EdgeInsets.all(AppSpacing.lg),
-      decoration: BoxDecoration(
-        color: _SetupColors.panel(context),
-        borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: _SetupColors.border(context), width: 2),
-      ),
       child: child,
     );
   }
@@ -1699,7 +1696,7 @@ class _SetupLoadErrorPage extends StatelessWidget {
               title: const Text('Setup and commitments'),
               leading: IconButton(
                 onPressed: () => context.go(AppRoutes.settings),
-                icon: const Icon(Icons.arrow_back),
+                icon: const Icon(AppIcons.arrowBack),
               ),
             )
           : null,
@@ -1712,7 +1709,7 @@ class _SetupLoadErrorPage extends StatelessWidget {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.cloud_off_outlined, size: 40),
+                  const Icon(AppIcons.cloudOffOutlined, size: 40),
                   const SizedBox(height: AppSpacing.md),
                   Text(
                     'Could not load setup',
@@ -1726,7 +1723,7 @@ class _SetupLoadErrorPage extends StatelessWidget {
                   const SizedBox(height: AppSpacing.lg),
                   FilledButton.icon(
                     onPressed: onRetry,
-                    icon: const Icon(Icons.refresh),
+                    icon: const Icon(AppIcons.refresh),
                     label: const Text('Retry setup load'),
                   ),
                 ],
@@ -1746,18 +1743,13 @@ class _InlineSetupError extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.errorContainer,
-        borderRadius: BorderRadius.circular(18),
-      ),
+    return AppSurface(
+      variant: AppSurfaceVariant.danger,
       child: Text(
         'Setup was not saved. Your draft is still here. ${_errorText(error)}',
-        style: TextStyle(
-          color: Theme.of(context).colorScheme.onErrorContainer,
-        ),
+        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: Theme.of(context).colorScheme.onErrorContainer,
+            ),
       ),
     );
   }
@@ -1774,13 +1766,8 @@ class _PendingSetupNotice extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.secondaryContainer,
-        borderRadius: BorderRadius.circular(18),
-      ),
+    return AppSurface(
+      variant: AppSurfaceVariant.accent,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -1858,18 +1845,8 @@ String _errorText(Object? error) {
 class _SetupColors {
   const _SetupColors._();
 
-  static bool _light(BuildContext context) =>
-      Theme.of(context).brightness == Brightness.light;
-
-  static Color panel(BuildContext context) =>
-      _light(context) ? const Color(0xFFFFFFFF) : const Color(0xFF122329);
-
-  static Color row(BuildContext context) =>
-      _light(context) ? const Color(0xFFEAF1F0) : const Color(0xFF202B32);
-
-  static Color border(BuildContext context) =>
-      _light(context) ? const Color(0xFFD4E1DF) : const Color(0xFF2A424A);
+  static Color panel(BuildContext context) => context.visualTokens.surface;
 
   static Color muted(BuildContext context) =>
-      _light(context) ? const Color(0xFF607078) : const Color(0xFFA8B5BE);
+      context.visualTokens.textSecondary;
 }

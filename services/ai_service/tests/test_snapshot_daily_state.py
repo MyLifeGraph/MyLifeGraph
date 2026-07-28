@@ -837,6 +837,29 @@ def test_previous_evening_and_target_morning_are_both_current() -> None:
     assert result.mode == "push"
 
 
+def test_previous_date_morning_sleep_is_not_current_for_target_date() -> None:
+    previous_morning = morning_capture(
+        entry_date=EVENING_DATE,
+        sleep_hours=3.0,
+        sleep_quality=1,
+        current_energy=1,
+    )
+    result = build_state(
+        daily_logs=[
+            capture_row(
+                row_id="previous-morning",
+                entry_date=EVENING_DATE,
+                morning=previous_morning,
+            ),
+        ],
+        tasks=[active_task()],
+    )
+
+    assert result.summary["freshness"]["morning"]["state"] == "stale"
+    assert "low_sleep" not in result.summary["risk_flags"]
+    assert "low_sleep_quality" not in result.summary["risk_flags"]
+
+
 def test_evening_two_days_old_is_stale_while_target_morning_is_current() -> None:
     stale_evening = evening_capture(entry_date=STALE_EVENING_DATE)
     result = build_state(

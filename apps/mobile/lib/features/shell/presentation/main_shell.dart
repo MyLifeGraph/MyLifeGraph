@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import 'package:my_life_graph/core/theme/app_icons.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -6,6 +8,9 @@ import '../../../core/capabilities/app_surface_capabilities.dart';
 import '../../../core/constants/app_radii.dart';
 import '../../../core/constants/app_spacing.dart';
 import '../../../core/navigation/app_routes.dart';
+import '../../../core/theme/app_motion_tokens.dart';
+import '../../../core/theme/app_visual_tokens.dart';
+import '../../../core/widgets/app_brand_mark.dart';
 import '../../notifications/domain/entities/notification_action_target.dart';
 import '../../notifications/presentation/providers/notifications_providers.dart';
 
@@ -41,36 +46,36 @@ class MainShell extends ConsumerWidget {
         canUseFocusSessions: capabilities.canUseSyncedExecution,
         canUseWeeklyReview: capabilities.canUseWeeklyReview,
       ).resolve(notification.actionUrl);
+      final router = GoRouter.of(context);
+      final messenger = ScaffoldMessenger.of(context);
+      void openTarget() {
+        if (target == null) return;
+        messenger.hideCurrentSnackBar();
+        router.go(target.location);
+      }
+
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!context.mounted) return;
-        ScaffoldMessenger.of(context)
+        final viewportWidth = MediaQuery.sizeOf(context).width;
+        messenger
           ..hideCurrentSnackBar()
           ..showSnackBar(
             SnackBar(
               key: ValueKey('in-app-notification-${notification.id}'),
               duration: const Duration(seconds: 8),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    notification.title,
-                    style: const TextStyle(fontWeight: FontWeight.w700),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(notification.body),
-                  const SizedBox(height: 4),
-                  const Text(
-                    'In-app · fixed text · not AI-written',
-                    style: TextStyle(fontSize: 12),
-                  ),
-                ],
+              width: viewportWidth >= 640 ? 560 : null,
+              padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
+              content: _InAppNotificationBannerContent(
+                notificationId: notification.id,
+                title: notification.title,
+                body: notification.body,
+                onOpen: target == null ? null : openTarget,
               ),
               action: target == null
                   ? null
                   : SnackBarAction(
-                      label: 'Open',
-                      onPressed: () => context.go(target.location),
+                      label: target.openLabel,
+                      onPressed: openTarget,
                     ),
             ),
           );
@@ -149,6 +154,110 @@ class MainShell extends ConsumerWidget {
   }
 }
 
+class _InAppNotificationBannerContent extends StatelessWidget {
+  const _InAppNotificationBannerContent({
+    required this.notificationId,
+    required this.title,
+    required this.body,
+    required this.onOpen,
+  });
+
+  final String notificationId;
+  final String title;
+  final String body;
+  final VoidCallback? onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final snackTextStyle = Theme.of(context).snackBarTheme.contentTextStyle ??
+        Theme.of(context).textTheme.bodyMedium;
+    final tokens = context.visualTokens;
+    final content = Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          width: 40,
+          height: 40,
+          decoration: BoxDecoration(
+            color: tokens.brand.withValues(alpha: 0.16),
+            borderRadius: BorderRadius.circular(AppRadii.sm),
+          ),
+          child: Icon(
+            AppIcons.notificationsActiveOutlined,
+            size: 20,
+            color: tokens.brand,
+          ),
+        ),
+        const SizedBox(width: AppSpacing.md),
+        Expanded(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: snackTextStyle?.copyWith(
+                  fontSize: 16,
+                  height: 1.25,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                body,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: snackTextStyle?.copyWith(
+                  fontSize: 13,
+                  height: 1.35,
+                  color: snackTextStyle.color?.withValues(alpha: 0.78),
+                ),
+              ),
+              const SizedBox(height: 5),
+              Row(
+                children: [
+                  Icon(AppIcons.checkCircle, size: 13, color: tokens.brand),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(
+                      'Fixed text · not AI-written',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: snackTextStyle?.copyWith(
+                        fontSize: 12,
+                        height: 1.2,
+                        fontWeight: FontWeight.w600,
+                        color: tokens.brand,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+
+    if (onOpen == null) return content;
+    return Semantics(
+      button: true,
+      label: 'Open notification $title',
+      child: InkWell(
+        key: ValueKey('in-app-notification-content-$notificationId'),
+        onTap: onOpen,
+        borderRadius: BorderRadius.circular(AppRadii.sm),
+        child: Padding(
+          padding: const EdgeInsets.all(2),
+          child: content,
+        ),
+      ),
+    );
+  }
+}
+
 class _ShellBody extends StatelessWidget {
   const _ShellBody({required this.isLocalDemo, required this.child});
 
@@ -220,24 +329,24 @@ class _DesktopNavigation extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
                         _DesktopNavItem(
-                          icon: Icons.home_outlined,
-                          selectedIcon: Icons.home_rounded,
+                          icon: AppIcons.homeOutlined,
+                          selectedIcon: AppIcons.homeRounded,
                           label: 'Today',
                           isSelected: selectedIndex == 0,
                           onTap: () => onDestinationSelected(0),
                         ),
                         const SizedBox(height: AppSpacing.xs),
                         _DesktopNavItem(
-                          icon: Icons.auto_graph_outlined,
-                          selectedIcon: Icons.auto_graph_rounded,
+                          icon: AppIcons.autoGraphOutlined,
+                          selectedIcon: AppIcons.autoGraphRounded,
                           label: 'Insights',
                           isSelected: selectedIndex == 1,
                           onTap: () => onDestinationSelected(1),
                         ),
                         const SizedBox(height: AppSpacing.md),
                         _DesktopNavItem(
-                          icon: Icons.add,
-                          selectedIcon: Icons.add,
+                          icon: AppIcons.add,
+                          selectedIcon: AppIcons.add,
                           label: 'Quick actions',
                           isSelected: selectedIndex == 2,
                           emphasized: true,
@@ -245,8 +354,8 @@ class _DesktopNavigation extends StatelessWidget {
                         ),
                         const SizedBox(height: AppSpacing.md),
                         _DesktopNavItem(
-                          icon: Icons.calendar_view_week_outlined,
-                          selectedIcon: Icons.calendar_view_week_rounded,
+                          icon: AppIcons.calendarViewWeekOutlined,
+                          selectedIcon: AppIcons.calendarViewWeekRounded,
                           label: 'Planner',
                           isSelected: selectedIndex == 3,
                           onTap: () => onDestinationSelected(3),
@@ -254,8 +363,8 @@ class _DesktopNavigation extends StatelessWidget {
                         const SizedBox(height: AppSpacing.xs),
                         if (showCoach)
                           _DesktopNavItem(
-                            icon: Icons.forum_outlined,
-                            selectedIcon: Icons.forum,
+                            icon: AppIcons.forumOutlined,
+                            selectedIcon: AppIcons.forum,
                             label: 'Coach',
                             isSelected: selectedIndex == 4,
                             onTap: () => onDestinationSelected(4),
@@ -286,6 +395,7 @@ class _DesktopBrand extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    final tokens = context.visualTokens;
     return Row(
       children: [
         Container(
@@ -296,10 +406,9 @@ class _DesktopBrand extends StatelessWidget {
             borderRadius: BorderRadius.circular(AppRadii.md),
           ),
           alignment: Alignment.center,
-          child: Icon(
-            Icons.auto_awesome_rounded,
+          child: AppBrandMark(
             color: colors.onPrimaryContainer,
-            size: 22,
+            size: 26,
           ),
         ),
         const SizedBox(width: AppSpacing.sm + 2),
@@ -310,7 +419,9 @@ class _DesktopBrand extends StatelessWidget {
               Text(
                 'MyLifeGraph',
                 maxLines: 1,
-                style: Theme.of(context).textTheme.titleMedium,
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      color: tokens.textPrimary,
+                    ),
               ),
               const SizedBox(height: 2),
               Text(
@@ -455,6 +566,7 @@ class _FloatingBottomNav extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    final tokens = context.visualTokens;
 
     return SafeArea(
       top: false,
@@ -480,15 +592,14 @@ class _FloatingBottomNav extends StatelessWidget {
             ),
             child: DecoratedBox(
               decoration: BoxDecoration(
-                color: colors.surface.withValues(alpha: 0.97),
+                color: colors.surface,
                 borderRadius: BorderRadius.circular(AppRadii.xl),
-                border: Border.all(color: colors.outlineVariant),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.16),
-                    blurRadius: 22,
-                    spreadRadius: -8,
-                    offset: const Offset(0, 10),
+                    color: tokens.shadow,
+                    blurRadius: 28,
+                    spreadRadius: -16,
+                    offset: const Offset(0, 12),
                   ),
                 ],
               ),
@@ -503,8 +614,8 @@ class _FloatingBottomNav extends StatelessWidget {
                     Row(
                       children: [
                         _FloatingNavItem(
-                          icon: Icons.home_outlined,
-                          selectedIcon: Icons.home,
+                          icon: AppIcons.homeOutlined,
+                          selectedIcon: AppIcons.home,
                           label: 'Today',
                           isSelected: selectedIndex == 0,
                           showLabel: !compact,
@@ -513,8 +624,8 @@ class _FloatingBottomNav extends StatelessWidget {
                           onTap: () => onDestinationSelected(0),
                         ),
                         _FloatingNavItem(
-                          icon: Icons.auto_graph_outlined,
-                          selectedIcon: Icons.auto_graph,
+                          icon: AppIcons.autoGraphOutlined,
+                          selectedIcon: AppIcons.autoGraph,
                           label: 'Insights',
                           isSelected: selectedIndex == 1,
                           showLabel: !compact,
@@ -532,8 +643,8 @@ class _FloatingBottomNav extends StatelessWidget {
                             child: SizedBox(height: itemHeight),
                           ),
                         _FloatingNavItem(
-                          icon: Icons.calendar_view_week_outlined,
-                          selectedIcon: Icons.calendar_view_week,
+                          icon: AppIcons.calendarViewWeekOutlined,
+                          selectedIcon: AppIcons.calendarViewWeek,
                           label: 'Planner',
                           isSelected: selectedIndex == 3,
                           showLabel: !compact,
@@ -543,8 +654,8 @@ class _FloatingBottomNav extends StatelessWidget {
                         ),
                         if (showCoach)
                           _FloatingNavItem(
-                            icon: Icons.forum_outlined,
-                            selectedIcon: Icons.forum,
+                            icon: AppIcons.forumOutlined,
+                            selectedIcon: AppIcons.forum,
                             label: 'Coach',
                             isSelected: selectedIndex == 4,
                             showLabel: !compact,
@@ -675,7 +786,7 @@ class _LocalDemoBanner extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(
-            Icons.cloud_off_outlined,
+            AppIcons.cloudOffOutlined,
             size: 14,
             color: colors.onSurfaceVariant,
           ),
@@ -739,8 +850,8 @@ class _FloatingNavItem extends StatelessWidget {
                 borderRadius: BorderRadius.circular(AppRadii.md),
                 onTap: onTap,
                 child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 180),
-                  curve: Curves.easeOutCubic,
+                  duration: context.motionTokens.stateFor(context),
+                  curve: context.motionTokens.curve,
                   height: height,
                   padding: EdgeInsets.symmetric(
                     horizontal: showLabel ? 6 : 0,
@@ -810,6 +921,8 @@ class _QuickActionButtonState extends State<_QuickActionButton> {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     final primary = colors.primary;
+    final tokens = context.visualTokens;
+    final motion = context.motionTokens;
 
     return Tooltip(
       message: 'Quick actions',
@@ -842,7 +955,7 @@ class _QuickActionButtonState extends State<_QuickActionButton> {
                   shape: BoxShape.circle,
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.22),
+                      color: tokens.shadow,
                       blurRadius: 16,
                       spreadRadius: -4,
                       offset: const Offset(0, 8),
@@ -850,10 +963,12 @@ class _QuickActionButtonState extends State<_QuickActionButton> {
                   ],
                 ),
                 child: AnimatedScale(
-                  duration: const Duration(milliseconds: 90),
+                  duration: motion.selectionFor(context),
+                  curve: motion.curve,
                   scale: _isPressed ? 0.94 : 1,
                   child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 90),
+                    duration: motion.selectionFor(context),
+                    curve: motion.curve,
                     width: 56,
                     height: 56,
                     decoration: BoxDecoration(
@@ -867,7 +982,7 @@ class _QuickActionButtonState extends State<_QuickActionButton> {
                       ),
                     ),
                     child: Icon(
-                      Icons.add,
+                      AppIcons.add,
                       key: const ValueKey('main-shell-add-signal-icon'),
                       color: colors.onPrimary,
                       size: 30,

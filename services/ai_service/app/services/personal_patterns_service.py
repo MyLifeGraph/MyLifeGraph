@@ -220,7 +220,7 @@ class PersonalPatternsService:
                     user_id=user_id,
                     starts_at=starts_at,
                     ends_at=generated_at,
-                    local_starts_on=window.local_starts_on - timedelta(days=2),
+                    local_starts_on=window.local_starts_on,
                     local_ends_on=window.local_ends_on,
                 )
             )
@@ -630,8 +630,8 @@ def _observations(
         eligible_sleep = [
             episode
             for episode in episodes
-            if episode.woke_at <= session.started_at
-            and session.started_at - episode.woke_at <= timedelta(hours=36)
+            if episode.entry_date == session.local_date
+            and episode.woke_at <= session.started_at
         ]
         sleep = eligible_sleep[-1] if eligible_sleep else None
         result.append(
@@ -871,8 +871,8 @@ def _sleep_pattern(
             "observed sleep-duration ranges."
         )
     episodes = details_by_bucket[best.preferred_key]
-    target_deviation = _median(
-        value.target_deviation_minutes for value in episodes
+    target_shortfall = _median(
+        max(0, -value.target_deviation_minutes) for value in episodes
     )
     sleep_quality = _median(value.sleep_quality for value in episodes)
     return PersonalPattern(
@@ -888,8 +888,8 @@ def _sleep_pattern(
                     "sessions followed it."
                 ),
                 (
-                    f"Preferred-range median target deviation was "
-                    f"{target_deviation:+.0f} min; median sleep quality was "
+                    f"Preferred-range median sleep shortfall was "
+                    f"{target_shortfall:.0f} min; median sleep quality was "
                     f"{sleep_quality:.1f}/10."
                 ),
             ],

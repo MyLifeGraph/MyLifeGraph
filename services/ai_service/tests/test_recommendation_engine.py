@@ -194,6 +194,36 @@ def test_valid_sleep_quality_or_target_deviation_create_recovery_recommendation(
     assert "high_stress_low_energy" in recovery_rule_ids
 
 
+def test_sleep_evidence_names_each_days_strongest_trigger() -> None:
+    candidate = next(
+        candidate
+        for candidate in RecommendationEngine().generate_candidates(
+            summary(
+                daily_logs=[
+                    daily_log(
+                        0,
+                        sleep_quality=4,
+                        sleep_target_deviation_minutes=-180,
+                    ),
+                    daily_log(
+                        1,
+                        sleep_quality=1,
+                        sleep_target_deviation_minutes=-60,
+                    ),
+                ],
+            ),
+        )
+        if candidate.rule_id == "low_recovery_sleep"
+    )
+
+    assert {
+        evidence.id: evidence.field for evidence in candidate.evidence_refs
+    } == {
+        "log-0": "sleep_target_deviation_minutes",
+        "log-1": "sleep_quality",
+    }
+
+
 def test_legacy_sleep_hours_alone_do_not_create_sleep_recommendation() -> None:
     candidates = RecommendationEngine().generate_candidates(
         summary(
@@ -226,6 +256,30 @@ def test_low_movement_creates_movement_recommendation() -> None:
     )
     assert movement.rule_id == "movement_nudge"
     assert movement.priority in {"low", "medium"}
+
+
+def test_movement_evidence_names_each_days_strongest_trigger() -> None:
+    movement = next(
+        candidate
+        for candidate in RecommendationEngine().generate_candidates(
+            summary(
+                daily_logs=[
+                    daily_log(0, steps=3500, activity_level=0),
+                    daily_log(1, steps=1000, activity_level=2),
+                    daily_log(2, steps=2500, activity_level=2),
+                ],
+            ),
+        )
+        if candidate.rule_id == "movement_nudge"
+    )
+
+    assert {
+        evidence.id: evidence.field for evidence in movement.evidence_refs
+    } == {
+        "log-0": "activity_level",
+        "log-1": "steps",
+        "log-2": "steps",
+    }
 
 
 def test_overdue_or_high_workload_creates_planning_recommendation() -> None:

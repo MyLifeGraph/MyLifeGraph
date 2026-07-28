@@ -1,6 +1,10 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+
+import 'package:my_life_graph/core/constants/app_radii.dart';
+
+import 'package:my_life_graph/core/theme/app_icons.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -107,7 +111,7 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage> {
         IconButton(
           tooltip: 'Refresh focus sessions',
           onPressed: _isLoading || _isSaving ? null : _load,
-          icon: const Icon(Icons.refresh),
+          icon: const Icon(AppIcons.refresh),
         ),
       ],
       children: [
@@ -848,7 +852,7 @@ class _FocusLoadErrorCard extends StatelessWidget {
           const SizedBox(height: AppSpacing.md),
           OutlinedButton.icon(
             onPressed: onRetry,
-            icon: const Icon(Icons.refresh),
+            icon: const Icon(AppIcons.refresh),
             label: const Text('Retry'),
           ),
         ],
@@ -932,7 +936,7 @@ class _StartFocusCard extends StatelessWidget {
             alignment: Alignment.centerLeft,
             child: TextButton.icon(
               onPressed: isSaving ? null : onCustomDuration,
-              icon: const Icon(Icons.tune),
+              icon: const Icon(AppIcons.tune),
               label: const Text('Custom duration'),
             ),
           ),
@@ -942,12 +946,12 @@ class _StartFocusCard extends StatelessWidget {
               padding: const EdgeInsets.all(AppSpacing.md),
               decoration: BoxDecoration(
                 color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(AppRadii.sm),
               ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(Icons.insights_outlined, size: 20),
+                  const Icon(AppIcons.insightsOutlined, size: 20),
                   const SizedBox(width: AppSpacing.sm),
                   Expanded(
                     child: Text(
@@ -1001,7 +1005,7 @@ class _StartFocusCard extends StatelessWidget {
                       dimension: 18,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
-                  : const Icon(Icons.play_arrow),
+                  : const Icon(AppIcons.playArrow),
               label: const Text('Start focus session'),
             ),
           ),
@@ -1048,7 +1052,7 @@ class _ActiveFocusCard extends StatelessWidget {
           Row(
             children: [
               Icon(
-                Icons.timer_outlined,
+                AppIcons.timerOutlined,
                 color: Theme.of(context).colorScheme.primary,
               ),
               const SizedBox(width: AppSpacing.sm),
@@ -1142,7 +1146,7 @@ class _RecoveryCard extends StatelessWidget {
           Row(
             children: [
               Icon(
-                Icons.self_improvement_outlined,
+                AppIcons.selfImprovementOutlined,
                 color: Theme.of(context).colorScheme.primary,
               ),
               const SizedBox(width: AppSpacing.sm),
@@ -1238,8 +1242,8 @@ class _FocusHistoryCard extends StatelessWidget {
                 contentPadding: EdgeInsets.zero,
                 leading: Icon(
                   session.status == FocusSessionStatus.completed
-                      ? Icons.check_circle_outline
-                      : Icons.cancel_outlined,
+                      ? AppIcons.checkCircleOutline
+                      : AppIcons.cancelOutlined,
                 ),
                 title: Text(session.label ?? 'Focus session'),
                 subtitle: Text(
@@ -1257,7 +1261,7 @@ class _FocusHistoryCard extends StatelessWidget {
                       )
                     : const Tooltip(
                         message: 'Reflection history could not be loaded.',
-                        child: Icon(Icons.sync_problem_outlined),
+                        child: Icon(AppIcons.syncProblemOutlined),
                       ),
               ),
             ),

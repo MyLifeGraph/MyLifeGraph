@@ -1399,6 +1399,9 @@ try {
     buttonFirst: true,
   });
   await clickByText(page, 'More');
+  await scrollUntilTextInViewport(page, 'Latest check-in', {
+    deltaY: 600,
+  });
   await expectText(page, 'Latest check-in');
   await expectText(page, 'Morning energy');
   await expectText(page, '4/10');
@@ -2032,8 +2035,8 @@ try {
       rows[0].metadata?.recovery_minutes === 10,
     'one independent active focus session after prior finish',
   );
-  await clickByText(page, 'Abandon');
-  await clickByText(page, 'Abandon session');
+  await clickVisibleExactText(page, 'Abandon');
+  await clickVisibleExactText(page, 'Abandon session');
   await expectText(page, 'How focused did the session feel?');
   await clickByText(page, 'Not now');
   await waitForRows(
@@ -2072,7 +2075,12 @@ try {
   });
   await expectText(page, 'Evening check-in');
   await clickByText(page, 'Next');
-  await clickByText(page, 'Next');
+  await expectText(page, 'When do you plan to sleep?');
+  await page.waitForTimeout(250);
+  // Flutter retains the prior step's semantics node after rebuilding this
+  // flow. Target the exact text whose rendered bounds are actually inside the
+  // viewport instead of trusting DOM order among stale nodes.
+  await clickVisibleExactText(page, 'Next');
   await expectText(page, "Today's Focus sessions");
   await expectText(page, '1 rated · 1 open');
   await clickByText(page, "Today's Focus sessions");
@@ -2662,6 +2670,27 @@ async function selectDropdownOption(page, label, option) {
   if (optionIndex < 0) {
     throw new Error(`No keyboard option map for ${label}: ${option}`);
   }
+  const semanticMenuOptions = [
+    page.getByRole('menuitem', { name: optionPattern }).last(),
+    page.getByRole('option', { name: optionPattern }).last(),
+  ];
+  // A keyboard-first attempt may already have opened the Flutter overlay.
+  // Resolve that exact option before looking for the field label, because an
+  // open overlay can temporarily exclude the underlying InputDecorator label
+  // from Flutter's semantics tree.
+  for (const candidate of semanticMenuOptions) {
+    if ((await candidate.count()) === 0) {
+      continue;
+    }
+    try {
+      await candidate.evaluate((element) => element.click());
+      await page.waitForTimeout(250);
+      await page.keyboard.press('Escape');
+      return;
+    } catch (_) {
+      // Continue with the labelled-field fallbacks below.
+    }
+  }
   const labelNode = page.getByText(label, { exact: true }).first();
   await labelNode.waitFor({ state: 'visible', timeout: 2500 });
   await labelNode.scrollIntoViewIfNeeded({ timeout: 2500 });
@@ -2670,10 +2699,6 @@ async function selectDropdownOption(page, label, option) {
   if (!labelBox) {
     throw new Error(`Could not resolve dropdown label: ${label}`);
   }
-  const semanticMenuOptions = [
-    page.getByRole('menuitem', { name: optionPattern }).last(),
-    page.getByRole('option', { name: optionPattern }).last(),
-  ];
   const valueNodeNearLabel = async (value) => {
     // Flutter may expose a selected DropdownButton value as either its own
     // semantics node or as part of the enclosing field's combined label.
@@ -3309,6 +3334,44 @@ async function clickByText(page, text, options = {}) {
       await partialTarget.click({ timeout: 2500, force: true });
     }
   }
+}
+
+async function clickVisibleExactText(page, text, { timeout = 15000 } = {}) {
+  const deadline = Date.now() + timeout;
+  do {
+    const candidates = page.getByText(text, { exact: true });
+    const viewport = page.viewportSize();
+    const count = await candidates.count();
+    for (let index = count - 1; index >= 0; index -= 1) {
+      const bounds = await candidates.nth(index).boundingBox().catch(() => null);
+      if (
+        !bounds ||
+        bounds.width <= 0 ||
+        bounds.height <= 0 ||
+        (viewport &&
+          (bounds.y >= viewport.height ||
+            bounds.y + bounds.height <= 0 ||
+            bounds.x >= viewport.width ||
+            bounds.x + bounds.width <= 0))
+      ) {
+        continue;
+      }
+      await candidates.nth(index).evaluate((element) => {
+        const button = element.closest('[role="button"]');
+        if (button instanceof HTMLElement) {
+          button.click();
+          return;
+        }
+        if (element instanceof HTMLElement) {
+          element.click();
+        }
+      });
+      await page.waitForTimeout(200);
+      return;
+    }
+    await page.waitForTimeout(100);
+  } while (Date.now() < deadline);
+  throw new Error(`Could not find visible exact text: ${text}`);
 }
 
 async function textLocatorInViewport(page, text, { buttonFirst = false } = {}) {
@@ -4769,7 +4832,7 @@ async function assertNotificationDelivery(page, userId) {
     );
   }
   await expectText(page, 'A gentler overview is ready');
-  await expectText(page, 'In-app · fixed text · not AI-written');
+  await expectText(page, 'Fixed text · not AI-written');
 
   const generatedRows = await fetchRows(
     `notifications?select=id,user_id,title,message,type,priority,is_read,read_at,dismissed_at,action_url,due_at,metadata,generation_key,generation_category,delivery_date,in_app_delivered_at,created_at,updated_at&id=eq.${receipt.notification_id}`,

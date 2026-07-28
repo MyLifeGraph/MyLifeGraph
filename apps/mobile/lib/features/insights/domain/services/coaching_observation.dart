@@ -47,6 +47,8 @@ class CoachingObservationBuilder {
         : ObservationConfidence.emerging;
     final direction =
         coefficient >= 0 ? 'moved together' : 'moved in opposite directions';
+    final experimentPair =
+        const CorrelationPairPolicy().experimentFor(metricA, metricB);
     return CoachingObservation(
       title:
           '${metricA.label} and ${metricB.label}: ${confidence == ObservationConfidence.stronger ? 'stronger pattern' : 'emerging pattern'}',
@@ -58,8 +60,12 @@ class CoachingObservationBuilder {
       dataQuality: confidence == ObservationConfidence.stronger
           ? 'Repeated shared measurements'
           : 'Early shared measurements',
-      experiment:
-          'Optional 7-day experiment: make one small, consistent change to ${metricA.label.toLowerCase()} and observe ${metricB.label.toLowerCase()} without changing your plan automatically.',
+      experiment: experimentPair == null
+          ? null
+          : 'Optional 7-day experiment: make one small, consistent change to '
+              '${experimentPair.factor.label.toLowerCase()} and observe '
+              '${experimentPair.outcome.label.toLowerCase()} without changing '
+              'your plan automatically.',
     );
   }
 }

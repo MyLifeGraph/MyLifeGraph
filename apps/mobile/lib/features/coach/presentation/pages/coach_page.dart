@@ -1,10 +1,15 @@
 import 'package:flutter/material.dart';
+
+import 'package:my_life_graph/core/constants/app_radii.dart';
+
+import 'package:my_life_graph/core/theme/app_icons.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/navigation/app_routes.dart';
+import '../../../../core/theme/app_motion_tokens.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_page.dart';
 import '../../application/coach_controller.dart';
@@ -46,7 +51,7 @@ class _CoachPageState extends ConsumerState<CoachPage> {
           onPressed: state.isLoading || state.isSending
               ? null
               : () => ref.read(coachControllerProvider.notifier).load(),
-          icon: const Icon(Icons.refresh_outlined),
+          icon: const Icon(AppIcons.refreshOutlined),
         ),
       ],
       children: [
@@ -90,8 +95,8 @@ class _CoachPageState extends ConsumerState<CoachPage> {
       Scrollable.ensureVisible(
         responseContext,
         alignment: 0.08,
-        duration: const Duration(milliseconds: 320),
-        curve: Curves.easeOutCubic,
+        duration: context.motionTokens.emphasisFor(context),
+        curve: context.motionTokens.curve,
       );
     });
   }
@@ -169,8 +174,8 @@ class _CapabilityCard extends StatelessWidget {
             CoachCapabilityState.unavailable => 'Coach temporarily unavailable',
           };
     final icon = ready && capability.limits.remainingRequests > 0
-        ? Icons.check_circle_outline
-        : Icons.info_outline;
+        ? AppIcons.checkCircleOutline
+        : AppIcons.infoOutline;
     return AppCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -216,7 +221,9 @@ class _CapabilityCard extends StatelessWidget {
             Text(
               'The latest availability refresh failed; the last validated '
               'state remains visible.',
-              style: TextStyle(color: Theme.of(context).colorScheme.error),
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Theme.of(context).colorScheme.error,
+                  ),
             ),
           ],
         ],
@@ -345,7 +352,7 @@ class _ComposerCard extends StatelessWidget {
                       dimension: 18,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
-                  : const Icon(Icons.send_outlined),
+                  : const Icon(AppIcons.sendOutlined),
               label: const Text('Send'),
             ),
           ),
@@ -431,7 +438,7 @@ class _MemoryTile extends StatelessWidget {
       tilePadding: EdgeInsets.zero,
       childrenPadding: const EdgeInsets.only(bottom: AppSpacing.sm),
       leading: Icon(
-        memory.selected ? Icons.bookmark : Icons.bookmark_border,
+        memory.selected ? AppIcons.bookmark : AppIcons.bookmarkBorder,
       ),
       title: Text(memory.title),
       subtitle: Text(
@@ -467,8 +474,8 @@ class _MemoryTile extends StatelessWidget {
                     )
                   : Icon(
                       memory.selected
-                          ? Icons.remove_circle_outline
-                          : Icons.add_circle_outline,
+                          ? AppIcons.removeCircleOutline
+                          : AppIcons.addCircleOutline,
                     ),
               label: Text(
                 memory.selected ? 'Remove from Coach' : 'Use in Coach',
@@ -477,7 +484,7 @@ class _MemoryTile extends StatelessWidget {
             if (setupOwned)
               TextButton.icon(
                 onPressed: () => context.go('${AppRoutes.onboarding}?edit=1'),
-                icon: const Icon(Icons.tune_outlined),
+                icon: const Icon(AppIcons.tuneOutlined),
                 label: const Text('Edit in Setup'),
               ),
           ],
@@ -522,7 +529,7 @@ class _HistoryCard extends StatelessWidget {
                         dimension: 16,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
-                    : const Icon(Icons.delete_outline),
+                    : const Icon(AppIcons.deleteOutline),
                 label: const Text('Delete conversation'),
               ),
             ],
@@ -598,7 +605,7 @@ class _ConversationTurnCard extends StatelessWidget {
         decoration: BoxDecoration(
           border:
               Border.all(color: Theme.of(context).colorScheme.outlineVariant),
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(AppRadii.md),
         ),
         child: Padding(
           padding: const EdgeInsets.all(AppSpacing.md),
@@ -703,7 +710,9 @@ class _ErrorText extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Text(
         message,
-        style: TextStyle(color: Theme.of(context).colorScheme.error),
+        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: Theme.of(context).colorScheme.error,
+            ),
       );
 }
 

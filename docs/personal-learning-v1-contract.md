@@ -102,10 +102,13 @@ preference.
 ### Sleep and energy evidence
 
 All consumers use the shared strict Daily Capture V4 parser. A Focus session may
-use only the most recent valid V4 morning sleep episode whose `woke_at` is no
-later than the session start and no more than 36 hours earlier. The episode
-contains estimated duration, explicit target deviation, sleep quality, and
-Morning energy only when that capture was recorded before the session.
+use a valid V4 Morning sleep episode only when the episode `entry_date` equals
+the session's profile-local start date and `woke_at` is no later than the
+session start. There is no prior-day or 36-hour fallback. A session after
+midnight therefore has no sleep values until that calendar day's valid Morning
+capture exists. The episode contains estimated duration, explicit target
+deviation, sleep quality, and Morning energy only when that capture was recorded
+before the session.
 
 For a sleep comparison, multiple sessions linked to the same episode collapse
 to one daily observation so a single day cannot be multiplied. An Evening
@@ -140,6 +143,31 @@ Insights replaces the generic observation for real accounts with one
 disabled, and error states. Expanded evidence cannot grant Planner authority.
 Advanced correlations remain exploratory and use profile-timezone backend
 points; unsupported reconstructed Planner and Habit histories are excluded.
+Flutter presents target-based sleep as non-negative `Sleep shortfall` while
+retaining the signed API property for compatibility. Previous-night sleep,
+sleep quality, and Morning energy share the local wake/Focus date. Planned and
+actual rated Focus minutes are daily sums; ratings and completion are daily
+averages across rated sessions.
+
+Pearson coefficients require seven shared local dates. Seven through thirteen
+dates are visibly restrained `Early evidence`; rankings, Top Patterns, and
+strong color weighting require at least fourteen. The only signal pairs not
+compared are sleep duration with sleep shortfall, and Activity with Steps,
+because each pair overlaps. Those cells are neutral, non-selectable, omitted
+from rankings and scatterplots, and cannot be selected together in the trend
+overlay. The default real-account comparison is Previous-night sleep with
+Rated useful progress; demo falls back to Previous-night sleep with Rated focus
+time.
+
+Trend copy states that sleep belongs to the local wake/Focus date, Focus values
+contain rated sessions only, and every curve is normalized relative to its own
+range. A 7-day experiment may appear only for an explicitly allowlisted,
+controllable factor-to-outcome pair. Sleep associations and outcome-to-outcome
+pairs stay descriptive.
+The correlation matrix keeps its row labels fixed while only the data grid
+scrolls horizontally. Row and column labels wrap without ellipsis, and their
+cells expand with text scaling so the complete metric names remain readable on
+desktop and at the supported 320-pixel/200%-text boundary.
 
 ## Optional Planner use
 
@@ -186,12 +214,16 @@ with Setup ordering and a visible fallback warning.
 This is a separate deterministic segment and does not grant Personal Patterns
 or Decision Feedback new authority.
 
-Recommendation generation resolves its rolling dates in the profile timezone
-and reads current structured facts. The Focus rule uses real terminal sessions:
+Recommendation generation resolves its rolling dates in the profile timezone,
+excludes `daily_logs.entry_date` after that profile-local date, and reads current
+structured facts. The Focus rule uses real terminal sessions:
 an intentionally short completed session is not a failure, and a warning
 requires at least three terminal sessions in 14 days with at least two
 abandonments. The sleep rule uses a valid V4 sleep-quality estimate or explicit
-target deviation instead of a fixed 6.5-hour cutoff alone. Movement candidates
+target deviation instead of a fixed 6.5-hour cutoff alone. Recovery and movement
+still count a matching date once. When both fields trigger on that date, its
+evidence reference deterministically names the stronger normalized trigger:
+sleep quality or sleep shortfall, and Steps or Activity. Movement candidates
 exist only for actually measured activity or steps and name fixed thresholds,
 never a personal baseline.
 

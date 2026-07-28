@@ -1,4 +1,8 @@
 import 'package:flutter/material.dart';
+
+import 'package:my_life_graph/core/constants/app_radii.dart';
+
+import 'package:my_life_graph/core/theme/app_icons.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -40,7 +44,7 @@ class _WeeklyReviewPageState extends ConsumerState<WeeklyReviewPage> {
           onPressed: _isGenerating
               ? null
               : () => ref.invalidate(latestWeeklyReviewProvider),
-          icon: const Icon(Icons.refresh),
+          icon: const Icon(AppIcons.refresh),
         ),
       ],
       children: [
@@ -62,16 +66,16 @@ class _WeeklyReviewPageState extends ConsumerState<WeeklyReviewPage> {
 
   Widget _buildFeed(WeeklyReviewFeed feed) {
     if (feed.origin == WeeklyReviewOrigin.localDemo) {
-      return const AppCard(
+      return AppCard(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
               'Weekly review unavailable',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
+              style: Theme.of(context).textTheme.titleLarge,
             ),
-            SizedBox(height: AppSpacing.sm),
-            Text(
+            const SizedBox(height: AppSpacing.sm),
+            const Text(
               'Weekly reviews require a synced account. Demo data is not presented as your personal review.',
             ),
           ],
@@ -235,7 +239,7 @@ class _ReviewReadError extends StatelessWidget {
           const SizedBox(height: AppSpacing.md),
           OutlinedButton.icon(
             onPressed: onRetry,
-            icon: const Icon(Icons.refresh),
+            icon: const Icon(AppIcons.refresh),
             label: const Text('Retry weekly review'),
           ),
         ],
@@ -304,7 +308,9 @@ class _MissingReviewCard extends StatelessWidget {
             const SizedBox(height: AppSpacing.sm),
             Text(
               generationError!,
-              style: TextStyle(color: Theme.of(context).colorScheme.error),
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Theme.of(context).colorScheme.error,
+                  ),
             ),
           ],
           const SizedBox(height: AppSpacing.md),
@@ -315,7 +321,7 @@ class _MissingReviewCard extends StatelessWidget {
                     dimension: 16,
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
-                : const Icon(Icons.fact_check_outlined),
+                : const Icon(AppIcons.factCheckOutlined),
             label: Text(
               isGenerating ? 'Creating…' : 'Create weekly review',
             ),
@@ -392,13 +398,13 @@ class _CurrentReview extends StatelessWidget {
                   padding: const EdgeInsets.all(AppSpacing.md),
                   decoration: BoxDecoration(
                     color: Theme.of(context).colorScheme.errorContainer,
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: BorderRadius.circular(AppRadii.md),
                   ),
                   child: Text(
                     'Your saved activity changed after this review. Update it before accepting a suggestion.',
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.onErrorContainer,
-                    ),
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: Theme.of(context).colorScheme.onErrorContainer,
+                        ),
                   ),
                 ),
               ],
@@ -440,14 +446,18 @@ class _CurrentReview extends StatelessWidget {
               if (proposalError != null) ...[
                 Text(
                   proposalError!,
-                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Theme.of(context).colorScheme.error,
+                      ),
                 ),
                 const SizedBox(height: AppSpacing.sm),
               ],
               if (generationError != null) ...[
                 Text(
                   generationError!,
-                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Theme.of(context).colorScheme.error,
+                      ),
                 ),
                 const SizedBox(height: AppSpacing.sm),
               ],
@@ -458,7 +468,7 @@ class _CurrentReview extends StatelessWidget {
                         dimension: 16,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
-                    : const Icon(Icons.refresh),
+                    : const Icon(AppIcons.refresh),
                 label: Text(
                   isGenerating ? 'Updating…' : 'Update weekly review',
                 ),
@@ -546,7 +556,7 @@ class _FactTile extends StatelessWidget {
       padding: const EdgeInsets.all(AppSpacing.sm),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(AppRadii.md),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -587,7 +597,7 @@ class _ProposalCard extends StatelessWidget {
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(AppRadii.md),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -616,7 +626,7 @@ class _ProposalCard extends StatelessWidget {
             padding: const EdgeInsets.all(AppSpacing.sm),
             decoration: BoxDecoration(
               color: Theme.of(context).colorScheme.surface,
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(AppRadii.sm),
             ),
             child: Text(
               _proposalAuthorityLabel(proposal.applicationMode),
@@ -670,7 +680,7 @@ class _ApplyProposalDialog extends StatelessWidget {
           Text(_stateLabel(proposal.change.before)),
           const Padding(
             padding: EdgeInsets.symmetric(vertical: AppSpacing.xs),
-            child: Icon(Icons.arrow_downward, size: 18),
+            child: Icon(AppIcons.arrowDownward, size: 18),
           ),
           Text(_stateLabel(proposal.change.after!)),
           const SizedBox(height: AppSpacing.md),
@@ -707,7 +717,7 @@ class _ReviewPill extends StatelessWidget {
       ),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.secondaryContainer,
-        borderRadius: BorderRadius.circular(999),
+        borderRadius: BorderRadius.circular(AppRadii.pill),
       ),
       child: Text(label, style: Theme.of(context).textTheme.labelMedium),
     );
@@ -751,10 +761,10 @@ String _proposalAuthorityLabel(WeeklyReviewApplicationMode mode) =>
     };
 
 IconData _proposalIcon(WeeklyReviewApplicationMode mode) => switch (mode) {
-      WeeklyReviewApplicationMode.directHabit => Icons.check,
-      WeeklyReviewApplicationMode.settingsSetup => Icons.tune_outlined,
-      WeeklyReviewApplicationMode.stagedOnly => Icons.open_in_new,
-      WeeklyReviewApplicationMode.none => Icons.remove_circle_outline,
+      WeeklyReviewApplicationMode.directHabit => AppIcons.check,
+      WeeklyReviewApplicationMode.settingsSetup => AppIcons.tuneOutlined,
+      WeeklyReviewApplicationMode.stagedOnly => AppIcons.openInNew,
+      WeeklyReviewApplicationMode.none => AppIcons.removeCircleOutline,
     };
 
 String _stateLabel(WeeklyReviewHabitState state) =>

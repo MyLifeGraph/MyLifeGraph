@@ -62,10 +62,11 @@ FastAPI service boundary for recommendation and future ML workflows.
 - Recommendation context ignores terminal done/cancelled/archived tasks for
   overdue and workload candidates. Focus warnings use real terminal sessions
   and require at least three sessions plus two abandonments in 14 days; a short
-  completed session is not automatically insufficient. Sleep uses valid V4
-  quality/target deviation, movement requires measured values, and a deliberate
-  refresh atomically replaces the prior current `new` set while retaining
-  history.
+  completed session is not automatically insufficient. Future Daily Log dates
+  are excluded. Sleep uses valid V4 quality/target deviation and movement
+  requires measured values; when two fields trigger on one date, evidence names
+  the stronger normalized field. A deliberate refresh atomically replaces the
+  prior current `new` set while retaining history.
 - `GET /v1/briefings/today` reads one persisted `daily-briefing-v1` decision;
   deliberate `POST /v1/briefings/generate` refreshes its exact profile-local
   date. Normal reads remain generation-free. The visible Today surface instead

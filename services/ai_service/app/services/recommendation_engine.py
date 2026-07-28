@@ -13,7 +13,7 @@ from app.models.recommendations import (
     RecommendationItem,
     RecommendationListResponse,
 )
-from app.models.user_context import EvidenceRef, SignalSummary
+from app.models.user_context import DailyLogSignal, EvidenceRef, SignalSummary
 from app.repositories.recommendation_repository import (
     RecommendationRepository,
 )
@@ -230,11 +230,7 @@ class RecommendationEngine:
             EvidenceRef(
                 table="daily_logs",
                 id=log.id,
-                field=(
-                    "sleep_quality"
-                    if log.sleep_quality is not None and log.sleep_quality <= 4
-                    else "sleep_target_deviation_minutes"
-                ),
+                field=_strongest_sleep_trigger(log),
             )
             for log in low_recovery_logs
         ]
@@ -389,7 +385,7 @@ class RecommendationEngine:
             EvidenceRef(
                 table="daily_logs",
                 id=log.id,
-                field="steps" if log.steps is not None else "activity_level",
+                field=_strongest_movement_trigger(log),
             )
             for log in low_movement_logs
         ]
@@ -494,6 +490,39 @@ def _score(
         recency=round(_clamp(recency), 4),
         final=round(final, 4),
     )
+
+
+def _strongest_sleep_trigger(log: DailyLogSignal) -> str:
+    quality_severity = _clamp(
+        (5 - log.sleep_quality) / 4
+        if log.sleep_quality is not None and log.sleep_quality <= 4
+        else 0,
+    )
+    shortfall_severity = _clamp(
+        -log.sleep_target_deviation_minutes / 180
+        if log.sleep_target_deviation_minutes is not None
+        and log.sleep_target_deviation_minutes <= -60
+        else 0,
+    )
+    return (
+        "sleep_quality"
+        if quality_severity >= shortfall_severity
+        else "sleep_target_deviation_minutes"
+    )
+
+
+def _strongest_movement_trigger(log: DailyLogSignal) -> str:
+    steps_severity = (
+        (4000 - min(log.steps, 4000)) / 4000
+        if log.steps is not None and log.steps < 4000
+        else 0
+    )
+    activity_severity = (
+        (3 - min(log.activity_level, 3)) / 3
+        if log.activity_level is not None and log.activity_level <= 2
+        else 0
+    )
+    return "steps" if steps_severity >= activity_severity else "activity_level"
 
 
 def _average(values) -> float:

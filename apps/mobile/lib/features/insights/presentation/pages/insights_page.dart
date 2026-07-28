@@ -1,10 +1,15 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+
+import 'package:my_life_graph/core/constants/app_radii.dart';
+
+import 'package:my_life_graph/core/theme/app_icons.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/capabilities/app_surface_capabilities.dart';
 import '../../../../core/constants/app_spacing.dart';
+import '../../../../core/theme/app_visual_tokens.dart';
 import '../../domain/entities/correlation.dart';
 import '../../domain/entities/insight.dart';
 import '../../domain/entities/personal_patterns.dart';
@@ -64,7 +69,7 @@ class _InsightsLoadError extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.cloud_off_outlined, size: 36),
+              const Icon(AppIcons.cloudOffOutlined, size: 36),
               const SizedBox(height: AppSpacing.md),
               Text(
                 'Could not load account insights.',
@@ -80,7 +85,7 @@ class _InsightsLoadError extends StatelessWidget {
               const SizedBox(height: AppSpacing.md),
               OutlinedButton.icon(
                 onPressed: onRetry,
-                icon: const Icon(Icons.refresh),
+                icon: const Icon(AppIcons.refresh),
                 label: const Text('Retry'),
               ),
             ],
@@ -112,11 +117,10 @@ class _InsightsHome extends ConsumerStatefulWidget {
 
 class _InsightsHomeState extends ConsumerState<_InsightsHome> {
   String _metricAId = 'sleep_hours';
-  String _metricBId = 'focus_minutes';
+  String _metricBId = 'useful_progress';
   final Set<String> _trendMetricIds = {
     'sleep_hours',
-    'focus_minutes',
-    'stress_level',
+    'useful_progress',
   };
 
   @override
@@ -226,9 +230,15 @@ class _InsightsHomeState extends ConsumerState<_InsightsHome> {
                             if (value == null) return;
                             setState(() {
                               _metricAId = value;
-                              if (_metricAId == _metricBId) {
-                                _metricBId =
-                                    _fallbackMetricId(except: _metricAId);
+                              if (_metricAId == _metricBId ||
+                                  const CorrelationPairPolicy().isBlocked(
+                                    _metricAId,
+                                    _metricBId,
+                                  )) {
+                                _metricBId = _fallbackMetricId(
+                                  except: _metricAId,
+                                  pairedWith: _metricAId,
+                                );
                               }
                             });
                           },
@@ -236,9 +246,15 @@ class _InsightsHomeState extends ConsumerState<_InsightsHome> {
                             if (value == null) return;
                             setState(() {
                               _metricBId = value;
-                              if (_metricAId == _metricBId) {
-                                _metricAId =
-                                    _fallbackMetricId(except: _metricBId);
+                              if (_metricAId == _metricBId ||
+                                  const CorrelationPairPolicy().isBlocked(
+                                    _metricAId,
+                                    _metricBId,
+                                  )) {
+                                _metricAId = _fallbackMetricId(
+                                  except: _metricBId,
+                                  pairedWith: _metricBId,
+                                );
                               }
                             });
                           },
@@ -255,7 +271,13 @@ class _InsightsHomeState extends ConsumerState<_InsightsHome> {
                                 if (_trendMetricIds.length > 1) {
                                   _trendMetricIds.remove(metricId);
                                 }
-                              } else {
+                              } else if (_trendMetricIds.every(
+                                (selected) =>
+                                    !const CorrelationPairPolicy().isBlocked(
+                                  selected,
+                                  metricId,
+                                ),
+                              )) {
                                 _trendMetricIds.add(metricId);
                               }
                             });
@@ -340,18 +362,52 @@ class _InsightsHomeState extends ConsumerState<_InsightsHome> {
     if (!metricIds.contains(_metricAId)) {
       _metricAId = widget.report.metrics.first.id;
     }
-    if (!metricIds.contains(_metricBId) || _metricAId == _metricBId) {
-      _metricBId = _fallbackMetricId(except: _metricAId);
+    if (!metricIds.contains(_metricBId) ||
+        _metricAId == _metricBId ||
+        const CorrelationPairPolicy().isBlocked(_metricAId, _metricBId)) {
+      _metricBId = _fallbackMetricId(
+        except: _metricAId,
+        pairedWith: _metricAId,
+      );
+    }
+    _trendMetricIds.removeWhere((id) => !metricIds.contains(id));
+    if (_trendMetricIds.length < 2 &&
+        !_trendMetricIds.contains(_metricBId) &&
+        _trendMetricIds.every(
+          (selected) => !const CorrelationPairPolicy().isBlocked(
+            selected,
+            _metricBId,
+          ),
+        )) {
+      _trendMetricIds.add(_metricBId);
+    }
+    if (_trendMetricIds.isEmpty) {
+      _trendMetricIds.add(_metricAId);
+      _trendMetricIds.add(_metricBId);
     }
   }
 
-  String _fallbackMetricId({required String except}) {
-    return widget.report.metrics
-        .firstWhere(
-          (metric) => metric.id != except,
-          orElse: () => widget.report.metrics.first,
-        )
-        .id;
+  String _fallbackMetricId({
+    required String except,
+    String? pairedWith,
+  }) {
+    final candidates = widget.report.metrics.where(
+      (metric) =>
+          metric.id != except &&
+          (pairedWith == null ||
+              !const CorrelationPairPolicy().isBlocked(
+                metric.id,
+                pairedWith,
+              )),
+    );
+    for (final preferred in const ['useful_progress', 'focus_minutes']) {
+      for (final candidate in candidates) {
+        if (candidate.id == preferred) return candidate.id;
+      }
+    }
+    return candidates.isEmpty
+        ? widget.report.metrics.first.id
+        : candidates.first.id;
   }
 }
 
@@ -484,11 +540,11 @@ class _InsightsHeader extends StatelessWidget {
           vertical: AppSpacing.md,
         ),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(AppRadii.md),
         ),
       ),
       onPressed: onRefresh,
-      icon: const Icon(Icons.refresh, size: 18),
+      icon: const Icon(AppIcons.refresh, size: 18),
       label: const Text('Refresh correlations'),
     );
 
@@ -570,7 +626,7 @@ class _PersonalStudyPatternCard extends StatelessWidget {
                   const SizedBox(height: AppSpacing.md),
                   OutlinedButton.icon(
                     onPressed: onRetry,
-                    icon: const Icon(Icons.refresh),
+                    icon: const Icon(AppIcons.refresh),
                     label: const Text('Retry personal pattern'),
                   ),
                 ],
@@ -792,7 +848,7 @@ class _CoachingObservationCard extends StatelessWidget {
                     .colorScheme
                     .primaryContainer
                     .withAlpha(90),
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(AppRadii.md),
               ),
               child: Text(observation.experiment!),
             ),
@@ -847,7 +903,7 @@ class _SkillsetProfileCard extends StatelessWidget {
             const SizedBox(height: AppSpacing.md),
             OutlinedButton.icon(
               onPressed: onRetry,
-              icon: const Icon(Icons.refresh),
+              icon: const Icon(AppIcons.refresh),
               label: const Text('Retry example'),
             ),
           ],
@@ -949,12 +1005,14 @@ class _ControlsPanel extends StatelessWidget {
       label: 'Compare',
       metrics: metrics,
       value: metricAId,
+      blockedWithMetricId: metricBId,
       onChanged: onMetricAChanged,
     );
     final pickerB = _MetricPicker(
       label: 'With',
       metrics: metrics,
       value: metricBId,
+      blockedWithMetricId: metricAId,
       onChanged: onMetricBChanged,
     );
     final windowSelector = _WindowSelector(
@@ -1020,12 +1078,14 @@ class _MetricPicker extends StatelessWidget {
     required this.label,
     required this.metrics,
     required this.value,
+    required this.blockedWithMetricId,
     required this.onChanged,
   });
 
   final String label;
   final List<CorrelationMetric> metrics;
   final String value;
+  final String blockedWithMetricId;
   final ValueChanged<String?> onChanged;
 
   @override
@@ -1038,6 +1098,12 @@ class _MetricPicker extends StatelessWidget {
           .map(
             (metric) => DropdownMenuItem(
               value: metric.id,
+              enabled: metric.id == value ||
+                  (metric.id != blockedWithMetricId &&
+                      !const CorrelationPairPolicy().isBlocked(
+                        metric.id,
+                        blockedWithMetricId,
+                      )),
               child: Text('${metric.label} · ${metric.category}'),
             ),
           )
@@ -1064,6 +1130,8 @@ class _TrendOverlayCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     final brightness = Theme.of(context).brightness;
+    final useStackedHeader =
+        isMobile || MediaQuery.textScalerOf(context).scale(14) > 18;
     final selectedMetrics = report.metrics
         .where((metric) => selectedMetricIds.contains(metric.id))
         .toList(growable: false);
@@ -1078,32 +1146,19 @@ class _TrendOverlayCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Trend overlay',
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
-                    const SizedBox(height: AppSpacing.xs),
-                    Text(
-                      'Select multiple signals to compare their peaks over time.',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color:
-                                Theme.of(context).colorScheme.onSurfaceVariant,
-                          ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: AppSpacing.md),
-              _SmallInfoBadge(label: '0-100 normalized'),
-            ],
-          ),
+          if (useStackedHeader) ...[
+            _TrendOverlayHeading(),
+            const SizedBox(height: AppSpacing.md),
+            _SmallInfoBadge(label: '0-100 normalized'),
+          ] else
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Expanded(child: _TrendOverlayHeading()),
+                const SizedBox(width: AppSpacing.md),
+                _SmallInfoBadge(label: '0-100 normalized'),
+              ],
+            ),
           const SizedBox(height: AppSpacing.lg),
           Wrap(
             spacing: AppSpacing.sm,
@@ -1113,12 +1168,30 @@ class _TrendOverlayCard extends StatelessWidget {
                 FilterChip(
                   label: Text(metric.label),
                   selected: selectedMetricIds.contains(metric.id),
-                  onSelected: (_) => onMetricToggled(metric.id),
+                  onSelected: !selectedMetricIds.contains(metric.id) &&
+                          selectedMetricIds.any(
+                            (selected) =>
+                                const CorrelationPairPolicy().isBlocked(
+                              selected,
+                              metric.id,
+                            ),
+                          )
+                      ? null
+                      : (_) => onMetricToggled(metric.id),
                   selectedColor: _trendColorForMetric(metric.id, brightness)
                       .withValues(alpha: 0.22),
                   checkmarkColor: _trendColorForMetric(metric.id, brightness),
                 ),
             ],
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          Text(
+            'Previous-night sleep is placed on the local wake and Focus day. '
+            'Focus values include rated sessions only. Each line is normalized '
+            'relative to its own range.',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: colors.onSurfaceVariant,
+                ),
           ),
           const SizedBox(height: AppSpacing.lg),
           SizedBox(
@@ -1193,6 +1266,30 @@ class _TrendOverlayCard extends StatelessWidget {
   }
 }
 
+class _TrendOverlayHeading extends StatelessWidget {
+  const _TrendOverlayHeading();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Trend overlay',
+          style: Theme.of(context).textTheme.titleLarge,
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        Text(
+          'Compare daily evidence without treating the lines as the same scale.',
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+        ),
+      ],
+    );
+  }
+}
+
 class _SmallInfoBadge extends StatelessWidget {
   const _SmallInfoBadge({required this.label});
 
@@ -1208,7 +1305,7 @@ class _SmallInfoBadge extends StatelessWidget {
       ),
       decoration: BoxDecoration(
         color: colors.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(999),
+        borderRadius: BorderRadius.circular(AppRadii.pill),
         border: Border.all(color: colors.outlineVariant),
       ),
       child: Text(label, style: Theme.of(context).textTheme.labelSmall),
@@ -1236,43 +1333,48 @@ class _CorrelationCard extends StatelessWidget {
     final activeResult = result;
     final colors = Theme.of(context).colorScheme;
     final olderPointColor = colors.onSurfaceVariant;
+    final useStackedContent =
+        isMobile || MediaQuery.textScalerOf(context).scale(14) > 18;
+    final heading = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '${metricA.label} vs ${metricB.label}',
+          style: Theme.of(context).textTheme.titleLarge,
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        Text(
+          activeResult?.summary ?? 'Choose two different signals to compare.',
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                height: 1.4,
+              ),
+        ),
+      ],
+    );
+    final badge = _CorrelationBadge(
+      result: activeResult,
+      metricA: metricA,
+      metricB: metricB,
+    );
     return _InsightsPanel(
       padding: EdgeInsets.all(isMobile ? AppSpacing.md : AppSpacing.lg),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '${metricA.label} vs ${metricB.label}',
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
-                    const SizedBox(height: AppSpacing.xs),
-                    Text(
-                      activeResult?.summary ??
-                          'Choose two different signals to compare.',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            color:
-                                Theme.of(context).colorScheme.onSurfaceVariant,
-                            height: 1.4,
-                          ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: AppSpacing.md),
-              _CorrelationBadge(
-                result: activeResult,
-                metricA: metricA,
-                metricB: metricB,
-              ),
-            ],
-          ),
+          if (useStackedContent) ...[
+            heading,
+            const SizedBox(height: AppSpacing.md),
+            badge,
+          ] else
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(child: heading),
+                const SizedBox(width: AppSpacing.md),
+                badge,
+              ],
+            ),
           const SizedBox(height: AppSpacing.lg),
           SizedBox(
             height: isMobile ? 230 : 320,
@@ -1299,33 +1401,54 @@ class _CorrelationCard extends StatelessWidget {
             newerColor: colors.primary,
           ),
           const SizedBox(height: AppSpacing.sm),
-          Row(
-            children: [
-              Expanded(
-                child: Text(
+          if (useStackedContent)
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
                   '${metricA.label} (${metricA.unit})',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
-              ),
-              Text(
-                '${activeResult?.sampleSize ?? values.length} shared days',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
-              ),
-              Expanded(
-                child: Text(
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  '${activeResult?.sampleSize ?? values.length} shared days',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                Text(
                   '${metricB.label} (${metricB.unit})',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  textAlign: TextAlign.end,
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
-              ),
-            ],
-          ),
+              ],
+            )
+          else
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    '${metricA.label} (${metricA.unit})',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Text(
+                  '${activeResult?.sampleSize ?? values.length} shared days',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: Text(
+                    '${metricB.label} (${metricB.unit})',
+                    textAlign: TextAlign.end,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ),
+              ],
+            ),
         ],
       ),
     );
@@ -1353,7 +1476,7 @@ class _CorrelationBadge extends StatelessWidget {
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.18),
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(AppRadii.lg),
         border: Border.all(color: color.withValues(alpha: 0.5)),
       ),
       child: Column(
@@ -1414,8 +1537,10 @@ class _LegendDot extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
+    return Wrap(
+      spacing: AppSpacing.xs,
+      runSpacing: AppSpacing.xs,
+      crossAxisAlignment: WrapCrossAlignment.center,
       children: [
         Container(
           width: 11,
@@ -1425,7 +1550,6 @@ class _LegendDot extends StatelessWidget {
             shape: BoxShape.circle,
           ),
         ),
-        const SizedBox(width: AppSpacing.xs),
         Text(label, style: Theme.of(context).textTheme.bodySmall),
       ],
     );
@@ -1495,7 +1619,7 @@ class _TopPatternTile extends StatelessWidget {
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(AppRadii.lg),
       ),
       child: Row(
         children: [
@@ -1504,12 +1628,12 @@ class _TopPatternTile extends StatelessWidget {
             height: 42,
             decoration: BoxDecoration(
               color: color.withValues(alpha: 0.18),
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(AppRadii.md),
             ),
             child: Icon(
               result.coefficient! >= 0
-                  ? Icons.trending_up
-                  : Icons.trending_down,
+                  ? AppIcons.trendingUp
+                  : AppIcons.trendingDown,
               color: color,
             ),
           ),
@@ -1572,73 +1696,143 @@ class _CorrelationMatrixCard extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.xs),
           Text(
-            'Tap any cell to inspect that pair.',
+            'Tap a comparable cell to inspect it. Overlapping signals are not compared.',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
           ),
           const SizedBox(height: AppSpacing.lg),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    const SizedBox(width: 116),
-                    ...report.metrics.map(
-                      (metric) => _MatrixHeaderCell(label: metric.label),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: AppSpacing.xs),
-                ...report.metrics.map(
-                  (rowMetric) => Padding(
-                    padding: const EdgeInsets.only(bottom: AppSpacing.xs),
-                    child: Row(
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final desktop = constraints.maxWidth >= 700;
+              final textScale = MediaQuery.textScalerOf(context).scale(13) / 13;
+              final widthScale = textScale.clamp(1.0, 2.0);
+              final rowLabelScale = textScale.clamp(1.0, 1.25);
+              final rowLabelWidth = (desktop ? 196.0 : 144.0) * rowLabelScale;
+              final cellWidth = 88.0 * widthScale;
+              final cellStride = cellWidth + AppSpacing.xs;
+              final rowHeight = math.max(56.0, 70 * textScale);
+              final headerHeight = math.max(
+                desktop ? 72.0 : 64.0,
+                70 * textScale,
+              );
+
+              return Row(
+                key: const ValueKey('insights-correlation-matrix-grid'),
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(
+                    width: rowLabelWidth,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _MatrixRowLabel(label: rowMetric.label),
+                        SizedBox(
+                          height: headerHeight + AppSpacing.xs,
+                          child: Align(
+                            alignment: Alignment.bottomLeft,
+                            child: Text(
+                              'Metric',
+                              style: Theme.of(context).textTheme.labelSmall,
+                            ),
+                          ),
+                        ),
                         ...report.metrics.map(
-                          (columnMetric) {
-                            final result = report.resultFor(
-                              rowMetric.id,
-                              columnMetric.id,
-                            );
-                            final color = _resultColor(
-                              context,
-                              result,
-                              rowMetric,
-                              columnMetric,
-                            );
-                            final selected = _isSelectedPair(
-                              rowMetric.id,
-                              columnMetric.id,
-                            );
-                            return _MatrixCell(
-                              cellKey: ValueKey(
-                                'insights-matrix-cell-${rowMetric.id}-${columnMetric.id}',
-                              ),
-                              rowLabel: rowMetric.label,
-                              columnLabel: columnMetric.label,
-                              result: result,
-                              color: color,
-                              selected: selected,
-                              disabled: rowMetric.id == columnMetric.id,
-                              onTap: rowMetric.id == columnMetric.id
-                                  ? null
-                                  : () => onPairSelected(
-                                        rowMetric.id,
-                                        columnMetric.id,
-                                      ),
-                            );
-                          },
+                          (metric) => Padding(
+                            padding: const EdgeInsets.only(
+                              bottom: AppSpacing.xs,
+                            ),
+                            child: _MatrixRowLabel(
+                              metricId: metric.id,
+                              label: metric.label,
+                              height: rowHeight,
+                            ),
+                          ),
                         ),
                       ],
                     ),
                   ),
-                ),
-              ],
-            ),
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: report.metrics
+                                .map(
+                                  (metric) => _MatrixHeaderCell(
+                                    metricId: metric.id,
+                                    label: metric.label,
+                                    width: cellStride,
+                                    height: headerHeight,
+                                  ),
+                                )
+                                .toList(growable: false),
+                          ),
+                          const SizedBox(height: AppSpacing.xs),
+                          ...report.metrics.map(
+                            (rowMetric) => Padding(
+                              padding: const EdgeInsets.only(
+                                bottom: AppSpacing.xs,
+                              ),
+                              child: Row(
+                                children: report.metrics.map(
+                                  (columnMetric) {
+                                    final result = report.resultFor(
+                                      rowMetric.id,
+                                      columnMetric.id,
+                                    );
+                                    final color = _resultColor(
+                                      context,
+                                      result,
+                                      rowMetric,
+                                      columnMetric,
+                                    );
+                                    final selected = _isSelectedPair(
+                                      rowMetric.id,
+                                      columnMetric.id,
+                                    );
+                                    final overlapping =
+                                        const CorrelationPairPolicy().isBlocked(
+                                      rowMetric.id,
+                                      columnMetric.id,
+                                    );
+                                    final disabled =
+                                        rowMetric.id == columnMetric.id ||
+                                            overlapping;
+                                    return _MatrixCell(
+                                      cellKey: ValueKey(
+                                        'insights-matrix-cell-${rowMetric.id}-${columnMetric.id}',
+                                      ),
+                                      rowLabel: rowMetric.label,
+                                      columnLabel: columnMetric.label,
+                                      result: result,
+                                      color: color,
+                                      selected: selected && !disabled,
+                                      disabled: disabled,
+                                      overlappingSignals: overlapping,
+                                      width: cellWidth,
+                                      height: rowHeight,
+                                      onTap: disabled
+                                          ? null
+                                          : () => onPairSelected(
+                                                rowMetric.id,
+                                                columnMetric.id,
+                                              ),
+                                    );
+                                  },
+                                ).toList(growable: false),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
           ),
         ],
       ),
@@ -1652,39 +1846,63 @@ class _CorrelationMatrixCard extends StatelessWidget {
 }
 
 class _MatrixHeaderCell extends StatelessWidget {
-  const _MatrixHeaderCell({required this.label});
+  const _MatrixHeaderCell({
+    required this.metricId,
+    required this.label,
+    required this.width,
+    required this.height,
+  });
 
+  final String metricId;
   final String label;
+  final double width;
+  final double height;
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 72,
-      child: Text(
-        label,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        textAlign: TextAlign.center,
-        style: Theme.of(context).textTheme.labelSmall,
+    return Padding(
+      padding: const EdgeInsets.only(right: AppSpacing.xs),
+      child: SizedBox(
+        key: ValueKey('insights-matrix-column-$metricId'),
+        width: width - AppSpacing.xs,
+        height: height,
+        child: Align(
+          alignment: Alignment.bottomCenter,
+          child: Text(
+            label,
+            maxLines: 4,
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.labelMedium,
+          ),
+        ),
       ),
     );
   }
 }
 
 class _MatrixRowLabel extends StatelessWidget {
-  const _MatrixRowLabel({required this.label});
+  const _MatrixRowLabel({
+    required this.metricId,
+    required this.label,
+    required this.height,
+  });
 
+  final String metricId;
   final String label;
+  final double height;
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: 116,
-      child: Text(
-        label,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: Theme.of(context).textTheme.labelMedium,
+      key: ValueKey('insights-matrix-row-$metricId'),
+      height: height,
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Text(
+          label,
+          maxLines: 4,
+          style: Theme.of(context).textTheme.labelMedium,
+        ),
       ),
     );
   }
@@ -1699,6 +1917,9 @@ class _MatrixCell extends StatelessWidget {
     required this.color,
     required this.selected,
     required this.disabled,
+    required this.overlappingSignals,
+    required this.width,
+    required this.height,
     required this.onTap,
   });
 
@@ -1709,12 +1930,16 @@ class _MatrixCell extends StatelessWidget {
   final Color color;
   final bool selected;
   final bool disabled;
+  final bool overlappingSignals;
+  final double width;
+  final double height;
   final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
-    final fillColor = disabled
+    final earlyEvidence = result?.status == CorrelationStatus.earlyEvidence;
+    final fillColor = disabled || earlyEvidence
         ? colors.surfaceContainerHighest
         : color.withValues(
             alpha: (result?.coefficient?.abs() ?? 0.08).clamp(0.12, 0.9),
@@ -1724,9 +1949,11 @@ class _MatrixCell extends StatelessWidget {
       final value when value.coefficient == null => value.strengthLabel,
       final value => '${value.coefficientLabel}. ${value.strengthLabel}',
     };
-    final semanticLabel = disabled
-        ? '$rowLabel, same metric'
-        : '$rowLabel and $columnLabel correlation. $resultDescription';
+    final semanticLabel = overlappingSignals
+        ? '$rowLabel and $columnLabel. Not compared · overlapping signals'
+        : disabled
+            ? '$rowLabel, same metric'
+            : '$rowLabel and $columnLabel correlation. $resultDescription';
     return Padding(
       padding: const EdgeInsets.only(right: AppSpacing.xs),
       child: Semantics(
@@ -1740,21 +1967,27 @@ class _MatrixCell extends StatelessWidget {
         child: ExcludeSemantics(
           child: InkWell(
             onTap: onTap,
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(AppRadii.md),
             child: Container(
-              width: 64,
-              height: 42,
+              width: width,
+              height: height,
               alignment: Alignment.center,
               decoration: BoxDecoration(
                 color: fillColor,
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(AppRadii.md),
                 border: Border.all(
                   color: selected ? colors.primary : colors.outlineVariant,
                   width: selected ? 2 : 1,
                 ),
               ),
               child: Text(
-                disabled ? '·' : result?.coefficientLabel ?? '--',
+                overlappingSignals
+                    ? 'Not compared\n· overlapping signals'
+                    : disabled
+                        ? '·'
+                        : result?.coefficientLabel ?? '--',
+                maxLines: 3,
+                textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
                       color:
                           disabled ? colors.onSurfaceVariant : colors.onSurface,
@@ -1788,7 +2021,7 @@ class _DiscoveredPatternsCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Icon(
-                Icons.psychology_outlined,
+                AppIcons.psychologyOutlined,
                 color: Theme.of(context).colorScheme.primary,
                 size: 34,
               ),
@@ -1852,7 +2085,7 @@ class InsightsPatternTile extends StatelessWidget {
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(AppRadii.lg),
       ),
       child: isMobile
           ? Column(
@@ -1932,7 +2165,7 @@ class _ConfidenceBadge extends StatelessWidget {
       ),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surfaceContainer,
-        borderRadius: BorderRadius.circular(999),
+        borderRadius: BorderRadius.circular(AppRadii.pill),
       ),
       child: Text(
         label,
@@ -2481,7 +2714,7 @@ class _InsightsPanel extends StatelessWidget {
       padding: padding,
       decoration: BoxDecoration(
         color: colors.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(AppRadii.xl),
         border: Border.all(color: colors.outlineVariant, width: 2),
         boxShadow: [
           BoxShadow(
@@ -2505,13 +2738,16 @@ Color _resultColor(
   CorrelationMetric metricB,
 ) {
   final colors = Theme.of(context).colorScheme;
-  final isLight = Theme.of(context).brightness == Brightness.light;
+  final tokens = context.visualTokens;
   final coefficient = result?.coefficient;
   if (coefficient == null) {
     return colors.onSurfaceVariant;
   }
+  if (result?.status == CorrelationStatus.earlyEvidence) {
+    return colors.onSurfaceVariant;
+  }
   if (coefficient.abs() < 0.2) {
-    return isLight ? const Color(0xFF795900) : const Color(0xFFFFC857);
+    return tokens.attention;
   }
 
   final bothPositive = metricA.higherIsPositive && metricB.higherIsPositive;
@@ -2522,9 +2758,9 @@ Color _resultColor(
       (bothRisk && coefficient < 0);
 
   if (supportive) {
-    return isLight ? const Color(0xFF18794E) : const Color(0xFF66D19E);
+    return tokens.success;
   }
-  return isLight ? colors.error : const Color(0xFFFF8F70);
+  return tokens.danger;
 }
 
 Color _pointColorForRecency(

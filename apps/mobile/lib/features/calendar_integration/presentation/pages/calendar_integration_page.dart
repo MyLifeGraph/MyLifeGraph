@@ -1,4 +1,8 @@
 import 'package:flutter/material.dart';
+
+import 'package:my_life_graph/core/constants/app_radii.dart';
+
+import 'package:my_life_graph/core/theme/app_icons.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -27,7 +31,7 @@ class CalendarIntegrationPage extends ConsumerWidget {
         IconButton(
           tooltip: 'Reload calendar state',
           onPressed: state.isBusy ? null : controller.load,
-          icon: const Icon(Icons.refresh),
+          icon: const Icon(AppIcons.refresh),
         ),
       ],
       children: _children(context, state, controller),
@@ -54,7 +58,7 @@ class CalendarIntegrationPage extends ConsumerWidget {
     if (state.loadError != null) {
       return [
         _MessageCard(
-          icon: Icons.cloud_off_outlined,
+          icon: AppIcons.cloudOffOutlined,
           title: 'Calendar import unavailable',
           message:
               'The calendar status could not be read. It was not replaced with a disconnected or demo state.',
@@ -67,7 +71,7 @@ class CalendarIntegrationPage extends ConsumerWidget {
     if (feed.origin == CalendarIntegrationOrigin.localDemo) {
       return const [
         _MessageCard(
-          icon: Icons.cloud_off_outlined,
+          icon: AppIcons.cloudOffOutlined,
           title: 'Calendar import unavailable in local demo',
           message:
               'Calendar import requires a synced account. Nothing was connected or imported, and the standalone app remains available.',
@@ -83,7 +87,7 @@ class CalendarIntegrationPage extends ConsumerWidget {
         _ConnectionSetupCard(state: state, controller: controller)
       else if (deleted) ...[
         _MessageCard(
-          icon: Icons.delete_outline,
+          icon: AppIcons.deleteOutline,
           title: 'Imported data deleted',
           message:
               'Any local imported copy and import history were deleted. The original calendar was never changed.',
@@ -111,16 +115,16 @@ class _ReadOnlyPromiseCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const AppCard(
+    return AppCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             'Read-only import',
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
+            style: Theme.of(context).textTheme.titleLarge,
           ),
-          SizedBox(height: AppSpacing.sm),
-          Text(
+          const SizedBox(height: AppSpacing.sm),
+          const Text(
             'You choose one UTF-8 .ics file. MyLifeGraph stores only essential event details, never changes the source calendar, and never sends imported content to AI.',
           ),
         ],
@@ -189,7 +193,7 @@ class _ConnectionSetupCard extends StatelessWidget {
                     dimension: 16,
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
-                : const Icon(Icons.add_link),
+                : const Icon(AppIcons.addLink),
             label: Text(
               state.operation == CalendarIntegrationOperation.creating
                   ? 'Creating…'
@@ -299,7 +303,7 @@ class _ImportFileCard extends StatelessWidget {
                     dimension: 16,
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
-                : const Icon(Icons.file_open_outlined),
+                : const Icon(AppIcons.fileOpenOutlined),
             label: const Text('Choose .ics file'),
           ),
           if (file != null) ...[
@@ -309,11 +313,11 @@ class _ImportFileCard extends StatelessWidget {
               padding: const EdgeInsets.all(AppSpacing.sm),
               decoration: BoxDecoration(
                 color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(AppRadii.md),
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.description_outlined),
+                  const Icon(AppIcons.descriptionOutlined),
                   const SizedBox(width: AppSpacing.sm),
                   Expanded(
                     child: Text('${file.name} · ${file.byteLength} bytes'),
@@ -321,7 +325,7 @@ class _ImportFileCard extends StatelessWidget {
                   IconButton(
                     tooltip: 'Clear selected file',
                     onPressed: locked ? null : controller.clearSelectedFile,
-                    icon: const Icon(Icons.close),
+                    icon: const Icon(AppIcons.close),
                   ),
                 ],
               ),
@@ -334,7 +338,7 @@ class _ImportFileCard extends StatelessWidget {
                       dimension: 16,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
-                  : const Icon(Icons.upload_file_outlined),
+                  : const Icon(AppIcons.uploadFileOutlined),
               label: Text(
                 state.operation == CalendarIntegrationOperation.importing
                     ? 'Importing…'
@@ -378,7 +382,7 @@ class _ImportedEventsCard extends StatelessWidget {
             const SizedBox(height: AppSpacing.sm),
             OutlinedButton.icon(
               onPressed: state.isBusy ? null : controller.load,
-              icon: const Icon(Icons.refresh),
+              icon: const Icon(AppIcons.refresh),
               label: const Text('Reload imported events'),
             ),
           ] else if (!hasImport)
@@ -402,7 +406,7 @@ class _ImportedEventsCard extends StatelessWidget {
                             dimension: 16,
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
-                        : const Icon(Icons.expand_more),
+                        : const Icon(AppIcons.expandMore),
                 label: const Text('Load more imported events'),
               ),
           ],
@@ -444,7 +448,7 @@ class _ImportedEventTile extends StatelessWidget {
               onPressed: () {
                 context.go(preparationLocation.toString());
               },
-              icon: const Icon(Icons.event_available_outlined),
+              icon: const Icon(AppIcons.eventAvailableOutlined),
               label: const Text('Plan preparation'),
             ),
           ],
@@ -511,7 +515,7 @@ class _SourceControlsCard extends StatelessWidget {
                       final confirmed = await _confirmDisconnect(context);
                       if (confirmed) await controller.disconnect();
                     },
-              icon: const Icon(Icons.link_off),
+              icon: const Icon(AppIcons.linkOff),
               label: Text(
                 state.retryKind == CalendarIntegrationRetryKind.disconnect
                     ? 'Retry unchanged'
@@ -528,7 +532,7 @@ class _SourceControlsCard extends StatelessWidget {
                       final confirmed = await _confirmDelete(context);
                       if (confirmed) await controller.deleteImportedData();
                     },
-              icon: const Icon(Icons.delete_outline),
+              icon: const Icon(AppIcons.deleteOutline),
               label: Text(
                 state.retryKind == CalendarIntegrationRetryKind.delete
                     ? 'Retry unchanged'
@@ -618,7 +622,7 @@ class _OperationErrorCard extends StatelessWidget {
             const SizedBox(height: AppSpacing.md),
             OutlinedButton.icon(
               onPressed: state.isBusy ? null : controller.load,
-              icon: const Icon(Icons.refresh),
+              icon: const Icon(AppIcons.refresh),
               label: const Text('Load latest calendar state'),
             ),
           ],
@@ -674,7 +678,7 @@ class _StatusPill extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(999),
+        borderRadius: BorderRadius.circular(AppRadii.pill),
       ),
       child: Text(label, style: Theme.of(context).textTheme.labelMedium),
     );

@@ -2,8 +2,10 @@ import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:my_life_graph/core/capabilities/app_surface_capabilities.dart';
 import 'package:my_life_graph/core/errors/app_exception.dart';
+import 'package:my_life_graph/core/theme/app_theme.dart';
 import 'package:my_life_graph/features/notifications/application/notification_delivery_controller.dart';
 import 'package:my_life_graph/features/notifications/data/datasources/notifications_supabase_data_source.dart';
 import 'package:my_life_graph/features/notifications/domain/entities/app_notification.dart';
@@ -345,12 +347,15 @@ void main() {
     await tester.tap(
       find.byKey(const ValueKey('notification-delivery-consent')),
     );
+    final saveButton = find.byKey(const ValueKey('notification-settings-save'));
     await tester.scrollUntilVisible(
-      find.byKey(const ValueKey('notification-settings-save')),
+      saveButton,
       240,
       scrollable: find.byType(Scrollable).first,
     );
-    await tester.tap(find.byKey(const ValueKey('notification-settings-save')));
+    await tester.ensureVisible(saveButton);
+    await tester.pumpAndSettle();
+    await tester.tap(saveButton);
     await tester.pumpAndSettle();
 
     expect(find.text('Allow in-app banners?'), findsOneWidget);
@@ -380,6 +385,8 @@ void main() {
       autoStart: false,
     );
     final inboxRepository = _InboxRepository();
+    final router = _notificationRouter();
+    addTearDown(router.dispose);
 
     await tester.pumpWidget(
       ProviderScope(
@@ -395,11 +402,9 @@ void main() {
           inAppNotificationDeliveryProvider.overrideWith((ref) => controller),
           notificationsRepositoryProvider.overrideWithValue(inboxRepository),
         ],
-        child: const MaterialApp(
-          home: MainShell(
-            currentPath: '/alerts',
-            child: NotificationsPage(),
-          ),
+        child: MaterialApp.router(
+          theme: AppTheme.dark,
+          routerConfig: router,
         ),
       ),
     );
@@ -415,21 +420,102 @@ void main() {
       find.byKey(const ValueKey('in-app-notification-$_notificationId')),
       findsOneWidget,
     );
-    expect(find.text('In-app · fixed text · not AI-written'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(
+          const ValueKey('in-app-notification-$_notificationId'),
+        ),
+        matching: find.text('Fixed text · not AI-written'),
+      ),
+      findsOneWidget,
+    );
     expect(find.text("Today's overview is ready"), findsWidgets);
     expect(find.text('Your inbox is empty.'), findsNothing);
     expect(inboxRepository.calls, greaterThanOrEqualTo(2));
-    await tester.drag(
-      find.byType(CustomScrollView),
-      const Offset(0, -400),
+    expect(
+      tester
+          .widget<SnackBar>(
+            find.byKey(
+              const ValueKey('in-app-notification-$_notificationId'),
+            ),
+          )
+          .width,
+      560,
     );
-    await tester.pumpAndSettle();
     expect(
       find.text(
         'Based on today\'s current plan for 2026-07-14 in Europe/Berlin.',
       ),
       findsOneWidget,
     );
+
+    await tester.tap(
+      find.byKey(
+        const ValueKey(
+          'in-app-notification-content-$_notificationId',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Today destination'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('in-app-notification-$_notificationId')),
+      findsNothing,
+    );
+  });
+
+  testWidgets('Inbox Open Today action navigates to the Today destination',
+      (tester) async {
+    tester.view
+      ..physicalSize = const Size(1280, 960)
+      ..devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    final deliveryRepository = _DeliveryRepository(
+      settings: NotificationSettings.fromJson(_settingsJson(enabled: false)),
+    );
+    final deliveryController = InAppNotificationDeliveryController(
+      repository: deliveryRepository,
+      enabled: false,
+      autoStart: false,
+    );
+    final inboxRepository = _InboxRepository()..items = [_notification()];
+    final router = _notificationRouter();
+    addTearDown(router.dispose);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          appSurfaceCapabilitiesProvider.overrideWithValue(
+            const AppSurfaceCapabilities(
+              isLocalDemo: false,
+              canUseSyncedHabits: true,
+              canUseSyncedExecution: true,
+              canUseWeeklyReview: true,
+            ),
+          ),
+          inAppNotificationDeliveryProvider.overrideWith(
+            (ref) => deliveryController,
+          ),
+          notificationsRepositoryProvider.overrideWithValue(inboxRepository),
+        ],
+        child: MaterialApp.router(
+          theme: AppTheme.dark,
+          routerConfig: router,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final open = find.byKey(
+      const ValueKey('notification-open-$_notificationId'),
+    );
+    await tester.tap(open);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Today destination'), findsOneWidget);
   });
 }
 
@@ -609,3 +695,22 @@ class _InboxRepository implements NotificationsRepository {
     throw UnimplementedError();
   }
 }
+
+GoRouter _notificationRouter() => GoRouter(
+      initialLocation: '/alerts',
+      routes: [
+        GoRoute(
+          path: '/alerts',
+          builder: (context, state) => const MainShell(
+            currentPath: '/alerts',
+            child: NotificationsPage(),
+          ),
+        ),
+        GoRoute(
+          path: '/dashboard',
+          builder: (context, state) => const Scaffold(
+            body: Center(child: Text('Today destination')),
+          ),
+        ),
+      ],
+    );

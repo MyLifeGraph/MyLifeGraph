@@ -385,6 +385,50 @@ def test_recommendation_context_uses_valid_v4_sleep_and_profile_timezone() -> No
     assert focus_query["started_at"] == "gte.2026-03-28T23:00:00+00:00"
 
 
+def test_recommendation_context_excludes_future_daily_logs() -> None:
+    client = FakeSupabaseClient(
+        daily_rows=[
+            {
+                "id": "future-log",
+                "entry_date": "2026-03-31",
+                "sleep_hours": 4.0,
+                "steps": 1000,
+                "activity_level": 1,
+                "focus_minutes": None,
+                "energy_level": None,
+                "stress_level": None,
+                "metadata": {},
+            },
+            {
+                "id": "today-log",
+                "entry_date": "2026-03-30",
+                "sleep_hours": None,
+                "steps": 5000,
+                "activity_level": 5,
+                "focus_minutes": None,
+                "energy_level": None,
+                "stress_level": None,
+                "metadata": {},
+            },
+        ],
+    )
+
+    context = run(
+        SupabaseUserContextRepository(client).load_recent_context(
+            user_id="user-test-123",
+            window_days=2,
+            today=date(2026, 3, 30),
+            timezone_name="Europe/Berlin",
+        ),
+    )
+
+    assert [log.id for log in context.daily_logs] == ["today-log"]
+    query = next(
+        params for table, params in client.select_calls if table == "daily_logs"
+    )
+    assert query["and"] == "(entry_date.lte.2026-03-30)"
+
+
 def test_recommendation_period_uses_profile_local_date() -> None:
     class LosAngelesContext(FakeUserContextRepository):
         async def get_profile_timezone(self, *, user_id: str) -> str:

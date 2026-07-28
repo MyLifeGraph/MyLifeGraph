@@ -173,9 +173,9 @@ class _FocusReflectionSheetState extends State<_FocusReflectionSheet> {
                     child: Text(
                       _error!,
                       key: const ValueKey('focus-reflection-error'),
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.error,
-                      ),
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: Theme.of(context).colorScheme.error,
+                          ),
                     ),
                   ),
                 ],

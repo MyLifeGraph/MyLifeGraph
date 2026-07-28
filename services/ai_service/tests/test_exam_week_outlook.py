@@ -322,6 +322,21 @@ def test_two_of_three_short_nights_raise_risk_exactly_one_level() -> None:
     ]
 
 
+def test_future_capture_rows_do_not_supply_sleep_plan_or_nights() -> None:
+    service, _ = _service(
+        [_detail(plan_id=EXAM_ID, kind="exam", days=7, remaining=60)],
+        sleep_rows=[
+            _sleep_row(NOW.date() + timedelta(days=1), estimated_minutes=360),
+        ],
+    )
+
+    result = asyncio.run(service.get_exam_week_outlook(user_id="owner"))
+
+    assert result.current_sleep_plan is None
+    assert result.recent_sleep_nights == []
+    assert "sleep_plan_missing" in result.warning_codes
+
+
 def test_missing_current_calendar_never_reports_on_track() -> None:
     service, _ = _service(
         [_detail(plan_id=EXAM_ID, kind="exam", days=7, remaining=60)],

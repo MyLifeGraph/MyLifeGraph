@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:my_life_graph/core/theme/app_icons.dart';
 import 'package:go_router/go_router.dart';
 import 'package:my_life_graph/app.dart';
 import 'package:my_life_graph/core/config/app_config.dart';
@@ -261,7 +262,7 @@ void main() {
 
     await _startGuestAndCompleteSetup(tester);
 
-    await tester.tap(find.byIcon(Icons.add).last);
+    await tester.tap(find.byIcon(AppIcons.add).last);
     await tester.pumpAndSettle();
     expect(find.text('Quick actions'), findsOneWidget);
 
@@ -308,7 +309,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Today at a glance'), findsOneWidget);
-    await tester.tap(find.byIcon(Icons.add).last);
+    await tester.tap(find.byIcon(AppIcons.add).last);
     await tester.pumpAndSettle();
     await tester.tap(find.text('Morning check-in'));
     await tester.pumpAndSettle();
@@ -371,7 +372,7 @@ void main() {
     expect(morning['source_evening_capture_id'], evening['capture_id']);
     expect(morning['branch_version'], dailyCaptureV4);
 
-    await tester.tap(find.byIcon(Icons.add).last);
+    await tester.tap(find.byIcon(AppIcons.add).last);
     await tester.pumpAndSettle();
     expect(find.text('Today\'s saved captures'), findsOneWidget);
     expect(
@@ -390,7 +391,7 @@ void main() {
     await _startGuestAndCompleteSetup(tester);
 
     expect(find.text('Local demo'), findsOneWidget);
-    await tester.tap(find.byIcon(Icons.add).last);
+    await tester.tap(find.byIcon(AppIcons.add).last);
     await tester.pumpAndSettle();
 
     expect(find.text('Evening check-in'), findsOneWidget);

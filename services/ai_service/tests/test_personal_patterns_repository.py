@@ -37,3 +37,8 @@ def test_evidence_query_bounds_terminal_sessions_at_both_window_edges() -> None:
     assert ("status", "in.(completed,abandoned)") in focus_params
     assert ("started_at", f"gte.{starts_at.isoformat()}") in focus_params
     assert ("started_at", f"lt.{ends_at.isoformat()}") in focus_params
+    daily_params = next(
+        params for table, params in client.calls if table == "daily_logs"
+    )
+    assert daily_params["entry_date"] == "gte.2026-04-25"
+    assert daily_params["and"] == "(entry_date.lte.2026-07-26)"

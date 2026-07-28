@@ -78,6 +78,7 @@ class SupabaseUserContextRepository:
                 ),
                 "user_id": f"eq.{user_id}",
                 "entry_date": f"gte.{start_date.isoformat()}",
+                "and": f"(entry_date.lte.{today.isoformat()})",
                 "order": "entry_date.desc",
                 "limit": str(max(window_days, 1)),
             },
@@ -119,7 +120,7 @@ class SupabaseUserContextRepository:
             period_key=_current_period_key(today),
             today=today,
             timezone_name=timezone_name,
-            daily_logs=[_daily_log_signal(row) for row in daily_logs],
+            daily_logs=_daily_log_signals_through(daily_logs, today=today),
             behavioral_events=[
                 _behavioral_event_signal(row) for row in behavioral_events
             ],
@@ -168,6 +169,20 @@ def _daily_log_signal(row: dict[str, Any]) -> DailyLogSignal:
         steps=_optional_int(row.get("steps")),
         activity_level=_optional_float(row.get("activity_level")),
     )
+
+
+def _daily_log_signals_through(
+    rows: list[dict[str, Any]],
+    *,
+    today: date,
+) -> list[DailyLogSignal]:
+    result: list[DailyLogSignal] = []
+    for row in rows:
+        entry_date = _optional_date(row.get("entry_date"))
+        if entry_date is None or entry_date > today:
+            continue
+        result.append(_daily_log_signal(row))
+    return result
 
 
 def _focus_session_signal(

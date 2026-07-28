@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import 'package:my_life_graph/core/theme/app_icons.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../capabilities/app_surface_capabilities.dart';
@@ -40,7 +42,7 @@ class OfflineStatusBanner extends ConsumerWidget {
                     child: Row(
                       children: [
                         Icon(
-                          Icons.cloud_off_outlined,
+                          AppIcons.cloudOffOutlined,
                           size: 18,
                           color: Theme.of(context).colorScheme.onErrorContainer,
                         ),
@@ -48,11 +50,14 @@ class OfflineStatusBanner extends ConsumerWidget {
                         Expanded(
                           child: Text(
                             visibleMessage,
-                            style: TextStyle(
-                              color: Theme.of(context)
-                                  .colorScheme
-                                  .onErrorContainer,
-                            ),
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodyMedium
+                                ?.copyWith(
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .onErrorContainer,
+                                ),
                           ),
                         ),
                       ],

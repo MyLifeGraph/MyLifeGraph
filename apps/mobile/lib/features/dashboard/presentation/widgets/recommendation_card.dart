@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
 
+import 'package:my_life_graph/core/constants/app_radii.dart';
+
+import 'package:my_life_graph/core/theme/app_icons.dart';
+
 import '../../../../core/constants/app_spacing.dart';
+import '../../../../core/theme/app_visual_tokens.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../optimization/domain/entities/recommendation.dart';
 
@@ -40,13 +45,13 @@ class RecommendationCard extends StatelessWidget {
             padding: const EdgeInsets.all(AppSpacing.sm),
             decoration: BoxDecoration(
               color: Theme.of(context).colorScheme.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(8),
+              borderRadius: BorderRadius.circular(AppRadii.sm),
             ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Icon(
-                  Icons.info_outline,
+                  AppIcons.infoOutline,
                   size: 18,
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
@@ -77,30 +82,22 @@ class RecommendationCard extends StatelessWidget {
 
   IconData _categoryIcon(RecommendationCategory category) {
     return switch (category) {
-      RecommendationCategory.focus => Icons.center_focus_strong,
-      RecommendationCategory.recovery => Icons.bedtime_outlined,
-      RecommendationCategory.nutrition => Icons.restaurant_outlined,
-      RecommendationCategory.movement => Icons.directions_walk,
-      RecommendationCategory.planning => Icons.event_available_outlined,
+      RecommendationCategory.focus => AppIcons.centerFocusStrong,
+      RecommendationCategory.recovery => AppIcons.bedtimeOutlined,
+      RecommendationCategory.nutrition => AppIcons.restaurantOutlined,
+      RecommendationCategory.movement => AppIcons.directionsWalk,
+      RecommendationCategory.planning => AppIcons.eventAvailableOutlined,
     };
   }
 
   Color _categoryColor(BuildContext context, RecommendationCategory category) {
-    if (Theme.of(context).brightness == Brightness.light) {
-      return switch (category) {
-        RecommendationCategory.focus => Theme.of(context).colorScheme.primary,
-        RecommendationCategory.recovery => const Color(0xFF3154A3),
-        RecommendationCategory.nutrition => const Color(0xFF795900),
-        RecommendationCategory.movement => const Color(0xFFB3261E),
-        RecommendationCategory.planning => const Color(0xFF466900),
-      };
-    }
+    final tokens = context.visualTokens;
     return switch (category) {
-      RecommendationCategory.focus => Theme.of(context).colorScheme.primary,
-      RecommendationCategory.recovery => const Color(0xFF8EA7FF),
-      RecommendationCategory.nutrition => const Color(0xFFFFC857),
-      RecommendationCategory.movement => const Color(0xFFFF8F70),
-      RecommendationCategory.planning => const Color(0xFFB7F07A),
+      RecommendationCategory.focus => tokens.brand,
+      RecommendationCategory.recovery => tokens.info,
+      RecommendationCategory.nutrition => tokens.attention,
+      RecommendationCategory.movement => tokens.danger,
+      RecommendationCategory.planning => tokens.success,
     };
   }
 }

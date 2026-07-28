@@ -112,6 +112,11 @@ at-most-once presentation rather than inventing delivery.
 
 The banner and Inbox expose deterministic/no-LLM truth. `action_url` still goes
 through the internal allowlist; generated rows use only Today or Weekly Review.
+An actionable foreground banner uses a compact destination-specific label such
+as `Open Today`; both that action and the banner body open the same allowlisted
+route. The matching Inbox card uses the same destination label. Opening either
+surface performs navigation only and does not imply a read, dismiss, generation,
+or delivery mutation.
 The fixed generic Today copy is `Today's overview is ready` / `Open Today to
 review your schedule and actions.` Recovery copy similarly describes a gentler
 overview and never exposes private capture details. It does not claim that the
@@ -137,3 +142,10 @@ background mobile execution, service workers, browser permission, FCM/APNs,
 email/SMS, Android notification channels, snooze, provider delivery receipts,
 or a production scheduler. It does not change the Controlled Coach provider or
 model.
+
+## Visual presentation
+
+Inbox and notification controls use the shared
+[Frontend Visual System V2](frontend-visual-system-v2.md). The migration changes
+only presentation; consent, deterministic generation, quiet hours, caps,
+foreground delivery, retry identity, and mutation authority remain unchanged.

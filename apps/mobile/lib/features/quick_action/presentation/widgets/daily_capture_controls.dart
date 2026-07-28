@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 
+import 'package:my_life_graph/core/constants/app_radii.dart';
+
+import 'package:my_life_graph/core/theme/app_icons.dart';
+
 import '../../../../core/constants/app_spacing.dart';
 
 class CaptureChoice<T> {
@@ -91,7 +95,7 @@ class CaptureRatingControl extends StatelessWidget {
           padding: const EdgeInsets.symmetric(vertical: AppSpacing.lg),
           decoration: BoxDecoration(
             color: Theme.of(context).colorScheme.surfaceContainerHighest,
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: BorderRadius.circular(AppRadii.xl),
           ),
           child: Column(
             children: [
@@ -248,7 +252,7 @@ class CaptureClockControl extends StatelessWidget {
                 '${selected.minute.toString().padLeft(2, '0')}',
               );
             },
-            icon: const Icon(Icons.schedule),
+            icon: const Icon(AppIcons.schedule),
             label: Padding(
               padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
               child: Column(
@@ -419,7 +423,7 @@ class CaptureFlowScaffold extends StatelessWidget {
                 child: Container(
                   decoration: BoxDecoration(
                     color: colors.surfaceContainer,
-                    borderRadius: BorderRadius.circular(28),
+                    borderRadius: BorderRadius.circular(AppRadii.xl),
                     border: Border.all(color: colors.outlineVariant),
                   ),
                   child: Column(
@@ -467,7 +471,7 @@ class CaptureFlowScaffold extends StatelessWidget {
                                 IconButton(
                                   tooltip: 'Close',
                                   onPressed: onClose,
-                                  icon: const Icon(Icons.close),
+                                  icon: const Icon(AppIcons.close),
                                 ),
                               ],
                             ),
@@ -503,7 +507,7 @@ class CaptureFlowScaffold extends StatelessWidget {
                             Expanded(
                               child: OutlinedButton.icon(
                                 onPressed: canGoBack ? onBack : null,
-                                icon: const Icon(Icons.arrow_back),
+                                icon: const Icon(AppIcons.arrowBack),
                                 label: const Text('Back'),
                               ),
                             ),
@@ -522,8 +526,8 @@ class CaptureFlowScaffold extends StatelessWidget {
                                       )
                                     : Icon(
                                         isLastStep
-                                            ? Icons.check
-                                            : Icons.arrow_forward,
+                                            ? AppIcons.check
+                                            : AppIcons.arrowForward,
                                       ),
                                 label: Text(
                                   isSaving
@@ -568,7 +572,7 @@ class CaptureInlineMessage extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Icon(
-          isError ? Icons.error_outline : Icons.check_circle_outline,
+          isError ? AppIcons.errorOutline : AppIcons.checkCircleOutline,
           color: color,
         ),
         const SizedBox(width: AppSpacing.sm),

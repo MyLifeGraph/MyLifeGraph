@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="72dp"
+    android:height="72dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:pathData="M4,18 C7,18 7.6,14.2 10,12 C12.4,9.8 12.5,6 17,6 M10,12 C13.2,12 14.4,15 19,15"
+        android:strokeColor="@color/mylifegraph_mint"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <path
+        android:fillColor="@color/mylifegraph_mint"
+        android:pathData="M4,16 A2,2 0,1 0,4,20 A2,2 0,1 0,4,16 M17,4 A2,2 0,1 0,17,8 A2,2 0,1 0,17,4 M19,13 A2,2 0,1 0,19,17 A2,2 0,1 0,19,13" />
+</vector>

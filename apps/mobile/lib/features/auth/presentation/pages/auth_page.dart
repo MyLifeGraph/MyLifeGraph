@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
+
+import 'package:my_life_graph/core/theme/app_icons.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/constants/app_radii.dart';
 import '../../../../core/constants/app_spacing.dart';
+import '../../../../core/widgets/app_brand_mark.dart';
+import '../../../../core/widgets/app_surface.dart';
 import '../providers/auth_providers.dart';
 
 class AuthPage extends ConsumerStatefulWidget {
@@ -38,21 +42,9 @@ class _AuthPageState extends ConsumerState<AuthPage> {
         ? 'Synced sign-in is not configured. Configure Supabase or continue as guest.'
         : 'Authentication failed. Check your details and connection, then try again.';
 
-    final colors = Theme.of(context).colorScheme;
     return Scaffold(
-      body: DecoratedBox(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Theme.of(context).scaffoldBackgroundColor,
-              colors.primaryContainer.withValues(alpha: 0.16),
-              Theme.of(context).scaffoldBackgroundColor,
-            ],
-            stops: const [0, 0.48, 1],
-          ),
-        ),
+      body: ColoredBox(
+        color: Theme.of(context).scaffoldBackgroundColor,
         child: SafeArea(
           child: LayoutBuilder(
             builder: (context, constraints) {
@@ -209,7 +201,7 @@ class _AuthPageState extends ConsumerState<AuthPage> {
         ),
         const SizedBox(height: AppSpacing.md),
         _AuthActionTile(
-          icon: Icons.person_outline_rounded,
+          icon: AppIcons.personOutlineRounded,
           title: 'Continue as guest',
           subtitle:
               'Local demo. Setup stays on this device and will not move to a later account.',
@@ -431,23 +423,10 @@ class _AuthPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    return Container(
-      width: double.infinity,
+    return AppSurface(
+      variant: AppSurfaceVariant.raised,
+      radius: AppRadii.xl,
       padding: const EdgeInsets.all(AppSpacing.lg),
-      decoration: BoxDecoration(
-        color: colors.surface.withValues(alpha: 0.96),
-        borderRadius: BorderRadius.circular(AppRadii.xl),
-        border: Border.all(color: colors.outlineVariant),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.10),
-            blurRadius: 32,
-            spreadRadius: -12,
-            offset: const Offset(0, 18),
-          ),
-        ],
-      ),
       child: child,
     );
   }
@@ -465,18 +444,14 @@ class _IconHero extends StatelessWidget {
       width: compact ? 64 : 76,
       height: compact ? 64 : 76,
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [colors.primaryContainer, colors.secondaryContainer],
-        ),
+        color: colors.primaryContainer,
         borderRadius: BorderRadius.circular(AppRadii.xl),
-        border: Border.all(color: colors.outlineVariant),
       ),
-      child: Icon(
-        Icons.auto_awesome_rounded,
+      alignment: Alignment.center,
+      child: AppBrandMark(
+        semanticLabel: 'MyLifeGraph',
         color: colors.onPrimaryContainer,
-        size: compact ? 30 : 36,
+        size: compact ? 34 : 40,
       ),
     );
   }
@@ -549,7 +524,9 @@ class _AuthForm extends StatelessWidget {
           width: double.infinity,
           child: FilledButton.icon(
             onPressed: onSubmit,
-            icon: Icon(registrationMode ? Icons.person_add_alt : Icons.login),
+            icon: Icon(
+              registrationMode ? AppIcons.personAddAlt : AppIcons.login,
+            ),
             label: Text(registrationMode ? 'Create account' : 'Login'),
           ),
         ),
@@ -620,7 +597,7 @@ class _AuthActionTile extends StatelessWidget {
                       ],
                     ),
                   ),
-                  Icon(Icons.chevron_right_rounded, color: colors.outline),
+                  Icon(AppIcons.chevronRightRounded, color: colors.outline),
                 ],
               ),
             ),

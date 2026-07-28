@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import 'package:my_life_graph/core/theme/app_icons.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -46,7 +48,7 @@ class _PasswordRecoveryPageState extends ConsumerState<PasswordRecoveryPage> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Icon(
-                          Icons.lock_reset_outlined,
+                          AppIcons.lockResetOutlined,
                           color: Theme.of(context).colorScheme.primary,
                           size: 40,
                         ),
@@ -89,9 +91,12 @@ class _PasswordRecoveryPageState extends ConsumerState<PasswordRecoveryPage> {
                             liveRegion: true,
                             child: Text(
                               _error!,
-                              style: TextStyle(
-                                color: Theme.of(context).colorScheme.error,
-                              ),
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodyMedium
+                                  ?.copyWith(
+                                    color: Theme.of(context).colorScheme.error,
+                                  ),
                             ),
                           ),
                         ],
@@ -107,7 +112,7 @@ class _PasswordRecoveryPageState extends ConsumerState<PasswordRecoveryPage> {
                                       strokeWidth: 2,
                                     ),
                                   )
-                                : const Icon(Icons.check_outlined),
+                                : const Icon(AppIcons.checkOutlined),
                             label: const Text('Update password'),
                           ),
                         ),

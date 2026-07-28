@@ -122,6 +122,14 @@ change or recommend a sleep target. Planner preview provenance uses the compact
 line `Learned timing applied · N rated sessions`; unavailable analysis states
 `Personal pattern unavailable · Setup timing used`.
 
+Advanced Insights uses `Previous-night sleep`,
+`Previous-night sleep quality`, `Sleep shortfall`, `Morning energy`,
+`Rated focus time`, `Planned focus time`, `Rated focus quality`,
+`Rated useful progress`, and `Rated session completion`. Dashboard saved detail
+uses `Previous-night sleep` and `Previous-night sleep quality`. A blocked
+correlation says `Not compared · overlapping signals`; a 7–13-day coefficient
+says `Early evidence`.
+
 ## Plain-language Rules
 
 - State the user outcome before implementation detail.

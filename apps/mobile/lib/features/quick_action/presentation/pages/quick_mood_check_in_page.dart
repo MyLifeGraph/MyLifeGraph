@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import 'package:my_life_graph/core/theme/app_icons.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -283,13 +285,13 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
             child: ListTile(
               key: const ValueKey('evening-focus-reflections'),
               contentPadding: EdgeInsets.zero,
-              leading: const Icon(Icons.timer_outlined),
+              leading: const Icon(AppIcons.timerOutlined),
               title: const Text('Today\'s Focus sessions'),
               subtitle: Text(
                 '${_todayFocusReflections.length} rated · '
                 '${_todayFocusSessions.length - _todayFocusReflections.length} open',
               ),
-              trailing: const Icon(Icons.chevron_right),
+              trailing: const Icon(AppIcons.chevronRight),
               onTap: _openTodayFocusReflections,
             ),
           ),
@@ -470,15 +472,15 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
                       contentPadding: EdgeInsets.zero,
                       leading: Icon(
                         session.status == FocusSessionStatus.completed
-                            ? Icons.check_circle_outline
-                            : Icons.cancel_outlined,
+                            ? AppIcons.checkCircleOutline
+                            : AppIcons.cancelOutlined,
                       ),
                       title: Text(session.label ?? 'Focus session'),
                       subtitle: Text(
                         '${session.actualMinutes ?? 0} min · '
                         '${_todayFocusReflections.containsKey(session.id) ? 'rated' : 'open'}',
                       ),
-                      trailing: const Icon(Icons.chevron_right),
+                      trailing: const Icon(AppIcons.chevronRight),
                       onTap: () => Navigator.of(sheetContext).pop(session),
                     ),
                 ],

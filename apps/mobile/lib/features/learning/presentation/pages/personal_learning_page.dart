@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import 'package:my_life_graph/core/theme/app_icons.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/config/app_config.dart';
@@ -54,7 +56,7 @@ class _PersonalLearningPageState extends ConsumerState<PersonalLearningPage> {
                 const SizedBox(height: AppSpacing.md),
                 OutlinedButton.icon(
                   onPressed: state.isLoading ? null : controller.load,
-                  icon: const Icon(Icons.refresh),
+                  icon: const Icon(AppIcons.refresh),
                   label: const Text('Retry'),
                 ),
               ],
@@ -150,7 +152,7 @@ class _PersonalLearningPageState extends ConsumerState<PersonalLearningPage> {
                         dimension: 18,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
-                    : const Icon(Icons.delete_sweep_outlined),
+                    : const Icon(AppIcons.deleteSweepOutlined),
                 label: const Text('Clear Focus reflection history'),
               ),
               if (state.lastClearedCount != null) ...[
@@ -183,8 +185,8 @@ class _PersonalLearningPageState extends ConsumerState<PersonalLearningPage> {
                           : controller.load,
                   icon: Icon(
                     state.requiresExactRetry
-                        ? Icons.replay_outlined
-                        : Icons.refresh,
+                        ? AppIcons.replayOutlined
+                        : AppIcons.refresh,
                   ),
                   label: Text(
                     state.requiresExactRetry
@@ -205,7 +207,7 @@ class _PersonalLearningPageState extends ConsumerState<PersonalLearningPage> {
                     dimension: 18,
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
-                : const Icon(Icons.save_outlined),
+                : const Icon(AppIcons.saveOutlined),
             label: const Text('Save Personal learning'),
           ),
         ),

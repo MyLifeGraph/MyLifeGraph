@@ -191,6 +191,11 @@ way to explore the product today is the Flutter app in mock-data guest mode.
 - `scripts` - Team-friendly helper scripts for local development.
 - `AGENTS.md` - Repo-local instructions for coding agents.
 
+The Flutter presentation system is defined in
+`docs/frontend-visual-system-v2.md`, including palette, local typography,
+surface and motion roles, icon policy, accessibility gates, and the automated
+source guard.
+
 ## Quick Start
 
 Prerequisites:

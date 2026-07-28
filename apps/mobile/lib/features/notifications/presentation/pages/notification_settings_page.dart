@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import 'package:my_life_graph/core/theme/app_icons.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/constants/app_spacing.dart';
@@ -164,7 +166,7 @@ class _NotificationSettingsPageState
                       onPressed: controlsEnabled
                           ? () => _chooseTime(isStart: true)
                           : null,
-                      icon: const Icon(Icons.bedtime_outlined),
+                      icon: const Icon(AppIcons.bedtimeOutlined),
                       label: Text('Starts $_quietStartsAt'),
                     ),
                     OutlinedButton.icon(
@@ -172,7 +174,7 @@ class _NotificationSettingsPageState
                       onPressed: controlsEnabled
                           ? () => _chooseTime(isStart: false)
                           : null,
-                      icon: const Icon(Icons.wb_sunny_outlined),
+                      icon: const Icon(AppIcons.wbSunnyOutlined),
                       label: Text('Ends $_quietEndsAt'),
                     ),
                   ],
@@ -218,13 +220,13 @@ class _NotificationSettingsPageState
                   OutlinedButton.icon(
                     key: const ValueKey('notification-settings-exact-retry'),
                     onPressed: state.isSaving ? null : controller.retryExact,
-                    icon: const Icon(Icons.replay_outlined),
+                    icon: const Icon(AppIcons.replayOutlined),
                     label: const Text('Retry unchanged'),
                   )
                 else
                   OutlinedButton.icon(
                     onPressed: state.isSaving ? null : controller.load,
-                    icon: const Icon(Icons.refresh),
+                    icon: const Icon(AppIcons.refresh),
                     label: const Text('Reload settings'),
                   ),
               ],
@@ -240,7 +242,7 @@ class _NotificationSettingsPageState
                     dimension: 18,
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
-                : const Icon(Icons.save_outlined),
+                : const Icon(AppIcons.saveOutlined),
             label: const Text('Save in-app reminders'),
           ),
         ),
@@ -377,13 +379,13 @@ class _NotificationSettingsLoadError extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.cloud_off_outlined, size: 36),
+            const Icon(AppIcons.cloudOffOutlined, size: 36),
             const SizedBox(height: AppSpacing.md),
             const Text('Could not load in-app reminder settings.'),
             const SizedBox(height: AppSpacing.md),
             OutlinedButton.icon(
               onPressed: onRetry,
-              icon: const Icon(Icons.refresh),
+              icon: const Icon(AppIcons.refresh),
               label: const Text('Retry'),
             ),
           ],

@@ -303,3 +303,10 @@ builds use debug signing. A distributable release intentionally fails until an
 ignored `android/key.properties` supplies `storePassword`, `keyPassword`,
 `keyAlias`, and `storeFile` for a private release keystore; release never falls
 back to the debug key.
+
+## Visual presentation
+
+Student-facing presentation follows
+[`docs/frontend-visual-system-v2.md`](../../docs/frontend-visual-system-v2.md).
+This changes typography, icons, surfaces, motion, and platform branding only;
+the mobile product flows and data authority described here remain unchanged.

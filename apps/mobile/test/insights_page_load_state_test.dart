@@ -23,6 +23,34 @@ void main() {
     expect(ids, containsAll(['focus_quality', 'useful_progress']));
   });
 
+  test('daily metric labels and evidence timing stay explicit', () {
+    final byId = {
+      for (final metric in correlationMetrics) metric.id: metric,
+    };
+
+    expect(byId['sleep_hours']?.label, 'Previous-night sleep');
+    expect(
+      byId['sleep_hours']?.timing,
+      CorrelationEvidenceTiming.previousNightOnLocalWakeDay,
+    );
+    expect(
+      byId['sleep_quality']?.label,
+      'Previous-night sleep quality',
+    );
+    expect(
+      byId['sleep_target_deviation_minutes']?.label,
+      'Sleep shortfall',
+    );
+    expect(byId['focus_minutes']?.label, 'Rated focus time');
+    expect(byId['planned_focus_minutes']?.label, 'Planned focus time');
+    expect(byId['focus_quality']?.label, 'Rated focus quality');
+    expect(byId['useful_progress']?.label, 'Rated useful progress');
+    expect(
+      byId['focus_completion_rate']?.label,
+      'Rated session completion',
+    );
+  });
+
   test('backend points aggregate in the profile-local response window', () {
     final patterns = _personalPatterns();
 
@@ -30,9 +58,11 @@ void main() {
 
     expect(points, hasLength(1));
     expect(points.single.date, DateTime.utc(2026, 7, 25));
-    expect(points.single.values['focus_minutes'], 45);
-    expect(points.single.values['focus_quality'], 4);
-    expect(points.single.values['useful_progress'], 5);
+    expect(points.single.values['focus_minutes'], 65);
+    expect(points.single.values['planned_focus_minutes'], 75);
+    expect(points.single.values['focus_quality'], 3.5);
+    expect(points.single.values['useful_progress'], 4.5);
+    expect(points.single.values['sleep_target_deviation_minutes'], 15);
     expect(points.single.values, isNot(contains('planned_minutes')));
     expect(points.single.values, isNot(contains('habit_completion_rate')));
   });
@@ -517,6 +547,156 @@ void main() {
     semantics.dispose();
   });
 
+  testWidgets('overlapping matrix signals are neutral and not selectable',
+      (tester) async {
+    final semantics = tester.ensureSemantics();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: _loadedOverrides(),
+        child: MaterialApp(
+          theme: AppTheme.dark,
+          home: const Scaffold(body: InsightsPage()),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await _openCorrelationMatrix(tester);
+
+    final cell = find.byKey(
+      const ValueKey(
+        'insights-matrix-cell-sleep_hours-sleep_target_deviation_minutes',
+      ),
+    );
+    await tester.ensureVisible(cell);
+    await tester.pumpAndSettle();
+
+    expect(
+      tester.getSemantics(cell),
+      matchesSemantics(
+        label: 'Previous-night sleep and Sleep shortfall. '
+            'Not compared · overlapping signals',
+        hasEnabledState: true,
+        isEnabled: false,
+        hasTapAction: false,
+      ),
+    );
+    expect(find.text('Not compared\n· overlapping signals'), findsWidgets);
+    semantics.dispose();
+  });
+
+  testWidgets('desktop correlation matrix keeps long axis labels readable',
+      (tester) async {
+    tester.view
+      ..physicalSize = const Size(1280, 960)
+      ..devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: _loadedOverrides(),
+        child: MaterialApp(
+          theme: AppTheme.dark,
+          home: const Scaffold(body: InsightsPage()),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await _openCorrelationMatrix(tester);
+
+    expect(
+      find.textContaining(
+        'Previous-night sleep is placed on the local wake and Focus day.',
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.textContaining('Focus values include rated sessions only.'),
+      findsOneWidget,
+    );
+    expect(
+      find.textContaining(
+        'Each line is normalized relative to its own range.',
+      ),
+      findsOneWidget,
+    );
+
+    const columnKey = ValueKey(
+      'insights-matrix-column-sleep_target_deviation_minutes',
+    );
+    const rowKey = ValueKey(
+      'insights-matrix-row-sleep_target_deviation_minutes',
+    );
+    final column = find.byKey(columnKey);
+    final row = find.byKey(rowKey);
+
+    expect(tester.getSize(column).width, greaterThanOrEqualTo(88));
+    expect(tester.getSize(row).width, greaterThanOrEqualTo(196));
+    _expectMatrixLabelFits(tester, column, 'Sleep shortfall');
+    _expectMatrixLabelFits(tester, row, 'Sleep shortfall');
+
+    final rowLeftBefore = tester.getTopLeft(row).dx;
+    final horizontalScroll = find.descendant(
+      of: find.byKey(
+        const ValueKey('insights-correlation-matrix-grid'),
+      ),
+      matching: find.byWidgetPredicate(
+        (widget) =>
+            widget is Scrollable && widget.axisDirection == AxisDirection.right,
+      ),
+    );
+    await tester.drag(horizontalScroll, const Offset(-480, 0));
+    await tester.pumpAndSettle();
+
+    expect(tester.getTopLeft(row).dx, rowLeftBefore);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('matrix labels remain complete at 320px and 200 percent text',
+      (tester) async {
+    tester.view
+      ..physicalSize = const Size(320, 900)
+      ..devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: _loadedOverrides(),
+        child: MaterialApp(
+          theme: AppTheme.dark,
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(context).copyWith(
+              textScaler: const TextScaler.linear(2),
+            ),
+            child: child!,
+          ),
+          home: const Scaffold(body: InsightsPage()),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await _openCorrelationMatrix(tester);
+
+    const columnKey = ValueKey(
+      'insights-matrix-column-sleep_target_deviation_minutes',
+    );
+    const rowKey = ValueKey(
+      'insights-matrix-row-sleep_target_deviation_minutes',
+    );
+    _expectMatrixLabelFits(
+      tester,
+      find.byKey(columnKey),
+      'Sleep shortfall',
+    );
+    _expectMatrixLabelFits(
+      tester,
+      find.byKey(rowKey),
+      'Sleep shortfall',
+    );
+    expect(tester.takeException(), isNull);
+  });
+
   for (final textScale in [1.5, 2.0]) {
     testWidgets(
       'mobile pattern title and nullable confidence wrap at ${textScale}x',
@@ -578,6 +758,52 @@ void main() {
       },
     );
   }
+}
+
+Future<void> _openCorrelationMatrix(WidgetTester tester) async {
+  await tester.scrollUntilVisible(
+    find.text('Advanced correlation exploration'),
+    240,
+    scrollable: find.byType(Scrollable).first,
+  );
+  await tester.ensureVisible(find.text('Advanced correlation exploration'));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text('Advanced correlation exploration'));
+  await tester.pumpAndSettle();
+  await tester.scrollUntilVisible(
+    find.text('Correlation matrix'),
+    240,
+    scrollable: find.byType(Scrollable).first,
+  );
+  await tester.pumpAndSettle();
+}
+
+void _expectMatrixLabelFits(
+  WidgetTester tester,
+  Finder container,
+  String label,
+) {
+  final textFinder = find.descendant(
+    of: container,
+    matching: find.text(label),
+  );
+  final widget = tester.widget<Text>(textFinder);
+  final context = tester.element(textFinder);
+  final renderBox = tester.renderObject<RenderBox>(textFinder);
+  final style = DefaultTextStyle.of(context).style.merge(widget.style);
+  final painter = TextPainter(
+    text: TextSpan(text: label, style: style),
+    textDirection: Directionality.of(context),
+    textScaler: widget.textScaler ?? MediaQuery.textScalerOf(context),
+    maxLines: widget.maxLines,
+  )..layout(maxWidth: renderBox.size.width);
+
+  expect(widget.overflow, isNot(TextOverflow.ellipsis));
+  expect(
+    painter.didExceedMaxLines,
+    isFalse,
+    reason: '$label did not fit ${renderBox.size.width}px',
+  );
 }
 
 List<Override> _loadedOverrides({List<Insight> insights = const []}) => [
@@ -695,6 +921,19 @@ PersonalPatterns _personalPatterns() => PersonalPatterns.fromJson({
           'completed': 1,
           'sleep_hours': 7.5,
           'sleep_target_deviation_minutes': -30,
+          'sleep_quality': 7,
+          'morning_energy': 6,
+        },
+        {
+          'local_date': '2026-07-25',
+          'local_started_at': '2026-07-25T14:00:00+02:00',
+          'focus_quality': 3,
+          'useful_progress': 4,
+          'planned_focus_minutes': 30,
+          'actual_focus_minutes': 20,
+          'completed': 0,
+          'sleep_hours': 7.5,
+          'sleep_target_deviation_minutes': 15,
           'sleep_quality': 7,
           'morning_energy': 6,
         },

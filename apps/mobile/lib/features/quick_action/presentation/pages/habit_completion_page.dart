@@ -1,4 +1,8 @@
 import 'package:flutter/material.dart';
+
+import 'package:my_life_graph/core/constants/app_radii.dart';
+
+import 'package:my_life_graph/core/theme/app_icons.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -51,12 +55,12 @@ class _HabitCompletionPageState extends ConsumerState<HabitCompletionPage> {
           tooltip: 'Refresh',
           onPressed:
               _isLoading || _savingHabitIds.isNotEmpty ? null : _loadHabits,
-          icon: const Icon(Icons.refresh),
+          icon: const Icon(AppIcons.refresh),
         ),
         IconButton(
           tooltip: 'Manage habits',
           onPressed: () => context.go(AppRoutes.habitManagement),
-          icon: const Icon(Icons.tune),
+          icon: const Icon(AppIcons.tune),
         ),
       ],
       children: [
@@ -78,7 +82,7 @@ class _HabitCompletionPageState extends ConsumerState<HabitCompletionPage> {
           const AppCard(
             child: Row(
               children: [
-                Icon(Icons.check_circle_outline),
+                Icon(AppIcons.checkCircleOutline),
                 SizedBox(width: AppSpacing.md),
                 Expanded(
                   child: Text('No active habit is scheduled for today.'),
@@ -266,7 +270,7 @@ class _HabitLoadErrorCard extends StatelessWidget {
           const SizedBox(height: AppSpacing.md),
           OutlinedButton.icon(
             onPressed: onRetry,
-            icon: const Icon(Icons.refresh),
+            icon: const Icon(AppIcons.refresh),
             label: const Text('Retry'),
           ),
         ],
@@ -310,10 +314,10 @@ class HabitOutcomeTile extends StatelessWidget {
               children: [
                 Icon(
                   completed
-                      ? Icons.check_circle
+                      ? AppIcons.checkCircle
                       : skipped
-                          ? Icons.fast_forward_outlined
-                          : Icons.radio_button_unchecked,
+                          ? AppIcons.fastForwardOutlined
+                          : AppIcons.radioButtonUnchecked,
                   color: outcome == null
                       ? null
                       : Theme.of(context).colorScheme.primary,
@@ -352,7 +356,7 @@ class HabitOutcomeTile extends StatelessWidget {
               child: LinearProgressIndicator(
                 value: progress.ratio,
                 minHeight: 8,
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(AppRadii.sm),
               ),
             ),
             const SizedBox(height: AppSpacing.sm),
@@ -399,7 +403,7 @@ class HabitOutcomeTile extends StatelessWidget {
                   child: ExcludeSemantics(
                     child: OutlinedButton.icon(
                       onPressed: onUndo,
-                      icon: const Icon(Icons.undo),
+                      icon: const Icon(AppIcons.undo),
                       label: Text(
                         skipped ? 'Undo skip' : 'Undo completion',
                       ),

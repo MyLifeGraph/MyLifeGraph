@@ -1508,6 +1508,7 @@ def _sleep_outlook(
         metadata = row.get("metadata")
         if (
             row_date is None
+            or row_date > local_date
             or not isinstance(metadata, dict)
             or metadata.get("capture_version") != "daily-capture-v4"
             or not isinstance(metadata.get("captures"), dict)

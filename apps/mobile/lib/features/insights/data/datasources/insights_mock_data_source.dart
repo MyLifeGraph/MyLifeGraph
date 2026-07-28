@@ -57,6 +57,9 @@ class InsightsMockDataSource {
       final sleep = (7.1 + wave * 0.55 - (index % 8 == 0 ? 0.7 : 0))
           .clamp(5.3, 8.8)
           .toDouble();
+      final sleepQuality =
+          (3.2 + sleep * 0.55 + wave * 0.4).clamp(1, 10).toDouble();
+      final sleepShortfall = ((8 - sleep).clamp(0, 8) * 60).roundToDouble();
       final screen = (4.4 - wave * 0.35 + (index % 6 == 0 ? 1.1 : 0))
           .clamp(2.0, 7.6)
           .toDouble();
@@ -82,8 +85,10 @@ class InsightsMockDataSource {
         date: date,
         values: {
           'sleep_hours': sleep,
+          'sleep_quality': sleepQuality,
+          'sleep_target_deviation_minutes': sleepShortfall,
           'focus_minutes': focus,
-          'planned_minutes': plannedMinutes,
+          'planned_focus_minutes': plannedMinutes,
           'stress_level': stress,
           'energy_level': energy,
           'mood_score': mood,

@@ -282,3 +282,10 @@ automatic replanning, Calendar write or live sync, provider OAuth, Task/Habit
 completion inference, notification generation, push delivery, or Setup-owned
 definition mutation. It does not claim that energy windows predict performance
 or that imported Calendar data is complete availability.
+
+## Visual presentation
+
+Planner uses the shared [Frontend Visual System V2](frontend-visual-system-v2.md).
+Time-block presentation and semantic states do not alter previews,
+confirmations, availability, reservations, commitment ownership, or Today
+projection rules.

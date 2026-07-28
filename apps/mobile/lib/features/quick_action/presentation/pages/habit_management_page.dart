@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import 'package:my_life_graph/core/theme/app_icons.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -55,27 +57,27 @@ class _HabitManagementPageState extends ConsumerState<HabitManagementPage> {
         IconButton(
           tooltip: 'Refresh',
           onPressed: _isLoading || _isSaving ? null : _loadHabits,
-          icon: const Icon(Icons.refresh),
+          icon: const Icon(AppIcons.refresh),
         ),
         IconButton(
           tooltip: 'Add habit',
           onPressed: _isLoading || _isSaving || _loadError != null
               ? null
               : () => _openEditor(),
-          icon: const Icon(Icons.add),
+          icon: const Icon(AppIcons.add),
         ),
       ],
       children: [
         AppCard(
           padding: EdgeInsets.zero,
           child: ListTile(
-            leading: const Icon(Icons.tune_outlined),
+            leading: const Icon(AppIcons.tuneOutlined),
             title: const Text('Setup routines are managed in Setup'),
             subtitle: const Text(
               'Their definition and lifecycle stay there. Active Setup '
               'routines can still be completed or skipped in Today Habits.',
             ),
-            trailing: const Icon(Icons.chevron_right),
+            trailing: const Icon(AppIcons.chevronRight),
             onTap: () => context.go('${AppRoutes.onboarding}?edit=1'),
           ),
         ),
@@ -109,7 +111,7 @@ class _HabitManagementPageState extends ConsumerState<HabitManagementPage> {
                   onPressed: _canUseSupabase && !_isSaving
                       ? () => _openEditor()
                       : null,
-                  icon: const Icon(Icons.add),
+                  icon: const Icon(AppIcons.add),
                   label: const Text('Add habit'),
                 ),
               ],
@@ -394,7 +396,7 @@ class _HabitManagementLoadErrorCard extends StatelessWidget {
           const SizedBox(height: AppSpacing.md),
           OutlinedButton.icon(
             onPressed: onRetry,
-            icon: const Icon(Icons.refresh),
+            icon: const Icon(AppIcons.refresh),
             label: const Text('Retry'),
           ),
         ],
@@ -467,10 +469,10 @@ class _HabitManagementTile extends StatelessWidget {
         children: [
           Icon(
             habit.lifecycle == HabitLifecycle.active
-                ? Icons.repeat
+                ? AppIcons.repeat
                 : habit.lifecycle == HabitLifecycle.paused
-                    ? Icons.pause_circle_outline
-                    : Icons.archive_outlined,
+                    ? AppIcons.pauseCircleOutline
+                    : AppIcons.archiveOutlined,
             color: habit.lifecycle == HabitLifecycle.active
                 ? Theme.of(context).colorScheme.primary
                 : null,
@@ -694,7 +696,7 @@ class _HabitEditorSheetState extends State<_HabitEditorSheet> {
                 const Spacer(),
                 FilledButton.icon(
                   onPressed: _submit,
-                  icon: const Icon(Icons.check),
+                  icon: const Icon(AppIcons.check),
                   label: const Text('Save habit'),
                 ),
               ],

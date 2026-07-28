@@ -18,14 +18,19 @@ bash scripts/test_local_supabase_migrations.sh
 bash scripts/test_start_local_stack.sh
 node --check scripts/check_docs_consistency.mjs
 node --check scripts/check_docs_consistency.test.mjs
+node --check scripts/check_frontend_visual_contract.mjs
+node --check scripts/check_frontend_visual_contract.test.mjs
 node --test scripts/check_docs_consistency.test.mjs
+node --test scripts/check_frontend_visual_contract.test.mjs
 node scripts/check_docs_consistency.mjs
+node scripts/check_frontend_visual_contract.mjs
 node --check scripts/seed_demo_data.mjs
 node --check scripts/seed_demo_contract.mjs
 node --check scripts/seed_demo_contract.test.mjs
 node --test scripts/seed_demo_contract.test.mjs
 node --check e2e/web/smoke.mjs
 python3 -m py_compile scripts/seed_student_feature_data.py
+python3 -m py_compile scripts/generate_brand_assets.py
 
 cd "$ROOT_DIR/apps/mobile"
 "$FLUTTER_BIN" pub get

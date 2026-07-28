@@ -1,4 +1,8 @@
 import 'package:flutter/material.dart';
+
+import 'package:my_life_graph/core/constants/app_radii.dart';
+
+import 'package:my_life_graph/core/theme/app_icons.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -7,6 +11,8 @@ import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/capabilities/app_surface_capabilities.dart';
 import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/supabase/supabase_providers.dart';
+import '../../../../core/theme/app_motion_tokens.dart';
+import '../../../../core/theme/app_visual_tokens.dart';
 import '../../../../core/utils/client_uuid.dart';
 import '../../../../core/utils/local_date.dart';
 import '../../../../core/widgets/app_card.dart';
@@ -823,7 +829,7 @@ class _FeedbackHistorySheet extends ConsumerWidget {
                 IconButton(
                   tooltip: 'Close',
                   onPressed: () => Navigator.of(context).pop(),
-                  icon: const Icon(Icons.close),
+                  icon: const Icon(AppIcons.close),
                 ),
               ],
             ),
@@ -869,7 +875,7 @@ class _FeedbackHistorySheet extends ConsumerWidget {
                               }
                             }
                           },
-                          icon: const Icon(Icons.delete_outline),
+                          icon: const Icon(AppIcons.deleteOutline),
                         ),
                       );
                     },
@@ -927,7 +933,7 @@ class _DashboardHeader extends StatelessWidget {
         IconButton.outlined(
           tooltip: 'Settings',
           onPressed: () => context.go(AppRoutes.settings),
-          icon: const Icon(Icons.settings_outlined),
+          icon: const Icon(AppIcons.settingsOutlined),
         ),
       ],
     );
@@ -945,14 +951,14 @@ class _WeeklyReviewEntryCard extends StatelessWidget {
       padding: EdgeInsets.zero,
       child: ListTile(
         leading: Icon(
-          Icons.event_note_outlined,
+          AppIcons.eventNoteOutlined,
           color: Theme.of(context).colorScheme.primary,
         ),
         title: const Text('Review your week'),
         subtitle: const Text(
           'Completed, skipped, missed, carried, and recovery facts stay distinct.',
         ),
-        trailing: const Icon(Icons.chevron_right),
+        trailing: const Icon(AppIcons.chevronRight),
         onTap: onOpen,
       ),
     );
@@ -983,7 +989,7 @@ class _CheckInStreakCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Icon(
-                Icons.local_fire_department_outlined,
+                AppIcons.localFireDepartmentOutlined,
                 color: Theme.of(context).colorScheme.primary,
                 size: 30,
               ),
@@ -1024,13 +1030,13 @@ class _CheckInStreakCard extends StatelessWidget {
               _CheckInButton(
                 label: 'Morning check-in',
                 saved: checkIns?.morningSaved == true,
-                icon: Icons.wb_sunny_outlined,
+                icon: AppIcons.wbSunnyOutlined,
                 onPressed: onAddMorning,
               ),
               _CheckInButton(
                 label: 'Evening check-in',
                 saved: checkIns?.eveningSaved == true,
-                icon: Icons.nights_stay_outlined,
+                icon: AppIcons.nightsStayOutlined,
                 onPressed: onAddEvening,
               ),
             ],
@@ -1063,7 +1069,7 @@ class _CheckInButton extends StatelessWidget {
       child: saved
           ? OutlinedButton.icon(
               onPressed: onPressed,
-              icon: const Icon(Icons.check_circle_outline),
+              icon: const Icon(AppIcons.checkCircleOutline),
               label: Text(text),
             )
           : FilledButton.tonalIcon(
@@ -1108,12 +1114,12 @@ class _TodayProgressCard extends StatelessWidget {
               child: ExcludeSemantics(
                 child: TweenAnimationBuilder<double>(
                   tween: Tween(begin: 0, end: progress.ratio),
-                  duration: const Duration(milliseconds: 450),
+                  duration: context.motionTokens.emphasisFor(context),
                   builder: (context, value, _) => LinearProgressIndicator(
                     value: value,
                     minHeight: 12,
-                    borderRadius: BorderRadius.circular(999),
-                    color: Colors.green.shade600,
+                    borderRadius: BorderRadius.circular(AppRadii.pill),
+                    color: context.visualTokens.success,
                     backgroundColor:
                         Theme.of(context).colorScheme.surfaceContainerHighest,
                   ),
@@ -1167,7 +1173,7 @@ class _TodayAgenda extends StatelessWidget {
         if (sourceErrors.isNotEmpty) ...[
           const SizedBox(height: AppSpacing.sm),
           _InlineMessage(
-            icon: Icons.warning_amber_outlined,
+            icon: AppIcons.warningAmberOutlined,
             message: sourceErrors.join(' '),
             color: Theme.of(context).colorScheme.error,
           ),
@@ -1175,7 +1181,7 @@ class _TodayAgenda extends StatelessWidget {
         const SizedBox(height: AppSpacing.md),
         if (snapshot.timeline.isEmpty)
           const _EmptySectionCard(
-            icon: Icons.calendar_today_outlined,
+            icon: AppIcons.calendarTodayOutlined,
             message: 'No timed blocks or all-day events are available today.',
           )
         else
@@ -1218,7 +1224,7 @@ class _AgendaItem extends StatelessWidget {
       child: Container(
         decoration: BoxDecoration(
           color: appearance.background,
-          borderRadius: BorderRadius.circular(10),
+          borderRadius: BorderRadius.circular(AppRadii.sm),
           border:
               Border.all(color: appearance.foreground.withValues(alpha: .3)),
         ),
@@ -1292,7 +1298,7 @@ class _AgendaItem extends StatelessWidget {
                             onPressed: () => onStartPreparationFocus(
                               item.managedTaskId!,
                             ),
-                            icon: const Icon(Icons.timer_outlined),
+                            icon: const Icon(AppIcons.timerOutlined),
                             label: const Text('Start focus'),
                           ),
                       ],
@@ -1306,7 +1312,7 @@ class _AgendaItem extends StatelessWidget {
                       onPressed: () => context.go(
                         '${AppRoutes.deepWork}?target_kind=task&target_id=${item.taskId}',
                       ),
-                      icon: const Icon(Icons.timer_outlined),
+                      icon: const Icon(AppIcons.timerOutlined),
                       label: const Text('Start focus'),
                     ),
                   ],
@@ -1316,7 +1322,7 @@ class _AgendaItem extends StatelessWidget {
                     const SizedBox(height: AppSpacing.sm),
                     FilledButton.tonalIcon(
                       onPressed: () => context.go(AppRoutes.habitCompletion),
-                      icon: const Icon(Icons.check_circle_outline),
+                      icon: const Icon(AppIcons.checkCircleOutline),
                       label: const Text('Log habit'),
                     ),
                   ],
@@ -1364,7 +1370,7 @@ class _TodayTasksSection extends StatelessWidget {
           trailing: canExecute
               ? FilledButton.icon(
                   onPressed: onAdd,
-                  icon: const Icon(Icons.calendar_month_outlined, size: 18),
+                  icon: const Icon(AppIcons.calendarMonthOutlined, size: 18),
                   label: const Text('Open Planner'),
                 )
               : null,
@@ -1377,7 +1383,7 @@ class _TodayTasksSection extends StatelessWidget {
           )
         else if (tasks.isEmpty)
           const _EmptySectionCard(
-            icon: Icons.task_alt_outlined,
+            icon: AppIcons.taskAltOutlined,
             message: 'No due, overdue, or in-progress tasks today.',
           )
         else
@@ -1440,7 +1446,7 @@ class _TodayHabitsSection extends StatelessWidget {
           )
         else if (habits.isEmpty)
           const _EmptySectionCard(
-            icon: Icons.check_circle_outline,
+            icon: AppIcons.checkCircleOutline,
             message: 'No habits need an outcome today.',
           )
         else
@@ -1489,12 +1495,12 @@ class _HabitCard extends StatelessWidget {
             children: [
               Icon(
                 completed
-                    ? Icons.check_circle
+                    ? AppIcons.checkCircle
                     : skipped
-                        ? Icons.skip_next_outlined
-                        : Icons.radio_button_unchecked,
+                        ? AppIcons.skipNextOutlined
+                        : AppIcons.radioButtonUnchecked,
                 color: completed
-                    ? Colors.green.shade700
+                    ? context.visualTokens.success
                     : skipped
                         ? Theme.of(context).colorScheme.tertiary
                         : null,
@@ -1537,18 +1543,18 @@ class _HabitCard extends StatelessWidget {
                   FilledButton.tonalIcon(
                     onPressed: () =>
                         onSetOutcome(habit, HabitOutcome.completed),
-                    icon: const Icon(Icons.check),
+                    icon: const Icon(AppIcons.check),
                     label: const Text('Complete'),
                   ),
                   OutlinedButton.icon(
                     onPressed: () => onSetOutcome(habit, HabitOutcome.skipped),
-                    icon: const Icon(Icons.skip_next_outlined),
+                    icon: const Icon(AppIcons.skipNextOutlined),
                     label: const Text('Skip'),
                   ),
                 ] else
                   OutlinedButton.icon(
                     onPressed: () => onUndo(habit),
-                    icon: const Icon(Icons.undo),
+                    icon: const Icon(AppIcons.undo),
                     label: const Text('Undo outcome'),
                   ),
               ],
@@ -1588,7 +1594,8 @@ class _InlineExpansionCard extends StatelessWidget {
             child: ListTile(
               title: Text(title),
               subtitle: Text(subtitle),
-              trailing: Icon(expanded ? Icons.expand_less : Icons.expand_more),
+              trailing:
+                  Icon(expanded ? AppIcons.expandLess : AppIcons.expandMore),
               onTap: onToggle,
             ),
           ),
@@ -1711,11 +1718,11 @@ class _MoreDashboardContent extends ConsumerWidget {
           AppCard(
             padding: EdgeInsets.zero,
             child: ListTile(
-              leading: const Icon(Icons.history_outlined),
+              leading: const Icon(AppIcons.historyOutlined),
               title: const Text('Decision feedback history'),
               subtitle:
                   const Text('Inspect or delete previously saved feedback.'),
-              trailing: const Icon(Icons.chevron_right),
+              trailing: const Icon(AppIcons.chevronRight),
               onTap: onShowFeedbackHistory,
             ),
           ),
@@ -1779,47 +1786,43 @@ _AgendaAppearance _agendaAppearance(
   return switch (kind) {
     TodayTimelineKind.setupCommitment => _AgendaAppearance(
         label: 'Setup commitment',
-        icon: Icons.event_repeat_outlined,
+        icon: AppIcons.eventRepeatOutlined,
         background: colors.primaryContainer,
         foreground: colors.onPrimaryContainer,
       ),
     TodayTimelineKind.preparation => _AgendaAppearance(
         label: 'Preparation',
-        icon: Icons.school_outlined,
+        icon: AppIcons.schoolOutlined,
         background: colors.secondaryContainer,
         foreground: colors.onSecondaryContainer,
       ),
     TodayTimelineKind.calendarEvent => _AgendaAppearance(
         label: 'Calendar',
-        icon: Icons.calendar_month_outlined,
+        icon: AppIcons.calendarMonthOutlined,
         background: colors.tertiaryContainer,
         foreground: colors.onTertiaryContainer,
       ),
     TodayTimelineKind.focusSession => _AgendaAppearance(
         label: 'Focus',
-        icon: Icons.timer_outlined,
-        background: Theme.of(context).brightness == Brightness.dark
-            ? const Color(0xFF49356B)
-            : const Color(0xFFE9DDFF),
-        foreground: Theme.of(context).brightness == Brightness.dark
-            ? const Color(0xFFF0E7FF)
-            : const Color(0xFF35204F),
+        icon: AppIcons.timerOutlined,
+        background: context.visualTokens.dataViolet.withValues(alpha: 0.16),
+        foreground: context.visualTokens.dataViolet,
       ),
     TodayTimelineKind.taskBlock => _AgendaAppearance(
         label: 'Task block',
-        icon: Icons.task_outlined,
+        icon: AppIcons.taskOutlined,
         background: colors.primaryContainer,
         foreground: colors.onPrimaryContainer,
       ),
     TodayTimelineKind.habitSlot => _AgendaAppearance(
         label: 'Habit slot',
-        icon: Icons.repeat_outlined,
+        icon: AppIcons.repeatOutlined,
         background: colors.secondaryContainer,
         foreground: colors.onSecondaryContainer,
       ),
     TodayTimelineKind.manualCommitment => _AgendaAppearance(
         label: 'Fixed commitment',
-        icon: Icons.event_busy_outlined,
+        icon: AppIcons.eventBusyOutlined,
         background: colors.errorContainer,
         foreground: colors.onErrorContainer,
       ),
@@ -1893,12 +1896,12 @@ class _LatestCheckInCard extends StatelessWidget {
               children: [
                 FilledButton.icon(
                   onPressed: onAddMorning,
-                  icon: const Icon(Icons.wb_sunny_outlined),
+                  icon: const Icon(AppIcons.wbSunnyOutlined),
                   label: const Text('Morning check-in'),
                 ),
                 OutlinedButton.icon(
                   onPressed: onAddEvening,
-                  icon: const Icon(Icons.nights_stay_outlined),
+                  icon: const Icon(AppIcons.nightsStayOutlined),
                   label: const Text('Evening check-in'),
                 ),
               ],
@@ -1918,7 +1921,7 @@ class _LatestCheckInCard extends StatelessWidget {
               children: [
                 TextButton.icon(
                   onPressed: onAddMorning,
-                  icon: const Icon(Icons.wb_sunny_outlined),
+                  icon: const Icon(AppIcons.wbSunnyOutlined),
                   label: Text(
                     checkIn?.hasMorningCapture == true
                         ? 'Edit morning check-in'
@@ -1927,7 +1930,7 @@ class _LatestCheckInCard extends StatelessWidget {
                 ),
                 TextButton.icon(
                   onPressed: onAddEvening,
-                  icon: const Icon(Icons.nights_stay_outlined),
+                  icon: const Icon(AppIcons.nightsStayOutlined),
                   label: Text(
                     checkIn?.hasEveningCapture == true
                         ? 'Edit evening check-in'
@@ -1954,66 +1957,66 @@ class _LatestCheckInCard extends StatelessWidget {
   List<_SignalMetric> _metricsForCheckIn(DashboardCheckIn checkIn) {
     return [
       if (checkIn.mood != null)
-        _SignalMetric('Mood', '${checkIn.mood}/10', Icons.mood_outlined),
+        _SignalMetric('Mood', '${checkIn.mood}/10', AppIcons.moodOutlined),
       if (checkIn.energy != null)
         _SignalMetric(
           checkIn.hasMorningCapture ? 'Morning energy' : 'Evening energy',
           '${checkIn.energy}/10',
-          Icons.bolt_outlined,
+          AppIcons.boltOutlined,
         ),
       if (checkIn.sleepHours != null)
         _SignalMetric(
-          'Sleep',
+          'Previous-night sleep',
           '${_formatDecimal(checkIn.sleepHours!)} h',
-          Icons.bedtime_outlined,
+          AppIcons.bedtimeOutlined,
         ),
       if (checkIn.sleepQuality != null)
         _SignalMetric(
-          'Sleep quality',
+          'Previous-night sleep quality',
           '${checkIn.sleepQuality}/10',
-          Icons.nights_stay_outlined,
+          AppIcons.nightsStayOutlined,
         ),
       if (checkIn.stress != null)
         _SignalMetric(
           'Stress',
           '${checkIn.stress}/10',
-          Icons.speed_outlined,
+          AppIcons.speedOutlined,
         ),
       if (checkIn.focusMinutes != null)
         _SignalMetric(
           'Focus',
           '${checkIn.focusMinutes} min',
-          Icons.timer_outlined,
+          AppIcons.timerOutlined,
         ),
       if (checkIn.focusBand != null)
         _SignalMetric(
           'Focus band',
           _readableCaptureCode(checkIn.focusBand!),
-          Icons.timer_outlined,
+          AppIcons.timerOutlined,
         ),
       if (checkIn.dayShape != null)
         _SignalMetric(
           'Day shape',
           _readableCaptureCode(checkIn.dayShape!),
-          Icons.calendar_today_outlined,
+          AppIcons.calendarTodayOutlined,
         ),
       if (checkIn.steps != null)
         _SignalMetric(
           'Steps',
           NumberFormat.decimalPattern().format(checkIn.steps),
-          Icons.directions_walk_outlined,
+          AppIcons.directionsWalkOutlined,
         ),
       if (checkIn.activityLevel != null)
         _SignalMetric(
           'Activity',
           '${checkIn.activityLevel}/10',
-          Icons.fitness_center_outlined,
+          AppIcons.fitnessCenterOutlined,
         ),
       if (checkIn.screenTimeHours != null)
         _SignalMetric(
           'Screen time',
           '${_formatDecimal(checkIn.screenTimeHours!)} h',
-          Icons.devices_outlined,
+          AppIcons.devicesOutlined,
         ),
     ];
   }
@@ -2052,7 +2055,7 @@ class _SignalTile extends StatelessWidget {
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
         color: colors.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(AppRadii.sm),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2111,7 +2114,7 @@ class _RecommendationsSection extends StatelessWidget {
                           dimension: 16,
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
-                      : const Icon(Icons.refresh, size: 18),
+                      : const Icon(AppIcons.refresh, size: 18),
                   label: const Text('Refresh recommendations'),
                 )
               : null,
@@ -2119,7 +2122,7 @@ class _RecommendationsSection extends StatelessWidget {
         if (refreshError != null) ...[
           const SizedBox(height: AppSpacing.sm),
           _InlineMessage(
-            icon: Icons.error_outline,
+            icon: AppIcons.errorOutline,
             message: refreshError!,
             color: Theme.of(context).colorScheme.error,
           ),
@@ -2170,18 +2173,18 @@ class _RecommendationFeedView extends StatelessWidget {
           runSpacing: AppSpacing.sm,
           children: [
             _StatusPill(
-              icon: isDemo ? Icons.science_outlined : Icons.rule_outlined,
+              icon: isDemo ? AppIcons.scienceOutlined : AppIcons.ruleOutlined,
               label: isDemo ? 'Example suggestions' : 'Rule-based suggestions',
             ),
             _StatusPill(
               icon: feed.freshness.needsRefresh
-                  ? Icons.history
-                  : Icons.check_circle_outline,
+                  ? AppIcons.history
+                  : AppIcons.checkCircleOutline,
               label: freshness,
             ),
             if (feed.generatedAt != null)
               _StatusPill(
-                icon: Icons.schedule,
+                icon: AppIcons.schedule,
                 label: DateFormat.yMMMd().add_Hm().format(feed.generatedAt!),
               ),
           ],
@@ -2189,7 +2192,7 @@ class _RecommendationFeedView extends StatelessWidget {
         const SizedBox(height: AppSpacing.md),
         if (feed.items.isEmpty)
           const _EmptySectionCard(
-            icon: Icons.lightbulb_outline,
+            icon: AppIcons.lightbulbOutline,
             message: 'No current recommendations yet.',
           )
         else
@@ -2252,7 +2255,7 @@ class _TasksSection extends StatelessWidget {
           trailing: canExecute
               ? FilledButton.icon(
                   onPressed: onAdd,
-                  icon: const Icon(Icons.calendar_month_outlined, size: 18),
+                  icon: const Icon(AppIcons.calendarMonthOutlined, size: 18),
                   label: const Text('Open Planner'),
                 )
               : null,
@@ -2260,7 +2263,7 @@ class _TasksSection extends StatelessWidget {
         const SizedBox(height: AppSpacing.md),
         if (activeTasks.isEmpty)
           const _EmptySectionCard(
-            icon: Icons.task_alt_outlined,
+            icon: AppIcons.taskAltOutlined,
             message: 'No open tasks.',
           )
         else
@@ -2283,7 +2286,7 @@ class _TasksSection extends StatelessWidget {
           TextButton.icon(
             onPressed: onToggleCompleted,
             icon: Icon(
-              showCompletedTasks ? Icons.expand_less : Icons.expand_more,
+              showCompletedTasks ? AppIcons.expandLess : AppIcons.expandMore,
             ),
             label: Text('Completed (${completedTasks.length})'),
           ),
@@ -2306,7 +2309,7 @@ class _TasksSection extends StatelessWidget {
           TextButton.icon(
             onPressed: onToggleCancelled,
             icon: Icon(
-              showCancelledTasks ? Icons.expand_less : Icons.expand_more,
+              showCancelledTasks ? AppIcons.expandLess : AppIcons.expandMore,
             ),
             label: Text('Cancelled (${cancelledTasks.length})'),
           ),
@@ -2366,10 +2369,10 @@ class _TaskCard extends StatelessWidget {
         children: [
           Icon(
             isCompleted
-                ? Icons.check_circle
+                ? AppIcons.checkCircle
                 : isCancelled
-                    ? Icons.cancel_outlined
-                    : Icons.radio_button_unchecked,
+                    ? AppIcons.cancelOutlined
+                    : AppIcons.radioButtonUnchecked,
             color: isCompleted || isCancelled
                 ? Theme.of(context).colorScheme.primary
                 : Theme.of(context).colorScheme.onSurfaceVariant,
@@ -2431,32 +2434,32 @@ class _TaskCard extends StatelessWidget {
                 IconButton(
                   tooltip: 'Focus on ${task.title}',
                   onPressed: onStartFocus,
-                  icon: const Icon(Icons.timer_outlined),
+                  icon: const Icon(AppIcons.timerOutlined),
                 ),
               if (onEdit != null || onRestore != null || onComplete != null)
                 IconButton(
                   tooltip: 'Open preparation plan',
                   onPressed: onEdit ?? onRestore ?? onComplete,
-                  icon: const Icon(Icons.arrow_forward),
+                  icon: const Icon(AppIcons.arrowForward),
                 ),
             ] else ...[
               if (onComplete != null)
                 IconButton(
                   tooltip: 'Complete task ${task.title}',
                   onPressed: onComplete,
-                  icon: const Icon(Icons.check),
+                  icon: const Icon(AppIcons.check),
                 ),
               if (onStartFocus != null)
                 IconButton(
                   tooltip: 'Focus on ${task.title}',
                   onPressed: onStartFocus,
-                  icon: const Icon(Icons.timer_outlined),
+                  icon: const Icon(AppIcons.timerOutlined),
                 ),
               if (onRestore != null)
                 IconButton(
                   tooltip: 'Restore task ${task.title}',
                   onPressed: onRestore,
-                  icon: const Icon(Icons.undo),
+                  icon: const Icon(AppIcons.undo),
                 ),
               if (onEdit != null || onPostpone != null || onCancel != null)
                 PopupMenuButton<_TaskMenuAction>(
@@ -2620,7 +2623,7 @@ class _TaskEditorSheetState extends State<_TaskEditorSheet> {
                 Expanded(
                   child: OutlinedButton.icon(
                     onPressed: _pickDeadline,
-                    icon: const Icon(Icons.event_outlined),
+                    icon: const Icon(AppIcons.eventOutlined),
                     label: Text(
                       _deadline == null
                           ? 'Set deadline'
@@ -2633,7 +2636,7 @@ class _TaskEditorSheetState extends State<_TaskEditorSheet> {
                   IconButton(
                     tooltip: 'Clear deadline',
                     onPressed: () => setState(() => _deadline = null),
-                    icon: const Icon(Icons.clear),
+                    icon: const Icon(AppIcons.clear),
                   ),
                 ],
               ],
@@ -2648,7 +2651,7 @@ class _TaskEditorSheetState extends State<_TaskEditorSheet> {
                 const Spacer(),
                 FilledButton.icon(
                   onPressed: _submit,
-                  icon: const Icon(Icons.check),
+                  icon: const Icon(AppIcons.check),
                   label: const Text('Save task'),
                 ),
               ],
@@ -2742,7 +2745,7 @@ class _ScheduleSection extends StatelessWidget {
         const SizedBox(height: AppSpacing.md),
         if (daysWithEvents.isEmpty)
           const _EmptySectionCard(
-            icon: Icons.calendar_today_outlined,
+            icon: AppIcons.calendarTodayOutlined,
             message: 'No schedule entries this week.',
           )
         else
@@ -2784,8 +2787,8 @@ class _ScheduleSection extends StatelessWidget {
                                   children: [
                                     Icon(
                                       event.isDeadlinePreparation
-                                          ? Icons.school_outlined
-                                          : Icons.event,
+                                          ? AppIcons.schoolOutlined
+                                          : AppIcons.event,
                                       size: 18,
                                       color: event.isDeadlinePreparation
                                           ? Theme.of(context)
@@ -2829,7 +2832,7 @@ class _ScheduleSection extends StatelessWidget {
                                           event.deadlinePlanId!,
                                         ),
                                         icon: const Icon(
-                                          Icons.arrow_forward,
+                                          AppIcons.arrowForward,
                                           size: 18,
                                         ),
                                       ),
@@ -2923,7 +2926,7 @@ class _StatusPill extends StatelessWidget {
       ),
       decoration: BoxDecoration(
         color: colors.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(6),
+        borderRadius: BorderRadius.circular(AppRadii.sm),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -2977,7 +2980,7 @@ class _SectionErrorCard extends StatelessWidget {
       child: Row(
         children: [
           Icon(
-            Icons.cloud_off_outlined,
+            AppIcons.cloudOffOutlined,
             color: Theme.of(context).colorScheme.error,
           ),
           const SizedBox(width: AppSpacing.md),
@@ -2994,7 +2997,7 @@ class _SectionErrorCard extends StatelessWidget {
           if (onRetry != null)
             TextButton.icon(
               onPressed: onRetry,
-              icon: const Icon(Icons.refresh),
+              icon: const Icon(AppIcons.refresh),
               label: const Text('Retry'),
             ),
         ],
@@ -3040,7 +3043,7 @@ class _DashboardLoadError extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Icon(
-                  Icons.cloud_off_outlined,
+                  AppIcons.cloudOffOutlined,
                   size: 44,
                   color: Theme.of(context).colorScheme.error,
                 ),
@@ -3058,7 +3061,7 @@ class _DashboardLoadError extends StatelessWidget {
                 const SizedBox(height: AppSpacing.lg),
                 FilledButton.icon(
                   onPressed: onRetry,
-                  icon: const Icon(Icons.refresh),
+                  icon: const Icon(AppIcons.refresh),
                   label: const Text('Retry'),
                 ),
               ],

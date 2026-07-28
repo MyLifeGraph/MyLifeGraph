@@ -209,13 +209,15 @@ erscheinen nur, wenn echte Werte vorhanden sind:
 
 | Metrik | Datenquelle |
 | --- | --- |
-| Sleep duration, quality, target difference | nur die letzte gültige V4-Schlafepisode vor der Session |
+| Previous-night sleep, quality, shortfall | nur eine gültige V4-Schlafepisode mit exakt demselben lokalen Aufwach-/Focus-Tag und `woke_at` vor der Session |
 | Morning energy | nur wenn Morning vor Sessionstart erfasst wurde |
-| Focus minutes and completion | tatsächliche terminale `focus_sessions` |
-| Planned Focus duration | die an der jeweiligen Session gespeicherte geplante Dauer |
-| Focus quality and useful progress | vorhandene `focus-reflection-v1`-Bewertungen |
+| Rated focus time and completion | Tagessumme beziehungsweise Quote ausschließlich bewerteter terminaler `focus_sessions` |
+| Planned focus time | Tagessumme der an bewerteten Sessions gespeicherten geplanten Dauer |
+| Rated focus quality and useful progress | vorhandene `focus-reflection-v1`-Bewertungen |
 
-Eine Korrelation benötigt mindestens fünf gemeinsame Tage. Das Ergebnis ist
+Eine Korrelation benötigt mindestens sieben gemeinsame Tage; 7–13 Tage bleiben
+`Early evidence`, Rankings beginnen ab 14. Sleep/Shortfall und Activity/Steps
+werden als überlappende Signale nicht miteinander verglichen. Das Ergebnis ist
 eine **Assoziation, keine Ursache**. Die Exploration besitzt keine
 Planner-Autorität. Nur ein separat freigegebenes, Planner-fähiges
 Focus-Zeitfenster aus der kompakten Hauptkarte darf einen neu angeforderten

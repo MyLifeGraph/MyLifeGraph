@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+
+import 'package:my_life_graph/core/constants/app_radii.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -106,7 +108,7 @@ class _MorningCalibrationPageState
             padding: const EdgeInsets.all(AppSpacing.lg),
             decoration: BoxDecoration(
               color: Theme.of(context).colorScheme.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(20),
+              borderRadius: BorderRadius.circular(AppRadii.xl),
             ),
             child: Text(
               _draft.estimatedSleepMinutes == null

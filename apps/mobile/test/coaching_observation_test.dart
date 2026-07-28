@@ -39,7 +39,7 @@ void main() {
     expect(observation.confidence, ObservationConfidence.stronger);
     expect(observation.evidenceWindow, contains('18 shared days'));
     expect(observation.summary, contains('not proof'));
-    expect(observation.experiment, contains('Optional 7-day experiment'));
+    expect(observation.experiment, isNull);
   });
 
   test('does not promote a five-day correlation as an insight', () {
@@ -63,5 +63,49 @@ void main() {
     expect(observation.confidence, ObservationConfidence.insufficient);
     expect(observation.experiment, isNull);
     expect(observation.dataQuality, contains('14 comparable days'));
+  });
+
+  test('offers an experiment only for a safe factor to outcome pair', () {
+    final observation = const CoachingObservationBuilder().build(
+      CorrelationReport(
+        windowDays: 30,
+        metrics: correlationMetrics,
+        points: [],
+        results: [
+          CorrelationResult(
+            metricAId: 'planned_focus_minutes',
+            metricBId: 'useful_progress',
+            sampleSize: 18,
+            coefficient: 0.45,
+            summary: 'unused',
+          ),
+        ],
+      ),
+    );
+
+    expect(observation.experiment, contains('Optional 7-day experiment'));
+    expect(observation.experiment, contains('planned focus time'));
+    expect(observation.experiment, contains('rated useful progress'));
+  });
+
+  test('keeps outcome to outcome pairs descriptive', () {
+    final observation = const CoachingObservationBuilder().build(
+      CorrelationReport(
+        windowDays: 30,
+        metrics: correlationMetrics,
+        points: [],
+        results: [
+          CorrelationResult(
+            metricAId: 'focus_quality',
+            metricBId: 'useful_progress',
+            sampleSize: 18,
+            coefficient: 0.6,
+            summary: 'unused',
+          ),
+        ],
+      ),
+    );
+
+    expect(observation.experiment, isNull);
   });
 }

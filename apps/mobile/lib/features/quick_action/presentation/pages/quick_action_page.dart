@@ -1,4 +1,8 @@
 import 'package:flutter/material.dart';
+
+import 'package:my_life_graph/core/constants/app_radii.dart';
+
+import 'package:my_life_graph/core/theme/app_icons.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -25,13 +29,13 @@ class QuickActionPage extends ConsumerWidget {
       subtitle: 'Add a check-in or start something you planned',
       children: [
         _ActionTile(
-          icon: Icons.nights_stay_outlined,
+          icon: AppIcons.nightsStayOutlined,
           title: 'Evening check-in',
           subtitle: 'Close today with three ratings and useful context',
           onTap: () => context.go(AppRoutes.quickMoodCheckIn),
         ),
         _ActionTile(
-          icon: Icons.wb_sunny_outlined,
+          icon: AppIcons.wbSunnyOutlined,
           title: 'Morning check-in',
           subtitle: 'Add sleep, current energy, and today\'s shape',
           onTap: () => context.go(AppRoutes.morningCalibration),
@@ -54,13 +58,13 @@ class QuickActionPage extends ConsumerWidget {
         ),
         if (capabilities.canUseSyncedHabits) ...[
           _ActionTile(
-            icon: Icons.task_alt_outlined,
+            icon: AppIcons.taskAltOutlined,
             title: 'Habit completion',
             subtitle: 'Track consistency signals',
             onTap: () => context.go(AppRoutes.habitCompletion),
           ),
           _ActionTile(
-            icon: Icons.timer_outlined,
+            icon: AppIcons.timerOutlined,
             title: 'Focus',
             subtitle: 'Start a real timed block linked to a task or habit',
             onTap: () => context.go(AppRoutes.deepWork),
@@ -96,7 +100,7 @@ class _SavedCheckInSummary extends StatelessWidget {
         children: [
           Row(
             children: [
-              const Icon(Icons.check_circle_outline, size: 20),
+              const Icon(AppIcons.checkCircleOutline, size: 20),
               const SizedBox(width: AppSpacing.sm),
               Expanded(
                 child: Text(
@@ -174,7 +178,7 @@ class _CaptureStatus extends StatelessWidget {
             .colorScheme
             .primary
             .withValues(alpha: saved ? 0.16 : 0.06),
-        borderRadius: BorderRadius.circular(999),
+        borderRadius: BorderRadius.circular(AppRadii.pill),
       ),
       child: Text('$label ${saved ? 'saved' : 'not saved'}'),
     );
@@ -208,7 +212,7 @@ class _SavedCheckInError extends StatelessWidget {
         IconButton(
           tooltip: 'Retry loading check-in',
           onPressed: onRetry,
-          icon: const Icon(Icons.refresh),
+          icon: const Icon(AppIcons.refresh),
         ),
       ],
     );
@@ -246,7 +250,7 @@ class _ActionTile extends StatelessWidget {
               ],
             ),
           ),
-          const Icon(Icons.chevron_right),
+          const Icon(AppIcons.chevronRight),
         ],
       ),
     );

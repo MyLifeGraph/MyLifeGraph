@@ -1781,3 +1781,10 @@ development adapter defined in `docs/phase-10-controlled-coach-plan.md`; it does
 not establish a deployable LLM provider or universal subscription/model
 availability. Select the next slice from a separately verified user need rather
 than broadening Coach automatically.
+
+## Visual presentation
+
+Daily Capture and Today presentation use the shared
+[Frontend Visual System V2](frontend-visual-system-v2.md). The visual migration
+does not alter capture fields, briefing generation, ranking, copy truth, or the
+read/write boundary described in this plan.

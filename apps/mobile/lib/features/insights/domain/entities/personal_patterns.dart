@@ -377,7 +377,9 @@ class _DailyCorrelationValues {
     _addOptional(sleepHours, point.sleepHours);
     _addOptional(
       sleepTargetDeviation,
-      point.sleepTargetDeviationMinutes?.toDouble(),
+      point.sleepTargetDeviationMinutes == null
+          ? null
+          : (-point.sleepTargetDeviationMinutes!).clamp(0, 720).toDouble(),
     );
     _addOptional(sleepQuality, point.sleepQuality?.toDouble());
     _addOptional(morningEnergy, point.morningEnergy?.toDouble());
@@ -385,7 +387,7 @@ class _DailyCorrelationValues {
 
   Map<String, double> get values => {
         'focus_minutes': focusMinutes,
-        'planned_focus_minutes': plannedFocusMinutes / count,
+        'planned_focus_minutes': plannedFocusMinutes,
         'focus_quality': focusQuality / count,
         'useful_progress': usefulProgress / count,
         'focus_completion_rate': completed / count * 100,

@@ -228,6 +228,7 @@ def test_collecting_exposes_baseline_only_after_three_ratings() -> None:
         call for call in repository.calls if call[0] == "evidence"
     )
     assert evidence_call[1]["ends_at"] == NOW
+    assert evidence_call[1]["local_starts_on"] == date(2026, 4, 27)
 
 
 def test_emerging_and_stable_maturity_boundaries_are_exact() -> None:
@@ -460,6 +461,73 @@ def test_sleep_comparison_counts_each_episode_once() -> None:
     assert sleep_pattern.evidence.preferred_count == 5
     assert sleep_pattern.evidence.comparison_count == 5
     assert "associated" in sleep_pattern.summary
+    assert any(
+        "median sleep shortfall was 30 min" in detail
+        for detail in sleep_pattern.evidence.details
+    )
+    assert all(
+        "target deviation" not in detail
+        for detail in sleep_pattern.evidence.details
+    )
+
+
+def test_sleep_requires_exact_wake_day_and_wake_before_session() -> None:
+    session_day = date(2026, 7, 20)
+    sessions: list[dict] = []
+    reflections: list[dict] = []
+    for index, hour in enumerate((1, 6, 9, 14)):
+        session, reflection = _focus(
+            index=index,
+            local_day=session_day,
+            hour=hour,
+        )
+        sessions.append(session)
+        assert reflection is not None
+        reflections.append(reflection)
+    service, _ = _service(
+        Repository(
+            sessions=sessions,
+            reflections=reflections,
+            daily_logs=[
+                _sleep_row(session_day - timedelta(days=1), minutes=450),
+                _sleep_row(session_day, minutes=450),
+            ],
+        ),
+    )
+
+    result = asyncio.run(service.get_patterns(user_id="owner"))
+
+    assert [point.sleep_hours for point in result.correlation_points] == [
+        None,
+        None,
+        7.5,
+        7.5,
+    ]
+
+
+def test_sleep_does_not_use_previous_day_episode_within_36_hours() -> None:
+    session_day = date(2026, 7, 20)
+    session, reflection = _focus(
+        index=1,
+        local_day=session_day,
+        hour=1,
+    )
+    assert reflection is not None
+    service, _ = _service(
+        Repository(
+            sessions=[session],
+            reflections=[reflection],
+            daily_logs=[
+                _sleep_row(session_day - timedelta(days=1), minutes=450),
+            ],
+        ),
+    )
+
+    result = asyncio.run(service.get_patterns(user_id="owner"))
+
+    assert result.correlation_points[0].sleep_hours is None
+    assert result.correlation_points[0].sleep_quality is None
+    assert result.correlation_points[0].morning_energy is None
 
 
 def test_profile_timezone_handles_dst_and_energy_is_not_backfilled() -> None:

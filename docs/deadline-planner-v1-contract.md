@@ -560,3 +560,10 @@ historical sections of `docs/verification.md`. Those local deterministic
 records do not establish remote migration state, provider-calendar behavior,
 installed-device behavior, notification delivery, participant evidence, or
 long-term outcomes.
+
+## Visual presentation
+
+Deadline Planner uses the shared
+[Frontend Visual System V2](frontend-visual-system-v2.md). The presentation
+migration leaves proposal identity, revisions, confirmation, reservations,
+managed-task ownership, and measured progress unchanged.

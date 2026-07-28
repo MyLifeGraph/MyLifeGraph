@@ -1,4 +1,8 @@
 import 'package:flutter/material.dart';
+
+import 'package:my_life_graph/core/constants/app_radii.dart';
+
+import 'package:my_life_graph/core/theme/app_icons.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
@@ -168,7 +172,7 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
                   ref.invalidate(examWeekOutlookProvider);
                   controller.load();
                 },
-          icon: const Icon(Icons.refresh),
+          icon: const Icon(AppIcons.refresh),
         ),
       ],
       children: children,
@@ -384,13 +388,13 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
               const SizedBox(height: AppSpacing.md),
               FilledButton.tonalIcon(
                 onPressed: () => Navigator.pop(context, 'edit'),
-                icon: const Icon(Icons.edit_outlined),
+                icon: const Icon(AppIcons.editOutlined),
                 label: const Text('Edit commitment'),
               ),
               const SizedBox(height: AppSpacing.sm),
               OutlinedButton.icon(
                 onPressed: () => Navigator.pop(context, 'archive'),
-                icon: const Icon(Icons.archive_outlined),
+                icon: const Icon(AppIcons.archiveOutlined),
                 label: const Text('Archive commitment'),
               ),
             ],
@@ -535,8 +539,8 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
                   onPressed: () => Navigator.pop(context, true),
                   icon: Icon(
                     plan.targetKind == 'task'
-                        ? Icons.play_arrow
-                        : Icons.check_circle_outline,
+                        ? AppIcons.playArrow
+                        : AppIcons.checkCircleOutline,
                   ),
                   label: Text(
                     plan.targetKind == 'task'
@@ -548,7 +552,7 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
               OutlinedButton.icon(
                 key: const ValueKey('planner-cancel-reservations'),
                 onPressed: () => Navigator.pop(context, false),
-                icon: const Icon(Icons.event_busy_outlined),
+                icon: const Icon(AppIcons.eventBusyOutlined),
                 label: const Text('Cancel reservations'),
               ),
             ],
@@ -648,7 +652,7 @@ class _PlannerLockedCard extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(Icons.lock_outline),
+            Icon(AppIcons.lockOutline),
             SizedBox(width: AppSpacing.md),
             Expanded(
               child: Column(
@@ -710,31 +714,31 @@ class _AddNewSection extends StatelessWidget {
               children: [
                 _CreateButton(
                   key: const ValueKey('planner-add-task'),
-                  icon: Icons.task_alt_outlined,
+                  icon: AppIcons.taskAltOutlined,
                   label: 'Task',
                   onPressed: busy ? null : onTask,
                 ),
                 _CreateButton(
                   key: const ValueKey('planner-add-habit'),
-                  icon: Icons.repeat_outlined,
+                  icon: AppIcons.repeatOutlined,
                   label: 'Habit',
                   onPressed: busy ? null : onHabit,
                 ),
                 _CreateButton(
                   key: const ValueKey('planner-add-exam'),
-                  icon: Icons.school_outlined,
+                  icon: AppIcons.schoolOutlined,
                   label: 'Exam',
                   onPressed: busy ? null : onExam,
                 ),
                 _CreateButton(
                   key: const ValueKey('planner-add-assignment'),
-                  icon: Icons.assignment_outlined,
+                  icon: AppIcons.assignmentOutlined,
                   label: 'Assignment',
                   onPressed: busy ? null : onAssignment,
                 ),
                 _CreateButton(
                   key: const ValueKey('planner-add-commitment'),
-                  icon: Icons.event_busy_outlined,
+                  icon: AppIcons.eventBusyOutlined,
                   label: 'Fixed commitment',
                   onPressed: busy ? null : onCommitment,
                 ),
@@ -748,7 +752,7 @@ class _AddNewSection extends StatelessWidget {
                 padding: const EdgeInsets.all(AppSpacing.md),
                 decoration: BoxDecoration(
                   color: Theme.of(context).colorScheme.secondaryContainer,
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(AppRadii.lg),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -756,7 +760,7 @@ class _AddNewSection extends StatelessWidget {
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Icon(Icons.event_note_outlined),
+                        const Icon(AppIcons.eventNoteOutlined),
                         const SizedBox(width: AppSpacing.sm),
                         Expanded(
                           child: Column(
@@ -779,7 +783,7 @@ class _AddNewSection extends StatelessWidget {
                     FilledButton.tonalIcon(
                       key: const ValueKey('planner-review-setup-schedule'),
                       onPressed: busy ? null : onReviewSetup,
-                      icon: const Icon(Icons.calendar_view_week_outlined),
+                      icon: const Icon(AppIcons.calendarViewWeekOutlined),
                       label: const Text('Add weekly schedule'),
                     ),
                   ],
@@ -793,7 +797,7 @@ class _AddNewSection extends StatelessWidget {
                 contentPadding: EdgeInsets.zero,
                 value: calendarPreference!.useCalendarBusyTime,
                 onChanged: busy ? null : onCalendarPreference,
-                secondary: const Icon(Icons.calendar_month_outlined),
+                secondary: const Icon(AppIcons.calendarMonthOutlined),
                 title: const Text('Use current calendar import as busy time'),
                 subtitle: Text(
                   calendarPreference!.calendarAvailable
@@ -873,7 +877,7 @@ class _ExamWeekOutlookSection extends StatelessWidget {
               const SizedBox(height: AppSpacing.md),
               OutlinedButton.icon(
                 onPressed: onRetry,
-                icon: const Icon(Icons.refresh),
+                icon: const Icon(AppIcons.refresh),
                 label: const Text('Retry outlook'),
               ),
             ],
@@ -925,10 +929,10 @@ class _ExamWeekOutlookCard extends StatelessWidget {
             children: [
               Icon(
                 outlook.mode == 'overdue'
-                    ? Icons.report_gmailerrorred_outlined
+                    ? AppIcons.reportGmailerrorredOutlined
                     : outlook.mode == 'exam_week'
-                        ? Icons.school_outlined
-                        : Icons.visibility_outlined,
+                        ? AppIcons.schoolOutlined
+                        : AppIcons.visibilityOutlined,
                 color: accent,
               ),
               const SizedBox(width: AppSpacing.sm),
@@ -960,7 +964,7 @@ class _ExamWeekOutlookCard extends StatelessWidget {
             padding: const EdgeInsets.all(AppSpacing.md),
             decoration: BoxDecoration(
               color: colors.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(AppRadii.lg),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -990,14 +994,14 @@ class _ExamWeekOutlookCard extends StatelessWidget {
             OutlinedButton.icon(
               key: const ValueKey('exam-outlook-evening-check-in'),
               onPressed: onEveningCheckIn,
-              icon: const Icon(Icons.bedtime_outlined),
+              icon: const Icon(AppIcons.bedtimeOutlined),
               label: const Text('Set it in Evening check-in'),
             ),
           ] else ...[
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Icon(Icons.bedtime_outlined),
+                const Icon(AppIcons.bedtimeOutlined),
                 const SizedBox(width: AppSpacing.sm),
                 Expanded(
                   child: Text(
@@ -1012,7 +1016,9 @@ class _ExamWeekOutlookCard extends StatelessWidget {
               const SizedBox(height: AppSpacing.sm),
               Text(
                 '$shortNights of the last ${outlook.recentSleepNights.length} valid nights were at least one hour below their saved target.',
-                style: TextStyle(color: accent),
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: accent,
+                    ),
               ),
             ],
           ],
@@ -1025,7 +1031,7 @@ class _ExamWeekOutlookCard extends StatelessWidget {
                   .map(
                     (code) => Chip(
                       avatar: Icon(
-                        Icons.warning_amber_outlined,
+                        AppIcons.warningAmberOutlined,
                         size: 18,
                         color: accent,
                       ),
@@ -1084,7 +1090,7 @@ class _OutlookRiskChip extends StatelessWidget {
         ),
         decoration: BoxDecoration(
           color: color.withValues(alpha: 0.12),
-          borderRadius: BorderRadius.circular(999),
+          borderRadius: BorderRadius.circular(AppRadii.pill),
         ),
         child: Text(
           label,
@@ -1111,7 +1117,7 @@ class _OutlookExamRow extends StatelessWidget {
         decoration: BoxDecoration(
           border:
               Border.all(color: Theme.of(context).colorScheme.outlineVariant),
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(AppRadii.lg),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -1224,7 +1230,7 @@ class _NeedsAttentionSection extends StatelessWidget {
             if (items.isEmpty)
               const Row(
                 children: [
-                  Icon(Icons.check_circle_outline),
+                  Icon(AppIcons.checkCircleOutline),
                   SizedBox(width: AppSpacing.sm),
                   Expanded(child: Text('No conflicts or stale previews.')),
                 ],
@@ -1235,21 +1241,21 @@ class _NeedsAttentionSection extends StatelessWidget {
                   contentPadding: EdgeInsets.zero,
                   leading: Icon(
                     item.kind == 'stale_preview'
-                        ? Icons.update_outlined
+                        ? AppIcons.updateOutlined
                         : item.kind == 'unscheduled'
-                            ? Icons.timer_off_outlined
-                            : Icons.warning_amber_outlined,
+                            ? AppIcons.timerOffOutlined
+                            : AppIcons.warningAmberOutlined,
                     color: Theme.of(context).colorScheme.error,
                   ),
                   title: Text(item.title),
                   subtitle: Text(item.detail),
                   trailing: item.planId == null
                       ? (item.target == 'study_setup'
-                          ? const Icon(Icons.chevron_right)
+                          ? const Icon(AppIcons.chevronRight)
                           : item.unplacedMinutes > 0
                               ? Text('${item.unplacedMinutes} min')
                               : null)
-                      : const Icon(Icons.chevron_right),
+                      : const Icon(AppIcons.chevronRight),
                   onTap: item.planId == null && item.target != 'study_setup'
                       ? null
                       : () => onOpen(item),
@@ -1336,7 +1342,7 @@ class _PlannerDayItemTile extends StatelessWidget {
       ),
       title: Text(item.title),
       subtitle: Text('$time · ${visual.label}'),
-      trailing: actionable ? const Icon(Icons.chevron_right) : null,
+      trailing: actionable ? const Icon(AppIcons.chevronRight) : null,
       onTap: actionable ? onTap : null,
     );
   }
@@ -1365,7 +1371,7 @@ class _PreparationSection extends StatelessWidget {
               for (final plan in plans)
                 ListTile(
                   contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.school_outlined),
+                  leading: const Icon(AppIcons.schoolOutlined),
                   title: Text(plan.title),
                   subtitle: Text(
                     '${_minutes(plan.remainingMinutes)} remaining · '
@@ -1373,7 +1379,7 @@ class _PreparationSection extends StatelessWidget {
                   ),
                   trailing: plan.hasPendingPreview
                       ? const Chip(label: Text('Preview'))
-                      : const Icon(Icons.chevron_right),
+                      : const Icon(AppIcons.chevronRight),
                   onTap: () => onOpen(plan),
                 ),
           ],
@@ -1403,12 +1409,12 @@ class _UnscheduledSection extends StatelessWidget {
                   contentPadding: EdgeInsets.zero,
                   leading: Icon(
                     item.kind == 'task'
-                        ? Icons.task_outlined
-                        : Icons.repeat_outlined,
+                        ? AppIcons.taskOutlined
+                        : AppIcons.repeatOutlined,
                   ),
                   title: Text(item.title),
                   subtitle: Text(_reason(item.reason)),
-                  trailing: const Icon(Icons.chevron_right),
+                  trailing: const Icon(AppIcons.chevronRight),
                   onTap: () => onOpen(item),
                 ),
           ],
@@ -1440,7 +1446,7 @@ class _HistorySection extends StatelessWidget {
             else
               for (final item in items)
                 ListTile(
-                  leading: const Icon(Icons.history),
+                  leading: const Icon(AppIcons.history),
                   title: Text(item.title),
                   subtitle: Text(item.kind == 'task' ? 'Task' : 'Habit'),
                 ),
@@ -1519,7 +1525,7 @@ class _PlannerLoadError extends StatelessWidget {
             const SizedBox(height: AppSpacing.sm),
             OutlinedButton.icon(
               onPressed: onRetry,
-              icon: const Icon(Icons.refresh),
+              icon: const Icon(AppIcons.refresh),
               label: const Text('Retry'),
             ),
           ],
@@ -1581,7 +1587,7 @@ class _PlanPreviewDialog extends StatelessWidget {
               for (final block in revision.taskBlocks)
                 ListTile(
                   contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.view_timeline_outlined),
+                  leading: const Icon(AppIcons.viewTimelineOutlined),
                   title: Text('${block.plannedMinutes} min'),
                   subtitle: Text(
                     block.recoveryMinutes > 0
@@ -1596,7 +1602,7 @@ class _PlanPreviewDialog extends StatelessWidget {
               for (final slot in revision.habitSlots)
                 ListTile(
                   contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.repeat_outlined),
+                  leading: const Icon(AppIcons.repeatOutlined),
                   title: Text(
                     '${_weekdayLabel(slot.weekday)} · ${slot.durationMinutes} min',
                   ),
@@ -1763,7 +1769,7 @@ class _TaskDialogState extends State<_TaskDialog> {
                           ? 'Not selected'
                           : DateFormat.yMMMd().add_Hm().format(_deadline!),
                     ),
-                    trailing: const Icon(Icons.edit_calendar_outlined),
+                    trailing: const Icon(AppIcons.editCalendarOutlined),
                     onTap: _pickDeadline,
                   ),
                 ],
@@ -1772,8 +1778,9 @@ class _TaskDialogState extends State<_TaskDialog> {
                     alignment: Alignment.centerLeft,
                     child: Text(
                       _error!,
-                      style:
-                          TextStyle(color: Theme.of(context).colorScheme.error),
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: Theme.of(context).colorScheme.error,
+                          ),
                     ),
                   ),
               ],
@@ -1989,8 +1996,9 @@ class _HabitDialogState extends State<_HabitDialog> {
                   const SizedBox(height: AppSpacing.sm),
                   Text(
                     _error!,
-                    style:
-                        TextStyle(color: Theme.of(context).colorScheme.error),
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: Theme.of(context).colorScheme.error,
+                        ),
                   ),
                 ],
               ],
@@ -2173,8 +2181,9 @@ class _CommitmentDialogState extends State<_CommitmentDialog> {
                 if (_error != null)
                   Text(
                     _error!,
-                    style:
-                        TextStyle(color: Theme.of(context).colorScheme.error),
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: Theme.of(context).colorScheme.error,
+                        ),
                   ),
               ],
             ),
@@ -2315,22 +2324,26 @@ List<String> _overlappingTitles(
 
 _BlockVisual _visual(String kind) => switch (kind) {
       'setup_commitment' => const _BlockVisual(
-          Icons.settings_suggest_outlined,
+          AppIcons.settingsSuggestOutlined,
           'Setup commitment',
           _tertiary,
         ),
       'manual_commitment' => const _BlockVisual(
-          Icons.event_busy_outlined,
+          AppIcons.eventBusyOutlined,
           'Fixed commitment',
           _error,
         ),
-      'task_block' => const _BlockVisual(Icons.task_outlined, 'Task', _primary),
+      'task_block' =>
+        const _BlockVisual(AppIcons.taskOutlined, 'Task', _primary),
       'habit_slot' =>
-        const _BlockVisual(Icons.repeat_outlined, 'Habit', _secondary),
+        const _BlockVisual(AppIcons.repeatOutlined, 'Habit', _secondary),
       'preparation' =>
-        const _BlockVisual(Icons.school_outlined, 'Preparation', _tertiary),
-      _ =>
-        const _BlockVisual(Icons.calendar_month_outlined, 'Calendar', _outline),
+        const _BlockVisual(AppIcons.schoolOutlined, 'Preparation', _tertiary),
+      _ => const _BlockVisual(
+          AppIcons.calendarMonthOutlined,
+          'Calendar',
+          _outline,
+        ),
     };
 
 class _BlockVisual {
