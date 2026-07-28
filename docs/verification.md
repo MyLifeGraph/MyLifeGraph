@@ -57,7 +57,7 @@ Use the lowest level that covers the change.
 | Browser E2E | `FLUTTER_BIN=/path/to/flutter bash scripts/e2e_web.sh` | Requires matching local migration history, starts Flutter Web, drives Playwright, and checks uniquely named DB writes. | No reset; writes test rows |
 | Personal Learning E2E | `E2E_PERSONAL_LEARNING_ONLY=true FLUTTER_BIN=/path/to/flutter bash scripts/e2e_web.sh` | Runs the focused reflection, Evening edit, pattern, learned-Planner, export, clear, and account-cascade journey. | No reset; writes and then deletes one test account |
 | Browser E2E with reset | `RESET_DB=true FLUTTER_BIN=/path/to/flutter bash scripts/e2e_web.sh` | Recreates local DB, then runs browser E2E. | Yes, local DB only |
-| Demo seed | `npm run seed:demo` | Starts local Supabase and replaces only the three named local demo accounts with repeatable data. | Demo accounts only |
+| Demo seed | `npm run seed:demo` | Starts local Supabase and replaces only the four named local demo accounts: one fresh Setup identity and three populated scenarios. | Demo accounts only |
 
 Do not run destructive Supabase commands against a remote database. These
 scripts are for the local Supabase stack from `supabase/config.toml`.
@@ -81,12 +81,16 @@ any API URL outside `http://127.0.0.1:54321` and
 environment with the service requirements installed.
 
 The seed is repeatable for the demo identities. It uses the reviewed local
-full-account cascade to delete and recreate only the three named Auth users, so
+full-account cascade to delete and recreate only the four named Auth users, so
 immutable retry/usage ledgers cannot leak between runs. Rerunning it invalidates
-an open demo-account session. Each Intake row is a valid applied revision with
-a stable request id and intentionally empty optional Setup-owned collections.
-The seed creates no active Goal row. Separately seeded habits and schedule rows
-retain `demo_seed` ownership and are not presented as Setup materialization.
+an open demo-account session. `onboarding@example.test` stays incomplete in
+`Europe/Berlin`; the command verifies its profile, default preference row, and
+neutral Personal Learning defaults, plus its absence from every activity,
+Setup, planning, Coach, and retry-ledger table. Each populated scenario's
+Intake row is a valid applied revision with a stable request id and
+intentionally empty optional Setup-owned collections. The seed creates no
+active Goal row. Separately seeded habits and schedule rows retain `demo_seed`
+ownership and are not presented as Setup materialization.
 
 The student scenario then uses the production backend service classes to
 persist and validate:
@@ -114,6 +118,7 @@ persist and validate:
 The seed command verifies those minimums before succeeding. The default
 local-only password is `DemoPass123!` for:
 
+- `onboarding@example.test`
 - `student@example.test`
 - `worker@example.test`
 - `recovery@example.test`
@@ -131,6 +136,7 @@ FLUTTER_BIN=/path/to/flutter scripts/verify.sh
 
 The script runs:
 
+- `node --test scripts/seed_demo_contract.test.mjs`
 - `node --test scripts/check_docs_consistency.test.mjs`
 - `node scripts/check_docs_consistency.mjs`
 - `bash -n scripts/start_frontend.sh`

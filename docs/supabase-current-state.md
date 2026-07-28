@@ -1040,17 +1040,22 @@ historical sections of `docs/verification.md`. They establish neither remote
 migration/RLS state nor production readiness. Later changes must establish a
 new full pass. Do not run destructive reset commands against a remote database.
 
-For manual local product exploration, `npm run seed:demo` creates repeatable
-local-only Auth users and app rows for student, worker, and recovery scenarios.
-It replaces only those three named demo accounts through the full-account
-cascade, so immutable retry and usage rows are reset without weakening their
-normal contracts. The seed script uses the local Supabase service-role key from
+For manual local product exploration, `npm run seed:demo` creates four
+repeatable local-only Auth users. `onboarding@example.test` is recreated with an
+incomplete `Europe/Berlin` profile, the Auth-created default notification
+and Personal Learning preferences, and no activity, Setup, planning, Coach, or
+retry-ledger rows. Student, worker, and recovery remain the three populated
+scenarios. The command replaces only
+those four named accounts through the full-account cascade, so immutable retry
+and usage rows are reset without weakening their normal contracts. The seed
+script uses the local Supabase service-role key from
 `supabase status -o env`, refuses non-local API URLs, and writes typed applied
 Setup revisions with stable request ids and empty optional Setup-owned
-collections. It then uses the existing backend services to enrich and verify
-the student account across Today, Weekly Review, Calendar Import, Deadline
-Planner, notification delivery, and Coach. It does not change the schema or
-relabel the separately seeded `demo_seed` objects as Setup-owned.
+collections only for the populated accounts. It then uses the existing backend
+services to enrich and verify the student account across Today, Weekly Review,
+Calendar Import, Deadline Planner, notification delivery, and Coach. It does
+not change the schema or relabel the separately seeded `demo_seed` objects as
+Setup-owned.
 
 See `docs/verification.md` for the current automation boundary.
 

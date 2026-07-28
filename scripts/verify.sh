@@ -21,6 +21,9 @@ node --check scripts/check_docs_consistency.test.mjs
 node --test scripts/check_docs_consistency.test.mjs
 node scripts/check_docs_consistency.mjs
 node --check scripts/seed_demo_data.mjs
+node --check scripts/seed_demo_contract.mjs
+node --check scripts/seed_demo_contract.test.mjs
+node --test scripts/seed_demo_contract.test.mjs
 node --check e2e/web/smoke.mjs
 python3 -m py_compile scripts/seed_student_feature_data.py
 

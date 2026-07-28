@@ -600,7 +600,7 @@ Remote projects still need to be inspected directly before relying on
 See `docs/supabase-current-state.md` before changing Supabase schema or relying
 on real remote data.
 
-For local product exploration with real Supabase-backed dashboards, seed three
+For local product exploration with real Supabase-backed dashboards, seed four
 local demo accounts:
 
 ```bash
@@ -608,11 +608,13 @@ npm run seed:demo
 ```
 
 The script starts local Supabase if needed, refuses non-local Supabase URLs, and
-replaces only the three local demo accounts with repeatable student, worker,
-and recovery scenarios. Its typed Setup rows include valid applied revisions
-with intentionally empty Setup-owned optional collections; separately seeded
-runtime Tasks, Habits, and commitments remain `demo_seed` data; no active Goal
-rows are seeded. The student
+replaces only the four named local accounts. `onboarding@example.test` is a
+real authenticated account in `Europe/Berlin` with incomplete Setup and no
+user-entered or generated product data. The student, worker, and recovery
+accounts remain repeatable populated scenarios. Their typed Setup rows include
+valid applied revisions with intentionally empty Setup-owned optional
+collections; separately seeded runtime Tasks, Habits, and commitments remain
+`demo_seed` data; no active Goal rows are seeded. The student
 scenario is additionally enriched through the real backend services with
 current Today/Weekly Review output, all three Habit cadences, 43 profile-local
 Daily Capture V4 days, 36 rated Focus days and a stable Personal Learning
@@ -744,6 +746,8 @@ has the nvm bin directory on `PATH`.
   navigation, features, data, learning behavior, dashboards, core concepts,
   Coach limits, and present information-architecture friction.
 - `docs/local-dev.md` - Full local setup and troubleshooting.
+- `docs/presentation-demo-2026-07-30.md` - Two-origin presentation setup,
+  live-Coach preflight, timed script, and presentation-day checklist.
 - `docs/architecture.md` - Current architecture and data-flow overview.
 - `docs/backend-roadmap.md` - Target backend flow, product agents, data model
   direction, LLM cost controls, and next implementation sequence.

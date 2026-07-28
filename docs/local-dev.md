@@ -1063,10 +1063,15 @@ The script:
   printing it;
 - refuses to run unless the API URL is `http://127.0.0.1:54321` or
   `http://localhost:54321`;
-- deletes and recreates only the three confirmed local demo Auth users through
+- deletes and recreates only the four confirmed local demo Auth users through
   the full-account cascade, so a rerun also resets immutable local retry and
   usage ledgers (and signs out an open demo session);
-- writes one typed applied Setup revision per user with a stable request UUID
+- keeps `onboarding@example.test` incomplete in `Europe/Berlin` and verifies
+  that every owner-content and retry-ledger table is empty apart from the
+  Auth-created profile and neutral notification/Personal Learning preference
+  projections;
+- writes one typed applied Setup revision per populated user with a stable
+  request UUID
   and intentionally empty optional Setup-owned collections, while leaving
   separately seeded `demo_seed` objects non-Setup-owned;
 - replaces their base demo app rows, then enriches `student@example.test`
@@ -1086,6 +1091,7 @@ Demo logins:
 
 | Scenario | Email | Password |
 | --- | --- | --- |
+| Fresh Setup | `onboarding@example.test` | `DemoPass123!` |
 | Student focus | `student@example.test` | `DemoPass123!` |
 | Busy worker | `worker@example.test` | `DemoPass123!` |
 | Recovery builder | `recovery@example.test` | `DemoPass123!` |
@@ -1117,6 +1123,10 @@ Mutate these freely and rerun the seed to restore them. Coach
 sending remains disabled unless FastAPI is deliberately started with a ready
 provider; the stored demo turns use the deterministic fake provider and imply
 no live model connection.
+For the two-origin live presentation setup, Coach cleanup/preflight, and timed
+rehearsal, follow `docs/presentation-demo-2026-07-30.md`. Seeding recreates the
+four Auth users and invalidates their sessions, so do not seed again after the
+presentation tabs sign in.
 Seeded recommendations are visible through the FastAPI recommendation endpoint
 when the AI service is running with the same local Supabase project settings;
 without FastAPI, an authenticated account shows a recoverable recommendation

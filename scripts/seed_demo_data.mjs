@@ -1,5 +1,11 @@
 import crypto from 'node:crypto';
 
+import {
+  ONBOARDING_DEMO,
+  ONBOARDING_EMPTY_TABLES,
+  assertFreshOnboardingProjection,
+} from './seed_demo_contract.mjs';
+
 const supabaseUrl = process.env.SUPABASE_URL?.replace(/\/$/, '');
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const demoPassword = process.env.DEMO_PASSWORD || 'DemoPass123!';
@@ -221,8 +227,10 @@ await main();
 async function main() {
   const users = await listAdminUsers();
   const seeded = [];
+  const identities = [ONBOARDING_DEMO, ...scenarios];
+  let onboardingUserId = null;
 
-  for (const scenario of scenarios) {
+  for (const scenario of identities) {
     const existing = users.find(
       (user) => user.email?.toLowerCase() === scenario.email.toLowerCase(),
     );
@@ -230,8 +238,22 @@ async function main() {
       await deleteDemoAccount(existing.id, scenario.email);
     }
     const user = await createAdminUser(scenario);
-    await seedScenario(user.id, scenario);
-    seeded.push(`${scenario.email} (${scenario.displayName})`);
+    if (scenario.seedProductData === false) {
+      await seedFreshOnboardingAccount(user.id, scenario);
+      onboardingUserId = user.id;
+      seeded.push(`${scenario.email} (fresh Setup)`);
+    } else {
+      await seedScenario(user.id, scenario);
+      seeded.push(`${scenario.email} (${scenario.displayName})`);
+    }
+  }
+
+  if (!onboardingUserId) {
+    throw new Error('The onboarding demo account was not created.');
+  }
+  await verifyFreshOnboardingAccount(onboardingUserId);
+  for (const identity of identities) {
+    await verifyPasswordLogin(identity.email);
   }
 
   console.log('');
@@ -271,6 +293,10 @@ async function listAdminUsers() {
 }
 
 async function createAdminUser(scenario) {
+  const userMetadata = {
+    demo_scenario: scenario.key,
+    ...(scenario.displayName ? { display_name: scenario.displayName } : {}),
+  };
   return adminRequest(
     '/auth/v1/admin/users',
     {
@@ -279,14 +305,94 @@ async function createAdminUser(scenario) {
         email: scenario.email,
         password: demoPassword,
         email_confirm: true,
-        user_metadata: {
-          display_name: scenario.displayName,
-          demo_scenario: scenario.key,
-        },
+        user_metadata: userMetadata,
       }),
     },
     `create demo user ${scenario.email}`,
   );
+}
+
+async function seedFreshOnboardingAccount(userId, scenario) {
+  const now = new Date().toISOString();
+  await upsertRows(
+    'profiles',
+    [
+      {
+        id: userId,
+        email: scenario.email,
+        display_name: null,
+        timezone: scenario.timezone,
+        role: 'user',
+        auth_provider: 'email',
+        onboarding_completed_at: null,
+        setup_revision: 0,
+        daily_preparation_budget_minutes: null,
+        updated_at: now,
+      },
+    ],
+    'id',
+  );
+}
+
+async function verifyFreshOnboardingAccount(userId) {
+  const profiles = await restRequest(
+    `profiles?select=email,timezone,role,auth_provider,onboarding_completed_at,setup_revision,daily_preparation_budget_minutes&id=eq.${userId}`,
+    { method: 'GET' },
+    'verify onboarding demo profile',
+  );
+  const preferences = await restRequest(
+    `notification_preferences?select=user_id&user_id=eq.${userId}`,
+    { method: 'GET' },
+    'verify onboarding demo notification preferences',
+  );
+  const learningPreferences = await restRequest(
+    `learning_preferences?select=contract_version,revision,focus_reflection_prompt_enabled,personal_pattern_analysis_enabled,learned_focus_planning_enabled&user_id=eq.${userId}`,
+    { method: 'GET' },
+    'verify onboarding demo Personal Learning preferences',
+  );
+  const nonEmptyTables = [];
+  for (const table of ONBOARDING_EMPTY_TABLES) {
+    const rows = await restRequest(
+      `${table}?select=user_id&user_id=eq.${userId}&limit=1`,
+      { method: 'GET' },
+      `verify empty onboarding demo ${table}`,
+    );
+    if (rows.length > 0) {
+      nonEmptyTables.push(table);
+    }
+  }
+  assertFreshOnboardingProjection({
+    profile: profiles.length === 1 ? profiles[0] : null,
+    notificationPreferenceCount: preferences.length,
+    learningPreference:
+      learningPreferences.length === 1 ? learningPreferences[0] : null,
+    nonEmptyTables,
+  });
+}
+
+async function verifyPasswordLogin(email) {
+  const session = await request(
+    `${supabaseUrl}/auth/v1/token?grant_type=password`,
+    {
+      method: 'POST',
+      headers: {
+        apikey: serviceRoleKey,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        email,
+        password: demoPassword,
+      }),
+    },
+    `verify demo login ${email}`,
+  );
+  if (
+    !session ||
+    typeof session.access_token !== 'string' ||
+    session.user?.email?.toLowerCase() !== email.toLowerCase()
+  ) {
+    throw new Error(`Could not confirm the local demo login for ${email}.`);
+  }
 }
 
 async function deleteDemoAccount(userId, email) {
