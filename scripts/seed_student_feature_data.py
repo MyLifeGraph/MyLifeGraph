@@ -36,6 +36,9 @@ from app.models.notifications import (  # noqa: E402
 from app.models.snapshots import SnapshotGenerateRequest  # noqa: E402
 from app.models.weekly_reviews import WeeklyReviewGenerateRequest  # noqa: E402
 from app.providers.fake import FakeCoachProvider  # noqa: E402
+from app.repositories.account_repository import (  # noqa: E402
+    SupabaseAccountRepository,
+)
 from app.repositories.briefing_repository import (  # noqa: E402
     SupabaseBriefingRepository,
 )
@@ -64,6 +67,7 @@ from app.repositories.snapshot_repository import (  # noqa: E402
 from app.repositories.weekly_review_repository import (  # noqa: E402
     SupabaseWeeklyReviewRepository,
 )
+from app.services.account_service import AccountService  # noqa: E402
 from app.services.briefing_service import BriefingService  # noqa: E402
 from app.services.calendar_integration_service import (  # noqa: E402
     CalendarIntegrationService,
@@ -333,12 +337,35 @@ async def _seed_deadline_plans(
     source_event: object,
     now: datetime,
 ) -> DeadlinePlanService:
-    await client.rpc(
-        "set_daily_preparation_budget_v1",
+    profile_rows = await client.select(
+        "profiles",
         params={
-            "p_user_id": user_id,
-            "p_daily_preparation_budget_minutes": STUDENT_DAILY_BUDGET,
+            "select": "preparation_budget_revision",
+            "id": f"eq.{user_id}",
+            "limit": "1",
         },
+    )
+    if len(profile_rows) != 1:
+        raise RuntimeError("Student preparation-budget revision is unavailable.")
+    preparation_budget_revision = profile_rows[0].get(
+        "preparation_budget_revision"
+    )
+    if (
+        not isinstance(preparation_budget_revision, int)
+        or isinstance(preparation_budget_revision, bool)
+        or preparation_budget_revision < 1
+    ):
+        raise RuntimeError("Student preparation-budget revision is invalid.")
+    await AccountService(
+        repository=SupabaseAccountRepository(client),
+        now=lambda: now,
+    ).update_preparation_budget(
+        user_id=user_id,
+        request_id=_stable_uuid(
+            f"demo-seed:account-preparation-budget:{user_id}"
+        ),
+        expected_revision=preparation_budget_revision,
+        minutes=STUDENT_DAILY_BUDGET,
     )
     planner_now = now - timedelta(days=2)
     service = DeadlinePlanService(

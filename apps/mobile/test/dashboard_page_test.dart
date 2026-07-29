@@ -5,6 +5,7 @@ import 'package:my_life_graph/core/capabilities/app_surface_capabilities.dart';
 import 'package:my_life_graph/features/briefings/domain/decision_feedback.dart';
 import 'package:my_life_graph/features/briefings/presentation/providers/briefing_providers.dart';
 import 'package:my_life_graph/features/dashboard/domain/entities/dashboard_snapshot.dart';
+import 'package:my_life_graph/features/dashboard/domain/repositories/dashboard_repository.dart';
 import 'package:my_life_graph/features/dashboard/presentation/pages/dashboard_page.dart';
 import 'package:my_life_graph/features/dashboard/presentation/providers/dashboard_providers.dart';
 import 'package:my_life_graph/features/deadline_plans/domain/deadline_plan.dart';
@@ -12,6 +13,11 @@ import 'package:my_life_graph/features/deadline_plans/presentation/providers/dea
 import 'package:my_life_graph/features/optimization/domain/entities/recommendation.dart';
 import 'package:my_life_graph/features/optimization/domain/entities/recommendation_feed.dart';
 import 'package:my_life_graph/features/optimization/presentation/providers/optimization_providers.dart';
+import 'package:my_life_graph/features/snapshots/application/snapshot_refresh_service.dart';
+import 'package:my_life_graph/features/snapshots/presentation/providers/snapshot_providers.dart';
+import 'package:my_life_graph/features/tasks/data/task_supabase_data_source.dart';
+import 'package:my_life_graph/features/tasks/domain/executable_task.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'support/deadline_plan_fixtures.dart';
 
@@ -260,6 +266,40 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets(
+      'durable Today task write locks stale projection and retry only reloads',
+      (tester) async {
+    final snapshot = _todaySnapshot();
+    final taskSource = _RecordingTaskSource();
+    final refresh = _RecordingSnapshotRefresh();
+    final repository = _FailOnceDashboardRepository(snapshot);
+
+    await _pumpDashboard(
+      tester,
+      snapshot: snapshot,
+      taskSource: taskSource,
+      snapshotRefresh: refresh,
+      dashboardRepository: repository,
+    );
+    await tester.tap(find.byTooltip('Complete task Due task'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Saved; Today could not reload.'), findsWidgets);
+    expect(taskSource.completeCalls, 1);
+    expect(refresh.taskTargetDates, ['2026-07-21']);
+    expect(
+      find.byTooltip('Complete task Due task'),
+      findsNothing,
+    );
+
+    await tester.tap(find.text('Reload Today'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Reload Today'), findsNothing);
+    expect(taskSource.completeCalls, 1);
+    expect(repository.calls, 2);
+  });
+
   testWidgets('dashboard load error never substitutes example content',
       (tester) async {
     await _pumpDashboard(
@@ -291,6 +331,9 @@ Future<void> _pumpDashboard(
   Size size = const Size(900, 1500),
   TextScaler textScaler = TextScaler.noScaling,
   List<DecisionFeedback> feedback = const [],
+  TaskSupabaseDataSource? taskSource,
+  SnapshotRefreshService? snapshotRefresh,
+  DashboardRepository? dashboardRepository,
   AppSurfaceCapabilities capabilities = const AppSurfaceCapabilities(
     isLocalDemo: false,
     canUseSyncedHabits: true,
@@ -324,6 +367,12 @@ Future<void> _pumpDashboard(
               Future.value(RecommendationFeed.demo(const [])),
         ),
         decisionFeedbackProvider.overrideWith((ref) => Future.value(feedback)),
+        if (taskSource != null)
+          dashboardTaskDataSourceProvider.overrideWithValue(taskSource),
+        if (snapshotRefresh != null)
+          snapshotRefreshServiceProvider.overrideWithValue(snapshotRefresh),
+        if (dashboardRepository != null)
+          dashboardRepositoryProvider.overrideWithValue(dashboardRepository),
         if (workload != null)
           preparationWorkloadProvider.overrideWith((ref) => workload),
       ],
@@ -494,4 +543,72 @@ TodaySourceStates _sourceStates({
     focusSessions: current,
     planner: current,
   );
+}
+
+class _RecordingTaskSource extends TaskSupabaseDataSource {
+  _RecordingTaskSource()
+      : super(
+          SupabaseClient(
+            'http://localhost:54321',
+            'test-anon-key',
+            authOptions: const AuthClientOptions(autoRefreshToken: false),
+          ),
+        );
+
+  int completeCalls = 0;
+
+  @override
+  Future<TaskUndoToken> completeTask(String taskId) async {
+    completeCalls += 1;
+    return TaskUndoToken(
+      taskId: taskId,
+      status: ExecutableTaskStatus.todo,
+      deadline: null,
+      completedAt: null,
+      cancelledAt: null,
+      expectedUpdatedAt: DateTime.utc(2026, 7, 21, 10),
+    );
+  }
+}
+
+class _RecordingSnapshotRefresh implements SnapshotRefreshService {
+  final List<String> taskTargetDates = [];
+
+  @override
+  Future<void> refreshDailyAfterTaskChange({
+    required String targetDate,
+  }) async {
+    taskTargetDates.add(targetDate);
+  }
+
+  @override
+  Future<void> refreshDailyAfterHabitChange({
+    required String targetDate,
+  }) async {}
+
+  @override
+  Future<void> refreshDailyAfterFocusChange({
+    required String targetDate,
+  }) async {}
+
+  @override
+  Future<void> refreshDailyAfterUserSignal({String? targetDate}) async {}
+}
+
+class _FailOnceDashboardRepository implements DashboardRepository {
+  _FailOnceDashboardRepository(this.snapshot);
+
+  final DashboardSnapshot snapshot;
+  int calls = 0;
+
+  @override
+  Future<DashboardSnapshot> getSnapshot() async {
+    calls += 1;
+    if (calls == 1) {
+      throw const DashboardUnavailableException(
+        'Today reload failed after commit.',
+      );
+    }
+    return snapshot;
+  }
 }

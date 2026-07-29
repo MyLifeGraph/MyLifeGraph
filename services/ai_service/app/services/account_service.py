@@ -1,8 +1,10 @@
+import hashlib
 import json
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
+from uuid import UUID
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from app.models.account import (
@@ -74,6 +76,7 @@ ACCOUNT_EXPORT_TABLES = (
     _table(
         "profiles",
         "id,email,display_name,timezone,daily_preparation_budget_minutes,"
+        "timezone_revision,preparation_budget_revision,"
         "role,auth_provider,"
         "onboarding_completed_at,setup_revision,created_at,updated_at",
         owner_column="id",
@@ -143,7 +146,8 @@ ACCOUNT_EXPORT_TABLES = (
         "id,user_id,connection_id,contract_version,origin,source_kind,"
         "window_starts_on,window_ends_before,timezone,accepted_count,"
         "cancelled_count,out_of_window_count,unsupported_recurring_count,"
-        "invalid_count,imported_at,created_at",
+        "invalid_count,profile_timezone_revision,planning_status,"
+        "imported_at,created_at",
     ),
     _table(
         "calendar_events",
@@ -178,7 +182,7 @@ ACCOUNT_EXPORT_TABLES = (
         "id,user_id,contract_version,origin,status,kind,title,managed_task_id,"
         "original_estimated_total_minutes,original_credited_prior_minutes,"
         "current_revision,latest_revision,first_activated_at,completed_at,"
-        "cancelled_at,created_at,updated_at",
+        "cancelled_at,attention_reasons,created_at,updated_at",
     ),
     _table(
         "deadline_plan_revisions",
@@ -193,7 +197,8 @@ ACCOUNT_EXPORT_TABLES = (
         "timing_evidence_fingerprint,timing_fell_back_to_setup,timing_warning,"
         "study_setup_revision,recovery_minutes,"
         "tracked_focus_minutes_at_proposal,remaining_minutes_at_proposal,"
-        "planned_minutes,unscheduled_minutes,created_at,activated_at,superseded_at",
+        "planned_minutes,unscheduled_minutes,timezone_revision,created_at,"
+        "activated_at,superseded_at",
     ),
     _table(
         "deadline_plan_blocks",
@@ -234,32 +239,72 @@ class AccountService:
         self,
         *,
         user_id: str,
+        request_id: UUID,
+        expected_revision: int,
         timezone: str,
     ) -> AccountProfileResponse:
         _validate_timezone(timezone)
+        now = self._now()
+        fingerprint = _setting_fingerprint(
+            {
+                "contract_version": "account-profile-update-v2",
+                "request_id": str(request_id),
+                "expected_revision": expected_revision,
+                "timezone": timezone,
+            },
+        )
         stored = await self._repository.update_timezone(
             user_id=user_id,
+            request_id=str(request_id),
+            request_fingerprint=fingerprint,
+            expected_revision=expected_revision,
             timezone=timezone,
+            now=now,
         )
         if stored is None:
             raise AccountNotFoundError("Account profile is unavailable.")
-        return AccountProfileResponse(timezone=stored)
+        return AccountProfileResponse(
+            contract_version="account-profile-v2",
+            timezone=stored.timezone,
+            revision=stored.revision,
+            updated_at=stored.updated_at,
+            replayed=stored.replayed,
+        )
 
     async def update_preparation_budget(
         self,
         *,
         user_id: str,
+        request_id: UUID,
+        expected_revision: int,
         minutes: int | None,
     ) -> AccountPreparationBudgetResponse:
         _validate_preparation_budget(minutes)
+        now = self._now()
+        fingerprint = _setting_fingerprint(
+            {
+                "contract_version": "account-preparation-budget-update-v2",
+                "request_id": str(request_id),
+                "expected_revision": expected_revision,
+                "daily_preparation_budget_minutes": minutes,
+            },
+        )
         stored = await self._repository.update_preparation_budget(
             user_id=user_id,
+            request_id=str(request_id),
+            request_fingerprint=fingerprint,
+            expected_revision=expected_revision,
             minutes=minutes,
+            now=now,
         )
         if stored is None:
             raise AccountNotFoundError("Account profile is unavailable.")
         return AccountPreparationBudgetResponse(
+            contract_version="account-preparation-budget-v2",
             daily_preparation_budget_minutes=stored.minutes,
+            revision=stored.revision,
+            updated_at=stored.updated_at,
+            replayed=stored.replayed,
         )
 
     async def export_account(self, *, user_id: str) -> PreparedAccountExport:
@@ -320,7 +365,7 @@ class AccountService:
                     )
                 except AccountExportSourceTooLargeError as exc:
                     raise AccountExportTooLargeError(
-                        "Account export exceeds the V1 JSON size bound.",
+                        "Account export exceeds the V2 JSON size bound.",
                     ) from exc
                 if not isinstance(page, list) or any(
                     not isinstance(row, dict) for row in page
@@ -342,11 +387,11 @@ class AccountService:
                     )
                 if len(page) > remaining:
                     raise AccountExportTooLargeError(
-                        f"Account export table {table.name} exceeds the V1 row bound.",
+                        f"Account export table {table.name} exceeds the V2 row bound.",
                     )
                 if total_rows + len(page) > ACCOUNT_EXPORT_MAX_TOTAL_ROWS:
                     raise AccountExportTooLargeError(
-                        "Account export exceeds the V1 total row bound.",
+                        "Account export exceeds the V2 total row bound.",
                     )
                 for row in page:
                     cursor = row.get(table.cursor_column)
@@ -370,7 +415,7 @@ class AccountService:
                     )
                     if estimated_json_bytes + growth > ACCOUNT_EXPORT_MAX_JSON_BYTES:
                         raise AccountExportTooLargeError(
-                            "Account export exceeds the V1 JSON size bound.",
+                            "Account export exceeds the V2 JSON size bound.",
                         )
                     rows.append(row)
                     total_rows += 1
@@ -393,7 +438,7 @@ class AccountService:
             or len(content) > ACCOUNT_EXPORT_MAX_JSON_BYTES
         ):
             raise AccountExportTooLargeError(
-                "Account export exceeds the V1 JSON size bound.",
+                "Account export exceeds the V2 JSON size bound.",
             )
         return PreparedAccountExport(envelope=envelope, content=content)
 
@@ -409,6 +454,16 @@ class AccountService:
             user_id=user_id,
             confirmation=confirmation,
         )
+
+
+def _setting_fingerprint(payload: dict[str, object]) -> str:
+    encoded = json.dumps(
+        payload,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
 
 
 def _validate_timezone(value: str) -> None:

@@ -301,10 +301,16 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     final authController = ref.read(authControllerProvider.notifier);
     setState(() => _isSavingTimezone = true);
     try {
-      final saved = await accountRepository.updateTimezone(timezone);
-      authController.updateProfileTimezone(saved);
+      final saved = await accountRepository.updateTimezone(
+        timezone,
+        expectedRevision: profile.timezoneRevision,
+      );
+      authController.updateProfileTimezone(
+        saved.timezone,
+        revision: saved.revision,
+      );
       if (mounted) {
-        _showMessage('Timezone updated to $saved.');
+        _showMessage('Timezone updated to ${saved.timezone}.');
       }
     } on AccountTimezoneRejectedException {
       if (mounted) {
@@ -316,6 +322,12 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       if (mounted) {
         _showMessage(
           'Timezone update could not be confirmed. Select the same timezone again to retry safely, or sign in again to verify it before choosing another.',
+        );
+      }
+    } on AccountSettingConflictException {
+      if (mounted) {
+        _showMessage(
+          'Timezone changed elsewhere. Reload Settings and try again.',
         );
       }
     } catch (_) {
@@ -345,15 +357,21 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     final authController = ref.read(authControllerProvider.notifier);
     setState(() => _isSavingPreparationBudget = true);
     try {
-      final saved =
-          await repository.updateDailyPreparationBudget(choice.minutes);
-      authController.updateDailyPreparationBudget(saved);
+      final saved = await repository.updateDailyPreparationBudget(
+        choice.minutes,
+        expectedRevision: profile.preparationBudgetRevision,
+      );
+      authController.updateDailyPreparationBudget(
+        saved.minutes,
+        revision: saved.revision,
+      );
       ref.invalidate(preparationWorkloadProvider);
       if (mounted) {
         _showMessage(
-          saved == null
+          saved.minutes == null
               ? 'Account-wide preparation budget removed.'
-              : 'Daily preparation budget set to ${_formatMinutes(saved)}.',
+              : 'Daily preparation budget set to '
+                  '${_formatMinutes(saved.minutes!)}.',
         );
       }
     } on AccountPreparationBudgetRejectedException {
@@ -364,6 +382,12 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       if (mounted) {
         _showMessage(
           'The budget update could not be confirmed. Retry the same value or sign in again before choosing another.',
+        );
+      }
+    } on AccountSettingConflictException {
+      if (mounted) {
+        _showMessage(
+          'Preparation budget changed elsewhere. Reload Settings and try again.',
         );
       }
     } catch (_) {
@@ -403,7 +427,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     } on AccountExportTooLargeException {
       if (mounted) {
         _showMessage(
-          'This account exceeds the V1 export limits. Retrying unchanged will not help; reduce deletable history or request a larger export workflow.',
+          'This account exceeds the V2 export limits. Retrying unchanged will not help; reduce deletable history or request a larger export workflow.',
         );
       }
     } catch (_) {

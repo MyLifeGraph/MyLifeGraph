@@ -253,8 +253,11 @@ cadence.
 
 ## Freshness
 
-Generation stores a SHA-256 fingerprint of the canonical source facts. `GET`
-recomputes that fingerprint without writing:
+Generation captures one `source_observed_at` before its first source read.
+Source repositories use lexicographic keyset pagination with their established
+sort fields and `id` as the tie-breaker, and exclude rows created or changed
+after that boundary. Generation stores a SHA-256 fingerprint of those canonical
+source facts. `GET` recomputes that fingerprint without writing:
 
 - equal fingerprint: `current`;
 - changed source facts or target definition: `stale` with bounded reason codes;
@@ -263,6 +266,14 @@ recomputes that fingerprint without writing:
 Habit application, outcome correction, feedback deletion, task state change,
 or valid daily-state replacement can therefore make a review stale. Stale facts
 remain visible but proposal controls are disabled until a deliberate refresh.
+
+`persist_weekly_review_v2` takes the owner and review-row locks, requires the
+referenced weekly Snapshot still to be current, rejects a candidate observed
+before the stored review, and binds exact Snapshot identity and provenance.
+After persistence, FastAPI reloads Snapshot, Review, and source context.
+`current` is returned only if they still match; a concurrent later fact makes
+the result honestly `stale`. This does not claim a historical database
+snapshot across separate reads.
 
 ## Executable Action Boundary
 

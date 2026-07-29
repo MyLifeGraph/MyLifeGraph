@@ -49,6 +49,24 @@ class DeadlineCalendarPrefillSupabaseDataSource
     }
     final event = _parseEvent(eventRows.single, expectedId: eventId);
 
+    final importResponse = await _client
+        .from(SupabaseTables.calendarImports)
+        .select('id,planning_status')
+        .eq('id', event.importId)
+        .limit(2);
+    final importRows = _rows(importResponse, 'calendar import');
+    if (importRows.length > 1) {
+      throw const DeadlineCalendarPrefillException(
+        'Calendar import result is not unique.',
+      );
+    }
+    final importIsCurrent = importRows.length == 1 &&
+        importRows.single.keys.toSet().containsAll(
+          const {'id', 'planning_status'},
+        ) &&
+        importRows.single['id'] == event.importId &&
+        importRows.single['planning_status'] == 'current';
+
     final connectionResponse = await _client
         .from(SupabaseTables.calendarConnections)
         .select(
@@ -63,7 +81,8 @@ class DeadlineCalendarPrefillSupabaseDataSource
         'Calendar connection result is not unique.',
       );
     }
-    final isCurrent = connectionRows.length == 1 &&
+    final isCurrent = importIsCurrent &&
+        connectionRows.length == 1 &&
         _connectionIsCurrent(
           connectionRows.single,
           expectedId: event.connectionId,
@@ -121,7 +140,7 @@ class DeadlineCalendarPrefillSupabaseDataSource
     if (row.keys.toSet().difference(expectedKeys).isNotEmpty ||
         expectedKeys.difference(row.keys.toSet()).isNotEmpty ||
         row['id'] != expectedId ||
-        row['contract_version'] != 'calendar-import-v1' ||
+        row['contract_version'] != 'calendar-import-v2' ||
         row['origin'] != 'authenticated_backend' ||
         row['source_kind'] != 'ical_file') {
       throw const DeadlineCalendarPrefillException(
@@ -193,7 +212,7 @@ class DeadlineCalendarPrefillSupabaseDataSource
     if (row.keys.toSet().difference(expectedKeys).isNotEmpty ||
         expectedKeys.difference(row.keys.toSet()).isNotEmpty ||
         row['id'] != expectedId ||
-        row['contract_version'] != 'calendar-import-v1' ||
+        row['contract_version'] != 'calendar-import-v2' ||
         row['origin'] != 'authenticated_backend' ||
         row['source_kind'] != 'ical_file') {
       throw const DeadlineCalendarPrefillException(

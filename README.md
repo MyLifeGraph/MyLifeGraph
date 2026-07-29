@@ -36,8 +36,9 @@ way to explore the product today is the Flutter app in mock-data guest mode.
   backend points instead of reconstructing unsupported Planner or Habit
   history. Local demo keeps its labelled mock time series. No Insights path
   calls an LLM.
-- Real authenticated accounts now have durable timezone editing, a strict
-  bounded `account-export-v1` JSON portability export, password reset/confirmation-email
+- Real authenticated accounts now have revision-checked, retry-safe timezone
+  and preparation-budget editing, a strict bounded `account-export-v2` JSON
+  portability export, password reset/confirmation-email
   recovery, and confirmed permanent account deletion. The deletion is one
   service-role-only database transaction and requires session-bound Supabase
   sign-in evidence no more than 15 minutes old; guest/mock exposes none of
@@ -507,11 +508,12 @@ Supabase is the intended auth and persistence backend. The current app supports:
   deliberate refresh. Direct application is limited to confirmed manual Habit
   V1 shrink/pause/archive commands with an exact target timestamp; other
   proposal kinds remain staged or return to Settings Setup.
-- `/v1/calendar-integrations` exposes the optional `calendar-import-v1`
+- `/v1/calendar-integrations` exposes the optional `calendar-import-v2`
   boundary. Connection requires explicit `calendar-import-consent-v1`, file
   import is a deliberate retry-safe POST, event pages are read-only, and
   disconnect/delete have separate local semantics. Imported events never become
-  app-authored commitments or provider writes.
+  app-authored commitments or provider writes; only imports whose persisted
+  planning status is `current` contribute Planner busy time.
 - `/v1/deadline-plans` exposes the authenticated `deadline-plan-v1` boundary.
   GET is read-only; deliberate proposal/confirm/complete/cancel commands use
   stable request identities and separate latest/current optimistic revisions.
@@ -552,9 +554,12 @@ Supabase is the intended auth and persistence backend. The current app supports:
 
 Important current caveat: the Flutter app targets the canonical snake_case
 schema. The migration chain currently ends at
-`20260728160000_free_read_only_coach_agent_v1.sql`. It preserves existing
-fixed-mode rows while adding message-only V3 claim, V2 response,
-evidence/trace/Fast provenance, and service-role-only completion. The preceding
+`20260729130000_observed_projection_persistence.sql`. The preceding write
+stabilization migration cuts Capture and account settings over to owner-locked
+CAS/RPC paths and adds timezone-bound Calendar/Planner truth. The earlier free
+Coach migration preserves existing fixed-mode rows while adding message-only
+V3 claim, V2 response, evidence/trace/Fast provenance, and service-role-only
+completion. The preceding
 longitudinal migration keeps exact V2 scope/parameter replay and partial
 terminal Task history indexes for compatible clients. The preceding learned
 timing migration retains learned evidence while recording when actual
@@ -786,6 +791,9 @@ has the nvm bin directory on `PATH`.
   phases.
 - `docs/supabase-current-state.md` - Supabase auth, schema, RLS, and known gaps.
 - `docs/verification.md` - Automated verification scripts and browser E2E.
+- `docs/stabilization-consistency-contract.md` - Review stabilization write
+  authority, timezone/DST guards, observed projection ordering, and durable
+  mutation/reload states.
 - `docs/today-overview-v1-contract.md` - Read-only Today endpoint, exact
   streak/progress rules, agenda sources, Task/Habit selection, partial failures,
   guest boundary, and UI order.

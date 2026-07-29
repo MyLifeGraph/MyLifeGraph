@@ -81,12 +81,13 @@ FastAPI service boundary for recommendation and future ML workflows.
   results.
 - Phase 8 exposes read-only completed-week review GETs and deliberate
   deterministic review generation under `weekly-review-v1`.
-- Phase 9 exposes one optional `calendar-import-v1` `.ics` connection. Consent,
-  file import, stable paginated event reads, disconnect, and local imported-data
-  deletion are authenticated and owner scoped. One fingerprint-free backend
-  request registry prevents UUID reuse across owners or operations. It has no
-  provider credential, URL fetch, provider write, background sync, or LLM
-  processing.
+- Phase 9 exposes the strict `calendar-import-v2` projection for one optional
+  `.ics` connection. Consent, file import, stable paginated event reads,
+  disconnect, and local imported-data deletion are authenticated and owner
+  scoped. Each import records its profile-timezone revision and planning status.
+  One fingerprint-free backend request registry prevents UUID reuse across
+  owners or operations. It has no provider credential, URL fetch, provider
+  write, background sync, or LLM processing.
 - Planner V1 exposes a read-only seven-day overview and detail plus explicit
   preference, Task/Habit proposal/confirm/cancel, and fixed-commitment commands
   under `/v1/planner`. Immutable previews use shared deterministic availability
@@ -120,10 +121,14 @@ FastAPI service boundary for recommendation and future ML workflows.
   prompt, memory-selection, or structured-suggestion flow; readable V1/V2
   history remains compatible. It is not a production provider.
   See `../../docs/phase-10-controlled-coach-plan.md`.
-- `/v1/account/profile`, `/v1/account/preparation-budget`,
-  `/v1/account/export`, and `/v1/account` expose the bearer-derived V1 timezone,
-  explicit account-wide preparation limit, bounded JSON portability, and
-  confirmed permanent deletion boundary. The client never supplies an owner id.
+- `PUT /v1/daily-capture/{entry_date}/{branch}` is the sole authenticated
+  Capture writer. `daily-capture-write-v1` combines request replay with
+  branch-local compare-and-swap and transactionally refreshes the Daily Log and
+  `quick_check_in` event projection.
+- `/v1/account/profile` and `/v1/account/preparation-budget` use strict V2
+  request ids and independent expected revisions. `/v1/account/export` returns
+  `account-export-v2`, and `/v1/account` remains the confirmed permanent
+  deletion boundary. The client never supplies an owner id.
   See `../../docs/v1-account-controls-contract.md`.
 - `POST /v1/notifications/{notification_id}/actions` exposes strict,
   bearer-derived `notification-lifecycle-v1` read/unread/dismiss commands
@@ -400,14 +405,16 @@ POST   /v1/calendar-integrations/connections/{connection_id}/disconnect
 DELETE /v1/calendar-integrations/connections/{connection_id}/imported-data?request_id=<uuid>
 ```
 
-Create requires the exact `calendar-import-consent-v1` read/store consent.
-Creating a connection never imports. Import accepts one stable request id and a
-bounded UTF-8 `calendar_text`; the same exact request replays without applying
-events again only while that import remains connected/current. GET is
-side-effect free. Disconnect retains the local read-only copy; delete is a
-separate body-free post-disconnect local operation and never changes
-`schedule_items` or a source calendar. Reusing any calendar request UUID across
-an owner, connection, or lifecycle operation returns conflict. See
+Responses use `calendar-import-v2`. Create requires the exact
+`calendar-import-consent-v1` read/store consent. Creating a connection never
+imports. Import accepts one stable request id and a bounded UTF-8
+`calendar_text`; the same exact request remains replayable without applying
+events again after supersession, disconnect, deletion, or a profile-timezone
+change. GET is side-effect free. Disconnect retains the local read-only copy;
+delete removes event content but retains a bounded `deleted` import audit.
+Neither changes `schedule_items` or a source calendar. Reusing any calendar
+request UUID across an owner, connection, or lifecycle operation returns
+conflict. See
 `../../docs/phase-9-calendar-import-contract.md`.
 
 Phase 10 Coach uses these bearer-authenticated endpoints:

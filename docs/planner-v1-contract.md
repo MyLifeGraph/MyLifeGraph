@@ -275,6 +275,21 @@ cannot be proven. Flutter and FastAPI both verify that every
 `scheduled_today` target has a matching agenda block and that block duration
 matches its interval.
 
+## Stabilized Time And Client Projection
+
+Planner proposals and confirmations bind the current profile
+`timezone_revision`. A timezone edit invalidates open previews and adds
+`timezone_changed` attention to active plans without moving blocks. Setup and
+recurring wall times resolve only when a UTC round trip produces exactly one
+instant; nonexistent or ambiguous DST times fail closed with source-specific
+attention, including cross-midnight intervals.
+
+Flutter keeps `current`, `refreshingAfterMutation`, and
+`staleAfterMutation` projection states. A durable mutation followed by a
+failed overview reload leaves the old overview visible but disables every
+derived mutation control. `Reload Planner` performs only the read and never
+replays the committed mutation.
+
 ## Non-Claims
 
 Planner V1 adds no LLM planning, hidden generation, background scheduler,

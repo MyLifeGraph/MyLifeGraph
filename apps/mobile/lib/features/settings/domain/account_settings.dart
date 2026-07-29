@@ -51,6 +51,8 @@ const accountExportV1SanitizedTables = <String>[
   'coach_usage_events',
 ];
 const accountExportV1OmittedTables = <String, String>{
+  'daily_capture_request_identities': 'backend_only_anti_replay_ledger',
+  'account_setting_request_identities': 'backend_only_anti_replay_ledger',
   'calendar_request_identities': 'backend_only_anti_replay_ledger',
   'notification_action_requests': 'backend_only_anti_replay_ledger',
   'deadline_plan_request_identities': 'backend_only_anti_replay_ledger',
@@ -116,6 +118,34 @@ bool isValidAccountTimezone(String value) {
   ).hasMatch(clean);
 }
 
+class AccountTimezoneWrite {
+  const AccountTimezoneWrite({
+    required this.timezone,
+    required this.revision,
+    required this.updatedAt,
+    required this.replayed,
+  });
+
+  final String timezone;
+  final int revision;
+  final DateTime updatedAt;
+  final bool replayed;
+}
+
+class AccountPreparationBudgetWrite {
+  const AccountPreparationBudgetWrite({
+    required this.minutes,
+    required this.revision,
+    required this.updatedAt,
+    required this.replayed,
+  });
+
+  final int? minutes;
+  final int revision;
+  final DateTime updatedAt;
+  final bool replayed;
+}
+
 class AccountSettingsException implements Exception {
   const AccountSettingsException(this.message);
 
@@ -149,6 +179,10 @@ class AccountProfileUpdateOutcomeUnknownException
 
 class AccountTimezoneRejectedException extends AccountSettingsException {
   const AccountTimezoneRejectedException(super.message);
+}
+
+class AccountSettingConflictException extends AccountSettingsException {
+  const AccountSettingConflictException(super.message);
 }
 
 class AccountPreparationBudgetRejectedException
@@ -233,7 +267,7 @@ class AccountExportEnvelope {
     };
     if (json.keys.toSet().difference(topLevelKeys).isNotEmpty ||
         topLevelKeys.difference(json.keys.toSet()).isNotEmpty ||
-        json['contract_version'] != 'account-export-v1') {
+        json['contract_version'] != 'account-export-v2') {
       throw const AccountSettingsContractException(
         'The account export response has an invalid top-level contract.',
       );
@@ -327,7 +361,7 @@ class AccountExportEnvelope {
           accountExportV1OmittedTables,
         )) {
       throw const AccountSettingsContractException(
-        'The account export ledger policy does not match V1.',
+        'The account export ledger policy does not match V2.',
       );
     }
 
@@ -352,7 +386,7 @@ class AccountExportEnvelope {
         maxTotalRows != accountExportV1MaxTotalRows ||
         maxJsonBytes != accountExportV1MaxJsonBytes) {
       throw const AccountSettingsContractException(
-        'The account export limits do not match V1.',
+        'The account export limits do not match V2.',
       );
     }
     if (recordCounts.values.any((count) => count > maxRowsPerTable) ||
@@ -391,7 +425,7 @@ class AccountExportEnvelope {
   final int maxJsonBytes;
   final Uint8List _sourceBytes;
 
-  String get contractVersion => 'account-export-v1';
+  String get contractVersion => 'account-export-v2';
 
   Uint8List get fileBytes => Uint8List.fromList(_sourceBytes);
 }

@@ -396,8 +396,9 @@ atomically. Composite owner references and database checks prevent cross-owner
 plan, revision, block, task, or calendar linkage.
 
 The optional account rule is stored on the owner profile. Only the verified
-FastAPI/service-role path may call `set_daily_preparation_budget_v1`; direct
-anonymous or authenticated updates to that profile column are revoked. The
+FastAPI/service-role path may call the revision-checked
+`apply_account_preparation_budget_v2`; the old V1 setter and direct anonymous
+or authenticated updates have no authority. The
 confirmation trigger provides a database-boundary recheck under the same owner
 lock, so concurrent plan confirmations or a concurrent budget update cannot
 bypass the aggregate cap.

@@ -289,7 +289,7 @@ def test_current_generate_is_write_free_and_source_change_marks_stale() -> None:
     still_current = asyncio.run(
         weekly_service.get_period(user_id="user-1", period_key=PERIOD),
     )
-    assert still_current.freshness == "current"
+    assert still_current.freshness == "stale"
 
     repository.context.habits[0]["target"] = 5
     stale = asyncio.run(weekly_service.get_period(user_id="user-1", period_key=PERIOD))

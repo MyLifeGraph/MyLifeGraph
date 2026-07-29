@@ -389,6 +389,10 @@ class CaptureFlowScaffold extends StatelessWidget {
     required this.onNext,
     this.statusMessage,
     this.errorMessage,
+    this.loadErrorMessage,
+    this.onRetryLoad,
+    this.secondaryLoadActionLabel,
+    this.onSecondaryLoadAction,
     super.key,
   });
 
@@ -405,6 +409,10 @@ class CaptureFlowScaffold extends StatelessWidget {
   final String saveLabel;
   final String? statusMessage;
   final String? errorMessage;
+  final String? loadErrorMessage;
+  final VoidCallback? onRetryLoad;
+  final String? secondaryLoadActionLabel;
+  final VoidCallback? onSecondaryLoadAction;
   final VoidCallback onClose;
   final VoidCallback onBack;
   final VoidCallback onNext;
@@ -487,6 +495,34 @@ class CaptureFlowScaffold extends StatelessWidget {
                               CaptureInlineMessage(
                                 message: errorMessage!,
                                 isError: true,
+                              ),
+                            ],
+                            if (loadErrorMessage != null) ...[
+                              const SizedBox(height: AppSpacing.md),
+                              CaptureInlineMessage(
+                                message: loadErrorMessage!,
+                                isError: true,
+                              ),
+                              const SizedBox(height: AppSpacing.sm),
+                              Wrap(
+                                spacing: AppSpacing.sm,
+                                runSpacing: AppSpacing.sm,
+                                children: [
+                                  if (onRetryLoad != null)
+                                    OutlinedButton.icon(
+                                      onPressed: isLoading ? null : onRetryLoad,
+                                      icon: const Icon(AppIcons.refresh),
+                                      label: const Text('Retry load'),
+                                    ),
+                                  if (secondaryLoadActionLabel != null &&
+                                      onSecondaryLoadAction != null)
+                                    TextButton(
+                                      onPressed: isLoading
+                                          ? null
+                                          : onSecondaryLoadAction,
+                                      child: Text(secondaryLoadActionLabel!),
+                                    ),
+                                ],
                               ),
                             ],
                           ],

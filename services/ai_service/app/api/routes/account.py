@@ -19,6 +19,7 @@ from app.repositories.account_repository import (
     AccountPersistenceError,
     AccountPreparationBudgetUpdateOutcomeUnknownError,
     AccountProfileUpdateOutcomeUnknownError,
+    AccountSettingConflictError,
     SupabaseAccountRepository,
 )
 from app.services.account_service import (
@@ -87,6 +88,8 @@ async def update_account_profile(
     try:
         return await service.update_timezone(
             user_id=principal.user_id,
+            request_id=body.request_id,
+            expected_revision=body.expected_revision,
             timezone=body.timezone,
         )
     except InvalidAccountTimezoneError as exc:
@@ -98,6 +101,11 @@ async def update_account_profile(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Account profile is unavailable.",
+        ) from exc
+    except AccountSettingConflictError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc),
         ) from exc
     except AccountProfileUpdateOutcomeUnknownError as exc:
         raise HTTPException(
@@ -123,6 +131,8 @@ async def update_account_preparation_budget(
     try:
         return await service.update_preparation_budget(
             user_id=principal.user_id,
+            request_id=body.request_id,
+            expected_revision=body.expected_revision,
             minutes=body.daily_preparation_budget_minutes,
         )
     except InvalidPreparationBudgetError as exc:
@@ -134,6 +144,11 @@ async def update_account_preparation_budget(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Account profile is unavailable.",
+        ) from exc
+    except AccountSettingConflictError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(exc),
         ) from exc
     except AccountPreparationBudgetUpdateOutcomeUnknownError as exc:
         raise HTTPException(

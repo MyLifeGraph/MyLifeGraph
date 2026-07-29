@@ -17,7 +17,11 @@ Map<String, dynamic> calendarConsentJson() => {
       'llm_processing': false,
     };
 
-Map<String, dynamic> calendarImportSummaryJson({int accepted = 2}) => {
+Map<String, dynamic> calendarImportSummaryJson({
+  int accepted = 2,
+  String planningStatus = 'current',
+}) =>
+    {
       'id': calendarImportId,
       'imported_at': '2026-07-13T12:00:00Z',
       'window': {
@@ -33,6 +37,8 @@ Map<String, dynamic> calendarImportSummaryJson({int accepted = 2}) => {
         'invalid': 0,
       },
       'source_fingerprint': calendarFingerprint,
+      'profile_timezone_revision': 3,
+      'planning_status': planningStatus,
     };
 
 Map<String, dynamic> calendarConnectionJson({
@@ -43,7 +49,7 @@ Map<String, dynamic> calendarConnectionJson({
 }) {
   final result = <String, dynamic>{
     'id': calendarConnectionId,
-    'contract_version': 'calendar-import-v1',
+    'contract_version': 'calendar-import-v2',
     'origin': 'authenticated_backend',
     'source_kind': 'ical_file',
     'source_label': sourceLabel,
@@ -60,7 +66,9 @@ Map<String, dynamic> calendarConnectionJson({
   if (deleted) {
     result['imported_data_deleted_at'] = '2026-07-13T15:00:00Z';
   } else if (includeImport) {
-    result['last_import'] = calendarImportSummaryJson();
+    result['last_import'] = calendarImportSummaryJson(
+      planningStatus: status == 'connected' ? 'current' : 'disconnected',
+    );
   }
   return result;
 }
@@ -70,7 +78,7 @@ Map<String, dynamic> calendarFeedJson({
   bool noConnection = false,
 }) =>
     {
-      'contract_version': 'calendar-import-v1',
+      'contract_version': 'calendar-import-v2',
       'origin': 'authenticated_backend',
       'connection':
           noConnection ? null : connection ?? calendarConnectionJson(),
@@ -81,7 +89,7 @@ Map<String, dynamic> calendarImportResponseJson({
   Map<String, dynamic>? import,
 }) =>
     {
-      'contract_version': 'calendar-import-v1',
+      'contract_version': 'calendar-import-v2',
       'origin': 'authenticated_backend',
       'connection': connection ?? calendarConnectionJson(),
       'import': import ?? calendarImportSummaryJson(),
@@ -111,7 +119,7 @@ Map<String, dynamic> calendarTimedEventJson({
     'source_fingerprint': calendarFingerprint,
     'provenance': {
       'kind': 'integration',
-      'contract_version': 'calendar-import-v1',
+      'contract_version': 'calendar-import-v2',
       'source_kind': 'ical_file',
       'source_label': 'Work calendar',
       'provider_writes': false,
@@ -137,7 +145,7 @@ Map<String, dynamic> calendarAllDayEventJson() => {
       'source_fingerprint': calendarFingerprint,
       'provenance': {
         'kind': 'integration',
-        'contract_version': 'calendar-import-v1',
+        'contract_version': 'calendar-import-v2',
         'source_kind': 'ical_file',
         'source_label': 'Work calendar',
         'provider_writes': false,
@@ -151,7 +159,7 @@ Map<String, dynamic> calendarEventsPageJson({
   bool includeImportId = true,
 }) {
   final result = <String, dynamic>{
-    'contract_version': 'calendar-import-v1',
+    'contract_version': 'calendar-import-v2',
     'origin': 'authenticated_backend',
     'connection_id': calendarConnectionId,
     'events': events ?? [calendarTimedEventJson(), calendarAllDayEventJson()],

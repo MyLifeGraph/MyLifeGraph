@@ -586,7 +586,7 @@ void main() {
 
     container
         .read(authControllerProvider.notifier)
-        .updateProfileTimezone('Europe/London');
+        .updateProfileTimezone('Europe/London', revision: 2);
     await tester.pumpAndSettle();
 
     expect(identical(router, container.read(appRouterProvider)), isTrue);

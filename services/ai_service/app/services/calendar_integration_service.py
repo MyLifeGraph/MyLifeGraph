@@ -155,15 +155,6 @@ class CalendarIntegrationService:
                 user_id=user_id,
                 connection_id=connection_id,
             )
-            if (
-                connection_row.get("status") != "connected"
-                or connection_row.get("imported_data_deleted_at") is not None
-            ):
-                raise CalendarConflictError("Calendar connection is not connected.")
-            if str(connection_row.get("last_import_id")) != str(existing.get("id")):
-                raise CalendarConflictError(
-                    "Calendar import request has been superseded by a newer import.",
-                )
             return CalendarImportResponse(
                 contract_version=CALENDAR_IMPORT_CONTRACT_VERSION,
                 origin="authenticated_backend",
@@ -185,7 +176,12 @@ class CalendarIntegrationService:
         ):
             raise CalendarConflictError("Calendar connection is not connected.")
 
-        timezone_name = await self._repository.get_profile_timezone(user_id=user_id)
+        profile_timezone = (
+            await self._repository.get_profile_timezone_identity(
+                user_id=user_id,
+            )
+        )
+        timezone_name = profile_timezone.timezone
         try:
             timezone = ZoneInfo(timezone_name)
         except ZoneInfoNotFoundError as exc:
@@ -209,6 +205,7 @@ class CalendarIntegrationService:
                 "starts_on": starts_on.isoformat(),
                 "ends_before": ends_before.isoformat(),
                 "timezone": timezone_name,
+                "profile_timezone_revision": profile_timezone.revision,
             },
         )
         try:
@@ -222,6 +219,8 @@ class CalendarIntegrationService:
                 starts_on=starts_on,
                 ends_before=ends_before,
                 timezone=timezone_name,
+                expected_profile_timezone=timezone_name,
+                expected_timezone_revision=profile_timezone.revision,
                 counts=parsed.counts.model_dump(mode="json"),
                 events=[event.persistence_payload() for event in parsed.events],
                 cancelled_source_keys=list(parsed.cancelled_source_keys),

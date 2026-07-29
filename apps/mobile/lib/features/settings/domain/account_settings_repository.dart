@@ -1,9 +1,15 @@
 import 'account_settings.dart';
 
 abstract interface class AccountSettingsRepository {
-  Future<String> updateTimezone(String timezone);
+  Future<AccountTimezoneWrite> updateTimezone(
+    String timezone, {
+    required int expectedRevision,
+  });
 
-  Future<int?> updateDailyPreparationBudget(int? minutes);
+  Future<AccountPreparationBudgetWrite> updateDailyPreparationBudget(
+    int? minutes, {
+    required int expectedRevision,
+  });
 
   Future<AccountExportEnvelope> exportAccount();
 

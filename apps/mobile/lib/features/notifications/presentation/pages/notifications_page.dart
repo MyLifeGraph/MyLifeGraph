@@ -565,7 +565,9 @@ class _NotificationCardContent extends StatelessWidget {
     final notification = alert.notification;
     final operation = alert.actionState;
     final isPending = operation?.isPending == true;
-    final lifecycleBlocked = isPending || operation?.error != null;
+    final lifecycleBlocked = isPending ||
+        operation?.error != null ||
+        operation?.committedRequiresReload == true;
     final readCommand = notification.isRead
         ? NotificationLifecycleCommand.markUnread
         : NotificationLifecycleCommand.markRead;
@@ -688,6 +690,33 @@ class _NotificationCardContent extends StatelessWidget {
             operation: operation!,
             onRetry: onRetryAction,
             onReload: onReload,
+          ),
+        ],
+        if (operation?.committedRequiresReload == true) ...[
+          const SizedBox(height: AppSpacing.md),
+          Semantics(
+            liveRegion: true,
+            child: Container(
+              padding: const EdgeInsets.all(AppSpacing.md),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.errorContainer,
+                borderRadius: BorderRadius.circular(AppRadii.sm),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Change saved. Inbox could not reload.',
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  OutlinedButton.icon(
+                    onPressed: onRetryAction,
+                    icon: const Icon(AppIcons.refresh),
+                    label: const Text('Reload Inbox'),
+                  ),
+                ],
+              ),
+            ),
           ),
         ],
         if (onOpen != null) ...[

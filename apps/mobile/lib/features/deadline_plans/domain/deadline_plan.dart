@@ -632,6 +632,7 @@ class DeadlinePlanRecord {
     required this.originalCreditedPriorMinutes,
     required this.currentRevision,
     required this.latestRevision,
+    required this.attentionReasons,
     required this.createdAt,
     required this.updatedAt,
     required this.completedAt,
@@ -644,6 +645,8 @@ class DeadlinePlanRecord {
         currentRevision < 0 ||
         latestRevision < 1 ||
         latestRevision > 200 ||
+        attentionReasons.length > 12 ||
+        attentionReasons.toSet().length != attentionReasons.length ||
         latestRevision < (currentRevision < 1 ? 1 : currentRevision) ||
         (currentRevision == 0) != (managedTaskId == null) ||
         updatedAt.isBefore(createdAt) ||
@@ -671,7 +674,12 @@ class DeadlinePlanRecord {
         'created_at',
         'updated_at',
       },
-      optional: const {'managed_task_id', 'completed_at', 'cancelled_at'},
+      optional: const {
+        'managed_task_id',
+        'completed_at',
+        'cancelled_at',
+        'attention_reasons',
+      },
       model: 'deadline plan',
     );
     final status = DeadlinePlanStatus.fromCode(json['status']);
@@ -703,6 +711,12 @@ class DeadlinePlanRecord {
         json['latest_revision'],
         'plan.latest_revision',
       ),
+      attentionReasons: json.containsKey('attention_reasons')
+          ? _stringList(
+              json['attention_reasons'],
+              'plan.attention_reasons',
+            )
+          : const [],
       createdAt: _requiredAwareDateTime(json['created_at'], 'plan.created_at'),
       updatedAt: _requiredAwareDateTime(json['updated_at'], 'plan.updated_at'),
       completedAt: _optionalAwareDateTime(json, 'completed_at'),
@@ -719,6 +733,7 @@ class DeadlinePlanRecord {
   final int originalCreditedPriorMinutes;
   final int currentRevision;
   final int latestRevision;
+  final List<String> attentionReasons;
   final DateTime createdAt;
   final DateTime updatedAt;
   final DateTime? completedAt;
@@ -1500,6 +1515,14 @@ String _requiredTime(Object? value, String field) {
     throw DeadlinePlanContractException('$field is invalid.');
   }
   return value;
+}
+
+List<String> _stringList(Object? value, String field) {
+  if (value is! List ||
+      value.any((item) => item is! String || item.trim().isEmpty)) {
+    throw DeadlinePlanContractException('$field is invalid.');
+  }
+  return List<String>.unmodifiable(value.cast<String>());
 }
 
 T? _optionalModel<T>(

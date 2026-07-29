@@ -45,7 +45,6 @@ const manualHabitTitle = `E2E manual paused habit ${runId}`;
 const manualScheduleTitle = `E2E manual schedule ${runId}`;
 const legacyExplicitScheduleTitle = `E2E legacy explicit schedule ${runId}`;
 const managedHabitTitle = `E2E managed habit ${runId}`;
-const setupExecutionHabitTitle = `E2E setup execution habit ${runId}`;
 const phase3TaskTitle = `E2E executable task ${runId}`;
 const eveningTomorrowPriority = `E2E protect a calm morning ${runId}`;
 const editedEveningTomorrowPriority =
@@ -115,6 +114,8 @@ const accountExportV1SanitizedTables = [
   'coach_usage_events',
 ];
 const accountExportV1OmittedTables = {
+  daily_capture_request_identities: 'backend_only_anti_replay_ledger',
+  account_setting_request_identities: 'backend_only_anti_replay_ledger',
   calendar_request_identities: 'backend_only_anti_replay_ledger',
   notification_action_requests: 'backend_only_anti_replay_ledger',
   deadline_plan_request_identities: 'backend_only_anti_replay_ledger',
@@ -529,7 +530,11 @@ try {
   };
   await page.route(intakeCompleteUrl, loseAppliedResponse);
   await clickByText(page, 'Save setup');
-  await expectText(page, 'Setup was not saved. Your draft is still here.');
+  await expectText(
+    page,
+    'Setup could not be saved. Keep this draft open and retry unchanged.',
+  );
+  await expectText(page, 'Setup save could not be confirmed');
   await page.unroute(intakeCompleteUrl, loseAppliedResponse);
   if (
     lostSavePayload?.responses?.fixed_commitments?.[0]?.weekday !== 1
@@ -747,6 +752,66 @@ try {
       `Unexpected activated setup habit: ${JSON.stringify(setupHabitsAtRevision3)}`,
     );
   }
+  const setupExecutionHabit = setupHabitAtRevision3;
+  const setupExecutionHabitDefinition = JSON.stringify({
+    title: setupExecutionHabit.title,
+    frequency: setupExecutionHabit.frequency,
+    target: setupExecutionHabit.target,
+    active: setupExecutionHabit.active,
+    metadata: setupExecutionHabit.metadata,
+  });
+
+  await page.goto(appRoute('/habit-completion'), {
+    waitUntil: 'domcontentloaded',
+  });
+  await waitForFlutterShell(page);
+  await enableFlutterSemantics(page);
+  await expectText(page, 'Today habits');
+  await clickByRoleName(
+    page,
+    'button',
+    `Complete habit ${setupExecutionHabit.title}`,
+  );
+  await waitForRows(
+    `habit_logs?select=id,habit_id,entry_date,status,value&user_id=eq.${user.id}&habit_id=eq.${setupExecutionHabit.id}`,
+    (rows) =>
+      rows.length === 1 &&
+      rows[0].status === 'completed' &&
+      rows[0].value === 1,
+    'active Setup-owned habit is executable',
+  );
+  const setupExecutionHabitAfterOutcome = await fetchRows(
+    `habits?select=id,title,frequency,target,active,metadata&id=eq.${setupExecutionHabit.id}`,
+    'Setup-owned habit definition after daily execution',
+  );
+  if (
+    setupExecutionHabitAfterOutcome.length !== 1 ||
+    JSON.stringify({
+      title: setupExecutionHabitAfterOutcome[0].title,
+      frequency: setupExecutionHabitAfterOutcome[0].frequency,
+      target: setupExecutionHabitAfterOutcome[0].target,
+      active: setupExecutionHabitAfterOutcome[0].active,
+      metadata: setupExecutionHabitAfterOutcome[0].metadata,
+    }) !== setupExecutionHabitDefinition
+  ) {
+    throw new Error(
+      `Daily execution changed a Setup-owned definition: ${JSON.stringify(setupExecutionHabitAfterOutcome)}`,
+    );
+  }
+  await clickByRoleName(
+    page,
+    'button',
+    `Undo habit ${setupExecutionHabit.title}`,
+  );
+  await waitForRows(
+    `habit_logs?select=id&user_id=eq.${user.id}&habit_id=eq.${setupExecutionHabit.id}`,
+    (rows) => rows.length === 0,
+    'Setup-owned habit outcome undo restores open state',
+  );
+  await page.goto(appRoute('/settings'), { waitUntil: 'domcontentloaded' });
+  await waitForFlutterShell(page);
+  await enableFlutterSemantics(page);
+  await expectText(page, 'Settings');
 
   const [manualGoal] = await insertRows('goals', [
     {
@@ -756,9 +821,12 @@ try {
       metadata: { source: 'manual-e2e' },
     },
   ]);
+  const manualHabitId = crypto.randomUUID();
   const [manualHabit] = await insertRows('habits', [
     {
+      id: manualHabitId,
       user_id: user.id,
+      creation_request_id: manualHabitId,
       title: manualHabitTitle,
       frequency: 'daily',
       target: 1,
@@ -949,8 +1017,6 @@ try {
     loseCommittedHabitCreateResponse,
   );
   await clickByText(page, 'Save habit');
-  await expectText(page, 'Could not add habit. Your draft is retained.');
-  await clickByText(page, 'Retry');
   await expectText(page, 'Habit added.');
   await page.unroute(
     '**/rest/v1/habits**',
@@ -960,7 +1026,7 @@ try {
     throw new Error('Habit response-loss path was not exercised exactly once.');
   }
   await waitForRows(
-    `habits?select=id,title,frequency,target,active,metadata&user_id=eq.${user.id}`,
+    `habits?select=id,title,frequency,target,active,metadata,creation_request_id,creation_fingerprint&user_id=eq.${user.id}`,
     (rows) =>
       rows.some(
         (row) =>
@@ -968,15 +1034,17 @@ try {
           row.frequency === 'daily' &&
           row.target === 1 &&
           row.active === true &&
+          row.creation_request_id === row.id &&
+          /^[0-9a-f]{64}$/.test(row.creation_fingerprint) &&
           row.metadata?.source === 'flutter-habit-management-v1' &&
           row.metadata?.contract_version === 'habit-v1' &&
           row.metadata?.cadence === 'daily' &&
           row.metadata?.lifecycle === 'active',
       ),
-    'habit row created from Habit management',
+    'response-loss Habit creation reconciled by immutable request identity',
   );
   const managedHabitRows = await fetchRows(
-    `habits?select=id,title,frequency,target,active,metadata&user_id=eq.${user.id}&title=eq.${encodeURIComponent(managedHabitTitle)}`,
+    `habits?select=id,title,frequency,target,active,metadata,creation_request_id,creation_fingerprint&user_id=eq.${user.id}&title=eq.${encodeURIComponent(managedHabitTitle)}`,
     'managed Phase 3 habit identity',
   );
   if (managedHabitRows.length !== 1) {
@@ -985,36 +1053,20 @@ try {
     );
   }
   const managedHabit = managedHabitRows[0];
-  const [setupExecutionHabit] = await insertRows('habits', [
-    {
-      user_id: user.id,
-      title: setupExecutionHabitTitle,
-      frequency: 'daily',
-      target: 1,
-      active: true,
-      metadata: {
-        source: 'intake-v1',
-        managed_by: 'setup',
-        setup_state: 'active',
-        setup_item_id: crypto.randomUUID(),
-        revision: 4,
-        contract_version: 'habit-v1',
-        cadence: 'daily',
-      },
-    },
-  ]);
-  const setupExecutionHabitDefinition = JSON.stringify({
-    title: setupExecutionHabit.title,
-    frequency: setupExecutionHabit.frequency,
-    target: setupExecutionHabit.target,
-    active: setupExecutionHabit.active,
-    metadata: setupExecutionHabit.metadata,
-  });
 
   const captureSideEffectsBefore = await captureSideEffectIds(user.id);
   const captureSnapshotRequests = [];
   const captureRecommendationGenerateRequests = [];
+  const dailyCaptureWritePayloads = [];
   const captureRequestObserver = (request) => {
+    if (
+      request.method() === 'PUT' &&
+      request.url().startsWith(`${aiServiceBaseUrl}/v1/daily-capture/`) &&
+      request.url().endsWith('/evening')
+    ) {
+      dailyCaptureWritePayloads.push(request.postDataJSON());
+      return;
+    }
     if (request.method() !== 'POST') {
       return;
     }
@@ -1027,27 +1079,27 @@ try {
   };
   page.on('request', captureRequestObserver);
 
-  let lostDailyLogPayload;
-  let lostDailyLogResponseCount = 0;
-  const loseCommittedDailyLogResponse = async (route) => {
+  let lostDailyCapturePayload;
+  let lostDailyCaptureResponseCount = 0;
+  const loseCommittedDailyCaptureResponse = async (route) => {
     const request = route.request();
-    if (request.method() !== 'POST' || lostDailyLogResponseCount > 0) {
+    if (request.method() !== 'PUT' || lostDailyCaptureResponseCount > 0) {
       await route.continue();
       return;
     }
-    lostDailyLogPayload = request.postDataJSON();
+    lostDailyCapturePayload = request.postDataJSON();
     const committedResponse = await route.fetch();
     if (!committedResponse.ok()) {
       throw new Error(
         `Evening response-loss precondition failed: ${committedResponse.status()} ${await committedResponse.text()}`,
       );
     }
-    lostDailyLogResponseCount += 1;
+    lostDailyCaptureResponseCount += 1;
     await route.abort('failed');
   };
   await page.route(
-    '**/rest/v1/daily_logs**',
-    loseCommittedDailyLogResponse,
+    '**/v1/daily-capture/**/evening',
+    loseCommittedDailyCaptureResponse,
   );
 
   await page.goto(appRoute('/daily-check-in'), { waitUntil: 'domcontentloaded' });
@@ -1093,22 +1145,30 @@ try {
     'Could not save. Your answers are still here. Try again.',
   );
   await page.unroute(
-    '**/rest/v1/daily_logs**',
-    loseCommittedDailyLogResponse,
+    '**/v1/daily-capture/**/evening',
+    loseCommittedDailyCaptureResponse,
   );
 
-  if (lostDailyLogResponseCount !== 1 || !lostDailyLogPayload) {
-    throw new Error('The committed daily_logs response loss was not exercised.');
+  if (lostDailyCaptureResponseCount !== 1 || !lostDailyCapturePayload) {
+    throw new Error(
+      'The committed Daily Capture response loss was not exercised.',
+    );
   }
-  const lostDailyLogRow = Array.isArray(lostDailyLogPayload)
-    ? lostDailyLogPayload[0]
-    : lostDailyLogPayload;
-  const captureEntryDate = lostDailyLogRow?.entry_date;
+  const captureEntryDate = lostDailyCapturePayload?.capture?.entry_date;
   const eveningCaptureId =
-    lostDailyLogRow?.metadata?.captures?.evening?.capture_id;
+    lostDailyCapturePayload?.capture?.capture_id;
   if (!captureEntryDate || !eveningCaptureId) {
     throw new Error(
-      `Lost daily_logs payload had no Phase 1 identity: ${JSON.stringify(lostDailyLogPayload)}`,
+      `Lost Daily Capture payload had no V1 write identity: ${JSON.stringify(lostDailyCapturePayload)}`,
+    );
+  }
+  if (
+    lostDailyCapturePayload.contract_version !== 'daily-capture-write-v1' ||
+    lostDailyCapturePayload.expected_capture !== null ||
+    typeof lostDailyCapturePayload.request_id !== 'string'
+  ) {
+    throw new Error(
+      `Lost Daily Capture payload violated the strict write contract: ${JSON.stringify(lostDailyCapturePayload)}`,
     );
   }
 
@@ -1139,8 +1199,38 @@ try {
     '/v1/snapshots/generate',
     'Evening retry snapshot refresh',
   );
+  const eveningRetryCapturePromise = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'PUT' &&
+      response
+        .url()
+        .startsWith(`${aiServiceBaseUrl}/v1/daily-capture/`) &&
+      response.url().endsWith('/evening'),
+  );
   await clickByText(page, 'Save evening check-in');
+  const eveningRetryCaptureResponse = await eveningRetryCapturePromise;
   const eveningRetrySnapshotResponse = await eveningRetrySnapshotPromise;
+  const eveningRetryCapture = await eveningRetryCaptureResponse.json();
+  if (
+    eveningRetryCaptureResponse.status() !== 200 ||
+    eveningRetryCapture.contract_version !== 'daily-capture-write-v1' ||
+    eveningRetryCapture.branch !== 'evening' ||
+    eveningRetryCapture.capture_id !== eveningCaptureId ||
+    eveningRetryCapture.replayed !== true
+  ) {
+    throw new Error(
+      `Evening exact replay did not return its canonical replay result: ${JSON.stringify(eveningRetryCapture)}`,
+    );
+  }
+  if (
+    dailyCaptureWritePayloads.length !== 2 ||
+    JSON.stringify(dailyCaptureWritePayloads[0]) !==
+      JSON.stringify(dailyCaptureWritePayloads[1])
+  ) {
+    throw new Error(
+      `Evening response-loss retry changed its strict request: ${JSON.stringify(dailyCaptureWritePayloads)}`,
+    );
+  }
   assertJsonPayload(
     eveningRetrySnapshotResponse.request(),
     {
@@ -1649,48 +1739,6 @@ try {
     'Habit V1 skip undo restores open state',
   );
 
-  await clickByRoleName(
-    page,
-    'button',
-    `Complete habit ${setupExecutionHabitTitle}`,
-  );
-  await waitForRows(
-    `habit_logs?select=id,habit_id,entry_date,status,value&user_id=eq.${user.id}&habit_id=eq.${setupExecutionHabit.id}`,
-    (rows) =>
-      rows.length === 1 &&
-      rows[0].status === 'completed' &&
-      rows[0].value === 1,
-    'active Setup-owned habit is executable',
-  );
-  const setupExecutionHabitAfterOutcome = await fetchRows(
-    `habits?select=id,title,frequency,target,active,metadata&id=eq.${setupExecutionHabit.id}`,
-    'Setup-owned habit definition after daily execution',
-  );
-  if (
-    setupExecutionHabitAfterOutcome.length !== 1 ||
-    JSON.stringify({
-      title: setupExecutionHabitAfterOutcome[0].title,
-      frequency: setupExecutionHabitAfterOutcome[0].frequency,
-      target: setupExecutionHabitAfterOutcome[0].target,
-      active: setupExecutionHabitAfterOutcome[0].active,
-      metadata: setupExecutionHabitAfterOutcome[0].metadata,
-    }) !== setupExecutionHabitDefinition
-  ) {
-    throw new Error(
-      `Daily execution changed a Setup-owned definition: ${JSON.stringify(setupExecutionHabitAfterOutcome)}`,
-    );
-  }
-  await clickByRoleName(
-    page,
-    'button',
-    `Undo habit ${setupExecutionHabitTitle}`,
-  );
-  await waitForRows(
-    `habit_logs?select=id&user_id=eq.${user.id}&habit_id=eq.${setupExecutionHabit.id}`,
-    (rows) => rows.length === 0,
-    'Setup-owned habit outcome undo restores open state',
-  );
-
   await page.goto(appRoute('/planner'), { waitUntil: 'domcontentloaded' });
   await waitForFlutterShell(page);
   await enableFlutterSemantics(page);
@@ -1823,12 +1871,14 @@ try {
     'task completion undo restores todo',
   );
 
+  const invalidTerminalTaskId = crypto.randomUUID();
   await assertInsertRejected(
     'tasks',
     [
       {
-        id: crypto.randomUUID(),
+        id: invalidTerminalTaskId,
         user_id: user.id,
+        creation_request_id: invalidTerminalTaskId,
         title: 'Invalid terminal task shape',
         status: 'done',
         priority: 'low',
@@ -2107,6 +2157,7 @@ try {
     {
       id: inactiveHabitId,
       user_id: user.id,
+      creation_request_id: inactiveHabitId,
       title: 'Inactive negative-check habit',
       frequency: 'daily',
       target: 1,
@@ -2146,6 +2197,7 @@ try {
     {
       id: unscheduledHabitId,
       user_id: user.id,
+      creation_request_id: unscheduledHabitId,
       title: 'Unscheduled negative-check habit',
       frequency: 'daily',
       target: 1,
@@ -2867,6 +2919,16 @@ async function selectDropdownOption(page, label, option) {
       continue;
     }
     try {
+      await currentValueNode.scrollIntoViewIfNeeded({ timeout: 2500 });
+      await currentValueNode.click({ force: true, timeout: 2500 });
+      await page.waitForTimeout(250);
+      if (await chooseFromOpenMenu({ allowKeyboard: false })) {
+        return;
+      }
+    } catch (_) {
+      // Flutter can rebuild the semantics node before the pointer event.
+    }
+    try {
       await currentValueNode.evaluate((element) => element.click());
       await page.waitForTimeout(250);
       if (await chooseFromOpenMenu({ allowKeyboard: false })) {
@@ -2903,15 +2965,18 @@ async function selectDropdownOption(page, label, option) {
     500,
     24,
   ];
-  for (const offset of xOffsets) {
-    const x = Math.min(labelBox.x + offset, viewportWidth - 24);
-    await page.mouse.click(x, labelBox.y + labelBox.height + 18);
-    await page.waitForTimeout(250);
-    if (await chooseFromOpenMenu({ allowKeyboard: true })) {
-      return;
+  const yOffsets = [labelBox.height + 18, 42, 62];
+  for (const yOffset of yOffsets) {
+    for (const offset of xOffsets) {
+      const x = Math.min(labelBox.x + offset, viewportWidth - 24);
+      await page.mouse.click(x, labelBox.y + yOffset);
+      await page.waitForTimeout(250);
+      if (await chooseFromOpenMenu({ allowKeyboard: true })) {
+        return;
+      }
+      await page.keyboard.press('Escape');
+      await page.waitForTimeout(100);
     }
-    await page.keyboard.press('Escape');
-    await page.waitForTimeout(100);
   }
 
   throw new Error(`Could not select ${option} in dropdown: ${label}`);
@@ -3342,6 +3407,47 @@ async function clickByText(page, text, options = {}) {
       await partialTarget.click({ timeout: 2500, force: true });
     }
   }
+}
+
+async function clickDialogButton(page, title, buttonName) {
+  const dialog = page
+    .getByRole('dialog')
+    .filter({ hasText: title })
+    .last();
+  try {
+    await dialog
+      .getByRole('button', { name: buttonName, exact: true })
+      .click({ timeout: 5000 });
+    return;
+  } catch (_) {
+    // Flutter may expose the dialog's descendants as sibling semantics nodes.
+  }
+
+  const titleNode = page.getByText(title, { exact: true }).last();
+  const titleBox = await titleNode.boundingBox({ timeout: 5000 });
+  if (!titleBox) {
+    throw new Error(`Could not resolve dialog title: ${title}`);
+  }
+  const candidates = page.getByRole('button', {
+    name: buttonName,
+    exact: true,
+  });
+  const count = await candidates.count();
+  for (let index = count - 1; index >= 0; index -= 1) {
+    const candidate = candidates.nth(index);
+    const bounds = await candidate.boundingBox().catch(() => null);
+    if (
+      bounds &&
+      bounds.width > 0 &&
+      bounds.height > 0 &&
+      bounds.y >= titleBox.y &&
+      bounds.y <= titleBox.y + 360
+    ) {
+      await candidate.click({ timeout: 2500, force: true });
+      return;
+    }
+  }
+  throw new Error(`Could not click ${buttonName} in dialog ${title}.`);
 }
 
 async function clickVisibleExactText(page, text, { timeout = 15000 } = {}) {
@@ -3813,29 +3919,22 @@ function hasExactCaptureEvents(rows, expected, contract) {
   const eveningTypes = contract.expectMorning
     ? ['mood', 'stress']
     : ['mood', 'energy', 'stress'];
+  const provenanceKeys = [
+    'capture_id',
+    'capture_kind',
+    'capture_version',
+    'captured_at',
+    'entry_date',
+  ];
   if (
     eveningTypes.some((type) => {
       const metadata = byType[type]?.metadata;
       return (
+        !arraysEqual(Object.keys(metadata ?? {}).sort(), provenanceKeys) ||
         metadata?.capture_kind !== 'evening' ||
-        metadata?.capture_id !== expected.eveningCaptureId ||
-        Object.hasOwn(metadata ?? {}, 'focus_band') ||
-        Object.hasOwn(metadata ?? {}, 'main_friction') ||
-        Object.hasOwn(metadata ?? {}, 'additional_frictions') ||
-        metadata?.tomorrow_priority !== expected.tomorrowPriority ||
-        Object.hasOwn(metadata ?? {}, 'gentle_tomorrow')
+        metadata?.capture_id !== expected.eveningCaptureId
       );
     })
-  ) {
-    return false;
-  }
-
-  const stressMetadata = byType.stress?.metadata;
-  if (
-    stressMetadata?.stress_intensity_label !== 'high' ||
-    stressMetadata?.stress_source !== expected.stressSource ||
-    stressMetadata?.stress_controllability !==
-      expected.stressControllability
   ) {
     return false;
   }
@@ -3846,14 +3945,9 @@ function hasExactCaptureEvents(rows, expected, contract) {
   return ['energy', 'sleep'].every((type) => {
     const metadata = byType[type]?.metadata;
     return (
+      arraysEqual(Object.keys(metadata ?? {}).sort(), provenanceKeys) &&
       metadata?.capture_kind === 'morning' &&
-      metadata?.capture_id === expected.morningCaptureId &&
-      metadata?.day_shape === 'constrained' &&
-      metadata?.sleep_quality === 3 &&
-      !Object.hasOwn(metadata ?? {}, 'estimated_sleep_started_at') &&
-      !Object.hasOwn(metadata ?? {}, 'woke_at') &&
-      !Object.hasOwn(metadata ?? {}, 'sleep_target_minutes') &&
-      !Object.hasOwn(metadata ?? {}, 'source_evening_capture_id')
+      metadata?.capture_id === expected.morningCaptureId
     );
   });
 }
@@ -5284,6 +5378,7 @@ async function assertDisposableAccountExportAndDeletion({
     {
       id: taskId,
       user_id: userId,
+      creation_request_id: taskId,
       title: taskTitle,
       description: 'Cascade verification target.',
       status: 'todo',
@@ -5753,7 +5848,7 @@ function assertDisposableAccountExportPayload(
     Array.isArray(payload) ||
     stableJson(Object.keys(payload).sort()) !==
       stableJson(expectedTopLevelKeys) ||
-    payload.contract_version !== 'account-export-v1' ||
+    payload.contract_version !== 'account-export-v2' ||
     !isIsoTimestamp(payload.exported_at) ||
     !/(Z|[+-]\d{2}:\d{2})$/.test(payload.exported_at) ||
     payload.data === null ||
@@ -5768,7 +5863,7 @@ function assertDisposableAccountExportPayload(
       stableJson(expectedTableKeys)
   ) {
     throw new Error(
-      `Account export has an invalid V1 envelope: ${JSON.stringify(payload)}`,
+      `Account export has an invalid V2 envelope: ${JSON.stringify(payload)}`,
     );
   }
   if (stableJson(payload.record_counts) !== stableJson(expectedRecordCounts)) {
@@ -6275,14 +6370,12 @@ async function assertBoundedWeeklyReview(page, userId) {
   const thursday = addUtcDays(monday, 3);
   const friday = addUtcDays(monday, 4);
   const manualHabitId = crypto.randomUUID();
-  const setupHabitId = crypto.randomUUID();
   const goalId = crypto.randomUUID();
   const completedTaskId = crypto.randomUUID();
   const carriedTaskId = crypto.randomUUID();
   const focusId = crypto.randomUUID();
   const briefingId = crypto.randomUUID();
   const manualHabitTitle = `E2E weekly target ${runId}`;
-  const setupHabitTitle = `E2E weekly setup habit ${runId}`;
   const stableHabitUpdatedAt = createdBeforeWeek;
 
   await insertRows('goals', [
@@ -6301,6 +6394,7 @@ async function assertBoundedWeeklyReview(page, userId) {
     {
       id: completedTaskId,
       user_id: userId,
+      creation_request_id: completedTaskId,
       title: `E2E weekly completed task ${runId}`,
       status: 'done',
       priority: 'high',
@@ -6315,6 +6409,7 @@ async function assertBoundedWeeklyReview(page, userId) {
     {
       id: carriedTaskId,
       user_id: userId,
+      creation_request_id: carriedTaskId,
       title: `E2E weekly carried task ${runId}`,
       status: 'todo',
       priority: 'medium',
@@ -6331,6 +6426,7 @@ async function assertBoundedWeeklyReview(page, userId) {
     {
       id: manualHabitId,
       user_id: userId,
+      creation_request_id: manualHabitId,
       title: manualHabitTitle,
       frequency: 'weekly',
       target: 4,
@@ -6344,26 +6440,6 @@ async function assertBoundedWeeklyReview(page, userId) {
       },
       created_at: createdBeforeWeek,
       updated_at: stableHabitUpdatedAt,
-    },
-    {
-      id: setupHabitId,
-      user_id: userId,
-      title: setupHabitTitle,
-      frequency: 'weekly',
-      target: 4,
-      active: true,
-      metadata: {
-        source: 'intake-v1',
-        managed_by: 'setup',
-        setup_state: 'active',
-        setup_item_id: crypto.randomUUID(),
-        revision: 4,
-        contract_version: 'habit-v1',
-        cadence: 'weekly_target',
-        started_on: addUtcDays(monday, -14),
-      },
-      created_at: createdBeforeWeek,
-      updated_at: createdBeforeWeek,
     },
   ]);
   await insertRows('habit_logs', [
@@ -6384,24 +6460,6 @@ async function assertBoundedWeeklyReview(page, userId) {
       value: 1,
       created_at: isoTimestampOnDate(thursday, '18:00:00'),
       updated_at: isoTimestampOnDate(thursday, '18:00:00'),
-    },
-    {
-      user_id: userId,
-      habit_id: setupHabitId,
-      entry_date: monday,
-      status: 'completed',
-      value: 1,
-      created_at: isoTimestampOnDate(monday, '18:05:00'),
-      updated_at: isoTimestampOnDate(monday, '18:05:00'),
-    },
-    {
-      user_id: userId,
-      habit_id: setupHabitId,
-      entry_date: thursday,
-      status: 'completed',
-      value: 1,
-      created_at: isoTimestampOnDate(thursday, '18:05:00'),
-      updated_at: isoTimestampOnDate(thursday, '18:05:00'),
     },
   ]);
   await insertRows('focus_sessions', [
@@ -6509,21 +6567,6 @@ async function assertBoundedWeeklyReview(page, userId) {
       },
       created_at: isoTimestampOnDate(wednesday, '20:00:00'),
     },
-    {
-      user_id: userId,
-      request_id: crypto.randomUUID(),
-      briefing_id: briefingId,
-      action_id: `log_habit:${setupHabitId}:${wednesday}`,
-      action_kind: 'habit',
-      feedback_type: 'too_much',
-      context_mode: 'steady',
-      rule_key: 'habit_due',
-      metadata: {
-        contract_version: 'decision-feedback-v1',
-        briefing_date: wednesday,
-      },
-      created_at: isoTimestampOnDate(wednesday, '20:05:00'),
-    },
   ]);
 
   const accessToken = await signInAccessToken('Phase 8 weekly review');
@@ -6598,9 +6641,6 @@ async function assertBoundedWeeklyReview(page, userId) {
       proposal.target_id === manualHabitId &&
       proposal.operation === 'shrink',
   );
-  const setupProposal = review?.proposals?.find(
-    (proposal) => proposal.target_id === setupHabitId,
-  );
   if (
     generated.freshness !== 'current' ||
     generated.needs_generation !== false ||
@@ -6612,18 +6652,18 @@ async function assertBoundedWeeklyReview(page, userId) {
     review?.facts?.tasks?.carried !== 1 ||
     review?.facts?.tasks?.overdue_carried !== 1 ||
     review?.facts?.tasks?.goal_linked_completed !== 0 ||
-    review?.facts?.habits?.scheduled_opportunities !== 8 ||
-    review?.facts?.habits?.completed !== 4 ||
+    review?.facts?.habits?.scheduled_opportunities !== 4 ||
+    review?.facts?.habits?.completed !== 2 ||
     review?.facts?.habits?.skipped !== 0 ||
-    review?.facts?.habits?.missed !== 2 ||
-    review?.facts?.habits?.recovery_open !== 2 ||
+    review?.facts?.habits?.missed !== 1 ||
+    review?.facts?.habits?.recovery_open !== 1 ||
     review?.facts?.habits?.unknown !== 0 ||
     review?.facts?.focus?.completed_sessions !== 1 ||
     review?.facts?.focus?.actual_minutes !== 25 ||
     review?.facts?.recovery?.observed_days !== 7 ||
     review?.facts?.recovery?.recovery_days !== 1 ||
-    review?.facts?.feedback?.total !== 2 ||
-    review?.facts?.feedback?.too_much !== 2 ||
+    review?.facts?.feedback?.total !== 1 ||
+    review?.facts?.feedback?.too_much !== 1 ||
     review?.provenance?.engine !== 'deterministic' ||
     review?.provenance?.contract_version !== 'weekly-review-v1' ||
     review?.provenance?.source_snapshot_id !== weeklySnapshot.snapshot_id ||
@@ -6638,9 +6678,7 @@ async function assertBoundedWeeklyReview(page, userId) {
       Date.parse(stableHabitUpdatedAt) ||
     manualProposal?.change?.before?.cadence?.kind !== 'weekly_target' ||
     manualProposal?.change?.before?.cadence?.weekly_target !== 4 ||
-    manualProposal?.change?.after?.cadence?.weekly_target !== 3 ||
-    setupProposal?.application_mode !== 'settings_setup' ||
-    setupProposal?.ownership !== 'setup'
+    manualProposal?.change?.after?.cadence?.weekly_target !== 3
   ) {
     throw new Error(
       `Generated Phase 8 weekly review violates its exact contract: ${JSON.stringify(generated)}`,
@@ -6704,30 +6742,10 @@ async function assertBoundedWeeklyReview(page, userId) {
     expectedHabitTarget: 4,
   });
 
-  const setupBefore = await fetchRows(
-    `habits?select=id,title,frequency,target,active,metadata,updated_at&id=eq.${setupHabitId}`,
-    'Setup-owned habit before weekly review UI',
-  );
   await page.goto(appRoute('/weekly-review'), { waitUntil: 'domcontentloaded' });
   await waitForFlutterShell(page);
   await enableFlutterSemantics(page);
   await expectText(page, 'Weekly review');
-  await expectText(page, manualHabitTitle);
-  await expectText(page, setupHabitTitle);
-
-  await clickByText(page, 'Open Setup (no auto-apply)');
-  await page.waitForURL('**/#/onboarding?edit=1');
-  await waitForFlutterShell(page);
-  await enableFlutterSemantics(page);
-  await expectText(page, 'Review your setup');
-  await assertRows(
-    `habits?select=id,title,frequency,target,active,metadata,updated_at&id=eq.${setupHabitId}`,
-    (rows) => stableJson(rows) === stableJson(setupBefore),
-    'weekly review Setup navigation performs no generic habit write',
-  );
-  await page.goto(appRoute('/weekly-review'), { waitUntil: 'domcontentloaded' });
-  await waitForFlutterShell(page);
-  await enableFlutterSemantics(page);
   await expectText(page, manualHabitTitle);
 
   await scrollUntilTextInViewport(page, 'Apply change', {
@@ -6736,7 +6754,7 @@ async function assertBoundedWeeklyReview(page, userId) {
   });
   await clickByText(page, 'Apply change');
   await expectText(page, 'Apply this habit change?');
-  await clickByText(page, 'Keep current');
+  await clickDialogButton(page, 'Apply this habit change?', 'Keep current');
   await assertRows(
     `habits?select=id,target,updated_at&id=eq.${manualHabitId}`,
     (rows) =>
@@ -6769,7 +6787,7 @@ async function assertBoundedWeeklyReview(page, userId) {
   });
   await clickByText(page, 'Apply change');
   await expectText(page, 'Apply this habit change?');
-  await clickByText(page, 'Apply change', { match: 'last' });
+  await clickDialogButton(page, 'Apply this habit change?', 'Apply change');
   await expectText(page, 'Habit change saved.');
   await waitForRows(
     `habits?select=id,title,frequency,target,active,metadata,updated_at&id=eq.${manualHabitId}`,
@@ -6799,12 +6817,6 @@ async function assertBoundedWeeklyReview(page, userId) {
       rows.every((row) => row.status === 'completed' && row.value === 1),
     'weekly habit adaptation preserves historical outcomes',
   );
-  await assertRows(
-    `habits?select=id,title,frequency,target,active,metadata,updated_at&id=eq.${setupHabitId}`,
-    (rows) => stableJson(rows) === stableJson(setupBefore),
-    'confirmed manual weekly proposal preserves Setup-owned definition',
-  );
-
   const stale = await briefingRequest(
     `/v1/weekly-reviews/${period.periodKey}`,
     accessToken,
@@ -6930,10 +6942,17 @@ async function assertDeadlinePlanner(page, userId) {
   const budgetSaveBody = budgetSaveResponse.request().postDataJSON();
   const budgetSaveResult = await budgetSaveResponse.json();
   if (
-    stableJson(budgetSaveBody) !==
-      stableJson({ daily_preparation_budget_minutes: 120 }) ||
-    stableJson(budgetSaveResult) !==
-      stableJson({ daily_preparation_budget_minutes: 120 })
+    budgetSaveBody?.contract_version !==
+      'account-preparation-budget-update-v2' ||
+    !isUuid(budgetSaveBody?.request_id) ||
+    !Number.isInteger(budgetSaveBody?.expected_revision) ||
+    budgetSaveBody.daily_preparation_budget_minutes !== 120 ||
+    budgetSaveResult?.contract_version !==
+      'account-preparation-budget-v2' ||
+    budgetSaveResult.daily_preparation_budget_minutes !== 120 ||
+    budgetSaveResult.revision !== budgetSaveBody.expected_revision + 1 ||
+    budgetSaveResult.replayed !== false ||
+    !isIsoTimestamp(budgetSaveResult.updated_at)
   ) {
     throw new Error(
       `Preparation budget transport was not exact: ${stableJson({ budgetSaveBody, budgetSaveResult })}`,
@@ -7484,11 +7503,13 @@ async function assertDeadlinePlanner(page, userId) {
     accessToken,
     userId,
     proposalBody,
+    budgetRevision: budgetSaveResult.revision,
   });
 
   await assertDeadlinePlannerFlutterSurface({
     page,
     accessToken,
+    userId,
     planId,
     title,
     activeRevision: confirmed.active_revision,
@@ -8334,6 +8355,7 @@ async function assertPreparationBudgetConfirmationGuard({
   accessToken,
   userId,
   proposalBody,
+  budgetRevision,
 }) {
   const planId = crypto.randomUUID();
   const proposal = {
@@ -8402,6 +8424,9 @@ async function assertPreparationBudgetConfirmationGuard({
     {
       method: 'PATCH',
       body: {
+        contract_version: 'account-preparation-budget-update-v2',
+        request_id: crypto.randomUUID(),
+        expected_revision: budgetRevision,
         daily_preparation_budget_minutes: 25,
         user_id: userId,
       },
@@ -8417,7 +8442,12 @@ async function assertPreparationBudgetConfirmationGuard({
     accessToken,
     {
       method: 'PATCH',
-      body: { daily_preparation_budget_minutes: 25 },
+      body: {
+        contract_version: 'account-preparation-budget-update-v2',
+        request_id: crypto.randomUUID(),
+        expected_revision: budgetRevision,
+        daily_preparation_budget_minutes: 25,
+      },
     },
   );
   assertDeadlinePlanApiStatus(lowered, 200, 'lowered preparation budget');
@@ -8525,7 +8555,12 @@ async function assertPreparationBudgetConfirmationGuard({
     accessToken,
     {
       method: 'PATCH',
-      body: { daily_preparation_budget_minutes: 120 },
+      body: {
+        contract_version: 'account-preparation-budget-update-v2',
+        request_id: crypto.randomUUID(),
+        expected_revision: lowered.json.revision,
+        daily_preparation_budget_minutes: 120,
+      },
     },
   );
   assertDeadlinePlanApiStatus(restored, 200, 'restored preparation budget');
@@ -8538,16 +8573,31 @@ async function assertPreparationBudgetConfirmationGuard({
 async function assertDeadlinePlannerFlutterSurface({
   page,
   accessToken,
+  userId,
   planId,
   title,
   activeRevision,
 }) {
+  const preparationProfileRows = await fetchRows(
+    `profiles?select=preparation_budget_revision&id=eq.${userId}`,
+    'Flutter workload-detail preparation budget revision',
+  );
+  const preparationBudgetRevision =
+    preparationProfileRows[0]?.preparation_budget_revision;
+  if (!Number.isInteger(preparationBudgetRevision)) {
+    throw new Error('Preparation budget revision is unavailable.');
+  }
   const lowered = await deadlinePlanApiRequest(
     '/v1/account/preparation-budget',
     accessToken,
     {
       method: 'PATCH',
-      body: { daily_preparation_budget_minutes: 25 },
+      body: {
+        contract_version: 'account-preparation-budget-update-v2',
+        request_id: crypto.randomUUID(),
+        expected_revision: preparationBudgetRevision,
+        daily_preparation_budget_minutes: 25,
+      },
     },
   );
   assertDeadlinePlanApiStatus(
@@ -8669,7 +8719,12 @@ async function assertDeadlinePlannerFlutterSurface({
     accessToken,
     {
       method: 'PATCH',
-      body: { daily_preparation_budget_minutes: 120 },
+      body: {
+        contract_version: 'account-preparation-budget-update-v2',
+        request_id: crypto.randomUUID(),
+        expected_revision: lowered.json.revision,
+        daily_preparation_budget_minutes: 120,
+      },
     },
   );
   assertDeadlinePlanApiStatus(
@@ -9676,7 +9731,9 @@ async function assertBoundedCalendarImport(userId) {
   );
   if (
     firstImported.connection.id !== connection.id ||
-    firstImported.connection.status !== 'connected'
+    firstImported.connection.status !== 'connected' ||
+    firstImported.import.planning_status !== 'current' ||
+    firstImported.import.profile_timezone_revision < 1
   ) {
     throw new Error(
       `First calendar import changed its connection identity: ${firstImport.text}`,
@@ -9716,7 +9773,7 @@ async function assertBoundedCalendarImport(userId) {
   );
 
   await assertRows(
-    `calendar_imports?select=id,request_id,connection_id,input_fingerprint,source_fingerprint,window_starts_on,window_ends_before,timezone,accepted_count,cancelled_count,out_of_window_count,unsupported_recurring_count,invalid_count&user_id=eq.${userId}`,
+    `calendar_imports?select=id,request_id,connection_id,input_fingerprint,source_fingerprint,window_starts_on,window_ends_before,timezone,profile_timezone_revision,planning_status,accepted_count,cancelled_count,out_of_window_count,unsupported_recurring_count,invalid_count&user_id=eq.${userId}`,
     (rows) =>
       rows.length === 1 &&
       rows[0].id === firstImported.import.id &&
@@ -9729,6 +9786,9 @@ async function assertBoundedCalendarImport(userId) {
       rows[0].window_ends_before ===
         firstImported.import.window.ends_before &&
       rows[0].timezone === 'Europe/Berlin' &&
+      rows[0].profile_timezone_revision ===
+        firstImported.import.profile_timezone_revision &&
+      rows[0].planning_status === 'current' &&
       rows[0].accepted_count === fixture.firstCounts.accepted &&
       rows[0].cancelled_count === fixture.firstCounts.cancelled &&
       rows[0].out_of_window_count === fixture.firstCounts.out_of_window &&
@@ -9878,7 +9938,8 @@ async function assertBoundedCalendarImport(userId) {
   if (
     secondImported.import.id === firstImported.import.id ||
     secondImported.import.source_fingerprint ===
-      firstImported.import.source_fingerprint
+      firstImported.import.source_fingerprint ||
+    secondImported.import.planning_status !== 'current'
   ) {
     throw new Error(
       `Replacement calendar import did not advance provenance: ${secondImport.text}`,
@@ -9891,9 +9952,23 @@ async function assertBoundedCalendarImport(userId) {
   );
   assertCalendarApiStatus(
     supersededImportReplay,
-    409,
+    200,
     'superseded calendar import replay',
   );
+  const supersededReplay = assertCalendarImportEnvelope(
+    supersededImportReplay.json,
+    'superseded calendar import replay',
+    { requireLastImportMatch: false },
+  );
+  if (
+    supersededReplay.import.id !== firstImported.import.id ||
+    supersededReplay.import.planning_status !== 'not_imported' ||
+    supersededReplay.connection.last_import?.id !== secondImported.import.id
+  ) {
+    throw new Error(
+      `Superseded exact replay lost durable import history: ${supersededImportReplay.text}`,
+    );
+  }
 
   const stalePage = await calendarApiRequest(
     `/v1/calendar-integrations/connections/${connection.id}/events?cursor=${encodeURIComponent(staleCursor)}`,
@@ -9953,11 +10028,13 @@ async function assertBoundedCalendarImport(userId) {
     );
   }
   await assertRows(
-    `calendar_imports?select=id,request_id&user_id=eq.${userId}&order=imported_at.asc`,
+    `calendar_imports?select=id,request_id,planning_status&user_id=eq.${userId}&order=imported_at.asc`,
     (rows) =>
       rows.length === 2 &&
       rows[0].id === firstImported.import.id &&
-      rows[1].id === secondImported.import.id,
+      rows[0].planning_status === 'not_imported' &&
+      rows[1].id === secondImported.import.id &&
+      rows[1].planning_status === 'current',
     'immutable calendar import history before disconnect',
   );
   await assertRows(
@@ -10009,7 +10086,8 @@ async function assertBoundedCalendarImport(userId) {
     disconnectedConnection?.id !== connection.id ||
     disconnectedConnection.status !== 'disconnected' ||
     !Object.hasOwn(disconnectedConnection, 'disconnected_at') ||
-    disconnectedConnection.last_import?.id !== secondImported.import.id
+    disconnectedConnection.last_import?.id !== secondImported.import.id ||
+    disconnectedConnection.last_import?.planning_status !== 'disconnected'
   ) {
     throw new Error(
       `Calendar disconnect did not retain stale imported data: ${disconnected.text}`,
@@ -10052,7 +10130,7 @@ async function assertBoundedCalendarImport(userId) {
     409,
     'calendar import after disconnect',
   );
-  const replayRejectedAfterDisconnect = await calendarApiRequest(
+  const replayAfterDisconnect = await calendarApiRequest(
     `/v1/calendar-integrations/connections/${connection.id}/imports`,
     accessToken,
     {
@@ -10064,10 +10142,22 @@ async function assertBoundedCalendarImport(userId) {
     },
   );
   assertCalendarApiStatus(
-    replayRejectedAfterDisconnect,
-    409,
+    replayAfterDisconnect,
+    200,
     'calendar import replay after disconnect',
   );
+  const disconnectedImportReplay = assertCalendarImportEnvelope(
+    replayAfterDisconnect.json,
+    'calendar import replay after disconnect',
+  );
+  if (
+    disconnectedImportReplay.import.id !== secondImported.import.id ||
+    disconnectedImportReplay.import.planning_status !== 'disconnected'
+  ) {
+    throw new Error(
+      `Disconnected exact replay became current again: ${replayAfterDisconnect.text}`,
+    );
+  }
   const retainedEventsResult = await calendarApiRequest(
     `/v1/calendar-integrations/connections/${connection.id}/events`,
     accessToken,
@@ -10094,6 +10184,13 @@ async function assertBoundedCalendarImport(userId) {
     userId,
     scheduleBefore,
     'calendar disconnect',
+  );
+  await assertRows(
+    `calendar_imports?select=id,planning_status&user_id=eq.${userId}`,
+    (rows) =>
+      rows.length === 2 &&
+      rows.every((row) => row.planning_status === 'disconnected'),
+    'disconnected imports remain readable but unusable for planning',
   );
   await assertDeadlinePlannerCalendarSourceStatus({
     accessToken,
@@ -10194,6 +10291,36 @@ async function assertBoundedCalendarImport(userId) {
       `Calendar delete replay changed terminal state: ${deleteReplay.text}`,
     );
   }
+  const importReplayAfterDelete = await calendarApiRequest(
+    `/v1/calendar-integrations/connections/${connection.id}/imports`,
+    accessToken,
+    {
+      method: 'POST',
+      body: {
+        request_id: secondImportRequestId,
+        calendar_text: fixture.secondCalendarText,
+      },
+    },
+  );
+  assertCalendarApiStatus(
+    importReplayAfterDelete,
+    200,
+    'calendar import replay after local deletion',
+  );
+  const deletedImportReplay = assertCalendarImportEnvelope(
+    importReplayAfterDelete.json,
+    'calendar import replay after local deletion',
+    { requireLastImportMatch: false },
+  );
+  if (
+    deletedImportReplay.import.id !== secondImported.import.id ||
+    deletedImportReplay.import.planning_status !== 'deleted' ||
+    Object.hasOwn(deletedImportReplay.connection, 'last_import')
+  ) {
+    throw new Error(
+      `Deleted exact replay restored Planner availability: ${importReplayAfterDelete.text}`,
+    );
+  }
   const deleteConflict = await calendarApiRequest(
     `/v1/calendar-integrations/connections/${connection.id}/imported-data` +
       `?request_id=${encodeURIComponent(crypto.randomUUID())}`,
@@ -10240,9 +10367,11 @@ async function assertBoundedCalendarImport(userId) {
     'global opaque calendar request identities',
   );
   await assertRows(
-    `calendar_imports?select=id&user_id=eq.${userId}`,
-    (rows) => rows.length === 0,
-    'deleted local calendar import history',
+    `calendar_imports?select=id,planning_status&user_id=eq.${userId}`,
+    (rows) =>
+      rows.length === 2 &&
+      rows.every((row) => row.planning_status === 'deleted'),
+    'deleted local calendar import audit history',
   );
   await assertRows(
     `calendar_events?select=id&user_id=eq.${userId}`,
@@ -10375,7 +10504,7 @@ async function assertCalendarImportUi(page, userId) {
   await expectText(page, 'Connected');
   await expectText(page, 'No file has been imported yet.');
   await assertRows(
-    `calendar_imports?select=id&user_id=eq.${userId}`,
+    `calendar_imports?select=id&user_id=eq.${userId}&connection_id=eq.${createdConnection.id}`,
     (rows) => rows.length === 0,
     'UI consent creates no calendar import',
   );
@@ -10440,10 +10569,12 @@ async function assertCalendarImportUi(page, userId) {
     );
   }
   await assertRows(
-    `calendar_imports?select=id,request_id,accepted_count,cancelled_count,out_of_window_count,unsupported_recurring_count,invalid_count&user_id=eq.${userId}`,
+    `calendar_imports?select=id,request_id,profile_timezone_revision,planning_status,accepted_count,cancelled_count,out_of_window_count,unsupported_recurring_count,invalid_count&user_id=eq.${userId}&connection_id=eq.${createdConnection.id}`,
     (rows) =>
       rows.length === 1 &&
       rows[0].request_id === lostImportPayload.request_id &&
+      rows[0].profile_timezone_revision >= 1 &&
+      rows[0].planning_status === 'current' &&
       rows[0].accepted_count === fixture.firstCounts.accepted &&
       rows[0].cancelled_count === fixture.firstCounts.cancelled &&
       rows[0].out_of_window_count === fixture.firstCounts.out_of_window &&
@@ -10490,7 +10621,7 @@ async function assertCalendarImportUi(page, userId) {
     `${fixture.firstCounts.accepted} accepted · ${fixture.firstCounts.cancelled} cancelled`,
   );
   await assertRows(
-    `calendar_imports?select=id,request_id&user_id=eq.${userId}`,
+    `calendar_imports?select=id,request_id&user_id=eq.${userId}&connection_id=eq.${createdConnection.id}`,
     (rows) =>
       rows.length === 1 &&
       rows[0].id === retryImport.import.id &&
@@ -10581,7 +10712,8 @@ async function assertCalendarImportUi(page, userId) {
   );
   if (
     disconnected?.status !== 'disconnected' ||
-    disconnected.last_import?.id !== retryImport.import.id
+    disconnected.last_import?.id !== retryImport.import.id ||
+    disconnected.last_import?.planning_status !== 'disconnected'
   ) {
     throw new Error('Calendar UI disconnect did not retain imported data.');
   }
@@ -10596,6 +10728,12 @@ async function assertCalendarImportUi(page, userId) {
     `calendar_events?select=id&user_id=eq.${userId}`,
     (rows) => rows.length === fixture.firstCounts.accepted,
     'UI disconnect retains imported calendar events',
+  );
+  await assertRows(
+    `calendar_imports?select=id,planning_status&user_id=eq.${userId}&connection_id=eq.${createdConnection.id}`,
+    (rows) =>
+      rows.length === 1 && rows[0].planning_status === 'disconnected',
+    'UI disconnect retains a stale import audit',
   );
   await assertCalendarScheduleUnchanged(
     userId,
@@ -10640,9 +10778,9 @@ async function assertCalendarImportUi(page, userId) {
   }
   await expectText(page, 'Imported data deleted');
   await assertRows(
-    `calendar_imports?select=id&user_id=eq.${userId}`,
-    (rows) => rows.length === 0,
-    'UI deletion removes calendar import history',
+    `calendar_imports?select=id,planning_status&user_id=eq.${userId}&connection_id=eq.${createdConnection.id}`,
+    (rows) => rows.length === 1 && rows[0].planning_status === 'deleted',
+    'UI deletion retains only the deleted import audit',
   );
   await assertRows(
     `calendar_events?select=id&user_id=eq.${userId}`,
@@ -12745,7 +12883,7 @@ async function assertFocusedLearningDataControls({
   const exportedReflections = exportPayload?.data?.focus_session_reflections;
   if (
     exportResponse.status !== 200 ||
-    exportPayload?.contract_version !== 'account-export-v1' ||
+    exportPayload?.contract_version !== 'account-export-v2' ||
     exportPayload?.record_counts?.learning_preferences !== 1 ||
     exportPayload?.record_counts?.focus_session_reflections < 37 ||
     !Array.isArray(exportedPreferences) ||
@@ -13734,6 +13872,7 @@ function assertDeadlinePlanIdentity(plan, context) {
     'original_credited_prior_minutes',
     'current_revision',
     'latest_revision',
+    'attention_reasons',
     'created_at',
     'updated_at',
   ];
@@ -13768,6 +13907,12 @@ function assertDeadlinePlanIdentity(plan, context) {
     !Number.isInteger(plan.latest_revision) ||
     plan.latest_revision < 1 ||
     plan.latest_revision < Math.max(1, plan.current_revision) ||
+    !Array.isArray(plan.attention_reasons) ||
+    plan.attention_reasons.length > 12 ||
+    plan.attention_reasons.some(
+      (reason) => typeof reason !== 'string' || reason.length === 0,
+    ) ||
+    new Set(plan.attention_reasons).size !== plan.attention_reasons.length ||
     !isIsoTimestamp(plan.created_at) ||
     !isIsoTimestamp(plan.updated_at) ||
     Date.parse(plan.updated_at) < Date.parse(plan.created_at) ||
@@ -14222,7 +14367,7 @@ function assertCalendarConnectionEnvelope(payload, context) {
     context,
   );
   if (
-    payload.contract_version !== 'calendar-import-v1' ||
+    payload.contract_version !== 'calendar-import-v2' ||
     payload.origin !== 'authenticated_backend'
   ) {
     throw new Error(`${context} has invalid root provenance: ${stableJson(payload)}`);
@@ -14254,7 +14399,7 @@ function assertCalendarConnectionEnvelope(payload, context) {
   }
   if (
     !isCalendarIdentifier(connection.id) ||
-    connection.contract_version !== 'calendar-import-v1' ||
+    connection.contract_version !== 'calendar-import-v2' ||
     connection.origin !== 'authenticated_backend' ||
     connection.source_kind !== 'ical_file' ||
     typeof connection.source_label !== 'string' ||
@@ -14311,7 +14456,11 @@ function assertCalendarConsent(consent, context) {
   }
 }
 
-function assertCalendarImportEnvelope(payload, context) {
+function assertCalendarImportEnvelope(
+  payload,
+  context,
+  { requireLastImportMatch = true } = {},
+) {
   assertExactCalendarKeys(
     payload,
     ['contract_version', 'origin', 'connection', 'import'],
@@ -14330,8 +14479,10 @@ function assertCalendarImportEnvelope(payload, context) {
   }
   assertCalendarImportSummary(payload.import, `${context} import`);
   if (
+    requireLastImportMatch &&
     !Object.hasOwn(connection, 'last_import') ||
-    stableJson(connection.last_import) !== stableJson(payload.import)
+    requireLastImportMatch &&
+      stableJson(connection.last_import) !== stableJson(payload.import)
   ) {
     throw new Error(`${context} import does not match last_import projection.`);
   }
@@ -14341,13 +14492,30 @@ function assertCalendarImportEnvelope(payload, context) {
 function assertCalendarImportSummary(summary, context) {
   assertExactCalendarKeys(
     summary,
-    ['id', 'imported_at', 'window', 'counts', 'source_fingerprint'],
+    [
+      'id',
+      'imported_at',
+      'window',
+      'counts',
+      'source_fingerprint',
+      'profile_timezone_revision',
+      'planning_status',
+    ],
     context,
   );
   if (
     !isCalendarIdentifier(summary.id) ||
     !isAwareCalendarTimestamp(summary.imported_at) ||
-    !/^[0-9a-f]{64}$/.test(summary.source_fingerprint ?? '')
+    !/^[0-9a-f]{64}$/.test(summary.source_fingerprint ?? '') ||
+    !Number.isInteger(summary.profile_timezone_revision) ||
+    summary.profile_timezone_revision < 0 ||
+    ![
+      'not_imported',
+      'current',
+      'profile_timezone_changed',
+      'disconnected',
+      'deleted',
+    ].includes(summary.planning_status)
   ) {
     throw new Error(`${context} has invalid identity/provenance.`);
   }
@@ -14424,7 +14592,7 @@ function assertCalendarEventsEnvelope(payload, sourceLabel, context) {
     throw new Error(`${context} returned an explicit-null optional root field.`);
   }
   if (
-    payload.contract_version !== 'calendar-import-v1' ||
+    payload.contract_version !== 'calendar-import-v2' ||
     payload.origin !== 'authenticated_backend' ||
     !isCalendarIdentifier(payload.connection_id) ||
     !Array.isArray(payload.events) ||
@@ -14534,7 +14702,7 @@ function assertCalendarEvent(event, sourceLabel, context) {
   );
   if (
     event.provenance.kind !== 'integration' ||
-    event.provenance.contract_version !== 'calendar-import-v1' ||
+    event.provenance.contract_version !== 'calendar-import-v2' ||
     event.provenance.source_kind !== 'ical_file' ||
     event.provenance.source_label !== sourceLabel ||
     event.provenance.provider_writes !== false ||

@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../core/network/api_client.dart';
 import '../../../core/supabase/supabase_tables.dart';
 import '../../quick_action/data/guest_quick_check_in_data_source.dart';
 import '../../quick_action/data/quick_check_in_supabase_data_source.dart';
@@ -18,14 +19,17 @@ class AuthRepository {
   AuthRepository(
     this._client, {
     required bool useMockData,
+    ApiClient? apiClient,
     GuestSetupDataSource guestSetupDataSource = const GuestSetupDataSource(),
     GoogleOAuthLauncher? googleOAuthLauncher,
   })  : _useMockData = useMockData,
+        _apiClient = apiClient,
         _guestSetupDataSource = guestSetupDataSource,
         _googleOAuthLauncher = googleOAuthLauncher;
 
   final SupabaseClient _client;
   final bool _useMockData;
+  final ApiClient? _apiClient;
   final GuestSetupDataSource _guestSetupDataSource;
   final GoogleOAuthLauncher? _googleOAuthLauncher;
 
@@ -210,7 +214,7 @@ class AuthRepository {
         .from(SupabaseTables.profiles)
         .select(
           'id,email,display_name,timezone,daily_preparation_budget_minutes,'
-          'auth_provider,'
+          'timezone_revision,preparation_budget_revision,auth_provider,'
           'onboarding_completed_at,role',
         )
         .eq('id', id)
@@ -233,6 +237,9 @@ class AuthRepository {
       authProvider: '${row['auth_provider'] ?? 'email'}',
       dailyPreparationBudgetMinutes:
           (row['daily_preparation_budget_minutes'] as num?)?.toInt(),
+      timezoneRevision: (row['timezone_revision'] as num?)?.toInt() ?? 1,
+      preparationBudgetRevision:
+          (row['preparation_budget_revision'] as num?)?.toInt() ?? 1,
     );
   }
 
@@ -288,8 +295,14 @@ class AuthRepository {
     }
     try {
       final entries = await GuestQuickCheckInDataSource().readAll();
-      final remote = QuickCheckInSupabaseDataSource(_client);
+      final remote = QuickCheckInSupabaseDataSource(
+        _client,
+        apiClient: _apiClient,
+      );
       for (final entry in entries) {
+        if (entry.evening == null && entry.morning == null) {
+          return;
+        }
         await remote.mergeEntryForUser(userId: userId, entry: entry);
       }
       await prefs.remove(_Prefs.guestQuickCheckIns);

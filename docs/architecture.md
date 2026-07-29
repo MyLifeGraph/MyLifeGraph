@@ -119,9 +119,13 @@ local and consistent.
 
 Canonical daily capture selects its store from the authenticated session.
 Guest/demo sessions merge one typed local daily entry through
-`shared_preferences`; real sessions merge the same Evening or Morning capture
-into Supabase. Other remote-only writes still show an in-app message when
-Supabase is not configured.
+`shared_preferences`; real sessions write one complete branch through
+`daily-capture-write-v1`. FastAPI derives the owner, and the owner-locked
+`apply_daily_capture_branch_v1` RPC performs branch-local CAS, replay
+fingerprinting, daily-row merge, and quick-check-in event projection in one
+transaction. Flutter has no direct Daily Log or Behavioral Event write
+authority. Other remote-only writes still show an in-app message when Supabase
+is not configured.
 
 ## Canonical Daily Capture
 
@@ -163,12 +167,14 @@ The current `daily-capture-v4` contract is:
 - Guest saves use a versioned V4 daily JSON object and remain readable on
   return. Legacy V1/V2/V3 guest JSON remains readable and is upgraded only
   through the same branch-compatible merge.
-- Supabase saves upsert the `(user_id, entry_date)` `daily_logs` row and rebuild
-  a dynamic set of at most four current `behavioral_events`. Mood, energy,
-  stress, and sleep receive deterministic ids derived from the daily row and
-  event kind, are linked through `daily_log_id`, and mirror relevant structured
-  capture metadata. Sleep quality is mirrored on the existing Morning-origin
-  energy and sleep events instead of creating a fifth event.
+- Authenticated saves call
+  `PUT /v1/daily-capture/{entry_date}/{morning|evening}` with the last-read
+  identity of the branch being changed. Morning and Evening merge
+  independently; same-branch version drift is `409`, and exact request replay
+  does not write twice.
+- The Capture RPC rebuilds the daily row and only `source = quick_check_in`
+  events in the same transaction. Other Behavioral Events remain untouched.
+  Authenticated callers keep owner reads but no direct DML on either table.
 - Planned/estimated raw clocks remain only in Daily Log metadata. The
   compatible `sleep_hours` column and Sleep event contain the derived duration;
   event metadata, Daily State, recommendations, notifications, and Coach do not
@@ -183,6 +189,10 @@ The current `daily-capture-v4` contract is:
   second submit. Successful real-account writes refresh the daily snapshot for
   the capture's explicit local `target_date` best-effort; guest/mock writes do
   not call Supabase or FastAPI.
+
+The cross-feature write-authority, timezone/DST, observation-ordering, and
+durable-mutation reload rules are defined together in
+`docs/stabilization-consistency-contract.md`.
 
 ## Dashboard Source Contract
 
@@ -598,9 +608,10 @@ Current responsibilities:
 - Serve read-only latest/explicit weekly-review GETs plus deliberate
   `POST /v1/weekly-reviews/generate` under `weekly-review-v1`.
 - Serve authenticated calendar connection/read endpoints plus deliberate file
-  import, disconnect, and imported-data deletion under `calendar-import-v1`.
+  import, disconnect, and imported-data deletion under `calendar-import-v2`.
   The service parses bounded caller-selected UTF-8 `.ics` text; it does not
   fetch arbitrary URLs, hold provider credentials, or write to a calendar.
+  Only `planning_status=current` is eligible read-only Planner busy time.
 - Serve read-only deadline-plan GETs plus deliberate proposal, confirm,
   complete, and cancel commands under `deadline-plan-v1`. The service uses the
   stored profile timezone and deterministic availability inputs, holds the
@@ -877,12 +888,13 @@ CI, FastAPI persistence, Flutter presentation, production readiness, or
 evidence about another developer's account. Deterministic API/browser tests
 cover persistence and UI behavior separately.
 
-### V1 Account Controls
+### Revisioned Account Controls
 
 The exact boundary is `docs/v1-account-controls-contract.md`. Real authenticated
-accounts use bearer-derived FastAPI routes for durable IANA timezone changes,
+accounts use bearer-derived FastAPI routes for revision-checked, retry-safe
+IANA timezone and daily preparation-budget changes,
 an optional bounded account-wide daily preparation rule, a strict bounded
-`account-export-v1` JSON portability export, and permanent deletion.
+`account-export-v2` JSON portability export, and permanent deletion.
 Password reset and confirmation resend remain Supabase Auth operations with a
 dedicated recovery-event route in Flutter. Guest/mock sessions make no account
 API calls.

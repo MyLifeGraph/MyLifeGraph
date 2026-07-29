@@ -39,6 +39,10 @@ class SnapshotAggregator:
         user_id: str,
         request: SnapshotGenerateRequest,
     ) -> SnapshotGenerateResponse:
+        source_observed_at = self._now_provider()
+        if source_observed_at.tzinfo is None:
+            raise ValueError("Snapshot observation time must be timezone-aware.")
+        source_observed_at = source_observed_at.astimezone(UTC)
         target_date = request.target_date or self._today_provider()
         period_key = _period_key(scope=request.scope, target_date=target_date)
         load_window_days = max(request.window_days, DAILY_STATE_LOOKBACK_DAYS)
@@ -46,6 +50,10 @@ class SnapshotAggregator:
             user_id=user_id,
             target_date=target_date,
             window_days=load_window_days,
+        )
+        loaded_inputs = _filter_observed_inputs(
+            loaded_inputs,
+            source_observed_at=source_observed_at,
         )
         inputs = _filter_window(
             inputs=loaded_inputs,
@@ -57,7 +65,7 @@ class SnapshotAggregator:
             target_date=target_date,
             window_days=DAILY_STATE_LOOKBACK_DAYS,
         )
-        generated_at = self._now_provider()
+        generated_at = source_observed_at
         daily_state = build_snapshot_daily_state(
             daily_logs=state_inputs.daily_logs,
             tasks=state_inputs.tasks,
@@ -84,6 +92,7 @@ class SnapshotAggregator:
                 "summary": summary,
                 "signals": signals,
                 "source": "backend",
+                "source_observed_at": source_observed_at.isoformat(),
                 "generated_at": generated_at.isoformat(),
                 "metadata": {
                     "source": "snapshot-aggregator-v1",
@@ -96,11 +105,11 @@ class SnapshotAggregator:
         )
         return SnapshotGenerateResponse(
             snapshot_id=str(row["id"]),
-            scope=request.scope,
-            period_key=period_key,
-            generated_at=generated_at,
-            summary=summary,
-            signals=signals,
+            scope=str(row["scope"]),
+            period_key=str(row["period_key"]),
+            generated_at=_required_aware_datetime(row["generated_at"]),
+            summary=dict(row["summary"]),
+            signals=dict(row["signals"]),
         )
 
 
@@ -270,6 +279,50 @@ def _filter_window(
         ],
         memory_entries=inputs.memory_entries,
     )
+
+
+def _filter_observed_inputs(
+    inputs: SnapshotInputRows,
+    *,
+    source_observed_at: datetime,
+) -> SnapshotInputRows:
+    def visible(row: dict[str, Any]) -> bool:
+        created = _row_datetime(row.get("created_at"))
+        updated = _row_datetime(row.get("updated_at"))
+        return (
+            (created is None or created < source_observed_at)
+            and (updated is None or updated <= source_observed_at)
+        )
+
+    return SnapshotInputRows(
+        daily_logs=[row for row in inputs.daily_logs if visible(row)],
+        behavioral_events=[
+            row for row in inputs.behavioral_events if visible(row)
+        ],
+        tasks=[row for row in inputs.tasks if visible(row)],
+        goals=[],
+        habits=[row for row in inputs.habits if visible(row)],
+        habit_logs=[row for row in inputs.habit_logs if visible(row)],
+        focus_sessions=[row for row in inputs.focus_sessions if visible(row)],
+        schedule_items=[row for row in inputs.schedule_items if visible(row)],
+        memory_entries=[row for row in inputs.memory_entries if visible(row)],
+    )
+
+
+def _row_datetime(value: object) -> datetime | None:
+    if not isinstance(value, str):
+        return None
+    parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    if parsed.tzinfo is None:
+        raise ValueError("Snapshot source timestamp must be timezone-aware.")
+    return parsed.astimezone(UTC)
+
+
+def _required_aware_datetime(value: object) -> datetime:
+    parsed = _row_datetime(value)
+    if parsed is None:
+        raise ValueError("Snapshot persistence timestamp is invalid.")
+    return parsed
 
 
 def _build_signals(

@@ -752,7 +752,17 @@ class _PageNotificationsRepository implements NotificationsRepository {
   ) async {
     requests.add(request);
     final handler = action;
-    if (handler != null) return handler(request);
-    return _lifecycleResult(request);
+    final result =
+        handler != null ? await handler(request) : _lifecycleResult(request);
+    final index = items.indexWhere((item) => item.id == request.notificationId);
+    if (index >= 0) {
+      if (request.command == NotificationLifecycleCommand.dismiss) {
+        items = [...items]..removeAt(index);
+      } else {
+        final updated = items[index].applyLifecycle(result);
+        items = [...items]..[index] = updated;
+      }
+    }
+    return result;
   }
 }

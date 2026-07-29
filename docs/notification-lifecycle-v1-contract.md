@@ -114,9 +114,12 @@ and the exact result projection, but no notification title or message.
   never reported as a successful local mutation.
 
 Flutter keeps the item and shows a row-scoped pending/error state. An ambiguous
-outcome permits only the exact stored request to be retried. A definite
-conflict offers reload so the stale expected timestamp is not silently
-overwritten. Dismissal removes the card only after a validated success result.
+outcome permits only the exact stored request to be retried. Every proven
+success, including replay, enters `committedRequiresReload`; the row and its
+actions stay locked until Inbox reload proves an at-least-as-new row or the
+absence of a dismissed row. A definite conflict offers reload so the stale
+expected timestamp is not silently overwritten. The committed-state retry
+loads Inbox only and never resends the lifecycle mutation.
 
 The RPC takes the existing owner workflow advisory lock before its request and
 row locks. Full-account deletion takes the same owner-first boundary, and the
@@ -126,7 +129,7 @@ notification.
 ## Account Export And Deletion
 
 The visible `notifications` rows, including lifecycle timestamps, remain part
-of the bounded 28-table `account-export-v1` payload. The backend-only
+of the bounded `account-export-v2` payload. The backend-only
 `notification_action_requests` anti-replay ledger is explicitly named as
 omitted, just like the Calendar request-identity ledger. Its omission does not
 change the exported table count.

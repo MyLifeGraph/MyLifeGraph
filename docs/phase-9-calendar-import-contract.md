@@ -35,7 +35,7 @@ Google sign-in authenticates the app only and is not calendar authorization.
 
 ## Contracts And Provenance
 
-The public contract version is `calendar-import-v1`. Consent is the exact
+The public contract version is `calendar-import-v2`. Consent remains the exact
 `calendar-import-consent-v1` shape:
 
 ```json
@@ -57,7 +57,7 @@ Every returned connection and event identifies:
 
 - `origin=authenticated_backend`;
 - `source_kind=ical_file`;
-- `contract_version=calendar-import-v1`;
+- `contract_version=calendar-import-v2`;
 - the user-chosen bounded source label;
 - `provider_writes=false` and `llm_processed=false`.
 
@@ -91,7 +91,7 @@ exactly:
 
 ```json
 {
-  "contract_version": "calendar-import-v1",
+  "contract_version": "calendar-import-v2",
   "origin": "authenticated_backend",
   "connection": null
 }
@@ -106,8 +106,10 @@ are never returned as explicit nulls. Internal replay or deletion counts do not
 leak through this public envelope.
 
 An import returns the same non-null connection envelope plus required key
-`import`. That summary contains exactly `id`, `imported_at`, `window`, `counts`,
-and `source_fingerprint`. The window contains `starts_on`, exclusive
+`import`. That summary contains `id`, `imported_at`, `window`, `counts`,
+`source_fingerprint`, `profile_timezone_revision`, and `planning_status`. The
+status is one of `not_imported`, `current`, `profile_timezone_changed`,
+`disconnected`, or `deleted`. The window contains `starts_on`, exclusive
 `ends_before`, and `timezone`. Event reads return exactly
 `contract_version`, `origin`, `connection_id`, `events`, and, only when
 applicable, `import_id` and `next_cursor`.
@@ -184,10 +186,19 @@ FastAPI resolves one profile-local import window from one aware server instant:
 
 No client timezone or device-local conversion owns the window.
 
+Only an import whose persisted `planning_status` is `current` contributes
+read-only busy time to Planner or Deadline Planner. A profile timezone change
+marks retained imported data `profile_timezone_changed`; disconnect and local
+deletion use their matching terminal planning states. Rows remain readable but
+stay excluded until a deliberate new import.
+
 The same `(user_id, request_id)` plus exact connection and input fingerprint
 replays the still-current persisted import without applying events again; its
 original window and timezone stay pinned even across profile-local midnight or
-a later profile-timezone edit. Reusing a request id with different content or
+a later profile-timezone edit. Before request claim FastAPI reads the current
+profile timezone and revision; after claim the owner-locked RPC rechecks both.
+An exact completed replay remains valid, but a new import racing a profile
+timezone change conflicts. Reusing a request id with different content or
 connection returns conflict. Retrying an older request after a newer import has
 superseded it also returns conflict and requires a current-state reload, so an
 old import summary is never paired with a newer connection projection. An
@@ -261,7 +272,7 @@ snapshot may remove prior events; a failed import performs no deletion.
 An event identity is derived from:
 
 ```text
-calendar-import-v1 namespace
+calendar-import-v2 namespace
   + connection_id
   + exact UID
   + `single` or normalized RECURRENCE-ID

@@ -14,7 +14,9 @@ class FakeClient:
     def __init__(self) -> None:
         self.select_calls = []
         self.upsert_calls = []
+        self.rpc_calls = []
         self.review_rows: list[dict[str, Any]] = []
+        self.habit_log_page = 0
 
     async def select(self, table: str, *, params):
         self.select_calls.append((table, params))
@@ -28,8 +30,8 @@ class FakeClient:
         if table == "weekly_reviews":
             return self.review_rows
         if table == "habit_logs":
-            offset = int(dict(params)["offset"])
-            if offset == 0:
+            if self.habit_log_page == 0:
+                self.habit_log_page += 1
                 return [
                     {
                         "id": f"log-{index}",
@@ -42,7 +44,8 @@ class FakeClient:
                     }
                     for index in range(1000)
                 ]
-            if offset == 1000:
+            if self.habit_log_page == 1:
+                self.habit_log_page += 1
                 return [
                     {
                         "id": "log-final",
@@ -59,6 +62,10 @@ class FakeClient:
     async def upsert(self, table: str, *, rows, on_conflict: str):
         self.upsert_calls.append((table, rows, on_conflict))
         return [{"id": "review-1", **rows[0]}]
+
+    async def rpc(self, function: str, *, params):
+        self.rpc_calls.append((function, params))
+        return {"id": "review-1", **params["p_row"]}
 
 
 def test_profile_and_context_reads_are_owner_scoped_bounded_and_paginated() -> None:
@@ -86,7 +93,9 @@ def test_profile_and_context_reads_are_owner_scoped_bounded_and_paginated() -> N
         for table, params in client.select_calls
         if table == "habit_logs"
     ]
-    assert [call["offset"] for call in habit_log_calls] == ["0", "1000"]
+    assert all("offset" not in call for call in habit_log_calls)
+    assert "or" not in habit_log_calls[0]
+    assert "id.gt.log-999" in habit_log_calls[1]["or"]
     assert all(call["user_id"] == "eq.user-1" for call in habit_log_calls)
     assert all(call["entry_date"] == "lte.2026-07-12" for call in habit_log_calls)
 
@@ -153,6 +162,7 @@ def test_persist_uses_stable_user_period_identity() -> None:
     repository = SupabaseWeeklyReviewRepository(client)
     row = valid_review_row()
     row.pop("id")
+    row["source_observed_at"] = "2026-07-13T08:00:00+00:00"
 
     review = asyncio.run(
         repository.persist_weekly_review(
@@ -163,10 +173,18 @@ def test_persist_uses_stable_user_period_identity() -> None:
     )
 
     assert review.id == "review-1"
-    table, rows, conflict = client.upsert_calls[0]
-    assert table == "weekly_reviews"
-    assert rows == [row]
-    assert conflict == "user_id,period_key"
+    assert client.upsert_calls == []
+    assert client.rpc_calls == [
+        (
+            "persist_weekly_review_v2",
+            {
+                "p_user_id": "user-1",
+                "p_period_key": "2026-W28",
+                "p_source_observed_at": "2026-07-13T08:00:00+00:00",
+                "p_row": row,
+            },
+        ),
+    ]
 
 
 def valid_review_row() -> dict[str, Any]:

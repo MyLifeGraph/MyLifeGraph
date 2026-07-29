@@ -11,7 +11,7 @@ from pydantic import (
 )
 
 
-CALENDAR_IMPORT_CONTRACT_VERSION = "calendar-import-v1"
+CALENDAR_IMPORT_CONTRACT_VERSION = "calendar-import-v2"
 CALENDAR_IMPORT_CONSENT_VERSION = "calendar-import-consent-v1"
 
 CalendarConnectionStatus = Literal["connected", "disconnected"]
@@ -97,6 +97,14 @@ class CalendarImportSummary(BaseModel):
     window: CalendarImportWindow
     counts: CalendarImportCounts
     source_fingerprint: str = Field(pattern=r"^[0-9a-f]{64}$")
+    profile_timezone_revision: int = Field(ge=0)
+    planning_status: Literal[
+        "not_imported",
+        "current",
+        "profile_timezone_changed",
+        "disconnected",
+        "deleted",
+    ]
 
     @model_validator(mode="after")
     def validate_timestamp(self) -> Self:
@@ -111,7 +119,7 @@ class CalendarConnection(BaseModel):
     id: UUID
     origin: Literal["authenticated_backend"]
     source_kind: Literal["ical_file"]
-    contract_version: Literal["calendar-import-v1"]
+    contract_version: Literal["calendar-import-v2"]
     source_label: str = Field(min_length=1, max_length=80)
     status: CalendarConnectionStatus
     consent: CalendarImportConsent
@@ -143,7 +151,7 @@ class CalendarConnection(BaseModel):
 class CalendarConnectionResponse(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
-    contract_version: Literal["calendar-import-v1"]
+    contract_version: Literal["calendar-import-v2"]
     origin: Literal["authenticated_backend"]
     connection: CalendarConnection | None
 
@@ -155,7 +163,7 @@ class CalendarImportResponse(BaseModel):
         populate_by_name=True,
     )
 
-    contract_version: Literal["calendar-import-v1"]
+    contract_version: Literal["calendar-import-v2"]
     origin: Literal["authenticated_backend"]
     connection: CalendarConnection
     import_summary: CalendarImportSummary = Field(
@@ -168,7 +176,7 @@ class CalendarEventProvenance(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
 
     kind: Literal["integration"]
-    contract_version: Literal["calendar-import-v1"]
+    contract_version: Literal["calendar-import-v2"]
     source_kind: Literal["ical_file"]
     source_label: str = Field(min_length=1, max_length=80)
     provider_writes: Literal[False]
@@ -240,7 +248,7 @@ class CalendarEvent(BaseModel):
 class CalendarEventsResponse(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
-    contract_version: Literal["calendar-import-v1"]
+    contract_version: Literal["calendar-import-v2"]
     origin: Literal["authenticated_backend"]
     connection_id: UUID
     import_id: UUID | None = None

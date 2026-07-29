@@ -4,17 +4,20 @@ import 'package:dio/dio.dart';
 
 import '../../../core/errors/app_exception.dart';
 import '../../../core/network/api_client.dart';
+import '../../../core/utils/client_uuid.dart';
 import '../domain/account_settings.dart';
 
 class AccountApiDataSource {
-  const AccountApiDataSource(this._client);
+  AccountApiDataSource(this._client);
 
   static const exportReceiveTimeout = Duration(minutes: 2);
 
   final ApiClient _client;
+  final Map<String, String> _pendingRequestIds = {};
 
-  Future<String> updateTimezone({
+  Future<AccountTimezoneWrite> updateTimezone({
     required String accessToken,
+    required int expectedRevision,
     required String timezone,
   }) async {
     if (!isValidAccountTimezone(timezone)) {
@@ -22,18 +25,30 @@ class AccountApiDataSource {
         'Choose a supported IANA timezone.',
       );
     }
+    final requestKey = 'timezone:$expectedRevision:$timezone';
+    final requestId = _pendingRequestIds.putIfAbsent(requestKey, newClientUuid);
     late final Map<String, dynamic> json;
     try {
       json = await _client.patchJson(
         '/v1/account/profile',
         headers: _headers(accessToken),
-        body: {'timezone': timezone},
+        body: {
+          'contract_version': 'account-profile-update-v2',
+          'request_id': requestId,
+          'expected_revision': expectedRevision,
+          'timezone': timezone,
+        },
       );
     } on AppException catch (error) {
       final cause = error.cause;
       if (cause is DioException && cause.response?.statusCode == 422) {
         throw const AccountTimezoneRejectedException(
           'The backend did not recognize that IANA timezone.',
+        );
+      }
+      if (cause is DioException && cause.response?.statusCode == 409) {
+        throw const AccountSettingConflictException(
+          'Timezone changed. Reload your account before saving.',
         );
       }
       if (cause is DioException &&
@@ -45,7 +60,12 @@ class AccountApiDataSource {
       }
       rethrow;
     }
-    if (json.length != 1 || json['timezone'] is! String) {
+    if (json.length != 5 ||
+        json['contract_version'] != 'account-profile-v2' ||
+        json['timezone'] is! String ||
+        json['revision'] is! int ||
+        json['updated_at'] is! String ||
+        json['replayed'] is! bool) {
       throw const AccountProfileUpdateOutcomeUnknownException(
         'Account profile update returned an invalid result.',
       );
@@ -57,11 +77,24 @@ class AccountApiDataSource {
         'Account profile update returned a mismatched result.',
       );
     }
-    return returnedTimezone;
+    final updatedAt = DateTime.tryParse(json['updated_at'] as String);
+    if (updatedAt == null || json['revision'] != expectedRevision + 1) {
+      throw const AccountProfileUpdateOutcomeUnknownException(
+        'Account profile update returned an invalid revision.',
+      );
+    }
+    _pendingRequestIds.remove(requestKey);
+    return AccountTimezoneWrite(
+      timezone: returnedTimezone,
+      revision: json['revision'] as int,
+      updatedAt: updatedAt,
+      replayed: json['replayed'] as bool,
+    );
   }
 
-  Future<int?> updateDailyPreparationBudget({
+  Future<AccountPreparationBudgetWrite> updateDailyPreparationBudget({
     required String accessToken,
+    required int expectedRevision,
     required int? minutes,
   }) async {
     if (!isValidDailyPreparationBudget(minutes)) {
@@ -69,18 +102,30 @@ class AccountApiDataSource {
         'Choose 25 to 480 minutes in five-minute steps.',
       );
     }
+    final requestKey = 'preparation:$expectedRevision:$minutes';
+    final requestId = _pendingRequestIds.putIfAbsent(requestKey, newClientUuid);
     late final Map<String, dynamic> json;
     try {
       json = await _client.patchJson(
         '/v1/account/preparation-budget',
         headers: _headers(accessToken),
-        body: {'daily_preparation_budget_minutes': minutes},
+        body: {
+          'contract_version': 'account-preparation-budget-update-v2',
+          'request_id': requestId,
+          'expected_revision': expectedRevision,
+          'daily_preparation_budget_minutes': minutes,
+        },
       );
     } on AppException catch (error) {
       final cause = error.cause;
       if (cause is DioException && cause.response?.statusCode == 422) {
         throw const AccountPreparationBudgetRejectedException(
           'The backend rejected that daily preparation budget.',
+        );
+      }
+      if (cause is DioException && cause.response?.statusCode == 409) {
+        throw const AccountSettingConflictException(
+          'Preparation budget changed. Reload your account before saving.',
         );
       }
       if (cause is DioException &&
@@ -92,7 +137,8 @@ class AccountApiDataSource {
       }
       rethrow;
     }
-    if (json.length != 1 ||
+    if (json.length != 5 ||
+        json['contract_version'] != 'account-preparation-budget-v2' ||
         !json.containsKey('daily_preparation_budget_minutes')) {
       throw const AccountPreparationBudgetUpdateOutcomeUnknownException(
         'Preparation budget update returned an invalid result.',
@@ -104,7 +150,22 @@ class AccountApiDataSource {
         'Preparation budget update returned a mismatched result.',
       );
     }
-    return returned as int?;
+    final updatedAt = DateTime.tryParse('${json['updated_at'] ?? ''}');
+    if (json['revision'] is! int ||
+        json['revision'] != expectedRevision + 1 ||
+        updatedAt == null ||
+        json['replayed'] is! bool) {
+      throw const AccountPreparationBudgetUpdateOutcomeUnknownException(
+        'Preparation budget update returned an invalid revision.',
+      );
+    }
+    _pendingRequestIds.remove(requestKey);
+    return AccountPreparationBudgetWrite(
+      minutes: returned as int?,
+      revision: json['revision'] as int,
+      updatedAt: updatedAt,
+      replayed: json['replayed'] as bool,
+    );
   }
 
   Future<AccountExportEnvelope> exportAccount({
@@ -120,13 +181,13 @@ class AccountApiDataSource {
       );
     } on ApiResponseTooLargeException {
       throw const AccountExportTooLargeException(
-        'Account export exceeds the V1 bounds.',
+        'Account export exceeds the V2 bounds.',
       );
     } on AppException catch (error) {
       final cause = error.cause;
       if (cause is DioException && cause.response?.statusCode == 413) {
         throw const AccountExportTooLargeException(
-          'Account export exceeds the V1 bounds.',
+          'Account export exceeds the V2 bounds.',
         );
       }
       rethrow;

@@ -39,7 +39,7 @@ class Service:
     async def get_connection(self, *, user_id: str):
         self.calls.append(("get", user_id))
         return CalendarConnectionResponse(
-            contract_version="calendar-import-v1",
+            contract_version="calendar-import-v2",
             origin="authenticated_backend",
             connection=None,
         )
@@ -52,7 +52,7 @@ class Service:
         self.calls.append(("import", user_id, connection_id, request))
         summary = _import_summary()
         return CalendarImportResponse(
-            contract_version="calendar-import-v1",
+            contract_version="calendar-import-v2",
             origin="authenticated_backend",
             connection=_connection(last_import=summary),
             import_summary=summary,
@@ -68,7 +68,7 @@ class Service:
     ):
         self.calls.append(("events", user_id, connection_id, cursor, limit))
         return CalendarEventsResponse(
-            contract_version="calendar-import-v1",
+            contract_version="calendar-import-v2",
             origin="authenticated_backend",
             connection_id=connection_id,
             events=[],
@@ -131,7 +131,7 @@ def _connection(
         id=CONNECTION_ID,
         origin="authenticated_backend",
         source_kind="ical_file",
-        contract_version="calendar-import-v1",
+        contract_version="calendar-import-v2",
         source_label="Work calendar",
         status="disconnected" if disconnected else "connected",
         consent=_consent(),
@@ -147,7 +147,7 @@ def _connection(
 
 def _connection_response(connection: CalendarConnection) -> CalendarConnectionResponse:
     return CalendarConnectionResponse(
-        contract_version="calendar-import-v1",
+        contract_version="calendar-import-v2",
         origin="authenticated_backend",
         connection=connection,
     )
@@ -190,7 +190,7 @@ def test_empty_get_keeps_required_null_connection_and_derives_owner() -> None:
 
     assert response.status_code == 200
     assert response.json() == {
-        "contract_version": "calendar-import-v1",
+        "contract_version": "calendar-import-v2",
         "origin": "authenticated_backend",
         "connection": None,
     }

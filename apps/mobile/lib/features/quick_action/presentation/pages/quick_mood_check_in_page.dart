@@ -31,6 +31,7 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
   var _stepIndex = 0;
   var _isLoading = true;
   var _loadedSavedCapture = false;
+  var _safeCaptureLoaded = false;
   var _isSaving = false;
   String? _loadError;
   String? _saveError;
@@ -83,15 +84,17 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
       subtitle: step.subtitle,
       progress: (_stepIndex + 1) / _steps.length,
       canGoBack: _stepIndex > 0,
-      canContinue: _canContinue,
+      canContinue: _safeCaptureLoaded && _canContinue,
       isLastStep: _stepIndex == _steps.length - 1,
       isLoading: _isLoading,
       isSaving: _isSaving,
       saveLabel: 'Save evening check-in',
       statusMessage: _loadedSavedCapture
           ? 'Today\'s evening check-in is loaded. Saving updates only these evening answers.'
-          : _loadError,
+          : null,
       errorMessage: _saveError,
+      loadErrorMessage: _loadError,
+      onRetryLoad: _loadToday,
       onClose: () => context.go(AppRoutes.quickAction),
       onBack: _previousStep,
       onNext: _nextStep,
@@ -331,7 +334,7 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
   }
 
   Future<void> _save() async {
-    if (_isSaving) {
+    if (_isSaving || !_safeCaptureLoaded) {
       return;
     }
     final draft = _draft.copyWith(
@@ -380,16 +383,23 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
   }
 
   Future<void> _loadToday() async {
+    if (_isLoading && _safeCaptureLoaded) return;
+    setState(() {
+      _isLoading = true;
+      _loadError = null;
+    });
     try {
       final store = ref.read(quickCheckInStoreProvider);
-      final results = await Future.wait<Object?>([
-        store.loadToday(DateTime.now()),
-        store.loadLatestEvening(),
-        _loadTodayFocusReflections(),
-      ]);
-      final entry = results.first as DailyCaptureEntry?;
-      final sleepPlan = results[1] as EveningShutdownDraft?;
-      final focusData = results[2] as _TodayFocusReflectionData?;
+      final entry = await store.loadToday(DateTime.now());
+      _safeCaptureLoaded = true;
+      EveningShutdownDraft? sleepPlan;
+      try {
+        sleepPlan = await store.loadLatestEvening();
+      } catch (_) {
+        // A prior Evening value is only a convenience here. The current
+        // branch read above is the required CAS baseline.
+      }
+      final focusData = await _loadTodayFocusReflections();
       final saved = entry?.evening;
       if (mounted) {
         final source = saved?.forEditing() ?? _draft;
@@ -411,13 +421,16 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
           }
           _todayFocusSessions = focusData?.sessions ?? const [];
           _todayFocusReflections = focusData?.reflections ?? const {};
+          _safeCaptureLoaded = true;
+          _loadError = null;
         });
       }
     } catch (_) {
       if (mounted) {
         setState(() {
+          _safeCaptureLoaded = false;
           _loadError =
-              'Today\'s saved capture could not be loaded. Saving will retry the server read before it changes anything.';
+              'Today\'s saved capture could not be loaded. Saving is blocked because its current branch version is unknown. Your draft is still here.';
         });
       }
     } finally {

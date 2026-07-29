@@ -25,6 +25,9 @@ class _MorningCalibrationPageState
   late MorningCalibrationDraft _draft;
   var _isLoading = true;
   var _loadedSavedCapture = false;
+  var _safeCaptureLoaded = false;
+  var _eveningPlanUnavailable = false;
+  var _continueWithoutEveningPlan = false;
   var _isSaving = false;
   String? _loadError;
   String? _saveError;
@@ -45,15 +48,29 @@ class _MorningCalibrationPageState
           'Estimate when sleep started and when you woke. Evening context stays untouched.',
       progress: 1,
       canGoBack: false,
-      canContinue: _draft.isComplete,
+      canContinue: _safeCaptureLoaded &&
+          (!_eveningPlanUnavailable || _continueWithoutEveningPlan) &&
+          _draft.isComplete,
       isLastStep: true,
       isLoading: _isLoading,
       isSaving: _isSaving,
       saveLabel: 'Save morning check-in',
       statusMessage: _loadedSavedCapture
           ? 'Today\'s morning check-in is loaded. Saving updates only these morning answers.'
-          : _loadError,
+          : null,
       errorMessage: _saveError,
+      loadErrorMessage: _loadError ??
+          (_eveningPlanUnavailable && !_continueWithoutEveningPlan
+              ? 'The previous Evening sleep plan could not be loaded. Retry, or explicitly continue without that plan.'
+              : null),
+      onRetryLoad: _loadToday,
+      secondaryLoadActionLabel:
+          _eveningPlanUnavailable && !_continueWithoutEveningPlan
+              ? 'Continue without previous Evening plan'
+              : null,
+      onSecondaryLoadAction: _eveningPlanUnavailable
+          ? () => setState(() => _continueWithoutEveningPlan = true)
+          : null,
       onClose: () => context.go(AppRoutes.quickAction),
       onBack: () {},
       onNext: _save,
@@ -255,7 +272,10 @@ class _MorningCalibrationPageState
   }
 
   Future<void> _save() async {
-    if (_isSaving || !_draft.isComplete) {
+    if (_isSaving ||
+        !_safeCaptureLoaded ||
+        _eveningPlanUnavailable && !_continueWithoutEveningPlan ||
+        !_draft.isComplete) {
       return;
     }
     final draft = _draft.normalized();
@@ -300,14 +320,23 @@ class _MorningCalibrationPageState
   }
 
   Future<void> _loadToday() async {
+    if (_isLoading && _safeCaptureLoaded) return;
+    setState(() {
+      _isLoading = true;
+      _loadError = null;
+      _eveningPlanUnavailable = false;
+      _continueWithoutEveningPlan = false;
+    });
     try {
       final store = ref.read(quickCheckInStoreProvider);
-      final results = await Future.wait<Object?>([
-        store.loadToday(DateTime.now()),
-        store.loadLatestEvening(),
-      ]);
-      final entry = results.first as DailyCaptureEntry?;
-      final sleepPlan = results.last as EveningShutdownDraft?;
+      final entry = await store.loadToday(DateTime.now());
+      _safeCaptureLoaded = true;
+      EveningShutdownDraft? sleepPlan;
+      try {
+        sleepPlan = await store.loadLatestEvening();
+      } catch (_) {
+        _eveningPlanUnavailable = true;
+      }
       final saved = entry?.morning;
       if (mounted) {
         var next = (saved ?? _draft).forEditing(sleepPlan: sleepPlan).copyWith(
@@ -333,13 +362,16 @@ class _MorningCalibrationPageState
         setState(() {
           _draft = next;
           _loadedSavedCapture = saved != null;
+          _safeCaptureLoaded = true;
+          _loadError = null;
         });
       }
     } catch (_) {
       if (mounted) {
         setState(() {
+          _safeCaptureLoaded = false;
           _loadError =
-              'Today\'s saved capture could not be loaded. Saving will retry the server read before it changes anything.';
+              'Today\'s saved capture could not be loaded. Saving is blocked because its current branch version is unknown. Your draft is still here.';
         });
       }
     } finally {

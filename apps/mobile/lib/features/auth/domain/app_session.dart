@@ -26,6 +26,8 @@ class AppProfile {
     required this.onboardingDone,
     required this.authProvider,
     this.dailyPreparationBudgetMinutes,
+    this.timezoneRevision = 1,
+    this.preparationBudgetRevision = 1,
   });
 
   final String id;
@@ -36,6 +38,8 @@ class AppProfile {
   final bool onboardingDone;
   final String authProvider;
   final int? dailyPreparationBudgetMinutes;
+  final int timezoneRevision;
+  final int preparationBudgetRevision;
 
   bool get isGuest => role == AppRole.guest;
   bool get isAdmin => role == AppRole.admin;
@@ -47,6 +51,7 @@ class AppProfile {
     AppRole? role,
     bool? onboardingDone,
     String? authProvider,
+    int? timezoneRevision,
   }) {
     return AppProfile(
       id: id,
@@ -57,10 +62,15 @@ class AppProfile {
       onboardingDone: onboardingDone ?? this.onboardingDone,
       authProvider: authProvider ?? this.authProvider,
       dailyPreparationBudgetMinutes: dailyPreparationBudgetMinutes,
+      timezoneRevision: timezoneRevision ?? this.timezoneRevision,
+      preparationBudgetRevision: preparationBudgetRevision,
     );
   }
 
-  AppProfile withDailyPreparationBudget(int? minutes) {
+  AppProfile withDailyPreparationBudget(
+    int? minutes, {
+    int? revision,
+  }) {
     return AppProfile(
       id: id,
       email: email,
@@ -70,6 +80,8 @@ class AppProfile {
       onboardingDone: onboardingDone,
       authProvider: authProvider,
       dailyPreparationBudgetMinutes: minutes,
+      timezoneRevision: timezoneRevision,
+      preparationBudgetRevision: revision ?? preparationBudgetRevision,
     );
   }
 }

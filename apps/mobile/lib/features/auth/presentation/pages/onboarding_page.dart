@@ -16,6 +16,7 @@ import '../../../optimization/presentation/providers/optimization_providers.dart
 import '../../domain/app_session.dart';
 import '../../domain/intake_response.dart';
 import '../providers/setup_providers.dart';
+import '../setup_user_message.dart';
 
 class OnboardingPage extends ConsumerStatefulWidget {
   const OnboardingPage({
@@ -1717,7 +1718,10 @@ class _SetupLoadErrorPage extends StatelessWidget {
                   ),
                   const SizedBox(height: AppSpacing.sm),
                   Text(
-                    _errorText(error),
+                    setupUserMessage(
+                      error,
+                      operation: SetupFailureOperation.load,
+                    ),
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: AppSpacing.lg),
@@ -1746,7 +1750,10 @@ class _InlineSetupError extends StatelessWidget {
     return AppSurface(
       variant: AppSurfaceVariant.danger,
       child: Text(
-        'Setup was not saved. Your draft is still here. ${_errorText(error)}',
+        setupUserMessage(
+          error,
+          operation: SetupFailureOperation.save,
+        ),
         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
               color: Theme.of(context).colorScheme.onErrorContainer,
             ),
@@ -1833,13 +1840,6 @@ String _commitmentReviewStatus(IntakeCommitmentDraft commitment) {
   }
   if (validFrom != null) return '$status · from ${_dateLabel(validFrom)}';
   return '$status · until ${_dateLabel(validUntil!)}';
-}
-
-String _errorText(Object? error) {
-  if (error == null) {
-    return 'Try again.';
-  }
-  return '$error'.replaceFirst('Bad state: ', '');
 }
 
 class _SetupColors {

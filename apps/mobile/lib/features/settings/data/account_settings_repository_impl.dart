@@ -22,7 +22,10 @@ class AccountSettingsRepositoryImpl implements AccountSettingsRepository {
   final bool _canUseSyncedAccount;
 
   @override
-  Future<String> updateTimezone(String timezone) async {
+  Future<AccountTimezoneWrite> updateTimezone(
+    String timezone, {
+    required int expectedRevision,
+  }) async {
     final cleanTimezone = timezone.trim();
     if (!isValidAccountTimezone(cleanTimezone)) {
       throw const AccountSettingsContractException(
@@ -31,12 +34,16 @@ class AccountSettingsRepositoryImpl implements AccountSettingsRepository {
     }
     return _apiDataSource.updateTimezone(
       accessToken: _requireAccessToken(),
+      expectedRevision: expectedRevision,
       timezone: cleanTimezone,
     );
   }
 
   @override
-  Future<int?> updateDailyPreparationBudget(int? minutes) async {
+  Future<AccountPreparationBudgetWrite> updateDailyPreparationBudget(
+    int? minutes, {
+    required int expectedRevision,
+  }) async {
     if (!isValidDailyPreparationBudget(minutes)) {
       throw const AccountSettingsContractException(
         'Choose 25 to 480 minutes in five-minute steps.',
@@ -44,6 +51,7 @@ class AccountSettingsRepositoryImpl implements AccountSettingsRepository {
     }
     return _apiDataSource.updateDailyPreparationBudget(
       accessToken: _requireAccessToken(),
+      expectedRevision: expectedRevision,
       minutes: minutes,
     );
   }

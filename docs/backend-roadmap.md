@@ -1106,6 +1106,9 @@ in `docs/phase-8-weekly-review-contract.md`.
 - Added retry-safe connection and import identities plus deterministic event
   reconciliation over a bounded profile-local window. Persisted fields are
   whitelisted; event reads are paginated, stable, and side-effect free.
+- The later stabilization cutover exposes `calendar-import-v2`, binds new
+  imports to profile timezone revision, and excludes any non-current planning
+  status from Planner busy time while retaining V1 history.
 - Timed, all-day, explicitly materialized recurrence occurrences, duplicate
   identity, cancellation, invalid component, and unsupported recurrence states
   remain explicit. Phase 9 does not invent a recurrence expansion engine.

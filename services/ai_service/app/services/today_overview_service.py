@@ -9,6 +9,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from app.models.deadline_plans import DeadlinePlansResponse
 from app.models.planner import PlannerOverviewResponse
+from app.services.local_time import resolve_local_datetime, resolve_local_interval
 from app.models.today_overview import (
     TODAY_OVERVIEW_CONTRACT_VERSION,
     TODAY_OVERVIEW_V2_CONTRACT_VERSION,
@@ -83,11 +84,17 @@ class TodayOverviewService:
             ) from exc
         local_date = generated_at.astimezone(zone).date()
         week_starts_on = local_date - timedelta(days=local_date.isoweekday() - 1)
-        range_starts_at = datetime.combine(local_date, time.min, tzinfo=zone)
-        range_ends_at = datetime.combine(
-            local_date + timedelta(days=1),
-            time.min,
-            tzinfo=zone,
+        range_starts_at = resolve_local_datetime(
+            local_date=local_date,
+            local_time=time.min,
+            zone=zone,
+            source_id=f"today:{local_date.isoformat()}",
+        )
+        range_ends_at = resolve_local_datetime(
+            local_date=local_date + timedelta(days=1),
+            local_time=time.min,
+            zone=zone,
+            source_id=f"today:{local_date.isoformat()}",
         )
 
         results = await asyncio.gather(
@@ -601,10 +608,13 @@ class TodayOverviewService:
                     or not recurring_commitment_applies_on(row, occurrence_date)
                 ):
                     continue
-                starts_at = datetime.combine(occurrence_date, start_time, tzinfo=zone)
-                ends_at = datetime.combine(occurrence_date, end_time, tzinfo=zone)
-                if ends_at <= starts_at:
-                    ends_at += timedelta(days=1)
+                starts_at, ends_at = resolve_local_interval(
+                    local_date=occurrence_date,
+                    starts_at=start_time,
+                    ends_at=end_time,
+                    zone=zone,
+                    source_id=f"setup:{row_id}",
+                )
                 if starts_at >= range_ends_at or ends_at <= range_starts_at:
                     continue
                 items.append(

@@ -90,7 +90,7 @@ class CalendarIntegrationPage extends ConsumerWidget {
           icon: AppIcons.deleteOutline,
           title: 'Imported data deleted',
           message:
-              'Any local imported copy and import history were deleted. The original calendar was never changed.',
+              'Imported event content was deleted. A minimal audit record remains, and the original calendar was never changed.',
         ),
         _ConnectionSetupCard(state: state, controller: controller),
       ] else ...[
@@ -221,22 +221,40 @@ class _ConnectionStatusCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  connection.sourceLabel,
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-              ),
-              _StatusPill(
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final status = _StatusPill(
                 label: connected
                     ? 'Connected'
                     : lastImport == null
                         ? 'Disconnected'
                         : 'Disconnected · may be out of date',
-              ),
-            ],
+              );
+              final label = Text(
+                connection.sourceLabel,
+                softWrap: true,
+                style: Theme.of(context).textTheme.titleLarge,
+              );
+              if (constraints.maxWidth < 480 ||
+                  MediaQuery.textScalerOf(context).scale(16) >= 28) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    label,
+                    const SizedBox(height: AppSpacing.xs),
+                    status,
+                  ],
+                );
+              }
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: label),
+                  const SizedBox(width: AppSpacing.sm),
+                  Flexible(child: status),
+                ],
+              );
+            },
           ),
           const SizedBox(height: AppSpacing.sm),
           Text(
@@ -254,6 +272,13 @@ class _ConnectionStatusCard extends StatelessWidget {
               '${lastImport.window.timezone}',
               style: Theme.of(context).textTheme.bodyMedium,
             ),
+            if (lastImport.planningStatus ==
+                CalendarImportPlanningStatus.profileTimezoneChanged) ...[
+              const SizedBox(height: AppSpacing.xs),
+              const Text(
+                'Profile timezone changed. Re-import this file before Planner uses it as busy time.',
+              ),
+            ],
             const SizedBox(height: AppSpacing.xs),
             Text(
               '${lastImport.counts.accepted} accepted · '

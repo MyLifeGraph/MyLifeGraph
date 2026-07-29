@@ -237,10 +237,16 @@ class PersonalPatternsService:
             session_ids = {session.id for session in sessions}
             reflections = {
                 session_id: reflection
-                for session_id, reflection in _reflections(reflection_rows).items()
+                for session_id, reflection in _reflections(
+                    reflection_rows,
+                    generated_at=generated_at,
+                ).items()
                 if session_id in session_ids
             }
-            episodes = _sleep_episodes(daily_log_rows)
+            episodes = _sleep_episodes(
+                daily_log_rows,
+                generated_at=generated_at,
+            )
             observations = _observations(
                 sessions=sessions,
                 reflections=reflections,
@@ -443,6 +449,10 @@ def _response(
         ),
         "Night sessions are visible evidence but can never become a Planner preference.",
         "Sleep evidence never changes your sleep target, capacity, or plans.",
+        (
+            "Evidence includes only facts observed by "
+            f"{generated_at.isoformat()}."
+        ),
         _obstacle_summary(observations),
     ]
     summary = _summary(status=status, rated_count=rated_count, patterns=patterns)
@@ -483,6 +493,10 @@ def _sessions(
             minimum=0,
             maximum=90 * 24 * 60,
         )
+        if ended_at is not None and ended_at >= ends_at:
+            # A session that had not ended before the captured observation
+            # instant is not a fact in this response.
+            continue
         if (
             session_id is None
             or session_id in seen
@@ -538,7 +552,11 @@ def _sessions(
     return result
 
 
-def _reflections(rows: list[dict[str, Any]]) -> dict[str, _Reflection]:
+def _reflections(
+    rows: list[dict[str, Any]],
+    *,
+    generated_at: datetime,
+) -> dict[str, _Reflection]:
     parsed: dict[str, _Reflection] = {}
     for row in rows:
         session_id = _text(row.get("focus_session_id"), maximum=200)
@@ -550,6 +568,13 @@ def _reflections(rows: list[dict[str, Any]]) -> dict[str, _Reflection]:
         )
         created_at = _datetime(row.get("created_at"))
         updated_at = _datetime(row.get("updated_at"))
+        if (
+            created_at is None
+            or updated_at is None
+            or created_at >= generated_at
+            or updated_at > generated_at
+        ):
+            continue
         raw_obstacles = row.get("obstacles")
         if (
             row.get("contract_version") != "focus-reflection-v1"
@@ -584,13 +609,17 @@ def _reflections(rows: list[dict[str, Any]]) -> dict[str, _Reflection]:
 
 def _sleep_episodes(
     rows: list[dict[str, Any]],
+    *,
+    generated_at: datetime,
 ) -> list[DailyCaptureV4SleepEpisode]:
     episodes: dict[str, DailyCaptureV4SleepEpisode] = {}
     for row in rows:
         row_date = _date(row.get("entry_date"))
+        updated_at = _datetime(row.get("updated_at"))
         metadata = row.get("metadata")
         if (
             row_date is None
+            or (updated_at is not None and updated_at > generated_at)
             or not isinstance(metadata, dict)
             or metadata.get("capture_version") != "daily-capture-v4"
             or not isinstance(metadata.get("captures"), dict)

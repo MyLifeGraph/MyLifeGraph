@@ -175,7 +175,7 @@ Phase 4's deterministic briefing service.
 | Auth and guest entry | Yes | Local demo is labeled; mock/demo auth skips remote profile/data bootstrap and reloads local Setup, while canonical guest check-ins migrate best-effort only into a real non-demo account |
 | Onboarding / Setup | Yes, Phase 0C complete | Progressive explicit input, typed prefill, atomic revision-safe save, differentiated retry/reload, and durable review are implemented |
 | Today | Yes, Today Overview V2 current | A read-only owner-scoped overview shows streak, transparent progress, Setup/Planner/Preparation/Calendar/Focus agenda facts, and selected Tasks/Habits. The persisted briefing remains a backend input but its ranked action card is no longer the visible Today authority. |
-| Canonical daily capture | Yes, Capture V4 current | Evening and Morning are separate typed flows over one ownership-merged daily entry. Evening stores an explicit sleep plan; Morning stores corrected estimated sleep instants and derived duration. Phase 2 interprets freshness/stress/sleep duration only inside backend snapshots. |
+| Canonical daily capture | Yes, Capture V4 current | Evening and Morning are separate typed flows over one ownership-merged daily entry. Authenticated writes use one backend-owned request ledger and branch-local compare-and-swap identity; a stale same-branch write conflicts without discarding the other branch. Evening stores an explicit sleep plan; Morning stores corrected estimated sleep instants and derived duration. Phase 2 interprets freshness/stress/sleep duration only inside backend snapshots. |
 | Legacy large Daily Check-In | Retired | `/daily-check-in` redirects to the canonical lightweight flow; do not recreate a competing form |
 | Habit management/completion | Yes, authenticated only | Habit V1 cadence, progress, streaks, explicit completion/skip, and undo are implemented; manual lifecycle stays in Habit Management, Setup-owned lifecycle stays in Settings Setup, and daily execution is available from Today Habits |
 | Insights correlations | Yes | Default to one cautious observation; advanced correlations expose data sufficiency, source, and independent loading/error truth. Real accounts hide Skillset until a real producer exists; demo data is labelled as an example. |
@@ -641,6 +641,13 @@ sensitive and daily capture is easy to abandon after one bad interaction.
 - A failed or timed-out write must keep the user's draft and offer a clear retry.
 - Retry must be idempotent or deduplicated so one check-in does not become two
   daily records.
+- Authenticated Save is unavailable until the current synchronized branch
+  identity has loaded. Morning separately requires either a readable prior
+  Evening plan or explicit one-time continuation without it.
+- Only `PUT /v1/daily-capture/{entry_date}/{morning|evening}` may persist a real
+  account Capture. The backend transaction merges the branch, refreshes the
+  canonical Daily Log projection, and replaces only its `quick_check_in`
+  Behavioral Events.
 - The UI must not show a saved state until the durable guest or Supabase write
   has succeeded.
 - If full offline sync is not implemented, say that a draft is pending locally;

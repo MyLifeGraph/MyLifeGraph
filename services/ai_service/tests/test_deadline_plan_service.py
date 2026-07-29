@@ -611,3 +611,64 @@ def test_active_block_is_missed_at_its_exact_end_instant() -> None:
 
     assert revision is not None
     assert revision.blocks[0].state == "missed"
+
+
+def test_revision_reloads_calendar_source_when_projection_lacks_status() -> None:
+    event_id = UUID("55555555-5555-4555-8555-555555555555")
+    import_id = UUID("66666666-6666-4666-8666-666666666666")
+    connection_id = UUID("77777777-7777-4777-8777-777777777777")
+    fingerprint = "c" * 64
+
+    class CurrentSourceRepository(ReplayRepository):
+        def __init__(self) -> None:
+            super().__init__("unused")
+            self.source_reloads = 0
+
+        async def get_calendar_event(self, *, user_id, event_id):
+            assert user_id == "owner"
+            assert event_id == UUID("55555555-5555-4555-8555-555555555555")
+            self.source_reloads += 1
+            return {
+                "id": str(event_id),
+                "import_id": str(import_id),
+                "source_fingerprint": fingerprint,
+                "_connection_status": "connected",
+                "_connection_last_import_id": str(import_id),
+                "_connection_imported_data_deleted_at": None,
+                "_import_planning_status": "current",
+            }
+
+    repository = CurrentSourceRepository()
+    service = DeadlinePlanService(repository=repository, now=lambda: NOW)
+    row = asyncio.run(
+        repository.list_revisions(user_id="owner", plan_id=PLAN_ID),
+    )[0]
+    row = {
+        **row,
+        "source_kind": "calendar_event",
+        "source_calendar_event_id": str(event_id),
+        "source_calendar_event_fingerprint": fingerprint,
+    }
+
+    revision = asyncio.run(
+        service._revision_from_row(
+            user_id="owner",
+            row=row,
+            block_rows=[],
+            tracked_focus_minutes=0,
+            now=NOW,
+            plan_status="draft",
+            calendar_events={
+                str(event_id): {
+                    "id": str(event_id),
+                    "connection_id": str(connection_id),
+                    "import_id": str(import_id),
+                    "source_fingerprint": fingerprint,
+                },
+            },
+        ),
+    )
+
+    assert revision is not None
+    assert revision.source_status == "current"
+    assert repository.source_reloads == 1

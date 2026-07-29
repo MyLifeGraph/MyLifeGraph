@@ -11,17 +11,20 @@ Capture V4, Daily State V2, Exam-Week Outlook V1, or Coach V3 expectations.
 
 ## Current Verified Baseline
 
-The free read-only Coach data-agent working tree was fully reverified locally
-on 2026-07-29. The complete FastAPI suite reported
-`1100 passed, 2 skipped`; full Flutter verification reported `695` passing
-tests and clean analysis. Documentation consistency passed across 50 Markdown
-files and 63 FastAPI routes, the frontend visual contract passed, the local
-stack harness passed, and `git diff --check` was clean. The reviewed working
-tree was based on commit `3be8f3d53b9b`.
+The post-review stabilization working tree was reverified locally on
+2026-07-29. The complete FastAPI suite reported
+`1108 passed, 2 skipped`; full Flutter verification reported `700` passing
+tests and clean analysis. The frontend visual contract and documentation
+consistency checks passed, and `git diff --check` was clean.
+
+The final combined stabilization browser journey reported
+`E2E browser smoke passed for e2e-1785327342@example.test`. It covered the
+new Capture, account-setting, Calendar, Setup/Focus, Planner/Today, and
+notification retry and stale-projection boundaries in the filled Student flow.
 
 A fresh local database reset applied the complete migration chain through
-`20260728160000_free_read_only_coach_agent_v1.sql`. The current five pgTAP
-files passed all 104 tests and local migration history matched the repository.
+`20260729130000_observed_projection_persistence.sql`. The current six pgTAP
+files passed all 137 tests and local migration history matched the repository.
 The 14 real analysis-image integration tests passed in 3.03 seconds as
 non-root with a mode-`0444` snapshot, actual SQL source attribution,
 conservative Python full-snapshot-scope provenance, network/host/secret
@@ -61,7 +64,7 @@ those values. Dated evidence below is historical run history and does not prove
 a later checkout.
 
 The current repository migration boundary ends at
-`20260728160000_free_read_only_coach_agent_v1.sql`.
+`20260729130000_observed_projection_persistence.sql`.
 
 ## Verification Levels
 
@@ -171,6 +174,26 @@ The script runs:
 - `flutter test`
 - `python3 -m compileall services/ai_service/app`
 - `git diff --check`
+
+The post-review stabilization additionally requires the complete backend suite
+and local database tests because the standard script does not run pytest or
+pgTAP:
+
+```bash
+cd services/ai_service
+./.venv/bin/python -m pytest
+
+cd ../..
+supabase db reset
+supabase test db
+```
+
+The stabilization evidence must include branch-CAS Capture writes, revisioned
+account settings, Setup-owned DML guards, timezone-bound Calendar/Planner
+races, observed Snapshot/Weekly Review ordering, Berlin DST gap/fold and
+cross-midnight cases, and Flutter durable-write/reload-failure states. The
+strict source is `docs/stabilization-consistency-contract.md`. A Coach/LLM live
+smoke is not required for this package.
 
 The fast documentation-only command is:
 
@@ -343,7 +366,7 @@ tests require stable full pagination and exact user/date scoping. Proposal tests
 cap deterministic output at two, require matching `too_much` evidence before
 the initial weekly-target shrink rule, preserve Setup ownership, and never apply
 a user-owned mutation during generation.
-Phase 9 tests cover strict `calendar-import-v1` and
+Phase 9 tests cover strict `calendar-import-v2` and
 `calendar-import-consent-v1` parsing, bearer-derived ownership, connection
 without import, create/import request replay and conflict, bounded `.ics`
 parsing, profile-local windows, stable event and recurrence identities,
@@ -916,11 +939,13 @@ It imports bounded `.ics` fixtures with duplicate, all-day, timezone-aware,
 materialized recurrence, unsupported recurrence, and cancellation cases;
 asserts stable retry/event identities plus paginated read-only provenance; and
 keeps `schedule_items` byte-for-byte unchanged. Separate confirmations prove
-disconnect retains the stale local copy while delete removes only integration
-events/history. The opaque fingerprint-free request ledger rejects reuse across
-operations and owners, a disconnected or superseded import cannot replay, and
-DELETE rejects a body. A second principal checks owner-only visibility and
-rejected direct/cross-owner writes. Guest/mock coverage remains zero-call.
+disconnect retains the stale local copy while delete removes imported event
+content and retains only its bounded `deleted` audit row. The opaque
+fingerprint-free request ledger rejects reuse across operations and owners;
+exact completed replays remain valid after disconnect, supersession, or local
+deletion, while a non-current import never supplies Planner busy time. DELETE
+rejects a body. A second principal checks owner-only visibility and rejected
+direct/cross-owner writes. Guest/mock coverage remains zero-call.
 The complete combined browser command passed these assertions non-destructively
 in the 2026-07-13 Phase 9 implementation checkout.
 
@@ -985,9 +1010,10 @@ The smoke then creates a habit through Habit Management and follows
 stress `8`, private/emotional hardly-controllable stress, tomorrow priority,
 reflection, and specific blocker. Every primary/additional friction control and
 the removed gentler control is asserted absent. Playwright lets the first
-`daily_logs` upsert commit but drops its browser response, verifies that the
-exact draft remains available, then retries without creating another daily row
-or event set.
+`daily-capture-write-v1` PUT commit but drops its browser response, verifies
+that the exact draft remains available, then retries the byte-equivalent
+request and requires `replayed=true` without creating another daily row or
+event set.
 
 The browser first saves Evening sleep start `23:00` with an eight-hour target.
 The same user then completes `/morning-calibration` after correcting the

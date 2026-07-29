@@ -118,7 +118,9 @@ class SupabaseWeeklyReviewRepository:
         rows = await self._client.select(
             "user_state_snapshots",
             params={
-                "select": "id,period_key,generated_at,metadata",
+                "select": (
+                    "id,period_key,source_observed_at,generated_at,metadata"
+                ),
                 "user_id": f"eq.{user_id}",
                 "scope": "eq.weekly",
                 "period_key": f"eq.{period_key}",
@@ -221,7 +223,11 @@ class SupabaseWeeklyReviewRepository:
         daily_snapshots = await self._select_all_pages(
             "user_state_snapshots",
             params=[
-                ("select", "id,period_key,summary,generated_at,metadata"),
+                (
+                    "select",
+                    "id,period_key,summary,source_observed_at,"
+                    "generated_at,metadata",
+                ),
                 ("user_id", f"eq.{user_id}"),
                 ("scope", "eq.daily"),
                 ("period_key", f"gte.{starts_on.isoformat()}"),
@@ -260,14 +266,21 @@ class SupabaseWeeklyReviewRepository:
         period_key: str,
         row: dict[str, Any],
     ) -> WeeklyReview:
-        rows = await self._client.upsert(
-            "weekly_reviews",
-            rows=[row],
-            on_conflict="user_id,period_key",
+        source_observed_at = row.get("source_observed_at")
+        if not isinstance(source_observed_at, str):
+            raise ValueError("Weekly review observation timestamp is missing.")
+        result = await self._client.rpc(
+            "persist_weekly_review_v2",
+            params={
+                "p_user_id": user_id,
+                "p_period_key": period_key,
+                "p_source_observed_at": source_observed_at,
+                "p_row": row,
+            },
         )
-        if not rows:
+        if not isinstance(result, dict):
             raise ValueError("Weekly review persistence returned no row.")
-        return _weekly_review(rows[0])
+        return _weekly_review(result)
 
     async def _select_all_pages(
         self,
@@ -277,20 +290,60 @@ class SupabaseWeeklyReviewRepository:
         page_size: int = 1000,
     ) -> list[dict[str, Any]]:
         rows: list[dict[str, Any]] = []
-        offset = 0
+        order = _order_columns(params)
+        cursor: dict[str, Any] | None = None
         while True:
+            page_params = [*params, ("limit", str(page_size))]
+            if cursor is not None:
+                page_params.append(("or", _keyset_filter(order, cursor)))
             page = await self._client.select(
                 table,
-                params=[
-                    *params,
-                    ("limit", str(page_size)),
-                    ("offset", str(offset)),
-                ],
+                params=page_params,
             )
             rows.extend(page)
             if len(page) < page_size:
                 return rows
-            offset += len(page)
+            cursor = page[-1]
+
+
+def _order_columns(
+    params: list[tuple[str, str]],
+) -> list[tuple[str, str]]:
+    values = [value for key, value in params if key == "order"]
+    if len(values) != 1:
+        raise ValueError("Keyset pagination requires one explicit order.")
+    order: list[tuple[str, str]] = []
+    for item in values[0].split(","):
+        pieces = item.split(".")
+        direction = pieces[1] if len(pieces) > 1 else "asc"
+        if direction not in {"asc", "desc"}:
+            raise ValueError("Keyset pagination order is invalid.")
+        order.append((pieces[0], direction))
+    if not order or order[-1][0] != "id":
+        raise ValueError("Keyset pagination requires id as the tie-breaker.")
+    return order
+
+
+def _keyset_filter(
+    order: list[tuple[str, str]],
+    cursor: dict[str, Any],
+) -> str:
+    branches: list[str] = []
+    equals: list[str] = []
+    for column, direction in order:
+        if column not in cursor or cursor[column] is None:
+            raise ValueError("Keyset page is missing an ordered value.")
+        value = str(cursor[column])
+        comparison = (
+            f"{column}.{'gt' if direction == 'asc' else 'lt'}.{value}"
+        )
+        branches.append(
+            comparison
+            if not equals
+            else f"and({','.join([*equals, comparison])})"
+        )
+        equals.append(f"{column}.eq.{value}")
+    return f"({','.join(branches)})"
 
 
 def _weekly_review(row: dict[str, Any]) -> WeeklyReview:

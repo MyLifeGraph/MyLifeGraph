@@ -6,7 +6,7 @@ import 'package:my_life_graph/features/calendar_integration/domain/calendar_inte
 import 'support/calendar_integration_fixtures.dart';
 
 void main() {
-  group('calendar-import-v1 domain', () {
+  group('calendar-import-v2 domain', () {
     test('parses exact connection, import, timed, and all-day shapes', () {
       final feed = CalendarIntegrationFeed.fromJson(calendarFeedJson());
       final response = CalendarImportResponse.fromJson(
@@ -54,7 +54,7 @@ void main() {
       );
 
       final wrongContract = _copy(calendarFeedJson());
-      wrongContract['contract_version'] = 'calendar-import-v2';
+      wrongContract['contract_version'] = 'calendar-import-v1';
       expect(
         () => CalendarIntegrationFeed.fromJson(wrongContract),
         throwsA(isA<CalendarIntegrationContractException>()),

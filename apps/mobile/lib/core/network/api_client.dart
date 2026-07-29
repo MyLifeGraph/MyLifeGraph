@@ -123,6 +123,23 @@ class ApiClient {
     }
   }
 
+  Future<Map<String, dynamic>> putJson(
+    String path, {
+    Map<String, dynamic>? body,
+    Map<String, String>? headers,
+  }) async {
+    try {
+      final response = await _dio.put<Map<String, dynamic>>(
+        path,
+        data: body ?? <String, dynamic>{},
+        options: headers == null ? null : Options(headers: headers),
+      );
+      return response.data ?? <String, dynamic>{};
+    } on DioException catch (error) {
+      throw AppException('Network request failed', cause: error);
+    }
+  }
+
   Future<Map<String, dynamic>> postJsonWithTimeout(
     String path, {
     required Duration receiveTimeout,

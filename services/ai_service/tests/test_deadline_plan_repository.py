@@ -63,6 +63,8 @@ class Client:
                     "imported_data_deleted_at": None,
                 },
             ]
+        if table == "calendar_imports":
+            return [{"id": IMPORT_ID, "planning_status": "current"}]
         if table == "calendar_events" and params.get("id"):
             return [
                 {

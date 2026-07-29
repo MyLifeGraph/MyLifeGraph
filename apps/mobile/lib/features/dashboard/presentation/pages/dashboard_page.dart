@@ -10,7 +10,6 @@ import 'package:intl/intl.dart';
 import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/capabilities/app_surface_capabilities.dart';
 import '../../../../core/navigation/app_routes.dart';
-import '../../../../core/supabase/supabase_providers.dart';
 import '../../../../core/theme/app_motion_tokens.dart';
 import '../../../../core/theme/app_visual_tokens.dart';
 import '../../../../core/utils/client_uuid.dart';
@@ -39,6 +38,12 @@ class DashboardPage extends ConsumerStatefulWidget {
   ConsumerState<DashboardPage> createState() => _DashboardPageState();
 }
 
+enum _TodayProjectionStatus {
+  current,
+  refreshingAfterMutation,
+  staleAfterMutation
+}
+
 class _DashboardPageState extends ConsumerState<DashboardPage> {
   final Set<String> _completedTaskIds = {};
   final Set<String> _restoredTaskIds = {};
@@ -51,6 +56,10 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
   bool _isRefreshingRecommendations = false;
   String? _recommendationRefreshError;
   final Set<String> _updatingHabitIds = {};
+  final Map<String, String?> _habitOutcomeOverrides = {};
+  _TodayProjectionStatus _todayProjectionStatus =
+      _TodayProjectionStatus.current;
+  DashboardSnapshot? _displayedSnapshot;
 
   @override
   Widget build(BuildContext context) {
@@ -63,82 +72,94 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
         : null;
     final supporting =
         _showMore ? ref.watch(dashboardSupportingSnapshotProvider) : null;
+    final visibleSnapshot = _displayedSnapshot ?? snapshot.valueOrNull;
 
-    return snapshot.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (error, stackTrace) => _DashboardLoadError(
-        onRetry: () => ref.invalidate(dashboardSnapshotProvider),
+    if (visibleSnapshot == null) {
+      return snapshot.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (error, stackTrace) => _DashboardLoadError(
+          onRetry: () => ref.invalidate(dashboardSnapshotProvider),
+        ),
+        data: (_) => const SizedBox.shrink(),
+      );
+    }
+    final projectionCurrent =
+        _todayProjectionStatus == _TodayProjectionStatus.current &&
+            !snapshot.isRefreshing;
+    final data = visibleSnapshot;
+    return _DashboardHome(
+      snapshot: data,
+      recommendations: recommendations,
+      workload: workload,
+      supporting: supporting,
+      onRetryWorkload: () => ref.invalidate(preparationWorkloadProvider),
+      onLoadWorkloadDetail: (localDate) =>
+          ref.read(deadlinePlanRepositoryProvider).getWorkloadDetail(localDate),
+      completedTaskIds: _completedTaskIds,
+      restoredTaskIds: _restoredTaskIds,
+      deletedTaskIds: _deletedTaskIds,
+      updatingTaskIds: _updatingTaskIds,
+      showCompletedTasks: _showCompletedTasks,
+      showCancelledTasks: _showCancelledTasks,
+      showAllTasks: _showAllTasks,
+      showMore: _showMore,
+      updatingHabitIds: _updatingHabitIds,
+      habitOutcomeOverrides: _habitOutcomeOverrides,
+      projectionCurrent: projectionCurrent,
+      projectionStale:
+          _todayProjectionStatus == _TodayProjectionStatus.staleAfterMutation,
+      onReloadToday: _reloadTodayOnly,
+      isRefreshingRecommendations: _isRefreshingRecommendations,
+      recommendationRefreshError: _recommendationRefreshError,
+      onAddEvening: () => context.go(AppRoutes.dailyCheckIn),
+      onAddMorning: () => context.go(AppRoutes.morningCalibration),
+      canUseWeeklyReview: capabilities.canUseWeeklyReview,
+      onOpenWeeklyReview: () => context.go(AppRoutes.weeklyReview),
+      onRetryRecommendations: () {
+        setState(() => _recommendationRefreshError = null);
+        ref.invalidate(recommendationFeedProvider);
+      },
+      onRefreshRecommendations: _refreshRecommendations,
+      onShowFeedbackHistory: _showFeedbackHistory,
+      onAddTask: () => context.go(AppRoutes.planner),
+      onEditTask: _openTaskOrPreparationPlan,
+      onCompleteTask: _completeTask,
+      onRestoreTask: _restoreTask,
+      onCancelTask: _cancelTask,
+      onPostponeTask: _postponeTask,
+      onStartFocus: (task) => context.go(
+        '${AppRoutes.deepWork}?target_kind=task&target_id=${task.id}',
       ),
-      data: (data) => _DashboardHome(
-        snapshot: data,
-        recommendations: recommendations,
-        workload: workload,
-        supporting: supporting,
-        onRetryWorkload: () => ref.invalidate(preparationWorkloadProvider),
-        onLoadWorkloadDetail: (localDate) => ref
-            .read(deadlinePlanRepositoryProvider)
-            .getWorkloadDetail(localDate),
-        completedTaskIds: _completedTaskIds,
-        restoredTaskIds: _restoredTaskIds,
-        deletedTaskIds: _deletedTaskIds,
-        updatingTaskIds: _updatingTaskIds,
-        showCompletedTasks: _showCompletedTasks,
-        showCancelledTasks: _showCancelledTasks,
-        showAllTasks: _showAllTasks,
-        showMore: _showMore,
-        updatingHabitIds: _updatingHabitIds,
-        isRefreshingRecommendations: _isRefreshingRecommendations,
-        recommendationRefreshError: _recommendationRefreshError,
-        onAddEvening: () => context.go(AppRoutes.dailyCheckIn),
-        onAddMorning: () => context.go(AppRoutes.morningCalibration),
-        canUseWeeklyReview: capabilities.canUseWeeklyReview,
-        onOpenWeeklyReview: () => context.go(AppRoutes.weeklyReview),
-        onRetryRecommendations: () {
-          setState(() => _recommendationRefreshError = null);
-          ref.invalidate(recommendationFeedProvider);
-        },
-        onRefreshRecommendations: _refreshRecommendations,
-        onShowFeedbackHistory: _showFeedbackHistory,
-        onAddTask: () => context.go(AppRoutes.planner),
-        onEditTask: _openTaskOrPreparationPlan,
-        onCompleteTask: _completeTask,
-        onRestoreTask: _restoreTask,
-        onCancelTask: _cancelTask,
-        onPostponeTask: _postponeTask,
-        onStartFocus: (task) => context.go(
-          '${AppRoutes.deepWork}?target_kind=task&target_id=${task.id}',
-        ),
-        onSetHabitOutcome: (habit, outcome) => _setHabitOutcome(
-          habit,
-          outcome,
-          data.localDate ?? DateTime.now(),
-        ),
-        onUndoHabitOutcome: (habit) => _undoHabitOutcome(
-          habit,
-          data.localDate ?? DateTime.now(),
-        ),
-        onOpenPreparationPlan: (planId) => context.go(
-          Uri(
-            path: AppRoutes.preparationPlans,
-            queryParameters: {'plan_id': planId},
-          ).toString(),
-        ),
-        onStartPreparationFocus: (taskId) => context.go(
-          '${AppRoutes.deepWork}?target_kind=task&target_id=$taskId',
-        ),
-        onToggleAllTasks: () {
-          setState(() => _showAllTasks = !_showAllTasks);
-        },
-        onToggleMore: () {
-          setState(() => _showMore = !_showMore);
-        },
-        onToggleCompletedTasks: () {
-          setState(() => _showCompletedTasks = !_showCompletedTasks);
-        },
-        onToggleCancelledTasks: () {
-          setState(() => _showCancelledTasks = !_showCancelledTasks);
-        },
+      onSetHabitOutcome: (habit, outcome) => _setHabitOutcome(
+        habit,
+        outcome,
+        data.localDate,
       ),
+      onUndoHabitOutcome: (habit) => _undoHabitOutcome(
+        habit,
+        data.localDate,
+      ),
+      onOpenPreparationPlan: (planId) => context.go(
+        Uri(
+          path: AppRoutes.preparationPlans,
+          queryParameters: {'plan_id': planId},
+        ).toString(),
+      ),
+      onStartPreparationFocus: (taskId) => context.go(
+        '${AppRoutes.deepWork}?target_kind=task&target_id=$taskId',
+      ),
+      onToggleAllTasks: () {
+        setState(() => _showAllTasks = !_showAllTasks);
+      },
+      onToggleMore: () {
+        setState(() => _showMore = !_showMore);
+      },
+      onToggleCompletedTasks: () {
+        setState(() => _showCompletedTasks = !_showCompletedTasks);
+      },
+      onToggleCancelledTasks: () {
+        setState(() => _showCancelledTasks = !_showCancelledTasks);
+      },
     );
   }
 
@@ -199,10 +220,20 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
   Future<void> _setHabitOutcome(
     TodayHabit habit,
     HabitOutcome outcome,
-    DateTime targetDate,
+    DateTime? targetDate,
   ) async {
-    if (_updatingHabitIds.contains(habit.id)) return;
+    if (_todayProjectionStatus != _TodayProjectionStatus.current ||
+        targetDate == null ||
+        _updatingHabitIds.contains(habit.id)) {
+      if (targetDate == null) {
+        _showTaskMessage(
+          'Today is unavailable. Reload before changing habits.',
+        );
+      }
+      return;
+    }
     setState(() => _updatingHabitIds.add(habit.id));
+    var committed = false;
     try {
       final source = _habitSource();
       await source.setTodayOutcome(
@@ -210,24 +241,36 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
         outcome: outcome,
         targetDate: targetDate,
       );
-      await ref
-          .read(snapshotRefreshServiceProvider)
-          .refreshDailyAfterHabitChange(targetDate: habitDateKey(targetDate));
-      ref.invalidate(dashboardSnapshotProvider);
-      ref.invalidate(dashboardSupportingSnapshotProvider);
+      committed = true;
+      if (mounted) {
+        setState(() {
+          _habitOutcomeOverrides[habit.id] = outcome.code;
+          _todayProjectionStatus =
+              _TodayProjectionStatus.refreshingAfterMutation;
+        });
+      }
+      final projectionCurrent = await _refreshTodayAfterMutation(
+        () => ref
+            .read(snapshotRefreshServiceProvider)
+            .refreshDailyAfterHabitChange(targetDate: habitDateKey(targetDate)),
+      );
       if (mounted) {
         _showTaskMessage(
-          outcome == HabitOutcome.completed
-              ? 'Habit completed.'
-              : 'Habit intentionally skipped.',
+          projectionCurrent
+              ? outcome == HabitOutcome.completed
+                  ? 'Habit completed.'
+                  : 'Habit intentionally skipped.'
+              : 'Saved; Today could not reload.',
         );
       }
     } catch (error) {
       if (mounted) {
         _showTaskMessage(
-          error is HabitCommandException
-              ? error.message
-              : 'Habit update could not be saved.',
+          committed
+              ? 'Saved; Today could not reload.'
+              : error is HabitCommandException
+                  ? error.message
+                  : 'Habit update could not be saved.',
         );
       }
     } finally {
@@ -237,27 +280,53 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
 
   Future<void> _undoHabitOutcome(
     TodayHabit habit,
-    DateTime targetDate,
+    DateTime? targetDate,
   ) async {
-    if (_updatingHabitIds.contains(habit.id)) return;
+    if (_todayProjectionStatus != _TodayProjectionStatus.current ||
+        targetDate == null ||
+        _updatingHabitIds.contains(habit.id)) {
+      if (targetDate == null) {
+        _showTaskMessage(
+          'Today is unavailable. Reload before changing habits.',
+        );
+      }
+      return;
+    }
     setState(() => _updatingHabitIds.add(habit.id));
+    var committed = false;
     try {
       await _habitSource().undoTodayOutcome(
         habitId: habit.id,
         targetDate: targetDate,
       );
-      await ref
-          .read(snapshotRefreshServiceProvider)
-          .refreshDailyAfterHabitChange(targetDate: habitDateKey(targetDate));
-      ref.invalidate(dashboardSnapshotProvider);
-      ref.invalidate(dashboardSupportingSnapshotProvider);
-      if (mounted) _showTaskMessage('Habit outcome undone.');
+      committed = true;
+      if (mounted) {
+        setState(() {
+          _habitOutcomeOverrides[habit.id] = null;
+          _todayProjectionStatus =
+              _TodayProjectionStatus.refreshingAfterMutation;
+        });
+      }
+      final projectionCurrent = await _refreshTodayAfterMutation(
+        () => ref
+            .read(snapshotRefreshServiceProvider)
+            .refreshDailyAfterHabitChange(targetDate: habitDateKey(targetDate)),
+      );
+      if (mounted) {
+        _showTaskMessage(
+          projectionCurrent
+              ? 'Habit outcome undone.'
+              : 'Saved; Today could not reload.',
+        );
+      }
     } catch (error) {
       if (mounted) {
         _showTaskMessage(
-          error is HabitCommandException
-              ? error.message
-              : 'Habit undo could not be saved.',
+          committed
+              ? 'Saved; Today could not reload.'
+              : error is HabitCommandException
+                  ? error.message
+                  : 'Habit undo could not be saved.',
         );
       }
     } finally {
@@ -266,11 +335,11 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
   }
 
   HabitCompletionSupabaseDataSource _habitSource() {
-    final client = ref.read(supabaseClientProvider);
-    if (client == null) {
+    final source = ref.read(dashboardHabitDataSourceProvider);
+    if (source == null) {
       throw const HabitCommandException('Synced habits are unavailable.');
     }
-    return HabitCompletionSupabaseDataSource(client);
+    return source;
   }
 
   Future<void> _completeTask(PlanItem task) async {
@@ -285,11 +354,18 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
 
   Future<void> _restoreTask(PlanItem task) async {
     if (_openManagedPreparationPlan(task)) return;
+    if (_todayProjectionStatus != _TodayProjectionStatus.current) return;
+    final targetDate = _currentAuthenticatedLocalDate();
+    if (targetDate == null) {
+      _showTaskMessage('Today is unavailable. Reload before changing tasks.');
+      return;
+    }
     await _mutateTask(
       task.id,
       () async {
         await _taskSource().restoreTask(task.id);
       },
+      targetDate: targetDate,
       successStatus: 'todo',
       successMessage: 'Task restored.',
     );
@@ -362,6 +438,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
     ExecutableTaskDraft? retainedDraft,
     String? requestId,
   }) async {
+    if (_todayProjectionStatus != _TodayProjectionStatus.current) return;
     if (task != null && _openManagedPreparationPlan(task)) return;
     final draft = await showModalBottomSheet<ExecutableTaskDraft>(
       context: context,
@@ -374,22 +451,24 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
     if (draft == null || !mounted) {
       return;
     }
+    final targetDate = _currentAuthenticatedLocalDate();
+    if (targetDate == null) {
+      _showTaskMessage('Today is unavailable. Reload before changing tasks.');
+      return;
+    }
     final id = requestId ?? newClientUuid();
     setState(() => _updatingTaskIds.add(task?.id ?? id));
     try {
       final source = _taskSource();
       if (task == null) {
         await source.createTask(taskId: id, draft: draft);
-        final overviewDate =
-            ref.read(dashboardSnapshotProvider).value?.localDate;
         final due = draft.deadline;
         final qualifiesForToday = due != null &&
-            overviewDate != null &&
             !DateTime(due.year, due.month, due.day).isAfter(
               DateTime(
-                overviewDate.year,
-                overviewDate.month,
-                overviewDate.day,
+                targetDate.year,
+                targetDate.month,
+                targetDate.day,
               ),
             );
         if (!qualifiesForToday && mounted) {
@@ -398,9 +477,21 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
       } else {
         await source.editTask(taskId: task.id, draft: draft);
       }
-      await _afterTaskWrite();
       if (mounted) {
-        _showTaskMessage(task == null ? 'Task added.' : 'Task updated.');
+        setState(() {
+          _todayProjectionStatus =
+              _TodayProjectionStatus.refreshingAfterMutation;
+        });
+      }
+      final projectionCurrent = await _afterTaskWrite(targetDate);
+      if (mounted) {
+        _showTaskMessage(
+          projectionCurrent
+              ? task == null
+                  ? 'Task added.'
+                  : 'Task updated.'
+              : 'Saved; Today could not reload.',
+        );
       }
     } catch (error) {
       if (mounted) {
@@ -453,12 +544,19 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
     required String successMessage,
     required Future<TaskUndoToken> Function(TaskSupabaseDataSource) mutation,
   }) async {
+    if (_todayProjectionStatus != _TodayProjectionStatus.current) return;
+    final targetDate = _currentAuthenticatedLocalDate();
+    if (targetDate == null) {
+      _showTaskMessage('Today is unavailable. Reload before changing tasks.');
+      return;
+    }
     TaskUndoToken? undo;
     await _mutateTask(
       task.id,
       () async {
         undo = await mutation(_taskSource());
       },
+      targetDate: targetDate,
       successStatus: successStatus,
       successMessage: successMessage,
       onSuccess: () {
@@ -480,11 +578,17 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
   }
 
   Future<void> _undoTask(TaskUndoToken token) async {
+    final targetDate = _currentAuthenticatedLocalDate();
+    if (targetDate == null) {
+      _showTaskMessage('Today is unavailable. Reload before changing tasks.');
+      return;
+    }
     await _mutateTask(
       token.taskId,
       () async {
         await _taskSource().undo(token);
       },
+      targetDate: targetDate,
       successStatus: token.status.code,
       successMessage: 'Task change undone.',
     );
@@ -493,22 +597,30 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
   Future<void> _mutateTask(
     String id,
     Future<void> Function() mutation, {
+    required DateTime targetDate,
     required String successStatus,
     required String successMessage,
     VoidCallback? onSuccess,
   }) async {
-    if (_updatingTaskIds.contains(id)) {
+    if (_todayProjectionStatus != _TodayProjectionStatus.current ||
+        _updatingTaskIds.contains(id)) {
       return;
     }
     setState(() => _updatingTaskIds.add(id));
     try {
       await mutation();
       if (mounted) {
-        setState(() => _applyLocalTaskStatus(id, successStatus));
+        setState(() {
+          _applyLocalTaskStatus(id, successStatus);
+          _todayProjectionStatus =
+              _TodayProjectionStatus.refreshingAfterMutation;
+        });
       }
-      await _afterTaskWrite();
+      final projectionCurrent = await _afterTaskWrite(targetDate);
       if (mounted) {
-        if (onSuccess != null) {
+        if (!projectionCurrent) {
+          _showTaskMessage('Saved; Today could not reload.');
+        } else if (onSuccess != null) {
           onSuccess();
         } else {
           _showTaskMessage(successMessage);
@@ -531,19 +643,92 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
   }
 
   TaskSupabaseDataSource _taskSource() {
-    final client = ref.read(supabaseClientProvider);
-    if (client == null) {
+    final source = ref.read(dashboardTaskDataSourceProvider);
+    if (source == null) {
       throw const TaskCommandException('Synced tasks are unavailable.');
     }
-    return TaskSupabaseDataSource(client);
+    return source;
   }
 
-  Future<void> _afterTaskWrite() async {
-    await ref
-        .read(snapshotRefreshServiceProvider)
-        .refreshDailyAfterTaskChange(targetDate: localDateKey(DateTime.now()));
-    ref.invalidate(dashboardSnapshotProvider);
-    ref.invalidate(dashboardSupportingSnapshotProvider);
+  Future<bool> _afterTaskWrite(DateTime targetDate) {
+    return _refreshTodayAfterMutation(
+      () => ref
+          .read(snapshotRefreshServiceProvider)
+          .refreshDailyAfterTaskChange(targetDate: localDateKey(targetDate)),
+    );
+  }
+
+  DateTime? _currentAuthenticatedLocalDate() {
+    final snapshot =
+        _displayedSnapshot ?? ref.read(dashboardSnapshotProvider).valueOrNull;
+    if (snapshot?.origin != DashboardOrigin.account) return null;
+    return snapshot?.localDate;
+  }
+
+  Future<bool> _refreshTodayAfterMutation(
+    Future<void> Function() refreshProjection,
+  ) async {
+    try {
+      await refreshProjection();
+      final fresh = await ref.read(dashboardRepositoryProvider).getSnapshot();
+      if (fresh.origin != DashboardOrigin.account || fresh.localDate == null) {
+        throw const DashboardUnavailableException(
+          'Authenticated Today projection is incomplete.',
+        );
+      }
+      if (!mounted) return false;
+      setState(() {
+        _displayedSnapshot = fresh;
+        _todayProjectionStatus = _TodayProjectionStatus.current;
+        _completedTaskIds.clear();
+        _restoredTaskIds.clear();
+        _deletedTaskIds.clear();
+        _habitOutcomeOverrides.clear();
+      });
+      ref.invalidate(dashboardSupportingSnapshotProvider);
+      return true;
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _todayProjectionStatus = _TodayProjectionStatus.staleAfterMutation;
+        });
+      }
+      return false;
+    }
+  }
+
+  Future<void> _reloadTodayOnly() async {
+    if (_todayProjectionStatus ==
+        _TodayProjectionStatus.refreshingAfterMutation) {
+      return;
+    }
+    setState(() {
+      _todayProjectionStatus = _TodayProjectionStatus.refreshingAfterMutation;
+    });
+    try {
+      final fresh = await ref.read(dashboardRepositoryProvider).getSnapshot();
+      if (fresh.origin != DashboardOrigin.account || fresh.localDate == null) {
+        throw const DashboardUnavailableException(
+          'Authenticated Today projection is incomplete.',
+        );
+      }
+      if (!mounted) return;
+      setState(() {
+        _displayedSnapshot = fresh;
+        _todayProjectionStatus = _TodayProjectionStatus.current;
+        _completedTaskIds.clear();
+        _restoredTaskIds.clear();
+        _deletedTaskIds.clear();
+        _habitOutcomeOverrides.clear();
+      });
+      ref.invalidate(dashboardSupportingSnapshotProvider);
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _todayProjectionStatus = _TodayProjectionStatus.staleAfterMutation;
+        });
+      }
+    }
   }
 
   void _showTaskMessage(String message) {
@@ -584,6 +769,10 @@ class _DashboardHome extends StatelessWidget {
     required this.showAllTasks,
     required this.showMore,
     required this.updatingHabitIds,
+    required this.habitOutcomeOverrides,
+    required this.projectionCurrent,
+    required this.projectionStale,
+    required this.onReloadToday,
     required this.isRefreshingRecommendations,
     required this.recommendationRefreshError,
     required this.onAddEvening,
@@ -625,6 +814,10 @@ class _DashboardHome extends StatelessWidget {
   final bool showAllTasks;
   final bool showMore;
   final Set<String> updatingHabitIds;
+  final Map<String, String?> habitOutcomeOverrides;
+  final bool projectionCurrent;
+  final bool projectionStale;
+  final VoidCallback onReloadToday;
   final bool isRefreshingRecommendations;
   final String? recommendationRefreshError;
   final VoidCallback onAddEvening;
@@ -671,7 +864,8 @@ class _DashboardHome extends StatelessWidget {
     }).toList();
     final selectedTodayTasks =
         snapshot.isTodayOverview ? snapshot.todayTasks : activeTasks;
-    final canExecute = snapshot.origin == DashboardOrigin.account;
+    final canExecute =
+        snapshot.origin == DashboardOrigin.account && projectionCurrent;
 
     return SafeArea(
       child: LayoutBuilder(
@@ -697,6 +891,38 @@ class _DashboardHome extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           _DashboardHeader(snapshot: snapshot),
+                          if (projectionStale) ...[
+                            const SizedBox(height: AppSpacing.md),
+                            AppCard(
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Icon(
+                                    AppIcons.syncProblemOutlined,
+                                    color: Theme.of(context).colorScheme.error,
+                                  ),
+                                  const SizedBox(width: AppSpacing.md),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        const Text(
+                                          'Saved; Today could not reload.',
+                                        ),
+                                        const SizedBox(height: AppSpacing.sm),
+                                        OutlinedButton.icon(
+                                          onPressed: onReloadToday,
+                                          icon: const Icon(AppIcons.refresh),
+                                          label: const Text('Reload Today'),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
                           const SizedBox(height: AppSpacing.md),
                           _CheckInStreakCard(
                             snapshot: snapshot,
@@ -757,6 +983,7 @@ class _DashboardHome extends StatelessWidget {
                             sourceState: snapshot.sourceStates?.habits,
                             canExecute: canExecute,
                             updatingHabitIds: updatingHabitIds,
+                            outcomeOverrides: habitOutcomeOverrides,
                             onSetOutcome: onSetHabitOutcome,
                             onUndo: onUndoHabitOutcome,
                           ),
@@ -1418,6 +1645,7 @@ class _TodayHabitsSection extends StatelessWidget {
     required this.sourceState,
     required this.canExecute,
     required this.updatingHabitIds,
+    required this.outcomeOverrides,
     required this.onSetOutcome,
     required this.onUndo,
   });
@@ -1426,6 +1654,7 @@ class _TodayHabitsSection extends StatelessWidget {
   final TodaySourceState? sourceState;
   final bool canExecute;
   final Set<String> updatingHabitIds;
+  final Map<String, String?> outcomeOverrides;
   final void Function(TodayHabit habit, HabitOutcome outcome) onSetOutcome;
   final ValueChanged<TodayHabit> onUndo;
 
@@ -1456,6 +1685,9 @@ class _TodayHabitsSection extends StatelessWidget {
               child: _HabitCard(
                 habit: habit,
                 updating: updatingHabitIds.contains(habit.id),
+                outcomeOverride: outcomeOverrides.containsKey(habit.id)
+                    ? outcomeOverrides[habit.id]
+                    : habit.outcome,
                 canExecute: canExecute,
                 onSetOutcome: onSetOutcome,
                 onUndo: onUndo,
@@ -1471,6 +1703,7 @@ class _HabitCard extends StatelessWidget {
   const _HabitCard({
     required this.habit,
     required this.updating,
+    required this.outcomeOverride,
     required this.canExecute,
     required this.onSetOutcome,
     required this.onUndo,
@@ -1478,14 +1711,15 @@ class _HabitCard extends StatelessWidget {
 
   final TodayHabit habit;
   final bool updating;
+  final String? outcomeOverride;
   final bool canExecute;
   final void Function(TodayHabit habit, HabitOutcome outcome) onSetOutcome;
   final ValueChanged<TodayHabit> onUndo;
 
   @override
   Widget build(BuildContext context) {
-    final completed = habit.outcome == 'completed';
-    final skipped = habit.outcome == 'skipped';
+    final completed = outcomeOverride == 'completed';
+    final skipped = outcomeOverride == 'skipped';
     return AppCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1539,7 +1773,7 @@ class _HabitCard extends StatelessWidget {
               spacing: AppSpacing.sm,
               runSpacing: AppSpacing.sm,
               children: [
-                if (habit.outcome == null) ...[
+                if (outcomeOverride == null) ...[
                   FilledButton.tonalIcon(
                     onPressed: () =>
                         onSetOutcome(habit, HabitOutcome.completed),

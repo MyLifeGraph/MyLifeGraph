@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any, Protocol
 
 import httpx
@@ -30,6 +31,10 @@ class AccountExportSourceTooLargeError(RuntimeError):
     pass
 
 
+class AccountSettingConflictError(RuntimeError):
+    pass
+
+
 @dataclass(frozen=True)
 class AccountExportTable:
     name: str
@@ -42,6 +47,17 @@ class AccountExportTable:
 @dataclass(frozen=True)
 class StoredPreparationBudget:
     minutes: int | None
+    revision: int
+    updated_at: datetime
+    replayed: bool
+
+
+@dataclass(frozen=True)
+class StoredTimezone:
+    timezone: str
+    revision: int
+    updated_at: datetime
+    replayed: bool
 
 
 class AccountRepository(Protocol):
@@ -49,15 +65,23 @@ class AccountRepository(Protocol):
         self,
         *,
         user_id: str,
+        request_id: str,
+        request_fingerprint: str,
+        expected_revision: int,
         timezone: str,
-    ) -> str | None:
+        now: datetime,
+    ) -> StoredTimezone | None:
         pass
 
     async def update_preparation_budget(
         self,
         *,
         user_id: str,
+        request_id: str,
+        request_fingerprint: str,
+        expected_revision: int,
         minutes: int | None,
+        now: datetime,
     ) -> StoredPreparationBudget | None:
         pass
 
@@ -106,231 +130,124 @@ class SupabaseAccountRepository:
         self,
         *,
         user_id: str,
+        request_id: str,
+        request_fingerprint: str,
+        expected_revision: int,
         timezone: str,
-    ) -> str | None:
+        now: datetime,
+    ) -> StoredTimezone | None:
+        params = {
+            "p_user_id": user_id,
+            "p_request_id": request_id,
+            "p_request_fingerprint": request_fingerprint,
+            "p_expected_revision": expected_revision,
+            "p_timezone": timezone,
+            "p_now": now.isoformat(),
+        }
         try:
-            rows = await self._client.update(
-                "profiles",
-                values={"timezone": timezone},
-                params={
-                    "id": f"eq.{user_id}",
-                    "select": "timezone",
-                },
+            result = await self._client.rpc(
+                "apply_account_timezone_v2",
+                params=params,
             )
         except httpx.HTTPStatusError as exc:
+            code = _response_error_code(exc.response)
+            if code == "PT404":
+                return None
+            if code == "PT409":
+                raise AccountSettingConflictError(
+                    "Account timezone changed. Reload before saving.",
+                ) from exc
             if exc.response.status_code >= 500:
-                return await self._reconcile_ambiguous_timezone_update(
-                    user_id=user_id,
-                    timezone=timezone,
-                    ambiguous_error=exc,
+                result = await self._replay_account_setting(
+                    function="apply_account_timezone_v2",
+                    params=params,
+                    outcome_error=AccountProfileUpdateOutcomeUnknownError,
                 )
-            raise AccountPersistenceError(
-                "Account profile persistence is unavailable.",
-            ) from exc
-        except (httpx.TransportError, ValueError) as exc:
-            return await self._reconcile_ambiguous_timezone_update(
-                user_id=user_id,
-                timezone=timezone,
-                ambiguous_error=exc,
+            else:
+                raise AccountPersistenceError(
+                    "Account profile persistence is unavailable.",
+                ) from exc
+        except (httpx.HTTPError, ValueError):
+            result = await self._replay_account_setting(
+                function="apply_account_timezone_v2",
+                params=params,
+                outcome_error=AccountProfileUpdateOutcomeUnknownError,
             )
-        except httpx.HTTPError as exc:
-            return await self._reconcile_ambiguous_timezone_update(
-                user_id=user_id,
-                timezone=timezone,
-                ambiguous_error=exc,
-            )
-        if rows == []:
-            return None
-        if not _is_exact_timezone_result(rows=rows, timezone=timezone):
-            return await self._reconcile_ambiguous_timezone_update(
-                user_id=user_id,
-                timezone=timezone,
-                ambiguous_error=ValueError(
-                    "Account profile persistence returned an invalid result.",
-                ),
-            )
-        return timezone
+        return _stored_timezone(result, expected_timezone=timezone)
 
     async def update_preparation_budget(
         self,
         *,
         user_id: str,
+        request_id: str,
+        request_fingerprint: str,
+        expected_revision: int,
         minutes: int | None,
+        now: datetime,
     ) -> StoredPreparationBudget | None:
+        params = {
+            "p_user_id": user_id,
+            "p_request_id": request_id,
+            "p_request_fingerprint": request_fingerprint,
+            "p_expected_revision": expected_revision,
+            "p_daily_preparation_budget_minutes": minutes,
+            "p_now": now.isoformat(),
+        }
         try:
             result = await self._client.rpc(
-                "set_daily_preparation_budget_v1",
-                params={
-                    "p_user_id": user_id,
-                    "p_daily_preparation_budget_minutes": minutes,
-                },
+                "apply_account_preparation_budget_v2",
+                params=params,
             )
         except httpx.HTTPStatusError as exc:
-            if _response_error_code(exc.response) == "PT404":
+            code = _response_error_code(exc.response)
+            if code == "PT404":
                 return None
-            if exc.response.status_code < 500:
+            if code == "PT409":
+                raise AccountSettingConflictError(
+                    "Preparation budget changed. Reload before saving.",
+                ) from exc
+            if exc.response.status_code >= 500:
+                result = await self._replay_account_setting(
+                    function="apply_account_preparation_budget_v2",
+                    params=params,
+                    outcome_error=(
+                        AccountPreparationBudgetUpdateOutcomeUnknownError
+                    ),
+                )
+            else:
                 raise AccountPersistenceError(
                     "Preparation budget persistence is unavailable.",
                 ) from exc
-            return await self._reconcile_ambiguous_preparation_budget_update(
-                user_id=user_id,
-                minutes=minutes,
-                ambiguous_error=exc,
+        except (httpx.HTTPError, ValueError):
+            result = await self._replay_account_setting(
+                function="apply_account_preparation_budget_v2",
+                params=params,
+                outcome_error=AccountPreparationBudgetUpdateOutcomeUnknownError,
             )
-        except (httpx.HTTPError, ValueError) as exc:
-            return await self._reconcile_ambiguous_preparation_budget_update(
-                user_id=user_id,
-                minutes=minutes,
-                ambiguous_error=exc,
-            )
-        if not _is_exact_preparation_budget_result(result=result, minutes=minutes):
-            return await self._reconcile_ambiguous_preparation_budget_update(
-                user_id=user_id,
-                minutes=minutes,
-                ambiguous_error=ValueError(
-                    "Preparation budget persistence returned an invalid result.",
-                ),
-            )
-        return StoredPreparationBudget(minutes=minutes)
+        return _stored_preparation_budget(result, expected_minutes=minutes)
 
-    async def _reconcile_ambiguous_preparation_budget_update(
+    async def _replay_account_setting(
         self,
         *,
-        user_id: str,
-        minutes: int | None,
-        ambiguous_error: Exception,
-    ) -> StoredPreparationBudget | None:
-        # The RPC takes the same owner lock as plan confirmation and setting the
-        # same nullable value is idempotent. Replaying serializes behind a first
-        # request that may still be committing.
+        function: str,
+        params: dict[str, Any],
+        outcome_error: type[RuntimeError],
+    ) -> Any:
         try:
-            result = await self._client.rpc(
-                "set_daily_preparation_budget_v1",
-                params={
-                    "p_user_id": user_id,
-                    "p_daily_preparation_budget_minutes": minutes,
-                },
-            )
+            return await self._client.rpc(function, params=params)
         except httpx.HTTPStatusError as exc:
-            if _response_error_code(exc.response) == "PT404":
-                return None
-            if exc.response.status_code < 500:
-                raise AccountPersistenceError(
-                    "Preparation budget persistence is unavailable.",
+            code = _response_error_code(exc.response)
+            if code == "PT409":
+                raise AccountSettingConflictError(
+                    "Account setting request conflicts with an earlier write.",
                 ) from exc
-            return await self._read_ambiguous_preparation_budget_result(
-                user_id=user_id,
-                minutes=minutes,
-                ambiguous_error=ambiguous_error,
-            )
-        except (httpx.HTTPError, ValueError):
-            return await self._read_ambiguous_preparation_budget_result(
-                user_id=user_id,
-                minutes=minutes,
-                ambiguous_error=ambiguous_error,
-            )
-        if _is_exact_preparation_budget_result(result=result, minutes=minutes):
-            return StoredPreparationBudget(minutes=minutes)
-        return await self._read_ambiguous_preparation_budget_result(
-            user_id=user_id,
-            minutes=minutes,
-            ambiguous_error=ambiguous_error,
-        )
-
-    async def _read_ambiguous_preparation_budget_result(
-        self,
-        *,
-        user_id: str,
-        minutes: int | None,
-        ambiguous_error: Exception,
-    ) -> StoredPreparationBudget | None:
-        try:
-            rows = await self._client.select(
-                "profiles",
-                params={
-                    "select": "daily_preparation_budget_minutes",
-                    "id": f"eq.{user_id}",
-                    "limit": "1",
-                },
-            )
-        except (httpx.HTTPError, ValueError) as exc:
-            raise AccountPreparationBudgetUpdateOutcomeUnknownError(
-                "Preparation budget update outcome could not be determined.",
+            raise outcome_error(
+                "Account setting update outcome could not be determined.",
             ) from exc
-        if rows == []:
-            return None
-        if _is_exact_preparation_budget_rows(rows=rows, minutes=minutes):
-            return StoredPreparationBudget(minutes=minutes)
-        raise AccountPreparationBudgetUpdateOutcomeUnknownError(
-            "Preparation budget update outcome could not be determined.",
-        ) from ambiguous_error
-
-    async def _reconcile_ambiguous_timezone_update(
-        self,
-        *,
-        user_id: str,
-        timezone: str,
-        ambiguous_error: Exception,
-    ) -> str | None:
-        # Replaying this exact PATCH is safe: setting a timezone is idempotent.
-        # It also avoids treating an MVCC read of the pre-commit row as proof
-        # that a timed-out first PATCH will not commit moments later.
-        try:
-            rows = await self._client.update(
-                "profiles",
-                values={"timezone": timezone},
-                params={
-                    "id": f"eq.{user_id}",
-                    "select": "timezone",
-                },
-            )
-        except (httpx.HTTPError, ValueError):
-            return await self._read_ambiguous_timezone_result(
-                user_id=user_id,
-                timezone=timezone,
-                ambiguous_error=ambiguous_error,
-            )
-        if rows == []:
-            return None
-        if _is_exact_timezone_result(rows=rows, timezone=timezone):
-            return timezone
-        return await self._read_ambiguous_timezone_result(
-            user_id=user_id,
-            timezone=timezone,
-            ambiguous_error=ambiguous_error,
-        )
-
-    async def _read_ambiguous_timezone_result(
-        self,
-        *,
-        user_id: str,
-        timezone: str,
-        ambiguous_error: Exception,
-    ) -> str | None:
-        try:
-            profile_rows = await self._client.select(
-                "profiles",
-                params={
-                    "select": "timezone",
-                    "id": f"eq.{user_id}",
-                    "limit": "1",
-                },
-            )
         except (httpx.HTTPError, ValueError) as exc:
-            raise AccountProfileUpdateOutcomeUnknownError(
-                "Account profile update outcome could not be determined.",
+            raise outcome_error(
+                "Account setting update outcome could not be determined.",
             ) from exc
-        if not isinstance(profile_rows, list):
-            raise AccountProfileUpdateOutcomeUnknownError(
-                "Account profile update outcome could not be determined.",
-            ) from ambiguous_error
-        if profile_rows == []:
-            return None
-        if _is_exact_timezone_result(rows=profile_rows, timezone=timezone):
-            return timezone
-        raise AccountProfileUpdateOutcomeUnknownError(
-            "Account profile update outcome could not be determined.",
-        ) from ambiguous_error
 
     async def list_export_rows(
         self,
@@ -359,7 +276,7 @@ class SupabaseAccountRepository:
             )
         except SupabaseResponseTooLargeError as exc:
             raise AccountExportSourceTooLargeError(
-                "Account export source page exceeds the V1 byte bound.",
+                "Account export source page exceeds the V2 byte bound.",
             ) from exc
         except (httpx.HTTPError, ValueError) as exc:
             raise AccountPersistenceError(
@@ -507,33 +424,89 @@ def _is_exact_delete_result(*, result: object, user_id: str) -> bool:
     )
 
 
-def _is_exact_timezone_result(*, rows: object, timezone: str) -> bool:
-    return (
-        isinstance(rows, list)
-        and len(rows) == 1
-        and isinstance(rows[0], dict)
-        and set(rows[0]) == {"timezone"}
-        and rows[0]["timezone"] == timezone
-    )
-
-
-def _is_exact_preparation_budget_result(*, result: object, minutes: int | None) -> bool:
-    return (
-        isinstance(result, dict)
-        and set(result) == {"daily_preparation_budget_minutes"}
-        and result["daily_preparation_budget_minutes"] == minutes
-        and (
-            result["daily_preparation_budget_minutes"] is None
-            or type(result["daily_preparation_budget_minutes"]) is int
+def _stored_timezone(
+    result: object,
+    *,
+    expected_timezone: str,
+) -> StoredTimezone:
+    expected_keys = {
+        "contract_version",
+        "timezone",
+        "revision",
+        "updated_at",
+        "replayed",
+    }
+    if (
+        not isinstance(result, dict)
+        or set(result) != expected_keys
+        or result.get("contract_version") != "account-profile-v2"
+        or result.get("timezone") != expected_timezone
+        or type(result.get("revision")) is not int
+        or result["revision"] < 2
+        or type(result.get("replayed")) is not bool
+        or not isinstance(result.get("updated_at"), str)
+    ):
+        raise AccountProfileUpdateOutcomeUnknownError(
+            "Account profile update outcome could not be determined.",
         )
+    try:
+        updated_at = datetime.fromisoformat(result["updated_at"].replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise AccountProfileUpdateOutcomeUnknownError(
+            "Account profile update outcome could not be determined.",
+        ) from exc
+    if updated_at.tzinfo is None:
+        raise AccountProfileUpdateOutcomeUnknownError(
+            "Account profile update outcome could not be determined.",
+        )
+    return StoredTimezone(
+        timezone=expected_timezone,
+        revision=result["revision"],
+        updated_at=updated_at,
+        replayed=result["replayed"],
     )
 
 
-def _is_exact_preparation_budget_rows(*, rows: object, minutes: int | None) -> bool:
-    return (
-        isinstance(rows, list)
-        and len(rows) == 1
-        and _is_exact_preparation_budget_result(result=rows[0], minutes=minutes)
+def _stored_preparation_budget(
+    result: object,
+    *,
+    expected_minutes: int | None,
+) -> StoredPreparationBudget:
+    expected_keys = {
+        "contract_version",
+        "daily_preparation_budget_minutes",
+        "revision",
+        "updated_at",
+        "replayed",
+    }
+    if (
+        not isinstance(result, dict)
+        or set(result) != expected_keys
+        or result.get("contract_version") != "account-preparation-budget-v2"
+        or result.get("daily_preparation_budget_minutes") != expected_minutes
+        or type(result.get("revision")) is not int
+        or result["revision"] < 2
+        or type(result.get("replayed")) is not bool
+        or not isinstance(result.get("updated_at"), str)
+    ):
+        raise AccountPreparationBudgetUpdateOutcomeUnknownError(
+            "Preparation budget update outcome could not be determined.",
+        )
+    try:
+        updated_at = datetime.fromisoformat(result["updated_at"].replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise AccountPreparationBudgetUpdateOutcomeUnknownError(
+            "Preparation budget update outcome could not be determined.",
+        ) from exc
+    if updated_at.tzinfo is None:
+        raise AccountPreparationBudgetUpdateOutcomeUnknownError(
+            "Preparation budget update outcome could not be determined.",
+        )
+    return StoredPreparationBudget(
+        minutes=expected_minutes,
+        revision=result["revision"],
+        updated_at=updated_at,
+        replayed=result["replayed"],
     )
 
 

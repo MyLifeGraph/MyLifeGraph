@@ -189,7 +189,10 @@ void main() {
       controller.state.items.single.updatedAt,
       DateTime.utc(2026, 7, 10, 8),
     );
-    expect(controller.state.actionFor(_firstId), isNull);
+    expect(
+      controller.state.actionFor(_firstId)?.committedRequiresReload,
+      isTrue,
+    );
     expect(controller.state.loadError, isA<StateError>());
     expect(controller.state.isLoading, isFalse);
   });
@@ -489,8 +492,21 @@ class _FakeNotificationsRepository implements NotificationsRepository {
   @override
   Future<NotificationLifecycleResult> performLifecycleAction(
     NotificationLifecycleRequest request,
-  ) {
+  ) async {
     requests.add(request);
-    return onAction(requests.length, request);
+    final result = await onAction(requests.length, request);
+    if (!result.replayed) {
+      final index =
+          items.indexWhere((item) => item.id == request.notificationId);
+      if (index >= 0) {
+        if (request.command == NotificationLifecycleCommand.dismiss) {
+          items = [...items]..removeAt(index);
+        } else {
+          final updated = items[index].applyLifecycle(result);
+          items = [...items]..[index] = updated;
+        }
+      }
+    }
+    return result;
   }
 }

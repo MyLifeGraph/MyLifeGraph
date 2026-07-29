@@ -23,6 +23,7 @@ final authRepositoryProvider = Provider<AuthRepository?>((ref) {
       : AuthRepository(
           client,
           useMockData: ref.watch(appConfigProvider).useMockData,
+          apiClient: ref.watch(apiClientProvider),
           guestSetupDataSource: const GuestSetupDataSource(),
         );
 });
@@ -174,26 +175,32 @@ class AuthController extends StateNotifier<AsyncValue<AppSession?>> {
     );
   }
 
-  void updateProfileTimezone(String timezone) {
+  void updateProfileTimezone(String timezone, {required int revision}) {
     final session = state.valueOrNull;
     if (session == null || session.isGuestSession) {
       throw StateError('A synced account session is required.');
     }
     state = AsyncValue.data(
       AppSession.authenticated(
-        session.profile.copyWith(timezone: timezone),
+        session.profile.copyWith(
+          timezone: timezone,
+          timezoneRevision: revision,
+        ),
       ),
     );
   }
 
-  void updateDailyPreparationBudget(int? minutes) {
+  void updateDailyPreparationBudget(int? minutes, {required int revision}) {
     final session = state.valueOrNull;
     if (session == null || session.isGuestSession) {
       throw StateError('A synced account session is required.');
     }
     state = AsyncValue.data(
       AppSession.authenticated(
-        session.profile.withDailyPreparationBudget(minutes),
+        session.profile.withDailyPreparationBudget(
+          minutes,
+          revision: revision,
+        ),
       ),
     );
   }

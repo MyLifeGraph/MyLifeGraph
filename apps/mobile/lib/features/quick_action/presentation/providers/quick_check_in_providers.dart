@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/capabilities/app_surface_capabilities.dart';
+import '../../../../core/network/api_client.dart';
 import '../../../../core/supabase/supabase_providers.dart';
 import '../../../focus/data/focus_session_supabase_data_source.dart';
 import '../../data/guest_quick_check_in_data_source.dart';
@@ -14,7 +15,10 @@ final quickCheckInStoreProvider = Provider<QuickCheckInStore>((ref) {
 
   final client = ref.watch(supabaseClientProvider);
   if (client != null) {
-    return QuickCheckInSupabaseDataSource(client);
+    return QuickCheckInSupabaseDataSource(
+      client,
+      apiClient: ref.watch(apiClientProvider),
+    );
   }
   return const _UnavailableQuickCheckInStore();
 });

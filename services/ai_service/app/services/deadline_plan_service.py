@@ -32,6 +32,11 @@ from app.models.deadline_plans import (
     PreparationWorkloadResponse,
 )
 from app.models.planning_timing import PlanningTimingProvenance
+from app.services.local_time import (
+    LocalTimeResolutionError,
+    resolve_local_datetime,
+    resolve_local_interval,
+)
 from app.repositories.deadline_plan_repository import (
     DeadlinePlanProjection,
     DeadlinePlanPersistenceConflict,
@@ -1162,6 +1167,13 @@ class DeadlinePlanService:
         if row.get("source_kind") == "calendar_event":
             if event_id and calendar_events is not None:
                 event = calendar_events.get(str(event_id))
+                if event is None or not _calendar_event_has_status_projection(
+                    event,
+                ):
+                    event = await self._repository.get_calendar_event(
+                        user_id=user_id,
+                        event_id=UUID(str(event_id)),
+                    )
             elif event_id:
                 event = await self._repository.get_calendar_event(
                     user_id=user_id,
@@ -1598,8 +1610,14 @@ def _sleep_busy_intervals(
     intervals: list[dict[str, Any]] = []
     complete = True
     for day in _days(starts_on, ends_on):
-        starts_at = datetime.combine(day, planned_time, tzinfo=zone)
-        if not is_unambiguous_local(starts_at, zone):
+        try:
+            starts_at = resolve_local_datetime(
+                local_date=day,
+                local_time=planned_time,
+                zone=zone,
+                source_id=f"sleep-plan:{sleep_plan.capture_id}",
+            )
+        except LocalTimeResolutionError:
             complete = False
             continue
         ends_at = (
@@ -1756,7 +1774,15 @@ def _busy_intervals_by_day(
                 local_now + timedelta(minutes=15),
             )
             result[day].append(
-                (datetime.combine(day, time.min, tzinfo=zone), rounded_now),
+                (
+                    resolve_local_datetime(
+                        local_date=day,
+                        local_time=time.min,
+                        zone=zone,
+                        source_id=f"planning-day:{day.isoformat()}",
+                    ),
+                    rounded_now,
+                ),
             )
     for item in context.schedule_items:
         weekday = _int(item.get("weekday"))
@@ -1770,9 +1796,12 @@ def _busy_intervals_by_day(
                 day,
             ):
                 result[day].append(
-                    (
-                        datetime.combine(day, starts, tzinfo=zone),
-                        datetime.combine(day, ends, tzinfo=zone),
+                    resolve_local_interval(
+                        local_date=day,
+                        starts_at=starts,
+                        ends_at=ends,
+                        zone=zone,
+                        source_id=f"setup:{item.get('id', weekday)}",
                     ),
                 )
     for item in [*context.confirmed_blocks, *context.timed_calendar_events]:
@@ -1791,11 +1820,17 @@ def _busy_intervals_by_day(
             if cursor in day_set:
                 result[cursor].append(
                     (
-                        datetime.combine(cursor, time.min, tzinfo=zone),
-                        datetime.combine(
-                            cursor + timedelta(days=1),
-                            time.min,
-                            tzinfo=zone,
+                        resolve_local_datetime(
+                            local_date=cursor,
+                            local_time=time.min,
+                            zone=zone,
+                            source_id=f"calendar-all-day:{item.get('id', cursor)}",
+                        ),
+                        resolve_local_datetime(
+                            local_date=cursor + timedelta(days=1),
+                            local_time=time.min,
+                            zone=zone,
+                            source_id=f"calendar-all-day:{item.get('id', cursor)}",
                         ),
                     ),
                 )
@@ -1972,10 +2007,20 @@ def _calendar_event_is_current(event: dict[str, Any]) -> bool:
     return (
         event.get("_connection_status") == "connected"
         and event.get("_connection_imported_data_deleted_at") is None
+        and event.get("_import_planning_status") == "current"
         and event.get("import_id") is not None
         and str(event.get("import_id"))
         == str(event.get("_connection_last_import_id"))
     )
+
+
+def _calendar_event_has_status_projection(event: dict[str, Any]) -> bool:
+    return {
+        "_connection_status",
+        "_connection_last_import_id",
+        "_connection_imported_data_deleted_at",
+        "_import_planning_status",
+    }.issubset(event)
 
 
 def _round_up_quarter_hour(value: datetime) -> datetime:
@@ -2043,6 +2088,13 @@ def _plan_identity(row: dict[str, Any]) -> DeadlinePlanIdentity:
         original_credited_prior_minutes=_int(row["original_credited_prior_minutes"]),
         current_revision=_int(row["current_revision"]),
         latest_revision=_int(row["latest_revision"]),
+        attention_reasons=list(
+            dict.fromkeys(
+                value
+                for value in row.get("attention_reasons", [])
+                if isinstance(value, str) and value
+            ),
+        ),
         created_at=_datetime(row["created_at"]),
         updated_at=_datetime(row["updated_at"]),
         completed_at=_optional_datetime(row.get("completed_at")),

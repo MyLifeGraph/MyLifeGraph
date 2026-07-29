@@ -1,4 +1,4 @@
-const calendarImportContractVersion = 'calendar-import-v1';
+const calendarImportContractVersion = 'calendar-import-v2';
 const calendarImportConsentVersion = 'calendar-import-consent-v1';
 const calendarImportMaxFileBytes = 512 * 1024;
 
@@ -24,6 +24,24 @@ enum CalendarConnectionStatus {
         'disconnected' => disconnected,
         _ => null,
       };
+}
+
+enum CalendarImportPlanningStatus {
+  notImported('not_imported'),
+  current('current'),
+  profileTimezoneChanged('profile_timezone_changed'),
+  disconnected('disconnected'),
+  deleted('deleted');
+
+  const CalendarImportPlanningStatus(this.code);
+  final String code;
+
+  static CalendarImportPlanningStatus? fromCode(Object? value) {
+    for (final item in values) {
+      if (item.code == value) return item;
+    }
+    return null;
+  }
 }
 
 class CalendarIntegrationFeed {
@@ -264,17 +282,38 @@ class CalendarImportSummary {
     required this.window,
     required this.counts,
     required this.sourceFingerprint,
+    required this.profileTimezoneRevision,
+    required this.planningStatus,
   });
 
   factory CalendarImportSummary.fromJson(Map<String, dynamic> json) {
     _expectExactKeys(
       json,
-      const {'id', 'imported_at', 'window', 'counts', 'source_fingerprint'},
+      const {
+        'id',
+        'imported_at',
+        'window',
+        'counts',
+        'source_fingerprint',
+        'profile_timezone_revision',
+        'planning_status',
+      },
       'calendar import summary',
     );
     if (json['window'] is! Map || json['counts'] is! Map) {
       throw const CalendarIntegrationContractException(
         'Calendar import summary fields are invalid.',
+      );
+    }
+    final planningStatus = CalendarImportPlanningStatus.fromCode(
+      json['planning_status'],
+    );
+    final timezoneRevision = json['profile_timezone_revision'];
+    if (planningStatus == null ||
+        timezoneRevision is! int ||
+        timezoneRevision < 0) {
+      throw const CalendarIntegrationContractException(
+        'Calendar import planning status is invalid.',
       );
     }
     return CalendarImportSummary(
@@ -293,6 +332,8 @@ class CalendarImportSummary {
         json['source_fingerprint'],
         'import.source_fingerprint',
       ),
+      profileTimezoneRevision: timezoneRevision,
+      planningStatus: planningStatus,
     );
   }
 
@@ -301,13 +342,17 @@ class CalendarImportSummary {
   final CalendarImportWindow window;
   final CalendarImportCounts counts;
   final String sourceFingerprint;
+  final int profileTimezoneRevision;
+  final CalendarImportPlanningStatus planningStatus;
 
   bool hasSameContent(CalendarImportSummary other) =>
       id == other.id &&
       importedAt == other.importedAt &&
       window.hasSameContent(other.window) &&
       counts.hasSameContent(other.counts) &&
-      sourceFingerprint == other.sourceFingerprint;
+      sourceFingerprint == other.sourceFingerprint &&
+      profileTimezoneRevision == other.profileTimezoneRevision &&
+      planningStatus == other.planningStatus;
 }
 
 class CalendarImportWindow {

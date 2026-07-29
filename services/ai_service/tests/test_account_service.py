@@ -1,6 +1,7 @@
 import asyncio
 from datetime import UTC, datetime
 from decimal import Decimal
+from uuid import UUID
 
 import pytest
 from pydantic import ValidationError
@@ -22,6 +23,7 @@ from app.repositories.account_repository import (
     AccountExportTable,
     AccountPersistenceError,
     StoredPreparationBudget,
+    StoredTimezone,
 )
 from app.services.account_service import (
     ACCOUNT_EXPORT_PAGE_SIZE,
@@ -34,14 +36,25 @@ from app.services.account_service import (
 
 
 NOW = datetime(2026, 7, 13, 12, tzinfo=UTC)
+REQUEST_ID = UUID("00000000-0000-4000-8000-000000000001")
 
 
 class Repository:
     def __init__(self) -> None:
-        self.timezone_result: str | None = "Europe/Berlin"
-        self.update_calls: list[tuple[str, str]] = []
-        self.preparation_budget_result = StoredPreparationBudget(minutes=120)
-        self.preparation_budget_calls: list[tuple[str, int | None]] = []
+        self.timezone_result: StoredTimezone | None = StoredTimezone(
+            timezone="Europe/Berlin",
+            revision=2,
+            updated_at=NOW,
+            replayed=False,
+        )
+        self.update_calls: list[dict[str, object]] = []
+        self.preparation_budget_result = StoredPreparationBudget(
+            minutes=120,
+            revision=2,
+            updated_at=NOW,
+            replayed=False,
+        )
+        self.preparation_budget_calls: list[dict[str, object]] = []
         self.export_calls: list[
             tuple[str, AccountExportTable, str | None, str, int, int]
         ] = []
@@ -50,12 +63,12 @@ class Repository:
         self.oversized_source_table: str | None = None
         self.delete_calls: list[tuple[str, str]] = []
 
-    async def update_timezone(self, *, user_id: str, timezone: str):
-        self.update_calls.append((user_id, timezone))
+    async def update_timezone(self, **kwargs):
+        self.update_calls.append(kwargs)
         return self.timezone_result
 
-    async def update_preparation_budget(self, *, user_id: str, minutes: int | None):
-        self.preparation_budget_calls.append((user_id, minutes))
+    async def update_preparation_budget(self, **kwargs):
+        self.preparation_budget_calls.append(kwargs)
         return self.preparation_budget_result
 
     async def list_export_rows(
@@ -113,15 +126,32 @@ class Repository:
 
 def test_timezone_update_validates_iana_name_and_derives_owner() -> None:
     repository = Repository()
-    repository.timezone_result = "America/New_York"
-    service = AccountService(repository=repository)
+    repository.timezone_result = StoredTimezone(
+        timezone="America/New_York",
+        revision=5,
+        updated_at=NOW,
+        replayed=False,
+    )
+    service = AccountService(repository=repository, now=lambda: NOW)
 
     result = asyncio.run(
-        service.update_timezone(user_id="owner-1", timezone="America/New_York"),
+        service.update_timezone(
+            user_id="owner-1",
+            request_id=REQUEST_ID,
+            expected_revision=4,
+            timezone="America/New_York",
+        ),
     )
 
-    assert result.model_dump() == {"timezone": "America/New_York"}
-    assert repository.update_calls == [("owner-1", "America/New_York")]
+    assert result.timezone == "America/New_York"
+    assert result.revision == 5
+    call = repository.update_calls[0]
+    assert call["user_id"] == "owner-1"
+    assert call["request_id"] == str(REQUEST_ID)
+    assert call["expected_revision"] == 4
+    assert call["timezone"] == "America/New_York"
+    assert call["now"] == NOW
+    assert isinstance(call["request_fingerprint"], str)
 
 
 @pytest.mark.parametrize(
@@ -140,7 +170,14 @@ def test_timezone_update_rejects_unstable_or_unknown_zone(timezone: str) -> None
     service = AccountService(repository=repository)
 
     with pytest.raises(InvalidAccountTimezoneError):
-        asyncio.run(service.update_timezone(user_id="owner-1", timezone=timezone))
+        asyncio.run(
+            service.update_timezone(
+                user_id="owner-1",
+                request_id=REQUEST_ID,
+                expected_revision=1,
+                timezone=timezone,
+            ),
+        )
 
     assert repository.update_calls == []
 
@@ -150,21 +187,31 @@ def test_preparation_budget_validates_rule_and_returns_stored_value() -> None:
     service = AccountService(repository=repository)
 
     result = asyncio.run(
-        service.update_preparation_budget(user_id="owner-1", minutes=120),
+        service.update_preparation_budget(
+            user_id="owner-1",
+            request_id=REQUEST_ID,
+            expected_revision=1,
+            minutes=120,
+        ),
     )
 
-    assert result.model_dump() == {"daily_preparation_budget_minutes": 120}
-    assert repository.preparation_budget_calls == [("owner-1", 120)]
+    assert result.daily_preparation_budget_minutes == 120
+    assert result.revision == 2
+    assert repository.preparation_budget_calls[0]["user_id"] == "owner-1"
+    assert repository.preparation_budget_calls[0]["minutes"] == 120
+    assert repository.preparation_budget_calls[0]["expected_revision"] == 1
 
     for invalid in (24, 26, 481, True):
         with pytest.raises(InvalidPreparationBudgetError):
             asyncio.run(
                 service.update_preparation_budget(
                     user_id="owner-1",
+                    request_id=REQUEST_ID,
+                    expected_revision=1,
                     minutes=invalid,  # type: ignore[arg-type]
                 ),
             )
-    assert repository.preparation_budget_calls == [("owner-1", 120)]
+    assert len(repository.preparation_budget_calls) == 1
 
 
 def test_export_is_owner_scoped_versioned_complete_and_sanitizes_ledgers() -> None:
@@ -185,7 +232,7 @@ def test_export_is_owner_scoped_versioned_complete_and_sanitizes_ledgers() -> No
     prepared = asyncio.run(service.export_account(user_id="owner-1"))
     result = prepared.envelope
 
-    assert result.contract_version == "account-export-v1"
+    assert result.contract_version == "account-export-v2"
     assert result.exported_at == NOW
     assert list(result.data) == [table.name for table in ACCOUNT_EXPORT_TABLES]
     assert result.record_counts["profiles"] == 1
@@ -316,7 +363,7 @@ def test_export_maps_a_stream_bounded_source_page_to_413_outcome() -> None:
     assert repository.export_calls[0][5] <= ACCOUNT_EXPORT_MAX_JSON_BYTES
 
 
-def test_export_models_reject_non_v1_tables_policy_and_limits() -> None:
+def test_export_models_reject_non_v2_tables_policy_and_limits() -> None:
     data = {name: [] for name in ACCOUNT_EXPORT_TABLE_NAMES}
     counts = {name: 0 for name in ACCOUNT_EXPORT_TABLE_NAMES}
     policy = AccountExportLedgerPolicy(
@@ -329,21 +376,21 @@ def test_export_models_reject_non_v1_tables_policy_and_limits() -> None:
         max_json_bytes=ACCOUNT_EXPORT_MAX_JSON_BYTES,
     )
 
-    with pytest.raises(ValidationError, match="exact V1 export table set"):
+    with pytest.raises(ValidationError, match="exact V2 export table set"):
         AccountExportResponse(
-            contract_version="account-export-v1",
+            contract_version="account-export-v2",
             exported_at=NOW,
             data={"profiles": []},
             record_counts={"profiles": 0},
             ledger_policy=policy,
             limits=limits,
         )
-    with pytest.raises(ValidationError, match="V1 ledger policy"):
+    with pytest.raises(ValidationError, match="V2 ledger policy"):
         AccountExportLedgerPolicy(
             sanitized_tables=["coach_requests"],
             omitted_tables=dict(ACCOUNT_EXPORT_OMITTED_TABLES),
         )
-    with pytest.raises(ValidationError, match="account-export-v1"):
+    with pytest.raises(ValidationError, match="account-export-v2"):
         AccountExportLimits(
             max_rows_per_table=1,
             max_total_rows=2,
@@ -351,7 +398,7 @@ def test_export_models_reject_non_v1_tables_policy_and_limits() -> None:
         )
 
     valid = AccountExportResponse(
-        contract_version="account-export-v1",
+        contract_version="account-export-v2",
         exported_at=NOW,
         data=data,
         record_counts=counts,

@@ -531,9 +531,11 @@ async function seedScenario(userId, scenario) {
       index,
     ) => {
       const terminalAt = atHour(addDays(reviewWeekStart, 1 + index), 16, 0);
+      const taskId = deterministicUuid(`demo-seed:task:${userId}:${index}`);
       return {
-        id: deterministicUuid(`demo-seed:task:${userId}:${index}`),
+        id: taskId,
         user_id: userId,
+        creation_request_id: taskId,
         title,
         description,
         status,
@@ -574,9 +576,11 @@ async function seedScenario(userId, scenario) {
   const habitRows = scenario.habits.map(
     ([title, description, , cadenceConfig], index) => {
       const cadence = habitCadenceProjection(cadenceConfig);
+      const habitId = deterministicUuid(`demo-seed:habit:${userId}:${index}`);
       return {
-        id: deterministicUuid(`demo-seed:habit:${userId}:${index}`),
+        id: habitId,
         user_id: userId,
+        creation_request_id: habitId,
         title,
         description,
         frequency: cadence.frequency,

@@ -35,6 +35,7 @@ from app.services.account_service import (
 
 USER_ID = "account-owner"
 NOW = datetime(2026, 7, 13, 12, tzinfo=UTC)
+REQUEST_ID = "00000000-0000-4000-8000-000000000001"
 
 
 class Verifier:
@@ -73,18 +74,52 @@ class Service:
         self.export_error: Exception | None = None
         self.delete_error: Exception | None = None
 
-    async def update_timezone(self, *, user_id: str, timezone: str):
-        self.calls.append(("profile", user_id, timezone))
+    async def update_timezone(
+        self,
+        *,
+        user_id: str,
+        request_id,
+        expected_revision: int,
+        timezone: str,
+    ):
+        self.calls.append(
+            ("profile", user_id, str(request_id), expected_revision, timezone),
+        )
         if self.profile_error is not None:
             raise self.profile_error
-        return AccountProfileResponse(timezone=timezone)
+        return AccountProfileResponse(
+            contract_version="account-profile-v2",
+            timezone=timezone,
+            revision=expected_revision + 1,
+            updated_at=NOW,
+            replayed=False,
+        )
 
-    async def update_preparation_budget(self, *, user_id: str, minutes: int | None):
-        self.calls.append(("preparation_budget", user_id, minutes))
+    async def update_preparation_budget(
+        self,
+        *,
+        user_id: str,
+        request_id,
+        expected_revision: int,
+        minutes: int | None,
+    ):
+        self.calls.append(
+            (
+                "preparation_budget",
+                user_id,
+                str(request_id),
+                expected_revision,
+                minutes,
+            ),
+        )
         if self.preparation_budget_error is not None:
             raise self.preparation_budget_error
         return AccountPreparationBudgetResponse(
+            contract_version="account-preparation-budget-v2",
             daily_preparation_budget_minutes=minutes,
+            revision=expected_revision + 1,
+            updated_at=NOW,
+            replayed=False,
         )
 
     async def export_account(self, *, user_id: str):
@@ -95,7 +130,7 @@ class Service:
         data["profiles"] = [{"id": USER_ID, "timezone": "Europe/Berlin"}]
         record_counts = {name: len(rows) for name, rows in data.items()}
         envelope = AccountExportResponse(
-            contract_version="account-export-v1",
+            contract_version="account-export-v2",
             exported_at=NOW,
             data=data,
             record_counts=record_counts,
@@ -151,19 +186,38 @@ def test_patch_profile_is_strict_authenticated_and_owner_derived() -> None:
         _request(
             "PATCH",
             "/v1/account/profile",
-            json={"timezone": "America/New_York"},
+            json={
+                "contract_version": "account-profile-update-v2",
+                "request_id": REQUEST_ID,
+                "expected_revision": 4,
+                "timezone": "America/New_York",
+            },
         ),
     )
 
     assert response.status_code == 200
-    assert response.json() == {"timezone": "America/New_York"}
-    assert service.calls == [("profile", USER_ID, "America/New_York")]
+    assert response.json() == {
+        "contract_version": "account-profile-v2",
+        "timezone": "America/New_York",
+        "revision": 5,
+        "updated_at": NOW.isoformat().replace("+00:00", "Z"),
+        "replayed": False,
+    }
+    assert service.calls == [
+        ("profile", USER_ID, REQUEST_ID, 4, "America/New_York"),
+    ]
 
     unknown, unknown_service = asyncio.run(
         _request(
             "PATCH",
             "/v1/account/profile",
-            json={"timezone": "UTC", "user_id": "other"},
+            json={
+                "contract_version": "account-profile-update-v2",
+                "request_id": REQUEST_ID,
+                "expected_revision": 4,
+                "timezone": "UTC",
+                "user_id": "other",
+            },
         ),
     )
     assert unknown.status_code == 422
@@ -184,7 +238,12 @@ def test_patch_maps_timezone_missing_and_persistence_errors_safely() -> None:
             _request(
                 "PATCH",
                 "/v1/account/profile",
-                json={"timezone": "Europe/Berlin"},
+                json={
+                    "contract_version": "account-profile-update-v2",
+                    "request_id": REQUEST_ID,
+                    "expected_revision": 1,
+                    "timezone": "Europe/Berlin",
+                },
                 service=service,
             ),
         )
@@ -198,23 +257,65 @@ def test_patch_preparation_budget_is_strict_owner_derived_and_nullable() -> None
             _request(
                 "PATCH",
                 "/v1/account/preparation-budget",
-                json={"daily_preparation_budget_minutes": minutes},
+                json={
+                    "contract_version": "account-preparation-budget-update-v2",
+                    "request_id": REQUEST_ID,
+                    "expected_revision": 6,
+                    "daily_preparation_budget_minutes": minutes,
+                },
             ),
         )
 
         assert response.status_code == 200
         assert response.json() == {
+            "contract_version": "account-preparation-budget-v2",
             "daily_preparation_budget_minutes": minutes,
+            "revision": 7,
+            "updated_at": NOW.isoformat().replace("+00:00", "Z"),
+            "replayed": False,
         }
-        assert service.calls == [("preparation_budget", USER_ID, minutes)]
+        assert service.calls == [
+            ("preparation_budget", USER_ID, REQUEST_ID, 6, minutes),
+        ]
 
     for invalid_body in [
-        {"daily_preparation_budget_minutes": 24},
-        {"daily_preparation_budget_minutes": 26},
-        {"daily_preparation_budget_minutes": 481},
-        {"daily_preparation_budget_minutes": True},
-        {"daily_preparation_budget_minutes": "120"},
-        {"daily_preparation_budget_minutes": 120, "user_id": "other"},
+        {
+            "contract_version": "account-preparation-budget-update-v2",
+            "request_id": REQUEST_ID,
+            "expected_revision": 1,
+            "daily_preparation_budget_minutes": 24,
+        },
+        {
+            "contract_version": "account-preparation-budget-update-v2",
+            "request_id": REQUEST_ID,
+            "expected_revision": 1,
+            "daily_preparation_budget_minutes": 26,
+        },
+        {
+            "contract_version": "account-preparation-budget-update-v2",
+            "request_id": REQUEST_ID,
+            "expected_revision": 1,
+            "daily_preparation_budget_minutes": 481,
+        },
+        {
+            "contract_version": "account-preparation-budget-update-v2",
+            "request_id": REQUEST_ID,
+            "expected_revision": 1,
+            "daily_preparation_budget_minutes": True,
+        },
+        {
+            "contract_version": "account-preparation-budget-update-v2",
+            "request_id": REQUEST_ID,
+            "expected_revision": 1,
+            "daily_preparation_budget_minutes": "120",
+        },
+        {
+            "contract_version": "account-preparation-budget-v2",
+            "request_id": REQUEST_ID,
+            "expected_revision": 1,
+            "daily_preparation_budget_minutes": 120,
+            "user_id": "other",
+        },
         {},
     ]:
         invalid, invalid_service = asyncio.run(
@@ -242,7 +343,12 @@ def test_patch_preparation_budget_maps_failures_without_leaking_details() -> Non
             _request(
                 "PATCH",
                 "/v1/account/preparation-budget",
-                json={"daily_preparation_budget_minutes": 120},
+                json={
+                    "contract_version": "account-preparation-budget-update-v2",
+                    "request_id": REQUEST_ID,
+                    "expected_revision": 1,
+                    "daily_preparation_budget_minutes": 120,
+                },
                 service=service,
             ),
         )
@@ -259,17 +365,17 @@ def test_export_returns_download_ready_versioned_json_and_maps_limits() -> None:
     assert response.headers["content-disposition"] == (
         'attachment; filename="mylifegraph-account-export.json"'
     )
-    assert response.json()["contract_version"] == "account-export-v1"
+    assert response.json()["contract_version"] == "account-export-v2"
     assert response.json()["data"]["profiles"][0]["id"] == USER_ID
     assert service.calls == [("export", USER_ID)]
 
     limited_service = Service()
-    limited_service.export_error = AccountExportTooLargeError("V1 bound reached")
+    limited_service.export_error = AccountExportTooLargeError("V2 bound reached")
     limited, _ = asyncio.run(
         _request("GET", "/v1/account/export", service=limited_service),
     )
     assert limited.status_code == 413
-    assert limited.json() == {"detail": "V1 bound reached"}
+    assert limited.json() == {"detail": "V2 bound reached"}
 
     failed_service = Service()
     failed_service.export_error = AccountPersistenceError("private upstream detail")

@@ -176,7 +176,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(
       find.text(
-        'This account exceeds the V1 export limits. Retrying unchanged will not help; reduce deletable history or request a larger export workflow.',
+        'This account exceeds the V2 export limits. Retrying unchanged will not help; reduce deletable history or request a larger export workflow.',
       ),
       findsOneWidget,
     );
@@ -876,7 +876,10 @@ class _FakeAccountSettingsRepository implements AccountSettingsRepository {
   int deleteCalls = 0;
 
   @override
-  Future<String> updateTimezone(String timezone) async {
+  Future<AccountTimezoneWrite> updateTimezone(
+    String timezone, {
+    required int expectedRevision,
+  }) async {
     timezoneCalls.add(timezone);
     if (failNextTimezone) {
       failNextTimezone = false;
@@ -885,13 +888,26 @@ class _FakeAccountSettingsRepository implements AccountSettingsRepository {
     final error = timezoneError;
     timezoneError = null;
     if (error != null) throw error;
-    return timezone;
+    return AccountTimezoneWrite(
+      timezone: timezone,
+      revision: expectedRevision + 1,
+      updatedAt: DateTime.utc(2026, 7, 29, 12),
+      replayed: false,
+    );
   }
 
   @override
-  Future<int?> updateDailyPreparationBudget(int? minutes) async {
+  Future<AccountPreparationBudgetWrite> updateDailyPreparationBudget(
+    int? minutes, {
+    required int expectedRevision,
+  }) async {
     preparationBudgetCalls.add(minutes);
-    return minutes;
+    return AccountPreparationBudgetWrite(
+      minutes: minutes,
+      revision: expectedRevision + 1,
+      updatedAt: DateTime.utc(2026, 7, 29, 12),
+      replayed: false,
+    );
   }
 
   @override
@@ -907,7 +923,7 @@ class _FakeAccountSettingsRepository implements AccountSettingsRepository {
         table: <Map<String, dynamic>>[],
     };
     return AccountExportEnvelope.fromJson({
-      'contract_version': 'account-export-v1',
+      'contract_version': 'account-export-v2',
       'exported_at': '2026-07-13T12:00:00Z',
       'data': data,
       'record_counts': <String, int>{
@@ -946,7 +962,7 @@ class _FakeExportSaver implements AccountExportSaver {
   }) async {
     calls += 1;
     expect(suggestedName, startsWith('mylifegraph-export-'));
-    expect(export.contractVersion, 'account-export-v1');
+    expect(export.contractVersion, 'account-export-v2');
     return AccountExportSaveResult.saved;
   }
 }

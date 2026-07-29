@@ -66,6 +66,7 @@ class FakeSupabaseClient:
         self.insert_calls: list[tuple[str, list[dict]]] = []
         self.update_calls: list[tuple[str, dict, dict[str, str]]] = []
         self.upsert_calls: list[tuple[str, list[dict], str | None]] = []
+        self.rpc_calls: list[tuple[str, dict]] = []
 
     async def select(self, table: str, *, params):
         self.select_calls.append((table, params))
@@ -91,25 +92,42 @@ class FakeSupabaseClient:
         self.upsert_calls.append((table, rows, on_conflict))
         return [{"id": "upserted-snapshot", **rows[0]}]
 
+    async def rpc(self, function: str, *, params: dict):
+        self.rpc_calls.append((function, params))
+        return {"id": "upserted-snapshot", **params["p_row"]}
+
 
 class FakePagedSnapshotClient(FakeSupabaseClient):
     def __init__(self) -> None:
         super().__init__()
         self.rows_by_table = {
-            "habit_logs": [{"id": f"habit-log-{index}"} for index in range(1005)],
+            "habit_logs": [
+                {
+                    "id": f"habit-log-{index:04d}",
+                    "entry_date": "2026-07-02",
+                    "created_at": "2026-07-02T10:00:00+00:00",
+                }
+                for index in range(1005)
+            ],
             "focus_sessions": [
-                {"id": f"focus-session-{index}"} for index in range(1002)
+                {
+                    "id": f"focus-session-{index:04d}",
+                    "started_at": "2026-07-02T10:00:00+00:00",
+                }
+                for index in range(1002)
             ],
         }
+        self.page_calls: dict[str, int] = {}
 
     async def select(self, table: str, *, params):
         self.select_calls.append((table, params))
         rows = self.rows_by_table.get(table, [])
-        offsets = _param_values(params, "offset")
         limits = _param_values(params, "limit")
-        offset = int(offsets[-1]) if offsets else 0
         limit = int(limits[-1]) if limits else len(rows)
-        return rows[offset : offset + limit]
+        page = self.page_calls.get(table, 0)
+        self.page_calls[table] = page + 1
+        start = page * limit
+        return rows[start : start + limit]
 
 
 class FakeTokenVerifier:
@@ -816,16 +834,18 @@ def test_snapshot_repository_paginates_complete_action_fact_windows():
 
     assert len(inputs.habit_logs) == 1005
     assert len(inputs.focus_sessions) == 1002
-    assert [
-        _param_values(params, "offset")[-1]
-        for table, params in client.select_calls
-        if table == "habit_logs"
-    ] == ["0", "1000"]
-    assert [
-        _param_values(params, "offset")[-1]
-        for table, params in client.select_calls
-        if table == "focus_sessions"
-    ] == ["0", "1000"]
+    habit_calls = [
+        params for table, params in client.select_calls if table == "habit_logs"
+    ]
+    focus_calls = [
+        params for table, params in client.select_calls if table == "focus_sessions"
+    ]
+    assert all(_param_values(params, "offset") == [] for params in habit_calls)
+    assert all(_param_values(params, "offset") == [] for params in focus_calls)
+    assert _param_values(habit_calls[0], "or") == []
+    assert _param_values(focus_calls[0], "or") == []
+    assert "id.gt.habit-log-0999" in _param_values(habit_calls[1], "or")[0]
+    assert "id.gt.focus-session-0999" in _param_values(focus_calls[1], "or")[0]
 
 
 def test_snapshot_repository_upserts_existing_period_snapshot_atomically():
@@ -843,6 +863,7 @@ def test_snapshot_repository_upserts_existing_period_snapshot_atomically():
                 "period_key": "2026-07-02",
                 "summary": {},
                 "signals": {},
+                "source_observed_at": "2026-07-29T12:00:00+00:00",
             },
         ),
     )
@@ -851,19 +872,24 @@ def test_snapshot_repository_upserts_existing_period_snapshot_atomically():
     assert client.select_calls == []
     assert client.insert_calls == []
     assert client.update_calls == []
-    assert client.upsert_calls == [
+    assert client.upsert_calls == []
+    assert client.rpc_calls == [
         (
-            "user_state_snapshots",
-            [
-                {
+            "persist_user_state_snapshot_v2",
+            {
+                "p_user_id": "user-test-123",
+                "p_scope": "daily",
+                "p_period_key": "2026-07-02",
+                "p_source_observed_at": "2026-07-29T12:00:00+00:00",
+                "p_row": {
                     "user_id": "user-test-123",
                     "scope": "daily",
                     "period_key": "2026-07-02",
                     "summary": {},
                     "signals": {},
+                    "source_observed_at": "2026-07-29T12:00:00+00:00",
                 },
-            ],
-            "user_id,scope,period_key",
+            },
         ),
     ]
 

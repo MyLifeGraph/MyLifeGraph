@@ -8,7 +8,6 @@ import 'package:my_life_graph/core/theme/app_icons.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/config/app_config.dart';
@@ -30,21 +29,22 @@ final focusSessionPageDataSourceProvider =
 });
 
 final focusStudySettingsDataSourceProvider =
-    Provider<FocusSessionSupabaseDataSource?>((ref) {
-  SupabaseClient? client;
-  try {
-    client = ref.watch(supabaseClientProvider);
-  } catch (_) {
-    return null;
-  }
-  return client == null || client.auth.currentUser == null
-      ? null
-      : FocusSessionSupabaseDataSource(client);
-});
+    Provider<FocusSessionSupabaseDataSource?>(
+  (ref) => ref.watch(focusSessionPageDataSourceProvider),
+);
 
 const _recoveryPreferenceKey = 'focus-recovery-countdown-v1';
 
 enum _PreparationChoice { ready, notNeeded }
+
+enum StudySetupLoadStatus { configured, notConfigured, unavailable }
+
+class _StudySettingsResult {
+  const _StudySettingsResult(this.status, this.settings);
+
+  final StudySetupLoadStatus status;
+  final StudyFocusSettings? settings;
+}
 
 class FocusSessionPage extends ConsumerStatefulWidget {
   const FocusSessionPage({
@@ -77,6 +77,8 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage> {
   int _plannedMinutes = 25;
   int _recoveryMinutes = 0;
   StudyFocusSettings? _studySettings;
+  StudySetupLoadStatus _studySetupStatus = StudySetupLoadStatus.unavailable;
+  bool _continueWithoutStudySetup = false;
   DateTime? _recoveryEndsAt;
   DateTime _clockNow = DateTime.now();
   Timer? _ticker;
@@ -144,7 +146,13 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage> {
             now: _clockNow,
             onSkip: _skipRecovery,
           )
-        else
+        else ...[
+          if (_studySetupStatus == StudySetupLoadStatus.unavailable &&
+              !_continueWithoutStudySetup)
+            _StudySetupUnavailableCard(
+              onRetry: _retryStudySettings,
+              onContinue: _continueWithoutSavedStudySetup,
+            ),
           _StartFocusCard(
             plannedMinutes: _plannedMinutes,
             recoveryMinutes: _recoveryMinutes,
@@ -152,6 +160,9 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage> {
             targets: _targets,
             selectedTargetValue: _selectedTargetValue,
             isSaving: _isSaving,
+            startEnabled:
+                _studySetupStatus != StudySetupLoadStatus.unavailable ||
+                    _continueWithoutStudySetup,
             onDurationChanged: (value) {
               setState(() => _plannedMinutes = value);
             },
@@ -161,6 +172,7 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage> {
             },
             onStart: _start,
           ),
+        ],
         if (!_isLoading && _loadError == null)
           _FocusHistoryCard(
             sessions: _recent,
@@ -209,7 +221,8 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage> {
       final active = results[0] as FocusSession?;
       final recent = results[1] as List<FocusSession>;
       final targets = results[2] as List<FocusTargetOption>;
-      final studySettings = results[3] as StudyFocusSettings?;
+      final studyResult = results[3] as _StudySettingsResult;
+      final studySettings = studyResult.settings;
       Map<String, FocusReflection> reflections = const {};
       var reflectionPromptEnabled = false;
       var reflectionDataAvailable = true;
@@ -273,6 +286,8 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage> {
           _plannedMinutes = plannedMinutes;
           _recoveryMinutes = recoveryMinutes;
           _studySettings = studySettings;
+          _studySetupStatus = studyResult.status;
+          _continueWithoutStudySetup = false;
           _recoveryEndsAt = recoveryEndsAt;
           _clockNow = DateTime.now();
           _loadError = null;
@@ -317,17 +332,60 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage> {
     });
   }
 
-  Future<StudyFocusSettings?> _fetchStudySettings(
+  Future<_StudySettingsResult> _fetchStudySettings(
     FocusSessionSupabaseDataSource? source,
   ) async {
-    if (source == null) return null;
-    try {
-      return await source.fetchStudyFocusSettings();
-    } catch (_) {
-      // Focus execution remains usable when this optional projection is absent
-      // or temporarily unavailable.
-      return null;
+    if (source == null) {
+      return const _StudySettingsResult(
+        StudySetupLoadStatus.unavailable,
+        null,
+      );
     }
+    try {
+      final settings = await source.fetchStudyFocusSettings();
+      return _StudySettingsResult(
+        settings == null
+            ? StudySetupLoadStatus.notConfigured
+            : StudySetupLoadStatus.configured,
+        settings,
+      );
+    } catch (_) {
+      return const _StudySettingsResult(
+        StudySetupLoadStatus.unavailable,
+        null,
+      );
+    }
+  }
+
+  Future<void> _retryStudySettings() async {
+    if (_isSaving) return;
+    final result = await _fetchStudySettings(
+      ref.read(focusStudySettingsDataSourceProvider),
+    );
+    if (!mounted) return;
+    setState(() {
+      _studySetupStatus = result.status;
+      _studySettings = result.settings;
+      _continueWithoutStudySetup = false;
+      if (result.settings != null) {
+        _plannedMinutes = result.settings!.focusMinutes;
+        _recoveryMinutes = result.settings!.recoveryMinutes;
+      }
+    });
+  }
+
+  void _continueWithoutSavedStudySetup() {
+    final terminal = _recent.where((session) => !session.isActive);
+    setState(() {
+      _continueWithoutStudySetup = true;
+      _studySettings = null;
+      _plannedMinutes = terminal.isNotEmpty
+          ? terminal.first.plannedMinutes
+          : (_plannedMinutes >= 5 && _plannedMinutes <= 240
+              ? _plannedMinutes
+              : 25);
+      _recoveryMinutes = 0;
+    });
   }
 
   Future<void> _chooseCustomDuration() async {
@@ -371,7 +429,10 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage> {
 
   Future<void> _start() async {
     final source = ref.read(focusSessionPageDataSourceProvider);
-    if (source == null || _isSaving) {
+    if (source == null ||
+        _isSaving ||
+        _studySetupStatus == StudySetupLoadStatus.unavailable &&
+            !_continueWithoutStudySetup) {
       return;
     }
     final prepared = await _confirmPreparation();
@@ -869,6 +930,7 @@ class _StartFocusCard extends StatelessWidget {
     required this.targets,
     required this.selectedTargetValue,
     required this.isSaving,
+    required this.startEnabled,
     required this.onDurationChanged,
     required this.onCustomDuration,
     required this.onTargetChanged,
@@ -881,6 +943,7 @@ class _StartFocusCard extends StatelessWidget {
   final List<FocusTargetOption> targets;
   final String? selectedTargetValue;
   final bool isSaving;
+  final bool startEnabled;
   final ValueChanged<int> onDurationChanged;
   final VoidCallback onCustomDuration;
   final ValueChanged<String?> onTargetChanged;
@@ -999,7 +1062,7 @@ class _StartFocusCard extends StatelessWidget {
           Align(
             alignment: Alignment.centerRight,
             child: FilledButton.icon(
-              onPressed: isSaving ? null : onStart,
+              onPressed: isSaving || !startEnabled ? null : onStart,
               icon: isSaving
                   ? const SizedBox.square(
                       dimension: 18,
@@ -1008,6 +1071,58 @@ class _StartFocusCard extends StatelessWidget {
                   : const Icon(AppIcons.playArrow),
               label: const Text('Start focus session'),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _StudySetupUnavailableCard extends StatelessWidget {
+  const _StudySetupUnavailableCard({
+    required this.onRetry,
+    required this.onContinue,
+  });
+
+  final VoidCallback onRetry;
+  final VoidCallback onContinue;
+
+  @override
+  Widget build(BuildContext context) {
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(
+                AppIcons.warningAmberOutlined,
+                color: Theme.of(context).colorScheme.error,
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              const Expanded(
+                child: Text(
+                  'Saved Study Setup could not be loaded. Starting a new session is blocked until you retry or explicitly continue without it.',
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Wrap(
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.sm,
+            children: [
+              FilledButton.icon(
+                onPressed: onRetry,
+                icon: const Icon(AppIcons.refresh),
+                label: const Text('Retry Study Setup'),
+              ),
+              TextButton(
+                onPressed: onContinue,
+                child: const Text('Continue without saved Study Setup'),
+              ),
+            ],
           ),
         ],
       ),

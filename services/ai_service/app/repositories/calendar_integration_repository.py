@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from datetime import date, datetime
 from typing import Any, Protocol
 from uuid import UUID
@@ -24,6 +25,12 @@ class CalendarPersistenceNotFound(RuntimeError):
     pass
 
 
+@dataclass(frozen=True)
+class CalendarProfileTimezone:
+    timezone: str
+    revision: int
+
+
 class CalendarIntegrationRepository(Protocol):
     async def get_visible_connection(self, *, user_id: str) -> dict[str, Any] | None:
         pass
@@ -37,6 +44,13 @@ class CalendarIntegrationRepository(Protocol):
         pass
 
     async def get_profile_timezone(self, *, user_id: str) -> str:
+        pass
+
+    async def get_profile_timezone_identity(
+        self,
+        *,
+        user_id: str,
+    ) -> CalendarProfileTimezone:
         pass
 
     async def create_connection(
@@ -79,6 +93,8 @@ class CalendarIntegrationRepository(Protocol):
         starts_on: date,
         ends_before: date,
         timezone: str,
+        expected_profile_timezone: str,
+        expected_timezone_revision: int,
         counts: dict[str, int],
         events: list[dict[str, object]],
         cancelled_source_keys: list[str],
@@ -164,10 +180,19 @@ class SupabaseCalendarIntegrationRepository:
         return rows[0] if rows else None
 
     async def get_profile_timezone(self, *, user_id: str) -> str:
+        return (
+            await self.get_profile_timezone_identity(user_id=user_id)
+        ).timezone
+
+    async def get_profile_timezone_identity(
+        self,
+        *,
+        user_id: str,
+    ) -> CalendarProfileTimezone:
         rows = await self._client.select(
             "profiles",
             params={
-                "select": "timezone",
+                "select": "timezone,timezone_revision",
                 "id": f"eq.{user_id}",
                 "limit": "1",
             },
@@ -177,7 +202,10 @@ class SupabaseCalendarIntegrationRepository:
         timezone = rows[0].get("timezone")
         if not isinstance(timezone, str) or not timezone:
             raise ValueError("Profile timezone is invalid.")
-        return timezone
+        revision = rows[0].get("timezone_revision")
+        if type(revision) is not int or revision < 1:
+            raise ValueError("Profile timezone revision is invalid.")
+        return CalendarProfileTimezone(timezone=timezone, revision=revision)
 
     async def create_connection(
         self,
@@ -229,13 +257,15 @@ class SupabaseCalendarIntegrationRepository:
         starts_on: date,
         ends_before: date,
         timezone: str,
+        expected_profile_timezone: str,
+        expected_timezone_revision: int,
         counts: dict[str, int],
         events: list[dict[str, object]],
         cancelled_source_keys: list[str],
         imported_at: datetime,
     ) -> UUID:
         result = await self._rpc(
-            "apply_calendar_import_v1",
+            "apply_calendar_import_v2",
             params={
                 "p_user_id": user_id,
                 "p_connection_id": str(connection_id),
@@ -246,6 +276,8 @@ class SupabaseCalendarIntegrationRepository:
                 "p_window_starts_on": starts_on.isoformat(),
                 "p_window_ends_before": ends_before.isoformat(),
                 "p_timezone": timezone,
+                "p_expected_profile_timezone": expected_profile_timezone,
+                "p_expected_timezone_revision": expected_timezone_revision,
                 "p_counts": counts,
                 "p_events": events,
                 "p_cancelled_source_keys": cancelled_source_keys,
@@ -371,7 +403,7 @@ async def calendar_connection_from_row(
         id=UUID(str(row["id"])),
         origin=row["origin"],
         source_kind=row["source_kind"],
-        contract_version=row["contract_version"],
+        contract_version="calendar-import-v2",
         source_label=row["source_label"],
         status=row["status"],
         consent=CalendarImportConsent(
@@ -410,6 +442,8 @@ def calendar_import_from_row(row: dict[str, Any]) -> CalendarImportSummary:
             invalid=row["invalid_count"],
         ),
         source_fingerprint=row["source_fingerprint"],
+        profile_timezone_revision=row.get("profile_timezone_revision", 0),
+        planning_status=row.get("planning_status", "not_imported"),
     )
 
 
@@ -438,7 +472,7 @@ def calendar_event_from_row(
         source_fingerprint=row["source_fingerprint"],
         provenance=CalendarEventProvenance(
             kind="integration",
-            contract_version="calendar-import-v1",
+            contract_version="calendar-import-v2",
             source_kind="ical_file",
             source_label=source_label,
             provider_writes=False,

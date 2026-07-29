@@ -52,7 +52,7 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
         overview != null && _availabilityIsIncomplete(overview);
     final children = <Widget>[
       _AddNewSection(
-        busy: state.isBusy || state.requiresExactRetry,
+        busy: !state.canMutate,
         calendarPreference: overview?.preferences,
         availabilityIncomplete: availabilityIncomplete,
         onTask: _createTask,
@@ -69,6 +69,45 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
               },
       ),
     ];
+    if (state.projectionStatus == PlannerProjectionStatus.staleAfterMutation) {
+      children.add(
+        AppCard(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(
+                AppIcons.warningAmberOutlined,
+                color: Theme.of(context).colorScheme.error,
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Change saved. Planner could not reload.',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            color: Theme.of(context).colorScheme.error,
+                          ),
+                    ),
+                    const SizedBox(height: AppSpacing.xs),
+                    const Text(
+                      'The overview is out of date. Reload it before making another change.',
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    OutlinedButton.icon(
+                      onPressed: state.isBusy ? null : controller.load,
+                      icon: const Icon(AppIcons.refresh),
+                      label: const Text('Reload Planner'),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
     final outlookValue = examWeekOutlook.valueOrNull;
     if (examWeekOutlook.isLoading ||
         examWeekOutlook.hasError ||

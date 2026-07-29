@@ -44,7 +44,13 @@ void main() {
 
   test('account operations use exact endpoints, bodies, and bearer', () async {
     final client = _TrackingApiClient(
-      patchResponse: const {'timezone': 'Europe/London'},
+      patchResponse: const {
+        'contract_version': 'account-profile-v2',
+        'timezone': 'Europe/London',
+        'revision': 5,
+        'updated_at': '2026-07-29T12:00:00Z',
+        'replayed': false,
+      },
       getResponse: _validExportJson(
         profileRows: const [
           {'id': 'account-id'},
@@ -58,14 +64,16 @@ void main() {
       canUseSyncedAccount: true,
     );
 
-    expect(
-      await repository.updateTimezone('Europe/London'),
+    final write = await repository.updateTimezone(
       'Europe/London',
+      expectedRevision: 4,
     );
     final export = await repository.exportAccount();
     await repository.deleteAccount();
 
-    expect(export.contractVersion, 'account-export-v1');
+    expect(write.timezone, 'Europe/London');
+    expect(write.revision, 5);
+    expect(export.contractVersion, 'account-export-v2');
     expect(export.recordCounts['profiles'], 1);
     expect(client.patchCalls, ['/v1/account/profile']);
     expect(client.getCalls, ['/v1/account/export']);
@@ -74,9 +82,18 @@ void main() {
       AccountApiDataSource.exportReceiveTimeout,
     );
     expect(client.deleteCalls, ['/v1/account']);
-    expect(client.bodyByPath['/v1/account/profile'], {
-      'timezone': 'Europe/London',
-    });
+    final profileBody = client.bodyByPath['/v1/account/profile']!;
+    expect(profileBody['contract_version'], 'account-profile-update-v2');
+    expect(profileBody['expected_revision'], 4);
+    expect(profileBody['timezone'], 'Europe/London');
+    expect(
+      profileBody['request_id'],
+      matches(
+        RegExp(
+          r'^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
+        ),
+      ),
+    );
     expect(client.bodyByPath['/v1/account'], {'confirmation': 'DELETE'});
     for (final headers in client.headersByPath.values) {
       expect(headers, {'Authorization': 'Bearer account-token'});
@@ -304,13 +321,19 @@ void main() {
       canUseSyncedAccount: true,
     );
     await expectLater(
-      invalidRequestRepository.updateTimezone('CET'),
+      invalidRequestRepository.updateTimezone('CET', expectedRevision: 1),
       throwsA(isA<AccountSettingsContractException>()),
     );
     expect(invalidRequestClient.totalCalls, 0);
 
     final mismatchedClient = _TrackingApiClient(
-      patchResponse: const {'timezone': 'Europe/Paris'},
+      patchResponse: const {
+        'contract_version': 'account-profile-v2',
+        'timezone': 'Europe/Paris',
+        'revision': 2,
+        'updated_at': '2026-07-29T12:00:00Z',
+        'replayed': false,
+      },
     );
     final mismatchedRepository = AccountSettingsRepositoryImpl(
       config: config,
@@ -319,7 +342,10 @@ void main() {
       canUseSyncedAccount: true,
     );
     await expectLater(
-      mismatchedRepository.updateTimezone('Europe/London'),
+      mismatchedRepository.updateTimezone(
+        'Europe/London',
+        expectedRevision: 1,
+      ),
       throwsA(isA<AccountProfileUpdateOutcomeUnknownException>()),
     );
 
@@ -336,6 +362,7 @@ void main() {
         _TrackingApiClient(patchError: unknownResponse),
       ).updateTimezone(
         accessToken: 'token',
+        expectedRevision: 1,
         timezone: 'Europe/London',
       ),
       throwsA(isA<AccountProfileUpdateOutcomeUnknownException>()),
@@ -354,6 +381,7 @@ void main() {
         _TrackingApiClient(patchError: rejectedResponse),
       ).updateTimezone(
         accessToken: 'token',
+        expectedRevision: 1,
         timezone: 'Europe/NotARealZone',
       ),
       throwsA(isA<AccountTimezoneRejectedException>()),
@@ -365,7 +393,11 @@ void main() {
     for (final minutes in <int?>[120, null]) {
       final client = _TrackingApiClient(
         patchResponse: {
+          'contract_version': 'account-preparation-budget-v2',
           'daily_preparation_budget_minutes': minutes,
+          'revision': 8,
+          'updated_at': '2026-07-29T12:00:00Z',
+          'replayed': false,
         },
       );
       final repository = AccountSettingsRepositoryImpl(
@@ -375,11 +407,24 @@ void main() {
         canUseSyncedAccount: true,
       );
 
-      expect(await repository.updateDailyPreparationBudget(minutes), minutes);
+      final write = await repository.updateDailyPreparationBudget(
+        minutes,
+        expectedRevision: 7,
+      );
+      expect(write.minutes, minutes);
+      expect(write.revision, 8);
       expect(client.patchCalls, ['/v1/account/preparation-budget']);
-      expect(client.bodyByPath['/v1/account/preparation-budget'], {
-        'daily_preparation_budget_minutes': minutes,
-      });
+      final body = client.bodyByPath['/v1/account/preparation-budget']!;
+      expect(
+        body['contract_version'],
+        'account-preparation-budget-update-v2',
+      );
+      expect(body['expected_revision'], 7);
+      expect(body['daily_preparation_budget_minutes'], minutes);
+      expect(
+        body['request_id'],
+        isA<String>().having((value) => value.length, 'UUID length', 36),
+      );
       expect(client.headersByPath['/v1/account/preparation-budget'], {
         'Authorization': 'Bearer account-token',
       });
@@ -394,7 +439,10 @@ void main() {
     );
     for (final minutes in [24, 26, 481]) {
       await expectLater(
-        invalidRepository.updateDailyPreparationBudget(minutes),
+        invalidRepository.updateDailyPreparationBudget(
+          minutes,
+          expectedRevision: 1,
+        ),
         throwsA(isA<AccountSettingsContractException>()),
       );
     }
@@ -406,9 +454,19 @@ void main() {
     await expectLater(
       AccountApiDataSource(
         _TrackingApiClient(
-          patchResponse: const {'daily_preparation_budget_minutes': 90},
+          patchResponse: const {
+            'contract_version': 'account-preparation-budget-v2',
+            'daily_preparation_budget_minutes': 90,
+            'revision': 2,
+            'updated_at': '2026-07-29T12:00:00Z',
+            'replayed': false,
+          },
         ),
-      ).updateDailyPreparationBudget(accessToken: 'token', minutes: 120),
+      ).updateDailyPreparationBudget(
+        accessToken: 'token',
+        expectedRevision: 1,
+        minutes: 120,
+      ),
       throwsA(isA<AccountPreparationBudgetUpdateOutcomeUnknownException>()),
     );
 
@@ -423,7 +481,11 @@ void main() {
     await expectLater(
       AccountApiDataSource(
         _TrackingApiClient(patchError: unknownResponse),
-      ).updateDailyPreparationBudget(accessToken: 'token', minutes: 120),
+      ).updateDailyPreparationBudget(
+        accessToken: 'token',
+        expectedRevision: 1,
+        minutes: 120,
+      ),
       throwsA(isA<AccountPreparationBudgetUpdateOutcomeUnknownException>()),
     );
   });
@@ -460,7 +522,7 @@ void main() {
         throwsA(isA<AccountSettingsAccessException>()),
       );
       await expectLater(
-        repository.updateDailyPreparationBudget(120),
+        repository.updateDailyPreparationBudget(120, expectedRevision: 1),
         throwsA(isA<AccountSettingsAccessException>()),
       );
       await expectLater(
@@ -582,7 +644,7 @@ Map<String, dynamic> _validExportJson({
   };
   data['profiles'] = profileRows;
   return {
-    'contract_version': 'account-export-v1',
+    'contract_version': 'account-export-v2',
     'exported_at': '2026-07-13T12:00:00Z',
     'data': data,
     'record_counts': <String, int>{

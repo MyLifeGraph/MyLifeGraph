@@ -6,6 +6,7 @@ from app.api.routes import (
     briefings,
     calendar_integrations,
     coach,
+    daily_capture,
     deadline_plans,
     feedback,
     health,
@@ -35,13 +36,14 @@ def create_app() -> FastAPI:
         CORSMiddleware,
         allow_origins=settings.allowed_origins,
         allow_credentials=True,
-        allow_methods=["GET", "POST", "PATCH", "DELETE"],
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
         allow_headers=["Authorization", "Content-Type"],
         expose_headers=["Content-Disposition"],
     )
 
     app.include_router(health.router, prefix=settings.api_prefix)
     app.include_router(account.router, prefix=settings.api_prefix)
+    app.include_router(daily_capture.router, prefix=settings.api_prefix)
     app.include_router(intake.router, prefix=settings.api_prefix)
     app.include_router(learning.router, prefix=settings.api_prefix)
     app.include_router(insights.router, prefix=settings.api_prefix)

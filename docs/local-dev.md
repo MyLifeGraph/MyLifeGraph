@@ -839,7 +839,7 @@ from normal reads. This endpoint does not generate, schedule, or deliver a
 notification; existing reminder settings are not delivery consent. See
 `docs/notification-lifecycle-v1-contract.md`.
 
-## V1 Account Controls
+## Revisioned Account Controls
 
 With FastAPI and the matching Supabase project configured, a real account can
 update its IANA timezone, export bounded JSON, and permanently delete itself:
@@ -848,7 +848,22 @@ update its IANA timezone, export bounded JSON, and permanently delete itself:
 curl -X PATCH http://localhost:8000/v1/account/profile \
   -H 'Authorization: Bearer <supabase_access_token>' \
   -H 'Content-Type: application/json' \
-  -d '{"timezone":"Europe/Berlin"}'
+  -d '{
+    "contract_version":"account-profile-update-v2",
+    "request_id":"11111111-1111-4111-8111-111111111111",
+    "expected_revision":1,
+    "timezone":"Europe/Berlin"
+  }'
+
+curl -X PATCH http://localhost:8000/v1/account/preparation-budget \
+  -H 'Authorization: Bearer <supabase_access_token>' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "contract_version":"account-preparation-budget-update-v2",
+    "request_id":"22222222-2222-4222-8222-222222222222",
+    "expected_revision":1,
+    "daily_preparation_budget_minutes":120
+  }'
 
 curl http://localhost:8000/v1/account/export \
   -H 'Authorization: Bearer <supabase_access_token>'
@@ -871,6 +886,34 @@ export, but the share plugin or operating system may retain a protected cache
 copy until its own cleanup. The source contains an iOS share branch, but there
 is no iOS runner or installed-iOS acceptance claim. An export is not a
 transaction-wide point-in-time database snapshot or a restore format.
+
+The response revision from each PATCH is the expected revision for its next
+change. A `409` means reload the current profile projection; do not invent a
+new expected revision or change the payload behind an existing request id.
+
+## Stabilization Write Paths
+
+With the two `20260729` stabilization migrations applied, authenticated Capture
+writes must use FastAPI rather than direct Data API DML:
+
+```bash
+curl -X PUT \
+  http://localhost:8000/v1/daily-capture/2026-07-29/evening \
+  -H 'Authorization: Bearer <supabase_access_token>' \
+  -H 'Content-Type: application/json' \
+  -d @daily-capture-evening.json
+```
+
+The file must contain the complete strict `daily-capture-write-v1` request,
+including one stable UUID request id, the last-read branch identity or `null`,
+and a complete `daily-capture-v4` branch. A `409` is a same-branch CAS or
+request-fingerprint conflict and requires a read/review. Reusing the same
+request id with a changed body is intentionally unsupported.
+
+Calendar imports use `calendar-import-v2` and carry the profile timezone and
+timezone revision read before import. Only an import with
+`planning_status = current` contributes Planner busy time. See
+`docs/stabilization-consistency-contract.md` for the exact cutover boundary.
 
 ## Android Builds
 
@@ -996,7 +1039,7 @@ onboarding projection changes; and remove legacy `"User"` fallback from role
 authority. Authenticated profile edits are limited to non-authority fields;
 service role and the atomic Intake apply RPC retain the required backend
 projection authority. A fresh migration-chain verification should end at
-`20260728160000_free_read_only_coach_agent_v1.sql`. The longitudinal Coach
+`20260729130000_observed_projection_persistence.sql`. The longitudinal Coach
 migration keeps exact V2 scope parameters and fixed-mode history compatible.
 The final migration admits message-only V3 claims and V2 responses, stores
 backend-derived evidence, bounded tool trace/count, and service-tier truth,

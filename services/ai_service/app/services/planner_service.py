@@ -39,6 +39,10 @@ from app.models.planner import (
     PlannerUnscheduledItem,
 )
 from app.models.planning_timing import PlanningTimingProvenance
+from app.services.local_time import (
+    resolve_local_datetime,
+    resolve_local_interval,
+)
 from app.repositories.planner_repository import (
     PlannerAvailabilityContext,
     PlannerOverviewContext,
@@ -836,7 +840,13 @@ class PlannerService:
             values = day_items[day]
             values.sort(
                 key=lambda item: (
-                    item.starts_at or datetime.combine(day, time.min, tzinfo=zone),
+                    item.starts_at
+                    or resolve_local_datetime(
+                        local_date=day,
+                        local_time=time.min,
+                        zone=zone,
+                        source_id=f"planner-item:{item.id}",
+                    ),
                     _kind_order(item.kind),
                     item.title.casefold(),
                     str(item.id),
@@ -1345,11 +1355,14 @@ def _add_setup_commitments(
                 or not recurring_commitment_applies_on(row, day)
             ):
                 continue
-            starts_at = datetime.combine(day, starts, tzinfo=zone)
-            ends_at = datetime.combine(day, ends, tzinfo=zone)
-            if ends_at <= starts_at:
-                ends_at += timedelta(days=1)
             source_id = UUID(str(row["id"]))
+            starts_at, ends_at = resolve_local_interval(
+                local_date=day,
+                starts_at=starts,
+                ends_at=ends,
+                zone=zone,
+                source_id=f"setup:{source_id}",
+            )
             day_items[day].append(
                 PlannerDayItem(
                     id=_occurrence_id("setup", source_id, day),
@@ -1403,8 +1416,13 @@ def _add_manual_commitments(
         for day in days:
             if day.isoweekday() != weekday:
                 continue
-            starts = datetime.combine(day, starts_local, tzinfo=zone)
-            ends = datetime.combine(day, ends_local, tzinfo=zone)
+            starts, ends = resolve_local_interval(
+                local_date=day,
+                starts_at=starts_local,
+                ends_at=ends_local,
+                zone=zone,
+                source_id=f"planner-commitment:{source_id}",
+            )
             day_items[day].append(
                 PlannerDayItem(
                     id=_occurrence_id("commitment", source_id, day),
@@ -1461,8 +1479,13 @@ def _add_action_reservations(
                 for day in days:
                     if day.isoweekday() != slot.weekday:
                         continue
-                    starts = datetime.combine(day, slot.starts_at, tzinfo=zone)
-                    ends = datetime.combine(day, slot.ends_at, tzinfo=zone)
+                    starts, ends = resolve_local_interval(
+                        local_date=day,
+                        starts_at=slot.starts_at,
+                        ends_at=slot.ends_at,
+                        zone=zone,
+                        source_id=f"planner-habit-slot:{slot.id}",
+                    )
                     day_items[day].append(
                         PlannerDayItem(
                             id=_occurrence_id("habit", slot.id, day),
@@ -1916,9 +1939,12 @@ def _authoritative_intervals(
                 day,
             ):
                 intervals.append(
-                    (
-                        datetime.combine(day, starts, tzinfo=zone),
-                        datetime.combine(day, ends, tzinfo=zone),
+                    resolve_local_interval(
+                        local_date=day,
+                        starts_at=starts,
+                        ends_at=ends,
+                        zone=zone,
+                        source_id=f"setup:{row.get('id', weekday)}",
                     ),
                 )
     for row in context.commitments:
@@ -1935,9 +1961,15 @@ def _authoritative_intervals(
             for day in days:
                 if day.isoweekday() == weekday:
                     intervals.append(
-                        (
-                            datetime.combine(day, starts, tzinfo=zone),
-                            datetime.combine(day, ends, tzinfo=zone),
+                        resolve_local_interval(
+                            local_date=day,
+                            starts_at=starts,
+                            ends_at=ends,
+                            zone=zone,
+                            source_id=(
+                                f"planner-commitment:"
+                                f"{row.get('id', weekday)}"
+                            ),
                         ),
                     )
     if calendar_enabled:
@@ -1953,8 +1985,18 @@ def _authoritative_intervals(
             ends_on = _date(row.get("ends_on"))
             intervals.append(
                 (
-                    datetime.combine(starts_on, time.min, tzinfo=zone),
-                    datetime.combine(ends_on, time.min, tzinfo=zone),
+                    resolve_local_datetime(
+                        local_date=starts_on,
+                        local_time=time.min,
+                        zone=zone,
+                        source_id=f"calendar-all-day:{row.get('id', starts_on)}",
+                    ),
+                    resolve_local_datetime(
+                        local_date=ends_on,
+                        local_time=time.min,
+                        zone=zone,
+                        source_id=f"calendar-all-day:{row.get('id', starts_on)}",
+                    ),
                 ),
             )
     return intervals
@@ -1979,9 +2021,12 @@ def _revision_conflicts(
         if slot.state != "active":
             continue
         candidates.extend(
-            (
-                datetime.combine(day, slot.starts_at, tzinfo=zone),
-                datetime.combine(day, slot.ends_at, tzinfo=zone),
+            resolve_local_interval(
+                local_date=day,
+                starts_at=slot.starts_at,
+                ends_at=slot.ends_at,
+                zone=zone,
+                source_id=f"planner-habit-slot:{slot.id}",
             )
             for day in days
             if day.isoweekday() == slot.weekday
@@ -2223,6 +2268,9 @@ def _attention_detail(reason: str) -> str:
         "commitment_conflict": "A fixed commitment overlaps this plan.",
         "target_released": "The target changed and its future slots were released.",
         "calendar_changed": "Calendar busy time changed. Create a new preview.",
+        "timezone_changed": (
+            "The account timezone changed. Create and confirm a new preview."
+        ),
         "study_rhythm_changed": (
             "The Study rhythm changed. Create and confirm a new preview."
         ),

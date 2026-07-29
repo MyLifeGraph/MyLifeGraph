@@ -92,27 +92,30 @@ class SupabasePersonalPatternsRepository:
                         ("status", "in.(completed,abandoned)"),
                         ("started_at", f"gte.{starts_at.isoformat()}"),
                         ("started_at", f"lt.{ends_at.isoformat()}"),
+                        ("ended_at", f"lt.{ends_at.isoformat()}"),
                         ("order", "started_at.asc,id.asc"),
                         ("limit", str(self._max_focus_rows + 1)),
                     ],
                 ),
                 self._client.select(
                     "focus_session_reflections",
-                    params={
-                        "select": (
+                    params=[
+                        ("select", (
                             "focus_session_id,contract_version,focus_quality,"
                             "useful_progress,obstacles,created_at,updated_at"
-                        ),
-                        "user_id": f"eq.{user_id}",
-                        "created_at": f"gte.{starts_at.isoformat()}",
-                        "order": "focus_session_id.asc",
-                        "limit": str(self._max_reflection_rows + 1),
-                    },
+                        )),
+                        ("user_id", f"eq.{user_id}"),
+                        ("created_at", f"gte.{starts_at.isoformat()}"),
+                        ("created_at", f"lt.{ends_at.isoformat()}"),
+                        ("updated_at", f"lte.{ends_at.isoformat()}"),
+                        ("order", "focus_session_id.asc"),
+                        ("limit", str(self._max_reflection_rows + 1)),
+                    ],
                 ),
                 self._client.select(
                     "daily_logs",
                     params={
-                        "select": "id,entry_date,metadata",
+                        "select": "id,entry_date,metadata,updated_at",
                         "user_id": f"eq.{user_id}",
                         "entry_date": (
                             f"gte.{local_starts_on.isoformat()}"
@@ -120,6 +123,7 @@ class SupabasePersonalPatternsRepository:
                         "and": (
                             f"(entry_date.lte.{local_ends_on.isoformat()})"
                         ),
+                        "updated_at": f"lte.{ends_at.isoformat()}",
                         "order": "entry_date.asc,id.asc",
                         "limit": str(self._max_daily_log_rows + 1),
                     },

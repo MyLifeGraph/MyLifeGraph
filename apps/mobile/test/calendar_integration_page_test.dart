@@ -187,6 +187,41 @@ void main() {
     );
   });
 
+  testWidgets('connection header wraps at 320 pixels and 200 percent text',
+      (tester) async {
+    const sourceLabel =
+        'University timetable with seminars, tutorials, and laboratory work';
+    final repository = _FakeCalendarRepository(
+      CalendarIntegrationFeed.fromJson(
+        calendarFeedJson(
+          connection: calendarConnectionJson(sourceLabel: sourceLabel),
+        ),
+      ),
+    );
+
+    await _pumpPage(
+      tester,
+      repository: repository,
+      size: const Size(320, 760),
+      textScaler: const TextScaler.linear(2),
+    );
+
+    final sourceLabelFinder = find.text(sourceLabel);
+    for (var attempt = 0;
+        attempt < 4 && sourceLabelFinder.evaluate().isEmpty;
+        attempt += 1) {
+      await tester.drag(
+        find.byType(CustomScrollView),
+        const Offset(0, -320),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    expect(sourceLabelFinder, findsOneWidget);
+    expect(find.text('Connected'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('disconnected never-imported source can still be cleared',
       (tester) async {
     final repository = _FakeCalendarRepository(
@@ -268,8 +303,10 @@ Future<void> _pumpPage(
   WidgetTester tester, {
   required _FakeCalendarRepository repository,
   CalendarIcsFilePicker? picker,
+  Size size = const Size(1200, 1800),
+  TextScaler textScaler = TextScaler.noScaling,
 }) async {
-  tester.view.physicalSize = const Size(1200, 1800);
+  tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
   addTearDown(() {
     tester.view.resetPhysicalSize();
@@ -283,7 +320,13 @@ Future<void> _pumpPage(
           picker ?? _FakeCalendarPicker(null),
         ),
       ],
-      child: const MaterialApp(home: CalendarIntegrationPage()),
+      child: MaterialApp(
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(context).copyWith(textScaler: textScaler),
+          child: child!,
+        ),
+        home: const CalendarIntegrationPage(),
+      ),
     ),
   );
   await tester.pumpAndSettle();

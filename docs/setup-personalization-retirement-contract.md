@@ -94,3 +94,10 @@ sanitization on first read and write the canonical value back locally.
 
 The cleanup permanently removes historical JSON answers. A code rollback does
 not restore them without a database backup.
+
+## Stabilized Setup errors
+
+Flutter maps Setup load/save, HTTP, and contract failures through one
+student-facing message boundary. Widgets never display URLs, status codes,
+transport dumps, exception causes, or internal contract text. Unknown failures
+use short English retry guidance and explicitly retain the current draft.

@@ -83,6 +83,12 @@ ending at that instant. It never persists a pattern and never calls a model.
 If analysis is disabled, it returns `disabled` before reading Focus or Daily
 Capture history.
 
+That one instant is captured before any source load. Focus sessions count only
+when terminal before it. Reflections require `created_at` before and
+`updated_at` at or before it; Daily Logs require `updated_at` at or before it.
+Facts exactly at the cutoff or modified after observation are conservatively
+excluded, and the response limitation names the actual generated-at boundary.
+
 ### Focus evidence
 
 Only terminal sessions in the interval participate. Rated coverage is the

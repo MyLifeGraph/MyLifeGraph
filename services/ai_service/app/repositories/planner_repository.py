@@ -663,6 +663,27 @@ class SupabasePlannerRepository:
             )
         connection_id = UUID(str(connection["id"]))
         import_id = UUID(str(import_value))
+        import_rows = await self._client.select(
+            "calendar_imports",
+            params={
+                "select": "id,planning_status",
+                "id": f"eq.{import_id}",
+                "user_id": f"eq.{user_id}",
+                "connection_id": f"eq.{connection_id}",
+                "limit": "1",
+            },
+        )
+        if (
+            len(import_rows) != 1
+            or import_rows[0].get("planning_status") != "current"
+        ):
+            return PlannerCalendarProjection(
+                False,
+                connection_id,
+                import_id,
+                [],
+                [],
+            )
         if not include_events:
             return PlannerCalendarProjection(True, connection_id, import_id, [], [])
         events = await self._select_pages(

@@ -31,6 +31,22 @@ enum PlannerPendingKind {
   cancel,
 }
 
+enum PlannerProjectionStatus {
+  current,
+  refreshingAfterMutation,
+  staleAfterMutation,
+}
+
+class PlannerMutationOutcome {
+  const PlannerMutationOutcome({
+    required this.committed,
+    required this.projectionCurrent,
+  });
+
+  final bool committed;
+  final bool projectionCurrent;
+}
+
 class PlannerPendingMutation {
   const PlannerPendingMutation({
     required this.kind,
@@ -60,6 +76,8 @@ class PlannerState {
     required this.pendingMutation,
     required this.reloadSuggested,
     required this.preview,
+    required this.projectionStatus,
+    required this.mutationOutcome,
   });
 
   factory PlannerState.initial() => const PlannerState(
@@ -70,6 +88,8 @@ class PlannerState {
         pendingMutation: null,
         reloadSuggested: false,
         preview: null,
+        projectionStatus: PlannerProjectionStatus.current,
+        mutationOutcome: null,
       );
 
   final PlannerOverview? overview;
@@ -79,9 +99,16 @@ class PlannerState {
   final PlannerPendingMutation? pendingMutation;
   final bool reloadSuggested;
   final PlannerActionPlan? preview;
+  final PlannerProjectionStatus projectionStatus;
+  final PlannerMutationOutcome? mutationOutcome;
 
   bool get isBusy => operation != PlannerOperation.idle;
   bool get requiresExactRetry => pendingMutation != null;
+  bool get canMutate =>
+      !isBusy &&
+      !requiresExactRetry &&
+      overview != null &&
+      projectionStatus == PlannerProjectionStatus.current;
 
   PlannerState copyWith({
     Object? overview = _unset,
@@ -91,6 +118,8 @@ class PlannerState {
     Object? pendingMutation = _unset,
     bool? reloadSuggested,
     Object? preview = _unset,
+    PlannerProjectionStatus? projectionStatus,
+    Object? mutationOutcome = _unset,
   }) =>
       PlannerState(
         overview: identical(overview, _unset)
@@ -108,6 +137,10 @@ class PlannerState {
         preview: identical(preview, _unset)
             ? this.preview
             : preview as PlannerActionPlan?,
+        projectionStatus: projectionStatus ?? this.projectionStatus,
+        mutationOutcome: identical(mutationOutcome, _unset)
+            ? this.mutationOutcome
+            : mutationOutcome as PlannerMutationOutcome?,
       );
 }
 
@@ -143,6 +176,7 @@ class PlannerController extends StateNotifier<PlannerState> {
         overview: overview,
         operation: PlannerOperation.idle,
         loadError: null,
+        projectionStatus: PlannerProjectionStatus.current,
       );
     } catch (error) {
       state = state.copyWith(
@@ -193,7 +227,7 @@ class PlannerController extends StateNotifier<PlannerState> {
   }
 
   Future<PlannerActionPlan?> _propose(PlannerPendingMutation pending) async {
-    if (state.isBusy || state.requiresExactRetry) return null;
+    if (!state.canMutate) return null;
     state = state.copyWith(
       operation: PlannerOperation.proposing,
       operationError: null,
@@ -208,6 +242,11 @@ class PlannerController extends StateNotifier<PlannerState> {
         operation: PlannerOperation.idle,
         pendingMutation: null,
         preview: plan,
+        projectionStatus: PlannerProjectionStatus.refreshingAfterMutation,
+        mutationOutcome: const PlannerMutationOutcome(
+          committed: true,
+          projectionCurrent: false,
+        ),
       );
       await _reloadAfterMutation();
       return plan;
@@ -219,7 +258,7 @@ class PlannerController extends StateNotifier<PlannerState> {
 
   Future<bool> confirm(PlannerActionPlan plan) async {
     final revision = plan.pendingRevision?.revision;
-    if (revision == null || state.isBusy || state.requiresExactRetry) {
+    if (revision == null || !state.canMutate) {
       return false;
     }
     final pending = PlannerPendingMutation(
@@ -249,6 +288,11 @@ class PlannerController extends StateNotifier<PlannerState> {
         operation: PlannerOperation.idle,
         pendingMutation: null,
         preview: null,
+        projectionStatus: PlannerProjectionStatus.refreshingAfterMutation,
+        mutationOutcome: const PlannerMutationOutcome(
+          committed: true,
+          projectionCurrent: false,
+        ),
       );
       await _reloadAfterMutation();
       return true;
@@ -259,7 +303,7 @@ class PlannerController extends StateNotifier<PlannerState> {
   }
 
   Future<bool> cancelPlan(PlannerActionPlan plan) async {
-    if (state.isBusy || state.requiresExactRetry) return false;
+    if (!state.canMutate) return false;
     final revision =
         plan.pendingRevision?.revision ?? plan.activeRevision?.revision;
     if (revision == null) return false;
@@ -291,6 +335,11 @@ class PlannerController extends StateNotifier<PlannerState> {
         operation: PlannerOperation.idle,
         pendingMutation: null,
         preview: null,
+        projectionStatus: PlannerProjectionStatus.refreshingAfterMutation,
+        mutationOutcome: const PlannerMutationOutcome(
+          committed: true,
+          projectionCurrent: false,
+        ),
       );
       await _reloadAfterMutation();
       return true;
@@ -301,7 +350,7 @@ class PlannerController extends StateNotifier<PlannerState> {
   }
 
   Future<bool> createCommitment(PlannerCommitmentDraft draft) async {
-    if (state.isBusy || state.requiresExactRetry) return false;
+    if (!state.canMutate) return false;
     final requestId = newClientUuid();
     final body = draft.createJson(
       requestId: requestId,
@@ -329,6 +378,11 @@ class PlannerController extends StateNotifier<PlannerState> {
       state = state.copyWith(
         operation: PlannerOperation.idle,
         pendingMutation: null,
+        projectionStatus: PlannerProjectionStatus.refreshingAfterMutation,
+        mutationOutcome: const PlannerMutationOutcome(
+          committed: true,
+          projectionCurrent: false,
+        ),
       );
       await _reloadAfterMutation();
       return true;
@@ -342,7 +396,7 @@ class PlannerController extends StateNotifier<PlannerState> {
     PlannerCommitment commitment,
     PlannerCommitmentDraft draft,
   ) async {
-    if (state.isBusy || state.requiresExactRetry) return false;
+    if (!state.canMutate) return false;
     final requestId = newClientUuid();
     return _updateCommitment(
       PlannerPendingMutation(
@@ -373,6 +427,11 @@ class PlannerController extends StateNotifier<PlannerState> {
       state = state.copyWith(
         operation: PlannerOperation.idle,
         pendingMutation: null,
+        projectionStatus: PlannerProjectionStatus.refreshingAfterMutation,
+        mutationOutcome: const PlannerMutationOutcome(
+          committed: true,
+          projectionCurrent: false,
+        ),
       );
       await _reloadAfterMutation();
       return true;
@@ -383,7 +442,7 @@ class PlannerController extends StateNotifier<PlannerState> {
   }
 
   Future<bool> updateCalendarPreference(bool enabled) async {
-    if (state.isBusy || state.requiresExactRetry || state.overview == null) {
+    if (!state.canMutate) {
       return false;
     }
     final pending = PlannerPendingMutation(
@@ -411,6 +470,11 @@ class PlannerController extends StateNotifier<PlannerState> {
       state = state.copyWith(
         operation: PlannerOperation.idle,
         pendingMutation: null,
+        projectionStatus: PlannerProjectionStatus.refreshingAfterMutation,
+        mutationOutcome: const PlannerMutationOutcome(
+          committed: true,
+          projectionCurrent: false,
+        ),
       );
       await _reloadAfterMutation();
       return true;
@@ -421,7 +485,7 @@ class PlannerController extends StateNotifier<PlannerState> {
   }
 
   Future<bool> archiveCommitment(PlannerCommitment commitment) async {
-    if (state.isBusy || state.requiresExactRetry) return false;
+    if (!state.canMutate) return false;
     final pending = PlannerPendingMutation(
       kind: PlannerPendingKind.commitmentArchive,
       requestId: newClientUuid(),
@@ -447,6 +511,11 @@ class PlannerController extends StateNotifier<PlannerState> {
       state = state.copyWith(
         operation: PlannerOperation.idle,
         pendingMutation: null,
+        projectionStatus: PlannerProjectionStatus.refreshingAfterMutation,
+        mutationOutcome: const PlannerMutationOutcome(
+          committed: true,
+          projectionCurrent: false,
+        ),
       );
       await _reloadAfterMutation();
       return true;
@@ -490,8 +559,24 @@ class PlannerController extends StateNotifier<PlannerState> {
     try {
       final overview = await _api.getOverview(accessToken: await _token());
       state = state.copyWith(overview: overview, loadError: null);
+      state = state.copyWith(
+        projectionStatus: PlannerProjectionStatus.current,
+        mutationOutcome: state.mutationOutcome?.committed == true
+            ? const PlannerMutationOutcome(
+                committed: true,
+                projectionCurrent: true,
+              )
+            : state.mutationOutcome,
+      );
     } catch (error) {
-      state = state.copyWith(loadError: error);
+      state = state.copyWith(
+        loadError: error,
+        projectionStatus: PlannerProjectionStatus.staleAfterMutation,
+        mutationOutcome: const PlannerMutationOutcome(
+          committed: true,
+          projectionCurrent: false,
+        ),
+      );
     }
   }
 
@@ -525,7 +610,7 @@ class PlannerController extends StateNotifier<PlannerState> {
   }
 
   String _planningDate() {
-    final date = state.overview?.localDate ?? DateTime.now();
+    final date = state.overview!.localDate;
     return '${date.year.toString().padLeft(4, '0')}-'
         '${date.month.toString().padLeft(2, '0')}-'
         '${date.day.toString().padLeft(2, '0')}';

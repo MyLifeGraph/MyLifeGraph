@@ -85,8 +85,13 @@ behavior. Mock/demo
 auth boot skips remote profile access and overlays the locally applied Setup
 name/completion state, so local Setup survives a browser reload.
 
-For authenticated real accounts, successful Evening/Morning writes refresh the
-backend Daily State best-effort. Today reads the strict read-only
+For authenticated real accounts, Evening and Morning save through the strict
+`daily-capture-write-v1` FastAPI boundary. Each branch carries a stable request
+id and the last loaded branch identity, so Morning and Evening merge while a
+same-branch stale write conflicts. A failed current-day read blocks Save and
+keeps the draft; Morning also requires retry or explicit continuation when the
+prior Evening plan is unavailable. Successful writes refresh the backend Daily
+State best-effort. Today reads the strict read-only
 `today-overview-v2` projection: both-capture streak, dynamic progress, the
 Setup/Preparation/Calendar/Focus plus Planner Task/Habit/fixed-commitment
 agenda, Tasks, and Habits. The V1 route remains available for older clients.

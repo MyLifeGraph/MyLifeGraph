@@ -20,7 +20,10 @@ from app.services.calendar_integration_service import (
     _decode_cursor,
     _encode_cursor,
 )
-from app.repositories.calendar_integration_repository import CalendarPersistenceConflict
+from app.repositories.calendar_integration_repository import (
+    CalendarPersistenceConflict,
+    CalendarProfileTimezone,
+)
 
 
 USER_ID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
@@ -35,7 +38,7 @@ def _connection_row() -> dict[str, Any]:
         "user_id": USER_ID,
         "origin": "authenticated_backend",
         "source_kind": "ical_file",
-        "contract_version": "calendar-import-v1",
+        "contract_version": "calendar-import-v2",
         "source_label": "Work calendar",
         "status": "connected",
         "consent_version": "calendar-import-consent-v1",
@@ -84,6 +87,15 @@ class FakeCalendarRepository:
         assert user_id == USER_ID
         return "Europe/Berlin"
 
+    async def get_profile_timezone_identity(
+        self,
+        *,
+        user_id: str,
+    ) -> CalendarProfileTimezone:
+        self.profile_calls += 1
+        assert user_id == USER_ID
+        return CalendarProfileTimezone(timezone="Europe/Berlin", revision=3)
+
     async def create_connection(self, **kwargs) -> UUID:
         assert kwargs["user_id"] == USER_ID
         self.connection["source_label"] = kwargs["source_label"]
@@ -100,6 +112,8 @@ class FakeCalendarRepository:
     async def apply_import(self, **kwargs) -> UUID:
         self.apply_calls += 1
         import_id = IMPORT_ID if self.apply_calls == 1 else uuid4()
+        for previous_import in self.imports.values():
+            previous_import["planning_status"] = "not_imported"
         row = {
             "id": str(import_id),
             "user_id": kwargs["user_id"],
@@ -111,6 +125,8 @@ class FakeCalendarRepository:
             "window_starts_on": kwargs["starts_on"].isoformat(),
             "window_ends_before": kwargs["ends_before"].isoformat(),
             "timezone": kwargs["timezone"],
+            "profile_timezone_revision": kwargs["expected_timezone_revision"],
+            "planning_status": "current",
             "accepted_count": kwargs["counts"]["accepted"],
             "cancelled_count": kwargs["counts"]["cancelled"],
             "out_of_window_count": kwargs["counts"]["out_of_window"],
@@ -133,7 +149,7 @@ class FakeCalendarRepository:
                 "import_id": str(import_id),
                 "origin": "authenticated_backend",
                 "source_kind": "ical_file",
-                "contract_version": "calendar-import-v1",
+                "contract_version": "calendar-import-v2",
                 "imported_at": (
                     previous["imported_at"]
                     if previous is not None
@@ -156,12 +172,14 @@ class FakeCalendarRepository:
     async def disconnect(self, **kwargs) -> None:
         self.connection["status"] = "disconnected"
         self.connection["disconnected_at"] = kwargs["now"].isoformat()
+        for row in self.imports.values():
+            row["planning_status"] = "disconnected"
 
     async def delete_imported_data(self, **kwargs) -> None:
         assert self.connection["status"] == "disconnected"
         self.events.clear()
-        self.imports.clear()
-        self.imports_by_request.clear()
+        for row in self.imports.values():
+            row["planning_status"] = "deleted"
         self.connection["last_import_id"] = None
         self.connection["imported_data_deleted_at"] = kwargs["now"].isoformat()
 
@@ -282,7 +300,7 @@ def test_request_id_reuse_with_different_file_conflicts() -> None:
         )
 
 
-def test_superseded_import_request_replay_conflicts() -> None:
+def test_superseded_import_request_exact_replay_remains_readable() -> None:
     repository = FakeCalendarRepository()
     service = _service(repository)
     first_request = _import_request(
@@ -305,17 +323,18 @@ def test_superseded_import_request_replay_conflicts() -> None:
         ),
     )
 
-    with pytest.raises(CalendarConflictError, match="superseded"):
-        asyncio.run(
-            service.import_file(
-                user_id=USER_ID,
-                connection_id=CONNECTION_ID,
-                request=first_request,
-            ),
-        )
+    replay = asyncio.run(
+        service.import_file(
+            user_id=USER_ID,
+            connection_id=CONNECTION_ID,
+            request=first_request,
+        ),
+    )
+    assert replay.import_summary.id == IMPORT_ID
+    assert replay.import_summary.planning_status == "not_imported"
 
 
-def test_current_import_replay_conflicts_after_disconnect() -> None:
+def test_current_import_exact_replay_remains_readable_after_disconnect() -> None:
     repository = FakeCalendarRepository()
     service = _service(repository)
     request = _import_request(UUID("43434343-1111-4111-8111-434343434343"))
@@ -336,14 +355,15 @@ def test_current_import_replay_conflicts_after_disconnect() -> None:
         ),
     )
 
-    with pytest.raises(CalendarConflictError, match="not connected"):
-        asyncio.run(
-            service.import_file(
-                user_id=USER_ID,
-                connection_id=CONNECTION_ID,
-                request=request,
-            ),
-        )
+    replay = asyncio.run(
+        service.import_file(
+            user_id=USER_ID,
+            connection_id=CONNECTION_ID,
+            request=request,
+        ),
+    )
+    assert replay.import_summary.id == IMPORT_ID
+    assert replay.import_summary.planning_status == "disconnected"
 
 
 def test_import_response_conflicts_if_a_concurrent_import_supersedes_projection() -> None:

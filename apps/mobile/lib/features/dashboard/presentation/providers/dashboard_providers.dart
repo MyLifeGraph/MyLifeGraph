@@ -4,6 +4,8 @@ import '../../../../core/capabilities/app_surface_capabilities.dart';
 import '../../../../core/network/api_client.dart';
 import '../../../../core/supabase/supabase_providers.dart';
 import '../../../quick_action/presentation/providers/quick_check_in_providers.dart';
+import '../../../quick_action/data/habit_completion_supabase_data_source.dart';
+import '../../../tasks/data/task_supabase_data_source.dart';
 import '../../data/datasources/deadline_preparation_schedule_data_source.dart';
 import '../../data/datasources/dashboard_mock_data_source.dart';
 import '../../data/datasources/dashboard_supabase_data_source.dart';
@@ -43,6 +45,18 @@ final deadlinePreparationScheduleDataSourceProvider =
   return client == null
       ? null
       : DeadlinePreparationScheduleSupabaseDataSource(client);
+});
+
+final dashboardTaskDataSourceProvider =
+    Provider<TaskSupabaseDataSource?>((ref) {
+  final client = ref.watch(supabaseClientProvider);
+  return client == null ? null : TaskSupabaseDataSource(client);
+});
+
+final dashboardHabitDataSourceProvider =
+    Provider<HabitCompletionSupabaseDataSource?>((ref) {
+  final client = ref.watch(supabaseClientProvider);
+  return client == null ? null : HabitCompletionSupabaseDataSource(client);
 });
 
 final dashboardSnapshotProvider =

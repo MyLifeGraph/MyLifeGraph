@@ -667,7 +667,22 @@ class SupabaseDeadlinePlanRepository:
             current_import_id = (
                 current_connection.get("last_import_id") if current_connection else None
             )
-            calendar_availability_current = current_import_id is not None
+            calendar_availability_current = False
+            if current_import_id is not None and current_connection is not None:
+                import_rows = await self._client.select(
+                    "calendar_imports",
+                    params={
+                        "select": "id,planning_status",
+                        "id": f"eq.{current_import_id}",
+                        "user_id": f"eq.{user_id}",
+                        "connection_id": f"eq.{current_connection['id']}",
+                        "limit": "1",
+                    },
+                )
+                calendar_availability_current = (
+                    len(import_rows) == 1
+                    and import_rows[0].get("planning_status") == "current"
+                )
         if include_calendar_availability and calendar_availability_current:
             assert current_connection is not None
             timed_events = await self._select_pages(
@@ -756,6 +771,15 @@ class SupabaseDeadlinePlanRepository:
             },
         )
         connection = rows[0] if rows else None
+        import_rows = await self._client.select(
+            "calendar_imports",
+            params={
+                "select": "id,planning_status",
+                "id": f"eq.{event.get('import_id')}",
+                "user_id": f"eq.{event.get('user_id')}",
+                "limit": "1",
+            },
+        )
         return {
             **event,
             "_connection_status": connection.get("status") if connection else None,
@@ -764,6 +788,11 @@ class SupabaseDeadlinePlanRepository:
             ),
             "_connection_imported_data_deleted_at": (
                 connection.get("imported_data_deleted_at") if connection else None
+            ),
+            "_import_planning_status": (
+                import_rows[0].get("planning_status")
+                if len(import_rows) == 1
+                else None
             ),
         }
 

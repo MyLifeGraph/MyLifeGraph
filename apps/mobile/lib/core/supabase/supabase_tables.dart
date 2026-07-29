@@ -22,5 +22,6 @@ class SupabaseTables {
   static const deadlinePlans = 'deadline_plans';
   static const deadlinePlanBlocks = 'deadline_plan_blocks';
   static const calendarConnections = 'calendar_connections';
+  static const calendarImports = 'calendar_imports';
   static const calendarEvents = 'calendar_events';
 }

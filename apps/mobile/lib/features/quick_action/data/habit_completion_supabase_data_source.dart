@@ -147,25 +147,45 @@ class HabitCompletionSupabaseDataSource {
       'lifecycle': HabitLifecycle.active.code,
       'started_on': habitDateKey(nowValue),
     };
-    final row = await _client
-        .from(SupabaseTables.habits)
-        .upsert(
-          {
-            'id': habitId,
-            'user_id': userId,
-            'title': normalizedTitle,
-            'description': normalizedDescription,
-            'frequency': cadence.compatibilityFrequency,
-            'target': cadence.compatibilityTarget,
-            'active': true,
-            'metadata': metadata,
-            'updated_at': now,
-          },
-          onConflict: 'id',
-        )
-        .select()
-        .single();
-    return _habitFromRow(Map<String, dynamic>.from(row));
+    final payload = {
+      'id': habitId,
+      'user_id': userId,
+      'creation_request_id': habitId,
+      'title': normalizedTitle,
+      'description': normalizedDescription,
+      'frequency': cadence.compatibilityFrequency,
+      'target': cadence.compatibilityTarget,
+      'active': true,
+      'metadata': metadata,
+      'updated_at': now,
+    };
+    try {
+      final row = await _client
+          .from(SupabaseTables.habits)
+          .insert(payload)
+          .select()
+          .single();
+      return _habitFromRow(Map<String, dynamic>.from(row));
+    } catch (_) {
+      final rows = await _client
+          .from(SupabaseTables.habits)
+          .select(
+            'id,title,description,frequency,target,active,metadata,created_at,'
+            'updated_at,creation_request_id',
+          )
+          .eq('user_id', userId)
+          .eq('id', habitId)
+          .limit(1);
+      if (rows.length == 1 &&
+          '${rows.first['creation_request_id'] ?? ''}' == habitId) {
+        return _habitFromRow(
+          Map<String, dynamic>.from(rows.first as Map),
+        );
+      }
+      throw const HabitCommandException(
+        'Habit creation conflicts with an existing request.',
+      );
+    }
   }
 
   Future<HabitV1> updateHabit({

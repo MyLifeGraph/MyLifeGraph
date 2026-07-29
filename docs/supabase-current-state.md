@@ -19,6 +19,9 @@ The later bounded Coach context-ledger extension is migration
 `20260728120000_coach_longitudinal_context_v1.sql`. The current free read-only
 Coach agent persistence is the additive migration
 `20260728160000_free_read_only_coach_agent_v1.sql`.
+The current repository boundary then adds write stabilization and
+observation-ordered persistence through
+`20260729130000_observed_projection_persistence.sql`.
 
 ## Runtime Activation
 
@@ -62,9 +65,11 @@ The app table constants live in
 
 | Table | Current app use |
 | --- | --- |
-| `profiles` | Canonical auth profile projection. Identity/authority (`role`, `auth_provider`) and onboarding eligibility are backend-owned; authenticated edits are limited to explicitly granted non-authority fields, `setup_revision` remains a monotonic backend projection guard, and the nullable account-wide preparation budget is read-only to application roles. |
-| `daily_logs` | One canonical daily row whose V3 metadata owns separate Evening/Morning captures plus direct nullable numeric Dashboard projections; V1/V2 remain readable with friction sanitized, and the Dashboard does not synthesize proxy scores. |
-| `behavioral_events` | Granular AI signal stream; canonical capture writes a dynamic deterministic maximum of four current events linked to its `daily_logs` row. |
+| `profiles` | Canonical auth profile projection. Identity/authority (`role`, `auth_provider`) and onboarding eligibility are backend-owned; `setup_revision`, `timezone_revision`, and `preparation_budget_revision` are monotonic backend guards, and timezone/preparation-budget writes require revisioned service-role RPCs. |
+| `daily_logs` | One canonical daily row whose V4 metadata owns separate Evening/Morning captures plus direct nullable numeric Dashboard projections; authenticated callers have owner reads but no direct DML. |
+| `behavioral_events` | Granular AI signal stream; the Capture RPC transactionally replaces only the dynamic deterministic maximum of four `quick_check_in` events linked to its `daily_logs` row. Other sources are preserved and application roles have no direct DML. |
+| `daily_capture_request_identities` | Service-role-only exact payload/result anti-replay ledger for branch-local `daily-capture-write-v1`; omitted from Account Export. |
+| `account_setting_request_identities` | Service-role-only operation/payload/result anti-replay ledger for revisioned timezone and preparation-budget writes; omitted from Account Export. |
 | `tasks` | Owner-scoped executable tasks with create/edit/complete/postpone/cancel/restore/undo, optional 5-480 minute estimates, and explicit completion/cancellation timestamps. |
 | `notifications` | Authenticated read-only Inbox projection with backend-owned read/unread/dismiss lifecycle plus optional deterministic generation key/category/local-date/provenance and foreground receipt time. A stored row alone does not prove delivery. |
 | `notification_action_requests` | Service-role-only exact retry/result ledger for `notification-lifecycle-v1`; it contains identities and lifecycle projections, not notification copy. |
@@ -84,12 +89,12 @@ The app table constants live in
 | `notification_preferences` | Reminder/category/quiet-hour configuration plus separate fail-closed in-app delivery consent/version/timestamps and a bounded daily cap. Reminder fields alone grant no delivery. |
 | `intake_responses` | Typed Setup history with request identity, optimistic revision, pending/applied state, and structured routine/commitment/Study lifecycle items. Retired personalization keys are stripped. |
 | `study_setup_profiles` | Optional `study-setup-v1` projection from the current applied Intake revision: focus/recovery rhythm, ordered preparation-item definitions, current/next semester, and Setup revision. Forced owner-read RLS; only the backend writes. |
-| `user_state_snapshots` | Compact backend-owned onboarding/daily/weekly state; daily and weekly summaries add Phase 2 Daily State plus Phase 3 explicit habit-outcome/focus facts while remaining deterministic recommendation context. |
+| `user_state_snapshots` | Compact backend-owned onboarding/daily/weekly state with `source_observed_at`; a V2 persistence RPC lets only a later-observed run replace the period projection. |
 | `daily_briefings` | One backend-owned deterministic `daily-briefing-v1` decision per user/profile-local date with strict executable actions, source-snapshot provenance, bounded evidence, and stale detection. |
 | `decision_feedback` | Retry-safe append-only feedback for an exact owned briefing action; authenticated owners can read/delete history and FastAPI owns validated writes. |
-| `weekly_reviews` | One backend-owned bounded `weekly-review-v1` output per user/completed ISO week with source fingerprint, at most two proposals, owner/admin reads, and service-role writes. |
+| `weekly_reviews` | One backend-owned bounded `weekly-review-v1` output per user/completed ISO week with source fingerprint, `source_observed_at`, at most two proposals, owner/admin reads, and owner-locked V2 persistence. |
 | `calendar_connections` | One optional consented `ical_file` source per owner with stable connect/disconnect/delete identity and no provider credential. |
-| `calendar_imports` | Immutable retry-safe `.ics` import identity, bounded window/counts, and canonical input/request fingerprints. |
+| `calendar_imports` | Immutable retry-safe `.ics` import identity, bounded window/counts, profile timezone revision, and `not_imported|current|profile_timezone_changed|disconnected|deleted` planning status. |
 | `calendar_events` | Current whitelisted imported event copy with stable single/recurrence identity and explicit imported/read-only provenance. |
 | `calendar_request_identities` | Minimal global UUID/owner/connection/operation registry enforcing stable identity across calendar lifecycle mutations; forced RLS and service-role insert/select only, with no content fingerprint. |
 | `deadline_plans` | Owner-scoped exam/assignment lifecycle with immutable original estimate/prior credit, one stable managed-task identity after first confirmation, and active/pending revision projections. |
@@ -107,10 +112,12 @@ The app table constants live in
 | `coach_usage_events` | Backend-only append-only one-row-per-request outcome/counter ledger retained across conversation deletion and used with request rows for the profile-local daily attempt budget. |
 | `coach_memory_selections` | Legacy explicit selection of at most eight eligible memories for fixed-context V1/V2 Coach. It remains readable for compatibility but current V3 Flutter does not call or depend on it. |
 
-Phase 1 canonical capture upserts one `daily_logs` row per user/date with source
-`quick_check_in`. `metadata.capture_version=daily-capture-v4` contains separate
-owned `captures.evening` and `captures.morning` objects. Saving one kind replaces
-only that object, preserving the other capture and unrelated metadata. Numeric
+Canonical authenticated Capture uses `apply_daily_capture_branch_v1` to merge
+one `daily_logs` row per user/date with source `quick_check_in`.
+`metadata.capture_version=daily-capture-v4` contains separate owned
+`captures.evening` and `captures.morning` objects. Saving one kind compares and
+replaces only that object, preserving the other capture and unrelated metadata.
+Numeric
 projection keeps existing consumers compatible: Morning energy takes
 precedence, Evening owns mood and stress, and Morning owns sleep. Evening stores
 no primary/additional friction fields. It requires one planned local sleep
@@ -446,8 +453,10 @@ global request-identity ledger backend-only.
 five-minute increments. Existing null rows retain the per-plan-only behavior.
 Application roles may read the owner profile through existing RLS but cannot
 write this column. The service-role-only
-`set_daily_preparation_budget_v1(uuid,int)` RPC takes the same owner advisory
-lock as planner mutations and returns only the exact nullable value.
+`set_daily_preparation_budget_v1(uuid,int)` RPC originally took the same owner
+advisory lock as planner mutations. The stabilization migration revokes its
+execute authority and replaces it with the revision-checked, fingerprinted
+`apply_account_preparation_budget_v2` path.
 
 Proposal calculation subtracts confirmed blocks from other plans on each
 profile-local planning date, including earlier reservations on the current
@@ -991,12 +1000,25 @@ claim/completion wrappers retain the owner lock, daily budget, terminal replay,
 legacy history, and deletion tombstones while adding no application write
 authority.
 
+`20260729120000_stabilization_write_authority.sql` adds branch-CAS Daily
+Capture and revision-CAS account-setting ledgers/RPCs, removes direct Capture
+DML and the old preparation setter's execute authority, binds Planner,
+Deadline, and Calendar projections to timezone revision, adds Calendar
+planning status, guards Setup-owned rows, and gives manual Task/Habit creation
+immutable retry identity.
+
+`20260729130000_observed_projection_persistence.sql` adds
+`source_observed_at` to user-state Snapshots and Weekly Reviews plus the
+service-role-only V2 persistence RPCs. A later-observed Snapshot wins; Weekly
+Review persistence validates the current weekly Snapshot identity and
+provenance under the owner/row lock.
+
 ## Local Verification Workflow
 
 For local Supabase-backed testing, the reset should complete through:
 
 ```text
-20260728160000_free_read_only_coach_agent_v1.sql
+20260729130000_observed_projection_persistence.sql
 ```
 
 Then configure `.env` with:

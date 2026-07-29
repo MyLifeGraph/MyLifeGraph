@@ -472,6 +472,7 @@ class DeadlinePlanIdentity(BaseModel):
     original_credited_prior_minutes: int = Field(ge=0, le=29_999)
     current_revision: int = Field(ge=0)
     latest_revision: int = Field(ge=1, le=200)
+    attention_reasons: list[str] = Field(default_factory=list, max_length=12)
     created_at: datetime
     updated_at: datetime
     completed_at: datetime | None = None
@@ -502,6 +503,8 @@ class DeadlinePlanIdentity(BaseModel):
             raise ValueError("managed task identity must match first activation")
         if self.latest_revision < max(1, self.current_revision):
             raise ValueError("latest deadline revision cannot precede the active one")
+        if len(self.attention_reasons) != len(set(self.attention_reasons)):
+            raise ValueError("deadline attention reasons must be unique")
         return self
 
 

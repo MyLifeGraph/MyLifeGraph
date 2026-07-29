@@ -1,10 +1,11 @@
 from datetime import datetime
 from typing import Any, Literal
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
-ACCOUNT_EXPORT_CONTRACT_VERSION = "account-export-v1"
+ACCOUNT_EXPORT_CONTRACT_VERSION = "account-export-v2"
 ACCOUNT_EXPORT_TABLE_NAMES = (
     "profiles",
     "notification_preferences",
@@ -55,6 +56,8 @@ ACCOUNT_EXPORT_SANITIZED_TABLES = (
     "coach_usage_events",
 )
 ACCOUNT_EXPORT_OMITTED_TABLES = {
+    "daily_capture_request_identities": "backend_only_anti_replay_ledger",
+    "account_setting_request_identities": "backend_only_anti_replay_ledger",
     "calendar_request_identities": "backend_only_anti_replay_ledger",
     "notification_action_requests": "backend_only_anti_replay_ledger",
     "deadline_plan_request_identities": "backend_only_anti_replay_ledger",
@@ -71,6 +74,9 @@ DAILY_PREPARATION_BUDGET_MINUTES_MAX = 480
 class AccountProfileUpdateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
 
+    contract_version: Literal["account-profile-update-v2"]
+    request_id: UUID = Field(strict=False)
+    expected_revision: int = Field(ge=1)
     timezone: str = Field(min_length=1, max_length=100)
 
     @field_validator("timezone")
@@ -84,12 +90,25 @@ class AccountProfileUpdateRequest(BaseModel):
 class AccountProfileResponse(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
 
+    contract_version: Literal["account-profile-v2"]
     timezone: str = Field(min_length=1, max_length=100)
+    revision: int = Field(ge=2)
+    updated_at: datetime
+    replayed: bool
+
+    @model_validator(mode="after")
+    def validate_timestamp(self) -> "AccountProfileResponse":
+        if self.updated_at.tzinfo is None:
+            raise ValueError("updated_at must be timezone-aware")
+        return self
 
 
 class AccountPreparationBudgetUpdateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
 
+    contract_version: Literal["account-preparation-budget-update-v2"]
+    request_id: UUID = Field(strict=False)
+    expected_revision: int = Field(ge=1)
     daily_preparation_budget_minutes: int | None = Field(
         ge=DAILY_PREPARATION_BUDGET_MINUTES_MIN,
         le=DAILY_PREPARATION_BUDGET_MINUTES_MAX,
@@ -108,10 +127,20 @@ class AccountPreparationBudgetUpdateRequest(BaseModel):
 class AccountPreparationBudgetResponse(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
 
+    contract_version: Literal["account-preparation-budget-v2"]
     daily_preparation_budget_minutes: int | None = Field(
         ge=DAILY_PREPARATION_BUDGET_MINUTES_MIN,
         le=DAILY_PREPARATION_BUDGET_MINUTES_MAX,
     )
+    revision: int = Field(ge=2)
+    updated_at: datetime
+    replayed: bool
+
+    @model_validator(mode="after")
+    def validate_timestamp(self) -> "AccountPreparationBudgetResponse":
+        if self.updated_at.tzinfo is None:
+            raise ValueError("updated_at must be timezone-aware")
+        return self
 
 
 class AccountDeleteRequest(BaseModel):
@@ -127,11 +156,11 @@ class AccountExportLedgerPolicy(BaseModel):
     omitted_tables: dict[str, str]
 
     @model_validator(mode="after")
-    def validate_exact_v1_policy(self) -> "AccountExportLedgerPolicy":
+    def validate_exact_v2_policy(self) -> "AccountExportLedgerPolicy":
         if tuple(self.sanitized_tables) != ACCOUNT_EXPORT_SANITIZED_TABLES:
-            raise ValueError("sanitized_tables must match the V1 ledger policy")
+            raise ValueError("sanitized_tables must match the V2 ledger policy")
         if self.omitted_tables != ACCOUNT_EXPORT_OMITTED_TABLES:
-            raise ValueError("omitted_tables must match the V1 ledger policy")
+            raise ValueError("omitted_tables must match the V2 ledger policy")
         return self
 
 
@@ -143,7 +172,7 @@ class AccountExportLimits(BaseModel):
     max_json_bytes: int = Field(gt=0)
 
     @model_validator(mode="after")
-    def validate_exact_v1_limits(self) -> "AccountExportLimits":
+    def validate_exact_v2_limits(self) -> "AccountExportLimits":
         if (
             self.max_rows_per_table,
             self.max_total_rows,
@@ -153,14 +182,14 @@ class AccountExportLimits(BaseModel):
             ACCOUNT_EXPORT_MAX_TOTAL_ROWS,
             ACCOUNT_EXPORT_MAX_JSON_BYTES,
         ):
-            raise ValueError("limits must match the account-export-v1 contract")
+            raise ValueError("limits must match the account-export-v2 contract")
         return self
 
 
 class AccountExportResponse(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
 
-    contract_version: Literal["account-export-v1"]
+    contract_version: Literal["account-export-v2"]
     exported_at: datetime
     data: dict[str, list[dict[str, Any]]]
     record_counts: dict[str, int]
@@ -173,9 +202,9 @@ class AccountExportResponse(BaseModel):
             raise ValueError("exported_at must be timezone-aware")
         expected_tables = set(ACCOUNT_EXPORT_TABLE_NAMES)
         if set(self.data) != expected_tables:
-            raise ValueError("data must contain the exact V1 export table set")
+            raise ValueError("data must contain the exact V2 export table set")
         if set(self.record_counts) != expected_tables:
-            raise ValueError("record_counts must contain the exact V1 table set")
+            raise ValueError("record_counts must contain the exact V2 table set")
         if any(
             self.record_counts[name] != len(rows)
             for name, rows in self.data.items()
@@ -185,7 +214,7 @@ class AccountExportResponse(BaseModel):
             count > ACCOUNT_EXPORT_MAX_ROWS_PER_TABLE
             for count in self.record_counts.values()
         ):
-            raise ValueError("record_counts exceed the V1 per-table bound")
+            raise ValueError("record_counts exceed the V2 per-table bound")
         if sum(self.record_counts.values()) > ACCOUNT_EXPORT_MAX_TOTAL_ROWS:
-            raise ValueError("record_counts exceed the V1 total bound")
+            raise ValueError("record_counts exceed the V2 total bound")
         return self

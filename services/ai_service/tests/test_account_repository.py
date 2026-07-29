@@ -1,4 +1,5 @@
 import asyncio
+from datetime import UTC, datetime
 
 import httpx
 import pytest
@@ -12,8 +13,11 @@ from app.repositories.account_repository import (
     AccountPreparationBudgetUpdateOutcomeUnknownError,
     AccountProfileUpdateOutcomeUnknownError,
     StoredPreparationBudget,
+    StoredTimezone,
     SupabaseAccountRepository,
 )
+
+NOW = datetime(2026, 7, 29, 12, tzinfo=UTC)
 
 
 class Client:
@@ -78,92 +82,134 @@ def _http_error(
     )
 
 
-def test_timezone_update_filters_by_owner_and_returns_exact_projection() -> None:
+def _timezone_kwargs() -> dict[str, object]:
+    return {
+        "user_id": "owner-1",
+        "request_id": "00000000-0000-4000-8000-000000000001",
+        "request_fingerprint": "a" * 64,
+        "expected_revision": 4,
+        "timezone": "America/New_York",
+        "now": NOW,
+    }
+
+
+def _budget_kwargs(minutes: int | None = 120) -> dict[str, object]:
+    return {
+        "user_id": "owner-1",
+        "request_id": "00000000-0000-4000-8000-000000000002",
+        "request_fingerprint": "b" * 64,
+        "expected_revision": 6,
+        "minutes": minutes,
+        "now": NOW,
+    }
+
+
+def test_timezone_update_calls_owner_locked_v2_rpc_and_returns_projection() -> None:
     client = Client()
+    client.rpc_result = {
+        "contract_version": "account-profile-v2",
+        "timezone": "America/New_York",
+        "revision": 5,
+        "updated_at": NOW.isoformat(),
+        "replayed": False,
+    }
     repository = SupabaseAccountRepository(client)  # type: ignore[arg-type]
 
-    result = asyncio.run(
-        repository.update_timezone(
-            user_id="owner-1",
-            timezone="America/New_York",
-        ),
-    )
+    result = asyncio.run(repository.update_timezone(**_timezone_kwargs()))
 
-    assert result == "America/New_York"
-    assert client.update_calls == [
+    assert result == StoredTimezone(
+        timezone="America/New_York",
+        revision=5,
+        updated_at=NOW,
+        replayed=False,
+    )
+    assert client.rpc_calls == [
         (
-            "profiles",
-            {"timezone": "America/New_York"},
-            {"id": "eq.owner-1", "select": "timezone"},
+            "apply_account_timezone_v2",
+            {
+                "p_user_id": "owner-1",
+                "p_request_id": "00000000-0000-4000-8000-000000000001",
+                "p_request_fingerprint": "a" * 64,
+                "p_expected_revision": 4,
+                "p_timezone": "America/New_York",
+                "p_now": NOW.isoformat(),
+            },
         ),
     ]
+    assert client.update_calls == []
 
 
-def test_timezone_update_returns_missing_and_rejects_mismatched_results() -> None:
+def test_timezone_update_returns_missing_and_rejects_mismatched_result() -> None:
     client = Client()
     repository = SupabaseAccountRepository(client)  # type: ignore[arg-type]
-    client.update_rows = []
+    client.rpc_error = _http_error(404, code="PT404")
     assert (
-        asyncio.run(
-            repository.update_timezone(
-                user_id="owner-1",
-                timezone="Europe/Berlin",
-            ),
-        )
-        is None
+        asyncio.run(repository.update_timezone(**_timezone_kwargs())) is None
     )
 
-    client.update_rows = [{"timezone": "UTC"}]
-    client.select_rows["profiles"] = [{"timezone": "UTC"}]
+    client.rpc_error = None
+    client.rpc_result = {
+        "contract_version": "account-profile-v2",
+        "timezone": "UTC",
+        "revision": 5,
+        "updated_at": NOW.isoformat(),
+        "replayed": False,
+    }
     with pytest.raises(AccountProfileUpdateOutcomeUnknownError, match="determined"):
-        asyncio.run(
-            repository.update_timezone(
-                user_id="owner-1",
-                timezone="Europe/Berlin",
-            ),
-        )
+        asyncio.run(repository.update_timezone(**_timezone_kwargs()))
 
 
-def test_timezone_update_response_loss_converges_by_exact_readback() -> None:
+def test_timezone_update_response_loss_replays_exact_request() -> None:
     client = Client()
-    client.update_error = httpx.ReadError("response lost")
-    client.select_rows["profiles"] = [{"timezone": "Europe/Berlin"}]
+    client.rpc_outcomes = [
+        httpx.ReadError("response lost"),
+        {
+            "contract_version": "account-profile-v2",
+            "timezone": "America/New_York",
+            "revision": 5,
+            "updated_at": NOW.isoformat(),
+            "replayed": True,
+        },
+    ]
     repository = SupabaseAccountRepository(client)  # type: ignore[arg-type]
 
-    result = asyncio.run(
-        repository.update_timezone(
-            user_id="owner-1",
-            timezone="Europe/Berlin",
-        ),
-    )
+    result = asyncio.run(repository.update_timezone(**_timezone_kwargs()))
 
-    assert result == "Europe/Berlin"
-    assert client.select_calls == [
-        (
-            "profiles",
-            {"select": "timezone", "id": "eq.owner-1", "limit": "1"},
-            None,
-        ),
-    ]
+    assert result is not None and result.replayed is True
+    assert len(client.rpc_calls) == 2
+    assert client.rpc_calls[0] == client.rpc_calls[1]
 
 
 @pytest.mark.parametrize("minutes", [120, None])
 def test_preparation_budget_uses_owner_scoped_atomic_rpc(minutes: int | None) -> None:
     client = Client()
-    client.rpc_result = {"daily_preparation_budget_minutes": minutes}
+    client.rpc_result = {
+        "contract_version": "account-preparation-budget-v2",
+        "daily_preparation_budget_minutes": minutes,
+        "revision": 7,
+        "updated_at": NOW.isoformat(),
+        "replayed": False,
+    }
     repository = SupabaseAccountRepository(client)  # type: ignore[arg-type]
 
-    result = asyncio.run(
-        repository.update_preparation_budget(user_id="owner-1", minutes=minutes),
-    )
+    result = asyncio.run(repository.update_preparation_budget(**_budget_kwargs(minutes)))
 
-    assert result == StoredPreparationBudget(minutes=minutes)
+    assert result == StoredPreparationBudget(
+        minutes=minutes,
+        revision=7,
+        updated_at=NOW,
+        replayed=False,
+    )
     assert client.rpc_calls == [
         (
-            "set_daily_preparation_budget_v1",
+            "apply_account_preparation_budget_v2",
             {
                 "p_user_id": "owner-1",
+                "p_request_id": "00000000-0000-4000-8000-000000000002",
+                "p_request_fingerprint": "b" * 64,
+                "p_expected_revision": 6,
                 "p_daily_preparation_budget_minutes": minutes,
+                "p_now": NOW.isoformat(),
             },
         ),
     ]
@@ -173,54 +219,34 @@ def test_preparation_budget_response_loss_replays_exact_idempotent_rpc() -> None
     client = Client()
     client.rpc_outcomes = [
         httpx.ReadError("response lost"),
-        {"daily_preparation_budget_minutes": 180},
+        {
+            "contract_version": "account-preparation-budget-v2",
+            "daily_preparation_budget_minutes": 180,
+            "revision": 7,
+            "updated_at": NOW.isoformat(),
+            "replayed": True,
+        },
     ]
     repository = SupabaseAccountRepository(client)  # type: ignore[arg-type]
 
-    result = asyncio.run(
-        repository.update_preparation_budget(user_id="owner-1", minutes=180),
-    )
+    result = asyncio.run(repository.update_preparation_budget(**_budget_kwargs(180)))
 
-    assert result == StoredPreparationBudget(minutes=180)
-    assert client.rpc_calls == [
-        (
-            "set_daily_preparation_budget_v1",
-            {
-                "p_user_id": "owner-1",
-                "p_daily_preparation_budget_minutes": 180,
-            },
-        ),
-    ] * 2
+    assert result is not None and result.minutes == 180 and result.replayed
+    assert len(client.rpc_calls) == 2
+    assert client.rpc_calls[0] == client.rpc_calls[1]
     assert client.select_calls == []
 
 
-def test_preparation_budget_ambiguous_result_requires_exact_readback() -> None:
+def test_preparation_budget_invalid_result_is_explicitly_unknown() -> None:
     client = Client()
-    client.rpc_outcomes = [{"wrong": 120}, {"wrong": 120}]
-    client.select_rows["profiles"] = [
-        {"daily_preparation_budget_minutes": 90},
-    ]
+    client.rpc_result = {"wrong": 120}
     repository = SupabaseAccountRepository(client)  # type: ignore[arg-type]
 
     with pytest.raises(
         AccountPreparationBudgetUpdateOutcomeUnknownError,
         match="determined",
     ):
-        asyncio.run(
-            repository.update_preparation_budget(user_id="owner-1", minutes=120),
-        )
-
-    assert client.select_calls == [
-        (
-            "profiles",
-            {
-                "select": "daily_preparation_budget_minutes",
-                "id": "eq.owner-1",
-                "limit": "1",
-            },
-            None,
-        ),
-    ]
+        asyncio.run(repository.update_preparation_budget(**_budget_kwargs()))
 
 
 def test_preparation_budget_distinguishes_missing_profile_from_missing_rpc() -> None:
@@ -230,45 +256,29 @@ def test_preparation_budget_distinguishes_missing_profile_from_missing_rpc() -> 
         missing_profile,
     )
     assert (
-        asyncio.run(
-            repository.update_preparation_budget(
-                user_id="owner-1",
-                minutes=120,
-            ),
-        )
+        asyncio.run(repository.update_preparation_budget(**_budget_kwargs()))
         is None
     )
 
     missing_rpc = Client()
     missing_rpc.rpc_error = _http_error(404, code="PGRST202")
-    missing_rpc.select_rows["profiles"] = [
-        {"daily_preparation_budget_minutes": 120},
-    ]
     repository = SupabaseAccountRepository(missing_rpc)  # type: ignore[arg-type]
     with pytest.raises(AccountPersistenceError, match="unavailable"):
-        asyncio.run(
-            repository.update_preparation_budget(
-                user_id="owner-1",
-                minutes=120,
-            ),
-        )
+        asyncio.run(repository.update_preparation_budget(**_budget_kwargs()))
     assert len(missing_rpc.rpc_calls) == 1
     assert missing_rpc.select_calls == []
 
 
-def test_timezone_update_response_loss_has_explicit_unknown_failed_readback() -> None:
+def test_timezone_update_response_loss_has_explicit_unknown_failed_replay() -> None:
     client = Client()
-    client.update_error = ValueError("invalid response")
-    client.select_error = _http_error()
+    client.rpc_outcomes = [
+        ValueError("invalid response"),
+        _http_error(),
+    ]
     repository = SupabaseAccountRepository(client)  # type: ignore[arg-type]
 
     with pytest.raises(AccountProfileUpdateOutcomeUnknownError, match="determined"):
-        asyncio.run(
-            repository.update_timezone(
-                user_id="owner-1",
-                timezone="Europe/Berlin",
-            ),
-        )
+        asyncio.run(repository.update_timezone(**_timezone_kwargs()))
 
 
 def test_export_query_always_has_exact_owner_filter_and_stable_page() -> None:

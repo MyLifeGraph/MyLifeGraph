@@ -191,6 +191,15 @@ loads, its independent source state is unavailable and no Planner block is
 fabricated. Other usable Today sources remain visible; progress is unavailable
 when scheduled target selection cannot be proven.
 
+## Mutation-Date And Reload Boundary
+
+Authenticated Task and Habit mutations derive their target date only from the
+displayed `DashboardSnapshot.localDate`; device time is not a fallback. While
+the write and subsequent Snapshot/Today refresh are in flight, all Task/Habit
+actions are locked. If the write committed but the refresh fails, Flutter keeps
+the optimistic saved state, disables old projection controls, and shows
+`Saved; Today could not reload.` Its retry performs only a read.
+
 ## Bounds And Non-Claims
 
 Backend parsers reject unknown/coerced contract shapes and cap task, habit,

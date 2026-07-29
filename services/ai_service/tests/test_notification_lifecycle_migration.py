@@ -123,6 +123,8 @@ def test_authenticated_direct_notification_mutation_remains_forbidden() -> None:
 
 def test_account_export_truthfully_names_the_omitted_notification_ledger() -> None:
     assert ACCOUNT_EXPORT_OMITTED_TABLES == {
+        "daily_capture_request_identities": "backend_only_anti_replay_ledger",
+        "account_setting_request_identities": "backend_only_anti_replay_ledger",
         "calendar_request_identities": "backend_only_anti_replay_ledger",
         "notification_action_requests": "backend_only_anti_replay_ledger",
         "deadline_plan_request_identities": "backend_only_anti_replay_ledger",

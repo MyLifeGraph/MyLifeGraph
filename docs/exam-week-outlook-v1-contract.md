@@ -173,6 +173,14 @@ The sleep comparison uses the saved local start clock and target elapsed
 minutes. A nonexistent or ambiguous DST start makes protected capacity
 incomplete rather than silently choosing an instant.
 
+Planner and Deadline proposal revisions also pin the profile
+`timezone_revision`. Confirmation rechecks that identity under the existing
+owner lock. A later timezone change never shifts confirmed blocks: active plans
+gain `timezone_changed` attention, while open previews must be recreated.
+Recurring Setup and Planner local times use the same round-trip resolver, so a
+DST gap or fold makes only that source unavailable instead of guessing an
+offset.
+
 The exact fit states are:
 
 - `fits_with_sleep_protected`: both simulations fit and all required

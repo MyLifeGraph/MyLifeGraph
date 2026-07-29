@@ -403,6 +403,113 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('unavailable Study Setup blocks start until retry succeeds',
+      (tester) async {
+    final source = _FailOnceStudySettingsSource();
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          appConfigProvider.overrideWithValue(_realConfig),
+          focusSessionPageDataSourceProvider.overrideWithValue(source),
+          snapshotRefreshServiceProvider.overrideWithValue(
+            _CountingSnapshotRefresh(),
+          ),
+        ],
+        child: const MaterialApp(
+          home: Scaffold(body: FocusSessionPage()),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.textContaining('Saved Study Setup could not be loaded.'),
+      findsOneWidget,
+    );
+    expect(find.text('No finished sessions yet.'), findsNothing);
+    expect(
+      tester
+          .widget<FilledButton>(
+            find.widgetWithText(FilledButton, 'Start focus session'),
+          )
+          .onPressed,
+      isNull,
+    );
+
+    await tester.tap(find.text('Retry Study Setup'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.textContaining('Saved Study Setup could not be loaded.'),
+      findsNothing,
+    );
+    expect(
+      tester
+          .widget<SegmentedButton<int>>(
+            find.byType(SegmentedButton<int>),
+          )
+          .selected,
+      {45},
+    );
+    expect(
+      tester
+          .widget<FilledButton>(
+            find.widgetWithText(FilledButton, 'Start focus session'),
+          )
+          .onPressed,
+      isNotNull,
+    );
+  });
+
+  testWidgets('explicit unavailable-Setup fallback is session-only and safe',
+      (tester) async {
+    final source = _UnavailableStudySettingsSource();
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          appConfigProvider.overrideWithValue(_realConfig),
+          focusSessionPageDataSourceProvider.overrideWithValue(source),
+          snapshotRefreshServiceProvider.overrideWithValue(
+            _CountingSnapshotRefresh(),
+          ),
+        ],
+        child: const MaterialApp(
+          home: Scaffold(body: FocusSessionPage()),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Continue without saved Study Setup'));
+    await tester.pumpAndSettle();
+    expect(find.text('Saved Study Setup is unavailable'), findsNothing);
+    expect(
+      tester
+          .widget<SegmentedButton<int>>(
+            find.byType(SegmentedButton<int>),
+          )
+          .selected,
+      {30},
+    );
+    expect(find.textContaining('recovery'), findsNothing);
+
+    await tester.scrollUntilVisible(
+      find.text('Start focus session'),
+      250,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.tap(find.text('Start focus session'));
+    await tester.pumpAndSettle();
+
+    expect(source.startCalls, 1);
+    expect(source.lastDraft?.plannedMinutes, 30);
+    expect(source.lastDraft?.recoveryMinutes, 0);
+    expect(find.text('Prepare to focus'), findsNothing);
+    expect(find.text('Focus active'), findsOneWidget);
+  });
+
   testWidgets('skip remaining starts without persisting ritual choices',
       (tester) async {
     final source = _StudyFocusSource();
@@ -635,6 +742,9 @@ class _FailOnceFocusSource extends FocusSessionSupabaseDataSource {
   Future<List<FocusTargetOption>> fetchAvailableTargets() async {
     return const [];
   }
+
+  @override
+  Future<StudyFocusSettings?> fetchStudyFocusSettings() async => null;
 }
 
 class _ActiveFocusSource extends FocusSessionSupabaseDataSource {
@@ -732,6 +842,9 @@ class _LongTargetFocusSource extends FocusSessionSupabaseDataSource {
           title: 'A very long focus target that must remain inside the field',
         ),
       ];
+
+  @override
+  Future<StudyFocusSettings?> fetchStudyFocusSettings() async => null;
 }
 
 class _PendingStartFocusSource extends FocusSessionSupabaseDataSource {
@@ -755,6 +868,9 @@ class _PendingStartFocusSource extends FocusSessionSupabaseDataSource {
 
   @override
   Future<List<FocusTargetOption>> fetchAvailableTargets() async => const [];
+
+  @override
+  Future<StudyFocusSettings?> fetchStudyFocusSettings() async => null;
 
   @override
   Future<FocusSession> startSession({
@@ -852,6 +968,26 @@ class _StudyFocusSource extends FocusSessionSupabaseDataSource {
       updatedAt: now,
     );
     return active!;
+  }
+}
+
+class _FailOnceStudySettingsSource extends _StudyFocusSource {
+  int studyLoads = 0;
+
+  @override
+  Future<StudyFocusSettings?> fetchStudyFocusSettings() {
+    studyLoads += 1;
+    if (studyLoads == 1) {
+      throw StateError('Study Setup read failed');
+    }
+    return super.fetchStudyFocusSettings();
+  }
+}
+
+class _UnavailableStudySettingsSource extends _StudyFocusSource {
+  @override
+  Future<StudyFocusSettings?> fetchStudyFocusSettings() {
+    throw StateError('Study Setup read failed');
   }
 }
 

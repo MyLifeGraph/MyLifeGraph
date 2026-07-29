@@ -14,15 +14,20 @@ class NotificationRowActionState {
     required this.command,
     required this.error,
     required this.exactRetryRequest,
+    this.committedRequiresReload = false,
+    this.committedResult,
   });
 
   final bool isPending;
   final NotificationLifecycleCommand command;
   final Object? error;
   final NotificationLifecycleRequest? exactRetryRequest;
+  final bool committedRequiresReload;
+  final NotificationLifecycleResult? committedResult;
 
   bool get requiresExactRetry => exactRetryRequest != null;
   bool get requiresReload =>
+      committedRequiresReload ||
       error != null && notificationLifecycleFailureRequiresReload(error!);
 }
 
@@ -102,6 +107,12 @@ class NotificationsController extends StateNotifier<NotificationsState> {
     try {
       final items = await _repository.getNotifications();
       if (_disposed) return false;
+      if (clearRowActionsOnSuccess &&
+          !_matchesCommittedResults(items, state.rowActions)) {
+        throw const NotificationLifecycleContractException(
+          'Inbox reload did not include the committed notification change.',
+        );
+      }
       state = state.copyWith(
         isLoading: false,
         items: List.unmodifiable(items),
@@ -133,6 +144,9 @@ class NotificationsController extends StateNotifier<NotificationsState> {
 
   Future<bool> retry(String notificationId) async {
     final operation = state.actionFor(notificationId);
+    if (operation?.committedRequiresReload == true) {
+      return _reloadInbox(clearRowActionsOnSuccess: true);
+    }
     if (operation == null ||
         operation.isPending ||
         operation.error == null ||
@@ -151,6 +165,7 @@ class NotificationsController extends StateNotifier<NotificationsState> {
     if (index < 0) return false;
     final existingOperation = state.actionFor(notificationId);
     if (existingOperation?.isPending == true) return false;
+    if (existingOperation?.committedRequiresReload == true) return false;
     final exactRequest = existingOperation?.exactRetryRequest;
     if (existingOperation?.error != null && exactRequest == null) return false;
     if (exactRequest != null && exactRequest.command != command) return false;
@@ -176,32 +191,39 @@ class NotificationsController extends StateNotifier<NotificationsState> {
       final result = await _repository.performLifecycleAction(request);
       result.requireMatches(request);
       if (_disposed) return false;
-      if (result.replayed) {
-        _removeRowAction(notificationId);
-        return _reloadInbox(clearRowActionsOnSuccess: false);
+      if (!result.replayed) {
+        final currentIndex =
+            state.items.indexWhere((item) => item.id == notificationId);
+        if (currentIndex < 0) return false;
+        final current = state.items[currentIndex];
+        if (current.updatedAt != request.expectedUpdatedAt) {
+          throw const NotificationLifecycleContractException(
+            'Notification changed while its action was pending.',
+          );
+        }
+        final updated = current.applyLifecycle(result);
+        final items = [...state.items];
+        if (command == NotificationLifecycleCommand.dismiss) {
+          // Keep the durable row visible but locked until the Inbox confirms
+          // the current projection. Removing it now would hide a failed
+          // reload and invite a second mutation from stale state.
+        } else {
+          items[currentIndex] = updated;
+        }
+        state = state.copyWith(items: List.unmodifiable(items));
       }
-      final currentIndex =
-          state.items.indexWhere((item) => item.id == notificationId);
-      if (currentIndex < 0) return false;
-      final current = state.items[currentIndex];
-      if (current.updatedAt != request.expectedUpdatedAt) {
-        throw const NotificationLifecycleContractException(
-          'Notification changed while its action was pending.',
-        );
-      }
-      final updated = current.applyLifecycle(result);
-      final items = [...state.items];
-      if (command == NotificationLifecycleCommand.dismiss) {
-        items.removeAt(currentIndex);
-      } else {
-        items[currentIndex] = updated;
-      }
-      final actions = {...state.rowActions}..remove(notificationId);
-      state = state.copyWith(
-        items: List.unmodifiable(items),
-        rowActions: Map.unmodifiable(actions),
+      _setRowAction(
+        notificationId,
+        NotificationRowActionState(
+          isPending: false,
+          command: command,
+          error: null,
+          exactRetryRequest: null,
+          committedRequiresReload: true,
+          committedResult: result,
+        ),
       );
-      return true;
+      return _reloadInbox(clearRowActionsOnSuccess: true);
     } catch (error) {
       if (_disposed) return false;
       final requiresExactRetry =
@@ -219,16 +241,34 @@ class NotificationsController extends StateNotifier<NotificationsState> {
     }
   }
 
+  bool _matchesCommittedResults(
+    List<AppNotification> items,
+    Map<String, NotificationRowActionState> actions,
+  ) {
+    for (final entry in actions.entries) {
+      final result = entry.value.committedResult;
+      if (!entry.value.committedRequiresReload || result == null) continue;
+      final matching = items.where((item) => item.id == entry.key).toList();
+      if (result.command == NotificationLifecycleCommand.dismiss) {
+        if (matching.isNotEmpty) return false;
+        continue;
+      }
+      if (matching.length != 1) return false;
+      final item = matching.single;
+      if (item.updatedAt.isBefore(result.updatedAt)) return false;
+      if (!result.replayed &&
+          (item.isRead != result.isRead || item.readAt != result.readAt)) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   void _setRowAction(
     String notificationId,
     NotificationRowActionState operation,
   ) {
     final actions = {...state.rowActions, notificationId: operation};
-    state = state.copyWith(rowActions: Map.unmodifiable(actions));
-  }
-
-  void _removeRowAction(String notificationId) {
-    final actions = {...state.rowActions}..remove(notificationId);
     state = state.copyWith(rowActions: Map.unmodifiable(actions));
   }
 

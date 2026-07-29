@@ -34,6 +34,7 @@ from app.repositories.weekly_review_repository import (
     WeeklyReviewRepository,
 )
 from app.services.snapshot_aggregator import SnapshotAggregator
+from app.services.local_time import resolve_local_datetime
 
 
 @dataclass(frozen=True)
@@ -129,13 +130,17 @@ class WeeklyReviewService:
         user_id: str,
         request: WeeklyReviewGenerateRequest,
     ) -> WeeklyReviewReadResponse:
+        initial_observed_at = self._observation_time()
         profile = await self._repository.get_profile(user_id=user_id)
         period = self._latest_period(profile=profile)
         self._require_period(period=period, requested=request.period_key)
         if not profile.onboarded:
             return _not_ready(period)
 
-        context = await self._load_context(user_id=user_id, period=period)
+        context = _context_observed_before(
+            await self._load_context(user_id=user_id, period=period),
+            source_observed_at=initial_observed_at,
+        )
         current = await self._response_for_context(
             user_id=user_id,
             period=period,
@@ -159,7 +164,11 @@ class WeeklyReviewService:
         )
         # Owner facts may change while the backend snapshot is being refreshed.
         # Re-read once so persisted review facts and their fingerprint agree.
-        context = await self._load_context(user_id=user_id, period=period)
+        source_observed_at = self._observation_time()
+        context = _context_observed_before(
+            await self._load_context(user_id=user_id, period=period),
+            source_observed_at=source_observed_at,
+        )
         if not _has_review_evidence(context):
             return await self._response_for_context(
                 user_id=user_id,
@@ -171,9 +180,7 @@ class WeeklyReviewService:
             period=period,
             context=context,
         )
-        generated_at = self._now_provider()
-        if generated_at.tzinfo is None:
-            raise ValueError("Weekly review generation time must be timezone-aware.")
+        generated_at = max(self._observation_time(), source_observed_at)
         review = await self._repository.persist_weekly_review(
             user_id=user_id,
             period_key=period.period_key,
@@ -210,15 +217,21 @@ class WeeklyReviewService:
                     llm_used=False,
                 ).model_dump(mode="json"),
                 "source_fingerprint": fingerprint,
+                "source_observed_at": source_observed_at.isoformat(),
                 "generated_at": generated_at.isoformat(),
                 "updated_at": generated_at.isoformat(),
             },
         )
-        return _response(
+        del review
+        final_observed_at = self._observation_time()
+        final_context = _context_observed_before(
+            await self._load_context(user_id=user_id, period=period),
+            source_observed_at=final_observed_at,
+        )
+        return await self._response_for_context(
+            user_id=user_id,
             period=period,
-            freshness="current",
-            stale_reasons=[],
-            review=review,
+            context=final_context,
         )
 
     async def _read(
@@ -230,7 +243,11 @@ class WeeklyReviewService:
     ) -> WeeklyReviewReadResponse:
         if not profile.onboarded:
             return _not_ready(period)
-        context = await self._load_context(user_id=user_id, period=period)
+        source_observed_at = self._observation_time()
+        context = _context_observed_before(
+            await self._load_context(user_id=user_id, period=period),
+            source_observed_at=source_observed_at,
+        )
         return await self._response_for_context(
             user_id=user_id,
             period=period,
@@ -301,11 +318,17 @@ class WeeklyReviewService:
         current_week_start = local_today - timedelta(days=local_today.isoweekday() - 1)
         ends_on = current_week_start - timedelta(days=1)
         starts_on = ends_on - timedelta(days=6)
-        starts_at = datetime.combine(starts_on, time.min, tzinfo=timezone).astimezone(UTC)
-        ends_at = datetime.combine(
-            ends_on + timedelta(days=1),
-            time.min,
-            tzinfo=timezone,
+        starts_at = resolve_local_datetime(
+            local_date=starts_on,
+            local_time=time.min,
+            zone=timezone,
+            source_id=f"weekly-review:{_period_key(starts_on)}",
+        ).astimezone(UTC)
+        ends_at = resolve_local_datetime(
+            local_date=ends_on + timedelta(days=1),
+            local_time=time.min,
+            zone=timezone,
+            source_id=f"weekly-review:{_period_key(starts_on)}",
         ).astimezone(UTC)
         return _ReviewPeriod(
             period_key=_period_key(starts_on),
@@ -317,12 +340,61 @@ class WeeklyReviewService:
             ends_at=ends_at,
         )
 
+    def _observation_time(self) -> datetime:
+        value = self._now_provider()
+        if value.tzinfo is None:
+            raise ValueError("Weekly review observation time must be aware.")
+        return value.astimezone(UTC)
+
     @staticmethod
     def _require_period(*, period: _ReviewPeriod, requested: str) -> None:
         if requested != period.period_key:
             raise WeeklyReviewPeriodError(
                 "Only the latest completed profile-local ISO week is available.",
             )
+
+
+def _context_observed_before(
+    context: WeeklyReviewContext,
+    *,
+    source_observed_at: datetime,
+) -> WeeklyReviewContext:
+    def visible(row: dict[str, Any]) -> bool:
+        created = _optional_source_datetime(row.get("created_at"))
+        updated = _optional_source_datetime(row.get("updated_at"))
+        observed = _optional_source_datetime(row.get("source_observed_at"))
+        generated = _optional_source_datetime(row.get("generated_at"))
+        return (
+            (created is None or created < source_observed_at)
+            and (updated is None or updated <= source_observed_at)
+            and (observed is None or observed <= source_observed_at)
+            and (generated is None or generated <= source_observed_at)
+        )
+
+    return WeeklyReviewContext(
+        tasks=[row for row in context.tasks if visible(row)],
+        goals=[],
+        habits=[row for row in context.habits if visible(row)],
+        habit_logs=[row for row in context.habit_logs if visible(row)],
+        focus_sessions=[
+            row for row in context.focus_sessions if visible(row)
+        ],
+        daily_snapshots=[
+            row for row in context.daily_snapshots if visible(row)
+        ],
+        feedback=[row for row in context.feedback if visible(row)],
+    )
+
+
+def _optional_source_datetime(value: object) -> datetime | None:
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        raise ValueError("Weekly review source timestamp is invalid.")
+    parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    if parsed.tzinfo is None:
+        raise ValueError("Weekly review source timestamp must be aware.")
+    return parsed.astimezone(UTC)
 
 
 def _build_review(

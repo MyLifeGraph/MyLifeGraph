@@ -1,4 +1,4 @@
-# V1 Account Controls Contract
+# Account Controls Contract
 
 This document defines the first complete account-management boundary for a
 real authenticated MyLifeGraph account. It covers profile timezone changes, an
@@ -26,56 +26,68 @@ and never call these endpoints.
 
 ## Profile Timezone
 
-`PATCH /v1/account/profile` accepts exactly:
+`PATCH /v1/account/profile` accepts only `account-profile-update-v2`:
 
 ```json
-{"timezone":"Europe/Berlin"}
+{
+  "contract_version": "account-profile-update-v2",
+  "request_id": "11111111-1111-4111-8111-111111111111",
+  "expected_revision": 1,
+  "timezone": "Europe/Berlin"
+}
 ```
 
-The backend accepts a trimmed stable IANA timezone name, validates it with the
-runtime timezone database, updates only the principal's `profiles` row, and
-returns exactly the persisted timezone. This timezone controls backend-owned
-product-local date resolution for briefings, weekly reviews, calendar import,
-scheduling, Deadline Planner proposals, and Coach budgets. The current Flutter
-capture flows still derive
-their explicit capture date from the device-local clock; changing the account
-timezone does not retroactively reinterpret or silently move those rows.
-Authenticated Data API callers have no direct `profiles.timezone` update
-privilege. New canonical and still-present legacy Auth projections default to
-`UTC`; the migration does not rewrite any existing user's selected timezone.
-An ambiguous PATCH is retried once with the same idempotent value. Only an exact
-retry representation or persisted-value readback may then converge to success;
-an unresolved outcome is an explicit `502`.
+The strict `account-profile-v2` response contains the persisted timezone, its
+new revision, `updated_at`, and `replayed`. The backend validates the trimmed
+IANA name and derives the owner from the bearer. The owner-locked
+`apply_account_timezone_v2` RPC first recognizes an exact full-payload replay,
+then compares `profiles.timezone_revision`. Two different changes from the
+same revision cannot both commit. Reusing a request id with another operation
+or payload conflicts.
+
+Changing timezone never rewrites captures, calendar events, active plan blocks,
+or confirmed reservations. Open Planner and Deadline previews become
+unconfirmable; active plans receive `timezone_changed` attention. This
+timezone remains the authority for backend product-local dates. Authenticated
+Data API callers have no direct timezone write privilege.
 
 ## Daily Preparation Budget
 
-`PATCH /v1/account/preparation-budget` accepts exactly one nullable field:
+`PATCH /v1/account/preparation-budget` accepts only
+`account-preparation-budget-update-v2`:
 
 ```json
-{"daily_preparation_budget_minutes":120}
+{
+  "contract_version": "account-preparation-budget-update-v2",
+  "request_id": "22222222-2222-4222-8222-222222222222",
+  "expected_revision": 1,
+  "daily_preparation_budget_minutes": 120
+}
 ```
 
 The value is either `null` or an integer from 25 through 480 in five-minute
 increments. `null` removes the account-wide rule and preserves Deadline
 Planner's per-plan daily caps. Any number is explicit user input: it is neither
 an effort estimate nor inferred availability, and no LLM chooses or changes it.
-The strict response repeats exactly the persisted nullable field.
+The strict response repeats the persisted nullable field, its new
+`preparation_budget_revision`, `updated_at`, and `replayed`.
 
 FastAPI derives the profile id only from the verified bearer and calls the
-service-role-only `set_daily_preparation_budget_v1` RPC. Anonymous and
+service-role-only owner-locked `apply_account_preparation_budget_v2` RPC.
+Anonymous and
 authenticated Data API callers cannot update the profile column directly. The
+old `set_daily_preparation_budget_v1` function is no longer executable. The V2
 RPC takes the shared owner advisory lock used by Deadline Planner confirmation,
-making a concurrent budget update and confirmation serializable. The planner's
-database trigger then rechecks aggregate active preparation on the candidate
-revision's local dates before activation.
+checks exact replay before expected revision, and makes a concurrent budget
+update and confirmation serializable. The planner's database trigger then
+rechecks aggregate active preparation on the candidate revision's local dates
+before activation.
 
-The setting is idempotent. After a transport, retryable server, or invalid-shape
-result, FastAPI retries the same nullable value once under the owner lock. An
-exact retry result or exact owner-scoped profile readback may converge to
-success; an unresolved result returns explicit outcome-unknown `502` rather
-than claiming the setting was saved. Changing the setting never mutates
-existing plan revisions. A lower value can therefore expose truthful `Needs
-review` overages until the student explicitly replans.
+After an ambiguous result FastAPI retries the identical request id, expected
+revision, and payload. An exact replay may converge to success; an unresolved
+result returns explicit outcome-unknown `502`. Changing the setting never
+mutates existing plan revisions. A lower value can therefore expose truthful
+`Needs review` overages until the student explicitly replans.
 
 The profile field is included in Account Export as part of the existing
 owner-scoped `profiles` row. It grants no new direct profile mutation authority.
@@ -83,8 +95,8 @@ owner-scoped `profiles` row. It grants no new direct profile mutation authority.
 ## Account Export
 
 `GET /v1/account/export` is side-effect free and returns the strict
-`account-export-v1` JSON envelope. It includes bounded owner rows from these 40
-V1 product tables: `profiles`, `notification_preferences`,
+`account-export-v2` JSON envelope. It includes the same bounded owner product
+rows as V1: `profiles`, `notification_preferences`,
 `learning_preferences`, `daily_logs`,
 `behavioral_events`, `lifestyle_entries`, `tasks`, `schedule_items`,
 `notifications`, `coach_messages`, `memory_entries`, `ai_insights`,
@@ -105,8 +117,10 @@ owner's current prompt flags, quiet hours, in-app delivery enabled/consent
 state and timestamps, and daily notification limit; its backend request
 identity and fingerprint remain excluded. The global `calendar_request_identities`,
 `notification_action_requests`, `deadline_plan_request_identities`, and
-`planner_request_identities`, and `learning_request_identities` anti-replay
-ledgers are deliberately omitted and named in that policy. Deadline
+`planner_request_identities`, `learning_request_identities`,
+`daily_capture_request_identities`, and
+`account_setting_request_identities` anti-replay ledgers are deliberately
+omitted and named in that policy. Deadline
 plan, revision, and block rows remain bounded owner product data; their opaque
 request fingerprints are not part of the export. Study Setup exports the
 current owner projection only; transient preparation-checklist decisions and
@@ -119,7 +133,8 @@ verified-bearer FastAPI path's `service_role` client the missing `SELECT` grant
 on `lifestyle_entries`; Flutter and anonymous callers gain no new table
 authority.
 
-The V1 bounds are 10,000 rows per table, 50,000 rows overall, and 8 MiB of JSON.
+The V2 bounds remain 10,000 rows per table, 50,000 rows overall, and 8 MiB of
+JSON.
 Exceeding a bound is an explicit `413`, never a silently truncated export.
 Supabase pages are stream-bounded before JSON materialization, and cumulative
 JSON growth is checked before retaining each row. Reads use immutable keyset

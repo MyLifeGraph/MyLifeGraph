@@ -105,6 +105,8 @@ def test_apply_import_calls_only_the_atomic_rpc_with_exact_scope() -> None:
             starts_on=date(2026, 6, 29),
             ends_before=date(2026, 10, 12),
             timezone="Europe/Berlin",
+            expected_profile_timezone="Europe/Berlin",
+            expected_timezone_revision=3,
             counts={
                 "accepted": 1,
                 "cancelled": 0,
@@ -121,7 +123,7 @@ def test_apply_import_calls_only_the_atomic_rpc_with_exact_scope() -> None:
     assert result == IMPORT_ID
     assert client.rpc_calls == [
         (
-            "apply_calendar_import_v1",
+            "apply_calendar_import_v2",
             {
                 "p_user_id": USER_ID,
                 "p_connection_id": str(CONNECTION_ID),
@@ -132,6 +134,8 @@ def test_apply_import_calls_only_the_atomic_rpc_with_exact_scope() -> None:
                 "p_window_starts_on": "2026-06-29",
                 "p_window_ends_before": "2026-10-12",
                 "p_timezone": "Europe/Berlin",
+                "p_expected_profile_timezone": "Europe/Berlin",
+                "p_expected_timezone_revision": 3,
                 "p_counts": {
                     "accepted": 1,
                     "cancelled": 0,

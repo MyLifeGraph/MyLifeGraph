@@ -1007,6 +1007,20 @@ class _DeadlinePlanCardState extends State<_DeadlinePlanCard> {
               'The imported calendar event may be out of date or unavailable. Check the deadline before confirming another version of this plan.',
             ),
           ],
+          if (plan.record.attentionReasons.contains('timezone_changed')) ...[
+            const SizedBox(height: AppSpacing.sm),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(AppSpacing.md),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.errorContainer,
+                borderRadius: BorderRadius.circular(AppRadii.sm),
+              ),
+              child: const Text(
+                'The account timezone changed. Existing reservations were not moved. Create a new preview before confirming different times.',
+              ),
+            ),
+          ],
           const SizedBox(height: AppSpacing.md),
           Text(
             pending

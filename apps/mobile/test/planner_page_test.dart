@@ -167,6 +167,54 @@ void main() {
     expect(target['preferred_session_minutes'], isNull);
   });
 
+  testWidgets(
+      'durable Planner change stays locked when only its overview reload fails',
+      (tester) async {
+    tester.view.physicalSize = const Size(1000, 1600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final backend = _PlannerBackend();
+
+    await _pumpPlanner(tester, backend: backend);
+    backend.failNextOverview = true;
+    await tester.tap(
+      find.byKey(const ValueKey('planner-calendar-consent')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('Change saved. Planner could not reload.'),
+      findsOneWidget,
+    );
+    expect(
+      tester
+          .widget<SwitchListTile>(
+            find.byKey(const ValueKey('planner-calendar-consent')),
+          )
+          .onChanged,
+      isNull,
+    );
+    expect(
+      backend.requests
+          .where((request) => request.path == '/v1/planner/preferences'),
+      hasLength(1),
+    );
+
+    await tester.tap(find.text('Reload Planner'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('Change saved. Planner could not reload.'),
+      findsNothing,
+    );
+    expect(
+      backend.requests
+          .where((request) => request.path == '/v1/planner/preferences'),
+      hasLength(1),
+    );
+  });
+
   testWidgets('Task preview explains learned timing evidence', (tester) async {
     tester.view.physicalSize = const Size(1000, 1600);
     tester.view.devicePixelRatio = 1;
@@ -477,6 +525,19 @@ class _PlannerBackend {
           requests
               .add(_PlannerRequest(options.method, options.path, options.data));
           if (options.path == '/v1/planner/overview') {
+            if (failNextOverview) {
+              failNextOverview = false;
+              return handler.reject(
+                DioException(
+                  requestOptions: options,
+                  response: Response<Object?>(
+                    requestOptions: options,
+                    statusCode: 503,
+                  ),
+                  type: DioExceptionType.badResponse,
+                ),
+              );
+            }
             final overview = plannerOverviewEnvelope();
             if (incompleteAvailability) {
               overview['commitments'] = <dynamic>[];
@@ -558,6 +619,7 @@ class _PlannerBackend {
 
   final Dio dio = Dio(BaseOptions(baseUrl: 'https://planner.test'));
   final List<_PlannerRequest> requests = [];
+  bool failNextOverview = false;
   bool failNextProposal;
   final bool incompleteAvailability;
   final bool learnedTiming;

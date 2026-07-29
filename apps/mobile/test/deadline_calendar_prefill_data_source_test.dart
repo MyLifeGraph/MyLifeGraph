@@ -19,6 +19,9 @@ void main() {
       if (request.url.path.endsWith('/calendar_connections')) {
         return _json([_connectionRow()], request);
       }
+      if (request.url.path.endsWith('/calendar_imports')) {
+        return _json([_importRow()], request);
+      }
       throw StateError('Unexpected request ${request.url}');
     });
     addTearDown(client.dispose);
@@ -32,7 +35,7 @@ void main() {
     expect(prefill.status, DeadlineCalendarPrefillStatus.current);
     expect(prefill.title, 'Private algorithms exam');
     expect(prefill.startsAt, DateTime.parse('2026-07-25T15:00:00Z'));
-    expect(requests, hasLength(2));
+    expect(requests, hasLength(3));
     expect(requests.first.url.queryParameters['id'], 'eq.$eventId');
     expect(requests.first.url.queryParameters, isNot(contains('user_id')));
     expect(
@@ -63,6 +66,14 @@ void main() {
     final client = _client((request) async {
       if (request.url.path.endsWith('/calendar_events')) {
         return _json([_eventRow()], request);
+      }
+      if (request.url.path.endsWith('/calendar_imports')) {
+        return _json(
+          [
+            _importRow()..['planning_status'] = 'disconnected',
+          ],
+          request,
+        );
       }
       return _json(
         [
@@ -96,7 +107,7 @@ Map<String, dynamic> _eventRow() => {
       'id': eventId,
       'connection_id': connectionId,
       'import_id': importId,
-      'contract_version': 'calendar-import-v1',
+      'contract_version': 'calendar-import-v2',
       'origin': 'authenticated_backend',
       'source_kind': 'ical_file',
       'source_fingerprint': fingerprint,
@@ -108,12 +119,17 @@ Map<String, dynamic> _eventRow() => {
 
 Map<String, dynamic> _connectionRow() => {
       'id': connectionId,
-      'contract_version': 'calendar-import-v1',
+      'contract_version': 'calendar-import-v2',
       'origin': 'authenticated_backend',
       'source_kind': 'ical_file',
       'status': 'connected',
       'last_import_id': importId,
       'imported_data_deleted_at': null,
+    };
+
+Map<String, dynamic> _importRow() => {
+      'id': importId,
+      'planning_status': 'current',
     };
 
 SupabaseClient _client(

@@ -6,6 +6,10 @@ from datetime import UTC, date, datetime, time, timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
+from app.services.local_time import (
+    resolve_local_datetime,
+    resolve_local_interval,
+)
 
 ENERGY_WINDOWS: dict[str, tuple[tuple[time, time], ...]] = {
     "early_morning": (
@@ -338,7 +342,12 @@ def busy_intervals_by_day(
     for day in days:
         if day == local_now.date():
             rounded_now = round_up_quarter_hour(local_now + timedelta(minutes=15))
-            day_start = datetime.combine(day, time.min, tzinfo=zone)
+            day_start = resolve_local_datetime(
+                local_date=day,
+                local_time=time.min,
+                zone=zone,
+                source_id=f"planning-day:{day.isoformat()}",
+            )
             if rounded_now > day_start:
                 result[day].append((day_start, rounded_now))
 
@@ -352,10 +361,18 @@ def busy_intervals_by_day(
                 or not recurring_commitment_applies_on(item, day)
             ):
                 continue
-            interval_start = datetime.combine(day, starts, tzinfo=zone)
-            interval_end = datetime.combine(day, ends, tzinfo=zone)
-            if interval_end <= interval_start:
-                interval_end += timedelta(days=1)
+            source_id = str(
+                item.get("id")
+                or item.get("source_id")
+                or f"recurring-commitment:{weekday}"
+            )
+            interval_start, interval_end = resolve_local_interval(
+                local_date=day,
+                starts_at=starts,
+                ends_at=ends,
+                zone=zone,
+                source_id=source_id,
+            )
             result[day].append((interval_start, interval_end))
             if interval_end.date() != day and day + timedelta(days=1) in day_set:
                 result[day + timedelta(days=1)].append(
@@ -381,11 +398,17 @@ def busy_intervals_by_day(
             if cursor in day_set:
                 result[cursor].append(
                     (
-                        datetime.combine(cursor, time.min, tzinfo=zone),
-                        datetime.combine(
-                            cursor + timedelta(days=1),
-                            time.min,
-                            tzinfo=zone,
+                        resolve_local_datetime(
+                            local_date=cursor,
+                            local_time=time.min,
+                            zone=zone,
+                            source_id=f"all-day:{item.get('id', cursor)}",
+                        ),
+                        resolve_local_datetime(
+                            local_date=cursor + timedelta(days=1),
+                            local_time=time.min,
+                            zone=zone,
+                            source_id=f"all-day:{item.get('id', cursor)}",
                         ),
                     ),
                 )
@@ -409,8 +432,13 @@ def free_energy_gaps_by_day(
             energy_window=energy_window,
             learned_focus_window=learned_focus_window,
         ):
-            starts_at = datetime.combine(day, window_start, tzinfo=zone)
-            ends_at = datetime.combine(day, window_end, tzinfo=zone)
+            starts_at, ends_at = resolve_local_interval(
+                local_date=day,
+                starts_at=window_start,
+                ends_at=window_end,
+                zone=zone,
+                source_id=f"planning-window:{energy_window}:{day.isoformat()}",
+            )
             if deadline_at is not None:
                 ends_at = min(ends_at, deadline_at.astimezone(zone))
             if ends_at <= starts_at or not safe_fixed_offset_interval(
@@ -680,8 +708,16 @@ def _recurring_candidate(
     if not occurrences:
         return None
     for window_start, window_end in ENERGY_WINDOWS[energy_window]:
-        cursor = datetime.combine(occurrences[0], window_start, tzinfo=zone)
-        window_limit = datetime.combine(occurrences[0], window_end, tzinfo=zone)
+        cursor, window_limit = resolve_local_interval(
+            local_date=occurrences[0],
+            starts_at=window_start,
+            ends_at=window_end,
+            zone=zone,
+            source_id=(
+                f"planner-recurring-slot:"
+                f"{occurrences[0].isoweekday()}"
+            ),
+        )
         while cursor < window_limit:
             wall_start = cursor.time().replace(tzinfo=None)
             if all(
@@ -695,10 +731,14 @@ def _recurring_candidate(
                 )
                 for local_day in occurrences
             ):
-                sample_start = datetime.combine(
-                    occurrences[0],
-                    wall_start,
-                    tzinfo=zone,
+                sample_start = resolve_local_datetime(
+                    local_date=occurrences[0],
+                    local_time=wall_start,
+                    zone=zone,
+                    source_id=(
+                        f"planner-recurring-slot:"
+                        f"{occurrences[0].isoweekday()}"
+                    ),
                 )
                 sample_end = (
                     sample_start.astimezone(UTC)
@@ -718,7 +758,12 @@ def _occurrence_is_free(
     busy: Sequence[tuple[datetime, datetime]],
     window_end: time,
 ) -> bool:
-    starts_at = datetime.combine(local_day, wall_start, tzinfo=zone)
+    starts_at = resolve_local_datetime(
+        local_date=local_day,
+        local_time=wall_start,
+        zone=zone,
+        source_id=f"planner-recurring-slot:{local_day.isoweekday()}",
+    )
     ends_at = (
         starts_at.astimezone(UTC) + timedelta(minutes=duration_minutes)
     ).astimezone(zone)

@@ -43,30 +43,49 @@ class TaskSupabaseDataSource {
     }
     final userId = await AppUserResolver(_client).resolveUserId();
     final now = _timestamp(_nowProvider());
-    final row = await _client
-        .from(SupabaseTables.tasks)
-        .upsert(
-          {
-            'id': taskId,
-            'user_id': userId,
-            'title': draft.title,
-            'description': draft.description,
-            'status': ExecutableTaskStatus.todo.code,
-            'priority': draft.priority.code,
-            'deadline': _optionalTimestamp(draft.deadline),
-            'estimated_minutes': draft.estimatedMinutes,
-            'source': 'flutter-task-v1',
-            'metadata': const {
-              'source': 'flutter-task-v1',
-              'contract_version': 'executable-task-v1',
-            },
-            'updated_at': now,
-          },
-          onConflict: 'id',
-        )
-        .select(_columns)
-        .single();
-    return ExecutableTask.fromRow(Map<String, dynamic>.from(row));
+    final payload = {
+      'id': taskId,
+      'user_id': userId,
+      'creation_request_id': taskId,
+      'title': draft.title,
+      'description': draft.description,
+      'status': ExecutableTaskStatus.todo.code,
+      'priority': draft.priority.code,
+      'deadline': _optionalTimestamp(draft.deadline),
+      'estimated_minutes': draft.estimatedMinutes,
+      'source': 'flutter-task-v1',
+      'metadata': const {
+        'source': 'flutter-task-v1',
+        'contract_version': 'executable-task-v1',
+      },
+      'updated_at': now,
+    };
+    try {
+      final row = await _client
+          .from(SupabaseTables.tasks)
+          .insert(payload)
+          .select(_columns)
+          .single();
+      return ExecutableTask.fromRow(Map<String, dynamic>.from(row));
+    } catch (_) {
+      final rows = await _client
+          .from(SupabaseTables.tasks)
+          .select('$_columns,creation_request_id')
+          .eq('user_id', userId)
+          .eq('id', taskId)
+          .limit(1);
+      if (rows.length == 1 &&
+          '${rows.first['creation_request_id'] ?? ''}' == taskId) {
+        // The creation committed. Return the current row without replaying the
+        // initial payload over edits that may have happened since.
+        return ExecutableTask.fromRow(
+          Map<String, dynamic>.from(rows.first as Map),
+        );
+      }
+      throw const TaskCommandException(
+        'Task creation conflicts with an existing request.',
+      );
+    }
   }
 
   Future<ExecutableTask> editTask({

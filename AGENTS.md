@@ -66,6 +66,9 @@ Read these files before making changes:
     Planner timing, or the recommendation-cleanup follow-up
 24. `docs/frontend-visual-system-v2.md` before changing Flutter themes,
     typography, icons, surfaces, motion, brand assets, or presentation styling
+25. `docs/stabilization-consistency-contract.md` before changing Daily Capture
+    write authority, revisioned account settings, timezone-bound planning,
+    projection observation/freshness, or post-mutation Flutter reload states
 
 ## Current State
 
@@ -93,6 +96,7 @@ databases may still contain legacy CamelCase tables such as `"User"`,
 - `goals`, `habits`, `habit_logs`, `focus_sessions`
 - `focus_session_reflections`, `learning_preferences`
 - `learning_request_identities`
+- `daily_capture_request_identities`, `account_setting_request_identities`
 - `intake_responses`, `user_state_snapshots`
 - `daily_briefings`, `decision_feedback`, `weekly_reviews`
 - `calendar_connections`, `calendar_imports`, `calendar_events`
@@ -337,6 +341,20 @@ completion RPCs. It keeps earlier requests/responses/history readable, preserves
 owner-before-request locking, one pending turn, local-day usage, terminal
 replay, and deletion tombstones, and gives application roles no new write
 authority.
+The migration
+`supabase/migrations/20260729120000_stabilization_write_authority.sql`
+adds retry-safe branch-CAS Daily Capture writes, independently revisioned
+timezone and preparation-budget settings, timezone-bound Calendar and planning
+projections, immutable manual Task/Habit creation identities, and Setup-owned
+row guards. It moves those mutations behind owner-locked service-role RPCs,
+keeps exact completed replays valid, revokes superseded application/V1 write
+authority, and preserves readable historical product data.
+The migration
+`supabase/migrations/20260729130000_observed_projection_persistence.sql`
+adds `source_observed_at` to snapshots and weekly reviews plus owner-locked V2
+persistence RPCs. Concurrent generators may return stale results, but an older
+observation cannot replace a newer stored projection and freshness is checked
+against the stored snapshot provenance.
 
 ## Important Docs
 
@@ -391,6 +409,9 @@ authority.
 - `docs/frontend-visual-system-v2.md` - Flutter palette, local typography,
   brand, icon, surface, motion, accessibility, and visual source-guard
   contract.
+- `docs/stabilization-consistency-contract.md` - current write-authority,
+  timezone, observation-order, retry, and stale-projection consistency
+  boundaries established by the whole-product stabilization review.
 - `README.md` - high-level project overview.
 
 ## Next Implementation Direction
@@ -838,7 +859,7 @@ you actually intend to run `supabase db reset`.
 `supabase db reset` must complete through:
 
 ```text
-20260728160000_free_read_only_coach_agent_v1.sql
+20260729130000_observed_projection_persistence.sql
 ```
 
 Expected local reset notices include skipped legacy CamelCase tables and
