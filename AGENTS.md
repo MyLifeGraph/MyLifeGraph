@@ -328,6 +328,15 @@ the original backend provider, local date, and version truth. The response and
 used-context validators retain V1/V2 compatibility while admitting bounded V3
 per-source provenance, and partial completed/cancelled Task history indexes
 support owner-scoped longitudinal reads.
+The migration
+`supabase/migrations/20260728160000_free_read_only_coach_agent_v1.sql`
+additively admits message-only `coach-request-v3` and
+`coach-response-v2`, persists backend-derived evidence, bounded agent trace,
+tool count, and service-tier truth, and adds service-role-only V3 claim and V2
+completion RPCs. It keeps earlier requests/responses/history readable, preserves
+owner-before-request locking, one pending turn, local-day usage, terminal
+replay, and deletion tombstones, and gives application roles no new write
+authority.
 
 ## Important Docs
 
@@ -356,9 +365,9 @@ support owner-scoped longitudinal reads.
 - `docs/phase-9-calendar-import-contract.md` - implemented explicit consent,
   bounded `.ics` reconciliation, imported/read-only provenance, and separate
   disconnect/local-delete contract.
-- `docs/phase-10-controlled-coach-plan.md` - implemented first bounded Coach
-  contract and the development-only subscription-backed local Codex OAuth
-  adapter, including its separate live-verification boundary.
+- `docs/phase-10-controlled-coach-plan.md` - implemented free read-only Coach
+  data-agent contract, personal snapshot/MCP/Python security boundaries,
+  development-only Fast Codex OAuth adapter, and separate live verification.
 - `docs/notification-lifecycle-v1-contract.md` - authenticated stored-Inbox
   visibility, strict lifecycle commands, replay/conflict behavior, owner/RLS
   boundary, and explicit delivery non-claims.
@@ -505,27 +514,32 @@ Read `docs/backend-roadmap.md`,
 contracts plus the Phase 9 calendar contract and Phase 10 Coach plan before
 planning the next backend, briefing, dashboard, integration, or agent workflow.
 
-Phase 10 Controlled Coach is implemented at the repository boundary. It adds a
-bounded authenticated explanation/context/budget contract, explicit memory
-selection, persisted validated history, retained usage accounting, and at most
-one review-only staged suggestion. Its first real-model provider is deliberately
-`local_codex_oauth`: FastAPI may invoke the current
-Linux/WSL user's explicitly enabled, already authenticated Codex CLI without an
-API key, while OAuth state stays outside Flutter, Supabase, Git, and application
-logs. This adapter is local-development-only; another developer must run their
-own `codex login`, and the repo must not promise that one model is available to
-every Plus/Pro account. Prefer `gpt-5.5` for the normal Coach because this is a
-general conversational reasoning/structured-output workflow, not a coding-agent
-task. Do not silently fall back to a Codex/Spark model; an unavailable preferred
-model is honest configuration, and another developer may explicitly select a
-model their account exposes. Standard automation uses the deterministic fake
-provider and never requires Codex, OAuth, or a network call. A real-model smoke
-is explicitly opt-in and must not be claimed without a recorded current-machine
-run.
+Phase 10 is now a free read-only Coach data agent at the repository boundary.
+Each authenticated V3 question gets a fresh owner-only SQLite snapshot and the
+local Codex process receives one required stdio MCP server with exactly
+`inspect_data`, read-only `query_data`, and separately sandboxed `run_python`.
+The current UI has no Today/Patterns/Focus/Review, horizon, prompt-starter,
+memory-selection, or staged-action control; V1/V2 history remains readable.
+FastAPI derives evidence, periods, counts, tool trace, and provenance from
+actual execution. Snapshots fail rather than truncate above 50,000 rows or
+8 MiB; a turn is limited to 12 tools and 180 seconds. Python runs in the pinned
+non-root, no-network, read-only Docker image with only the snapshot mounted.
+Internally generated plots are ephemeral and never shown or persisted.
 
-Do not expand this boundary into broad LLM integration, vector search,
-autonomous background agents, model-controlled tools, unreviewed provider
-writes, or automatic memory extraction. Live calendar provider OAuth/sync/writes, a
+The real provider remains deliberately `local_codex_oauth`: FastAPI invokes
+the current Linux/WSL user's explicitly enabled, already authenticated Codex
+CLI without an API key while OAuth state stays outside Flutter, Supabase, Git,
+the MCP snapshot, the analysis container, and application logs. Every real
+agent turn explicitly requires `gpt-5.5`, `service_tier="fast"`, and
+`fast_mode=true`; an unavailable model or rejected Fast configuration fails
+honestly with no fallback. Standard automation uses the deterministic fake
+provider and never requires Codex, OAuth, Docker analysis execution, or a
+network call. A real-model smoke is opt-in and must not be claimed without a
+recorded current-machine run.
+
+Do not expand this boundary into vector search, autonomous background agents,
+additional model tools, provider writes, product mutations, or automatic memory
+extraction. Live calendar provider OAuth/sync/writes, a
 deployable LLM provider, deployed scheduling, and push/background notification
 delivery still require their own directly verified contracts.
 Notification Lifecycle V1 is implemented at the repository boundary: real
@@ -707,24 +721,23 @@ local events/history while preserving every `schedule_items` row. Guest/mock is
 zero-call. There is no provider OAuth/token, URL fetch, RRULE engine, provider
 write, background sync, LLM processing, or automatic calendar-derived action.
 
-Phase 10, Controlled Coach, is implemented through strict authenticated
-`coach-request-v1`, `coach-response-v1`, `coach-capabilities-v1`,
-`coach-history-v1`, `coach-memory-selection-v1`, and
-`coach-context-options-v1` boundaries. `/coach` uses FastAPI only for a real
-authenticated account; `/more` is an alias. Guest/mock is zero-call and shows
-honest local unavailability. FastAPI builds at most 32 KiB of owner-scoped
-`coach-context-v3` data for explicit Today, Patterns, Focus, or Review requests
-under `controlled-coach-prompt-v3`. Today uses the established bounded current
-facts; historical modes deterministically fold only allowlisted structured
-Daily Capture, terminal Focus/current reflection, explicit Habit outcomes,
-Decision Feedback, validated Weekly Reviews, and retained terminal Task facts.
-Imported calendar content, Planner/Preparation details, raw history, hidden
-capture/intake free text, retired Goals/onboarding preferences/coaching
-style/friction, credentials, and cross-user rows are excluded. Compatible V1
-Today requests keep paired V2 context/prompt provenance and persisted V1
-history remains readable. Capability, context-options, history, and memory reads
-never call a model; every response is a deliberate, budgeted send. Urgent safety
-may bypass the provider, and no suggestion can execute or mutate product state.
+Phase 10 is implemented through strict authenticated `coach-request-v3`,
+`coach-response-v2`, `coach-capabilities-v2`, and `coach-history-v2`
+boundaries plus a `started|activity|completed|failed` SSE route. The current
+pair is `free-coach-agent-prompt-v1` over `personal-snapshot-v1`. `/coach` uses
+FastAPI only for a real authenticated account; `/more` is an alias. Guest/mock
+is zero-call and shows honest local unavailability. FastAPI exports the
+owner's relevant Setup/Capture/Task/Habit/Focus/Planner/Preparation/Calendar/
+Review/Insight/Recommendation/Memory/Coach data into a fresh private SQLite
+snapshot, excluding auth, credentials, anti-replay ledgers, provider internals,
+operational state, and cross-user rows. One per-turn required MCP exposes only
+catalog inspection, bounded read-only SQL, and isolated Python. Free text and
+calendar content are untrusted data, never instructions. Direct safety may
+bypass the provider; no reply, tool, or suggestion can mutate product state.
+The old V1/V2 request, response, context-option, and memory-selection paths stay
+readable/available only for compatibility and are not used by current Flutter.
+Their newest fixed-mode pair remains `controlled-coach-prompt-v3` with
+`coach-context-v3`; it is not the current V3 agent prompt/snapshot contract.
 
 FastAPI, Flutter, migration, and browser coverage spans Setup ownership and
 retry, Capture V4, Daily State V2, executable Tasks/Habits/Focus, Today,
@@ -825,7 +838,7 @@ you actually intend to run `supabase db reset`.
 `supabase db reset` must complete through:
 
 ```text
-20260728120000_coach_longitudinal_context_v1.sql
+20260728160000_free_read_only_coach_agent_v1.sql
 ```
 
 Expected local reset notices include skipped legacy CamelCase tables and
@@ -894,6 +907,10 @@ and Flutter. A mismatch fails closed. After reviewing the pending SQL and local
 data, explicitly set `APPLY_MIGRATIONS=true` to apply it; that operation may
 change or delete local rows. The default Coach provider is disabled; opt into
 `fake` or `local_codex_oauth` with `LOCAL_STACK_COACH_PROVIDER`. The supervisor
+verifies/builds the pinned Coach analysis image for the real provider and fails
+closed when Docker, `gpt-5.5`, or explicit Fast support is unavailable. The
+deterministic fake path does not require Codex, OAuth, or analysis execution.
+The supervisor
 must never expose the service-role key or scheduler token to Flutter, logs,
 status files, or command arguments, and must never reset or stop Supabase.
 
@@ -928,9 +945,12 @@ Manual smoke test after schema or Supabase-client changes:
 - Open dashboard.
 - Open Inbox (`/alerts`); exercise read/unread/dismiss lifecycle and keep
   generation/delivery explicitly unclaimed.
-- Open Coach with a real local account and confirm capability, history, and
-  memory reads do not generate. Use the fake provider for ordinary automated
-  smoke; enable `local_codex_oauth` only for a deliberate per-machine check.
+- Open Coach with a real local account and ask a free question. Confirm there is
+  no mode/horizon/Focus/memory selector, safe activity can be cancelled, and
+  the completed answer expands actual data ranges, tool steps, limitations,
+  and `gpt-5.5 · Fast configured` provenance without showing a plot. Use the
+  fake provider for ordinary automated smoke; enable `local_codex_oauth` only
+  for a deliberate per-machine check.
 
 The browser smoke path is automated through Playwright in `scripts/e2e_web.sh`.
 The widget tests still cover the faster guest auth, guest onboarding, and guest
