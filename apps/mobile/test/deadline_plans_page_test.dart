@@ -690,6 +690,23 @@ void main() {
     expect(find.text('Show history details'), findsOneWidget);
   });
 
+  testWidgets('deep-linked plan is immediately visible before supporting load',
+      (tester) async {
+    final repository = _FakeDeadlinePlanRepository(
+      feeds: [
+        DeadlinePlanFeed(plans: [_plan()]),
+      ],
+    );
+    await _pumpPage(
+      tester,
+      repository: repository,
+      page: const DeadlinePlansPage(initialPlanId: deadlinePlanId),
+      size: const Size(1200, 700),
+    );
+
+    expect(find.text('Algorithms exam').hitTestable(), findsOneWidget);
+  });
+
   testWidgets('deep-linked replan opens review without changing reservations',
       (tester) async {
     final repository = _FakeDeadlinePlanRepository(

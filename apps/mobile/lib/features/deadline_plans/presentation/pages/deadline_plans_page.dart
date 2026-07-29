@@ -169,6 +169,24 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
         if (leftDeadline == null || rightDeadline == null) return 0;
         return leftDeadline.compareTo(rightDeadline);
       });
+    final targetPlan = _planById(visiblePlans, widget.initialPlanId);
+
+    Widget planCard(DeadlinePlan plan) => _DeadlinePlanCard(
+          key: ValueKey('deadline-plan-${plan.id}'),
+          plan: plan,
+          isBusy: state.isBusy,
+          exactRetryLocked: state.requiresExactRetry,
+          onAdjust: () => _openEditor(plan: plan),
+          onReplanMissed: () => _openEditor(
+            plan: plan,
+            replanContext: _DeadlineReplanContext.missed,
+          ),
+          onConfirm: () => _confirmPlan(plan),
+          onComplete: () => _completePlan(plan),
+          onCancel: () => _cancelPlan(plan),
+          onStartBlock: (block) => _startBlock(plan, block),
+        );
+
     return [
       if (_targetPlanLoading)
         const AppCard(
@@ -193,6 +211,7 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
           onAction: _retryTargetPlan,
         ),
       if (sourcePrefill != null) _sourcePrefillCard(sourcePrefill),
+      if (targetPlan != null) planCard(targetPlan),
       PreparationWorkloadCard(
         value: workload,
         onRetry: () => ref.invalidate(preparationWorkloadProvider),
@@ -237,21 +256,7 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
         )
       else
         for (final plan in visiblePlans)
-          _DeadlinePlanCard(
-            key: ValueKey('deadline-plan-${plan.id}'),
-            plan: plan,
-            isBusy: state.isBusy,
-            exactRetryLocked: state.requiresExactRetry,
-            onAdjust: () => _openEditor(plan: plan),
-            onReplanMissed: () => _openEditor(
-              plan: plan,
-              replanContext: _DeadlineReplanContext.missed,
-            ),
-            onConfirm: () => _confirmPlan(plan),
-            onComplete: () => _completePlan(plan),
-            onCancel: () => _cancelPlan(plan),
-            onStartBlock: (block) => _startBlock(plan, block),
-          ),
+          if (plan.id != targetPlan?.id) planCard(plan),
       if (_retainedDraft != null &&
           state.operationError == null &&
           !state.isBusy)
