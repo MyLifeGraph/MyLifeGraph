@@ -389,6 +389,21 @@ def test_export_uses_explicit_field_allowlists_for_backend_ledgers() -> None:
 
     assert "calendar_request_identities" not in tables
 
+    notification_fields = set(
+        tables["notification_preferences"].select.split(","),
+    )
+    assert {
+        "in_app_delivery_enabled",
+        "in_app_delivery_consent_version",
+        "in_app_delivery_consented_at",
+        "in_app_delivery_disabled_at",
+        "daily_notification_limit",
+    } <= notification_fields
+    assert {
+        "delivery_settings_request_id",
+        "delivery_settings_request_fingerprint",
+    }.isdisjoint(notification_fields)
+
 
 def test_export_service_rejects_drifted_table_configuration(monkeypatch) -> None:
     monkeypatch.setattr(

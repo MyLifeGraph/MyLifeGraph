@@ -108,17 +108,17 @@ FastAPI service boundary for recommendation and future ML workflows.
   watch/exam-week/overdue mode; no read creates a preview or changes a plan. See
   `../../docs/deadline-planner-v1-contract.md` and
   `../../docs/exam-week-outlook-v1-contract.md`.
-- Phase 10 exposes authenticated capability, deliberate response,
-  history/delete, model-call-free context options, and explicit
-  memory-selection contracts. Standard tests use the deterministic fake
-  provider. The only real-model adapter is the strictly development-only
-  `local_codex_oauth`, which invokes the current Linux user's manually
-  authenticated Codex CLI without an application API key, tools, or model
-  fallback. Only a deliberate Coach send may call it; all other service
-  workflows remain deterministic/no-model. New V2 requests use paired
-  `coach-context-v3` and `controlled-coach-prompt-v3` for Today, Patterns,
-  Focus, or Review; compatible V1 Today requests/history remain readable. It is
-  not a production provider.
+- Phase 10 exposes authenticated free-question capability, streaming and
+  non-streaming response, and mixed legacy/current history/delete contracts.
+  Each V3 turn creates a fresh owner-only SQLite snapshot and gives the local
+  agent exactly three required MCP tools: inspect, bounded immutable SQL, and
+  isolated Python. FastAPI derives conservative snapshot-source coverage,
+  actual trace, and provenance. Standard tests use the fake provider; the only
+  real adapter is development-only
+  `local_codex_oauth`, which requires `gpt-5.5` with Fast explicitly configured
+  and never falls back. Current Flutter has no fixed mode, horizon, Focus,
+  prompt, memory-selection, or structured-suggestion flow; readable V1/V2
+  history remains compatible. It is not a production provider.
   See `../../docs/phase-10-controlled-coach-plan.md`.
 - `/v1/account/profile`, `/v1/account/preparation-budget`,
   `/v1/account/export`, and `/v1/account` expose the bearer-derived V1 timezone,
@@ -414,14 +414,16 @@ Phase 10 Coach uses these bearer-authenticated endpoints:
 
 ```text
 GET    /v1/coach/capabilities
-GET    /v1/coach/context-options
 POST   /v1/coach/respond
+POST   /v1/coach/respond/stream
 GET    /v1/coach/history
 DELETE /v1/coach/history
-GET    /v1/coach/memories
-POST   /v1/coach/memories/{memory_id}/selection
-DELETE /v1/coach/memories/{memory_id}/selection
 ```
+
+`GET /context-options` and the memory-selection routes remain for pre-V3
+clients only. Current Flutter does not call them. The newest compatible
+fixed-mode rows retain paired
+`controlled-coach-prompt-v3`/`coach-context-v3` provenance.
 
 Stored Inbox lifecycle uses one bearer-authenticated endpoint:
 
@@ -463,32 +465,68 @@ refresh-only, or materially future evidence fails closed with `403` before the
 delete service runs. Do not exercise deletion against anything except an
 intentionally disposable account.
 
-Capability, context options, history, and memory operations never call a model.
-Respond accepts strict `coach-request-v2` with one UUID, a trimmed message of at
-most 2,000 Unicode code points, one `today|patterns|focus|review` scope, and its
-exact parameter object. Compatible V1 Today requests remain accepted. V2
-builds at most 32 KiB of current context or a compact deterministic historical
-digest, returns strict `coach-response-v1`, and exposes exact source
-counts/freshness plus provider/model/prompt/context provenance. Completed
-same-id replay does not call the provider again; changed message, scope, or
-parameters with the same id conflict; failed/deleted ids remain terminal. One
-owner has at most one live claim and the default retained attempt limit is 20
-per profile-local day.
+Capability and history reads never call a model. Current respond accepts strict
+`coach-request-v3` with one UUID and a trimmed free question of at most 2,000
+Unicode code points. There is no scope or time parameter:
 
-Historical digests page bounded owner rows and aggregate at most 24 adaptive
-buckets from structured Daily Capture, terminal Focus/current reflection,
-explicit Habit outcomes, Decision Feedback, validated Weekly Review facts, and
-retained terminal Task timestamps. They never contain raw row history, Planner,
-Preparation, Calendar, Coach conversation evidence, or hidden free text.
-Evidence construction uses its own process-local timeout/concurrency guard and
-releases it before provider capacity is acquired.
+```json
+{
+  "contract_version": "coach-request-v3",
+  "request_id": "11111111-1111-4111-8111-111111111111",
+  "message": "What changed in my focus consistency this semester?"
+}
+```
 
-Memory selection is explicit, separate from memory content/Setup ownership, and
-capped at eight eligible rows. Conversation deletion is body-free: it removes
-message/response content but retains content-free request tombstones and
-append-only usage events, so it neither resets the daily limit nor permits
-request-id reinterpretation. Coach returns at most one review-only text
-suggestion and has no mutation command.
+The non-streaming route awaits the same agent service and still dispatches old
+V1/V2 bodies through the legacy service for compatibility. The streaming route
+accepts V3 only and emits `started`, allowlisted `activity`, and one
+`completed|failed` SSE event. Client disconnect cancels the turn.
+
+Each non-safety V3 turn creates a fresh owner-only
+`personal-snapshot-v1` SQLite database from the relevant Account Export table
+set under `free-coach-agent-prompt-v1`. It contains sanitized retained
+Setup/Capture/Task/Habit/Focus/Planner/
+Preparation/Calendar/Review/Insight/Recommendation/Memory/Coach detail plus a
+catalog, relationships, counts, periods, and helper views. It excludes auth,
+profile email/role/provider identity, credentials, cross-user rows,
+Coach request/usage/selection ledgers, provider internals, and operational
+request ledgers. The turn fails rather than truncates beyond 10,000 rows per
+table, 50,000 total, or 8 MiB.
+
+The required per-turn stdio MCP exposes exactly:
+
+- `inspect_data`;
+- `query_data`, one immutable SQLite `SELECT|WITH` with authorizer,
+  five-second progress limit, 500-row limit, and 256 KiB result limit; and
+- `run_python`, 30 seconds in `mylifegraph-coach-analysis:1` with no network/
+  secrets, non-root user, read-only root/snapshot, dropped capabilities,
+  bounded temp space, one CPU, 512 MiB RAM, 64 PIDs, and bounded output.
+
+The overall turn is limited to 12 tool calls and 180 seconds. At most one
+internal Python plot may be returned to the model, but it is not stored or
+returned to Flutter.
+All free text is untrusted data, not tool instructions. There is no shell, web,
+app, plugin, sub-agent, host-file, Supabase, or product mutation tool.
+
+`coach-response-v2` contains reply, uncertainty, safety, backend-derived
+snapshot-source coverage in the `evidence` field, actual tool
+steps/limitations, and exact model/Fast/snapshot provenance. Coverage counts
+and periods describe each full accessed snapshot source, not exact supporting
+or SQL-returned rows. `inspect_data` alone adds no row coverage. A SQL step
+records its returned-row count separately, while successful arbitrary Python is
+conservatively attributed to the full `personal_snapshot` because table-level
+Python claims are not trusted. The model produces only reply/uncertainty/safety.
+No structured suggestion or artifact exists.
+
+Exact same-id/message replay does not call the provider; changed message
+conflicts, and failed/deleted ids remain terminal. One owner has at most one
+pending turn and, by default, 20 newly started questions per profile-local day.
+Tool calls do not consume extra question budget.
+
+Conversation deletion is body-free. It removes messages and V3 evidence/trace/
+tier content while retaining request tombstones and append-only usage, so it
+cannot reset budget or reinterpret identity. `coach-history-v2` returns both
+readable legacy `coach-response-v1` and current `coach-response-v2` turns.
 
 ## Environment
 
@@ -509,6 +547,9 @@ LOCAL_CODEX_ENABLED=false
 LOCAL_CODEX_BIN=codex
 LOCAL_CODEX_MODEL=gpt-5.5
 LOCAL_CODEX_TIMEOUT_SECONDS=45
+COACH_AGENT_TIMEOUT_SECONDS=180
+COACH_ANALYSIS_DOCKER_BIN=docker
+COACH_ANALYSIS_IMAGE=mylifegraph-coach-analysis:1
 LOCAL_CODEX_MAX_REQUESTS_PER_USER_PER_DAY=20
 LOCAL_CODEX_GLOBAL_CONCURRENCY=2
 COACH_EVIDENCE_TIMEOUT_SECONDS=15
@@ -524,14 +565,27 @@ Coach is off by default. Standard automation may explicitly use
 adapter additionally requires `APP_ENV=development`, `USE_MOCK_DATA=false`,
 `COACH_PROVIDER=local_codex_oauth`, `LOCAL_CODEX_ENABLED=true`, valid backend
 Supabase settings, an executable CLI, and an existing login for the FastAPI
-Linux user. An empty `LOCAL_CODEX_MODEL` truthfully selects the CLI default;
-otherwise the exact configured model is requested with no fallback.
+Linux user. Current agent capability requires
+`LOCAL_CODEX_MODEL=gpt-5.5`, explicit Fast support, Docker, and the pinned
+analysis image. Empty or another model is unavailable; there is no CLI-default,
+model, or standard-tier fallback for V3.
 
 Codex OAuth remains private CLI state; the service may run sanitized
 help/feature/login capability commands but must never read or copy an auth file.
 Its child environment is allowlisted and excludes the Supabase service-role key
 and every other application secret. The adapter is rejected outside development
 and is not a deployment design.
+
+Prepare the content-labelled analysis image explicitly from the repository
+root:
+
+```bash
+npm run prepare:coach-analysis
+```
+
+From the repository root, `npm run start:local:coach` verifies the image label
+and builds it when missing or stale. Runtime Python analysis starts it with
+networking disabled.
 
 From the repository root, `scripts/start_local_stack.sh` is the supported local
 supervisor for Supabase, FastAPI, Flutter, and the scheduled preparation loop.
@@ -561,12 +615,14 @@ Personal Learning persistence requires
 `20260726190000_planning_confirmation_timestamp_guard.sql`, and
 `20260726200000_learned_timing_setup_fallback_provenance.sql`.
 Controlled Coach longitudinal context then requires
-`20260728120000_coach_longitudinal_context_v1.sql`. Together they
+`20260728120000_coach_longitudinal_context_v1.sql`; the free read-only agent
+then requires `20260728160000_free_read_only_coach_agent_v1.sql`. Together they
 add forced-RLS terminal Focus reflections, revisioned settings and retry
 identities, immutable Planner/Deadline timing provenance, strict replay-safe
 delegation, monotone confirmation timestamps, truthful allocation-fallback
-provenance, atomic current-Recommendation replacement, and exact Coach V2
-scope/parameter replay with paired V3 provenance. Account Export
+provenance, atomic current-Recommendation replacement, compatible fixed-mode
+Coach V2 replay, and message-only V3 evidence/trace/Fast-tier persistence.
+Account Export
 includes the two owner-content projections and omits the backend retry ledger
 explicitly.
 
@@ -590,7 +646,9 @@ Controlled Coach persistence requires
 `20260713220000_phase_10_coach_safety_provenance_guard.sql`,
 `20260713223000_phase_10_profile_privilege_guard.sql`,
 `20260713224500_phase_10_role_authority_guard.sql`, and
-`20260713230000_phase_10_onboarding_eligibility_guard.sql`. The first adds backend-owned
+`20260713230000_phase_10_onboarding_eligibility_guard.sql`, followed by the
+longitudinal compatibility and
+`20260728160000_free_read_only_coach_agent_v1.sql` migrations. The first adds backend-owned
 `coach_requests`, `coach_usage_events`, and `coach_memory_selections`; exact
 request-linked V1 message pairs; hardened forced RLS/grants for messages and
 memories; and service-role-only atomic claim, complete, fail, selection, and
@@ -600,7 +658,9 @@ claim/complete/fail take the same owner-first advisory lock as history delete.
 The additive guards persist exact provider-call truth for safety redirects,
 make profile identity and onboarding eligibility backend-owned, remove legacy
 `"User"` role fallback and authenticated profile deletion, and retain
-service-role/atomic Intake authority. Real local PostgreSQL parallel
+service-role/atomic Intake authority. The final migration adds V3 claim/V2
+completion validators and RPCs plus evidence, agent-trace, tool-count, and Fast
+tier fields while retaining V1/V2 rows and application-role denial. Historical real local PostgreSQL parallel
 claim/completion/deletion smokes completed on 2026-07-13 without deadlock or
 timeout and converged on the expected state.
 
@@ -661,21 +721,28 @@ Recommendation replacement. A documented test suite alone is not a pass claim.
 Exact current results live in
 [Current Verified Baseline](../../docs/verification.md#current-verified-baseline).
 
-Phase 10 tests use fake services/providers/process runners. They do not require
-Codex, OAuth, a subscription, or network access. See
+Phase 10 tests use fake services/providers/process runners. They cover the V3
+request/SSE, snapshot, three-tool MCP, SQL/Python isolation, trace/source-scope
+derivation, replay/budget/cancel/delete, and current no-fixed-mode UI without
+requiring Codex, OAuth, a subscription, or network access. Scripted provider
+responses prove strict envelopes and execution-path handling, not autonomous
+model tool choice, false-premise judgment, or answer quality. See
 `../../docs/verification.md` for historical deterministic evidence and the
 diagnostic-only focused rerun command.
-The separate synthetic-context live smoke is skipped by default and runs only
-after explicit local-provider setup and login:
+The separate live multi-tool smoke is skipped by default and runs only after
+explicit local-provider setup, image preparation, and login:
 
 ```bash
 RUN_LOCAL_CODEX_SMOKE=true ./.venv/bin/python -m pytest -q \
   tests/test_local_codex_smoke.py
 ```
 
-Any recorded live result is specific to its tested machine, CLI, login, and
-account; it is not a deployable-provider or another-developer availability
-claim. Another Linux user's independent clone/login run remains unverified.
+Any current live claim must verify strict `gpt-5.5` selection, explicit Fast
+configuration, required MCP startup, and matching multi-tool trace/source-scope
+provenance. It is specific to its tested machine, CLI, image, login, account,
+and date; it is not a persistence, API, Flutter UI, deployable-provider, or
+another-developer availability claim. Deterministic API/browser tests
+separately cover persisted response/history behavior and presentation.
 
 Run service tests with:
 

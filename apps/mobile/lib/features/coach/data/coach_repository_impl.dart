@@ -45,39 +45,15 @@ class CoachRepositoryImpl implements CoachRepository {
   }
 
   @override
-  Future<CoachMemorySelection> getMemories() async {
-    if (_isLocalDemo) return CoachMemorySelection.empty();
-    _requireRemote();
-    return _api.getMemories(accessToken: await _requireToken());
-  }
-
-  @override
-  Future<CoachContextOptions> getContextOptions() async {
-    if (_isLocalDemo) return CoachContextOptions.localDemo();
-    _requireRemote();
-    return _api.getContextOptions(accessToken: await _requireToken());
-  }
-
-  @override
-  Future<CoachResponse> respond({
+  Stream<CoachStreamEvent> respond({
     required String requestId,
     required String message,
-    required CoachContextSelection context,
-    required Duration receiveTimeout,
-  }) async {
+  }) async* {
     _requireRemote();
     if (!isClientUuid(requestId)) {
       throw const CoachInputException('Coach request id is invalid.');
     }
-    if (receiveTimeout < const Duration(seconds: 5) ||
-        receiveTimeout > const Duration(seconds: 130)) {
-      throw const CoachInputException('Coach response timeout is invalid.');
-    }
-    final request = CoachRequest(
-      requestId: requestId,
-      message: message,
-      context: context,
-    );
+    final request = CoachRequest(requestId: requestId, message: message);
     if (_activeResponseCancellation != null) {
       throw const CoachAccessException(
         'Another Coach response is already in progress.',
@@ -86,18 +62,32 @@ class CoachRepositoryImpl implements CoachRepository {
     final cancellation = CancelToken();
     _activeResponseCancellation = cancellation;
     try {
-      final response = await _api.respond(
+      await for (final event in _api.respond(
         accessToken: await _requireToken(),
         request: request,
-        receiveTimeout: receiveTimeout,
         cancelToken: cancellation,
-      );
-      if (response.requestId != requestId) {
-        throw const CoachContractException(
-          'Coach response request identity is inconsistent.',
-        );
+      )) {
+        if (event is CoachStartedEvent && event.requestId != requestId) {
+          throw const CoachContractException(
+            'Coach stream request identity is inconsistent.',
+          );
+        }
+        if (event is CoachCompletedEvent &&
+            event.response.requestId != requestId) {
+          throw const CoachContractException(
+            'Coach response request identity is inconsistent.',
+          );
+        }
+        if (event is CoachFailedEvent) {
+          throw CoachRemoteException(
+            code: event.error.code,
+            message: event.error.message,
+            retryable: event.error.retryable,
+            statusCode: _statusForError(event.error.code),
+          );
+        }
+        yield event;
       }
-      return response;
     } finally {
       if (identical(_activeResponseCancellation, cancellation)) {
         _activeResponseCancellation = null;
@@ -118,32 +108,8 @@ class CoachRepositoryImpl implements CoachRepository {
   }
 
   @override
-  Future<CoachMemorySelection> selectMemory(String memoryId) async {
-    _requireMemoryId(memoryId);
-    _requireRemote();
-    final selection = await _api.selectMemory(
-      accessToken: await _requireToken(),
-      memoryId: memoryId,
-    );
-    _requireMemorySelection(selection, memoryId, selected: true);
-    return selection;
-  }
-
-  @override
-  Future<CoachMemorySelection> deselectMemory(String memoryId) async {
-    _requireMemoryId(memoryId);
-    _requireRemote();
-    final selection = await _api.deselectMemory(
-      accessToken: await _requireToken(),
-      memoryId: memoryId,
-    );
-    _requireMemorySelection(selection, memoryId, selected: false);
-    return selection;
-  }
-
-  @override
   void cancelActiveResponse() {
-    _activeResponseCancellation?.cancel('Coach page disposed.');
+    _activeResponseCancellation?.cancel('Coach analysis cancelled.');
   }
 
   void _requireRemote() {
@@ -173,27 +139,11 @@ class CoachRepositoryImpl implements CoachRepository {
     }
     return token.trim();
   }
+}
 
-  void _requireMemoryId(String memoryId) {
-    if (!RegExp(
-      r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
-    ).hasMatch(memoryId)) {
-      throw const CoachInputException('Coach memory id is invalid.');
-    }
-  }
-
-  void _requireMemorySelection(
-    CoachMemorySelection selection,
-    String memoryId, {
-    required bool selected,
-  }) {
-    final matches = selection.memories.where(
-      (memory) => memory.id == memoryId.toLowerCase(),
-    );
-    if (matches.length != 1 || matches.single.selected != selected) {
-      throw const CoachContractException(
-        'Coach memory selection response is inconsistent.',
-      );
-    }
-  }
+int _statusForError(String code) {
+  if (code == 'account_limit') return 429;
+  if (code == 'in_progress' || code == 'request_conflict') return 409;
+  if (code == 'history_deleted') return 410;
+  return 503;
 }

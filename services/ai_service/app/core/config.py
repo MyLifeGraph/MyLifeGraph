@@ -54,6 +54,20 @@ class Settings(BaseSettings):
         le=120,
         alias="LOCAL_CODEX_TIMEOUT_SECONDS",
     )
+    coach_agent_timeout_seconds: int = Field(
+        default=180,
+        ge=180,
+        le=180,
+        alias="COACH_AGENT_TIMEOUT_SECONDS",
+    )
+    coach_analysis_docker_bin: str = Field(
+        default="docker",
+        alias="COACH_ANALYSIS_DOCKER_BIN",
+    )
+    coach_analysis_image: str = Field(
+        default="mylifegraph-coach-analysis:1",
+        alias="COACH_ANALYSIS_IMAGE",
+    )
     local_codex_max_requests_per_user_per_day: int = Field(
         default=20,
         ge=1,

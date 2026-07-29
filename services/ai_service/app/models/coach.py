@@ -16,12 +16,23 @@ COACH_CONTEXT_VERSION = "coach-context-v2"
 COACH_PROMPT_VERSION = "controlled-coach-prompt-v2"
 COACH_CONTEXT_V3_VERSION = "coach-context-v3"
 COACH_PROMPT_V3_VERSION = "controlled-coach-prompt-v3"
+COACH_REQUEST_V3_CONTRACT_VERSION = "coach-request-v3"
+COACH_RESPONSE_V2_CONTRACT_VERSION = "coach-response-v2"
+COACH_CAPABILITIES_V2_CONTRACT_VERSION = "coach-capabilities-v2"
+COACH_HISTORY_V2_CONTRACT_VERSION = "coach-history-v2"
+COACH_AGENT_PROMPT_VERSION = "free-coach-agent-prompt-v1"
+COACH_AGENT_CONTEXT_VERSION = "personal-snapshot-v1"
 
 COACH_MESSAGE_CODEPOINTS = 2_000
 COACH_CONTEXT_BYTES = 32_768
 COACH_REPLY_CODEPOINTS = 4_000
 COACH_MAX_SELECTED_MEMORIES = 8
 COACH_MAX_HISTORY_TURNS = 6
+COACH_AGENT_MAX_TOOL_CALLS = 12
+COACH_AGENT_TIMEOUT_SECONDS = 180
+COACH_AGENT_REQUESTS_PER_LOCAL_DAY = 20
+COACH_SNAPSHOT_MAX_ROWS = 50_000
+COACH_SNAPSHOT_MAX_BYTES = 8 * 1024 * 1024
 
 CoachProviderName = Literal["disabled", "local_codex_oauth", "fake"]
 CoachProviderMode = Literal[
@@ -98,9 +109,7 @@ class CoachRequest(BaseModel):
     @field_validator("message")
     @classmethod
     def normalize_message(cls, value: str) -> str:
-        normalized = value.strip()
-        if not normalized:
-            raise ValueError("message cannot be blank")
+        normalized = _nonblank(value, "message")
         if len(normalized) > COACH_MESSAGE_CODEPOINTS:
             raise ValueError("message exceeds 2,000 Unicode code points")
         return normalized
@@ -436,8 +445,276 @@ class CoachContextOptionsResponse(BaseModel):
         return self
 
 
+class CoachAgentRequest(BaseModel):
+    """The free-question request. Data scope is decided through read-only tools."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    contract_version: Literal["coach-request-v3"]
+    request_id: UUID = Field(strict=False)
+    message: str
+
+    @field_validator("message")
+    @classmethod
+    def normalize_message(cls, value: str) -> str:
+        normalized = _nonblank(value, "message")
+        if len(normalized) > COACH_MESSAGE_CODEPOINTS:
+            raise ValueError("message exceeds 2,000 Unicode code points")
+        return normalized
+
+
+class CoachAgentLimits(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+
+    message_codepoints: Literal[2000]
+    reply_codepoints: Literal[4000]
+    requests_per_local_day: Literal[20]
+    remaining_requests: int = Field(
+        ge=0,
+        le=COACH_AGENT_REQUESTS_PER_LOCAL_DAY,
+    )
+    max_tool_calls: Literal[12]
+    turn_timeout_seconds: Literal[180]
+    sql_timeout_seconds: Literal[5]
+    python_timeout_seconds: Literal[30]
+    snapshot_max_rows: Literal[50000]
+    snapshot_max_bytes: Literal[8388608]
+
+
+class CoachAgentCapabilitiesResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+
+    contract_version: Literal["coach-capabilities-v2"]
+    state: CoachCapabilityState
+    provider: CoachProviderName
+    provider_mode: CoachProviderMode
+    model_requested: str | None = Field(default=None, max_length=100)
+    model_source: CoachModelSource
+    service_tier: Literal["fast", "not_applicable"]
+    fast_mode: bool
+    reason_code: str = Field(min_length=1, max_length=64)
+    limits: CoachAgentLimits
+
+    @model_validator(mode="after")
+    def validate_provider_identity(self) -> Self:
+        if self.provider == "local_codex_oauth":
+            if (
+                self.provider_mode != "local_development_only"
+                or self.model_source != "explicit"
+                or self.service_tier != "fast"
+                or not self.fast_mode
+            ):
+                raise ValueError("local Coach capabilities require Fast mode")
+            if self.state == "ready" and self.model_requested != "gpt-5.5":
+                raise ValueError("a ready local Coach requires GPT-5.5")
+        elif self.provider == "fake":
+            if (
+                self.provider_mode != "deterministic_test_only"
+                or self.model_requested is not None
+                or self.model_source != "not_applicable"
+                or self.service_tier != "not_applicable"
+                or self.fast_mode
+            ):
+                raise ValueError("fake Coach capability identity is invalid")
+        elif (
+            self.provider_mode != "disabled"
+            or self.model_requested is not None
+            or self.model_source != "not_applicable"
+            or self.service_tier != "not_applicable"
+            or self.fast_mode
+        ):
+            raise ValueError("disabled Coach capability identity is invalid")
+        if (
+            (self.state == "ready" and self.provider == "disabled")
+            or (self.state == "disabled" and self.provider != "disabled")
+        ):
+            raise ValueError("Coach capability state and provider are inconsistent")
+        return self
+
+
+class CoachAgentEvidence(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+
+    source: str = Field(min_length=1, max_length=80)
+    record_count: int = Field(ge=0, le=COACH_SNAPSHOT_MAX_ROWS)
+    period_start: str | None = Field(default=None, min_length=1, max_length=40)
+    period_end: str | None = Field(default=None, min_length=1, max_length=40)
+
+    @model_validator(mode="after")
+    def validate_period(self) -> Self:
+        if (self.period_start is None) != (self.period_end is None):
+            raise ValueError("evidence periods must be complete or absent")
+        return self
+
+
+class CoachAgentTraceStep(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+
+    sequence: int = Field(ge=1, le=COACH_AGENT_MAX_TOOL_CALLS)
+    tool: Literal["inspect_data", "query_data", "run_python"]
+    status: Literal["completed", "failed"]
+    summary: str = Field(min_length=1, max_length=500)
+    row_count: int | None = Field(default=None, ge=0)
+    duration_ms: int = Field(ge=0, le=COACH_AGENT_TIMEOUT_SECONDS * 1_000)
+
+
+class CoachAgentTrace(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+
+    tool_call_count: int = Field(ge=0, le=COACH_AGENT_MAX_TOOL_CALLS)
+    steps: list[CoachAgentTraceStep] = Field(max_length=COACH_AGENT_MAX_TOOL_CALLS)
+    limitations: list[str] = Field(max_length=20)
+
+    @model_validator(mode="after")
+    def validate_trace(self) -> Self:
+        if self.tool_call_count != len(self.steps):
+            raise ValueError("tool count must match trace steps")
+        if [step.sequence for step in self.steps] != list(
+            range(1, len(self.steps) + 1),
+        ):
+            raise ValueError("trace steps must be contiguous")
+        if any(not value.strip() or len(value) > 500 for value in self.limitations):
+            raise ValueError("trace limitations must be bounded nonblank text")
+        return self
+
+
+class CoachAgentProvenance(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+
+    source: Literal["model", "deterministic_safety"]
+    provider: CoachProviderName
+    provider_mode: CoachProviderMode
+    model_requested: str | None = Field(default=None, max_length=100)
+    model_reported: str | None = Field(default=None, max_length=100)
+    model_source: CoachModelSource
+    prompt_version: Literal["free-coach-agent-prompt-v1"]
+    context_version: Literal["personal-snapshot-v1"]
+    generated_at: datetime = Field(strict=False)
+    provider_called: bool
+    service_tier: Literal["fast", "not_applicable"]
+    service_tier_status: Literal["configured", "not_applicable"]
+    fast_mode: bool
+    snapshot_row_count: int = Field(ge=0, le=COACH_SNAPSHOT_MAX_ROWS)
+    snapshot_bytes: int = Field(ge=0, le=COACH_SNAPSHOT_MAX_BYTES)
+
+    @model_validator(mode="after")
+    def validate_provenance(self) -> Self:
+        if self.generated_at.tzinfo is None:
+            raise ValueError("generated_at must be timezone-aware")
+        if self.source == "model" and not self.provider_called:
+            raise ValueError("model responses must call a provider")
+        if self.provider_called and self.provider == "disabled":
+            raise ValueError("a disabled provider cannot have been called")
+        if self.provider == "local_codex_oauth":
+            if (
+                self.provider_mode != "local_development_only"
+                or self.service_tier != "fast"
+                or self.service_tier_status != "configured"
+                or not self.fast_mode
+                or self.model_requested != "gpt-5.5"
+                or self.model_reported not in {None, "gpt-5.5"}
+                or self.model_source != "explicit"
+            ):
+                raise ValueError("local Codex agent must use configured Fast GPT-5.5")
+        elif self.provider == "fake":
+            if (
+                self.provider_mode != "deterministic_test_only"
+                or self.model_requested is not None
+                or self.model_reported is not None
+                or self.model_source != "not_applicable"
+                or self.service_tier != "not_applicable"
+                or self.service_tier_status != "not_applicable"
+                or self.fast_mode
+            ):
+                raise ValueError("fake Coach provenance is invalid")
+        elif (
+            self.provider_mode != "disabled"
+            or self.model_requested is not None
+            or self.model_reported is not None
+            or self.model_source != "not_applicable"
+            or self.service_tier != "not_applicable"
+            or self.service_tier_status != "not_applicable"
+            or self.fast_mode
+        ):
+            raise ValueError("disabled Coach provenance is invalid")
+        return self
+
+
+class CoachAgentModelOutput(BaseModel):
+    """The complete and only output fields trusted from the model."""
+
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+
+    reply: str = Field(min_length=1, max_length=COACH_REPLY_CODEPOINTS)
+    uncertainty: CoachUncertainty
+    safety: CoachSafety
+
+    @field_validator("reply")
+    @classmethod
+    def normalize_reply(cls, value: str) -> str:
+        return _nonblank(value, "reply")
+
+
+class CoachAgentResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+
+    contract_version: Literal["coach-response-v2"]
+    request_id: UUID = Field(strict=False)
+    reply: str = Field(min_length=1, max_length=COACH_REPLY_CODEPOINTS)
+    uncertainty: CoachUncertainty
+    safety: CoachSafety
+    evidence: list[CoachAgentEvidence] = Field(max_length=100)
+    agent_trace: CoachAgentTrace
+    provenance: CoachAgentProvenance
+
+    @field_validator("reply")
+    @classmethod
+    def normalize_reply(cls, value: str) -> str:
+        return _nonblank(value, "reply")
+
+    @model_validator(mode="after")
+    def validate_safety_provenance(self) -> Self:
+        deterministic = self.provenance.source == "deterministic_safety"
+        redirected = self.safety.classification == "safety_redirect"
+        if deterministic != redirected:
+            raise ValueError(
+                "deterministic safety provenance requires a safety redirect",
+            )
+        return self
+
+
+class CoachAgentHistoryTurn(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+
+    request_id: UUID = Field(strict=False)
+    message: str = Field(min_length=1, max_length=COACH_MESSAGE_CODEPOINTS)
+    response: CoachResponse | CoachAgentResponse
+    created_at: datetime = Field(strict=False)
+
+    @model_validator(mode="after")
+    def validate_turn(self) -> Self:
+        if self.created_at.tzinfo is None:
+            raise ValueError("created_at must be timezone-aware")
+        if self.response.request_id != self.request_id:
+            raise ValueError("history request identity is inconsistent")
+        return self
+
+
+class CoachAgentHistoryResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+
+    contract_version: Literal["coach-history-v2"]
+    turns: list[CoachAgentHistoryTurn]
+
+
 def _nonblank(value: str, field_name: str) -> str:
     normalized = value.strip()
     if not normalized:
         raise ValueError(f"{field_name} cannot be blank")
+    try:
+        normalized.encode("utf-8", errors="strict")
+    except UnicodeEncodeError as exc:
+        raise ValueError(
+            f"{field_name} must contain valid Unicode scalar values",
+        ) from exc
     return normalized

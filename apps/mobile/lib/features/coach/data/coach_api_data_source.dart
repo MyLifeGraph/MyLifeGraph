@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:dio/dio.dart';
 
 import '../../../core/errors/app_exception.dart';
@@ -32,46 +34,24 @@ class CoachApiDataSource {
     return CoachHistory.fromJson(json);
   }
 
-  Future<CoachMemorySelection> getMemories({
-    required String accessToken,
-  }) async {
-    final json = await _guardRemote(
-      () => _client.getJson(
-        '/v1/coach/memories',
-        headers: _headers(accessToken),
-      ),
-    );
-    return CoachMemorySelection.fromJson(json);
-  }
-
-  Future<CoachContextOptions> getContextOptions({
-    required String accessToken,
-  }) async {
-    final json = await _guardRemote(
-      () => _client.getJson(
-        '/v1/coach/context-options',
-        headers: _headers(accessToken),
-      ),
-    );
-    return CoachContextOptions.fromJson(json);
-  }
-
-  Future<CoachResponse> respond({
+  Stream<CoachStreamEvent> respond({
     required String accessToken,
     required CoachRequest request,
-    required Duration receiveTimeout,
     required CancelToken cancelToken,
-  }) async {
-    final json = await _guardRemote(
-      () => _client.postJsonWithTimeout(
-        '/v1/coach/respond',
-        headers: _headers(accessToken),
+  }) async* {
+    final body = await _guardStream(
+      () => _client.postStream(
+        '/v1/coach/respond/stream',
+        headers: {
+          ..._headers(accessToken),
+          'Accept': 'text/event-stream',
+        },
         body: request.toJson(),
-        receiveTimeout: receiveTimeout,
+        receiveTimeout: const Duration(seconds: 190),
         cancelToken: cancelToken,
       ),
     );
-    return CoachResponse.fromJson(json);
+    yield* _parseSse(body.stream.cast<List<int>>());
   }
 
   Future<CoachHistoryDeleteResult> deleteHistory({
@@ -86,36 +66,190 @@ class CoachApiDataSource {
     return CoachHistoryDeleteResult.fromJson(json);
   }
 
-  Future<CoachMemorySelection> selectMemory({
-    required String accessToken,
-    required String memoryId,
-  }) async {
-    final json = await _guardRemote(
-      () => _client.postJson(
-        '/v1/coach/memories/$memoryId/selection',
-        headers: _headers(accessToken),
-        body: const {'selected': true},
-      ),
-    );
-    return CoachMemorySelection.fromJson(json);
-  }
-
-  Future<CoachMemorySelection> deselectMemory({
-    required String accessToken,
-    required String memoryId,
-  }) async {
-    final json = await _guardRemote(
-      () => _client.deleteJson(
-        '/v1/coach/memories/$memoryId/selection',
-        headers: _headers(accessToken),
-      ),
-    );
-    return CoachMemorySelection.fromJson(json);
-  }
-
   Map<String, String> _headers(String accessToken) => {
         'Authorization': 'Bearer $accessToken',
       };
+}
+
+const _maxCoachStreamBytes = 512 * 1024;
+const _maxCoachEventCodepoints = 256 * 1024;
+const _safeCoachActivityMessages = {
+  'Preparing a private data snapshot …',
+  'Preparing a direct answer …',
+  'Checking available personal data …',
+  'Checking relevant history …',
+  'Testing the data with isolated analysis …',
+  'Working with personal data …',
+};
+
+Stream<CoachStreamEvent> _parseSse(Stream<List<int>> bytes) async* {
+  String? event;
+  final data = StringBuffer();
+  var started = false;
+  var terminal = false;
+  var activityCount = 0;
+
+  await for (final line in _decodeSseLines(bytes)) {
+    if (line.isEmpty) {
+      if (event == null) continue;
+      final payloadText = data.toString();
+      if (payloadText.runes.length > _maxCoachEventCodepoints) {
+        throw const CoachContractException('Coach stream event is too large.');
+      }
+      Map<String, dynamic> payload;
+      try {
+        final decoded = jsonDecode(payloadText);
+        if (decoded is! Map) {
+          throw const FormatException();
+        }
+        payload = Map<String, dynamic>.from(decoded);
+      } on Object {
+        throw const CoachContractException('Coach stream event is invalid.');
+      }
+      switch (event) {
+        case 'started':
+          if (started || terminal) {
+            throw const CoachContractException(
+              'Coach stream order is invalid.',
+            );
+          }
+          _expectKeys(
+            payload,
+            const {'request_id', 'contract_version'},
+            'started event',
+          );
+          if (payload['contract_version'] != coachRequestContractVersion) {
+            throw const CoachContractException(
+              'Coach stream contract is invalid.',
+            );
+          }
+          final requestId = payload['request_id'];
+          if (requestId is! String || requestId.isEmpty) {
+            throw const CoachContractException(
+              'Coach stream request identity is invalid.',
+            );
+          }
+          started = true;
+          yield CoachStartedEvent(requestId);
+          break;
+        case 'activity':
+          if (!started || terminal || ++activityCount > 16) {
+            throw const CoachContractException(
+              'Coach stream activity is invalid.',
+            );
+          }
+          _expectKeys(payload, const {'message'}, 'activity event');
+          final message = payload['message'];
+          if (message is! String ||
+              !_safeCoachActivityMessages.contains(message)) {
+            throw const CoachContractException(
+              'Coach stream activity is invalid.',
+            );
+          }
+          yield CoachActivityEvent(message);
+          break;
+        case 'completed':
+          if (!started || terminal) {
+            throw const CoachContractException(
+              'Coach stream completion is invalid.',
+            );
+          }
+          _expectKeys(payload, const {'response'}, 'completed event');
+          final response = payload['response'];
+          if (response is! Map) {
+            throw const CoachContractException(
+              'Coach stream completion is invalid.',
+            );
+          }
+          terminal = true;
+          yield CoachCompletedEvent(
+            CoachResponse.fromJson(
+              Map<String, dynamic>.from(response),
+            ),
+          );
+          break;
+        case 'failed':
+          if (!started || terminal) {
+            throw const CoachContractException(
+              'Coach stream failure is invalid.',
+            );
+          }
+          _expectKeys(payload, const {'error'}, 'failed event');
+          final error = payload['error'];
+          if (error is! Map) {
+            throw const CoachContractException(
+              'Coach stream failure is invalid.',
+            );
+          }
+          terminal = true;
+          yield CoachFailedEvent(
+            CoachErrorDetail.fromJson(
+              Map<String, dynamic>.from(error),
+            ),
+          );
+          break;
+        default:
+          throw const CoachContractException(
+            'Coach stream event is unsupported.',
+          );
+      }
+      event = null;
+      data.clear();
+      continue;
+    }
+    if (line.startsWith('event: ')) {
+      if (event != null || data.isNotEmpty) {
+        throw const CoachContractException('Coach stream line is invalid.');
+      }
+      event = line.substring(7);
+    } else if (line.startsWith('data: ')) {
+      if (event == null) {
+        throw const CoachContractException('Coach stream line is invalid.');
+      }
+      if (data.isNotEmpty) data.write('\n');
+      data.write(line.substring(6));
+    } else if (!line.startsWith(':')) {
+      throw const CoachContractException('Coach stream line is invalid.');
+    }
+  }
+  if (!terminal || event != null || data.isNotEmpty) {
+    throw const CoachContractException(
+      'Coach stream ended without a terminal event.',
+    );
+  }
+}
+
+Stream<String> _decodeSseLines(Stream<List<int>> bytes) async* {
+  try {
+    await for (final line in _boundedSseBytes(bytes)
+        .transform(utf8.decoder)
+        .transform(const LineSplitter())) {
+      yield line;
+    }
+  } on FormatException {
+    throw const CoachContractException('Coach stream encoding is invalid.');
+  }
+}
+
+Stream<List<int>> _boundedSseBytes(Stream<List<int>> source) async* {
+  var total = 0;
+  await for (final chunk in source) {
+    total += chunk.length;
+    if (total > _maxCoachStreamBytes) {
+      throw const CoachContractException('Coach stream is too large.');
+    }
+    yield chunk;
+  }
+}
+
+void _expectKeys(
+  Map<String, dynamic> value,
+  Set<String> keys,
+  String label,
+) {
+  if (value.length != keys.length || !value.keys.every(keys.contains)) {
+    throw CoachContractException('Coach $label is invalid.');
+  }
 }
 
 Future<Map<String, dynamic>> _guardRemote(
@@ -124,17 +258,38 @@ Future<Map<String, dynamic>> _guardRemote(
   try {
     return await operation();
   } on AppException catch (error) {
-    final cause = error.cause;
-    if (cause is! DioException || cause.response == null) rethrow;
-    final response = cause.response!;
-    final detail = _parseErrorDetail(response.data);
-    throw CoachRemoteException(
-      code: detail?.code ?? 'remote_error',
-      message: detail?.message ?? 'Coach request failed.',
-      retryable: detail?.retryable ?? false,
-      statusCode: response.statusCode ?? 500,
+    throw _remoteException(error);
+  }
+}
+
+Future<ResponseBody> _guardStream(
+  Future<ResponseBody> Function() operation,
+) async {
+  try {
+    return await operation();
+  } on AppException catch (error) {
+    throw _remoteException(error);
+  }
+}
+
+CoachRemoteException _remoteException(AppException error) {
+  final cause = error.cause;
+  if (cause is! DioException || cause.response == null) {
+    return const CoachRemoteException(
+      code: 'network_error',
+      message: 'Coach could not be reached.',
+      retryable: true,
+      statusCode: 503,
     );
   }
+  final response = cause.response!;
+  final detail = _parseErrorDetail(response.data);
+  return CoachRemoteException(
+    code: detail?.code ?? 'remote_error',
+    message: detail?.message ?? 'Coach request failed.',
+    retryable: detail?.retryable ?? false,
+    statusCode: response.statusCode ?? 500,
+  );
 }
 
 CoachErrorDetail? _parseErrorDetail(Object? body) {

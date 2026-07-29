@@ -209,8 +209,8 @@ routes such as `/alerts` leave the shell destinations unselected.
 - `/daily-check-in` (redirects to Evening Shutdown)
 - `/deep-work` (real focus lifecycle for authenticated real accounts; local
   guest/demo redirects to Quick Action)
-- `/coach` (typed Controlled Coach; hidden/redirected in production and release
-  unless explicitly enabled; guest/mock makes zero Coach HTTP calls)
+- `/coach` (typed free read-only Coach; hidden/redirected in production and
+  release unless explicitly enabled; guest/mock makes zero Coach HTTP calls)
 - `/more` (compatibility alias to `/coach`)
 - `/settings`
 - `/settings/notifications` (foreground in-app consent, categories, quiet hours,
@@ -238,24 +238,28 @@ Correlation exploration offers only bounded 7/14/30/90-day windows and pages
 every contributing Supabase source with a hard explicit row ceiling; it neither
 labels a silently truncated result as all-time nor allocates unbounded history.
 
-Phase 10 replaces the gated canned `MorePage`/direct Supabase message path with
-a typed authenticated FastAPI Coach boundary. Flutter does not handle the
-developer's Codex OAuth login or receive any model credential. It loads
-capability, context options, validated history, and eligible memory without
-generating. Inside the unchanged Coach destination, the user chooses Today,
-Patterns (90 days, one year, or all retained), one of the latest ten terminal
-Focus sessions, or the fixed last-two-complete-weeks Review. Prompt starters
-only fill the draft. A deliberate send uses strict `coach-request-v2`, and the
-page shows uncertainty, safety, provider/model/prompt/context provenance, exact
-`Data used` counts/freshness, and at most one review-only suggestion.
+Phase 10 is a typed authenticated free-question FastAPI Coach. Flutter never
+handles the developer's Codex OAuth login, snapshot, SQL, Python container, or
+model credential. It loads capability and mixed legacy/current history without
+generating. The Coach page has `Ask anything`, one free question field, Send,
+explicit history deletion, and Cancel only while analysis is running. It has no
+Today/Patterns/Focus/Review, horizon, Focus-session, prompt-starter,
+memory-selection, or structured suggestion controls.
 
-Memory selection/deselection is explicit and underlying Setup/manual content
-stays unchanged. Changing mode, horizon, Focus session, or draft performs no
-remote/model call and preserves scroll position; it also rotates retry identity
-so an ambiguous request can only be retried with the exact original full
-payload. Double submit is disabled. Conversation deletion is explicit.
-Guest/mock remains zero-call. See
-`../../docs/phase-10-controlled-coach-plan.md`.
+A deliberate send streams strict `coach-request-v3` through SSE. The controller
+accepts only `started`, safe `activity`, `completed`, or `failed`; cancellation
+closes the stream. Timeout-aware retry preserves the exact request id and
+message, while editing rotates identity. Double submit is disabled.
+
+Each `coach-response-v2` shows answer text and uncertainty. Flutter validates
+the safety field and its consistency with provenance without rendering the raw
+classification. An expandable `Data and analysis details` section renders
+backend-owned `Snapshot source coverage`, conservative source periods/counts,
+actual inspect/SQL/Python step summaries, limitations, and model/Fast
+provenance. It does not present coverage as exact query-result or answer-support
+rows, and it never renders plots, scripts, hidden reasoning, or an executable
+action. Legacy `coach-response-v1` turns remain readable. Guest/mock remains
+zero-call. See `../../docs/phase-10-controlled-coach-plan.md`.
 
 ## Verify
 
@@ -277,10 +281,11 @@ merge, persistence, retry, and readback; source-aware dashboard/recommendation
 states; route capability gates; durable Settings Setup entry; and strict
 notification action routing. Focused domain tests now cover strict action-target
 parsing, task validation/undo, all Habit V1 cadence/outcome calculations, and
-focus lifecycle invariants. Controlled Coach tests cover strict nested parsing,
-authenticated request methods/bodies/timeouts, guest/mock zero HTTP, controller
-retry/cancellation, capability/error/rate-limit states, visible provenance/data
-use, memory control, and conversation deletion. Browser E2E additionally covers authenticated
+focus lifecycle invariants. Coach tests cover strict V3/V2/capability/history/
+SSE parsing, authenticated requests, guest/mock zero HTTP, retry/cancellation,
+capability/error/rate-limit states, mixed legacy history, visible evidence/
+trace/Fast detail, absence of fixed-mode/memory/suggestion/plot UI, and history
+deletion. Browser E2E additionally covers authenticated
 Setup revisions,
 identity/ownership-safe reconciliation, exact Phase 1 capture metadata and
 deduplicated linked signals, authenticated target-date refreshes, exact Phase 2

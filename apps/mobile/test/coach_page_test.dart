@@ -1,8 +1,8 @@
-import 'package:dio/dio.dart';
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:my_life_graph/core/errors/app_exception.dart';
 import 'package:my_life_graph/features/coach/domain/coach.dart';
 import 'package:my_life_graph/features/coach/domain/coach_repository.dart';
 import 'package:my_life_graph/features/coach/presentation/pages/coach_page.dart';
@@ -11,473 +11,226 @@ import 'package:my_life_graph/features/coach/presentation/providers/coach_provid
 import 'support/coach_fixtures.dart';
 
 void main() {
-  test('legacy V1 Coach provenance remains readable', () {
-    final json = coachResponseJson();
-    final provenance = Map<String, dynamic>.from(
-      json['provenance'] as Map,
-    )
-      ..['prompt_version'] = 'controlled-coach-prompt-v1'
-      ..['context_version'] = 'coach-context-v1';
-    json['provenance'] = provenance;
-
-    final response = CoachResponse.fromJson(json);
-
-    expect(response.provenance.promptVersion, 'controlled-coach-prompt-v1');
-    expect(response.provenance.contextVersion, 'coach-context-v1');
-  });
-
-  testWidgets('ready Coach sends deliberately and renders contract truth',
+  testWidgets('free-question surface has no modes, starters, or memories',
       (tester) async {
     final repository = _FakeCoachRepository();
     await _pumpPage(tester, repository);
 
-    expect(find.text('Coach preview'), findsOneWidget);
-    expect(find.text('Development Coach ready'), findsOneWidget);
-    expect(find.text('Choose Coach context'), findsOneWidget);
-    for (final label in ['Today', 'Patterns', 'Focus', 'Review']) {
-      expect(find.text(label), findsOneWidget);
-    }
-    expect(find.text('Ask Coach'), findsNWidgets(2));
+    expect(find.text('Coach'), findsOneWidget);
+    expect(find.text('Read-only Coach ready'), findsOneWidget);
+    expect(find.text('Ask anything'), findsOneWidget);
+    expect(find.byKey(const Key('coach-message-field')), findsOneWidget);
+    await _scrollTo(tester, find.text('Conversation history'));
     expect(find.text('Conversation history'), findsOneWidget);
-    expect(find.text('Selected memories'), findsOneWidget);
-    expect(
-      tester
-          .widget<TextField>(find.byKey(const Key('coach-message-field')))
-          .enabled,
-      isTrue,
-    );
+    for (final removed in [
+      'Choose Coach context',
+      'Today',
+      'Patterns',
+      'Focus',
+      'Review',
+      'Prompt starters',
+      'Selected memories',
+    ]) {
+      expect(find.text(removed), findsNothing);
+    }
+  });
+
+  testWidgets(
+      'answer shows snapshot source coverage, SQL/Python trace, and provenance',
+      (tester) async {
+    final repository = _FakeCoachRepository();
+    await _pumpPage(tester, repository);
 
     await tester.enterText(
       find.byKey(const Key('coach-message-field')),
-      'How should I pace today?',
+      'How long are my Focus sessions?',
     );
-    await tester.pump();
-    await tester.tap(find.widgetWithText(FilledButton, 'Send'));
+    await _scrollTo(tester, find.byKey(const Key('coach-send-button')));
+    await tester.tap(find.byKey(const Key('coach-send-button')));
     await tester.pumpAndSettle();
 
-    expect(repository.respondMessages, ['How should I pace today?']);
-    expect(repository.respondRequestIds, hasLength(1));
-    expect(
-      repository.respondContexts.single,
-      const CoachContextSelection.today(),
-    );
-    expect(repository.responseTimeouts, [const Duration(seconds: 55)]);
-    expect(
-      tester
-          .widget<TextField>(find.byKey(const Key('coach-message-field')))
-          .controller!
-          .text,
-      isEmpty,
+    expect(repository.messages, ['How long are my Focus sessions?']);
+    await _scrollTo(
+      tester,
+      find.text('Your median Focus duration was 42 minutes.'),
     );
     expect(
-      find.text('Protect one focused block, then reassess your energy.'),
+      find.text('Your median Focus duration was 42 minutes.'),
       findsOneWidget,
     );
     expect(find.text('Uncertainty'), findsOneWidget);
-    expect(find.text('Review-only suggestion'), findsOneWidget);
-    expect(find.text('This suggestion cannot apply changes.'), findsOneWidget);
-    expect(find.textContaining('Apply'), findsNothing);
+    expect(find.textContaining('suggestion'), findsNothing);
 
-    await _scrollTo(tester, find.text('Data used'));
-    await tester.tap(find.text('Data used'));
+    final details = find.text('Data and analysis details').last;
+    await _scrollTo(tester, details);
+    await tester.tap(details);
     await tester.pumpAndSettle();
-    expect(find.text('Today\'s check-in state'), findsOneWidget);
-    expect(find.text('Selected saved notes'), findsOneWidget);
 
-    await _scrollTo(tester, find.text('Provider and model'));
-    await tester.tap(find.text('Provider and model'));
-    await tester.pumpAndSettle();
+    expect(find.text('Snapshot source coverage'), findsOneWidget);
+    expect(find.text('Data used'), findsNothing);
+    expect(find.text('Focus Sessions'), findsOneWidget);
+    expect(find.textContaining('12 records in snapshot'), findsOneWidget);
     expect(
-      find.textContaining('Prompt version: controlled-coach-prompt-v3'),
+      find.text(
+        'Counts and dates describe source coverage, not rows returned '
+        'by one query.',
+      ),
       findsOneWidget,
     );
-    expect(
-      find.textContaining('Context version: coach-context-v3'),
-      findsOneWidget,
-    );
-    expect(find.textContaining('Provider called: yes'), findsOneWidget);
+    expect(find.textContaining('Read-only SQL'), findsWidgets);
+    expect(find.textContaining('Snapshot: 120 rows'), findsOneWidget);
+    expect(find.textContaining('Deterministic Test Only'), findsOneWidget);
+    expect(find.byType(Image), findsNothing);
   });
 
-  testWidgets('successful send brings the latest response into view',
+  testWidgets(
+      'legacy history labels selected context and does not invent Fast status',
       (tester) async {
-    final repository = _FakeCoachRepository();
-    await _pumpPage(
-      tester,
-      repository,
-      physicalSize: const Size(1200, 600),
+    final legacyResponse = coachLegacyResponseJson(
+      provider: 'local_codex_oauth',
+      providerMode: 'local_development_only',
+      modelRequested: 'gpt-5.5',
+      modelReported: 'gpt-5.5',
+      modelSource: 'explicit',
     );
-
-    await _scrollTo(
-      tester,
-      find.byKey(const Key('coach-message-field')),
-    );
-    await tester.enterText(
-      find.byKey(const Key('coach-message-field')),
-      'Show the response without making me search for it.',
-    );
-    await tester.pump();
-    await _scrollTo(
-      tester,
-      find.byKey(const Key('coach-send-button')),
-    );
-    await tester.tap(find.byKey(const Key('coach-send-button')));
-    await tester.pumpAndSettle();
-
-    final responseTitle = find.text('Latest response');
-    expect(responseTitle, findsOneWidget);
-    final titleRect = tester.getRect(responseTitle);
-    expect(titleRect.top, greaterThanOrEqualTo(0));
-    expect(titleRect.top, lessThan(600));
-    expect(
-      find.text('Protect one focused block, then reassess your energy.'),
-      findsOneWidget,
-    );
-  });
-
-  testWidgets('context controls preserve draft and send exact selected mode',
-      (tester) async {
-    final repository = _FakeCoachRepository();
-    await _pumpPage(tester, repository);
-
-    await tester.enterText(
-      find.byKey(const Key('coach-message-field')),
-      'Keep this draft while the context changes.',
-    );
-    await tester.pump();
-    await tester.tap(find.byKey(const ValueKey('coach-context-patterns')));
-    await tester.pumpAndSettle();
-
-    expect(find.text('90 days'), findsOneWidget);
-    expect(find.text('1 year'), findsOneWidget);
-    expect(find.text('All available'), findsOneWidget);
-    expect(
-      tester
-          .widget<TextField>(find.byKey(const Key('coach-message-field')))
-          .controller!
-          .text,
-      'Keep this draft while the context changes.',
-    );
-
-    await tester.tap(find.text('1 year'));
-    await tester.pump();
-    await _scrollTo(tester, find.text('What changed?'));
-    await tester.tap(find.text('What changed?'));
-    await tester.pump();
-    expect(repository.respondMessages, isEmpty);
-    expect(
-      tester
-          .widget<TextField>(find.byKey(const Key('coach-message-field')))
-          .controller!
-          .text,
-      contains('What changed in my study patterns'),
-    );
-
-    await _scrollTo(tester, find.byKey(const Key('coach-send-button')));
-    await tester.tap(find.byKey(const Key('coach-send-button')));
-    await tester.pumpAndSettle();
-
-    expect(repository.respondContexts, hasLength(1));
-    expect(repository.respondContexts.single.scope, CoachContextScope.patterns);
-    expect(
-      repository.respondContexts.single.patternHorizon,
-      CoachPatternHorizon.year1,
-    );
-  });
-
-  testWidgets('Focus defaults to rated session and permits explicit selection',
-      (tester) async {
-    final repository = _FakeCoachRepository();
-    await _pumpPage(tester, repository);
-
-    await tester.tap(find.byKey(const ValueKey('coach-context-focus')));
-    await tester.pumpAndSettle();
-    expect(find.text('Jul 27, 2026, 09:30'), findsOneWidget);
-    expect(find.textContaining('Rated'), findsOneWidget);
-
-    await tester.tap(
-      find.byKey(const ValueKey('coach-focus-session-picker')),
-    );
-    await tester.pumpAndSettle();
-    expect(find.text('Choose a Focus session'), findsOneWidget);
-    await tester.tap(find.text('Jul 25, 2026, 15:15'));
-    await tester.pumpAndSettle();
-
-    await _scrollTo(tester, find.byKey(const Key('coach-message-field')));
-    await tester.enterText(
-      find.byKey(const Key('coach-message-field')),
-      'Help me reflect on this session.',
-    );
-    await tester.pump();
-    await _scrollTo(tester, find.byKey(const Key('coach-send-button')));
-    await tester.tap(find.byKey(const Key('coach-send-button')));
-    await tester.pumpAndSettle();
-
-    expect(
-      repository.respondContexts.single.focusSessionId,
-      coachSecondFocusSessionId,
-    );
-  });
-
-  testWidgets('context controls remain usable at 320 pixels and 200% text',
-      (tester) async {
-    final repository = _FakeCoachRepository();
-    await _pumpPage(
-      tester,
-      repository,
-      physicalSize: const Size(320, 1000),
-      textScale: 2,
-    );
-
-    for (final scope in CoachContextScope.values) {
-      final control = find.byKey(ValueKey('coach-context-${scope.code}'));
-      await _scrollTo(tester, control);
-      await tester.tap(control);
-      await tester.pumpAndSettle();
-      expect(tester.takeException(), isNull);
-    }
-    expect(
-      find.byKey(const ValueKey('coach-focus-session-picker')),
-      findsNothing,
-    );
-    await _scrollTo(
-      tester,
-      find.byKey(const ValueKey('coach-context-focus')),
-    );
-    await tester.tap(find.byKey(const ValueKey('coach-context-focus')));
-    await tester.pumpAndSettle();
-    expect(
-      find.byKey(const ValueKey('coach-focus-session-picker')),
-      findsOneWidget,
-    );
-    expect(tester.takeException(), isNull);
-  });
-
-  testWidgets('provider outage keeps history and memory controls available',
-      (tester) async {
     final repository = _FakeCoachRepository(
-      capability: CoachCapabilities.fromJson(
-        coachCapabilitiesJson(
-          state: 'unavailable',
-          provider: 'local_codex_oauth',
-          providerMode: 'local_development_only',
-          modelRequested: 'gpt-5.5',
-          reasonCode: 'cli_not_logged_in',
-        ),
-      ),
-      history: CoachHistory.fromJson(coachHistoryJson()),
-      memories: CoachMemorySelection.fromJson(coachMemoriesJson()),
+      historyTurns: [
+        {
+          'request_id': coachSecondRequestId,
+          'message': 'What did the older Coach inspect?',
+          'response': legacyResponse,
+          'created_at': '2026-07-27T10:15:01Z',
+        },
+      ],
     );
     await _pumpPage(tester, repository);
 
-    expect(find.text('Coach temporarily unavailable'), findsOneWidget);
+    final details = find.text('Data and analysis details');
+    await _scrollTo(tester, details);
+    await tester.tap(details);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Selected context in older response'), findsOneWidget);
     expect(
-      find.textContaining(
-        'The explicitly enabled local Codex connection is currently unavailable.',
-      ),
-      findsOneWidget,
-    );
-    expect(
-      tester
-          .widget<TextField>(find.byKey(const Key('coach-message-field')))
-          .enabled,
-      isFalse,
-    );
-    expect(repository.respondMessages, isEmpty);
-
-    await _scrollTo(tester, find.text('Prefer one clear next step'));
-    await tester.tap(find.text('Prefer one clear next step'));
-    await tester.pumpAndSettle();
-    expect(find.text('From Setup · selected'), findsOneWidget);
-    expect(find.text('Edit in Setup'), findsOneWidget);
-    await tester.tap(find.text('Remove from Coach'));
-    await tester.pumpAndSettle();
-    expect(repository.deselectedMemoryIds, [coachMemoryId]);
-
-    await _scrollTo(tester, find.text('Conversation history'));
-    expect(find.text('How should I pace today?'), findsOneWidget);
-    await tester.tap(find.text('Delete conversation'));
-    await tester.pumpAndSettle();
-    expect(find.text('Delete conversation?'), findsOneWidget);
-    await tester.tap(
-      find.widgetWithText(FilledButton, 'Delete conversation'),
-    );
-    await tester.pumpAndSettle();
-
-    expect(repository.deleteHistoryCalls, 1);
-    expect(find.text('No saved Coach conversation yet.'), findsOneWidget);
-  });
-
-  testWidgets('history dialog result is ignored after Coach unmounts',
-      (tester) async {
-    tester.view.physicalSize = const Size(1200, 2000);
-    tester.view.devicePixelRatio = 1;
-    addTearDown(tester.view.resetPhysicalSize);
-    addTearDown(tester.view.resetDevicePixelRatio);
-    final repository = _FakeCoachRepository(
-      history: CoachHistory.fromJson(coachHistoryJson()),
-    );
-    final showCoach = ValueNotifier<bool>(true);
-    addTearDown(showCoach.dispose);
-    await tester.pumpWidget(
-      ProviderScope(
-        overrides: [coachRepositoryProvider.overrideWithValue(repository)],
-        child: MaterialApp(
-          home: Scaffold(
-            body: ValueListenableBuilder<bool>(
-              valueListenable: showCoach,
-              builder: (_, visible, __) =>
-                  visible ? const CoachPage() : const Text('Different page'),
-            ),
-          ),
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
-    await _scrollTo(tester, find.text('Conversation history'));
-    await tester.tap(find.text('Delete conversation'));
-    await tester.pumpAndSettle();
-
-    showCoach.value = false;
-    await tester.pump();
-    await tester.tap(
-      find.widgetWithText(FilledButton, 'Delete conversation'),
-    );
-    await tester.pumpAndSettle();
-
-    expect(find.text('Different page'), findsOneWidget);
-    expect(repository.deleteHistoryCalls, 0);
-    expect(tester.takeException(), isNull);
-  });
-
-  testWidgets('timeout keeps draft and advertises exact retry', (tester) async {
-    final request = RequestOptions(path: '/v1/coach/respond');
-    final repository = _FakeCoachRepository(
-      respondError: AppException(
-        'Network request failed',
-        cause: DioException(
-          requestOptions: request,
-          type: DioExceptionType.receiveTimeout,
-        ),
-      ),
-    );
-    await _pumpPage(tester, repository);
-
-    await tester.enterText(
-      find.byKey(const Key('coach-message-field')),
-      'Keep this draft',
-    );
-    await tester.pump();
-    await tester.tap(find.widgetWithText(FilledButton, 'Send'));
-    await tester.pumpAndSettle();
-
-    expect(
-      find.text('Coach timed out. Retry the exact message.'),
+      find.text('1 of 2 records selected for this older response'),
       findsOneWidget,
     );
     expect(
       find.text(
-        'Your message is still here. Retry it unchanged to check the same request safely.',
+        'Counts describe context selected for this older response, '
+        'not snapshot coverage or current tool evidence.',
       ),
       findsOneWidget,
     );
+    expect(
+      find.text(
+        'No per-turn tool trace was recorded for this older response.',
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.textContaining('Local Codex OAuth · Fast status not recorded'),
+      findsOneWidget,
+    );
+    expect(
+      find.textContaining('Snapshot: not recorded for this older response'),
+      findsOneWidget,
+    );
+    expect(find.text('Snapshot source coverage'), findsNothing);
+    expect(find.textContaining('records in snapshot'), findsNothing);
+    expect(find.textContaining('gpt-5.5 · Fast configured'), findsNothing);
+  });
+
+  testWidgets('running analysis shows safe activity and cancel control',
+      (tester) async {
+    final repository = _FakeCoachRepository(block: true);
+    await _pumpPage(tester, repository);
+    await tester.enterText(
+      find.byKey(const Key('coach-message-field')),
+      'Run a longer analysis',
+    );
+    await _scrollTo(tester, find.byKey(const Key('coach-send-button')));
+    await tester.tap(find.byKey(const Key('coach-send-button')));
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.byKey(const Key('coach-activity')), findsOneWidget);
+    expect(find.text('Checking relevant history …'), findsOneWidget);
+    expect(find.byKey(const Key('coach-cancel-button')), findsOneWidget);
+    expect(find.textContaining('reasoning'), findsNothing);
+
+    await tester.tap(find.byKey(const Key('coach-cancel-button')));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 100));
+
+    expect(repository.cancelCalls, 1);
+    await _scrollTo(tester, find.byKey(const Key('coach-send-button')));
+    expect(find.byKey(const Key('coach-send-button')), findsOneWidget);
     expect(
       tester
           .widget<TextField>(find.byKey(const Key('coach-message-field')))
-          .controller!
-          .text,
-      'Keep this draft',
+          .controller
+          ?.text,
+      'Run a longer analysis',
     );
   });
 
-  testWidgets('local unavailable and rate-limited states remain distinct',
-      (tester) async {
-    final local = _FakeCoachRepository(
-      capability: CoachCapabilities.localDemo(),
-    );
-    await _pumpPage(tester, local);
-
-    expect(find.text('Coach unavailable'), findsOneWidget);
-    expect(
-      find.textContaining(
-        'Coach replies are unavailable in guest or local demo mode.',
-      ),
-      findsOneWidget,
-    );
-    expect(find.textContaining('I can help you break that down'), findsNothing);
-    expect(local.respondMessages, isEmpty);
-
-    final limited = _FakeCoachRepository(
-      capability: CoachCapabilities.fromJson(
-        coachCapabilitiesJson(remainingRequests: 0),
-      ),
-    );
-    await _pumpPage(tester, limited);
-    expect(find.text('Rate limited'), findsOneWidget);
-    expect(
-      find.textContaining('Existing history and memories remain available.'),
-      findsOneWidget,
-    );
-  });
-
-  testWidgets('disabled local stack explains both reply-enabled start modes',
+  testWidgets('unavailable Coach keeps history readable and input disabled',
       (tester) async {
     final repository = _FakeCoachRepository(
-      capability: CoachCapabilities.fromJson(
-        coachCapabilitiesJson(
-          state: 'disabled',
-          provider: 'disabled',
-          providerMode: 'disabled',
-          modelRequested: null,
-          modelSource: 'not_applicable',
-          reasonCode: 'provider_disabled',
-          remainingRequests: 0,
-        ),
-      ),
+      capability: CoachCapabilities.localDemo(),
     );
     await _pumpPage(tester, repository);
 
     expect(find.text('Coach unavailable'), findsOneWidget);
-    expect(
-      find.textContaining('npm run start:local:coach for'),
-      findsOneWidget,
-    );
-    expect(
-      find.textContaining('npm run start:local:coach:fake for'),
-      findsOneWidget,
-    );
     expect(
       tester
           .widget<TextField>(find.byKey(const Key('coach-message-field')))
           .enabled,
       isFalse,
     );
-    expect(repository.respondMessages, isEmpty);
+    await _scrollTo(
+      tester,
+      find.text('Your median Focus duration was 42 minutes.'),
+    );
+    expect(
+      find.text('Your median Focus duration was 42 minutes.'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('asynchronous Coach errors are announced as live regions',
+      (tester) async {
+    final repository = _FakeCoachRepository(
+      capabilityError: StateError('availability failed'),
+    );
+    await _pumpPage(tester, repository);
+
+    final error = find.text(
+      'Coach could not complete this operation. Try again.',
+    );
+    expect(error, findsOneWidget);
+    final semantics = tester.widgetList<Semantics>(
+      find.ancestor(of: error, matching: find.byType(Semantics)),
+    );
+    expect(
+      semantics.any((widget) => widget.properties.liveRegion == true),
+      isTrue,
+    );
   });
 }
 
 Future<void> _pumpPage(
   WidgetTester tester,
-  _FakeCoachRepository repository, {
-  Size physicalSize = const Size(1200, 2000),
-  double textScale = 1,
-}) async {
-  tester.view.physicalSize = physicalSize;
-  tester.view.devicePixelRatio = 1;
-  addTearDown(() {
-    tester.view.resetPhysicalSize();
-    tester.view.resetDevicePixelRatio();
-  });
+  CoachRepository repository,
+) async {
   await tester.pumpWidget(
     ProviderScope(
-      overrides: [coachRepositoryProvider.overrideWithValue(repository)],
-      child: MaterialApp(
-        builder: (context, child) => MediaQuery(
-          data: MediaQuery.of(context).copyWith(
-            textScaler: TextScaler.linear(textScale),
-          ),
-          child: child!,
-        ),
-        home: const Scaffold(body: CoachPage()),
+      overrides: [
+        coachRepositoryProvider.overrideWithValue(repository),
+      ],
+      child: const MaterialApp(
+        home: Scaffold(body: CoachPage()),
       ),
     ),
   );
@@ -496,98 +249,77 @@ Future<void> _scrollTo(WidgetTester tester, Finder finder) async {
 class _FakeCoachRepository implements CoachRepository {
   _FakeCoachRepository({
     CoachCapabilities? capability,
-    CoachHistory? history,
-    CoachMemorySelection? memories,
-    CoachContextOptions? contextOptions,
-    this.respondError,
-  })  : capability =
-            capability ?? CoachCapabilities.fromJson(coachCapabilitiesJson()),
-        history = history ?? CoachHistory.empty(),
-        memories = memories ?? CoachMemorySelection.empty(),
-        contextOptions = contextOptions ??
-            CoachContextOptions.fromJson(coachContextOptionsJson());
+    this.block = false,
+    this.capabilityError,
+    this.historyTurns,
+  }) : capability =
+            capability ?? CoachCapabilities.fromJson(coachCapabilitiesJson());
 
-  CoachCapabilities capability;
-  CoachHistory history;
-  CoachMemorySelection memories;
-  CoachContextOptions contextOptions;
-  final Object? respondError;
-  int deleteHistoryCalls = 0;
-  final List<String> respondRequestIds = [];
-  final List<String> respondMessages = [];
-  final List<CoachContextSelection> respondContexts = [];
-  final List<Duration> responseTimeouts = [];
-  final List<String> selectedMemoryIds = [];
-  final List<String> deselectedMemoryIds = [];
+  final CoachCapabilities capability;
+  final bool block;
+  final Object? capabilityError;
+  final List<Map<String, dynamic>>? historyTurns;
+  final List<String> messages = [];
+  final StreamController<CoachStreamEvent> _blocking =
+      StreamController<CoachStreamEvent>();
+  int cancelCalls = 0;
+  String? _latestRequestId;
+  String? _latestMessage;
 
   @override
-  Future<CoachCapabilities> getCapabilities() async => capability;
+  Future<CoachCapabilities> getCapabilities() async {
+    if (capabilityError != null) throw capabilityError!;
+    return capability;
+  }
 
   @override
-  Future<CoachHistory> getHistory() async => history;
+  Future<CoachHistory> getHistory() async {
+    final requestId = _latestRequestId;
+    final message = _latestMessage;
+    return CoachHistory.fromJson(
+      requestId == null || message == null
+          ? coachHistoryJson(turns: historyTurns)
+          : coachHistoryJson(
+              turns: [
+                {
+                  'request_id': requestId,
+                  'message': message,
+                  'response': coachResponseJson(requestId: requestId),
+                  'created_at': '2026-07-28T10:15:01Z',
+                },
+              ],
+            ),
+    );
+  }
 
   @override
-  Future<CoachMemorySelection> getMemories() async => memories;
-
-  @override
-  Future<CoachContextOptions> getContextOptions() async => contextOptions;
-
-  @override
-  Future<CoachResponse> respond({
+  Stream<CoachStreamEvent> respond({
     required String requestId,
     required String message,
-    required CoachContextSelection context,
-    required Duration receiveTimeout,
-  }) async {
-    respondRequestIds.add(requestId);
-    respondMessages.add(message);
-    respondContexts.add(context);
-    responseTimeouts.add(receiveTimeout);
-    if (respondError != null) throw respondError!;
-    capability = CoachCapabilities.fromJson(
-      coachCapabilitiesJson(remainingRequests: 18),
+  }) async* {
+    messages.add(message);
+    _latestRequestId = requestId;
+    _latestMessage = message;
+    yield CoachStartedEvent(requestId);
+    yield const CoachActivityEvent('Checking relevant history …');
+    if (block) {
+      yield* _blocking.stream;
+      return;
+    }
+    yield CoachCompletedEvent(
+      CoachResponse.fromJson(coachResponseJson(requestId: requestId)),
     );
-    return CoachResponse.fromJson(coachResponseJson(requestId: requestId));
   }
 
   @override
-  Future<CoachHistoryDeleteResult> deleteHistory() async {
-    deleteHistoryCalls += 1;
-    history = CoachHistory.empty();
-    return const CoachHistoryDeleteResult(deleted: true);
-  }
+  Future<CoachHistoryDeleteResult> deleteHistory() async =>
+      const CoachHistoryDeleteResult(true);
 
   @override
-  Future<CoachMemorySelection> selectMemory(String memoryId) async {
-    selectedMemoryIds.add(memoryId);
-    memories = _selection(selected: true);
-    return memories;
+  void cancelActiveResponse() {
+    cancelCalls++;
+    if (block && !_blocking.isClosed) {
+      _blocking.close();
+    }
   }
-
-  @override
-  Future<CoachMemorySelection> deselectMemory(String memoryId) async {
-    deselectedMemoryIds.add(memoryId);
-    memories = _selection(selected: false);
-    return memories;
-  }
-
-  @override
-  void cancelActiveResponse() {}
 }
-
-CoachMemorySelection _selection({required bool selected}) =>
-    CoachMemorySelection.fromJson(
-      coachMemoriesJson(
-        memories: [
-          coachMemoryJson(selected: selected),
-          coachMemoryJson(
-            id: coachManualMemoryId,
-            type: 'pattern',
-            title: 'Afternoon energy dip',
-            content: 'Energy often drops later.',
-            ownership: 'manual',
-            selected: false,
-          ),
-        ],
-      ),
-    );

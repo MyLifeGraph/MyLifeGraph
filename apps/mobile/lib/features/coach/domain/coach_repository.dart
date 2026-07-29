@@ -5,22 +5,12 @@ abstract interface class CoachRepository {
 
   Future<CoachHistory> getHistory();
 
-  Future<CoachMemorySelection> getMemories();
-
-  Future<CoachContextOptions> getContextOptions();
-
-  Future<CoachResponse> respond({
+  Stream<CoachStreamEvent> respond({
     required String requestId,
     required String message,
-    required CoachContextSelection context,
-    required Duration receiveTimeout,
   });
 
   Future<CoachHistoryDeleteResult> deleteHistory();
-
-  Future<CoachMemorySelection> selectMemory(String memoryId);
-
-  Future<CoachMemorySelection> deselectMemory(String memoryId);
 
   void cancelActiveResponse();
 }
@@ -47,7 +37,8 @@ class CoachRemoteException implements Exception {
   final int statusCode;
 
   bool get preservesRequestIdentity =>
-      statusCode == 409 && (code == 'in_progress' || retryable);
+      statusCode == 409 && (code == 'in_progress' || retryable) ||
+      code == 'network_error' && retryable;
 
   bool get isRateLimited =>
       statusCode == 429 ||
@@ -57,7 +48,4 @@ class CoachRemoteException implements Exception {
         'daily_limit',
         'usage_limit',
       }.contains(code);
-
-  @override
-  String toString() => 'CoachRemoteException($code, $statusCode)';
 }

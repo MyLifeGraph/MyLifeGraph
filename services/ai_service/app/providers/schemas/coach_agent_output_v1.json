@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["reply", "uncertainty", "safety"],
+  "properties": {
+    "reply": {"type": "string", "minLength": 1, "maxLength": 4000},
+    "uncertainty": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["level", "reason"],
+      "properties": {
+        "level": {"enum": ["low", "medium", "high"]},
+        "reason": {"type": "string", "minLength": 1, "maxLength": 300}
+      }
+    },
+    "safety": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["classification"],
+      "properties": {
+        "classification": {"enum": ["normal", "sensitive", "safety_redirect"]}
+      }
+    }
+  }
+}

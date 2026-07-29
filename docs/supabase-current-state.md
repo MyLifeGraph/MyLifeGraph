@@ -16,7 +16,9 @@ The later deterministic learning boundary is recorded in
 `20260726190000_planning_confirmation_timestamp_guard.sql`, and
 `20260726200000_learned_timing_setup_fallback_provenance.sql`.
 The later bounded Coach context-ledger extension is migration
-`20260728120000_coach_longitudinal_context_v1.sql`.
+`20260728120000_coach_longitudinal_context_v1.sql`. The current free read-only
+Coach agent persistence is the additive migration
+`20260728160000_free_read_only_coach_agent_v1.sql`.
 
 ## Runtime Activation
 
@@ -68,8 +70,8 @@ The app table constants live in
 | `notification_action_requests` | Service-role-only exact retry/result ledger for `notification-lifecycle-v1`; it contains identities and lifecycle projections, not notification copy. |
 | `schedule_items` | Setup-owned confirmed fixed commitments plus preserved manual/other-source dashboard schedule rows. Setup-owned metadata may add inclusive optional `valid_from`/`valid_until` semester dates; older/undated rows remain unbounded. |
 | `ai_insights` | Insights list. |
-| `coach_messages` | Bounded validated Phase 10 user/assistant history linked to a retry-safe backend request. Authenticated owners can read; only FastAPI can insert/delete V1 turns. Legacy rows remain distinguishable by null request/contract fields. |
-| `memory_entries` | Durable Setup/manual memory content. Authenticated owners can read, but Phase 10 selection is a separate projection and does not transfer Setup ownership or promote check-in/conversation text automatically. Preference rows remain ineligible until a later sensitivity contract can distinguish hidden context safely. |
+| `coach_messages` | Bounded validated user/assistant history linked to a retry-safe backend request. Authenticated owners can read; only FastAPI inserts/deletes turns. V3 answers use `coach-response-v2`; legacy and fixed-mode V1/V2 rows remain readable. |
+| `memory_entries` | Durable Setup/manual memory content. Authenticated owners can read it. Current free-question Coach snapshots may include sanitized owner memory detail as untrusted data; the old explicit selection projection remains only for V1/V2 compatibility and never changes content ownership. |
 | `focus_sessions` | Real one-active-session Deep Work lifecycle with bounded planned/measured duration, fully immutable terminal history, persisted local start date, and at most one owned task or active-habit target whose deletion is restricted. |
 | `focus_session_reflections` | At most one editable `focus-reflection-v1` rating per owned terminal Focus session, with two bounded scores and up to two controlled obstacles. Forced owner RLS; account deletion cascades it. |
 | `learning_preferences` | One revisioned `learning-preferences-v1` projection per owner for prompt, analysis, and separately gated learned-Planning choices. Learned planning cannot remain enabled while analysis is disabled. |
@@ -101,9 +103,9 @@ The app table constants live in
 | `planner_habit_slots` | Stable recurring wall-clock slots for planned Habit occurrences; Study rhythm does not apply. |
 | `planner_commitments` | Authoritative owner-created one-off or weekly fixed commitments. |
 | `planner_request_identities` | Backend-only global retry ledger for Planner preferences, plans, and commitments; omitted from Account Export. |
-| `coach_requests` | Backend-only retry/lease/terminal ledger. V1 remains `today` with `{}` parameters; V2 stores one exact bounded scope/parameter object for replay. Pending rows store only a SHA-256 message fingerprint; completed rows store the strict response/manifest; deleted rows are content-free tombstones. |
+| `coach_requests` | Backend-only retry/lease/terminal ledger. V1 remains `today` with `{}` and V2 stores fixed scope parameters; V3 replay binds only owner/request/message and persists exact backend-derived evidence, bounded agent trace/tool count, and service-tier truth on completion. Deleted rows are content-free tombstones and clear V3 detail without clearing usage. |
 | `coach_usage_events` | Backend-only append-only one-row-per-request outcome/counter ledger retained across conversation deletion and used with request rows for the profile-local daily attempt budget. |
-| `coach_memory_selections` | Explicit owner-scoped selection of at most eight eligible `memory_entries` for Coach context, stored separately from memory ownership/content. |
+| `coach_memory_selections` | Legacy explicit selection of at most eight eligible memories for fixed-context V1/V2 Coach. It remains readable for compatibility but current V3 Flutter does not call or depend on it. |
 
 Phase 1 canonical capture upserts one `daily_logs` row per user/date with source
 `quick_check_in`. `metadata.capture_version=daily-capture-v4` contains separate
@@ -553,7 +555,7 @@ while daily preparation arithmetic continues to sum only focus minutes.
 The full Intake, Focus, planning, semester-attention, export, and non-claim
 boundary is in `docs/study-setup-v1-contract.md`.
 
-## Phase 10 Controlled Coach
+## Phase 10 Coach Persistence
 
 `20260713200000_phase_10_controlled_coach.sql` adds
 `coach_requests`, `coach_usage_events`, and `coach_memory_selections`, then
@@ -640,6 +642,45 @@ completion, failure, and deletion RPCs continue to handle both request
 versions. Partial `(user_id, completed_at, id)` and
 `(user_id, cancelled_at, id)` Task indexes accelerate owner-scoped terminal
 history without changing Task lifecycle authority.
+
+`20260728160000_free_read_only_coach_agent_v1.sql` additively implements the
+current free-question persistence contract without rewriting old rows. It adds
+nullable `evidence`, `agent_trace`, `tool_call_count`, and `service_tier`
+columns to `coach_requests`; V1/V2 rows keep those fields null.
+
+`coach-request-v3` has no user-selected scope or parameter object. Its
+service-role-only `claim_coach_request_v3` reuses the established owner-before-
+request locks, one-pending-owner rule, lease, terminal replay, and profile-local
+daily budget. Replay binds derived owner, request UUID, and exact message
+fingerprint only. A new claim stores
+`free-coach-agent-prompt-v1`/`personal-snapshot-v1`; the legacy physical scope
+columns stay neutral `today`/`{}` for schema compatibility and are not a
+current product mode.
+
+The service-role-only `complete_coach_request_v2` requires one exact
+`coach-response-v2` and validates:
+
+- response request identity and bounded reply/uncertainty/safety;
+- backend-derived evidence source/count/period rows;
+- at most 12 contiguous `inspect_data|query_data|run_python` trace steps,
+  completion/failure status, bounded summaries/counts/durations, and
+  limitations;
+- exact equality between response and separately supplied evidence/trace/tool
+  count;
+- paired `free-coach-agent-prompt-v1` and `personal-snapshot-v1` provenance;
+- snapshot rows no greater than 50,000 and bytes no greater than 8 MiB; and
+- `local_codex_oauth` truth fixed to `gpt-5.5`, explicit Fast configured, and
+  no non-Codex Fast claim.
+
+The response validator continues to admit strict `coach-response-v1`; existing
+completion/failure rows, usage events, and histories remain readable. The
+history-delete wrapper calls the prior owner-locked transaction and then clears
+V3 evidence, trace, tool count, and service tier from tombstones. It does not
+delete usage/request identities and conflicts with an active turn.
+
+All new validator and mutation functions are revoked from `public`, `anon`, and
+`authenticated`. Only `service_role` may execute the V3 claim, V2 completion,
+or history-delete RPC. No new application-role table write is introduced.
 
 ## V1 Account Deletion
 
@@ -943,12 +984,19 @@ RLS mode, owner/admin predicate, or service-role boundary.
 while adding exact V2 context parameters/replay, paired V3 provenance
 validation, and partial completed/cancelled Task history indexes.
 
+`20260728160000_free_read_only_coach_agent_v1.sql` admits message-only
+`coach-request-v3`, exact `coach-response-v2`, and backend-owned
+evidence/agent-trace/tool-count/Fast-tier persistence. Its service-role-only
+claim/completion wrappers retain the owner lock, daily budget, terminal replay,
+legacy history, and deletion tombstones while adding no application write
+authority.
+
 ## Local Verification Workflow
 
 For local Supabase-backed testing, the reset should complete through:
 
 ```text
-20260728120000_coach_longitudinal_context_v1.sql
+20260728160000_free_read_only_coach_agent_v1.sql
 ```
 
 Then configure `.env` with:
@@ -996,7 +1044,7 @@ RESET_DB=true FLUTTER_BIN=/path/to/flutter scripts/verify_supabase_local.sh
 ```
 
 The reset form should apply all migrations through
-`20260728120000_coach_longitudinal_context_v1.sql`; expected legacy-table
+`20260728160000_free_read_only_coach_agent_v1.sql`; expected legacy-table
 skip notices may be emitted for missing CamelCase tables. Use reset when proving
 the full migration/backfill/constraint chain from a fresh local database, not
 merely because a reviewed migration is pending.
@@ -1039,11 +1087,12 @@ Supabase-backed path:
   import a bounded `.ics` file, page through events, disconnect while retaining
   the visibly imported/read-only copy, then delete that local copy and confirm
   `schedule_items` is unchanged.
-- Open Coach with the fake provider, confirm read-only capability/history/
-  memory loading, explicitly select one eligible memory, send one bounded turn,
-  replay its request id, delete the conversation, and confirm messages are gone
-  while request tombstones and usage remain. Confirm guest/mock makes no Coach
-  request.
+- Open Coach with the fake provider, confirm read-only capability/history,
+  send a free V3 question, observe safe stream activity, inspect actual
+  evidence/trace/provenance, replay its id with the exact message, and delete
+  history. Confirm messages and V3 detail are gone while request tombstones and
+  usage remain. Confirm there is no fixed mode/memory/suggestion UI and
+  guest/mock makes no Coach request.
 - Open Inbox (`/alerts`); mark one row read/unread, dismiss it, reload, and do
   not infer notification delivery from stored rows or preferences.
 
@@ -1063,8 +1112,9 @@ outcome/undo, task completion/undo, and focus start/finish. Negative
 task/focus/habit lifecycle, duration, active-target, and weekday-cadence writes
 include terminal-focus `updated_at` mutation. Phase 8/9 source adds weekly review
 and calendar import. Phase 10 source starts FastAPI with the deterministic fake
-provider and adds bounded Coach persistence, replay, safety, memory, history,
-RLS, UI, and guest-zero-call assertions. Exact current results and dated run
+provider and adds free-question streaming, snapshot/trace/evidence persistence,
+replay, cancellation, safety, limits, history deletion, RLS, no-fixed-mode UI,
+and guest-zero-call assertions. Exact current results and dated run
 history live in
 [Current Verified Baseline](verification.md#current-verified-baseline) and the
 historical sections of `docs/verification.md`. They establish neither remote
@@ -1120,10 +1170,12 @@ legacy compatibility only and should be dropped in a later dedicated migration
 after data migration and app verification are complete.
 
 The latest migration is
-`20260728120000_coach_longitudinal_context_v1.sql`. It preserves V1 Coach claim
-and stored-row compatibility while adding exact V2 scope/parameter replay,
-paired V3 provenance validation, and partial terminal Task history indexes. The
-preceding
+`20260728160000_free_read_only_coach_agent_v1.sql`. It preserves fixed-mode
+V1/V2 rows while adding message-only V3 claim, exact V2 response, backend-owned
+evidence/trace/tool/tier persistence, and compatible history deletion. The
+preceding `20260728120000_coach_longitudinal_context_v1.sql` adds exact V2
+scope/parameter replay, paired V3 prompt/context provenance, and partial
+terminal Task history indexes. The preceding
 `20260726200000_learned_timing_setup_fallback_provenance.sql` preserves learned
 evidence while recording actual Setup allocation fallback. The earlier
 confirmation-time and proposal-RPC guards keep timestamps monotone, strict V1

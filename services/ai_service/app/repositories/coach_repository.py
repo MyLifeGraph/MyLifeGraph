@@ -6,7 +6,11 @@ from uuid import UUID
 import httpx
 
 from app.clients.supabase import SupabaseRestClient
-from app.models.coach import CoachErrorDetail, CoachResponse
+from app.models.coach import (
+    CoachAgentResponse,
+    CoachErrorDetail,
+    CoachResponse,
+)
 
 
 CoachClaimState = Literal[
@@ -30,7 +34,7 @@ class CoachPersistenceRateLimited(RuntimeError):
 class CoachClaimResult:
     state: CoachClaimState
     remaining_requests: int
-    response: CoachResponse | None
+    response: CoachResponse | CoachAgentResponse | None
     error: CoachErrorDetail | None
 
 
@@ -41,6 +45,43 @@ class CoachMemoryRows:
 
 
 class CoachRepository(Protocol):
+    async def claim_agent_request(
+        self,
+        *,
+        user_id: str,
+        request_id: UUID,
+        message_fingerprint: str,
+        local_date: date,
+        provider: str,
+        provider_mode: str,
+        model_requested: str | None,
+        model_source: str,
+        claimed_at: datetime,
+        lease_expires_at: datetime,
+        daily_limit: int,
+    ) -> CoachClaimResult:
+        pass
+
+    async def complete_agent_request(
+        self,
+        *,
+        user_id: str,
+        request_id: UUID,
+        user_message: str,
+        response: CoachAgentResponse,
+        usage: dict[str, Any],
+        completed_at: datetime,
+    ) -> CoachAgentResponse:
+        pass
+
+    async def list_agent_history(
+        self,
+        *,
+        user_id: str,
+        limit: int,
+    ) -> list[dict[str, Any]]:
+        pass
+
     async def claim_request(
         self,
         *,
@@ -118,6 +159,120 @@ class CoachRepository(Protocol):
 class SupabaseCoachRepository:
     def __init__(self, client: SupabaseRestClient) -> None:
         self._client = client
+
+    async def claim_agent_request(
+        self,
+        *,
+        user_id: str,
+        request_id: UUID,
+        message_fingerprint: str,
+        local_date: date,
+        provider: str,
+        provider_mode: str,
+        model_requested: str | None,
+        model_source: str,
+        claimed_at: datetime,
+        lease_expires_at: datetime,
+        daily_limit: int,
+    ) -> CoachClaimResult:
+        result = await self._rpc(
+            "claim_coach_request_v3",
+            params={
+                "p_user_id": user_id,
+                "p_request_id": str(request_id),
+                "p_message_fingerprint": message_fingerprint,
+                "p_local_date": local_date.isoformat(),
+                "p_provider": provider,
+                "p_provider_mode": provider_mode,
+                "p_model_requested": model_requested,
+                "p_model_source": model_source,
+                "p_claimed_at": claimed_at.isoformat(),
+                "p_lease_expires_at": lease_expires_at.isoformat(),
+                "p_daily_limit": daily_limit,
+            },
+        )
+        return _claim_result(result, request_id=request_id)
+
+    async def complete_agent_request(
+        self,
+        *,
+        user_id: str,
+        request_id: UUID,
+        user_message: str,
+        response: CoachAgentResponse,
+        usage: dict[str, Any],
+        completed_at: datetime,
+    ) -> CoachAgentResponse:
+        result = await self._rpc(
+            "complete_coach_request_v2",
+            params={
+                "p_user_id": user_id,
+                "p_request_id": str(request_id),
+                "p_user_message": user_message,
+                "p_response": response.model_dump(mode="json"),
+                "p_evidence": [
+                    item.model_dump(mode="json") for item in response.evidence
+                ],
+                "p_agent_trace": response.agent_trace.model_dump(mode="json"),
+                "p_tool_call_count": response.agent_trace.tool_call_count,
+                "p_service_tier": response.provenance.service_tier,
+                "p_usage": usage,
+                "p_completed_at": completed_at.isoformat(),
+            },
+        )
+        if set(result) != {"state", "response"} or result["state"] != "completed":
+            raise ValueError("Coach agent completion RPC returned an invalid envelope.")
+        persisted = CoachAgentResponse.model_validate(result["response"])
+        if persisted.request_id != request_id:
+            raise ValueError("Coach agent completion returned another request.")
+        return persisted
+
+    async def list_agent_history(
+        self,
+        *,
+        user_id: str,
+        limit: int,
+    ) -> list[dict[str, Any]]:
+        requests = await self._client.select(
+            "coach_requests",
+            params={
+                "select": "request_id,response,created_at",
+                "user_id": f"eq.{user_id}",
+                "state": "eq.completed",
+                "order": "created_at.desc,request_id.asc",
+                "limit": str(limit),
+            },
+        )
+        if not requests:
+            return []
+        request_ids = [str(row.get("request_id")) for row in requests]
+        messages = await self._client.select(
+            "coach_messages",
+            params={
+                "select": "request_id,content",
+                "user_id": f"eq.{user_id}",
+                "role": "eq.user",
+                "request_id": f"in.({','.join(request_ids)})",
+                "order": "created_at.asc,id.asc",
+                "limit": str(limit),
+            },
+        )
+        by_request = {str(row.get("request_id")): row for row in messages}
+        result: list[dict[str, Any]] = []
+        for row in reversed(requests):
+            request_id = str(row.get("request_id"))
+            message = by_request.get(request_id)
+            if message is None:
+                raise ValueError("Completed Coach request lacks its user message.")
+            result.append(
+                {
+                    "request_id": request_id,
+                    "message": message.get("content"),
+                    "response": row.get("response"),
+                    "created_at": row.get("created_at"),
+                },
+            )
+        return result
 
     async def claim_request(
         self,
@@ -476,4 +631,50 @@ def _postgres_error(exc: httpx.HTTPStatusError) -> tuple[str | None, str]:
     return (
         str(code) if code is not None else None,
         str(message) if message is not None else "Coach persistence request failed.",
+    )
+
+
+def _claim_result(
+    result: dict[str, Any],
+    *,
+    request_id: UUID,
+) -> CoachClaimResult:
+    if set(result) != {"state", "remaining_requests", "response", "error"}:
+        raise ValueError("Coach claim RPC returned an invalid envelope.")
+    state = result["state"]
+    if state not in {"pending", "completed", "failed", "deleted", "in_progress"}:
+        raise ValueError("Coach claim RPC returned an invalid state.")
+    remaining = result["remaining_requests"]
+    if isinstance(remaining, bool) or not isinstance(remaining, int) or remaining < 0:
+        raise ValueError("Coach claim RPC returned an invalid remaining count.")
+    raw_response = result["response"]
+    response: CoachResponse | CoachAgentResponse | None = None
+    if raw_response is not None:
+        if not isinstance(raw_response, dict):
+            raise ValueError("Coach claim RPC returned an invalid response.")
+        response = (
+            CoachAgentResponse.model_validate(raw_response)
+            if raw_response.get("contract_version") == "coach-response-v2"
+            else CoachResponse.model_validate(raw_response)
+        )
+        if response.request_id != request_id:
+            raise ValueError("Coach claim RPC returned another request.")
+    error = (
+        CoachErrorDetail.model_validate(result["error"])
+        if result["error"] is not None
+        else None
+    )
+    if (state == "completed") != (response is not None):
+        raise ValueError("Coach claim response does not match its state.")
+    if state in {"failed", "deleted"} and error is None:
+        raise ValueError("Terminal Coach claim lacks its error.")
+    if state in {"pending", "in_progress"} and (
+        response is not None or error is not None
+    ):
+        raise ValueError("Active Coach claim contains terminal data.")
+    return CoachClaimResult(
+        state=state,
+        remaining_requests=remaining,
+        response=response,
+        error=error,
     )

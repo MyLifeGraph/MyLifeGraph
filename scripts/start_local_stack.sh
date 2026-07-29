@@ -25,9 +25,9 @@ APPLY_MIGRATIONS="${APPLY_MIGRATIONS-false}"
 FLUTTER_BIN="${FLUTTER_BIN:-flutter}"
 AI_SERVICE_PYTHON="${AI_SERVICE_PYTHON:-$ROOT_DIR/services/ai_service/.venv/bin/python}"
 LOCAL_CODEX_BIN="${LOCAL_CODEX_BIN:-codex}"
-# Preserve an explicitly empty value: that is the provider contract for asking
-# the CLI to choose its own model while reporting `model_requested: null`.
-LOCAL_CODEX_MODEL="${LOCAL_CODEX_MODEL-gpt-5.5}"
+LOCAL_CODEX_MODEL="${LOCAL_CODEX_MODEL:-gpt-5.5}"
+COACH_ANALYSIS_DOCKER_BIN="${COACH_ANALYSIS_DOCKER_BIN:-docker}"
+COACH_ANALYSIS_IMAGE="${COACH_ANALYSIS_IMAGE:-mylifegraph-coach-analysis:1}"
 
 # A caller cannot inject backend credentials into unrelated child processes.
 # The local values used below are derived afresh and remain unexported shell
@@ -239,6 +239,10 @@ esac
 
 [[ "$LOCAL_CODEX_MODEL" != *$'\n'* && "$LOCAL_CODEX_MODEL" != *$'\r'* ]] ||
   fail "LOCAL_CODEX_MODEL contains invalid characters."
+if [[ "$COACH_PROVIDER_MODE" == "local_codex_oauth" &&
+  "$LOCAL_CODEX_MODEL" != "gpt-5.5" ]]; then
+  fail "The free data Coach requires LOCAL_CODEX_MODEL=gpt-5.5; no model fallback is permitted."
+fi
 
 SUPABASE_BIN="$(resolve_executable supabase)" ||
   fail "Supabase CLI is not available in PATH."
@@ -255,6 +259,7 @@ FLUTTER_BIN="$(resolve_executable "$FLUTTER_BIN")" ||
   fail "The existing frontend start script is unavailable."
 
 resolved_codex_bin="$LOCAL_CODEX_BIN"
+resolved_coach_docker_bin="$COACH_ANALYSIS_DOCKER_BIN"
 if [[ "$COACH_PROVIDER_MODE" == "local_codex_oauth" ]]; then
   resolved_codex_bin="$(resolve_executable "$LOCAL_CODEX_BIN")" ||
     fail "Local Codex CLI is not available. Run codex login manually as this WSL user."
@@ -262,6 +267,12 @@ if [[ "$COACH_PROVIDER_MODE" == "local_codex_oauth" ]]; then
     fail "Local Codex CLI preflight failed."
   "$resolved_codex_bin" login status >/dev/null 2>&1 ||
     fail "Codex is not logged in for this WSL user. Run codex login manually."
+  resolved_coach_docker_bin="$(resolve_executable "$COACH_ANALYSIS_DOCKER_BIN")" ||
+    fail "Docker is unavailable. Install or start Docker before using the live Coach."
+  COACH_ANALYSIS_DOCKER_BIN="$resolved_coach_docker_bin" \
+    COACH_ANALYSIS_IMAGE="$COACH_ANALYSIS_IMAGE" \
+    "$ROOT_DIR/scripts/prepare_coach_analysis_image.sh" ||
+    fail "The isolated Coach analysis image could not be prepared."
 fi
 
 if port_is_occupied "$AI_SERVICE_PORT"; then
@@ -345,6 +356,8 @@ fi
     LOCAL_CODEX_ENABLED="$local_codex_enabled" \
     LOCAL_CODEX_BIN="$resolved_codex_bin" \
     LOCAL_CODEX_MODEL="$LOCAL_CODEX_MODEL" \
+    COACH_ANALYSIS_DOCKER_BIN="$resolved_coach_docker_bin" \
+    COACH_ANALYSIS_IMAGE="$COACH_ANALYSIS_IMAGE" \
     exec "$SETSID_BIN" "$AI_SERVICE_PYTHON" -m uvicorn app.main:app \
       --host "$AI_SERVICE_HOST" \
       --port "$AI_SERVICE_PORT" \

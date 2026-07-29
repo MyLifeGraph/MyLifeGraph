@@ -59,11 +59,14 @@ readable after sanitization. V2 has no friction context, risk, reason, or
 evidence. Stress, sleep, energy, day shape, workload, and active Tasks continue
 to drive classification. `push` requires at least one active Task.
 
-Current Coach V2 requests use `controlled-coach-prompt-v3` and
-`coach-context-v3`; compatible V1 Today requests retain paired
-`controlled-coach-prompt-v2` and `coach-context-v2` provenance. Neither path
-loads Goals, onboarding preference, coaching style, or friction fields.
-Persisted V1 Coach responses and history remain readable and replay-compatible.
+Current free questions use `free-coach-agent-prompt-v1` with a per-turn
+`personal-snapshot-v1`. The snapshot may include retained sanitized Intake,
+Goal, Memory, and Daily Capture rows as untrusted data, but the cleanup means it
+cannot resurrect removed onboarding preference, coaching-style, friction, or
+Setup-Goal JSON. Compatible V2 fixed-mode requests retain
+`controlled-coach-prompt-v3`/`coach-context-v3`; V1 Today retains paired
+`controlled-coach-prompt-v2`/`coach-context-v2`. Persisted V1/V2 responses and
+history remain readable and replay-compatible.
 
 Briefings and Weekly Reviews do not load Goals. The V1 Weekly Review field
 `facts.tasks.goal_linked_completed` remains present and is always `0`.

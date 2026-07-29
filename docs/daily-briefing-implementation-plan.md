@@ -181,7 +181,7 @@ Phase 4's deterministic briefing service.
 | Insights correlations | Yes | Default to one cautious observation; advanced correlations expose data sufficiency, source, and independent loading/error truth. Real accounts hide Skillset until a real producer exists; demo data is labelled as an example. |
 | Inbox (`/alerts`) | Stored inbox with Lifecycle V1 | Structured internal links are allowlisted; read/unread/dismiss is durable and retry-safe, while stored preferences and rows still do not imply delivery |
 | Deep Work | Yes, authenticated real-data mode | One active session, optional owned task/habit linkage, measured finish/abandon duration, and no implicit target completion are implemented; guest/mock redirects to Quick Action |
-| Coach | Explicitly gated authenticated mode | The route/surface is fail-closed in release/production unless explicitly enabled; capability/history/memory reads are generation-free and backend `ready` gates sending |
+| Coach | Explicitly gated authenticated free-question agent | The route is fail-closed in release/production; capability/history reads are generation-free, backend `ready` gates sending, and each real turn is read-only over a temporary owner-only snapshot |
 | Planner | Central authenticated planning home | Deterministic Task/Habit previews, Deadline Planner delegation, manual commitments, shared availability, conflict attention, explicit confirmation, and the read-only Exam-Week Outlook are implemented without hidden scheduling. |
 | Study Setup | Optional Setup projection | Focus/recovery rhythm, preparation checklist, current/next semester, recovery reservations, and course-selection attention are implemented under the revisioned Setup authority. |
 | Settings | Durable V1 controls | Profile, Setup and Study Setup review, account timezone, preparation budget, Inbox, reminders, bounded export, confirmed deletion, device-persisted theme, Calendar Import, and sign-out expose their actual persistence boundaries. Coach is a gated shell destination, not a Settings fallback. |
@@ -354,7 +354,7 @@ learned baseline before one exists.
 | Two-plus weeks | Repeated comparable signals | Emerging patterns with visible sample size and low/medium confidence | Medical conclusion or certainty from correlation |
 | One-plus month | Daily and weekly outcomes plus feedback | Personal baselines, weekly adaptation, stronger ranking, habit change proposals | Unreviewed autonomous schedule changes |
 | Integration stage | Calendar or wearable data with consent | Lower-friction capture, better capacity estimates, conflict-aware proposals | Hidden provider writes or opaque data use |
-| Coach stage | Stable snapshots, feedback, controlled memory | Explain, compare, answer follow-ups, stage bounded changes for approval | Acting as a doctor, therapist, or unrestricted autonomous agent |
+| Coach stage | Retained personal data in an ephemeral owner-only snapshot | Explain, compare, test assumptions, answer follow-ups, and state missing information through bounded read-only tools | Acting as a doctor/therapist, inventing causality, exposing hidden reasoning, or mutating product data |
 
 Every briefing, recommendation, insight, and coach answer should expose or carry:
 
@@ -955,15 +955,20 @@ Reasoning:
 
 - Do not present canned responses as personalized AI coaching.
 - The implemented Coach is visible only to authenticated real-data sessions and
-  may send only when its backend capability is ready. It uses current snapshots,
-  the persisted briefing, bounded active facts, explicitly selected eligible
-  memories, a current weekly review when available, and limited completed
-  history.
-- Users can inspect and select/deselect eligible memory. Setup-owned content is
-  corrected through Setup; Phase 10 does not add automatic memory extraction or
-  a parallel content editor.
-- Any coach-proposed task, habit, or schedule change is staged for review before
-  it is persisted.
+  may send only when its backend capability is ready. Each free question gets a
+  fresh owner-only personal snapshot and only read-only catalog, SQL, and
+  isolated-Python tools.
+- Do not classify questions into Today, Patterns, Focus, or Review. The agent
+  may answer directly, test a premise, report missing data, or ask a concise
+  clarifying question.
+- Earlier memory selection and fixed-mode history remain readable only for
+  compatibility. Current Coach has no memory selector, structured suggestion,
+  or product apply action.
+- Any task, habit, schedule, calendar, notification, memory, or planning idea
+  remains plain text; Coach cannot stage, persist, or claim the change.
+- The expandable answer detail comes from actual backend tool execution and
+  may show sources, periods, counts, SQL/Python steps, limitations, and
+  provenance, never chain-of-thought or plots.
 - Health and stress guidance remains informational and must not claim diagnosis
   or treatment.
 
@@ -1318,12 +1323,11 @@ and Phase 9 adds bounded calendar-import ownership and recovery assertions. The
 combined Phase 3 through Phase 9 journey passed non-destructively in the
 2026-07-13 Phase 9 implementation checkout. Later changes must establish their
 own current-checkout pass before claiming E2E.
-Phase 10 browser source uses the deterministic fake provider and adds bounded
-Coach response/replay/safety/history/memory/RLS/UI assertions. Its focused rerun
-and the subsequent full non-destructive local-Supabase browser journey passed
-in the recorded 2026-07-13 checkout. The separate opt-in synthetic live-model
-smoke also passed with explicitly requested `gpt-5.5`, no fallback, and no
-answer/prompt/raw event stream logged.
+Phase 10 browser source uses the deterministic fake provider and covers the
+free-question response/stream/replay/safety/history/RLS/UI boundary. A current
+checkout must rerun it before claiming the new snapshot, trace/provenance,
+cancellation, and no-fixed-mode behavior. Earlier fixed-context browser and
+live-model results do not verify this agent path.
 
 The complete object/command/validation/recovery contract is in
 `docs/phase-3-executable-actions-contract.md`.
@@ -1597,69 +1601,79 @@ Evaluation:
   DST, block bounds, and an impossible capacity deficit represented honestly?
 - Does linked focus change progress without stealing lifecycle authority?
 
-### Phase 10: Controlled Coach (Implemented Repository Boundary)
+### Phase 10: Free Read-Only Coach Data Agent (Implemented Repository Boundary)
 
 Goal:
 
-- Add conversational explanation and adaptation after the deterministic product
-  loop works.
+- Add open-ended conversational analysis after the deterministic product loop
+  works without granting mutation authority.
 
 Implemented:
 
-- Added authenticated Coach capability, deliberate response, history/delete,
-  and memory-selection services with retry identity, one in-flight request per
-  owner, a retained profile-local daily attempt budget, and safe feature flags.
-- Builds context from compact snapshots, current briefing, selected memories, and
-  a bounded message window.
-- Lets users inspect and explicitly select/deselect eligible memory; memory
-  content remains owned by Setup or its future manual contract.
-- Stages at most one text-only idea for review and exposes no apply command.
+- Added authenticated `coach-request-v3`, `coach-response-v2`, capabilities,
+  history/delete, and SSE lifecycle contracts with one in-flight request per
+  owner, a retained profile-local daily question budget, and safe feature flags.
+- Replaced Today/Patterns/Focus/Review, horizons, Focus selection, prompt
+  starters, memory selection, and structured suggestions with one free field.
+- Builds a fresh immutable owner-only SQLite snapshot for each non-safety turn
+  from retained relevant Setup, Capture, action, planning, calendar, review,
+  insight, recommendation, memory, and Coach data. It includes catalog,
+  relationship, count, period, and helper-view metadata under
+  `free-coach-agent-prompt-v1`/`personal-snapshot-v1`, while excluding auth,
+  secrets, cross-user, anti-replay, provider, and operational rows.
+- Reuses Account Export's 10,000-per-table, 50,000-total, and 8 MiB limits and
+  reports overflow instead of truncating.
+- Gives the model one required per-turn stdio MCP with exactly catalog
+  inspection, bounded immutable SQL, and Python in a no-network, non-root,
+  read-only Docker sandbox. A turn has 12 tools/180 seconds; SQL/Python have
+  shorter limits. Internal plots are temporary and never visible.
+- Lets the agent answer directly, combine queries, use Python, test or correct a
+  premise, explain absent information, or ask a concise question. Stored free
+  text is untrusted data, never instructions.
 - Adds deterministic pre/post wellness safety boundaries, urgent provider
-  bypass, required uncertainty for missing/stale Daily State, and source-aware
+  bypass, explicit uncertainty, non-causal/diagnostic rules, and source-aware
   responses.
 - Adds an injectable
   `local_codex_oauth` provider that invokes the current Linux/WSL user's
   explicitly enabled, already authenticated Codex CLI. It uses no application
   API key, shares no OAuth state, and is not the production provider design.
-- Prefers the explicitly configured `gpt-5.5` for the normal interactive Coach because the task is general
-  conversational reasoning and bounded structured output. The Codex CLI is the
-  local OAuth transport, not a reason to select a coding-focused Spark model.
-  Keep unavailable-model truth explicit and require deliberate overrides.
-- Gives FastAPI owner-scoped reach to relevant life-graph facts while disclosing
-  only a bounded `coach-context-v3` package under
-  `controlled-coach-prompt-v3` for current V2 requests. Historical modes receive
-  deterministic aggregates rather than raw history. Goals, onboarding
-  preferences, coaching style, friction, imported calendar content, and hidden
-  free text remain excluded. The model receives neither direct database/tool
-  access nor a full-history dump; compatible V1 Today uses paired V2 provenance
-  and persisted V1 history remains readable.
-- Replaces the gated canned Coach and direct Flutter inserts with strict typed
-  FastAPI request/history/memory boundaries, honest unavailable states, and a
-  fake provider for all normal automation.
+- Requires `gpt-5.5`, `service_tier="fast"`, and Fast mode on every real turn.
+  Model/tier rejection fails honestly with no model or standard-tier fallback.
+- Derives conservative accessed-source coverage, agent tool trace, snapshot
+  size, and model/Fast provenance from actual backend execution; inspection
+  alone adds no row coverage, SQL keeps returned rows separate, arbitrary
+  Python records full-snapshot scope, and the model owns only reply,
+  uncertainty, and safety.
+- Streams safe lifecycle activity and supports cancellation without showing
+  hidden reasoning. Temporary snapshot, scripts, plots, and workspaces are
+  removed after every terminal path.
+- Keeps compatible V1/V2 request/response/history and legacy context/memory
+  routes readable while current Flutter uses only V3 and history V2. The newest
+  legacy provenance pair remains
+  `controlled-coach-prompt-v3`/`coach-context-v3`.
 - Adds database follow-up guards for exact provider-call safety provenance,
   owner-first Coach lock order, backend-owned profile identity and onboarding
-  eligibility, canonical-only role authority, and rejected authenticated
-  profile deletion. Real local PostgreSQL parallel Coach lifecycle smokes
-  completed without deadlock or timeout.
+  eligibility, canonical-only role authority, and V3 evidence/trace/tier truth.
 
 Current evaluation boundary:
 
 - Does Coach answer from actual current state and disclose uncertainty?
-- Can the user inspect and control memory?
-- Are all state-changing suggestions reviewed before persistence?
+- Can it challenge a false premise and explain empty or sparse data?
+- Do actual evidence and tool steps reconcile with the snapshot and trace?
+- Can SQL/Python/prompt injection reach no mutation, network, secret, or host
+  authority?
+- Are all state-changing suggestions plain text and explicitly non-executable?
 - Does Coach add value beyond the existing briefing instead of restating it?
 - Can two Linux developers use their own eligible Codex logins without copying
-  credentials, while disabled/login/model-limit failures remain honest?
+  credentials while disabled/login/model/Fast/image failures remain honest?
 
 The exact provider, context, subprocess, retention, safety, UI, verification,
 and acceptance contract is fixed in
 `docs/phase-10-controlled-coach-plan.md`. Standard verification uses the fake
-provider. The opt-in synthetic local Codex smoke passed on this machine with
-`gpt-5.5`; the focused and full non-destructive local fake-provider browser
-runs also passed in the recorded 2026-07-13 checkout. A separate authenticated Flutter-to-
-live-Codex product turn passed on this machine with explicit `gpt-5.5`, strict
-persisted provenance, and visible UI data-use/provider truth. These are not
-claims about another account, remote state, or production readiness.
+provider. A valid current live claim requires a newly recorded multi-tool turn
+that reports `gpt-5.5` with Fast configured; earlier fixed-context live results
+do not verify the free-agent snapshot/MCP path. No local result proves another
+account, remote state, or production readiness.
 
 ## Evaluation Checklist For Next Work
 
@@ -1772,17 +1786,18 @@ recovery, checklist, and semester facts under revisioned Setup authority and
 binds them to planning only under the documented opt-in rules. Neither feature
 moves an active reservation or infers missing scheduling input automatically.
 
-Phase 10 is implemented as an authenticated, budgeted, source-aware explanation
-boundary with explicit reviewable memory selection, bounded validated history,
-and non-executable suggestions. Live provider calendar sync/writes, broad
-autonomous changes, deployed/background notification delivery or scheduling,
-vector search,
-automatic memory extraction, and unbounded LLM context remain separate later
-concerns. The real-model path is the explicitly enabled local Codex OAuth
-development adapter defined in `docs/phase-10-controlled-coach-plan.md`; it does
-not establish a deployable LLM provider or universal subscription/model
-availability. Select the next slice from a separately verified user need rather
-than broadening Coach automatically.
+Phase 10 is implemented as an authenticated, budgeted, free-question,
+source-aware read-only data agent. It uses a fresh bounded owner-only snapshot,
+three required read-only analysis tools, backend-derived conservative source
+coverage/trace, and validated history with no executable suggestion. Live
+provider calendar sync/writes, product mutation, broad autonomous changes,
+deployed/background delivery or scheduling, vector search, automatic memory
+extraction, and unbounded snapshots/tools remain separate later concerns. The
+real path is the explicitly enabled `gpt-5.5` Fast local Codex OAuth development
+adapter defined in `docs/phase-10-controlled-coach-plan.md`; it does not
+establish a deployable provider or universal subscription/model availability.
+Select later work from a separately verified user need rather than broadening
+Coach automatically.
 
 ## Visual presentation
 

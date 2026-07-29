@@ -7,8 +7,8 @@ is:
 > flexible explanation creates value.
 
 The demo uses two real local Supabase accounts in two browser origins. It makes
-no production-provider claim and adds no Coach, schema, API, or model-contract
-capability.
+no production-provider claim; the free read-only Coach remains a local
+development capability.
 
 ## Accounts
 
@@ -54,25 +54,31 @@ Run these steps in order:
    npm run seed:demo
    ```
 
-3. Confirm the local Codex login without inspecting or copying its auth files:
+3. Prepare the pinned analysis image:
+
+   ```bash
+   npm run prepare:coach-analysis
+   ```
+
+4. Confirm the local Codex login without inspecting or copying its auth files:
 
    ```bash
    codex login status
    ```
 
-4. Start the real local Coach stack:
+5. Start the real local Coach stack. It rechecks the image revision:
 
    ```bash
    npm run start:local:coach
    ```
 
-5. Open `http://localhost:7357` and sign in as
+6. Open `http://localhost:7357` and sign in as
    `onboarding@example.test`.
-6. Open `http://127.0.0.1:7357` and sign in as
+7. Open `http://127.0.0.1:7357` and sign in as
    `student@example.test`.
-7. Reload both origins once. Confirm that each retains its own account and does
+8. Reload both origins once. Confirm that each retains its own account and does
    not switch to the other identity.
-8. Do not run the seed again.
+9. Do not run the seed again.
 
 `localhost` and `127.0.0.1` have separate browser storage origins, so the two
 Supabase sessions remain independent without signing in and out.
@@ -83,26 +89,29 @@ The seed deliberately includes deterministic fake-provider Coach history for
 coverage. Before the presentation:
 
 1. In the Student tab, open Coach and choose **Delete conversation**.
-2. Confirm the capability says **Development Coach ready**.
+2. Confirm the capability says **Read-only Coach ready** and the summary says
+   `Local development-only agent · gpt-5.5 · Fast configured`.
 3. Send the prepared presentation prompt once through the live provider.
 4. Verify the reply is concise English, names its uncertainty, and makes no
    product-data mutation claim.
-5. Expand **Data used** and technical provenance. Confirm the provider is the
-   local-development connection and the requested model is `gpt-5.5`.
+5. Expand **Data and analysis details**. Confirm **Snapshot source coverage**
+   with its conservative periods/counts, multiple completed SQL/Python steps,
+   limitations, and `gpt-5.5 · Fast configured`; no plot or hidden reasoning
+   is visible. Coverage may be broader than rows returned by one query.
 6. Delete the conversation again.
 
 Conversation deletion retains usage accounting and request tombstones. It does
-not remove the Student's explicit memory selections, so those remain available
-for the live presentation.
+not reset the Student's daily question budget.
 
 Prepared prompt:
 
-> Answer in no more than five sentences and use only the data you can actually
-> see: What are the two most sensible priorities for Maya today, and what are
-> you uncertain about?
+> Using all retained Focus reflections and the valid preceding sleep data,
+> test whether Maya's focus rating was usually higher after at least 7.5 hours
+> of estimated sleep. Look for counterexamples, distinguish observation from
+> interpretation, and answer in no more than five sentences.
 
-Do not ask Coach to reschedule exact exam, essay, Planner, Preparation, or
-Calendar blocks. Those details are outside the current bounded Coach context.
+The Coach may inspect Planner, Preparation, and Calendar data when relevant,
+but can never reschedule or mutate them.
 
 ## Live Presentation
 
@@ -110,9 +119,9 @@ Calendar blocks. Those details are outside the current bounded Coach context.
 | --- | --- | --- |
 | 0:00–0:40 | Introduce the problem | “Most of MyLifeGraph is deterministic. I use an LLM only where flexible explanation adds value.” |
 | 0:40–2:10 | Complete the fresh user's minimal Setup | Show that only weekday structure and energy window are required; Study Setup remains optional. |
-| 2:10–2:40 | Open Coach for the fresh account | Show that Coach does not pretend to know a new user. Memory use requires explicit selection. |
+| 2:10–2:40 | Open Coach for the fresh account and ask what changed this month | Show that Coach reports missing data instead of fabricating a pattern; there is no mode or memory selector. |
 | 2:40–5:10 | Switch to the populated Student tab | Show Today, current Tasks and Habits, then one stable Personal Learning insight. |
-| 5:10–8:30 | Open Student Coach and send the prepared prompt | Show the live answer, uncertainty, **Data used**, and `gpt-5.5` provenance. Explain that Coach cannot mutate product data. |
+| 5:10–8:30 | Open Student Coach and send the prepared prompt | Show safe activity, the live answer, uncertainty, **Data and analysis details**, actual SQL/Python steps, and Fast provenance. Explain that Coach cannot mutate product data. |
 | 8:30–9:30 | Conclude | “The goal is not to let AI run the product. It is to improve the experience without giving up control or transparency.” |
 
 ## Rehearsal Acceptance
@@ -120,23 +129,28 @@ Calendar blocks. Those details are outside the current bounded Coach context.
 Complete one uninterrupted timed rehearsal and keep it below 9:30. Confirm:
 
 - Fresh: sign in → minimal Setup → Today → Coach shows
-  **Development Coach ready**.
+  **Read-only Coach ready**.
 - Student: sign in → populated Today and Insights → Coach shows ready.
 - Both sessions survive reload on their separate origins.
 - The prepared prompt produces at most five English sentences grounded only in
-  visible sources, with explicit uncertainty and no mutation claim.
-- **Data used** is expandable and provider provenance shows the explicitly
-  requested `gpt-5.5`.
+  actual data, with explicit uncertainty, counterexample handling, and no
+  mutation claim.
+- **Data and analysis details** is expandable, labels conservative
+  **Snapshot source coverage**, shows multiple actual tool steps, and provider
+  provenance says `gpt-5.5 · Fast configured`.
+- No plot, mode/horizon/Focus selector, prompt starter, memory selector, or
+  structured action appears.
 
-If the model, login, network, or provider is unavailable, report that state
-honestly. Do not enable the fake provider or silently change models for the
-live presentation.
+If model, Fast, login, Docker/image, network, or provider is unavailable, report
+that state honestly. Do not enable the fake provider, silently change models,
+or accept standard tier for the live presentation.
 
 ## Presentation-Day Checklist
 
 - Connect power.
 - Disable sleep and system notifications.
 - Confirm WLAN or hotspot access.
+- Confirm `mylifegraph-coach-analysis:1` was prepared.
 - Run `codex login status`.
 - Start the local Coach stack.
 - Preload and reload both browser origins.

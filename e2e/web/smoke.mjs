@@ -50,9 +50,10 @@ const phase3TaskTitle = `E2E executable task ${runId}`;
 const eveningTomorrowPriority = `E2E protect a calm morning ${runId}`;
 const editedEveningTomorrowPriority =
   `E2E finish the smallest useful draft ${runId}`;
-const coachMemoryTitle = `E2E bounded Coach memory ${runId}`;
-const coachApiMessage = `E2E explain one bounded next step ${runId}`;
-const coachUiMessage = `E2E UI Coach question ${runId}`;
+const coachApiMessage =
+  `Which personal-data limitation matters most for this answer? E2E ${runId}`;
+const coachUiMessage =
+  `What changed in my focus consistency this semester? E2E ${runId}`;
 const coachSafetyMessage =
   `E2E safety check ${runId}: I am in immediate danger and might hurt myself.`;
 const notificationLifecycleTitle = `E2E inbox lifecycle ${runId}`;
@@ -184,7 +185,9 @@ try {
       `Focused Personal learning browser smoke passed for ${email}`,
     );
   } else if (phase10Only) {
+    await createConfirmedUser();
     const accessToken = await signInAccessToken('focused Phase 10 browser run');
+    await completeFocusedPersonalLearningSetup(accessToken);
     const userId = await authenticatedUserId(accessToken);
     await resetCoachE2EState(userId);
     page = await browser.newPage({ viewport: { width: 1280, height: 960 } });
@@ -203,8 +206,8 @@ try {
     await fillByLabelOrPlaceholder(page, 'Password', password, 1);
     await clickByText(page, 'Login', { match: 'last' });
     await page.waitForURL('**/#/dashboard', { timeout: 45000 });
-    await assertControlledCoach(page, userId);
-    console.log(`Focused Phase 10 browser smoke passed for ${email}`);
+    await assertFreeReadOnlyCoach(page, userId);
+    console.log(`Focused free Coach browser smoke passed for ${email}`);
   } else {
   const user = await createConfirmedUser();
   await patchRows(
@@ -2355,9 +2358,9 @@ try {
   await expectText(page, 'Compare');
 
   await assertNotificationLifecycle(page, user.id);
-  await assertNotificationDelivery(page, user.id);
+  await assertNotificationDelivery(page, user.id, captureEntryDate);
 
-  await assertControlledCoach(page, user.id);
+  await assertFreeReadOnlyCoach(page, user.id);
 
   await page.goto(appRoute('/deep-work'), { waitUntil: 'domcontentloaded' });
   await waitForFlutterShell(page);
@@ -3874,6 +3877,18 @@ function isoDateInTimeZone(value, timeZone) {
   return `${parts.year}-${parts.month}-${parts.day}`;
 }
 
+function assertProfileLocalDateStable(
+  expectedLocalDate,
+  timeZone = 'Europe/Berlin',
+) {
+  const actualLocalDate = isoDateInTimeZone(new Date().toISOString(), timeZone);
+  if (actualLocalDate !== expectedLocalDate) {
+    throw new Error(
+      `E2E crossed profile-local midnight (${expectedLocalDate} -> ${actualLocalDate}); rerun the non-reset journey on one local date.`,
+    );
+  }
+}
+
 function localHourInTimeZone(value, timeZone) {
   if (!isIsoTimestamp(value)) {
     throw new Error(`Could not resolve a local hour from ${String(value)}.`);
@@ -4593,7 +4608,8 @@ async function assertNotificationLifecycle(page, userId) {
   });
 }
 
-async function assertNotificationDelivery(page, userId) {
+async function assertNotificationDelivery(page, userId, expectedLocalDate) {
+  assertProfileLocalDateStable(expectedLocalDate);
   const accessToken = await signInAccessToken('Notification delivery');
   const initialResponse = await notificationSettingsRequest(
     accessToken,
@@ -4776,13 +4792,17 @@ async function assertNotificationDelivery(page, userId) {
     );
   }
 
-  const deliveryResponsePromise = page.waitForResponse(
-    (candidate) =>
-      candidate.url().startsWith(`${aiServiceBaseUrl}/v1/notifications/`) &&
-      candidate.url().endsWith('/delivery') &&
-      candidate.request().method() === 'POST',
-    { timeout: 45000 },
-  );
+  const deliveryResponsePromise = page
+    .waitForResponse(
+      (candidate) =>
+        candidate.url().startsWith(`${aiServiceBaseUrl}/v1/notifications/`) &&
+        candidate.url().endsWith('/delivery') &&
+        candidate.request().method() === 'POST',
+      { timeout: 45000 },
+    )
+    .then((response) => ({ response, error: null }))
+    .catch((error) => ({ response: null, error }));
+  assertProfileLocalDateStable(expectedLocalDate);
   const generated = await scheduledRefreshRequest({
     profile_ids: [userId],
     window_days: 7,
@@ -4813,7 +4833,13 @@ async function assertNotificationDelivery(page, userId) {
     );
   }
 
-  const deliveryResponse = await deliveryResponsePromise;
+  const deliveryResult = await deliveryResponsePromise;
+  if (deliveryResult.error || !deliveryResult.response) {
+    throw new Error(
+      `Foreground Notification receipt was not observed: ${deliveryResult.error}`,
+    );
+  }
+  const deliveryResponse = deliveryResult.response;
   if (!deliveryResponse.ok()) {
     throw new Error(
       `Foreground Notification receipt failed: ${deliveryResponse.status()} ${await deliveryResponse.text()}`,
@@ -10700,8 +10726,24 @@ async function assertCalendarGuestBoundary() {
   }
 }
 
-async function assertControlledCoach(page, userId) {
-  const accessToken = await signInAccessToken('Phase 10 Controlled Coach');
+async function assertFreeReadOnlyCoach(page, userId) {
+  const accessToken = await signInAccessToken('Phase 10 free read-only Coach');
+  const profileRows = await fetchRows(
+    `profiles?select=timezone&id=eq.${userId}`,
+    'Coach profile timezone for daily budget',
+  );
+  const profileTimeZone = profileRows[0]?.timezone;
+  if (
+    profileRows.length !== 1 ||
+    typeof profileTimeZone !== 'string' ||
+    profileTimeZone.length === 0
+  ) {
+    throw new Error('Could not resolve the Coach profile timezone.');
+  }
+  const expectedCoachLocalDate = isoDateInTimeZone(
+    new Date().toISOString(),
+    profileTimeZone,
+  );
   const persistenceBeforeReads = await coachPersistenceSnapshot(userId);
   if (
     persistenceBeforeReads.requests.length !== 0 ||
@@ -10711,6 +10753,7 @@ async function assertControlledCoach(page, userId) {
     throw new Error('Phase 10 requires an empty owner-scoped Coach history.');
   }
 
+  assertProfileLocalDateStable(expectedCoachLocalDate, profileTimeZone);
   const capabilityResult = await coachApiRequest(
     '/v1/coach/capabilities',
     accessToken,
@@ -10720,6 +10763,7 @@ async function assertControlledCoach(page, userId) {
     capabilityResult.json,
     'initial Coach capability',
   );
+  assertProfileLocalDateStable(expectedCoachLocalDate, profileTimeZone);
 
   const emptyHistoryResult = await coachApiRequest(
     '/v1/coach/history',
@@ -10731,108 +10775,19 @@ async function assertControlledCoach(page, userId) {
     [],
     'read-only empty Coach history',
   );
-  const contextOptionsResult = await coachApiRequest(
-    '/v1/coach/context-options',
-    accessToken,
-  );
-  assertCoachApiStatus(
-    contextOptionsResult,
-    200,
-    'read-only Coach context options',
-  );
-  const contextOptions = assertCoachContextOptions(
-    contextOptionsResult.json,
-    'read-only Coach context options',
-  );
-  if (contextOptions.focus_options.length === 0) {
-    throw new Error(
-      'Coach context options did not expose an existing terminal Focus session.',
-    );
-  }
-  if (contextOptions.personal_pattern_analysis_enabled !== true) {
-    throw new Error(
-      'Coach Patterns E2E requires the default enabled Personal learning analysis.',
-    );
-  }
   const persistenceAfterReads = await coachPersistenceSnapshot(userId);
   if (stableJson(persistenceAfterReads) !== stableJson(persistenceBeforeReads)) {
     throw new Error(
-      'Coach capability/history/context-options GET created persistence rows.',
+      'Coach capability/history GET created persistence rows.',
     );
   }
-
-  const coachMemoryId = crypto.randomUUID();
-  const coachMemoryContent =
-    `Synthetic E2E memory ${runId}: prefer one bounded, reviewable next step.`;
-  await insertRows('memory_entries', [
-    {
-      id: coachMemoryId,
-      user_id: userId,
-      type: 'pattern',
-      title: coachMemoryTitle,
-      content: coachMemoryContent,
-      strength: 0.7,
-      evidence: [],
-      metadata: { source: 'phase-10-e2e' },
-    },
-  ]);
-
-  const memoriesResult = await coachApiRequest(
-    '/v1/coach/memories',
-    accessToken,
-  );
-  assertCoachApiStatus(memoriesResult, 200, 'Coach memory read');
-  const memories = assertCoachMemoryEnvelope(
-    memoriesResult.json,
-    'Coach memory read',
-  );
-  const eligibleMemory = memories.memories.find(
-    (memory) => memory.id === coachMemoryId,
-  );
-  if (
-    eligibleMemory?.type !== 'pattern' ||
-    eligibleMemory.title !== coachMemoryTitle ||
-    eligibleMemory.content !== coachMemoryContent ||
-    eligibleMemory.ownership !== 'manual' ||
-    eligibleMemory.selected !== false
-  ) {
-    throw new Error('Coach did not expose the exact eligible E2E memory.');
-  }
-  if (memories.memories.some((memory) => memory.type === 'preference')) {
-    throw new Error('Coach exposed a preference memory as selectable context.');
-  }
-
-  const selectResult = await coachApiRequest(
-    `/v1/coach/memories/${coachMemoryId}/selection`,
-    accessToken,
-    { method: 'POST', body: { selected: true } },
-  );
-  assertCoachApiStatus(selectResult, 200, 'Coach memory selection');
-  const selectedMemories = assertCoachMemoryEnvelope(
-    selectResult.json,
-    'Coach memory selection',
-  );
-  if (
-    selectedMemories.memories.find((memory) => memory.id === coachMemoryId)
-      ?.selected !== true
-  ) {
-    throw new Error('Coach memory selection did not persist as selected.');
-  }
-  await assertRows(
-    `coach_memory_selections?select=user_id,memory_id,selection_version&user_id=eq.${userId}&memory_id=eq.${coachMemoryId}`,
-    (rows) =>
-      rows.length === 1 &&
-      rows[0].selection_version === 'coach-memory-selection-v1',
-    'one exact Coach memory selection row',
-  );
 
   const productBeforeResponses = await coachProductSnapshot(userId);
   const firstRequestId = crypto.randomUUID();
   const firstRequest = {
-    contract_version: 'coach-request-v1',
+    contract_version: 'coach-request-v3',
     request_id: firstRequestId,
     message: coachApiMessage,
-    context_scope: 'today',
   };
   const firstResult = await coachApiRequest(
     '/v1/coach/respond',
@@ -10847,32 +10802,10 @@ async function assertControlledCoach(page, userId) {
       source: 'model',
       providerCalled: true,
       safety: 'normal',
-      promptVersion: 'controlled-coach-prompt-v2',
-      contextVersion: 'coach-context-v2',
-      contextSources: [
-        'profile',
-        'daily_snapshot',
-        'daily_briefing',
-        'tasks',
-        'habits',
-        'focus_sessions',
-        'weekly_review',
-        'memories',
-        'coach_history',
-      ],
+      snapshotRequired: true,
     },
     'first Coach response',
   );
-  const memoryContext = firstResponse.used_context.find(
-    (item) => item.source === 'memories',
-  );
-  if (
-    memoryContext?.available_count !== 1 ||
-    memoryContext.included_count !== 1 ||
-    memoryContext.omitted_count !== 0
-  ) {
-    throw new Error('Selected Coach memory was not used exactly once.');
-  }
   await assertCoachAtomicPersistence(userId, [
     {
       requestId: firstRequestId,
@@ -10880,11 +10813,6 @@ async function assertControlledCoach(page, userId) {
       response: firstResponse,
       outcome: 'completed',
       providerCalled: true,
-      contractVersion: 'coach-request-v1',
-      contextScope: 'today',
-      contextParameters: {},
-      promptVersion: 'controlled-coach-prompt-v2',
-      contextVersion: 'coach-context-v2',
     },
   ]);
 
@@ -10936,10 +10864,9 @@ async function assertControlledCoach(page, userId) {
     {
       method: 'POST',
       body: {
-        contract_version: 'coach-request-v1',
+        contract_version: 'coach-request-v3',
         request_id: safetyRequestId,
         message: coachSafetyMessage,
-        context_scope: 'today',
       },
     },
   );
@@ -10951,18 +10878,16 @@ async function assertControlledCoach(page, userId) {
       source: 'deterministic_safety',
       providerCalled: false,
       safety: 'safety_redirect',
-      promptVersion: 'controlled-coach-prompt-v2',
-      contextVersion: 'coach-context-v2',
-      contextSources: [],
+      snapshotRequired: false,
     },
     'deterministic Coach safety response',
   );
   if (
-    safetyResponse.used_context.length !== 0 ||
-    safetyResponse.staged_suggestion !== null ||
+    safetyResponse.evidence.length !== 0 ||
+    safetyResponse.agent_trace.tool_call_count !== 0 ||
     safetyResponse.uncertainty.level !== 'high'
   ) {
-    throw new Error('Deterministic Coach safety bypass included model context.');
+    throw new Error('Deterministic Coach safety bypass used personal analysis.');
   }
   await assertCoachAtomicPersistence(userId, [
     {
@@ -10971,11 +10896,6 @@ async function assertControlledCoach(page, userId) {
       response: firstResponse,
       outcome: 'completed',
       providerCalled: true,
-      contractVersion: 'coach-request-v1',
-      contextScope: 'today',
-      contextParameters: {},
-      promptVersion: 'controlled-coach-prompt-v2',
-      contextVersion: 'coach-context-v2',
     },
     {
       requestId: safetyRequestId,
@@ -10983,11 +10903,6 @@ async function assertControlledCoach(page, userId) {
       response: safetyResponse,
       outcome: 'safety_redirect',
       providerCalled: false,
-      contractVersion: 'coach-request-v1',
-      contextScope: 'today',
-      contextParameters: {},
-      promptVersion: 'controlled-coach-prompt-v2',
-      contextVersion: 'coach-context-v2',
     },
   ]);
 
@@ -11001,160 +10916,186 @@ async function assertControlledCoach(page, userId) {
     [
       {
         requestId: firstRequestId,
-        contextScope: 'today',
-        contextParameters: {},
-        promptVersion: 'controlled-coach-prompt-v2',
-        contextVersion: 'coach-context-v2',
+        message: coachApiMessage,
+        response: firstResponse,
       },
       {
         requestId: safetyRequestId,
-        contextScope: 'today',
-        contextParameters: {},
-        promptVersion: 'controlled-coach-prompt-v2',
-        contextVersion: 'coach-context-v2',
+        message: coachSafetyMessage,
+        response: safetyResponse,
       },
     ],
     'persisted Coach history',
   );
 
+  const uiCoachRequests = [];
+  const uiCoachRequestObserver = (request) => {
+    if (request.url().startsWith(`${aiServiceBaseUrl}/v1/coach`)) {
+      uiCoachRequests.push({
+        method: request.method(),
+        url: request.url(),
+      });
+    }
+  };
+  page.on('request', uiCoachRequestObserver);
   await page.goto(appRoute('/coach'), { waitUntil: 'domcontentloaded' });
   await waitForFlutterShell(page);
   await enableFlutterSemantics(page);
   await page.waitForURL('**/#/coach');
-  await expectText(page, 'Development Coach ready');
-  await expectText(page, 'Uses fixed test responses. This is not a live assistant.');
-  await expectText(page, 'Choose Coach context');
-  await clickChoiceChip(page, 'Patterns');
+  await expectText(page, 'Read-only Coach ready');
   await expectText(
     page,
-    'Uses deterministic historical summaries, coverage, changes, counterexamples, and limitations—not a raw history dump.',
+    'Uses deterministic test output. No live model is contacted.',
   );
-  await clickChoiceChip(page, '1 year');
-  await fillByLabelOrPlaceholder(page, 'Ask Coach', coachUiMessage, -1);
+  await expectText(page, 'Ask anything');
+  await expectText(page, 'Your question');
+  await assertFlutterTextAbsent(
+    page,
+    'Choose Coach context',
+    'fixed Coach mode selector',
+  );
+  await assertFlutterTextAbsent(page, 'Patterns', 'Coach Patterns mode');
+  await assertFlutterTextAbsent(page, 'Review', 'Coach Review mode');
+  await assertFlutterTextAbsent(page, '1 year', 'Coach horizon selector');
+  await assertFlutterTextAbsent(
+    page,
+    'Choose a Focus session',
+    'Coach Focus selector',
+  );
+  await assertFlutterTextAbsent(
+    page,
+    'Selected memories',
+    'Coach memory-selection control',
+  );
+  await assertFlutterTextAbsent(
+    page,
+    'Prompt starters',
+    'Coach prompt-starter controls',
+  );
+  await assertFlutterTextAbsent(
+    page,
+    'Review-only suggestion',
+    'Coach structured suggestion control',
+  );
+
+  await fillByLabelOrPlaceholder(page, 'Your question', coachUiMessage, -1);
   const uiResponsePromise = waitForAiPost(
     page,
-    '/v1/coach/respond',
-    'deliberate Coach UI response',
+    '/v1/coach/respond/stream',
+    'deliberate Coach UI stream',
   );
-  await clickByText(page, 'Send');
+  const cancelVisiblePromise = page
+    .getByText('Cancel analysis', { exact: true })
+    .waitFor({ state: 'visible', timeout: 5000 })
+    .then(() => true)
+    .catch(() => false);
+  await clickByText(page, 'Ask Coach');
   const uiResponseResult = await uiResponsePromise;
   const uiPayload = uiResponseResult.request().postDataJSON();
   assertExactCoachKeys(
     uiPayload,
-    [
-      'contract_version',
-      'request_id',
-      'message',
-      'context_scope',
-      'context_parameters',
-    ],
+    ['contract_version', 'request_id', 'message'],
     'Coach UI request',
   );
-  assertExactCoachKeys(
-    uiPayload.context_parameters,
-    ['horizon'],
-    'Coach UI context parameters',
-  );
   if (
-    uiPayload.contract_version !== 'coach-request-v2' ||
+    uiPayload.contract_version !== 'coach-request-v3' ||
     !isUuid(uiPayload.request_id) ||
-    uiPayload.message !== coachUiMessage ||
-    uiPayload.context_scope !== 'patterns' ||
-    uiPayload.context_parameters.horizon !== '1_year'
+    uiPayload.message !== coachUiMessage
   ) {
-    throw new Error('Coach UI did not send the exact bounded request contract.');
+    throw new Error('Coach UI did not send the exact free-question contract.');
+  }
+  const stream = assertCoachSse(
+    await uiResponseResult.text(),
+    uiPayload.request_id,
+    'Coach UI stream',
+  );
+  if (!(await cancelVisiblePromise)) {
+    throw new Error('Coach UI did not expose cancellation while analysis ran.');
   }
   const uiResponse = assertCoachResponse(
-    await uiResponseResult.json(),
+    stream.response,
     {
       requestId: uiPayload.request_id,
       source: 'model',
       providerCalled: true,
       safety: 'normal',
-      promptVersion: 'controlled-coach-prompt-v3',
-      contextVersion: 'coach-context-v3',
-      contextSources: [
-        'profile',
-        'daily_capture',
-        'focus_reflections',
-        'habit_outcomes',
-        'decision_feedback',
-        'weekly_reviews',
-        'task_lifecycle',
-        'memories',
-        'coach_history',
-      ],
+      snapshotRequired: true,
     },
     'Coach UI response',
   );
-  // Anchor these assertions to the newly inserted Latest response card. The
-  // deterministic provider intentionally returns the same wording for older
-  // turns, so a global first/last text match can expand the wrong history card.
   await scrollFlutterPage(page, -20000);
   await scrollUntilTextInViewport(page, coachUiMessage);
   await scrollUntilTextInViewport(page, uiResponse.reply);
   await scrollUntilTextInViewport(page, 'Uncertainty');
   await scrollUntilTextInViewport(page, uiResponse.uncertainty.reason);
-  await scrollUntilTextInViewport(page, 'Review-only suggestion');
-  await scrollUntilTextInViewport(page, uiResponse.staged_suggestion.title);
+  const analysisDetails = await scrollUntilTextInViewport(
+    page,
+    'Data and analysis details',
+    {
+      buttonFirst: true,
+    },
+  );
+  await analysisDetails.click({ force: true });
+  await scrollUntilTextInViewport(page, 'Snapshot source coverage');
   await scrollUntilTextInViewport(
     page,
-    'This suggestion cannot apply changes.',
+    'No snapshot source coverage was recorded.',
   );
-  await scrollUntilTextInViewport(page, 'Data used', {
-    buttonFirst: true,
-  });
+  await scrollUntilTextInViewport(page, 'Analysis steps · 0');
+  await scrollUntilTextInViewport(page, 'No SQL or Python step was used.');
+  await scrollUntilTextInViewport(page, 'Limitations');
   await scrollUntilTextInViewport(
     page,
-    'Provider and model',
-    { buttonFirst: true },
+    'The snapshot contains app data only and cannot establish causality.',
   );
-  // Exact expanded data-use and provenance text is exercised in Flutter's
-  // widget test. The browser assertion stays anchored to this unique latest
-  // card while the exact API envelope above verifies every underlying value.
+  await scrollUntilTextInViewport(page, 'Technical provenance');
+  await scrollUntilTextInViewport(page, 'Fake · Deterministic Test Only');
+  await scrollUntilTextInViewport(page, 'Provider called: yes');
+  await scrollUntilTextInViewport(page, 'free-coach-agent-prompt-v1');
+  await scrollUntilTextInViewport(page, 'personal-snapshot-v1');
 
-  const persistenceBeforeV2Replay = await coachPersistenceSnapshot(userId);
+  const persistenceBeforeUiReplay = await coachPersistenceSnapshot(userId);
   const uiReplayResult = await coachApiRequest(
     '/v1/coach/respond',
     accessToken,
     { method: 'POST', body: uiPayload },
   );
-  assertCoachApiStatus(uiReplayResult, 200, 'same-id Coach V2 replay');
+  assertCoachApiStatus(uiReplayResult, 200, 'same-id Coach V3 replay');
   if (stableJson(uiReplayResult.json) !== stableJson(uiResponse)) {
-    throw new Error('Same-id Coach V2 replay changed the persisted response.');
+    throw new Error('Same-id Coach V3 replay changed the persisted response.');
   }
   if (
     stableJson(await coachPersistenceSnapshot(userId)) !==
-    stableJson(persistenceBeforeV2Replay)
+    stableJson(persistenceBeforeUiReplay)
   ) {
-    throw new Error('Same-id Coach V2 replay created or changed persistence.');
+    throw new Error('Same-id Coach V3 replay created or changed persistence.');
   }
-  const v2ContextConflict = await coachApiRequest(
+  const v3MessageConflict = await coachApiRequest(
     '/v1/coach/respond',
     accessToken,
     {
       method: 'POST',
       body: {
         ...uiPayload,
-        context_parameters: { horizon: '90_days' },
+        message: `${coachUiMessage} changed`,
       },
     },
   );
   assertCoachApiStatus(
-    v2ContextConflict,
+    v3MessageConflict,
     409,
-    'same-id Coach V2 context conflict',
+    'same-id Coach V3 message conflict',
   );
-  if (stableJson(v2ContextConflict.json) !== stableJson(expectedConflict)) {
+  if (stableJson(v3MessageConflict.json) !== stableJson(expectedConflict)) {
     throw new Error(
-      'Same-id Coach V2 parameter reinterpretation was not an exact conflict.',
+      'Same-id Coach V3 message reinterpretation was not an exact conflict.',
     );
   }
   if (
     stableJson(await coachPersistenceSnapshot(userId)) !==
-    stableJson(persistenceBeforeV2Replay)
+    stableJson(persistenceBeforeUiReplay)
   ) {
-    throw new Error('Rejected Coach V2 parameter conflict changed persistence.');
+    throw new Error('Rejected Coach V3 message conflict changed persistence.');
   }
 
   await assertCoachAtomicPersistence(userId, [
@@ -11164,11 +11105,6 @@ async function assertControlledCoach(page, userId) {
       response: firstResponse,
       outcome: 'completed',
       providerCalled: true,
-      contractVersion: 'coach-request-v1',
-      contextScope: 'today',
-      contextParameters: {},
-      promptVersion: 'controlled-coach-prompt-v2',
-      contextVersion: 'coach-context-v2',
     },
     {
       requestId: safetyRequestId,
@@ -11176,11 +11112,6 @@ async function assertControlledCoach(page, userId) {
       response: safetyResponse,
       outcome: 'safety_redirect',
       providerCalled: false,
-      contractVersion: 'coach-request-v1',
-      contextScope: 'today',
-      contextParameters: {},
-      promptVersion: 'controlled-coach-prompt-v2',
-      contextVersion: 'coach-context-v2',
     },
     {
       requestId: uiPayload.request_id,
@@ -11188,11 +11119,6 @@ async function assertControlledCoach(page, userId) {
       response: uiResponse,
       outcome: 'completed',
       providerCalled: true,
-      contractVersion: 'coach-request-v2',
-      contextScope: 'patterns',
-      contextParameters: { horizon: '1_year' },
-      promptVersion: 'controlled-coach-prompt-v3',
-      contextVersion: 'coach-context-v3',
     },
   ]);
   const uiHistory = await coachApiRequest('/v1/coach/history', accessToken);
@@ -11202,24 +11128,18 @@ async function assertControlledCoach(page, userId) {
     [
       {
         requestId: firstRequestId,
-        contextScope: 'today',
-        contextParameters: {},
-        promptVersion: 'controlled-coach-prompt-v2',
-        contextVersion: 'coach-context-v2',
+        message: coachApiMessage,
+        response: firstResponse,
       },
       {
         requestId: safetyRequestId,
-        contextScope: 'today',
-        contextParameters: {},
-        promptVersion: 'controlled-coach-prompt-v2',
-        contextVersion: 'coach-context-v2',
+        message: coachSafetyMessage,
+        response: safetyResponse,
       },
       {
         requestId: uiPayload.request_id,
-        contextScope: 'patterns',
-        contextParameters: { horizon: '1_year' },
-        promptVersion: 'controlled-coach-prompt-v3',
-        contextVersion: 'coach-context-v3',
+        message: coachUiMessage,
+        response: uiResponse,
       },
     ],
     'Coach history after UI response',
@@ -11228,37 +11148,29 @@ async function assertControlledCoach(page, userId) {
   await assertCoachRls({
     ownerAccessToken: accessToken,
     userId,
-    memoryId: coachMemoryId,
-    memoryTitle: coachMemoryTitle,
     requestId: firstRequestId,
   });
   const productAfterResponses = await coachProductSnapshot(userId);
   if (stableJson(productAfterResponses) !== stableJson(productBeforeResponses)) {
-    throw new Error('Controlled Coach mutated owner product records.');
+    const changedSources = Object.keys(productBeforeResponses).filter(
+      (source) =>
+        stableJson(productBeforeResponses[source]) !==
+        stableJson(productAfterResponses[source]),
+    );
+    throw new Error(
+      `Free read-only Coach mutated owner product records: ${changedSources.join(', ')}.`,
+    );
   }
 
-  const deselectResult = await coachApiRequest(
-    `/v1/coach/memories/${coachMemoryId}/selection`,
-    accessToken,
-    { method: 'DELETE' },
-  );
-  assertCoachApiStatus(deselectResult, 200, 'Coach memory deselection');
-  const deselectedMemories = assertCoachMemoryEnvelope(
-    deselectResult.json,
-    'Coach memory deselection',
-  );
-  if (
-    deselectedMemories.memories.find((memory) => memory.id === coachMemoryId)
-      ?.selected !== false
-  ) {
-    throw new Error('Coach memory deselection did not persist.');
-  }
-  await assertRows(
-    `coach_memory_selections?select=memory_id&user_id=eq.${userId}&memory_id=eq.${coachMemoryId}`,
-    (rows) => rows.length === 0,
-    'removed Coach memory selection row',
-  );
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await waitForFlutterShell(page);
+  await enableFlutterSemantics(page);
+  await page.waitForURL('**/#/coach');
+  await scrollUntilTextInViewport(page, coachUiMessage);
+  await scrollUntilTextInViewport(page, uiResponse.reply);
+  await scrollUntilTextInViewport(page, 'Data and analysis details');
 
+  assertProfileLocalDateStable(expectedCoachLocalDate, profileTimeZone);
   const capabilityBeforeDeleteResult = await coachApiRequest(
     '/v1/coach/capabilities',
     accessToken,
@@ -11272,6 +11184,7 @@ async function assertControlledCoach(page, userId) {
     capabilityBeforeDeleteResult.json,
     'Coach capability before history deletion',
   );
+  assertProfileLocalDateStable(expectedCoachLocalDate, profileTimeZone);
   if (
     capabilityBeforeDelete.limits.remaining_requests !==
     initialCapability.limits.remaining_requests - 3
@@ -11279,10 +11192,31 @@ async function assertControlledCoach(page, userId) {
     throw new Error('Coach attempts did not decrement the daily budget exactly.');
   }
 
+  const forbiddenUiCoachRequests = uiCoachRequests.filter(
+    (request) =>
+      request.url.includes('/context-options') ||
+      request.url.includes('/memories') ||
+      request.url === `${aiServiceBaseUrl}/v1/coach/respond`,
+  );
+  if (forbiddenUiCoachRequests.length !== 0) {
+    throw new Error(
+      `Current Coach UI called a legacy endpoint: ${JSON.stringify(forbiddenUiCoachRequests)}`,
+    );
+  }
+  if (
+    !uiCoachRequests.some(
+      (request) =>
+        request.method === 'POST' &&
+        request.url === `${aiServiceBaseUrl}/v1/coach/respond/stream`,
+    )
+  ) {
+    throw new Error('Current Coach UI did not use the V3 SSE endpoint.');
+  }
+
   await scrollUntilTextInViewport(page, 'Conversation history');
   const firstDeleteConversation = await scrollUntilTextInViewport(
     page,
-    'Delete conversation',
+    'Delete',
     { buttonFirst: true },
   );
   const historyDeletes = [];
@@ -11309,7 +11243,7 @@ async function assertControlledCoach(page, userId) {
 
   const secondDeleteConversation = await scrollUntilTextInViewport(
     page,
-    'Delete conversation',
+    'Delete',
     { buttonFirst: true },
   );
   await secondDeleteConversation.click();
@@ -11322,6 +11256,7 @@ async function assertControlledCoach(page, userId) {
   await clickByText(page, 'Delete conversation', { match: 'last' });
   const deleteResponse = await deleteResponsePromise;
   page.off('request', historyDeleteObserver);
+  page.off('request', uiCoachRequestObserver);
   if (!deleteResponse.ok()) {
     throw new Error(
       `Coach UI history deletion failed with ${deleteResponse.status()}.`,
@@ -11354,6 +11289,10 @@ async function assertControlledCoach(page, userId) {
         request.message_fingerprint !== null ||
         request.response !== null ||
         stableJson(request.used_context) !== '[]' ||
+        request.evidence !== null ||
+        request.agent_trace !== null ||
+        request.tool_call_count !== null ||
+        request.service_tier !== null ||
         request.deleted_at === null,
     )
   ) {
@@ -11366,6 +11305,7 @@ async function assertControlledCoach(page, userId) {
     [],
     'deleted Coach history read',
   );
+  assertProfileLocalDateStable(expectedCoachLocalDate, profileTimeZone);
   const capabilityAfterDeleteResult = await coachApiRequest(
     '/v1/coach/capabilities',
     accessToken,
@@ -11379,6 +11319,7 @@ async function assertControlledCoach(page, userId) {
     capabilityAfterDeleteResult.json,
     'Coach capability after history deletion',
   );
+  assertProfileLocalDateStable(expectedCoachLocalDate, profileTimeZone);
   if (
     capabilityAfterDelete.limits.remaining_requests !==
     capabilityBeforeDelete.limits.remaining_requests
@@ -11411,6 +11352,8 @@ function assertCoachCapability(payload, context) {
       'provider_mode',
       'model_requested',
       'model_source',
+      'service_tier',
+      'fast_mode',
       'reason_code',
       'limits',
     ],
@@ -11420,169 +11363,42 @@ function assertCoachCapability(payload, context) {
     payload.limits,
     [
       'message_codepoints',
-      'context_bytes',
       'reply_codepoints',
-      'timeout_seconds',
       'requests_per_local_day',
       'remaining_requests',
+      'max_tool_calls',
+      'turn_timeout_seconds',
+      'sql_timeout_seconds',
+      'python_timeout_seconds',
+      'snapshot_max_rows',
+      'snapshot_max_bytes',
     ],
     `${context} limits`,
   );
   if (
-    payload.contract_version !== 'coach-capabilities-v1' ||
+    payload.contract_version !== 'coach-capabilities-v2' ||
     payload.state !== 'ready' ||
     payload.provider !== 'fake' ||
     payload.provider_mode !== 'deterministic_test_only' ||
     payload.model_requested !== null ||
     payload.model_source !== 'not_applicable' ||
+    payload.service_tier !== 'not_applicable' ||
+    payload.fast_mode !== false ||
     payload.reason_code !== 'ready' ||
     payload.limits.message_codepoints !== 2000 ||
-    payload.limits.context_bytes !== 32768 ||
     payload.limits.reply_codepoints !== 4000 ||
-    !Number.isInteger(payload.limits.timeout_seconds) ||
-    payload.limits.timeout_seconds < 5 ||
-    payload.limits.timeout_seconds > 120 ||
-    !Number.isInteger(payload.limits.requests_per_local_day) ||
-    payload.limits.requests_per_local_day < 1 ||
-    payload.limits.requests_per_local_day > 100 ||
+    payload.limits.requests_per_local_day !== 20 ||
     !Number.isInteger(payload.limits.remaining_requests) ||
     payload.limits.remaining_requests < 0 ||
-    payload.limits.remaining_requests > payload.limits.requests_per_local_day
+    payload.limits.remaining_requests > 20 ||
+    payload.limits.max_tool_calls !== 12 ||
+    payload.limits.turn_timeout_seconds !== 180 ||
+    payload.limits.sql_timeout_seconds !== 5 ||
+    payload.limits.python_timeout_seconds !== 30 ||
+    payload.limits.snapshot_max_rows !== 50000 ||
+    payload.limits.snapshot_max_bytes !== 8 * 1024 * 1024
   ) {
     throw new Error(`${context} is not the ready deterministic fake capability.`);
-  }
-  return payload;
-}
-
-function assertCoachContextOptions(payload, context) {
-  assertExactCoachKeys(
-    payload,
-    [
-      'contract_version',
-      'timezone',
-      'personal_pattern_analysis_enabled',
-      'focus_options',
-      'default_focus_session_id',
-      'more_focus_options_available',
-    ],
-    context,
-  );
-  if (
-    payload.contract_version !== 'coach-context-options-v1' ||
-    typeof payload.timezone !== 'string' ||
-    payload.timezone.length === 0 ||
-    typeof payload.personal_pattern_analysis_enabled !== 'boolean' ||
-    !Array.isArray(payload.focus_options) ||
-    payload.focus_options.length > 10 ||
-    typeof payload.more_focus_options_available !== 'boolean'
-  ) {
-    throw new Error(`${context} has an invalid options envelope.`);
-  }
-  const focusIds = [];
-  for (const option of payload.focus_options) {
-    assertExactCoachKeys(
-      option,
-      [
-        'focus_session_id',
-        'status',
-        'local_started_at',
-        'planned_minutes',
-        'actual_minutes',
-        'has_reflection',
-      ],
-      `${context} Focus option`,
-    );
-    if (
-      !isCanonicalUuid(option.focus_session_id) ||
-      !['completed', 'abandoned'].includes(option.status) ||
-      typeof option.local_started_at !== 'string' ||
-      Number.isNaN(Date.parse(option.local_started_at)) ||
-      !/[+-]\d{2}:\d{2}$|Z$/.test(option.local_started_at) ||
-      !Number.isInteger(option.planned_minutes) ||
-      option.planned_minutes < 5 ||
-      option.planned_minutes > 240 ||
-      !Number.isInteger(option.actual_minutes) ||
-      option.actual_minutes < 0 ||
-      option.actual_minutes > 90 * 24 * 60 ||
-      typeof option.has_reflection !== 'boolean'
-    ) {
-      throw new Error(`${context} contains an invalid Focus option.`);
-    }
-    focusIds.push(option.focus_session_id);
-  }
-  if (new Set(focusIds).size !== focusIds.length) {
-    throw new Error(`${context} repeats a Focus session.`);
-  }
-  if (
-    payload.default_focus_session_id !== null &&
-    (!isCanonicalUuid(payload.default_focus_session_id) ||
-      !focusIds.includes(payload.default_focus_session_id))
-  ) {
-    throw new Error(`${context} has an unavailable default Focus session.`);
-  }
-  const expectedDefault =
-    payload.focus_options.find((option) => option.has_reflection)
-      ?.focus_session_id ??
-    payload.focus_options[0]?.focus_session_id ??
-    null;
-  if (payload.default_focus_session_id !== expectedDefault) {
-    throw new Error(
-      `${context} did not default to the newest rated or terminal Focus session.`,
-    );
-  }
-  return payload;
-}
-
-function assertCoachMemoryEnvelope(payload, context) {
-  assertExactCoachKeys(
-    payload,
-    ['contract_version', 'max_selected', 'available_count', 'memories'],
-    context,
-  );
-  if (
-    payload.contract_version !== 'coach-memory-selection-v1' ||
-    payload.max_selected !== 8 ||
-    !Number.isInteger(payload.available_count) ||
-    payload.available_count < 0 ||
-    !Array.isArray(payload.memories) ||
-    payload.available_count < payload.memories.length
-  ) {
-    throw new Error(`${context} has an invalid memory-selection envelope.`);
-  }
-  for (const memory of payload.memories) {
-    assertExactCoachKeys(
-      memory,
-      [
-        'id',
-        'type',
-        'title',
-        'content',
-        'content_truncated',
-        'ownership',
-        'selected',
-        'updated_at',
-      ],
-      `${context} memory`,
-    );
-    if (
-      !isCanonicalUuid(memory.id) ||
-      !['pattern', 'goal', 'habit', 'recurring_problem', 'recommendation'].includes(
-        memory.type,
-      ) ||
-      typeof memory.title !== 'string' ||
-      memory.title.length === 0 ||
-      typeof memory.content !== 'string' ||
-      memory.content.length === 0 ||
-      typeof memory.content_truncated !== 'boolean' ||
-      !['setup', 'manual'].includes(memory.ownership) ||
-      typeof memory.selected !== 'boolean' ||
-      Number.isNaN(Date.parse(memory.updated_at))
-    ) {
-      throw new Error(`${context} contains an invalid memory row.`);
-    }
-  }
-  if (payload.memories.filter((memory) => memory.selected).length > 8) {
-    throw new Error(`${context} exceeds the selected-memory limit.`);
   }
   return payload;
 }
@@ -11595,9 +11411,9 @@ function assertCoachResponse(payload, expected, context) {
       'request_id',
       'reply',
       'uncertainty',
-      'staged_suggestion',
       'safety',
-      'used_context',
+      'evidence',
+      'agent_trace',
       'provenance',
     ],
     context,
@@ -11613,6 +11429,11 @@ function assertCoachResponse(payload, expected, context) {
     `${context} safety`,
   );
   assertExactCoachKeys(
+    payload.agent_trace,
+    ['tool_call_count', 'steps', 'limitations'],
+    `${context} agent trace`,
+  );
+  assertExactCoachKeys(
     payload.provenance,
     [
       'source',
@@ -11625,11 +11446,16 @@ function assertCoachResponse(payload, expected, context) {
       'context_version',
       'generated_at',
       'provider_called',
+      'service_tier',
+      'service_tier_status',
+      'fast_mode',
+      'snapshot_row_count',
+      'snapshot_bytes',
     ],
     `${context} provenance`,
   );
   if (
-    payload.contract_version !== 'coach-response-v1' ||
+    payload.contract_version !== 'coach-response-v2' ||
     payload.request_id !== expected.requestId ||
     typeof payload.reply !== 'string' ||
     payload.reply.length === 0 ||
@@ -11637,78 +11463,130 @@ function assertCoachResponse(payload, expected, context) {
     typeof payload.uncertainty.reason !== 'string' ||
     payload.uncertainty.reason.length === 0 ||
     payload.safety.classification !== expected.safety ||
-    !Array.isArray(payload.used_context) ||
+    !Array.isArray(payload.evidence) ||
     payload.provenance.source !== expected.source ||
     payload.provenance.provider !== 'fake' ||
     payload.provenance.provider_mode !== 'deterministic_test_only' ||
     payload.provenance.model_requested !== null ||
     payload.provenance.model_reported !== null ||
     payload.provenance.model_source !== 'not_applicable' ||
-    payload.provenance.prompt_version !== expected.promptVersion ||
-    payload.provenance.context_version !== expected.contextVersion ||
+    payload.provenance.prompt_version !== 'free-coach-agent-prompt-v1' ||
+    payload.provenance.context_version !== 'personal-snapshot-v1' ||
     payload.provenance.provider_called !== expected.providerCalled ||
+    payload.provenance.service_tier !== 'not_applicable' ||
+    payload.provenance.service_tier_status !== 'not_applicable' ||
+    payload.provenance.fast_mode !== false ||
+    !Number.isInteger(payload.provenance.snapshot_row_count) ||
+    payload.provenance.snapshot_row_count < 0 ||
+    payload.provenance.snapshot_row_count > 50000 ||
+    !Number.isInteger(payload.provenance.snapshot_bytes) ||
+    payload.provenance.snapshot_bytes < 0 ||
+    payload.provenance.snapshot_bytes > 8 * 1024 * 1024 ||
     Number.isNaN(Date.parse(payload.provenance.generated_at))
   ) {
     throw new Error(`${context} violates the exact Coach response contract.`);
   }
-  if (payload.staged_suggestion !== null) {
-    assertExactCoachKeys(
-      payload.staged_suggestion,
-      ['title', 'rationale'],
-      `${context} staged suggestion`,
-    );
-    if (
-      typeof payload.staged_suggestion.title !== 'string' ||
-      payload.staged_suggestion.title.length === 0 ||
-      typeof payload.staged_suggestion.rationale !== 'string' ||
-      payload.staged_suggestion.rationale.length === 0
-    ) {
-      throw new Error(`${context} has an invalid staged suggestion.`);
-    }
+  if (
+    expected.snapshotRequired &&
+    (payload.provenance.snapshot_row_count < 1 ||
+      payload.provenance.snapshot_bytes < 1)
+  ) {
+    throw new Error(`${context} did not record the personal snapshot.`);
+  }
+  if (
+    !expected.snapshotRequired &&
+    (payload.provenance.snapshot_row_count !== 0 ||
+      payload.provenance.snapshot_bytes !== 0)
+  ) {
+    throw new Error(`${context} unexpectedly created a personal snapshot.`);
   }
 
-  const sources = [];
-  for (const item of payload.used_context) {
+  const evidenceSources = [];
+  for (const item of payload.evidence) {
     assertExactCoachKeys(
       item,
-      [
-        'source',
-        'available_count',
-        'included_count',
-        'omitted_count',
-        'freshness',
-      ],
-      `${context} used context`,
+      ['source', 'record_count', 'period_start', 'period_end'],
+      `${context} evidence`,
     );
     if (
-      !Number.isInteger(item.available_count) ||
-      !Number.isInteger(item.included_count) ||
-      !Number.isInteger(item.omitted_count) ||
-      item.included_count + item.omitted_count !== item.available_count ||
-      !['current', 'stale', 'missing', 'not_applicable'].includes(
-        item.freshness,
-      )
+      typeof item.source !== 'string' ||
+      item.source.length === 0 ||
+      !Number.isInteger(item.record_count) ||
+      item.record_count < 0 ||
+      (item.period_start === null) !== (item.period_end === null) ||
+      (item.period_start !== null &&
+        (typeof item.period_start !== 'string' ||
+          typeof item.period_end !== 'string'))
     ) {
-      throw new Error(`${context} has non-reconciling context counts.`);
+      throw new Error(`${context} has invalid backend-derived evidence.`);
     }
-    sources.push(item.source);
+    evidenceSources.push(item.source);
   }
-  if (new Set(sources).size !== sources.length) {
-    throw new Error(`${context} repeats a context source.`);
+  if (new Set(evidenceSources).size !== evidenceSources.length) {
+    throw new Error(`${context} repeats an evidence source.`);
   }
-  if (stableJson(sources) !== stableJson(expected.contextSources)) {
-    throw new Error(`${context} has an incomplete ordered context manifest.`);
+
+  if (
+    !Number.isInteger(payload.agent_trace.tool_call_count) ||
+    payload.agent_trace.tool_call_count < 0 ||
+    payload.agent_trace.tool_call_count > 12 ||
+    !Array.isArray(payload.agent_trace.steps) ||
+    payload.agent_trace.steps.length !==
+      payload.agent_trace.tool_call_count ||
+    !Array.isArray(payload.agent_trace.limitations) ||
+    payload.agent_trace.limitations.length > 20
+  ) {
+    throw new Error(`${context} has an invalid backend-derived agent trace.`);
+  }
+  for (const [index, step] of payload.agent_trace.steps.entries()) {
+    assertExactCoachKeys(
+      step,
+      [
+        'sequence',
+        'tool',
+        'status',
+        'summary',
+        'row_count',
+        'duration_ms',
+      ],
+      `${context} trace step`,
+    );
+    if (
+      step.sequence !== index + 1 ||
+      !['inspect_data', 'query_data', 'run_python'].includes(step.tool) ||
+      !['completed', 'failed'].includes(step.status) ||
+      typeof step.summary !== 'string' ||
+      step.summary.length === 0 ||
+      (step.row_count !== null &&
+        (!Number.isInteger(step.row_count) || step.row_count < 0)) ||
+      !Number.isInteger(step.duration_ms) ||
+      step.duration_ms < 0 ||
+      step.duration_ms > 180000
+    ) {
+      throw new Error(`${context} contains an invalid trace step.`);
+    }
+  }
+  if (
+    payload.agent_trace.limitations.some(
+      (value) => typeof value !== 'string' || value.length === 0,
+    )
+  ) {
+    throw new Error(`${context} contains an invalid trace limitation.`);
   }
   if (expected.source === 'model') {
     const expectedReply =
-      'Your current plan already contains a clear next step. Keep it small, then reassess your available capacity.';
-    if (
-      payload.reply !== expectedReply ||
-      payload.staged_suggestion?.title !== 'Protect one small next step' ||
-      payload.staged_suggestion?.rationale !==
-        'Review whether one deliberately small action fits the capacity you have today.'
-    ) {
+      'I can answer freely from the personal data available in this local test account. This deterministic reply does not call a real model.';
+    if (payload.reply !== expectedReply) {
       throw new Error(`${context} was not produced by the deterministic fake provider.`);
+    }
+    if (
+      payload.evidence.length !== 0 ||
+      payload.agent_trace.tool_call_count !== 0 ||
+      !payload.agent_trace.limitations.includes(
+        'The snapshot contains app data only and cannot establish causality.',
+      )
+    ) {
+      throw new Error(`${context} did not preserve the direct-answer trace.`);
     }
   }
   return payload;
@@ -11717,7 +11595,7 @@ function assertCoachResponse(payload, expected, context) {
 function assertCoachHistoryEnvelope(payload, expectedTurns, context) {
   assertExactCoachKeys(payload, ['contract_version', 'turns'], context);
   if (
-    payload.contract_version !== 'coach-history-v1' ||
+    payload.contract_version !== 'coach-history-v2' ||
     !Array.isArray(payload.turns) ||
     payload.turns.length !== expectedTurns.length
   ) {
@@ -11727,14 +11605,7 @@ function assertCoachHistoryEnvelope(payload, expectedTurns, context) {
   for (const turn of payload.turns) {
     assertExactCoachKeys(
       turn,
-      [
-        'request_id',
-        'message',
-        'context_scope',
-        'context_parameters',
-        'response',
-        'created_at',
-      ],
+      ['request_id', 'message', 'response', 'created_at'],
       `${context} turn`,
     );
     const expected = expectedTurns.find(
@@ -11743,43 +11614,12 @@ function assertCoachHistoryEnvelope(payload, expectedTurns, context) {
     if (
       expected === undefined ||
       !isUuid(turn.request_id) ||
-      typeof turn.message !== 'string' ||
-      turn.message.length === 0 ||
-      turn.context_scope !== expected.contextScope ||
-      stableJson(turn.context_parameters) !==
-        stableJson(expected.contextParameters) ||
+      turn.message !== expected.message ||
       Number.isNaN(Date.parse(turn.created_at)) ||
-      turn.response?.request_id !== turn.request_id
+      stableJson(turn.response) !== stableJson(expected.response)
     ) {
       throw new Error(`${context} contains an invalid history turn.`);
     }
-    const contextSources =
-      turn.response.provenance?.source === 'deterministic_safety'
-        ? []
-        : turn.response.provenance?.context_version === 'coach-context-v3' &&
-            turn.context_scope !== 'today'
-          ? [
-              'profile',
-              'daily_capture',
-              'focus_reflections',
-              'habit_outcomes',
-              'decision_feedback',
-              'weekly_reviews',
-              'task_lifecycle',
-              'memories',
-              'coach_history',
-            ]
-          : [
-              'profile',
-              'daily_snapshot',
-              'daily_briefing',
-              'tasks',
-              'habits',
-              'focus_sessions',
-              'weekly_review',
-              'memories',
-              'coach_history',
-            ];
     assertCoachResponse(
       turn.response,
       {
@@ -11787,9 +11627,8 @@ function assertCoachHistoryEnvelope(payload, expectedTurns, context) {
         source: turn.response.provenance?.source,
         providerCalled: turn.response.provenance?.provider_called,
         safety: turn.response.safety?.classification,
-        promptVersion: expected.promptVersion,
-        contextVersion: expected.contextVersion,
-        contextSources,
+        snapshotRequired:
+          turn.response.provenance?.snapshot_row_count > 0,
       },
       `${context} persisted response`,
     );
@@ -11802,6 +11641,83 @@ function assertCoachHistoryEnvelope(payload, expectedTurns, context) {
     throw new Error(`${context} returned the wrong request identities.`);
   }
   return payload;
+}
+
+function assertCoachSse(body, requestId, context) {
+  const events = body
+    .trim()
+    .split(/\r?\n\r?\n/)
+    .filter(Boolean)
+    .map((block) => {
+      const lines = block.split(/\r?\n/);
+      const eventLine = lines.find((line) => line.startsWith('event: '));
+      const dataLines = lines
+        .filter((line) => line.startsWith('data: '))
+        .map((line) => line.slice(6));
+      if (!eventLine || dataLines.length === 0) {
+        throw new Error(`${context} contains an invalid SSE block.`);
+      }
+      let data;
+      try {
+        data = JSON.parse(dataLines.join('\n'));
+      } catch (error) {
+        throw new Error(`${context} contains invalid SSE JSON: ${error}`);
+      }
+      return { event: eventLine.slice(7), data };
+    });
+  if (
+    events.length < 2 ||
+    events[0].event !== 'started' ||
+    events.at(-1)?.event !== 'completed' ||
+    events.some(
+      (event, index) =>
+        !['started', 'activity', 'completed'].includes(event.event) ||
+        index > 0 &&
+          index < events.length - 1 &&
+          event.event !== 'activity',
+    )
+  ) {
+    throw new Error(`${context} has an invalid event order.`);
+  }
+  assertExactCoachKeys(
+    events[0].data,
+    ['request_id', 'contract_version'],
+    `${context} started event`,
+  );
+  if (
+    events[0].data.request_id !== requestId ||
+    events[0].data.contract_version !== 'coach-request-v3'
+  ) {
+    throw new Error(`${context} started another request.`);
+  }
+  const allowedActivity = new Set([
+    'Preparing a private data snapshot …',
+    'Preparing a direct answer …',
+    'Checking available personal data …',
+    'Checking relevant history …',
+    'Testing the data with isolated analysis …',
+    'Working with personal data …',
+  ]);
+  const activities = events.slice(1, -1).map((event) => {
+    assertExactCoachKeys(event.data, ['message'], `${context} activity`);
+    if (
+      typeof event.data.message !== 'string' ||
+      event.data.message.length > 100 ||
+      !allowedActivity.has(event.data.message)
+    ) {
+      throw new Error(`${context} exposed non-allowlisted activity.`);
+    }
+    return event.data.message;
+  });
+  if (
+    activities.length === 0 ||
+    !activities.includes('Preparing a private data snapshot …')
+  ) {
+    throw new Error(`${context} omitted safe snapshot activity.`);
+  }
+  const completed = events.at(-1).data;
+  assertExactCoachKeys(completed, ['response'], `${context} completed event`);
+  return { activities, response: completed.response };
 }
 
 function assertExactCoachKeys(value, keys, context) {
@@ -11818,7 +11734,7 @@ function assertExactCoachKeys(value, keys, context) {
 async function coachPersistenceSnapshot(userId) {
   const [requests, messages, usage] = await Promise.all([
     fetchRows(
-      `coach_requests?select=request_id,user_id,contract_version,context_scope,context_parameters,local_date,message_fingerprint,state,lease_expires_at,provider,provider_mode,model_requested,model_reported,model_source,prompt_version,context_version,response,used_context,error,created_at,completed_at,failed_at,deleted_at,updated_at&user_id=eq.${userId}&order=request_id.asc`,
+      `coach_requests?select=request_id,user_id,contract_version,context_scope,context_parameters,local_date,message_fingerprint,state,lease_expires_at,provider,provider_mode,model_requested,model_reported,model_source,prompt_version,context_version,response,used_context,evidence,agent_trace,tool_call_count,service_tier,error,created_at,completed_at,failed_at,deleted_at,updated_at&user_id=eq.${userId}&order=request_id.asc`,
       'Phase 10 Coach requests',
     ),
     fetchRows(
@@ -11854,19 +11770,25 @@ async function assertCoachAtomicPersistence(userId, expected) {
     );
     if (
       request?.state !== 'completed' ||
-      request.contract_version !== item.contractVersion ||
-      request.context_scope !== item.contextScope ||
-      stableJson(request.context_parameters) !==
-        stableJson(item.contextParameters) ||
+      request.contract_version !== 'coach-request-v3' ||
+      request.context_scope !== 'today' ||
+      stableJson(request.context_parameters) !== '{}' ||
       request.provider !== 'fake' ||
       request.provider_mode !== 'deterministic_test_only' ||
       request.model_requested !== null ||
+      request.model_reported !== null ||
       request.model_source !== 'not_applicable' ||
-      request.prompt_version !== item.promptVersion ||
-      request.context_version !== item.contextVersion ||
+      request.prompt_version !== 'free-coach-agent-prompt-v1' ||
+      request.context_version !== 'personal-snapshot-v1' ||
       !/^[0-9a-f]{64}$/.test(request.message_fingerprint ?? '') ||
       stableJson(request.response) !== stableJson(item.response) ||
-      stableJson(request.used_context) !== stableJson(item.response.used_context) ||
+      stableJson(request.used_context) !== stableJson(item.response.evidence) ||
+      stableJson(request.evidence) !== stableJson(item.response.evidence) ||
+      stableJson(request.agent_trace) !==
+        stableJson(item.response.agent_trace) ||
+      request.tool_call_count !==
+        item.response.agent_trace.tool_call_count ||
+      request.service_tier !== item.response.provenance.service_tier ||
       request.error !== null ||
       request.completed_at === null ||
       stableJson(request).includes(item.message)
@@ -11903,6 +11825,7 @@ async function assertCoachAtomicPersistence(userId, expected) {
       usage.error_code !== null ||
       usage.counters.provider_called !== item.providerCalled ||
       usage.counters.reply_codepoints !== Array.from(item.response.reply).length ||
+      usage.counters.context_bytes !== item.response.provenance.snapshot_bytes ||
       (item.providerCalled &&
         (usage.counters.prompt_bytes <= 0 || usage.counters.context_bytes <= 0)) ||
       (!item.providerCalled &&
@@ -11950,31 +11873,17 @@ async function coachProductSnapshot(userId) {
 async function assertCoachRls({
   ownerAccessToken,
   userId,
-  memoryId,
-  memoryTitle,
   requestId,
 }) {
   const ownerMessages = await authenticatedRestRequest(
     `coach_messages?select=id,user_id,request_id,role&request_id=eq.${requestId}`,
     ownerAccessToken,
   );
-  const ownerMemory = await authenticatedRestRequest(
-    `memory_entries?select=id,user_id,type,title&id=eq.${memoryId}`,
-    ownerAccessToken,
-  );
-  const ownerSelection = await authenticatedRestRequest(
-    `coach_memory_selections?select=user_id,memory_id,selection_version&memory_id=eq.${memoryId}`,
-    ownerAccessToken,
-  );
   if (
     !ownerMessages.response.ok ||
-    ownerMessages.rows?.length !== 2 ||
-    !ownerMemory.response.ok ||
-    ownerMemory.rows?.length !== 1 ||
-    !ownerSelection.response.ok ||
-    ownerSelection.rows?.length !== 1
+    ownerMessages.rows?.length !== 2
   ) {
-    throw new Error('Coach owner SELECT policies did not expose exact owned rows.');
+    throw new Error('Coach owner SELECT policy did not expose exact owned messages.');
   }
 
   const secondaryEmail = `e2e-phase10-other-${coachAttemptId}@example.test`;
@@ -12027,14 +11936,6 @@ async function assertCoachRls({
       `coach_messages?select=id&request_id=eq.${requestId}`,
       secondaryToken,
     ),
-    authenticatedRestRequest(
-      `memory_entries?select=id&id=eq.${memoryId}`,
-      secondaryToken,
-    ),
-    authenticatedRestRequest(
-      `coach_memory_selections?select=memory_id&memory_id=eq.${memoryId}`,
-      secondaryToken,
-    ),
   ]);
   if (
     crossOwnerReads.some(
@@ -12053,6 +11954,76 @@ async function assertCoachRls({
     [],
     'cross-owner Coach history',
   );
+  const emptyAccountRequestId = crypto.randomUUID();
+  const emptyAccountMessage =
+    `E2E answer without invented personal history ${coachAttemptId}`;
+  const emptyAccountResult = await coachApiRequest(
+    '/v1/coach/respond',
+    secondaryToken,
+    {
+      method: 'POST',
+      body: {
+        contract_version: 'coach-request-v3',
+        request_id: emptyAccountRequestId,
+        message: emptyAccountMessage,
+      },
+    },
+  );
+  assertCoachApiStatus(
+    emptyAccountResult,
+    200,
+    'empty-account free Coach response',
+  );
+  const emptyAccountResponse = assertCoachResponse(
+    emptyAccountResult.json,
+    {
+      requestId: emptyAccountRequestId,
+      source: 'model',
+      providerCalled: true,
+      safety: 'normal',
+      snapshotRequired: true,
+    },
+    'empty-account free Coach response',
+  );
+  await assertCoachAtomicPersistence(secondary.id, [
+    {
+      requestId: emptyAccountRequestId,
+      message: emptyAccountMessage,
+      response: emptyAccountResponse,
+      outcome: 'completed',
+      providerCalled: true,
+    },
+  ]);
+  const emptyAccountHistory = await coachApiRequest(
+    '/v1/coach/history',
+    secondaryToken,
+  );
+  assertCoachApiStatus(
+    emptyAccountHistory,
+    200,
+    'empty-account Coach history',
+  );
+  assertCoachHistoryEnvelope(
+    emptyAccountHistory.json,
+    [
+      {
+        requestId: emptyAccountRequestId,
+        message: emptyAccountMessage,
+        response: emptyAccountResponse,
+      },
+    ],
+    'empty-account Coach history',
+  );
+  const primaryReadsEmptyAccount = await authenticatedRestRequest(
+    `coach_messages?select=id&request_id=eq.${emptyAccountRequestId}`,
+    ownerAccessToken,
+  );
+  if (
+    !primaryReadsEmptyAccount.response.ok ||
+    primaryReadsEmptyAccount.rows?.length !== 0
+  ) {
+    throw new Error('Coach RLS exposed the empty-account turn to the first owner.');
+  }
 
   const directMessageInsert = await authenticatedRestRequest(
     'coach_messages',
@@ -12067,20 +12038,14 @@ async function assertCoachRls({
       },
     },
   );
-  const directMemoryPatch = await authenticatedRestRequest(
-    `memory_entries?id=eq.${memoryId}`,
-    ownerAccessToken,
-    { method: 'PATCH', body: { title: 'E2E unauthorized memory rewrite' } },
-  );
-  const directSelectionDelete = await authenticatedRestRequest(
-    `coach_memory_selections?user_id=eq.${userId}&memory_id=eq.${memoryId}`,
+  const directMessageDelete = await authenticatedRestRequest(
+    `coach_messages?user_id=eq.${userId}`,
     ownerAccessToken,
     { method: 'DELETE' },
   );
   if (
     directMessageInsert.response.ok ||
-    directMemoryPatch.response.ok ||
-    directSelectionDelete.response.ok
+    directMessageDelete.response.ok
   ) {
     throw new Error('Authenticated client wrote backend-owned Coach state directly.');
   }
@@ -12088,16 +12053,6 @@ async function assertCoachRls({
     `coach_messages?select=id&user_id=eq.${userId}`,
     (rows) => rows.length === 6,
     'Coach messages survive direct authenticated insert',
-  );
-  await assertRows(
-    `memory_entries?select=id,title&id=eq.${memoryId}`,
-    (rows) => rows.length === 1 && rows[0].title === memoryTitle,
-    'Coach memory survives direct authenticated update',
-  );
-  await assertRows(
-    `coach_memory_selections?select=memory_id&user_id=eq.${userId}&memory_id=eq.${memoryId}`,
-    (rows) => rows.length === 1,
-    'Coach selection survives direct authenticated delete',
   );
 }
 
@@ -12128,8 +12083,9 @@ async function assertCoachGuestBoundary() {
     await expectText(guestPage, 'Coach unavailable');
     await expectText(
       guestPage,
-      'Coach replies are unavailable in guest or local demo mode.',
+      'Coach requires an authenticated synced account.',
     );
+    await expectText(guestPage, 'Ask anything');
     await guestPage.waitForTimeout(500);
     if (coachRequests.length !== 0) {
       throw new Error(
@@ -13416,16 +13372,8 @@ async function authenticatedUserId(accessToken) {
 
 async function resetCoachE2EState(userId) {
   await deleteRows(
-    `coach_memory_selections?user_id=eq.${userId}`,
-    'focused Phase 10 memory selections',
-  );
-  await deleteRows(
     `coach_requests?user_id=eq.${userId}`,
     'focused Phase 10 request history',
-  );
-  await deleteRows(
-    `memory_entries?user_id=eq.${userId}&title=eq.${encodeURIComponent(coachMemoryTitle)}`,
-    'focused Phase 10 synthetic memories',
   );
 }
 

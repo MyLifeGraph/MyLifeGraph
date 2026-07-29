@@ -139,31 +139,42 @@ way to explore the product today is the Flutter app in mock-data guest mode.
   The repository does not configure a deployed cron. Notification Delivery V1
   can create bounded local deterministic Inbox rows only after separate in-app
   consent; it still adds no provider/system delivery channel.
-  Phase 10 adds a strict authenticated, deliberate-send Coach boundary with a
-  32 KiB owner-scoped context cap, visible source/freshness/uncertainty
-  provenance, explicit selection of up to eight eligible memories, bounded
-  validated history, retained usage accounting, and at most one review-only
-  suggestion. Capability/context-options/history/memory reads never call a
-  model; guest/mock is zero-call. New V2 turns use
-  Goal/style/friction-free `coach-context-v3` and
-  `controlled-coach-prompt-v3` for explicit Today, Patterns, Focus, or Review
-  context, while compatible V1 Today turns and history stay readable. Historical
-  modes receive a bounded deterministic digest instead of raw history. Coach
-  cannot mutate tasks, habits, schedules, briefings, reviews, memory content, or
-  calendar data. Standard tests use the deterministic
-  fake provider. The Coach UI is hard-hidden in release builds and whenever
-  `APP_ENV=production`; a Flutter define cannot override that boundary. The
-  real-model adapter is intentionally local-development-only:
-  FastAPI invokes an explicitly enabled Codex CLI already authenticated by the
-  current Linux/WSL user, so local subscription testing needs no application API
-  key and shares no OAuth files. It prefers the explicitly configured `gpt-5.5`
-  setting, reports unavailable login/model/tool-free capability honestly, and
-  never silently falls back. Production deployment requires a separate
-  provider/security contract. Per-machine live-provider evidence and the
-  current deterministic checkout result are recorded centrally in
+  Phase 10 now exposes one free-question, read-only personal-data Coach instead
+  of fixed Today, Patterns, Focus, or Review modes. Each V3 turn creates a fresh
+  `personal-snapshot-v1` owner-only SQLite database and runs
+  `free-coach-agent-prompt-v1`, then gives the development-only local Codex agent
+  exactly three required stdio-MCP tools: catalog inspection, read-only SQL,
+  and isolated Python. SQL and Python are bounded; Python runs as non-root in a
+  no-network, read-only Docker sandbox with only the snapshot mounted. The
+  backend derives conservative accessed-source coverage, actual tool trace, and
+  provenance; source counts/periods can be broader than one query's returned
+  rows, and Python is attributed to the full snapshot. No model-authored trace
+  or plot reaches Flutter. The current UI streams safe lifecycle activity,
+  supports cancellation, and expands data/analysis detail below each text
+  answer. It has no mode, horizon, Focus, prompt-starter, memory-selection, or
+  structured suggestion control. Guest/mock is zero-call, standard tests use
+  the deterministic fake provider, and legacy V1/V2 history stays readable.
+  Coach cannot mutate tasks, habits, schedules, briefings, reviews, memory
+  content, or calendar data. The Coach UI is hard-hidden in
+  release builds and whenever `APP_ENV=production`; a Flutter define cannot
+  override that boundary. The real adapter invokes the explicitly enabled Codex
+  CLI already authenticated by the current Linux/WSL user. Every turn requires
+  exactly `gpt-5.5`, `service_tier="fast"`, and Fast mode; missing model/Fast
+  capability fails honestly with no fallback or standard-tier downgrade.
+  Snapshots fail instead of truncating above 50,000 rows or 8 MiB, and each turn
+  is capped at 12 tool calls and 180 seconds. Production deployment still
+  requires a separate provider, worker, and credential contract. Per-machine
+  live-provider evidence and the current deterministic checkout result are
+  recorded centrally in
   [Current Verified Baseline](docs/verification.md#current-verified-baseline).
   They establish neither a remote/production provider nor another developer's
   account; the separate other-Linux-user acceptance remains open.
+  The additive schema boundary is
+  `20260728160000_free_read_only_coach_agent_v1.sql`; it preserves readable
+  V1/V2 history while adding V3 evidence/trace/Fast persistence and
+  service-role-only claim/completion RPCs. Legacy fixed-mode
+  `controlled-coach-prompt-v3`/`coach-context-v3` rows remain compatible but
+  are not current Flutter requests.
   Notification Lifecycle V1 adds strict stored-Inbox read/unread/dismiss
   tombstones for real authenticated accounts through FastAPI and one
   service-role-only retry ledger. Guest/demo stays local and zero-call, and
@@ -332,10 +343,14 @@ curl http://localhost:8000/v1/health
 
 The service remains deterministic except for an explicit authenticated Coach
 send. Coach is disabled by default; automated tests use an explicitly enabled
-fake provider, while the development-only `local_codex_oauth` adapter never
-uses `OPENAI_API_KEY`. Each Linux/WSL developer authenticates their own Codex
-CLI manually, and FastAPI uses it only behind explicit local flags. Do not copy
-another developer's Codex OAuth state into the repo or `.env`. See
+fake provider. The development-only `local_codex_oauth` adapter never uses
+`OPENAI_API_KEY`: each Linux/WSL developer authenticates their own Codex CLI,
+and FastAPI starts `gpt-5.5` with Fast explicitly configured. A real turn builds
+a temporary personal SQLite snapshot and exposes only read-only inspection,
+SQL, and isolated-Python MCP tools. Prepare the content-labelled analysis image
+with `npm run prepare:coach-analysis`, or let `npm run start:local:coach`
+verify and build it when missing or stale. Do not copy another developer's OAuth state
+into the repo or `.env`. See
 `docs/phase-10-controlled-coach-plan.md` for the exact boundary and
 `docs/local-dev.md` for the active settings and routes.
 
@@ -519,15 +534,14 @@ Supabase is the intended auth and persistence backend. The current app supports:
   sleep-duration facts, and capacity with/without hypothetical sleep protection
   from bearer-owned state. Opening it never creates or confirms a revision.
   See `docs/exam-week-outlook-v1-contract.md`.
-- `/v1/coach/capabilities`, `/v1/coach/history`, and `/v1/coach/memories` are
-  authenticated read/control boundaries that do not generate a reply.
-  `POST /v1/coach/respond` is the only deliberate model-call path. Completed
-  request replay is provider-free; one request id cannot be reinterpreted, one
-  owner has at most one in-flight request, and the default daily limit is 20
-  retained attempts in the profile-local day. History deletion removes message
-  content, tombstones requests, and keeps usage rows plus request identities.
-  Memory selection is a separate owner-scoped projection and never edits the
-  underlying Setup/manual memory.
+- `/v1/coach/capabilities` and `/v1/coach/history` are authenticated read
+  boundaries that do not generate a reply. `POST /v1/coach/respond/stream` is
+  the current V3 path; non-streaming `/respond` wraps the same service and keeps
+  old V1/V2 requests compatible. Completed exact id/message replay is
+  provider-free; one owner has at most one pending turn and the default daily
+  limit is 20 new questions in the profile-local day. History deletion removes
+  messages and V3 evidence/trace detail while retaining tombstones and usage.
+  Legacy memory routes remain available only for pre-V3 clients.
 - `POST /v1/notifications/{notification_id}/actions` is the authenticated
   `notification-lifecycle-v1` path for retry-safe read/unread/dismiss
   tombstones. Direct authenticated Notification DML remains forbidden, and the
@@ -538,13 +552,11 @@ Supabase is the intended auth and persistence backend. The current app supports:
 
 Important current caveat: the Flutter app targets the canonical snake_case
 schema. The migration chain currently ends at
-`20260728120000_coach_longitudinal_context_v1.sql`. It preserves the existing
-V1 Coach claim path and rows while adding exact V2 scope/parameter replay,
-paired V3 prompt/context provenance, and partial completed/cancelled Task
-history indexes. V2 permits only parameter-free `today`/`review`, one bounded
-`patterns` horizon, or one Focus-session UUID; its service-role-only claim
-binds the message fingerprint, scope, and parameters without reinterpreting
-the original provider, local date, or version truth. The preceding learned
+`20260728160000_free_read_only_coach_agent_v1.sql`. It preserves existing
+fixed-mode rows while adding message-only V3 claim, V2 response,
+evidence/trace/Fast provenance, and service-role-only completion. The preceding
+longitudinal migration keeps exact V2 scope/parameter replay and partial
+terminal Task history indexes for compatible clients. The preceding learned
 timing migration retains learned evidence while recording when actual
 allocation used Setup timing. The earlier confirmation-time and proposal-RPC
 guards preserve monotone audit timestamps, strict established payloads, and
@@ -734,8 +746,11 @@ deliberate generation, exact persisted weekly facts/proposals, confirmed manual
 habit adaptation, stale refresh, Setup non-mutation, and review-table RLS. Phase
 9 adds explicit consent, bounded `.ics` reconciliation, paginated imported-only
 events, disconnect/delete separation, schedule preservation, and integration
-RLS. Phase 10 adds fake-provider Coach request/replay/safety/history/memory/RLS/
-UI assertions. Deadline Planner, preparation capacity/detail, Capture V4, and
+RLS. Phase 10 adds free-question V3 streaming, cancellation, backend-derived
+snapshot-source coverage/trace/provenance, snapshot limits,
+replay/budget/history deletion, read-only-tool security, prompt-injection
+authority boundaries, and the absence of fixed mode UI. Deadline Planner,
+preparation capacity/detail, Capture V4, and
 Exam-Week Outlook coverage additionally checks strict capacity arithmetic,
 sleep-plan correction, Planner-only status, explicit replan navigation, and no
 automatic mutation.
@@ -806,9 +821,9 @@ has the nvm bin directory on `PATH`.
   limits; it is not a participant or longitudinal study.
 - `docs/product-review-handoff.md` - Self-contained review scope, invariants,
   verification checklist, and prompt for a fresh review chat.
-- `docs/phase-10-controlled-coach-plan.md` - Implemented bounded Coach contract,
-  local subscription-backed Codex OAuth adapter, privacy limits, and separate
-  live-verification criteria.
+- `docs/phase-10-controlled-coach-plan.md` - Implemented free read-only Coach
+  data agent, personal SQLite snapshot, required MCP and isolated-Python
+  boundaries, Fast configuration, persistence, UI, and live-smoke criteria.
 - `docs/notification-lifecycle-v1-contract.md` - Stored-Inbox visibility,
   read/unread/dismiss commands, exact retry/conflict behavior, and delivery
   non-claims.

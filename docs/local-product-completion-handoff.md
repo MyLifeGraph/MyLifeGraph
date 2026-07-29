@@ -9,6 +9,11 @@ and persistence contracts; they do not mean a demo, cheap edition, or reduced
 quality target.
 The later `docs/setup-personalization-retirement-contract.md` also supersedes
 historical Goal/friction/Setup-preference references below.
+The free read-only data-agent contract in
+`docs/phase-10-controlled-coach-plan.md` supersedes every fixed-context,
+memory-selection, review-only-suggestion, tool-free, and live-Coach criterion
+below. Earlier live results do not verify the current personal snapshot/MCP/
+Fast path.
 
 ## Objective
 

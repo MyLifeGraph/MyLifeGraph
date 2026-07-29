@@ -1,10 +1,13 @@
 from app.core.config import Settings
-from app.models.coach import CoachModelOutput
+from app.models.coach import CoachAgentModelOutput, CoachModelOutput
 from app.providers.base import (
+    CoachActivityCallback,
+    CoachAgentProviderResult,
     CoachProviderCapability,
     CoachProviderError,
     CoachProviderResult,
 )
+from pathlib import Path
 
 
 class FakeCoachProvider:
@@ -54,6 +57,40 @@ class FakeCoachProvider:
                         "Review whether one deliberately small action fits the "
                         "capacity you have today."
                     ),
+                },
+                safety={"classification": "normal"},
+            ),
+        )
+
+    async def respond_agent(
+        self,
+        *,
+        prompt: str,
+        snapshot_path: Path,
+        trace_path: Path,
+        activity_callback: CoachActivityCallback | None = None,
+    ) -> CoachAgentProviderResult:
+        del prompt, snapshot_path, trace_path
+        capability = await self.capability()
+        if capability.state != "ready":
+            raise CoachProviderError(
+                "provider_unavailable",
+                "The deterministic Coach test provider is unavailable.",
+                retryable=False,
+            )
+        self.calls += 1
+        if activity_callback is not None:
+            await activity_callback("Preparing a direct answer …")
+        return CoachAgentProviderResult(
+            output=CoachAgentModelOutput(
+                reply=(
+                    "I can answer freely from the personal data available in this "
+                    "local test account. This deterministic reply does not call a "
+                    "real model."
+                ),
+                uncertainty={
+                    "level": "medium",
+                    "reason": "This is deterministic test-provider output.",
                 },
                 safety={"classification": "normal"},
             ),

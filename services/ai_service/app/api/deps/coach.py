@@ -7,6 +7,7 @@ from app.core.config import settings
 from app.providers.disabled import DisabledCoachProvider
 from app.providers.fake import FakeCoachProvider
 from app.providers.local_codex import LocalCodexCoachProvider
+from app.repositories.account_repository import SupabaseAccountRepository
 from app.repositories.briefing_repository import SupabaseBriefingRepository
 from app.repositories.coach_context_repository import SupabaseCoachContextRepository
 from app.repositories.coach_evidence_repository import (
@@ -18,8 +19,10 @@ from app.repositories.snapshot_repository import SupabaseSnapshotRepository
 from app.repositories.weekly_review_repository import SupabaseWeeklyReviewRepository
 from app.services.briefing_service import BriefingService
 from app.services.coach_context import CoachContextService
+from app.services.coach_agent_service import CoachAgentService
 from app.services.coach_evidence_service import CoachEvidenceService
 from app.services.coach_service import CoachService
+from app.services.coach_snapshot import CoachSnapshotService
 from app.services.learning_service import LearningService
 from app.services.snapshot_aggregator import SnapshotAggregator
 from app.services.weekly_review_service import WeeklyReviewService
@@ -87,6 +90,39 @@ async def get_coach_service(request: Request) -> CoachService:
         repository=SupabaseCoachRepository(client),
         context_repository=context_repository,
         context_service=context_service,
+        provider=provider,
+        global_semaphore=_GLOBAL_COACH_SEMAPHORE,
+    )
+
+
+async def get_coach_agent_service(request: Request) -> CoachAgentService:
+    injected = getattr(request.app.state, "coach_agent_service", None)
+    if injected is not None:
+        return injected
+    try:
+        client = SupabaseRestClient.from_settings(settings)
+    except SupabaseConfigurationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={
+                "code": "provider_unavailable",
+                "message": "Coach persistence is not configured.",
+                "retryable": False,
+            },
+        ) from exc
+    if settings.coach_provider == "local_codex_oauth":
+        provider = _GLOBAL_LOCAL_CODEX_PROVIDER
+    elif settings.coach_provider == "fake":
+        provider = FakeCoachProvider(settings)
+    else:
+        provider = DisabledCoachProvider()
+    return CoachAgentService(
+        settings=settings,
+        repository=SupabaseCoachRepository(client),
+        context_repository=SupabaseCoachContextRepository(client),
+        snapshot_service=CoachSnapshotService(
+            repository=SupabaseAccountRepository(client),
+        ),
         provider=provider,
         global_semaphore=_GLOBAL_COACH_SEMAPHORE,
     )

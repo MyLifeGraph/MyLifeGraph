@@ -1,737 +1,512 @@
-# Phase 10 Controlled Coach Implementation Plan
+# Phase 10 Free Read-Only Coach Data Agent
 
-Status: implemented at the repository boundary. This document now records the
-locked Phase 10 contract and the separate verification limits. The opt-in
-synthetic local Codex provider smoke passed on 2026-07-13 with explicitly
-requested `gpt-5.5`. A focused Phase 10 fake-provider browser rerun and the
-subsequent full non-destructive local-Supabase journey passed in that recorded
-checkout; the 2026-07-23 shell-navigation follow-up did not rerun the full
-browser journey. The first full-product live-account acceptance passed
-non-destructively on 2026-07-13 in the working tree based on `b8c7935`:
-authenticated Flutter -> FastAPI -> `local_codex_oauth` -> the same Linux
-user's logged-in Codex CLI -> validated and persisted `coach-response-v1`.
+## Status
 
-New `coach-request-v2` claims use `coach-context-v3` and
-`controlled-coach-prompt-v3`. Persisted request V1 with paired context/prompt
-V1 or V2, history, and exact replay remain readable; the historical 2026-07-13
-run below remains a V1 verification record rather than a claim about the new
-context.
+The development-only Coach is implemented as a free-question, read-only
+personal-data agent. The current Flutter surface no longer asks the user to
+choose `Today`, `Patterns`, `Focus`, or `Review`, a time horizon, one Focus
+session, prompt starter, or selected memory. One deliberate send contains only
+the user's question and a retry-safe request id.
 
-## Longitudinal Context V1 Extension
+For a real local turn, FastAPI creates a fresh owner-only SQLite snapshot and
+starts the logged-in local Codex CLI with one required stdio MCP server. The
+agent can answer directly or use only `inspect_data`, `query_data`, and
+`run_python`. FastAPI derives evidence and the compact tool trace from actual
+execution; the model cannot supply either field.
 
-The Coach surface now exposes four deliberate context modes without changing
-shell navigation or any non-Coach page:
+The real provider remains local-development-only. Automated tests use the
+deterministic fake provider and need no Codex login, network call, or OpenAI API
+key. A current-machine live smoke remains separately opt-in and must not be
+claimed unless it was actually run.
 
-- `Today` retains the established bounded current-state context;
-- `Patterns` deterministically summarizes `90_days`, `1_year`, or
-  `all_available` retained evidence;
-- `Focus` analyzes one explicitly selected terminal Focus session against a
-  bounded 90-day baseline; and
-- `Review` compares the last two complete profile-local ISO weeks.
+The earlier bounded `coach-request-v1|v2`, `coach-response-v1`,
+`coach-history-v1`, context-options, and memory-selection records remain
+readable for compatibility. Their newest provenance pair remains
+`controlled-coach-prompt-v3`/`coach-context-v3`. The current app does not
+expose or create those fixed-mode selections.
 
-`GET /v1/coach/context-options` is model-call-free. It returns at most ten
-terminal Focus choices, defaults to the newest rated session and otherwise the
-newest terminal session, and reports whether Personal Learning pattern analysis
-is enabled. Turning that preference off blocks only broad `Patterns`; a
-deliberate single-session `Focus` or fixed two-week `Review` remains a separate,
-explicit Coach action.
+## Product Contract
 
-Historical retrieval is deterministic and read-only. It pages bounded
-owner-scoped rows, folds them into at most 24 adaptive time buckets, and sends
-only a compact digest to the provider. Allowed historical sources are
-structured Daily Capture values, immutable terminal Focus facts plus the
-current optional reflection, explicit Habit outcomes, retained Decision
-Feedback, validated persisted Weekly Review facts, and currently retained
-terminal Task lifecycle facts. Planner, Preparation, imported Calendar content,
-and conversation history are not historical evidence; a small recent
-conversation window remains separate conversational context. No raw historical
-row list, hidden check-in text, task title, habit title, note, calendar field,
-or model-controlled tool enters the digest.
+The user asks an ordinary free-form question. `gpt-5.5` decides whether to:
 
-The stable manifest source code `focus_reflections` represents terminal Focus
-sessions with their optional current reflection. Its available/included counts
-count each terminal session once rather than counting a session and its
-reflection as two rows; rated-session count and coverage remain separate digest
-metrics.
+- answer without inspecting personal data;
+- inspect the catalog and available periods;
+- combine one or more read-only SQL queries;
+- use isolated Python for aggregation, a statistical check, or an internal
+  plot;
+- look for counterexamples or correct a false premise;
+- explain which information is missing; or
+- ask one concise clarifying question.
 
-Every retrieval page also has a 4 MiB response-byte limit before JSON parsing
-or sanitization. An oversized page fails the request closed instead of allowing
-an owner-controlled metadata value to create unbounded transfer or memory use.
+There is no request classifier and no requirement to produce a recommendation.
+The final reply is plain English text. It may contain several reasoned
+suggestions, but the Coach cannot execute, stage, or claim any product
+mutation. `staged_suggestion` and visible analysis artifacts are absent from
+the current response contract.
 
-Each digest carries its requested and retained window, timezone, bucket
-granularity, sample/coverage counts, limitations, partial/truncation truth, and
-a deterministic evidence fingerprint. `All available` therefore means all
-retained evidence that fit the documented source safety caps, never deleted
-history or silently truncated infinity. The model may discuss associations and
-counterexamples, but must not claim causation. An ambiguous hypothesis may
-produce at most one clarifying question; the Coach must not silently choose a
-metric.
+The answer must distinguish:
 
-Evidence construction has a separate configured concurrency limit and timeout,
-then releases that capacity before the existing provider semaphore is acquired.
-The database still enforces one in-flight request per owner and 20 retained
-attempts per profile-local day. This makes on-demand use suitable for a bounded
-local pilot, but the single-user local Codex OAuth adapter and process-local
-limits remain explicitly non-production.
+- observations directly supported by the snapshot;
+- plausible but uncertain interpretations;
+- information that is absent; and
+- general explanation from model knowledge.
 
-## Implemented Boundary
-
-The current checkout includes:
-
-- strict authenticated capability, deliberate response, history/delete, and
-  memory-selection HTTP models and Flutter parsers;
-- a deterministic fake provider for standard tests and browser setup;
-- the development-only `local_codex_oauth` provider with fixed non-shell argv,
-  stdin prompt transport, per-request permission-`0700` workspace, ignored user
-  configuration/rules, read-only sandbox, strict schema, feature disabling,
-  allowlisted environment, bounded process I/O/events/time/concurrency, process-
-  group termination, sanitized errors, and unexpected tool-event rejection;
-- deterministic 32 KiB `coach-context-v2|v3` builders: V2 preserves the
-  compatible current-state request path, while V3 adds the four explicit modes
-  and compact longitudinal evidence described above; both retain selected
-  eligible memories and a small completed-turn window with exact
-  source/count/freshness manifests;
-- deterministic urgent-risk provider bypass and post-provider safety/
-  uncertainty checks;
-- `coach_requests`, `coach_usage_events`, and `coach_memory_selections`, plus
-  request-linked `coach_messages`, forced RLS/grant hardening, and service-role-
-  only atomic claim/complete/fail/select/delete RPCs;
-- a follow-up owner-first advisory-lock wrapper around claim/complete/fail,
-  aligned with history deletion so concurrent lifecycle paths do not acquire
-  owner and request/row locks in inverse order;
-- follow-up database guards that persist whether safety copy bypassed or
-  replaced a provider response, make canonical profile identity/role authority
-  backend-owned, remove legacy-role fallback and authenticated profile delete,
-  and reserve onboarding eligibility projection for the backend Intake RPC;
-- the typed `/coach` Flutter surface, `/more` compatibility alias, visible
-  Today/Patterns/Focus/Review selection, prompt starters that never submit,
-  provider/model/prompt/context/data-use truth, preserved full-payload retry
-  identity, review-only suggestions, explicit memory selection, and
-  conversation deletion; and
-- an independent Flutter surface gate: release builds and
-  `APP_ENV=production` always hide navigation and redirect `/coach` to Settings.
-  When enabled, Coach occupies the fifth shell destination in place of the
-  redundant Settings item; Settings remains available from Today. A disabled
-  gate does not restore Settings as a shell fallback.
-  `COACH_SURFACE_ENABLED` cannot override either production boundary. Exact
-  `true` may expose only the UI boundary in a non-production debug/profile
-  build; backend capability still controls whether sending is ready.
-
-Pending claims store no message, only its fingerprint. Successful completion
-atomically writes the full bounded user/assistant pair. Conversation deletion
-removes messages and request content, leaves content-free request tombstones,
-and retains append-only usage, so it does not reset the daily attempt budget or
-allow request-id reinterpretation. For a V2 tombstone it also neutralizes the
-stored scope and parameters to `today` with `{}`, so a deleted Focus UUID or
-Patterns horizon is not retained.
-
-The additive hardening chain after the base Coach schema is:
-
-- `20260713213000_phase_10_coach_lock_order_guard.sql` aligns public
-  claim/complete/fail wrappers and history deletion on the owner-first lock;
-- `20260713220000_phase_10_coach_safety_provenance_guard.sql` requires exact
-  persisted `provider_called` provenance for model and deterministic-safety
-  responses;
-- `20260713223000_phase_10_profile_privilege_guard.sql` blocks application-role
-  profile insertion and `role`/`auth_provider` mutation while preserving
-  bounded non-identity profile edits;
-- `20260713224500_phase_10_role_authority_guard.sql` removes legacy `"User"`
-  fallback from role authority and revokes authenticated profile deletion; and
-- `20260713230000_phase_10_onboarding_eligibility_guard.sql` revokes
-  authenticated `onboarding_completed_at` updates and keeps that projection
-  behind service-role/atomic Intake apply authority; and
-- `20260725120000_retire_setup_goals_and_friction.sql` admits paired V2
-  prompt/context provenance for new claims while retaining paired V1
-  history/replay validation; and
-- `20260728120000_coach_longitudinal_context_v1.sql` adds exact V2
-  scope-parameter persistence, a separate owner-first V2 claim RPC, paired V3
-  provenance validation, transparent longitudinal source manifests, a
-  history-delete wrapper that removes V2 context selection from tombstones, and
-  query-driven retained Task lifecycle indexes without weakening V1 replay.
-
-## Outcome
-
-Phase 10 makes an authenticated Coach conversation locally testable without an
-OpenAI API key. During development, FastAPI may invoke the
-Codex CLI that is already installed and authenticated for the current Linux or
-WSL user. That user's own ChatGPT subscription-backed Codex login supplies the
-model access.
-
-This is a local development adapter, not the production LLM architecture. A
-future deployed service must use a separately approved server-side provider
-and credential contract. The Flutter app, Supabase, repository, and browser
-must never receive or copy Codex OAuth credentials.
-
-The implemented slice is deliberately narrow:
-
-- one explicit user submit to an authenticated Coach endpoint;
-- one bounded `coach-context-v2|v3` package built by FastAPI under its paired
-  prompt contract;
-- one schema-validated `coach-response-v1` answer;
-- visible data-use, model, prompt, freshness, and uncertainty provenance;
-- no hidden state mutation, background call, or autonomous agent loop.
-
-## Locked Product Decisions
-
-1. The deterministic Daily State, persisted daily briefing, and Phase 3 action
-   contracts remain the source of truth. Coach explains and helps the user
-   think; it does not replace deterministic ranking.
-2. The local provider is named `local_codex_oauth`. It is enabled only by an
-   explicit development flag and an authenticated real Supabase session.
-3. No OpenAI API key is required or accepted by this adapter. There is no
-   Hermes dependency. FastAPI invokes the local `codex` executable directly.
-4. Every developer authenticates Codex in their own Linux environment. A repo
-   clone never inherits another person's login. A WSL user with Pro and a
-   project partner with Plus each run their own `codex login`; actual model
-   availability remains an account/CLI capability and is never promised by the
-   repository.
-5. A requested model may be configured locally. If it is unavailable, the
-   request fails honestly. There is no silent model or API-key fallback.
-   The preferred Phase 10 Coach model is `gpt-5.5`, provided the current Codex
-   CLI/account exposes that exact id. It is the general text/reasoning default
-   and fits nuanced conversation, planning, instruction following, and strict
-   structured output better than a coding-focused Codex/Spark variant.
-   `gpt-5.5-pro` is an optional later quality benchmark for unusually complex
-   reflection or planning when latency and account limits are acceptable; it is
-   not the interactive default. A partner may select a different model
-   available to their own account without changing source code.
-6. The backend has owner-scoped reach across the user's product data, but the
-   model never gets database credentials, arbitrary SQL, or an unbounded table
-   dump. Context is selected, compact, capped, and disclosed to the user.
-7. Imported `.ics` event content is excluded from Phase 10 prompts. Phase 9 did
-   not grant Coach consent merely because calendar import was consented to.
-8. Coach calls occur only after a deliberate send action. Dashboard GET,
-   captures, task/habit/focus writes, scheduled preparation, recommendation
-   generation, and weekly review remain no-LLM paths.
-9. Suggestions are review-only. Phase 10 must not directly create, edit,
-   complete, postpone, archive, or delete a task, habit, schedule item,
-   memory, briefing, review, or calendar row.
-10. No memory is inferred or promoted automatically. Only explicitly selected,
-    reviewable memory may enter context.
+Observational product data does not justify causal, diagnostic, or medical
+claims. Existing deterministic pre-provider and post-provider safety checks
+remain authoritative.
 
 ## Runtime Topology
 
 ```text
 Flutter Coach
-  -> POST /v1/coach/respond with Supabase bearer token
-  -> FastAPI derives user_id and loads bounded owner-scoped context
-  -> LocalCodexCoachProvider starts local `codex exec`
-  -> Codex CLI uses that Linux user's existing OAuth login
-  -> FastAPI validates the model output and adds trusted provenance
-  -> Flutter renders the answer, uncertainty, and "data used" manifest
+  -> authenticated FastAPI coach-request-v3
+  -> owner-locked retry claim and local-day budget
+  -> fresh owner-only personal-snapshot-v1 SQLite file
+  -> local Codex CLI: gpt-5.5, service_tier="fast", fast_mode=true
+  -> required per-turn coach_data stdio MCP server
+       -> inspect_data
+       -> query_data
+       -> run_python -> isolated Docker analysis container
+  -> schema-validated model text
+  -> backend-derived evidence, trace, and provenance
+  -> atomic coach-response-v2 persistence
+  -> SSE completed/failed event or non-streaming wrapper response
+  -> snapshot, scripts, images, and temporary files deleted
 ```
 
-OAuth terminates inside the locally installed Codex CLI. The application must
-not read, print, upload, copy, or parse `~/.codex/auth.json` or equivalent auth
-state. The FastAPI process must run as the same Linux user whose Codex CLI is
-logged in, unless a separate deliberately configured service account is used.
-Do not run the service as root merely to reach another user's auth files.
+The FastAPI process must run as the same Linux/WSL user whose Codex CLI login is
+being used. OAuth material remains in that user's Codex home; it is not copied
+to Flutter, Supabase, the repository, the snapshot, the MCP process, the
+analysis container, or application logs.
 
-## Local Configuration Contract
+The provider starts Codex in an empty private temporary working directory with
+read-only sandboxing, no approvals, ephemeral execution, ignored user rules,
+and a strict output schema. User-configured MCP servers, apps, plugins,
+sub-agents, web search, shell execution, and file/product mutation are not
+available to the turn. The single `coach_data` server is required; startup or
+tool-configuration failure fails the turn.
 
-The implementation adds these backend-only settings. They must not be
-passed to Flutter as Dart defines:
+## HTTP Contracts
 
-```env
-COACH_PROVIDER=disabled
-LOCAL_CODEX_ENABLED=false
-LOCAL_CODEX_BIN=codex
-LOCAL_CODEX_MODEL=gpt-5.5
-LOCAL_CODEX_TIMEOUT_SECONDS=45
-LOCAL_CODEX_MAX_REQUESTS_PER_USER_PER_DAY=20
-```
+All Coach routes require a valid bearer token for a canonical authenticated
+non-guest profile. Guest/mock Flutter remains local and performs zero Coach
+HTTP calls.
 
-The live local adapter is ready only when all of these are true:
+### Capabilities V2
 
-- `APP_ENV=development`;
-- `USE_MOCK_DATA=false` for the Flutter product source boundary;
-- `COACH_PROVIDER=local_codex_oauth`;
-- `LOCAL_CODEX_ENABLED=true`;
-- FastAPI has valid local Supabase backend settings;
-- the request contains a valid real-account Supabase bearer token;
-- `LOCAL_CODEX_BIN` resolves to an executable;
-- `codex login status` succeeds for the FastAPI Linux user.
+`GET /v1/coach/capabilities` returns `coach-capabilities-v2`. It publishes:
 
-`LOCAL_CODEX_MODEL=gpt-5.5` is the recommended Coach setting. When non-empty,
-pass it as one `--model` argument and report it as `model_requested`. If the
-local subscription does not expose it, return `unavailable_model`; never fall
-back silently to Spark or another model. A developer may explicitly configure a
-different locally available model. When the setting is deliberately empty, let
-the CLI choose its default and report the exact truth as
-`model_requested: null` and `model_source: cli_default`; do not invent a model
-name. If the CLI exposes a reliable selected-model field in its machine output,
-preserve that separately as `model_reported`.
+- provider state and the exact configured provider;
+- requested model and model source;
+- `service_tier: "fast"` and `fast_mode: true` for
+  `local_codex_oauth`;
+- 2,000 message code points and 4,000 reply code points;
+- the configured per-local-day allowance and remaining questions;
+- at most 12 tool calls;
+- a 180-second turn timeout;
+- 5-second SQL and 30-second Python limits; and
+- 50,000 snapshot rows and 8 MiB of serialized source data.
 
-### Model Choice Rationale
+The fake and disabled providers report Fast as not applicable. Readiness is
+fail-closed. A different model, an unavailable `gpt-5.5`, rejected Fast
+configuration, missing CLI/login, absent analysis image, non-development
+runtime, mock-data mode, or missing backend persistence produces honest
+disabled/unavailable capability.
 
-The Coach is a general-language reasoning workflow, not a software-engineering
-agent. Its first model must prioritize conversational nuance, current-state
-synthesis, cautious planning, instruction adherence, and reliable JSON over
-coding-tool speed. The preferred order is therefore:
+### Request V3
 
-1. `gpt-5.5` for the normal interactive Coach.
-2. An explicitly configured account-available general reasoning model when
-   `gpt-5.5` is unavailable; this is a user choice, not automatic fallback.
-3. `gpt-5.5-pro` only for a separately evaluated high-effort workflow, never as
-   a hidden upgrade within an ordinary Coach turn.
-
-Do not prefer `gpt-5.3-codex-spark` or another coding-focused Codex variant for
-the Coach simply because the local bridge happens to be the Codex CLI. The CLI
-is the authenticated transport in this development design; it does not make
-the product workflow a coding task.
-
-This choice was made from the locally bundled model-selection fallback available
-on 2026-07-13 because external documentation lookup was explicitly excluded for
-this handoff. Before a later production provider is selected, revalidate the
-model separately under that provider's then-current supported catalog and
-evaluation results.
-
-The checked local CLI on 2026-07-13 was `codex-cli 0.144.1`. Its local help
-exposed `codex login`, `codex login status`, and non-interactive `codex exec`
-with model, read-only sandbox, ephemeral session, ignored user config, JSON
-events, and output-schema options. Its local feature list also exposed enabled
-`shell_tool` and `unified_exec` features. Implementation must feature-detect the
-installed version and fail with a useful unavailable state rather than assuming
-all future or older CLIs have identical flags or allowing a model-controlled
-tool merely because one version names it differently.
-
-Developer preflight is intentionally per machine:
-
-```bash
-codex --version
-codex login
-codex login status
-```
-
-The repository must never automate login, distribute OAuth files, or make a
-real subscription call part of standard verification or CI.
-
-## Provider Invocation Contract
-
-The provider interface is independent of Codex.
-`LocalCodexCoachProvider` is the only real-model adapter; tests use a fake
-provider/process runner, while only an explicit per-machine request may use the
-real CLI.
-
-The subprocess wrapper must:
-
-- use an argv array with `shell=False`; never accept raw extra CLI arguments
-  from a request or environment string;
-- send the prompt/context through stdin (`codex exec ... -`) so personal data
-  is not placed in process arguments;
-- use a new permission-`0700` empty temporary working directory for every
-  request and remove it afterward;
-- use `--ephemeral`, `--ignore-user-config`, `--sandbox read-only`,
-  `--ask-for-approval never`, `--skip-git-repo-check`, and the empty directory
-  as `--cd`;
-- explicitly disable every available model-controlled shell, unified execution,
-  app, browser/computer, plugin, multi-agent, image-generation, and search/tool
-  feature. At minimum the checked CLI requires `--disable shell_tool` and
-  `--disable unified_exec`; feature-detect the rest instead of assuming names;
-- use a committed strict output JSON schema and parse machine-readable events;
-- never use `--search`, `--add-dir`, a config profile, MCP configuration,
-  plugin configuration, hooks, `danger-full-access`, or either dangerous bypass
-  flag;
-- pass only an allowlisted child environment needed by the CLI. In particular,
-  do not inherit Supabase service-role/anon keys, scheduled tokens, application
-  secrets, request headers, or the user's message as environment variables;
-- bound stdin, stdout, stderr, event count, and final reply size;
-- enforce an async timeout, terminate the complete process group on timeout or
-  client cancellation, and reap it;
-- permit at most one in-flight turn per user and a small configured global
-  concurrency;
-- redact stderr and map failures to stable application error codes. Never send
-  raw CLI diagnostics, account identity, paths, tokens, or prompt content to
-  Flutter or normal logs.
-- reject and terminate an invocation if its event stream contains any tool,
-  command, file, browser, app, MCP, plugin, delegation, or approval event.
-
-Ignoring user config prevents an individual's MCP servers, plugins, hooks, and
-prompt customizations from changing application behavior while retaining the
-CLI's own auth lookup. Explicit feature disabling is mandatory: if the installed
-CLI cannot establish a tool-free invocation, capability is `unavailable` and no
-personal context is sent. The empty work directory and read-only sandbox remain
-defense in depth, not a production-grade isolation boundary for a same-user
-agentic CLI. This limitation is why the adapter is development only. The prompt
-must also tell Codex not to invoke tools, but prompt text alone must not be
-described as a security control.
-
-## HTTP Contract
-
-The authenticated, model-call-free reads are:
-
-```text
-GET /v1/coach/capabilities
-GET /v1/coach/context-options
-```
-
-It returns one honest state: `disabled`, `unavailable`, or `ready`, plus the
-provider mode, configured model request, limits, and a sanitized reason code.
-It must not return account identity, OAuth details, filesystem paths, or token
-content. Capability checks must not make a model call.
-
-The one deliberate response endpoint is:
-
-```text
-POST /v1/coach/respond
-Authorization: Bearer <supabase_access_token>
-```
-
-Current request shape:
+`POST /v1/coach/respond` and `POST /v1/coach/respond/stream` accept:
 
 ```json
 {
-  "contract_version": "coach-request-v2",
-  "request_id": "uuid",
-  "message": "bounded user text",
-  "context_scope": "patterns",
-  "context_parameters": {
-    "horizon": "1_year"
-  }
+  "contract_version": "coach-request-v3",
+  "request_id": "11111111-1111-4111-8111-111111111111",
+  "message": "What changed in my focus consistency this semester?"
 }
 ```
 
-Rules:
+Unknown fields, blank messages, invalid UUIDs, or more than 2,000 Unicode code
+points fail strict validation. There is no scope or period field.
 
-- derive `user_id` exclusively from the verified bearer token;
-- reject a body `user_id` and unknown or explicit-null fields;
-- require exact parameters for the selected scope: `{}` for `today` and
-  `review`, one `90_days|1_year|all_available` horizon for `patterns`, or one
-  owner-scoped terminal `focus_session_id` for `focus`;
-- cap `message` at 2,000 Unicode code points after trimming and reject blank
-  input;
-- make `request_id` retry-safe across message, scope, and the complete parameter
-  object. A completed request returns the exact persisted result without a
-  second provider call; an active request reports `in_progress`; a failed
-  request stays failed and an explicit retry uses a new id;
-- never hold a database transaction open while the CLI runs.
+The non-streaming route is the compatibility wrapper used by focused tests and
+older clients. It also continues to accept the old strict V1/V2 requests through
+the legacy service. New Flutter sends V3 through the streaming route.
 
-The old exact `coach-request-v1` Today body remains accepted for compatible
-clients and uses paired V2 prompt/context provenance. It cannot be
-reinterpreted as a V2 mode.
+### SSE
 
-The HTTP response is backend-owned. The model returns only its answer fields;
-FastAPI attaches request identity and provenance that the model cannot invent:
+The streaming route uses `text/event-stream` and emits only:
+
+- `started`, containing request identity and contract version;
+- zero or more allowlisted `activity` messages such as
+  `Preparing a private data snapshot …` or
+  `Testing the data with isolated analysis …`;
+- one `completed` event containing the full response; or
+- one `failed` event containing the strict safe error.
+
+Activity is a compact lifecycle signal, not hidden reasoning. Disconnecting or
+pressing Cancel cancels the running request, terminates the provider process,
+records an interrupted failure when possible, and cleans all turn-local files.
+
+### Response V2
+
+Successful current turns return:
 
 ```json
 {
-  "contract_version": "coach-response-v1",
-  "request_id": "uuid",
-  "reply": "bounded validated text",
+  "contract_version": "coach-response-v2",
+  "request_id": "11111111-1111-4111-8111-111111111111",
+  "reply": "Your directly observed focus duration became more consistent...",
   "uncertainty": {
-    "level": "low|medium|high",
-    "reason": "bounded text"
+    "level": "medium",
+    "reason": "There are only four completed sessions before March."
   },
-  "staged_suggestion": null,
   "safety": {
-    "classification": "normal|sensitive|safety_redirect"
+    "classification": "normal"
   },
-  "used_context": [],
+  "evidence": [
+    {
+      "source": "focus_sessions",
+      "record_count": 18,
+      "period_start": "2026-01-18T09:00:00+00:00",
+      "period_end": "2026-07-24T15:30:00+00:00"
+    }
+  ],
+  "agent_trace": {
+    "tool_call_count": 2,
+    "steps": [
+      {
+        "sequence": 1,
+        "tool": "inspect_data",
+        "status": "completed",
+        "summary": "Inspected the data catalog.",
+        "row_count": null,
+        "duration_ms": 4
+      },
+      {
+        "sequence": 2,
+        "tool": "query_data",
+        "status": "completed",
+        "summary": "Ran read-only SQL and returned 18 row(s).",
+        "row_count": 18,
+        "duration_ms": 9
+      }
+    ],
+    "limitations": []
+  },
   "provenance": {
     "source": "model",
     "provider": "local_codex_oauth",
     "provider_mode": "local_development_only",
-    "model_requested": null,
-    "model_reported": null,
-    "model_source": "cli_default|explicit",
-    "prompt_version": "controlled-coach-prompt-v3",
-    "context_version": "coach-context-v3",
-    "generated_at": "RFC3339 UTC",
-    "provider_called": true
+    "model_requested": "gpt-5.5",
+    "model_reported": "gpt-5.5",
+    "model_source": "explicit",
+    "prompt_version": "free-coach-agent-prompt-v1",
+    "context_version": "personal-snapshot-v1",
+    "generated_at": "2026-07-28T12:00:00Z",
+    "provider_called": true,
+    "service_tier": "fast",
+    "service_tier_status": "configured",
+    "fast_mode": true,
+    "snapshot_row_count": 142,
+    "snapshot_bytes": 87412
   }
 }
 ```
 
-`staged_suggestion` may contain at most one review-only idea with a bounded
-title and rationale. It must have no executable command or apply endpoint in
-the first slice. Invalid, truncated, unknown-field, non-JSON, or oversized
-model output is an unavailable response, never partially rendered as trusted
-Coach content.
+There is no `staged_suggestion`, fixed context manifest, or chat artifact. The
+model produces only `reply`, `uncertainty`, and `safety`. FastAPI reads the MCP
+trace and snapshot catalog to produce the backend-owned `evidence` field, agent
+trace, tool status, and provenance. Despite its contract name, `evidence` is
+conservative snapshot-source coverage: its counts and periods describe the full
+accessed snapshot source, not the exact rows that supported a sentence or that
+one SQL query returned. An `inspect_data` call discovers schema and coverage but
+does not by itself contribute row evidence. A successful SQL step contributes
+the complete catalog count/period for each source it accessed, while the step's
+separate `row_count` is the number of returned rows. Because arbitrary Python
+table attribution is not trusted, a successful Python step records
+`personal_snapshot` coverage for the entire read-only snapshot.
 
-For `safety_redirect`, `provenance.provider_called` distinguishes the
-deterministic pre-provider bypass (`false`) from backend safety copy that
-replaces an unsafe provider result (`true`). The model cannot set either the
-provenance source or this call truth.
+`GET /v1/coach/history` returns `coach-history-v2`. Each turn has the original
+message and either a readable legacy `coach-response-v1` or current
+`coach-response-v2`. The current UI renders both but exposes no historical mode
+controls.
 
-## Context Contract: Full Reach, Minimal Disclosure
+`DELETE /v1/coach/history` remains body-free. It removes user and assistant
+message content and clears persisted V3 evidence/trace/service-tier detail while
+retaining request tombstones and usage accounting. It conflicts while a turn is
+active.
 
-The implemented personalization is not a full database dump. FastAPI owns a
-read-only `CoachContextRepository` that may reach relevant canonical tables for
-the bearer-derived owner, then builds a deterministic compact package. The LLM
-cannot query Supabase itself.
+The context-options and memory-selection endpoints remain only for pre-V3
+compatibility. The current Flutter client does not call them.
 
-The `today` package contains only:
+## Personal Snapshot Contract
 
-- profile-local date/timezone, without email, auth/provider identifiers, or
-  onboarding/coaching preference;
-- the exact current daily snapshot and sanitized
-  `explainable-daily-state-v1|v2` summary;
-- the current persisted `daily-briefing-v1`, including freshness and evidence;
-- bounded active Task, Habit, and current/recent focus summaries needed
-  to explain today's decision;
-- the latest completed weekly review only when its freshness is explicit;
-- at most eight explicitly Coach-selected memory entries;
-- at most six prior completed Coach turns, capped again by total characters.
+FastAPI builds a new `personal-snapshot-v1` SQLite file for each non-safety
+turn. It takes bounded export watermarks first, paginates every source with an
+explicit owner filter, verifies cursor order and ownership again, and only then
+writes the file. Another owner's row fails the turn.
 
-Caps and stable ordering must be constants in the contract. The serialized
-context should be capped at 32 KiB before provider invocation. When facts do not
-fit, truncate deterministically and disclose counts in `used_context`. Do not
-let the model claim it saw rows that were omitted.
+The snapshot includes the retained relevant product projections available
+through the account-export boundary:
 
-The V3 historical modes add only the compact digest described in
-[Longitudinal Context V1 Extension](#longitudinal-context-v1-extension).
-Manifest rows disclose the separate `daily_capture`, `focus_reflections`,
-`habit_outcomes`, `decision_feedback`, `weekly_reviews`, and `task_lifecycle`
-contributions. Missing ratings remain missing rather than zero. Habit rows
-support only explicit completed/skipped counts, not reconstructed adherence;
-Task rows support only currently retained terminal timestamps, not a complete
-transition history. Weekly Review facts remain a derived mutable projection and
-are labelled accordingly.
+- profile timezone and planning/setup projections, excluding email, role, and
+  auth-provider fields;
+- notification and learning preferences;
+- Setup/Intake and Study Setup;
+- Daily Capture, behavioral, and lifestyle entries including retained notes;
+- Tasks, Habits, outcomes, Focus sessions, and Focus reflections;
+- schedule items and stored Inbox rows;
+- Planner commitments, Action Plans, revisions, Task blocks, and Habit slots;
+- Deadline/Preparation plans, revisions, and blocks;
+- calendar connection/import summaries and imported event content, without
+  credentials;
+- Daily State snapshots, briefings, decision feedback, and Weekly Reviews;
+- Insights, Recommendations, skillset projections, goals, and memories; and
+- earlier Coach user/assistant messages.
 
-Excluded in V2:
+The snapshot excludes `coach_requests`, `coach_usage_events`,
+`coach_memory_selections`, authentication records, service keys, provider
+internals, request-identity ledgers, operational retry state, and all other
+users.
 
-- Supabase tokens, service-role credentials, email, auth metadata, internal
-  roles, or cross-user rows;
-- raw full history and arbitrary SQL/tool access;
-- Phase 9 imported calendar event title, description, location, attendees, or
-  raw `.ics` content;
-- check-in context notes, intake free text, notification bodies, or other
-  hidden free text unless a later explicit consent contract names it;
-- Goals, onboarding preferences, coaching style, and all primary/additional
-  friction fields;
-- archived/deleted objects except when an exact current contract needs a
-  non-sensitive status count;
-- raw deterministic prompt internals or secrets in model-visible provenance.
+Each product table has sanitized typed columns when available plus `row_json`
+containing the complete sanitized source row. `_coach_catalog` describes every
+table, available columns, record count, and observed period. A separate
+relationship catalog and read-only helper views make common time-series,
+terminal Focus/reflection, and planning joins discoverable. Empty sources are
+represented honestly.
 
-Allowlisted structured Daily State context is separate from hidden free text.
-It keeps Morning `sleep_hours` and the independent bounded
-`sleep_quality` rating as separate numeric facts so the Coach cannot equate
-duration with restorativeness.
+The initial Account Export limits apply without silent truncation:
 
-User text, Task titles, and memory content are untrusted data, not
-system instructions. Serialize them as typed JSON inside explicit data
-delimiters and keep application instructions outside that data envelope.
+- at most 10,000 rows per source table;
+- at most 50,000 rows across the snapshot; and
+- at most 8 MiB of serialized sanitized source data.
 
-The current memory-selection repository excludes every `type=preference` or
-`type=goal` row. Retired Setup Goal/style/context memories are removed by the
-migration; Coach does not infer equivalent preferences from titles or content.
+Exceeding any boundary fails with `snapshot_too_large`. The snapshot is created
+in a private directory, made read-only before the provider starts, and removed
+in `finally` handling after completion, failure, timeout, or cancellation.
 
-Any later Coach mode must add an explicit scope, source allowlist, limits,
-consent where needed, and user-visible data-use manifest. Do not solve this with
-vector search or direct model tools.
+## Read-Only Tool Contract
 
-## Memory And Retention
+The per-turn stdio MCP server exposes exactly three tools.
 
-Coach memory and chat history are separate:
+### `inspect_data`
 
-- Setup-owned memory remains owned by revisioned Settings Setup. Coach may
-  reference it only after a separate user selection; toggling Coach use must not
-  rewrite Setup metadata or transfer ownership.
-- `coach_memory_selections` is the separate owner-scoped projection; no flag is
-  stored inside metadata that Setup apply replaces.
-- The user can inspect every selected memory and remove it from Coach context.
-  Editing/deleting Setup-owned content routes to Setup; future manual Coach
-  memory needs its own explicit edit/delete contract.
-- Phase 10 does not extract memory candidates from conversation and does not
-  silently update strength, evidence, or `last_seen_at`.
+Returns the catalog, descriptions, counts, periods, relationships, tables, and
+views. It accepts no arguments and performs no mutation.
 
-The implementation persists validated user/assistant turns in
-`coach_messages` under a retry-safe request identity and bounded backend-owned
-response/provenance contract. Flutter no longer inserts canned user or
-assistant rows directly. Authenticated owners read history through FastAPI and
-delete it through the explicit body-free endpoint; model/provider writes go
-through FastAPI. The assembled prompt, copied snapshot, and raw CLI event stream
-are not persisted. A pending claim stores only a message fingerprint, and
-successful atomic completion stores the bounded pair, compact context manifest,
-validated response metadata, and usage counters. Delete removes message/
-response content while retaining content-free request tombstones and append-only
-usage.
+### `query_data`
 
-`--ephemeral` prevents this application invocation from deliberately creating a
-resumable Codex session. It does not by itself define OpenAI service retention,
-which remains outside the repository's control and must not be misrepresented
-in product copy.
+Accepts one SQL string beginning with `SELECT` or `WITH`. SQLite is opened with
+`mode=ro`, `immutable=1`, `query_only=ON`, and `trusted_schema=OFF`. An
+authorizer permits only read/select/function operations and rejects DML, DDL,
+`ATTACH`, transactions, writable pragmas, and extension/file-write functions.
+There is no multi-statement execution.
 
-## Safety Contract
+Each query has a five-second progress deadline, at most 500 returned rows, and
+a bounded 256 KiB result. Truncation is explicit in the tool result.
 
-The Coach is informational planning and reflection support. It must not claim
-diagnosis, treatment, causation, certainty, professional monitoring, or an
-emergency response service.
+### `run_python`
 
-Implement deterministic pre- and post-provider safety boundaries:
+Accepts one bounded Python program. It starts
+`mylifegraph-coach-analysis:1` with:
 
-- an urgent-risk path bypasses ordinary planning language and returns approved
-  safety-oriented copy directing the user toward immediate human/local
-  emergency support;
-- the model may not turn sparse mood, sleep, stress, or behavior data into a
-  medical conclusion;
-- uncertainty is required when evidence is missing, partial, stale, or
-  conflicting;
-- provider failure must never fabricate reassurance or imply a human reviewed
-  the message;
-- safety copy and tests must be locale-aware before production claims are made.
+- no network;
+- no secrets or inherited backend environment;
+- a non-root `65532:65532` user;
+- read-only root filesystem;
+- all Linux capabilities dropped and `no-new-privileges`;
+- only `/data/personal.sqlite` mounted read-only;
+- a 64 MiB temporary filesystem;
+- one CPU, 512 MiB RAM, no swap growth, and at most 64 processes;
+- a 30-second timeout and bounded output; and
+- isolated Python with Pandas, NumPy, SciPy, Statsmodels, and Matplotlib.
 
-Safety checks must be tested independently of a live model. Do not rely only on
-the system prompt or the model's own classification.
+The runner exposes a read-only SQLite helper and captures at most one bounded
+PNG plot for the model's internal analysis. Plots are not persisted in
+Supabase, returned in `coach-response-v2`, or shown in Flutter. The temporary
+container and all turn files are removed after the turn.
 
-## Usage And Failure Truth
+All three tools append backend-readable JSONL facts to the private trace file.
+There are at most 12 calls total, including failed calls. Tool output and all
+free text are untrusted data and cannot add tools or permissions.
 
-Even when a subscription rather than an API bill supplies access, the app needs
-bounded use:
+## Provider And Fast Contract
 
-- default maximum 20 successful/attempted turns per user per local day;
-- one in-flight request per user and a small global concurrency cap;
-- bounded request, context, output, and timeout values;
-- usage recorded without storing full prompts;
-- stable errors for disabled provider, missing CLI, not logged in, unavailable
-  model, rate limit/account limit, timeout, invalid output, safety redirect, and
-  generic provider failure.
+The real provider is exactly `local_codex_oauth`. It invokes:
 
-Flutter must keep `disabled`, `unavailable`, `loading`, `ready`, `rate_limited`,
-and `error` distinct. It must retain the unsent/failed draft and never replace a
-real failure with the old canned response or demo content. Guest/mock mode shows
-an honest local-unavailable Coach state and makes zero backend/model calls.
+- model `gpt-5.5`;
+- `service_tier="fast"`; and
+- `[features].fast_mode=true`.
 
-## Flutter Slice
+These settings are passed explicitly for every agent turn. The provider checks
+that the installed CLI exposes Fast configuration and rejects a reported model
+other than `gpt-5.5`. There is no automatic model fallback and no silent
+standard-tier downgrade. User-visible provenance is
+`gpt-5.5 · Fast configured`.
 
-The gated canned Coach implementation and direct Supabase writer are replaced
-rather than merely removing the route redirect.
+Fast mode is currently documented by OpenAI as roughly 1.5 times the speed and,
+for ChatGPT login, 2.5 times the credits. That is an operational tradeoff for
+this local preview, not a product guarantee.
 
-The first usable surface:
+The normal turn limit is 180 seconds. The existing global local-provider
+semaphore orders low-concurrency local requests. Per-user persistence allows at
+most one pending turn and 20 newly started user questions per profile-local
+day by default. Tool calls do not consume additional user-request budget.
 
-- be exposed only when the independent surface gate is enabled, including its
-  fifth shell destination;
-- let an authenticated real account inspect persisted history and capability
-  truth while the provider is disabled or unavailable, while only a backend
-  `ready` capability enables sending;
-- show guest/mock unavailability locally with zero Coach HTTP calls when a
-  development build deliberately exposes the surface;
-- explain that the active provider is a local development connection;
-- load persisted validated history without generating a reply;
-- display Today, Patterns, Focus, and Review inside the existing Coach page,
-  with conditional horizon/session controls and prompt starters that only fill
-  the draft;
-- send only through FastAPI with a fresh retry-safe request id bound to the
-  complete selected context;
-- show the answer, uncertainty, freshness, local-provider/model provenance, and
-  expandable `Data used` manifest;
-- show selected memories with inspect/deselect and correct Setup ownership
-  routing;
-- present any suggestion as review-only text with no apply action;
-- preserve the draft and scroll position across context changes, preserve the
-  exact message plus context after an ambiguous timeout, rotate identity when
-  either changes, and prevent double submit;
-- expose delete-history and memory-control actions;
-- never write directly to `coach_messages` from Flutter.
+## Persistence And Replay
 
-The existing `MorePage` canned string and `CoachSupabaseService.addMessage`
-path are not an implementation foundation. Remove or replace them so they
-cannot be accidentally ungated.
+Migration
+`20260728160000_free_read_only_coach_agent_v1.sql` is additive. It:
 
-## Implementation Order Used
+- admits `coach-request-v3` while retaining V1/V2 rows;
+- adds bounded evidence, agent trace, tool-count, and service-tier columns;
+- validates the exact `coach-response-v2` and trusted provenance pairing;
+- adds the service-role-only `claim_coach_request_v3` and
+  `complete_coach_request_v2` RPCs;
+- binds V3 replay to owner, request id, and message fingerprint only;
+- preserves owner-before-request lock order, one pending owner turn, terminal
+  replay behavior, and the local-day budget; and
+- extends history deletion to remove V3 detail without resetting usage or
+  request identities.
 
-1. Freeze strict Python and Dart request/response/context models and the model
-   output JSON schema.
-2. Add backend settings and an injectable `CoachProvider` interface with a fake
-   provider for tests.
-3. Implement the hardened local Codex subprocess adapter and capability check.
-4. Add owner-scoped context loading, stable caps/order, memory selection, usage,
-   retry identity, and any required migration/RLS hardening.
-5. Add `GET /v1/coach/capabilities`, history/memory-control reads, deletion, and
-   `POST /v1/coach/respond`.
-6. Replace the gated/canned Flutter Coach with the real typed FastAPI boundary.
-7. Add unit, repository, widget, migration/RLS, subprocess, and browser tests.
-8. Run the standard checks and local Supabase E2E with the fake provider.
-9. Run one explicitly opt-in manual real-Codex smoke locally; do not include it
-   in CI or claim it for a partner/account that was not tested.
-10. Update all affected docs and record exact current-checkout verification.
+Application roles receive no new Coach write authority. Authenticated owners
+retain only the intended bounded reads. The FastAPI service role remains the
+only normal claim/complete/fail/delete mutation path.
+
+Retrying the same V3 request id and exact message replays the stored terminal
+result. Reusing that id with another message conflicts. A completed, failed,
+deleted, or still-active request is never reinterpreted as a new question.
+Expired leases are accounted as interrupted failures before retry state is
+returned.
+
+## Safety And Trust Boundaries
+
+- Setup text, notes, memories, imported calendar content, earlier chat, SQL
+  values, and Python output are data, never instructions.
+- The agent receives no service-role credential, Supabase URL, OAuth file,
+  general host filesystem, host shell, network tool, app, plugin, sub-agent, or
+  mutation endpoint.
+- Direct deterministic safety redirects may bypass snapshot/provider creation.
+  Post-provider safety may replace unsafe model text while retaining truthful
+  `provider_called`.
+- The final reply contains no chain-of-thought. SSE activity and persisted
+  traces expose only tool names, completion state, bounded summaries, counts,
+  durations, data ranges, and limitations.
+- Model-produced evidence, counts, tool traces, provenance, or mutation claims
+  are ignored because those fields are backend-owned.
+- The Coach is informational. It must not claim causal, diagnostic, or medical
+  certainty from these observational records.
+
+## Flutter Contract
+
+Coach remains the fifth development-gated shell destination. Settings stays
+available from the top-right Today control. Release builds and
+`APP_ENV=production` hide Coach regardless of Flutter defines.
+
+Inside Coach, the current surface contains:
+
+- capability/status and remaining-question truth;
+- persisted conversation history;
+- one free text field and Send;
+- a Cancel action only while a stream is active;
+- short safe activity text;
+- Clear history; and
+- an expandable `Data & analysis` section below each current answer.
+
+The detail section labels the backend-owned `evidence` rows as
+`Snapshot source coverage`. It shows conservative source periods/counts,
+SQL/Python/inspection steps, limitations, and technical provenance. It does
+not imply that every covered row was returned by a query or used in the prose,
+and it does not show plots, raw hidden reasoning, mode controls, time-horizon
+controls, Focus selectors, prompt buttons, memory selectors, or structured
+action cards.
+
+All visible Coach UI and model-facing reply copy is English.
+
+## Local Preparation
+
+Build the pinned analysis image explicitly before a presentation:
+
+```bash
+npm run prepare:coach-analysis
+```
+
+The local Coach stack command verifies the image revision and builds it when it
+is missing or stale:
+
+```bash
+npm run start:local:coach
+```
+
+The normal deterministic path remains:
+
+```bash
+npm run start:local:coach:fake
+```
+
+The live command additionally requires a current `codex login`, a CLI version
+that supports `gpt-5.5` Fast configuration and required stdio MCP servers,
+Docker, local Supabase, applied migrations, and the development Coach surface
+gate. See [Local Development](local-dev.md) for the complete runbook.
 
 ## Verification Contract
 
-Default automated tests must never require network access, a ChatGPT account,
-or a real Codex login. Provide a fake executable/provider fixture that proves:
+Standard deterministic automation must prove:
 
-- exact argv, no shell, stdin-only prompt delivery, isolated work directory,
-  allowed environment, no application secrets, and cleanup;
-- required tool-feature disabling, unavailable behavior when tool-free mode
-  cannot be established, and rejection of every unexpected tool event;
-- valid schema parsing plus unknown/null/coerced/oversized/truncated rejection;
-- timeout/process-group termination and sanitized stderr;
-- missing binary, unauthenticated CLI, unavailable model, rate-limit, and
-  non-zero-exit mapping;
-- owner-derived context and zero cross-user data;
-- stable pagination, ordering, caps, manifest counts, and 32 KiB limit;
-- exact V2 mode/parameter replay, 90-day/one-year/all-retained boundaries,
-  terminal Focus ownership/defaulting, two complete ISO-week boundaries,
-  adaptive at-most-24 buckets, partial truth, and deterministic fingerprints;
-- no imported calendar content or hidden capture/intake free text in context;
-- no model call on capabilities, GET/history, Dashboard, capture, CRUD,
-  scheduled, recommendation, or weekly-review paths;
-- request replay returns the same completed turn without a second fake call;
-- one in-flight request per user and bounded usage;
-- memory selection, Setup ownership, history deletion including V2
-  scope/parameter neutralization, and RLS;
-- safety bypass and unsafe/invalid model-output rejection;
-- Flutter guest/mock isolation, honest unavailable/error states, preserved
-  draft, provenance/data-use display, and no direct Supabase Coach write.
+- strict scripted direct-answer paths can finish with zero tool calls;
+- scripted multi-tool traces can combine SQL calls and represent full retained
+  source periods;
+- the isolated Python tool supports statistical code and one internal plot
+  without a visible artifact;
+- SQL cannot write, attach, change pragmas, load extensions, or bypass limits;
+- Python cannot reach the network, host files, Supabase, Codex OAuth, service
+  secrets, or product mutation paths;
+- prompt injection embedded in Setup, notes, memories, and calendar content
+  cannot add tools or authority;
+- tool count, query/result/output limits, cancellation, timeout, provider
+  errors, missing/stale image, oversized snapshots, replay conflicts, one
+  active turn, daily budget, and history deletion fail safely;
+- conservative source coverage and trace are derived from actual MCP records:
+  inspection alone adds no row coverage, SQL has separate returned-row counts,
+  and Python records full-snapshot read scope;
+- the authenticated onboarding-empty API path answers without inventing
+  personal history, while the seeded student account renders honestly; reload
+  retains current and legacy history; and
+- the UI has no fixed mode, horizon, Focus, prompt-starter, memory-selection, or
+  staged-action surface.
 
-The browser journey is configured to use the deterministic fake provider.
-`services/ai_service/tests/test_local_codex_smoke.py` is the separate
-real-subscription smoke; it is skipped unless `RUN_LOCAL_CODEX_SMOKE=true`, uses
-only synthetic context, and must print no prompt or CLI event stream. Any live
-result is specific to its machine, CLI, login, account, and configured model.
-The first same-machine product-path criterion has been exercised; another Linux
-user's independent clone/login acceptance remains open.
+Standard tests use the deterministic fake provider. They do not prove a real
+model, autonomous tool choice, false-premise judgment, semantic quality, OAuth
+login, Fast acceptance, Docker daemon, or external service. The system-prompt
+tests enforce instructions for missing information, counterexamples, and
+clarifying questions; only a real-model evaluation can assess how well a model
+follows them.
 
-Exact current results and dated fake/live-provider evidence live in
-[Current Verified Baseline](verification.md#current-verified-baseline) and the
-historical sections of `docs/verification.md`. Those records do not establish a
-deployable provider, a different account's model access, or remote production
-state.
+The opt-in live smoke must record current-machine evidence that:
 
-Focused Python and Flutter tests plus migration contract tests exist in the
-checkout, but source coverage is not a pass claim. Record actual commands and
-results only after they run in the current checkout.
+- Codex accepted a strict explicit `gpt-5.5` invocation with no fallback, and
+  any reported model matched it;
+- Fast was explicitly configured and not downgraded;
+- the required data MCP started;
+- a complex synthetic-data question completed through multiple allowed tools;
+  and
+- the emitted tool trace and source-scope provenance match that provider
+  execution.
 
-## Phase 10 Acceptance Criteria
-
-The repository implementation covers the contract below, and the first
-end-to-end live-account criterion is now verified on this machine. The
-synthetic provider smoke alone did not establish that result; the separate
-Flutter/FastAPI product-path run recorded above did. One live-account criterion
-remains open, so Phase 10's full multi-developer acceptance is not complete:
-
-- **Verified on this machine, 2026-07-13:** a real authenticated local user can
-  deliberately receive one validated Coach answer through their own logged-in
-  Codex CLI without an API key;
-- **Open:** another Linux user can clone the repo, log in with their own eligible
-  account, and use the same documented setup without copied credentials;
-- disabled, missing-login, unavailable-model, timeout, invalid-output, and
-  account-limit states are honest and recoverable;
-- the user can see which compact product sources and memories were used;
-- no cross-user row, application secret, imported calendar content, hidden free
-  text, or direct database credential enters the model input;
-- no Coach response can silently mutate product state;
-- standard tests pass entirely with a fake provider and the real local smoke is
-  explicitly opt-in;
-- documentation calls the adapter local-development-only and makes no deployed
-  availability, production security, or universal Plus/Pro model claim.
+This provider smoke does not pass through FastAPI persistence or Flutter.
+Deterministic API/browser tests separately prove request replay, persisted
+response/history, deletion, budget behavior, and the expandable UI.
 
 ## Explicitly Later
 
-- a deployable API/provider adapter and production secret/billing policy;
-- mobile-device execution without a developer Linux host;
-- provider failover or API-key fallback;
-- multiple specialized autonomous agents;
-- background Coach messages or notification delivery;
-- vector search or model-controlled database tools;
-- imported calendar content in prompts;
-- automatic memory extraction/promotion;
-- executable Task/Habit/schedule changes from Coach;
-- clinical, diagnostic, therapeutic, or emergency-monitoring features.
+- a production Responses API provider and deployable credential strategy;
+- scalable remote snapshot and sandbox workers;
+- deployed multi-user concurrency, queues, and cancellation control plane;
+- push/background Coach turns;
+- writable or executable Coach actions;
+- persisted or user-visible analysis plots; and
+- automatic planning, calendar, notification, task, habit, or memory mutation.
 
-## Visual presentation
-
-Coach uses the shared [Frontend Visual System V2](frontend-visual-system-v2.md).
-Its iconography, surfaces, and interaction polish do not alter routing, provider
-selection, persisted context, budgets, safety provenance, or mutation authority.
+This local architecture keeps the future provider seam visible without claiming
+that a local Codex OAuth process is a production multi-user service.

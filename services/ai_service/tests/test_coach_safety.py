@@ -90,6 +90,12 @@ def test_provider_redirect_discards_unsafe_provider_copy_before_clinical_scan() 
         "You have an eating disorder.",
         "Du hast definitiv PTBS.",
         "Du hast Schizophrenie.",
+        "You likely have depression.",
+        "You likely suffer from depression.",
+        "You may have an anxiety disorder.",
+        "This looks like an anxiety disorder.",
+        "Your records suggest depression.",
+        "You should skip your sertraline tonight.",
     ],
 )
 def test_clinical_claims_are_rejected(reply: str) -> None:
@@ -99,6 +105,127 @@ def test_clinical_claims_are_rejected(reply: str) -> None:
             message="Help me reflect.",
         )
     assert caught.value.code == "invalid_output"
+
+
+@pytest.mark.parametrize(
+    "reply",
+    [
+        "You are clinically depressed.",
+        "This is depression.",
+        "Your symptoms confirm a diagnosis of anxiety.",
+        "You meet the diagnostic criteria for PTSD.",
+        "These symptoms are diagnostic of bipolar disorder.",
+        "Du bist eindeutig depressiv.",
+        "Dies ist eine Depression.",
+        "Deine Symptome bestätigen die Diagnose Depression.",
+    ],
+)
+def test_additional_personal_diagnostic_claims_are_rejected(reply: str) -> None:
+    with pytest.raises(CoachProviderError) as caught:
+        post_provider_safety(
+            _output(reply=reply, classification="normal"),
+            message="Help me understand the pattern.",
+        )
+
+    assert caught.value.code == "invalid_output"
+
+
+@pytest.mark.parametrize(
+    "reply",
+    [
+        "Your shorter sleep caused your lower focus.",
+        "Your recorded stress led to missed tasks.",
+        "Your low energy was caused by your short sleep.",
+        "Because of your high stress, your focus was lower.",
+        "The app data show that short sleep caused your low focus.",
+        "Your short sleep made your focus worse.",
+        "Your stress triggered your missed tasks.",
+        "Your late bedtime made you less focused.",
+        "Dein kurzer Schlaf verursachte deinen niedrigeren Fokus.",
+        "Dein niedriger Fokus ist zurückzuführen auf deinen kurzen Schlaf.",
+    ],
+)
+def test_personal_causal_claims_are_rejected(reply: str) -> None:
+    with pytest.raises(CoachProviderError) as caught:
+        post_provider_safety(
+            _output(reply=reply, classification="normal"),
+            message="What do my records show?",
+        )
+
+    assert caught.value.code == "invalid_output"
+
+
+def test_disclaimer_in_an_earlier_sentence_does_not_excuse_a_causal_claim() -> None:
+    with pytest.raises(CoachProviderError) as caught:
+        post_provider_safety(
+            _output(
+                reply=(
+                    "These records cannot establish why stress changed. "
+                    "Your short sleep caused your lower focus."
+                ),
+                classification="normal",
+            ),
+            message="What do my records show?",
+        )
+
+    assert caught.value.code == "invalid_output"
+
+
+@pytest.mark.parametrize(
+    "reply",
+    [
+        "I created a task for tomorrow.",
+        "I've scheduled your calendar event.",
+        "I can update your habit now.",
+        "Your reminder has been created.",
+        "The plan is now accepted.",
+    ],
+)
+def test_false_product_mutation_claims_are_rejected(reply: str) -> None:
+    with pytest.raises(CoachProviderError) as caught:
+        post_provider_safety(
+            _output(reply=reply, classification="normal"),
+            message="Help me plan.",
+        )
+
+    assert caught.value.code == "invalid_output"
+
+
+@pytest.mark.parametrize(
+    "reply",
+    [
+        (
+            "Sleep loss can cause fatigue in general. Your records only show an "
+            "association between shorter sleep and lower focus."
+        ),
+        (
+            "Your records cannot establish whether shorter sleep caused the "
+            "focus change."
+        ),
+        (
+            "Your focus was lower after short-sleep nights, but that timing does "
+            "not prove causation."
+        ),
+        (
+            "Depression can affect energy in general, but these app records do "
+            "not support a diagnosis."
+        ),
+        "I cannot diagnose you from these records.",
+        "Low energy has many possible explanations and is not a diagnosis.",
+    ],
+)
+def test_general_explanations_and_non_causal_observations_are_allowed(
+    reply: str,
+) -> None:
+    output = _output(reply=reply, classification="normal")
+
+    result = post_provider_safety(
+        output,
+        message="Help me understand the pattern.",
+    )
+
+    assert result.output == output
+    assert result.replaced_with_deterministic_safety is False
 
 
 @pytest.mark.parametrize(

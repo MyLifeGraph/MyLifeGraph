@@ -322,22 +322,21 @@ Already implemented:
     for review without moving reservations. The next-semester course-selection
     window creates Planner attention only, never a Task, calendar row,
     notification, or background command.
-- Phase 10 Controlled Coach:
-  - Strict authenticated capability, deliberate response, history/delete, and
-    explicit memory-selection contracts with guest/mock zero-call behavior.
+- Phase 10 free read-only Coach:
+  - Strict authenticated V3 free-question, V2 response/capability/history,
+    streaming/cancel, and history-delete contracts with guest/mock zero calls.
   - A deterministic fake provider for normal tests and an opt-in,
-    development-only `local_codex_oauth` adapter with fixed tool-free Codex CLI
-    invocation, allowlisted environment, bounded process I/O/time/concurrency,
-    strict output schema, and no API-key/model fallback.
-  - At most 32 KiB of owner-scoped current context, including current state and
-    briefing, bounded active facts, a current weekly review, up to eight
-    explicitly selected eligible memories, and up to six completed turns.
-    Goals, onboarding preferences, coaching style, friction, imported calendar
-    content, hidden free text, credentials, and cross-user rows remain excluded.
-  - Message-free pending claims, exact retry replay, one in-flight request per
-    owner, retained profile-local daily attempt limits, atomic validated
-    user/assistant completion, deterministic safety bypass/post-checks, and
-    review-only non-executable suggestions.
+    development-only `local_codex_oauth` adapter that requires `gpt-5.5` Fast,
+    one required three-tool data MCP, bounded process state, and no fallback.
+  - A fresh owner-only SQLite snapshot per turn covering retained relevant
+    product detail plus catalog/relationships/counts/periods/views. Auth,
+    secrets, cross-user, provider, anti-replay, and operational rows are
+    excluded; 50,000 rows/8 MiB fail instead of truncating.
+  - Exactly read-only inspection, immutable SQL, and isolated no-network Python
+    under tool/query/process limits. Internal plots are ephemeral and invisible.
+  - Exact message replay, one pending owner turn, retained local-day question
+    budget, atomic validated completion, deterministic safety, backend-derived
+    evidence/trace/Fast provenance, and no product mutation/suggestion card.
   - A follow-up wrapper gives claim, complete, fail, and history delete one
     owner-first advisory-lock order before existing request/row locks.
   - Conversation deletion removes message/content projections and tombstones
@@ -409,8 +408,8 @@ repositories, and jobs, not as unconstrained autonomous LLM loops.
 | Weekly review service | Explicit completed-week review read/generation | Profile timezone, weekly snapshot, tasks, habits/outcomes, focus, daily snapshots, `decision_feedback` | `weekly_reviews` derived output only | None for v1 |
 | Calendar import service | Explicit consent and selected `.ics` upload | Bounded iCalendar text, profile timezone, owned connection | `calendar_connections`, `calendar_imports`, `calendar_events`, opaque `calendar_request_identities` | None |
 | Deadline planning service | Explicit user proposal/confirmation/lifecycle command | User-entered estimate, profile timezone/energy window, app commitments, confirmed blocks, optional current imported busy time | `deadline_plans`, immutable revisions/blocks, one first-confirm managed task, opaque request identities | None |
-| Coach service | Deliberate authenticated user send with explicit mode | Current Today package or a deterministic bounded longitudinal digest, selected memory, recent completed turns | Validated `coach_messages`, exact context selection, compact provenance/usage only | One configured provider call, budgeted |
-| Memory selection service | Explicit user inspect/select/deselect | Owner-scoped eligible `memory_entries` plus Setup ownership | Separate Coach selection projection; content changes only through its owning contract | None for Phase 10 v1 |
+| Coach service | Deliberate authenticated free question | Fresh owner-only SQLite snapshot; required read-only inspect/SQL/isolated-Python MCP | Validated `coach_messages`, backend-derived evidence/trace/provenance, request/usage state only | One configured `gpt-5.5` Fast agent turn, budgeted |
+| Legacy memory selection service | Pre-V3 compatibility call only | Owner-scoped eligible `memory_entries` plus Setup ownership | Separate legacy selection projection; current Coach ignores it and content changes only through its owner | None |
 | Planning service | Weekly review, user request | Tasks, habits, schedule, snapshots | `tasks`, `schedule_items`, `recommendations`, `coach_messages` | Optional for complex plans |
 | Notification lifecycle service | Deliberate authenticated Inbox action | One owner-scoped stored notification plus retry identity | Read/unread/dismiss projection and `notification_action_requests` result ledger | None |
 | Notification generation service | Protected current-day local scheduler run | Explicit delivery consent, profile timezone, current snapshot/briefing, exact completed weekly review | Bounded deduplicated `notifications` rows with strict provenance | None |
@@ -749,44 +748,52 @@ Implemented authenticated endpoints:
 
 ```text
 GET /v1/coach/capabilities
-GET /v1/coach/context-options
 POST /v1/coach/respond
+POST /v1/coach/respond/stream
 GET /v1/coach/history
 DELETE /v1/coach/history
-GET /v1/coach/memories
-POST|DELETE /v1/coach/memories/{memory_id}/selection
 Authorization: Bearer <supabase_access_token>
 ```
+
+Context-options and memory-selection endpoints remain only for older clients.
+Current Flutter does not call them.
 
 Current behavior:
 
 1. Derive the owner from the verified Supabase bearer token and claim a
-   retry-safe bounded request identity. V2 identity binds message, exact
-   `today|patterns|focus|review` scope, and its complete parameter object.
-2. Keep compatible V1 Today on paired context/prompt V2. Build new
-   `coach-context-v3` under `controlled-coach-prompt-v3`: Today reuses the
-   current sanitized package; Patterns folds 90-day, one-year, or all-retained
-   evidence; Focus uses one explicit terminal session plus a bounded baseline;
-   Review compares the last two complete profile-local ISO weeks.
-3. Page and fold only structured Daily Capture, terminal Focus/current
-   reflection, explicit Habit outcome, Decision Feedback, validated Weekly
-   Review, and retained terminal Task facts. Emit at most 24 adaptive buckets,
-   stable caps/order, partial/coverage/limitation truth, a deterministic
-   fingerprint, and per-source counts. Never give a model database credentials,
-   arbitrary SQL, raw full history, imported calendar content, hidden free
-   text, or cross-user rows.
-4. Build historical evidence under a separate bounded concurrency/timeout,
-   release it, then call one explicitly configured provider only after a
-   deliberate Coach send.
-5. Validate strict model output, then attach backend-owned request, provider,
-   model, prompt, context, time, safety, and uncertainty provenance.
-6. Atomically persist only the bounded validated user/assistant pair, compact
-   manifest, response provenance, request state, and usage counters. Do not
-   store the assembled prompt or raw provider event stream.
-7. Return at most one review-only staged suggestion with no mutation command.
-8. Delete conversation content explicitly while retaining request tombstones and
-   append-only usage, so deletion neither resets budget nor permits request-id
-   reinterpretation.
+   retry-safe V3 identity bound only to request id and exact message. Enforce one
+   pending owner turn and the profile-local daily question budget.
+2. Preserve V1/V2 request/response/history parsing for compatibility, but expose
+   no fixed Today, Patterns, Focus, Review, horizon, Focus-session, prompt, or
+   memory-selection choice in the current product. The legacy newest pair is
+   `controlled-coach-prompt-v3`/`coach-context-v3`.
+3. Build a fresh immutable owner-only SQLite snapshot from the retained relevant
+   Account Export sources. Include detail text and a catalog/count/period/
+   relationship layer; exclude auth, credentials, provider internals,
+   anti-replay/usage/selection ledgers, operational state, and other owners.
+   The current pair is `free-coach-agent-prompt-v1` with
+   `personal-snapshot-v1`.
+   Fail rather than truncate beyond 10,000 rows per table, 50,000 total, or
+   8 MiB.
+4. Start the explicitly configured agent only after deliberate send and
+   deterministic pre-safety. Provide one required stdio MCP with exactly
+   `inspect_data`, bounded immutable-SQL `query_data`, and no-network,
+   non-root, read-only-container `run_python`. Allow at most 12 tools and
+   180 seconds; SQL and Python have shorter limits.
+5. Let the model answer directly, combine tools, test a hypothesis, correct a
+   premise, state missing information, or ask a concise question. Treat all
+   stored free text and calendar content as untrusted data.
+6. Validate model-owned reply/uncertainty/safety only. Derive evidence
+   source/count/period, SQL/Python/inspection trace, limitations, model/Fast
+   provenance, and snapshot size from backend execution records.
+7. Stream only `started`, allowlisted lifecycle `activity`, and one
+   `completed|failed`; cancellation terminates work and cleans temporary files.
+   The non-streaming route awaits the same service.
+8. Atomically persist the bounded answer, evidence, trace, provenance,
+   user/assistant pair, request state, and usage. No structured suggestion,
+   plot, script, prompt, raw CLI stream, or mutation command is stored.
+9. Delete conversation/evidence/trace content while retaining tombstones and
+   append-only usage so deletion cannot reset budget or request identity.
 
 The first test provider is deliberately `local_codex_oauth`. When explicitly
 enabled in development, FastAPI invokes the current Linux/WSL user's already
@@ -795,11 +802,10 @@ their own `codex login`; OAuth files never enter Flutter, Supabase, Git, `.env`,
 or application logs. This same-user agentic subprocess is a local testing
 adapter, not a production isolation/deployment design. The complete implemented
 boundary is `docs/phase-10-controlled-coach-plan.md`.
-The preferred normal Coach model is `gpt-5.5`: this workflow values general
-conversation, synthesis, cautious planning, and strict structured output over
-coding-agent speed. Do not default to Spark merely because Codex CLI supplies
-the local OAuth bridge, and do not silently replace an unavailable configured
-model.
+Every real turn requires `gpt-5.5`, `service_tier="fast"`, and
+`fast_mode=true`. Do not default to Spark, another model, or the standard
+service tier merely because Codex CLI supplies the local OAuth bridge. A
+reported/configured mismatch is an honest failed capability.
 
 ## LLM Cost Control
 
@@ -807,10 +813,12 @@ Use these rules before adding any model provider:
 
 - No LLM calls on dashboard load.
 - No LLM calls for simple CRUD, check-ins, or deterministic recommendations.
-- No full-history prompts.
-- Build and reuse `user_state_snapshots`.
-- Limit coach context to the latest compact snapshot, selected memories, and a
-  small message window.
+- Do not serialize full history into the prompt. Put relevant retained data in
+  the ephemeral owner-only snapshot and let the agent query only what it needs.
+- Keep deterministic `user_state_snapshots` for non-Coach product workflows;
+  the Coach snapshot is per-turn and is never reused.
+- Bound Coach snapshot rows/bytes, tool count, SQL/Python results, answer size,
+  and turn time even when the retained period is complete.
 - Use idempotency keys for jobs that could retry.
 - Track LLM usage per user before enabling broad access.
 - Keep per-user, concurrency, timeout, input, context, and output caps even when
@@ -1166,28 +1174,34 @@ local migration, remote, or installed-device pass without running that boundary.
 The exact behavior, schema, routes, copy, and verification boundary live in
 `docs/planner-v1-contract.md`.
 
-### Completed Slice 10: Controlled Coach
+### Completed Slice 10: Free Read-Only Coach Data Agent
 
-- Added strict authenticated `coach-request-v1`, `coach-response-v1`,
-  `coach-capabilities-v1`, history, and memory-selection boundaries.
-- Added an injectable provider abstraction. Standard tests use a fake; one
-  explicit local-development adapter invokes the same Linux user's Codex CLI
-  and existing OAuth login without `OPENAI_API_KEY` or Hermes.
-- Prefer `gpt-5.5` for normal Coach turns. Its absence is honest
-  configuration and allow an explicit per-developer override; do not silently
-  choose a coding-focused Codex/Spark variant.
-- Uses full owner-scoped backend reach with minimal model disclosure: current
-  compact state, briefing, bounded active life-graph facts, selected memory, and
-  a small message window only. Imported calendar content remains excluded.
-- Surfaces exact data-use, freshness, uncertainty, provider/model, prompt, and
-  context provenance. Keep all suggestions review-only and non-mutating.
-- Replaced the gated canned Coach and direct Flutter message insert path; keeps
-  guest/mock at zero backend/model calls.
-- Bounds usage, concurrency, process environment, output, timeout, retention,
-  memory selection, safety, and retry identity before calling a real model.
-- Persists successful turns as one atomic user/assistant pair, retains request
-  and usage identity across deletion, and stores no prompt or raw CLI event
-  stream. Suggestions remain review-only and non-executable.
+- Added strict authenticated message-only `coach-request-v3`,
+  `coach-response-v2`, `coach-capabilities-v2`, `coach-history-v2`, and an SSE
+  lifecycle stream while retaining readable V1/V2 history.
+- Removed current fixed mode, horizon, Focus-session, prompt-starter, selected
+  memory, and structured suggestion surfaces. Guest/mock remains zero-call.
+- Added one fresh owner-only SQLite snapshot per turn with retained relevant
+  product detail, catalog, relationships, counts, periods, and helper views.
+  Auth, credentials, cross-user, anti-replay, and operational rows are excluded;
+  50,000 rows/8 MiB fail rather than truncate.
+- Added one required per-turn stdio MCP with exactly catalog inspection,
+  immutable bounded SQL, and isolated Python. The Python image has no network or
+  secrets, runs non-root with read-only root/snapshot, and bounds temp space,
+  CPU, RAM, PIDs, output, and time. Internal plots are ephemeral.
+- Added backend-derived conservative snapshot-source coverage and compact tool
+  trace. Inspection alone adds no row coverage, SQL returned-row counts stay
+  separate, and arbitrary Python is attributed to the full snapshot. The model
+  cannot invent source coverage, SQL/Python execution, limitations, or
+  provenance.
+- Requires explicit `gpt-5.5` Fast configuration on the local Codex OAuth
+  adapter; model/tier mismatch fails with no fallback. Standard tests use a fake.
+- Bounds one pending owner turn, 20 questions per local day by default, 12 tools,
+  180 seconds, SQL/Python sublimits, reply size, replay, cancellation, safety,
+  and global local concurrency.
+- Persists one atomic user/assistant pair plus backend-derived source
+  coverage/trace/provenance, retains request/usage identity across deletion, and
+  stores no prompt, script, plot, or raw CLI stream.
 - Hardens persisted safety-call provenance plus canonical profile role and
   onboarding authority. Application roles cannot self-promote, delete/recreate
   the canonical profile, use a legacy role fallback, or opt into backend
@@ -1312,8 +1326,10 @@ The detailed implementation order and acceptance criteria live in
   `local_codex_oauth` adapter behind the provider seam.
 - A deployable OpenAI/OpenRouter/other API provider, API-key fallback, provider
   failover, or claims that a local subscription adapter is production-ready.
-- Model-controlled tools, database access, unbounded history, automatic memory
-  promotion, or executable Coach suggestions.
+- Any Coach tool beyond the required read-only inspection/SQL/isolated-Python
+  set; direct Supabase credentials, writable database access, host shell/web/
+  apps/plugins/sub-agents, unbounded snapshots, automatic memory promotion, or
+  executable Coach suggestions.
 - Live calendar-provider OAuth, URL fetch, incremental/background sync,
   provider writes, and hidden or automatic calendar-derived time blocks.
 - Autonomous weekly plan rewrites or applying review proposals without explicit

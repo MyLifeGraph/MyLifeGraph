@@ -1,7 +1,7 @@
 # MyLifeGraph: aktueller Produktleitfaden
 
 Status: Beschreibung des tatsächlich implementierten Repository-Stands vom
-26. Juli 2026. Dieses Dokument beschreibt den Ist-Zustand, nicht die Roadmap.
+28. Juli 2026. Dieses Dokument beschreibt den Ist-Zustand, nicht die Roadmap.
 Die verbindlichen technischen Detailverträge bleiben die am Ende verlinkten
 Contract-Dokumente.
 
@@ -34,8 +34,9 @@ ehrlichen Tagesüberblick und vorsichtige regelbasierte Unterstützung übersetz
 8. **Feedback, Insights und Weekly Review** machen Reaktionen und Entwicklungen
    sichtbar. Nur das Feedback verändert derzeit automatisch und begrenzt die
    spätere Rangfolge ähnlicher Vorschläge.
-9. Der **Coach** kann diesen Zustand erklären und eine unverbindliche Anregung
-   formulieren. Er darf keine Produktdaten ändern.
+9. Der **Coach** beantwortet freie Fragen, untersucht bei Bedarf den gesamten
+   verfügbaren persönlichen Datenzeitraum read-only und kann Annahmen prüfen
+   oder fehlende Daten benennen. Er darf keine Produktdaten ändern.
 
 Der Großteil des Produkts ist bewusst regelbasiert und verwendet **kein LLM**.
 Der Coach ist die einzige Oberfläche, die in einer explizit aktivierten lokalen
@@ -68,8 +69,9 @@ Task/Habit/Focus                bleibt begrenzt beeinflussbar
                          ▼
 Review: Insights + Weekly Review
 
-Coach: liest einen begrenzten Ausschnitt dieses Modells, erklärt ihn,
-       besitzt aber weder Berechnungs- noch Änderungsrechte.
+Coach: erhält je Frage einen frischen persönlichen Read-only-Snapshot,
+       darf ihn inspizieren, mit SQL abfragen oder isoliert analysieren,
+       besitzt aber keinerlei Änderungsrechte.
 
 Calendar import: bleibt ein separater, read-only Datenzweig und darf nur auf
 ausdrücklichen Wunsch im Planner beziehungsweise bei Preparation als Busy-Time-
@@ -82,8 +84,8 @@ Quelle verwendet werden. Es gibt keinen Live-Sync und keinen Calendar-Write.
 | --- | --- | --- | --- |
 | Local guest/demo | Check-ins und ausgewählte Beispieldaten lokal auf dem Gerät | Grundnavigation, Morning/Evening, ehrliche Demo- oder Leerzustände | Keine synchronisierten Tasks, Habits, Focus sessions, Planner-Pläne, Reviews, Kalenderimporte oder Preparation Plans |
 | Synced account | Supabase Auth und die eigenen, per RLS geschützten Supabase-Daten; abgeleitete Workflows über FastAPI | Der vollständige aktuelle Produktumfang | Fehler werden angezeigt und niemals durch personalisiert wirkende Mock-Daten ersetzt |
-| Coach mit `fake` provider | Wie ein synced account, aber Coach-Antworten sind feste Testantworten | Coach-Vertrag, History, Memories, Limits und UI lassen sich testen | Das ist kein aktives LLM |
-| Coach mit `local_codex_oauth` | Synced account plus explizit aktivierter Codex-CLI-Zugang des lokalen Entwicklers | Ein echter, begrenzter Modellaufruf | Nur lokale Entwicklung; nicht in Release/Produktion verfügbar |
+| Coach mit `fake` provider | Wie ein synced account, aber Coach-Antworten sind feste Testantworten | Freie Frage, Stream, History, Evidence/Trace, Limits und UI lassen sich testen | Das ist kein aktives LLM und führt keine Analyse aus |
+| Coach mit `local_codex_oauth` | Synced account plus explizit aktivierter Codex-CLI-Zugang und lokales Analyse-Image | Ein echter `gpt-5.5`-Fast-Turn mit drei Read-only-Werkzeugen | Nur lokale Entwicklung; nicht in Release/Produktion verfügbar |
 
 Ein neu registrierter echter Account erhält seine Auth-Identität und sein
 kanonisches Profil in Supabase. Danach erzwingt die App das Setup. Erst dessen
@@ -104,7 +106,7 @@ vollständig; `Settings` wird nicht als redundanter Ersatz eingeblendet.
 | **Insights** | Entwicklungen untersuchen | Für echte Accounts die Backend-Karte `Personal study pattern` mit Stichprobe, Abdeckung und erklärbarer Evidenz; zusätzlich 7/14/30/90-Tage-Korrelationen, Trends, Matrix und gespeicherte Insight-Notizen. Nur Demo zeigt die lokale Beispielbeobachtung. |
 | **Quick actions** | Tagesdaten erfassen oder eine Aktivität ausführen | Evening check-in, Morning check-in, Habit completion und Focus |
 | **Planner** | Aufgaben, Routinen und feste Zeiten bewusst planen | Task, Habit, Exam, Assignment und Fixed commitment anlegen; Vorschauen bestätigen; sieben Tage, Konflikte, Unscheduled und laufende Preparation verwalten |
-| **Coach** | Den aktuellen Zustand bewusst erklären oder reflektieren | Development Preview mit begrenztem Context, sichtbarer Provenance und unverbindlichen, nicht ausführbaren Vorschlägen |
+| **Coach** | Eine freie Frage zu den eigenen Daten stellen | Development Preview mit frischem persönlichen Snapshot, Read-only-Analyse, sichtbarer Evidence/Provenance und rein textueller Antwort |
 
 Weitere Screens sind Unterseiten und keine eigenständigen Hauptbereiche:
 
@@ -249,7 +251,7 @@ Dashboards:
 | **Auth und Account** | E-Mail/Passwort, Recovery und optional konfiguriertes Google OAuth über Supabase Auth | Auth-Identität und Profil | `profiles`; kein LLM |
 | **Setup** | nur Typical weekday und Best energy window sind erforderlich; Name, Routinen, Commitments und Study Setup sind optional; Focus setup speichert Rhythmus und Start-Ritual, Semester planning genau ein aktuelles/nächstes Semester; atomar, revisioniert und retry-sicher | explizite Tagesstruktur/Energiefenster sowie optionale Routine-, Commitment-, Focus-/Pausen-, Ritual- und Semesterangaben; keine Focus Areas, Goals, Frictions, Coaching-Style-, Reminder- oder Context-Frage | `intake_responses`, `study_setup_profiles`, `habits`, `schedule_items`, die Best-Energy-`memory_entries` und Onboarding-Snapshot; Setup-owned Goals werden archiviert, `notification_preferences` bleibt vollständig unverändert; kein LLM |
 | **Morning check-in** | korrigierbarer geschätzter Schlafbeginn und Aufwachzeit mit automatisch berechneter „Estimated sleep duration“, separat geschätzter Schlafqualität (1–10), aktueller Energie und Tagesform | explizite Selbstauskunft; Qualität wird nicht aus der Dauer abgeleitet, Rohzeiten gelten nicht als objektive Messung | Teil des lokalen Tages in `daily_logs`; Rohzeiten bleiben nur dort, Dauer/Qualität werden kompatibel projiziert, kein fünftes Event und kein LLM |
-| **Evening check-in** | drei kurze Schritte für Mood, Energie, Stress, geplante Schlafzeit mit Dauerziel sowie optionale Reflection, Possible Priority und Specific Blocker; keine Friction-Auswahl | explizite Auswahl/Text; bei Stress 5–10 zusätzlich Quelle und Kontrollierbarkeit; zuerst sichtbar sind acht Stunden, persönlich wird der Wert erst beim Speichern | `daily-capture-v4` im selben `daily_logs`-Tag plus abgeleitete `behavioral_events`; V2/V3 bleiben als explizite Kompatibilitäts-Branches lesbar; freie Reflection-/Blockertexte und Schlaf-Rohzeiten gelangen nicht in Snapshot oder Coach |
+| **Evening check-in** | drei kurze Schritte für Mood, Energie, Stress, geplante Schlafzeit mit Dauerziel sowie optionale Reflection, Possible Priority und Specific Blocker; keine Friction-Auswahl | explizite Auswahl/Text; bei Stress 5–10 zusätzlich Quelle und Kontrollierbarkeit; zuerst sichtbar sind acht Stunden, persönlich wird der Wert erst beim Speichern | `daily-capture-v4` im selben `daily_logs`-Tag plus abgeleitete `behavioral_events`; V2/V3 bleiben lesbar; freie Texte/Rohzeiten gelangen nicht in Daily State, können aber im ausdrücklich ausgelösten persönlichen Coach-Snapshot als nicht vertrauenswürdige Daten enthalten sein |
 | **Daily State / Snapshot** | `explainable-daily-state-v2` betrachtet einen festen Sieben-Tage-Kontext und klassifiziert Zustand, Risiken und Gründe ohne Friction; sehr schlechte Schlafqualität kann trotz ausreichender Dauer Recovery auslösen, mäßig schlechte Qualität verhindert Push, und Push benötigt einen aktiven Task | validierte Stress-, Schlaf-, Energie- und Day-Shape-Signale plus Workload/Tasks; Habits, Outcomes, Focus, Schedule und Memories ergänzen die übrige Snapshot-Zusammenfassung; keine Goals | `user_state_snapshots`; kein LLM und kein gelernter persönlicher Basiswert |
 | **Recommendations** | einzelne regelbasierte Kandidaten werden explizit oder geplant erzeugt/aktualisiert; Setup erzeugt keine Recommendation | Snapshot, echte Check-ins, offene Tasks, Habits und verfügbare Feedback-Signale; keine Goals oder retired Onboarding-Personalisierung | `recommendations`; LLM-Wording ist im aktuellen Produktpfad deaktiviert |
 | **Daily Briefing** | wählt aus zulässigen Kandidaten eine primäre und bis zu zwei unterstützende Aktionen | aktueller Snapshot, Recommendations, Actions, Dringlichkeit, Recovery-Schutz und passendes Feedback | `daily_briefings`; regelbasiert, nicht AI-geschrieben |
@@ -259,12 +261,12 @@ Dashboards:
 | **Planner** | deterministische Vorschau aus expliziter Dauer/Deadline/Session beziehungsweise Habit-Dauer/Cadence; normale Tasks können explizit den Study Rhythm verwenden, Habits nicht; freie Zeit berücksichtigt bestätigte Belegung einschließlich Recovery; eine aktive Klausur aktiviert zusätzlich den read-only 14-/7-Tage-Outlook mit hypothetisch geschütztem Schlaf | Task/Habit-Eingaben, primär Setup/manual commitments, Study-Revision, Planner/Preparation reservations, optional consented aktueller Import sowie neueste gültige Evening-/Morning-V4-Schlaffakten | Planner preferences/plans/revisions/blocks/slots/commitments; erst Confirm erstellt/ändert Ziel und Reservierungen; Outlook speichert nichts und erzeugt weder Today-Eintrag noch Notification; kein LLM, Calendar-Write oder Auto-Replan |
 | **Decision feedback** | Reaktion auf eine konkrete Briefing-Aktion | Aktion, Kontext und Feedback-Typ | append-only `decision_feedback`; beeinflusst begrenzt spätere Rankings, führt die Aktion aber nicht aus |
 | **Weekly review** | deterministische Fakten für die letzte abgeschlossene lokale ISO-Woche | Tasks, Habit-Möglichkeiten/Outcomes, Focus, Daily State und Feedback | `weekly_reviews`; kein LLM; Änderungen nur nach Bestätigung |
-| **Calendar import** | ein bewusst gewähltes UTF-8-`.ics`-File wird begrenzt und read-only importiert | explizite Einwilligung und die gewählte Datei | `calendar_connections`, `calendar_imports`, `calendar_events`; nie an das LLM und nie in `schedule_items` kopiert |
+| **Calendar import** | ein bewusst gewähltes UTF-8-`.ics`-File wird begrenzt und read-only importiert | explizite Einwilligung und die gewählte Datei | `calendar_connections`, `calendar_imports`, `calendar_events`; nie in `schedule_items` kopiert; im Coach nur als nicht vertrauenswürdige Snapshot-Daten, niemals als Anweisung |
 | **Preparation plans** | Nutzer schätzt Gesamtaufwand und Vorleistung; Regeln teilen Restzeit in überprüfbare Datumsblöcke und verwenden einen konfigurierten Study Rhythm verbindlich | Deadline, eigene Schätzung, Study-Revision beziehungsweise sonst bevorzugte Blockgröße, Tageslimit, Puffer, Setup-Commitments und optional aktuelle importierte Busy Times | `deadline_plans`, Revisionen, Focus-/Recovery-Blocks und nach Bestätigung ein verwalteter `task`; Recovery ist Belegung, aber keine Lern-/Budgetminute; kein LLM |
 | **Insights** | `personal-patterns-v1` liefert für echte Accounts die persönliche Musterkarte und profilzeitbasierte Korrelationspunkte; nur Demo berechnet lokal eine vorsichtige Beispielbeobachtung | terminale Focus Sessions mit vorhandenen Reflexionen sowie ausschließlich vor der Session gültige Schlaf-/Morning-Fakten; gespeicherte `ai_insights` bleiben getrennte Notizen | read-only; kein LLM, keine Kausalaussage und keine automatische Produktänderung; Planner-Nutzung nur nach separater Freigabe für neue Previews |
 | **Inbox lifecycle** | fällige gespeicherte Hinweise lesen, unread/read setzen oder dismissen | owner-scoped `notifications` | Lifecycle-Zeitstempel plus Retry-Ledger; kein LLM |
 | **In-app reminders** | nach separater Einwilligung werden höchstens zwei Kandidaten mit fixer Copy regelbasiert erzeugt und bei offener App höchstens einmal als Banner gezeigt | aktueller Recovery-/Briefing-Zustand oder aktuelles Weekly Review, Kategorien, Quiet Hours und Tageslimit | `notification_preferences`, `notifications` und Delivery-Provenance; kein Push, kein Background und kein LLM |
-| **Coach** | bewusste Nachricht, begrenzter Context, Safety-Prüfung und validierte Antwort | ausgewählte aktuelle Produktfakten und Memories | `coach_requests`, `coach_messages`, Usage und Selection; nur dieser Pfad kann lokal ein LLM verwenden |
+| **Coach** | freie Frage, bei Bedarf Read-only-Inspektion/SQL/isoliertes Python, Safety-Prüfung und validierte Textantwort | frischer owner-only SQLite-Snapshot über den verfügbaren relevanten Produktzeitraum, inklusive Detailtexten und Datenkatalog | `coach_requests`, `coach_messages`, Usage sowie backend-erzeugte Evidence/Trace/Fast-Provenance; kein Plot und keine Produktmutation; nur dieser Pfad kann lokal ein LLM verwenden |
 | **Account controls** | Zeitzone, JSON-Export, Passwort-Recovery und permanente Löschung | Profil und owner-scoped Produktdaten | kontrollierte FastAPI/RPC-Operationen; kein LLM |
 
 ## Die zentralen Begriffe
@@ -361,7 +363,8 @@ Beispiel: ein importierter Abgabetermin `Research methods essay due`.
 - `Delete local imported data` entfernt nur die lokale Kopie und Historie;
 - kann nach ausdrücklicher Auswahl eine Deadline oder Busy-Time-Quelle für
   einen Preparation Plan sein;
-- wird nie zu einem `schedule_item` und nie an den Coach gesendet.
+- wird nie zu einem `schedule_item`; der Coach darf seine lokale read-only
+  Kopie nur als nicht vertrauenswürdige Snapshot-Daten untersuchen.
 
 ### Preparation Plan, Revision und Block
 
@@ -482,14 +485,16 @@ Dringlichkeitsschutz können nicht dadurch ausgehebelt werden.
 Eine **Memory Entry** ist eine dauerhafte, überprüfbare Notiz, etwa zu Habit,
 Pattern oder wiederkehrendem Problem. Setup materialisiert nur noch `Best
 energy window`; manuelle oder anderweitig erzeugte Memories bleiben erhalten.
-Der Coach darf höchstens acht geeignete Memories verwenden, und auch nur nach
-separater Auswahl im Coach-Screen.
+Der aktuelle freie Coach kann sanitisierten owner-scoped Memory-Inhalt in
+seinem temporären Snapshot untersuchen. Die frühere Auswahl von höchstens acht
+Memories bleibt nur für lesbare V1/V2-Historie kompatibel und erscheint nicht
+mehr im aktuellen Coach-Screen.
 
 Aktuell gilt:
 
 - keine automatische Extraktion aus Gesprächen;
 - keine automatische Änderung von Stärke oder Evidenz;
-- preference- und goal-Memories sind für Coach ausgeschlossen;
+- Memory-Text ist im Coach immer nicht vertrauenswürdige Daten, nie Anweisung;
 - Setup-owned Inhalt wird in Setup geändert;
 - es gibt noch keine eigenständige allgemeine Memory-Verwaltung.
 
@@ -562,7 +567,8 @@ oder öffnet Setup.
 - kein persönlicher gelernter Baseline- oder Readiness-Score;
 - keine Embeddings und keine Vector Search;
 - keine automatische Memory-Extraktion aus Check-ins oder Coach-Chats;
-- keine autonomen Agents oder model-gesteuerten Tools;
+- kein autonomer Hintergrund-Agent; der Coach besitzt genau drei begrenzte
+  Read-only-Analysewerkzeuge und keine Shell-, Web- oder Schreibwerkzeuge;
 - keine versteckten Änderungen an Tasks, Habits, Schedule oder Plänen;
 - keine automatische Kalender-Synchronisation;
 - keine kausalen Gesundheits- oder Leistungsbehauptungen.
@@ -571,77 +577,107 @@ oder öffnet Setup.
 
 ### Sichtbarkeit und Provider
 
-Der Screen heißt bewusst `Coach preview`.
+Der Screen heißt `Coach` und beginnt mit `Ask anything`.
 
 - Er ist in Release-Builds und bei `APP_ENV=production` immer verborgen.
 - Mit `provider=fake` zeigt er feste Testantworten. Die UI sagt dann ausdrücklich
-  `Uses fixed test responses. This is not a live assistant.`
+  dass es Testdaten und kein Live-Assistant sind.
 - Mit explizit aktiviertem `local_codex_oauth` kann FastAPI lokal die bereits
-  angemeldete Codex CLI desselben Linux/WSL-Nutzers aufrufen. Das bevorzugte
-  konfigurierte Modell ist `gpt-5.5`, sofern CLI und Account diese ID anbieten.
-- Es gibt keinen stillen Fallback und derzeit keinen deploybaren
-  Produktionsprovider.
+  angemeldete Codex CLI desselben Linux/WSL-Nutzers aufrufen. Jeder Turn
+  verlangt exakt `gpt-5.5`, `service_tier="fast"` und aktivierten Fast Mode.
+- Fehlen Modell, Fast-Unterstützung, Login, Docker oder Analyse-Image, ist der
+  Provider ehrlich nicht verfügbar. Es gibt keinen Modell-/Tier-Fallback und
+  keinen deploybaren Produktionsprovider.
 
 ### Was er lesen darf
 
-Für eine bewusst gesendete Nachricht baut FastAPI ein deterministisches Paket
-von höchstens 32 KiB. Es kann enthalten:
+Für jede bewusst gesendete V3-Frage baut FastAPI eine neue, private
+`personal-snapshot-v1`-SQLite-Datei ausschließlich aus Daten des angemeldeten
+Owners. Sie darf den gesamten verfügbaren Zeitraum der relevanten Quellen
+enthalten:
 
-- lokales Datum und Profil-Zeitzone;
-- aktuellen, sanitisierten Daily-State-Snapshot;
-- aktuelles persistiertes Daily Briefing inklusive Freshness;
-- begrenzte aktive Tasks, Habits und aktuelle/letzte Focus-Sessions;
-- das letzte abgeschlossene Weekly Review mit sichtbarer Freshness;
-- höchstens acht ausdrücklich ausgewählte Memories;
-- höchstens sechs abgeschlossene frühere Coach-Turns, nochmals nach Zeichen
-  begrenzt.
+- Setup/Intake, Preferences und Study Setup;
+- Morning/Evening, Behavioral und Lifestyle Entries;
+- Tasks, Habits/Outcomes, Focus Sessions und Reflections;
+- Planner, Preparation Plans, Commitments und Reservierungen;
+- Calendar Connection/Import/Event-Inhalte;
+- Snapshots, Briefings, Feedback und Weekly Reviews;
+- Insights, Recommendations, Goals, Skillsets und Memories; sowie
+- frühere Coach-Nachrichten.
 
-Die Antwort zeigt unter `Data used`, wie viele Einträge pro Quelle verfügbar,
-einbezogen oder ausgelassen wurden und wie frisch die Quelle war.
+Ein verständlicher Katalog beschreibt Tabellen, Spalten, Beziehungen,
+Datensatzanzahlen, verfügbare Zeiträume und Hilfs-Views. Maximal gelten 10.000
+Zeilen je Quelle, 50.000 insgesamt und 8 MiB. Überschreitung bricht ehrlich ab;
+es gibt keine stille Kürzung.
+
+Der Agent erhält ausschließlich:
+
+- `inspect_data` für Katalog und Abdeckung;
+- `query_data` für begrenzte read-only `SELECT`-/`WITH`-Abfragen; und
+- `run_python` in einem separaten Docker-Container ohne Netzwerk oder Secrets,
+  als Non-root mit read-only Root und ausschließlich read-only gemountetem
+  Snapshot.
+
+Pandas, NumPy, SciPy, Statsmodels und Matplotlib sind vorhanden. Ein interner
+Plot kann dem Modell bei der Analyse helfen, wird aber weder gespeichert noch
+in Flutter dargestellt.
 
 ### Was er nicht lesen darf
 
-- E-Mail, Tokens, Rollen, Service Keys oder fremde Nutzerzeilen;
-- arbitrary SQL, Datenbankzugang, Dateien, Web, Apps, Plugins oder Tools;
-- importierte Calendar-Titel, Beschreibungen, Orte, Teilnehmer oder `.ics`-
-  Rohinhalt;
-- Check-in-Notizen, Intake-Freitext, Notification-Texte oder andere versteckte
-  Freitexte;
-- Goals, Onboarding-Präferenzen, Coaching-Stil und Friction-Felder;
-- nicht ausgewählte Memories oder unbegrenzte Historie.
+- Supabase Auth-Daten, E-Mail, Tokens, Rollen, Provider-Interna oder Service
+  Keys;
+- andere Nutzerzeilen;
+- Anti-Replay-, Usage-, Memory-Selection- oder rein operative Backend-Ledger;
+- allgemeine Hostdateien, OAuth-Dateien oder Backend-Environment;
+- Web, Apps, Plugins, Unteragenten, Host-Shell oder Produkt-APIs.
+
+Notes, Setup- und Calendar-Text, Memories und frühere Nachrichten können als
+persönliche Daten im Snapshot stehen, gelten aber immer als nicht
+vertrauenswürdige Inhalte und niemals als Anweisung.
 
 ### Was er ausgeben darf
 
 - eine Antwort von höchstens 4.000 Zeichen;
 - explizite Unsicherheit `low`, `medium` oder `high` samt Grund;
 - Safety-Klassifikation;
-- Herkunft, Provider- und Modellangabe;
-- höchstens eine **review-only staged suggestion**.
+- mehrere begründete Vorschläge im normalen Text, aber keine strukturierte
+  Action/Suggestion;
+- einen aufklappbaren Bereich mit tatsächlich verwendeten Datenquellen,
+  Zeiträumen, Counts, Inspect-/SQL-/Python-Schritten, Einschränkungen und
+  `gpt-5.5 · Fast configured`-Provenance.
+
+Die sichtbare Antwort trennt beobachtete Daten, unsichere Interpretation,
+fehlende Information und allgemeines Modellwissen. Sie darf einer falschen
+Prämisse widersprechen oder eine kurze Rückfrage stellen. Chain-of-thought,
+Plots, Scripts oder erfundene Evidence werden nicht angezeigt.
 
 ### Was er nicht tun darf
 
 Der Coach kann keine Tasks, Habits, Schedule Items, Calendar Events,
 Briefings, Reviews, Memories oder Preparation Plans anlegen, ändern, erledigen
-oder löschen. Er kann auch nicht selbständig im Hintergrund laufen. Daily State
-und Daily Briefing bleiben begrenzte Berechnungs- und Rangfolgequellen; der
-Coach erklärt und reflektiert sie nur und entscheidet nichts für den Nutzer.
+oder löschen. Er kann keine Notifications auslösen und nicht im Hintergrund
+laufen. Er darf aus beobachtbaren Produktdaten keine Kausalität, Diagnose oder
+medizinische Gewissheit behaupten.
 
 Deterministische Safety-Prüfungen laufen vor und nach dem Provider. Ein akuter
-Risikofall kann den Provider komplett umgehen. Fehlende oder veraltete Daten
-erzwingen sichtbar höhere Unsicherheit.
+Risikofall kann Snapshot und Provider komplett umgehen.
 
 ### Limits und Speicherung
 
 - Nachricht: höchstens 2.000 Unicode-Codepoints;
 - Antwort: höchstens 4.000 Codepoints;
-- Standardbudget: 20 Requests pro lokalem Tag und Nutzer;
-- höchstens ein gleichzeitig aktiver Request pro Nutzer plus globales
+- Standardbudget: 20 gestartete Fragen pro lokalem Tag und Nutzer;
+- höchstens ein gleichzeitig aktiver Turn pro Nutzer plus globales
   Parallelitätslimit;
+- höchstens zwölf Tool-Aufrufe und 180 Sekunden pro Turn;
+- SQL höchstens fünf Sekunden, Python höchstens 30 Sekunden;
 - erfolgreiche validierte User-/Assistant-Paare werden gespeichert;
-- `Delete conversation` entfernt den Gesprächsinhalt, aber nicht die
-  inhaltsfreien Request-Tombstones oder das Usage-Ledger. Löschen setzt das
-  Tagesbudget deshalb nicht zurück;
-- Prompt, Snapshot-Kopie und roher CLI-Eventstream werden nicht persistiert.
+- Evidence, kompakter Tool-Trace und Fast-Provenance stammen aus Backend-
+  Ausführung, nicht aus dem Modell;
+- `Delete conversation` entfernt Gespräch, Evidence und Trace, aber nicht
+  Request-Tombstones oder Usage. Löschen setzt das Tagesbudget nicht zurück;
+- Prompt, SQLite-Snapshot, Python-Scripts, Plots, Temp-Dateien und roher
+  CLI-Eventstream werden nach dem Turn gelöscht und nicht persistiert.
 
 ## Welche Daten liegen wo?
 
@@ -653,13 +689,13 @@ erzwingen sichtbar höhere Unsicherheit.
 | Ausführung | `tasks`, `habit_logs`, `focus_sessions` | Today, Focus/Habits, Snapshot, Weekly Review, Insights |
 | Persönliches Lernen | `focus_session_reflections`, `learning_preferences`; gelernte Planner-Provenienz additiv in Planner-/Deadline-Revisionen | Focus, Evening, Insights und nach separater Freigabe nur neue Planner-Previews |
 | Tagesüberblick | `daily_logs`, `tasks`, `habits`, `habit_logs`, `schedule_items`, aktive Planner-/Preparation-Blöcke, feste Planner-Commitments, aktueller Calendar Import und `focus_sessions` | `today-overview-v2` und Today; V1 bleibt kompatibel |
-| Interne Tagesrangfolge | `user_state_snapshots`, `recommendations`, `daily_briefings`, `decision_feedback` | Reminder, Coach-Kontext, Historie und zukünftige regelbasierte Rangfolge |
-| Wochenreview | `weekly_reviews` | Weekly Review, Reminder, begrenzter Coach-Kontext |
-| Kalenderimport | `calendar_connections`, `calendar_imports`, `calendar_events`, technische Request-Identitäten | Calendar und optional Preparation Planner; nicht Coach |
+| Interne Tagesrangfolge | `user_state_snapshots`, `recommendations`, `daily_briefings`, `decision_feedback` | Reminder, Historie, regelbasierte Rangfolge und bei expliziter Frage der temporäre Coach-Snapshot |
+| Wochenreview | `weekly_reviews` | Weekly Review, Reminder und bei expliziter Frage Coach-Snapshot |
+| Kalenderimport | `calendar_connections`, `calendar_imports`, `calendar_events`, technische Request-Identitäten | Calendar, optional Preparation Planner und read-only Coach-Snapshot; nie als Instruktion |
 | Vorbereitung | `deadline_plans`, `deadline_plan_revisions`, `deadline_plan_blocks`, technische Request-Identitäten | Preparation Plans, Today workload/week, Focus-Fortschritt |
 | Zentrale Planung | `planner_preferences`, Action Plans/Revisionen, Task Blocks, Habit Slots, Planner Commitments und technische Request-Identitäten | Planner, Today V2 und gemeinsame Availability |
 | Hinweise | `notifications`, `notification_preferences`, Action-Request-Ledger | Inbox und foreground banners |
-| Coach | `coach_requests`, `coach_usage_events`, `coach_memory_selections`, `coach_messages` | Coach-Availability, Context, History und Budget |
+| Coach | `coach_requests`, `coach_usage_events`, `coach_messages`; `coach_memory_selections` nur Legacy-Kompatibilität | Availability, V3 Evidence/Trace/Fast-Provenance, gemischte History und Budget |
 | Weitere Projektionen | `ai_insights`, `skillset_profiles` | gespeicherte Notes bzw. ausschließlich gekennzeichnete lokale Demo-Skillset-Anzeige |
 | Gerätelokal | Guest-Check-ins und Theme-Präferenz | Gastmodus bzw. Appearance |
 
@@ -688,8 +724,8 @@ absichtlich weiterhin sichtbar:
    Bedeutungen.
 4. **Mehrere Ratschlagsquellen existieren weiter.** Recommendations liegen
    bewusst unter `More`, das Daily Briefing ist ein interner regelbasierter
-   Backend-Fakt für Reminder/Coach/Feedback, und eine Coach-Suggestion bleibt
-   nur eine unverbindliche sprachliche Reflexion.
+   Backend-Fakt für Reminder/Coach/Feedback, und Vorschläge im Coach-Text
+   bleiben unverbindliche, nicht ausführbare sprachliche Reflexionen.
 5. **Setup ist gleichzeitig Onboarding und spätere Verwaltung.** Nutzer erwarten
    dort meist nur den ersten Start; tatsächlich werden dort dauerhaft
    Setup-Habits, Commitments und Study Setup gepflegt.
@@ -738,7 +774,7 @@ Umgebung. Der Seed deckt unter anderem 43 profilzeitbasierte Daily-Capture-V4-
 Tage, drei Habit-Cadences, mehrere Task-Status, 36 bewertete Focus-Tage, eine
 fortsetzbare aktive Focus Session, Briefing-Historie, Decision Feedback, Weekly
 Review, Calendar Import, drei Preparation Plans, In-app consent, Inbox-Zustände,
-ausgewählte Memories und Coach-History ab. Schlaf bleibt bei ungefähr
+Memories und Coach-History ab. Schlaf bleibt bei ungefähr
 `7:15–8:30 h`, Schlafqualität bei `6–9`, Energie bei `5–8` und Stress bei
 `3–8`. Die heutige Morning Capture ist vorhanden; Evening bleibt absichtlich
 offen.
@@ -792,8 +828,10 @@ dabei lediglich lesbar.
 9. Unter `Settings → Inbox` unread/read/dismiss und erlaubte `Open`-Ziele
    testen.
 10. Unter `Settings` Preparation Budget und Reminder-Consent prüfen. `Coach`
-   über die Hauptnavigation öffnen. Beim `fake` provider sind Antworten
-   absichtlich feste Testdaten und kein LLM-Beweis.
+   über die Hauptnavigation öffnen, eine freie Frage stellen und `Data and
+   analysis details` prüfen. Es darf keine Modus-/Horizon-/Focus-/Memory-
+   Auswahl oder Plot geben. Beim `fake` provider sind Antworten absichtlich
+   feste Testdaten und kein LLM-Beweis.
 
 `npm run seed:demo` stellt diese lokale Fixture wieder her, löscht und erzeugt
 dabei aber die drei ausdrücklich benannten **lokalen** Demo-Auth-Accounts neu.
@@ -806,7 +844,8 @@ Es ist kein Befehl für eine Remote-Datenbank.
   Memory-Verwaltungsseite;
 - produktionsfähiger LLM-Provider;
 - ein persönliches trainiertes Modell oder Vector Memory;
-- autonomer Coach oder model-gesteuerte Schreibaktionen;
+- autonomer Hintergrund-Coach, zusätzliche Tools oder model-gesteuerte
+  Schreibaktionen;
 - Live-Calendar-OAuth, URL-Fetch, Zwei-Wege-Sync oder Provider-Write;
 - Browser-, System-, Push-, E-Mail- oder Background-Notifications;
 - deployter Cron/Scheduler;
@@ -835,8 +874,8 @@ Es ist kein Befehl für eine Remote-Datenbank.
   `.ics`-Import.
 - `docs/deadline-planner-v1-contract.md`: Preparation Plans, Revisionen,
   Blocks, Kapazität und Fortschritt.
-- `docs/phase-10-controlled-coach-plan.md`: Coach-Context, Provider, Safety,
-  Memory und Usage.
+- `docs/phase-10-controlled-coach-plan.md`: freier Coach-Agent, persönlicher
+  SQLite-Snapshot, MCP/Python-Sandbox, Provider/Fast, Safety, Evidence und Usage.
 - `docs/notification-lifecycle-v1-contract.md`: Inbox read/unread/dismiss.
 - `docs/notification-delivery-v1-contract.md`: Consent, fixe Reminder-Copy und
   foreground delivery.

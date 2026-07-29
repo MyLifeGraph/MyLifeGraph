@@ -11,44 +11,57 @@ Capture V4, Daily State V2, Exam-Week Outlook V1, or Coach V3 expectations.
 
 ## Current Verified Baseline
 
-The current working tree was verified on 2026-07-28 after the Coach
-longitudinal-context and Insights overlay-stability changes. The complete
-FastAPI suite reported `978 passed, 1 skipped`; the standard gate completed
-clean Flutter analysis and all `703` Flutter tests. Documentation consistency
-passed across 50 Markdown files and 62 FastAPI routes.
+The free read-only Coach data-agent working tree was fully reverified locally
+on 2026-07-29. The complete FastAPI suite reported
+`1100 passed, 2 skipped`; full Flutter verification reported `695` passing
+tests and clean analysis. Documentation consistency passed across 50 Markdown
+files and 63 FastAPI routes, the frontend visual contract passed, the local
+stack harness passed, and `git diff --check` was clean. The reviewed working
+tree was based on commit `3be8f3d53b9b`.
 
-A fresh local database reset rebuilt the complete migration chain through
-`20260728120000_coach_longitudinal_context_v1.sql`. All four pgTAP files passed
-their 65 tests, and local migration history matched the repository. The final
-non-reset full browser journey reported
-`E2E browser smoke passed for e2e-1785248523@example.test` with the
-deterministic fake Coach provider.
+A fresh local database reset applied the complete migration chain through
+`20260728160000_free_read_only_coach_agent_v1.sql`. The current five pgTAP
+files passed all 104 tests and local migration history matched the repository.
+The 14 real analysis-image integration tests passed in 3.03 seconds as
+non-root with a mode-`0444` snapshot, actual SQL source attribution,
+conservative Python full-snapshot-scope provenance, network/host/secret
+isolation, and strict trusted-image validation. The prepared image revision was
+`daf088985421`.
 
-The presentation seed then completed successfully twice after the browser run.
-Each pass recreated and credential-checked the fresh onboarding account plus
-the three populated identities, verified the fresh profile/default projections
-and empty product/ledger state, and restored the validated Student feature
-fixture. After the final seed, the current Linux user's valid Codex login
-powered one opt-in Student preflight through `local_codex_oauth`: the prepared
-prompt returned a four-sentence English response with explicit medium
-uncertainty and data-use provenance under requested model `gpt-5.5`,
-`controlled-coach-prompt-v3`, and `coach-context-v3`. The seeded Coach
-conversation was deleted before that call, and the live preflight conversation
-was deleted afterward.
+The focused Coach browser journey reported
+`Focused free Coach browser smoke passed for e2e-1785280791@example.test`.
+The subsequent same-date full non-reset journey reported
+`E2E browser smoke passed for e2e-1785282054@example.test`. Together they
+covered the exact V3 request, V2 response, capabilities/history/SSE contracts,
+Cancel visibility, replay/conflict, reload, expandable snapshot-source coverage
+and provenance, history deletion, guest/read-only boundaries, absence of fixed
+Coach controls, and integration with the filled Student product flow.
+
+The explicit per-machine live smoke also passed (`1 passed in 41.31s`) using
+the current Linux user's ChatGPT-authenticated Codex CLI. Its strict invocation
+selected `gpt-5.5`, configured `service_tier="fast"` and Fast mode, required
+the single allowlisted data MCP, and completed `inspect_data` plus isolated
+`run_python` against all three intended synthetic tables. The current CLI JSONL
+did not emit a selected-model field, so `model_reported` truthfully remains
+`null`; any emitted different model fails closed. Successful strict explicit
+model selection, the no-fallback argv, completed multi-tool trace, and matching
+full-snapshot read-scope provenance are the current-machine model-path evidence.
+That provider smoke did not exercise FastAPI persistence or Flutter; the
+deterministic API/browser journeys above supplied those separate checks.
 
 This is local working-tree evidence only; all automation except the named
-opt-in provider preflight was deterministic. It does not establish remote
-migration state, installed-device behavior, deployed scheduling, a production
-or multi-user model provider, clinical or academic outcomes, longitudinal
-results, or participant evidence.
+opt-in live smoke was deterministic. It does not establish remote migration
+state, installed-device behavior, deployed scheduling, a production or
+multi-user model provider, clinical or academic outcomes, longitudinal
+results, another account's model availability, or participant evidence.
 
 This section is the only source for the repository's current exact verification
 counts, commit id, and E2E identity. Current docs link here instead of copying
 those values. Dated evidence below is historical run history and does not prove
 a later checkout.
 
-The current repository migration boundary under verification ends at
-`20260728120000_coach_longitudinal_context_v1.sql`.
+The current repository migration boundary ends at
+`20260728160000_free_read_only_coach_agent_v1.sql`.
 
 ## Verification Levels
 
@@ -457,28 +470,30 @@ the exact target date.
 The exact boundary is `docs/personal-learning-v1-contract.md`.
 
 Phase 10 focused backend source coverage is split across strict model/API,
-service, migration, and local-provider tests. It covers exact request/error
-shapes and bearer-derived ownership; completed replay without context/provider;
-public in-progress/conflict codes; missing-state uncertainty; deterministic
-urgent safety bypass; unexpected provider failure terminalization; ambiguous
-atomic completion; retained request-count budgets; message-free request claims;
-exact completed message pairs; service-only memory selection; history
-tombstones with retained usage; and authenticated mutation denial. The local
-provider tests use fake runners to assert fixed argv, stdin-only prompt data,
-allowlisted child environment, temporary-directory cleanup, explicit model
-truth with no fallback, and rejection of tool/command/file events. This source
-coverage is distinct from the opt-in live-Codex pass recorded below.
-The longitudinal extension additionally covers strict V2 scope/parameter
-models, paired V3 provenance, current V2 Today context, exact 90-day/one-year/
-all-retained retrieval boundaries, at-most-24 adaptive buckets, Personal
-Learning opt-out before broad evidence reads, one of the last ten terminal
-Focus sessions, two complete profile-local ISO weeks, deterministic rereads
-after Personal Learning data deletion, owner-scoped bounded pagination, exact
-overflow counts without row transfer, raw-page byte limits, hidden-free-text
-sanitization, and the six-source manifest. The stable
-`focus_reflections` manifest code counts terminal Focus sessions once; an
-optional reflection changes rated coverage rather than adding a second
-available row.
+service, snapshot, MCP, sandbox, migration, and local-provider tests. The
+current boundary requires exact message-only V3 and V2 response/capability/
+history/SSE shapes; owner-derived snapshot paging; no silent 10,000-table,
+50,000-total, or 8 MiB truncation; scripted zero-tool and multi-tool provider
+paths; backend-derived source coverage/trace; one active owner turn; exact
+message replay; daily budget; deterministic safety; timeout/cancel/provider
+failure; history tombstones; and authenticated mutation denial.
+
+Snapshot/MCP tests must cover catalog/count/period/relationship/view truth,
+sanitized retained detail, cross-owner rejection, prohibited auth/identity/
+ledger fields, immutable SQL authorizer/progress/row/byte limits, exactly three
+tools and 12 total calls, Python image arguments and limits, no network/secrets/
+host access, single internal-image handling, prompt-injection authority
+boundaries, and cleanup. Evidence tests must prove that inspection alone adds no
+row coverage, SQL reports full accessed-source coverage separately from returned
+row counts, and arbitrary successful Python records full-snapshot read scope.
+Local-provider fake runners must assert required MCP configuration,
+`gpt-5.5`, `service_tier="fast"`, Fast mode, no fallback, allowlisted child
+environment, fixed non-shell argv, bounded output/process termination, and safe
+activity. This source coverage is distinct from the opt-in live smoke.
+
+The old longitudinal fixed-mode suite remains useful compatibility coverage for
+readable V1/V2 history and deprecated endpoints; it does not define current
+Flutter request behavior.
 The follow-up migration contract test also checks that public
 claim/complete/fail wrappers acquire the owner advisory lock before calling
 their ungranted inner bodies, matching history-delete lock order. Additional
@@ -486,10 +501,13 @@ migration tests require exact provider-call safety provenance, backend-owned
 profile identity fields, canonical-only role authority, rejected authenticated
 profile deletion, backend-owned onboarding eligibility, and V2 history
 deletion that neutralizes retained scope/parameters to `today` with `{}` so a
-Focus UUID or Patterns horizon is not left in the tombstone. Real local
+Focus UUID or Patterns horizon is not left in the tombstone. The additive V3
+migration test must also prove message-only replay, exact V2 response/evidence/
+trace/tier validation, V1/V2 compatibility, one owner turn, daily budget, V3
+detail deletion, and service-role-only RPC authority. Historical real local
 PostgreSQL parallel claim/completion/deletion smokes completed on 2026-07-13
 without deadlock or timeout and converged on the expected message, usage, and
-deletion outcomes.
+deletion outcomes; rerun for the V3 RPC chain before a current claim.
 
 Current Flutter widget tests include:
 
@@ -631,16 +649,16 @@ Current Flutter widget tests include:
   imported/read-only source labels, stable pagination, event-local timezone and
   all-day rendering, no event mutation controls, and the distinct disconnect,
   retained-data, delete, empty, and error states.
-- Controlled Coach tests cover strict capability/request/response/history/
-  memory/context-options parsing; exact bearer-authenticated GET/POST/DELETE
-  calls; guest/mock zero HTTP; Today/Patterns/Focus/Review controls; all three
-  Pattern horizons; explicit terminal-Focus selection; prompt starters that
-  only fill the draft; timeout-aware full-payload retry identity and preserved
-  drafts; duplicate submit prevention; distinct unavailable/rate-limit/error
-  states; visible uncertainty, safety, provider/model/prompt/context provenance
-  and `Data used` counts; review-only suggestions; memory selection/Setup
-  routing; and confirmed conversation deletion without a direct Supabase Coach
-  write.
+- Coach tests cover strict V2 capability/history/response/evidence/trace/
+  provenance parsing, message-only V3 encoding, SSE
+  started/activity/completed/failed parsing, cancellation, exact bearer calls,
+  guest/mock zero HTTP, timeout-aware request-id/message retry, duplicate
+  submit prevention, unavailable/rate-limit/error states, visible uncertainty
+  and validated safety/provenance consistency, expandable snapshot-source
+  coverage plus tool/limitation/Fast detail, mixed legacy/current history, and
+  confirmed history deletion without direct Supabase writes. Widget assertions
+  reject fixed mode/horizon/Focus, prompt-starter, memory-selection, structured
+  suggestion, hidden reasoning, and plot surfaces.
 
 These tests cover the default mock/guest product path. They do not prove real
 Supabase registration, RLS, or browser behavior.
@@ -933,24 +951,21 @@ to the full editor, and modal cancellation; a single end-to-end browser wizard
 submission remains additional coverage rather than evidence already supplied by
 the API-seeded journey.
 
-The Phase 10 source portion uses only the deterministic fake provider. It is
-designed to assert read-only capability/history/context-options/memory calls,
-explicit memory selection, compatible V1 Today plus current V2 Patterns
-responses, exact V2 one-year UI parameters, exact persisted scope/parameter/
-message/request/usage identity, same-id replay without another durable turn,
-changed-parameter and changed-message conflicts, mixed V1/V2 history,
-deterministic safety bypass, visible UI provenance and review-only suggestion,
-conversation deletion with retained tombstones/usage, owner-only reads and
-rejected authenticated mutations, plus guest/mock zero Coach calls.
-Current V2 claims must record paired `controlled-coach-prompt-v3` and
-`coach-context-v3`; compatible V1 Today claims retain paired
-`controlled-coach-prompt-v2` and `coach-context-v2`. Both omit
-Goal/style/friction sources and still read/replay paired V1 history. Mixed
-prompt/context versions must fail.
-On 2026-07-13 a focused non-reset run with `E2E_RUN_ID=1783945829` passed. The
-subsequent full current-checkout command also passed non-destructively against
-local Supabase with the deterministic fake provider and reported
-`E2E browser smoke passed for e2e-1783947134@example.test`.
+The Phase 10 browser source uses only the deterministic fake provider. The
+current design asserts generation-free capability/history reads, message-only
+V3 streaming, safe activity, Cancel, a fixed direct answer with empty
+source-coverage/tool trace, exact persisted message/request/usage/response
+identity, same-id replay without another durable turn, changed-message
+conflict, mixed legacy/current history, deterministic safety bypass, expandable
+UI provenance, conversation deletion with retained tombstones/usage, owner-only
+reads, rejected authenticated mutations, and guest/mock zero calls. It also
+asserts that the current page has no fixed mode, horizon, Focus selector, prompt
+starter, memory selection, structured suggestion, or plot. Service/unit
+fixtures separately exercise scripted non-empty SQL/Python traces.
+
+Historical note: focused and full fixed-mode fake-provider browser runs passed
+on 2026-07-13. They do not prove the free-agent stream, snapshot, trace, Cancel,
+or current UI. Run the current source before making a current-checkout claim.
 
 The Setup assertions inspect exact `request_id`, base/revision, applied state,
 stable materialized ids, server ownership metadata, record counts, and the
@@ -1122,23 +1137,49 @@ On browser failure, Playwright saves a screenshot named:
 
 ## Phase 10 Provider Verification
 
-Phase 10 keeps two strictly separate paths:
+The current pair under verification is `free-coach-agent-prompt-v1` with
+`personal-snapshot-v1`. Phase 10 keeps two strictly separate paths:
 
 1. The default deterministic path uses a fake provider/process runner in
-   pytest, Flutter tests, and the configured browser environment. It asserts
-   strict HTTP/models, request replay, safety, memory/history behavior, fixed
-   argv, stdin-only prompt transport, temporary-directory cleanup, an
-   allowlisted environment, explicit model truth, and unsafe tool-event
-   rejection. Before a full boundary claim, the combined suites must also prove
-   no application secret reaches the child, mandatory feature disabling and
-   unavailable tool-free state, strict output/timeout/process termination,
-   sanitized errors, owner scoping, context caps/exclusions, retry/budget,
-   memory/RLS, Flutter states, and zero hidden calls.
+   pytest, Flutter tests, and the browser environment. It covers strict
+   V3/V2/capabilities/history/SSE envelopes; scripted direct zero-tool and
+   multi-tool execution paths; snapshot-wide source windows; SQL/Python
+   mechanics; empty coverage; retry; one pending turn; local-day budget;
+   cancellation; timeout; provider/model/Fast/image failure; snapshot overflow;
+   history deletion; and guest zero calls. Scripted responses do not prove
+   autonomous tool choice, hypothesis quality, false-premise correction, or
+   honest clarifying behavior. Prompt tests verify that these behaviors are
+   required, while real-model evaluation is needed to assess them.
+
+   Security coverage must prove that the snapshot is owner-only and excludes
+   auth, secrets, provider internals, and ledgers; SQL cannot write, attach,
+   change state, or load extensions; and Python cannot reach the network, host
+   files, Supabase, OAuth, secrets, or mutation paths. Prompt injections in
+   Setup, notes, memories, calendar content, and prior chat must not add tools
+   or permissions. Trace/source coverage must reconcile with actual MCP JSONL
+   rather than model output: inspection alone adds no row coverage, SQL reports
+   full accessed-source coverage separately from returned-row counts, and
+   successful arbitrary Python records the full snapshot read scope. Snapshot,
+   script, plot, trace, container, and process workspaces must be cleaned after
+   every terminal path.
+
+   The browser harness must cover an authenticated onboarding-empty API path
+   without invented personal history plus the populated Student UI, alongside
+   reload/history compatibility, safe compact activity, Cancel, expandable
+   snapshot-source coverage/steps/limitations/Fast provenance, no plot, and the
+   absence of fixed mode/horizon/Focus/prompt/memory/suggestion controls. These
+   deterministic API/browser paths, rather than the provider-only smoke below,
+   prove persistence and presentation.
 2. `services/ai_service/tests/test_local_codex_smoke.py` is the deliberately
    separate per-machine real-model smoke. It is skipped unless
-   `RUN_LOCAL_CODEX_SMOKE=true`, uses only synthetic context, and must print no
-   prompts, OAuth/account data, paths, raw JSON events, stderr, or tokens. Run
-   it only with the explicit local provider settings and an existing login:
+   `RUN_LOCAL_CODEX_SMOKE=true` and must print no personal question/answer,
+   prompt, OAuth/account data, paths, raw JSON events, stderr, or tokens. Build
+   the analysis image first and run it only with the explicit local provider
+   settings and an existing login:
+
+```bash
+npm run prepare:coach-analysis
+```
 
 ```bash
 cd services/ai_service
@@ -1146,17 +1187,25 @@ RUN_LOCAL_CODEX_SMOKE=true ./.venv/bin/python -m pytest -q \
   tests/test_local_codex_smoke.py
 ```
 
-The opt-in smoke proves only the exact machine, CLI version, account, and model
-tested at that time. It does not prove availability for another developer's
-Plus/Pro account and is not evidence of production readiness. A missing login,
-unavailable model, rate/account limit, invalid output, or timeout is an honest
-smoke failure, never a reason to add an API-key or model fallback silently.
+The opt-in smoke proves only the provider path on the exact machine, CLI
+version, account, and model tested at that time. A valid current smoke must
+prove strict explicit `gpt-5.5` selection with no fallback, reject any different
+reported model, configure `service_tier="fast"` plus Fast mode, require MCP
+startup, and run one complex synthetic-data question through multiple allowed
+tools with matching trace and full-snapshot read-scope provenance. Current
+Codex JSONL may omit the selected model field; that omission must remain
+`model_reported=null`, not be fabricated. It does not prove FastAPI persistence,
+Flutter presentation, autonomous answer quality, availability for another
+account, or production readiness. Missing login/model/Fast/image, rate/account
+limit, invalid output, or timeout is an honest failure, never a reason to add an
+API key, model fallback, or standard-tier downgrade.
 
-Recorded local result on 2026-07-13: the synthetic-context smoke completed
+Historical result, not current-agent evidence: on 2026-07-13 the old
+synthetic-context smoke completed
 against the explicitly requested `gpt-5.5` model (`1 passed`), with no fallback
 and no answer, prompt, OAuth/account data, or raw event stream logged.
-This does not replace the fake-provider browser journey or satisfy the separate
-another-developer/login acceptance check.
+It did not use the personal snapshot, required data MCP, Fast configuration, or
+isolated Python and therefore does not satisfy the current live criterion.
 
 Recorded full-product local result on 2026-07-13 in the working tree based on
 `b8c7935`: an existing onboarded local E2E principal authenticated through
@@ -1173,12 +1222,13 @@ sanitized contract/provenance/count results, never the question, assembled
 prompt, answer, raw event stream, stderr, account identity, path, token, `.env`
 value, or Supabase key.
 
-That live manifest included current profile and daily snapshot; a stale daily
+That historical live manifest included current profile and daily snapshot; a stale daily
 briefing; current goals, tasks, habits, and focus sessions; and explicitly
 omitted the stale weekly review. No memory was selected and no previous
-completed turn entered context. This proves the first local live-account
-product-path criterion on this machine only. The separate clone/setup/login
-acceptance with another Linux user and their own eligible account remains open.
+completed turn entered context. It proves only the retired fixed-context
+product path on that machine. The current multi-tool V3/Fast result is recorded
+in the baseline above; separate clone/setup/login acceptance with another Linux
+user remains open.
 
 Keep the smoke out of the standard verification-level table and CI. It is an
 explicit account/network action, not a prerequisite for deterministic checks.

@@ -161,6 +161,12 @@ if [[ "$AI_SERVICE_START" == "true" ]]; then
   ai_service_ready=false
   for _ in {1..60}; do
     if curl -fsS "$AI_SERVICE_BASE_URL/v1/health" >/dev/null 2>&1; then
+      if ! kill -0 "$AI_SERVICE_PID" >/dev/null 2>&1; then
+        echo "AI service exited while another process answered at $AI_SERVICE_BASE_URL. Recent log:" >&2
+        tail -n 80 "$AI_SERVICE_LOG" >&2 || true
+        echo "Choose a free AI_SERVICE_PORT; the E2E runner will not reuse an unknown process." >&2
+        exit 1
+      fi
       ai_service_ready=true
       break
     fi

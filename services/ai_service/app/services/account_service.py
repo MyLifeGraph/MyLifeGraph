@@ -83,6 +83,9 @@ ACCOUNT_EXPORT_TABLES = (
         "notification_preferences",
         "user_id,focus_prompts_enabled,recovery_prompts_enabled,"
         "weekly_summary_enabled,quiet_hours_start,quiet_hours_end,"
+        "in_app_delivery_enabled,in_app_delivery_consent_version,"
+        "in_app_delivery_consented_at,in_app_delivery_disabled_at,"
+        "daily_notification_limit,"
         "created_at,updated_at",
         cursor_column="user_id",
     ),

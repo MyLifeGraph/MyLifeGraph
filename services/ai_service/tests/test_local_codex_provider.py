@@ -12,6 +12,7 @@ from app.providers.base import CoachProviderError
 from app.providers.local_codex import (
     LocalCodexCoachProvider,
     ProcessResult,
+    _expected_analysis_revision,
     _mapped_failure,
     _mapped_process_failure,
     _parse_event_stream,
@@ -42,6 +43,7 @@ EXEC_HELP = b" ".join(
 )
 FEATURES = b"""shell_tool stable true
 unified_exec stable true
+fast_mode stable false
 apps stable true
 browser_use stable true
 goals stable true
@@ -86,6 +88,11 @@ class Runner:
 
     async def __call__(self, argv, **kwargs):
         self.calls.append((list(argv), kwargs))
+        if argv[1:2] == ["version"]:
+            return ProcessResult(0, b"27.0.0", b"")
+        if argv[1:3] == ["image", "inspect"]:
+            revision = _expected_analysis_revision()
+            return ProcessResult(0, (revision or "").encode(), b"")
         if argv[-1] == "--help" and argv[-2] == "exec":
             return ProcessResult(0, EXEC_HELP, b"")
         if argv[-1] == "--help":
@@ -171,6 +178,7 @@ def test_hardened_argv_environment_stdin_and_cleanup() -> None:
         "apps",
         "auth_elicitation",
         "browser_use",
+        "fast_mode",
         "goals",
         "memories",
         "remote_plugin",
@@ -322,14 +330,14 @@ def test_capability_preflight_is_cached_coalesced_and_short_lived() -> None:
 
     first = asyncio.run(concurrent_capabilities())
     assert all(capability.state == "ready" for capability in first)
-    assert len(runner.calls) == 4
+    assert len(runner.calls) == 6
 
     assert asyncio.run(provider.capability()).state == "ready"
-    assert len(runner.calls) == 4
+    assert len(runner.calls) == 6
 
     clock[0] += 6
     assert asyncio.run(provider.capability()).state == "ready"
-    assert len(runner.calls) == 8
+    assert len(runner.calls) == 12
 
 
 def test_unavailable_auth_cache_rechecks_quickly_after_local_login_change() -> None:
@@ -363,7 +371,7 @@ def test_unavailable_auth_cache_rechecks_quickly_after_local_login_change() -> N
 
     clock[0] += 0.6
     assert asyncio.run(provider.capability()).state == "ready"
-    assert len(runner.calls) == 8
+    assert len(runner.calls) == 10
 
 
 @pytest.mark.parametrize(

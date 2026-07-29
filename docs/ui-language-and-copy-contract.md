@@ -182,16 +182,25 @@ says `Early evidence`.
   destination; `Settings` remains the top-right Today control and is not
   duplicated in the shell. The local Codex path proves one developer machine
   only and is not a production provider.
-- Coach context controls use `Today`, `Patterns`, `Focus`, and `Review`.
-  Pattern horizons use `90 days`, `1 year`, and `All available`; the last label
-  means all retained allowlisted evidence within explicit safety caps, not
-  deleted or silently truncated history. Focus choices distinguish whether a
-  reflection is rated. Review copy says that it compares the last two complete
-  weeks. Mode, horizon, session, and prompt-starter changes never imply a model
-  call.
-- Historical Coach answers use observational language, surface sparse/partial
-  evidence in uncertainty and expandable `Data used`, and never claim
-  causation, automatic changes, generated charts, or script/tool execution.
+- Current Coach uses `Ask anything`, `Your question`, and `Ask Coach`. It has no
+  `Today`, `Patterns`, `Focus`, `Review`, horizon, session, prompt-starter,
+  memory-selection, or structured suggestion controls. Older answers remain
+  readable without recreating their fixed-mode controls.
+- While a turn runs, use short allowlisted lifecycle copy such as
+  `Preparing a private data snapshot …`, `Checking relevant history …`, or
+  `Testing the data with isolated analysis …`, plus `Cancel analysis`. Never
+  expose hidden reasoning, raw SQL/code, personal values, or model event text as
+  transient status.
+- The expandable answer label is `Data and analysis details`. It may show
+  `Snapshot source coverage`, conservative source periods/counts, actual
+  inspection/SQL/Python step summaries, limitations, uncertainty, and technical
+  provenance. Coverage must not be described as the exact rows returned by one
+  query or used in the answer. The live local provider label is exactly
+  `gpt-5.5 · Fast configured`. It must not display a plot, chain-of-thought,
+  invented evidence, or an executable app action.
+- Coach answers use observational language, separate observed data from
+  uncertain interpretation/missing information/general explanation, and never
+  claim causation, diagnosis, automatic changes, or product mutation.
 
 ## Accessibility Copy Gate
 

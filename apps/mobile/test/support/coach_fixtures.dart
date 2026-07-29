@@ -1,207 +1,171 @@
 const coachRequestId = '11111111-1111-4111-8111-111111111111';
 const coachSecondRequestId = '22222222-2222-4222-8222-222222222222';
-const coachMemoryId = '33333333-3333-4333-8333-333333333333';
-const coachManualMemoryId = '44444444-4444-4444-8444-444444444444';
-const coachFocusSessionId = '55555555-5555-4555-8555-555555555555';
-const coachSecondFocusSessionId = '66666666-6666-4666-8666-666666666666';
 
 Map<String, dynamic> coachCapabilitiesJson({
   String state = 'ready',
   String provider = 'fake',
   String providerMode = 'deterministic_test_only',
-  String? modelRequested = 'fake-coach-model',
-  String modelSource = 'explicit',
+  String? modelRequested,
+  String modelSource = 'not_applicable',
+  String serviceTier = 'not_applicable',
+  bool fastMode = false,
   String reasonCode = 'ready',
   int remainingRequests = 19,
-  int timeoutSeconds = 45,
 }) =>
     {
-      'contract_version': 'coach-capabilities-v1',
+      'contract_version': 'coach-capabilities-v2',
       'state': state,
       'provider': provider,
       'provider_mode': providerMode,
       'model_requested': modelRequested,
       'model_source': modelSource,
+      'service_tier': serviceTier,
+      'fast_mode': fastMode,
       'reason_code': reasonCode,
       'limits': {
         'message_codepoints': 2000,
-        'context_bytes': 32768,
         'reply_codepoints': 4000,
-        'timeout_seconds': timeoutSeconds,
         'requests_per_local_day': 20,
         'remaining_requests': remainingRequests,
+        'max_tool_calls': 12,
+        'turn_timeout_seconds': 180,
+        'sql_timeout_seconds': 5,
+        'python_timeout_seconds': 30,
+        'snapshot_max_rows': 50000,
+        'snapshot_max_bytes': 8388608,
       },
     };
+
+Map<String, dynamic> localCodexCapabilitiesJson() => coachCapabilitiesJson(
+      provider: 'local_codex_oauth',
+      providerMode: 'local_development_only',
+      modelRequested: 'gpt-5.5',
+      modelSource: 'explicit',
+      serviceTier: 'fast',
+      fastMode: true,
+    );
 
 Map<String, dynamic> coachResponseJson({
   String requestId = coachRequestId,
-  String reply = 'Protect one focused block, then reassess your energy.',
-  String uncertaintyLevel = 'medium',
-  String uncertaintyReason = 'The latest daily state is partial.',
-  bool includeSuggestion = true,
-  String safetyClassification = 'normal',
-  String provenanceSource = 'model',
-  bool providerCalled = true,
-  List<Map<String, dynamic>>? usedContext,
-  String promptVersion = 'controlled-coach-prompt-v3',
-  String contextVersion = 'coach-context-v3',
-}) =>
-    {
-      'contract_version': 'coach-response-v1',
-      'request_id': requestId,
-      'reply': reply,
-      'uncertainty': {
-        'level': uncertaintyLevel,
-        'reason': uncertaintyReason,
-      },
-      'staged_suggestion': includeSuggestion
-          ? {
-              'title': 'Review a smaller focus block',
-              'rationale': 'A shorter block may fit the partial daily state.',
-            }
-          : null,
-      'safety': {'classification': safetyClassification},
-      'used_context': usedContext ??
-          [
-            {
-              'source': 'daily_snapshot',
-              'available_count': 1,
-              'included_count': 1,
-              'omitted_count': 0,
-              'freshness': 'current',
-            },
-            {
-              'source': 'memories',
-              'available_count': 2,
-              'included_count': 1,
-              'omitted_count': 1,
-              'freshness': 'current',
-            },
-          ],
-      'provenance': {
-        'source': provenanceSource,
-        'provider': 'fake',
-        'provider_mode': 'deterministic_test_only',
-        'model_requested': 'fake-coach-model',
-        'model_reported': providerCalled ? 'fake-coach-model-v1' : null,
-        'model_source': 'explicit',
-        'prompt_version': promptVersion,
-        'context_version': contextVersion,
-        'generated_at': '2026-07-13T10:15:00Z',
-        'provider_called': providerCalled,
-      },
-    };
+  String reply = 'Your median Focus duration was 42 minutes.',
+  String uncertaintyLevel = 'low',
+  String uncertaintyReason = 'This describes recorded sessions only.',
+  List<Map<String, dynamic>>? evidence,
+  List<Map<String, dynamic>>? steps,
+}) {
+  final traceSteps = steps ??
+      [
+        {
+          'sequence': 1,
+          'tool': 'query_data',
+          'status': 'completed',
+          'summary': 'Read-only SQL: SELECT actual_minutes FROM focus_sessions',
+          'row_count': 12,
+          'duration_ms': 8,
+        },
+      ];
+  return {
+    'contract_version': 'coach-response-v2',
+    'request_id': requestId,
+    'reply': reply,
+    'uncertainty': {
+      'level': uncertaintyLevel,
+      'reason': uncertaintyReason,
+    },
+    'safety': {'classification': 'normal'},
+    'evidence': evidence ??
+        [
+          {
+            'source': 'focus_sessions',
+            'record_count': 12,
+            'period_start': '2026-06-01T09:00:00Z',
+            'period_end': '2026-07-27T09:00:00Z',
+          },
+        ],
+    'agent_trace': {
+      'tool_call_count': traceSteps.length,
+      'steps': traceSteps,
+      'limitations': [
+        'The snapshot contains app data only and cannot establish causality.',
+      ],
+    },
+    'provenance': {
+      'source': 'model',
+      'provider': 'fake',
+      'provider_mode': 'deterministic_test_only',
+      'model_requested': null,
+      'model_reported': null,
+      'model_source': 'not_applicable',
+      'prompt_version': 'free-coach-agent-prompt-v1',
+      'context_version': 'personal-snapshot-v1',
+      'generated_at': '2026-07-28T10:15:00Z',
+      'provider_called': true,
+      'service_tier': 'not_applicable',
+      'service_tier_status': 'not_applicable',
+      'fast_mode': false,
+      'snapshot_row_count': 120,
+      'snapshot_bytes': 24576,
+    },
+  };
+}
 
 Map<String, dynamic> coachHistoryJson({
   List<Map<String, dynamic>>? turns,
-  bool includeContext = true,
 }) =>
     {
-      'contract_version': 'coach-history-v1',
+      'contract_version': 'coach-history-v2',
       'turns': turns ??
           [
             {
               'request_id': coachRequestId,
-              'message': 'How should I pace today?',
-              if (includeContext) ...{
-                'context_scope': 'today',
-                'context_parameters': <String, dynamic>{},
-              },
+              'message': 'How long are my Focus sessions?',
               'response': coachResponseJson(),
-              'created_at': '2026-07-13T10:15:01Z',
+              'created_at': '2026-07-28T10:15:01Z',
             },
           ],
     };
 
-Map<String, dynamic> coachFocusOptionJson({
-  String focusSessionId = coachFocusSessionId,
-  String status = 'completed',
-  String localStartedAt = '2026-07-27T09:30:00+02:00',
-  int plannedMinutes = 50,
-  int actualMinutes = 47,
-  bool hasReflection = true,
+Map<String, dynamic> coachLegacyResponseJson({
+  String provider = 'fake',
+  String providerMode = 'deterministic_test_only',
+  String? modelRequested,
+  String? modelReported,
+  String modelSource = 'not_applicable',
 }) =>
     {
-      'focus_session_id': focusSessionId,
-      'status': status,
-      'local_started_at': localStartedAt,
-      'planned_minutes': plannedMinutes,
-      'actual_minutes': actualMinutes,
-      'has_reflection': hasReflection,
-    };
-
-Map<String, dynamic> coachContextOptionsJson({
-  String timezone = 'Europe/Berlin',
-  bool personalPatternAnalysisEnabled = true,
-  List<Map<String, dynamic>>? focusOptions,
-  String? defaultFocusSessionId = coachFocusSessionId,
-  bool moreFocusOptionsAvailable = false,
-}) =>
-    {
-      'contract_version': 'coach-context-options-v1',
-      'timezone': timezone,
-      'personal_pattern_analysis_enabled': personalPatternAnalysisEnabled,
-      'focus_options': focusOptions ??
-          [
-            coachFocusOptionJson(),
-            coachFocusOptionJson(
-              focusSessionId: coachSecondFocusSessionId,
-              status: 'abandoned',
-              localStartedAt: '2026-07-25T15:15:00+02:00',
-              plannedMinutes: 25,
-              actualMinutes: 12,
-              hasReflection: false,
-            ),
-          ],
-      'default_focus_session_id': defaultFocusSessionId,
-      'more_focus_options_available': moreFocusOptionsAvailable,
+      'contract_version': 'coach-response-v1',
+      'request_id': coachSecondRequestId,
+      'reply': 'This older response remains readable.',
+      'uncertainty': {
+        'level': 'medium',
+        'reason': 'Legacy bounded context.',
+      },
+      'staged_suggestion': null,
+      'safety': {'classification': 'normal'},
+      'used_context': [
+        {
+          'source': 'tasks',
+          'available_count': 2,
+          'included_count': 1,
+          'omitted_count': 1,
+          'freshness': 'current',
+        },
+      ],
+      'provenance': {
+        'source': 'model',
+        'provider': provider,
+        'provider_mode': providerMode,
+        'model_requested': modelRequested,
+        'model_reported': modelReported,
+        'model_source': modelSource,
+        'prompt_version': 'controlled-coach-prompt-v3',
+        'context_version': 'coach-context-v3',
+        'generated_at': '2026-07-27T10:15:00Z',
+        'provider_called': true,
+      },
     };
 
 Map<String, dynamic> coachHistoryDeleteJson({bool deleted = true}) => {
       'contract_version': 'coach-history-v1',
       'deleted': deleted,
     };
-
-Map<String, dynamic> coachMemoryJson({
-  String id = coachMemoryId,
-  String type = 'preference',
-  String title = 'Prefer one clear next step',
-  String content = 'Keep guidance concrete and recovery-aware.',
-  bool contentTruncated = false,
-  String ownership = 'setup',
-  bool selected = true,
-}) =>
-    {
-      'id': id,
-      'type': type,
-      'title': title,
-      'content': content,
-      'content_truncated': contentTruncated,
-      'ownership': ownership,
-      'selected': selected,
-      'updated_at': '2026-07-12T09:00:00+00:00',
-    };
-
-Map<String, dynamic> coachMemoriesJson({
-  List<Map<String, dynamic>>? memories,
-  int? availableCount,
-}) {
-  final rows = memories ??
-      [
-        coachMemoryJson(),
-        coachMemoryJson(
-          id: coachManualMemoryId,
-          type: 'pattern',
-          title: 'Afternoon energy dip',
-          content: 'Energy often drops after a meeting-heavy morning.',
-          ownership: 'manual',
-          selected: false,
-        ),
-      ];
-  return {
-    'contract_version': 'coach-memory-selection-v1',
-    'max_selected': 8,
-    'available_count': availableCount ?? rows.length,
-    'memories': rows,
-  };
-}

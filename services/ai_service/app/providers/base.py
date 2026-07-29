@@ -1,7 +1,10 @@
 from dataclasses import dataclass
+from collections.abc import Awaitable, Callable
+from pathlib import Path
 from typing import Protocol
 
 from app.models.coach import (
+    CoachAgentModelOutput,
     CoachCapabilityState,
     CoachModelOutput,
     CoachModelSource,
@@ -26,6 +29,15 @@ class CoachProviderResult:
     model_reported: str | None = None
 
 
+@dataclass(frozen=True)
+class CoachAgentProviderResult:
+    output: CoachAgentModelOutput
+    model_reported: str | None = None
+
+
+CoachActivityCallback = Callable[[str], Awaitable[None]]
+
+
 class CoachProviderError(RuntimeError):
     def __init__(
         self,
@@ -44,4 +56,14 @@ class CoachProvider(Protocol):
         pass
 
     async def respond(self, *, prompt: str) -> CoachProviderResult:
+        pass
+
+    async def respond_agent(
+        self,
+        *,
+        prompt: str,
+        snapshot_path: Path,
+        trace_path: Path,
+        activity_callback: CoachActivityCallback | None = None,
+    ) -> CoachAgentProviderResult:
         pass

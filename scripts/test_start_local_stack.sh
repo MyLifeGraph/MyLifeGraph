@@ -25,13 +25,23 @@ mkdir -p \
   "$REPO/scripts" \
   "$REPO/apps/mobile" \
   "$REPO/services/ai_service/app/ops" \
+  "$REPO/services/ai_service/coach_analysis" \
   "$FAKE_BIN"
 cp "$SOURCE_ROOT/scripts/start_local_stack.sh" "$REPO/scripts/start_local_stack.sh"
 cp "$SOURCE_ROOT/scripts/start_frontend.sh" "$REPO/scripts/start_frontend.sh"
+cp "$SOURCE_ROOT/scripts/prepare_coach_analysis_image.sh" \
+  "$REPO/scripts/prepare_coach_analysis_image.sh"
 cp "$SOURCE_ROOT/scripts/lib/local_supabase_migrations.sh" \
   "$REPO/scripts/lib/local_supabase_migrations.sh"
+cp "$SOURCE_ROOT/services/ai_service/coach_analysis/Dockerfile" \
+  "$REPO/services/ai_service/coach_analysis/Dockerfile"
+cp "$SOURCE_ROOT/services/ai_service/coach_analysis/runner.py" \
+  "$REPO/services/ai_service/coach_analysis/runner.py"
 touch "$REPO/services/ai_service/app/ops/local_daily_refresh.py"
-chmod 700 "$REPO/scripts/start_local_stack.sh" "$REPO/scripts/start_frontend.sh"
+chmod 700 \
+  "$REPO/scripts/start_local_stack.sh" \
+  "$REPO/scripts/start_frontend.sh" \
+  "$REPO/scripts/prepare_coach_analysis_image.sh"
 
 cat >"$FAKE_BIN/supabase" <<'EOF'
 #!/usr/bin/env bash
@@ -97,6 +107,44 @@ printf 'private-preflight-marker\n'
 printf 'private-preflight-marker\n' >&2
 EOF
 
+cat >"$FAKE_BIN/docker" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+printf 'docker command=' >>"$TEST_EVENT_FILE"
+printf '%s ' "$@" >>"$TEST_EVENT_FILE"
+printf '\n' >>"$TEST_EVENT_FILE"
+
+case "${1:-}" in
+  version)
+    printf 'Docker version 28.0.0\n'
+    ;;
+  image)
+    [[ "${2:-}" == "inspect" ]]
+    if [[ -f "$TEST_DOCKER_STATE_FILE" ]]; then
+      cat "$TEST_DOCKER_STATE_FILE"
+    else
+      exit 1
+    fi
+    ;;
+  build)
+    revision=
+    while (($#)); do
+      if [[ "$1" == "--build-arg" ]]; then
+        shift
+        revision="${1#COACH_ANALYSIS_REVISION=}"
+        break
+      fi
+      shift
+    done
+    [[ "$revision" =~ ^[a-f0-9]{64}$ ]]
+    printf '%s\n' "$revision" >"$TEST_DOCKER_STATE_FILE"
+    ;;
+  *)
+    exit 93
+    ;;
+esac
+EOF
+
 cat >"$FAKE_BIN/python" <<'EOF'
 #!/usr/bin/env bash
 set -euo pipefail
@@ -114,7 +162,7 @@ elif [[ "${1:-}" == "-m" && "${2:-}" == "app.ops.local_daily_refresh" ]]; then
   kind=runner
 fi
 
-printf '%s service=%s token=%s anon=%s provider=%s local=%s fake=%s\n' \
+printf '%s service=%s token=%s anon=%s provider=%s local=%s fake=%s image=%s\n' \
   "$kind" \
   "${SUPABASE_SERVICE_ROLE_KEY:+set}" \
   "${SCHEDULED_REFRESH_TOKEN:+set}" \
@@ -122,6 +170,7 @@ printf '%s service=%s token=%s anon=%s provider=%s local=%s fake=%s\n' \
   "${COACH_PROVIDER:-unset}" \
   "${LOCAL_CODEX_ENABLED:-unset}" \
   "${COACH_FAKE_PROVIDER_ENABLED:-unset}" \
+  "${COACH_ANALYSIS_IMAGE:-unset}" \
   >>"$TEST_EVENT_FILE"
 
 trap 'printf "%s terminated\\n" "$kind" >>"$TEST_EVENT_FILE"; exit 0' TERM INT
@@ -192,6 +241,7 @@ wait_for_event() {
 }
 
 export TEST_EVENT_FILE="$EVENTS"
+export TEST_DOCKER_STATE_FILE="$TEST_ROOT/docker-image-revision"
 PATH="$FAKE_BIN:$PATH" \
 AI_SERVICE_PYTHON="$FAKE_BIN/python" \
 FLUTTER_BIN="$FAKE_BIN/flutter" \
@@ -222,6 +272,10 @@ assert_contains "$EVENTS" 'command=migration list --local '
 assert_contains "$EVENTS" 'command=status -o env '
 assert_contains "$EVENTS" 'codex command=--version '
 assert_contains "$EVENTS" 'codex command=login status '
+assert_contains "$EVENTS" 'docker command=version '
+assert_contains "$EVENTS" 'docker command=build --build-arg COACH_ANALYSIS_REVISION='
+assert_contains "$EVENTS" 'docker command=image inspect --format'
+assert_contains "$EVENTS" 'image=mylifegraph-coach-analysis:1'
 assert_contains "$EVENTS" 'backend terminated'
 assert_contains "$EVENTS" 'runner terminated'
 assert_contains "$EVENTS" 'frontend terminated'
@@ -233,6 +287,7 @@ assert_not_contains "$OUTPUT" 'fake-scheduler-token'
 assert_not_contains "$OUTPUT" 'private-preflight-marker'
 assert_contains "$OUTPUT" 'Coach provider: local_codex_oauth'
 assert_contains "$OUTPUT" "Coach replies use this Linux user's explicitly enabled local Codex login."
+assert_contains "$OUTPUT" 'Coach analysis image is ready: mylifegraph-coach-analysis:1'
 
 for log_file in ai-service.log daily-refresh.log flutter-web.log; do
   mode="$(stat -c '%a' "$REPO/.tools/local-stack/$log_file")"
@@ -263,6 +318,14 @@ provider_status=$?
 PATH="$FAKE_BIN:$PATH" \
 AI_SERVICE_PYTHON="$FAKE_BIN/python" \
 FLUTTER_BIN="$FAKE_BIN/flutter" \
+LOCAL_STACK_COACH_PROVIDER=local_codex_oauth \
+LOCAL_CODEX_MODEL=gpt-5.4 \
+"$REPO/scripts/start_local_stack.sh" >"$TEST_ROOT/model.log" 2>&1
+model_status=$?
+
+PATH="$FAKE_BIN:$PATH" \
+AI_SERVICE_PYTHON="$FAKE_BIN/python" \
+FLUTTER_BIN="$FAKE_BIN/flutter" \
 FAKE_PORT_OCCUPIED=true \
 "$REPO/scripts/start_local_stack.sh" >"$TEST_ROOT/occupied.log" 2>&1
 occupied_status=$?
@@ -284,11 +347,13 @@ set -e
 
 [[ "$non_loopback_status" -eq 1 ]]
 [[ "$provider_status" -eq 1 ]]
+[[ "$model_status" -eq 1 ]]
 [[ "$occupied_status" -eq 1 ]]
 [[ "$migration_flag_status" -eq 2 ]]
 [[ "$reset_forbidden_status" -eq 2 ]]
 assert_contains "$TEST_ROOT/non-loopback.log" 'must be a loopback host'
 assert_contains "$TEST_ROOT/provider.log" 'must be disabled, fake, or local_codex_oauth'
+assert_contains "$TEST_ROOT/model.log" 'requires LOCAL_CODEX_MODEL=gpt-5.5'
 assert_contains "$TEST_ROOT/occupied.log" 'already occupied; refusing to reuse an unknown process'
 assert_contains "$TEST_ROOT/migration-flag.log" 'must be exactly true or false'
 assert_contains "$TEST_ROOT/reset-forbidden.log" 'this command never resets the database'

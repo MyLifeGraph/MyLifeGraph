@@ -146,6 +146,34 @@ class ApiClient {
     }
   }
 
+  Future<ResponseBody> postStream(
+    String path, {
+    required Map<String, dynamic> body,
+    required Duration receiveTimeout,
+    Map<String, String>? headers,
+    CancelToken? cancelToken,
+  }) async {
+    try {
+      final response = await _dio.post<ResponseBody>(
+        path,
+        data: body,
+        options: Options(
+          headers: headers,
+          receiveTimeout: receiveTimeout,
+          responseType: ResponseType.stream,
+        ),
+        cancelToken: cancelToken,
+      );
+      final stream = response.data;
+      if (stream == null) {
+        throw const AppException('Network response did not include a stream.');
+      }
+      return stream;
+    } on DioException catch (error) {
+      throw AppException('Network request failed', cause: error);
+    }
+  }
+
   Future<Map<String, dynamic>> deleteJson(
     String path, {
     Map<String, String>? headers,

@@ -1,8 +1,6 @@
 import 'dart:async';
 
-import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:my_life_graph/core/errors/app_exception.dart';
 import 'package:my_life_graph/features/coach/application/coach_controller.dart';
 import 'package:my_life_graph/features/coach/domain/coach.dart';
 import 'package:my_life_graph/features/coach/domain/coach_repository.dart';
@@ -10,415 +8,309 @@ import 'package:my_life_graph/features/coach/domain/coach_repository.dart';
 import 'support/coach_fixtures.dart';
 
 void main() {
-  test(
-      'initial load reads capability, history, memories, and context options '
-      'without responding', () async {
-    final repository = _FakeCoachRepository(
-      capability: _capability(state: 'unavailable'),
-      history: _history(),
-      memories: _memories(),
-    );
+  test('load reads only capabilities and conversation history', () async {
+    final repository = _FakeCoachRepository();
     final controller = CoachController(repository: repository);
-    addTearDown(controller.dispose);
-
-    await pumpEventQueue();
+    await _settle();
 
     expect(controller.state.isLoading, isFalse);
-    expect(
-      controller.state.capabilities!.state,
-      CoachCapabilityState.unavailable,
-    );
+    expect(controller.state.capabilities?.canRespond, isTrue);
     expect(controller.state.history.turns, hasLength(1));
-    expect(controller.state.memories.memories, hasLength(2));
     expect(repository.capabilityCalls, 1);
     expect(repository.historyCalls, 1);
-    expect(repository.memoryCalls, 1);
-    expect(repository.contextOptionsCalls, 1);
-    expect(controller.state.selectedFocusSessionId, coachFocusSessionId);
-    expect(repository.respondRequestIds, isEmpty);
+    controller.dispose();
   });
 
-  test('send prevents duplicates, uses capability timeout, clears on success',
-      () async {
-    final responseCompleter = Completer<CoachResponse>();
+  test('send accepts a free question and surfaces safe activity', () async {
     final repository = _FakeCoachRepository(
-      responseCompleter: responseCompleter,
+      remainingRequests: const [19, 18],
     );
     final controller = CoachController(repository: repository);
-    addTearDown(controller.dispose);
-    await pumpEventQueue();
-    controller.updateDraft('  Help me pace today.  ');
-    final firstRequestId = controller.state.requestId;
+    await _settle();
+    controller.updateDraft('  Compare my full Focus history.  ');
 
-    final first = controller.send();
-    final duplicate = await controller.send();
-    expect(duplicate, isFalse);
-    expect(repository.respondRequestIds, [firstRequestId]);
-    expect(repository.respondMessages, ['Help me pace today.']);
-    expect(
-      repository.respondContexts,
-      [const CoachContextSelection.today()],
-    );
-    expect(repository.responseTimeouts, [const Duration(seconds: 55)]);
+    final sent = await controller.send();
 
-    responseCompleter.complete(_response(requestId: firstRequestId));
-    expect(await first, isTrue);
+    expect(sent, isTrue);
+    expect(repository.messages.single, 'Compare my full Focus history.');
+    expect(controller.state.latestResponse?.agentTrace.toolCallCount, 1);
+    expect(controller.state.latestMessage, 'Compare my full Focus history.');
     expect(controller.state.draft, isEmpty);
-    expect(controller.state.requestId, isNot(firstRequestId));
-    expect(controller.state.latestResponse!.requestId, firstRequestId);
-    expect(controller.state.latestMessage, 'Help me pace today.');
+    expect(controller.state.capabilities?.limits.remainingRequests, 18);
+    expect(repository.capabilityCalls, 2);
+    expect(repository.historyCalls, 2);
+    controller.dispose();
   });
 
-  test('ambiguous timeout retains exact request identity for retry', () async {
-    final request = RequestOptions(path: '/v1/coach/respond');
+  test('completed response replaces cancellation before projections refresh',
+      () async {
+    final refreshGate = Completer<void>();
     final repository = _FakeCoachRepository(
-      responseErrors: [
-        AppException(
-          'Network request failed',
-          cause: DioException(
-            requestOptions: request,
-            type: DioExceptionType.receiveTimeout,
-          ),
-        ),
-      ],
+      refreshGate: refreshGate,
+      remainingRequests: const [19, 18],
     );
     final controller = CoachController(repository: repository);
-    addTearDown(controller.dispose);
-    await pumpEventQueue();
-    controller.updateDraft('Keep this exact');
-    final requestId = controller.state.requestId;
+    await _settle();
+    controller.updateDraft('Compare the full history');
 
+    final pending = controller.send();
+    await _waitUntil(() => controller.state.latestResponse != null);
+
+    expect(controller.state.isSending, isFalse);
+    expect(controller.state.isCancelling, isFalse);
+    expect(controller.state.isLoading, isTrue);
+    expect(controller.state.latestMessage, 'Compare the full history');
+    controller.cancelAnalysis();
+    expect(repository.cancelCalls, 0);
+
+    await controller.deleteHistory();
+    await controller.load();
     expect(await controller.send(), isFalse);
-    expect(controller.state.requestId, requestId);
-    expect(controller.state.exactRetryMessage, 'Keep this exact');
-    expect(
-      coachErrorMessage(controller.state.sendError),
-      contains('timed out'),
+    expect(repository.deleteCalls, 0);
+    expect(repository.capabilityCalls, 2);
+    expect(repository.messages, hasLength(1));
+
+    refreshGate.complete();
+    expect(await pending, isTrue);
+    expect(controller.state.isLoading, isFalse);
+    expect(controller.state.capabilities?.limits.remainingRequests, 18);
+    controller.dispose();
+  });
+
+  test('projection failures are independent and retain a completed response',
+      () async {
+    final repository = _FakeCoachRepository(
+      capabilityErrorAfterInitial: StateError('capability refresh failed'),
+      historyAfterInitial: CoachHistory.empty(),
     );
+    final controller = CoachController(repository: repository);
+    await _settle();
+    controller.updateDraft('Keep the answer if status refresh fails');
 
     expect(await controller.send(), isTrue);
-    expect(repository.respondRequestIds, [requestId, requestId]);
-    expect(repository.respondMessages, ['Keep this exact', 'Keep this exact']);
+
+    expect(controller.state.latestResponse, isNotNull);
+    expect(
+      controller.state.latestMessage,
+      'Keep the answer if status refresh fails',
+    );
+    expect(controller.state.capabilityError, isA<StateError>());
+    expect(controller.state.history.turns, isEmpty);
+    expect(controller.state.historyError, isNull);
+    controller.dispose();
   });
 
-  test('editing after ambiguous failure releases the exact retry identity',
+  test('failed turn refreshes capabilities even when history refresh fails',
       () async {
     final repository = _FakeCoachRepository(
-      responseErrors: [const CoachContractException('invalid success')],
+      error: const CoachRemoteException(
+        code: 'provider_timeout',
+        message: 'Timed out.',
+        retryable: true,
+        statusCode: 503,
+      ),
+      historyErrorAfterInitial: StateError('history refresh failed'),
+      remainingRequests: const [20, 19],
     );
     final controller = CoachController(repository: repository);
-    addTearDown(controller.dispose);
-    await pumpEventQueue();
-    controller.updateDraft('Original payload');
-    final requestId = controller.state.requestId;
+    await _settle();
+    controller.updateDraft('Long data question');
 
     expect(await controller.send(), isFalse);
-    expect(controller.state.requestId, requestId);
-    controller.updateDraft('Changed payload');
 
-    expect(controller.state.requestId, isNot(requestId));
-    expect(controller.state.exactRetryMessage, isNull);
-    expect(controller.state.sendError, isNull);
+    expect(controller.state.capabilities?.limits.remainingRequests, 19);
+    expect(controller.state.capabilityError, isNull);
+    expect(controller.state.historyError, isA<StateError>());
+    expect(controller.state.sendError, isA<CoachRemoteException>());
+    controller.dispose();
   });
 
-  test('changing context releases the full-payload exact retry identity',
-      () async {
+  test('editing an uncertain retry creates a fresh request identity', () async {
     final repository = _FakeCoachRepository(
-      responseErrors: [const CoachContractException('invalid success')],
-    );
-    final controller = CoachController(repository: repository);
-    addTearDown(controller.dispose);
-    await pumpEventQueue();
-    controller.updateDraft('Original payload');
-    final requestId = controller.state.requestId;
-
-    expect(await controller.send(), isFalse);
-    expect(controller.state.requestId, requestId);
-    expect(controller.state.exactRetryPayload, isNotNull);
-
-    controller.selectScope(CoachContextScope.patterns);
-    controller.selectPatternHorizon(CoachPatternHorizon.year1);
-
-    expect(controller.state.requestId, isNot(requestId));
-    expect(controller.state.exactRetryPayload, isNull);
-    expect(controller.state.sendError, isNull);
-    expect(controller.state.draft, 'Original payload');
-    expect(repository.contextOptionsCalls, 1);
-  });
-
-  test('Pattern availability and Focus selection only gate their own modes',
-      () async {
-    final repository = _FakeCoachRepository(
-      contextOptions: CoachContextOptions.fromJson(
-        coachContextOptionsJson(
-          personalPatternAnalysisEnabled: false,
-          focusOptions: [coachFocusOptionJson()],
-        ),
+      error: const CoachRemoteException(
+        code: 'network_error',
+        message: 'Connection lost.',
+        retryable: true,
+        statusCode: 503,
       ),
     );
     final controller = CoachController(repository: repository);
-    addTearDown(controller.dispose);
-    await pumpEventQueue();
-    controller.updateDraft('Use this context');
+    await _settle();
+    controller.updateDraft('First question');
+    await controller.send();
+    final retained = controller.state.requestId;
 
-    expect(controller.state.canSend, isTrue);
-    controller.selectScope(CoachContextScope.patterns);
-    expect(controller.state.canSend, isFalse);
-    controller.selectScope(CoachContextScope.focus);
-    expect(controller.state.canSend, isTrue);
-    controller.selectScope(CoachContextScope.review);
-    expect(controller.state.canSend, isTrue);
-    expect(repository.respondRequestIds, isEmpty);
+    expect(controller.state.exactRetryMessage, 'First question');
+    controller.updateDraft('Different question');
+
+    expect(controller.state.exactRetryMessage, isNull);
+    expect(controller.state.requestId, isNot(retained));
+    controller.dispose();
   });
 
-  test('known failures rotate id except retryable in-progress conflict',
+  test('contract failure preserves the exact request identity for retry',
       () async {
-    final knownRepository = _FakeCoachRepository(
-      responseErrors: [
-        const CoachRemoteException(
-          code: 'invalid_output',
-          message: 'Invalid provider output.',
-          retryable: false,
-          statusCode: 422,
-        ),
-      ],
-    );
-    final known = CoachController(repository: knownRepository);
-    addTearDown(known.dispose);
-    await pumpEventQueue();
-    known.updateDraft('Known failure');
-    final knownId = known.state.requestId;
-    expect(await known.send(), isFalse);
-    expect(known.state.requestId, isNot(knownId));
-    expect(known.state.exactRetryMessage, isNull);
-
-    final activeRepository = _FakeCoachRepository(
-      responseErrors: [
-        const CoachRemoteException(
-          code: 'in_progress',
-          message: 'Still in progress.',
-          retryable: true,
-          statusCode: 409,
-        ),
-      ],
-    );
-    final active = CoachController(repository: activeRepository);
-    addTearDown(active.dispose);
-    await pumpEventQueue();
-    active.updateDraft('Active request');
-    final activeId = active.state.requestId;
-    expect(await active.send(), isFalse);
-    expect(active.state.requestId, activeId);
-    expect(active.state.exactRetryMessage, 'Active request');
-  });
-
-  test('rate limit is distinct and capability refresh can recover', () async {
     final repository = _FakeCoachRepository(
-      responseErrors: [
-        const CoachRemoteException(
-          code: 'rate_limited',
-          message: 'Local account limit reached.',
-          retryable: true,
-          statusCode: 429,
-        ),
-      ],
+      error: const CoachContractException('Malformed stream encoding.'),
     );
     final controller = CoachController(repository: repository);
-    addTearDown(controller.dispose);
-    await pumpEventQueue();
-    controller.updateDraft('Keep the draft');
+    await _settle();
+    controller.updateDraft('Retry this exact question');
+    final requestId = controller.state.requestId;
 
     expect(await controller.send(), isFalse);
-    expect(controller.state.isRateLimited, isTrue);
-    expect(controller.state.canSend, isFalse);
-    expect(controller.state.draft, 'Keep the draft');
 
-    await controller.load();
-    expect(controller.state.isRateLimited, isFalse);
-    expect(controller.state.canSend, isTrue);
-    expect(controller.state.draft, 'Keep the draft');
-  });
-
-  test('history and memories remain mutable when provider is unavailable',
-      () async {
-    final repository = _FakeCoachRepository(
-      capability: _capability(state: 'unavailable'),
-      history: _history(),
-      memories: _memories(),
-    );
-    final controller = CoachController(repository: repository);
-    addTearDown(controller.dispose);
-    await pumpEventQueue();
-
-    await controller.setMemorySelected(
-      controller.state.memories.memories.first,
-      false,
-    );
-    await controller.deleteHistory();
-
-    expect(repository.deselectedMemoryIds, [coachMemoryId]);
-    expect(controller.state.memories.selectedCount, 0);
-    expect(repository.deleteHistoryCalls, 1);
-    expect(controller.state.history.turns, isEmpty);
-  });
-
-  test('disposing an active response cancels it without publishing error',
-      () async {
-    final completer = Completer<CoachResponse>();
-    final repository = _FakeCoachRepository(responseCompleter: completer);
-    final controller = CoachController(repository: repository);
-    await pumpEventQueue();
-    controller.updateDraft('Long response');
-
-    final send = controller.send();
+    expect(controller.state.requestId, requestId);
+    expect(controller.state.exactRetryMessage, 'Retry this exact question');
+    expect(controller.state.sendError, isA<CoachContractException>());
     controller.dispose();
+  });
+
+  test('cancel keeps the draft and clears the running status', () async {
+    final repository = _FakeCoachRepository(
+      block: true,
+      remainingRequests: const [20, 19],
+    );
+    final controller = CoachController(repository: repository);
+    await _settle();
+    controller.updateDraft('Long analysis');
+    final pending = controller.send();
+    await _settle();
+
+    expect(controller.state.isSending, isTrue);
+    controller.cancelAnalysis();
+    await pending;
+
     expect(repository.cancelCalls, 1);
-    expect(await send, isFalse);
+    expect(controller.state.isSending, isFalse);
+    expect(controller.state.draft, 'Long analysis');
+    expect(controller.state.sendError, isNull);
+    expect(controller.state.capabilities?.limits.remainingRequests, 19);
+    expect(repository.capabilityCalls, 2);
+    expect(repository.historyCalls, 2);
+    controller.dispose();
+  });
+
+  test('history deletion is blocked while analysis is running', () async {
+    final repository = _FakeCoachRepository(block: true);
+    final controller = CoachController(repository: repository);
+    await _settle();
+    controller.updateDraft('Long analysis');
+    final pending = controller.send();
+    await _settle();
+
+    await controller.deleteHistory();
+    expect(repository.deleteCalls, 0);
+
+    controller.cancelAnalysis();
+    await pending;
+    await controller.deleteHistory();
+    expect(repository.deleteCalls, 1);
+    expect(controller.state.history.turns, isEmpty);
+    controller.dispose();
   });
 }
 
-CoachCapabilities _capability({String state = 'ready'}) =>
-    CoachCapabilities.fromJson(
-      coachCapabilitiesJson(
-        state: state,
-        reasonCode: state == 'ready' ? 'ready' : 'provider_unavailable',
-      ),
-    );
+Future<void> _settle() async {
+  await Future<void>.delayed(Duration.zero);
+  await Future<void>.delayed(Duration.zero);
+}
 
-CoachHistory _history() => CoachHistory.fromJson(coachHistoryJson());
-
-CoachMemorySelection _memories({bool selected = true}) =>
-    CoachMemorySelection.fromJson(
-      coachMemoriesJson(
-        memories: [
-          coachMemoryJson(selected: selected),
-          coachMemoryJson(
-            id: coachManualMemoryId,
-            type: 'pattern',
-            title: 'Afternoon energy dip',
-            content: 'Energy often drops later.',
-            ownership: 'manual',
-            selected: false,
-          ),
-        ],
-      ),
-    );
-
-CoachResponse _response({required String requestId}) =>
-    CoachResponse.fromJson(coachResponseJson(requestId: requestId));
+Future<void> _waitUntil(bool Function() predicate) async {
+  for (var attempt = 0; attempt < 50; attempt++) {
+    if (predicate()) return;
+    await _settle();
+  }
+  fail('Timed out waiting for Coach controller state.');
+}
 
 class _FakeCoachRepository implements CoachRepository {
   _FakeCoachRepository({
-    CoachCapabilities? capability,
-    CoachHistory? history,
-    CoachMemorySelection? memories,
-    CoachContextOptions? contextOptions,
-    List<Object>? responseErrors,
-    this.responseCompleter,
-  })  : capability = capability ?? _capability(),
-        history = history ?? CoachHistory.empty(),
-        memories = memories ?? CoachMemorySelection.empty(),
-        contextOptions = contextOptions ??
-            CoachContextOptions.fromJson(coachContextOptionsJson()),
-        responseErrors = responseErrors ?? [];
+    this.error,
+    this.block = false,
+    this.refreshGate,
+    this.capabilityErrorAfterInitial,
+    this.historyErrorAfterInitial,
+    this.historyAfterInitial,
+    this.remainingRequests = const [19],
+  }) : assert(remainingRequests.isNotEmpty);
 
-  CoachCapabilities capability;
-  CoachHistory history;
-  CoachMemorySelection memories;
-  CoachContextOptions contextOptions;
-  final List<Object> responseErrors;
-  final Completer<CoachResponse>? responseCompleter;
+  final Object? error;
+  final bool block;
+  final Completer<void>? refreshGate;
+  final Object? capabilityErrorAfterInitial;
+  final Object? historyErrorAfterInitial;
+  final CoachHistory? historyAfterInitial;
+  final List<int> remainingRequests;
+  final List<String> messages = [];
+  final StreamController<CoachStreamEvent> _blocking =
+      StreamController<CoachStreamEvent>();
   int capabilityCalls = 0;
   int historyCalls = 0;
-  int memoryCalls = 0;
-  int contextOptionsCalls = 0;
-  int deleteHistoryCalls = 0;
+  int deleteCalls = 0;
   int cancelCalls = 0;
-  final List<String> respondRequestIds = [];
-  final List<String> respondMessages = [];
-  final List<CoachContextSelection> respondContexts = [];
-  final List<Duration> responseTimeouts = [];
-  final List<String> selectedMemoryIds = [];
-  final List<String> deselectedMemoryIds = [];
 
   @override
   Future<CoachCapabilities> getCapabilities() async {
-    capabilityCalls += 1;
-    return capability;
+    capabilityCalls++;
+    if (capabilityCalls > 1) {
+      await refreshGate?.future;
+      if (capabilityErrorAfterInitial != null) {
+        throw capabilityErrorAfterInitial!;
+      }
+    }
+    final index = capabilityCalls <= remainingRequests.length
+        ? capabilityCalls - 1
+        : remainingRequests.length - 1;
+    return CoachCapabilities.fromJson(
+      coachCapabilitiesJson(remainingRequests: remainingRequests[index]),
+    );
   }
 
   @override
   Future<CoachHistory> getHistory() async {
-    historyCalls += 1;
-    return history;
+    historyCalls++;
+    if (historyCalls > 1) {
+      await refreshGate?.future;
+      if (historyErrorAfterInitial != null) {
+        throw historyErrorAfterInitial!;
+      }
+      if (historyAfterInitial != null) return historyAfterInitial!;
+    }
+    return CoachHistory.fromJson(coachHistoryJson());
   }
 
   @override
-  Future<CoachMemorySelection> getMemories() async {
-    memoryCalls += 1;
-    return memories;
-  }
-
-  @override
-  Future<CoachContextOptions> getContextOptions() async {
-    contextOptionsCalls += 1;
-    return contextOptions;
-  }
-
-  @override
-  Future<CoachResponse> respond({
+  Stream<CoachStreamEvent> respond({
     required String requestId,
     required String message,
-    required CoachContextSelection context,
-    required Duration receiveTimeout,
-  }) async {
-    respondRequestIds.add(requestId);
-    respondMessages.add(message);
-    respondContexts.add(context);
-    responseTimeouts.add(receiveTimeout);
-    if (responseErrors.isNotEmpty) throw responseErrors.removeAt(0);
-    if (responseCompleter != null && !responseCompleter!.isCompleted) {
-      return responseCompleter!.future;
+  }) async* {
+    messages.add(message);
+    yield CoachStartedEvent(requestId);
+    yield const CoachActivityEvent('Checking relevant history …');
+    if (block) {
+      yield* _blocking.stream;
+      return;
     }
-    return _response(requestId: requestId);
+    if (error != null) throw error!;
+    yield CoachCompletedEvent(
+      CoachResponse.fromJson(coachResponseJson(requestId: requestId)),
+    );
   }
 
   @override
   Future<CoachHistoryDeleteResult> deleteHistory() async {
-    deleteHistoryCalls += 1;
-    history = CoachHistory.empty();
-    return const CoachHistoryDeleteResult(deleted: true);
-  }
-
-  @override
-  Future<CoachMemorySelection> selectMemory(String memoryId) async {
-    selectedMemoryIds.add(memoryId);
-    memories = _memories(selected: true);
-    return memories;
-  }
-
-  @override
-  Future<CoachMemorySelection> deselectMemory(String memoryId) async {
-    deselectedMemoryIds.add(memoryId);
-    memories = _memories(selected: false);
-    return memories;
+    deleteCalls++;
+    return const CoachHistoryDeleteResult(true);
   }
 
   @override
   void cancelActiveResponse() {
-    cancelCalls += 1;
-    final completer = responseCompleter;
-    if (completer != null && !completer.isCompleted) {
-      final request = RequestOptions(path: '/v1/coach/respond');
-      completer.completeError(
-        AppException(
-          'Network request failed',
-          cause: DioException(
-            requestOptions: request,
-            type: DioExceptionType.cancel,
-          ),
-        ),
-      );
+    cancelCalls++;
+    if (block && !_blocking.isClosed) {
+      _blocking
+        ..addError(const CoachAccessException('Cancelled.'))
+        ..close();
     }
   }
 }

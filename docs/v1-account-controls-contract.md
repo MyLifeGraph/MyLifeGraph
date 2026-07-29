@@ -100,7 +100,10 @@ V1 product tables: `profiles`, `notification_preferences`,
 and `planner_commitments`. It returns exact per-table record counts, an export
 timestamp, bounds, and an explicit ledger policy. Calendar
 connection/import and Coach request/usage rows use field allowlists so
-backend-only details are not leaked. The global `calendar_request_identities`,
+backend-only details are not leaked. `notification_preferences` includes the
+owner's current prompt flags, quiet hours, in-app delivery enabled/consent
+state and timestamps, and daily notification limit; its backend request
+identity and fingerprint remain excluded. The global `calendar_request_identities`,
 `notification_action_requests`, `deadline_plan_request_identities`, and
 `planner_request_identities`, and `learning_request_identities` anti-replay
 ledgers are deliberately omitted and named in that policy. Deadline

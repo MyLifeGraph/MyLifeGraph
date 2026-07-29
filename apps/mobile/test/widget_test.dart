@@ -414,9 +414,9 @@ void main() {
     );
     router.go(AppRoutes.coach);
     await tester.pumpAndSettle();
-    expect(find.text('Coach preview'), findsOneWidget);
+    expect(find.text('Ask anything'), findsOneWidget);
     expect(find.text('Coach unavailable'), findsOneWidget);
-    expect(find.text('Ask Coach'), findsNWidgets(2));
+    expect(find.text('Ask Coach'), findsOneWidget);
     expect(
       tester
           .widget<TextField>(find.byKey(const Key('coach-message-field')))

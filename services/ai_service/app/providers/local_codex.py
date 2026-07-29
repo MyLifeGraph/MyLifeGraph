@@ -1,9 +1,12 @@
 import asyncio
+import hashlib
 import json
 import os
 import re
 import shutil
 import signal
+import stat
+import sys
 import tempfile
 import time
 from collections.abc import Awaitable, Callable, Mapping
@@ -14,8 +17,15 @@ from typing import Any
 from pydantic import ValidationError
 
 from app.core.config import Settings
-from app.models.coach import CoachModelOutput
+from app.core.private_files import (
+    PrivateFileCleanupError,
+    await_despite_cancellation,
+    remove_private_directory_despite_cancellation,
+)
+from app.models.coach import CoachAgentModelOutput, CoachModelOutput
 from app.providers.base import (
+    CoachActivityCallback,
+    CoachAgentProviderResult,
     CoachProviderCapability,
     CoachProviderError,
     CoachProviderResult,
@@ -32,6 +42,25 @@ _UNAVAILABLE_CAPABILITY_CACHE_SECONDS = 1.0
 _SCHEMA_PATH = (
     Path(__file__).resolve().parent / "schemas" / "coach_model_output_v1.json"
 )
+_AGENT_SCHEMA_PATH = (
+    Path(__file__).resolve().parent / "schemas" / "coach_agent_output_v1.json"
+)
+_COACH_MCP_SERVER_PATH = (
+    Path(__file__).resolve().parents[1] / "mcp" / "coach_data_server.py"
+)
+_COACH_ANALYSIS_CONTEXT_PATH = (
+    Path(__file__).resolve().parents[2] / "coach_analysis"
+)
+_COACH_ANALYSIS_REVISION_LABEL = "org.mylifegraph.coach-analysis.revision"
+_AGENT_ALLOWED_TOOLS = {"inspect_data", "query_data", "run_python"}
+_ANALYSIS_IMAGE_PATTERN = re.compile(
+    r"[A-Za-z0-9][A-Za-z0-9._/:@-]{0,255}",
+)
+_TURN_CONTAINER_NAME_PATTERN = re.compile(
+    r"mylifegraph-coach-analysis-[0-9a-f]{32}",
+)
+_MAX_CONTAINER_STATE_BYTES = 128
+_CONTAINER_CLEANUP_TIMEOUT_SECONDS = 5
 
 _ENV_ALLOWLIST = {
     "CODEX_HOME",
@@ -358,6 +387,12 @@ class LocalCodexCoachProvider:
                     state="unavailable",
                     reason_code="tool_free_unavailable",
                 )
+            if "fast_mode" not in disabled:
+                return self._cache_capability(
+                    cache_key=cache_key,
+                    state="unavailable",
+                    reason_code="fast_mode_unavailable",
+                )
             login_result = await self._preflight([resolved, "login", "status"])
         except (CoachProviderError, OSError):
             return self._cache_capability(
@@ -378,6 +413,67 @@ class LocalCodexCoachProvider:
                 cache_key=cache_key,
                 state="unavailable",
                 reason_code="unsupported_auth_mode",
+            )
+        expected_revision = _expected_analysis_revision()
+        if expected_revision is None:
+            return self._cache_capability(
+                cache_key=cache_key,
+                state="unavailable",
+                reason_code="analysis_image_stale",
+            )
+        try:
+            docker_result = await self._docker_preflight(
+                [
+                    self._settings.coach_analysis_docker_bin,
+                    "version",
+                    "--format",
+                    "{{.Server.Version}}",
+                ],
+            )
+            if docker_result.returncode != 0:
+                return self._cache_capability(
+                    cache_key=cache_key,
+                    state="unavailable",
+                    reason_code="analysis_runtime_unavailable",
+                )
+            image_result = await self._docker_preflight(
+                [
+                    self._settings.coach_analysis_docker_bin,
+                    "image",
+                    "inspect",
+                    "--format",
+                    (
+                        "{{ index .Config.Labels "
+                        f'"{_COACH_ANALYSIS_REVISION_LABEL}"'
+                        " }}"
+                    ),
+                    self._settings.coach_analysis_image,
+                ],
+            )
+        except (CoachProviderError, OSError):
+            return self._cache_capability(
+                cache_key=cache_key,
+                state="unavailable",
+                reason_code="analysis_runtime_unavailable",
+            )
+        if image_result.returncode != 0:
+            return self._cache_capability(
+                cache_key=cache_key,
+                state="unavailable",
+                reason_code="analysis_image_unavailable",
+            )
+        try:
+            image_revision = image_result.stdout.decode(
+                "ascii",
+                errors="strict",
+            ).strip()
+        except UnicodeDecodeError:
+            image_revision = ""
+        if image_revision != expected_revision:
+            return self._cache_capability(
+                cache_key=cache_key,
+                state="unavailable",
+                reason_code="analysis_image_stale",
             )
 
         self._resolved_bin = resolved
@@ -469,7 +565,138 @@ class LocalCodexCoachProvider:
                 self.invalidate_capability()
             raise
         finally:
-            shutil.rmtree(workdir, ignore_errors=True)
+            await _cleanup_provider_workdir(
+                workdir,
+                expected_name_prefix="mylifegraph-coach-",
+            )
+
+    async def respond_agent(
+        self,
+        *,
+        prompt: str,
+        snapshot_path: Path,
+        trace_path: Path,
+        activity_callback: CoachActivityCallback | None = None,
+    ) -> CoachAgentProviderResult:
+        if self._configured_model() != "gpt-5.5":
+            raise CoachProviderError(
+                "unavailable_model",
+                "The free Coach data agent requires explicit gpt-5.5.",
+                retryable=False,
+            )
+        if self._resolved_bin is None or self._disabled_features is None:
+            capability = await self.capability()
+            if capability.state != "ready":
+                raise CoachProviderError(
+                    capability.reason_code,
+                    "The local Coach provider is unavailable.",
+                    retryable=capability.reason_code
+                    in {"provider_failure", "not_logged_in"},
+                )
+        assert self._resolved_bin is not None
+        assert self._disabled_features is not None
+        if "fast_mode" not in self._disabled_features:
+            raise CoachProviderError(
+                "provider_failure",
+                "The installed Codex CLI cannot configure Fast mode.",
+                retryable=False,
+            )
+        workdir = tempfile.mkdtemp(prefix="mylifegraph-coach-agent-")
+        os.chmod(workdir, 0o700)
+        mcp_home = Path(workdir) / "mcp-home"
+        mcp_home.mkdir(mode=0o700)
+        container_state_path = trace_path.with_name(
+            "coach-analysis-container.name",
+        )
+        if container_state_path.exists() or container_state_path.is_symlink():
+            await _cleanup_provider_workdir(
+                workdir,
+                expected_name_prefix="mylifegraph-coach-agent-",
+            )
+            raise CoachProviderError(
+                "provider_failure",
+                "The local Coach analysis runtime state was not fresh.",
+                retryable=True,
+            )
+        watcher: asyncio.Task[None] | None = None
+        try:
+            final_path = Path(workdir) / "coach-agent-output.json"
+            final_path.touch(mode=0o600, exist_ok=False)
+            trace_path.touch(mode=0o600, exist_ok=True)
+            if activity_callback is not None:
+                watcher = asyncio.create_task(
+                    _watch_activity(trace_path, activity_callback),
+                )
+            result = await self._runner(
+                self._agent_response_argv(
+                    workdir=workdir,
+                    snapshot_path=snapshot_path,
+                    trace_path=trace_path,
+                    mcp_home=mcp_home,
+                    container_state_path=container_state_path,
+                ),
+                stdin=prompt.encode("utf-8"),
+                cwd=workdir,
+                env=self._child_environment(),
+                timeout_seconds=self._settings.coach_agent_timeout_seconds,
+                max_stdout_bytes=12 * 1_048_576,
+                stdout_line_validator=_validate_agent_event_line,
+            )
+            if result.returncode != 0:
+                error = _mapped_process_failure(result.stdout, result.stderr)
+                if error.code in {"not_logged_in", "provider_failure"}:
+                    self.invalidate_capability()
+                raise error
+            if final_path.is_symlink() or not final_path.is_file():
+                raise CoachProviderError(
+                    "invalid_output",
+                    "The local Coach agent returned no bounded final answer.",
+                    retryable=True,
+                )
+            if final_path.stat().st_size > 16_384:
+                raise CoachProviderError(
+                    "invalid_output",
+                    "The local Coach agent returned an oversized final answer.",
+                    retryable=True,
+                )
+            output = _parse_agent_output(final_path.read_bytes())
+            reported = _reported_model(result.stdout)
+            if reported is not None and reported != "gpt-5.5":
+                raise CoachProviderError(
+                    "unavailable_model",
+                    "The local Coach provider reported a different model.",
+                    retryable=False,
+                )
+            return CoachAgentProviderResult(
+                output=output,
+                model_reported=reported,
+            )
+        except FileNotFoundError as exc:
+            self.invalidate_capability()
+            raise CoachProviderError(
+                "missing_cli",
+                "The local Codex CLI is unavailable.",
+                retryable=False,
+            ) from exc
+        finally:
+            if watcher is not None:
+                watcher.cancel()
+            try:
+                await _await_cleanup_despite_cancellation(
+                    self._cleanup_turn_container(
+                        state_path=container_state_path,
+                        workdir=workdir,
+                    ),
+                )
+            finally:
+                try:
+                    if watcher is not None:
+                        await asyncio.gather(watcher, return_exceptions=True)
+                finally:
+                    await _cleanup_provider_workdir(
+                        workdir,
+                        expected_name_prefix="mylifegraph-coach-agent-",
+                    )
 
     def invalidate_capability(self) -> None:
         """Forget local CLI readiness after auth/process state changes."""
@@ -522,6 +749,9 @@ class LocalCodexCoachProvider:
             child_environment.get("CODEX_HOME"),
             child_environment.get("HOME"),
             child_environment.get("PATH"),
+            self._settings.coach_analysis_docker_bin,
+            self._settings.coach_analysis_image,
+            _analysis_source_fingerprint(),
         )
 
     def _configuration_reason(self) -> str | None:
@@ -538,6 +768,16 @@ class LocalCodexCoachProvider:
             and self._settings.supabase_service_role_key.strip()
         ):
             return "persistence_unconfigured"
+        docker_bin = self._settings.coach_analysis_docker_bin
+        if (
+            not docker_bin.strip()
+            or any(char in docker_bin for char in "\x00\r\n")
+        ):
+            return "analysis_runtime_unavailable"
+        if _ANALYSIS_IMAGE_PATTERN.fullmatch(
+            self._settings.coach_analysis_image,
+        ) is None:
+            return "analysis_image_unavailable"
         return None
 
     def _resolve_executable(self) -> str | None:
@@ -559,6 +799,21 @@ class LocalCodexCoachProvider:
                 stdin=b"",
                 cwd=workdir,
                 env=self._child_environment(),
+                timeout_seconds=_PREFLIGHT_TIMEOUT_SECONDS,
+                max_stdout_bytes=65_536,
+                max_stderr_bytes=16_384,
+            )
+
+    async def _docker_preflight(self, argv: list[str]) -> ProcessResult:
+        with tempfile.TemporaryDirectory(
+            prefix="mylifegraph-coach-analysis-check-",
+        ) as workdir:
+            os.chmod(workdir, 0o700)
+            return await self._runner(
+                argv,
+                stdin=b"",
+                cwd=workdir,
+                env=self._docker_environment(workdir),
                 timeout_seconds=_PREFLIGHT_TIMEOUT_SECONDS,
                 max_stdout_bytes=65_536,
                 max_stderr_bytes=16_384,
@@ -601,6 +856,102 @@ class LocalCodexCoachProvider:
         )
         return argv
 
+    def _agent_response_argv(
+        self,
+        *,
+        workdir: str,
+        snapshot_path: Path,
+        trace_path: Path,
+        mcp_home: Path,
+        container_state_path: Path,
+    ) -> list[str]:
+        assert self._resolved_bin is not None
+        assert self._disabled_features is not None
+        server = "mcp_servers.coach_data"
+        argv = [
+            self._resolved_bin,
+            "--ask-for-approval",
+            "never",
+            "--strict-config",
+            "--sandbox",
+            "read-only",
+            "--cd",
+            workdir,
+            "--model",
+            "gpt-5.5",
+            "-c",
+            'service_tier="fast"',
+            "-c",
+            "features.fast_mode=true",
+            "-c",
+            f"{server}.command={json.dumps(sys.executable)}",
+            "-c",
+            (
+                f"{server}.args="
+                + json.dumps([str(_COACH_MCP_SERVER_PATH)], separators=(",", ":"))
+            ),
+            "-c",
+            f"{server}.required=true",
+            "-c",
+            f"{server}.startup_timeout_sec=5",
+            "-c",
+            f"{server}.tool_timeout_sec=35",
+            "-c",
+            (
+                f"{server}.enabled_tools="
+                + json.dumps(sorted(_AGENT_ALLOWED_TOOLS), separators=(",", ":"))
+            ),
+            "-c",
+            f'{server}.default_tools_approval_mode="approve"',
+            "-c",
+            (
+                f"{server}.env.COACH_SNAPSHOT_PATH="
+                + json.dumps(str(snapshot_path))
+            ),
+            "-c",
+            f"{server}.env.COACH_TRACE_PATH=" + json.dumps(str(trace_path)),
+            "-c",
+            f"{server}.env.HOME=" + json.dumps(str(mcp_home)),
+            "-c",
+            f"{server}.env.CODEX_HOME=" + json.dumps(str(mcp_home)),
+            "-c",
+            (
+                f"{server}.env.COACH_CONTAINER_STATE_PATH="
+                + json.dumps(str(container_state_path))
+            ),
+            "-c",
+            (
+                f"{server}.env.COACH_DOCKER_BIN="
+                + json.dumps(self._settings.coach_analysis_docker_bin)
+            ),
+            "-c",
+            (
+                f"{server}.env.COACH_ANALYSIS_IMAGE="
+                + json.dumps(self._settings.coach_analysis_image)
+            ),
+        ]
+        for feature in self._disabled_features:
+            if feature != "fast_mode":
+                argv.extend(["--disable", feature])
+        argv.extend(
+            [
+                "exec",
+                "--ephemeral",
+                "--ignore-user-config",
+                "--ignore-rules",
+                "--skip-git-repo-check",
+                "--output-schema",
+                str(_AGENT_SCHEMA_PATH),
+                "--output-last-message",
+                str(Path(workdir) / "coach-agent-output.json"),
+                "--json",
+                "--color",
+                "never",
+                "-",
+            ],
+        )
+        return argv
+
     def _configured_model(self) -> str | None:
         model = self._settings.local_codex_model.strip()
         return model or None
@@ -611,6 +962,98 @@ class LocalCodexCoachProvider:
             for key, value in self._environ.items()
             if key in _ENV_ALLOWLIST
         }
+
+    def _docker_environment(self, workdir: str) -> dict[str, str]:
+        environment = {
+            "HOME": workdir,
+        }
+        path = self._environ.get("PATH")
+        if path is not None:
+            environment["PATH"] = path
+        return environment
+
+    async def _cleanup_turn_container(
+        self,
+        *,
+        state_path: Path,
+        workdir: str,
+    ) -> None:
+        container_name = _read_turn_container_name(state_path)
+        if container_name is None:
+            return
+        docker_bin = self._settings.coach_analysis_docker_bin
+        environment = self._docker_environment(workdir)
+        for _attempt in range(2):
+            try:
+                await self._runner(
+                    [docker_bin, "container", "rm", "--force", container_name],
+                    stdin=b"",
+                    cwd=workdir,
+                    env=environment,
+                    timeout_seconds=_CONTAINER_CLEANUP_TIMEOUT_SECONDS,
+                    max_stdout_bytes=4_096,
+                    max_stderr_bytes=4_096,
+                )
+                remaining = await self._runner(
+                    [
+                        docker_bin,
+                        "container",
+                        "ls",
+                        "--all",
+                        "--filter",
+                        f"name=^/{container_name}$",
+                        "--format",
+                        "{{.Names}}",
+                    ],
+                    stdin=b"",
+                    cwd=workdir,
+                    env=environment,
+                    timeout_seconds=_CONTAINER_CLEANUP_TIMEOUT_SECONDS,
+                    max_stdout_bytes=4_096,
+                    max_stderr_bytes=4_096,
+                )
+            except (CoachProviderError, OSError) as exc:
+                if _attempt == 0:
+                    continue
+                raise CoachProviderError(
+                    "provider_failure",
+                    "The local Coach could not verify analysis cleanup.",
+                    retryable=True,
+                ) from exc
+            if remaining.returncode != 0:
+                if _attempt == 0:
+                    continue
+                raise CoachProviderError(
+                    "provider_failure",
+                    "The local Coach could not verify analysis cleanup.",
+                    retryable=True,
+                )
+            try:
+                active_names = {
+                    item
+                    for item in remaining.stdout.decode(
+                        "ascii",
+                        errors="strict",
+                    ).splitlines()
+                    if item
+                }
+            except UnicodeDecodeError as exc:
+                raise CoachProviderError(
+                    "provider_failure",
+                    "The local Coach could not verify analysis cleanup.",
+                    retryable=True,
+                ) from exc
+            if container_name not in active_names:
+                try:
+                    state_path.unlink(missing_ok=True)
+                except OSError:
+                    pass
+                return
+        raise CoachProviderError(
+            "provider_failure",
+            "The local Coach analysis container remained active.",
+            retryable=True,
+        )
 
     def _capability(
         self,
@@ -627,6 +1070,89 @@ class LocalCodexCoachProvider:
             model_source="explicit" if model is not None else "cli_default",
             reason_code=reason_code,
         )
+
+
+async def _await_cleanup_despite_cancellation(cleanup: Awaitable[None]) -> None:
+    await await_despite_cancellation(cleanup)
+
+
+async def _cleanup_provider_workdir(
+    workdir: str,
+    *,
+    expected_name_prefix: str,
+) -> None:
+    try:
+        await remove_private_directory_despite_cancellation(
+            Path(workdir),
+            expected_name_prefix=expected_name_prefix,
+        )
+    except PrivateFileCleanupError as exc:
+        raise CoachProviderError(
+            "provider_failure",
+            "The local Coach could not securely remove private turn files.",
+            retryable=True,
+        ) from exc
+
+
+def _read_turn_container_name(state_path: Path) -> str | None:
+    try:
+        metadata = state_path.lstat()
+    except FileNotFoundError:
+        return None
+    except OSError as exc:
+        raise CoachProviderError(
+            "provider_failure",
+            "The local Coach could not read analysis runtime state.",
+            retryable=True,
+        ) from exc
+    if (
+        not stat.S_ISREG(metadata.st_mode)
+        or metadata.st_size > _MAX_CONTAINER_STATE_BYTES
+    ):
+        raise CoachProviderError(
+            "provider_failure",
+            "The local Coach analysis runtime state was invalid.",
+            retryable=True,
+        )
+    try:
+        raw_name = state_path.read_bytes()
+        if raw_name.endswith(b"\n"):
+            raw_name = raw_name[:-1]
+        name = raw_name.decode("ascii", errors="strict")
+    except (OSError, UnicodeDecodeError) as exc:
+        raise CoachProviderError(
+            "provider_failure",
+            "The local Coach analysis runtime state was invalid.",
+            retryable=True,
+        ) from exc
+    if not name:
+        return None
+    if _TURN_CONTAINER_NAME_PATTERN.fullmatch(name) is None:
+        raise CoachProviderError(
+            "provider_failure",
+            "The local Coach analysis runtime state was invalid.",
+            retryable=True,
+        )
+    return name
+
+
+def _analysis_source_fingerprint() -> str | None:
+    return _expected_analysis_revision()
+
+
+def _expected_analysis_revision() -> str | None:
+    inputs = [
+        _COACH_ANALYSIS_CONTEXT_PATH / "Dockerfile",
+        _COACH_ANALYSIS_CONTEXT_PATH / "runner.py",
+    ]
+    sha256sum_output = bytearray()
+    try:
+        for path in inputs:
+            digest = hashlib.sha256(path.read_bytes()).hexdigest()
+            sha256sum_output.extend(f"{digest}  {path}\n".encode("utf-8"))
+    except OSError:
+        return None
+    return hashlib.sha256(sha256sum_output).hexdigest()
 
 
 def _supports_hardened_argv(help_stdout: bytes, exec_help_stdout: bytes) -> bool:
@@ -1150,3 +1676,122 @@ def _mapped_failure(stderr: bytes) -> CoachProviderError:
         "The local Coach provider failed.",
         retryable=True,
     )
+
+
+def _validate_agent_event_line(line: bytes) -> None:
+    try:
+        event = json.loads(line.decode("utf-8", errors="strict"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise CoachProviderError(
+            "invalid_output",
+            "The local Coach agent returned an invalid event.",
+            retryable=True,
+        ) from exc
+    if not isinstance(event, dict):
+        raise CoachProviderError(
+            "invalid_output",
+            "The local Coach agent returned an invalid event.",
+            retryable=True,
+        )
+    event_type = event.get("type")
+    if event_type in {"error", "turn.failed"}:
+        raise _mapped_process_failure(line, b"")
+    if event_type not in _ALLOWED_EVENT_TYPES:
+        raise CoachProviderError(
+            "unsafe_provider_event",
+            "The local Coach agent attempted an unsupported operation.",
+            retryable=False,
+        )
+    item = event.get("item")
+    if item is None:
+        return
+    if not isinstance(item, dict):
+        raise CoachProviderError(
+            "invalid_output",
+            "The local Coach agent returned an invalid item.",
+            retryable=True,
+        )
+    item_type = item.get("type")
+    if item_type in {"reasoning", "agent_message", "error"}:
+        return
+    if item_type not in {"mcp_tool_call", "mcp_call"}:
+        raise CoachProviderError(
+            "unsafe_provider_event",
+            "The local Coach agent attempted a non-MCP operation.",
+            retryable=False,
+        )
+    server = item.get("server") or item.get("server_name")
+    tool = item.get("tool") or item.get("name")
+    if server not in {None, "coach_data"}:
+        raise CoachProviderError(
+            "unsafe_provider_event",
+            "The local Coach agent attempted another MCP server.",
+            retryable=False,
+        )
+    if isinstance(tool, str):
+        normalized = tool.rsplit("__", 1)[-1]
+    else:
+        normalized = None
+    if normalized not in _AGENT_ALLOWED_TOOLS:
+        raise CoachProviderError(
+            "unsafe_provider_event",
+            "The local Coach agent attempted an unsupported MCP tool.",
+            retryable=False,
+        )
+
+
+def _parse_agent_output(value: bytes) -> CoachAgentModelOutput:
+    try:
+        payload = json.loads(value.decode("utf-8", errors="strict"))
+        return CoachAgentModelOutput.model_validate(payload)
+    except (UnicodeDecodeError, json.JSONDecodeError, ValidationError) as exc:
+        raise CoachProviderError(
+            "invalid_output",
+            "The local Coach agent returned an invalid answer.",
+            retryable=True,
+        ) from exc
+
+
+def _reported_model(stdout: bytes) -> str | None:
+    reported: str | None = None
+    try:
+        lines = stdout.decode("utf-8", errors="strict").splitlines()
+    except UnicodeDecodeError:
+        return None
+    for line in lines:
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(event, dict) and isinstance(event.get("model"), str):
+            candidate = event["model"].strip()
+            if candidate:
+                reported = candidate[:100]
+    return reported
+
+
+async def _watch_activity(
+    trace_path: Path,
+    callback: CoachActivityCallback,
+) -> None:
+    seen = 0
+    labels = {
+        "inspect_data": "Checking available personal data …",
+        "query_data": "Checking relevant history …",
+        "run_python": "Testing the data with isolated analysis …",
+    }
+    while True:
+        await asyncio.sleep(0.1)
+        try:
+            lines = trace_path.read_text(encoding="utf-8").splitlines()
+        except OSError:
+            continue
+        for line in lines[seen:]:
+            try:
+                value = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            tool = value.get("tool") if isinstance(value, dict) else None
+            if tool in labels:
+                await callback(labels[tool])
+        seen = len(lines)

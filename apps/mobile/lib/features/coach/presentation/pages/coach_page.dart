@@ -1,14 +1,10 @@
 import 'package:flutter/material.dart';
-
-import 'package:my_life_graph/core/constants/app_radii.dart';
-
-import 'package:my_life_graph/core/theme/app_icons.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../../../core/constants/app_radii.dart';
 import '../../../../core/constants/app_spacing.dart';
-import '../../../../core/navigation/app_routes.dart';
+import '../../../../core/theme/app_icons.dart';
 import '../../../../core/theme/app_motion_tokens.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_page.dart';
@@ -41,36 +37,27 @@ class _CoachPageState extends ConsumerState<CoachPage> {
         : state.history.turns
             .where((turn) => turn.requestId != state.latestResponse!.requestId)
             .toList(growable: false);
-
     return AppPage(
-      title: 'Coach preview',
-      subtitle: 'Development-only explanations and suggestions',
+      title: 'Coach',
+      subtitle: 'Ask freely. Personal data stays read-only.',
       actions: [
         IconButton(
           tooltip: 'Refresh Coach',
-          onPressed: state.isLoading || state.isSending
-              ? null
-              : () => ref.read(coachControllerProvider.notifier).load(),
+          onPressed:
+              state.isLoading || state.isSending || state.isDeletingHistory
+                  ? null
+                  : () => ref.read(coachControllerProvider.notifier).load(),
           icon: const Icon(AppIcons.refreshOutlined),
         ),
       ],
       children: [
         _CapabilityCard(state: state),
-        _CoachContextCard(
-          state: state,
-          onScopeSelected:
-              ref.read(coachControllerProvider.notifier).selectScope,
-          onPatternHorizonSelected:
-              ref.read(coachControllerProvider.notifier).selectPatternHorizon,
-          onFocusSessionSelected:
-              ref.read(coachControllerProvider.notifier).selectFocusSession,
-          onPromptSelected: _usePromptStarter,
-        ),
         _ComposerCard(
           state: state,
           controller: _messageController,
           onChanged: ref.read(coachControllerProvider.notifier).updateDraft,
           onSend: _send,
+          onCancel: ref.read(coachControllerProvider.notifier).cancelAnalysis,
         ),
         if (state.latestResponse != null && state.latestMessage != null)
           Semantics(
@@ -83,7 +70,6 @@ class _CoachPageState extends ConsumerState<CoachPage> {
               response: state.latestResponse!,
             ),
           ),
-        _MemoriesCard(state: state),
         _HistoryCard(
           state: state,
           turns: history,
@@ -111,24 +97,14 @@ class _CoachPageState extends ConsumerState<CoachPage> {
     });
   }
 
-  void _usePromptStarter(String prompt) {
-    final state = ref.read(coachControllerProvider);
-    if (state.isSending || !state.contextIsValid) return;
-    _messageController.value = TextEditingValue(
-      text: prompt,
-      selection: TextSelection.collapsed(offset: prompt.length),
-    );
-    ref.read(coachControllerProvider.notifier).updateDraft(prompt);
-  }
-
   Future<void> _confirmDeleteHistory() async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Delete conversation?'),
         content: const Text(
-          'This removes the saved Coach conversation. It does not delete '
-          'your tasks, check-ins, or memories.',
+          'This removes saved Coach messages and their recorded analysis '
+          'details. It does not delete your personal product data.',
         ),
         actions: [
           TextButton(
@@ -164,7 +140,7 @@ class _CapabilityCard extends StatelessWidget {
               child: CircularProgressIndicator(strokeWidth: 2),
             ),
             SizedBox(width: AppSpacing.md),
-            Expanded(child: Text('Loading Coach availability…')),
+            Expanded(child: Text('Loading Coach availability …')),
           ],
         ),
       );
@@ -179,34 +155,29 @@ class _CapabilityCard extends StatelessWidget {
               style: Theme.of(context).textTheme.titleMedium,
             ),
             const SizedBox(height: AppSpacing.sm),
-            Text(coachErrorMessage(state.capabilityError)),
+            _ErrorText(coachErrorMessage(state.capabilityError)),
           ],
         ),
       );
     }
-
-    final ready = capability.state == CoachCapabilityState.ready;
-    final title = state.isRateLimited
-        ? 'Rate limited'
-        : switch (capability.state) {
-            CoachCapabilityState.ready => 'Development Coach ready',
-            CoachCapabilityState.disabled => 'Coach unavailable',
-            CoachCapabilityState.unavailable => 'Coach temporarily unavailable',
-          };
-    final icon = ready && capability.limits.remainingRequests > 0
-        ? AppIcons.checkCircleOutline
-        : AppIcons.infoOutline;
+    final ready = capability.canRespond;
     return AppCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Icon(icon),
+              Icon(
+                ready ? AppIcons.checkCircleOutline : AppIcons.infoOutline,
+              ),
               const SizedBox(width: AppSpacing.sm),
               Expanded(
                 child: Text(
-                  title,
+                  state.isRateLimited
+                      ? 'Daily question limit reached'
+                      : ready
+                          ? 'Read-only Coach ready'
+                          : 'Coach unavailable',
                   style: Theme.of(context).textTheme.titleMedium,
                 ),
               ),
@@ -214,14 +185,22 @@ class _CapabilityCard extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.sm),
           Text(_availabilitySummary(capability)),
-          if (ready) ...[
+          if (capability.state == CoachCapabilityState.ready) ...[
             const SizedBox(height: AppSpacing.sm),
             Text(
               '${capability.limits.remainingRequests} of '
-              '${capability.limits.requestsPerLocalDay} development requests remain today',
+              '${capability.limits.requestsPerLocalDay} questions remain today',
+            ),
+          ],
+          if (state.capabilityError != null) ...[
+            const SizedBox(height: AppSpacing.sm),
+            _ErrorText(
+              'Coach availability may be out of date. '
+              '${coachErrorMessage(state.capabilityError)}',
             ),
           ],
           ExpansionTile(
+            key: const Key('coach-capability-details'),
             tilePadding: EdgeInsets.zero,
             childrenPadding: const EdgeInsets.only(bottom: AppSpacing.sm),
             title: const Text('Technical availability'),
@@ -229,23 +208,18 @@ class _CapabilityCard extends StatelessWidget {
               Align(
                 alignment: Alignment.centerLeft,
                 child: Text(
-                  'Status: ${capability.state.code}\n'
+                  'Status: ${_humanize(capability.state.code)}\n'
                   'Reason: ${_humanize(capability.reasonCode)}\n'
-                  'Requested model: ${capability.modelRequested ?? 'CLI default'}',
+                  'Model: ${capability.modelRequested ?? 'Not applicable'}\n'
+                  'Service tier: ${_humanize(capability.serviceTier)}\n'
+                  'Tool limit: ${capability.limits.maxToolCalls}\n'
+                  'Turn limit: ${capability.limits.turnTimeoutSeconds} seconds\n'
+                  'Snapshot limit: ${capability.limits.snapshotMaxRows} rows · '
+                  '${_formatBytes(capability.limits.snapshotMaxBytes)}',
                 ),
               ),
             ],
           ),
-          if (state.capabilityError != null) ...[
-            const SizedBox(height: AppSpacing.sm),
-            Text(
-              'The latest availability refresh failed; the last validated '
-              'state remains visible.',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Theme.of(context).colorScheme.error,
-                  ),
-            ),
-          ],
         ],
       ),
     );
@@ -254,439 +228,19 @@ class _CapabilityCard extends StatelessWidget {
 
 String _availabilitySummary(CoachCapabilities capability) {
   if (capability.reasonCode == 'local_demo') {
-    return 'Coach replies are unavailable in guest or local demo mode. '
-        'Use a locally synced account with a Coach-enabled local stack.';
-  }
-  if (capability.provider == CoachProviderName.disabled) {
-    return 'Local replies are off for this run. Restart with '
-        'npm run start:local:coach for the signed-in local Codex '
-        'connection, or npm run start:local:coach:fake for fixed test '
-        'replies.';
+    return 'Coach requires an authenticated synced account.';
   }
   if (capability.provider == CoachProviderName.fake) {
-    return capability.state == CoachCapabilityState.ready
-        ? 'Uses fixed test responses. This is not a live assistant.'
-        : 'The fixed local test provider is currently unavailable.';
+    return 'Uses deterministic test output. No live model is contacted.';
   }
   if (capability.provider == CoachProviderName.localCodexOauth) {
     return capability.state == CoachCapabilityState.ready
-        ? 'Uses this developer\'s explicitly enabled local Codex login. '
-            'This is not a production service and may not work on another '
-            'device or account.'
-        : 'The explicitly enabled local Codex connection is currently '
-            'unavailable. Check the reason below, then refresh Coach.';
+        ? 'Local development-only agent · gpt-5.5 · Fast configured. '
+            'This is not a production service.'
+        : 'The required local gpt-5.5 Fast connection is unavailable.';
   }
-  return 'No Coach response provider is available.';
+  return 'No Coach response provider is enabled for this run.';
 }
-
-class _CoachContextCard extends StatelessWidget {
-  const _CoachContextCard({
-    required this.state,
-    required this.onScopeSelected,
-    required this.onPatternHorizonSelected,
-    required this.onFocusSessionSelected,
-    required this.onPromptSelected,
-  });
-
-  final CoachState state;
-  final ValueChanged<CoachContextScope> onScopeSelected;
-  final ValueChanged<CoachPatternHorizon> onPatternHorizonSelected;
-  final ValueChanged<String> onFocusSessionSelected;
-  final ValueChanged<String> onPromptSelected;
-
-  @override
-  Widget build(BuildContext context) {
-    final scope = state.selectedScope;
-    final promptsEnabled = state.capabilities?.canRespond == true &&
-        state.contextIsValid &&
-        !state.isSending;
-    return AppCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Choose Coach context',
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
-          const SizedBox(height: AppSpacing.xs),
-          const Text(
-            'Coach uses only the bounded, read-only data for the selected '
-            'view. Changing this selection does not change your data.',
-          ),
-          if (state.contextOptionsError != null) ...[
-            const SizedBox(height: AppSpacing.sm),
-            _ErrorText(coachErrorMessage(state.contextOptionsError)),
-          ],
-          const SizedBox(height: AppSpacing.md),
-          Wrap(
-            spacing: AppSpacing.sm,
-            runSpacing: AppSpacing.sm,
-            children: [
-              for (final value in CoachContextScope.values)
-                ChoiceChip(
-                  key: ValueKey('coach-context-${value.code}'),
-                  label: Text(_contextScopeLabel(value)),
-                  selected: scope == value,
-                  onSelected: state.isSending
-                      ? null
-                      : (selected) {
-                          if (selected) onScopeSelected(value);
-                        },
-                ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.md),
-          switch (scope) {
-            CoachContextScope.today => const Text(
-                'Uses today’s bounded state, current actions, recent Focus, '
-                'selected memories, and limited Coach history.',
-              ),
-            CoachContextScope.patterns => _PatternContextControls(
-                state: state,
-                onSelected: onPatternHorizonSelected,
-              ),
-            CoachContextScope.focus => _FocusContextControls(
-                state: state,
-                onSelected: onFocusSessionSelected,
-              ),
-            CoachContextScope.review => const Text(
-                'Compares the last two complete ISO weeks using bounded, '
-                'rule-based evidence.',
-              ),
-          },
-          const SizedBox(height: AppSpacing.md),
-          Text(
-            'Prompt starters',
-            style: Theme.of(context).textTheme.labelLarge,
-          ),
-          const SizedBox(height: AppSpacing.xs),
-          Wrap(
-            spacing: AppSpacing.sm,
-            runSpacing: AppSpacing.sm,
-            children: [
-              for (final starter in _promptStarters(scope))
-                ActionChip(
-                  key: ValueKey(
-                    'coach-prompt-${scope.code}-${starter.key}',
-                  ),
-                  label: Text(starter.label),
-                  onPressed: promptsEnabled
-                      ? () => onPromptSelected(starter.prompt)
-                      : null,
-                ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PatternContextControls extends StatelessWidget {
-  const _PatternContextControls({
-    required this.state,
-    required this.onSelected,
-  });
-
-  final CoachState state;
-  final ValueChanged<CoachPatternHorizon> onSelected;
-
-  @override
-  Widget build(BuildContext context) {
-    final enabled = state.contextOptions.personalPatternAnalysisEnabled;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Uses deterministic historical summaries, coverage, changes, '
-          'counterexamples, and limitations—not a raw history dump.',
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: SegmentedButton<CoachPatternHorizon>(
-            key: const ValueKey('coach-pattern-horizon'),
-            segments: const [
-              ButtonSegment(
-                value: CoachPatternHorizon.days90,
-                label: Text('90 days'),
-              ),
-              ButtonSegment(
-                value: CoachPatternHorizon.year1,
-                label: Text('1 year'),
-              ),
-              ButtonSegment(
-                value: CoachPatternHorizon.allAvailable,
-                label: Text('All available'),
-              ),
-            ],
-            selected: {state.patternHorizon},
-            onSelectionChanged: state.isSending
-                ? null
-                : (selection) => onSelected(selection.single),
-          ),
-        ),
-        if (!enabled && state.contextOptionsError == null) ...[
-          const SizedBox(height: AppSpacing.sm),
-          Text(
-            'Pattern analysis is off in Personal learning settings. Turn it '
-            'on before asking Coach to use historical study evidence.',
-            key: const ValueKey('coach-pattern-analysis-disabled'),
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Theme.of(context).colorScheme.error,
-                ),
-          ),
-        ],
-      ],
-    );
-  }
-}
-
-class _FocusContextControls extends StatelessWidget {
-  const _FocusContextControls({
-    required this.state,
-    required this.onSelected,
-  });
-
-  final CoachState state;
-  final ValueChanged<String> onSelected;
-
-  @override
-  Widget build(BuildContext context) {
-    final options = state.contextOptions.focusOptions;
-    final selected = options.where(
-      (option) => option.focusSessionId == state.selectedFocusSessionId,
-    );
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Uses one finished Focus session and its saved reflection when one '
-          'exists. It does not change the session.',
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        if (options.isEmpty)
-          const Text(
-            'No finished Focus sessions are available for Coach yet.',
-            key: ValueKey('coach-focus-options-empty'),
-          )
-        else
-          _FocusOptionPicker(
-            selected: selected.isEmpty ? null : selected.single,
-            options: options,
-            enabled: !state.isSending,
-            onSelected: onSelected,
-          ),
-        if (state.contextOptions.moreFocusOptionsAvailable) ...[
-          const SizedBox(height: AppSpacing.xs),
-          const Text(
-            'Showing the 10 most recent finished Focus sessions.',
-          ),
-        ],
-      ],
-    );
-  }
-}
-
-class _FocusOptionPicker extends StatelessWidget {
-  const _FocusOptionPicker({
-    required this.selected,
-    required this.options,
-    required this.enabled,
-    required this.onSelected,
-  });
-
-  final CoachFocusOption? selected;
-  final List<CoachFocusOption> options;
-  final bool enabled;
-  final ValueChanged<String> onSelected;
-
-  @override
-  Widget build(BuildContext context) {
-    final option = selected;
-    return SizedBox(
-      width: double.infinity,
-      child: OutlinedButton(
-        key: const ValueKey('coach-focus-session-picker'),
-        onPressed: enabled ? () => _showPicker(context) : null,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
-          child: Row(
-            children: [
-              const Icon(AppIcons.centerFocusStrong),
-              const SizedBox(width: AppSpacing.sm),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      option == null
-                          ? 'Choose a Focus session'
-                          : _focusOptionTitle(option),
-                    ),
-                    if (option != null)
-                      Text(
-                        _focusOptionSubtitle(option),
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                  ],
-                ),
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              const Icon(AppIcons.chevronRight),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Future<void> _showPicker(BuildContext context) async {
-    final selectedId = await showModalBottomSheet<String>(
-      context: context,
-      isScrollControlled: true,
-      builder: (context) => SafeArea(
-        child: ConstrainedBox(
-          constraints: BoxConstraints(
-            maxHeight: MediaQuery.sizeOf(context).height * 0.8,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(
-                  AppSpacing.lg,
-                  AppSpacing.lg,
-                  AppSpacing.lg,
-                  AppSpacing.sm,
-                ),
-                child: Text(
-                  'Choose a Focus session',
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-              ),
-              Flexible(
-                child: ListView(
-                  shrinkWrap: true,
-                  children: [
-                    for (final option in options)
-                      ListTile(
-                        key: ValueKey(
-                          'coach-focus-option-${option.focusSessionId}',
-                        ),
-                        title: Text(_focusOptionTitle(option)),
-                        subtitle: Text(_focusOptionSubtitle(option)),
-                        trailing:
-                            option.focusSessionId == selected?.focusSessionId
-                                ? const Icon(AppIcons.check)
-                                : null,
-                        onTap: () => Navigator.of(context).pop(
-                          option.focusSessionId,
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-    if (selectedId != null) onSelected(selectedId);
-  }
-}
-
-String _focusOptionTitle(CoachFocusOption option) =>
-    DateFormat('MMM d, y, HH:mm').format(option.localStartedAt);
-
-String _focusOptionSubtitle(CoachFocusOption option) {
-  final status =
-      option.status == CoachFocusStatus.completed ? 'Completed' : 'Abandoned';
-  final reflection = option.hasReflection ? ' · Rated' : '';
-  return '${option.actualMinutes} min actual · '
-      '${option.plannedMinutes} min planned · $status$reflection';
-}
-
-String _contextScopeLabel(CoachContextScope scope) => switch (scope) {
-      CoachContextScope.today => 'Today',
-      CoachContextScope.patterns => 'Patterns',
-      CoachContextScope.focus => 'Focus',
-      CoachContextScope.review => 'Review',
-    };
-
-class _PromptStarter {
-  const _PromptStarter({
-    required this.key,
-    required this.label,
-    required this.prompt,
-  });
-
-  final String key;
-  final String label;
-  final String prompt;
-}
-
-List<_PromptStarter> _promptStarters(CoachContextScope scope) =>
-    switch (scope) {
-      CoachContextScope.today => const [
-          _PromptStarter(
-            key: 'priorities',
-            label: 'Today’s priorities',
-            prompt: 'What are the two most sensible priorities for me today, '
-                'and what are you uncertain about?',
-          ),
-          _PromptStarter(
-            key: 'protect-time',
-            label: 'Protect my time',
-            prompt: 'What should I protect time for today, and why?',
-          ),
-        ],
-      CoachContextScope.patterns => const [
-          _PromptStarter(
-            key: 'changes',
-            label: 'What changed?',
-            prompt: 'What changed in my study patterns over this period, and '
-                'what remains uncertain?',
-          ),
-          _PromptStarter(
-            key: 'obstacles',
-            label: 'Recurring obstacles',
-            prompt: 'Which recurring obstacle is most worth testing next?',
-          ),
-          _PromptStarter(
-            key: 'counterevidence',
-            label: 'Counterevidence',
-            prompt: 'What evidence contradicts the strongest pattern?',
-          ),
-        ],
-      CoachContextScope.focus => const [
-          _PromptStarter(
-            key: 'reflection',
-            label: 'Reflect on this session',
-            prompt: 'What does this Focus session suggest, and what should I '
-                'reflect on next?',
-          ),
-          _PromptStarter(
-            key: 'uncertainty',
-            label: 'What is uncertain?',
-            prompt: 'What are you uncertain about in this Focus session?',
-          ),
-        ],
-      CoachContextScope.review => const [
-          _PromptStarter(
-            key: 'compare',
-            label: 'Compare both weeks',
-            prompt: 'What changed between the last two full weeks, and what '
-                'remains uncertain?',
-          ),
-          _PromptStarter(
-            key: 'experiment',
-            label: 'A small experiment',
-            prompt: 'What is one small experiment worth trying next week?',
-          ),
-        ],
-    };
 
 class _ComposerCard extends StatelessWidget {
   const _ComposerCard({
@@ -694,19 +248,18 @@ class _ComposerCard extends StatelessWidget {
     required this.controller,
     required this.onChanged,
     required this.onSend,
+    required this.onCancel,
   });
 
   final CoachState state;
   final TextEditingController controller;
   final ValueChanged<String> onChanged;
   final VoidCallback onSend;
+  final VoidCallback onCancel;
 
   @override
   Widget build(BuildContext context) {
-    final capabilityReady =
-        state.capabilities?.state == CoachCapabilityState.ready &&
-            state.capabilities!.limits.remainingRequests > 0 &&
-            !state.isRateLimited;
+    final available = state.capabilities?.canRespond == true;
     final countColor = state.draftCodepoints > coachMessageCodepoints
         ? Theme.of(context).colorScheme.error
         : Theme.of(context).colorScheme.onSurfaceVariant;
@@ -714,27 +267,33 @@ class _ComposerCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Ask Coach', style: Theme.of(context).textTheme.titleMedium),
+          Text(
+            'Ask anything',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
           const SizedBox(height: AppSpacing.xs),
           const Text(
-            'Coach can explain and suggest. Every change remains a preview. It cannot apply changes to your '
-            'tasks, habits, or schedule.',
+            'Coach may answer directly or inspect your read-only personal '
+            'data with SQL and isolated Python. It cannot change the app.',
           ),
           const SizedBox(height: AppSpacing.md),
           TextField(
             key: const Key('coach-message-field'),
             controller: controller,
-            enabled: capabilityReady && !state.isSending,
+            enabled: available &&
+                !state.isLoading &&
+                !state.isSending &&
+                !state.isDeletingHistory,
             minLines: 3,
-            maxLines: 7,
+            maxLines: 8,
             textInputAction: TextInputAction.newline,
             onChanged: onChanged,
             decoration: InputDecoration(
-              labelText: 'Ask Coach',
-              hintText: 'What should I pay attention to today?',
+              labelText: 'Your question',
+              hintText: 'What do my data suggest about …?',
               border: const OutlineInputBorder(),
               errorText: state.draftCodepoints > coachMessageCodepoints
-                  ? 'Keep the message within 2,000 characters.'
+                  ? 'Keep the question within 2,000 characters.'
                   : null,
             ),
           ),
@@ -749,14 +308,25 @@ class _ComposerCard extends StatelessWidget {
                   ?.copyWith(color: countColor),
             ),
           ),
-          if (!capabilityReady) ...[
+          if (state.isSending) ...[
             const SizedBox(height: AppSpacing.sm),
-            Text(
-              state.isRateLimited
-                  ? 'Rate limited. Existing history and memories remain '
-                      'available.'
-                  : 'Sending is unavailable. Existing history and memories '
-                      'remain available.',
+            Semantics(
+              liveRegion: true,
+              child: Row(
+                key: const Key('coach-activity'),
+                children: [
+                  const SizedBox.square(
+                    dimension: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                  const SizedBox(width: AppSpacing.sm),
+                  Expanded(
+                    child: Text(
+                      state.activityMessage ?? 'Working with personal data …',
+                    ),
+                  ),
+                ],
+              ),
             ),
           ],
           if (state.sendError != null) ...[
@@ -766,159 +336,31 @@ class _ComposerCard extends StatelessWidget {
               const Padding(
                 padding: EdgeInsets.only(top: AppSpacing.xs),
                 child: Text(
-                  'Your message is still here. Retry it unchanged to check the same request safely.',
+                  'Retry the unchanged question to check the same request safely.',
                 ),
               ),
           ],
           const SizedBox(height: AppSpacing.md),
           SizedBox(
             width: double.infinity,
-            child: FilledButton.icon(
-              key: const Key('coach-send-button'),
-              onPressed: state.canSend ? onSend : null,
-              icon: state.isSending
-                  ? const SizedBox.square(
-                      dimension: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(AppIcons.sendOutlined),
-              label: const Text('Send'),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _MemoriesCard extends ConsumerWidget {
-  const _MemoriesCard({required this.state});
-
-  final CoachState state;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final selection = state.memories;
-    return AppCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Selected memories',
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
-          const SizedBox(height: AppSpacing.xs),
-          Text(
-            '${selection.selectedCount} selected of '
-            '${selection.maxSelected} · ${selection.availableCount} available',
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          const Text(
-            'Only selected saved notes may be used in an answer. Selecting one does not change it.',
-          ),
-          if (state.memoryError != null) ...[
-            const SizedBox(height: AppSpacing.sm),
-            _ErrorText(coachErrorMessage(state.memoryError)),
-          ],
-          if (state.memoryActionError != null) ...[
-            const SizedBox(height: AppSpacing.sm),
-            _ErrorText(coachErrorMessage(state.memoryActionError)),
-          ],
-          if (selection.memories.isEmpty) ...[
-            const SizedBox(height: AppSpacing.md),
-            const Text('No eligible memories are available.'),
-          ] else ...[
-            const SizedBox(height: AppSpacing.sm),
-            ...selection.memories.map(
-              (memory) => _MemoryTile(
-                memory: memory,
-                isUpdating: state.updatingMemoryId == memory.id,
-                selectionLimitReached:
-                    selection.selectedCount >= selection.maxSelected,
-                onSelected: (selected) => ref
-                    .read(coachControllerProvider.notifier)
-                    .setMemorySelected(memory, selected),
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _MemoryTile extends StatelessWidget {
-  const _MemoryTile({
-    required this.memory,
-    required this.isUpdating,
-    required this.selectionLimitReached,
-    required this.onSelected,
-  });
-
-  final CoachMemory memory;
-  final bool isUpdating;
-  final bool selectionLimitReached;
-  final ValueChanged<bool> onSelected;
-
-  @override
-  Widget build(BuildContext context) {
-    final setupOwned = memory.ownership == CoachMemoryOwnership.setup;
-    return ExpansionTile(
-      tilePadding: EdgeInsets.zero,
-      childrenPadding: const EdgeInsets.only(bottom: AppSpacing.sm),
-      leading: Icon(
-        memory.selected ? AppIcons.bookmark : AppIcons.bookmarkBorder,
-      ),
-      title: Text(memory.title),
-      subtitle: Text(
-        '${setupOwned ? 'From Setup' : 'Added manually'} · '
-        '${memory.selected ? 'selected' : 'not selected'}',
-      ),
-      children: [
-        Align(
-          alignment: Alignment.centerLeft,
-          child: Text(memory.content),
-        ),
-        if (memory.contentTruncated)
-          const Align(
-            alignment: Alignment.centerLeft,
-            child: Padding(
-              padding: EdgeInsets.only(top: AppSpacing.xs),
-              child: Text('Only part of this saved note can be shown here.'),
-            ),
-          ),
-        const SizedBox(height: AppSpacing.sm),
-        Wrap(
-          spacing: AppSpacing.sm,
-          runSpacing: AppSpacing.sm,
-          children: [
-            OutlinedButton.icon(
-              onPressed: isUpdating || !memory.selected && selectionLimitReached
-                  ? null
-                  : () => onSelected(!memory.selected),
-              icon: isUpdating
-                  ? const SizedBox.square(
-                      dimension: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : Icon(
-                      memory.selected
-                          ? AppIcons.removeCircleOutline
-                          : AppIcons.addCircleOutline,
+            child: state.isSending
+                ? OutlinedButton.icon(
+                    key: const Key('coach-cancel-button'),
+                    onPressed: state.isCancelling ? null : onCancel,
+                    icon: const Icon(AppIcons.close),
+                    label: Text(
+                      state.isCancelling ? 'Cancelling …' : 'Cancel analysis',
                     ),
-              label: Text(
-                memory.selected ? 'Remove from Coach' : 'Use in Coach',
-              ),
-            ),
-            if (setupOwned)
-              TextButton.icon(
-                onPressed: () => context.go('${AppRoutes.onboarding}?edit=1'),
-                icon: const Icon(AppIcons.tuneOutlined),
-                label: const Text('Edit in Setup'),
-              ),
-          ],
-        ),
-      ],
+                  )
+                : FilledButton.icon(
+                    key: const Key('coach-send-button'),
+                    onPressed: state.canSend ? onSend : null,
+                    icon: const Icon(AppIcons.sendOutlined),
+                    label: const Text('Ask Coach'),
+                  ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -950,7 +392,10 @@ class _HistoryCard extends StatelessWidget {
                 ),
               ),
               TextButton.icon(
-                onPressed: hasConversation && !state.isDeletingHistory
+                onPressed: hasConversation &&
+                        !state.isLoading &&
+                        !state.isDeletingHistory &&
+                        !state.isSending
                     ? onDelete
                     : null,
                 icon: state.isDeletingHistory
@@ -959,7 +404,7 @@ class _HistoryCard extends StatelessWidget {
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
                     : const Icon(AppIcons.deleteOutline),
-                label: const Text('Delete conversation'),
+                label: const Text('Delete'),
               ),
             ],
           ),
@@ -1026,122 +471,229 @@ class _ConversationTurnCard extends StatelessWidget {
         Text('Coach', style: Theme.of(context).textTheme.labelLarge),
         Text(response.reply),
         const SizedBox(height: AppSpacing.md),
-        _ResponseDetails(response: response),
+        Text('Uncertainty', style: Theme.of(context).textTheme.labelLarge),
+        Text('${_humanize(response.uncertainty.level)} · '
+            '${response.uncertainty.reason}'),
+        const SizedBox(height: AppSpacing.sm),
+        _AnalysisDetails(response: response),
       ],
     );
-    if (nested) {
-      return DecoratedBox(
-        decoration: BoxDecoration(
-          border:
-              Border.all(color: Theme.of(context).colorScheme.outlineVariant),
-          borderRadius: BorderRadius.circular(AppRadii.md),
+    if (!nested) return AppCard(child: content);
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        border: Border.all(
+          color: Theme.of(context).colorScheme.outlineVariant,
         ),
-        child: Padding(
-          padding: const EdgeInsets.all(AppSpacing.md),
-          child: content,
-        ),
-      );
-    }
-    return AppCard(child: content);
+        borderRadius: BorderRadius.circular(AppRadii.md),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        child: content,
+      ),
+    );
   }
 }
 
-class _ResponseDetails extends StatelessWidget {
-  const _ResponseDetails({required this.response});
+class _AnalysisDetails extends StatelessWidget {
+  const _AnalysisDetails({required this.response});
 
   final CoachResponse response;
 
   @override
   Widget build(BuildContext context) {
-    final suggestion = response.stagedSuggestion;
     final provenance = response.provenance;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    final legacy = response.usesLegacySelectedContext;
+    return ExpansionTile(
+      key: ValueKey('coach-analysis-${response.requestId}'),
+      tilePadding: EdgeInsets.zero,
+      childrenPadding: const EdgeInsets.only(bottom: AppSpacing.sm),
+      title: const Text('Data and analysis details'),
       children: [
-        Text('Uncertainty', style: Theme.of(context).textTheme.labelLarge),
-        Text(
-          '${_humanize(response.uncertainty.level.code)} · '
-          '${response.uncertainty.reason}',
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        Text('Safety', style: Theme.of(context).textTheme.labelLarge),
-        Text(_humanize(response.safety.classification.code)),
-        if (suggestion != null) ...[
-          const SizedBox(height: AppSpacing.md),
-          Text(
-            'Review-only suggestion',
+        Align(
+          alignment: Alignment.centerLeft,
+          child: Text(
+            legacy
+                ? 'Selected context in older response'
+                : 'Snapshot source coverage',
             style: Theme.of(context).textTheme.labelLarge,
           ),
-          Text(suggestion.title),
-          Text(suggestion.rationale),
-          const Text('This suggestion cannot apply changes.'),
-        ],
-        const SizedBox(height: AppSpacing.sm),
-        ExpansionTile(
-          tilePadding: EdgeInsets.zero,
-          childrenPadding: const EdgeInsets.only(bottom: AppSpacing.sm),
-          title: const Text('Data used'),
-          children: [
-            if (response.usedContext.isEmpty)
-              const Align(
-                alignment: Alignment.centerLeft,
-                child: Text('No product context was used.'),
-              )
-            else
-              ...response.usedContext.map(
-                (item) => ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  dense: true,
-                  title: Text(_coachSourceLabel(item.source)),
-                  subtitle: Text(
-                    '${item.includedCount} of ${item.availableCount} included · '
-                    '${item.omittedCount} omitted · '
-                    '${_humanize(item.freshness.code)}',
-                  ),
-                ),
-              ),
-          ],
         ),
-        ExpansionTile(
-          tilePadding: EdgeInsets.zero,
-          childrenPadding: const EdgeInsets.only(bottom: AppSpacing.sm),
-          title: const Text('Provider and model'),
-          children: [
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                'Source: ${_humanize(provenance.source.code)}\n'
-                'Provider: ${_humanize(provenance.provider.code)}\n'
-                'Mode: ${_humanize(provenance.providerMode.code)}\n'
-                'Model requested: '
-                '${provenance.modelRequested ?? 'CLI default'}\n'
-                'Model reported: '
-                '${provenance.modelReported ?? 'Not reported'}\n'
-                'Prompt version: ${provenance.promptVersion}\n'
-                'Context version: ${provenance.contextVersion}\n'
-                'Provider called: ${provenance.providerCalled ? 'yes' : 'no'}\n'
-                'Answered at: '
-                '${DateFormat('MMM d, HH:mm').format(provenance.generatedAt.toLocal())}',
+        if (response.evidence.isEmpty)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              legacy
+                  ? 'No selected context was recorded for this older response.'
+                  : 'No snapshot source coverage was recorded.',
+            ),
+          ),
+        ...response.evidence.map(
+          (item) => ListTile(
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            title: Text(_humanize(item.source)),
+            subtitle: Text(_coverageText(item, legacy: legacy)),
+          ),
+        ),
+        if (response.evidence.isNotEmpty)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              legacy
+                  ? 'Counts describe context selected for this older response, '
+                      'not snapshot coverage or current tool evidence.'
+                  : 'Counts and dates describe source coverage, not rows '
+                      'returned by one query.',
+            ),
+          ),
+        const SizedBox(height: AppSpacing.sm),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: Text(
+            'Analysis steps · ${response.agentTrace.toolCallCount}',
+            style: Theme.of(context).textTheme.labelLarge,
+          ),
+        ),
+        if (response.agentTrace.steps.isEmpty)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              legacy
+                  ? 'No per-turn tool trace was recorded for this older '
+                      'response.'
+                  : 'No SQL or Python step was used.',
+            ),
+          )
+        else
+          ...response.agentTrace.steps.map(
+            (step) => ListTile(
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              title: Text(
+                '${step.sequence}. ${_toolLabel(step.tool)} · '
+                '${_humanize(step.status)}',
+              ),
+              subtitle: Text(
+                '${step.summary}\n'
+                '${step.rowCount == null ? '' : '${step.rowCount} rows · '}'
+                '${step.durationMs} ms',
               ),
             ),
-          ],
+          ),
+        if (response.agentTrace.limitations.isNotEmpty) ...[
+          const SizedBox(height: AppSpacing.sm),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              'Limitations',
+              style: Theme.of(context).textTheme.labelLarge,
+            ),
+          ),
+          ...response.agentTrace.limitations.map(
+            (value) => Align(
+              alignment: Alignment.centerLeft,
+              child: Text('• $value'),
+            ),
+          ),
+        ],
+        const SizedBox(height: AppSpacing.md),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: Text(
+            'Technical provenance',
+            style: Theme.of(context).textTheme.labelLarge,
+          ),
+        ),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: Text(
+            '${_provenanceLabel(provenance)}\n'
+            'Provider called: ${provenance.providerCalled ? 'yes' : 'no'}\n'
+            '${_snapshotText(provenance, legacy: legacy)}\n'
+            'Prompt: ${provenance.promptVersion}\n'
+            'Context: ${provenance.contextVersion}\n'
+            'Answered: ${DateFormat('MMM d, HH:mm').format(
+              provenance.generatedAt.toLocal(),
+            )}',
+          ),
         ),
       ],
     );
   }
 }
 
+String _provenanceLabel(CoachProvenance provenance) {
+  if (provenance.provider == CoachProviderName.localCodexOauth) {
+    if (provenance.fastMode &&
+        provenance.serviceTier == 'fast' &&
+        provenance.serviceTierStatus == 'configured') {
+      return 'gpt-5.5 · Fast configured';
+    }
+    return 'Local Codex OAuth · Fast status not recorded';
+  }
+  return '${_humanize(provenance.provider.code)} · '
+      '${_humanize(provenance.providerMode)}';
+}
+
+String _recordLabel(int value) => value == 1 ? 'record' : 'records';
+
+String _coverageText(
+  CoachEvidence evidence, {
+  required bool legacy,
+}) {
+  if (legacy) {
+    final available = evidence.availableRecordCount ?? evidence.recordCount;
+    return '${evidence.recordCount} of $available ${_recordLabel(available)} '
+        'selected for this older response';
+  }
+  return '${evidence.recordCount} ${_recordLabel(evidence.recordCount)} '
+      'in snapshot${_period(evidence)}';
+}
+
+String _snapshotText(
+  CoachProvenance provenance, {
+  required bool legacy,
+}) {
+  if (legacy) return 'Snapshot: not recorded for this older response';
+  return 'Snapshot: ${provenance.snapshotRowCount} rows · '
+      '${_formatBytes(provenance.snapshotBytes)}';
+}
+
+String _period(CoachEvidence evidence) {
+  if (evidence.periodStart == null && evidence.periodEnd == null) return '';
+  return ' · ${evidence.periodStart ?? 'unknown'} to '
+      '${evidence.periodEnd ?? 'unknown'}';
+}
+
+String _toolLabel(String value) => switch (value) {
+      'inspect_data' => 'Catalog',
+      'query_data' => 'Read-only SQL',
+      'run_python' => 'Isolated Python',
+      _ => _humanize(value),
+    };
+
+String _formatBytes(int value) {
+  if (value >= 1024 * 1024) {
+    return '${(value / (1024 * 1024)).toStringAsFixed(1)} MiB';
+  }
+  if (value >= 1024) return '${(value / 1024).toStringAsFixed(1)} KiB';
+  return '$value B';
+}
+
 class _ErrorText extends StatelessWidget {
   const _ErrorText(this.message);
-
   final String message;
 
   @override
-  Widget build(BuildContext context) => Text(
-        message,
-        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: Theme.of(context).colorScheme.error,
-            ),
+  Widget build(BuildContext context) => Semantics(
+        container: true,
+        liveRegion: true,
+        child: Text(
+          message,
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: Theme.of(context).colorScheme.error,
+              ),
+        ),
       );
 }
 
@@ -1150,22 +702,3 @@ String _humanize(String value) => value
     .where((part) => part.isNotEmpty)
     .map((part) => '${part[0].toUpperCase()}${part.substring(1)}')
     .join(' ');
-
-String _coachSourceLabel(CoachContextSource source) => switch (source) {
-      CoachContextSource.profile => 'Profile',
-      CoachContextSource.dailySnapshot => 'Today\'s check-in state',
-      CoachContextSource.dailyBriefing => 'Today\'s plan',
-      CoachContextSource.goals => 'Goals',
-      CoachContextSource.tasks => 'Tasks',
-      CoachContextSource.habits => 'Habits',
-      CoachContextSource.focusSessions => 'Focus sessions',
-      CoachContextSource.weeklyReview => 'Weekly review',
-      CoachContextSource.memories => 'Selected saved notes',
-      CoachContextSource.coachHistory => 'Earlier Coach messages',
-      CoachContextSource.dailyCapture => 'Daily Capture',
-      CoachContextSource.focusReflections => 'Focus sessions and reflections',
-      CoachContextSource.habitOutcomes => 'Habit outcomes',
-      CoachContextSource.decisionFeedback => 'Decision feedback',
-      CoachContextSource.weeklyReviews => 'Weekly reviews',
-      CoachContextSource.taskLifecycle => 'Task lifecycle',
-    };
