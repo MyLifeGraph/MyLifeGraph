@@ -33,6 +33,9 @@ supabase/.temp/
 .vscode/
 .codex/
 
+# Local presentation drafts
+/Präsentation_80_07/
+
 # OS
 .DS_Store
 Thumbs.db
