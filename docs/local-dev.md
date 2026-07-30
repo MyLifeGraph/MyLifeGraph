@@ -1317,15 +1317,26 @@ Browser E2E:
 ```bash
 npm install
 npx playwright install chromium
+FLUTTER_BIN=/path/to/flutter npm run e2e:web:smoke
 FLUTTER_BIN=/path/to/flutter npm run e2e:web:full
 ```
 
+The smoke is the serial critical-wiring suite: one independently provisioned
+and cleaned-up spec for each of `auth-capture-today`, `planner-confirm`,
+`authority`, `account-controls`, `coach`, and `personal-learning`. The full
+command first runs all split specs and then the retained detailed
+`e2e/web/legacy-full.mjs` assertion oracle. For diagnosis,
+`e2e:web:new-full` runs only the independent specs and `e2e:web:legacy` runs
+only the oracle. Parallel workers remain disabled until the specs have proven
+state independence.
+
 This is the normal non-reset path. It requires repository and local database
 migration history to match and never applies pending SQL automatically. It
-writes only its uniquely named test data to the local stack and skips
-`supabase db reset` unless `RESET_DB=true` is explicitly supplied. After
-reviewing pending SQL and local rows, `APPLY_MIGRATIONS=true` is the separate
-opt-in; it may change or delete those rows.
+writes only run-unique test data to the local stack and skips the
+`supabase db reset` step unless `RESET_DB=true` is explicitly supplied. Every
+split spec owns its account and exact `finally` cleanup. After reviewing pending
+SQL and local rows, `APPLY_MIGRATIONS=true` is the separate opt-in; it may
+change or delete those rows.
 
 For a narrow Phase 10 diagnosis, choose a fresh unique run id:
 
@@ -1356,11 +1367,13 @@ RESET_DB=true FLUTTER_BIN=/path/to/flutter npm run e2e:web:full
 ```
 
 The E2E script starts local Supabase, starts the FastAPI AI service with the
-local Supabase backend settings and deterministic fake Coach provider, starts Flutter Web on `http://127.0.0.1:7357`,
-creates a confirmed local test user through the local Supabase admin API, signs
-in through the app, completes required-only Setup, exercises retry/edit/review
-and ownership-safe reconciliation, proves retired Setup fields stay absent and
-Reminder preferences remain unchanged, then walks Evening Shutdown and Morning
+local Supabase backend settings and deterministic fake Coach provider, and
+starts Flutter Web on `http://127.0.0.1:7357`. The concise specs then exercise
+their independently owned wiring paths. In the full gate, the retained oracle
+creates its own confirmed local user, signs in through the app, completes
+required-only Setup, exercises retry/edit/review and ownership-safe
+reconciliation, proves retired Setup fields stay absent and Reminder
+preferences remain unchanged, then walks Evening Shutdown and Morning
 Calibration. Its implemented assertions cover a committed
 `daily_logs` response loss followed by exact retry, same-day Evening/Morning
 merge, Evening re-entry/edit, one `daily_logs` row, nested
@@ -1399,14 +1412,15 @@ only; it still does not generate during normal load. The E2E script supplies a
 local scheduler token to FastAPI and the Node assertion process only, never to
 Flutter.
 
-The Phase 0C portion remains part of the same smoke: it verifies revisioned
+The Phase 0C portion remains part of the detailed oracle: it verifies revisioned
 Setup ownership and retry/edit behavior, the service-role-only atomic apply RPC,
 manual-row preservation, profile projection, and concurrent same-request
 convergence before and after the capture journey. This describes the coverage
-implemented by `e2e/web/smoke.mjs`. The Phase 8 path adds read-only missing
-truth, deliberate generation, exact persisted weekly facts/proposals, confirmed
-manual Habit V1 adaptation, stale/refresh behavior, Setup non-mutation, and
-review-table RLS.
+implemented by `e2e/web/legacy-full.mjs`, which remains part of
+`e2e:web:full` until equivalent independent or lower-level assertions are
+explicit. The Phase 8 path adds read-only missing truth, deliberate generation,
+exact persisted weekly facts/proposals, confirmed manual Habit V1 adaptation,
+stale/refresh behavior, Setup non-mutation, and review-table RLS.
 
 The Phase 9 source journey additionally covers explicit consent, connection
 without import, retry-safe `.ics` reconciliation, stable paginated event reads,
@@ -1468,10 +1482,14 @@ passing run, and an earlier test error remains primary if both fail. Old E2E
 accounts are never swept by a normal run; `npm run e2e:cleanup:local` previews
 the separate fingerprint-confirmed local cleanup.
 
-Logs, screenshots, and timing artifacts are run-specific under
-`.tools/e2e/runs/<run-id>/`. Supabase, FastAPI, Flutter, Chromium, Semantics,
-journeys, Auth cleanup, runner, and process-cleanup timings are emitted as
-structured `[e2e:timing]` records.
+Logs, screenshots, traces, and timing artifacts are run-specific under
+`.tools/e2e/runs/<run-id>/`. A failing split spec retains its Playwright trace
+and screenshot below the `playwright/` child; the legacy oracle writes its
+failure trace and screenshot at the run root. Supabase, FastAPI, Flutter,
+Chromium, Semantics, journeys, Auth cleanup, runner, and process-cleanup
+timings are emitted as structured `[e2e:timing]` records, with one additional
+`[e2e:test-timing]` record per split spec.
+
 This automated browser smoke covers the manual Supabase-backed smoke path for
 the listed screens. Keep manual testing for flows not listed in
 `docs/verification.md`.

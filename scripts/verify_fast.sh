@@ -43,7 +43,16 @@ run_source_checks() {
   node --check scripts/seed_demo_data.mjs
   node --check scripts/seed_demo_contract.mjs
   node --check scripts/seed_demo_contract.test.mjs
-  node --check e2e/web/smoke.mjs
+  node --check e2e/web/legacy-full.mjs
+  node --check e2e/web/playwright.config.mjs
+  node --check e2e/web/fixtures/e2e.fixture.mjs
+  node --check e2e/web/support/api-client.mjs
+  node --check e2e/web/support/db-client.mjs
+  node --check e2e/web/support/duration-reporter.mjs
+  node --check e2e/web/support/flutter-ui.mjs
+  for spec in e2e/web/journeys/*.spec.mjs; do
+    node --check "$spec"
+  done
   node --check e2e/web/support/local-auth-users.mjs
   node --check scripts/cleanup_local_e2e_users.mjs
   node --check scripts/verify_affected.mjs

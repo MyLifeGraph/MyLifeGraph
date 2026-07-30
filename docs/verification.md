@@ -36,6 +36,17 @@ The final focused Coach run `p0-coach-final-20260730` also passed in 1:36
 runner time; all four Semantics checks were below 0.4 seconds and both exact
 Auth users were removed.
 
+The first split-suite baseline then passed all six serial tagged specs.
+`split-final-20260730a` reported 1:56 runner time and 1:51 of journeys (about
+2:17 including Supabase, FastAPI, and Flutter startup), and
+`split-new-full-20260730a` reported 1:55. The unchanged detailed oracle
+`split-legacy-20260730a` passed in 15:22 runner time, including 14:47 of
+journeys, 49 pre-enabled Semantics checks with a 0.432-second maximum, and
+exact cleanup of all six registered users. A non-destructive legacy-account
+preview after those runs still found the same pre-existing 107 accounts and
+fingerprint `e2e-users-107-02f006e46c6549ba`; none of the new run identities
+remained, and the historical selection was not deleted.
+
 The final combined stabilization browser journey reported
 `E2E browser smoke passed for e2e-1785377904@example.test`. It covered the
 new Capture, account-setting, Calendar, Setup/Focus, Planner/Today,
@@ -105,7 +116,10 @@ Use the lowest level that covers the change.
 | Local Supabase migration apply | `APPLY_MIGRATIONS=true npm run verify:db` | Explicitly applies reviewed pending SQL, verifies history, then runs pgTAP. | May change or delete local rows |
 | Local Supabase reset | `RESET_DB=true npm run verify:db` | Recreates local DB, applies migrations, then runs pgTAP. | Yes, local DB only |
 | Full | `FLUTTER_BIN=/path/to/flutter npm run verify:full` | Runs fast, database, web-build, and full browser E2E gates. | No reset; E2E writes and removes exact test users |
-| Browser E2E | `FLUTTER_BIN=/path/to/flutter npm run e2e:web:full` | Requires matching local migration history, starts Flutter Web, drives Playwright, and checks uniquely named DB writes. | No reset; removes its exact test users |
+| Browser smoke | `FLUTTER_BIN=/path/to/flutter npm run e2e:web:smoke` | Runs six representative tagged wiring specs serially with independent accounts. | No reset; removes each spec's exact users |
+| New split suite | `FLUTTER_BIN=/path/to/flutter npm run e2e:web:new-full` | Runs every independent Playwright journey currently migrated from the oracle. | No reset; removes each spec's exact users |
+| Browser full | `FLUTTER_BIN=/path/to/flutter npm run e2e:web:full` | Runs the split suite, then the unchanged detailed legacy assertion oracle. | No reset; removes all exact test users |
+| Legacy parity oracle | `FLUTTER_BIN=/path/to/flutter npm run e2e:web:legacy` | Diagnoses the retained detailed regression alone while assertions are migrated. | No reset; removes its exact test users |
 | Personal Learning E2E | `E2E_PERSONAL_LEARNING_ONLY=true FLUTTER_BIN=/path/to/flutter bash scripts/e2e_web.sh` | Runs the focused reflection, Evening edit, pattern, learned-Planner, export, clear, and account-cascade journey. | No reset; writes and then deletes one test account |
 | Browser E2E with reset | `RESET_DB=true FLUTTER_BIN=/path/to/flutter bash scripts/e2e_web.sh` | Recreates local DB, then runs browser E2E. | Yes, local DB only |
 | Demo seed | `npm run seed:demo` | Starts local Supabase and replaces only the four named local demo accounts: one fresh Setup identity and three populated scenarios. | Demo accounts only |
@@ -815,15 +829,37 @@ Browser E2E is implemented with Playwright:
 ```bash
 npm install
 npx playwright install chromium
+FLUTTER_BIN=/path/to/flutter npm run e2e:web:smoke
 FLUTTER_BIN=/path/to/flutter npm run e2e:web:full
 ```
+
+The smoke runs these six representative, tagged wiring specs with one
+Playwright worker:
+
+- `@auth-capture-today`;
+- `@planner-confirm`;
+- `@authority`;
+- `@account-controls`;
+- `@coach`;
+- `@personal-learning`.
+
+Each spec receives a separately created account and an exact `finally`
+cleanup. `e2e:web:new-full` runs all independent specs (currently the same six
+that make up the critical smoke). The authoritative `e2e:web:full` then runs
+`e2e:web/legacy-full.mjs` in a separate browser process, preserving every
+detailed assertion from the former monolith while those assertions are moved
+incrementally into isolated specs, API tests, widget tests, or pgTAP.
+`e2e:web:legacy` runs only that parity oracle for diagnosis. Do not remove an
+oracle assertion merely because a representative split spec covers the same
+feature; remove it only after equivalent lower-level or independent-spec
+coverage is explicit.
 
 This is the normal non-reset database path: the script starts or reuses the
 repository's local Supabase stack, skips `supabase db reset`, inspects
 `supabase migration list --local`, and fails when repository and database
-history differ. It never applies pending SQL automatically. The smoke still
-writes a uniquely named local Auth user and its test rows. Do not set
-`RESET_DB=true` unless recreating the local database is explicitly intended.
+history differ. It never applies pending SQL automatically. The suites write
+only run-unique local Auth users and their test rows. Do not set `RESET_DB=true`
+unless recreating the local database is explicitly intended.
 
 Phase 10 can be run narrowly for diagnosis with a fresh unique run id:
 
@@ -892,8 +928,11 @@ The script:
    never contacts a live Codex account.
 5. Starts Flutter Web on `127.0.0.1:7357` with `USE_MOCK_DATA=false` and
    `AI_SERVICE_BASE_URL` pointing at the local FastAPI service.
-6. Passes the same token only to the Node assertion process and runs
-   `e2e/web/smoke.mjs` with Playwright. The token is never passed to Flutter.
+6. Passes the same token only to the Node assertion processes. The Playwright
+   runner loads `e2e/web/journeys/*.spec.mjs` through
+   `e2e/web/fixtures/e2e.fixture.mjs`; the full gate subsequently runs
+   `e2e/web/legacy-full.mjs` as its assertion-parity oracle. The token is never
+   passed to Flutter.
 
 The script waits for the Flutter log line containing `is being served at` before
 starting Playwright. A plain `curl` response from `/` is not enough, because
@@ -1146,14 +1185,18 @@ Controlled Coach journey against the deterministic fake provider, verifies real
 Deep Work, and checks the explicit payloads of manual snapshot/recommendation
 requests. Source coverage is not a current-checkout pass.
 
-These assertions are present in `e2e/web/smoke.mjs`; run one of the commands in
-this section to establish pass/fail for the current checkout. Documentation of
-the path is not evidence that a current full browser run passed.
+These detailed assertions remain intact in `e2e/web/legacy-full.mjs`, which is
+part of `e2e:web:full`; run the full command to establish pass/fail for the
+current checkout. The six independent journey specs intentionally cover only
+representative critical wiring until assertion-by-assertion migration is
+complete. Documentation of either path is not evidence that a current full
+browser run passed.
 
-`e2e/web/smoke.mjs` navigates Flutter routes through root hash URLs such as
-`/#/auth`, `/#/daily-check-in`, and `/#/morning-calibration`. This avoids direct
-deep-link requests against the `flutter run -d web-server` development server,
-which does not provide a production-style rewrite layer for every app path.
+The split Flutter helper and the legacy oracle navigate through root hash URLs
+such as `/#/auth`, `/#/daily-check-in`, and `/#/morning-calibration`. This
+avoids direct deep-link requests against the `flutter run -d web-server`
+development server, which does not provide a production-style rewrite layer
+for every app path.
 
 The service-role key is used only in the Node-side E2E process for local setup
 and assertions and in the FastAPI process for backend persistence. It must never
@@ -1183,6 +1226,7 @@ AI_SERVICE_START=false
 SCHEDULED_REFRESH_TOKEN=local-e2e-override
 E2E_RUN_ID=manual-001
 E2E_SEMANTICS_PRE_ENABLED=true
+E2E_SUITE=smoke
 ```
 
 By default, `scripts/e2e_web.sh` starts FastAPI from the current checkout and
@@ -1204,15 +1248,22 @@ FastAPI logs for the E2E run are written to:
 .tools/e2e/runs/<run-id>/ai-service.log
 ```
 
-On browser failure, Playwright saves a screenshot named:
+On a split-spec failure, Playwright retains both artifacts below that spec's
+run-specific output directory:
 
 ```text
-.tools/e2e/runs/<run-id>/failure-<run-id>.png
+.tools/e2e/runs/<run-id>/playwright/<spec-output>/trace.zip
+.tools/e2e/runs/<run-id>/playwright/<spec-output>/test-failed-1.png
 ```
+
+The retained legacy oracle saves
+`failure-<run-id>.png` and `trace-<run-id>.zip` at the run-directory root only
+when it fails.
 
 The runner prints machine-readable `[e2e:timing]` JSON for Supabase, FastAPI,
 Flutter, Chromium, Semantics, journeys, exact-user cleanup, the Node runner,
-and process cleanup. `.tools/` is ignored by git.
+and process cleanup. The split reporter additionally emits one
+`[e2e:test-timing]` JSON record per spec. `.tools/` is ignored by git.
 
 ## Phase 10 Provider Verification
 
@@ -1649,8 +1700,8 @@ successful PR gate.
 
 Still missing for broader product verification:
 
-- Per-spec Playwright trace artifact collection; the current P0 runner saves
-  failure screenshots and run logs.
+- Hosted PR evidence for the new conditional jobs; the workflow is defined,
+  but a local run cannot establish that GitHub-hosted gates passed.
 - Deployed scheduler/cron wiring and monitoring; the repository verifies the
   protected preparation endpoint, not any production invocation platform.
 - Android/system notification delivery is not part of Notification Delivery V1
@@ -1661,5 +1712,6 @@ Still missing for broader product verification:
   do not replace device acceptance. Guest Setup intentionally has no automatic
   account migration.
 
-When changing E2E flows, keep `e2e/web/smoke.mjs`,
+When changing E2E flows, keep `e2e/web/playwright.config.mjs`, the fixtures and
+tagged specs below `e2e/web/`, the retained `e2e/web/legacy-full.mjs` oracle,
 `scripts/e2e_web.sh`, and this document in sync.

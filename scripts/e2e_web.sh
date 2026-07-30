@@ -17,6 +17,7 @@ HEADED="${HEADED-false}"
 E2E_PHASE10_ONLY="${E2E_PHASE10_ONLY-false}"
 E2E_PERSONAL_LEARNING_ONLY="${E2E_PERSONAL_LEARNING_ONLY-false}"
 E2E_SEMANTICS_PRE_ENABLED="${E2E_SEMANTICS_PRE_ENABLED-true}"
+E2E_SUITE="${E2E_SUITE-full}"
 LEARNED_FOCUS_PLANNING_PILOT_ENABLED="${LEARNED_FOCUS_PLANNING_PILOT_ENABLED-true}"
 RESET_DB="${RESET_DB-false}"
 APPLY_MIGRATIONS="${APPLY_MIGRATIONS-false}"
@@ -74,6 +75,11 @@ mkdir -p "$E2E_RUN_DIR"
 if [[ "$E2E_PHASE10_ONLY" == "true" &&
   "$E2E_PERSONAL_LEARNING_ONLY" == "true" ]]; then
   echo "E2E_PHASE10_ONLY and E2E_PERSONAL_LEARNING_ONLY are mutually exclusive." >&2
+  exit 64
+fi
+
+if [[ ! "$E2E_SUITE" =~ ^(smoke|new-full|legacy|full)$ ]]; then
+  echo "E2E_SUITE must be smoke, new-full, legacy, or full." >&2
   exit 64
 fi
 
@@ -281,19 +287,54 @@ emit_timing "flutter" "$flutter_started_at"
 
 runner_started_at="$(timer_now_ms)"
 set +e
-APP_URL="$APP_URL" \
-SUPABASE_URL="$api_url" \
-SUPABASE_ANON_KEY="$local_anon_key" \
-SUPABASE_SERVICE_ROLE_KEY="$local_service_role_key" \
-AI_SERVICE_BASE_URL="$AI_SERVICE_BASE_URL" \
-SCHEDULED_REFRESH_TOKEN="$SCHEDULED_REFRESH_TOKEN" \
-E2E_PHASE10_ONLY="$E2E_PHASE10_ONLY" \
-E2E_PERSONAL_LEARNING_ONLY="$E2E_PERSONAL_LEARNING_ONLY" \
-E2E_SEMANTICS_PRE_ENABLED="$E2E_SEMANTICS_PRE_ENABLED" \
-E2E_ARTIFACT_DIR="$E2E_RUN_DIR" \
-E2E_RUN_ID="$E2E_RUN_ID" \
-"$NODE_BIN" e2e/web/smoke.mjs
-runner_status=$?
+if [[ "$E2E_PHASE10_ONLY" == "true" ||
+  "$E2E_PERSONAL_LEARNING_ONLY" == "true" ||
+  "$E2E_SUITE" == "legacy" ]]; then
+  APP_URL="$APP_URL" \
+  SUPABASE_URL="$api_url" \
+  SUPABASE_ANON_KEY="$local_anon_key" \
+  SUPABASE_SERVICE_ROLE_KEY="$local_service_role_key" \
+  AI_SERVICE_BASE_URL="$AI_SERVICE_BASE_URL" \
+  SCHEDULED_REFRESH_TOKEN="$SCHEDULED_REFRESH_TOKEN" \
+  E2E_PHASE10_ONLY="$E2E_PHASE10_ONLY" \
+  E2E_PERSONAL_LEARNING_ONLY="$E2E_PERSONAL_LEARNING_ONLY" \
+  E2E_SEMANTICS_PRE_ENABLED="$E2E_SEMANTICS_PRE_ENABLED" \
+  E2E_ARTIFACT_DIR="$E2E_RUN_DIR" \
+  E2E_RUN_ID="$E2E_RUN_ID" \
+  "$NODE_BIN" e2e/web/legacy-full.mjs
+  runner_status=$?
+else
+  APP_URL="$APP_URL" \
+  SUPABASE_URL="$api_url" \
+  SUPABASE_ANON_KEY="$local_anon_key" \
+  SUPABASE_SERVICE_ROLE_KEY="$local_service_role_key" \
+  AI_SERVICE_BASE_URL="$AI_SERVICE_BASE_URL" \
+  SCHEDULED_REFRESH_TOKEN="$SCHEDULED_REFRESH_TOKEN" \
+  E2E_PHASE10_ONLY=false \
+  E2E_PERSONAL_LEARNING_ONLY=false \
+  E2E_SEMANTICS_PRE_ENABLED="$E2E_SEMANTICS_PRE_ENABLED" \
+  E2E_ARTIFACT_DIR="$E2E_RUN_DIR" \
+  E2E_RUN_ID="$E2E_RUN_ID" \
+  E2E_SUITE="$E2E_SUITE" \
+  "$ROOT_DIR/node_modules/.bin/playwright" test \
+    --config e2e/web/playwright.config.mjs
+  runner_status=$?
+  if [[ "$runner_status" -eq 0 && "$E2E_SUITE" == "full" ]]; then
+    APP_URL="$APP_URL" \
+    SUPABASE_URL="$api_url" \
+    SUPABASE_ANON_KEY="$local_anon_key" \
+    SUPABASE_SERVICE_ROLE_KEY="$local_service_role_key" \
+    AI_SERVICE_BASE_URL="$AI_SERVICE_BASE_URL" \
+    SCHEDULED_REFRESH_TOKEN="$SCHEDULED_REFRESH_TOKEN" \
+    E2E_PHASE10_ONLY=false \
+    E2E_PERSONAL_LEARNING_ONLY=false \
+    E2E_SEMANTICS_PRE_ENABLED="$E2E_SEMANTICS_PRE_ENABLED" \
+    E2E_ARTIFACT_DIR="$E2E_RUN_DIR" \
+    E2E_RUN_ID="$E2E_RUN_ID" \
+    "$NODE_BIN" e2e/web/legacy-full.mjs
+    runner_status=$?
+  fi
+fi
 set -e
 emit_timing "runner" "$runner_started_at"
 exit "$runner_status"

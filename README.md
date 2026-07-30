@@ -742,8 +742,17 @@ Browser E2E:
 ```bash
 npm install
 npx playwright install chromium
+FLUTTER_BIN=/path/to/flutter npm run e2e:web:smoke
 FLUTTER_BIN=/path/to/flutter npm run e2e:web:full
 ```
+
+`e2e:web:smoke` runs six serial, independently provisioned wiring journeys for
+Auth/Capture/Today, Planner confirmation, authority, account controls, Coach,
+and Personal Learning. `e2e:web:full` first runs that split Playwright suite and
+then the unchanged detailed legacy regression as a coverage-parity oracle.
+During the migration, `e2e:web:new-full` and `e2e:web:legacy` can diagnose
+either half separately; the legacy oracle is removed only after its assertions
+have moved to isolated specs or lower-level tests.
 
 The normal E2E command likewise requires current migration history and never
 applies pending SQL automatically. Use `APPLY_MIGRATIONS=true` only after
@@ -754,7 +763,10 @@ writes logs and failure artifacts below `.tools/e2e/runs/<run-id>/`, registers
 every exact Auth UUID it creates, and deletes only those UUIDs through the
 loopback local Admin API in `finally`. A cleanup failure fails an otherwise
 passing run while preserving and additionally reporting an earlier test
-failure.
+failure. The split suite uses one worker, gives every spec its own account and
+cleanup, prints per-test duration records, and retains a Playwright trace plus
+screenshot for a failed spec. Parallel execution stays disabled until the
+journeys are proven state-independent.
 
 For diagnosis only, `E2E_PHASE10_ONLY=true` plus a fresh unique run id creates
 a minimal eligible local principal and runs only the Coach portion. Reusing an

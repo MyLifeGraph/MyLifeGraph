@@ -1,3 +1,5 @@
+// Coverage-parity oracle retained until the independent specs own every
+// assertion below.
 import { chromium } from 'playwright';
 
 import { createLocalAuthUserRegistry } from './support/local-auth-users.mjs';
@@ -151,6 +153,22 @@ const browser = await chromium.launch({
   executablePath: process.env.CHROME_BIN || undefined,
 });
 emitTiming('chromium', performance.now() - chromiumStartedAt);
+const primaryContext = await browser.newContext({
+  viewport: { width: 1280, height: 960 },
+});
+let ownsPrimaryTrace = true;
+try {
+  await primaryContext.tracing.start({
+    screenshots: true,
+    snapshots: true,
+    sources: true,
+  });
+} catch (error) {
+  if (!String(error).includes('Tracing has been already started')) {
+    throw error;
+  }
+  ownsPrimaryTrace = false;
+}
 
 let page;
 let runError = null;
@@ -168,7 +186,7 @@ try {
       { timezone: 'Europe/Berlin' },
       'focused Personal learning profile timezone',
     );
-    page = await browser.newPage({ viewport: { width: 1280, height: 960 } });
+    page = await primaryContext.newPage();
     page.on('pageerror', (error) => {
       console.error(`[browser page error] ${error.message}`);
     });
@@ -217,7 +235,7 @@ try {
     await completeFocusedPersonalLearningSetup(accessToken);
     const userId = await authenticatedUserId(accessToken);
     await resetCoachE2EState(userId);
-    page = await browser.newPage({ viewport: { width: 1280, height: 960 } });
+    page = await primaryContext.newPage();
     page.on('pageerror', (error) => {
       console.error(`[browser page error] ${error.message}`);
     });
@@ -242,9 +260,7 @@ try {
     { timezone: 'Europe/Berlin' },
     'E2E profile timezone',
   );
-  page = await browser.newPage({
-    viewport: { width: 1280, height: 960 },
-  });
+  page = await primaryContext.newPage();
 
   page.on('pageerror', (error) => {
     console.error(`[browser page error] ${error.message}`);
@@ -2514,6 +2530,21 @@ try {
 
   const cleanupStartedAt = performance.now();
   const cleanupErrors = [];
+  if (ownsPrimaryTrace) {
+    try {
+      if (runError === null) {
+        await primaryContext.tracing.stop();
+      } else {
+        const tracePath = `${artifactDir}/trace-${runId}.zip`;
+        await primaryContext.tracing.stop({ path: tracePath });
+        console.error(`Saved failure trace to ${tracePath}`);
+      }
+    } catch (error) {
+      cleanupErrors.push(
+        `trace stop: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
   try {
     await browser.close();
   } catch (error) {
