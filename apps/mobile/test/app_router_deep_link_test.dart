@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:my_life_graph/app.dart';
 import 'package:my_life_graph/core/config/app_config.dart';
 import 'package:my_life_graph/core/navigation/app_router.dart';
@@ -39,6 +40,7 @@ void main() {
       tester.element(find.byType(PersonalOptimizationApp)),
     );
     final router = container.read(appRouterProvider);
+    expect(GoRouter.optionURLReflectsImperativeAPIs, isTrue);
     final visitedLocations = <Uri>[];
     void recordLocation() {
       visitedLocations.add(router.routeInformationProvider.value.uri);

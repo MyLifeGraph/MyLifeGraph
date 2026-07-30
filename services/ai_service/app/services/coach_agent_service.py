@@ -854,6 +854,7 @@ def _provider_error_code(code: str) -> str:
         "account_limit": "account_limit",
         "context_too_large": "snapshot_too_large",
         "tool_limit": "tool_limit",
+        "invalid_output": "invalid_output",
     }.get(code, "provider_failure")
 
 
@@ -866,6 +867,7 @@ def _provider_error_message(code: str) -> str:
         "account_limit": "The local Codex account limit has been reached.",
         "context_too_large": "Personal data exceeds the Coach snapshot limit.",
         "tool_limit": "Coach analysis exceeded the 12-call tool limit.",
+        "invalid_output": "The Coach provider returned invalid output.",
     }.get(code, "The local Coach provider failed.")
 
 

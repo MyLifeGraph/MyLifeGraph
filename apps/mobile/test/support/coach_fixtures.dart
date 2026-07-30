@@ -96,7 +96,7 @@ Map<String, dynamic> coachResponseJson({
       'model_requested': null,
       'model_reported': null,
       'model_source': 'not_applicable',
-      'prompt_version': 'free-coach-agent-prompt-v1',
+      'prompt_version': 'free-coach-agent-prompt-v2',
       'context_version': 'personal-snapshot-v1',
       'generated_at': '2026-07-28T10:15:00Z',
       'provider_called': true,

@@ -99,13 +99,15 @@ way to explore the product today is the Flutter app in mock-data guest mode.
   remains in the preparation plan instead of generic Task controls. Settings
   may add an explicit account-wide daily preparation budget; new proposals
   deduct confirmed blocks from other plans, and confirmation rechecks the rule
-  under the owner lock. Today and Preparation plans show a strict seven-day
-  view of confirmed preparation plus separately labelled weekly Setup
-  commitments. This remains a transparent deterministic rule, not an AI effort
-  estimate or a complete calendar/free-time model. Replanning an active plan
-  without a pending preview now starts with a compact saved-value review and one
-  deliberate staged-preview action; changing values still uses the full editor,
-  and current reservations remain active until confirmation.
+  under the owner lock. Today and Planner show a strict seven-day view of
+  confirmed preparation plus separately labelled weekly Setup commitments. The
+  Preparation page keeps the same budget data available to planning but
+  presents only compact `Open plans` and `History` accordions. This remains a
+  transparent deterministic rule, not an AI effort estimate or a complete
+  calendar/free-time model. Replanning an active plan uses the focused
+  `/planner/replan?plan_id=<uuid>` route: it starts with the selected plan's
+  saved-value review, creates a deliberate staged preview, and changes current
+  reservations only after explicit confirmation.
   Daily Capture V4 adds an explicit Evening sleep plan and Morning estimated
   start/wake interval while keeping raw clocks inside `daily_logs.metadata`.
   Planner reads the side-effect-free `exam-week-outlook-v1` projection: an
@@ -143,7 +145,7 @@ way to explore the product today is the Flutter app in mock-data guest mode.
   Phase 10 now exposes one free-question, read-only personal-data Coach instead
   of fixed Today, Patterns, Focus, or Review modes. Each V3 turn creates a fresh
   `personal-snapshot-v1` owner-only SQLite database and runs
-  `free-coach-agent-prompt-v1`, then gives the development-only local Codex agent
+  `free-coach-agent-prompt-v2`, then gives the development-only local Codex agent
   exactly three required stdio-MCP tools: catalog inspection, read-only SQL,
   and isolated Python. SQL and Python are bounded; Python runs as non-root in a
   no-network, read-only Docker sandbox with only the snapshot mounted. The
@@ -155,7 +157,11 @@ way to explore the product today is the Flutter app in mock-data guest mode.
   answer. It has no mode, horizon, Focus, prompt-starter, memory-selection, or
   structured suggestion control. Guest/mock is zero-call, standard tests use
   the deterministic fake provider, and legacy V1/V2 history stays readable.
-  Coach cannot mutate tasks, habits, schedules, briefings, reviews, memory
+  The prompt requires every answer field to be English regardless of the
+  question or stored-data language. A conservative backend check rejects a
+  clearly German reply or uncertainty reason as retryable `invalid_output`
+  before an assistant message is persisted. V1 prompt history and exact replay
+  remain readable. Coach cannot mutate tasks, habits, schedules, briefings, reviews, memory
   content, or calendar data. The Coach UI is hard-hidden in
   release builds and whenever `APP_ENV=production`; a Flutter define cannot
   override that boundary. The real adapter invokes the explicitly enabled Codex
@@ -400,9 +406,10 @@ Supabase is the intended auth and persistence backend. The current app supports:
 - Evening check-in is a three-page flow for mood, energy, stress, and one
   explicit sleep plan.
   Stress source/influence is requested only from medium stress upward; primary
-  and additional friction are neither requested nor stored. Tomorrow priority,
-  reflection, and blocker are optional; the former gentle-tomorrow switch is no
-  longer written. It no
+  and additional friction are neither requested nor stored. Reflection and
+  blocker are optional. Tomorrow priority is no longer shown or newly written,
+  while a legacy saved value survives an otherwise valid edit; the former
+  gentle-tomorrow switch is no longer written. It no
   longer asks users to estimate focus that completed Focus sessions can
   measure. Evening requires an intended local sleep start plus a `300..720`
   minute target in 15-minute steps; the first visible value is eight hours and
@@ -554,7 +561,9 @@ Supabase is the intended auth and persistence backend. The current app supports:
 
 Important current caveat: the Flutter app targets the canonical snake_case
 schema. The migration chain currently ends at
-`20260729130000_observed_projection_persistence.sql`. The preceding write
+`20260729160000_coach_english_prompt_v2.sql`. The current migration admits
+paired free-agent prompt V1/V2 provenance and adds the service-role-only V4
+claim wrapper without rewriting existing requests. The preceding write
 stabilization migration cuts Capture and account settings over to owner-locked
 CAS/RPC paths and adds timezone-bound Calendar/Planner truth. The earlier free
 Coach migration preserves existing fixed-mode rows while adding message-only

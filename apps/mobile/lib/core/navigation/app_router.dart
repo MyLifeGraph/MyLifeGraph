@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -39,6 +40,7 @@ const _postAuthContinuationPaths = <String>{
   AppRoutes.calendarIntegration,
   AppRoutes.preparationPlans,
   AppRoutes.planner,
+  AppRoutes.plannerReplan,
   AppRoutes.insights,
   AppRoutes.quickAction,
   AppRoutes.quickMoodCheckIn,
@@ -55,6 +57,7 @@ const _postAuthContinuationPaths = <String>{
 };
 
 final appRouterProvider = Provider<GoRouter>((ref) {
+  GoRouter.optionURLReflectsImperativeAPIs = true;
   Uri? pendingPostAuthLocation;
   final router = GoRouter(
     initialLocation: AppRoutes.dashboard,
@@ -173,19 +176,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             builder: (context, state) => const CalendarIntegrationPage(),
           ),
           GoRoute(
-            path: AppRoutes.preparationPlans,
-            builder: (context, state) => DeadlinePlansPage(
-              initialKind: DeadlinePlanKind.fromCode(
-                state.uri.queryParameters['kind'],
-              ),
-              initialPlanId: state.uri.queryParameters['plan_id'],
-              openInitialReplan:
-                  state.uri.queryParameters['action'] == 'replan',
-              sourceCalendarEventId:
-                  state.uri.queryParameters['calendar_event_id'],
-            ),
-          ),
-          GoRoute(
             path: AppRoutes.planner,
             builder: (context, state) => const PlannerPage(),
           ),
@@ -265,6 +255,30 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             redirect: (context, state) => AppRoutes.coach,
           ),
         ],
+      ),
+      GoRoute(
+        path: AppRoutes.preparationPlans,
+        builder: (context, state) => Scaffold(
+          body: DeadlinePlansPage(
+            initialKind: DeadlinePlanKind.fromCode(
+              state.uri.queryParameters['kind'],
+            ),
+            initialPlanId: state.uri.queryParameters['plan_id'],
+            openInitialReplan: state.uri.queryParameters['action'] == 'replan',
+            sourceCalendarEventId:
+                state.uri.queryParameters['calendar_event_id'],
+          ),
+        ),
+      ),
+      GoRoute(
+        path: AppRoutes.plannerReplan,
+        builder: (context, state) => Scaffold(
+          body: DeadlinePlansPage(
+            initialPlanId: state.uri.queryParameters['plan_id'],
+            openInitialReplan: true,
+            focusedReplan: true,
+          ),
+        ),
       ),
     ],
   );

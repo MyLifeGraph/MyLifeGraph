@@ -14,14 +14,15 @@ import '../../../../core/utils/client_uuid.dart';
 import '../../../../core/utils/local_date.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_page.dart';
+import '../../../../core/widgets/app_surface.dart';
 import '../../../briefings/presentation/providers/briefing_providers.dart';
 import '../../../dashboard/presentation/providers/dashboard_providers.dart';
+import '../../../planner/presentation/providers/planner_providers.dart';
 import '../../../snapshots/presentation/providers/snapshot_providers.dart';
 import '../../application/deadline_plan_controller.dart';
 import '../../domain/deadline_calendar_prefill.dart';
 import '../../domain/deadline_plan.dart';
 import '../providers/deadline_plan_providers.dart';
-import '../widgets/preparation_workload_card.dart';
 
 class DeadlinePlansPage extends ConsumerStatefulWidget {
   const DeadlinePlansPage({
@@ -33,6 +34,7 @@ class DeadlinePlansPage extends ConsumerStatefulWidget {
     this.initialKind,
     this.initialPlanId,
     this.openInitialReplan = false,
+    this.focusedReplan = false,
     this.currentTime,
   });
 
@@ -43,6 +45,7 @@ class DeadlinePlansPage extends ConsumerStatefulWidget {
   final DeadlinePlanKind? initialKind;
   final String? initialPlanId;
   final bool openInitialReplan;
+  final bool focusedReplan;
   final DateTime? currentTime;
 
   @override
@@ -56,8 +59,18 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
   bool _targetPlanLoading = false;
   bool _initialReplanOpened = false;
   bool _initialKindEditorOpened = false;
+  bool _expansionInitialized = false;
   Object? _targetPlanError;
   DeadlinePlanProposalDraft? _retainedDraft;
+  String? _expandedPlanId;
+  String? _operationPlanId;
+  final Map<String, GlobalKey> _planKeys = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _expandedPlanId = widget.initialPlanId;
+  }
 
   @override
   void didUpdateWidget(covariant DeadlinePlansPage oldWidget) {
@@ -67,6 +80,8 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
       _targetPlanLoading = false;
       _targetPlanError = null;
       _initialReplanOpened = false;
+      _expandedPlanId = widget.initialPlanId;
+      _expansionInitialized = false;
     } else if (oldWidget.openInitialReplan != widget.openInitialReplan) {
       _initialReplanOpened = false;
     }
@@ -82,6 +97,7 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
       return const AppPage(
         title: 'Preparation plans',
         subtitle: 'Reserve realistic focus time before an exam or assignment',
+        backFallback: AppRoutes.planner,
         children: [
           _MessageCard(
             icon: AppIcons.cloudOffOutlined,
@@ -93,7 +109,7 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
       );
     }
     final state = ref.watch(deadlinePlanControllerProvider);
-    final workload = ref.watch(preparationWorkloadProvider);
+    ref.watch(preparationWorkloadProvider);
     final controller = ref.read(deadlinePlanControllerProvider.notifier);
     final sourcePrefill = widget.sourceCalendarEventId == null
         ? null
@@ -102,12 +118,16 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
           );
     _openSourceEditorAfterBuild(state, sourcePrefill);
     _loadTargetPlanAfterBuild(state);
+    _initializeExpansionAfterBuild(state);
     _openInitialReplanAfterBuild(state);
     _openInitialKindEditorAfterBuild(state);
 
     return AppPage(
-      title: 'Preparation plans',
-      subtitle: 'Reserve realistic focus time before an exam or assignment',
+      title: widget.focusedReplan ? 'Replan preparation' : 'Preparation plans',
+      subtitle: widget.focusedReplan
+          ? 'Review one plan, stage a preview, then confirm explicitly'
+          : 'Reserve realistic focus time before an exam or assignment',
+      backFallback: AppRoutes.planner,
       actions: [
         IconButton(
           tooltip: 'Reload preparation plans',
@@ -120,7 +140,7 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
           icon: const Icon(AppIcons.refresh),
         ),
       ],
-      children: _children(state, controller, sourcePrefill, workload),
+      children: _children(state, controller, sourcePrefill),
     );
   }
 
@@ -128,7 +148,6 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
     DeadlinePlanState state,
     DeadlinePlanController controller,
     AsyncValue<DeadlineCalendarPrefill>? sourcePrefill,
-    AsyncValue<PreparationWorkload> workload,
   ) {
     if (state.isLoading) {
       return const [
@@ -171,11 +190,25 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
       });
     final targetPlan = _planById(visiblePlans, widget.initialPlanId);
 
-    Widget planCard(DeadlinePlan plan) => _DeadlinePlanCard(
+    Widget planCard(DeadlinePlan plan) {
+      final key = _planKeys.putIfAbsent(plan.id, GlobalKey.new);
+      final hasInlineError =
+          state.operationError != null && _operationPlanId == plan.id;
+      return KeyedSubtree(
+        key: key,
+        child: _DeadlinePlanCard(
           key: ValueKey('deadline-plan-${plan.id}'),
           plan: plan,
+          expanded: _expandedPlanId == plan.id,
           isBusy: state.isBusy,
           exactRetryLocked: state.requiresExactRetry,
+          confirmLabel: widget.focusedReplan
+              ? 'Confirm reservations and return to Planner'
+              : 'Confirm reservations',
+          operationError: hasInlineError ? state.operationError : null,
+          onToggle: () => setState(
+            () => _expandedPlanId = _expandedPlanId == plan.id ? null : plan.id,
+          ),
           onAdjust: () => _openEditor(plan: plan),
           onReplanMissed: () => _openEditor(
             plan: plan,
@@ -185,9 +218,22 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
           onComplete: () => _completePlan(plan),
           onCancel: () => _cancelPlan(plan),
           onStartBlock: (block) => _startBlock(plan, block),
-        );
+          onRetry: controller.retryExact,
+          onReload: controller.load,
+          onDismissError: () {
+            controller.clearOperationError();
+            setState(() => _operationPlanId = null);
+          },
+        ),
+      );
+    }
 
-    return [
+    final openPlans =
+        visiblePlans.where((plan) => !plan.isTerminal).toList(growable: false);
+    final historyPlans =
+        visiblePlans.where((plan) => plan.isTerminal).toList(growable: false);
+
+    final leading = <Widget>[
       if (_targetPlanLoading)
         const AppCard(
           child: Row(
@@ -211,17 +257,54 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
           onAction: _retryTargetPlan,
         ),
       if (sourcePrefill != null) _sourcePrefillCard(sourcePrefill),
-      if (targetPlan != null) planCard(targetPlan),
-      PreparationWorkloadCard(
-        value: workload,
-        onRetry: () => ref.invalidate(preparationWorkloadProvider),
-        onOpenSettings: () => context.go(AppRoutes.settings),
-        onLoadDayDetail: (localDate) => ref
-            .read(deadlinePlanRepositoryProvider)
-            .getWorkloadDetail(localDate),
-        onReviewPlan: _reviewPlanFromWorkload,
-        onReplanPlan: _replanFromWorkload,
-      ),
+    ];
+
+    if (widget.focusedReplan) {
+      if (targetPlan == null &&
+          !_targetPlanLoading &&
+          _targetPlanError == null) {
+        leading.add(
+          _MessageCard(
+            icon: AppIcons.searchOffOutlined,
+            title: 'Preparation plan unavailable',
+            message:
+                'This focused replan needs an available, open Exam or Assignment plan.',
+            actionLabel: 'Return to Planner',
+            onAction: () => context.go(AppRoutes.planner),
+          ),
+        );
+      } else if (targetPlan?.isTerminal == true) {
+        leading.add(
+          _MessageCard(
+            icon: AppIcons.infoOutline,
+            title: 'This plan can no longer be replanned',
+            message:
+                'Completed and cancelled preparation plans keep their history, but cannot create another preview.',
+            actionLabel: 'Return to Planner',
+            onAction: () => context.go(AppRoutes.planner),
+          ),
+        );
+      } else if (targetPlan != null) {
+        leading.add(planCard(targetPlan));
+      }
+      if (state.operationError != null && _operationPlanId == null) {
+        leading.add(
+          _OperationErrorCard(
+            state: state,
+            onRetry: controller.retryExact,
+            onReload: controller.load,
+            onDismiss: controller.clearOperationError,
+            onReview: _retainedDraft == null
+                ? null
+                : () => _openEditor(retainedDraft: _retainedDraft),
+          ),
+        );
+      }
+      return leading;
+    }
+
+    return [
+      ...leading,
       AppCard(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -254,9 +337,17 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
           message:
               'Create a staged preview first. Nothing is reserved until you confirm it.',
         )
-      else
-        for (final plan in visiblePlans)
-          if (plan.id != targetPlan?.id) planCard(plan),
+      else ...[
+        Text('Open plans', style: Theme.of(context).textTheme.titleLarge),
+        if (openPlans.isEmpty)
+          const Text('No open preparation plans.')
+        else
+          for (final plan in openPlans) planCard(plan),
+        if (historyPlans.isNotEmpty) ...[
+          Text('History', style: Theme.of(context).textTheme.titleLarge),
+          for (final plan in historyPlans) planCard(plan),
+        ],
+      ],
       if (_retainedDraft != null &&
           state.operationError == null &&
           !state.isBusy)
@@ -270,7 +361,7 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
           secondaryLabel: 'Discard entered values',
           onSecondary: () => setState(() => _retainedDraft = null),
         ),
-      if (state.operationError != null)
+      if (state.operationError != null && _operationPlanId == null)
         _OperationErrorCard(
           state: state,
           onRetry: controller.retryExact,
@@ -300,6 +391,24 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
     });
   }
 
+  void _initializeExpansionAfterBuild(DeadlinePlanState state) {
+    if (_expansionInitialized || state.isLoading || state.loadError != null) {
+      return;
+    }
+    _expansionInitialized = true;
+    if (_expandedPlanId != null) return;
+    for (final plan in state.plans) {
+      if (plan.pendingRevision != null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && _expandedPlanId == null) {
+            setState(() => _expandedPlanId = plan.id);
+          }
+        });
+        return;
+      }
+    }
+  }
+
   void _openInitialReplanAfterBuild(DeadlinePlanState state) {
     final planId = widget.initialPlanId;
     if (!widget.openInitialReplan ||
@@ -316,12 +425,7 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
     _initialReplanOpened = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      if (plan.isTerminal) {
-        _showMessage(
-          'This preparation plan is already closed and cannot be replanned.',
-        );
-        return;
-      }
+      if (plan.isTerminal) return;
       _openEditor(
         plan: plan,
         replanContext: _DeadlineReplanContext.workload,
@@ -344,38 +448,6 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _openEditor();
     });
-  }
-
-  void _reviewPlanFromWorkload(String planId) {
-    final query = Uri(
-      path: AppRoutes.preparationPlans,
-      queryParameters: {'plan_id': planId},
-    );
-    if (widget.initialPlanId == planId) {
-      _showMessage(
-        'This plan is listed first below. No reservations were changed.',
-      );
-      return;
-    }
-    context.go(query.toString());
-  }
-
-  void _replanFromWorkload(String planId) {
-    final state = ref.read(deadlinePlanControllerProvider);
-    final plan = _planById(state.plans, planId);
-    if (plan != null && !plan.isTerminal) {
-      _openEditor(
-        plan: plan,
-        replanContext: _DeadlineReplanContext.workload,
-      );
-      return;
-    }
-    context.go(
-      Uri(
-        path: AppRoutes.preparationPlans,
-        queryParameters: {'plan_id': planId, 'action': 'replan'},
-      ).toString(),
-    );
   }
 
   Future<void> _loadTargetPlan(String planId) async {
@@ -609,7 +681,12 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
     final saved =
         await ref.read(deadlinePlanControllerProvider.notifier).propose(draft);
     if (mounted && saved) {
-      setState(() => _retainedDraft = null);
+      final changedPlanId =
+          ref.read(deadlinePlanControllerProvider).lastChangedPlanId;
+      setState(() {
+        _retainedDraft = null;
+        _expandedPlanId = changedPlanId ?? draft!.planId;
+      });
       _showMessage('Preparation preview created. Review and confirm it.');
     }
   }
@@ -647,18 +724,32 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
               ),
               FilledButton(
                 onPressed: () => Navigator.of(context).pop(true),
-                child: const Text('Confirm reservations'),
+                child: Text(
+                  widget.focusedReplan
+                      ? 'Confirm reservations and return to Planner'
+                      : 'Confirm reservations',
+                ),
               ),
             ],
           ),
         ) ??
         false;
     if (!mounted || !confirmed) return;
+    setState(() => _operationPlanId = plan.id);
     final saved =
         await ref.read(deadlinePlanControllerProvider.notifier).confirm(plan);
     if (mounted && saved) {
       await _afterManagedTaskMutation();
-      _showMessage('Preparation blocks reserved.');
+      if (!mounted) return;
+      setState(() => _operationPlanId = null);
+      if (widget.focusedReplan) {
+        ref.invalidate(plannerControllerProvider);
+        ref.invalidate(examWeekOutlookProvider);
+        ref.invalidate(dashboardSnapshotProvider);
+        context.go(AppRoutes.planner);
+      } else {
+        _showMessage('Preparation blocks reserved.');
+      }
     }
   }
 
@@ -670,10 +761,17 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
       action: 'Mark complete',
     );
     if (!mounted || !confirmed) return;
+    setState(() => _operationPlanId = plan.id);
     final saved =
         await ref.read(deadlinePlanControllerProvider.notifier).complete(plan);
     if (mounted && saved) {
       await _afterManagedTaskMutation();
+      if (!mounted) return;
+      setState(() {
+        _operationPlanId = null;
+        _expandedPlanId = null;
+      });
+      _keepPlanVisible(plan.id);
       _showMessage('Preparation plan completed.');
     }
   }
@@ -689,6 +787,7 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
       action: plan.isDraft ? 'Discard preview' : 'Cancel plan',
     );
     if (!mounted || !confirmed) return;
+    setState(() => _operationPlanId = plan.id);
     final saved =
         await ref.read(deadlinePlanControllerProvider.notifier).cancel(plan);
     if (mounted && saved) {
@@ -697,6 +796,12 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
       } else {
         ref.invalidate(dashboardSnapshotProvider);
       }
+      if (!mounted) return;
+      setState(() {
+        _operationPlanId = null;
+        _expandedPlanId = null;
+      });
+      _keepPlanVisible(plan.id);
       _showMessage(
         plan.isDraft
             ? 'Preparation preview discarded.'
@@ -744,7 +849,7 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
         'recovery_minutes': '${block.recoveryMinutes}',
       },
     );
-    context.go(query.toString());
+    context.push(query.toString());
   }
 
   Future<void> _afterManagedTaskMutation() async {
@@ -762,6 +867,18 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
     ref.invalidate(preparationWorkloadProvider);
   }
 
+  void _keepPlanVisible(String planId) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final context = _planKeys[planId]?.currentContext;
+      if (!mounted || context == null) return;
+      Scrollable.ensureVisible(
+        context,
+        alignment: 0.2,
+        duration: const Duration(milliseconds: 220),
+      );
+    });
+  }
+
   void _showMessage(String message) {
     ScaffoldMessenger.of(context)
       ..clearSnackBars()
@@ -775,25 +892,39 @@ class _DeadlinePlanCard extends StatefulWidget {
   const _DeadlinePlanCard({
     super.key,
     required this.plan,
+    required this.expanded,
     required this.isBusy,
     required this.exactRetryLocked,
+    required this.confirmLabel,
+    required this.operationError,
+    required this.onToggle,
     required this.onAdjust,
     required this.onReplanMissed,
     required this.onConfirm,
     required this.onComplete,
     required this.onCancel,
     required this.onStartBlock,
+    required this.onRetry,
+    required this.onReload,
+    required this.onDismissError,
   });
 
   final DeadlinePlan plan;
+  final bool expanded;
   final bool isBusy;
   final bool exactRetryLocked;
+  final String confirmLabel;
+  final Object? operationError;
+  final VoidCallback onToggle;
   final VoidCallback onAdjust;
   final VoidCallback onReplanMissed;
   final VoidCallback onConfirm;
   final VoidCallback onComplete;
   final VoidCallback onCancel;
   final ValueChanged<DeadlinePlanBlock> onStartBlock;
+  final Future<bool> Function() onRetry;
+  final Future<void> Function() onReload;
+  final VoidCallback onDismissError;
 
   @override
   State<_DeadlinePlanCard> createState() => _DeadlinePlanCardState();
@@ -802,7 +933,6 @@ class _DeadlinePlanCard extends StatefulWidget {
 class _DeadlinePlanCardState extends State<_DeadlinePlanCard> {
   static const _collapsedBlockLimit = 6;
 
-  bool _showTerminalDetails = false;
   bool _showAllDisplayedBlocks = false;
   bool _showAllActiveBlocks = false;
 
@@ -823,16 +953,34 @@ class _DeadlinePlanCardState extends State<_DeadlinePlanCard> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _StatusPill(label: _statusLabel(plan.status)),
+            _StatusPill(
+              label: _statusLabel(plan.status),
+              tone: _statusTone(plan.status),
+            ),
             const SizedBox(height: AppSpacing.sm),
-            Text(
-              plan.title,
-              style: Theme.of(context).textTheme.titleLarge,
+            InkWell(
+              onTap: widget.onToggle,
+              child: Row(
+                children: [
+                  Icon(
+                    widget.expanded ? AppIcons.expandLess : AppIcons.expandMore,
+                  ),
+                  const SizedBox(width: AppSpacing.xs),
+                  Expanded(
+                    child: Text(
+                      plan.title,
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                  ),
+                ],
+              ),
             ),
-            const SizedBox(height: AppSpacing.xs),
-            const Text(
-              'This unconfirmed preview was discarded. It created no task or reserved preparation blocks.',
-            ),
+            if (widget.expanded) ...[
+              const SizedBox(height: AppSpacing.xs),
+              const Text(
+                'This unconfirmed preview was discarded. It created no task or reserved preparation blocks.',
+              ),
+            ],
           ],
         ),
       );
@@ -863,7 +1011,7 @@ class _DeadlinePlanCardState extends State<_DeadlinePlanCard> {
     final remaining = pending
         ? revision.remainingMinutesAtProposal
         : plan.progress.remainingMinutes;
-    if (plan.isTerminal && !_showTerminalDetails) {
+    if (!widget.expanded) {
       return AppCard(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -872,33 +1020,52 @@ class _DeadlinePlanCardState extends State<_DeadlinePlanCard> {
               spacing: AppSpacing.sm,
               runSpacing: AppSpacing.xs,
               children: [
-                _StatusPill(label: _statusLabel(plan.status)),
+                _StatusPill(
+                  label: pending ? 'Preview' : _statusLabel(plan.status),
+                  tone: pending
+                      ? AppStatusTone.attention
+                      : _statusTone(plan.status),
+                ),
                 _StatusPill(
                   label: revision.kind == DeadlinePlanKind.exam
                       ? 'Exam'
                       : 'Assignment',
+                  tone: AppStatusTone.info,
                 ),
+                if (sourceNeedsReview)
+                  const _StatusPill(
+                    label: 'Source changed',
+                    tone: AppStatusTone.attention,
+                  ),
               ],
             ),
             const SizedBox(height: AppSpacing.sm),
-            Text(
-              revision.title,
-              style: Theme.of(context).textTheme.titleLarge,
+            InkWell(
+              key: ValueKey('deadline-toggle-plan-${plan.id}'),
+              onTap: widget.onToggle,
+              child: Row(
+                children: [
+                  const Icon(AppIcons.expandMore),
+                  const SizedBox(width: AppSpacing.xs),
+                  Expanded(
+                    child: Text(
+                      revision.title,
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                  ),
+                ],
+              ),
             ),
             const SizedBox(height: AppSpacing.xs),
             Text(
-              'Finished by ${DateFormat.yMMMd().add_Hm().format(revision.deadlineAt.toLocal())} · device time',
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            Text(
-              '${_duration(estimate)} estimated · ${_duration(tracked)} tracked Focus · ${revision.blocks.length} preparation blocks',
+              _compactPlanSummary(
+                plan: plan,
+                pending: pending,
+                remaining: remaining,
+                tracked: tracked,
+                sourceNeedsReview: sourceNeedsReview,
+              ),
               style: Theme.of(context).textTheme.bodySmall,
-            ),
-            TextButton.icon(
-              key: ValueKey('deadline-show-history-${plan.id}'),
-              onPressed: () => setState(() => _showTerminalDetails = true),
-              icon: const Icon(AppIcons.expandMore),
-              label: const Text('Show history details'),
             ),
           ],
         ),
@@ -915,17 +1082,40 @@ class _DeadlinePlanCardState extends State<_DeadlinePlanCard> {
             children: [
               _StatusPill(
                 label: pending ? 'Preview' : _statusLabel(plan.status),
+                tone: pending
+                    ? AppStatusTone.attention
+                    : _statusTone(plan.status),
               ),
               _StatusPill(
                 label: revision.kind == DeadlinePlanKind.exam
                     ? 'Exam'
                     : 'Assignment',
+                tone: AppStatusTone.info,
               ),
-              if (sourceNeedsReview) const _StatusPill(label: 'Source changed'),
+              if (sourceNeedsReview)
+                const _StatusPill(
+                  label: 'Source changed',
+                  tone: AppStatusTone.attention,
+                ),
             ],
           ),
           const SizedBox(height: AppSpacing.sm),
-          Text(revision.title, style: Theme.of(context).textTheme.titleLarge),
+          InkWell(
+            key: ValueKey('deadline-toggle-plan-${plan.id}'),
+            onTap: widget.onToggle,
+            child: Row(
+              children: [
+                const Icon(AppIcons.expandLess),
+                const SizedBox(width: AppSpacing.xs),
+                Expanded(
+                  child: Text(
+                    revision.title,
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                ),
+              ],
+            ),
+          ),
           const SizedBox(height: AppSpacing.xs),
           Text(
             'Finish by ${DateFormat.yMMMd().add_Hm().format(revision.deadlineAt.toLocal())} · device time',
@@ -1154,6 +1344,17 @@ class _DeadlinePlanCardState extends State<_DeadlinePlanCard> {
                 ),
               ),
           ],
+          if (widget.operationError != null) ...[
+            const SizedBox(height: AppSpacing.md),
+            _InlineOperationError(
+              error: widget.operationError!,
+              exactRetryLocked: widget.exactRetryLocked,
+              isBusy: widget.isBusy,
+              onRetry: widget.onRetry,
+              onReload: widget.onReload,
+              onDismiss: widget.onDismissError,
+            ),
+          ],
           const SizedBox(height: AppSpacing.md),
           Wrap(
             spacing: AppSpacing.sm,
@@ -1163,7 +1364,7 @@ class _DeadlinePlanCardState extends State<_DeadlinePlanCard> {
                 FilledButton.icon(
                   onPressed: canMutate && !sourceNeedsReview ? onConfirm : null,
                   icon: const Icon(AppIcons.eventAvailableOutlined),
-                  label: const Text('Confirm reservations'),
+                  label: Text(widget.confirmLabel),
                 ),
               if (!plan.isTerminal)
                 OutlinedButton.icon(
@@ -1181,13 +1382,6 @@ class _DeadlinePlanCardState extends State<_DeadlinePlanCard> {
                 TextButton(
                   onPressed: canMutate ? onCancel : null,
                   child: Text(plan.isDraft ? 'Discard preview' : 'Cancel plan'),
-                ),
-              if (plan.isTerminal)
-                TextButton.icon(
-                  key: ValueKey('deadline-hide-history-${plan.id}'),
-                  onPressed: () => setState(() => _showTerminalDetails = false),
-                  icon: const Icon(AppIcons.expandLess),
-                  label: const Text('Hide history details'),
                 ),
             ],
           ),
@@ -2212,6 +2406,75 @@ class _OperationErrorCard extends StatelessWidget {
   }
 }
 
+class _InlineOperationError extends StatelessWidget {
+  const _InlineOperationError({
+    required this.error,
+    required this.exactRetryLocked,
+    required this.isBusy,
+    required this.onRetry,
+    required this.onReload,
+    required this.onDismiss,
+  });
+
+  final Object error;
+  final bool exactRetryLocked;
+  final bool isBusy;
+  final Future<bool> Function() onRetry;
+  final Future<void> Function() onReload;
+  final VoidCallback onDismiss;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      key: const ValueKey('deadline-plan-inline-error'),
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.errorContainer,
+        borderRadius: BorderRadius.circular(AppRadii.sm),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Could not update this plan',
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  color: Theme.of(context).colorScheme.onErrorContainer,
+                ),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Text(
+            exactRetryLocked
+                ? 'The plan remains unchanged and visible. Retry the exact request or load the latest saved state.'
+                : deadlinePlanConflictGuidance(error) ?? _errorMessage(error),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Wrap(
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.sm,
+            children: [
+              if (exactRetryLocked)
+                FilledButton(
+                  onPressed: isBusy ? null : onRetry,
+                  child: const Text('Retry unchanged'),
+                ),
+              OutlinedButton(
+                onPressed: isBusy ? null : onReload,
+                child: const Text('Load latest plan'),
+              ),
+              if (!exactRetryLocked)
+                TextButton(
+                  onPressed: isBusy ? null : onDismiss,
+                  child: const Text('Dismiss'),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _MessageCard extends StatelessWidget {
   const _MessageCard({
     required this.icon,
@@ -2301,20 +2564,18 @@ class _CalendarPrefillCard extends StatelessWidget {
 }
 
 class _StatusPill extends StatelessWidget {
-  const _StatusPill({required this.label});
+  const _StatusPill({
+    required this.label,
+    this.tone = AppStatusTone.neutral,
+  });
   final String label;
+  final AppStatusTone tone;
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(AppRadii.pill),
-      ),
-      child: Text(label, style: Theme.of(context).textTheme.labelMedium),
-    );
-  }
+  Widget build(BuildContext context) => AppStatusPill(
+        label: label,
+        tone: tone,
+      );
 }
 
 int? _durationInput(String hoursText, String minutesText) {
@@ -2354,6 +2615,37 @@ String _statusLabel(DeadlinePlanStatus status) => switch (status) {
       DeadlinePlanStatus.completed => 'Completed',
       DeadlinePlanStatus.cancelled => 'Cancelled',
     };
+
+AppStatusTone _statusTone(DeadlinePlanStatus status) => switch (status) {
+      DeadlinePlanStatus.active ||
+      DeadlinePlanStatus.completed =>
+        AppStatusTone.success,
+      DeadlinePlanStatus.cancelled => AppStatusTone.danger,
+      DeadlinePlanStatus.draft => AppStatusTone.neutral,
+    };
+
+String _compactPlanSummary({
+  required DeadlinePlan plan,
+  required bool pending,
+  required int remaining,
+  required int tracked,
+  required bool sourceNeedsReview,
+}) {
+  if (sourceNeedsReview) {
+    return 'Source changed · review before confirming another preview';
+  }
+  if (pending) {
+    return plan.isActive
+        ? 'Preview ready · active reservations stay unchanged until confirmation'
+        : 'Preview ready · nothing is reserved until confirmation';
+  }
+  if (plan.isTerminal) {
+    return '${_duration(tracked)} tracked Focus · saved preparation history';
+  }
+  final attention =
+      plan.record.attentionReasons.isNotEmpty ? ' · needs attention' : '';
+  return '${_duration(remaining)} remaining · ${_duration(tracked)} tracked$attention';
+}
 
 String _blockLabel(DeadlinePlanBlockState state) => switch (state) {
       DeadlinePlanBlockState.proposed => 'proposed',

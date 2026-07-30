@@ -4,6 +4,7 @@ import 'package:my_life_graph/core/theme/app_icons.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/constants/app_spacing.dart';
+import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_page.dart';
 import '../../domain/entities/notification_delivery.dart';
@@ -58,6 +59,7 @@ class _NotificationSettingsPageState
     return AppPage(
       title: 'In-app reminders',
       subtitle: 'Banners only while the app is open',
+      backFallback: AppRoutes.settings,
       children: [
         AppCard(
           child: Column(

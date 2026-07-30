@@ -11,6 +11,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/config/app_config.dart';
+import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/supabase/supabase_providers.dart';
 import '../../../../core/utils/client_uuid.dart';
 import '../../../../core/widgets/app_card.dart';
@@ -109,6 +110,7 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage> {
     return AppPage(
       title: 'Focus session',
       subtitle: 'A real timed execution block linked to an optional action',
+      backFallback: AppRoutes.quickAction,
       actions: [
         IconButton(
           tooltip: 'Refresh focus sessions',

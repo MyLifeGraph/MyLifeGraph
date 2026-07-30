@@ -71,7 +71,8 @@ class _MorningCalibrationPageState
       onSecondaryLoadAction: _eveningPlanUnavailable
           ? () => setState(() => _continueWithoutEveningPlan = true)
           : null,
-      onClose: () => context.go(AppRoutes.quickAction),
+      onClose: () =>
+          context.canPop() ? context.pop() : context.go(AppRoutes.quickAction),
       onBack: () {},
       onNext: _save,
       child: Column(

@@ -59,8 +59,9 @@ readable after sanitization. V2 has no friction context, risk, reason, or
 evidence. Stress, sleep, energy, day shape, workload, and active Tasks continue
 to drive classification. `push` requires at least one active Task.
 
-Current free questions use `free-coach-agent-prompt-v1` with a per-turn
-`personal-snapshot-v1`. The snapshot may include retained sanitized Intake,
+Current free questions use `free-coach-agent-prompt-v2` with a per-turn
+`personal-snapshot-v1`; paired V1 prompt history and exact replay stay valid.
+The snapshot may include retained sanitized Intake,
 Goal, Memory, and Daily Capture rows as untrusted data, but the cleanup means it
 cannot resurrect removed onboarding preference, coaching-style, friction, or
 Setup-Goal JSON. Compatible V2 fixed-mode requests retain

@@ -576,10 +576,11 @@ capture metadata onto those events. Sleep quality remains additive Morning
 metadata mirrored onto the existing Morning-origin events, so the maximum stays
 four. Raw planned/estimated clocks, target, and source Evening identity stay in
 Daily Log metadata and are not copied into event metadata, Daily State, Coach,
-or Notification content. Blank Evening reflection, blocker, and
-tomorrow-priority answers stay absent and do not create other product records.
-Evening has no primary/additional friction selection and no longer writes the
-retired `gentle_tomorrow` field. Legacy V2 captures remain readable, but
+or Notification content. Blank Evening reflection and blocker answers stay
+absent and do not create other product records. The active form no longer
+shows or newly writes tomorrow priority; an existing saved value survives an
+otherwise valid edit. Evening has no primary/additional friction selection and
+no longer writes the retired `gentle_tomorrow` field. Legacy V2 captures remain readable, but
 friction keys are ignored. V2/V3 opposite branches may remain explicit
 compatibility branches until that branch is edited.
 
@@ -1039,11 +1040,13 @@ onboarding projection changes; and remove legacy `"User"` fallback from role
 authority. Authenticated profile edits are limited to non-authority fields;
 service role and the atomic Intake apply RPC retain the required backend
 projection authority. A fresh migration-chain verification should end at
-`20260729130000_observed_projection_persistence.sql`. The longitudinal Coach
+`20260729160000_coach_english_prompt_v2.sql`. The longitudinal Coach
 migration keeps exact V2 scope parameters and fixed-mode history compatible.
-The final migration admits message-only V3 claims and V2 responses, stores
+The free-agent migration admits message-only V3 claims and V2 responses, stores
 backend-derived evidence, bounded tool trace/count, and service-tier truth,
-extends history deletion, and retains V1/V2 behavior. The preceding three
+extends history deletion, and retains V1/V2 behavior. The latest Coach
+migration admits V1/V2 free-agent prompt provenance and exposes the
+service-role-only rolling-safe V4 claim. The preceding three
 planning guards bind additive timing outside strict V1 payloads, keep
 confirmation timestamps monotone under clock skew, and record actual Setup
 allocation fallback without discarding learned evidence. The earlier Personal

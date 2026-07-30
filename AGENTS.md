@@ -355,6 +355,12 @@ adds `source_observed_at` to snapshots and weekly reviews plus owner-locked V2
 persistence RPCs. Concurrent generators may return stale results, but an older
 observation cannot replace a newer stored projection and freshness is checked
 against the stored snapshot provenance.
+The migration
+`supabase/migrations/20260729160000_coach_english_prompt_v2.sql`
+adds rolling-safe English-only Coach prompt provenance. New free-agent claims
+use `free-coach-agent-prompt-v2`; exact replays retain their originally stored
+V1 or V2 prompt, and the service-role-only V4 claim wrapper gives application
+roles no new write authority.
 
 ## Important Docs
 
@@ -745,7 +751,8 @@ write, background sync, LLM processing, or automatic calendar-derived action.
 Phase 10 is implemented through strict authenticated `coach-request-v3`,
 `coach-response-v2`, `coach-capabilities-v2`, and `coach-history-v2`
 boundaries plus a `started|activity|completed|failed` SSE route. The current
-pair is `free-coach-agent-prompt-v1` over `personal-snapshot-v1`. `/coach` uses
+pair is `free-coach-agent-prompt-v2` over `personal-snapshot-v1`. V1 prompt
+history and exact replay remain valid. `/coach` uses
 FastAPI only for a real authenticated account; `/more` is an alias. Guest/mock
 is zero-call and shows honest local unavailability. FastAPI exports the
 owner's relevant Setup/Capture/Task/Habit/Focus/Planner/Preparation/Calendar/
@@ -859,7 +866,7 @@ you actually intend to run `supabase db reset`.
 `supabase db reset` must complete through:
 
 ```text
-20260729130000_observed_projection_persistence.sql
+20260729160000_coach_english_prompt_v2.sql
 ```
 
 Expected local reset notices include skipped legacy CamelCase tables and

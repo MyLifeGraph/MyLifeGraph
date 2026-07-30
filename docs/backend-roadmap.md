@@ -66,8 +66,10 @@ Already implemented:
 - Lightweight Evening And Morning Capture:
   - `EveningShutdownDraft` and `MorningCalibrationDraft` merge into one typed
     `DailyCaptureEntry` per local date without one capture erasing the other.
-  - Evening stores exact stress intensity/source/controllability, tomorrow
-    priority, and only explicitly supplied optional reflection/blocker detail.
+  - Evening stores exact stress intensity/source/controllability and only
+    explicitly supplied optional reflection/blocker detail. The active form no
+    longer edits or writes tomorrow priority; a retained legacy value survives
+    an otherwise valid branch edit.
     Primary/additional friction choices are retired. Evening also stores one
     required planned local sleep clock and bounded duration target. Morning
     stores aware estimated start/wake instants, their derived duration, the
@@ -771,8 +773,8 @@ Current behavior:
    Account Export sources. Include detail text and a catalog/count/period/
    relationship layer; exclude auth, credentials, provider internals,
    anti-replay/usage/selection ledgers, operational state, and other owners.
-   The current pair is `free-coach-agent-prompt-v1` with
-   `personal-snapshot-v1`.
+   The current pair is `free-coach-agent-prompt-v2` with
+   `personal-snapshot-v1`; exact V1 prompt replay remains valid.
    Fail rather than truncate beyond 10,000 rows per table, 50,000 total, or
    8 MiB.
 4. Start the explicitly configured agent only after deliberate send and

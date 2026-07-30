@@ -7,6 +7,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:my_life_graph/core/capabilities/app_surface_capabilities.dart';
 import 'package:my_life_graph/core/errors/app_exception.dart';
+import 'package:my_life_graph/core/navigation/app_routes.dart';
+import 'package:my_life_graph/core/widgets/app_surface.dart';
 import 'package:my_life_graph/features/deadline_plans/data/deadline_calendar_prefill_data_source.dart';
 import 'package:my_life_graph/features/deadline_plans/domain/deadline_calendar_prefill.dart';
 import 'package:my_life_graph/features/deadline_plans/domain/deadline_plan.dart';
@@ -74,7 +76,7 @@ void main() {
     expect(find.textContaining('there is no background sync'), findsOneWidget);
   });
 
-  testWidgets('shows account-wide seven-day load and explains plan deduction',
+  testWidgets('hides seven-day load but keeps its budget in the editor',
       (tester) async {
     final repository = _FakeDeadlinePlanRepository();
     await _pumpPage(
@@ -87,12 +89,12 @@ void main() {
       ),
     );
 
-    expect(find.text('Your next 7 days'), findsOneWidget);
+    expect(find.text('Your next 7 days'), findsNothing);
     expect(
       find.text('2h total preparation per day across confirmed plans.'),
-      findsOneWidget,
+      findsNothing,
     );
-    expect(find.textContaining('50 min reserved'), findsOneWidget);
+    expect(find.textContaining('50 min reserved'), findsNothing);
 
     await _tap(tester, find.text('Plan preparation'));
     await _tap(tester, find.text('Exam'));
@@ -164,7 +166,7 @@ void main() {
       page: DeadlinePlansPage(currentTime: now),
     );
 
-    await _tap(tester, find.text('Adjust estimate or plan'));
+    await _tapPlanAction(tester, 'Adjust estimate or plan');
     expect(
       find.textContaining('imported source changed or became unavailable'),
       findsOneWidget,
@@ -245,6 +247,7 @@ void main() {
       page: DeadlinePlansPage(currentTime: now),
     );
 
+    await _expandPlan(tester);
     expect(
       find.byKey(const Key('deadline-learned-timing-applied')),
       findsOneWidget,
@@ -309,6 +312,7 @@ void main() {
       page: DeadlinePlansPage(currentTime: now),
     );
 
+    await _expandPlan(tester);
     expect(
       find.textContaining('Rule-based windows: prefers 08:00–13:00'),
       findsOneWidget,
@@ -333,6 +337,7 @@ void main() {
       page: DeadlinePlansPage(currentTime: now),
     );
 
+    await _expandPlan(tester);
     expect(find.text('Plan needs attention'), findsOneWidget);
     expect(find.textContaining('50 min still uncredited'), findsOneWidget);
 
@@ -374,7 +379,7 @@ void main() {
       page: DeadlinePlansPage(currentTime: DateTime(2026, 7, 22, 10)),
     );
 
-    await _tap(tester, find.text('Adjust estimate or plan'));
+    await _tapPlanAction(tester, 'Adjust estimate or plan');
     expect(find.text('Replan remaining preparation'), findsOneWidget);
     expect(find.textContaining('Plan from Jul 22, 2026'), findsOneWidget);
     expect(
@@ -426,7 +431,7 @@ void main() {
       page: DeadlinePlansPage(currentTime: now),
     );
 
-    await _tap(tester, find.text('Adjust estimate or plan'));
+    await _tapPlanAction(tester, 'Adjust estimate or plan');
     expect(
       find.textContaining('saved finish-by time has passed'),
       findsOneWidget,
@@ -454,6 +459,7 @@ void main() {
       page: DeadlinePlansPage(currentTime: now),
     );
 
+    await _expandPlan(tester);
     expect(
       find.byKey(
         const ValueKey(
@@ -497,10 +503,162 @@ void main() {
       page: DeadlinePlansPage(currentTime: now),
     );
 
+    expect(find.text('History'), findsOneWidget);
     expect(find.textContaining('2026-07-20 · 10:00'), findsNothing);
-    await _tap(tester, find.text('Show history details'));
+    await _expandPlan(tester);
     expect(find.textContaining('2026-07-20 · 10:00'), findsOneWidget);
-    expect(find.text('Hide history details'), findsOneWidget);
+  });
+
+  testWidgets('open plans and history keep exactly one accordion expanded',
+      (tester) async {
+    const secondId = '55555555-5555-4555-8555-555555555555';
+    const historyId = '66666666-6666-4666-8666-666666666666';
+    final repository = _FakeDeadlinePlanRepository(
+      feeds: [
+        DeadlinePlanFeed(
+          plans: [
+            _plan(),
+            _planWithIdentity(
+              id: secondId,
+              title: 'History assignment',
+            ),
+            _planWithIdentity(
+              id: historyId,
+              title: 'Completed statistics exam',
+              status: 'completed',
+            ),
+          ],
+        ),
+      ],
+    );
+    await _pumpPage(
+      tester,
+      repository: repository,
+      page: DeadlinePlansPage(currentTime: now),
+    );
+
+    expect(find.text('Open plans'), findsOneWidget);
+    expect(find.text('History'), findsOneWidget);
+    expect(find.textContaining('Finish by'), findsNothing);
+
+    await _tap(
+      tester,
+      find.byKey(const ValueKey('deadline-toggle-plan-$secondId')),
+    );
+    expect(find.textContaining('Finish by'), findsOneWidget);
+    await _tap(
+      tester,
+      find.byKey(const ValueKey('deadline-toggle-plan-$deadlinePlanId')),
+    );
+    expect(find.textContaining('Finish by'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('deadline-block-$deadlineBlockId')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('status and type pills use their semantic tones', (tester) async {
+    final repository = _FakeDeadlinePlanRepository(
+      feeds: [
+        DeadlinePlanFeed(
+          plans: [
+            _plan(pending: true),
+            _planWithIdentity(
+              id: '55555555-5555-4555-8555-555555555555',
+              title: 'Completed assignment',
+              status: 'completed',
+            ),
+            _planWithIdentity(
+              id: '66666666-6666-4666-8666-666666666666',
+              title: 'Cancelled exam',
+              status: 'cancelled',
+            ),
+          ],
+        ),
+      ],
+    );
+    await _pumpPage(
+      tester,
+      repository: repository,
+      page: DeadlinePlansPage(currentTime: now),
+    );
+
+    AppStatusTone tone(String label) => tester
+        .widget<AppStatusPill>(
+          find
+              .byWidgetPredicate(
+                (widget) => widget is AppStatusPill && widget.label == label,
+              )
+              .first,
+        )
+        .tone;
+    expect(tone('Preview'), AppStatusTone.attention);
+    expect(tone('Completed'), AppStatusTone.success);
+    expect(tone('Cancelled'), AppStatusTone.danger);
+    expect(tone('Exam'), AppStatusTone.info);
+  });
+
+  testWidgets('completing a long scrolled plan leaves a visible history card',
+      (tester) async {
+    final repository = _FakeDeadlinePlanRepository(
+      feeds: [
+        DeadlinePlanFeed(plans: [_planWithEightBlocks()]),
+      ],
+    );
+    await _pumpPage(
+      tester,
+      repository: repository,
+      page: DeadlinePlansPage(currentTime: now),
+      size: const Size(1200, 650),
+    );
+    await _expandPlan(tester);
+    await _tap(tester, find.text('Mark preparation complete'));
+    await _tap(
+      tester,
+      find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.text('Mark complete'),
+      ),
+    );
+
+    expect(find.text('Completed'), findsOneWidget);
+    expect(find.text('History'), findsOneWidget);
+    expect(find.text('Algorithms exam').hitTestable(), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('deadline-plan-inline-error')),
+      findsNothing,
+    );
+  });
+
+  testWidgets('failed completion preserves the active card and inline error',
+      (tester) async {
+    final repository = _FakeDeadlinePlanRepository(
+      feeds: [
+        DeadlinePlanFeed(plans: [_plan()]),
+      ],
+      completeError: StateError('offline'),
+    );
+    await _pumpPage(
+      tester,
+      repository: repository,
+      page: DeadlinePlansPage(currentTime: now),
+    );
+    await _expandPlan(tester);
+    await _tap(tester, find.text('Mark preparation complete'));
+    await _tap(
+      tester,
+      find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.text('Mark complete'),
+      ),
+    );
+
+    expect(find.text('Active'), findsOneWidget);
+    expect(find.text('Mark preparation complete'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('deadline-plan-inline-error')),
+      findsOneWidget,
+    );
   });
 
   testWidgets('409 reload retains values and rebases against latest revision',
@@ -627,7 +785,7 @@ void main() {
         isLocalDemo: true,
         canUseSyncedHabits: false,
       ),
-      page: const DeadlinePlansPage(
+      page: DeadlinePlansPage(
         sourceCalendarEventId: deadlineCalendarEventId,
       ),
     );
@@ -687,7 +845,7 @@ void main() {
 
     expect(repository.getPlanCalls, 1);
     expect(find.text('Algorithms exam'), findsOneWidget);
-    expect(find.text('Show history details'), findsOneWidget);
+    expect(find.textContaining('2026-07-20 · 10:00'), findsOneWidget);
   });
 
   testWidgets('deep-linked plan is immediately visible before supporting load',
@@ -735,6 +893,157 @@ void main() {
     expect(find.text('Step 1 of 3'), findsOneWidget);
     expect(find.byKey(const ValueKey('deadline-plan-title')), findsOneWidget);
     expect(repository.proposalDrafts, isEmpty);
+  });
+
+  testWidgets('focused replan isolates one plan and keeps preview staged',
+      (tester) async {
+    const otherPlanId = '55555555-5555-4555-8555-555555555555';
+    final repository = _FakeDeadlinePlanRepository(
+      feeds: [
+        DeadlinePlanFeed(
+          plans: [
+            _plan(),
+            _planWithIdentity(
+              id: otherPlanId,
+              title: 'Hidden history assignment',
+            ),
+          ],
+        ),
+      ],
+      proposalResults: [_plan(pending: true)],
+    );
+    await _pumpPage(
+      tester,
+      repository: repository,
+      page: DeadlinePlansPage(
+        initialPlanId: deadlinePlanId,
+        openInitialReplan: true,
+        focusedReplan: true,
+        currentTime: now,
+      ),
+    );
+
+    expect(find.text('Replan preparation'), findsOneWidget);
+    expect(find.text('Hidden history assignment'), findsNothing);
+    expect(find.text('Plan preparation'), findsNothing);
+    expect(find.text('Replan remaining preparation'), findsOneWidget);
+    expect(repository.proposalDrafts, isEmpty);
+
+    await _tap(tester, find.text('Create preview with these values'));
+    expect(repository.proposalDrafts, hasLength(1));
+    expect(repository.confirmCalls, 0);
+    expect(
+      find.text('Currently reserved until you confirm'),
+      findsOneWidget,
+    );
+    expect(
+      find.text('Confirm reservations and return to Planner'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('focused replan gives terminal plans an inline return path',
+      (tester) async {
+    final repository = _FakeDeadlinePlanRepository(
+      feeds: [
+        DeadlinePlanFeed(plans: [_plan(status: 'completed')]),
+      ],
+    );
+    await _pumpPage(
+      tester,
+      repository: repository,
+      page: const DeadlinePlansPage(
+        initialPlanId: deadlinePlanId,
+        openInitialReplan: true,
+        focusedReplan: true,
+      ),
+    );
+
+    expect(find.text('This plan can no longer be replanned'), findsOneWidget);
+    expect(find.text('Return to Planner'), findsOneWidget);
+    expect(find.text('Replan remaining preparation'), findsNothing);
+  });
+
+  testWidgets('focused confirmation returns to Planner after explicit confirm',
+      (tester) async {
+    final repository = _FakeDeadlinePlanRepository(
+      feeds: [
+        DeadlinePlanFeed(plans: [_plan()]),
+      ],
+      proposalResults: [_plan(pending: true)],
+      confirmResult: _plan(),
+    );
+    final router = GoRouter(
+      initialLocation: AppRoutes.planner,
+      routes: [
+        GoRoute(
+          path: AppRoutes.planner,
+          builder: (context, state) => Scaffold(
+            body: FilledButton(
+              onPressed: () => context.push(
+                '${AppRoutes.plannerReplan}?plan_id=$deadlinePlanId',
+              ),
+              child: const Text('Begin focused replan'),
+            ),
+          ),
+        ),
+        GoRoute(
+          path: AppRoutes.plannerReplan,
+          builder: (context, state) => DeadlinePlansPage(
+            initialPlanId: state.uri.queryParameters['plan_id'],
+            openInitialReplan: true,
+            focusedReplan: true,
+            currentTime: now,
+          ),
+        ),
+      ],
+    );
+    addTearDown(router.dispose);
+    tester.view.physicalSize = const Size(1200, 1800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          appSurfaceCapabilitiesProvider.overrideWithValue(
+            const AppSurfaceCapabilities(
+              isLocalDemo: false,
+              canUseSyncedHabits: true,
+              canUseSyncedExecution: true,
+              canUseDeadlinePlanner: true,
+            ),
+          ),
+          deadlinePlanRepositoryProvider.overrideWithValue(repository),
+        ],
+        child: MaterialApp.router(routerConfig: router),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await _tap(tester, find.text('Begin focused replan'));
+    await _tap(tester, find.text('Create preview with these values'));
+    await _tap(
+      tester,
+      find.text('Confirm reservations and return to Planner').first,
+    );
+    await _tap(
+      tester,
+      find.descendant(
+        of: find.byType(AlertDialog),
+        matching: find.text('Confirm reservations and return to Planner'),
+      ),
+    );
+
+    expect(repository.proposalDrafts, hasLength(1));
+    expect(repository.confirmCalls, 1);
+    expect(
+      router.routeInformationProvider.value.uri.path,
+      AppRoutes.planner,
+    );
+    expect(find.text('Begin focused replan'), findsOneWidget);
   });
 
   testWidgets('replan editor blocks shell navigation and cancel stays on page',
@@ -797,7 +1106,7 @@ void main() {
 
     router.go('/preparation-plans');
     await tester.pumpAndSettle();
-    await _tap(tester, find.text('Adjust estimate or plan'));
+    await _tapPlanAction(tester, 'Adjust estimate or plan');
     expect(find.text('Replan remaining preparation'), findsOneWidget);
 
     await tester.tap(find.text('Shell Insights'), warnIfMissed: false);
@@ -884,15 +1193,7 @@ void main() {
       textScaler: const TextScaler.linear(2),
       page: DeadlinePlansPage(currentTime: now),
     );
-    await tester.scrollUntilVisible(
-      find.text('Adjust estimate or plan'),
-      500,
-      scrollable: find.byType(Scrollable).first,
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Adjust estimate or plan'));
-    await tester.pumpAndSettle();
-    await tester.pump();
+    await _tapPlanAction(tester, 'Adjust estimate or plan');
 
     expect(tester.takeException(), isNull);
     expect(find.text('Replan remaining preparation'), findsOneWidget);
@@ -914,12 +1215,41 @@ Future<void> _completeNewWizard(WidgetTester tester) async {
 }
 
 Future<void> _submitExistingWizard(WidgetTester tester) async {
-  await _tap(tester, find.text('Adjust estimate or plan'));
+  await _tapPlanAction(tester, 'Adjust estimate or plan');
   await _tap(tester, find.text('Create preview with these values'));
+}
+
+Future<void> _expandPlan(WidgetTester tester) async {
+  if (find.textContaining('Finish by').evaluate().isNotEmpty) {
+    return;
+  }
+  final toggle = find.byKey(
+    const ValueKey('deadline-toggle-plan-$deadlinePlanId'),
+  );
+  if (toggle.evaluate().isEmpty) {
+    await tester.scrollUntilVisible(
+      toggle,
+      500,
+      scrollable: _pageScrollable(),
+    );
+    await tester.pumpAndSettle();
+  }
+  if (toggle.evaluate().isNotEmpty) {
+    await _tap(tester, toggle);
+  }
+}
+
+Future<void> _tapPlanAction(WidgetTester tester, String label) async {
+  final action = find.text(label);
+  if (action.evaluate().isEmpty) {
+    await _expandPlan(tester);
+  }
+  await _tap(tester, action);
 }
 
 Future<void> _tap(WidgetTester tester, Finder finder) async {
   await tester.ensureVisible(finder.first);
+  await tester.pumpAndSettle();
   await tester.tap(finder.first);
   await tester.pumpAndSettle();
 }
@@ -983,6 +1313,26 @@ DeadlinePlan _plan({String status = 'active', bool pending = false}) =>
     DeadlinePlanResponse.fromJson(
       deadlinePlanEnvelope(status: status, pending: pending),
     ).plan;
+
+DeadlinePlan _planWithIdentity({
+  required String id,
+  required String title,
+  String status = 'active',
+}) {
+  final json = deadlinePlanEnvelope(status: status, activeTitle: title);
+  final record = json['plan'] as Map<String, dynamic>;
+  record['id'] = id;
+  if (record.containsKey('managed_task_id')) {
+    record['managed_task_id'] = id;
+  }
+  for (final key in ['active_revision', 'pending_revision']) {
+    final revision = json[key];
+    if (revision is Map<String, dynamic>) {
+      revision['plan_id'] = id;
+    }
+  }
+  return DeadlinePlanResponse.fromJson(json).plan;
+}
 
 DeadlinePlan _planWithDeadline(String deadlineAt) {
   final json = deadlinePlanEnvelope();
@@ -1084,6 +1434,7 @@ class _FakeDeadlinePlanRepository implements DeadlinePlanRepository {
     List<DeadlinePlan>? proposalResults,
     List<Object>? proposalErrors,
     this.confirmResult,
+    this.completeError,
     this.targetedPlan,
     this.targetedError,
   })  : feeds = feeds ?? [DeadlinePlanFeed(plans: const [])],
@@ -1094,6 +1445,7 @@ class _FakeDeadlinePlanRepository implements DeadlinePlanRepository {
   final List<DeadlinePlan> proposalResults;
   final List<Object> proposalErrors;
   final DeadlinePlan? confirmResult;
+  final Object? completeError;
   final DeadlinePlan? targetedPlan;
   final Object? targetedError;
   final List<DeadlinePlanProposalDraft> proposalDrafts = [];
@@ -1153,8 +1505,10 @@ class _FakeDeadlinePlanRepository implements DeadlinePlanRepository {
     required String planId,
     required String requestId,
     required int expectedRevision,
-  }) async =>
-      _plan(status: 'completed');
+  }) async {
+    if (completeError case final error?) throw error;
+    return _plan(status: 'completed');
+  }
 
   @override
   Future<DeadlinePlan> cancel({

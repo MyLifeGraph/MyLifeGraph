@@ -21,7 +21,9 @@ Coach agent persistence is the additive migration
 `20260728160000_free_read_only_coach_agent_v1.sql`.
 The current repository boundary then adds write stabilization and
 observation-ordered persistence through
-`20260729130000_observed_projection_persistence.sql`.
+`20260729130000_observed_projection_persistence.sql`, followed by rolling-safe
+English-only Coach prompt provenance in
+`20260729160000_coach_english_prompt_v2.sql`.
 
 ## Runtime Activation
 
@@ -662,7 +664,8 @@ service-role-only `claim_coach_request_v3` reuses the established owner-before-
 request locks, one-pending-owner rule, lease, terminal replay, and profile-local
 daily budget. Replay binds derived owner, request UUID, and exact message
 fingerprint only. A new claim stores
-`free-coach-agent-prompt-v1`/`personal-snapshot-v1`; the legacy physical scope
+`free-coach-agent-prompt-v1`/`personal-snapshot-v1`; the later V4 claim wrapper
+stores `free-coach-agent-prompt-v2` for a newly claimed request. The legacy physical scope
 columns stay neutral `today`/`{}` for schema compatibility and are not a
 current product mode.
 
@@ -676,7 +679,7 @@ The service-role-only `complete_coach_request_v2` requires one exact
   limitations;
 - exact equality between response and separately supplied evidence/trace/tool
   count;
-- paired `free-coach-agent-prompt-v1` and `personal-snapshot-v1` provenance;
+- paired `free-coach-agent-prompt-v1|v2` and `personal-snapshot-v1` provenance;
 - snapshot rows no greater than 50,000 and bytes no greater than 8 MiB; and
 - `local_codex_oauth` truth fixed to `gpt-5.5`, explicit Fast configured, and
   no non-Codex Fast claim.
@@ -1013,12 +1016,18 @@ service-role-only V2 persistence RPCs. A later-observed Snapshot wins; Weekly
 Review persistence validates the current weekly Snapshot identity and
 provenance under the owner/row lock.
 
+`20260729160000_coach_english_prompt_v2.sql` admits the paired free-agent V1/V2
+prompt provenance and adds service-role-only `claim_coach_request_v4`. It
+upgrades only a newly claimed pending request to V2, so existing V1 requests
+and exact replays retain their original provenance. Application roles receive
+no new table or RPC write authority.
+
 ## Local Verification Workflow
 
 For local Supabase-backed testing, the reset should complete through:
 
 ```text
-20260729130000_observed_projection_persistence.sql
+20260729160000_coach_english_prompt_v2.sql
 ```
 
 Then configure `.env` with:

@@ -3,7 +3,11 @@ const coachResponseContractVersion = 'coach-response-v2';
 const _legacyCoachResponseContractVersion = 'coach-response-v1';
 const coachCapabilitiesContractVersion = 'coach-capabilities-v2';
 const coachHistoryContractVersion = 'coach-history-v2';
-const coachAgentPromptVersion = 'free-coach-agent-prompt-v1';
+const coachAgentPromptVersion = 'free-coach-agent-prompt-v2';
+const _acceptedCoachAgentPromptVersions = {
+  'free-coach-agent-prompt-v1',
+  coachAgentPromptVersion,
+};
 const coachAgentContextVersion = 'personal-snapshot-v1';
 const coachMessageCodepoints = 2000;
 const coachReplyCodepoints = 4000;
@@ -505,7 +509,7 @@ class CoachProvenance {
       snapshotBytes: _int(json['snapshot_bytes']),
     );
     if (!const {'model', 'deterministic_safety'}.contains(result.source) ||
-        result.promptVersion != coachAgentPromptVersion ||
+        !_acceptedCoachAgentPromptVersions.contains(result.promptVersion) ||
         result.contextVersion != coachAgentContextVersion ||
         result.snapshotRowCount < 0 ||
         result.snapshotRowCount > 50000 ||

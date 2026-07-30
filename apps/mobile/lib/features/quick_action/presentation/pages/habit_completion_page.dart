@@ -50,6 +50,7 @@ class _HabitCompletionPageState extends ConsumerState<HabitCompletionPage> {
     return AppPage(
       title: 'Today habits',
       subtitle: 'Complete, intentionally skip, or undo today\'s opportunities',
+      backFallback: AppRoutes.quickAction,
       actions: [
         IconButton(
           tooltip: 'Refresh',
@@ -59,7 +60,7 @@ class _HabitCompletionPageState extends ConsumerState<HabitCompletionPage> {
         ),
         IconButton(
           tooltip: 'Manage habits',
-          onPressed: () => context.go(AppRoutes.habitManagement),
+          onPressed: () => context.push(AppRoutes.habitManagement),
           icon: const Icon(AppIcons.tune),
         ),
       ],

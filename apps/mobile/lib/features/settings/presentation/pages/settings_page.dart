@@ -105,7 +105,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               'Review routine candidates, study setup, and fixed commitments.',
             ),
             trailing: const Icon(AppIcons.chevronRight),
-            onTap: () => context.go('${AppRoutes.onboarding}?edit=1'),
+            onTap: () => context.push('${AppRoutes.onboarding}?edit=1'),
           ),
         ),
         AppCard(
@@ -122,7 +122,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             ),
             trailing: syncedAccount ? const Icon(AppIcons.chevronRight) : null,
             onTap: syncedAccount
-                ? () => context.go(AppRoutes.personalLearning)
+                ? () => context.push(AppRoutes.personalLearning)
                 : null,
           ),
         ),
@@ -163,7 +163,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               'Read saved notifications and manage their read or dismissed state.',
             ),
             trailing: const Icon(AppIcons.chevronRight),
-            onTap: () => context.go(AppRoutes.alerts),
+            onTap: () => context.push(AppRoutes.alerts),
           ),
         ),
         AppCard(
@@ -178,7 +178,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             ),
             trailing: syncedAccount ? const Icon(AppIcons.chevronRight) : null,
             onTap: syncedAccount
-                ? () => context.go(AppRoutes.notificationSettings)
+                ? () => context.push(AppRoutes.notificationSettings)
                 : null,
           ),
         ),
@@ -192,7 +192,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 'Development preview only. Cannot change your data.',
               ),
               trailing: const Icon(AppIcons.chevronRight),
-              onTap: () => context.go(AppRoutes.coach),
+              onTap: () => context.push(AppRoutes.coach),
             ),
           ),
         AppCard(
@@ -204,7 +204,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               'Import a selected .ics file as a read-only local copy.',
             ),
             trailing: const Icon(AppIcons.chevronRight),
-            onTap: () => context.go(AppRoutes.calendarIntegration),
+            onTap: () => context.push(AppRoutes.calendarIntegration),
           ),
         ),
         AppCard(

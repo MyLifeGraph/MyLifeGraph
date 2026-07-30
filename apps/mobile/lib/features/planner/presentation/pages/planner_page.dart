@@ -10,6 +10,7 @@ import 'package:intl/intl.dart';
 import '../../../../core/capabilities/app_surface_capabilities.dart';
 import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/navigation/app_routes.dart';
+import '../../../../core/theme/app_category_visuals.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_page.dart';
 import '../../../deadline_plans/domain/exam_week_outlook.dart';
@@ -38,6 +39,8 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
       return AppPage(
         title: 'Planner',
         subtitle: 'Turn explicit estimates into reviewable time blocks',
+        backFallback: AppRoutes.dashboard,
+        showBackForFallback: false,
         children: const [
           _PlannerLockedCard(),
         ],
@@ -60,7 +63,7 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
         onExam: () => _openPreparationCreation('exam'),
         onAssignment: () => _openPreparationCreation('assignment'),
         onCommitment: () => _createCommitment(overview),
-        onReviewSetup: () => context.go('${AppRoutes.onboarding}?edit=1'),
+        onReviewSetup: () => context.push('${AppRoutes.onboarding}?edit=1'),
         onCalendarPreference: overview == null
             ? null
             : (value) async {
@@ -116,17 +119,17 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
         _ExamWeekOutlookSection(
           value: examWeekOutlook,
           onRetry: () => ref.invalidate(examWeekOutlookProvider),
-          onEveningCheckIn: () => context.go(AppRoutes.quickMoodCheckIn),
-          onReviewPlan: (planId) => context.go(
+          onEveningCheckIn: () => context.push(AppRoutes.quickMoodCheckIn),
+          onReviewPlan: (planId) => context.push(
             Uri(
               path: AppRoutes.preparationPlans,
               queryParameters: {'plan_id': planId},
             ).toString(),
           ),
-          onReplan: (planId) => context.go(
+          onReplan: (planId) => context.push(
             Uri(
-              path: AppRoutes.preparationPlans,
-              queryParameters: {'plan_id': planId, 'action': 'replan'},
+              path: AppRoutes.plannerReplan,
+              queryParameters: {'plan_id': planId},
             ).toString(),
           ),
         ),
@@ -168,6 +171,8 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
       return AppPage(
         title: 'Planner',
         subtitle: 'Turn explicit estimates into reviewable time blocks',
+        backFallback: AppRoutes.dashboard,
+        showBackForFallback: false,
         children: children,
       );
     }
@@ -187,7 +192,7 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
     children.add(
       _PreparationSection(
         plans: overview.ongoingPreparation,
-        onOpen: (plan) => context.go(
+        onOpen: (plan) => context.push(
           '${AppRoutes.preparationPlans}?plan_id=${plan.planId}',
         ),
       ),
@@ -202,6 +207,8 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
     return AppPage(
       title: 'Planner',
       subtitle: 'Preview first. Times are reserved only after confirmation.',
+      backFallback: AppRoutes.dashboard,
+      showBackForFallback: false,
       actions: [
         IconButton(
           tooltip: 'Reload Planner',
@@ -259,7 +266,7 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
 
   Future<void> _openPreparationCreation(String kind) async {
     if (!await _confirmAvailabilityForAutomaticPlanning() || !mounted) return;
-    context.go('${AppRoutes.preparationPlans}?kind=$kind');
+    context.push('${AppRoutes.preparationPlans}?kind=$kind');
   }
 
   Future<bool> _confirmAvailabilityForAutomaticPlanning() async {
@@ -390,7 +397,7 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
     PlannerOverview overview,
   ) async {
     if (item.kind == 'preparation') {
-      context.go('${AppRoutes.preparationPlans}?plan_id=${item.sourceId}');
+      context.push('${AppRoutes.preparationPlans}?plan_id=${item.sourceId}');
       return;
     }
     if (item.kind == 'habit_slot') {
@@ -461,7 +468,7 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
     PlannerOverview overview,
   ) async {
     if (item.target == 'study_setup') {
-      context.go('${AppRoutes.onboarding}?edit=1&section=study');
+      context.push('${AppRoutes.onboarding}?edit=1&section=study');
       return;
     }
     final plan = overview.actionPlans
@@ -476,7 +483,7 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
           .where((value) => value.planId == item.planId)
           .firstOrNull;
       if (preparation != null && mounted) {
-        context.go(
+        context.push(
           '${AppRoutes.preparationPlans}?plan_id=${preparation.planId}',
         );
       }
@@ -541,13 +548,13 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
     final execute = await _openActionPlan(plan);
     if (!mounted || !execute) return;
     if (kind == 'task') {
-      context.go(
+      context.push(
         '${AppRoutes.deepWork}?target_kind=task&target_id=${item.sourceId}'
         '&planned_minutes=${item.endsAt!.difference(item.startsAt!).inMinutes}'
         '&recovery_minutes=${item.recoveryMinutes}',
       );
     } else {
-      context.go(AppRoutes.habitCompletion);
+      context.push(AppRoutes.habitCompletion);
     }
   }
 
@@ -753,30 +760,35 @@ class _AddNewSection extends StatelessWidget {
               children: [
                 _CreateButton(
                   key: const ValueKey('planner-add-task'),
+                  category: AppCategory.task,
                   icon: AppIcons.taskAltOutlined,
                   label: 'Task',
                   onPressed: busy ? null : onTask,
                 ),
                 _CreateButton(
                   key: const ValueKey('planner-add-habit'),
+                  category: AppCategory.habit,
                   icon: AppIcons.repeatOutlined,
                   label: 'Habit',
                   onPressed: busy ? null : onHabit,
                 ),
                 _CreateButton(
                   key: const ValueKey('planner-add-exam'),
+                  category: AppCategory.preparation,
                   icon: AppIcons.schoolOutlined,
                   label: 'Exam',
                   onPressed: busy ? null : onExam,
                 ),
                 _CreateButton(
                   key: const ValueKey('planner-add-assignment'),
+                  category: AppCategory.preparation,
                   icon: AppIcons.assignmentOutlined,
                   label: 'Assignment',
                   onPressed: busy ? null : onAssignment,
                 ),
                 _CreateButton(
                   key: const ValueKey('planner-add-commitment'),
+                  category: AppCategory.fixedCommitment,
                   icon: AppIcons.eventBusyOutlined,
                   label: 'Fixed commitment',
                   onPressed: busy ? null : onCommitment,
@@ -852,22 +864,32 @@ class _AddNewSection extends StatelessWidget {
 
 class _CreateButton extends StatelessWidget {
   const _CreateButton({
+    required this.category,
     required this.icon,
     required this.label,
     required this.onPressed,
     super.key,
   });
 
+  final AppCategory category;
   final IconData icon;
   final String label;
   final VoidCallback? onPressed;
 
   @override
-  Widget build(BuildContext context) => OutlinedButton.icon(
-        onPressed: onPressed,
-        icon: Icon(icon),
-        label: Text(label),
-      );
+  Widget build(BuildContext context) {
+    final visual = category.visual(context);
+    return OutlinedButton.icon(
+      style: OutlinedButton.styleFrom(
+        foregroundColor: visual.foreground,
+        backgroundColor: visual.background,
+        side: BorderSide(color: visual.foreground.withValues(alpha: 0.45)),
+      ),
+      onPressed: onPressed,
+      icon: Icon(icon),
+      label: Text(label),
+    );
+  }
 }
 
 class _ExamWeekOutlookSection extends StatelessWidget {
@@ -1356,6 +1378,7 @@ class _PlannerDayItemTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final visual = _visual(item.kind);
+    final appearance = visual.category.visual(context);
     final time = item.allDay
         ? 'All day'
         : item.recoveryMinutes > 0
@@ -1371,18 +1394,29 @@ class _PlannerDayItemTile extends StatelessWidget {
       'habit_slot',
       'preparation',
     }.contains(item.kind);
-    return ListTile(
-      contentPadding: EdgeInsets.zero,
-      leading: CircleAvatar(
-        backgroundColor:
-            visual.color(Theme.of(context)).withValues(alpha: 0.14),
-        foregroundColor: visual.color(Theme.of(context)),
-        child: Icon(visual.icon, size: 20),
+    return Container(
+      key: ValueKey('planner-day-item-${item.id}'),
+      margin: const EdgeInsets.only(bottom: AppSpacing.xs),
+      child: Material(
+        color: appearance.background,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppRadii.sm),
+          side: BorderSide(
+            color: appearance.foreground.withValues(alpha: 0.34),
+          ),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: ListTile(
+          contentPadding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+          iconColor: appearance.foreground,
+          textColor: appearance.foreground,
+          leading: Icon(visual.icon, size: 22),
+          title: Text(item.title),
+          subtitle: Text('$time · ${appearance.label}'),
+          trailing: actionable ? const Icon(AppIcons.chevronRight) : null,
+          onTap: actionable ? onTap : null,
+        ),
       ),
-      title: Text(item.title),
-      subtitle: Text('$time · ${visual.label}'),
-      trailing: actionable ? const Icon(AppIcons.chevronRight) : null,
-      onTap: actionable ? onTap : null,
     );
   }
 }
@@ -2364,40 +2398,30 @@ List<String> _overlappingTitles(
 _BlockVisual _visual(String kind) => switch (kind) {
       'setup_commitment' => const _BlockVisual(
           AppIcons.settingsSuggestOutlined,
-          'Setup commitment',
-          _tertiary,
+          AppCategory.setup,
         ),
       'manual_commitment' => const _BlockVisual(
           AppIcons.eventBusyOutlined,
-          'Fixed commitment',
-          _error,
+          AppCategory.fixedCommitment,
         ),
       'task_block' =>
-        const _BlockVisual(AppIcons.taskOutlined, 'Task', _primary),
+        const _BlockVisual(AppIcons.taskOutlined, AppCategory.task),
       'habit_slot' =>
-        const _BlockVisual(AppIcons.repeatOutlined, 'Habit', _secondary),
+        const _BlockVisual(AppIcons.repeatOutlined, AppCategory.habit),
       'preparation' =>
-        const _BlockVisual(AppIcons.schoolOutlined, 'Preparation', _tertiary),
+        const _BlockVisual(AppIcons.schoolOutlined, AppCategory.preparation),
       _ => const _BlockVisual(
           AppIcons.calendarMonthOutlined,
-          'Calendar',
-          _outline,
+          AppCategory.calendar,
         ),
     };
 
 class _BlockVisual {
-  const _BlockVisual(this.icon, this.label, this.color);
+  const _BlockVisual(this.icon, this.category);
 
   final IconData icon;
-  final String label;
-  final Color Function(ThemeData) color;
+  final AppCategory category;
 }
-
-Color _primary(ThemeData theme) => theme.colorScheme.primary;
-Color _secondary(ThemeData theme) => theme.colorScheme.secondary;
-Color _tertiary(ThemeData theme) => theme.colorScheme.tertiary;
-Color _error(ThemeData theme) => theme.colorScheme.error;
-Color _outline(ThemeData theme) => theme.colorScheme.outline;
 
 String _reason(String value) => switch (value) {
       'released' => 'Future reservations were released. Create a new preview.',

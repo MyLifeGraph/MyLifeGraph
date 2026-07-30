@@ -41,6 +41,9 @@ and `due_at`. Unknown, missing, malformed, naive-timestamp, or internally
 inconsistent rows fail the real-data load instead of becoming mock content.
 Only the existing internal route allowlist may turn `action_url` into an Open
 button.
+An allowlisted Open action pushes in-app history, while a direct `/alerts`
+deep link uses Settings as its Back fallback. Neither Back nor Open implicitly
+marks a row read or dismissed.
 
 ## Lifecycle Endpoint
 

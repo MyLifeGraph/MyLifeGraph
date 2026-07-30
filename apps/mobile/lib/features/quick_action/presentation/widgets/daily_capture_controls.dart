@@ -25,51 +25,150 @@ class CaptureChoiceControl<T> extends StatelessWidget {
     required this.value,
     required this.choices,
     required this.onChanged,
+    this.equalWidthRow = false,
     super.key,
   });
 
   final T? value;
   final List<CaptureChoice<T>> choices;
   final ValueChanged<T> onChanged;
+  final bool equalWidthRow;
 
   @override
   Widget build(BuildContext context) {
+    if (equalWidthRow) {
+      return IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            for (var index = 0; index < choices.length; index++) ...[
+              if (index > 0) const SizedBox(width: AppSpacing.xs),
+              Expanded(
+                child: _EqualChoiceButton<T>(
+                  choice: choices[index],
+                  selected: choices[index].value == value,
+                  onChanged: onChanged,
+                ),
+              ),
+            ],
+          ],
+        ),
+      );
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: choices.map((choice) {
         final selected = choice.value == value;
         return Padding(
           padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-          child: MergeSemantics(
-            child: Semantics(
-              label: choice.semanticLabel ?? choice.label,
-              child: ChoiceChip(
-                selected: selected,
-                onSelected: (_) => onChanged(choice.value),
-                label: ExcludeSemantics(
-                  child: SizedBox(
-                    width: double.infinity,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(choice.label),
-                        if (choice.description != null) ...[
-                          const SizedBox(height: AppSpacing.xs),
-                          Text(
-                            choice.description!,
-                            style: Theme.of(context).textTheme.bodySmall,
-                          ),
-                        ],
-                      ],
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(
+                child: MergeSemantics(
+                  child: Semantics(
+                    label: choice.semanticLabel ?? choice.label,
+                    child: ChoiceChip(
+                      selected: selected,
+                      onSelected: (_) => onChanged(choice.value),
+                      label: ExcludeSemantics(
+                        child: SizedBox(
+                          width: double.infinity,
+                          child: Text(choice.label),
+                        ),
+                      ),
+                      padding: const EdgeInsets.all(AppSpacing.md),
                     ),
                   ),
                 ),
-                padding: const EdgeInsets.all(AppSpacing.md),
               ),
-            ),
+              if (choice.description != null) ...[
+                const SizedBox(width: AppSpacing.xs),
+                _ChoiceInfoButton(
+                  label: choice.label,
+                  description: choice.description!,
+                ),
+              ],
+            ],
           ),
         );
       }).toList(),
+    );
+  }
+}
+
+class _EqualChoiceButton<T> extends StatelessWidget {
+  const _EqualChoiceButton({
+    required this.choice,
+    required this.selected,
+    required this.onChanged,
+  });
+
+  final CaptureChoice<T> choice;
+  final bool selected;
+  final ValueChanged<T> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return MergeSemantics(
+      child: Semantics(
+        label: choice.semanticLabel ?? choice.label,
+        child: ChoiceChip(
+          selected: selected,
+          onSelected: (_) => onChanged(choice.value),
+          label: ExcludeSemantics(
+            child: SizedBox(
+              width: double.infinity,
+              child: Text(
+                choice.label,
+                textAlign: TextAlign.center,
+                softWrap: true,
+              ),
+            ),
+          ),
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.xs,
+            vertical: AppSpacing.md,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ChoiceInfoButton extends StatefulWidget {
+  const _ChoiceInfoButton({
+    required this.label,
+    required this.description,
+  });
+
+  final String label;
+  final String description;
+
+  @override
+  State<_ChoiceInfoButton> createState() => _ChoiceInfoButtonState();
+}
+
+class _ChoiceInfoButtonState extends State<_ChoiceInfoButton> {
+  final _tooltipKey = GlobalKey<TooltipState>();
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      key: _tooltipKey,
+      message: widget.description,
+      triggerMode: TooltipTriggerMode.tap,
+      child: Semantics(
+        button: true,
+        label: 'More information about ${widget.label}: ${widget.description}',
+        child: ExcludeSemantics(
+          child: IconButton(
+            key: ValueKey('capture-choice-info-${widget.label}'),
+            onPressed: () => _tooltipKey.currentState?.ensureTooltipVisible(),
+            icon: const Icon(AppIcons.infoOutline),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -477,9 +576,10 @@ class CaptureFlowScaffold extends StatelessWidget {
                                   ),
                                 ),
                                 IconButton(
-                                  tooltip: 'Close',
-                                  onPressed: onClose,
-                                  icon: const Icon(AppIcons.close),
+                                  key: const ValueKey('capture-flow-back'),
+                                  tooltip: 'Back',
+                                  onPressed: canGoBack ? onBack : onClose,
+                                  icon: const Icon(AppIcons.arrowBack),
                                 ),
                               ],
                             ),

@@ -1125,19 +1125,29 @@ try {
   await expectText(page, '8 h');
   await clickByText(page, 'Next');
   await clickScrolledByLabel(page, 'stress source private_emotional');
+  const privateSourceBounds = await page
+    .getByLabel('stress source private_emotional', { exact: true })
+    .first()
+    .boundingBox();
+  if (!privateSourceBounds) {
+    throw new Error('Evening stress-source selection bounds are unavailable.');
+  }
+  await page.mouse.move(
+    privateSourceBounds.x + privateSourceBounds.width + 28,
+    privateSourceBounds.y + privateSourceBounds.height / 2,
+  );
+  await expectText(
+    page,
+    'Personal events, conflict, grief, family, or worry',
+  );
   await clickScrolledByLabel(
     page,
     'stress influence hardly_controllable',
   );
-  await stabilizeLabeledControl(
+  await assertFlutterTextAbsent(
     page,
     'Possible priority tomorrow (optional)',
-  );
-  await fillByLabelOrPlaceholder(
-    page,
-    'Possible priority tomorrow (optional)',
-    `  ${eveningTomorrowPriority}  `,
-    0,
+    'retired Evening tomorrow-priority input',
   );
   await clickByText(page, 'Save evening check-in');
   await expectText(
@@ -1421,15 +1431,10 @@ try {
     page,
     'stress influence mostly_controllable',
   );
-  await stabilizeLabeledControl(
+  await assertFlutterTextAbsent(
     page,
     'Possible priority tomorrow (optional)',
-  );
-  await fillByLabelOrPlaceholder(
-    page,
-    'Possible priority tomorrow (optional)',
-    editedEveningTomorrowPriority,
-    0,
+    'retired Evening tomorrow-priority input on edit',
   );
   await expectFieldValue(page, 'Reflection (optional)', '', 0);
   await expectFieldValue(page, 'Specific blocker (optional)', '', 1);
@@ -3860,7 +3865,7 @@ function hasExactPhaseOneDailyRow(row, expected) {
     !Object.hasOwn(evening ?? {}, 'focus_band') &&
     !Object.hasOwn(evening ?? {}, 'main_friction') &&
     !Object.hasOwn(evening ?? {}, 'additional_frictions') &&
-    evening?.tomorrow_priority === expected.tomorrowPriority &&
+    !Object.hasOwn(evening ?? {}, 'tomorrow_priority') &&
     !Object.hasOwn(evening ?? {}, 'reflection_note') &&
     !Object.hasOwn(evening ?? {}, 'specific_blocker') &&
     !Object.hasOwn(evening ?? {}, 'gentle_tomorrow') &&
@@ -7986,24 +7991,91 @@ async function assertDeadlinePlanner(page, userId) {
     'stable managed task after replacement confirmation',
   );
 
-  const completeRequestId = crypto.randomUUID();
-  const completeBody = {
-    request_id: completeRequestId,
-    expected_revision: 3,
-  };
-  const completedResult = await deadlinePlanApiRequest(
-    `/v1/deadline-plans/${planId}/complete`,
-    accessToken,
-    { method: 'POST', body: completeBody },
+  const completionContext = await browser.newContext({
+    viewport: { width: 1280, height: 960 },
+  });
+  const completionPage = await completionContext.newPage();
+  const completionPageErrors = [];
+  completionPage.on('pageerror', (error) => {
+    completionPageErrors.push(error.message);
+  });
+  await completionPage.goto(appRoute('/auth'), {
+    waitUntil: 'domcontentloaded',
+  });
+  await waitForFlutterShell(completionPage);
+  await enableFlutterSemantics(completionPage);
+  await fillByLabelOrPlaceholder(completionPage, 'Email', email, 0);
+  await fillByLabelOrPlaceholder(completionPage, 'Password', password, 1);
+  await clickByText(completionPage, 'Login', { match: 'last' });
+  await completionPage.waitForURL('**/#/dashboard', { timeout: 45000 });
+  await enableFlutterSemantics(completionPage);
+  await expectText(completionPage, 'Today at a glance');
+  await completionPage.waitForTimeout(1500);
+  await completionPage.mouse.click(100, 302);
+  await completionPage.waitForFunction(
+    () => window.location.hash === '#/planner',
+    null,
+    { timeout: 10000 },
   );
+  await expectText(completionPage, 'Planner');
+  await completionPage.waitForTimeout(2000);
+  await scrollUntilTextInViewport(completionPage, finalTitle, {
+    maxSteps: 30,
+    buttonFirst: true,
+  });
+  await clickByText(completionPage, finalTitle);
+  await completionPage.waitForFunction(
+    (expectedPlanId) =>
+      window.location.hash.startsWith('#/preparation-plans') &&
+      window.location.hash.includes(`plan_id=${expectedPlanId}`),
+    planId,
+    { timeout: 10000 },
+  );
+  await expectText(completionPage, 'Preparation plans');
+  await completionPage.waitForTimeout(1000);
+  await scrollUntilTextInViewport(
+    completionPage,
+    'Mark preparation complete',
+    {
+      maxSteps: 30,
+      buttonFirst: true,
+    },
+  );
+  const completedResponsePromise = completionPage.waitForResponse(
+    (response) =>
+      response.url() ===
+        `${aiServiceBaseUrl}/v1/deadline-plans/${planId}/complete` &&
+      response.request().method() === 'POST',
+    { timeout: 45000 },
+  );
+  await clickByText(completionPage, 'Mark preparation complete');
+  await expectText(completionPage, 'Mark preparation complete?');
+  await clickByText(completionPage, 'Mark complete');
+  const completedHttpResponse = await completedResponsePromise;
+  const completeBody = completedHttpResponse.request().postDataJSON();
+  const completeRequestId = completeBody?.request_id;
+  const completedText = await completedHttpResponse.text();
+  const completedResult = {
+    response: { status: completedHttpResponse.status() },
+    text: completedText,
+    json: JSON.parse(completedText),
+  };
   assertDeadlinePlanApiStatus(
     completedResult,
     200,
-    'explicit deadline completion',
+    'Flutter explicit deadline completion',
   );
+  if (
+    !isUuid(completeRequestId) ||
+    completeBody?.expected_revision !== 3
+  ) {
+    throw new Error(
+      `Flutter completion used an invalid lifecycle request: ${JSON.stringify(completeBody)}`,
+    );
+  }
   const completed = assertDeadlinePlanEnvelope(
     completedResult.json,
-    'explicit deadline completion',
+    'Flutter explicit deadline completion',
   );
   if (
     completed.plan.status !== 'completed' ||
@@ -8017,6 +8089,24 @@ async function assertDeadlinePlanner(page, userId) {
       `Explicit Deadline Planner completion is invalid: ${completedResult.text}`,
     );
   }
+  await expectText(completionPage, 'Preparation plan completed.');
+  await scrollUntilTextInViewport(completionPage, finalTitle, {
+    maxSteps: 30,
+  });
+  await expectText(completionPage, 'History');
+  await expectText(completionPage, 'Completed');
+  await assertFlutterTextAbsent(
+    completionPage,
+    'Mark preparation complete',
+    'terminal Preparation action after completion',
+  );
+  await completionPage.waitForTimeout(1000);
+  if (completionPageErrors.length > 0) {
+    throw new Error(
+      `Preparation completion produced page errors: ${completionPageErrors.join(' | ')}`,
+    );
+  }
+  await completionContext.close();
   const completeReplay = await deadlinePlanApiRequest(
     `/v1/deadline-plans/${planId}/complete`,
     accessToken,
@@ -8649,48 +8739,39 @@ async function assertDeadlinePlannerFlutterSurface({
   await waitForFlutterShell(page);
   await enableFlutterSemantics(page);
   await expectText(page, 'Preparation plans');
-  await expectText(page, 'Your next 7 days');
-  await expectText(
+  await expectText(page, 'Open plans');
+  await assertFlutterTextAbsent(
+    page,
+    'Your next 7 days',
+    'removed Preparation workload card',
+  );
+  await assertFlutterTextAbsent(
     page,
     '25 min total preparation per day across confirmed plans.',
+    'Preparation workload budget copy',
   );
-  const workloadDetailLoad = page.waitForResponse(
-    (response) =>
-      response.url() ===
-        `${aiServiceBaseUrl}/v1/deadline-plans/workload/${overloadedDay.local_date}` &&
-      response.request().method() === 'GET',
-    { timeout: 45000 },
-  );
-  const dayLabel = new Intl.DateTimeFormat('en-US', {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-    timeZone: 'UTC',
-  }).format(new Date(`${overloadedDay.local_date}T12:00:00Z`));
-  const workloadDay = await scrollUntilTextInViewport(page, dayLabel, {
+  await scrollUntilTextInViewport(page, title, {
     maxSteps: 16,
-    buttonFirst: true,
   });
-  await workloadDay.click({ force: true });
-  const workloadDetailResponse = await workloadDetailLoad;
-  if (!workloadDetailResponse.ok()) {
-    throw new Error(
-      `Flutter workload detail failed to load: ${workloadDetailResponse.status()} ${await workloadDetailResponse.text()}`,
-    );
-  }
-  assertPreparationWorkloadDetail(await workloadDetailResponse.json(), {
-    budget: 25,
-    localDate: overloadedDay.local_date,
-    context: 'Flutter preparation workload detail',
+  await expectText(page, 'Active');
+  await scrollUntilTextInViewport(page, 'Reserved in MyLifeGraph only', {
+    maxSteps: 12,
   });
-  await expectText(page, 'At least');
-  await expectText(page, 'nothing changes automatically');
-  await expectText(page, 'Review plan');
-  await scrollUntilTextInViewport(page, 'Replan remaining time', {
-    maxSteps: 8,
-    buttonFirst: true,
-  });
-  await clickByText(page, 'Replan remaining time');
+  await page.goto(
+    appRoute(
+      `/planner/replan?plan_id=${encodeURIComponent(planId)}`,
+    ),
+    { waitUntil: 'domcontentloaded' },
+  );
+  await waitForFlutterShell(page);
+  await enableFlutterSemantics(page);
+  await page.waitForFunction(
+    (expectedPlanId) =>
+      window.location.hash.startsWith('#/planner/replan') &&
+      window.location.hash.includes(`plan_id=${expectedPlanId}`),
+    planId,
+    { timeout: 10000 },
+  );
   await expectText(page, 'Replan remaining preparation');
   await expectText(page, 'Create preview with these values');
   await expectText(page, 'Nothing changes automatically');
@@ -8707,11 +8788,17 @@ async function assertDeadlinePlannerFlutterSurface({
     );
   }
   await editorCancel.click();
+  await expectText(page, 'Replan preparation');
+  await clickByRoleName(page, 'button', 'Back');
   await page.waitForFunction(
-    () => window.location.hash.startsWith('#/preparation-plans'),
+    () => window.location.hash === '#/planner',
     null,
     { timeout: 10000 },
   );
+  await expectText(page, 'Planner');
+  await page.goto(planPageUrl, { waitUntil: 'domcontentloaded' });
+  await waitForFlutterShell(page);
+  await enableFlutterSemantics(page);
   await expectText(page, 'Preparation plans');
 
   const restored = await deadlinePlanApiRequest(
@@ -8865,6 +8952,65 @@ async function assertDeadlinePlannerFlutterSurface({
       maxSteps: 4,
       buttonFirst: true,
     });
+  }
+  await assertPlannerBack(page, { browserBack: false });
+  await assertPlannerBrowserBack(page);
+}
+
+async function assertPlannerBrowserBack(authenticatedPage) {
+  await assertPlannerBack(authenticatedPage, { browserBack: true });
+}
+
+async function assertPlannerBack(authenticatedPage, { browserBack }) {
+  const backContext = await browser.newContext({
+    viewport: { width: 1280, height: 960 },
+    storageState: await authenticatedPage.context().storageState(),
+  });
+  const backPage = await backContext.newPage();
+  const pageErrors = [];
+  backPage.on('pageerror', (error) => {
+    pageErrors.push(error.message);
+  });
+
+  try {
+    await backPage.goto(appRoute('/dashboard'), {
+      waitUntil: 'domcontentloaded',
+    });
+    await waitForFlutterShell(backPage);
+    await enableFlutterSemantics(backPage);
+    await expectText(backPage, 'Today at a glance');
+    await scrollUntilTextInViewport(backPage, 'Open Planner', {
+      deltaY: -700,
+      maxSteps: 40,
+      buttonFirst: true,
+    });
+    await clickFlutterSemanticsButton(backPage, 'Open Planner');
+    await backPage.waitForFunction(
+      () => window.location.hash.startsWith('#/planner'),
+      null,
+      { timeout: 10000 },
+    );
+    await expectText(backPage, 'Planner');
+    if (browserBack) {
+      await backPage.goBack();
+    } else {
+      await clickFlutterSemanticsButton(backPage, 'Back');
+    }
+    await backPage.waitForFunction(
+      () => window.location.hash.startsWith('#/dashboard'),
+      null,
+      { timeout: 10000 },
+    );
+    await expectText(backPage, 'Today at a glance');
+    await backPage.waitForTimeout(1000);
+    if (pageErrors.length > 0) {
+      const backKind = browserBack ? 'browser Back' : 'App Back';
+      throw new Error(
+        `Planner ${backKind} produced page errors: ${pageErrors.join(' | ')}`,
+      );
+    }
+  } finally {
+    await backContext.close();
   }
 }
 
@@ -11189,7 +11335,7 @@ async function assertFreeReadOnlyCoach(page, userId) {
   await scrollUntilTextInViewport(page, 'Technical provenance');
   await scrollUntilTextInViewport(page, 'Fake · Deterministic Test Only');
   await scrollUntilTextInViewport(page, 'Provider called: yes');
-  await scrollUntilTextInViewport(page, 'free-coach-agent-prompt-v1');
+  await scrollUntilTextInViewport(page, 'free-coach-agent-prompt-v2');
   await scrollUntilTextInViewport(page, 'personal-snapshot-v1');
 
   const persistenceBeforeUiReplay = await coachPersistenceSnapshot(userId);
@@ -11608,7 +11754,7 @@ function assertCoachResponse(payload, expected, context) {
     payload.provenance.model_requested !== null ||
     payload.provenance.model_reported !== null ||
     payload.provenance.model_source !== 'not_applicable' ||
-    payload.provenance.prompt_version !== 'free-coach-agent-prompt-v1' ||
+    payload.provenance.prompt_version !== 'free-coach-agent-prompt-v2' ||
     payload.provenance.context_version !== 'personal-snapshot-v1' ||
     payload.provenance.provider_called !== expected.providerCalled ||
     payload.provenance.service_tier !== 'not_applicable' ||
@@ -11916,7 +12062,7 @@ async function assertCoachAtomicPersistence(userId, expected) {
       request.model_requested !== null ||
       request.model_reported !== null ||
       request.model_source !== 'not_applicable' ||
-      request.prompt_version !== 'free-coach-agent-prompt-v1' ||
+      request.prompt_version !== 'free-coach-agent-prompt-v2' ||
       request.context_version !== 'personal-snapshot-v1' ||
       !/^[0-9a-f]{64}$/.test(request.message_fingerprint ?? '') ||
       stableJson(request.response) !== stableJson(item.response) ||

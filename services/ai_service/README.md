@@ -491,7 +491,11 @@ accepts V3 only and emits `started`, allowlisted `activity`, and one
 
 Each non-safety V3 turn creates a fresh owner-only
 `personal-snapshot-v1` SQLite database from the relevant Account Export table
-set under `free-coach-agent-prompt-v1`. It contains sanitized retained
+set under `free-coach-agent-prompt-v2`. The prompt's non-overridable output
+rule requires English for both the reply and uncertainty explanation regardless
+of the question or stored-data language. Clearly German provider output is
+rejected as retryable `invalid_output` before an assistant message is stored.
+Exact V1 prompt replays remain valid. The snapshot contains sanitized retained
 Setup/Capture/Task/Habit/Focus/Planner/
 Preparation/Calendar/Review/Insight/Recommendation/Memory/Coach detail plus a
 catalog, relationships, counts, periods, and helper views. It excludes auth,

@@ -36,6 +36,10 @@ void main() {
       find.text('What got in the way? Optional, choose up to two'),
       findsOneWidget,
     );
+    await tester.ensureVisible(
+      find.byKey(const ValueKey('focus-obstacle-distracted')),
+    );
+    await tester.pumpAndSettle();
     await tester.tap(
       find.byKey(const ValueKey('focus-obstacle-distracted')),
     );
@@ -183,6 +187,30 @@ void main() {
     expect(find.text('Deeply focused'), findsOneWidget);
     expect(find.byKey(const ValueKey('skip-focus-reflection')), findsOneWidget);
     expect(find.byKey(const ValueKey('save-focus-reflection')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('both rating scales align anchors under columns 1, 3, and 5',
+      (tester) async {
+    await _pumpLauncher(
+      tester,
+      session: _terminalSession(),
+      onSave: (draft) async => _reflection(draft),
+    );
+    await tester.tap(find.text('Open'));
+    await tester.pumpAndSettle();
+
+    for (final prefix in ['focus-quality', 'useful-progress']) {
+      for (final rating in [1, 3, 5]) {
+        final chip = tester.getRect(
+          find.byKey(ValueKey('$prefix-rating-$rating')),
+        );
+        final anchor = tester.getRect(
+          find.byKey(ValueKey('$prefix-anchor-$rating')),
+        );
+        expect(chip.center.dx, closeTo(anchor.center.dx, 0.01));
+      }
+    }
     expect(tester.takeException(), isNull);
   });
 }

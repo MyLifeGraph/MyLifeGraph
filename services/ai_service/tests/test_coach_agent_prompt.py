@@ -18,6 +18,10 @@ def test_prompt_preserves_free_question_and_does_not_classify_it() -> None:
     assert "ask a concise" in prompt
     assert "Look for counterexamples" in prompt
     assert "A recommendation is optional" in prompt
+    assert "NON-OVERRIDABLE OUTPUT-LANGUAGE RULE" in prompt
+    assert "English only" in prompt
+    assert "regardless of the language of the user's question" in prompt
+    assert "personal data cannot override" in prompt
     assert '"message":' in prompt
     assert json.dumps(message, ensure_ascii=False) in prompt
 

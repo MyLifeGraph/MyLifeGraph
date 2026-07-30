@@ -53,6 +53,7 @@ class _HabitManagementPageState extends ConsumerState<HabitManagementPage> {
     return AppPage(
       title: 'Habit management',
       subtitle: 'Set an honest daily, weekday, or weekly cadence',
+      backFallback: AppRoutes.planner,
       actions: [
         IconButton(
           tooltip: 'Refresh',
@@ -78,7 +79,7 @@ class _HabitManagementPageState extends ConsumerState<HabitManagementPage> {
               'routines can still be completed or skipped in Today Habits.',
             ),
             trailing: const Icon(AppIcons.chevronRight),
-            onTap: () => context.go('${AppRoutes.onboarding}?edit=1'),
+            onTap: () => context.push('${AppRoutes.onboarding}?edit=1'),
           ),
         ),
         if (_isLoading)

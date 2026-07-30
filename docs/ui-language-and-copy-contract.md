@@ -145,16 +145,18 @@ says `Early evidence`.
   claim. The compact Today projection calls confirmed preparation reservations
   `7-day preparation load`; it does not combine them with current Task
   estimates or imply an immutable historical workload.
-- The Deadline Planner's separate `Your next 7 days` card names only confirmed
-  preparation reservations as preparation load. Recurring `schedule_items` are
-  labelled `weekly setup commitments`; imported calendar busy time is not shown
-  there. The optional `Daily preparation budget` is described as an explicit
+- Today and Planner name confirmed reservations `7-day preparation load`. The
+  Preparation Plans page does not repeat a `Your next 7 days` card; it groups
+  compact `Open plans` and `History` accordions instead. Recurring
+  `schedule_items` are labelled `weekly setup commitments`; imported calendar
+  busy time is not shown in that workload. The optional
+  `Daily preparation budget` is described as an explicit
   account-wide transparent rule, not an AI estimate or inferred free time.
   Existing over-budget reservations say `Needs review` because changing the
   setting does not mutate them. Expanding that date may say `At least N must be
   redistributed on this date`; this is the exact rule overage, not an automatic
   choice of plan. `Review plan` navigates to saved details, while `Replan
-  remaining time` only opens the existing staged flow. For an active plan with
+  remaining time` opens only the selected plan in the focused staged flow. For an active plan with
   no pending preview, its compact review uses `Replan remaining preparation`,
   `Create preview with these values`, and `Change values`. It states that the
   current reservations remain active until confirmation and that the
@@ -165,6 +167,10 @@ says `Early evidence`.
   data. Do not imply that a preview or recommendation already changed a plan.
 - Keep provider names, model names, contract versions, source manifests, and
   diagnostics secondary or expandable.
+- Coach answers are English-only in the current free-agent contract, including
+  uncertainty text, even when the question or stored evidence is not English.
+  A rejected provider-language response uses ordinary retry copy and is never
+  shown as a partial answer.
 - Do not use `generated`, `learned`, `optimized`, or `AI-powered` unless the
   current execution path and its visible provenance prove that claim.
 

@@ -233,9 +233,12 @@ placed after `Add new` and before `Needs attention`:
 - each exam offers `Review plan` and `Replan remaining time`.
 
 `Review plan` opens existing saved Preparation details.
-`Replan remaining time` opens the existing saved-value review. It makes no
-proposal request until the student explicitly chooses to create a preview, and
-the preview still requires explicit confirmation.
+`Replan remaining time` pushes
+`/planner/replan?plan_id=<uuid>`, which renders only that selected plan over the
+existing saved-value review. It makes no proposal request until the student
+explicitly chooses to create a preview, and the preview still requires explicit
+confirmation. Confirmation returns to Planner and reloads the outlook; leaving
+an unconfirmed preview preserves it as staged.
 
 The card labels assignments as capacity consumers and states that it is
 read-only. It is absent from Today, Inbox, notification generation, and guest/

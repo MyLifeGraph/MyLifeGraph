@@ -424,30 +424,45 @@ prefilling them; the wizard still requires the user's explicit classification
 and estimate.
 
 Settings exposes the optional account-wide daily budget with explicit rule-based
-copy and no AI claim. Today and Preparation plans show the authenticated seven-
-day workload, including honest loading, unavailable, over-budget, and no-budget
+copy and no AI claim. Today and Planner show the authenticated seven-day
+workload, including honest loading, unavailable, over-budget, and no-budget
 states; guest/mock makes zero workload calls. A date with confirmed plans can
 be expanded deliberately. Its independently loaded detail keeps loading,
 failure, and changed-since-summary states visible, lists the contributing plans,
-and states the exact minimum date overage when present. `Review plan` opens the
-existing owner-scoped plan surface. For an active plan without a pending
-revision, `Replan remaining time` first opens a compact review of the active
-revision's saved estimate, credit, current tracked Focus, remaining effort,
-deadline, split preferences, normalized planning start, imported-busy-time
-choice, and current account budget. Opening this review sends no proposal and
-moves no block. `Create preview with these values` deliberately sends the same
-versioned proposal used by the full editor; the active reservations remain in
-force until explicit confirmation. `Change values` reveals the existing
-three-step editor. A stale or unavailable imported source or a passed deadline
-disables the compact submit and requires that full review. Draft plans, plans
-that already have a pending revision, and values retained after an ambiguous or
-conflicting response continue directly in the full editor. The UI never chooses
-which plan to sacrifice. The resulting preview shows total estimate, prior
-spent, currently qualifying focus time, remaining minutes, dated staged blocks,
-optional busy-time provenance, and any unallocated deficit before confirmation.
-It names the fixed planning windows, the per-plan daily cap, the optional
-account budget, and the manually imported availability boundary. Guest/mock
-shows honest unavailability and makes zero planner calls.
+and states the exact minimum date overage when present.
+
+`/preparation-plans` itself is grouped into `Open plans` and compact `History`;
+it does not repeat the seven-day workload card. Every plan is an accordion and
+at most one selected or newly previewed plan is open. Collapsed rows expose only
+status, Exam/Assignment type, title, and a short progress or attention summary.
+Finish-by/timezone, timing rules, learned-timing provenance, progress, blocks,
+and actions are visible only after expansion. A lifecycle failure stays inline
+with the affected expanded plan. Successful completion collapses that same plan
+as a visible Completed history row instead of replacing the scroll viewport.
+
+`Review plan` opens the owner-scoped plan surface. `Replan remaining time` uses
+`/planner/replan?plan_id=<uuid>` and renders only the selected plan. For an
+active plan without a pending revision, it first opens a compact review of the
+active revision's saved estimate, credit, current tracked Focus, remaining
+effort, deadline, split preferences, normalized planning start,
+imported-busy-time choice, and current account budget. Opening this review sends
+no proposal and moves no block. `Create preview with these values` deliberately
+sends the same versioned proposal used by the full editor; the active
+reservations remain in force until explicit confirmation. Leaving after
+proposal creation intentionally preserves the staged preview. `Change values`
+reveals the existing three-step editor. A stale/terminal/unavailable plan shows
+an inline explanation and a route back to Planner. A stale or unavailable
+imported source or a passed deadline disables the compact submit and requires
+full review. Draft plans, plans that already have a pending revision, and values
+retained after an ambiguous or conflicting response continue directly in the
+full editor. The UI never chooses which plan to sacrifice. The resulting
+preview shows total estimate, prior spent, currently qualifying focus time,
+remaining minutes, dated staged blocks, optional busy-time provenance, and any
+unallocated deficit before confirmation. It names the fixed planning windows,
+the per-plan daily cap, the optional account budget, and the manually imported
+availability boundary. Confirmation returns to Planner and reloads Planner,
+Exam Outlook, and relevant Today projections. Guest/mock shows honest
+unavailability and makes zero planner calls.
 
 An active plan with passed `missed` blocks shows the number of affected blocks
 and still-uncredited minutes. `Replan remaining time` opens the existing staged

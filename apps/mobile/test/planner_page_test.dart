@@ -16,6 +16,48 @@ import 'package:my_life_graph/features/planner/presentation/providers/planner_pr
 import 'support/planner_fixtures.dart';
 
 void main() {
+  test('late Planner overview response is ignored after disposal', () async {
+    final requestStarted = Completer<void>();
+    final releaseResponse = Completer<void>();
+    final uncaughtErrors = <Object>[];
+    final dio = Dio(BaseOptions(baseUrl: 'https://planner.test'));
+    dio.interceptors.add(
+      InterceptorsWrapper(
+        onRequest: (options, handler) {
+          requestStarted.complete();
+          releaseResponse.future.then(
+            (_) => handler.resolve(
+              Response<Map<String, dynamic>>(
+                requestOptions: options,
+                statusCode: 200,
+                data: plannerOverviewEnvelope(),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+
+    await runZonedGuarded(
+      () async {
+        final controller = PlannerController(
+          api: PlannerApiDataSource(ApiClient(dio)),
+          accessTokenProvider: () => 'test-token',
+          canUseSyncedPlanner: true,
+          isBackendConfigured: true,
+        );
+        await requestStarted.future;
+        controller.dispose();
+        releaseResponse.complete();
+        await Future<void>.delayed(Duration.zero);
+        await Future<void>.delayed(Duration.zero);
+      },
+      (error, _) => uncaughtErrors.add(error),
+    );
+
+    expect(uncaughtErrors, isEmpty);
+  });
+
   testWidgets('guest Planner stays honestly locked and makes no request',
       (tester) async {
     final backend = _PlannerBackend();

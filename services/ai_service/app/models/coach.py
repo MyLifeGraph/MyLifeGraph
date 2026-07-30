@@ -20,7 +20,7 @@ COACH_REQUEST_V3_CONTRACT_VERSION = "coach-request-v3"
 COACH_RESPONSE_V2_CONTRACT_VERSION = "coach-response-v2"
 COACH_CAPABILITIES_V2_CONTRACT_VERSION = "coach-capabilities-v2"
 COACH_HISTORY_V2_CONTRACT_VERSION = "coach-history-v2"
-COACH_AGENT_PROMPT_VERSION = "free-coach-agent-prompt-v1"
+COACH_AGENT_PROMPT_VERSION = "free-coach-agent-prompt-v2"
 COACH_AGENT_CONTEXT_VERSION = "personal-snapshot-v1"
 
 COACH_MESSAGE_CODEPOINTS = 2_000
@@ -587,7 +587,10 @@ class CoachAgentProvenance(BaseModel):
     model_requested: str | None = Field(default=None, max_length=100)
     model_reported: str | None = Field(default=None, max_length=100)
     model_source: CoachModelSource
-    prompt_version: Literal["free-coach-agent-prompt-v1"]
+    prompt_version: Literal[
+        "free-coach-agent-prompt-v1",
+        "free-coach-agent-prompt-v2",
+    ]
     context_version: Literal["personal-snapshot-v1"]
     generated_at: datetime = Field(strict=False)
     provider_called: bool

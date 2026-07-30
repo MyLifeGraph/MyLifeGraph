@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' show PointerDeviceKind;
 
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
@@ -10,6 +11,7 @@ import 'package:my_life_graph/core/network/api_client.dart';
 import 'package:my_life_graph/features/quick_action/domain/quick_check_in.dart';
 import 'package:my_life_graph/features/quick_action/presentation/pages/quick_mood_check_in_page.dart';
 import 'package:my_life_graph/features/quick_action/presentation/providers/quick_check_in_providers.dart';
+import 'package:my_life_graph/features/quick_action/presentation/widgets/daily_capture_controls.dart';
 import 'package:my_life_graph/features/snapshots/application/snapshot_refresh_service.dart';
 import 'package:my_life_graph/features/snapshots/data/snapshot_api_data_source.dart';
 import 'package:my_life_graph/features/snapshots/presentation/providers/snapshot_providers.dart';
@@ -57,6 +59,27 @@ void main() {
     expect(next.onPressed, isNotNull);
   });
 
+  testWidgets('top back returns an Evening flow step before leaving the route',
+      (tester) async {
+    await _pumpEveningPage(tester, _RecordingCaptureStore());
+    await tester.tap(find.bySemanticsLabel('evening mood 7 of 10'));
+    await tester.tap(find.bySemanticsLabel('evening energy 7 of 10'));
+    await tester.tap(find.bySemanticsLabel('evening stress 3 of 10'));
+    await tester.pump();
+    await tester.tap(find.text('Next'));
+    await tester.pumpAndSettle();
+    expect(find.text('Planned sleep time'), findsOneWidget);
+
+    await tester.tap(
+      find.byKey(const ValueKey('capture-flow-back')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Close today in under a minute'), findsOneWidget);
+    expect(find.text('Planned sleep time'), findsNothing);
+    expect(find.text('7 / 10'), findsNWidgets(2));
+  });
+
   testWidgets('authenticated evening failure retains exact draft for retry',
       (tester) async {
     final store = _FailOnceCaptureStore();
@@ -86,7 +109,7 @@ void main() {
     expect(first.focusBand, isNull);
     expect(first.mainFriction, isNull);
     expect(first.additionalFrictions, isEmpty);
-    expect(first.tomorrowPriority, 'Protect the exact priority');
+    expect(first.tomorrowPriority, isEmpty);
     expect(first.reflectionNote, 'Exact retry reflection');
     expect(first.specificBlocker, 'Exact retry blocker');
     expect(first.plannedSleepTime, '23:00');
@@ -128,6 +151,10 @@ void main() {
     await tester.tap(find.text('Next'));
     await tester.pumpAndSettle();
     expect(
+      _textFieldWithLabel('Possible priority tomorrow (optional)'),
+      findsNothing,
+    );
+    expect(
       _textFieldWithLabel('Reflection (optional)'),
       findsOneWidget,
     );
@@ -140,6 +167,7 @@ void main() {
     expect(written, isNot(contains('reflection_note')));
     expect(written, isNot(contains('specific_blocker')));
     expect(written, isNot(contains('gentle_tomorrow')));
+    expect(written['tomorrow_priority'], 'Protect the exact priority');
   });
 
   testWidgets('evening omits friction choices but keeps stress and notes',
@@ -154,7 +182,7 @@ void main() {
     expect(find.text('What drove the pressure?'), findsOneWidget);
     expect(
       _textFieldWithLabel('Possible priority tomorrow (optional)'),
-      findsOneWidget,
+      findsNothing,
     );
     expect(_textFieldWithLabel('Specific blocker (optional)'), findsOneWidget);
     await _tapVisible(tester, find.text('Save evening check-in'));
@@ -164,6 +192,111 @@ void main() {
     expect(saved.mainFriction, isNull);
     expect(saved.additionalFrictions, isEmpty);
     expect(saved.stressSource, StressSource.privateEmotional);
+    expect(saved.toMetadataJson(), isNot(contains('tomorrow_priority')));
+  });
+
+  testWidgets(
+      'stress source info supports hover and tap without changing selection',
+      (tester) async {
+    var changed = 0;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: CaptureChoiceControl<String>(
+            value: null,
+            choices: const [
+              CaptureChoice(
+                value: 'workload',
+                label: 'Workload',
+                semanticLabel: 'stress source workload',
+                description: 'Deadlines, volume, meetings, or responsibility',
+              ),
+            ],
+            onChanged: (_) => changed += 1,
+          ),
+        ),
+      ),
+    );
+
+    final info = find.byKey(
+      const ValueKey('capture-choice-info-Workload'),
+    );
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    addTearDown(mouse.removePointer);
+    await mouse.addPointer(location: tester.getCenter(info));
+    await mouse.moveTo(tester.getCenter(info));
+    await tester.pump(const Duration(seconds: 1));
+    expect(
+      find.text('Deadlines, volume, meetings, or responsibility'),
+      findsOneWidget,
+    );
+    expect(changed, 0);
+
+    await mouse.moveTo(const Offset(1, 1));
+    await tester.pumpAndSettle();
+    await tester.tap(info);
+    await tester.pumpAndSettle();
+    expect(
+      find.text('Deadlines, volume, meetings, or responsibility'),
+      findsOneWidget,
+    );
+    expect(changed, 0);
+    expect(
+      find.bySemanticsLabel(
+        'More information about Workload: '
+        'Deadlines, volume, meetings, or responsibility',
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets(
+      'influence choices stay equal and horizontal at narrow large text',
+      (tester) async {
+    tester.view.physicalSize = const Size(320, 568);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    await tester.pumpWidget(
+      MaterialApp(
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(context).copyWith(
+            textScaler: const TextScaler.linear(2),
+          ),
+          child: child!,
+        ),
+        home: Scaffold(
+          body: CaptureChoiceControl<String>(
+            value: null,
+            equalWidthRow: true,
+            choices: const [
+              CaptureChoice(value: 'little', label: 'Little influence'),
+              CaptureChoice(value: 'some', label: 'Some influence'),
+              CaptureChoice(
+                value: 'mostly',
+                label: 'Mostly within my influence',
+              ),
+            ],
+            onChanged: (_) {},
+          ),
+        ),
+      ),
+    );
+
+    final chips = find.byType(ChoiceChip);
+    expect(chips, findsNWidgets(3));
+    final rects = [
+      for (var index = 0; index < 3; index++) tester.getRect(chips.at(index)),
+    ];
+    expect(rects[0].top, rects[1].top);
+    expect(rects[1].top, rects[2].top);
+    expect(rects[0].width, closeTo(rects[1].width, 0.01));
+    expect(rects[1].width, closeTo(rects[2].width, 0.01));
+    expect(rects[0].height, closeTo(rects[1].height, 0.01));
+    expect(rects[1].height, closeTo(rects[2].height, 0.01));
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('saving state prevents a duplicate in-flight evening write',
@@ -249,11 +382,6 @@ Future<void> _completeEveningDraft(
   await _tapVisible(
     tester,
     find.bySemanticsLabel('stress influence hardly_controllable'),
-  );
-
-  await tester.enterText(
-    _textFieldWithLabel('Possible priority tomorrow (optional)'),
-    'Protect the exact priority',
   );
 
   if (includeOptionals) {

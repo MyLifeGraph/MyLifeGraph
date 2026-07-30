@@ -243,8 +243,8 @@ void main() {
       ),
     );
 
-    expect(find.text('Task block'), findsNWidgets(2));
-    expect(find.text('Habit slot'), findsOneWidget);
+    expect(find.text('Task'), findsNWidgets(2));
+    expect(find.text('Habit'), findsOneWidget);
     expect(find.text('Fixed commitment'), findsNWidgets(2));
     expect(find.text('4/7 completed'), findsOneWidget);
     expect(find.text('Due task'), findsNWidgets(3));

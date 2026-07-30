@@ -27,6 +27,7 @@ class CalendarIntegrationPage extends ConsumerWidget {
     return AppPage(
       title: 'Calendar import',
       subtitle: 'Optional, explicit, and read-only',
+      backFallback: AppRoutes.settings,
       actions: [
         IconButton(
           tooltip: 'Reload calendar state',
@@ -471,7 +472,7 @@ class _ImportedEventTile extends StatelessWidget {
             OutlinedButton.icon(
               key: ValueKey('plan-preparation-${event.id}'),
               onPressed: () {
-                context.go(preparationLocation.toString());
+                context.push(preparationLocation.toString());
               },
               icon: const Icon(AppIcons.eventAvailableOutlined),
               label: const Text('Plan preparation'),

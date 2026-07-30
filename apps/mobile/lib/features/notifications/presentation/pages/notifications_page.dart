@@ -52,7 +52,7 @@ class NotificationsPage extends ConsumerWidget {
       refreshError: state.loadError,
       canManageLifecycle: state.canManageLifecycle,
       onReload: controller.load,
-      onOpen: (target) => GoRouter.of(context).go(target.location),
+      onOpen: (target) => GoRouter.of(context).push(target.location),
       onLifecycleAction: controller.performAction,
       onRetryAction: controller.retry,
     );

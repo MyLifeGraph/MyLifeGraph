@@ -10,6 +10,7 @@ import 'package:intl/intl.dart';
 import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/capabilities/app_surface_capabilities.dart';
 import '../../../../core/navigation/app_routes.dart';
+import '../../../../core/theme/app_category_visuals.dart';
 import '../../../../core/theme/app_motion_tokens.dart';
 import '../../../../core/theme/app_visual_tokens.dart';
 import '../../../../core/utils/client_uuid.dart';
@@ -111,23 +112,23 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
       onReloadToday: _reloadTodayOnly,
       isRefreshingRecommendations: _isRefreshingRecommendations,
       recommendationRefreshError: _recommendationRefreshError,
-      onAddEvening: () => context.go(AppRoutes.dailyCheckIn),
-      onAddMorning: () => context.go(AppRoutes.morningCalibration),
+      onAddEvening: () => context.push(AppRoutes.dailyCheckIn),
+      onAddMorning: () => context.push(AppRoutes.morningCalibration),
       canUseWeeklyReview: capabilities.canUseWeeklyReview,
-      onOpenWeeklyReview: () => context.go(AppRoutes.weeklyReview),
+      onOpenWeeklyReview: () => context.push(AppRoutes.weeklyReview),
       onRetryRecommendations: () {
         setState(() => _recommendationRefreshError = null);
         ref.invalidate(recommendationFeedProvider);
       },
       onRefreshRecommendations: _refreshRecommendations,
       onShowFeedbackHistory: _showFeedbackHistory,
-      onAddTask: () => context.go(AppRoutes.planner),
+      onAddTask: () => context.push(AppRoutes.planner),
       onEditTask: _openTaskOrPreparationPlan,
       onCompleteTask: _completeTask,
       onRestoreTask: _restoreTask,
       onCancelTask: _cancelTask,
       onPostponeTask: _postponeTask,
-      onStartFocus: (task) => context.go(
+      onStartFocus: (task) => context.push(
         '${AppRoutes.deepWork}?target_kind=task&target_id=${task.id}',
       ),
       onSetHabitOutcome: (habit, outcome) => _setHabitOutcome(
@@ -139,13 +140,13 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
         habit,
         data.localDate,
       ),
-      onOpenPreparationPlan: (planId) => context.go(
+      onOpenPreparationPlan: (planId) => context.push(
         Uri(
           path: AppRoutes.preparationPlans,
           queryParameters: {'plan_id': planId},
         ).toString(),
       ),
-      onStartPreparationFocus: (taskId) => context.go(
+      onStartPreparationFocus: (taskId) => context.push(
         '${AppRoutes.deepWork}?target_kind=task&target_id=$taskId',
       ),
       onToggleAllTasks: () {
@@ -529,7 +530,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
   bool _openManagedPreparationPlan(PlanItem task) {
     final planId = task.deadlinePlanId;
     if (!task.isDeadlinePlanManaged || planId == null) return false;
-    context.go(
+    context.push(
       Uri(
         path: AppRoutes.preparationPlans,
         queryParameters: {'plan_id': planId},
@@ -1159,7 +1160,7 @@ class _DashboardHeader extends StatelessWidget {
         ),
         IconButton.outlined(
           tooltip: 'Settings',
-          onPressed: () => context.go(AppRoutes.settings),
+          onPressed: () => context.push(AppRoutes.settings),
           icon: const Icon(AppIcons.settingsOutlined),
         ),
       ],
@@ -1536,7 +1537,7 @@ class _AgendaItem extends StatelessWidget {
                       item.taskId != null) ...[
                     const SizedBox(height: AppSpacing.sm),
                     FilledButton.tonalIcon(
-                      onPressed: () => context.go(
+                      onPressed: () => context.push(
                         '${AppRoutes.deepWork}?target_kind=task&target_id=${item.taskId}',
                       ),
                       icon: const Icon(AppIcons.timerOutlined),
@@ -1548,7 +1549,7 @@ class _AgendaItem extends StatelessWidget {
                       item.habitId != null) ...[
                     const SizedBox(height: AppSpacing.sm),
                     FilledButton.tonalIcon(
-                      onPressed: () => context.go(AppRoutes.habitCompletion),
+                      onPressed: () => context.push(AppRoutes.habitCompletion),
                       icon: const Icon(AppIcons.checkCircleOutline),
                       label: const Text('Log habit'),
                     ),
@@ -1897,13 +1898,13 @@ class _MoreDashboardContent extends ConsumerWidget {
             compact: true,
             onRetry: onRetryWorkload,
             onLoadDayDetail: onLoadWorkloadDetail,
-            onOpenSettings: () => context.go(AppRoutes.settings),
-            onOpenPlans: () => context.go(AppRoutes.preparationPlans),
+            onOpenSettings: () => context.push(AppRoutes.settings),
+            onOpenPlans: () => context.push(AppRoutes.preparationPlans),
             onReviewPlan: onOpenPreparationPlan,
-            onReplanPlan: (planId) => context.go(
+            onReplanPlan: (planId) => context.push(
               Uri(
-                path: AppRoutes.preparationPlans,
-                queryParameters: {'plan_id': planId, 'action': 'replan'},
+                path: AppRoutes.plannerReplan,
+                queryParameters: {'plan_id': planId},
               ).toString(),
             ),
           ),
@@ -2012,69 +2013,20 @@ String? _agendaDetail(TodayTimelineItem item) => switch (item.kind) {
       TodayTimelineKind.manualCommitment => 'Fixed commitment',
     };
 
-_AgendaAppearance _agendaAppearance(
+AppCategoryVisual _agendaAppearance(
   BuildContext context,
   TodayTimelineKind kind,
 ) {
-  final colors = Theme.of(context).colorScheme;
-  return switch (kind) {
-    TodayTimelineKind.setupCommitment => _AgendaAppearance(
-        label: 'Setup commitment',
-        icon: AppIcons.eventRepeatOutlined,
-        background: colors.primaryContainer,
-        foreground: colors.onPrimaryContainer,
-      ),
-    TodayTimelineKind.preparation => _AgendaAppearance(
-        label: 'Preparation',
-        icon: AppIcons.schoolOutlined,
-        background: colors.secondaryContainer,
-        foreground: colors.onSecondaryContainer,
-      ),
-    TodayTimelineKind.calendarEvent => _AgendaAppearance(
-        label: 'Calendar',
-        icon: AppIcons.calendarMonthOutlined,
-        background: colors.tertiaryContainer,
-        foreground: colors.onTertiaryContainer,
-      ),
-    TodayTimelineKind.focusSession => _AgendaAppearance(
-        label: 'Focus',
-        icon: AppIcons.timerOutlined,
-        background: context.visualTokens.dataViolet.withValues(alpha: 0.16),
-        foreground: context.visualTokens.dataViolet,
-      ),
-    TodayTimelineKind.taskBlock => _AgendaAppearance(
-        label: 'Task block',
-        icon: AppIcons.taskOutlined,
-        background: colors.primaryContainer,
-        foreground: colors.onPrimaryContainer,
-      ),
-    TodayTimelineKind.habitSlot => _AgendaAppearance(
-        label: 'Habit slot',
-        icon: AppIcons.repeatOutlined,
-        background: colors.secondaryContainer,
-        foreground: colors.onSecondaryContainer,
-      ),
-    TodayTimelineKind.manualCommitment => _AgendaAppearance(
-        label: 'Fixed commitment',
-        icon: AppIcons.eventBusyOutlined,
-        background: colors.errorContainer,
-        foreground: colors.onErrorContainer,
-      ),
+  final category = switch (kind) {
+    TodayTimelineKind.setupCommitment => AppCategory.setup,
+    TodayTimelineKind.preparation => AppCategory.preparation,
+    TodayTimelineKind.calendarEvent => AppCategory.calendar,
+    TodayTimelineKind.focusSession => AppCategory.focus,
+    TodayTimelineKind.taskBlock => AppCategory.task,
+    TodayTimelineKind.habitSlot => AppCategory.habit,
+    TodayTimelineKind.manualCommitment => AppCategory.fixedCommitment,
   };
-}
-
-class _AgendaAppearance {
-  const _AgendaAppearance({
-    required this.label,
-    required this.icon,
-    required this.background,
-    required this.foreground,
-  });
-
-  final String label;
-  final IconData icon;
-  final Color background;
-  final Color foreground;
+  return category.visual(context);
 }
 
 class _LatestCheckInCard extends StatelessWidget {

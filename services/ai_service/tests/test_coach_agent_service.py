@@ -784,6 +784,85 @@ def test_v3_post_provider_safety_response_is_english_for_german_input() -> None:
     assert "Provider-authored" not in result.reply
 
 
+def test_v3_normal_german_question_still_returns_english_provider_output() -> None:
+    repository = AgentRepository()
+    snapshot = SnapshotService()
+    provider = AgentProvider()
+    service = _service(
+        repository=repository,
+        snapshot=snapshot,
+        provider=provider,
+    )
+
+    result = asyncio.run(
+        service.respond(
+            user_id="owner-1",
+            request=_request(
+                "Kannst du meine Fokusdaten prüfen und die Unsicherheit erklären?",
+            ),
+        ),
+    )
+
+    assert result.reply == provider.output.reply
+    assert result.uncertainty.reason == provider.output.uncertainty.reason
+    assert result.provenance.prompt_version == "free-coach-agent-prompt-v2"
+    assert repository.completion_calls
+    assert repository.failure_calls == []
+
+
+@pytest.mark.parametrize(
+    ("field", "german_text"),
+    [
+        (
+            "reply",
+            "Die Daten zeigen eine Veränderung, aber sie erklären die Ursache nicht.",
+        ),
+        (
+            "uncertainty",
+            "Die Datenlage ist klein und die Erklärung bleibt unsicher.",
+        ),
+    ],
+)
+def test_v3_rejects_clearly_german_provider_text_as_invalid_output(
+    field: str,
+    german_text: str,
+) -> None:
+    repository = AgentRepository()
+    snapshot = SnapshotService()
+    provider = AgentProvider()
+    if field == "reply":
+        provider.output = provider.output.model_copy(
+            update={"reply": german_text},
+        )
+    else:
+        provider.output = provider.output.model_copy(
+            update={
+                "uncertainty": provider.output.uncertainty.model_copy(
+                    update={"reason": german_text},
+                ),
+            },
+        )
+    service = _service(
+        repository=repository,
+        snapshot=snapshot,
+        provider=provider,
+    )
+
+    with pytest.raises(CoachServiceError) as caught:
+        asyncio.run(
+            service.respond(
+                user_id="owner-1",
+                request=_request("Bitte antworte auf Deutsch."),
+            ),
+        )
+
+    assert caught.value.detail.code == "invalid_output"
+    assert caught.value.detail.retryable is True
+    assert repository.completion_calls == []
+    assert repository.failure_calls[0]["error"].code == "invalid_output"
+    assert repository.failure_calls[0]["error"].retryable is True
+
+
 @pytest.mark.parametrize(
     "unsafe_reply",
     [
@@ -809,9 +888,9 @@ def test_v3_rejects_unsupported_personal_claims_and_records_failure(
             service.respond(user_id="owner-1", request=_request()),
         )
 
-    assert caught.value.detail.code == "provider_failure"
+    assert caught.value.detail.code == "invalid_output"
     assert repository.completion_calls == []
-    assert repository.failure_calls[0]["error"].code == "provider_failure"
+    assert repository.failure_calls[0]["error"].code == "invalid_output"
     assert repository.failure_calls[0]["usage"]["provider_called"] is True
     assert not snapshot.snapshots[0].working_directory.exists()
 

@@ -12,19 +12,21 @@ Capture V4, Daily State V2, Exam-Week Outlook V1, or Coach V3 expectations.
 ## Current Verified Baseline
 
 The post-review stabilization working tree was reverified locally on
-2026-07-29. The complete FastAPI suite reported
-`1108 passed, 2 skipped`; full Flutter verification reported `700` passing
+2026-07-30. The complete FastAPI suite reported
+`1115 passed, 2 skipped`; full Flutter verification reported `719` passing
 tests and clean analysis. The frontend visual contract and documentation
 consistency checks passed, and `git diff --check` was clean.
 
 The final combined stabilization browser journey reported
-`E2E browser smoke passed for e2e-1785327342@example.test`. It covered the
-new Capture, account-setting, Calendar, Setup/Focus, Planner/Today, and
-notification retry and stale-projection boundaries in the filled Student flow.
+`E2E browser smoke passed for e2e-1785377904@example.test`. It covered the
+new Capture, account-setting, Calendar, Setup/Focus, Planner/Today,
+Preparation accordion/replanning/completion/navigation, Coach V2 prompt
+provenance, and notification retry and stale-projection boundaries in the
+filled Student flow.
 
 A fresh local database reset applied the complete migration chain through
-`20260729130000_observed_projection_persistence.sql`. The current six pgTAP
-files passed all 137 tests and local migration history matched the repository.
+`20260729160000_coach_english_prompt_v2.sql`. The current seven pgTAP files
+passed all 142 tests and local migration history matched the repository.
 The 14 real analysis-image integration tests passed in 3.03 seconds as
 non-root with a mode-`0444` snapshot, actual SQL source attribution,
 conservative Python full-snapshot-scope provenance, network/host/secret
@@ -64,7 +66,7 @@ those values. Dated evidence below is historical run history and does not prove
 a later checkout.
 
 The current repository migration boundary ends at
-`20260729130000_observed_projection_persistence.sql`.
+`20260729160000_coach_english_prompt_v2.sql`.
 
 ## Verification Levels
 
@@ -1007,9 +1009,10 @@ than only the in-memory concurrency tests.
 The smoke then creates a habit through Habit Management and follows
 `/daily-check-in` into the canonical Evening Shutdown at
 `/quick-mood-check-in`. It records distinctive mood `2`, Evening energy `9`,
-stress `8`, private/emotional hardly-controllable stress, tomorrow priority,
-reflection, and specific blocker. Every primary/additional friction control and
-the removed gentler control is asserted absent. Playwright lets the first
+stress `8`, private/emotional hardly-controllable stress, reflection, and
+specific blocker. Every primary/additional friction control and
+the removed gentler and tomorrow-priority controls are asserted absent. The
+saved branch must omit a new `tomorrow_priority` value. Playwright lets the first
 `daily-capture-write-v1` PUT commit but drops its browser response, verifies
 that the exact draft remains available, then retries the byte-equivalent
 request and requires `replayed=true` without creating another daily row or
@@ -1163,8 +1166,9 @@ On browser failure, Playwright saves a screenshot named:
 
 ## Phase 10 Provider Verification
 
-The current pair under verification is `free-coach-agent-prompt-v1` with
-`personal-snapshot-v1`. Phase 10 keeps two strictly separate paths:
+The current pair under verification is `free-coach-agent-prompt-v2` with
+`personal-snapshot-v1`; stored V1 prompt responses and exact replay remain
+valid. Phase 10 keeps two strictly separate paths:
 
 1. The default deterministic path uses a fake provider/process runner in
    pytest, Flutter tests, and the browser environment. It covers strict

@@ -394,6 +394,10 @@ disconnect/delete consequences. Every event carries an `Imported · read-only`
 label, source label, local date/time, timezone, and import freshness. No event
 edit, provider delete, or provider-write control exists.
 
+Calendar import is a Settings-owned subpage. Its shared top back control pops
+the actual in-app history and falls back to Settings for a direct deep link;
+this navigation behavior performs no import, disconnect, or delete operation.
+
 An eligible current event may also expose `Plan preparation`. Navigation may
 prefill only its id, current source fingerprint, visible title, and deadline.
 The separate planner wizard still requires the user to classify it as an exam

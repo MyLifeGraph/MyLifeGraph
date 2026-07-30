@@ -9,6 +9,70 @@ _GERMAN_NON_NEGATING_MODIFIERS = (
     r"(?:(?:\s+(?!(?:nicht|nie|niemals|keinesfalls|"
     r"kein(?:e|en|em|er|es)?)\b)[^\s.!?…,;:]+)){0,8}"
 )
+_GERMAN_LANGUAGE_MARKERS = frozenset(
+    {
+        "aber",
+        "auch",
+        "auf",
+        "aus",
+        "das",
+        "dein",
+        "deine",
+        "der",
+        "die",
+        "du",
+        "ein",
+        "eine",
+        "für",
+        "hat",
+        "heute",
+        "ich",
+        "im",
+        "ist",
+        "kann",
+        "mit",
+        "nicht",
+        "oder",
+        "sich",
+        "sie",
+        "sind",
+        "und",
+        "von",
+        "weil",
+        "wenn",
+        "wie",
+        "wir",
+        "zu",
+    },
+)
+_ENGLISH_LANGUAGE_MARKERS = frozenset(
+    {
+        "a",
+        "and",
+        "are",
+        "as",
+        "based",
+        "but",
+        "can",
+        "data",
+        "for",
+        "from",
+        "is",
+        "it",
+        "not",
+        "of",
+        "on",
+        "or",
+        "that",
+        "the",
+        "this",
+        "to",
+        "was",
+        "with",
+        "you",
+        "your",
+    },
+)
 _GERMAN_TERMINAL = r"(?=\s*(?:[.!?…]|$|,\s*(?:wenn|weil|bevor)\b))"
 _GERMAN_TEMPORAL_PREFIX = (
     r"(?:heute(?:\s+(?:abend|nacht|mittag|morgen))?|"
@@ -355,6 +419,15 @@ def post_provider_safety(
             "The Coach output crossed the non-clinical or non-causal boundary.",
             retryable=True,
         )
+    if force_english and any(
+        _is_clearly_german(value)
+        for value in (output.reply, output.uncertainty.reason)
+    ):
+        raise CoachProviderError(
+            "invalid_output",
+            "The Coach output did not follow the English-only response contract.",
+            retryable=True,
+        )
     return CoachPostProviderSafetyResult(
         output=output,
         replaced_with_deterministic_safety=False,
@@ -466,4 +539,21 @@ def _looks_german(value: str) -> bool:
             r"\b(?:ich|mich|nicht|selbst|gefahr|hilfe|sterben)\b|[äöüß]",
             lowered,
         ),
+    )
+
+
+def _is_clearly_german(value: str) -> bool:
+    """Reject clear German prose without guessing from isolated borrowed words."""
+
+    lowered = value.casefold()
+    words = re.findall(r"[a-zäöüß]+", lowered)
+    german_hits = sum(word in _GERMAN_LANGUAGE_MARKERS for word in words)
+    english_hits = sum(word in _ENGLISH_LANGUAGE_MARKERS for word in words)
+    has_german_character = bool(re.search(r"[äöüß]", lowered))
+    return (
+        german_hits >= 4
+        and german_hits >= english_hits + 2
+        or has_german_character
+        and german_hits >= 2
+        and german_hits > english_hits
     )

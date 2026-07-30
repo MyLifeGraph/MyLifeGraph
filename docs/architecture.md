@@ -55,6 +55,13 @@ Settings-owned routes do not select an unrelated shell item. When the Coach
 surface gate is off, its destination is omitted rather than replaced by
 Settings. Stored Inbox is reached from Settings; `/alerts` remains a compatible
 Settings-owned route.
+In-page calls to action push GoRouter history. Shell destinations, auth
+redirects, and completed flows replace it. `AppPage` owns the shared top-left
+back control: it pops actual history and otherwise uses an explicit
+feature-level fallback for direct deep links. A primary shell page opened by
+shell navigation has no meaningless back affordance. Multi-step full-page
+Capture flows consume Back internally before leaving their route; dialogs and
+bottom sheets retain their own close actions.
 Guest/demo sessions receive one persistent `Local demo` banner. The canned
 Coach preview and direct Supabase message writer have been replaced by a typed
 FastAPI Coach surface at `/coach`; `/more` aliases that route. Guest/mock renders
@@ -142,9 +149,12 @@ The current `daily-capture-v4` contract is:
   required. The first visible target is 480 minutes; later forms prefill the
   newest valid Evening V4 plan.
   Stress source and controllability appear and become required together only
-  at stress `5..10`; tomorrow priority, reflection, and a specific blocker are
-  optional and omitted when blank. Primary and additional friction choices are
-  retired. V2/V3 captures remain readable, but their friction keys are ignored.
+  at stress `5..10`; each source description is behind a separate accessible
+  info control that does not change selection. Reflection and a specific
+  blocker are optional and omitted when blank. Tomorrow priority is retired
+  from the form and new writes, while a value on an existing branch is
+  preserved. Primary and additional friction choices are retired. V2/V3
+  captures remain readable, but their friction keys are ignored.
   A V4 merge preserves an untouched older opposite branch with its explicit
   branch version and `compatibility: true`; editing that branch upgrades it and
   requires its V4 fields. New captures do not write the retired
@@ -402,7 +412,7 @@ active revision. Existing active blocks are never silently moved when the
 setting changes.
 
 The side-effect-free `preparation-workload-v1` read projects seven consecutive
-profile-local dates for Today and Preparation plans. It reports active confirmed
+profile-local dates for Today and Planner. It reports active confirmed
 preparation reservations and merged weekly `schedule_items` duration as separate
 facts. It deliberately excludes proposed blocks, imported busy rows, live
 provider state, task estimates, and Focus history, so the UI labels the latter
@@ -424,10 +434,10 @@ student expands one date from that summary. It accepts only a date in the
 current profile-local seven-day window and aggregates active blocks by their
 owner-scoped plan id. The response exposes only plan title, date-reserved
 minutes, and block count, with exact sum/budget invariants; it does not return
-block times or calendar content. Today and Preparation plans use the same
-detail boundary. Review navigation opens the existing plan, while replanning
-opens the existing editor and remains preview/confirmation based. Neither GET
-route has mutation or LLM authority.
+block times or calendar content. Today and Planner use the same detail
+boundary. Review navigation opens the existing plan, while replanning pushes
+`/planner/replan?plan_id=<uuid>` and isolates that selected plan's existing
+preview/confirmation workflow. Neither GET route has mutation or LLM authority.
 
 ## Authentication
 
@@ -856,7 +866,10 @@ text and calendar values are untrusted data, never instructions.
 The HTTP boundary is message-only `coach-request-v3`,
 `coach-response-v2`, `coach-capabilities-v2`, `coach-history-v2`, and a
 `started|activity|completed|failed` SSE stream. The current agent pair is
-`free-coach-agent-prompt-v1` with `personal-snapshot-v1`. Activity is allowlisted
+`free-coach-agent-prompt-v2` with `personal-snapshot-v1`; stored V1 prompt
+responses and exact replay remain valid. V2 makes English the non-overridable
+output language for reply and uncertainty. FastAPI rejects clearly German
+provider output as retryable `invalid_output` before persistence. Activity is allowlisted
 lifecycle copy rather than hidden reasoning; disconnect/cancel terminates the
 turn. The non-streaming route wraps the same service. Old fixed-mode V1/V2
 request and response shapes, context options, and memory-selection endpoints

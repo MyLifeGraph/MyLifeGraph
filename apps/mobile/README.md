@@ -105,8 +105,12 @@ requires one planned local sleep time and a `300..720` minute target on a
 15-minute grid. Morning records editable aware estimated sleep-start/wake
 instants, derives and labels the `Estimated sleep duration`, retains the target
 used for that night, and separately requires a `1..10` estimated sleep-quality
-rating. V2/V3 branches remain readable and may stay explicit compatibility
-branches until edited; editing a branch requires its V4 fields.
+rating. Evening pressure-source descriptions are available from a separate
+accessible info control; the control never changes the selected source.
+`Possible priority tomorrow` is no longer an editable Capture input and new
+saves omit it, while a value already present on a legacy branch survives an
+otherwise valid edit. V2/V3 branches remain readable and may stay explicit
+compatibility branches until edited; editing a branch requires its V4 fields.
 Guest/mock Today and capture stay local and make no authenticated request.
 
 Planner additionally loads the strictly read-only
@@ -206,6 +210,8 @@ routes such as `/alerts` leave the shell destinations unselected.
 - `/habits` (compatible manual Habit V1 route with Planner selected)
 - `/preparation-plans` (compatible Preparation route with Planner selected;
   `?kind=exam|assignment` opens that create flow)
+- `/planner/replan?plan_id=<uuid>` (focused saved-value review, staged preview,
+  and explicit confirmation for exactly one Preparation plan)
 - `/weekly-review` (authenticated, completed-week review)
 - `/alerts` (Settings-owned stored Inbox with authenticated
   read/unread/dismiss lifecycle; notification generation/delivery contracts are
@@ -221,6 +227,14 @@ routes such as `/alerts` leave the shell destinations unselected.
 - `/settings/notifications` (foreground in-app consent, categories, quiet hours,
   and daily cap)
 - `/settings/integrations/calendar` (optional authenticated `.ics` import)
+
+Student-facing category treatment is shared between Today and Planner: Task
+and Setup use brand, Habit and Preparation use information, Calendar uses
+attention, Focus uses violet, and fixed commitments use danger. Preparation
+plans are grouped as `Open plans` and compact `History`; only the selected or
+newly previewed accordion is expanded. In-page navigation pushes route history,
+while shell destinations replace it. The shared top back control pops real
+history and uses route-specific fallbacks for direct deep links.
 
 The global offline banner reports only that no network transport is available;
 it does not prove Supabase or FastAPI reachability. Synced writes are not queued.

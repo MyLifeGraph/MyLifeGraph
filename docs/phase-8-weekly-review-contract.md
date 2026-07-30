@@ -245,6 +245,11 @@ Setup-owned targets use `application_mode=settings_setup`. Staged proposals use
 V1 updater. Flutter renders staged-only and `keep` rows without an action
 control; their authority label states that Weekly Review cannot execute them.
 
+Weekly Review is an in-page destination. The shared top Back action pops its
+actual pushed origin and falls back to Today for a direct deep link. Proposal
+review dialogs retain their own Cancel action, and navigation alone never
+generates or applies a review.
+
 One initial deterministic shrink rule may propose reducing a stable manual
 weekly target by one when the week has full valid daily-state coverage, exactly
 bounded durable outcomes, and matching recent `too_much` feedback for the real

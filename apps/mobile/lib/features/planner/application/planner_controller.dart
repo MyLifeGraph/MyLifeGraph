@@ -172,6 +172,7 @@ class PlannerController extends StateNotifier<PlannerState> {
     try {
       _requireRemote();
       final overview = await _api.getOverview(accessToken: await _token());
+      if (!mounted) return;
       state = state.copyWith(
         overview: overview,
         operation: PlannerOperation.idle,
@@ -179,6 +180,7 @@ class PlannerController extends StateNotifier<PlannerState> {
         projectionStatus: PlannerProjectionStatus.current,
       );
     } catch (error) {
+      if (!mounted) return;
       state = state.copyWith(
         operation: PlannerOperation.idle,
         loadError: error,
@@ -238,6 +240,7 @@ class PlannerController extends StateNotifier<PlannerState> {
         accessToken: await _token(),
         body: pending.body!,
       );
+      if (!mounted) return null;
       state = state.copyWith(
         operation: PlannerOperation.idle,
         pendingMutation: null,
@@ -251,6 +254,7 @@ class PlannerController extends StateNotifier<PlannerState> {
       await _reloadAfterMutation();
       return plan;
     } catch (error) {
+      if (!mounted) return null;
       _recordFailure(error, pending);
       return null;
     }
@@ -284,6 +288,7 @@ class PlannerController extends StateNotifier<PlannerState> {
         requestId: pending.requestId,
         expectedRevision: pending.expectedRevision!,
       );
+      if (!mounted) return false;
       state = state.copyWith(
         operation: PlannerOperation.idle,
         pendingMutation: null,
@@ -297,6 +302,7 @@ class PlannerController extends StateNotifier<PlannerState> {
       await _reloadAfterMutation();
       return true;
     } catch (error) {
+      if (!mounted) return false;
       _recordFailure(error, pending);
       return false;
     }
@@ -331,6 +337,7 @@ class PlannerController extends StateNotifier<PlannerState> {
         requestId: pending.requestId,
         expectedRevision: pending.expectedRevision!,
       );
+      if (!mounted) return false;
       state = state.copyWith(
         operation: PlannerOperation.idle,
         pendingMutation: null,
@@ -344,6 +351,7 @@ class PlannerController extends StateNotifier<PlannerState> {
       await _reloadAfterMutation();
       return true;
     } catch (error) {
+      if (!mounted) return false;
       _recordFailure(error, pending);
       return false;
     }
@@ -375,6 +383,7 @@ class PlannerController extends StateNotifier<PlannerState> {
         accessToken: await _token(),
         body: pending.body!,
       );
+      if (!mounted) return false;
       state = state.copyWith(
         operation: PlannerOperation.idle,
         pendingMutation: null,
@@ -387,6 +396,7 @@ class PlannerController extends StateNotifier<PlannerState> {
       await _reloadAfterMutation();
       return true;
     } catch (error) {
+      if (!mounted) return false;
       _recordFailure(error, pending);
       return false;
     }
@@ -424,6 +434,7 @@ class PlannerController extends StateNotifier<PlannerState> {
         commitmentId: pending.commitmentId!,
         body: pending.body!,
       );
+      if (!mounted) return false;
       state = state.copyWith(
         operation: PlannerOperation.idle,
         pendingMutation: null,
@@ -436,6 +447,7 @@ class PlannerController extends StateNotifier<PlannerState> {
       await _reloadAfterMutation();
       return true;
     } catch (error) {
+      if (!mounted) return false;
       _recordFailure(error, pending);
       return false;
     }
@@ -467,6 +479,7 @@ class PlannerController extends StateNotifier<PlannerState> {
         expectedUpdatedAt: pending.expectedUpdatedAt,
         useCalendarBusyTime: pending.body!['enabled'] as bool,
       );
+      if (!mounted) return false;
       state = state.copyWith(
         operation: PlannerOperation.idle,
         pendingMutation: null,
@@ -479,6 +492,7 @@ class PlannerController extends StateNotifier<PlannerState> {
       await _reloadAfterMutation();
       return true;
     } catch (error) {
+      if (!mounted) return false;
       _recordFailure(error, pending);
       return false;
     }
@@ -508,6 +522,7 @@ class PlannerController extends StateNotifier<PlannerState> {
         requestId: pending.requestId,
         expectedUpdatedAt: pending.expectedUpdatedAt!,
       );
+      if (!mounted) return false;
       state = state.copyWith(
         operation: PlannerOperation.idle,
         pendingMutation: null,
@@ -520,6 +535,7 @@ class PlannerController extends StateNotifier<PlannerState> {
       await _reloadAfterMutation();
       return true;
     } catch (error) {
+      if (!mounted) return false;
       _recordFailure(error, pending);
       return false;
     }
@@ -558,6 +574,7 @@ class PlannerController extends StateNotifier<PlannerState> {
   Future<void> _reloadAfterMutation() async {
     try {
       final overview = await _api.getOverview(accessToken: await _token());
+      if (!mounted) return;
       state = state.copyWith(overview: overview, loadError: null);
       state = state.copyWith(
         projectionStatus: PlannerProjectionStatus.current,
@@ -569,6 +586,7 @@ class PlannerController extends StateNotifier<PlannerState> {
             : state.mutationOutcome,
       );
     } catch (error) {
+      if (!mounted) return;
       state = state.copyWith(
         loadError: error,
         projectionStatus: PlannerProjectionStatus.staleAfterMutation,
@@ -581,6 +599,7 @@ class PlannerController extends StateNotifier<PlannerState> {
   }
 
   void _recordFailure(Object error, PlannerPendingMutation pending) {
+    if (!mounted) return;
     final ambiguous = _isAmbiguous(error);
     state = state.copyWith(
       operation: PlannerOperation.idle,

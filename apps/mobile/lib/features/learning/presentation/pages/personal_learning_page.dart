@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/config/app_config.dart';
 import '../../../../core/constants/app_spacing.dart';
+import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_page.dart';
 import '../providers/learning_providers.dart';
@@ -47,6 +48,7 @@ class _PersonalLearningPageState extends ConsumerState<PersonalLearningPage> {
       return AppPage(
         title: 'Personal learning',
         subtitle: 'Focus reflections and transparent patterns',
+        backFallback: AppRoutes.settings,
         children: [
           AppCard(
             child: Column(
@@ -73,6 +75,7 @@ class _PersonalLearningPageState extends ConsumerState<PersonalLearningPage> {
     return AppPage(
       title: 'Personal learning',
       subtitle: 'Focus reflections and transparent patterns',
+      backFallback: AppRoutes.settings,
       children: [
         AppCard(
           child: Column(

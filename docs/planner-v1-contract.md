@@ -1,8 +1,8 @@
 # Planner V1 Contract
 
 Status: implemented, including the Study Setup, shell-navigation, read-only
-Exam-Week Outlook, and optional Personal Learning timing follow-ups, as of
-2026-07-26.
+Exam-Week Outlook, optional Personal Learning timing, and focused Replanning
+follow-ups, as of 2026-07-29.
 
 Planner V1 is the authenticated, deterministic planning home for Tasks,
 Habits, exam and assignment preparation, and manually fixed commitments. It
@@ -24,6 +24,13 @@ actions contains Morning, Evening, Habit Completion, and Focus. Today is an
 execution surface and no longer exposes generic Task creation or
 Habit-definition management.
 
+An in-page Today CTA pushes Planner, so the shared top back control returns to
+Today. Opening Planner from shell navigation replaces the destination and does
+not fabricate back history. Direct Preparation deep links fall back to Planner.
+The focused `/planner/replan?plan_id=<uuid>` route is not a second planning
+engine; it renders one selected Preparation plan over the existing
+proposal/confirmation APIs.
+
 Planner renders:
 
 1. `Add new`: Task, Habit, Exam, Assignment, and Fixed commitment;
@@ -41,6 +48,12 @@ Calendar events with icon, text, and color. Setup-owned definitions still
 belong to Settings. Exam and Assignment creation continues through the strict
 Deadline Planner V1 flow. Guest/demo renders an explicit unavailable state and
 makes no Planner request or fabricated synchronized projection.
+
+Today and Planner use the same category semantics for both Add-new actions and
+complete agenda rows: Task/Setup are brand-primary, Habit/Preparation are
+information-secondary, Calendar is attention-tertiary, Focus is violet, and a
+fixed commitment is danger. Exam and Assignment share Preparation color while
+retaining different icons and labels.
 
 The primary availability path is the weekly schedule entered in Setup. Each
 recurring Setup commitment may carry inclusive optional `valid_from` and
@@ -250,9 +263,12 @@ activate the card.
 The outlook reuses shared Availability without creating Planner or Preparation
 reservations. It compares regular capacity with the newest Evening V4 sleep
 plan hypothetically protected and reports missing/incomplete inputs rather than
-inventing availability. `Review plan` and `Replan remaining time` reuse the
-existing Preparation routes. Opening either the card or saved-value replan
-review submits no proposal and leaves the active revision unchanged.
+inventing availability. `Review plan` reuses the Preparation surface;
+`Replan remaining time` pushes the focused
+`/planner/replan?plan_id=<uuid>` route for the selected plan only. Opening
+either the card or saved-value replan review submits no proposal and leaves the
+active revision unchanged. Confirmation returns to Planner and refreshes
+Planner, Exam Outlook, and relevant Today projections.
 
 Guest/demo does not request or fabricate this projection. It is not a Today,
 course-selection, Inbox, or Notification attention item. The exact derivation,

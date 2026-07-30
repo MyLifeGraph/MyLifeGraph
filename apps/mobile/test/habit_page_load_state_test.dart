@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_life_graph/core/config/app_config.dart';
+import 'package:my_life_graph/core/theme/app_icons.dart';
 import 'package:my_life_graph/features/quick_action/data/habit_completion_supabase_data_source.dart';
 import 'package:my_life_graph/features/quick_action/domain/habit_v1.dart';
 import 'package:my_life_graph/features/quick_action/presentation/pages/habit_completion_page.dart';
@@ -98,7 +99,14 @@ void main() {
     await tester.tap(find.bySemanticsLabel('Complete habit First habit'));
     await tester.pump();
     expect(
-      tester.widget<IconButton>(find.byType(IconButton).first).onPressed,
+      tester
+          .widget<IconButton>(
+            find.ancestor(
+              of: find.byIcon(AppIcons.refresh),
+              matching: find.byType(IconButton),
+            ),
+          )
+          .onPressed,
       isNull,
     );
     await tester.tap(find.bySemanticsLabel('Complete habit Second habit'));
@@ -208,7 +216,14 @@ void main() {
     await tester.tap(find.text('Pause'));
     await tester.pump();
     expect(
-      tester.widget<IconButton>(find.byType(IconButton).first).onPressed,
+      tester
+          .widget<IconButton>(
+            find.ancestor(
+              of: find.byIcon(AppIcons.refresh),
+              matching: find.byType(IconButton),
+            ),
+          )
+          .onPressed,
       isNull,
     );
     showPage.value = false;

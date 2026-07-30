@@ -64,6 +64,19 @@ void main() {
     expect(response.provenance.snapshotRowCount, 120);
   });
 
+  test('rolling history accepts both free Coach prompt versions', () {
+    final current = CoachResponse.fromJson(coachResponseJson());
+    final prior = coachResponseJson();
+    (prior['provenance'] as Map<String, dynamic>)['prompt_version'] =
+        'free-coach-agent-prompt-v1';
+
+    expect(current.provenance.promptVersion, coachAgentPromptVersion);
+    expect(
+      CoachResponse.fromJson(prior).provenance.promptVersion,
+      'free-coach-agent-prompt-v1',
+    );
+  });
+
   test('response limits count Unicode code points rather than UTF-16 units',
       () {
     final reply = List.filled(3000, '😀').join();

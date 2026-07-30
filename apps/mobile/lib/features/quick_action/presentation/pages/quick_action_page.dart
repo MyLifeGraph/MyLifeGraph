@@ -32,13 +32,13 @@ class QuickActionPage extends ConsumerWidget {
           icon: AppIcons.nightsStayOutlined,
           title: 'Evening check-in',
           subtitle: 'Close today with three ratings and useful context',
-          onTap: () => context.go(AppRoutes.quickMoodCheckIn),
+          onTap: () => context.push(AppRoutes.quickMoodCheckIn),
         ),
         _ActionTile(
           icon: AppIcons.wbSunnyOutlined,
           title: 'Morning check-in',
           subtitle: 'Add sleep, current energy, and today\'s shape',
-          onTap: () => context.go(AppRoutes.morningCalibration),
+          onTap: () => context.push(AppRoutes.morningCalibration),
         ),
         ...latestCheckIn.when(
           data: (draft) => draft == null
@@ -61,13 +61,13 @@ class QuickActionPage extends ConsumerWidget {
             icon: AppIcons.taskAltOutlined,
             title: 'Habit completion',
             subtitle: 'Track consistency signals',
-            onTap: () => context.go(AppRoutes.habitCompletion),
+            onTap: () => context.push(AppRoutes.habitCompletion),
           ),
           _ActionTile(
             icon: AppIcons.timerOutlined,
             title: 'Focus',
             subtitle: 'Start a real timed block linked to a task or habit',
-            onTap: () => context.go(AppRoutes.deepWork),
+            onTap: () => context.push(AppRoutes.deepWork),
           ),
         ],
       ],

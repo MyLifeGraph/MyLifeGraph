@@ -38,6 +38,7 @@ class _WeeklyReviewPageState extends ConsumerState<WeeklyReviewPage> {
     return AppPage(
       title: 'Weekly review',
       subtitle: 'What happened last week and what you may want to adjust',
+      backFallback: AppRoutes.dashboard,
       actions: [
         IconButton(
           tooltip: 'Retry weekly review',
@@ -183,10 +184,10 @@ class _WeeklyReviewPageState extends ConsumerState<WeeklyReviewPage> {
           setState(() => _noChangeProposalIds.add(proposal.id));
           _showMessage('Current habit kept. No change was made.');
         case WeeklyReviewApplyStatus.requiresSetup:
-          context.go('${AppRoutes.onboarding}?edit=1');
+          context.push('${AppRoutes.onboarding}?edit=1');
         case WeeklyReviewApplyStatus.stagedOnly:
           if (proposal.operation == WeeklyReviewOperation.replace) {
-            context.go(AppRoutes.habitManagement);
+            context.push(AppRoutes.habitManagement);
           } else {
             setState(() => _noChangeProposalIds.add(proposal.id));
             _showMessage('Change deferred. No habit was changed.');

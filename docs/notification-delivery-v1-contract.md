@@ -117,6 +117,10 @@ as `Open Today`; both that action and the banner body open the same allowlisted
 route. The matching Inbox card uses the same destination label. Opening either
 surface performs navigation only and does not imply a read, dismiss, generation,
 or delivery mutation.
+Those in-page internal actions push route history; the destination's shared
+Back action therefore returns to the originating banner or Inbox surface. Shell
+navigation still replaces history. This changes no lifecycle or delivery
+receipt.
 The fixed generic Today copy is `Today's overview is ready` / `Open Today to
 review your schedule and actions.` Recovery copy similarly describes a gentler
 overview and never exposes private capture details. It does not claim that the

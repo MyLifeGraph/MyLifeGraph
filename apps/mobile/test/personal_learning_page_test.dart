@@ -123,6 +123,11 @@ void main() {
       pilotEnabled: true,
       textScale: 2,
     );
+    await tester.drag(
+      find.byType(CustomScrollView),
+      const Offset(0, -400),
+    );
+    await tester.pumpAndSettle();
     expect(find.text('Analyze my study patterns'), findsOneWidget);
     expect(find.byType(SwitchListTile), findsNWidgets(3));
     expect(tester.takeException(), isNull);

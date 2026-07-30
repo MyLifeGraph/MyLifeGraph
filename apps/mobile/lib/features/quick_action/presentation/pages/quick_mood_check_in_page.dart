@@ -23,7 +23,6 @@ class QuickMoodCheckInPage extends ConsumerStatefulWidget {
 }
 
 class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
-  final _tomorrowPriorityController = TextEditingController();
   final _reflectionController = TextEditingController();
   final _blockerController = TextEditingController();
 
@@ -69,7 +68,6 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
 
   @override
   void dispose() {
-    _tomorrowPriorityController.dispose();
     _reflectionController.dispose();
     _blockerController.dispose();
     super.dispose();
@@ -95,7 +93,8 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
       errorMessage: _saveError,
       loadErrorMessage: _loadError,
       onRetryLoad: _loadToday,
-      onClose: () => context.go(AppRoutes.quickAction),
+      onClose: () =>
+          context.canPop() ? context.pop() : context.go(AppRoutes.quickAction),
       onBack: _previousStep,
       onNext: _nextStep,
       child: _buildStep(step.kind),
@@ -230,6 +229,7 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
           const SizedBox(height: AppSpacing.sm),
           CaptureChoiceControl<StressControllability>(
             value: _draft.stressControllability,
+            equalWidthRow: true,
             choices: StressControllability.values
                 .map(
                   (value) => CaptureChoice(
@@ -245,17 +245,6 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
           ),
         ],
         const SizedBox(height: AppSpacing.lg),
-        TextField(
-          controller: _tomorrowPriorityController,
-          maxLength: 160,
-          maxLines: 2,
-          decoration: const InputDecoration(
-            labelText: 'Possible priority tomorrow (optional)',
-            hintText: 'For example: Finish the first project draft',
-            helperText: 'Context only; this does not create a task.',
-          ),
-        ),
-        const SizedBox(height: AppSpacing.md),
         TextField(
           controller: _reflectionController,
           maxLength: 500,
@@ -338,7 +327,6 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
       return;
     }
     final draft = _draft.copyWith(
-      tomorrowPriority: _tomorrowPriorityController.text,
       reflectionNote: _reflectionController.text,
       specificBlocker: _blockerController.text,
     );
@@ -414,7 +402,6 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
         setState(() {
           _draft = next;
           if (saved != null) {
-            _tomorrowPriorityController.text = saved.tomorrowPriority;
             _reflectionController.text = saved.reflectionNote;
             _blockerController.text = saved.specificBlocker;
             _loadedSavedCapture = true;

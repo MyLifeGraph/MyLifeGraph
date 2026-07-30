@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import '../constants/app_spacing.dart';
+import '../theme/app_icons.dart';
 
 class AppPage extends StatelessWidget {
   const AppPage({
@@ -8,6 +10,8 @@ class AppPage extends StatelessWidget {
     required this.children,
     this.subtitle,
     this.actions,
+    this.backFallback,
+    this.showBackForFallback = true,
     this.maxWidth = 1120,
     super.key,
   });
@@ -16,6 +20,8 @@ class AppPage extends StatelessWidget {
   final String? subtitle;
   final List<Widget> children;
   final List<Widget>? actions;
+  final String? backFallback;
+  final bool showBackForFallback;
   final double maxWidth;
 
   @override
@@ -33,6 +39,11 @@ class AppPage extends StatelessWidget {
           final pageTitleStyle = constraints.maxWidth >= 900
               ? Theme.of(context).textTheme.headlineLarge
               : Theme.of(context).textTheme.headlineMedium;
+          final router = GoRouter.maybeOf(context);
+          final hasImperativeHistory =
+              router != null && _hasImperativeHistory(router);
+          final showBack = hasImperativeHistory ||
+              (backFallback != null && showBackForFallback);
 
           return CustomScrollView(
             slivers: [
@@ -50,6 +61,28 @@ class AppPage extends StatelessWidget {
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          if (showBack) ...[
+                            IconButton(
+                              key: const ValueKey('app-page-back'),
+                              tooltip: 'Back',
+                              onPressed: () {
+                                final activeRouter = GoRouter.maybeOf(context);
+                                if (activeRouter != null &&
+                                    _hasImperativeHistory(activeRouter)) {
+                                  final navigator = Navigator.maybeOf(context);
+                                  if (navigator?.canPop() ?? false) {
+                                    navigator!.pop();
+                                  } else if (backFallback != null) {
+                                    activeRouter.go(backFallback!);
+                                  }
+                                } else if (backFallback != null) {
+                                  activeRouter?.go(backFallback!);
+                                }
+                              },
+                              icon: const Icon(AppIcons.arrowBack),
+                            ),
+                            const SizedBox(width: AppSpacing.sm),
+                          ],
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -106,4 +139,20 @@ class AppPage extends StatelessWidget {
       ),
     );
   }
+}
+
+bool _hasImperativeHistory(GoRouter router) {
+  bool containsImperative(Iterable<RouteMatchBase> matches) {
+    for (final match in matches) {
+      if (match is ImperativeRouteMatch) return true;
+      if (match is ShellRouteMatch && containsImperative(match.matches)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  return containsImperative(
+    router.routerDelegate.currentConfiguration.matches,
+  );
 }

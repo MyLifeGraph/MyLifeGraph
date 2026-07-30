@@ -285,7 +285,8 @@ What the user does:
 1. Confirms what was completed, postponed, or no longer relevant.
 2. Reports mood, energy, and stress intensity. At medium/high stress, the flow
    also asks source and controllability.
-3. Optionally records a likely priority, reflection, or specific blocker.
+3. Optionally records a reflection or specific blocker. The retired likely
+   priority is not shown or newly written.
 4. Reviews a provisional tomorrow preview and closes the day.
 
 What the app does:
@@ -400,13 +401,13 @@ Conditional fields at stress `5..10`:
 
 Optional fields:
 
-- One likely priority for tomorrow.
 - Reflection note.
 - Specific blocker.
 
 Current Phase 1 output:
 
-- Persisted current-state context and the user's explicit likely priority.
+- Persisted current-state context. A legacy likely priority remains readable
+  for compatibility but is not editable or newly written.
 - No primary/additional friction field is persisted or evaluated.
 - No provisional plan is generated. For authenticated real accounts, Phase 2
   now classifies an explainable backend Daily State best-effort after the
@@ -853,8 +854,9 @@ The implemented Evening Shutdown quick action supports:
 - Three short pages instead of one page per answer.
 - Required energy, mood, and stress intensity; stress source and controllability
   are a paired conditional question at stress `5..10`.
-- An optional short tomorrow priority. Measured focus comes from completed
-  Focus sessions instead of another self-estimate.
+- No tomorrow-priority input. New saves omit it; a retained legacy value
+  survives an otherwise valid edit. Measured focus comes from completed Focus
+  sessions instead of another self-estimate.
 - Optional reflection and specific blocker; blank optionals are omitted rather
   than replaced with fallback content. The former gentle-tomorrow switch is
   retired and no longer written; legacy metadata containing it stays readable.
@@ -876,7 +878,7 @@ Reasoning:
 - This is the main daily data capture moment.
 - It should feel like confirming reality, not filling a form.
 - A provisional tomorrow plan remains a later briefing concern; Phase 1 stores
-  the explicit priority and context but does not rank or generate actions.
+  current context but does not rank or generate actions.
 
 ### Morning Calibration Flow
 
@@ -1000,8 +1002,7 @@ Implemented metadata shape, abbreviated:
       "stress_source": "private_emotional",
       "stress_controllability": "hardly_controllable",
       "planned_sleep_time": "23:00",
-      "sleep_target_minutes": 480,
-      "tomorrow_priority": "Keep the morning light"
+      "sleep_target_minutes": 480
     },
     "morning": {
       "branch_version": "daily-capture-v4",
@@ -1626,7 +1627,7 @@ Implemented:
   from retained relevant Setup, Capture, action, planning, calendar, review,
   insight, recommendation, memory, and Coach data. It includes catalog,
   relationship, count, period, and helper-view metadata under
-  `free-coach-agent-prompt-v1`/`personal-snapshot-v1`, while excluding auth,
+  `free-coach-agent-prompt-v2`/`personal-snapshot-v1`, while excluding auth,
   secrets, cross-user, anti-replay, provider, and operational rows.
 - Reuses Account Export's 10,000-per-table, 50,000-total, and 8 MiB limits and
   reports overflow instead of truncating.

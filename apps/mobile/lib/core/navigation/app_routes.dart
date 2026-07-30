@@ -11,6 +11,7 @@ class AppRoutes {
   static const calendarIntegration = '/settings/integrations/calendar';
   static const preparationPlans = '/preparation-plans';
   static const planner = '/planner';
+  static const plannerReplan = '/planner/replan';
   static const insights = '/insights';
   static const quickAction = '/quick-action';
   static const quickMoodCheckIn = '/quick-mood-check-in';

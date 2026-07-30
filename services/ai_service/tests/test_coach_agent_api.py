@@ -169,7 +169,7 @@ def _response(request_id: UUID) -> CoachAgentResponse:
             "model_requested": None,
             "model_reported": None,
             "model_source": "not_applicable",
-            "prompt_version": "free-coach-agent-prompt-v1",
+            "prompt_version": "free-coach-agent-prompt-v2",
             "context_version": "personal-snapshot-v1",
             "generated_at": NOW,
             "provider_called": True,

@@ -299,11 +299,10 @@ void main() {
       await tester.tap(choice);
       await tester.pump();
     }
-    await tester.enterText(
+    expect(
       _textFieldWithLabel('Possible priority tomorrow (optional)'),
-      'Protect the guest morning',
+      findsNothing,
     );
-    await tester.pump();
     await tester.ensureVisible(find.text('Save evening check-in'));
     await tester.tap(find.text('Save evening check-in'));
     await tester.pumpAndSettle();
@@ -354,7 +353,7 @@ void main() {
     expect(evening['stress_intensity'], 8);
     expect(evening['stress_source'], 'private_emotional');
     expect(evening['stress_controllability'], 'hardly_controllable');
-    expect(evening['tomorrow_priority'], 'Protect the guest morning');
+    expect(evening.containsKey('tomorrow_priority'), isFalse);
     expect(evening['planned_sleep_time'], '23:00');
     expect(evening['sleep_target_minutes'], 480);
     expect(evening['branch_version'], dailyCaptureV4);

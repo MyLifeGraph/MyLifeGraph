@@ -1,7 +1,7 @@
 # Frontend Visual System V2
 
 Status: implemented repository visual contract for Flutter Web and Android as
-of 2026-07-27.
+of 2026-07-29.
 
 ## Product Intent
 
@@ -56,6 +56,23 @@ brand.
 outline, shadow, and bounded data colors. Presentation code consumes
 `Theme.of(context).colorScheme` or `context.visualTokens`; it does not add
 route-local semantic colors.
+
+Today and Planner share one semantic category mapping:
+
+| Category | Visual role |
+| --- | --- |
+| Task, Setup | Brand/primary |
+| Habit, Preparation, Exam, Assignment | Information/secondary |
+| Calendar | Attention/tertiary |
+| Focus | Violet data role |
+| Fixed commitment | Danger |
+
+Exam and Assignment therefore share a color while retaining distinct labels
+and icons. The mapping colors the entire Planner seven-day row—surface, border,
+icon, and text—not only an avatar. It never replaces the visible category
+label. Preparation status pills use Attention for Preview/Source changed,
+Success for Active/Completed, Danger for Cancelled, and Information for the
+Exam/Assignment type.
 
 Normal content surfaces have no outline. An outline is reserved for inputs,
 keyboard focus, selected state, a conflict/warning/danger state, or a genuine
@@ -156,6 +173,17 @@ two-pixel strong-focus outline, including buttons, icon buttons, fields,
 switches, checkboxes, segmented controls, and interactive surfaces. Hover,
 pressed, disabled, selected, and loading states remain visually distinct
 without changing product truth.
+
+Evening pressure-source help is a separate accessible info control: hover opens
+the tooltip on web, tap opens it on touch, and neither path changes the
+selection. The three influence choices remain equal-width/equal-height in one
+row at 320 logical pixels and 200% text. Focus reflection ratings use five equal
+columns; the low/middle/high anchors align under values 1, 3, and 5.
+
+`AppPage` owns the top-left route back control. It pops actual pushed history
+and uses an explicit feature fallback for a direct deep link. Shell navigation,
+auth redirects, and completed flows replace history; in-page CTAs push it.
+Primary shell destinations do not show a meaningless fallback back button.
 
 ## Material Coverage
 

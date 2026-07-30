@@ -327,23 +327,25 @@ class _RatingQuestion extends StatelessWidget {
       children: [
         Text(question, style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: AppSpacing.sm),
-        Wrap(
-          spacing: AppSpacing.sm,
-          runSpacing: AppSpacing.xs,
+        Row(
           children: [
             for (var rating = 1; rating <= 5; rating++)
-              Semantics(
-                button: true,
-                selected: value == rating,
-                label: '$semanticsPrefix $rating of 5',
-                child: ChoiceChip(
-                  key: ValueKey(
-                    '${semanticsPrefix.toLowerCase().replaceAll(' ', '-')}-rating-$rating',
+              Expanded(
+                child: Center(
+                  child: Semantics(
+                    button: true,
+                    selected: value == rating,
+                    label: '$semanticsPrefix $rating of 5',
+                    child: ChoiceChip(
+                      key: ValueKey(
+                        '${semanticsPrefix.toLowerCase().replaceAll(' ', '-')}-rating-$rating',
+                      ),
+                      label: Text('$rating'),
+                      selected: value == rating,
+                      onSelected:
+                          onChanged == null ? null : (_) => onChanged!(rating),
+                    ),
                   ),
-                  label: Text('$rating'),
-                  selected: value == rating,
-                  onSelected:
-                      onChanged == null ? null : (_) => onChanged!(rating),
                 ),
               ),
           ],
@@ -351,12 +353,34 @@ class _RatingQuestion extends StatelessWidget {
         const SizedBox(height: AppSpacing.xs),
         Row(
           children: [
-            Expanded(child: Text(lowAnchor)),
             Expanded(
-              child: Text(middleAnchor, textAlign: TextAlign.center),
+              child: Text(
+                lowAnchor,
+                key: ValueKey(
+                  '${semanticsPrefix.toLowerCase().replaceAll(' ', '-')}-anchor-1',
+                ),
+                textAlign: TextAlign.center,
+              ),
             ),
+            const Spacer(),
             Expanded(
-              child: Text(highAnchor, textAlign: TextAlign.end),
+              child: Text(
+                middleAnchor,
+                key: ValueKey(
+                  '${semanticsPrefix.toLowerCase().replaceAll(' ', '-')}-anchor-3',
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+            const Spacer(),
+            Expanded(
+              child: Text(
+                highAnchor,
+                key: ValueKey(
+                  '${semanticsPrefix.toLowerCase().replaceAll(' ', '-')}-anchor-5',
+                ),
+                textAlign: TextAlign.center,
+              ),
             ),
           ],
         ),

@@ -200,7 +200,7 @@ Successful current turns return:
     "model_requested": "gpt-5.5",
     "model_reported": "gpt-5.5",
     "model_source": "explicit",
-    "prompt_version": "free-coach-agent-prompt-v1",
+    "prompt_version": "free-coach-agent-prompt-v2",
     "context_version": "personal-snapshot-v1",
     "generated_at": "2026-07-28T12:00:00Z",
     "provider_called": true,
@@ -370,6 +370,12 @@ Migration
 - extends history deletion to remove V3 detail without resetting usage or
   request identities.
 
+Migration `20260729160000_coach_english_prompt_v2.sql` is also additive. It
+admits paired `free-coach-agent-prompt-v1|v2` provenance, exposes only the
+service-role-only `claim_coach_request_v4`, and advances only a newly claimed
+pending request to V2. An existing V1 request or terminal response keeps its
+original prompt provenance on exact replay.
+
 Application roles receive no new Coach write authority. Authenticated owners
 retain only the intended bounded reads. The FastAPI service role remains the
 only normal claim/complete/fail/delete mutation path.
@@ -384,6 +390,10 @@ returned.
 
 - Setup text, notes, memories, imported calendar content, earlier chat, SQL
   values, and Python output are data, never instructions.
+- `free-coach-agent-prompt-v2` requires English in every visible response field
+  regardless of the question or stored-data language. Clearly German reply or
+  uncertainty output fails as retryable `invalid_output` and is not stored as
+  an assistant message.
 - The agent receives no service-role credential, Supabase URL, OAuth file,
   general host filesystem, host shell, network tool, app, plugin, sub-agent, or
   mutation endpoint.
