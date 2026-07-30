@@ -9,7 +9,9 @@ import '../../../../core/theme/app_motion_tokens.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_page.dart';
 import '../../application/coach_controller.dart';
+import '../../application/coach_turn_notice.dart';
 import '../../domain/coach.dart';
+import '../../../shell/presentation/widgets/app_header_actions.dart';
 import '../providers/coach_providers.dart';
 
 class CoachPage extends ConsumerStatefulWidget {
@@ -22,6 +24,9 @@ class CoachPage extends ConsumerStatefulWidget {
 class _CoachPageState extends ConsumerState<CoachPage> {
   final _messageController = TextEditingController();
   final _latestResponseKey = GlobalKey();
+  final _latestReadMarkerKey = GlobalKey();
+  final _failureReadMarkerKey = GlobalKey();
+  bool _readCheckScheduled = false;
 
   @override
   void dispose() {
@@ -32,42 +37,54 @@ class _CoachPageState extends ConsumerState<CoachPage> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(coachControllerProvider);
+    ref.listen(coachTurnNoticeProvider, (_, __) => _scheduleReadCheck());
+    _syncDraft(state.draft);
     final history = state.latestResponse == null
         ? state.history.turns
         : state.history.turns
             .where((turn) => turn.requestId != state.latestResponse!.requestId)
             .toList(growable: false);
-    return AppPage(
+    final page = AppPage(
       title: 'Coach',
       subtitle: 'Ask freely. Personal data stays read-only.',
       actions: [
-        IconButton(
-          tooltip: 'Refresh Coach',
-          onPressed:
-              state.isLoading || state.isSending || state.isDeletingHistory
-                  ? null
-                  : () => ref.read(coachControllerProvider.notifier).load(),
-          icon: const Icon(AppIcons.refreshOutlined),
+        AppHeaderActions(
+          pageActions: [
+            IconButton(
+              tooltip: 'Refresh Coach',
+              onPressed:
+                  state.isLoading || state.isSending || state.isDeletingHistory
+                      ? null
+                      : () => ref.read(coachControllerProvider.notifier).load(),
+              icon: const Icon(AppIcons.refreshOutlined),
+            ),
+          ],
         ),
       ],
       children: [
         _CapabilityCard(state: state),
-        _ComposerCard(
-          state: state,
-          controller: _messageController,
-          onChanged: ref.read(coachControllerProvider.notifier).updateDraft,
-          onSend: _send,
-          onCancel: ref.read(coachControllerProvider.notifier).cancelAnalysis,
+        SizeChangedLayoutNotifier(
+          child: _ComposerCard(
+            state: state,
+            controller: _messageController,
+            failureReadMarkerKey: _failureReadMarkerKey,
+            onChanged: ref.read(coachControllerProvider.notifier).updateDraft,
+            onSend: _send,
+            onCancel: ref.read(coachControllerProvider.notifier).cancelAnalysis,
+          ),
         ),
         if (state.latestResponse != null && state.latestMessage != null)
-          Semantics(
-            key: _latestResponseKey,
-            container: true,
-            liveRegion: true,
-            child: _ConversationTurnCard(
-              title: 'Latest response',
-              message: state.latestMessage!,
-              response: state.latestResponse!,
+          SizeChangedLayoutNotifier(
+            child: Semantics(
+              key: _latestResponseKey,
+              container: true,
+              liveRegion: true,
+              child: _ConversationTurnCard(
+                title: 'Latest response',
+                message: state.latestMessage!,
+                response: state.latestResponse!,
+                readMarkerKey: _latestReadMarkerKey,
+              ),
             ),
           ),
         _HistoryCard(
@@ -78,12 +95,25 @@ class _CoachPageState extends ConsumerState<CoachPage> {
         const SizedBox(height: 72),
       ],
     );
+    _scheduleReadCheck();
+    return NotificationListener<SizeChangedLayoutNotification>(
+      onNotification: (_) {
+        _scheduleReadCheck();
+        return false;
+      },
+      child: NotificationListener<ScrollNotification>(
+        onNotification: (_) {
+          _scheduleReadCheck();
+          return false;
+        },
+        child: page,
+      ),
+    );
   }
 
   Future<void> _send() async {
     final sent = await ref.read(coachControllerProvider.notifier).send();
     if (!sent || !mounted) return;
-    _messageController.clear();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       final responseContext = _latestResponseKey.currentContext;
@@ -95,6 +125,64 @@ class _CoachPageState extends ConsumerState<CoachPage> {
         curve: context.motionTokens.curve,
       );
     });
+  }
+
+  void _syncDraft(String draft) {
+    if (_messageController.text == draft) return;
+    _messageController.value = TextEditingValue(
+      text: draft,
+      selection: TextSelection.collapsed(offset: draft.length),
+    );
+  }
+
+  void _scheduleReadCheck() {
+    if (_readCheckScheduled) return;
+    _readCheckScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _readCheckScheduled = false;
+      if (!mounted) return;
+      _markVisibleNoticeRead();
+    });
+  }
+
+  void _markVisibleNoticeRead() {
+    final notice = ref.read(coachTurnNoticeProvider);
+    final profileId = ref.read(coachActiveProfileIdProvider);
+    if (notice == null || profileId == null || notice.profileId != profileId) {
+      return;
+    }
+    final markerKey = switch (notice.status) {
+      CoachTurnNoticeStatus.completed => _latestReadMarkerKey,
+      CoachTurnNoticeStatus.failed => _failureReadMarkerKey,
+    };
+    final markerContext = markerKey.currentContext;
+    final marker = markerContext?.findRenderObject();
+    final scrollable =
+        markerContext == null ? null : Scrollable.maybeOf(markerContext);
+    final viewport = scrollable?.context.findRenderObject();
+    if (marker is! RenderBox ||
+        viewport is! RenderBox ||
+        !marker.attached ||
+        !viewport.attached ||
+        !marker.hasSize ||
+        !viewport.hasSize) {
+      return;
+    }
+    final markerTop = marker.localToGlobal(Offset.zero).dy;
+    final markerBottom = marker.localToGlobal(Offset(0, marker.size.height)).dy;
+    final viewportTop = viewport.localToGlobal(Offset.zero).dy;
+    final viewportBottom =
+        viewport.localToGlobal(Offset(0, viewport.size.height)).dy;
+    const tolerance = 0.5;
+    if (markerTop + tolerance < viewportTop ||
+        markerBottom - tolerance > viewportBottom) {
+      return;
+    }
+    ref.read(coachTurnNoticeProvider.notifier).markRead(
+          profileId: profileId,
+          requestId: notice.requestId,
+          status: notice.status,
+        );
   }
 
   Future<void> _confirmDeleteHistory() async {
@@ -246,6 +334,7 @@ class _ComposerCard extends StatelessWidget {
   const _ComposerCard({
     required this.state,
     required this.controller,
+    required this.failureReadMarkerKey,
     required this.onChanged,
     required this.onSend,
     required this.onCancel,
@@ -253,6 +342,7 @@ class _ComposerCard extends StatelessWidget {
 
   final CoachState state;
   final TextEditingController controller;
+  final GlobalKey failureReadMarkerKey;
   final ValueChanged<String> onChanged;
   final VoidCallback onSend;
   final VoidCallback onCancel;
@@ -339,6 +429,13 @@ class _ComposerCard extends StatelessWidget {
                   'Retry the unchanged question to check the same request safely.',
                 ),
               ),
+            ExcludeSemantics(
+              child: SizedBox(
+                key: failureReadMarkerKey,
+                height: 1,
+                width: double.infinity,
+              ),
+            ),
           ],
           const SizedBox(height: AppSpacing.md),
           SizedBox(
@@ -451,12 +548,14 @@ class _ConversationTurnCard extends StatelessWidget {
     required this.message,
     required this.response,
     this.nested = false,
+    this.readMarkerKey,
   });
 
   final String title;
   final String message;
   final CoachResponse response;
   final bool nested;
+  final GlobalKey? readMarkerKey;
 
   @override
   Widget build(BuildContext context) {
@@ -474,6 +573,14 @@ class _ConversationTurnCard extends StatelessWidget {
         Text('Uncertainty', style: Theme.of(context).textTheme.labelLarge),
         Text('${_humanize(response.uncertainty.level)} · '
             '${response.uncertainty.reason}'),
+        if (readMarkerKey != null)
+          ExcludeSemantics(
+            child: SizedBox(
+              key: readMarkerKey,
+              height: 1,
+              width: double.infinity,
+            ),
+          ),
         const SizedBox(height: AppSpacing.sm),
         _AnalysisDetails(response: response),
       ],

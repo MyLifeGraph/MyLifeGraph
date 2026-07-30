@@ -39,6 +39,9 @@ class AppPage extends StatelessWidget {
           final pageTitleStyle = constraints.maxWidth >= 900
               ? Theme.of(context).textTheme.headlineLarge
               : Theme.of(context).textTheme.headlineMedium;
+          final scaledBodySize = MediaQuery.textScalerOf(context).scale(16);
+          final stackHeaderActions =
+              constraints.maxWidth < 600 || scaledBodySize >= 24;
           final router = GoRouter.maybeOf(context);
           final hasImperativeHistory =
               router != null && _hasImperativeHistory(router);
@@ -58,57 +61,14 @@ class AppPage extends StatelessWidget {
                   child: Center(
                     child: ConstrainedBox(
                       constraints: BoxConstraints(maxWidth: maxWidth),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          if (showBack) ...[
-                            IconButton(
-                              key: const ValueKey('app-page-back'),
-                              tooltip: 'Back',
-                              onPressed: () {
-                                final activeRouter = GoRouter.maybeOf(context);
-                                if (activeRouter != null &&
-                                    _hasImperativeHistory(activeRouter)) {
-                                  final navigator = Navigator.maybeOf(context);
-                                  if (navigator?.canPop() ?? false) {
-                                    navigator!.pop();
-                                  } else if (backFallback != null) {
-                                    activeRouter.go(backFallback!);
-                                  }
-                                } else if (backFallback != null) {
-                                  activeRouter?.go(backFallback!);
-                                }
-                              },
-                              icon: const Icon(AppIcons.arrowBack),
-                            ),
-                            const SizedBox(width: AppSpacing.sm),
-                          ],
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  title,
-                                  style: pageTitleStyle,
-                                ),
-                                if (subtitle != null) ...[
-                                  const SizedBox(height: AppSpacing.xs),
-                                  ConstrainedBox(
-                                    constraints:
-                                        const BoxConstraints(maxWidth: 720),
-                                    child: Text(
-                                      subtitle!,
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .bodyMedium,
-                                    ),
-                                  ),
-                                ],
-                              ],
-                            ),
-                          ),
-                          if (actions != null) ...actions!,
-                        ],
+                      child: _AppPageHeader(
+                        title: title,
+                        subtitle: subtitle,
+                        titleStyle: pageTitleStyle,
+                        showBack: showBack,
+                        backFallback: backFallback,
+                        stackActions: stackHeaderActions,
+                        actions: actions,
                       ),
                     ),
                   ),
@@ -137,6 +97,101 @@ class AppPage extends StatelessWidget {
           );
         },
       ),
+    );
+  }
+}
+
+class _AppPageHeader extends StatelessWidget {
+  const _AppPageHeader({
+    required this.title,
+    required this.subtitle,
+    required this.titleStyle,
+    required this.showBack,
+    required this.backFallback,
+    required this.stackActions,
+    required this.actions,
+  });
+
+  final String title;
+  final String? subtitle;
+  final TextStyle? titleStyle;
+  final bool showBack;
+  final String? backFallback;
+  final bool stackActions;
+  final List<Widget>? actions;
+
+  @override
+  Widget build(BuildContext context) {
+    final titleRow = Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (showBack) ...[
+          IconButton(
+            key: const ValueKey('app-page-back'),
+            tooltip: 'Back',
+            onPressed: () {
+              final activeRouter = GoRouter.maybeOf(context);
+              if (activeRouter != null && _hasImperativeHistory(activeRouter)) {
+                final navigator = Navigator.maybeOf(context);
+                if (navigator?.canPop() ?? false) {
+                  navigator!.pop();
+                } else if (backFallback != null) {
+                  activeRouter.go(backFallback!);
+                }
+              } else if (backFallback != null) {
+                activeRouter?.go(backFallback!);
+              }
+            },
+            icon: const Icon(AppIcons.arrowBack),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+        ],
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title, style: titleStyle),
+              if (subtitle != null) ...[
+                const SizedBox(height: AppSpacing.xs),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 720),
+                  child: Text(
+                    subtitle!,
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+    final pageActions = actions;
+    if (pageActions == null || pageActions.isEmpty) return titleRow;
+    final actionWrap = Wrap(
+      alignment: WrapAlignment.end,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      spacing: AppSpacing.xs,
+      runSpacing: AppSpacing.xs,
+      children: pageActions,
+    );
+    if (stackActions) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          titleRow,
+          const SizedBox(height: AppSpacing.sm),
+          Align(alignment: Alignment.centerRight, child: actionWrap),
+        ],
+      );
+    }
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(child: titleRow),
+        const SizedBox(width: AppSpacing.sm),
+        Flexible(child: actionWrap),
+      ],
     );
   }
 }

@@ -15,6 +15,7 @@ import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_page.dart';
 import '../../../deadline_plans/domain/exam_week_outlook.dart';
 import '../../../deadline_plans/presentation/providers/deadline_plan_providers.dart';
+import '../../../shell/presentation/widgets/app_header_actions.dart';
 import '../../application/planner_controller.dart';
 import '../../domain/planner.dart';
 import '../providers/planner_providers.dart';
@@ -41,6 +42,7 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
         subtitle: 'Turn explicit estimates into reviewable time blocks',
         backFallback: AppRoutes.dashboard,
         showBackForFallback: false,
+        actions: const [AppHeaderActions()],
         children: const [
           _PlannerLockedCard(),
         ],
@@ -173,6 +175,17 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
         subtitle: 'Turn explicit estimates into reviewable time blocks',
         backFallback: AppRoutes.dashboard,
         showBackForFallback: false,
+        actions: [
+          AppHeaderActions(
+            pageActions: [
+              IconButton(
+                tooltip: 'Reload Planner',
+                onPressed: state.isBusy ? null : controller.load,
+                icon: const Icon(AppIcons.refresh),
+              ),
+            ],
+          ),
+        ],
         children: children,
       );
     }
@@ -210,15 +223,19 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
       backFallback: AppRoutes.dashboard,
       showBackForFallback: false,
       actions: [
-        IconButton(
-          tooltip: 'Reload Planner',
-          onPressed: state.isBusy
-              ? null
-              : () {
-                  ref.invalidate(examWeekOutlookProvider);
-                  controller.load();
-                },
-          icon: const Icon(AppIcons.refresh),
+        AppHeaderActions(
+          pageActions: [
+            IconButton(
+              tooltip: 'Reload Planner',
+              onPressed: state.isBusy
+                  ? null
+                  : () {
+                      ref.invalidate(examWeekOutlookProvider);
+                      controller.load();
+                    },
+              icon: const Icon(AppIcons.refresh),
+            ),
+          ],
         ),
       ],
       children: children,

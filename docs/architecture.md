@@ -49,12 +49,17 @@ The Flutter app uses feature-first clean architecture:
 
 State management is Riverpod. Navigation is GoRouter. When the development
 Coach surface gate is enabled, the shell navigation maps to Today, Insights,
-central Quick actions, Planner, and Coach. Settings is reached from the
-top-right Today control instead of occupying a redundant shell destination;
+central Quick actions, Planner, and Coach. Today, Insights, Quick actions,
+Planner, Coach, and Settings share one top action group: an optional
+page-specific action comes first, an unread local Coach result comes second,
+and Settings comes last. Settings is pushed from that control instead of
+occupying a redundant shell destination, so Back returns to the originating
+main page. Its own Settings control remains visible, selected, and inert.
 Settings-owned routes do not select an unrelated shell item. When the Coach
 surface gate is off, its destination is omitted rather than replaced by
 Settings. Stored Inbox is reached from Settings; `/alerts` remains a compatible
-Settings-owned route.
+Settings-owned route. Auth, Setup, Capture, and other sub-routes do not inherit
+the main-page action group.
 In-page calls to action push GoRouter history. Shell destinations, auth
 redirects, and completed flows replace it. `AppPage` owns the shared top-left
 back control: it pops actual history and otherwise uses an explicit
@@ -68,6 +73,18 @@ FastAPI Coach surface at `/coach`; `/more` aliases that route. Guest/mock render
 honest local unavailability and makes no Coach HTTP call.
 `/deep-work` now serves the real linked focus lifecycle only when synced
 execution is available; guest/demo sessions redirect to Quick Action.
+
+The Coach controller is app-scoped and bound to the currently eligible profile,
+not to the lifetime of the Coach route. Its draft, retry request identity, and
+active SSE subscription therefore survive shell navigation. Profile change,
+logout, Coach-gate loss, or app-container teardown rebuilds/disposes that
+boundary, clears its local draft/result notice, and cancels any active response.
+A separate in-memory, profile/request-bound `completed|failed` notice drives
+the shared headers and never calls the Coach API. A successful notice is read
+only when the end marker after the latest reply and uncertainty is fully inside
+the Coach scroll viewport. A failure is read at its error/retry marker or when
+a subsequent retry starts. Opening Coach, seeing an older turn, or closing the
+floating notice does not acknowledge it.
 
 ## Runtime Configuration
 
@@ -869,9 +886,11 @@ The HTTP boundary is message-only `coach-request-v3`,
 `free-coach-agent-prompt-v2` with `personal-snapshot-v1`; stored V1 prompt
 responses and exact replay remain valid. V2 makes English the non-overridable
 output language for reply and uncertainty. FastAPI rejects clearly German
-provider output as retryable `invalid_output` before persistence. Activity is allowlisted
-lifecycle copy rather than hidden reasoning; disconnect/cancel terminates the
-turn. The non-streaming route wraps the same service. Old fixed-mode V1/V2
+provider output as retryable `invalid_output` before persistence. Activity is
+allowlisted lifecycle copy rather than hidden reasoning; a real client
+disconnect or explicit cancel terminates the turn. Flutter shell navigation
+keeps the app-scoped subscription attached and is not a disconnect. The
+non-streaming route wraps the same service. Old fixed-mode V1/V2
 request and response shapes, context options, and memory-selection endpoints
 remain readable/available for compatibility but current Flutter does not call
 or display them. Their newest paired provenance remains

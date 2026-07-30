@@ -2602,6 +2602,13 @@ function appRoute(path) {
   return `${appUrl}/#${path}`;
 }
 
+async function navigateFlutterRoute(page, path) {
+  await page.evaluate((routePath) => {
+    window.location.hash = routePath;
+  }, path);
+  await page.waitForURL(`**/#${path}`);
+}
+
 async function enableFlutterSemantics(page) {
   const placeholder = page.locator('flt-semantics-placeholder');
   try {
@@ -3289,6 +3296,35 @@ async function clickFlutterSemanticsButtonContaining(page, text) {
     }
   }
   throw lastError;
+}
+
+async function clickFlutterControlByLabel(page, label) {
+  const candidates = [
+    page.getByText(label, { exact: true }).last(),
+    page.getByLabel(label, { exact: false }).last(),
+    page.getByRole('button', { name: label, exact: true }).last(),
+  ];
+  let lastError;
+  for (const locator of candidates) {
+    try {
+      await locator.waitFor({ state: 'visible', timeout: 2500 });
+      const bounds = await locator.boundingBox();
+      if (!bounds || bounds.width <= 0 || bounds.height <= 0) {
+        continue;
+      }
+      await page.mouse.click(
+        bounds.x + bounds.width / 2,
+        bounds.y + bounds.height / 2,
+      );
+      await page.waitForTimeout(250);
+      return;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw (
+    lastError ?? new Error(`Flutter control has no clickable bounds: ${label}`)
+  );
 }
 
 async function clickScrolledByLabel(page, name) {
@@ -11263,6 +11299,19 @@ async function assertFreeReadOnlyCoach(page, userId) {
   );
 
   await fillByLabelOrPlaceholder(page, 'Your question', coachUiMessage, -1);
+  await navigateFlutterRoute(page, '/dashboard');
+  await navigateFlutterRoute(page, '/coach');
+
+  let releaseCoachUiRequest;
+  const coachUiRequestGate = new Promise((resolve) => {
+    releaseCoachUiRequest = resolve;
+  });
+  const coachUiStreamUrl = `${aiServiceBaseUrl}/v1/coach/respond/stream`;
+  const delayedCoachUiRequest = async (route) => {
+    await coachUiRequestGate;
+    await route.continue();
+  };
+  await page.route(coachUiStreamUrl, delayedCoachUiRequest);
   const uiResponsePromise = waitForAiPost(
     page,
     '/v1/coach/respond/stream',
@@ -11274,7 +11323,14 @@ async function assertFreeReadOnlyCoach(page, userId) {
     .then(() => true)
     .catch(() => false);
   await clickByText(page, 'Ask Coach');
+  if (!(await cancelVisiblePromise)) {
+    releaseCoachUiRequest();
+    throw new Error('Coach UI did not expose cancellation while analysis ran.');
+  }
+  await navigateFlutterRoute(page, '/dashboard');
+  releaseCoachUiRequest();
   const uiResponseResult = await uiResponsePromise;
+  await page.unroute(coachUiStreamUrl, delayedCoachUiRequest);
   const uiPayload = uiResponseResult.request().postDataJSON();
   assertExactCoachKeys(
     uiPayload,
@@ -11293,9 +11349,6 @@ async function assertFreeReadOnlyCoach(page, userId) {
     uiPayload.request_id,
     'Coach UI stream',
   );
-  if (!(await cancelVisiblePromise)) {
-    throw new Error('Coach UI did not expose cancellation while analysis ran.');
-  }
   const uiResponse = assertCoachResponse(
     stream.response,
     {
@@ -11307,11 +11360,26 @@ async function assertFreeReadOnlyCoach(page, userId) {
     },
     'Coach UI response',
   );
+  await expectText(page, 'Unread Coach answer');
+  await clickFlutterControlByLabel(page, 'Unread Coach answer');
+  await expectText(page, 'Your Coach answer is ready.');
+  await clickFlutterControlByLabel(page, 'Close');
+  await expectText(page, 'Unread Coach answer');
+  if (!page.url().endsWith('/#/dashboard')) {
+    throw new Error('Coach notice unexpectedly navigated away from Today.');
+  }
+  await navigateFlutterRoute(page, '/coach');
   await scrollFlutterPage(page, -20000);
   await scrollUntilTextInViewport(page, coachUiMessage);
   await scrollUntilTextInViewport(page, uiResponse.reply);
   await scrollUntilTextInViewport(page, 'Uncertainty');
   await scrollUntilTextInViewport(page, uiResponse.uncertainty.reason);
+  await scrollFlutterPage(page, -20000);
+  await assertFlutterTextAbsent(
+    page,
+    'Unread Coach answer',
+    'Coach notice after the latest answer end was visible',
+  );
   const analysisDetails = await scrollUntilTextInViewport(
     page,
     'Data and analysis details',

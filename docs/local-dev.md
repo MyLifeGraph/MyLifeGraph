@@ -1327,21 +1327,22 @@ writes only its uniquely named test data to the local stack and skips
 reviewing pending SQL and local rows, `APPLY_MIGRATIONS=true` is the separate
 opt-in; it may change or delete those rows.
 
-For a narrow Phase 10 diagnosis against an already-created, onboarded E2E
-principal, reuse that principal's exact run id:
+For a narrow Phase 10 diagnosis, choose a fresh unique run id:
 
 ```bash
 E2E_PHASE10_ONLY=true \
-E2E_RUN_ID=<existing-e2e-run-id> \
+E2E_RUN_ID=<new-unique-e2e-run-id> \
 FLUTTER_BIN=/path/to/flutter \
 bash scripts/e2e_web.sh
 ```
 
-This mode signs in as the existing `e2e-<run-id>@example.test` account, clears
-only its Coach E2E state, and reruns the bounded Coach browser/RLS assertions.
-It does not create the prerequisite user or exercise Setup, capture, action,
-briefing, review, and calendar journeys, so it is a diagnostic/repetition aid,
-never a substitute for the full command above.
+This mode creates and signs in the confirmed
+`e2e-<run-id>@example.test` account, applies its minimal prerequisite Setup
+projection, clears only its Coach E2E state, and runs the bounded Coach
+browser/RLS assertions. Reusing an existing local email fails closed. It does
+not exercise the normal Setup UI, capture, action, briefing, review, or
+calendar journeys, so it is a diagnostic aid, never a substitute for the full
+command above.
 
 Exact current results live in
 [Current Verified Baseline](verification.md#current-verified-baseline).

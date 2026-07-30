@@ -1,7 +1,7 @@
 # Today Overview V1 Contract
 
 Status: implemented through the additive Today Overview V2 Planner projection
-and Daily Capture V4 compatibility as of 2026-07-26. The V1 endpoint remains
+and Daily Capture V4 compatibility as of 2026-07-30. The V1 endpoint remains
 available and unchanged.
 
 Today Overview V1 replaces the briefing-first presentation on the `Today`
@@ -145,7 +145,8 @@ commands. Skipped outcomes stay distinct from completion.
 
 The primary Today order is:
 
-1. profile-local date and source;
+1. profile-local date and source, with the shared optional unread-Coach and
+   Settings header actions;
 2. Check-in streak with Morning and Evening save state/actions;
 3. green Today progress bar;
 4. `Today at a glance` vertical agenda;
@@ -156,6 +157,9 @@ The primary Today order is:
 `More` lazily loads Preparation workload, Weekly review, saved check-in signals,
 rule-based recommendations, decision-feedback history, and the full week. A
 normal collapsed Today load does not request those supporting projections.
+The same header controls remain available during the initial Today loading and
+load-error states. The local unread Coach control does not generate, reload, or
+acknowledge a Coach turn; it only presents the current in-memory notice.
 
 Guest/demo builds the same conceptual overview from local capture storage. It
 performs no authenticated Today, Supabase, briefing, recommendation, or

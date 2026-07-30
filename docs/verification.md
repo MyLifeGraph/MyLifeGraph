@@ -13,7 +13,7 @@ Capture V4, Daily State V2, Exam-Week Outlook V1, or Coach V3 expectations.
 
 The post-review stabilization working tree was reverified locally on
 2026-07-30. The complete FastAPI suite reported
-`1115 passed, 2 skipped`; full Flutter verification reported `719` passing
+`1115 passed, 2 skipped`; full Flutter verification reported `726` passing
 tests and clean analysis. The frontend visual contract and documentation
 consistency checks passed, and `git diff --check` was clean.
 
@@ -33,9 +33,14 @@ conservative Python full-snapshot-scope provenance, network/host/secret
 isolation, and strict trusted-image validation. The prepared image revision was
 `daf088985421`.
 
-The focused Coach browser journey reported
-`Focused free Coach browser smoke passed for e2e-1785280791@example.test`.
-The subsequent same-date full non-reset journey reported
+The latest focused Coach browser journey on this working tree reported
+`Focused free Coach browser smoke passed for e2e-1785433298@example.test`.
+It additionally held the V3 SSE request across Coach-to-Today navigation,
+proved the exact draft in the eventual request payload, rendered the global
+unread result, opened and closed its non-navigating message without consuming
+the notice, and applied the short-answer viewport acknowledgement. The
+separate long-answer widget path kept the notice until the end marker became
+visible. An earlier subsequent same-date full non-reset journey reported
 `E2E browser smoke passed for e2e-1785282054@example.test`. Together they
 covered the exact V3 request, V2 response, capabilities/history/SSE contracts,
 Cancel visibility, replay/conflict, reload, expandable snapshot-source coverage
@@ -683,7 +688,14 @@ Current Flutter widget tests include:
   coverage plus tool/limitation/Fast detail, mixed legacy/current history, and
   confirmed history deletion without direct Supabase writes. Widget assertions
   reject fixed mode/horizon/Focus, prompt-starter, memory-selection, structured
-  suggestion, hidden reasoning, and plot surfaces.
+  suggestion, hidden reasoning, and plot surfaces. App-lifecycle tests also
+  prove that draft/request identity and an active stream survive main-page
+  navigation; success clears while failure/Cancel retain the draft; profile
+  switch and app teardown clear notices and cancel the old controller; the
+  shared six-page header orders page action, unread Coach, and Settings; the
+  notice popup neither navigates nor reads; only the newest answer-end or
+  failure/retry marker acknowledges; Settings Push/Back is preserved; and all
+  icon targets stay at least 44 by 44 at 320 px/200-percent text.
 
 These tests cover the default mock/guest product path. They do not prove real
 Supabase registration, RLS, or browser behavior.
@@ -810,22 +822,26 @@ history differ. It never applies pending SQL automatically. The smoke still
 writes a uniquely named local Auth user and its test rows. Do not set
 `RESET_DB=true` unless recreating the local database is explicitly intended.
 
-After a full or partially completed run has already created and onboarded its
-E2E principal, Phase 10 can be repeated narrowly for diagnosis:
+Phase 10 can be run narrowly for diagnosis with a fresh unique run id:
 
 ```bash
 E2E_PHASE10_ONLY=true \
-E2E_RUN_ID=<existing-e2e-run-id> \
+E2E_RUN_ID=<new-unique-e2e-run-id> \
 FLUTTER_BIN=/path/to/flutter \
 bash scripts/e2e_web.sh
 ```
 
-This mode signs in to the existing `e2e-<run-id>@example.test` principal,
-resets only its Coach E2E state, and repeats the fake-provider Coach UI/API/RLS
-assertions. It does not create the prerequisite principal or exercise Setup,
-capture, executable actions, briefing, feedback, weekly review, or calendar
-import. Treat it as a focused diagnosis/repetition path, never as a substitute
-for the full command.
+This mode creates and signs in a confirmed `e2e-<run-id>@example.test`
+principal, applies only its minimal prerequisite Setup projection, resets only
+its Coach E2E state, and repeats the fake-provider Coach UI/API/RLS assertions.
+Reusing an id fails closed when that local email already exists. Its UI path
+also retains a draft across Coach/Today navigation,
+holds the SSE request while navigating away, verifies completion without a
+Flutter disconnect, exercises the unread header message without navigation or
+acknowledgement, and confirms acknowledgement only after the newest answer end
+is reached. It does not exercise the normal Setup UI, capture, executable
+actions, briefing, feedback, weekly review, or calendar import. Treat it as a
+focused diagnosis path, never as a substitute for the full command.
 
 For a fresh local database before the browser run:
 

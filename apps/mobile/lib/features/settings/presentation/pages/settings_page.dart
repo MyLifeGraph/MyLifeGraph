@@ -12,6 +12,7 @@ import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_page.dart';
 import '../../../auth/presentation/providers/auth_providers.dart';
 import '../../../deadline_plans/presentation/providers/deadline_plan_providers.dart';
+import '../../../shell/presentation/widgets/app_header_actions.dart';
 import '../../domain/account_settings.dart';
 import '../providers/account_settings_providers.dart';
 
@@ -45,6 +46,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     return AppPage(
       title: 'Settings',
       subtitle: 'Account and appearance',
+      actions: const [AppHeaderActions(settingsSelected: true)],
       children: [
         AppCard(
           child: Column(

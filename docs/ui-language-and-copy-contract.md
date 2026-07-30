@@ -185,9 +185,11 @@ says `Early evidence`.
   never changed by Setup.
 - Coach is a development preview. Release builds and `APP_ENV=production` hide
   it regardless of Flutter defines. When enabled, `Coach` is the right shell
-  destination; `Settings` remains the top-right Today control and is not
-  duplicated in the shell. The local Codex path proves one developer machine
-  only and is not a production provider.
+  destination; `Settings` remains the last top-right action on Today, Insights,
+  Quick actions, Planner, Coach, and Settings and is not duplicated in the
+  shell. Page-specific actions precede any unread Coach action and Settings.
+  The local Codex path proves one developer machine only and is not a
+  production provider.
 - Current Coach uses `Ask anything`, `Your question`, and `Ask Coach`. It has no
   `Today`, `Patterns`, `Focus`, `Review`, horizon, session, prompt-starter,
   memory-selection, or structured suggestion controls. Older answers remain
@@ -197,6 +199,11 @@ says `Early evidence`.
   `Testing the data with isolated analysis …`, plus `Cancel analysis`. Never
   expose hidden reasoning, raw SQL/code, personal values, or model event text as
   transient status.
+- A completed turn may show `Your Coach answer is ready.` from the shared
+  unread Coach action. A non-Cancel failure may show
+  `Coach could not finish the answer. Open Coach to review or retry.` Closing
+  this floating message is not equivalent to reading the answer and neither
+  message claims background or push delivery.
 - The expandable answer label is `Data and analysis details`. It may show
   `Snapshot source coverage`, conservative source periods/counts, actual
   inspection/SQL/Python step summaries, limitations, uncertainty, and technical

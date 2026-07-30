@@ -5,6 +5,7 @@ import '../../../core/errors/app_exception.dart';
 import '../../../core/utils/client_uuid.dart';
 import '../domain/coach.dart';
 import '../domain/coach_repository.dart';
+import 'coach_turn_notice.dart';
 
 class CoachState {
   const CoachState({
@@ -132,13 +133,20 @@ class CoachState {
 }
 
 class CoachController extends StateNotifier<CoachState> {
-  CoachController({required CoachRepository repository})
-      : _repository = repository,
+  CoachController({
+    required CoachRepository repository,
+    String? profileId,
+    CoachTurnNoticeController? turnNoticeController,
+  })  : _repository = repository,
+        _profileId = profileId,
+        _turnNoticeController = turnNoticeController,
         super(CoachState.loading()) {
     Future<void>.microtask(load);
   }
 
   final CoachRepository _repository;
+  final String? _profileId;
+  final CoachTurnNoticeController? _turnNoticeController;
   bool _disposed = false;
   bool _cancelRequested = false;
   bool _operationInProgress = false;
@@ -241,6 +249,7 @@ class CoachController extends StateNotifier<CoachState> {
     _operationInProgress = true;
     try {
       _cancelRequested = false;
+      _markCurrentFailureRead();
       state = state.copyWith(
         isSending: true,
         isCancelling: false,
@@ -283,6 +292,10 @@ class CoachController extends StateNotifier<CoachState> {
           latestResponse: completed,
           latestMessage: message,
         );
+        _publishNotice(
+          requestId,
+          status: CoachTurnNoticeStatus.completed,
+        );
         await _refreshProjections();
         return !_disposed;
       } catch (error) {
@@ -314,6 +327,10 @@ class CoachController extends StateNotifier<CoachState> {
           requestId: preserve ? requestId : newClientUuid(),
           exactRetryMessage: preserve ? message : null,
         );
+        _publishNotice(
+          requestId,
+          status: CoachTurnNoticeStatus.failed,
+        );
         await _refreshProjections();
         return false;
       }
@@ -330,6 +347,35 @@ class CoachController extends StateNotifier<CoachState> {
       activityMessage: 'Cancelling analysis …',
     );
     _repository.cancelActiveResponse();
+  }
+
+  void _publishNotice(
+    String requestId, {
+    required CoachTurnNoticeStatus status,
+  }) {
+    final profileId = _profileId;
+    if (profileId == null) return;
+    _turnNoticeController?.publish(
+      profileId: profileId,
+      requestId: requestId,
+      status: status,
+    );
+  }
+
+  void _markCurrentFailureRead() {
+    final profileId = _profileId;
+    final notice = _turnNoticeController?.state;
+    if (profileId == null ||
+        notice == null ||
+        notice.profileId != profileId ||
+        notice.status != CoachTurnNoticeStatus.failed) {
+      return;
+    }
+    _turnNoticeController?.markRead(
+      profileId: profileId,
+      requestId: notice.requestId,
+      status: CoachTurnNoticeStatus.failed,
+    );
   }
 
   Future<void> deleteHistory() async {

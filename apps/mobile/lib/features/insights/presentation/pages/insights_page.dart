@@ -10,6 +10,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/capabilities/app_surface_capabilities.dart';
 import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/theme/app_visual_tokens.dart';
+import '../../../../core/widgets/app_page.dart';
 import '../../domain/entities/correlation.dart';
 import '../../domain/entities/insight.dart';
 import '../../domain/entities/personal_patterns.dart';
@@ -17,6 +18,7 @@ import '../../domain/services/correlation_analyzer.dart';
 import '../../domain/services/coaching_observation.dart';
 import '../../../optimization/domain/entities/skillset_profile.dart';
 import '../../../optimization/presentation/providers/optimization_providers.dart';
+import '../../../shell/presentation/widgets/app_header_actions.dart';
 import '../providers/insights_providers.dart';
 
 class InsightsPage extends ConsumerWidget {
@@ -31,19 +33,38 @@ class InsightsPage extends ConsumerWidget {
     final personalPatterns = ref.watch(personalPatternsProvider);
     final skillset =
         showExampleSkillset ? ref.watch(skillsetProfileProvider) : null;
+    void retry() {
+      ref.invalidate(insightsProvider);
+      ref.invalidate(correlationReportProvider);
+      ref.invalidate(personalPatternsProvider);
+    }
 
     if ((insights.hasError && !insights.hasValue) ||
         (report.hasError && !report.hasValue)) {
-      return _InsightsLoadError(
-        onRetry: () {
-          ref.invalidate(insightsProvider);
-          ref.invalidate(correlationReportProvider);
-          ref.invalidate(personalPatternsProvider);
-        },
+      return AppPage(
+        title: 'Insights',
+        actions: [
+          AppHeaderActions(
+            pageActions: [_InsightsRefreshButton(onRefresh: retry)],
+          ),
+        ],
+        children: [
+          _InsightsLoadError(onRetry: retry),
+        ],
       );
     }
     if (!insights.hasValue || !report.hasValue) {
-      return const Center(child: CircularProgressIndicator());
+      return AppPage(
+        title: 'Insights',
+        actions: [
+          AppHeaderActions(
+            pageActions: [_InsightsRefreshButton(onRefresh: retry)],
+          ),
+        ],
+        children: const [
+          Center(child: CircularProgressIndicator()),
+        ],
+      );
     }
 
     return _InsightsHome(
@@ -532,7 +553,42 @@ class _InsightsHeader extends StatelessWidget {
       ],
     );
 
-    final action = FilledButton.icon(
+    final actions = AppHeaderActions(
+      pageActions: [
+        _InsightsRefreshButton(onRefresh: onRefresh),
+      ],
+    );
+
+    if (isMobile) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          copy,
+          const SizedBox(height: AppSpacing.md),
+          Align(alignment: Alignment.centerRight, child: actions),
+        ],
+      );
+    }
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(child: copy),
+        const SizedBox(width: AppSpacing.md),
+        Flexible(child: actions),
+      ],
+    );
+  }
+}
+
+class _InsightsRefreshButton extends StatelessWidget {
+  const _InsightsRefreshButton({required this.onRefresh});
+
+  final VoidCallback onRefresh;
+
+  @override
+  Widget build(BuildContext context) {
+    return FilledButton.icon(
       style: FilledButton.styleFrom(
         backgroundColor: Theme.of(context).colorScheme.primary,
         foregroundColor: Theme.of(context).colorScheme.onPrimary,
@@ -547,26 +603,6 @@ class _InsightsHeader extends StatelessWidget {
       onPressed: onRefresh,
       icon: const Icon(AppIcons.refresh, size: 18),
       label: const Text('Refresh correlations'),
-    );
-
-    if (isMobile) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          copy,
-          const SizedBox(height: AppSpacing.md),
-          SizedBox(width: double.infinity, child: action),
-        ],
-      );
-    }
-
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(child: copy),
-        const SizedBox(width: AppSpacing.md),
-        action,
-      ],
     );
   }
 }

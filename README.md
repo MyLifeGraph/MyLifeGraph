@@ -735,9 +735,10 @@ The normal E2E command likewise requires current migration history and never
 applies pending SQL automatically. Use `APPLY_MIGRATIONS=true` only after
 reviewing and accepting the possible local-row changes.
 
-For diagnosis only, `E2E_PHASE10_ONLY=true` plus the exact `E2E_RUN_ID` of an
-existing eligible principal repeats the Coach portion against that E2E user.
-It is not a substitute for the full command; see `docs/verification.md`.
+For diagnosis only, `E2E_PHASE10_ONLY=true` plus a fresh unique `E2E_RUN_ID`
+creates a minimal eligible local principal and runs only the Coach portion.
+Reusing an existing id fails closed. It is not a substitute for the full
+command; see `docs/verification.md`.
 
 The browser E2E script starts local Supabase, starts FastAPI with local backend
 Supabase settings and the deterministic fake Coach provider, and runs Flutter

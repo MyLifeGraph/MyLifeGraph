@@ -1,9 +1,12 @@
 import 'dart:async';
 
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_life_graph/features/coach/application/coach_controller.dart';
+import 'package:my_life_graph/features/coach/application/coach_turn_notice.dart';
 import 'package:my_life_graph/features/coach/domain/coach.dart';
 import 'package:my_life_graph/features/coach/domain/coach_repository.dart';
+import 'package:my_life_graph/features/coach/presentation/providers/coach_providers.dart';
 
 import 'support/coach_fixtures.dart';
 
@@ -40,6 +43,35 @@ void main() {
     expect(repository.capabilityCalls, 2);
     expect(repository.historyCalls, 2);
     controller.dispose();
+  });
+
+  test('completed turn publishes a profile-bound local notice', () async {
+    final repository = _FakeCoachRepository();
+    final notice = CoachTurnNoticeController(profileId: 'profile-1');
+    final controller = CoachController(
+      repository: repository,
+      profileId: 'profile-1',
+      turnNoticeController: notice,
+    );
+    await _settle();
+    controller.updateDraft('Compare my Focus history');
+    final requestId = controller.state.requestId;
+
+    expect(await controller.send(), isTrue);
+
+    expect(
+      notice.state,
+      isA<CoachTurnNotice>()
+          .having((value) => value.profileId, 'profileId', 'profile-1')
+          .having((value) => value.requestId, 'requestId', requestId)
+          .having(
+            (value) => value.status,
+            'status',
+            CoachTurnNoticeStatus.completed,
+          ),
+    );
+    controller.dispose();
+    notice.dispose();
   });
 
   test('completed response replaces cancellation before projections refresh',
@@ -125,6 +157,49 @@ void main() {
     controller.dispose();
   });
 
+  test('failed turn publishes a notice and a new retry consumes it', () async {
+    final repository = _FakeCoachRepository(
+      error: const CoachRemoteException(
+        code: 'provider_timeout',
+        message: 'Timed out.',
+        retryable: true,
+        statusCode: 503,
+      ),
+    );
+    final notice = CoachTurnNoticeController(profileId: 'profile-1');
+    final controller = CoachController(
+      repository: repository,
+      profileId: 'profile-1',
+      turnNoticeController: notice,
+    );
+    await _settle();
+    controller.updateDraft('Retry this unchanged question');
+    final requestId = controller.state.requestId;
+
+    expect(await controller.send(), isFalse);
+    expect(
+      notice.state,
+      isA<CoachTurnNotice>()
+          .having((value) => value.requestId, 'requestId', requestId)
+          .having(
+            (value) => value.status,
+            'status',
+            CoachTurnNoticeStatus.failed,
+          ),
+    );
+
+    repository.responseGate = Completer<void>();
+    expect(controller.state.requestId, isNot(requestId));
+    final retry = controller.send();
+    await _settle();
+    expect(notice.state, isNull);
+    repository.responseGate!.complete();
+    expect(await retry, isFalse);
+    expect(notice.state?.status, CoachTurnNoticeStatus.failed);
+    controller.dispose();
+    notice.dispose();
+  });
+
   test('editing an uncertain retry creates a fresh request identity', () async {
     final repository = _FakeCoachRepository(
       error: const CoachRemoteException(
@@ -171,7 +246,12 @@ void main() {
       block: true,
       remainingRequests: const [20, 19],
     );
-    final controller = CoachController(repository: repository);
+    final notice = CoachTurnNoticeController(profileId: 'profile-1');
+    final controller = CoachController(
+      repository: repository,
+      profileId: 'profile-1',
+      turnNoticeController: notice,
+    );
     await _settle();
     controller.updateDraft('Long analysis');
     final pending = controller.send();
@@ -188,7 +268,9 @@ void main() {
     expect(controller.state.capabilities?.limits.remainingRequests, 19);
     expect(repository.capabilityCalls, 2);
     expect(repository.historyCalls, 2);
+    expect(notice.state, isNull);
     controller.dispose();
+    notice.dispose();
   });
 
   test('history deletion is blocked while analysis is running', () async {
@@ -208,6 +290,47 @@ void main() {
     expect(repository.deleteCalls, 1);
     expect(controller.state.history.turns, isEmpty);
     controller.dispose();
+  });
+
+  test('profile switch clears draft and notice and disposes the old turn',
+      () async {
+    final activeProfile = StateProvider<String?>((ref) => 'profile-1');
+    final repository = _FakeCoachRepository();
+    final container = ProviderContainer(
+      overrides: [
+        coachActiveProfileIdProvider.overrideWith(
+          (ref) => ref.watch(activeProfile),
+        ),
+        coachRepositoryProvider.overrideWithValue(repository),
+      ],
+    );
+    final subscription = container.listen(
+      coachControllerProvider,
+      (_, __) {},
+      fireImmediately: true,
+    );
+    await _settle();
+    container
+        .read(coachControllerProvider.notifier)
+        .updateDraft('Profile one private draft');
+    final requestId = container.read(coachControllerProvider).requestId;
+    container.read(coachTurnNoticeProvider.notifier).publish(
+          profileId: 'profile-1',
+          requestId: requestId,
+          status: CoachTurnNoticeStatus.completed,
+        );
+
+    container.read(activeProfile.notifier).state = 'profile-2';
+    await _settle();
+
+    expect(container.read(coachControllerProvider).draft, isEmpty);
+    expect(container.read(coachControllerProvider).requestId, isNot(requestId));
+    expect(container.read(coachTurnNoticeProvider), isNull);
+    expect(repository.cancelCalls, 1);
+
+    subscription.close();
+    container.dispose();
+    expect(repository.cancelCalls, 2);
   });
 }
 
@@ -242,6 +365,7 @@ class _FakeCoachRepository implements CoachRepository {
   final Object? historyErrorAfterInitial;
   final CoachHistory? historyAfterInitial;
   final List<int> remainingRequests;
+  Completer<void>? responseGate;
   final List<String> messages = [];
   final StreamController<CoachStreamEvent> _blocking =
       StreamController<CoachStreamEvent>();
@@ -288,6 +412,7 @@ class _FakeCoachRepository implements CoachRepository {
     messages.add(message);
     yield CoachStartedEvent(requestId);
     yield const CoachActivityEvent('Checking relevant history …');
+    await responseGate?.future;
     if (block) {
       yield* _blocking.stream;
       return;

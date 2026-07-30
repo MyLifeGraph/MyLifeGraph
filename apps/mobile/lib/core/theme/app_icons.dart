@@ -673,6 +673,12 @@ class AppIcons {
     fontPackage: 'phosphor_flutter',
     matchTextDirection: true,
   );
+  static const settings = IconData(
+    0xe270,
+    fontFamily: 'PhosphorFill',
+    fontPackage: 'phosphor_flutter',
+    matchTextDirection: true,
+  );
   static const settingsOutlined = IconData(
     0xe270,
     fontFamily: 'PhosphorRegular',

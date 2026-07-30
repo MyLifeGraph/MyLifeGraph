@@ -2,14 +2,15 @@
 
 Status: implemented, including the Study Setup, shell-navigation, read-only
 Exam-Week Outlook, optional Personal Learning timing, and focused Replanning
-follow-ups, as of 2026-07-29.
+follow-ups, as of 2026-07-30.
 
 Planner V1 is the authenticated, deterministic planning home for Tasks,
 Habits, exam and assignment preparation, and manually fixed commitments. It
 replaces Inbox in the Coach-enabled five-item app shell. Inbox remains available from
 Settings and its persistence, generation, lifecycle, and delivery contracts are
 unchanged. The later navigation follow-up replaces the redundant Settings shell
-item with the gated Coach destination; Settings remains available from Today.
+item with the gated Coach destination; Settings remains available from every
+main page through the shared header action.
 
 ## Navigation And Surface
 
@@ -17,7 +18,11 @@ When the development Coach surface is enabled, the mobile and desktop
 destinations are, in order: `Today`, `Insights`, `Quick actions`, `Planner`, and
 `Coach`. Release builds, production, or an explicit disabled gate omit Coach
 and do not restore Settings as a fallback shell item. Settings is opened from
-the top-right Today control. `/preparation-plans` and `/habits` remain
+the shared top-right action on Today, Insights, Quick actions, Planner, Coach,
+and Settings. Planner orders its `Reload Planner` action before an optional
+unread Coach result and Settings; the same action group remains visible in
+locked, initial loading, overview-error, current, and stale-after-mutation
+states. Settings is pushed so Back returns to Planner. `/preparation-plans` and `/habits` remain
 compatible and select Planner in the shell; `/alerts` remains a compatible
 Settings-owned route without selecting an unrelated shell destination. Quick
 actions contains Morning, Evening, Habit Completion, and Focus. Today is an
@@ -304,7 +309,8 @@ Flutter keeps `current`, `refreshingAfterMutation`, and
 `staleAfterMutation` projection states. A durable mutation followed by a
 failed overview reload leaves the old overview visible but disables every
 derived mutation control. `Reload Planner` performs only the read and never
-replays the committed mutation.
+replays the committed mutation. The shared unread Coach and Settings header
+controls do not change this projection or call a Planner/Coach endpoint.
 
 ## Non-Claims
 

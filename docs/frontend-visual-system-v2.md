@@ -105,6 +105,14 @@ figures through `AppMetric` or an equivalent themed style. Text is allowed to
 wrap and surfaces are allowed to scroll; text must not be scaled down to hide
 an overflow.
 
+Main-page top actions use one shared wrapping group on Today, Insights, Quick
+actions, Planner, Coach, and Settings. Page-specific actions come first, an
+unread Coach action comes second when present, and Settings comes last. Every
+icon action owns a 44 by 44 logical-pixel target and keyboard/semantic label.
+At narrow width or 200-percent text, `AppPage` stacks the action group below the
+title instead of shrinking or overflowing it. The selected Settings icon uses
+the filled icon and selected surface without creating another route.
+
 ## Shape And Surface Roles
 
 The radius scale is `8 / 12 / 16 / 20 / pill`, exposed through `AppRadii`.

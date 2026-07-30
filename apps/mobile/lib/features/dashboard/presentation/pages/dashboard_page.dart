@@ -16,6 +16,7 @@ import '../../../../core/theme/app_visual_tokens.dart';
 import '../../../../core/utils/client_uuid.dart';
 import '../../../../core/utils/local_date.dart';
 import '../../../../core/widgets/app_card.dart';
+import '../../../../core/widgets/app_page.dart';
 import '../../../briefings/domain/decision_feedback.dart';
 import '../../../briefings/presentation/providers/briefing_providers.dart';
 import '../../../deadline_plans/domain/deadline_plan.dart';
@@ -28,6 +29,7 @@ import '../../../quick_action/domain/habit_v1.dart';
 import '../../../snapshots/presentation/providers/snapshot_providers.dart';
 import '../../../tasks/data/task_supabase_data_source.dart';
 import '../../../tasks/domain/executable_task.dart';
+import '../../../shell/presentation/widgets/app_header_actions.dart';
 import '../../domain/entities/dashboard_snapshot.dart';
 import '../providers/dashboard_providers.dart';
 import '../widgets/recommendation_card.dart';
@@ -77,9 +79,21 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
 
     if (visibleSnapshot == null) {
       return snapshot.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, stackTrace) => _DashboardLoadError(
-          onRetry: () => ref.invalidate(dashboardSnapshotProvider),
+        loading: () => const AppPage(
+          title: 'Today',
+          actions: [AppHeaderActions()],
+          children: [
+            Center(child: CircularProgressIndicator()),
+          ],
+        ),
+        error: (error, stackTrace) => AppPage(
+          title: 'Today',
+          actions: const [AppHeaderActions()],
+          children: [
+            _DashboardLoadError(
+              onRetry: () => ref.invalidate(dashboardSnapshotProvider),
+            ),
+          ],
         ),
         data: (_) => const SizedBox.shrink(),
       );
@@ -1140,29 +1154,40 @@ class _DashboardHeader extends StatelessWidget {
         ? 'Local data'
         : 'Your account data';
 
+    final copy = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(date, style: Theme.of(context).textTheme.bodyMedium),
+        const SizedBox(height: AppSpacing.xs),
+        Text('Today', style: Theme.of(context).textTheme.headlineLarge),
+        const SizedBox(height: AppSpacing.sm),
+        Text(
+          '$sourceLabel · updated ${DateFormat.Hm().format(snapshot.loadedAt)}',
+          style: Theme.of(context).textTheme.labelMedium,
+        ),
+      ],
+    );
+    final stackActions = MediaQuery.sizeOf(context).width < 600 ||
+        MediaQuery.textScalerOf(context).scale(16) >= 24;
+    if (stackActions) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          copy,
+          const SizedBox(height: AppSpacing.sm),
+          const Align(
+            alignment: Alignment.centerRight,
+            child: AppHeaderActions(),
+          ),
+        ],
+      );
+    }
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(date, style: Theme.of(context).textTheme.bodyMedium),
-              const SizedBox(height: AppSpacing.xs),
-              Text('Today', style: Theme.of(context).textTheme.headlineLarge),
-              const SizedBox(height: AppSpacing.sm),
-              Text(
-                '$sourceLabel · updated ${DateFormat.Hm().format(snapshot.loadedAt)}',
-                style: Theme.of(context).textTheme.labelMedium,
-              ),
-            ],
-          ),
-        ),
-        IconButton.outlined(
-          tooltip: 'Settings',
-          onPressed: () => context.push(AppRoutes.settings),
-          icon: const Icon(AppIcons.settingsOutlined),
-        ),
+        Expanded(child: copy),
+        const SizedBox(width: AppSpacing.sm),
+        const AppHeaderActions(),
       ],
     );
   }

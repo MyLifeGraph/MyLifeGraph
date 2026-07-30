@@ -191,10 +191,12 @@ and Phase 3 does not rank a briefing or call an LLM. See
 ## Main Routes
 
 With the development Coach surface enabled, the five shell destinations are
-Today, Insights, Quick actions, Planner, and Coach. Settings is reached from
-the top-right Today control, and Inbox remains under Settings. A disabled Coach
-gate omits the fifth destination rather than restoring Settings; Settings-owned
-routes such as `/alerts` leave the shell destinations unselected.
+Today, Insights, Quick actions, Planner, and Coach. Those pages plus Settings
+share a top action group with optional page action, unread Coach result, and
+Settings in that order. Settings is pushed so Back returns to the originating
+page; Inbox remains under Settings. A disabled Coach gate omits the fifth
+destination rather than restoring Settings; Settings-owned routes such as
+`/alerts` leave the shell destinations unselected.
 
 - `/auth`
 - `/auth/recovery` (Supabase password-recovery event only)
@@ -268,7 +270,16 @@ memory-selection, or structured suggestion controls.
 A deliberate send streams strict `coach-request-v3` through SSE. The controller
 accepts only `started`, safe `activity`, `completed`, or `failed`; cancellation
 closes the stream. Timeout-aware retry preserves the exact request id and
-message, while editing rotates identity. Double submit is disabled.
+message, while editing rotates identity. Double submit is disabled. The
+profile-bound controller is app-scoped: draft, request identity, and a running
+stream survive main-page navigation, while logout, profile switch, Coach-gate
+loss, and app teardown clear/cancel them.
+
+Completed turns and non-Cancel failures create only an in-memory unread result.
+The shared header opens its English success/failure message without navigating
+or marking it read. Success is acknowledged only when the end of the newest
+reply and uncertainty is visible in the Coach viewport; failures are
+acknowledged at the error/retry end marker or when a subsequent retry starts.
 
 Each `coach-response-v2` shows answer text and uncertainty. Flutter validates
 the safety field and its consistency with provenance without rendering the raw
@@ -304,7 +315,10 @@ focus lifecycle invariants. Coach tests cover strict V3/V2/capability/history/
 SSE parsing, authenticated requests, guest/mock zero HTTP, retry/cancellation,
 capability/error/rate-limit states, mixed legacy history, visible evidence/
 trace/Fast detail, absence of fixed-mode/memory/suggestion/plot UI, and history
-deletion. Browser E2E additionally covers authenticated
+deletion. Lifecycle tests cover route-persistent draft/request identity and
+streaming, profile/app teardown, unread success/failure notices, exact
+viewport acknowledgement, Settings Push/Back, and 320 px/200-percent header
+layout. Browser E2E additionally covers authenticated
 Setup revisions,
 identity/ownership-safe reconciliation, exact Phase 1 capture metadata and
 deduplicated linked signals, authenticated target-date refreshes, exact Phase 2

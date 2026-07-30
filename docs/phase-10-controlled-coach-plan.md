@@ -410,9 +410,48 @@ returned.
 
 ## Flutter Contract
 
-Coach remains the fifth development-gated shell destination. Settings stays
-available from the top-right Today control. Release builds and
-`APP_ENV=production` hide Coach regardless of Flutter defines.
+Coach remains the fifth development-gated shell destination. Today, Insights,
+Quick actions, Planner, Coach, and Settings share the same top action group:
+page-specific actions such as Refresh first, an unread Coach result second, and
+Settings last. Settings is pushed so Back returns to the originating main page;
+on Settings its filled control remains visible, selected, and does not push
+again. Loading, empty, and error states retain the same actions. Sub-pages,
+Auth, Setup, and Capture flows remain outside this header contract. Release
+builds and `APP_ENV=production` hide Coach regardless of Flutter defines.
+
+The profile-bound Coach controller lives for the app session rather than the
+Coach route. Its draft is the field's source of truth, and its request id and
+active SSE subscription survive navigation among shell pages. Success clears
+the draft; failure and explicit Cancel retain it. Logout, profile change,
+loss of Coach eligibility, and app teardown dispose the controller, cancel an
+active response, and clear all local draft/answer/notice state. Flutter route
+navigation alone does not close the SSE stream. The backend contract remains
+unchanged: a real disconnect or explicit Cancel may still terminate the turn.
+
+A separate in-memory `CoachTurnNotice` contains only profile id, request id, and
+`completed|failed`. It is never persisted and never initiates an API request.
+Successful turns and non-user-cancel failures show a Coach icon with `!` on all
+six covered pages. The icon opens a dismissible floating message without
+navigating:
+
+- success: `Your Coach answer is ready.`;
+- failure:
+  `Coach could not finish the answer. Open Coach to review or retry.`.
+
+Closing that message leaves the unread icon intact. Opening Coach also does not
+read it. For the latest successful response, an invisible marker follows Reply
+and Uncertainty and precedes the optional `Data and analysis details`.
+Scroll/layout notifications acknowledge the exact notice only when that marker
+is fully within the current scroll viewport; a short fully visible response is
+therefore read after its first layout. Historical turns, the start of a long
+answer, and expansion of later analysis details do not acknowledge it. The
+failure marker follows the visible error and retry copy; reaching it or
+starting a subsequent retry acknowledges the failure. Explicit Cancel creates no
+notice.
+
+Header controls have 44 by 44 logical-pixel targets, keyboard focus, unique
+tooltips/semantics, and wrapping layout that remains usable at 320 logical
+pixels with 200-percent text.
 
 Inside Coach, the current surface contains:
 
@@ -484,7 +523,13 @@ Standard deterministic automation must prove:
   personal history, while the seeded student account renders honestly; reload
   retains current and legacy history; and
 - the UI has no fixed mode, horizon, Focus, prompt-starter, memory-selection, or
-  staged-action surface.
+  staged-action surface;
+- draft and retry identity survive shell navigation, an active stream completes
+  away from Coach without cancellation, and profile/app teardown still
+  cancels and clears local state; and
+- every covered page/state retains the ordered accessible header actions,
+  Settings push/Back works, the popup does not consume or navigate, and only
+  the latest answer-end or failure/retry marker acknowledges its exact notice.
 
 Standard tests use the deterministic fake provider. They do not prove a real
 model, autonomous tool choice, false-premise judgment, semantic quality, OAuth
