@@ -32,6 +32,11 @@ Every seed run deletes and recreates these identities. It therefore resets the
 fresh account and invalidates any open session for all four accounts. Do not
 seed again after the presentation tabs have signed in.
 
+Stop any running `start_local_stack.sh` instance before seeding. Its local
+scheduled-refresh loop can observe an intentionally incomplete intermediate
+seed state. Start the presentation stack only after `npm run seed:demo`
+finishes with the Student coverage summary.
+
 The Auth/profile triggers create the fresh account's canonical profile plus
 neutral notification and Personal Learning preference projections. The seed
 verifies those defaults, keeps onboarding incomplete, and requires every
@@ -66,11 +71,17 @@ Run these steps in order:
    codex login status
    ```
 
-5. Start the real local Coach stack. It rechecks the image revision:
+5. Start the real local Coach stack in static frontend mode. It rechecks the
+   image revision:
 
    ```bash
-   npm run start:local:coach
+   MODE=static npm run start:local:coach
    ```
+
+   Static mode is required for this two-tab presentation setup: it serves the
+   same built app reliably from both `localhost` and `127.0.0.1`. The Flutter
+   debug web server is intended for development and may keep its DDC bootstrap
+   tied to the first hostname that opens it.
 
 6. Open `http://localhost:7357` and sign in as
    `onboarding@example.test`.
@@ -152,6 +163,7 @@ or accept standard tier for the live presentation.
 - Confirm WLAN or hotspot access.
 - Confirm `mylifegraph-coach-analysis:1` was prepared.
 - Run `codex login status`.
-- Start the local Coach stack.
+- Start the local Coach stack with
+  `MODE=static npm run start:local:coach`.
 - Preload and reload both browser origins.
 - Confirm the fresh and Student identities before presenting.
