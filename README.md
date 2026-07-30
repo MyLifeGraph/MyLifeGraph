@@ -667,16 +667,32 @@ password `DemoPass123!`.
 
 ## Verification
 
-Standard non-destructive checks:
+Fast non-destructive checks:
 
 ```bash
-FLUTTER_BIN=/path/to/flutter scripts/verify.sh
+FLUTTER_BIN=/path/to/flutter npm run verify:fast
 ```
 
-This runs the docs-consistency gate, Flutter dependency resolution, analysis,
-widget tests, Python compile checks, shell syntax checks, and whitespace checks.
-Run only the docs gate with `npm run verify:docs`; the GitHub push/pull-request
-workflow runs that same gate against the event base commit.
+This runs docs and visual contracts, Flutter dependency resolution, analysis
+and the complete Flutter suite, the complete FastAPI pytest suite, compile and
+source checks, and `git diff --check`. The compatible `npm run verify` and
+`scripts/verify.sh` aliases select the same gate. Run only the docs gate with
+`npm run verify:docs`.
+
+The other stable verification interfaces are:
+
+```bash
+npm run verify:db
+npm run verify:web
+npm run verify:affected -- --base-ref <git-ref>
+npm run verify:full
+```
+
+`verify:db` checks local migration history and runs the complete pgTAP suite;
+it never repeats Flutter tests. `verify:web` performs a debug web build.
+`verify:affected` conservatively escalates core, Auth, routing, configuration,
+schema, mixed-stack, and unknown changes. `verify:full` runs fast, database,
+web-build, and full browser E2E gates.
 
 Flutter app, if running commands manually:
 
@@ -696,20 +712,18 @@ curl http://localhost:8000/v1/health
 ./.venv/bin/python -m pytest
 ```
 
-Local Supabase verification:
+Local Supabase and pgTAP verification:
 
 ```bash
-FLUTTER_BIN=/path/to/flutter scripts/verify_supabase_local.sh
+npm run verify:db
 ```
 
 This default is inspection-only for migrations and fails if repository files
-and local database history differ. After reviewing the pending SQL and local
-data, use:
+and local database history differ. It then runs all pgTAP assertions and does
+not run `flutter test`. After reviewing the pending SQL and local data, use:
 
 ```bash
-APPLY_MIGRATIONS=true \
-FLUTTER_BIN=/path/to/flutter \
-scripts/verify_supabase_local.sh
+APPLY_MIGRATIONS=true npm run verify:db
 ```
 
 That opt-in may change or delete local rows.
@@ -717,7 +731,7 @@ That opt-in may change or delete local rows.
 Local Supabase reset and migration verification:
 
 ```bash
-RESET_DB=true FLUTTER_BIN=/path/to/flutter scripts/verify_supabase_local.sh
+RESET_DB=true npm run verify:db
 ```
 
 `RESET_DB=true` destroys and recreates the local Supabase database only. It must
@@ -728,17 +742,34 @@ Browser E2E:
 ```bash
 npm install
 npx playwright install chromium
-FLUTTER_BIN=/path/to/flutter bash scripts/e2e_web.sh
+FLUTTER_BIN=/path/to/flutter npm run e2e:web:full
 ```
 
 The normal E2E command likewise requires current migration history and never
 applies pending SQL automatically. Use `APPLY_MIGRATIONS=true` only after
 reviewing and accepting the possible local-row changes.
 
-For diagnosis only, `E2E_PHASE10_ONLY=true` plus a fresh unique `E2E_RUN_ID`
-creates a minimal eligible local principal and runs only the Coach portion.
-Reusing an existing id fails closed. It is not a substitute for the full
-command; see `docs/verification.md`.
+Each run requires a fresh safe `E2E_RUN_ID` (or receives one automatically),
+writes logs and failure artifacts below `.tools/e2e/runs/<run-id>/`, registers
+every exact Auth UUID it creates, and deletes only those UUIDs through the
+loopback local Admin API in `finally`. A cleanup failure fails an otherwise
+passing run while preserving and additionally reporting an earlier test
+failure.
+
+For diagnosis only, `E2E_PHASE10_ONLY=true` plus a fresh unique run id creates
+a minimal eligible local principal and runs only the Coach portion. Reusing an
+id fails closed. It is not a substitute for the full command; see
+`docs/verification.md`.
+
+Old E2E accounts are intentionally not swept by normal runs. Preview the
+separate local-only cleanup with:
+
+```bash
+npm run e2e:cleanup:local
+```
+
+Deletion requires rerunning with the exact selection fingerprint printed by
+that preview.
 
 The browser E2E script starts local Supabase, starts FastAPI with local backend
 Supabase settings and the deterministic fake Coach provider, and runs Flutter
@@ -778,7 +809,7 @@ later checkout passes this source coverage.
 With a fresh local database:
 
 ```bash
-RESET_DB=true FLUTTER_BIN=/path/to/flutter bash scripts/e2e_web.sh
+RESET_DB=true FLUTTER_BIN=/path/to/flutter npm run e2e:web:full
 ```
 
 Use real Ubuntu-installed `node`, `npm`, `supabase`, and Docker for E2E. If

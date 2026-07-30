@@ -1,5 +1,7 @@
 import { chromium } from 'playwright';
 
+import { createLocalAuthUserRegistry } from './support/local-auth-users.mjs';
+
 const required = [
   'APP_URL',
   'AI_SERVICE_BASE_URL',
@@ -22,6 +24,16 @@ const supabaseAnonKey = process.env.SUPABASE_ANON_KEY;
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const scheduledRefreshToken = process.env.SCHEDULED_REFRESH_TOKEN;
 const headed = process.env.HEADED === 'true';
+const semanticsPreEnabled =
+  process.env.E2E_SEMANTICS_PRE_ENABLED === 'true';
+if (
+  process.env.E2E_SEMANTICS_PRE_ENABLED !== undefined &&
+  !['true', 'false'].includes(process.env.E2E_SEMANTICS_PRE_ENABLED)
+) {
+  throw new Error(
+    'E2E_SEMANTICS_PRE_ENABLED must be exactly true or false.',
+  );
+}
 const runId = process.env.E2E_RUN_ID ?? `${Date.now()}`;
 const phase10Only = process.env.E2E_PHASE10_ONLY === 'true';
 const personalLearningOnly =
@@ -123,12 +135,26 @@ const accountExportV1OmittedTables = {
   learning_request_identities: 'backend_only_anti_replay_ledger',
 };
 
+const authUserRegistry = createLocalAuthUserRegistry({
+  supabaseUrl,
+  serviceRoleKey,
+});
+const semanticsTimings = {
+  checks: 0,
+  totalMs: 0,
+  firstMs: null,
+  maxMs: 0,
+};
+const chromiumStartedAt = performance.now();
 const browser = await chromium.launch({
   headless: !headed,
   executablePath: process.env.CHROME_BIN || undefined,
 });
+emitTiming('chromium', performance.now() - chromiumStartedAt);
 
 let page;
+let runError = null;
+const journeyStartedAt = performance.now();
 try {
   await assertAiServiceHealthy();
   if (personalLearningOnly) {
@@ -1109,7 +1135,8 @@ try {
   await clickByRoleName(page, 'button', 'evening mood 2 of 10');
   await clickByRoleName(page, 'button', 'evening energy 9 of 10');
   await clickByRoleName(page, 'button', 'evening stress 8 of 10');
-  await clickByText(page, 'Next');
+  await clickFlutterSemanticsButton(page, 'Next');
+  await expectText(page, 'Planned sleep time');
   await assertFlutterTextAbsent(
     page,
     'Make tomorrow gentler',
@@ -1120,10 +1147,17 @@ try {
   ) {
     throw new Error('Evening check-in still exposes retired friction choices.');
   }
-  await clickByText(page, '23:00');
-  await clickByText(page, '8 h', { match: 'last' });
+  await clickFlutterSemanticsButton(
+    page,
+    'planned sleep time preset 23:00',
+  );
+  await page
+    .getByRole('button', { name: 'planned sleep time 23:00', exact: true })
+    .waitFor({ state: 'visible', timeout: 7500 });
+  await clickFlutterSemanticsButton(page, 'sleep target 8 h');
   await expectText(page, '8 h');
-  await clickByText(page, 'Next');
+  await clickFlutterSemanticsButton(page, 'Next');
+  await expectText(page, 'What drove the pressure?');
   await clickScrolledByLabel(page, 'stress source private_emotional');
   const privateSourceBounds = await page
     .getByLabel('stress source private_emotional', { exact: true })
@@ -1422,10 +1456,12 @@ try {
     page,
     "Today's evening check-in is loaded. Saving updates only these evening answers.",
   );
-  await clickByText(page, 'Next');
+  await clickFlutterSemanticsButton(page, 'Next');
+  await expectText(page, 'Planned sleep time');
   await expectText(page, '23:00');
   await expectText(page, '8 h');
-  await clickByText(page, 'Next');
+  await clickFlutterSemanticsButton(page, 'Next');
+  await expectText(page, 'What drove the pressure?');
   await clickScrolledByLabel(page, 'stress source workload');
   await clickScrolledByLabel(
     page,
@@ -2132,13 +2168,9 @@ try {
     waitUntil: 'domcontentloaded',
   });
   await expectText(page, 'Evening check-in');
-  await clickByText(page, 'Next');
+  await clickFlutterSemanticsButton(page, 'Next');
   await expectText(page, 'When do you plan to sleep?');
-  await page.waitForTimeout(250);
-  // Flutter retains the prior step's semantics node after rebuilding this
-  // flow. Target the exact text whose rendered bounds are actually inside the
-  // viewport instead of trusting DOM order among stale nodes.
-  await clickVisibleExactText(page, 'Next');
+  await clickFlutterSemanticsButton(page, 'Next');
   await expectText(page, "Today's Focus sessions");
   await expectText(page, '1 rated · 1 open');
   await clickByText(page, "Today's Focus sessions");
@@ -2470,9 +2502,59 @@ try {
       console.error(`Could not save failure screenshot: ${screenshotError}`);
     }
   }
-  throw error;
+  runError = error;
 } finally {
-  await browser.close();
+  emitTiming('journeys', performance.now() - journeyStartedAt);
+  emitTiming('semantics', semanticsTimings.totalMs, {
+    checks: semanticsTimings.checks,
+    first_ms: semanticsTimings.firstMs,
+    max_ms: semanticsTimings.maxMs,
+    mode: semanticsPreEnabled ? 'pre_enabled' : 'click_fallback',
+  });
+
+  const cleanupStartedAt = performance.now();
+  const cleanupErrors = [];
+  try {
+    await browser.close();
+  } catch (error) {
+    cleanupErrors.push(
+      `browser close: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+
+  let authCleanup = {
+    registered: authUserRegistry.size,
+    deleted: 0,
+    alreadyAbsent: 0,
+  };
+  try {
+    authCleanup = await authUserRegistry.cleanup();
+  } catch (error) {
+    cleanupErrors.push(
+      error instanceof Error ? error.message : String(error),
+    );
+  }
+  emitTiming('cleanup', performance.now() - cleanupStartedAt, {
+    registered_users: authCleanup.registered,
+    deleted_users: authCleanup.deleted,
+    already_absent_users: authCleanup.alreadyAbsent,
+    status: cleanupErrors.length === 0 ? 'passed' : 'failed',
+  });
+
+  if (cleanupErrors.length > 0) {
+    const combinedCleanupError = new Error(cleanupErrors.join('; '));
+    if (runError === null) {
+      runError = combinedCleanupError;
+    } else {
+      console.error(
+        `[e2e cleanup error] ${combinedCleanupError.message}`,
+      );
+    }
+  }
+}
+
+if (runError !== null) {
+  throw runError;
 }
 
 async function assertAiServiceHealthy() {
@@ -2508,7 +2590,9 @@ async function createConfirmedUser() {
     );
   }
 
-  return response.json();
+  const user = await response.json();
+  authUserRegistry.register(user.id);
+  return user;
 }
 
 async function assertConcurrentSetupReplay(userId) {
@@ -2610,6 +2694,16 @@ async function navigateFlutterRoute(page, path) {
 }
 
 async function enableFlutterSemantics(page) {
+  const startedAt = performance.now();
+  if (semanticsPreEnabled) {
+    await page.locator('flt-semantics').first().waitFor({
+      state: 'attached',
+      timeout: 1000,
+    });
+    recordSemanticsTiming(performance.now() - startedAt);
+    return;
+  }
+
   const placeholder = page.locator('flt-semantics-placeholder');
   try {
     await placeholder.click({ force: true, timeout: 10000 });
@@ -2622,6 +2716,29 @@ async function enableFlutterSemantics(page) {
       // Flutter Web only shows the semantics placeholder before semantics are on.
     }
   }
+  await page.locator('flt-semantics').first().waitFor({
+    state: 'attached',
+    timeout: 10000,
+  });
+  recordSemanticsTiming(performance.now() - startedAt);
+}
+
+function recordSemanticsTiming(durationMs) {
+  const rounded = Math.round(durationMs);
+  semanticsTimings.checks += 1;
+  semanticsTimings.totalMs += rounded;
+  semanticsTimings.maxMs = Math.max(semanticsTimings.maxMs, rounded);
+  semanticsTimings.firstMs ??= rounded;
+}
+
+function emitTiming(phase, durationMs, details = {}) {
+  console.log(
+    `[e2e:timing] ${JSON.stringify({
+      phase,
+      duration_ms: Math.round(durationMs),
+      ...details,
+    })}`,
+  );
 }
 
 async function waitForFlutterShell(page) {
@@ -3267,10 +3384,21 @@ async function clickByRoleName(page, role, name) {
 }
 
 async function clickFlutterSemanticsButton(page, name) {
-  const locator = page.getByRole('button', { name, exact: true }).last();
-  await locator.waitFor({ state: 'visible', timeout: 7500 });
+  const button = () =>
+    page.getByRole('button', { name, exact: true }).last();
+  await button().waitFor({ state: 'visible', timeout: 7500 });
+  const enabledDeadline = Date.now() + 7500;
+  while (
+    (await button().getAttribute('aria-disabled').catch(() => 'true')) ===
+    'true'
+  ) {
+    if (Date.now() >= enabledDeadline) {
+      throw new Error(`Flutter semantics button ${JSON.stringify(name)} stayed disabled.`);
+    }
+    await page.waitForTimeout(100);
+  }
   await page.waitForTimeout(250);
-  await locator.evaluate((element) => {
+  await button().evaluate((element) => {
     if (element.getAttribute('aria-disabled') === 'true') {
       throw new Error('Flutter semantics button is disabled.');
     }
@@ -11565,11 +11693,15 @@ async function assertFreeReadOnlyCoach(page, userId) {
     throw new Error('Current Coach UI did not use the V3 SSE endpoint.');
   }
 
-  await scrollUntilTextInViewport(page, 'Conversation history');
+  await scrollFlutterPage(page, -20000);
+  await scrollUntilTextInViewport(page, 'Conversation history', {
+    deltaY: 500,
+    precise: true,
+  });
   const firstDeleteConversation = await scrollUntilTextInViewport(
     page,
     'Delete',
-    { buttonFirst: true },
+    { buttonFirst: true, deltaY: 250, precise: true },
   );
   const historyDeletes = [];
   const historyDeleteObserver = (request) => {
@@ -13029,15 +13161,17 @@ async function assertCompactFocusReflectionJourney(page, userId) {
   await clickByRoleName(page, 'button', 'evening mood 7 of 10');
   await clickByRoleName(page, 'button', 'evening energy 6 of 10');
   await clickByRoleName(page, 'button', 'evening stress 3 of 10');
-  await clickByText(page, 'Next');
+  await clickFlutterSemanticsButton(page, 'Next');
   await expectText(page, 'Planned sleep time');
-  await clickByRoleName(
+  await clickFlutterSemanticsButton(
     page,
-    'button',
     'planned sleep time preset 23:00',
   );
-  await clickByRoleName(page, 'button', 'sleep target 8 h');
-  await clickByText(page, 'Next');
+  await page
+    .getByRole('button', { name: 'planned sleep time 23:00', exact: true })
+    .waitFor({ state: 'visible', timeout: 7500 });
+  await clickFlutterSemanticsButton(page, 'sleep target 8 h');
+  await clickFlutterSemanticsButton(page, 'Next');
   await expectText(page, "Today's Focus sessions");
   await expectText(page, '1 rated · 0 open');
   await clickFlutterSemanticsButtonContaining(
@@ -15801,7 +15935,9 @@ async function createConfirmedUserWithCredentials({
       `Could not create additional local auth user: ${response.status} ${await response.text()}`,
     );
   }
-  return response.json();
+  const user = await response.json();
+  authUserRegistry.register(user.id);
+  return user;
 }
 
 async function signInCredentials({

@@ -1231,18 +1231,18 @@ error and never substitutes local mock recommendations.
 Automated local preflight without resetting the database:
 
 ```bash
-FLUTTER_BIN=/path/to/flutter scripts/verify_supabase_local.sh
+npm run verify:db
 ```
 
 Automated local reset and test run:
 
 ```bash
-RESET_DB=true FLUTTER_BIN=/path/to/flutter scripts/verify_supabase_local.sh
+RESET_DB=true npm run verify:db
 ```
 
 The script runs Supabase with telemetry disabled, redacts keys from output,
-reads the local anon key from `supabase status -o env`, and runs Flutter tests
-with `USE_MOCK_DATA=false`.
+requires matching migration history, and runs all 142 pgTAP assertions. It does
+not read Flutter client configuration or repeat Flutter tests.
 
 ## Verification
 
@@ -1263,11 +1263,17 @@ python -m compileall app
 ./.venv/bin/python -m pytest
 ```
 
-All standard non-destructive checks from the repository root:
+All fast non-destructive checks from the repository root:
 
 ```bash
-FLUTTER_BIN=/path/to/flutter scripts/verify.sh
+FLUTTER_BIN=/path/to/flutter npm run verify:fast
 ```
+
+This includes the complete Flutter and FastAPI suites. `npm run verify` and
+`scripts/verify.sh` remain compatible aliases. Use `npm run verify:web` for a
+debug web build, `npm run verify:affected -- --base-ref <ref>` for conservative
+path selection, and `npm run verify:full` for fast, database, web, and full
+browser gates.
 
 Run the fast documentation-only gate with:
 
@@ -1278,20 +1284,17 @@ npm run verify:docs
 Non-destructive local Supabase preflight:
 
 ```bash
-FLUTTER_BIN=/path/to/flutter scripts/verify_supabase_local.sh
+npm run verify:db
 ```
 
 The command starts or reuses the repository's local Supabase stack, verifies
-that repository and database migration history match, reads the local anon key
-without printing it, and does not reset or apply migrations. A mismatch fails
-with instructions before Flutter tests run.
+that repository and database migration history match, and does not reset or
+apply migrations. A mismatch fails with instructions before pgTAP runs.
 
 After reviewing pending SQL and local data, the explicit application path is:
 
 ```bash
-APPLY_MIGRATIONS=true \
-FLUTTER_BIN=/path/to/flutter \
-scripts/verify_supabase_local.sh
+APPLY_MIGRATIONS=true npm run verify:db
 ```
 
 That operation may change or delete local rows.
@@ -1300,14 +1303,11 @@ Local Supabase reset workflow, only when a fresh local database is explicitly
 intended:
 
 ```bash
-RESET_DB=true \
-FLUTTER_BIN=/path/to/flutter \
-scripts/verify_supabase_local.sh
+RESET_DB=true npm run verify:db
 ```
 
 `RESET_DB=true` destroys and recreates the local database. The script requires
-the Supabase CLI and Docker to be available to the same shell that runs it. It
-reads the local anon key from `supabase status` without printing the key.
+the Supabase CLI and Docker to be available to the same shell that runs it.
 
 For details on what each script verifies and what is still not automated, read
 `docs/verification.md`.
@@ -1317,7 +1317,7 @@ Browser E2E:
 ```bash
 npm install
 npx playwright install chromium
-FLUTTER_BIN=/path/to/flutter bash scripts/e2e_web.sh
+FLUTTER_BIN=/path/to/flutter npm run e2e:web:full
 ```
 
 This is the normal non-reset path. It requires repository and local database
@@ -1339,7 +1339,8 @@ bash scripts/e2e_web.sh
 This mode creates and signs in the confirmed
 `e2e-<run-id>@example.test` account, applies its minimal prerequisite Setup
 projection, clears only its Coach E2E state, and runs the bounded Coach
-browser/RLS assertions. Reusing an existing local email fails closed. It does
+browser/RLS assertions. The run id must be fresh; reuse fails closed against
+the run-specific artifact directory even after exact-user cleanup. It does
 not exercise the normal Setup UI, capture, action, briefing, review, or
 calendar journeys, so it is a diagnostic aid, never a substitute for the full
 command above.
@@ -1351,7 +1352,7 @@ Documented browser assertions are not a pass claim for a later checkout.
 Browser E2E with a fresh local database:
 
 ```bash
-RESET_DB=true FLUTTER_BIN=/path/to/flutter bash scripts/e2e_web.sh
+RESET_DB=true FLUTTER_BIN=/path/to/flutter npm run e2e:web:full
 ```
 
 The E2E script starts local Supabase, starts the FastAPI AI service with the
@@ -1458,6 +1459,19 @@ E2E must not contact a live Codex account.
 
 The local service-role key is used only inside FastAPI and the Node E2E process
 for local test setup and assertions. It is not passed to Flutter.
+The standard Flutter start pre-enables Semantics. The Node runner waits for a
+real `flt-semantics` node in the explicit pre-enabled mode; the slower
+placeholder/button fallback is reserved for manually started builds. Each run
+records its exact created Auth UUIDs and removes only those users through the
+loopback local Admin API in `finally`. A cleanup failure fails an otherwise
+passing run, and an earlier test error remains primary if both fail. Old E2E
+accounts are never swept by a normal run; `npm run e2e:cleanup:local` previews
+the separate fingerprint-confirmed local cleanup.
+
+Logs, screenshots, and timing artifacts are run-specific under
+`.tools/e2e/runs/<run-id>/`. Supabase, FastAPI, Flutter, Chromium, Semantics,
+journeys, Auth cleanup, runner, and process-cleanup timings are emitted as
+structured `[e2e:timing]` records.
 This automated browser smoke covers the manual Supabase-backed smoke path for
 the listed screens. Keep manual testing for flows not listed in
 `docs/verification.md`.
@@ -1492,14 +1506,16 @@ the listed screens. Keep manual testing for flows not listed in
   retrying. The migration deliberately will not reinterpret it as a skip;
   positive legacy values are safely normalized to completion.
 - If the AI service exits early during E2E, inspect
-  `.tools/e2e/ai-service.log` and confirm `services/ai_service` dependencies are
-  installed. If the log says the address is already in use, stop the stale
-  service or set `AI_SERVICE_PORT` to a free port.
+  `.tools/e2e/runs/<run-id>/ai-service.log` and confirm
+  `services/ai_service` dependencies are installed. If the log says the
+  address is already in use, stop the stale service or set
+  `AI_SERVICE_PORT` to a free port.
 - If the local Coach reports that its provider is
   unavailable, run `codex --version` and `codex login status` as the same Linux
   user that runs FastAPI. Do not troubleshoot by opening or copying the Codex
   auth file. An unavailable explicitly configured model is not permission to
   fall back silently.
-- If Flutter Web exits early during E2E, inspect `.tools/e2e/flutter-web.log`.
+- If Flutter Web exits early during E2E, inspect
+  `.tools/e2e/runs/<run-id>/flutter-web.log`.
 - Chromium WebGL performance warnings during E2E are expected in headless/local
   runs.

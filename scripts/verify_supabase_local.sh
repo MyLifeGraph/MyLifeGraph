@@ -4,7 +4,6 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$ROOT_DIR/scripts/lib/local_supabase_migrations.sh"
 
-FLUTTER_BIN="${FLUTTER_BIN:-flutter}"
 RESET_DB="${RESET_DB-false}"
 APPLY_MIGRATIONS="${APPLY_MIGRATIONS-false}"
 SUPABASE_HOME="$ROOT_DIR/.tools/supabase-home"
@@ -44,22 +43,5 @@ printf '%s\n' "$start_output" | sanitize_supabase_output
 local_supabase_prepare_migration_state \
   "$RESET_DB" "$APPLY_MIGRATIONS" true
 
-status_output="$(supabase_cli status -o env)"
-api_url="$(printf '%s\n' "$status_output" | awk -F= '$1 == "API_URL" {gsub(/"/, "", $2); print $2; exit}')"
-local_anon_key="$(printf '%s\n' "$status_output" | awk -F= '$1 == "ANON_KEY" {gsub(/"/, "", $2); print $2; exit}')"
-
-if [[ -z "$local_anon_key" && -z "${SUPABASE_ANON_KEY:-}" ]]; then
-  echo "Could not read the local anon key from 'supabase status'." >&2
-  echo "Export SUPABASE_ANON_KEY manually and re-run this script." >&2
-  exit 2
-fi
-
-echo "Supabase local API: ${api_url:-http://127.0.0.1:54321}"
-echo "Local anon key: available"
-
-cd "$ROOT_DIR/apps/mobile"
-
-USE_MOCK_DATA=false \
-SUPABASE_URL="${SUPABASE_URL:-${api_url:-http://127.0.0.1:54321}}" \
-SUPABASE_ANON_KEY="${SUPABASE_ANON_KEY:-$local_anon_key}" \
-"$FLUTTER_BIN" test
+echo "Running the complete local pgTAP suite."
+supabase_cli test db

@@ -1041,27 +1041,27 @@ SUPABASE_ANON_KEY=<local anon key from supabase status>
 Run the standard local checks first:
 
 ```bash
-FLUTTER_BIN=/path/to/flutter scripts/verify.sh
+FLUTTER_BIN=/path/to/flutter npm run verify:fast
 ```
 
-This includes Flutter analysis, widget tests, Python compile checks, whitespace
-checks, and the automated guest onboarding/quick-check-in smoke tests.
+This includes docs/visual/source checks, clean Flutter analysis and the
+complete Flutter suite, the complete FastAPI pytest suite, compile checks, and
+whitespace checks.
 
 For local Supabase preflight without resetting the database:
 
 ```bash
-FLUTTER_BIN=/path/to/flutter scripts/verify_supabase_local.sh
+npm run verify:db
 ```
 
 This default starts/reuses the local stack, inspects
 `supabase migration list --local`, and fails if repository files and database
-history differ. It never applies SQL automatically. If the histories differ,
-review the pending SQL and affected local rows before opting in:
+history differ. It then runs all 142 pgTAP assertions and never runs Flutter
+tests. It never applies SQL automatically. If the histories differ, review the
+pending SQL and affected local rows before opting in:
 
 ```bash
-APPLY_MIGRATIONS=true \
-FLUTTER_BIN=/path/to/flutter \
-scripts/verify_supabase_local.sh
+APPLY_MIGRATIONS=true npm run verify:db
 ```
 
 Pending migrations may change or delete local rows. Avoid describing this path
@@ -1071,11 +1071,11 @@ script verifies migration history again after the explicit application.
 For local Supabase reset and migration verification:
 
 ```bash
-RESET_DB=true FLUTTER_BIN=/path/to/flutter scripts/verify_supabase_local.sh
+RESET_DB=true npm run verify:db
 ```
 
 The reset form should apply all migrations through
-`20260728160000_free_read_only_coach_agent_v1.sql`; expected legacy-table
+`20260729160000_coach_english_prompt_v2.sql`; expected legacy-table
 skip notices may be emitted for missing CamelCase tables. Use reset when proving
 the full migration/backfill/constraint chain from a fresh local database, not
 merely because a reviewed migration is pending.
@@ -1201,7 +1201,11 @@ legacy compatibility only and should be dropped in a later dedicated migration
 after data migration and app verification are complete.
 
 The latest migration is
-`20260728160000_free_read_only_coach_agent_v1.sql`. It preserves fixed-mode
+`20260729160000_coach_english_prompt_v2.sql`. It adds rolling-safe English-only
+Coach prompt provenance and a service-role-only V4 claim wrapper without
+changing application-role authority. The preceding stabilization migrations
+establish retry-safe write authority and observation-order persistence. The
+earlier `20260728160000_free_read_only_coach_agent_v1.sql` preserves fixed-mode
 V1/V2 rows while adding message-only V3 claim, exact V2 response, backend-owned
 evidence/trace/tool/tier persistence, and compatible history deletion. The
 preceding `20260728120000_coach_longitudinal_context_v1.sql` adds exact V2

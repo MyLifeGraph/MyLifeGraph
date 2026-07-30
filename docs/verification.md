@@ -17,6 +17,25 @@ The post-review stabilization working tree was reverified locally on
 tests and clean analysis. The frontend visual contract and documentation
 consistency checks passed, and `git diff --check` was clean.
 
+Before the P0 test-infrastructure work, the recorded warm timings were
+25.08 seconds for the standard repository gate, 23.10 seconds for the old
+Supabase preflight, 2:43 for focused Coach E2E, and 25:57 for full E2E. The P0
+interfaces were then measured on the same machine: `verify:fast` passed in
+27.29 seconds with the same 726 Flutter and 1,115 backend tests;
+`verify:db` passed all 142 pgTAP assertions in 2.90 seconds even with
+`FLUTTER_BIN` deliberately invalid; and the first and repeated debug web builds
+passed in 27.38 and 27.31 seconds.
+
+The P0 full browser run
+`p0-full-20260730i` passed in 14:53 runner time, 11:03 faster than its recorded
+25:57 baseline. Its 49 pre-enabled Semantics checks each completed in less
+than 0.4 seconds after the Flutter shell. Exact cleanup registered six Auth
+users, deleted five, accepted the one already removed by the account-deletion
+journey, and read every identity back as absent.
+The final focused Coach run `p0-coach-final-20260730` also passed in 1:36
+runner time; all four Semantics checks were below 0.4 seconds and both exact
+Auth users were removed.
+
 The final combined stabilization browser journey reported
 `E2E browser smoke passed for e2e-1785377904@example.test`. It covered the
 new Capture, account-setting, Calendar, Setup/Focus, Planner/Today,
@@ -79,11 +98,14 @@ Use the lowest level that covers the change.
 
 | Level | Command | Purpose | Destructive |
 | --- | --- | --- | --- |
-| Standard | `FLUTTER_BIN=/path/to/flutter scripts/verify.sh` | Non-destructive repo checks. | No |
-| Local Supabase preflight | `FLUTTER_BIN=/path/to/flutter scripts/verify_supabase_local.sh` | Starts local Supabase, requires matching migration history, and runs tests with Supabase config. | No |
-| Local Supabase migration apply | `APPLY_MIGRATIONS=true FLUTTER_BIN=/path/to/flutter scripts/verify_supabase_local.sh` | Explicitly applies reviewed pending SQL, verifies history, then runs tests. | May change or delete local rows |
-| Local Supabase reset | `RESET_DB=true FLUTTER_BIN=/path/to/flutter scripts/verify_supabase_local.sh` | Recreates local DB, applies migrations, then runs tests. | Yes, local DB only |
-| Browser E2E | `FLUTTER_BIN=/path/to/flutter bash scripts/e2e_web.sh` | Requires matching local migration history, starts Flutter Web, drives Playwright, and checks uniquely named DB writes. | No reset; writes test rows |
+| Fast | `FLUTTER_BIN=/path/to/flutter npm run verify:fast` | Docs/visual and source checks, clean Flutter analysis and complete Flutter tests, complete pytest, compile, and diff checks. | No |
+| Affected | `npm run verify:affected -- --base-ref <ref>` | Conservatively selects gates from all committed, working-tree, and untracked paths; core/Auth/routing/config/schema/mixed/unknown changes escalate to full. | Depends on selected gate |
+| Web build | `FLUTTER_BIN=/path/to/flutter npm run verify:web` | Builds the Flutter debug web bundle. | No |
+| Local Supabase preflight | `npm run verify:db` | Starts local Supabase, requires matching migration history, and runs the complete pgTAP suite without Flutter. | No |
+| Local Supabase migration apply | `APPLY_MIGRATIONS=true npm run verify:db` | Explicitly applies reviewed pending SQL, verifies history, then runs pgTAP. | May change or delete local rows |
+| Local Supabase reset | `RESET_DB=true npm run verify:db` | Recreates local DB, applies migrations, then runs pgTAP. | Yes, local DB only |
+| Full | `FLUTTER_BIN=/path/to/flutter npm run verify:full` | Runs fast, database, web-build, and full browser E2E gates. | No reset; E2E writes and removes exact test users |
+| Browser E2E | `FLUTTER_BIN=/path/to/flutter npm run e2e:web:full` | Requires matching local migration history, starts Flutter Web, drives Playwright, and checks uniquely named DB writes. | No reset; removes its exact test users |
 | Personal Learning E2E | `E2E_PERSONAL_LEARNING_ONLY=true FLUTTER_BIN=/path/to/flutter bash scripts/e2e_web.sh` | Runs the focused reflection, Evening edit, pattern, learned-Planner, export, clear, and account-cascade journey. | No reset; writes and then deletes one test account |
 | Browser E2E with reset | `RESET_DB=true FLUTTER_BIN=/path/to/flutter bash scripts/e2e_web.sh` | Recreates local DB, then runs browser E2E. | Yes, local DB only |
 | Demo seed | `npm run seed:demo` | Starts local Supabase and replaces only the four named local demo accounts: one fresh Setup identity and three populated scenarios. | Demo accounts only |
@@ -155,15 +177,17 @@ local-only password is `DemoPass123!` for:
 Override it with `DEMO_PASSWORD` when needed. Do not use this workflow for a
 remote Supabase project.
 
-## Standard Verification
+## Fast Verification
 
 From the repository root:
 
 ```bash
-FLUTTER_BIN=/path/to/flutter scripts/verify.sh
+FLUTTER_BIN=/path/to/flutter npm run verify:fast
 ```
 
-The script runs:
+The compatible `npm run verify` and `scripts/verify.sh` aliases run the same
+gate. Its independent source, Flutter, and backend groups run concurrently. It
+runs:
 
 - `node --test scripts/check_frontend_visual_contract.test.mjs`
 - `node scripts/check_frontend_visual_contract.mjs`
@@ -178,22 +202,13 @@ The script runs:
 - syntax checks for the demo seed, browser smoke, and student feature enricher
 - `flutter pub get`
 - `flutter analyze`
-- `flutter test`
+- the complete `flutter test` suite
 - `python3 -m compileall services/ai_service/app`
+- the complete `python -m pytest` suite
 - `git diff --check`
 
-The post-review stabilization additionally requires the complete backend suite
-and local database tests because the standard script does not run pytest or
-pgTAP:
-
-```bash
-cd services/ai_service
-./.venv/bin/python -m pytest
-
-cd ../..
-supabase db reset
-supabase test db
-```
+Database integration is deliberately separate: `npm run verify:db` runs
+migration-history checks plus pgTAP and never repeats Flutter tests.
 
 The stabilization evidence must include branch-CAS Capture writes, revisioned
 account settings, Setup-owned DML guards, timezone-bound Calendar/Planner
@@ -705,7 +720,7 @@ Supabase registration, RLS, or browser behavior.
 From the repository root:
 
 ```bash
-FLUTTER_BIN=/path/to/flutter scripts/verify_supabase_local.sh
+npm run verify:db
 ```
 
 The script:
@@ -716,28 +731,18 @@ The script:
    user's real home directory.
 3. Starts the local Supabase stack.
 4. Redacts Supabase keys from CLI output.
-5. Reads `API_URL` and `ANON_KEY` from `supabase status -o env` without printing
-   the key.
-6. Runs Flutter tests from `apps/mobile` with:
-
-```env
-USE_MOCK_DATA=false
-SUPABASE_URL=<local API URL>
-SUPABASE_ANON_KEY=<local anon key>
-```
+5. Requires repository and local migration history to match.
+6. Runs all seven pgTAP files and their 142 assertions.
 
 With the default `RESET_DB=false` and `APPLY_MIGRATIONS=false`, the script runs
 `supabase migration list --local` and requires every repository/DB history row
 to match. It never applies pending SQL automatically. A mismatch fails before
-reading client configuration or running Flutter tests and explains the two
-explicit choices.
+pgTAP and explains the two explicit choices.
 
 After reviewing the pending SQL and affected local rows, apply intentionally:
 
 ```bash
-APPLY_MIGRATIONS=true \
-FLUTTER_BIN=/path/to/flutter \
-scripts/verify_supabase_local.sh
+APPLY_MIGRATIONS=true npm run verify:db
 ```
 
 The script warns that this may change or delete local rows, runs
@@ -750,7 +755,7 @@ unknown, or non-boolean flag value is rejected. `APPLY_MIGRATIONS=true` and
 Run this only when a local database reset is intended:
 
 ```bash
-RESET_DB=true FLUTTER_BIN=/path/to/flutter scripts/verify_supabase_local.sh
+RESET_DB=true npm run verify:db
 ```
 
 This executes:
@@ -762,7 +767,7 @@ supabase db reset
 Expected successful reset output applies migrations through:
 
 ```text
-20260725120000_retire_setup_goals_and_friction.sql
+20260729160000_coach_english_prompt_v2.sql
 ```
 
 Expected notices include skipped legacy CamelCase tables and already-existing
@@ -791,9 +796,7 @@ target constraints/triggers. Existing local stacks may apply reviewed pending
 migrations explicitly with:
 
 ```bash
-APPLY_MIGRATIONS=true \
-FLUTTER_BIN=/path/to/flutter \
-scripts/verify_supabase_local.sh
+APPLY_MIGRATIONS=true npm run verify:db
 ```
 
 This is not a non-destructive claim: migration SQL may change or delete local
@@ -812,7 +815,7 @@ Browser E2E is implemented with Playwright:
 ```bash
 npm install
 npx playwright install chromium
-FLUTTER_BIN=/path/to/flutter bash scripts/e2e_web.sh
+FLUTTER_BIN=/path/to/flutter npm run e2e:web:full
 ```
 
 This is the normal non-reset database path: the script starts or reuses the
@@ -834,7 +837,10 @@ bash scripts/e2e_web.sh
 This mode creates and signs in a confirmed `e2e-<run-id>@example.test`
 principal, applies only its minimal prerequisite Setup projection, resets only
 its Coach E2E state, and repeats the fake-provider Coach UI/API/RLS assertions.
-Reusing an id fails closed when that local email already exists. Its UI path
+Every invocation must use a fresh run id. Reusing one fails closed when its
+run-specific artifact directory already exists, even though successful cleanup
+removed the Auth principal. The Coach request attempt id is additionally
+run/process/time scoped. Its UI path
 also retains a draft across Coach/Today navigation,
 holds the SSE request while navigating away, verifies completion without a
 Flutter disconnect, exercises the unread header message without navigation or
@@ -897,7 +903,32 @@ Playwright opens the page during that window, screenshots are often blank white.
 The E2E Flutter process also passes `--dart-define=E2E_ENABLE_SEMANTICS=true`.
 `apps/mobile/lib/main.dart` uses that test-only flag to keep Flutter Semantics
 enabled, which gives Playwright stable text fields, buttons, and labels instead
-of relying on canvas pixels.
+of relying on canvas pixels. The standard runner also sets
+`E2E_SEMANTICS_PRE_ENABLED=true`: after each Flutter shell it waits at most one
+second for a real `flt-semantics` node and never waits for or clicks the
+placeholder. The legacy placeholder/accessibility-button fallback remains only
+for deliberately reused, manually started builds with
+`E2E_SEMANTICS_PRE_ENABLED=false`.
+
+All Auth UUIDs created during a run are registered immediately. The runner's
+`finally` block deletes only those exact users through the local Admin API,
+after the exact focus-history prerequisite, and reads them back as absent.
+This is rejected for every non-loopback or credential-bearing Supabase URL.
+Normal cleanup never resets the database and never discovers users by email
+prefix. If a passing journey cannot clean up, the run fails; if the journey
+already failed, its original error remains primary and the cleanup error is
+reported additionally.
+
+Historical E2E accounts are intentionally outside that registry. The separate
+command below is preview-only by default and prints a fingerprint bound to the
+current exact UUID/email selection:
+
+```bash
+npm run e2e:cleanup:local
+```
+
+Only an explicit rerun with `--confirm <printed-fingerprint>` deletes that
+still-current selection, and the command also rejects non-loopback Supabase.
 
 The browser smoke creates a confirmed local Supabase Auth user through the local
 admin API and walks the Phase 0C Setup journeys before continuing through the
@@ -1151,6 +1182,7 @@ AI_SERVICE_PYTHON=/path/to/python
 AI_SERVICE_START=false
 SCHEDULED_REFRESH_TOKEN=local-e2e-override
 E2E_RUN_ID=manual-001
+E2E_SEMANTICS_PRE_ENABLED=true
 ```
 
 By default, `scripts/e2e_web.sh` starts FastAPI from the current checkout and
@@ -1163,22 +1195,24 @@ project settings and scheduled-refresh token.
 Flutter Web logs for the E2E run are written to:
 
 ```text
-.tools/e2e/flutter-web.log
+.tools/e2e/runs/<run-id>/flutter-web.log
 ```
 
 FastAPI logs for the E2E run are written to:
 
 ```text
-.tools/e2e/ai-service.log
+.tools/e2e/runs/<run-id>/ai-service.log
 ```
 
 On browser failure, Playwright saves a screenshot named:
 
 ```text
-.tools/e2e/failure-<run-id>.png
+.tools/e2e/runs/<run-id>/failure-<run-id>.png
 ```
 
-`.tools/` is ignored by git.
+The runner prints machine-readable `[e2e:timing]` JSON for Supabase, FastAPI,
+Flutter, Chromium, Semantics, journeys, exact-user cleanup, the Node runner,
+and process cleanup. `.tools/` is ignored by git.
 
 ## Phase 10 Provider Verification
 
@@ -1597,10 +1631,26 @@ complete the documented path without copied credentials.
 Known harmless local E2E output includes Chromium WebGL performance warnings.
 The FastAPI AI service must be healthy for the browser smoke to pass.
 
+## Continuous Integration Gates
+
+`.github/workflows/ci.yml` runs documentation/visual contracts, clean Flutter
+analysis plus the complete Flutter suite, and the complete FastAPI pytest suite
+on every pull request. Path classification adds a debug web build for Flutter
+changes and a fresh ephemeral local migration chain plus pgTAP for Supabase,
+migration, or database-test changes. Full browser E2E runs nightly, on manual
+dispatch, and for Auth, routing, schema, core/configuration, unknown, or
+cross-stack pull-request changes. No local Git hook is required or installed.
+
+The same conservative rules are available locally through
+`npm run verify:affected -- --base-ref <ref>`. CI failure artifacts are retained
+from the run-specific E2E directory. A local workflow run is evidence for the
+checkout only; a hosted PR job must itself succeed before it is reported as a
+successful PR gate.
+
 Still missing for broader product verification:
 
-- CI wiring for the browser E2E command.
-- Playwright trace artifact collection on failure.
+- Per-spec Playwright trace artifact collection; the current P0 runner saves
+  failure screenshots and run logs.
 - Deployed scheduler/cron wiring and monitoring; the repository verifies the
   protected preparation endpoint, not any production invocation platform.
 - Android/system notification delivery is not part of Notification Delivery V1
@@ -1611,5 +1661,5 @@ Still missing for broader product verification:
   do not replace device acceptance. Guest Setup intentionally has no automatic
   account migration.
 
-When changing E2E flows, keep `e2e/web/smoke.mjs`, `scripts/e2e_web.sh`, and
-this document in sync.
+When changing E2E flows, keep `e2e/web/smoke.mjs`,
+`scripts/e2e_web.sh`, and this document in sync.

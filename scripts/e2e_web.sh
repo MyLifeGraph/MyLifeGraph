@@ -16,17 +16,33 @@ AI_SERVICE_START="${AI_SERVICE_START-true}"
 HEADED="${HEADED-false}"
 E2E_PHASE10_ONLY="${E2E_PHASE10_ONLY-false}"
 E2E_PERSONAL_LEARNING_ONLY="${E2E_PERSONAL_LEARNING_ONLY-false}"
+E2E_SEMANTICS_PRE_ENABLED="${E2E_SEMANTICS_PRE_ENABLED-true}"
 LEARNED_FOCUS_PLANNING_PILOT_ENABLED="${LEARNED_FOCUS_PLANNING_PILOT_ENABLED-true}"
-SCHEDULED_REFRESH_TOKEN="${SCHEDULED_REFRESH_TOKEN:-local-e2e-scheduled-refresh-${E2E_RUN_ID:-$$}}"
 RESET_DB="${RESET_DB-false}"
 APPLY_MIGRATIONS="${APPLY_MIGRATIONS-false}"
 SUPABASE_HOME="$ROOT_DIR/.tools/supabase-home"
-E2E_LOG_DIR="$ROOT_DIR/.tools/e2e"
-FLUTTER_LOG="$E2E_LOG_DIR/flutter-web.log"
-AI_SERVICE_LOG="$E2E_LOG_DIR/ai-service.log"
+E2E_RUN_ID="${E2E_RUN_ID:-$(date -u +%Y%m%dT%H%M%SZ)-$$}"
+SCHEDULED_REFRESH_TOKEN="${SCHEDULED_REFRESH_TOKEN:-local-e2e-scheduled-refresh-$E2E_RUN_ID}"
+E2E_LOG_ROOT="$ROOT_DIR/.tools/e2e/runs"
+E2E_RUN_DIR="$E2E_LOG_ROOT/$E2E_RUN_ID"
+FLUTTER_LOG="$E2E_RUN_DIR/flutter-web.log"
+AI_SERVICE_LOG="$E2E_RUN_DIR/ai-service.log"
+
+timer_now_ms() {
+  date +%s%3N
+}
+
+emit_timing() {
+  local phase="$1"
+  local started_at="$2"
+  local finished_at
+  finished_at="$(timer_now_ms)"
+  printf '[e2e:timing] {"phase":"%s","duration_ms":%d}\n' \
+    "$phase" "$((finished_at - started_at))"
+}
 
 cd "$ROOT_DIR"
-mkdir -p "$SUPABASE_HOME" "$E2E_LOG_DIR"
+mkdir -p "$SUPABASE_HOME"
 
 local_supabase_validate_migration_flags \
   "$RESET_DB" "$APPLY_MIGRATIONS" true || exit $?
@@ -37,8 +53,23 @@ local_supabase_validate_boolean \
   E2E_PERSONAL_LEARNING_ONLY \
   "$E2E_PERSONAL_LEARNING_ONLY" || exit $?
 local_supabase_validate_boolean \
+  E2E_SEMANTICS_PRE_ENABLED \
+  "$E2E_SEMANTICS_PRE_ENABLED" || exit $?
+local_supabase_validate_boolean \
   LEARNED_FOCUS_PLANNING_PILOT_ENABLED \
   "$LEARNED_FOCUS_PLANNING_PILOT_ENABLED" || exit $?
+
+if [[ ! "$E2E_RUN_ID" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,57}$ ]]; then
+  echo "E2E_RUN_ID must contain 1-58 safe filename/email-token characters." >&2
+  exit 64
+fi
+
+if [[ -e "$E2E_RUN_DIR" ]]; then
+  echo "E2E_RUN_ID '$E2E_RUN_ID' already has an artifact directory." >&2
+  echo "Choose a fresh run id; E2E run identities are never reused." >&2
+  exit 64
+fi
+mkdir -p "$E2E_RUN_DIR"
 
 if [[ "$E2E_PHASE10_ONLY" == "true" &&
   "$E2E_PERSONAL_LEARNING_ONLY" == "true" ]]; then
@@ -87,6 +118,10 @@ sanitize_supabase_output() {
 }
 
 cleanup() {
+  local original_status=$?
+  local cleanup_started_at
+  cleanup_started_at="$(timer_now_ms)"
+  trap - EXIT
   if [[ -n "${FLUTTER_PID:-}" ]] && kill -0 "$FLUTTER_PID" >/dev/null 2>&1; then
     kill "$FLUTTER_PID" >/dev/null 2>&1 || true
     wait "$FLUTTER_PID" >/dev/null 2>&1 || true
@@ -95,9 +130,12 @@ cleanup() {
     kill "$AI_SERVICE_PID" >/dev/null 2>&1 || true
     wait "$AI_SERVICE_PID" >/dev/null 2>&1 || true
   fi
+  emit_timing "process_cleanup" "$cleanup_started_at"
+  exit "$original_status"
 }
 trap cleanup EXIT
 
+supabase_started_at="$(timer_now_ms)"
 supabase_cli --version
 if ! start_output="$(supabase_cli start 2>&1)"; then
   printf '%s\n' "$start_output" | sanitize_supabase_output >&2
@@ -107,6 +145,7 @@ printf '%s\n' "$start_output" | sanitize_supabase_output
 
 local_supabase_prepare_migration_state \
   "$RESET_DB" "$APPLY_MIGRATIONS" true
+emit_timing "supabase" "$supabase_started_at"
 
 status_output="$(supabase_cli status -o env)"
 api_url="$(printf '%s\n' "$status_output" | awk -F= '$1 == "API_URL" {gsub(/"/, "", $2); print $2; exit}')"
@@ -122,6 +161,7 @@ echo "Supabase local API: $api_url"
 echo "Local anon key: available"
 echo "Local service role key: available for backend and Node-side assertions"
 
+fastapi_started_at="$(timer_now_ms)"
 if [[ "$AI_SERVICE_START" == "true" ]]; then
   if [[ -n "${AI_SERVICE_PYTHON:-}" ]]; then
     if ! command -v "$AI_SERVICE_PYTHON" >/dev/null 2>&1; then
@@ -192,7 +232,9 @@ else
     exit 1
   fi
 fi
+emit_timing "fastapi" "$fastapi_started_at"
 
+flutter_started_at="$(timer_now_ms)"
 cd "$ROOT_DIR/apps/mobile"
 USE_MOCK_DATA=false \
 APP_ENV=development \
@@ -235,7 +277,10 @@ if [[ "$flutter_ready" != "true" ]]; then
   tail -n 80 "$FLUTTER_LOG" >&2 || true
   exit 1
 fi
+emit_timing "flutter" "$flutter_started_at"
 
+runner_started_at="$(timer_now_ms)"
+set +e
 APP_URL="$APP_URL" \
 SUPABASE_URL="$api_url" \
 SUPABASE_ANON_KEY="$local_anon_key" \
@@ -244,6 +289,11 @@ AI_SERVICE_BASE_URL="$AI_SERVICE_BASE_URL" \
 SCHEDULED_REFRESH_TOKEN="$SCHEDULED_REFRESH_TOKEN" \
 E2E_PHASE10_ONLY="$E2E_PHASE10_ONLY" \
 E2E_PERSONAL_LEARNING_ONLY="$E2E_PERSONAL_LEARNING_ONLY" \
-E2E_ARTIFACT_DIR="$E2E_LOG_DIR" \
-E2E_RUN_ID="${E2E_RUN_ID:-$(date +%s)}" \
+E2E_SEMANTICS_PRE_ENABLED="$E2E_SEMANTICS_PRE_ENABLED" \
+E2E_ARTIFACT_DIR="$E2E_RUN_DIR" \
+E2E_RUN_ID="$E2E_RUN_ID" \
 "$NODE_BIN" e2e/web/smoke.mjs
+runner_status=$?
+set -e
+emit_timing "runner" "$runner_started_at"
+exit "$runner_status"
