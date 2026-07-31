@@ -129,6 +129,38 @@ void main() {
     expect(controller.state.updatingTaskIds, isEmpty);
   });
 
+  test('committed task refreshes shared projections after Today is disposed',
+      () async {
+    final release = Completer<TaskUndoToken>();
+    final tasks = _FakeTaskCommands(completeResult: release.future);
+    final repository = _SequenceDashboardRepository([_snapshot(targetDate)]);
+    final refreshedDates = <DateTime>[];
+    var supportingReloads = 0;
+    final controller = TodayCommandController(
+      taskCommands: tasks,
+      habitCommands: _FakeHabitCommands(),
+      dashboardRepository: repository,
+      refreshAfterTask: (date) async => refreshedDates.add(date),
+      refreshAfterHabit: (_) async {},
+      onTodayReloaded: () => supportingReloads += 1,
+    );
+
+    final command = controller.completeTask(
+      taskId: taskId,
+      targetDate: targetDate,
+    );
+    await Future<void>.delayed(Duration.zero);
+    controller.dispose();
+    release.complete(_undoToken(taskId));
+
+    final result = await command;
+    expect(result.committed, isTrue);
+    expect(result.projectionCurrent, isFalse);
+    expect(refreshedDates, [targetDate]);
+    expect(repository.calls, 0);
+    expect(supportingReloads, 0);
+  });
+
   test('every Today task command delegates through the narrow task port',
       () async {
     final tasks = _FakeTaskCommands();
@@ -218,6 +250,39 @@ void main() {
       controller.state.projectionStatus,
       TodayProjectionStatus.staleAfterMutation,
     );
+  });
+
+  test('committed habit refreshes shared projections after Today is disposed',
+      () async {
+    final release = Completer<void>();
+    final habits = _FakeHabitCommands(outcomeResult: release.future);
+    final repository = _SequenceDashboardRepository([_snapshot(targetDate)]);
+    final refreshedDates = <DateTime>[];
+    var supportingReloads = 0;
+    final controller = TodayCommandController(
+      taskCommands: _FakeTaskCommands(),
+      habitCommands: habits,
+      dashboardRepository: repository,
+      refreshAfterTask: (_) async {},
+      refreshAfterHabit: (date) async => refreshedDates.add(date),
+      onTodayReloaded: () => supportingReloads += 1,
+    );
+
+    final command = controller.setHabitOutcome(
+      habitId: 'habit-1',
+      outcome: HabitOutcome.completed,
+      targetDate: targetDate,
+    );
+    await Future<void>.delayed(Duration.zero);
+    controller.dispose();
+    release.complete();
+
+    final result = await command;
+    expect(result.committed, isTrue);
+    expect(result.projectionCurrent, isFalse);
+    expect(refreshedDates, [targetDate]);
+    expect(repository.calls, 0);
+    expect(supportingReloads, 0);
   });
 
   test('missing command ports fail explicitly without touching read state',
@@ -388,6 +453,9 @@ class _FakeTaskCommands implements TodayTaskCommandPort {
 }
 
 class _FakeHabitCommands implements TodayHabitCommandPort {
+  _FakeHabitCommands({this.outcomeResult});
+
+  final Future<void>? outcomeResult;
   int outcomeCalls = 0;
   final List<DateTime> targetDates = [];
 
@@ -399,6 +467,7 @@ class _FakeHabitCommands implements TodayHabitCommandPort {
   }) async {
     outcomeCalls += 1;
     targetDates.add(targetDate);
+    await outcomeResult;
   }
 
   @override

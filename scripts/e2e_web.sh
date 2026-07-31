@@ -84,7 +84,7 @@ if [[ ! "$E2E_SUITE" =~ ^(smoke|full)$ ]]; then
 fi
 
 if [[ -n "$E2E_JOURNEY" &&
-  ! "$E2E_JOURNEY" =~ ^(setup-onboarding|auth-capture-today|planner-confirm|account-controls|coach|personal-learning)$ ]]; then
+  ! "$E2E_JOURNEY" =~ ^(setup-onboarding|auth-capture-today|planner-confirm|exam-week-outlook|notification-lifecycle|account-controls|coach|personal-learning)$ ]]; then
   echo "E2E_JOURNEY must name one current Playwright journey." >&2
   exit 64
 fi

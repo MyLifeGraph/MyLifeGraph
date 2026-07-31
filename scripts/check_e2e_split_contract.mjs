@@ -12,6 +12,8 @@ const expectedJourneys = new Set([
   'account-controls',
   'auth-capture-today',
   'coach',
+  'exam-week-outlook',
+  'notification-lifecycle',
   'personal-learning',
   'planner-confirm',
   'setup-onboarding',
@@ -48,6 +50,7 @@ export function findE2eSplitContractErrors(root = repositoryRoot) {
   for (const spec of specs) {
     const relativePath = `e2e/web/journeys/${spec}`;
     const source = readFileSync(join(journeysRoot, spec), 'utf8');
+    const executableSource = stripNonExecutableJavaScript(source);
     const expectedTag = spec.replace(/\.spec\.mjs$/, '');
     const match = source.match(/\btest\(\s*['"]@([a-z0-9-]+)\b/);
     if (match?.[1] !== expectedTag) {
@@ -57,13 +60,17 @@ export function findE2eSplitContractErrors(root = repositoryRoot) {
     } else {
       tags.add(match[1]);
     }
-    if (!/\{\s*[\s\S]*\bpage\b[\s\S]*\}\s*\)\s*=>/.test(source)) {
+    if (
+      !/\btest\s*\(\s*,\s*async\s*\(\s*\{[^}]*\bpage\b[^}]*\}\s*\)\s*=>/.test(
+        executableSource,
+      )
+    ) {
       errors.push(`${relativePath}: journey does not request a browser page`);
     }
-    if (!source.includes('e2e.signInUi')) {
+    if (!/\be2e\s*\.\s*signInUi\s*\(/.test(executableSource)) {
       errors.push(`${relativePath}: journey does not authenticate through Flutter`);
     }
-    if (!source.includes('expectFlutterText')) {
+    if (!/\bexpectFlutterText\s*\(/.test(executableSource)) {
       errors.push(`${relativePath}: journey has no user-visible Flutter assertion`);
     }
   }
@@ -117,6 +124,74 @@ export function findE2eSplitContractErrors(root = repositoryRoot) {
   }
 
   return errors;
+}
+
+function stripNonExecutableJavaScript(source) {
+  let result = '';
+  let mode = 'code';
+  let quote = '';
+  let escaped = false;
+
+  for (let index = 0; index < source.length; index += 1) {
+    const character = source[index];
+    const next = source[index + 1];
+
+    if (mode === 'code') {
+      if (character === '/' && next === '/') {
+        result += '  ';
+        index += 1;
+        mode = 'line-comment';
+      } else if (character === '/' && next === '*') {
+        result += '  ';
+        index += 1;
+        mode = 'block-comment';
+      } else if (character === "'" || character === '"' || character === '`') {
+        result += ' ';
+        quote = character;
+        escaped = false;
+        mode = 'string';
+      } else {
+        result += character;
+      }
+      continue;
+    }
+
+    if (mode === 'line-comment') {
+      if (character === '\n') {
+        result += '\n';
+        mode = 'code';
+      } else {
+        result += ' ';
+      }
+      continue;
+    }
+
+    if (mode === 'block-comment') {
+      if (character === '*' && next === '/') {
+        result += '  ';
+        index += 1;
+        mode = 'code';
+      } else {
+        result += character === '\n' ? '\n' : ' ';
+      }
+      continue;
+    }
+
+    if (escaped) {
+      result += character === '\n' ? '\n' : ' ';
+      escaped = false;
+    } else if (character === '\\') {
+      result += ' ';
+      escaped = true;
+    } else if (character === quote) {
+      result += ' ';
+      mode = 'code';
+    } else {
+      result += character === '\n' ? '\n' : ' ';
+    }
+  }
+
+  return result;
 }
 
 function main() {

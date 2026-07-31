@@ -164,6 +164,12 @@ Local Supabase and browser verification must additionally prove all three
 commands, exact replay, request-id reinterpretation conflict, owner isolation,
 direct authenticated DML rejection, dismiss persistence, and disappearance on
 reload before this slice is called end-to-end complete.
+The independent Playwright journey
+`e2e/web/journeys/notification-lifecycle.spec.mjs` now proves that complete
+boundary through visible Flutter Inbox controls. Its Node-only fixture creates
+the owned row with the local service role; Flutter receives only the normal
+authenticated client configuration, and both registered Auth users are removed
+by exact UUID cleanup.
 
 The FastAPI route now reuses the application-lifespan-owned Supabase HTTP pool.
 This does not change Notification ownership, action identity, ambiguous replay,

@@ -19,6 +19,8 @@ test('E2E split guard rejects a legacy oracle and API-only journey', () => {
       'account-controls',
       'auth-capture-today',
       'coach',
+      'exam-week-outlook',
+      'notification-lifecycle',
       'personal-learning',
       'planner-confirm',
       'setup-onboarding',
@@ -27,7 +29,11 @@ test('E2E split guard rejects a legacy oracle and API-only journey', () => {
         root,
         `e2e/web/journeys/${name}.spec.mjs`,
         name === 'coach'
-          ? `test('@${name} API only', async ({ e2e }) => {});`
+          ? `test('@${name} API only', async ({ page, e2e }) => {
+              // await e2e.signInUi();
+              const fake = 'expectFlutterText(page, "Visible")';
+              await e2e.api.request('/v1/health');
+            });`
           : `test('@${name} UI', async ({ page, e2e }) => {
               await e2e.signInUi();
               await expectFlutterText(page, 'Visible');
@@ -50,7 +56,7 @@ test('E2E split guard rejects a legacy oracle and API-only journey', () => {
       errors.some(
         (error) =>
           error.includes('coach.spec.mjs') &&
-          error.includes('browser page'),
+          error.includes('authenticate through Flutter'),
       ),
     );
     assert.ok(

@@ -215,7 +215,11 @@ widget-local sets or concrete Supabase calls. Its narrow Task/Habit ports return
 only after their existing exact reconciliation rules have proved a write; a
 thrown or unavailable result remains uncommitted. A successful port result
 stays committed even if projection refresh fails, and `reloadToday` performs no
-command call.
+command call. If navigation disposes Today while the durable command is still
+in flight, the completed command still invokes the captured application-level
+projection coordinator. The disposed controller skips only its own optimistic
+state and Today repository reload; it neither dereferences a disposed provider
+ref nor suppresses Snapshot refresh and foreign projection invalidation.
 
 Notification lifecycle rows enter `committedRequiresReload` after every proven
 success, including replay. The row remains visible and locked until a reload

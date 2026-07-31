@@ -753,10 +753,12 @@ FLUTTER_BIN=/path/to/flutter npm run e2e:web:full
 
 `e2e:web:smoke` runs four serial, independently provisioned critical UI
 journeys for Setup, Auth/Capture/Today, Planner confirmation, and Coach.
-`e2e:web:full` runs all six independent Playwright journeys, adding account
-controls and Personal Learning. Pure HTTP, persistence, replay, authorization,
-RLS, and database-constraint assertions stay in pytest or pgTAP instead of
-being duplicated in a browser script.
+`e2e:web:full` runs all eight independent Playwright journeys, adding Exam-Week
+Outlook, Notification Lifecycle, account controls, and Personal Learning. The
+Exam-Week and Notification journeys retain the contract assertions needed to
+prove their visible Flutter integration; exhaustive HTTP, persistence,
+authorization, RLS, and database-constraint coverage remains in pytest and
+pgTAP.
 
 The normal E2E command likewise requires current migration history and never
 applies pending SQL automatically. Use `APPLY_MIGRATIONS=true` only after

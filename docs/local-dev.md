@@ -1330,10 +1330,12 @@ FLUTTER_BIN=/path/to/flutter npm run e2e:web:full
 The smoke is the serial critical-wiring suite: one independently provisioned
 and cleaned-up spec for each of `setup-onboarding`,
 `auth-capture-today`, `planner-confirm`, and `coach`. The full command runs all
-six independent specs and additionally covers `account-controls` and
-`personal-learning`. Pure HTTP, RLS, replay, and database-constraint
-invariants are verified by pytest and pgTAP. Parallel workers remain disabled
-until the specs have proven state independence.
+eight independent specs and additionally covers `exam-week-outlook`,
+`notification-lifecycle`, `account-controls`, and `personal-learning`.
+Detailed HTTP, RLS, replay, and database-constraint invariants remain verified
+by pytest and pgTAP; the two restored journeys keep the narrower contract
+checks required to prove their visible Flutter behavior. Parallel workers
+remain disabled until the specs have proven state independence.
 
 This is the normal non-reset path. It requires repository and local database
 migration history to match and never applies pending SQL automatically. It
@@ -1370,7 +1372,7 @@ RESET_DB=true FLUTTER_BIN=/path/to/flutter npm run e2e:web:full
 
 The E2E script starts local Supabase, the FastAPI service with its deterministic
 fake Coach provider, and Flutter Web on `http://127.0.0.1:7357`. The smoke
-runs the four critical UI journeys; the full gate runs all six. Each journey
+runs the four critical UI journeys; the full gate runs all eight. Each journey
 owns a fresh confirmed account and exact cleanup. The browser layer proves only
 user-visible cross-stack wiring. Detailed validation, retry, RLS, privilege,
 and database-constraint coverage stays in the feature-specific Flutter,

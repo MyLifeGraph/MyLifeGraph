@@ -28,15 +28,15 @@ final todayCommandControllerProvider = StateNotifierProvider.autoDispose<
               todayProvider: ref.watch(profileLocalDateSourceProvider).today,
             ),
           );
+    final projectionRefreshCoordinator =
+        ref.watch(projectionRefreshCoordinatorProvider);
     return TodayCommandController(
       taskCommands: taskCommands,
       habitCommands: habitCommands,
       dashboardRepository: ref.watch(dashboardRepositoryProvider),
-      refreshAfterTask: (targetDate) => ref
-          .read(projectionRefreshCoordinatorProvider)
+      refreshAfterTask: (targetDate) => projectionRefreshCoordinator
           .todayTaskChanged(targetDate: localDateKey(targetDate)),
-      refreshAfterHabit: (targetDate) => ref
-          .read(projectionRefreshCoordinatorProvider)
+      refreshAfterHabit: (targetDate) => projectionRefreshCoordinator
           .todayHabitOutcomeChanged(targetDate: habitDateKey(targetDate)),
       onTodayReloaded: () {
         ref.invalidate(dashboardSupportingSnapshotProvider);

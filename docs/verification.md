@@ -11,25 +11,23 @@ Capture V4, Daily State V2, Exam-Week Outlook V1, or Coach V3 expectations.
 
 ## Current Verified Baseline
 
-The current architecture-remediation working tree was reverified locally on
-2026-07-31 through implementation and cleanup. The
-complete FastAPI suite reported `1132 passed, 2 skipped`; full Flutter
-verification reported `760` passing tests and clean analysis.
-The frontend visual contract and documentation consistency checks passed.
-The final six-journey Playwright gate passed against a statically served
-profile-mode Flutter bundle in 2:26 of journeys and 2:35 runner time. Each
-journey used an independent account; cleanup deleted five exact users and
-confirmed the UI account-deletion subject already absent. The four-journey
-smoke and isolated Setup journey also passed during migration.
-The affected full-gate components also passed against this working tree:
-repository/local migration history matched, all 142 pgTAP assertions passed,
-the debug web build completed, and all six isolated Playwright journeys
-passed. The now-retired monolithic regression then passed in 15:37 runner time
-with 14:48
-of journeys, 49 pre-enabled Semantics checks with a 0.425-second maximum, and
-exact cleanup of all six registered users (five deleted and the account-delete
-subject already absent). The final source and diff checks are rerun after each
-subsequent remediation item.
+The current architecture-remediation follow-up working tree was reverified
+locally on 2026-07-31 through implementation and cleanup. `verify:fast`
+reported `762` passing Flutter tests, clean Flutter analysis, `1132 passed, 2
+skipped` for FastAPI, and passing documentation, visual, source, Ruff, and diff
+checks. Repository/local migration history matched and the complete eight-file
+pgTAP suite passed all `150` assertions without reset or migration application.
+The full eight-journey Playwright gate passed against a statically served
+profile-mode Flutter bundle in 4:10 of journeys and 4:26 runner time. Its specs
+registered nine exact Auth users, deleted eight, and confirmed the
+account-deletion subject already absent.
+
+Earlier architecture-remediation checkpoints below are historical evidence for
+their then-current checkout. The now-retired monolithic regression passed in
+15:37 runner time with 14:48 of journeys, 49 pre-enabled Semantics checks with a
+0.425-second maximum, and exact cleanup of all six registered users (five
+deleted and the account-delete subject already absent). The final source and
+diff checks were rerun after each subsequent remediation item.
 After the application-owned Supabase HTTP pool was introduced, the six-spec
 split browser smoke passed again in 1:56 runner time and 1:48 of journeys,
 including exact per-spec Auth cleanup.
@@ -153,7 +151,7 @@ Use the lowest level that covers the change.
 | Local Supabase reset | `RESET_DB=true npm run verify:db` | Recreates local DB, applies migrations, then runs pgTAP. | Yes, local DB only |
 | Full | `FLUTTER_BIN=/path/to/flutter npm run verify:full` | Runs fast, database, web-build, and full browser E2E gates. | No reset; E2E writes and removes exact test users |
 | Browser smoke | `FLUTTER_BIN=/path/to/flutter npm run e2e:web:smoke` | Runs four representative tagged UI journeys serially with independent accounts. | No reset; removes each spec's exact users |
-| Browser full | `FLUTTER_BIN=/path/to/flutter npm run e2e:web:full` | Runs all six independent Playwright UI journeys. | No reset; removes each spec's exact users |
+| Browser full | `FLUTTER_BIN=/path/to/flutter npm run e2e:web:full` | Runs all eight independent Playwright UI journeys. | No reset; removes each spec's exact users |
 | Focused browser journey | `E2E_JOURNEY=coach FLUTTER_BIN=/path/to/flutter bash scripts/e2e_web.sh` | Runs one named current journey for diagnosis; any journey filename without `.spec.mjs` is accepted. | No reset; removes the spec's exact users |
 | Browser E2E with reset | `RESET_DB=true FLUTTER_BIN=/path/to/flutter bash scripts/e2e_web.sh` | Recreates local DB, then runs browser E2E. | Yes, local DB only |
 | Demo seed | `npm run seed:demo` | Starts local Supabase and replaces only the four named local demo accounts: one fresh Setup identity and three populated scenarios. | Demo accounts only |
@@ -935,12 +933,15 @@ Playwright worker:
 - `@coach`.
 
 Each spec receives a separately created account and an exact `finally`
-cleanup. `e2e:web:full` runs all six independent journeys and adds
-`@account-controls` plus `@personal-learning`. Every retained browser
-assertion crosses the Flutter UI boundary and checks a user-visible result.
-Pure HTTP validation, owner derivation, replay/conflict handling, RLS,
-privilege, cascade, and database-constraint assertions belong to pytest and
-pgTAP, where they are faster and more precisely isolated.
+cleanup. `e2e:web:full` runs all eight independent journeys and adds
+`@exam-week-outlook`, `@notification-lifecycle`, `@account-controls`, and
+`@personal-learning`. Every retained browser assertion crosses the Flutter UI
+boundary and checks a user-visible result. The Exam-Week and Notification
+journeys also retain the bounded persistence/replay/owner assertions needed to
+prove that the visible control operated on the intended durable contract.
+Exhaustive HTTP validation, owner derivation, RLS, privilege, cascade, and
+database-constraint matrices remain in pytest and pgTAP, where they are faster
+and more precisely isolated.
 
 This is the normal non-reset database path: the script starts or reuses the
 repository's local Supabase stack, skips `supabase db reset`, inspects
@@ -987,11 +988,12 @@ starting FastAPI, Flutter, or Playwright.
 
 The full E2E command enables
 `LEARNED_FOCUS_PLANNING_PILOT_ENABLED=true` in both FastAPI and Flutter for the
-test process. It finishes and rates Focus, edits the rating from Evening, loads
-a stable profile-timezone pattern fixture, enables the separate Settings
-permission, proves a learned free window and a busy-window Setup fallback, and
-checks export/deletion. This test-only gate does not change normal or production
-defaults.
+test process. The current `@personal-learning` journey enables the separate
+Settings permissions and renders the transparent empty 90-day evidence state.
+Focus reflection, mature learned-window ordering, and Setup-fallback behavior
+remain covered by focused Flutter, pytest, and pgTAP tests rather than being
+claimed by that browser journey. The test-only flag does not change normal or
+production defaults.
 
 Use real Ubuntu-installed Node.js, npm, Supabase CLI, and Docker. If these tools
 are installed through nvm, non-interactive agent shells may need an explicit
@@ -1014,10 +1016,13 @@ The script:
    `e2e/web/journeys/*.spec.mjs` through
    `e2e/web/fixtures/e2e.fixture.mjs`. The token is never passed to Flutter.
 
-The script waits for the Flutter log line containing `is being served at` before
-starting Playwright. A plain `curl` response from `/` is not enough, because
-`flutter run -d web-server` can answer before the web bundle is ready; if
-Playwright opens the page during that window, screenshots are often blank white.
+In the default profile mode, the script waits synchronously for
+`flutter build web --profile` to finish, starts a static server for that
+completed bundle, and then polls `/` with process-liveness checks. In diagnostic
+debug mode it starts `flutter run -d web-server` and uses the same bounded HTTP
+and liveness loop. Browser-side shell and Semantics helpers then wait for the
+actual Flutter DOM before interacting; readiness is not inferred from a stale
+log line.
 
 The E2E Flutter process also passes `--dart-define=E2E_ENABLE_SEMANTICS=true`.
 `apps/mobile/lib/main.dart` uses that test-only flag to keep Flutter Semantics
@@ -1055,13 +1060,18 @@ Only an explicit rerun with `--confirm <printed-fingerprint>` deletes that
 still-current selection, and the command also rejects non-loopback Supabase.
 
 The current browser layer deliberately stays at the user-visible integration
-boundary. Its six independent journeys prove:
+boundary. Its eight independent journeys prove:
 
 - incomplete-account sign-in, required Setup submission, persisted Intake
   projection, and navigation to Today;
 - authenticated Evening persistence followed by the exact saved check-in state
   in Today;
 - Planner proposal/confirmation followed by the exact plan title in Flutter;
+- V4 Evening/Morning sleep facts plus confirmed Exam and competing Assignment
+  state followed by a Planner-only Exam-Week card and non-mutating replan entry;
+- stored Inbox mark-read, mark-unread, and dismiss controls, including exact
+  replay, request-id conflict, direct-write denial, owner isolation, durable
+  tombstone, and disappearance after Flutter reload;
 - fake-provider Coach persistence followed by the exact message in Coach
   history;
 - Settings-driven account export, byte-identical browser download, confirmed
@@ -1080,17 +1090,18 @@ test boundary before the monolith was removed:
 | Task, Habit, and Focus lifecycle constraints | `test_executable_actions.py`, executable-action Flutter tests, and migration contract tests |
 | Briefing, recommendation, and weekly-review determinism/replay | `test_briefing_service.py`, `test_weekly_review_service.py`, their API/repository tests, and corresponding Flutter widget/controller tests |
 | Calendar parsing, reconciliation, consent, identity, and isolation | `test_calendar_ical_parser.py`, Calendar API/service/repository/migration tests, and Calendar Flutter page/repository tests |
-| Notification lifecycle, delivery policy, conflicts, and Inbox behavior | Notification API/service/repository/migration tests and `notifications_page_test.dart`/`notification_delivery_test.dart` |
-| Deadline and central Planner calculations, writes, conflicts, and rendering | Deadline/Planner model, service, repository, API, migration, and Flutter page tests, plus `@planner-confirm` |
+| Notification lifecycle, delivery policy, conflicts, and Inbox behavior | Notification API/service/repository/migration tests, `notifications_page_test.dart`/`notification_delivery_test.dart`, plus `@notification-lifecycle` for the visible stored-Inbox lifecycle |
+| Deadline and central Planner calculations, writes, conflicts, and rendering | Deadline/Planner model, service, repository, API, migration, and Flutter page tests, plus `@planner-confirm` and the read-only `@exam-week-outlook` integration |
 | Coach safety, budget, evidence, persistence, and read-only authority | Coach API/service/repository/evidence/migration tests, Coach Flutter tests, plus `@coach` |
 | Personal Learning evidence, preferences, clearing, learned timing, and RLS | Personal-pattern/learning API/service/repository/migration tests, `personal_learning_v1_test.sql`, Flutter Learning tests, plus `@personal-learning` |
 | Account export/deletion contracts and authority | Account API/service/repository/migration tests and Settings widget/repository tests, plus `@account-controls` |
-| Global owner isolation, role authority, direct-DML denial, and protected-route authentication | `test_auth.py`, owner-derived API tests, privilege/RLS migration tests, and the pgTAP authority suites; these are intentionally not duplicated in Playwright |
+| Global owner isolation, role authority, direct-DML denial, and protected-route authentication | `test_auth.py`, owner-derived API tests, privilege/RLS migration tests, and `supabase/tests/profile_authority_test.sql`; `@notification-lifecycle` additionally proves the owner boundary for its visible row actions |
 
 The source guard `scripts/check_e2e_split_contract.mjs` fails if the retired
 monolith or transitional commands return, if an expected journey disappears,
 or if a journey no longer authenticates through Flutter and makes a
-user-visible assertion. The Flutter helper navigates through root hash URLs
+user-visible assertion. Authentication/assertion markers in comments or string
+literals do not satisfy the guard. The Flutter helper navigates through root hash URLs
 such as `/#/auth` and `/#/planner`, avoiding unsupported development-server
 deep-link rewrites.
 

@@ -15,6 +15,8 @@ const knownJourneys = new Set([
   'setup-onboarding',
   'auth-capture-today',
   'planner-confirm',
+  'exam-week-outlook',
+  'notification-lifecycle',
   'account-controls',
   'coach',
   'personal-learning',

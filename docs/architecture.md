@@ -131,7 +131,11 @@ removed; Task creation and editing continue through Planner. In-flight identity
 locks, optimistic
 status/outcome overlays, committed-versus-unconfirmed results, the single
 post-write Today reload, and stale/reload-only state are independently testable
-outside the widget.
+outside the widget. Composition captures the application-level coordinator for
+each accepted command future. If the auto-disposed Today controller leaves the
+route before a durable write completes, shared Snapshot refresh and foreign
+read invalidation still finish; only controller-owned state and Today reload
+are skipped.
 
 Dashboard presentation is split by product responsibility rather than by an
 arbitrary line limit. `TodayOverviewSections` owns capture streak, progress,

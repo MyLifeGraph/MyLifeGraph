@@ -77,6 +77,11 @@ export const test = base.extend({
       anonKey,
       accessToken: identity.accessToken,
     });
+    const serviceDb = new SupabaseDbClient({
+      supabaseUrl,
+      anonKey: serviceRoleKey,
+      accessToken: serviceRoleKey,
+    });
     let setupComplete = false;
 
     page.on('pageerror', (error) => {
@@ -97,6 +102,7 @@ export const test = base.extend({
       identity,
       api,
       db,
+      serviceDb,
       async createAdditionalIdentity(label) {
         const additional = await createIdentity(label);
         return {

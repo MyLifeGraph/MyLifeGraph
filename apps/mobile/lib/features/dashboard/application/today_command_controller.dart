@@ -347,16 +347,15 @@ class TodayCommandController extends StateNotifier<TodayCommandState> {
         );
       }
       await mutation(commands);
-      if (!mounted) {
-        return TodayCommandResult.saved(projectionCurrent: false);
+      if (mounted) {
+        final overrides = Map<String, String?>.from(
+          state.habitOutcomeOverrides,
+        )..[habitId] = optimisticOutcome;
+        state = state.copyWith(
+          projectionStatus: TodayProjectionStatus.refreshingAfterMutation,
+          habitOutcomeOverrides: overrides,
+        );
       }
-      final overrides = Map<String, String?>.from(
-        state.habitOutcomeOverrides,
-      )..[habitId] = optimisticOutcome;
-      state = state.copyWith(
-        projectionStatus: TodayProjectionStatus.refreshingAfterMutation,
-        habitOutcomeOverrides: overrides,
-      );
       final projectionCurrent = await _refreshAfterMutation(
         targetDate: targetDate,
         refreshProjection: _refreshAfterHabit,
@@ -389,18 +388,14 @@ class TodayCommandController extends StateNotifier<TodayCommandState> {
         throw const TaskCommandException('Synced tasks are unavailable.');
       }
       final value = await mutation(commands);
-      if (!mounted) {
-        return TodayCommandResult.saved(
-          value: value,
-          projectionCurrent: false,
-        );
-      }
-      if (optimisticStatus != null) {
-        _applyLocalTaskStatus(taskId, optimisticStatus);
-      } else {
-        state = state.copyWith(
-          projectionStatus: TodayProjectionStatus.refreshingAfterMutation,
-        );
+      if (mounted) {
+        if (optimisticStatus != null) {
+          _applyLocalTaskStatus(taskId, optimisticStatus);
+        } else {
+          state = state.copyWith(
+            projectionStatus: TodayProjectionStatus.refreshingAfterMutation,
+          );
+        }
       }
       final projectionCurrent = await _refreshAfterMutation(
         targetDate: targetDate,
@@ -423,6 +418,7 @@ class TodayCommandController extends StateNotifier<TodayCommandState> {
   }) async {
     try {
       await refreshProjection(targetDate);
+      if (!mounted) return false;
       return _loadFreshProjection();
     } catch (_) {
       if (mounted) {

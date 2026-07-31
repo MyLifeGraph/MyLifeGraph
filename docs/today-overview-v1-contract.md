@@ -214,6 +214,15 @@ invalidate Today for these inline writes. Today owns exactly one repository
 reload so an automatic provider rebuild cannot consume or obscure the explicit
 stale-after-mutation result.
 
+Route disposal does not cancel an already accepted durable write. When its
+command port later proves the write committed, the captured app-lifespan
+projection coordinator still refreshes the Snapshot and invalidates foreign
+dependencies. A disposed Today controller performs no controller-owned state
+write, repository reload, or supporting-Today invalidation, and reports the
+projection as not current to its awaiting caller. This avoids both a stale
+shared projection after navigation and retention of a date-bound Today
+controller.
+
 The feature-local `TodayCommandController` owns Task/Habit in-flight locks,
 optimistic overlays, committed-versus-unconfirmed outcomes, and the
 `current | refreshingAfterMutation | staleAfterMutation` lifecycle. It receives

@@ -298,6 +298,12 @@ Automated coverage must prove:
   competing assignment, Planner-only status, explicit replan navigation, and
   unchanged active revisions before confirmation.
 
+That browser proof is the independent
+`e2e/web/journeys/exam-week-outlook.spec.mjs` Playwright journey. It reads the
+persisted plan/revision/block projections before and after opening and
+cancelling the replan form, so visible navigation cannot silently satisfy the
+contract by creating a preview.
+
 Passing repository automation proves only this deterministic local boundary. It
 does not prove remote deployment, provider freshness, installed-device
 behavior, clinical value, academic outcomes, or long-term sleep behavior.

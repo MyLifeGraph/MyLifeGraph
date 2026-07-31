@@ -133,6 +133,10 @@ controller with narrow ports supplied by app composition. The Dashboard page
 owns only navigation, Undo presentation, and visible messages;
 command dedupe, optimistic overlays, durable-versus-unconfirmed outcomes, and
 the reload-only stale state are tested without a widget or Supabase client.
+An accepted command that commits after the Today route is disposed still
+finishes the captured app-level Snapshot/foreign-projection refresh. It skips
+only disposed controller state and its Today-owned reload, so the date-bound
+auto-disposed provider is not retained.
 Its home layout composes separate typed presentation sections for
 streak/progress/agenda, Tasks, Habits, and lazy supporting content. Task
 creation/editing remains in Planner; an unreachable duplicate Today editor and
