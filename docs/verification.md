@@ -943,6 +943,14 @@ Exhaustive HTTP validation, owner derivation, RLS, privilege, cascade, and
 database-constraint matrices remain in pytest and pgTAP, where they are faster
 and more precisely isolated.
 
+`e2e/web/journey-manifest.mjs` is the canonical registry for the eight full and
+four smoke journeys. Playwright selection, named-journey shell validation, the
+split-contract guard, and its fixture test consume that registry instead of
+maintaining separate regex/list copies. Adding or retiring a journey therefore
+requires one manifest edit plus the corresponding spec and documentation; the
+guard still rejects missing/unregistered specs, a returned monolith, or a
+journey without real Flutter authentication and a visible assertion.
+
 This is the normal non-reset database path: the script starts or reuses the
 repository's local Supabase stack, skips `supabase db reset`, inspects
 `supabase migration list --local`, and fails when repository and database
@@ -962,8 +970,9 @@ FLUTTER_BIN=/path/to/flutter \
 bash scripts/e2e_web.sh
 ```
 
-`E2E_JOURNEY` accepts any current filename below `e2e/web/journeys` without
-`.spec.mjs`. Every invocation must use a fresh run id. Reusing one fails closed
+`E2E_JOURNEY` accepts any name registered in
+`e2e/web/journey-manifest.mjs` (the matching spec filename without
+`.spec.mjs`). Every invocation must use a fresh run id. Reusing one fails closed
 when its run-specific artifact directory already exists, even though successful
 cleanup removed the Auth principal. A focused path never substitutes for the
 full command.

@@ -361,6 +361,15 @@ semaphore orders low-concurrency local requests. Per-user persistence allows at
 most one pending turn and 20 newly started user questions per profile-local
 day by default. Tool calls do not consume additional user-request budget.
 
+The provider implementation keeps three explicit internal boundaries:
+`local_codex.py` composes and preflights fixed command arguments,
+`bounded_process.py` owns no-shell subprocess execution, byte/event limits,
+timeouts, and process-group termination, and `codex_events.py` owns the strict
+allowlisted event/output state machine and failure classification. The latter
+two receive no Settings, Supabase client, request repository, or owner data.
+This split changes no CLI arguments, tool allowlist, model/tier check, output
+schema, cleanup, timeout, or persisted provenance.
+
 ## Persistence And Replay
 
 Migration

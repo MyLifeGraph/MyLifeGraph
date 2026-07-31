@@ -5,7 +5,7 @@ from datetime import UTC, date, datetime
 from math import isfinite
 from typing import Any, Literal
 
-from app.services.daily_capture_parser import (
+from app.contracts.daily_capture_v4 import (
     parse_daily_capture_v4_sleep_episode,
     parse_daily_capture_v4_sleep_plan,
 )

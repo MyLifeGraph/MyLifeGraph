@@ -83,8 +83,8 @@ if [[ ! "$E2E_SUITE" =~ ^(smoke|full)$ ]]; then
   exit 64
 fi
 
-if [[ -n "$E2E_JOURNEY" &&
-  ! "$E2E_JOURNEY" =~ ^(setup-onboarding|auth-capture-today|planner-confirm|exam-week-outlook|notification-lifecycle|account-controls|coach|personal-learning)$ ]]; then
+if [[ -n "$E2E_JOURNEY" ]] &&
+  ! "$NODE_BIN" "$ROOT_DIR/e2e/web/journey-manifest.mjs" "$E2E_JOURNEY"; then
   echo "E2E_JOURNEY must name one current Playwright journey." >&2
   exit 64
 fi

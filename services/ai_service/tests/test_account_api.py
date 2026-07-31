@@ -19,15 +19,11 @@ from app.models.account import (
     AccountPreparationBudgetResponse,
     AccountProfileResponse,
 )
-from app.repositories.account_repository import (
-    AccountDeletionOutcomeUnknownError,
-    AccountNotFoundError,
-    AccountPersistenceError,
-    AccountPreparationBudgetUpdateOutcomeUnknownError,
-    AccountProfileUpdateOutcomeUnknownError,
-)
 from app.services.account_service import (
     AccountExportTooLargeError,
+    AccountNotFoundError,
+    AccountOutcomeUnknownError,
+    AccountUnavailableError,
     InvalidAccountTimezoneError,
     InvalidPreparationBudgetError,
     PreparedAccountExport,
@@ -226,8 +222,8 @@ def test_patch_maps_timezone_missing_and_persistence_errors_safely() -> None:
     cases = [
         (InvalidAccountTimezoneError("timezone must be a valid IANA name"), 422),
         (AccountNotFoundError("internal owner detail"), 404),
-        (AccountProfileUpdateOutcomeUnknownError("internal outcome"), 502),
-        (AccountPersistenceError("internal upstream detail"), 503),
+        (AccountOutcomeUnknownError("internal outcome"), 502),
+        (AccountUnavailableError("internal upstream detail"), 503),
     ]
     for error, expected_status in cases:
         service = Service()
@@ -331,8 +327,8 @@ def test_patch_preparation_budget_maps_failures_without_leaking_details() -> Non
     cases = [
         (InvalidPreparationBudgetError("invalid rule"), 422),
         (AccountNotFoundError("private owner"), 404),
-        (AccountPreparationBudgetUpdateOutcomeUnknownError("private result"), 502),
-        (AccountPersistenceError("private upstream"), 503),
+        (AccountOutcomeUnknownError("private result"), 502),
+        (AccountUnavailableError("private upstream"), 503),
     ]
     for error, expected_status in cases:
         service = Service()
@@ -376,7 +372,7 @@ def test_export_returns_download_ready_versioned_json_and_maps_limits() -> None:
     assert limited.json() == {"detail": "V2 bound reached"}
 
     failed_service = Service()
-    failed_service.export_error = AccountPersistenceError("private upstream detail")
+    failed_service.export_error = AccountUnavailableError("private upstream detail")
     failed, _ = asyncio.run(
         _request("GET", "/v1/account/export", service=failed_service),
     )
@@ -409,8 +405,8 @@ def test_delete_requires_exact_confirmation_and_returns_no_content() -> None:
 def test_delete_maps_atomic_failure_without_leaking_details() -> None:
     cases = [
         (AccountNotFoundError("private"), 404),
-        (AccountDeletionOutcomeUnknownError("private"), 502),
-        (AccountPersistenceError("private"), 503),
+        (AccountOutcomeUnknownError("private"), 502),
+        (AccountUnavailableError("private"), 503),
     ]
     for error, expected_status in cases:
         service = Service()

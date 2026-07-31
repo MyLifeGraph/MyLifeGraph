@@ -12,11 +12,32 @@ from app.models.learning import (
     LearningPreferencesUpdateRequest,
     LearningPreferencesUpdateResponse,
 )
-from app.repositories.learning_repository import LearningRepository
-from app.repositories.learning_repository import LearningPersistenceNotFound
+from app.repositories.learning_repository import (
+    LearningPersistenceConflict,
+    LearningPersistenceError,
+    LearningPersistenceNotFound,
+    LearningPersistenceOutcomeUnknown,
+    LearningRepository,
+)
 
 
 class LearningContractError(ValueError):
+    pass
+
+
+class LearningConflictError(RuntimeError):
+    pass
+
+
+class LearningNotFoundError(RuntimeError):
+    pass
+
+
+class LearningOutcomeUnknownError(RuntimeError):
+    pass
+
+
+class LearningUnavailableError(RuntimeError):
     pass
 
 
@@ -25,10 +46,23 @@ class LearningService:
         self._repository = repository
 
     async def get_preferences(self, *, user_id: str) -> LearningPreferencesState:
-        row = await self._repository.get_preferences(user_id=user_id)
+        try:
+            row = await self._repository.get_preferences(user_id=user_id)
+        except LearningPersistenceNotFound as exc:
+            raise LearningNotFoundError(str(exc)) from exc
+        except LearningPersistenceError as exc:
+            raise LearningUnavailableError(
+                "Personal learning settings could not be loaded.",
+            ) from exc
         if row is None:
-            if not await self._repository.profile_exists(user_id=user_id):
-                raise LearningPersistenceNotFound(
+            try:
+                profile_exists = await self._repository.profile_exists(user_id=user_id)
+            except LearningPersistenceError as exc:
+                raise LearningUnavailableError(
+                    "Personal learning settings could not be loaded.",
+                ) from exc
+            if not profile_exists:
+                raise LearningNotFoundError(
                     "Personal learning settings are unavailable.",
                 )
             return LearningPreferencesState(
@@ -47,20 +81,31 @@ class LearningService:
         user_id: str,
         request: LearningPreferencesUpdateRequest,
     ) -> LearningPreferencesUpdateResponse:
-        row = await self._repository.update_preferences(
-            user_id=user_id,
-            request_id=request.request_id,
-            expected_revision=request.expected_revision,
-            focus_reflection_prompt_enabled=(
-                request.focus_reflection_prompt_enabled
-            ),
-            personal_pattern_analysis_enabled=(
-                request.personal_pattern_analysis_enabled
-            ),
-            learned_focus_planning_enabled=(
-                request.learned_focus_planning_enabled
-            ),
-        )
+        try:
+            row = await self._repository.update_preferences(
+                user_id=user_id,
+                request_id=request.request_id,
+                expected_revision=request.expected_revision,
+                focus_reflection_prompt_enabled=(
+                    request.focus_reflection_prompt_enabled
+                ),
+                personal_pattern_analysis_enabled=(
+                    request.personal_pattern_analysis_enabled
+                ),
+                learned_focus_planning_enabled=(
+                    request.learned_focus_planning_enabled
+                ),
+            )
+        except LearningPersistenceConflict as exc:
+            raise LearningConflictError(str(exc)) from exc
+        except LearningPersistenceNotFound as exc:
+            raise LearningNotFoundError(str(exc)) from exc
+        except LearningPersistenceOutcomeUnknown as exc:
+            raise LearningOutcomeUnknownError(str(exc)) from exc
+        except LearningPersistenceError as exc:
+            raise LearningUnavailableError(
+                "Personal learning settings could not be updated.",
+            ) from exc
         try:
             return LearningPreferencesUpdateResponse.model_validate(
                 {
@@ -80,12 +125,23 @@ class LearningService:
         user_id: str,
         request: FocusReflectionHistoryClearRequest,
     ) -> FocusReflectionHistoryClearResponse:
-        row = await self._repository.clear_focus_reflections(
-            user_id=user_id,
-            request_id=request.request_id,
-            expected_revision=request.expected_revision,
-            confirmation=request.confirmation,
-        )
+        try:
+            row = await self._repository.clear_focus_reflections(
+                user_id=user_id,
+                request_id=request.request_id,
+                expected_revision=request.expected_revision,
+                confirmation=request.confirmation,
+            )
+        except LearningPersistenceConflict as exc:
+            raise LearningConflictError(str(exc)) from exc
+        except LearningPersistenceNotFound as exc:
+            raise LearningNotFoundError(str(exc)) from exc
+        except LearningPersistenceOutcomeUnknown as exc:
+            raise LearningOutcomeUnknownError(str(exc)) from exc
+        except LearningPersistenceError as exc:
+            raise LearningUnavailableError(
+                "Focus reflection history could not be cleared.",
+            ) from exc
         try:
             response = FocusReflectionHistoryClearResponse.model_validate(
                 {

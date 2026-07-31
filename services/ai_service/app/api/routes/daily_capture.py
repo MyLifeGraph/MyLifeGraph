@@ -9,12 +9,10 @@ from app.models.daily_capture import (
     DailyCaptureWriteRequest,
     DailyCaptureWriteResponse,
 )
-from app.repositories.daily_capture_repository import (
-    DailyCaptureConflictError,
-    DailyCapturePersistenceError,
-)
 from app.services.daily_capture_service import (
+    DailyCaptureConflictError,
     DailyCaptureService,
+    DailyCaptureUnavailableError,
     InvalidDailyCaptureError,
 )
 
@@ -50,7 +48,7 @@ async def write_daily_capture_branch(
             status_code=status.HTTP_409_CONFLICT,
             detail=str(exc),
         ) from exc
-    except DailyCapturePersistenceError as exc:
+    except DailyCaptureUnavailableError as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Daily Capture could not be saved.",

@@ -67,6 +67,18 @@ FastAPI service boundary for recommendation and future ML workflows.
   `recommendations`. Snapshot generation reuses `user_state_snapshots`, keeps
   recommendation rules unchanged, excludes capture free text from Daily State,
   and does not require an LLM provider.
+- API routes translate only service-level failures to HTTP responses; concrete
+  repository errors terminate at their owning service. Pure Daily Capture V4
+  parsing/new-write validation lives in `app/contracts/daily_capture_v4.py`,
+  avoiding repository-to-service dependencies and keeping saved V4 branches
+  readable by the same strict contract.
+- Planner and Deadline service modules own I/O orchestration; deterministic
+  overview, projection, availability, block, and serialization helpers live in
+  `planner_builder.py` and `deadline_plan_builder.py`. Local Codex command
+  composition is similarly separated from bounded subprocess lifecycle in
+  `providers/bounded_process.py` and event/output validation in
+  `providers/codex_events.py`. Existing service/provider import paths remain
+  compatible for callers and tests.
 - Recommendation context ignores terminal done/cancelled/archived tasks for
   overdue and workload candidates. Focus warnings use real terminal sessions
   and require at least three sessions plus two abandonments in 14 days; a short

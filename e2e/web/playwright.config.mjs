@@ -2,25 +2,22 @@ import path from 'node:path';
 
 import { defineConfig } from 'playwright/test';
 
+import {
+  ALL_JOURNEYS,
+  SMOKE_JOURNEYS,
+  journeyTagPattern,
+} from './journey-manifest.mjs';
+
 const suite = process.env.E2E_SUITE ?? 'full';
 const suiteGrep = {
-  smoke: /@(setup-onboarding|auth-capture-today|planner-confirm|coach)\b/,
+  smoke: journeyTagPattern(SMOKE_JOURNEYS),
   full: undefined,
 };
 if (!(suite in suiteGrep)) {
   throw new Error(`Unknown E2E_SUITE: ${suite}`);
 }
 const journey = process.env.E2E_JOURNEY ?? '';
-const knownJourneys = new Set([
-  'setup-onboarding',
-  'auth-capture-today',
-  'planner-confirm',
-  'exam-week-outlook',
-  'notification-lifecycle',
-  'account-controls',
-  'coach',
-  'personal-learning',
-]);
+const knownJourneys = new Set(ALL_JOURNEYS);
 if (journey !== '' && !knownJourneys.has(journey)) {
   throw new Error(`Unknown E2E_JOURNEY: ${journey}`);
 }

@@ -276,3 +276,10 @@ The FastAPI route now obtains the application-lifespan-owned Supabase client
 instead of constructing a transport per request. This changes only connection
 reuse: bearer-derived ownership, streamed bounds, retry behavior, service-role
 authority, and every account RPC contract above are unchanged.
+
+The HTTP layer also depends only on account-service failures. Supabase/REST and
+RPC-specific repository exceptions are translated inside `AccountService` to
+not-found, conflict, outcome-unknown, unavailable, or export-too-large service
+outcomes before the route maps them to status codes. This is a layering change
+only; it does not broaden retries, expose provider detail, or alter any owner,
+watermark, page, JSON, CAS, or deletion boundary.

@@ -2,6 +2,7 @@ import asyncio
 from datetime import UTC, date, datetime, timedelta
 
 import httpx
+import pytest
 
 from app.api.deps.auth import Principal, get_token_verifier
 from app.api.deps.services import get_personal_patterns_service
@@ -11,6 +12,11 @@ from app.models.personal_patterns import (
     PersonalPatternsResponse,
     PersonalPatternsSample,
     PersonalPatternsWindow,
+)
+from app.services.personal_patterns_service import (
+    PersonalPatternsDataError,
+    PersonalPatternsNotFoundError,
+    PersonalPatternsUnavailableError,
 )
 from tests.api_test_dependencies import override_dependency
 
@@ -28,9 +34,12 @@ class Verifier:
 class Service:
     def __init__(self) -> None:
         self.calls: list[str] = []
+        self.error: Exception | None = None
 
     async def get_patterns(self, *, user_id: str) -> PersonalPatternsResponse:
         self.calls.append(user_id)
+        if self.error is not None:
+            raise self.error
         return PersonalPatternsResponse(
             contract_version="personal-patterns-v1",
             status="disabled",
@@ -70,9 +79,10 @@ class Service:
         )
 
 
-async def _get(*, authenticated: bool):
+async def _get(*, authenticated: bool, error: Exception | None = None):
     app = create_app()
     service = Service()
+    service.error = error
     override_dependency(app, get_token_verifier, Verifier())
     override_dependency(app, get_personal_patterns_service, service)
     headers = {"Authorization": "Bearer patterns-token"} if authenticated else {}
@@ -100,3 +110,21 @@ def test_personal_patterns_route_is_authenticated_and_read_only() -> None:
     )
     assert unauthorized.status_code == 401
     assert unauthorized_service.calls == []
+
+
+@pytest.mark.parametrize(
+    ("error", "expected_status"),
+    [
+        (PersonalPatternsNotFoundError("missing"), 404),
+        (PersonalPatternsUnavailableError("unavailable"), 503),
+        (PersonalPatternsDataError("invalid"), 503),
+    ],
+)
+def test_personal_patterns_route_maps_service_failures(
+    error: Exception,
+    expected_status: int,
+) -> None:
+    response, service = asyncio.run(_get(authenticated=True, error=error))
+
+    assert response.status_code == expected_status
+    assert service.calls == ["patterns-owner"]

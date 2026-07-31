@@ -8,7 +8,20 @@ from app.models.learning import (
     FocusReflectionHistoryClearRequest,
     LearningPreferencesUpdateRequest,
 )
-from app.services.learning_service import LearningContractError, LearningService
+from app.repositories.learning_repository import (
+    LearningPersistenceConflict,
+    LearningPersistenceError,
+    LearningPersistenceNotFound,
+    LearningPersistenceOutcomeUnknown,
+)
+from app.services.learning_service import (
+    LearningConflictError,
+    LearningContractError,
+    LearningNotFoundError,
+    LearningOutcomeUnknownError,
+    LearningService,
+    LearningUnavailableError,
+)
 
 
 USER_ID = "learning-owner"
@@ -42,21 +55,33 @@ class Repository:
             "cleared_at": NOW,
             "replayed": False,
         }
+        self.get_error: Exception | None = None
+        self.profile_error: Exception | None = None
+        self.update_error: Exception | None = None
+        self.clear_error: Exception | None = None
 
     async def get_preferences(self, *, user_id: str):
         self.calls.append(("get", user_id))
+        if self.get_error is not None:
+            raise self.get_error
         return self.preferences
 
     async def profile_exists(self, *, user_id: str):
         self.calls.append(("profile", user_id))
+        if self.profile_error is not None:
+            raise self.profile_error
         return self.profile_present
 
     async def update_preferences(self, **kwargs):
         self.calls.append(("update", kwargs))
+        if self.update_error is not None:
+            raise self.update_error
         return self.update_result
 
     async def clear_focus_reflections(self, **kwargs):
         self.calls.append(("clear", kwargs))
+        if self.clear_error is not None:
+            raise self.clear_error
         return self.clear_result
 
 
@@ -133,3 +158,48 @@ def test_clear_is_confirmation_bound_and_missing_is_not_zero() -> None:
         asyncio.run(
             service.clear_focus_reflections(user_id=USER_ID, request=request),
         )
+
+
+@pytest.mark.parametrize(
+    ("persistence_error", "service_error"),
+    [
+        (LearningPersistenceConflict("conflict"), LearningConflictError),
+        (LearningPersistenceNotFound("missing"), LearningNotFoundError),
+        (
+            LearningPersistenceOutcomeUnknown("unknown"),
+            LearningOutcomeUnknownError,
+        ),
+        (LearningPersistenceError("unavailable"), LearningUnavailableError),
+    ],
+)
+def test_update_translates_persistence_failures(
+    persistence_error: Exception,
+    service_error: type[Exception],
+) -> None:
+    repository = Repository()
+    repository.update_error = persistence_error
+    service = LearningService(repository=repository)
+    request = LearningPreferencesUpdateRequest(
+        request_id=REQUEST_ID,
+        expected_revision=2,
+        focus_reflection_prompt_enabled=False,
+        personal_pattern_analysis_enabled=True,
+        learned_focus_planning_enabled=True,
+    )
+
+    with pytest.raises(service_error):
+        asyncio.run(service.update_preferences(user_id=USER_ID, request=request))
+
+
+def test_read_translates_missing_owner_and_persistence_failure() -> None:
+    repository = Repository()
+    repository.preferences = None
+    repository.profile_present = False
+    service = LearningService(repository=repository)
+
+    with pytest.raises(LearningNotFoundError):
+        asyncio.run(service.get_preferences(user_id=USER_ID))
+
+    repository.get_error = LearningPersistenceError("provider detail")
+    with pytest.raises(LearningUnavailableError):
+        asyncio.run(service.get_preferences(user_id=USER_ID))

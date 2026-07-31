@@ -50,6 +50,14 @@ The Flutter app uses feature-first clean architecture:
 - `composition` contains app-level wiring whose dependency knowledge cannot
   belong to one feature without coupling that feature to its consumers.
 
+Large feature pages keep orchestration in the page state and move cohesive
+presentation units into feature-owned widget modules. Planner follows this
+boundary explicitly: `planner_page.dart` owns Riverpod/navigation/mutation
+coordination, `planner_sections.dart` owns read-only overview sections, and
+`planner_dialogs.dart` owns draft collection and preview dialogs. Those widget
+modules depend only on Planner/domain and shared presentation contracts; they
+do not read providers or perform writes.
+
 Cross-feature Riverpod factories, shared shell actions, and UI adapters that
 combine two feature-owned contracts live in `composition`. This includes Auth,
 profile-date, Capture, Dashboard, Deadline, Recommendation, Briefing, Weekly
@@ -829,6 +837,17 @@ protocols and direct unit-level service/repository injection remain unchanged;
 the graph is application-lifespan scoped, not a process-global service
 locator.
 
+FastAPI routes depend only on service-level errors and models; repository
+exception types do not cross into `app/api`. Daily Capture V4 parsing and
+new-write validation share the framework-neutral
+`app/contracts/daily_capture_v4.py` boundary, so repositories and deterministic
+read builders do not import a service module. Planner and Deadline orchestration
+likewise remain in `planner_service.py` and `deadline_plan_service.py`, while
+their deterministic projection/availability builders live in
+`planner_builder.py` and `deadline_plan_builder.py`. The development-only local
+Codex adapter separates process limits/termination (`bounded_process.py`) and
+strict event validation (`codex_events.py`) from provider command composition.
+
 Flutter reads persisted recommendations through `GET /v1/recommendations` when
 `USE_MOCK_DATA=false`, Supabase is configured, and a real Supabase session
 access token is available. The app attaches that token as a bearer token for the
@@ -1089,7 +1108,10 @@ terminal session to only a preceding valid V4 sleep episode, collapses repeated
 sleep-episode use, and emits fixed-window observational comparisons with sample,
 coverage, maturity, limits, and deterministic fingerprint. Daily State,
 Exam-Week Outlook, and Personal Patterns share one strict Daily Capture V4
-sleep parser.
+sleep parser. Authenticated V4 writes use that same contract module for complete
+branch validation, including exact rating ranges, stress label/context,
+minute-aligned sleep intervals, day shape, and bounded optional fields before
+repository I/O.
 
 Real-account Insights replaces the generic observation with this backend
 contract. Advanced correlation uses the response's profile-local points and no

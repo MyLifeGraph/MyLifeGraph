@@ -30,10 +30,14 @@ from app.owner_data_catalog import (
     OWNER_DATA_WATERMARK_MAX_BYTES,
 )
 from app.repositories.account_repository import (
-    AccountExportSourceTooLargeError,
-    AccountNotFoundError,
+    AccountDeletionOutcomeUnknownError as AccountPersistenceDeletionOutcomeUnknown,
+    AccountExportSourceTooLargeError as AccountPersistenceSourceTooLarge,
+    AccountNotFoundError as AccountPersistenceNotFound,
     AccountPersistenceError,
+    AccountPreparationBudgetUpdateOutcomeUnknownError as AccountPersistenceBudgetOutcomeUnknown,
+    AccountProfileUpdateOutcomeUnknownError as AccountPersistenceProfileOutcomeUnknown,
     AccountRepository,
+    AccountSettingConflictError as AccountPersistenceConflict,
 )
 
 
@@ -51,6 +55,22 @@ class InvalidPreparationBudgetError(ValueError):
 
 
 class AccountExportTooLargeError(RuntimeError):
+    pass
+
+
+class AccountNotFoundError(RuntimeError):
+    pass
+
+
+class AccountConflictError(RuntimeError):
+    pass
+
+
+class AccountOutcomeUnknownError(RuntimeError):
+    pass
+
+
+class AccountUnavailableError(RuntimeError):
     pass
 
 
@@ -94,14 +114,25 @@ class AccountService:
                 "timezone": timezone,
             },
         )
-        stored = await self._repository.update_timezone(
-            user_id=user_id,
-            request_id=str(request_id),
-            request_fingerprint=fingerprint,
-            expected_revision=expected_revision,
-            timezone=timezone,
-            now=now,
-        )
+        try:
+            stored = await self._repository.update_timezone(
+                user_id=user_id,
+                request_id=str(request_id),
+                request_fingerprint=fingerprint,
+                expected_revision=expected_revision,
+                timezone=timezone,
+                now=now,
+            )
+        except AccountPersistenceConflict as exc:
+            raise AccountConflictError(str(exc)) from exc
+        except AccountPersistenceProfileOutcomeUnknown as exc:
+            raise AccountOutcomeUnknownError(str(exc)) from exc
+        except AccountPersistenceNotFound as exc:
+            raise AccountNotFoundError(str(exc)) from exc
+        except AccountPersistenceError as exc:
+            raise AccountUnavailableError(
+                "Account profile could not be updated.",
+            ) from exc
         if stored is None:
             raise AccountNotFoundError("Account profile is unavailable.")
         return AccountProfileResponse(
@@ -130,14 +161,25 @@ class AccountService:
                 "daily_preparation_budget_minutes": minutes,
             },
         )
-        stored = await self._repository.update_preparation_budget(
-            user_id=user_id,
-            request_id=str(request_id),
-            request_fingerprint=fingerprint,
-            expected_revision=expected_revision,
-            minutes=minutes,
-            now=now,
-        )
+        try:
+            stored = await self._repository.update_preparation_budget(
+                user_id=user_id,
+                request_id=str(request_id),
+                request_fingerprint=fingerprint,
+                expected_revision=expected_revision,
+                minutes=minutes,
+                now=now,
+            )
+        except AccountPersistenceConflict as exc:
+            raise AccountConflictError(str(exc)) from exc
+        except AccountPersistenceBudgetOutcomeUnknown as exc:
+            raise AccountOutcomeUnknownError(str(exc)) from exc
+        except AccountPersistenceNotFound as exc:
+            raise AccountNotFoundError(str(exc)) from exc
+        except AccountPersistenceError as exc:
+            raise AccountUnavailableError(
+                "Preparation budget could not be updated.",
+            ) from exc
         if stored is None:
             raise AccountNotFoundError("Account profile is unavailable.")
         return AccountPreparationBudgetResponse(
@@ -168,14 +210,19 @@ class AccountService:
         # rows. Together with immutable keyset cursors this prevents offset
         # shifts and excludes normal inserts committed after each watermark.
         # This deliberately does not claim a cross-table transaction snapshot.
-        watermarks = {
-            table.name: await self._repository.get_export_watermark(
-                user_id=user_id,
-                table=table,
-                max_response_bytes=ACCOUNT_EXPORT_WATERMARK_MAX_BYTES,
-            )
-            for table in ACCOUNT_EXPORT_TABLES
-        }
+        try:
+            watermarks = {
+                table.name: await self._repository.get_export_watermark(
+                    user_id=user_id,
+                    table=table,
+                    max_response_bytes=ACCOUNT_EXPORT_WATERMARK_MAX_BYTES,
+                )
+                for table in ACCOUNT_EXPORT_TABLES
+            }
+        except AccountPersistenceError as exc:
+            raise AccountUnavailableError(
+                "Account export could not be generated.",
+            ) from exc
         for table in ACCOUNT_EXPORT_TABLES:
             rows = data[table.name]
             not_after = watermarks[table.name]
@@ -202,18 +249,22 @@ class AccountService:
                         limit=request_limit,
                         max_response_bytes=source_page_bound,
                     )
-                except AccountExportSourceTooLargeError as exc:
+                except AccountPersistenceSourceTooLarge as exc:
                     raise AccountExportTooLargeError(
                         "Account export exceeds the V2 JSON size bound.",
+                    ) from exc
+                except AccountPersistenceError as exc:
+                    raise AccountUnavailableError(
+                        "Account export could not be generated.",
                     ) from exc
                 if not isinstance(page, list) or any(
                     not isinstance(row, dict) for row in page
                 ):
-                    raise AccountPersistenceError(
+                    raise AccountUnavailableError(
                         "Account export persistence returned an invalid page.",
                     )
                 if len(page) > request_limit:
-                    raise AccountPersistenceError(
+                    raise AccountUnavailableError(
                         "Account export persistence returned an invalid page.",
                     )
                 if any(
@@ -221,7 +272,7 @@ class AccountService:
                     or row[table.owner_column] != user_id
                     for row in page
                 ):
-                    raise AccountPersistenceError(
+                    raise AccountUnavailableError(
                         "Account export persistence returned an invalid owner.",
                     )
                 if len(page) > remaining:
@@ -239,7 +290,7 @@ class AccountService:
                         or not cursor
                         or (after_cursor is not None and cursor <= after_cursor)
                     ):
-                        raise AccountPersistenceError(
+                        raise AccountUnavailableError(
                             "Account export persistence returned an invalid cursor.",
                         )
                     row_bytes = len(_compact_json_bytes(row))
@@ -289,10 +340,19 @@ class AccountService:
     ) -> None:
         if confirmation != "DELETE":
             raise ValueError("Exact account deletion confirmation is required.")
-        await self._repository.delete_account(
-            user_id=user_id,
-            confirmation=confirmation,
-        )
+        try:
+            await self._repository.delete_account(
+                user_id=user_id,
+                confirmation=confirmation,
+            )
+        except AccountPersistenceNotFound as exc:
+            raise AccountNotFoundError(str(exc)) from exc
+        except AccountPersistenceDeletionOutcomeUnknown as exc:
+            raise AccountOutcomeUnknownError(str(exc)) from exc
+        except AccountPersistenceError as exc:
+            raise AccountUnavailableError(
+                "Account deletion could not be completed.",
+            ) from exc
 
 
 def _setting_fingerprint(payload: dict[str, object]) -> str:
@@ -334,7 +394,7 @@ def _validate_preparation_budget(value: int | None) -> None:
 def _validate_export_configuration() -> None:
     configured_tables = tuple(table.name for table in ACCOUNT_EXPORT_TABLES)
     if configured_tables != ACCOUNT_EXPORT_TABLE_NAMES:
-        raise AccountPersistenceError(
+        raise AccountUnavailableError(
             "Account export contract configuration is invalid.",
         )
     configured_sanitized = tuple(
@@ -344,7 +404,7 @@ def _validate_export_configuration() -> None:
         configured_sanitized != ACCOUNT_EXPORT_SANITIZED_TABLES
         or ACCOUNT_EXPORT_LEDGER_POLICY.omitted_tables != ACCOUNT_EXPORT_OMITTED_TABLES
     ):
-        raise AccountPersistenceError(
+        raise AccountUnavailableError(
             "Account export contract configuration is invalid.",
         )
     if (
@@ -352,7 +412,7 @@ def _validate_export_configuration() -> None:
         ACCOUNT_EXPORT_MAX_TOTAL_ROWS,
         ACCOUNT_EXPORT_MAX_JSON_BYTES,
     ) != (10_000, 50_000, 8 * 1024 * 1024):
-        raise AccountPersistenceError(
+        raise AccountUnavailableError(
             "Account export contract configuration is invalid.",
         )
 
@@ -374,6 +434,6 @@ def _compact_json_bytes(value: AccountExportResponse | dict[str, object]) -> byt
     try:
         return lossless_json_text(serializable).encode("utf-8")
     except (RecursionError, TypeError, ValueError) as exc:
-        raise AccountPersistenceError(
+        raise AccountUnavailableError(
             "Account export persistence returned invalid JSON data.",
         ) from exc

@@ -12,13 +12,13 @@ from app.models.learning import (
     LearningPreferencesState,
     LearningPreferencesUpdateResponse,
 )
-from app.repositories.learning_repository import (
-    LearningPersistenceConflict,
-    LearningPersistenceError,
-    LearningPersistenceNotFound,
-    LearningPersistenceOutcomeUnknown,
+from app.services.learning_service import (
+    LearningConflictError,
+    LearningContractError,
+    LearningNotFoundError,
+    LearningOutcomeUnknownError,
+    LearningUnavailableError,
 )
-from app.services.learning_service import LearningContractError
 from tests.api_test_dependencies import override_dependency
 
 
@@ -201,11 +201,11 @@ def test_learning_routes_map_conflict_ambiguous_and_safe_failures() -> None:
         "learned_focus_planning_enabled": False,
     }
     cases = (
-        (LearningPersistenceConflict("safe conflict"), 409),
-        (LearningPersistenceNotFound("private owner"), 404),
-        (LearningPersistenceOutcomeUnknown("private outcome"), 502),
+        (LearningConflictError("safe conflict"), 409),
+        (LearningNotFoundError("private owner"), 404),
+        (LearningOutcomeUnknownError("private outcome"), 502),
         (LearningContractError("private contract"), 502),
-        (LearningPersistenceError("private upstream"), 503),
+        (LearningUnavailableError("private upstream"), 503),
     )
     for error, expected_status in cases:
         service = Service()

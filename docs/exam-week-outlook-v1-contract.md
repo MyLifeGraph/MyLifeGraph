@@ -304,6 +304,12 @@ persisted plan/revision/block projections before and after opening and
 cancelling the replan form, so visible navigation cannot silently satisfy the
 contract by creating a preview.
 
+The outlook capacity algorithm remains its existing pure builder. Deadline
+plan orchestration now imports its own deterministic projection/block helpers
+from `deadline_plan_builder.py`; neither module performs repository I/O. This
+module split changes no activation window, timezone, sleep protection,
+availability, capacity, or response contract.
+
 Passing repository automation proves only this deterministic local boundary. It
 does not prove remote deployment, provider freshness, installed-device
 behavior, clinical value, academic outcomes, or long-term sleep behavior.

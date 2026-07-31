@@ -2,6 +2,7 @@ import asyncio
 from datetime import UTC, date, datetime
 
 import httpx
+import pytest
 
 from app.api.deps.auth import Principal, get_token_verifier
 from app.api.deps.services import get_daily_capture_service
@@ -54,8 +55,26 @@ def _evening_capture() -> dict[str, object]:
         "mood": 7,
         "energy": 6,
         "stress_intensity": 3,
-        "stress_intensity_label": "Low",
+        "stress_intensity_label": "low",
         "planned_sleep_time": "23:00",
+        "sleep_target_minutes": 480,
+    }
+
+
+def _morning_capture() -> dict[str, object]:
+    return {
+        "branch_version": "daily-capture-v4",
+        "capture_kind": "morning",
+        "entry_date": "2026-07-29",
+        "capture_id": "morning:2026-07-29",
+        "captured_at": "2026-07-29T08:05:00Z",
+        "sleep_hours": 8.0,
+        "sleep_quality": 6,
+        "current_energy": 7,
+        "day_shape": "normal",
+        "estimated_sleep_started_at": "2026-07-28T23:00:00Z",
+        "woke_at": "2026-07-29T07:00:00Z",
+        "estimated_sleep_minutes": 480,
         "sleep_target_minutes": 480,
     }
 
@@ -64,6 +83,7 @@ async def _request(
     repository: Repository,
     *,
     body: dict[str, object],
+    branch: str = "evening",
 ) -> httpx.Response:
     app = create_app()
     service = DailyCaptureService(
@@ -77,7 +97,7 @@ async def _request(
         base_url="http://test",
     ) as client:
         return await client.put(
-            "/v1/daily-capture/2026-07-29/evening",
+            f"/v1/daily-capture/2026-07-29/{branch}",
             headers={"Authorization": "Bearer valid-capture-token"},
             json=body,
         )
@@ -126,6 +146,70 @@ def test_daily_capture_put_rejects_incomplete_branch_before_persistence() -> Non
     response = asyncio.run(
         _request(
             repository,
+            body={
+                "contract_version": "daily-capture-write-v1",
+                "request_id": REQUEST_ID,
+                "expected_capture": None,
+                "capture": capture,
+            },
+        ),
+    )
+
+    assert response.status_code == 422
+    assert repository.calls == []
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"mood": 0},
+        {"stress_intensity_label": "Low"},
+        {"stress_intensity": 8, "stress_intensity_label": "high"},
+    ],
+)
+def test_daily_capture_put_rejects_evening_values_the_read_contract_rejects(
+    overrides: dict[str, object],
+) -> None:
+    repository = Repository()
+    capture = {**_evening_capture(), **overrides}
+
+    response = asyncio.run(
+        _request(
+            repository,
+            body={
+                "contract_version": "daily-capture-write-v1",
+                "request_id": REQUEST_ID,
+                "expected_capture": None,
+                "capture": capture,
+            },
+        ),
+    )
+
+    assert response.status_code == 422
+    assert repository.calls == []
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"day_shape": "invalid"},
+        {
+            "estimated_sleep_started_at": "2026-07-28T22:59:30Z",
+            "estimated_sleep_minutes": 480,
+            "sleep_hours": 8.0,
+        },
+    ],
+)
+def test_daily_capture_put_rejects_morning_values_the_read_contract_rejects(
+    overrides: dict[str, object],
+) -> None:
+    repository = Repository()
+    capture = {**_morning_capture(), **overrides}
+
+    response = asyncio.run(
+        _request(
+            repository,
+            branch="morning",
             body={
                 "contract_version": "daily-capture-write-v1",
                 "request_id": REQUEST_ID,

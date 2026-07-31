@@ -21,7 +21,6 @@ from app.models.account import (
 from app.repositories.account_repository import (
     AccountExportSourceTooLargeError,
     AccountExportTable,
-    AccountPersistenceError,
     StoredPreparationBudget,
     StoredTimezone,
 )
@@ -30,6 +29,7 @@ from app.services.account_service import (
     ACCOUNT_EXPORT_TABLES,
     AccountExportTooLargeError,
     AccountService,
+    AccountUnavailableError,
     InvalidAccountTimezoneError,
     InvalidPreparationBudgetError,
 )
@@ -315,7 +315,7 @@ def test_export_rejects_a_repository_row_for_another_owner() -> None:
     repository.rows["daily_logs"] = [{"id": "log-1", "user_id": "other-owner"}]
     service = AccountService(repository=repository, now=lambda: NOW)
 
-    with pytest.raises(AccountPersistenceError, match="invalid owner"):
+    with pytest.raises(AccountUnavailableError, match="invalid owner"):
         asyncio.run(service.export_account(user_id="owner-1"))
 
 
@@ -461,7 +461,7 @@ def test_export_service_rejects_drifted_table_configuration(monkeypatch) -> None
     repository = Repository()
     service = AccountService(repository=repository, now=lambda: NOW)
 
-    with pytest.raises(AccountPersistenceError, match="configuration"):
+    with pytest.raises(AccountUnavailableError, match="configuration"):
         asyncio.run(service.export_account(user_id="owner-1"))
 
     assert repository.export_calls == []
@@ -479,7 +479,7 @@ def test_export_service_rejects_drifted_policy_configuration(monkeypatch) -> Non
     repository = Repository()
     service = AccountService(repository=repository, now=lambda: NOW)
 
-    with pytest.raises(AccountPersistenceError, match="configuration"):
+    with pytest.raises(AccountUnavailableError, match="configuration"):
         asyncio.run(service.export_account(user_id="owner-1"))
 
     assert repository.export_calls == []
@@ -494,7 +494,7 @@ def test_export_service_rejects_drifted_limit_configuration(monkeypatch) -> None
     repository = Repository()
     service = AccountService(repository=repository, now=lambda: NOW)
 
-    with pytest.raises(AccountPersistenceError, match="configuration"):
+    with pytest.raises(AccountUnavailableError, match="configuration"):
         asyncio.run(service.export_account(user_id="owner-1"))
 
     assert repository.export_calls == []

@@ -4,6 +4,12 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import test from 'node:test';
 
+import {
+  ALL_JOURNEYS,
+  SMOKE_JOURNEYS,
+  isKnownJourney,
+  journeyTagPattern,
+} from '../e2e/web/journey-manifest.mjs';
 import { findE2eSplitContractErrors } from './check_e2e_split_contract.mjs';
 
 function writeFixture(root, path, contents = '') {
@@ -12,19 +18,20 @@ function writeFixture(root, path, contents = '') {
   writeFileSync(target, contents);
 }
 
+test('journey manifest keeps exact full, smoke, and named selection', () => {
+  assert.equal(new Set(ALL_JOURNEYS).size, 8);
+  assert.equal(new Set(SMOKE_JOURNEYS).size, 4);
+  assert.ok(SMOKE_JOURNEYS.every((name) => isKnownJourney(name)));
+  const smokePattern = journeyTagPattern(SMOKE_JOURNEYS);
+  assert.equal(smokePattern.test('@coach visible UI'), true);
+  assert.equal(smokePattern.test('@account-controls visible UI'), false);
+  assert.equal(isKnownJourney('legacy-full'), false);
+});
+
 test('E2E split guard rejects a legacy oracle and API-only journey', () => {
   const root = mkdtempSync(join(tmpdir(), 'mylifegraph-e2e-split-'));
   try {
-    for (const name of [
-      'account-controls',
-      'auth-capture-today',
-      'coach',
-      'exam-week-outlook',
-      'notification-lifecycle',
-      'personal-learning',
-      'planner-confirm',
-      'setup-onboarding',
-    ]) {
+    for (const name of ALL_JOURNEYS) {
       writeFixture(
         root,
         `e2e/web/journeys/${name}.spec.mjs`,
@@ -41,10 +48,11 @@ test('E2E split guard rejects a legacy oracle and API-only journey', () => {
       );
     }
     writeFixture(root, 'e2e/web/legacy-full.mjs', 'legacy');
+    writeFixture(root, 'e2e/web/journey-manifest.mjs');
     writeFixture(
       root,
       'e2e/web/playwright.config.mjs',
-      'setup-onboarding auth-capture-today planner-confirm coach full: undefined',
+      'ALL_JOURNEYS SMOKE_JOURNEYS journeyTagPattern full: undefined',
     );
     writeFixture(root, 'scripts/e2e_web.sh');
     writeFixture(root, 'scripts/verify_fast.sh');

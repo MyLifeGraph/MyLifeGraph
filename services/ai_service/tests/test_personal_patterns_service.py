@@ -6,7 +6,19 @@ from zoneinfo import ZoneInfo
 import pytest
 
 from app.models.learning import LearningPreferencesState
-from app.services.personal_patterns_service import PersonalPatternsService
+from app.repositories.personal_patterns_repository import (
+    PersonalPatternsNotFound,
+    PersonalPatternsPersistenceError,
+)
+from app.services.learning_service import (
+    LearningNotFoundError,
+    LearningUnavailableError,
+)
+from app.services.personal_patterns_service import (
+    PersonalPatternsNotFoundError,
+    PersonalPatternsService,
+    PersonalPatternsUnavailableError,
+)
 
 
 NOW = datetime(2026, 7, 26, 12, tzinfo=UTC)
@@ -16,9 +28,12 @@ class Learning:
     def __init__(self, *, enabled: bool = True) -> None:
         self.enabled = enabled
         self.calls: list[str] = []
+        self.error: Exception | None = None
 
     async def get_preferences(self, *, user_id: str) -> LearningPreferencesState:
         self.calls.append(user_id)
+        if self.error is not None:
+            raise self.error
         return LearningPreferencesState(
             contract_version="learning-preferences-v1",
             revision=1,
@@ -43,13 +58,19 @@ class Repository:
         self.reflections = reflections or []
         self.daily_logs = daily_logs or []
         self.calls: list[tuple] = []
+        self.timezone_error: Exception | None = None
+        self.evidence_error: Exception | None = None
 
     async def get_profile_timezone(self, *, user_id: str) -> str:
         self.calls.append(("timezone", user_id))
+        if self.timezone_error is not None:
+            raise self.timezone_error
         return self.timezone
 
     async def load_evidence(self, **kwargs):
         self.calls.append(("evidence", kwargs))
+        if self.evidence_error is not None:
+            raise self.evidence_error
         return self.sessions, self.reflections, self.daily_logs
 
 
@@ -202,6 +223,33 @@ def test_failure_log_contains_only_bounded_stage_and_counts(caplog) -> None:
     assert "error_stage=evidence_read" in caplog.text
     assert "contract_version=personal-patterns-v1 status=error" in caplog.text
     assert "raw provider detail" not in caplog.text
+
+
+def test_service_translates_learning_and_repository_boundary_failures() -> None:
+    repository = Repository()
+    service, learning = _service(repository)
+    learning.error = LearningNotFoundError("missing")
+
+    with pytest.raises(PersonalPatternsNotFoundError):
+        asyncio.run(service.get_patterns(user_id="owner"))
+
+    learning.error = LearningUnavailableError("unavailable")
+    with pytest.raises(PersonalPatternsUnavailableError):
+        asyncio.run(service.get_patterns(user_id="owner"))
+
+    learning.error = None
+    repository.timezone_error = PersonalPatternsNotFound("missing")
+    with pytest.raises(PersonalPatternsNotFoundError):
+        asyncio.run(service.get_patterns(user_id="owner"))
+
+    repository.timezone_error = PersonalPatternsPersistenceError("unavailable")
+    with pytest.raises(PersonalPatternsUnavailableError):
+        asyncio.run(service.get_patterns(user_id="owner"))
+
+    repository.timezone_error = None
+    repository.evidence_error = PersonalPatternsPersistenceError("unavailable")
+    with pytest.raises(PersonalPatternsUnavailableError):
+        asyncio.run(service.get_patterns(user_id="owner"))
 
 
 def test_collecting_exposes_baseline_only_after_three_ratings() -> None:

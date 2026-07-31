@@ -10,7 +10,7 @@ from app.models.user_context import (
     SignalSummary,
     TaskSignal,
 )
-from app.services.daily_capture_parser import parse_daily_capture_v4_sleep_episode
+from app.contracts.daily_capture_v4 import parse_daily_capture_v4_sleep_episode
 
 
 class UserContextRepository(Protocol):

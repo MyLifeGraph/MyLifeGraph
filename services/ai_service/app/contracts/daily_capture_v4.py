@@ -6,6 +6,53 @@ from math import isfinite
 from typing import Literal
 
 
+DailyCaptureV4Branch = Literal["morning", "evening"]
+
+_EVENING_REQUIRED_KEYS = frozenset(
+    {
+        "branch_version",
+        "capture_kind",
+        "entry_date",
+        "capture_id",
+        "captured_at",
+        "mood",
+        "energy",
+        "stress_intensity",
+        "stress_intensity_label",
+        "planned_sleep_time",
+        "sleep_target_minutes",
+    },
+)
+_EVENING_OPTIONAL_KEYS = frozenset(
+    {
+        "stress_source",
+        "stress_controllability",
+        "focus_band",
+        "tomorrow_priority",
+        "reflection_note",
+        "specific_blocker",
+    },
+)
+_MORNING_REQUIRED_KEYS = frozenset(
+    {
+        "branch_version",
+        "capture_kind",
+        "entry_date",
+        "capture_id",
+        "captured_at",
+        "sleep_hours",
+        "sleep_quality",
+        "current_energy",
+        "day_shape",
+        "estimated_sleep_started_at",
+        "woke_at",
+        "estimated_sleep_minutes",
+        "sleep_target_minutes",
+    },
+)
+_MORNING_OPTIONAL_KEYS = frozenset({"source_evening_capture_id"})
+
+
 @dataclass(frozen=True)
 class DailyCaptureV4SleepPlan:
     capture_id: str
@@ -38,6 +85,66 @@ class DailyCaptureV4SleepEpisode:
 class DailyCaptureV4ParseResult:
     value: DailyCaptureV4SleepPlan | DailyCaptureV4SleepEpisode | None
     issues: tuple[str, ...]
+
+
+def validate_daily_capture_v4_branch(
+    raw: object,
+    *,
+    row_date: date,
+    branch: DailyCaptureV4Branch,
+) -> tuple[str, ...]:
+    """Validate one new-write V4 branch against its complete strict contract."""
+
+    if not isinstance(raw, dict):
+        return (f"{branch}.invalid_object",)
+    required = (
+        _MORNING_REQUIRED_KEYS if branch == "morning" else _EVENING_REQUIRED_KEYS
+    )
+    optional = (
+        _MORNING_OPTIONAL_KEYS if branch == "morning" else _EVENING_OPTIONAL_KEYS
+    )
+    issues: list[str] = []
+    if required - set(raw):
+        issues.append(f"{branch}.missing_fields")
+    if set(raw) - required - optional:
+        issues.append(f"{branch}.unexpected_fields")
+
+    parsed = (
+        parse_daily_capture_v4_sleep_episode(raw, row_date=row_date)
+        if branch == "morning"
+        else parse_daily_capture_v4_sleep_plan(raw, row_date=row_date)
+    )
+    issues.extend(parsed.issues)
+
+    integer_fields = (
+        (
+            "sleep_quality",
+            "current_energy",
+            "estimated_sleep_minutes",
+            "sleep_target_minutes",
+        )
+        if branch == "morning"
+        else ("mood", "energy", "stress_intensity", "sleep_target_minutes")
+    )
+    for field in integer_fields:
+        if field in raw and type(raw[field]) is not int:
+            issues.append(f"{branch}.invalid_{field}")
+    if type(raw.get("captured_at")) is not str:
+        issues.append(f"{branch}.invalid_captured_at")
+
+    if branch == "evening":
+        focus_band = raw.get("focus_band")
+        if focus_band is not None and focus_band not in _FOCUS_BANDS:
+            issues.append("evening.invalid_focus_band")
+        for field, maximum in (
+            ("tomorrow_priority", 160),
+            ("reflection_note", 1_000),
+            ("specific_blocker", 280),
+        ):
+            if field in raw and _optional_bounded_text(raw[field], maximum=maximum) is None:
+                issues.append(f"evening.invalid_{field}")
+
+    return tuple(_dedupe(issues))
 
 
 def parse_daily_capture_v4_sleep_plan(
@@ -80,6 +187,9 @@ def parse_daily_capture_v4_sleep_plan(
         and controllability not in _STRESS_CONTROLLABILITY
     ):
         issues.append("evening.invalid_stress_controllability")
+    expected_label = _stress_label(stress) if stress is not None else None
+    if raw.get("stress_intensity_label") != expected_label:
+        issues.append("evening.invalid_stress_intensity_label")
 
     planned_sleep_time = raw.get("planned_sleep_time")
     target = _sleep_target_minutes(raw.get("sleep_target_minutes"))
@@ -255,6 +365,13 @@ def _bounded_string(value: object, *, maximum: int) -> str | None:
     return clean if clean and len(clean) <= maximum else None
 
 
+def _optional_bounded_text(value: object, *, maximum: int) -> str | None:
+    if not isinstance(value, str):
+        return None
+    clean = value.strip()
+    return clean if clean and len(clean) <= maximum else None
+
+
 def _whole_number(
     value: object,
     *,
@@ -295,6 +412,14 @@ def _dedupe(values: list[str]) -> list[str]:
     return list(dict.fromkeys(values))
 
 
+def _stress_label(stress: int) -> str:
+    if stress >= 8:
+        return "high"
+    if stress >= 5:
+        return "medium"
+    return "low"
+
+
 _STRESS_SOURCES = frozenset(
     {
         "workload",
@@ -306,5 +431,14 @@ _STRESS_SOURCES = frozenset(
 )
 _STRESS_CONTROLLABILITY = frozenset(
     {"hardly_controllable", "partly_controllable", "mostly_controllable"},
+)
+_FOCUS_BANDS = frozenset(
+    {
+        "none",
+        "under_30_minutes",
+        "30_to_60_minutes",
+        "1_to_2_hours",
+        "over_2_hours",
+    },
 )
 _DAY_SHAPES = frozenset({"normal", "constrained", "flexible"})

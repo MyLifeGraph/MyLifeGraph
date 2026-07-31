@@ -64,6 +64,13 @@ and minute fields before serializing the unchanged RPC JSON. This prevents
 service/repository key drift without adding another application layer or
 changing the database signature.
 
+The orchestration and deterministic calculation are separate modules:
+`deadline_plan_service.py` owns repository reads/writes and lifecycle flow,
+while `deadline_plan_builder.py` owns block allocation, busy-time projection,
+context fingerprints, DST-safe rounding, and response construction. The
+service passes complete contexts into those pure helpers; the split introduces
+no alternate proposal path and changes no HTTP, typed-write, or RPC payload.
+
 The managed task is a Phase 3-compatible focus target but remains planner-owned.
 Generic task edit/complete/postpone/cancel/restore commands and the ordinary task
 editor reject it and direct the user to `/preparation-plans`; starting focus on

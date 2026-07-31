@@ -12,17 +12,13 @@ from app.models.account import (
     AccountProfileResponse,
     AccountProfileUpdateRequest,
 )
-from app.repositories.account_repository import (
-    AccountDeletionOutcomeUnknownError,
-    AccountNotFoundError,
-    AccountPersistenceError,
-    AccountPreparationBudgetUpdateOutcomeUnknownError,
-    AccountProfileUpdateOutcomeUnknownError,
-    AccountSettingConflictError,
-)
 from app.services.account_service import (
+    AccountConflictError,
     AccountExportTooLargeError,
+    AccountNotFoundError,
+    AccountOutcomeUnknownError,
     AccountService,
+    AccountUnavailableError,
     InvalidAccountTimezoneError,
     InvalidPreparationBudgetError,
 )
@@ -86,17 +82,17 @@ async def update_account_profile(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Account profile is unavailable.",
         ) from exc
-    except AccountSettingConflictError as exc:
+    except AccountConflictError as exc:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=str(exc),
         ) from exc
-    except AccountProfileUpdateOutcomeUnknownError as exc:
+    except AccountOutcomeUnknownError as exc:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="Account profile update outcome could not be determined.",
         ) from exc
-    except AccountPersistenceError as exc:
+    except AccountUnavailableError as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Account profile could not be updated.",
@@ -129,17 +125,17 @@ async def update_account_preparation_budget(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Account profile is unavailable.",
         ) from exc
-    except AccountSettingConflictError as exc:
+    except AccountConflictError as exc:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=str(exc),
         ) from exc
-    except AccountPreparationBudgetUpdateOutcomeUnknownError as exc:
+    except AccountOutcomeUnknownError as exc:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="Preparation budget update outcome could not be determined.",
         ) from exc
-    except AccountPersistenceError as exc:
+    except AccountUnavailableError as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Preparation budget could not be updated.",
@@ -161,7 +157,7 @@ async def export_account(
             status_code=status.HTTP_413_CONTENT_TOO_LARGE,
             detail=str(exc),
         ) from exc
-    except AccountPersistenceError as exc:
+    except AccountUnavailableError as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Account export could not be generated.",
@@ -195,12 +191,12 @@ async def delete_account(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Account is unavailable.",
         ) from exc
-    except AccountDeletionOutcomeUnknownError as exc:
+    except AccountOutcomeUnknownError as exc:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="Account deletion outcome could not be determined.",
         ) from exc
-    except AccountPersistenceError as exc:
+    except AccountUnavailableError as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Account deletion could not be completed.",

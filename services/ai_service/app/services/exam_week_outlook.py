@@ -16,7 +16,7 @@ from app.models.deadline_plans import (
     ExamWeekSleepPlan,
 )
 from app.repositories.deadline_plan_repository import DeadlinePlanningContext
-from app.services.daily_capture_parser import (
+from app.contracts.daily_capture_v4 import (
     DailyCaptureV4SleepEpisode,
     DailyCaptureV4SleepPlan,
     parse_daily_capture_v4_sleep_episode,

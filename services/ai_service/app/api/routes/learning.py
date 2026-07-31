@@ -9,13 +9,14 @@ from app.models.learning import (
     LearningPreferencesUpdateRequest,
     LearningPreferencesUpdateResponse,
 )
-from app.repositories.learning_repository import (
-    LearningPersistenceConflict,
-    LearningPersistenceError,
-    LearningPersistenceNotFound,
-    LearningPersistenceOutcomeUnknown,
+from app.services.learning_service import (
+    LearningConflictError,
+    LearningContractError,
+    LearningNotFoundError,
+    LearningOutcomeUnknownError,
+    LearningService,
+    LearningUnavailableError,
 )
-from app.services.learning_service import LearningContractError, LearningService
 
 
 router = APIRouter(prefix="/learning", tags=["learning"])
@@ -28,12 +29,12 @@ async def get_learning_preferences(
 ) -> LearningPreferencesState:
     try:
         return await service.get_preferences(user_id=principal.user_id)
-    except LearningPersistenceNotFound as exc:
+    except LearningNotFoundError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Personal learning settings are unavailable.",
         ) from exc
-    except (LearningPersistenceError, LearningContractError) as exc:
+    except (LearningUnavailableError, LearningContractError) as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Personal learning settings could not be loaded.",
@@ -54,17 +55,17 @@ async def update_learning_preferences(
             user_id=principal.user_id,
             request=body,
         )
-    except LearningPersistenceConflict as exc:
+    except LearningConflictError as exc:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=str(exc),
         ) from exc
-    except LearningPersistenceNotFound as exc:
+    except LearningNotFoundError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Personal learning settings are unavailable.",
         ) from exc
-    except LearningPersistenceOutcomeUnknown as exc:
+    except LearningOutcomeUnknownError as exc:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="Personal learning update outcome could not be determined.",
@@ -74,7 +75,7 @@ async def update_learning_preferences(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="Personal learning update returned an invalid result.",
         ) from exc
-    except LearningPersistenceError as exc:
+    except LearningUnavailableError as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Personal learning settings could not be updated.",
@@ -95,17 +96,17 @@ async def clear_focus_reflection_history(
             user_id=principal.user_id,
             request=body,
         )
-    except LearningPersistenceConflict as exc:
+    except LearningConflictError as exc:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=str(exc),
         ) from exc
-    except LearningPersistenceNotFound as exc:
+    except LearningNotFoundError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Personal learning settings are unavailable.",
         ) from exc
-    except LearningPersistenceOutcomeUnknown as exc:
+    except LearningOutcomeUnknownError as exc:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="Focus reflection clear outcome could not be determined.",
@@ -115,7 +116,7 @@ async def clear_focus_reflection_history(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="Focus reflection clear returned an invalid result.",
         ) from exc
-    except LearningPersistenceError as exc:
+    except LearningUnavailableError as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Focus reflection history could not be cleared.",

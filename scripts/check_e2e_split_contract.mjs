@@ -4,23 +4,32 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import {
+  ALL_JOURNEYS,
+  SMOKE_JOURNEYS,
+} from '../e2e/web/journey-manifest.mjs';
+
 const repositoryRoot = resolve(
   fileURLToPath(new URL('..', import.meta.url)),
 );
 
-const expectedJourneys = new Set([
-  'account-controls',
-  'auth-capture-today',
-  'coach',
-  'exam-week-outlook',
-  'notification-lifecycle',
-  'personal-learning',
-  'planner-confirm',
-  'setup-onboarding',
-]);
+const expectedJourneys = new Set(ALL_JOURNEYS);
 
 export function findE2eSplitContractErrors(root = repositoryRoot) {
   const errors = [];
+  if (expectedJourneys.size !== ALL_JOURNEYS.length) {
+    errors.push('e2e/web/journey-manifest.mjs: full journey names must be unique');
+  }
+  if (new Set(SMOKE_JOURNEYS).size !== SMOKE_JOURNEYS.length) {
+    errors.push('e2e/web/journey-manifest.mjs: smoke journey names must be unique');
+  }
+  for (const journey of ALL_JOURNEYS) {
+    if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(journey)) {
+      errors.push(
+        `e2e/web/journey-manifest.mjs: invalid journey name ${journey}`,
+      );
+    }
+  }
   const journeysRoot = join(root, 'e2e/web/journeys');
   const legacyPath = join(root, 'e2e/web/legacy-full.mjs');
   if (existsSync(legacyPath)) {
@@ -76,6 +85,7 @@ export function findE2eSplitContractErrors(root = repositoryRoot) {
   }
 
   const requiredFiles = [
+    'e2e/web/journey-manifest.mjs',
     'e2e/web/playwright.config.mjs',
     'scripts/e2e_web.sh',
     'scripts/verify_fast.sh',
@@ -104,21 +114,26 @@ export function findE2eSplitContractErrors(root = repositoryRoot) {
   const configPath = join(root, 'e2e/web/playwright.config.mjs');
   if (existsSync(configPath)) {
     const config = readFileSync(configPath, 'utf8');
-    for (const tag of [
-      'setup-onboarding',
-      'auth-capture-today',
-      'planner-confirm',
-      'coach',
-    ]) {
-      if (!config.includes(tag)) {
-        errors.push(
-          `e2e/web/playwright.config.mjs: smoke suite is missing @${tag}`,
-        );
-      }
+    if (
+      !config.includes('ALL_JOURNEYS') ||
+      !config.includes('SMOKE_JOURNEYS') ||
+      !config.includes('journeyTagPattern')
+    ) {
+      errors.push(
+        'e2e/web/playwright.config.mjs: journey selection must use the canonical manifest',
+      );
     }
     if (!config.includes("full: undefined")) {
       errors.push(
         'e2e/web/playwright.config.mjs: full suite must remain unfiltered',
+      );
+    }
+  }
+
+  for (const journey of SMOKE_JOURNEYS) {
+    if (!expectedJourneys.has(journey)) {
+      errors.push(
+        `e2e/web/journey-manifest.mjs: smoke journey ${journey} is not registered`,
       );
     }
   }

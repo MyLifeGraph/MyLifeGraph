@@ -109,6 +109,14 @@ Proposal writes use one strict typed persistence object that binds target kind
 and identity, the exactly next revision, and the mutually exclusive Task-block
 or Habit-slot payload. This changes no HTTP or database contract.
 
+That boundary is physical as well as conceptual: `planner_service.py` contains
+repository orchestration and mutation sequencing, while `planner_builder.py`
+contains overview/projection/availability and serialization helpers. Shared
+Planner error types remain stable through the service facade. In Flutter,
+`planner_page.dart` coordinates state and navigation, while feature-owned
+section and dialog modules render projections and collect drafts without
+reading providers or writing data.
+
 ## Deterministic Availability
 
 One shared availability component is used by Planner Task/Habit proposals and

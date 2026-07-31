@@ -24,11 +24,18 @@ from app.models.personal_patterns import (
     PersonalPatternsWindow,
 )
 from app.repositories.personal_patterns_repository import (
+    PersonalPatternsNotFound as PersonalPatternsPersistenceNotFound,
+    PersonalPatternsPersistenceError,
     PersonalPatternsRepository,
 )
-from app.services.daily_capture_parser import (
+from app.contracts.daily_capture_v4 import (
     DailyCaptureV4SleepEpisode,
     parse_daily_capture_v4_sleep_episode,
+)
+from app.services.learning_service import (
+    LearningContractError,
+    LearningNotFoundError,
+    LearningUnavailableError,
 )
 
 
@@ -37,6 +44,14 @@ class LearningPreferencesReader(Protocol):
 
 
 class PersonalPatternsDataError(ValueError):
+    pass
+
+
+class PersonalPatternsNotFoundError(RuntimeError):
+    pass
+
+
+class PersonalPatternsUnavailableError(RuntimeError):
     pass
 
 
@@ -184,6 +199,14 @@ class PersonalPatternsService:
             raise
         try:
             preferences = await self._learning.get_preferences(user_id=user_id)
+        except LearningNotFoundError as exc:
+            _log_failure(stage="preferences")
+            raise PersonalPatternsNotFoundError(str(exc)) from exc
+        except (LearningUnavailableError, LearningContractError) as exc:
+            _log_failure(stage="preferences")
+            raise PersonalPatternsUnavailableError(
+                "Personal pattern preferences could not be loaded.",
+            ) from exc
         except Exception:
             _log_failure(stage="preferences")
             raise
@@ -197,6 +220,14 @@ class PersonalPatternsService:
                 local_starts_on=starts_at.astimezone(zone).date(),
                 local_ends_on=generated_at.astimezone(zone).date(),
             )
+        except PersonalPatternsPersistenceNotFound as exc:
+            _log_failure(stage="profile_timezone")
+            raise PersonalPatternsNotFoundError(str(exc)) from exc
+        except PersonalPatternsPersistenceError as exc:
+            _log_failure(stage="profile_timezone")
+            raise PersonalPatternsUnavailableError(
+                "Personal pattern profile could not be loaded.",
+            ) from exc
         except Exception:
             _log_failure(stage="profile_timezone")
             raise
@@ -223,6 +254,11 @@ class PersonalPatternsService:
                     local_ends_on=window.local_ends_on,
                 )
             )
+        except PersonalPatternsPersistenceError as exc:
+            _log_failure(stage="evidence_read")
+            raise PersonalPatternsUnavailableError(
+                "Personal pattern evidence could not be loaded.",
+            ) from exc
         except Exception:
             _log_failure(stage="evidence_read")
             raise
