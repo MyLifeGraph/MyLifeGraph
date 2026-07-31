@@ -9,7 +9,7 @@ import 'package:my_life_graph/core/navigation/app_router.dart';
 import 'package:my_life_graph/core/navigation/app_routes.dart';
 import 'package:my_life_graph/features/auth/data/auth_repository.dart';
 import 'package:my_life_graph/features/auth/domain/app_session.dart';
-import 'package:my_life_graph/features/auth/presentation/providers/auth_providers.dart';
+import 'package:my_life_graph/composition/auth_providers.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 

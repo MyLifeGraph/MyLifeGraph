@@ -1,0 +1,494 @@
+import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
+
+import '../../../../core/constants/app_radii.dart';
+import '../../../../core/constants/app_spacing.dart';
+import '../../../../core/navigation/app_routes.dart';
+import '../../../../core/theme/app_category_visuals.dart';
+import '../../../../core/theme/app_icons.dart';
+import '../../../../core/theme/app_motion_tokens.dart';
+import '../../../../core/theme/app_visual_tokens.dart';
+import '../../../../core/widgets/app_card.dart';
+import '../../domain/entities/dashboard_snapshot.dart';
+import 'dashboard_section_widgets.dart';
+
+class TodayOverviewActions {
+  const TodayOverviewActions({
+    required this.onAddEvening,
+    required this.onAddMorning,
+    required this.onOpenPreparationPlan,
+    required this.onStartPreparationFocus,
+  });
+
+  final VoidCallback onAddEvening;
+  final VoidCallback onAddMorning;
+  final ValueChanged<String> onOpenPreparationPlan;
+  final ValueChanged<String> onStartPreparationFocus;
+}
+
+/// Owns the stable Today summary sequence: capture streak, progress, and
+/// agenda. Task and Habit commands deliberately belong to separate sections.
+class TodayOverviewSections extends StatelessWidget {
+  const TodayOverviewSections({
+    super.key,
+    required this.snapshot,
+    required this.canExecute,
+    required this.actions,
+  });
+
+  final DashboardSnapshot snapshot;
+  final bool canExecute;
+  final TodayOverviewActions actions;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _CheckInStreakCard(
+          snapshot: snapshot,
+          onAddMorning: actions.onAddMorning,
+          onAddEvening: actions.onAddEvening,
+        ),
+        const SizedBox(height: AppSpacing.md),
+        _TodayProgressCard(snapshot: snapshot),
+        const SizedBox(height: AppSpacing.lg),
+        _TodayAgenda(
+          snapshot: snapshot,
+          canExecute: canExecute,
+          onOpenPreparationPlan: actions.onOpenPreparationPlan,
+          onStartPreparationFocus: actions.onStartPreparationFocus,
+        ),
+      ],
+    );
+  }
+}
+
+class _CheckInStreakCard extends StatelessWidget {
+  const _CheckInStreakCard({
+    required this.snapshot,
+    required this.onAddMorning,
+    required this.onAddEvening,
+  });
+
+  final DashboardSnapshot snapshot;
+  final VoidCallback onAddMorning;
+  final VoidCallback onAddEvening;
+
+  @override
+  Widget build(BuildContext context) {
+    final checkIns = snapshot.checkIns;
+    final unavailable =
+        snapshot.sourceStates?.checkIns.status == TodaySourceStatus.unavailable;
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(
+                AppIcons.localFireDepartmentOutlined,
+                color: Theme.of(context).colorScheme.primary,
+                size: 30,
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Check-in streak',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                    const SizedBox(height: AppSpacing.xs),
+                    Text(
+                      unavailable
+                          ? 'Streak unavailable'
+                          : '${checkIns?.completedDaysStreak ?? 0} consecutive ${checkIns?.completedDaysStreak == 1 ? 'day' : 'days'}',
+                      style: Theme.of(context).textTheme.headlineSmall,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            unavailable
+                ? snapshot.sourceStates?.checkIns.message ??
+                    'Check-ins could not be loaded.'
+                : 'A day counts when both check-ins are saved. You can enter both at any time today; an unfinished current day does not end the prior streak.',
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+          const SizedBox(height: AppSpacing.md),
+          Wrap(
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.sm,
+            children: [
+              _CheckInButton(
+                label: 'Morning check-in',
+                saved: checkIns?.morningSaved == true,
+                icon: AppIcons.wbSunnyOutlined,
+                onPressed: onAddMorning,
+              ),
+              _CheckInButton(
+                label: 'Evening check-in',
+                saved: checkIns?.eveningSaved == true,
+                icon: AppIcons.nightsStayOutlined,
+                onPressed: onAddEvening,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CheckInButton extends StatelessWidget {
+  const _CheckInButton({
+    required this.label,
+    required this.saved,
+    required this.icon,
+    required this.onPressed,
+  });
+
+  final String label;
+  final bool saved;
+  final IconData icon;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = '${saved ? 'Edit' : 'Add'} $label';
+    return Semantics(
+      button: true,
+      label: '$text. ${saved ? 'Saved' : 'Not saved'} today.',
+      child: saved
+          ? OutlinedButton.icon(
+              onPressed: onPressed,
+              icon: const Icon(AppIcons.checkCircleOutline),
+              label: Text(text),
+            )
+          : FilledButton.tonalIcon(
+              onPressed: onPressed,
+              icon: Icon(icon),
+              label: Text(text),
+            ),
+    );
+  }
+}
+
+class _TodayProgressCard extends StatelessWidget {
+  const _TodayProgressCard({required this.snapshot});
+
+  final DashboardSnapshot snapshot;
+
+  @override
+  Widget build(BuildContext context) {
+    final progress = snapshot.progress;
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Today\'s progress',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          if (progress == null) ...[
+            Text(
+              'Progress unavailable',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            const Text(
+              'At least one counted source could not be verified, so no partial total is shown.',
+            ),
+          ] else ...[
+            Semantics(
+              label:
+                  '${progress.completed} of ${progress.total} counted items completed today',
+              child: ExcludeSemantics(
+                child: TweenAnimationBuilder<double>(
+                  tween: Tween(begin: 0, end: progress.ratio),
+                  duration: context.motionTokens.emphasisFor(context),
+                  builder: (context, value, _) => LinearProgressIndicator(
+                    value: value,
+                    minHeight: 12,
+                    borderRadius: BorderRadius.circular(AppRadii.pill),
+                    color: context.visualTokens.success,
+                    backgroundColor:
+                        Theme.of(context).colorScheme.surfaceContainerHighest,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              '${progress.completed}/${progress.total} completed',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            const Text(
+              'Includes both check-ins, today\'s tasks and habits, and confirmed preparation blocks. Skipped habits do not count as completed.',
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _TodayAgenda extends StatelessWidget {
+  const _TodayAgenda({
+    required this.snapshot,
+    required this.canExecute,
+    required this.onOpenPreparationPlan,
+    required this.onStartPreparationFocus,
+  });
+
+  final DashboardSnapshot snapshot;
+  final bool canExecute;
+  final ValueChanged<String> onOpenPreparationPlan;
+  final ValueChanged<String> onStartPreparationFocus;
+
+  @override
+  Widget build(BuildContext context) {
+    final sourceErrors = snapshot.sourceStates?.timelineStates
+            .where((state) => state.status == TodaySourceStatus.unavailable)
+            .map((state) => state.message)
+            .whereType<String>()
+            .toList(growable: false) ??
+        const <String>[];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const DashboardSectionTitle(
+          title: 'Today at a glance',
+          subtitle: 'Your timed day in one compact agenda.',
+        ),
+        if (sourceErrors.isNotEmpty) ...[
+          const SizedBox(height: AppSpacing.sm),
+          DashboardInlineMessage(
+            icon: AppIcons.warningAmberOutlined,
+            message: sourceErrors.join(' '),
+            color: Theme.of(context).colorScheme.error,
+          ),
+        ],
+        const SizedBox(height: AppSpacing.md),
+        if (snapshot.timeline.isEmpty)
+          const DashboardEmptySectionCard(
+            icon: AppIcons.calendarTodayOutlined,
+            message: 'No timed blocks or all-day events are available today.',
+          )
+        else
+          ...snapshot.timeline.map(
+            (item) => Padding(
+              padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+              child: _AgendaItem(
+                item: item,
+                canExecute: canExecute,
+                onOpenPreparationPlan: onOpenPreparationPlan,
+                onStartPreparationFocus: onStartPreparationFocus,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _AgendaItem extends StatelessWidget {
+  const _AgendaItem({
+    required this.item,
+    required this.canExecute,
+    required this.onOpenPreparationPlan,
+    required this.onStartPreparationFocus,
+  });
+
+  final TodayTimelineItem item;
+  final bool canExecute;
+  final ValueChanged<String> onOpenPreparationPlan;
+  final ValueChanged<String> onStartPreparationFocus;
+
+  @override
+  Widget build(BuildContext context) {
+    final appearance = _agendaAppearance(context, item.kind);
+    final detail = _agendaDetail(item);
+    return Semantics(
+      container: true,
+      label: '${appearance.label}. ${item.title}. ${_agendaTime(item)}.',
+      child: Container(
+        decoration: BoxDecoration(
+          color: appearance.background,
+          borderRadius: BorderRadius.circular(AppRadii.sm),
+          border:
+              Border.all(color: appearance.foreground.withValues(alpha: .3)),
+        ),
+        padding: const EdgeInsets.all(AppSpacing.md),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SizedBox(
+              width: 76,
+              child: Text(
+                _agendaTime(item),
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                      color: appearance.foreground,
+                    ),
+              ),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            Icon(appearance.icon, color: appearance.foreground, size: 21),
+            const SizedBox(width: AppSpacing.sm),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    appearance.label,
+                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                          color: appearance.foreground,
+                          fontWeight: FontWeight.w700,
+                        ),
+                  ),
+                  const SizedBox(height: AppSpacing.xs),
+                  Text(
+                    item.title,
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          color: appearance.foreground,
+                        ),
+                  ),
+                  if (detail != null) ...[
+                    const SizedBox(height: AppSpacing.xs),
+                    Text(
+                      detail,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: appearance.foreground,
+                          ),
+                    ),
+                  ],
+                  if (item.location != null) ...[
+                    const SizedBox(height: AppSpacing.xs),
+                    Text(
+                      item.location!,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: appearance.foreground,
+                          ),
+                    ),
+                  ],
+                  if (item.kind == TodayTimelineKind.preparation &&
+                      item.planId != null) ...[
+                    const SizedBox(height: AppSpacing.sm),
+                    Wrap(
+                      spacing: AppSpacing.sm,
+                      runSpacing: AppSpacing.sm,
+                      children: [
+                        OutlinedButton(
+                          onPressed: () => onOpenPreparationPlan(item.planId!),
+                          child: const Text('Open plan'),
+                        ),
+                        if (canExecute &&
+                            item.managedTaskId != null &&
+                            const {'upcoming', 'partial'}.contains(item.state))
+                          FilledButton.tonalIcon(
+                            onPressed: () => onStartPreparationFocus(
+                              item.managedTaskId!,
+                            ),
+                            icon: const Icon(AppIcons.timerOutlined),
+                            label: const Text('Start focus'),
+                          ),
+                      ],
+                    ),
+                  ],
+                  if (canExecute &&
+                      item.kind == TodayTimelineKind.taskBlock &&
+                      item.taskId != null) ...[
+                    const SizedBox(height: AppSpacing.sm),
+                    FilledButton.tonalIcon(
+                      onPressed: () => context.push(
+                        '${AppRoutes.deepWork}?target_kind=task&target_id=${item.taskId}',
+                      ),
+                      icon: const Icon(AppIcons.timerOutlined),
+                      label: const Text('Start focus'),
+                    ),
+                  ],
+                  if (canExecute &&
+                      item.kind == TodayTimelineKind.habitSlot &&
+                      item.habitId != null) ...[
+                    const SizedBox(height: AppSpacing.sm),
+                    FilledButton.tonalIcon(
+                      onPressed: () => context.push(AppRoutes.habitCompletion),
+                      icon: const Icon(AppIcons.checkCircleOutline),
+                      label: const Text('Log habit'),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+String _agendaTime(TodayTimelineItem item) {
+  if (item.allDay) return 'All day';
+  final startsAt = item.startsAt;
+  final endsAt = item.endsAt;
+  if (startsAt == null || endsAt == null) return 'Time unavailable';
+  return '${DateFormat.Hm().format(startsAt)}–${DateFormat.Hm().format(endsAt)}';
+}
+
+String? _agendaDetail(TodayTimelineItem item) => switch (item.kind) {
+      TodayTimelineKind.setupCommitment => 'Recurring Setup commitment',
+      TodayTimelineKind.preparation => [
+          _preparationStateLabel(item.state ?? ''),
+          if (item.creditedTrackedMinutes != null &&
+              item.plannedMinutes != null)
+            '${item.creditedTrackedMinutes}/${item.plannedMinutes} min tracked',
+        ].join(' · '),
+      TodayTimelineKind.calendarEvent => item.sourceLabel == null
+          ? 'Imported calendar event'
+          : 'Imported from ${item.sourceLabel}',
+      TodayTimelineKind.focusSession => [
+          switch (item.state) {
+            'active' => 'Active',
+            'completed' => 'Completed',
+            'abandoned' => 'Abandoned',
+            _ => 'Focus',
+          },
+          if (item.actualMinutes != null) '${item.actualMinutes} min',
+        ].join(' · '),
+      TodayTimelineKind.taskBlock => '${item.plannedMinutes} min reserved',
+      TodayTimelineKind.habitSlot => '${item.plannedMinutes} min reserved',
+      TodayTimelineKind.manualCommitment => 'Fixed commitment',
+    };
+
+AppCategoryVisual _agendaAppearance(
+  BuildContext context,
+  TodayTimelineKind kind,
+) {
+  final category = switch (kind) {
+    TodayTimelineKind.setupCommitment => AppCategory.setup,
+    TodayTimelineKind.preparation => AppCategory.preparation,
+    TodayTimelineKind.calendarEvent => AppCategory.calendar,
+    TodayTimelineKind.focusSession => AppCategory.focus,
+    TodayTimelineKind.taskBlock => AppCategory.task,
+    TodayTimelineKind.habitSlot => AppCategory.habit,
+    TodayTimelineKind.manualCommitment => AppCategory.fixedCommitment,
+  };
+  return category.visual(context);
+}
+
+String _preparationStateLabel(String state) => switch (state) {
+      'upcoming' => 'Upcoming',
+      'partial' => 'Partly tracked',
+      'completed' => 'Completed',
+      'missed' => 'Missed',
+      _ => 'Preparation',
+    };

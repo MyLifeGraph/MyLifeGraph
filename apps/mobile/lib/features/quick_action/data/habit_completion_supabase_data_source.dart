@@ -6,18 +6,22 @@ import '../../../core/utils/client_uuid.dart';
 import '../domain/habit_v1.dart';
 
 typedef HabitNowProvider = DateTime Function();
+typedef HabitTodayProvider = DateTime Function();
 
 class HabitCompletionSupabaseDataSource {
   HabitCompletionSupabaseDataSource(
     this._client, {
     HabitNowProvider? nowProvider,
-  }) : _nowProvider = nowProvider ?? DateTime.now;
+    HabitTodayProvider? todayProvider,
+  })  : _nowProvider = nowProvider ?? DateTime.now,
+        _todayProvider = todayProvider ?? nowProvider ?? DateTime.now;
 
   final SupabaseClient _client;
   final HabitNowProvider _nowProvider;
+  final HabitTodayProvider _todayProvider;
 
   Future<List<HabitV1>> fetchActiveHabits() async {
-    final today = habitDateOnly(_nowProvider());
+    final today = habitDateOnly(_todayProvider());
     final habits = await fetchHabits(activeOnly: true);
     return habits.where((habit) => habit.isRelevantOn(today)).toList();
   }
@@ -30,7 +34,7 @@ class HabitCompletionSupabaseDataSource {
     bool excludeSetupManaged = false,
   }) async {
     final userId = await AppUserResolver(_client).resolveUserId();
-    final today = habitDateOnly(_nowProvider());
+    final today = habitDateOnly(_todayProvider());
     final historyStart = habitAddCalendarDays(today, -370);
     final habitRows = await _fetchHabitRows(
       userId: userId,
@@ -138,14 +142,15 @@ class HabitCompletionSupabaseDataSource {
     }
     final normalizedTitle = _validateTitle(title);
     final normalizedDescription = _validateDescription(description);
-    final userId = await AppUserResolver(_client).resolveUserId();
+    final startedOn = habitDateKey(habitDateOnly(_todayProvider()));
     final nowValue = _nowProvider();
+    final userId = await AppUserResolver(_client).resolveUserId();
     final now = _timestamp(nowValue);
     final metadata = <String, Object>{
       'source': 'flutter-habit-management-v1',
       ...cadence.metadataProjection,
       'lifecycle': HabitLifecycle.active.code,
-      'started_on': habitDateKey(nowValue),
+      'started_on': startedOn,
     };
     final payload = {
       'id': habitId,

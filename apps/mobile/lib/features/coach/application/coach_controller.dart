@@ -1,7 +1,6 @@
-import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/errors/app_exception.dart';
+import '../../../core/network/api_failure.dart';
 import '../../../core/utils/client_uuid.dart';
 import '../domain/coach.dart';
 import '../domain/coach_repository.dart';
@@ -428,33 +427,29 @@ bool coachFailurePreservesRequestIdentity(Object error) {
       error is CoachInputException) {
     return true;
   }
-  final dio = _dioExceptionFrom(error);
-  return dio != null && dio.response == null;
+  final failure = apiFailureFrom(error);
+  return failure != null && failure.statusCode == null;
 }
 
 String coachErrorMessage(Object? error) {
-  if (error is CoachRemoteException) return error.message;
+  if (error is CoachRemoteException) {
+    if (error.timedOut) {
+      return 'Coach timed out. Retry the exact message.';
+    }
+    return error.message;
+  }
   if (error is CoachAccessException) return error.message;
   if (error is CoachInputException) return error.message;
   if (error is CoachContractException) {
     return 'Coach returned an invalid response. Retry the exact message.';
   }
-  final dio = _dioExceptionFrom(error);
-  if (dio?.type == DioExceptionType.receiveTimeout ||
-      dio?.type == DioExceptionType.connectionTimeout ||
-      dio?.type == DioExceptionType.sendTimeout) {
+  if (apiFailureFrom(error)?.isTimeout ?? false) {
     return 'Coach timed out. Retry the exact message.';
   }
-  if (dio != null) {
+  if (apiFailureFrom(error) != null) {
     return 'Coach could not be reached. Retry the exact message.';
   }
   return 'Coach could not complete this operation. Try again.';
-}
-
-DioException? _dioExceptionFrom(Object? error) {
-  if (error is DioException) return error;
-  final cause = error is AppException ? error.cause : null;
-  return cause is DioException ? cause : null;
 }
 
 const Object _unset = Object();

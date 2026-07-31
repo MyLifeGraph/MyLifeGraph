@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../../../composition/projection_refresh_providers.dart';
 import '../../../../core/capabilities/app_surface_capabilities.dart';
 import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/navigation/app_routes.dart';
@@ -15,14 +16,11 @@ import '../../../../core/utils/local_date.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_page.dart';
 import '../../../../core/widgets/app_surface.dart';
-import '../../../briefings/presentation/providers/briefing_providers.dart';
-import '../../../dashboard/presentation/providers/dashboard_providers.dart';
-import '../../../planner/presentation/providers/planner_providers.dart';
-import '../../../snapshots/presentation/providers/snapshot_providers.dart';
+import 'package:my_life_graph/composition/profile_local_date_providers.dart';
 import '../../application/deadline_plan_controller.dart';
 import '../../domain/deadline_calendar_prefill.dart';
 import '../../domain/deadline_plan.dart';
-import '../providers/deadline_plan_providers.dart';
+import 'package:my_life_graph/composition/deadline_plan_providers.dart';
 
 class DeadlinePlansPage extends ConsumerStatefulWidget {
   const DeadlinePlansPage({
@@ -619,6 +617,13 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
             : null;
     DeadlinePlanProposalDraft? draft;
     final preparationWorkload = ref.read(preparationWorkloadProvider);
+    final profileToday = widget.currentTime == null
+        ? ref.read(profileLocalDateSourceProvider).today()
+        : DateTime(
+            widget.currentTime!.year,
+            widget.currentTime!.month,
+            widget.currentTime!.day,
+          );
     try {
       draft = await showModalBottomSheet<DeadlinePlanProposalDraft>(
         context: context,
@@ -671,6 +676,7 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
               retainedDraft == null,
           replanContext: replanContext,
           currentTime: widget.currentTime,
+          profileToday: profileToday,
         ),
       );
     } finally {
@@ -743,9 +749,6 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
       if (!mounted) return;
       setState(() => _operationPlanId = null);
       if (widget.focusedReplan) {
-        ref.invalidate(plannerControllerProvider);
-        ref.invalidate(examWeekOutlookProvider);
-        ref.invalidate(dashboardSnapshotProvider);
         context.go(AppRoutes.planner);
       } else {
         _showMessage('Preparation blocks reserved.');
@@ -794,7 +797,9 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
       if (plan.taskId != null) {
         await _afterManagedTaskMutation();
       } else {
-        ref.invalidate(dashboardSnapshotProvider);
+        await ref
+            .read(projectionRefreshCoordinatorProvider)
+            .deadlinePlanChanged();
       }
       if (!mounted) return;
       setState(() {
@@ -854,17 +859,12 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
 
   Future<void> _afterManagedTaskMutation() async {
     try {
-      await ref
-          .read(snapshotRefreshServiceProvider)
-          .refreshDailyAfterTaskChange(
-            targetDate: localDateKey(DateTime.now()),
+      await ref.read(projectionRefreshCoordinatorProvider).deadlinePlanChanged(
+            targetDate: ref.read(profileLocalDateSourceProvider).todayKey(),
           );
     } catch (_) {
       // The plan mutation is already durable; snapshot refresh is best effort.
     }
-    ref.invalidate(dashboardSnapshotProvider);
-    ref.invalidate(todayBriefingProvider);
-    ref.invalidate(preparationWorkloadProvider);
   }
 
   void _keepPlanVisible(String planId) {
@@ -1456,6 +1456,7 @@ class _DeadlinePlanEditorSheet extends StatefulWidget {
     required this.startWithExistingSummary,
     required this.replanContext,
     required this.currentTime,
+    required this.profileToday,
   });
 
   final String planId;
@@ -1476,6 +1477,7 @@ class _DeadlinePlanEditorSheet extends StatefulWidget {
   final bool startWithExistingSummary;
   final _DeadlineReplanContext replanContext;
   final DateTime? currentTime;
+  final DateTime profileToday;
 
   @override
   State<_DeadlinePlanEditorSheet> createState() =>
@@ -1552,7 +1554,7 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
     }
     _sourceKind = widget.sourceKind;
     _showExistingSummary = widget.startWithExistingSummary;
-    final today = DateTime(now.year, now.month, now.day);
+    final today = widget.profileToday;
     final savedPlanningStart = DateTime.tryParse(
       retained?.planningStartOn ?? existing?.planningStartOn ?? '',
     );
@@ -2171,7 +2173,7 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
 
   Future<void> _pickPlanningStart() async {
     final now = _now;
-    final today = DateTime(now.year, now.month, now.day);
+    final today = widget.profileToday;
     final deadlineDate = _deadline?.toLocal();
     final lastDate = deadlineDate == null
         ? now.add(const Duration(days: 365))

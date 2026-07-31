@@ -17,8 +17,8 @@ import '../../domain/entities/personal_patterns.dart';
 import '../../domain/services/correlation_analyzer.dart';
 import '../../domain/services/coaching_observation.dart';
 import '../../../optimization/domain/entities/skillset_profile.dart';
-import '../../../optimization/presentation/providers/optimization_providers.dart';
-import '../../../shell/presentation/widgets/app_header_actions.dart';
+import 'package:my_life_graph/composition/optimization_providers.dart';
+import 'package:my_life_graph/composition/widgets/app_header_actions.dart';
 import '../providers/insights_providers.dart';
 
 class InsightsPage extends ConsumerWidget {

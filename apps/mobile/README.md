@@ -2,6 +2,16 @@
 
 Flutter client for the AI Personal Coach / MyLifeGraph product.
 
+Feature code keeps its data and presentation internals private. Riverpod
+factories or widgets that deliberately wire multiple features live under
+`lib/composition`; feature application/domain contracts remain directly
+importable. A source test rejects new cross-feature `data`/`presentation`
+imports except for one documented embedded Focus-reflection UI seam, so
+boundaries cannot drift silently. Shell destinations share one immutable
+descriptor for labels, icons, active paths, and Coach visibility while
+GoRouter routes remain explicit. This is direct Riverpod composition, not a DI
+framework or barrel API.
+
 ## Recommended Local Run
 
 From the repository root:
@@ -112,6 +122,21 @@ saves omit it, while a value already present on a legacy branch survives an
 otherwise valid edit. V2/V3 branches remain readable and may stay explicit
 compatibility branches until edited; editing a branch requires its V4 fields.
 Guest/mock Today and capture stay local and make no authenticated request.
+After durable writes, feature callers send a typed domain impact to the
+app-level projection coordinator instead of importing foreign Riverpod
+providers. That composition boundary owns Daily Snapshot refresh and dependent
+read-cache invalidation. Today and Planner retain their explicit controlled
+reload/stale states, and guest Capture performs local invalidation without a
+backend refresh.
+Today Task/Habit execution additionally goes through a feature-local command
+controller with narrow ports supplied by app composition. The Dashboard page
+owns only navigation, Undo presentation, and visible messages;
+command dedupe, optimistic overlays, durable-versus-unconfirmed outcomes, and
+the reload-only stale state are tested without a widget or Supabase client.
+Its home layout composes separate typed presentation sections for
+streak/progress/agenda, Tasks, Habits, and lazy supporting content. Task
+creation/editing remains in Planner; an unreachable duplicate Today editor and
+its inert edit/cancel/postpone wiring are not retained.
 
 Planner additionally loads the strictly read-only
 `exam-week-outlook-v1` projection for authenticated real accounts. An active
@@ -134,6 +159,10 @@ no outlook request.
   additionally require `com.mylifegraph.app://login-callback/`. Signup,
   recovery, and OAuth use that same Android callback. This repository contains
   no iOS runner, so native iOS callback support is not claimed.
+- A real authenticated identity must already have the canonical profile created
+  by the backend-owned Auth trigger. A missing profile fails closed with an
+  explicit sign-out action; Flutter never attempts to insert or repair the
+  protected profile.
 
 First-run Setup requires only Typical weekday and Best energy window, with an
 optional display name, routines, fixed commitments, and Study Setup. Focus

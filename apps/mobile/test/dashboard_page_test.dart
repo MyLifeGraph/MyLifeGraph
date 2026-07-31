@@ -1,23 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:my_life_graph/composition/today_command_providers.dart';
 import 'package:my_life_graph/core/capabilities/app_surface_capabilities.dart';
+import 'package:my_life_graph/features/auth/application/profile_local_date_source.dart';
+import 'package:my_life_graph/composition/profile_local_date_providers.dart';
 import 'package:my_life_graph/features/briefings/domain/decision_feedback.dart';
-import 'package:my_life_graph/features/briefings/presentation/providers/briefing_providers.dart';
+import 'package:my_life_graph/composition/briefing_providers.dart';
 import 'package:my_life_graph/features/dashboard/domain/entities/dashboard_snapshot.dart';
 import 'package:my_life_graph/features/dashboard/domain/repositories/dashboard_repository.dart';
 import 'package:my_life_graph/features/dashboard/presentation/pages/dashboard_page.dart';
-import 'package:my_life_graph/features/dashboard/presentation/providers/dashboard_providers.dart';
+import 'package:my_life_graph/composition/dashboard_providers.dart';
 import 'package:my_life_graph/features/deadline_plans/domain/deadline_plan.dart';
-import 'package:my_life_graph/features/deadline_plans/presentation/providers/deadline_plan_providers.dart';
+import 'package:my_life_graph/composition/deadline_plan_providers.dart';
 import 'package:my_life_graph/features/optimization/domain/entities/recommendation.dart';
 import 'package:my_life_graph/features/optimization/domain/entities/recommendation_feed.dart';
-import 'package:my_life_graph/features/optimization/presentation/providers/optimization_providers.dart';
-import 'package:my_life_graph/features/snapshots/application/snapshot_refresh_service.dart';
-import 'package:my_life_graph/features/snapshots/presentation/providers/snapshot_providers.dart';
-import 'package:my_life_graph/features/tasks/data/task_supabase_data_source.dart';
+import 'package:my_life_graph/composition/optimization_providers.dart';
+import 'package:my_life_graph/features/quick_action/domain/habit_v1.dart';
 import 'package:my_life_graph/features/tasks/domain/executable_task.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'support/deadline_plan_fixtures.dart';
 
@@ -270,23 +270,23 @@ void main() {
       'durable Today task write locks stale projection and retry only reloads',
       (tester) async {
     final snapshot = _todaySnapshot();
-    final taskSource = _RecordingTaskSource();
-    final refresh = _RecordingSnapshotRefresh();
+    final taskCommands = _RecordingTaskCommands();
+    final refresh = _RecordingProjectionRefresh();
     final repository = _FailOnceDashboardRepository(snapshot);
 
     await _pumpDashboard(
       tester,
       snapshot: snapshot,
-      taskSource: taskSource,
-      snapshotRefresh: refresh,
+      taskCommands: taskCommands,
+      projectionRefresh: refresh,
       dashboardRepository: repository,
     );
     await tester.tap(find.byTooltip('Complete task Due task'));
     await tester.pumpAndSettle();
 
     expect(find.text('Saved; Today could not reload.'), findsWidgets);
-    expect(taskSource.completeCalls, 1);
-    expect(refresh.taskTargetDates, ['2026-07-21']);
+    expect(taskCommands.completeCalls, 1);
+    expect(refresh.targetDates, ['2026-07-21']);
     expect(
       find.byTooltip('Complete task Due task'),
       findsNothing,
@@ -296,8 +296,43 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Reload Today'), findsNothing);
-    expect(taskSource.completeCalls, 1);
+    expect(taskCommands.completeCalls, 1);
     expect(repository.calls, 2);
+  });
+
+  testWidgets('embedded habit write and refresh use the displayed profile date',
+      (tester) async {
+    final snapshot = _todaySnapshot(
+      todayHabits: const [
+        TodayHabit(
+          id: '80000000-0000-4000-8000-000000000003',
+          title: 'Profile-day habit',
+          cadence: 'daily',
+          cadenceLabel: 'Daily',
+          weeklyCompleted: 0,
+          weeklyTarget: 1,
+          setupManaged: false,
+        ),
+      ],
+    );
+    final habitCommands = _RecordingHabitCommands();
+    final refresh = _RecordingProjectionRefresh();
+
+    await _pumpDashboard(
+      tester,
+      snapshot: snapshot,
+      habitCommands: habitCommands,
+      projectionRefresh: refresh,
+      dashboardRepository: _StaticDashboardRepository(snapshot),
+    );
+    final complete = find.widgetWithText(FilledButton, 'Complete');
+    await tester.ensureVisible(complete);
+    await tester.pumpAndSettle();
+    await tester.tap(complete);
+    await tester.pumpAndSettle();
+
+    expect(habitCommands.targetDates.map(habitDateKey), ['2026-07-21']);
+    expect(refresh.targetDates, ['2026-07-21']);
   });
 
   testWidgets('dashboard load error never substitutes example content',
@@ -331,8 +366,9 @@ Future<void> _pumpDashboard(
   Size size = const Size(900, 1500),
   TextScaler textScaler = TextScaler.noScaling,
   List<DecisionFeedback> feedback = const [],
-  TaskSupabaseDataSource? taskSource,
-  SnapshotRefreshService? snapshotRefresh,
+  TodayTaskCommandPort? taskCommands,
+  TodayHabitCommandPort? habitCommands,
+  _RecordingProjectionRefresh? projectionRefresh,
   DashboardRepository? dashboardRepository,
   AppSurfaceCapabilities capabilities = const AppSurfaceCapabilities(
     isLocalDemo: false,
@@ -347,10 +383,15 @@ Future<void> _pumpDashboard(
     tester.view.resetDevicePixelRatio();
   });
   final value = snapshotFuture ?? Future.value(snapshot ?? _todaySnapshot());
+  final commandRepository = dashboardRepository ??
+      _StaticDashboardRepository(snapshot ?? _todaySnapshot());
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
         appSurfaceCapabilitiesProvider.overrideWithValue(capabilities),
+        profileLocalDateSourceProvider.overrideWithValue(
+          const SessionProfileLocalDateSource(session: null),
+        ),
         dashboardSnapshotProvider.overrideWith((ref) => value),
         dashboardSupportingSnapshotProvider.overrideWith(
           (ref) => Future.value(
@@ -367,12 +408,16 @@ Future<void> _pumpDashboard(
               Future.value(RecommendationFeed.demo(const [])),
         ),
         decisionFeedbackProvider.overrideWith((ref) => Future.value(feedback)),
-        if (taskSource != null)
-          dashboardTaskDataSourceProvider.overrideWithValue(taskSource),
-        if (snapshotRefresh != null)
-          snapshotRefreshServiceProvider.overrideWithValue(snapshotRefresh),
-        if (dashboardRepository != null)
-          dashboardRepositoryProvider.overrideWithValue(dashboardRepository),
+        todayCommandControllerProvider.overrideWith(
+          (ref) => TodayCommandController(
+            taskCommands: taskCommands,
+            habitCommands: habitCommands,
+            dashboardRepository: commandRepository,
+            refreshAfterTask: projectionRefresh?.call ?? (_) async {},
+            refreshAfterHabit: projectionRefresh?.call ?? (_) async {},
+            onTodayReloaded: () {},
+          ),
+        ),
         if (workload != null)
           preparationWorkloadProvider.overrideWith((ref) => workload),
       ],
@@ -394,6 +439,7 @@ DashboardSnapshot _todaySnapshot({
   List<PlanItem>? todayTasks,
   List<PlanItem>? allTasks,
   List<TodayTimelineItem>? timeline,
+  List<TodayHabit>? todayHabits,
 }) {
   const due = PlanItem(
     id: '10000000-0000-4000-8000-000000000001',
@@ -501,27 +547,28 @@ DashboardSnapshot _todaySnapshot({
             actualMinutes: 30,
           ),
         ],
-    todayHabits: const [
-      TodayHabit(
-        id: '80000000-0000-4000-8000-000000000001',
-        title: 'Read',
-        cadence: 'daily',
-        cadenceLabel: 'Daily',
-        weeklyCompleted: 1,
-        weeklyTarget: 1,
-        setupManaged: false,
-        outcome: 'completed',
-      ),
-      TodayHabit(
-        id: '80000000-0000-4000-8000-000000000002',
-        title: 'Exercise',
-        cadence: 'weekly_target',
-        cadenceLabel: '3 times per week',
-        weeklyCompleted: 1,
-        weeklyTarget: 3,
-        setupManaged: true,
-      ),
-    ],
+    todayHabits: todayHabits ??
+        const [
+          TodayHabit(
+            id: '80000000-0000-4000-8000-000000000001',
+            title: 'Read',
+            cadence: 'daily',
+            cadenceLabel: 'Daily',
+            weeklyCompleted: 1,
+            weeklyTarget: 1,
+            setupManaged: false,
+            outcome: 'completed',
+          ),
+          TodayHabit(
+            id: '80000000-0000-4000-8000-000000000002',
+            title: 'Exercise',
+            cadence: 'weekly_target',
+            cadenceLabel: '3 times per week',
+            weeklyCompleted: 1,
+            weeklyTarget: 3,
+            setupManaged: true,
+          ),
+        ],
     sourceStates: sourceStates ?? _sourceStates(),
     isTodayOverview: true,
   );
@@ -545,16 +592,7 @@ TodaySourceStates _sourceStates({
   );
 }
 
-class _RecordingTaskSource extends TaskSupabaseDataSource {
-  _RecordingTaskSource()
-      : super(
-          SupabaseClient(
-            'http://localhost:54321',
-            'test-anon-key',
-            authOptions: const AuthClientOptions(autoRefreshToken: false),
-          ),
-        );
-
+class _RecordingTaskCommands implements TodayTaskCommandPort {
   int completeCalls = 0;
 
   @override
@@ -569,30 +607,74 @@ class _RecordingTaskSource extends TaskSupabaseDataSource {
       expectedUpdatedAt: DateTime.utc(2026, 7, 21, 10),
     );
   }
-}
-
-class _RecordingSnapshotRefresh implements SnapshotRefreshService {
-  final List<String> taskTargetDates = [];
 
   @override
-  Future<void> refreshDailyAfterTaskChange({
-    required String targetDate,
+  Future<TaskUndoToken> cancelTask(String taskId) => throw UnimplementedError();
+
+  @override
+  Future<ExecutableTask> createTask({
+    required String taskId,
+    required ExecutableTaskDraft draft,
+  }) =>
+      throw UnimplementedError();
+
+  @override
+  Future<ExecutableTask> editTask({
+    required String taskId,
+    required ExecutableTaskDraft draft,
+  }) =>
+      throw UnimplementedError();
+
+  @override
+  Future<TaskUndoToken> postponeTask({
+    required String taskId,
+    required DateTime newDeadline,
+  }) =>
+      throw UnimplementedError();
+
+  @override
+  Future<ExecutableTask> restoreTask(String taskId) =>
+      throw UnimplementedError();
+
+  @override
+  Future<ExecutableTask> undo(TaskUndoToken token) =>
+      throw UnimplementedError();
+}
+
+class _RecordingHabitCommands implements TodayHabitCommandPort {
+  final List<DateTime> targetDates = [];
+
+  @override
+  Future<void> setOutcome({
+    required String habitId,
+    required HabitOutcome outcome,
+    required DateTime targetDate,
   }) async {
-    taskTargetDates.add(targetDate);
+    targetDates.add(targetDate);
   }
 
   @override
-  Future<void> refreshDailyAfterHabitChange({
-    required String targetDate,
+  Future<void> undoOutcome({
+    required String habitId,
+    required DateTime targetDate,
   }) async {}
+}
+
+class _RecordingProjectionRefresh {
+  final List<String> targetDates = [];
+
+  Future<void> call(DateTime targetDate) async {
+    targetDates.add(habitDateKey(targetDate));
+  }
+}
+
+class _StaticDashboardRepository implements DashboardRepository {
+  const _StaticDashboardRepository(this.snapshot);
+
+  final DashboardSnapshot snapshot;
 
   @override
-  Future<void> refreshDailyAfterFocusChange({
-    required String targetDate,
-  }) async {}
-
-  @override
-  Future<void> refreshDailyAfterUserSignal({String? targetDate}) async {}
+  Future<DashboardSnapshot> getSnapshot() async => snapshot;
 }
 
 class _FailOnceDashboardRepository implements DashboardRepository {

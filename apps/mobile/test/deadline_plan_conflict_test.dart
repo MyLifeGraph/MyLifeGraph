@@ -1,6 +1,6 @@
-import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_life_graph/core/errors/app_exception.dart';
+import 'package:my_life_graph/core/network/api_failure.dart';
 import 'package:my_life_graph/features/deadline_plans/application/deadline_plan_controller.dart';
 
 void main() {
@@ -86,16 +86,12 @@ void main() {
 }
 
 AppException _error(String detail) {
-  final options = RequestOptions(path: '/v1/deadline-plans/proposals');
   return AppException(
     'Network request failed',
-    cause: DioException(
-      requestOptions: options,
-      response: Response<Map<String, dynamic>>(
-        requestOptions: options,
-        statusCode: 409,
-        data: {'detail': detail},
-      ),
+    cause: ApiFailure(
+      kind: ApiFailureKind.response,
+      statusCode: 409,
+      responseData: {'detail': detail},
     ),
   );
 }

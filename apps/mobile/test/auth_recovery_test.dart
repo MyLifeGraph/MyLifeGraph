@@ -12,9 +12,10 @@ import 'package:my_life_graph/core/navigation/app_routes.dart';
 import 'package:my_life_graph/core/theme/app_theme.dart';
 import 'package:my_life_graph/features/auth/data/auth_repository.dart';
 import 'package:my_life_graph/features/auth/domain/app_session.dart';
+import 'package:my_life_graph/features/auth/domain/auth_failure.dart';
 import 'package:my_life_graph/features/auth/presentation/pages/auth_page.dart';
 import 'package:my_life_graph/features/auth/presentation/pages/password_recovery_page.dart';
-import 'package:my_life_graph/features/auth/presentation/providers/auth_providers.dart';
+import 'package:my_life_graph/composition/auth_providers.dart';
 import 'package:my_life_graph/features/settings/presentation/pages/settings_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -203,6 +204,52 @@ void main() {
       find.textContaining('Check your email to confirm registration'),
       findsNothing,
     );
+  });
+
+  testWidgets('missing synced profile fails closed and offers sign-out',
+      (tester) async {
+    final repository = _FakeAuthRepository(
+      signInError: const MissingProfileInvariantException(),
+    );
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [authRepositoryProvider.overrideWithValue(repository)],
+        child: const MaterialApp(home: AuthPage()),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Email'),
+      'profile-less@example.test',
+    );
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Password'),
+      'password',
+    );
+    final loginButton = find.widgetWithText(FilledButton, 'Login');
+    await tester.ensureVisible(loginButton);
+    await tester.tap(loginButton);
+    await tester.pumpAndSettle();
+
+    const unavailable =
+        'Your sign-in succeeded, but this synced account could not be opened. No account data was changed. Sign out, then try again. If it continues, the account needs repair.';
+    expect(find.text(unavailable), findsOneWidget);
+    expect(
+      find.text(
+        'Authentication failed. Check your details and connection, then try again.',
+      ),
+      findsNothing,
+    );
+
+    final signOut = find.widgetWithText(TextButton, 'Sign out');
+    await tester.ensureVisible(signOut);
+    await tester.tap(signOut);
+    await tester.pumpAndSettle();
+
+    expect(repository.signOutCalls, 1);
+    expect(find.text(unavailable), findsNothing);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('missing Supabase configuration keeps email auth honest',
@@ -609,6 +656,7 @@ class _FakeAuthRepository extends AuthRepository {
     this.failSignOut = false,
     this.failDeletedAccountSignOut = false,
     this.failRegistration = false,
+    this.signInError,
     this.googleSignInCompleter,
     this.googleSignInError,
   }) : super(
@@ -624,6 +672,7 @@ class _FakeAuthRepository extends AuthRepository {
   final bool failSignOut;
   final bool failDeletedAccountSignOut;
   final bool failRegistration;
+  final Object? signInError;
   final Completer<void>? googleSignInCompleter;
   final Object? googleSignInError;
   final _authStates = StreamController<AuthState>.broadcast();
@@ -643,6 +692,16 @@ class _FakeAuthRepository extends AuthRepository {
   @override
   Future<void> requestPasswordReset({required String email}) async {
     passwordResetEmails.add(email);
+  }
+
+  @override
+  Future<AppSession> signInWithEmail({
+    required String email,
+    required String password,
+  }) async {
+    final error = signInError;
+    if (error != null) throw error;
+    return AppSession.authenticated(_profile());
   }
 
   @override

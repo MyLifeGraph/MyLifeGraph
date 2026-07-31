@@ -11,9 +11,9 @@ import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_page.dart';
-import '../../../shell/presentation/widgets/app_header_actions.dart';
+import 'package:my_life_graph/composition/widgets/app_header_actions.dart';
 import '../../domain/quick_check_in.dart';
-import '../providers/quick_check_in_providers.dart';
+import 'package:my_life_graph/composition/quick_check_in_providers.dart';
 import '../widgets/daily_capture_controls.dart';
 
 class QuickActionPage extends ConsumerWidget {

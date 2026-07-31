@@ -7,7 +7,8 @@ import '../../../../core/constants/app_radii.dart';
 import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/widgets/app_brand_mark.dart';
 import '../../../../core/widgets/app_surface.dart';
-import '../providers/auth_providers.dart';
+import '../../domain/auth_failure.dart';
+import 'package:my_life_graph/composition/auth_providers.dart';
 
 class AuthPage extends ConsumerStatefulWidget {
   const AuthPage({super.key});
@@ -38,9 +39,16 @@ class _AuthPageState extends ConsumerState<AuthPage> {
     final authState = ref.watch(authControllerProvider);
     final authNotice = ref.watch(authNoticeProvider);
     final isBusy = _submitting || authState.isLoading;
-    final authErrorMessage = authState.error is AuthConfigurationException
-        ? 'Synced sign-in is not configured. Configure Supabase or continue as guest.'
-        : 'Authentication failed. Check your details and connection, then try again.';
+    final profileUnavailable =
+        authState.error is MissingProfileInvariantException;
+    final authErrorMessage = switch (authState.error) {
+      AuthConfigurationException() =>
+        'Synced sign-in is not configured. Configure Supabase or continue as guest.',
+      MissingProfileInvariantException() =>
+        'Your sign-in succeeded, but this synced account could not be opened. No account data was changed. Sign out, then try again. If it continues, the account needs repair.',
+      _ =>
+        'Authentication failed. Check your details and connection, then try again.',
+    };
 
     return Scaffold(
       body: ColoredBox(
@@ -57,6 +65,7 @@ class _AuthPageState extends ConsumerState<AuthPage> {
                   authHasError: authState.hasError,
                   authNotice: authNotice,
                   authErrorMessage: authErrorMessage,
+                  showUnavailableAccountAction: profileUnavailable,
                   isBusy: isBusy,
                 ),
               );
@@ -106,6 +115,7 @@ class _AuthPageState extends ConsumerState<AuthPage> {
     required bool authHasError,
     required AuthNotice? authNotice,
     required String authErrorMessage,
+    required bool showUnavailableAccountAction,
     required bool isBusy,
   }) {
     return Column(
@@ -162,6 +172,14 @@ class _AuthPageState extends ConsumerState<AuthPage> {
         if (authHasError) ...[
           const SizedBox(height: AppSpacing.md),
           _InlineStatus(message: authErrorMessage, isError: true),
+          if (showUnavailableAccountAction)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton(
+                onPressed: isBusy ? null : _signOutUnavailableAccount,
+                child: const Text('Sign out'),
+              ),
+            ),
         ],
         Align(
           alignment: Alignment.centerLeft,
@@ -257,6 +275,24 @@ class _AuthPageState extends ConsumerState<AuthPage> {
               password: password,
             );
       }
+    } finally {
+      if (mounted) {
+        setState(() => _submitting = false);
+      }
+    }
+  }
+
+  Future<void> _signOutUnavailableAccount() async {
+    setState(() => _submitting = true);
+    try {
+      await ref.read(authControllerProvider.notifier).signOut();
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _accountHelpFailed = true;
+        _accountHelpMessage =
+            'Sign-out could not be confirmed. Close and reopen the app before trying again.';
+      });
     } finally {
       if (mounted) {
         setState(() => _submitting = false);

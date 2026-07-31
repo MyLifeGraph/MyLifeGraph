@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_life_graph/core/config/app_config.dart';
 import 'package:my_life_graph/features/auth/domain/app_session.dart';
-import 'package:my_life_graph/features/optimization/presentation/providers/optimization_providers.dart';
+import 'package:my_life_graph/composition/optimization_providers.dart';
 
 void main() {
   test('explicit mock configuration selects recommendation demo data', () {

@@ -1,7 +1,6 @@
-import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/errors/app_exception.dart';
+import '../../../core/network/api_failure.dart';
 import '../../../core/utils/client_uuid.dart';
 import '../domain/deadline_plan.dart';
 import '../domain/deadline_plan_repository.dart';
@@ -326,19 +325,19 @@ class DeadlinePlanController extends StateNotifier<DeadlinePlanState> {
 }
 
 bool deadlinePlanMutationRequiresExactRetry(Object error) {
-  final status = _dioExceptionFrom(error)?.response?.statusCode;
+  final status = apiFailureFrom(error)?.statusCode;
   return status == null || status < 400 || status >= 500;
 }
 
 bool deadlinePlanMutationSuggestsReload(Object error) {
-  if (_dioExceptionFrom(error)?.response?.statusCode != 409) return false;
+  if (apiFailureFrom(error)?.statusCode != 409) return false;
   final kind = deadlinePlanConflictKind(error);
   return kind == DeadlinePlanConflictKind.revision ||
       kind == DeadlinePlanConflictKind.unknown;
 }
 
 DeadlinePlanConflictKind deadlinePlanConflictKind(Object error) {
-  if (_dioExceptionFrom(error)?.response?.statusCode != 409) {
+  if (apiFailureFrom(error)?.statusCode != 409) {
     return DeadlinePlanConflictKind.unknown;
   }
   final detail = _conflictDetail(error);
@@ -365,7 +364,7 @@ DeadlinePlanConflictKind deadlinePlanConflictKind(Object error) {
 }
 
 String? deadlinePlanConflictGuidance(Object error) {
-  if (_dioExceptionFrom(error)?.response?.statusCode != 409) return null;
+  if (apiFailureFrom(error)?.statusCode != 409) return null;
   return switch (deadlinePlanConflictKind(error)) {
     DeadlinePlanConflictKind.activeFocus =>
       'Finish or abandon the active Focus session before changing or confirming this preparation plan.',
@@ -385,16 +384,10 @@ String? deadlinePlanConflictGuidance(Object error) {
 }
 
 String? _conflictDetail(Object error) {
-  final data = _dioExceptionFrom(error)?.response?.data;
+  final data = apiFailureFrom(error)?.responseData;
   if (data is! Map) return null;
   final detail = data['detail'];
   return detail is String ? detail : null;
-}
-
-DioException? _dioExceptionFrom(Object error) {
-  if (error is DioException) return error;
-  final cause = error is AppException ? error.cause : null;
-  return cause is DioException ? cause : null;
 }
 
 const _revisionConflictDetails = {

@@ -1,9 +1,8 @@
 import 'dart:async';
 
-import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/errors/app_exception.dart';
+import '../../../core/network/api_failure.dart';
 import '../../../core/utils/client_uuid.dart';
 import '../data/planner_api_data_source.dart';
 import '../domain/planner.dart';
@@ -164,6 +163,7 @@ class PlannerController extends StateNotifier<PlannerState> {
   final bool _isBackendConfigured;
 
   Future<void> load() async {
+    if (!mounted) return;
     if (state.isBusy && state.operation != PlannerOperation.loading) return;
     state = state.copyWith(
       operation: PlannerOperation.loading,
@@ -648,14 +648,13 @@ class PlannerController extends StateNotifier<PlannerState> {
 }
 
 bool _isConflict(Object error) {
-  final cause = error is AppException ? error.cause : null;
-  return cause is DioException && cause.response?.statusCode == 409;
+  return apiFailureFrom(error)?.isConflict ?? false;
 }
 
 bool _isAmbiguous(Object error) {
-  final cause = error is AppException ? error.cause : null;
-  if (cause is! DioException) return false;
-  final status = cause.response?.statusCode;
+  final failure = apiFailureFrom(error);
+  if (failure == null) return false;
+  final status = failure.statusCode;
   return status == null || status >= 500;
 }
 

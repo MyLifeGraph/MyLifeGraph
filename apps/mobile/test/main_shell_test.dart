@@ -7,8 +7,99 @@ import 'package:my_life_graph/core/capabilities/app_surface_capabilities.dart';
 import 'package:my_life_graph/core/navigation/app_routes.dart';
 import 'package:my_life_graph/core/theme/app_theme.dart';
 import 'package:my_life_graph/features/shell/presentation/main_shell.dart';
+import 'package:my_life_graph/features/shell/presentation/shell_destination_descriptor.dart';
 
 void main() {
+  group('shell destination descriptors', () {
+    test('own one unique route and presentation definition per destination',
+        () {
+      expect(
+        shellDestinations.map((destination) => destination.path),
+        [
+          AppRoutes.dashboard,
+          AppRoutes.insights,
+          AppRoutes.quickAction,
+          AppRoutes.planner,
+          AppRoutes.coach,
+        ],
+      );
+      expect(
+        shellDestinations.map((destination) => destination.label),
+        ['Today', 'Insights', 'Quick actions', 'Planner', 'Coach'],
+      );
+      expect(
+        shellDestinations.map((destination) => destination.path).toSet().length,
+        shellDestinations.length,
+      );
+      expect(
+        shellDestinations
+            .where((destination) => destination.emphasized)
+            .single
+            .path,
+        AppRoutes.quickAction,
+      );
+      for (final destination in shellDestinations) {
+        expect(destination.activePathPrefixes, contains(destination.path));
+      }
+    });
+
+    test('maps nested feature paths to the same responsive destination', () {
+      const expectedPaths = <String, String>{
+        AppRoutes.dashboard: AppRoutes.dashboard,
+        AppRoutes.weeklyReview: AppRoutes.dashboard,
+        AppRoutes.insights: AppRoutes.insights,
+        AppRoutes.quickAction: AppRoutes.quickAction,
+        AppRoutes.habitCompletion: AppRoutes.quickAction,
+        AppRoutes.quickMoodCheckIn: AppRoutes.quickAction,
+        AppRoutes.dailyCheckIn: AppRoutes.quickAction,
+        AppRoutes.deepWork: AppRoutes.quickAction,
+        AppRoutes.planner: AppRoutes.planner,
+        AppRoutes.plannerReplan: AppRoutes.planner,
+        AppRoutes.habitManagement: AppRoutes.planner,
+        AppRoutes.preparationPlans: AppRoutes.planner,
+        AppRoutes.coach: AppRoutes.coach,
+      };
+      for (final entry in expectedPaths.entries) {
+        expect(
+          shellDestinationForPath(entry.key)?.path,
+          entry.value,
+          reason: entry.key,
+        );
+      }
+
+      for (final path in [
+        AppRoutes.settings,
+        AppRoutes.alerts,
+        AppRoutes.notifications,
+        AppRoutes.notificationSettings,
+        AppRoutes.calendarIntegration,
+        AppRoutes.morningCalibration,
+      ]) {
+        expect(shellDestinationForPath(path), isNull, reason: path);
+      }
+    });
+
+    test('Coach is the only capability-gated destination', () {
+      expect(
+        visibleShellDestinations(canShowCoach: false)
+            .map((destination) => destination.path),
+        isNot(contains(AppRoutes.coach)),
+      );
+      expect(
+        visibleShellDestinations(canShowCoach: true)
+            .map((destination) => destination.path),
+        contains(AppRoutes.coach),
+      );
+      expect(
+        shellDestinations
+            .where((destination) => destination.requiresCoachCapability)
+            .single
+            .path,
+        AppRoutes.coach,
+      );
+    });
+  });
+
   testWidgets('deep work selects the keyboard-operable quick action control',
       (tester) async {
     final semantics = tester.ensureSemantics();

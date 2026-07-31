@@ -8,7 +8,7 @@ import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_page.dart';
 import '../../domain/entities/notification_delivery.dart';
-import '../providers/notifications_providers.dart';
+import '../../../../composition/notifications_providers.dart';
 
 class NotificationSettingsPage extends ConsumerStatefulWidget {
   const NotificationSettingsPage({super.key});

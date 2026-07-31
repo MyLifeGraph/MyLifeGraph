@@ -4,7 +4,7 @@ import '../../../../core/capabilities/app_surface_capabilities.dart';
 import '../../../../core/config/app_config.dart';
 import '../../../../core/network/api_client.dart';
 import '../../../../core/supabase/supabase_providers.dart';
-import '../../../auth/presentation/providers/auth_providers.dart';
+import 'package:my_life_graph/composition/auth_providers.dart';
 import '../../application/coach_controller.dart';
 import '../../application/coach_turn_notice.dart';
 import '../../data/coach_api_data_source.dart';

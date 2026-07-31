@@ -1,7 +1,6 @@
-import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/errors/app_exception.dart';
+import '../../../core/network/api_failure.dart';
 import '../../../core/utils/client_uuid.dart';
 import '../domain/calendar_integration.dart';
 import '../domain/calendar_integration_repository.dart';
@@ -449,14 +448,8 @@ class CalendarIntegrationController
 }
 
 bool calendarOperationRequiresExactRetry(Object error) {
-  final statusCode = _dioExceptionFrom(error)?.response?.statusCode;
+  final statusCode = apiFailureFrom(error)?.statusCode;
   return statusCode == null || statusCode < 400 || statusCode >= 500;
-}
-
-DioException? _dioExceptionFrom(Object error) {
-  if (error is DioException) return error;
-  final cause = error is AppException ? error.cause : null;
-  return cause is DioException ? cause : null;
 }
 
 const Object _unset = Object();

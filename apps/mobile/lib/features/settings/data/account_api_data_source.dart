@@ -1,9 +1,8 @@
 import 'dart:typed_data';
 
-import 'package:dio/dio.dart';
-
 import '../../../core/errors/app_exception.dart';
 import '../../../core/network/api_client.dart';
+import '../../../core/network/api_failure.dart';
 import '../../../core/utils/client_uuid.dart';
 import '../domain/account_settings.dart';
 
@@ -40,20 +39,18 @@ class AccountApiDataSource {
         },
       );
     } on AppException catch (error) {
-      final cause = error.cause;
-      if (cause is DioException && cause.response?.statusCode == 422) {
+      final failure = apiFailureFrom(error);
+      if (failure?.statusCode == 422) {
         throw const AccountTimezoneRejectedException(
           'The backend did not recognize that IANA timezone.',
         );
       }
-      if (cause is DioException && cause.response?.statusCode == 409) {
+      if (failure?.statusCode == 409) {
         throw const AccountSettingConflictException(
           'Timezone changed. Reload your account before saving.',
         );
       }
-      if (cause is DioException &&
-          ((cause.response?.statusCode ?? 0) >= 500 ||
-              cause.response == null)) {
+      if (failure != null && failure.hasAmbiguousMutationOutcome) {
         throw const AccountProfileUpdateOutcomeUnknownException(
           'Account profile update outcome could not be confirmed.',
         );
@@ -117,20 +114,18 @@ class AccountApiDataSource {
         },
       );
     } on AppException catch (error) {
-      final cause = error.cause;
-      if (cause is DioException && cause.response?.statusCode == 422) {
+      final failure = apiFailureFrom(error);
+      if (failure?.statusCode == 422) {
         throw const AccountPreparationBudgetRejectedException(
           'The backend rejected that daily preparation budget.',
         );
       }
-      if (cause is DioException && cause.response?.statusCode == 409) {
+      if (failure?.statusCode == 409) {
         throw const AccountSettingConflictException(
           'Preparation budget changed. Reload your account before saving.',
         );
       }
-      if (cause is DioException &&
-          ((cause.response?.statusCode ?? 0) >= 500 ||
-              cause.response == null)) {
+      if (failure != null && failure.hasAmbiguousMutationOutcome) {
         throw const AccountPreparationBudgetUpdateOutcomeUnknownException(
           'Preparation budget update outcome could not be confirmed.',
         );
@@ -184,8 +179,7 @@ class AccountApiDataSource {
         'Account export exceeds the V2 bounds.',
       );
     } on AppException catch (error) {
-      final cause = error.cause;
-      if (cause is DioException && cause.response?.statusCode == 413) {
+      if (apiFailureFrom(error)?.statusCode == 413) {
         throw const AccountExportTooLargeException(
           'Account export exceeds the V2 bounds.',
         );
@@ -208,15 +202,13 @@ class AccountApiDataSource {
         );
       }
     } on AppException catch (error) {
-      final cause = error.cause;
-      if (cause is DioException && cause.response?.statusCode == 403) {
+      final failure = apiFailureFrom(error);
+      if (failure?.statusCode == 403) {
         throw const AccountRecentAuthenticationRequiredException(
           'Recent authentication is required before account deletion.',
         );
       }
-      if (cause is DioException &&
-          ((cause.response?.statusCode ?? 0) >= 500 ||
-              cause.response == null)) {
+      if (failure != null && failure.hasAmbiguousMutationOutcome) {
         throw const AccountDeletionOutcomeUnknownException(
           'Account deletion outcome could not be confirmed.',
         );

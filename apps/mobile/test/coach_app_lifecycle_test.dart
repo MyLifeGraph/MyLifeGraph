@@ -12,7 +12,7 @@ import 'package:my_life_graph/features/coach/domain/coach.dart';
 import 'package:my_life_graph/features/coach/domain/coach_repository.dart';
 import 'package:my_life_graph/features/coach/presentation/pages/coach_page.dart';
 import 'package:my_life_graph/features/coach/presentation/providers/coach_providers.dart';
-import 'package:my_life_graph/features/shell/presentation/widgets/app_header_actions.dart';
+import 'package:my_life_graph/composition/widgets/app_header_actions.dart';
 
 import 'support/coach_fixtures.dart';
 

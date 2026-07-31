@@ -9,6 +9,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../../composition/projection_refresh_providers.dart';
 import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/config/app_config.dart';
 import '../../../../core/navigation/app_routes.dart';
@@ -16,9 +17,7 @@ import '../../../../core/supabase/supabase_providers.dart';
 import '../../../../core/utils/client_uuid.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_page.dart';
-import '../../../dashboard/presentation/providers/dashboard_providers.dart';
-import '../../../snapshots/application/snapshot_refresh_service.dart';
-import '../../../snapshots/presentation/providers/snapshot_providers.dart';
+import 'package:my_life_graph/composition/profile_local_date_providers.dart';
 import '../../data/focus_session_supabase_data_source.dart';
 import '../../domain/focus_session.dart';
 import '../widgets/focus_reflection_sheet.dart';
@@ -26,7 +25,13 @@ import '../widgets/focus_reflection_sheet.dart';
 final focusSessionPageDataSourceProvider =
     Provider<FocusSessionSupabaseDataSource?>((ref) {
   final client = ref.watch(supabaseClientProvider);
-  return client == null ? null : FocusSessionSupabaseDataSource(client);
+  return client == null
+      ? null
+      : FocusSessionSupabaseDataSource(
+          client,
+          entryDateProvider:
+              ref.watch(profileLocalDateSourceProvider).dateKeyAt,
+        );
 });
 
 final focusStudySettingsDataSourceProvider =
@@ -445,7 +450,7 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage> {
         .where((candidate) => candidate.value == _selectedTargetValue)
         .firstOrNull;
     final requestId = newClientUuid();
-    final snapshotRefresh = ref.read(snapshotRefreshServiceProvider);
+    final projectionRefresh = ref.read(projectionRefreshCoordinatorProvider);
     setState(() => _isSaving = true);
     try {
       final started = await source.startSession(
@@ -458,7 +463,7 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage> {
           label: target?.title ?? 'Independent focus block',
         ),
       );
-      await _afterDurableWrite(started, snapshotRefresh);
+      await _afterDurableWrite(started, projectionRefresh);
       if (mounted) {
         _showMessage('Focus session started.');
       }
@@ -467,7 +472,7 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage> {
         try {
           final active = await source.fetchActiveSession();
           if (active?.id == requestId) {
-            await _afterDurableWrite(active!, snapshotRefresh);
+            await _afterDurableWrite(active!, projectionRefresh);
           }
         } catch (_) {
           // The mutation remains honestly unconfirmed after navigation.
@@ -477,7 +482,7 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage> {
       await _load();
       if (!mounted) return;
       if (_active?.id == requestId) {
-        await _afterDurableWrite(_active!, snapshotRefresh);
+        await _afterDurableWrite(_active!, projectionRefresh);
         if (mounted) {
           _showMessage('Focus session started.');
         }
@@ -503,7 +508,7 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage> {
     if (active == null || source == null || _isSaving) {
       return;
     }
-    final snapshotRefresh = ref.read(snapshotRefreshServiceProvider);
+    final projectionRefresh = ref.read(projectionRefreshCoordinatorProvider);
     setState(() => _isSaving = true);
     try {
       final finished = await source.finishSession(active.id);
@@ -519,7 +524,7 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage> {
         _syncTicker();
       }
       await _startRecoveryCountdown(finished);
-      unawaited(_refreshAfterTerminalWrite(finished, snapshotRefresh));
+      unawaited(_refreshAfterTerminalWrite(finished, projectionRefresh));
       if (mounted) {
         _showMessage(
           finished.recoveryMinutes > 0
@@ -756,7 +761,7 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage> {
     if (confirmed != true || !mounted) {
       return;
     }
-    final snapshotRefresh = ref.read(snapshotRefreshServiceProvider);
+    final projectionRefresh = ref.read(projectionRefreshCoordinatorProvider);
     setState(() => _isSaving = true);
     try {
       final abandoned = await source.abandonSession(active.id);
@@ -771,7 +776,7 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage> {
         });
         _syncTicker();
       }
-      unawaited(_refreshAfterTerminalWrite(abandoned, snapshotRefresh));
+      unawaited(_refreshAfterTerminalWrite(abandoned, projectionRefresh));
       if (mounted) {
         _showMessage('Focus session abandoned.');
       }
@@ -794,27 +799,23 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage> {
 
   Future<void> _afterDurableWrite(
     FocusSession session,
-    SnapshotRefreshService snapshotRefresh,
+    ProjectionRefreshCoordinator projectionRefresh,
   ) async {
-    await snapshotRefresh.refreshDailyAfterFocusChange(
+    await projectionRefresh.focusChanged(
       targetDate: session.snapshotEntryDate,
     );
     if (!mounted) return;
-    ref.invalidate(dashboardSnapshotProvider);
     await _load();
   }
 
   Future<void> _refreshAfterTerminalWrite(
     FocusSession session,
-    SnapshotRefreshService snapshotRefresh,
+    ProjectionRefreshCoordinator projectionRefresh,
   ) async {
     try {
-      await snapshotRefresh.refreshDailyAfterFocusChange(
+      await projectionRefresh.focusChanged(
         targetDate: session.snapshotEntryDate,
       );
-      if (mounted) {
-        ref.invalidate(dashboardSnapshotProvider);
-      }
     } catch (_) {
       // The terminal Focus write remains durable even when its derived
       // snapshot cannot be refreshed immediately.

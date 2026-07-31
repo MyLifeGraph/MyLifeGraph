@@ -6,7 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:my_life_graph/core/capabilities/app_surface_capabilities.dart';
 import 'package:my_life_graph/features/auth/data/auth_repository.dart';
 import 'package:my_life_graph/features/auth/domain/app_session.dart';
-import 'package:my_life_graph/features/auth/presentation/providers/auth_providers.dart';
+import 'package:my_life_graph/composition/auth_providers.dart';
 import 'package:my_life_graph/features/settings/application/account_export_saver.dart';
 import 'package:my_life_graph/features/settings/domain/account_settings.dart';
 import 'package:my_life_graph/features/settings/domain/account_settings_repository.dart';

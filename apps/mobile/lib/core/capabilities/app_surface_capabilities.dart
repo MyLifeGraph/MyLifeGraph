@@ -1,7 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../features/auth/domain/app_session.dart';
-import '../../features/auth/presentation/providers/auth_providers.dart';
+import 'package:my_life_graph/composition/auth_providers.dart';
 import '../config/app_config.dart';
 import '../supabase/supabase_providers.dart';
 

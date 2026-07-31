@@ -4,15 +4,15 @@ import 'package:my_life_graph/core/theme/app_icons.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../composition/projection_refresh_providers.dart';
 import '../../../../core/capabilities/app_surface_capabilities.dart';
 import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/theme/theme_mode_provider.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_page.dart';
-import '../../../auth/presentation/providers/auth_providers.dart';
-import '../../../deadline_plans/presentation/providers/deadline_plan_providers.dart';
-import '../../../shell/presentation/widgets/app_header_actions.dart';
+import 'package:my_life_graph/composition/auth_providers.dart';
+import 'package:my_life_graph/composition/widgets/app_header_actions.dart';
 import '../../domain/account_settings.dart';
 import '../providers/account_settings_providers.dart';
 
@@ -311,6 +311,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         saved.timezone,
         revision: saved.revision,
       );
+      await ref.read(projectionRefreshCoordinatorProvider).timezoneChanged();
       if (mounted) {
         _showMessage('Timezone updated to ${saved.timezone}.');
       }
@@ -367,7 +368,9 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         saved.minutes,
         revision: saved.revision,
       );
-      ref.invalidate(preparationWorkloadProvider);
+      await ref
+          .read(projectionRefreshCoordinatorProvider)
+          .preparationBudgetChanged();
       if (mounted) {
         _showMessage(
           saved.minutes == null

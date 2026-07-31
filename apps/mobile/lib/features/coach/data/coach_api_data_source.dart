@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 
 import '../../../core/errors/app_exception.dart';
 import '../../../core/network/api_client.dart';
+import '../../../core/network/api_failure.dart';
 import '../domain/coach.dart';
 import '../domain/coach_repository.dart';
 
@@ -273,22 +274,22 @@ Future<ResponseBody> _guardStream(
 }
 
 CoachRemoteException _remoteException(AppException error) {
-  final cause = error.cause;
-  if (cause is! DioException || cause.response == null) {
-    return const CoachRemoteException(
+  final failure = apiFailureFrom(error);
+  if (failure == null || failure.statusCode == null) {
+    return CoachRemoteException(
       code: 'network_error',
       message: 'Coach could not be reached.',
       retryable: true,
       statusCode: 503,
+      timedOut: failure?.isTimeout ?? false,
     );
   }
-  final response = cause.response!;
-  final detail = _parseErrorDetail(response.data);
+  final detail = _parseErrorDetail(failure.responseData);
   return CoachRemoteException(
     code: detail?.code ?? 'remote_error',
     message: detail?.message ?? 'Coach request failed.',
     retryable: detail?.retryable ?? false,
-    statusCode: response.statusCode ?? 500,
+    statusCode: failure.statusCode!,
   );
 }
 

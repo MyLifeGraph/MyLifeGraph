@@ -8,9 +8,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:my_life_graph/core/config/app_config.dart';
 import 'package:my_life_graph/core/network/api_client.dart';
+import 'package:my_life_graph/features/auth/application/profile_local_date_source.dart';
+import 'package:my_life_graph/composition/profile_local_date_providers.dart';
 import 'package:my_life_graph/features/quick_action/domain/quick_check_in.dart';
 import 'package:my_life_graph/features/quick_action/presentation/pages/quick_mood_check_in_page.dart';
-import 'package:my_life_graph/features/quick_action/presentation/providers/quick_check_in_providers.dart';
+import 'package:my_life_graph/composition/quick_check_in_providers.dart';
 import 'package:my_life_graph/features/quick_action/presentation/widgets/daily_capture_controls.dart';
 import 'package:my_life_graph/features/snapshots/application/snapshot_refresh_service.dart';
 import 'package:my_life_graph/features/snapshots/data/snapshot_api_data_source.dart';
@@ -349,6 +351,9 @@ Future<void> _pumpEveningPage(
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
+        profileLocalDateSourceProvider.overrideWithValue(
+          const SessionProfileLocalDateSource(session: null),
+        ),
         quickCheckInStoreProvider.overrideWithValue(store),
         if (snapshotRefresh != null)
           snapshotRefreshServiceProvider.overrideWithValue(snapshotRefresh),

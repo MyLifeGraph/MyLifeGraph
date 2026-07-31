@@ -7,12 +7,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../../../composition/projection_refresh_providers.dart';
 import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/theme/app_visual_tokens.dart';
 import '../../../../core/widgets/app_surface.dart';
-import '../../../dashboard/presentation/providers/dashboard_providers.dart';
-import '../../../optimization/presentation/providers/optimization_providers.dart';
 import '../../domain/app_session.dart';
 import '../../domain/intake_response.dart';
 import '../providers/setup_providers.dart';
@@ -319,8 +318,8 @@ class _OnboardingPageState extends ConsumerState<OnboardingPage> {
     if (!saved || !mounted) {
       return;
     }
-    ref.invalidate(recommendationFeedProvider);
-    ref.invalidate(dashboardSnapshotProvider);
+    await ref.read(projectionRefreshCoordinatorProvider).setupChanged();
+    if (!mounted) return;
     final session = ref.read(setupControllerProvider.notifier).session;
     if (shouldConfirmInitialUtcTimezone(
       editing: widget.editing,

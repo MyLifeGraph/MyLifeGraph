@@ -1,5 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:my_life_graph/features/dashboard/data/datasources/dashboard_mock_data_source.dart';
+import 'package:my_life_graph/composition/dashboard_guest_snapshot_adapter.dart';
 import 'package:my_life_graph/features/dashboard/data/datasources/dashboard_supabase_data_source.dart';
 import 'package:my_life_graph/features/dashboard/data/repositories/dashboard_repository_impl.dart';
 import 'package:my_life_graph/features/dashboard/domain/entities/dashboard_snapshot.dart';
@@ -156,7 +156,7 @@ void main() {
   test('local dashboard reads exact guest check-in values', () async {
     final capturedAt = DateTime.now();
     final entryDate = dailyCaptureEntryDate(capturedAt);
-    final source = DashboardMockDataSource(
+    final source = DashboardGuestSnapshotAdapter(
       quickCheckInStore: _MemoryCaptureStore(
         DailyCaptureEntry(
           entryDate: entryDate,
@@ -200,7 +200,7 @@ void main() {
 
   test('real dashboard without Supabase throws instead of returning demo', () {
     final repository = DashboardRepositoryImpl(
-      mockDataSource: const DashboardMockDataSource(),
+      mockSnapshotLoader: const DashboardGuestSnapshotAdapter().getSnapshot,
       allowMockData: false,
     );
 

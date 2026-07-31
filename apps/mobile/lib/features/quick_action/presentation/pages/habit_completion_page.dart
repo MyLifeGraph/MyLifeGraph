@@ -6,21 +6,26 @@ import 'package:my_life_graph/core/theme/app_icons.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../composition/projection_refresh_providers.dart';
 import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/config/app_config.dart';
 import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/supabase/supabase_providers.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_page.dart';
-import '../../../dashboard/presentation/providers/dashboard_providers.dart';
-import '../../../snapshots/presentation/providers/snapshot_providers.dart';
+import 'package:my_life_graph/composition/profile_local_date_providers.dart';
 import '../../data/habit_completion_supabase_data_source.dart';
 import '../../domain/habit_v1.dart';
 
 final habitCompletionPageDataSourceProvider =
     Provider<HabitCompletionSupabaseDataSource?>((ref) {
   final client = ref.watch(supabaseClientProvider);
-  return client == null ? null : HabitCompletionSupabaseDataSource(client);
+  return client == null
+      ? null
+      : HabitCompletionSupabaseDataSource(
+          client,
+          todayProvider: ref.watch(profileLocalDateSourceProvider).today,
+        );
 });
 
 class HabitCompletionPage extends ConsumerStatefulWidget {
@@ -46,7 +51,7 @@ class _HabitCompletionPageState extends ConsumerState<HabitCompletionPage> {
 
   @override
   Widget build(BuildContext context) {
-    final today = habitDateOnly(DateTime.now());
+    final today = ref.watch(profileLocalDateSourceProvider).today();
     return AppPage(
       title: 'Today habits',
       subtitle: 'Complete, intentionally skip, or undo today\'s opportunities',
@@ -158,7 +163,7 @@ class _HabitCompletionPageState extends ConsumerState<HabitCompletionPage> {
   }
 
   Future<void> _setOutcome(HabitV1 habit, HabitOutcome outcome) async {
-    final targetDate = habitDateOnly(DateTime.now());
+    final targetDate = ref.read(profileLocalDateSourceProvider).today();
     final config = ref.read(appConfigProvider);
     final source = ref.read(habitCompletionPageDataSourceProvider);
     if (config.useMockData || source == null) {
@@ -169,7 +174,7 @@ class _HabitCompletionPageState extends ConsumerState<HabitCompletionPage> {
       return;
     }
 
-    final snapshotRefresh = ref.read(snapshotRefreshServiceProvider);
+    final projectionRefresh = ref.read(projectionRefreshCoordinatorProvider);
     setState(() => _savingHabitIds.add(habit.id));
     try {
       await source.setTodayOutcome(
@@ -177,11 +182,10 @@ class _HabitCompletionPageState extends ConsumerState<HabitCompletionPage> {
         outcome: outcome,
         targetDate: targetDate,
       );
-      await snapshotRefresh.refreshDailyAfterHabitChange(
+      await projectionRefresh.habitOutcomeChanged(
         targetDate: habitDateKey(targetDate),
       );
       if (!mounted) return;
-      ref.invalidate(dashboardSnapshotProvider);
       await _loadHabits();
       if (mounted) {
         _showMessage(
@@ -202,7 +206,7 @@ class _HabitCompletionPageState extends ConsumerState<HabitCompletionPage> {
   }
 
   Future<void> _undoOutcome(HabitV1 habit) async {
-    final targetDate = habitDateOnly(DateTime.now());
+    final targetDate = ref.read(profileLocalDateSourceProvider).today();
     final config = ref.read(appConfigProvider);
     final source = ref.read(habitCompletionPageDataSourceProvider);
     if (config.useMockData || source == null) {
@@ -213,18 +217,17 @@ class _HabitCompletionPageState extends ConsumerState<HabitCompletionPage> {
       return;
     }
 
-    final snapshotRefresh = ref.read(snapshotRefreshServiceProvider);
+    final projectionRefresh = ref.read(projectionRefreshCoordinatorProvider);
     setState(() => _savingHabitIds.add(habit.id));
     try {
       await source.undoTodayOutcome(
         habitId: habit.id,
         targetDate: targetDate,
       );
-      await snapshotRefresh.refreshDailyAfterHabitChange(
+      await projectionRefresh.habitOutcomeChanged(
         targetDate: habitDateKey(targetDate),
       );
       if (!mounted) return;
-      ref.invalidate(dashboardSnapshotProvider);
       await _loadHabits();
       if (mounted) {
         _showMessage('Habit outcome undone.');

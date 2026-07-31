@@ -1,7 +1,6 @@
-import 'package:dio/dio.dart';
-
 import '../../../core/errors/app_exception.dart';
 import '../../../core/network/api_client.dart';
+import '../../../core/network/api_failure.dart';
 import '../domain/learning_preferences.dart';
 
 class LearningApiDataSource {
@@ -70,14 +69,13 @@ class LearningApiDataSource {
   }
 
   Never _mapMutationError(AppException error) {
-    final cause = error.cause;
-    if (cause is DioException && cause.response?.statusCode == 409) {
+    final failure = apiFailureFrom(error);
+    if (failure?.statusCode == 409) {
       throw const LearningConflictException(
         'Personal learning settings changed since they were loaded.',
       );
     }
-    if (cause is DioException &&
-        (cause.response == null || (cause.response?.statusCode ?? 0) >= 500)) {
+    if (failure != null && failure.hasAmbiguousMutationOutcome) {
       throw const LearningOutcomeUnknownException(
         'Personal learning mutation outcome could not be confirmed.',
       );

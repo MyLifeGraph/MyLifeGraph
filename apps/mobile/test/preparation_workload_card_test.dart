@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_life_graph/features/deadline_plans/domain/deadline_plan.dart';
-import 'package:my_life_graph/features/deadline_plans/presentation/widgets/preparation_workload_card.dart';
+import 'package:my_life_graph/composition/widgets/preparation_workload_card.dart';
 
 import 'support/deadline_plan_fixtures.dart';
 

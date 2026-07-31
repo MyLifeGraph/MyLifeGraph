@@ -1,10 +1,10 @@
-import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:my_life_graph/core/navigation/app_routes.dart';
 import 'package:my_life_graph/core/errors/app_exception.dart';
+import 'package:my_life_graph/core/network/api_failure.dart';
 import 'package:my_life_graph/features/auth/data/intake_setup_repository.dart';
 import 'package:my_life_graph/features/auth/domain/app_session.dart';
 import 'package:my_life_graph/features/auth/domain/intake_response.dart';
@@ -52,7 +52,7 @@ void main() {
   test('server failures remain exact-retry locked', () {
     expect(
       setupSaveRequiresExactRetry(
-        _dioError(DioExceptionType.badResponse, statusCode: 503),
+        _apiError(ApiFailureKind.response, statusCode: 503),
       ),
       isTrue,
     );
@@ -144,7 +144,7 @@ void main() {
   test('failed save retains draft and request id for an exact retry', () async {
     final gateway = _FakeSetupGateway(
       fetched: const IntakeSetupReadState.empty(),
-      saveErrors: [_dioError(DioExceptionType.receiveTimeout)],
+      saveErrors: [_apiError(ApiFailureKind.timeout)],
     );
     IntakeResponseDraft? applied;
     final controller = SetupController(
@@ -181,7 +181,7 @@ void main() {
   test('HTTP 422 keeps the draft editable for correction and retry', () async {
     final gateway = _FakeSetupGateway(
       fetched: const IntakeSetupReadState.empty(),
-      saveErrors: [_dioError(DioExceptionType.badResponse, statusCode: 422)],
+      saveErrors: [_apiError(ApiFailureKind.response, statusCode: 422)],
     );
     final controller = SetupController(
       repository: gateway,
@@ -209,7 +209,7 @@ void main() {
   test('HTTP 409 stays editable and prompts a reload', () async {
     final gateway = _FakeSetupGateway(
       fetched: const IntakeSetupReadState.empty(),
-      saveErrors: [_dioError(DioExceptionType.badResponse, statusCode: 409)],
+      saveErrors: [_apiError(ApiFailureKind.response, statusCode: 409)],
     );
     final controller = SetupController(
       repository: gateway,
@@ -569,16 +569,12 @@ class _FakeSetupGateway implements IntakeSetupGateway {
   }
 }
 
-AppException _dioError(DioExceptionType type, {int? statusCode}) {
-  final request = RequestOptions(path: '/v1/intake/complete');
+AppException _apiError(ApiFailureKind kind, {int? statusCode}) {
   return AppException(
     'Network request failed',
-    cause: DioException(
-      requestOptions: request,
-      type: type,
-      response: statusCode == null
-          ? null
-          : Response<void>(requestOptions: request, statusCode: statusCode),
+    cause: ApiFailure(
+      kind: kind,
+      statusCode: statusCode,
     ),
   );
 }

@@ -1,7 +1,6 @@
-import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../core/errors/app_exception.dart';
+import '../../../core/network/api_failure.dart';
 import '../../../core/utils/client_uuid.dart';
 import '../data/repositories/notifications_repository_impl.dart';
 import '../domain/entities/app_notification.dart';
@@ -281,21 +280,15 @@ class NotificationsController extends StateNotifier<NotificationsState> {
 
 bool notificationLifecycleFailureRequiresExactRetry(Object error) {
   if (error is NotificationsLifecycleAccessException) return false;
-  final dioError = _dioExceptionFrom(error);
-  if (dioError == null) return true;
-  final statusCode = dioError.response?.statusCode;
+  final failure = apiFailureFrom(error);
+  if (failure == null) return true;
+  final statusCode = failure.statusCode;
   return statusCode == null || statusCode < 400 || statusCode >= 500;
 }
 
 bool notificationLifecycleFailureRequiresReload(Object error) {
-  final statusCode = _dioExceptionFrom(error)?.response?.statusCode;
+  final statusCode = apiFailureFrom(error)?.statusCode;
   return statusCode != null && statusCode >= 400 && statusCode < 500;
-}
-
-DioException? _dioExceptionFrom(Object error) {
-  if (error is DioException) return error;
-  final cause = error is AppException ? error.cause : null;
-  return cause is DioException ? cause : null;
 }
 
 const Object _unset = Object();

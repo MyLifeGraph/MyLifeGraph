@@ -1,20 +1,24 @@
 import 'dart:async';
 
-import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:my_life_graph/core/capabilities/app_surface_capabilities.dart';
 import 'package:my_life_graph/core/errors/app_exception.dart';
+import 'package:my_life_graph/core/network/api_failure.dart';
 import 'package:my_life_graph/core/navigation/app_routes.dart';
 import 'package:my_life_graph/core/widgets/app_surface.dart';
+import 'package:my_life_graph/features/auth/application/profile_local_date_source.dart';
+import 'package:my_life_graph/composition/profile_local_date_providers.dart';
 import 'package:my_life_graph/features/deadline_plans/data/deadline_calendar_prefill_data_source.dart';
 import 'package:my_life_graph/features/deadline_plans/domain/deadline_calendar_prefill.dart';
 import 'package:my_life_graph/features/deadline_plans/domain/deadline_plan.dart';
 import 'package:my_life_graph/features/deadline_plans/domain/deadline_plan_repository.dart';
 import 'package:my_life_graph/features/deadline_plans/presentation/pages/deadline_plans_page.dart';
-import 'package:my_life_graph/features/deadline_plans/presentation/providers/deadline_plan_providers.dart';
+import 'package:my_life_graph/composition/deadline_plan_providers.dart';
+import 'package:my_life_graph/features/snapshots/application/snapshot_refresh_service.dart';
+import 'package:my_life_graph/features/snapshots/presentation/providers/snapshot_providers.dart';
 
 import 'support/deadline_plan_fixtures.dart';
 
@@ -119,9 +123,15 @@ void main() {
       proposalResults: [_plan(status: 'draft')],
       confirmResult: _plan(),
     );
+    final snapshotRefresh = _RecordingSnapshotRefresh();
     await _pumpPage(
       tester,
       repository: repository,
+      snapshotRefresh: snapshotRefresh,
+      profileDateSource: SessionProfileLocalDateSource(
+        session: null,
+        currentInstant: () => DateTime(2026, 7, 18, 10),
+      ),
       page: DeadlinePlansPage(
         initialTitle: 'Algorithms exam',
         initialDeadlineAt: DateTime(2026, 7, 18, 18),
@@ -147,6 +157,7 @@ void main() {
     );
 
     expect(repository.confirmCalls, 1);
+    expect(snapshotRefresh.taskTargetDates, ['2026-07-18']);
     expect(find.text('Active'), findsOneWidget);
     expect(find.text('Preview'), findsNothing);
   });
@@ -1016,6 +1027,9 @@ void main() {
               canUseDeadlinePlanner: true,
             ),
           ),
+          profileLocalDateSourceProvider.overrideWithValue(
+            const SessionProfileLocalDateSource(session: null),
+          ),
           deadlinePlanRepositoryProvider.overrideWithValue(repository),
         ],
         child: MaterialApp.router(routerConfig: router),
@@ -1275,6 +1289,9 @@ Future<void> _pumpPage(
   Size size = const Size(1200, 1800),
   TextScaler textScaler = TextScaler.noScaling,
   bool settle = true,
+  ProfileLocalDateSource profileDateSource =
+      const SessionProfileLocalDateSource(session: null),
+  SnapshotRefreshService? snapshotRefresh,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
@@ -1286,7 +1303,10 @@ Future<void> _pumpPage(
     ProviderScope(
       overrides: [
         appSurfaceCapabilitiesProvider.overrideWithValue(capabilities),
+        profileLocalDateSourceProvider.overrideWithValue(profileDateSource),
         deadlinePlanRepositoryProvider.overrideWithValue(repository),
+        if (snapshotRefresh != null)
+          snapshotRefreshServiceProvider.overrideWithValue(snapshotRefresh),
         if (prefillDataSource != null)
           deadlineCalendarPrefillDataSourceProvider.overrideWithValue(
             prefillDataSource,
@@ -1306,6 +1326,15 @@ Future<void> _pumpPage(
   } else {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
+  }
+}
+
+class _RecordingSnapshotRefresh implements SnapshotRefreshService {
+  final List<String> taskTargetDates = [];
+
+  @override
+  Future<void> refreshDailyAfterUserSignal({String? targetDate}) async {
+    if (targetDate != null) taskTargetDates.add(targetDate);
   }
 }
 
@@ -1414,16 +1443,12 @@ DeadlinePlan _calendarPlan(DeadlinePlanSourceStatus status) {
 }
 
 AppException _conflict(String detail) {
-  final options = RequestOptions(path: '/v1/deadline-plans/proposals');
   return AppException(
     'Network request failed',
-    cause: DioException(
-      requestOptions: options,
-      response: Response<Map<String, dynamic>>(
-        requestOptions: options,
-        statusCode: 409,
-        data: {'detail': detail},
-      ),
+    cause: ApiFailure(
+      kind: ApiFailureKind.response,
+      statusCode: 409,
+      responseData: {'detail': detail},
     ),
   );
 }

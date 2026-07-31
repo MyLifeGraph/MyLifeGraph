@@ -29,12 +29,14 @@ class CoachRemoteException implements Exception {
     required this.message,
     required this.retryable,
     required this.statusCode,
+    this.timedOut = false,
   });
 
   final String code;
   final String message;
   final bool retryable;
   final int statusCode;
+  final bool timedOut;
 
   bool get preservesRequestIdentity =>
       statusCode == 409 && (code == 'in_progress' || retryable) ||

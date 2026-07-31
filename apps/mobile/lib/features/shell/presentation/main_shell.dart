@@ -7,12 +7,12 @@ import 'package:go_router/go_router.dart';
 import '../../../core/capabilities/app_surface_capabilities.dart';
 import '../../../core/constants/app_radii.dart';
 import '../../../core/constants/app_spacing.dart';
-import '../../../core/navigation/app_routes.dart';
 import '../../../core/theme/app_motion_tokens.dart';
 import '../../../core/theme/app_visual_tokens.dart';
 import '../../../core/widgets/app_brand_mark.dart';
+import '../../../composition/notifications_providers.dart';
 import '../../notifications/domain/entities/notification_action_target.dart';
-import '../../notifications/presentation/providers/notifications_providers.dart';
+import 'shell_destination_descriptor.dart';
 
 class MainShell extends ConsumerWidget {
   const MainShell({
@@ -23,14 +23,6 @@ class MainShell extends ConsumerWidget {
 
   final String currentPath;
   final Widget child;
-
-  static const _routes = [
-    AppRoutes.dashboard,
-    AppRoutes.insights,
-    AppRoutes.quickAction,
-    AppRoutes.planner,
-    AppRoutes.coach,
-  ];
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -81,35 +73,13 @@ class MainShell extends ConsumerWidget {
           );
       });
     });
-    final effectivePath = switch (currentPath) {
-      final path when path.startsWith(AppRoutes.habitCompletion) =>
-        AppRoutes.quickAction,
-      final path when path.startsWith(AppRoutes.habitManagement) =>
-        AppRoutes.planner,
-      final path when path.startsWith(AppRoutes.quickMoodCheckIn) =>
-        AppRoutes.quickAction,
-      final path when path.startsWith(AppRoutes.dailyCheckIn) =>
-        AppRoutes.quickAction,
-      final path when path.startsWith(AppRoutes.weeklyReview) =>
-        AppRoutes.dashboard,
-      final path when path.startsWith(AppRoutes.deepWork) =>
-        AppRoutes.quickAction,
-      final path when path.startsWith(AppRoutes.preparationPlans) =>
-        AppRoutes.planner,
-      final path when path.startsWith(AppRoutes.alerts) => AppRoutes.settings,
-      final path when path.startsWith(AppRoutes.notifications) =>
-        AppRoutes.settings,
-      final path when path.startsWith(AppRoutes.calendarIntegration) =>
-        AppRoutes.settings,
-      final path when path.startsWith(AppRoutes.notificationSettings) =>
-        AppRoutes.settings,
-      final path when path.startsWith(AppRoutes.coach) => AppRoutes.coach,
-      _ => currentPath,
-    };
-    final currentIndex = _routes.indexWhere(
-      (route) => effectivePath.startsWith(route),
+    final selectedDestination = shellDestinationForPath(currentPath);
+    final visibleDestinations = visibleShellDestinations(
+      canShowCoach: capabilities.canShowCoachSurface,
+    ).toList(growable: false);
+    final quickActionDestination = shellDestinations.firstWhere(
+      (destination) => destination.emphasized,
     );
-    final selectedIndex = currentIndex;
 
     final content = _ShellBody(
       isLocalDemo: capabilities.isLocalDemo,
@@ -124,9 +94,10 @@ class MainShell extends ConsumerWidget {
             body: Row(
               children: [
                 _DesktopNavigation(
-                  selectedIndex: selectedIndex,
-                  showCoach: capabilities.canShowCoachSurface,
-                  onDestinationSelected: (index) => context.go(_routes[index]),
+                  destinations: visibleDestinations,
+                  selectedDestination: selectedDestination,
+                  onDestinationSelected: (destination) =>
+                      context.go(destination.path),
                 ),
                 Expanded(child: content),
               ],
@@ -138,15 +109,17 @@ class MainShell extends ConsumerWidget {
           extendBody: true,
           body: content,
           floatingActionButton: _QuickActionButton(
-            isSelected: selectedIndex == 2,
-            onTap: () => context.go(AppRoutes.quickAction),
+            destination: quickActionDestination,
+            isSelected: selectedDestination == quickActionDestination,
+            onTap: () => context.go(quickActionDestination.path),
           ),
           floatingActionButtonLocation:
               FloatingActionButtonLocation.centerDocked,
           bottomNavigationBar: _FloatingBottomNav(
-            selectedIndex: selectedIndex,
-            showCoach: capabilities.canShowCoachSurface,
-            onDestinationSelected: (index) => context.go(_routes[index]),
+            destinations: visibleDestinations,
+            selectedDestination: selectedDestination,
+            onDestinationSelected: (destination) =>
+                context.go(destination.path),
           ),
         );
       },
@@ -288,18 +261,26 @@ class _ShellBody extends StatelessWidget {
 
 class _DesktopNavigation extends StatelessWidget {
   const _DesktopNavigation({
-    required this.selectedIndex,
-    required this.showCoach,
+    required this.destinations,
+    required this.selectedDestination,
     required this.onDestinationSelected,
   });
 
-  final int selectedIndex;
-  final bool showCoach;
-  final ValueChanged<int> onDestinationSelected;
+  final List<ShellDestinationDescriptor> destinations;
+  final ShellDestinationDescriptor? selectedDestination;
+  final ValueChanged<ShellDestinationDescriptor> onDestinationSelected;
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    double spacingBefore(int index) {
+      final destination = destinations[index];
+      final previous = destinations[index - 1];
+      return destination.emphasized || previous.emphasized
+          ? AppSpacing.md
+          : AppSpacing.xs;
+    }
+
     return Material(
       color: colors.surface,
       child: Container(
@@ -328,47 +309,18 @@ class _DesktopNavigation extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        _DesktopNavItem(
-                          icon: AppIcons.homeOutlined,
-                          selectedIcon: AppIcons.homeRounded,
-                          label: 'Today',
-                          isSelected: selectedIndex == 0,
-                          onTap: () => onDestinationSelected(0),
-                        ),
-                        const SizedBox(height: AppSpacing.xs),
-                        _DesktopNavItem(
-                          icon: AppIcons.autoGraphOutlined,
-                          selectedIcon: AppIcons.autoGraphRounded,
-                          label: 'Insights',
-                          isSelected: selectedIndex == 1,
-                          onTap: () => onDestinationSelected(1),
-                        ),
-                        const SizedBox(height: AppSpacing.md),
-                        _DesktopNavItem(
-                          icon: AppIcons.add,
-                          selectedIcon: AppIcons.add,
-                          label: 'Quick actions',
-                          isSelected: selectedIndex == 2,
-                          emphasized: true,
-                          onTap: () => onDestinationSelected(2),
-                        ),
-                        const SizedBox(height: AppSpacing.md),
-                        _DesktopNavItem(
-                          icon: AppIcons.calendarViewWeekOutlined,
-                          selectedIcon: AppIcons.calendarViewWeekRounded,
-                          label: 'Planner',
-                          isSelected: selectedIndex == 3,
-                          onTap: () => onDestinationSelected(3),
-                        ),
-                        const SizedBox(height: AppSpacing.xs),
-                        if (showCoach)
+                        for (var index = 0;
+                            index < destinations.length;
+                            index++) ...[
+                          if (index > 0) SizedBox(height: spacingBefore(index)),
                           _DesktopNavItem(
-                            icon: AppIcons.forumOutlined,
-                            selectedIcon: AppIcons.forum,
-                            label: 'Coach',
-                            isSelected: selectedIndex == 4,
-                            onTap: () => onDestinationSelected(4),
+                            destination: destinations[index],
+                            isSelected:
+                                selectedDestination == destinations[index],
+                            onTap: () =>
+                                onDestinationSelected(destinations[index]),
                           ),
+                        ],
                       ],
                     ),
                   ),
@@ -438,24 +390,20 @@ class _DesktopBrand extends StatelessWidget {
 
 class _DesktopNavItem extends StatelessWidget {
   const _DesktopNavItem({
-    required this.icon,
-    required this.selectedIcon,
-    required this.label,
+    required this.destination,
     required this.isSelected,
     required this.onTap,
-    this.emphasized = false,
   });
 
-  final IconData icon;
-  final IconData selectedIcon;
-  final String label;
+  final ShellDestinationDescriptor destination;
   final bool isSelected;
   final VoidCallback onTap;
-  final bool emphasized;
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
+    final label = destination.label;
+    final emphasized = destination.emphasized;
     final normalizedLabel = label.toLowerCase().replaceAll(' ', '-');
     final semanticKey = emphasized
         ? const ValueKey('main-shell-add-signal')
@@ -506,7 +454,9 @@ class _DesktopNavItem extends StatelessWidget {
               child: Row(
                 children: [
                   Icon(
-                    isSelected ? selectedIcon : icon,
+                    isSelected
+                        ? destination.desktopSelectedIcon
+                        : destination.icon,
                     key: emphasized
                         ? const ValueKey('main-shell-add-signal-icon')
                         : null,
@@ -554,19 +504,27 @@ class _DesktopNavItem extends StatelessWidget {
 
 class _FloatingBottomNav extends StatelessWidget {
   const _FloatingBottomNav({
-    required this.selectedIndex,
-    required this.showCoach,
+    required this.destinations,
+    required this.selectedDestination,
     required this.onDestinationSelected,
   });
 
-  final int selectedIndex;
-  final bool showCoach;
-  final ValueChanged<int> onDestinationSelected;
+  final List<ShellDestinationDescriptor> destinations;
+  final ShellDestinationDescriptor? selectedDestination;
+  final ValueChanged<ShellDestinationDescriptor> onDestinationSelected;
 
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
     final tokens = context.visualTokens;
+    final emphasizedIndex = destinations.indexWhere(
+      (destination) => destination.emphasized,
+    );
+    assert(emphasizedIndex >= 0, 'The shell requires one emphasized action.');
+    final leadingDestinations =
+        destinations.take(emphasizedIndex).toList(growable: false);
+    final trailingDestinations =
+        destinations.skip(emphasizedIndex + 1).toList(growable: false);
 
     return SafeArea(
       top: false,
@@ -613,55 +571,36 @@ class _FloatingBottomNav extends StatelessWidget {
                   children: [
                     Row(
                       children: [
-                        _FloatingNavItem(
-                          icon: AppIcons.homeOutlined,
-                          selectedIcon: AppIcons.home,
-                          label: 'Today',
-                          isSelected: selectedIndex == 0,
-                          showLabel: !compact,
-                          flex: itemFlex(selectedIndex == 0),
-                          height: itemHeight,
-                          onTap: () => onDestinationSelected(0),
-                        ),
-                        _FloatingNavItem(
-                          icon: AppIcons.autoGraphOutlined,
-                          selectedIcon: AppIcons.autoGraph,
-                          label: 'Insights',
-                          isSelected: selectedIndex == 1,
-                          showLabel: !compact,
-                          flex: itemFlex(selectedIndex == 1),
-                          height: itemHeight,
-                          onTap: () => onDestinationSelected(1),
-                        ),
+                        for (final destination in leadingDestinations)
+                          _FloatingNavItem(
+                            destination: destination,
+                            isSelected: selectedDestination == destination,
+                            showLabel: !compact,
+                            flex: itemFlex(
+                              selectedDestination == destination,
+                            ),
+                            height: itemHeight,
+                            onTap: () => onDestinationSelected(destination),
+                          ),
                         Expanded(
                           flex: compact ? 6 : 1,
                           child: SizedBox(height: itemHeight),
                         ),
-                        if (!showCoach)
+                        if (trailingDestinations.length == 1)
                           Expanded(
                             flex: itemFlex(false),
                             child: SizedBox(height: itemHeight),
                           ),
-                        _FloatingNavItem(
-                          icon: AppIcons.calendarViewWeekOutlined,
-                          selectedIcon: AppIcons.calendarViewWeek,
-                          label: 'Planner',
-                          isSelected: selectedIndex == 3,
-                          showLabel: !compact,
-                          flex: itemFlex(selectedIndex == 3),
-                          height: itemHeight,
-                          onTap: () => onDestinationSelected(3),
-                        ),
-                        if (showCoach)
+                        for (final destination in trailingDestinations)
                           _FloatingNavItem(
-                            icon: AppIcons.forumOutlined,
-                            selectedIcon: AppIcons.forum,
-                            label: 'Coach',
-                            isSelected: selectedIndex == 4,
+                            destination: destination,
+                            isSelected: selectedDestination == destination,
                             showLabel: !compact,
-                            flex: itemFlex(selectedIndex == 4),
+                            flex: itemFlex(
+                              selectedDestination == destination,
+                            ),
                             height: itemHeight,
-                            onTap: () => onDestinationSelected(4),
+                            onTap: () => onDestinationSelected(destination),
                           ),
                       ],
                     ),
@@ -673,41 +612,13 @@ class _FloatingBottomNav extends StatelessWidget {
                         spacing: 8,
                         runSpacing: 4,
                         children: [
-                          _CompactNavLabel(
-                            label: 'Today',
-                            isSelected: selectedIndex == 0,
-                            selectedColor: selectedColor,
-                            idleColor: idleColor,
-                            onTap: () => onDestinationSelected(0),
-                          ),
-                          _CompactNavLabel(
-                            label: 'Insights',
-                            isSelected: selectedIndex == 1,
-                            selectedColor: selectedColor,
-                            idleColor: idleColor,
-                            onTap: () => onDestinationSelected(1),
-                          ),
-                          _CompactNavLabel(
-                            label: 'Quick actions',
-                            isSelected: selectedIndex == 2,
-                            selectedColor: selectedColor,
-                            idleColor: idleColor,
-                            onTap: () => onDestinationSelected(2),
-                          ),
-                          _CompactNavLabel(
-                            label: 'Planner',
-                            isSelected: selectedIndex == 3,
-                            selectedColor: selectedColor,
-                            idleColor: idleColor,
-                            onTap: () => onDestinationSelected(3),
-                          ),
-                          if (showCoach)
+                          for (final destination in destinations)
                             _CompactNavLabel(
-                              label: 'Coach',
-                              isSelected: selectedIndex == 4,
+                              destination: destination,
+                              isSelected: selectedDestination == destination,
                               selectedColor: selectedColor,
                               idleColor: idleColor,
-                              onTap: () => onDestinationSelected(4),
+                              onTap: () => onDestinationSelected(destination),
                             ),
                         ],
                       ),
@@ -725,14 +636,14 @@ class _FloatingBottomNav extends StatelessWidget {
 
 class _CompactNavLabel extends StatelessWidget {
   const _CompactNavLabel({
-    required this.label,
+    required this.destination,
     required this.isSelected,
     required this.selectedColor,
     required this.idleColor,
     required this.onTap,
   });
 
-  final String label;
+  final ShellDestinationDescriptor destination;
   final bool isSelected;
   final Color selectedColor;
   final Color idleColor;
@@ -740,6 +651,7 @@ class _CompactNavLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final label = destination.label;
     final normalizedLabel = label.toLowerCase().replaceAll(' ', '-');
     return ExcludeSemantics(
       child: GestureDetector(
@@ -805,9 +717,7 @@ class _LocalDemoBanner extends StatelessWidget {
 
 class _FloatingNavItem extends StatelessWidget {
   const _FloatingNavItem({
-    required this.icon,
-    required this.selectedIcon,
-    required this.label,
+    required this.destination,
     required this.isSelected,
     required this.showLabel,
     required this.flex,
@@ -815,9 +725,7 @@ class _FloatingNavItem extends StatelessWidget {
     required this.onTap,
   });
 
-  final IconData icon;
-  final IconData selectedIcon;
-  final String label;
+  final ShellDestinationDescriptor destination;
   final bool isSelected;
   final bool showLabel;
   final int flex;
@@ -829,6 +737,7 @@ class _FloatingNavItem extends StatelessWidget {
     final colors = Theme.of(context).colorScheme;
     final selectedColor = colors.onPrimaryContainer;
     final idleColor = colors.onSurfaceVariant;
+    final label = destination.label;
 
     return Expanded(
       flex: flex,
@@ -866,7 +775,9 @@ class _FloatingNavItem extends StatelessWidget {
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Icon(
-                        isSelected ? selectedIcon : icon,
+                        isSelected
+                            ? destination.mobileSelectedIcon
+                            : destination.icon,
                         color: isSelected ? selectedColor : idleColor,
                       ),
                       if (showLabel) ...[
@@ -903,10 +814,12 @@ class _FloatingNavItem extends StatelessWidget {
 
 class _QuickActionButton extends StatefulWidget {
   const _QuickActionButton({
+    required this.destination,
     required this.isSelected,
     required this.onTap,
   });
 
+  final ShellDestinationDescriptor destination;
   final bool isSelected;
   final VoidCallback onTap;
 
@@ -925,14 +838,14 @@ class _QuickActionButtonState extends State<_QuickActionButton> {
     final motion = context.motionTokens;
 
     return Tooltip(
-      message: 'Quick actions',
+      message: widget.destination.label,
       excludeFromSemantics: true,
       child: Semantics(
         key: const ValueKey('main-shell-add-signal'),
         container: true,
         button: true,
         selected: widget.isSelected,
-        label: 'Quick actions',
+        label: widget.destination.label,
         onTap: widget.onTap,
         child: ExcludeSemantics(
           child: Material(
@@ -982,7 +895,7 @@ class _QuickActionButtonState extends State<_QuickActionButton> {
                       ),
                     ),
                     child: Icon(
-                      AppIcons.add,
+                      widget.destination.mobileSelectedIcon,
                       key: const ValueKey('main-shell-add-signal-icon'),
                       color: colors.onPrimary,
                       size: 30,

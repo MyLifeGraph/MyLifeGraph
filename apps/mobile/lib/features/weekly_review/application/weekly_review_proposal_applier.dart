@@ -1,4 +1,3 @@
-import '../../quick_action/data/habit_completion_supabase_data_source.dart';
 import '../../quick_action/domain/habit_v1.dart';
 import '../domain/weekly_review.dart';
 
@@ -16,37 +15,6 @@ abstract interface class WeeklyReviewHabitGateway {
     required HabitV1 habit,
     required HabitLifecycle lifecycle,
   });
-}
-
-class WeeklyReviewHabitGatewayImpl implements WeeklyReviewHabitGateway {
-  const WeeklyReviewHabitGatewayImpl(this._dataSource);
-
-  final HabitCompletionSupabaseDataSource _dataSource;
-
-  @override
-  Future<HabitV1> fetchOwnedHabit(String habitId) =>
-      _dataSource.fetchOwnedHabit(habitId);
-
-  @override
-  Future<HabitV1> updateHabit({
-    required HabitV1 habit,
-    required String title,
-    String? description,
-    required HabitCadence cadence,
-  }) =>
-      _dataSource.updateHabit(
-        habit: habit,
-        title: title,
-        description: description,
-        cadence: cadence,
-      );
-
-  @override
-  Future<HabitV1> setHabitLifecycle({
-    required HabitV1 habit,
-    required HabitLifecycle lifecycle,
-  }) =>
-      _dataSource.setHabitLifecycle(habit: habit, lifecycle: lifecycle);
 }
 
 typedef WeeklyReviewSnapshotRefresh = Future<void> Function();

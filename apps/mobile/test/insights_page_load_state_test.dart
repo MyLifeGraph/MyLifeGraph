@@ -11,7 +11,7 @@ import 'package:my_life_graph/features/insights/domain/entities/personal_pattern
 import 'package:my_life_graph/features/insights/presentation/pages/insights_page.dart';
 import 'package:my_life_graph/features/insights/presentation/providers/insights_providers.dart';
 import 'package:my_life_graph/features/optimization/domain/entities/skillset_profile.dart';
-import 'package:my_life_graph/features/optimization/presentation/providers/optimization_providers.dart';
+import 'package:my_life_graph/composition/optimization_providers.dart';
 
 const _fingerprint =
     'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';

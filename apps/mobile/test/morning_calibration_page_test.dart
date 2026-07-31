@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:my_life_graph/features/auth/application/profile_local_date_source.dart';
+import 'package:my_life_graph/composition/profile_local_date_providers.dart';
 import 'package:my_life_graph/features/quick_action/domain/quick_check_in.dart';
 import 'package:my_life_graph/features/quick_action/presentation/pages/morning_calibration_page.dart';
-import 'package:my_life_graph/features/quick_action/presentation/providers/quick_check_in_providers.dart';
+import 'package:my_life_graph/composition/quick_check_in_providers.dart';
 
 void main() {
   testWidgets('morning calibration derives duration from the Evening proposal',
@@ -209,7 +211,12 @@ Future<void> _pumpPage(
   });
   await tester.pumpWidget(
     ProviderScope(
-      overrides: [quickCheckInStoreProvider.overrideWithValue(store)],
+      overrides: [
+        profileLocalDateSourceProvider.overrideWithValue(
+          const SessionProfileLocalDateSource(session: null),
+        ),
+        quickCheckInStoreProvider.overrideWithValue(store),
+      ],
       child: MaterialApp.router(
         routerConfig: router,
         builder: (context, child) => MediaQuery(

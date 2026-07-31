@@ -11,7 +11,7 @@ import '../../../../core/widgets/app_page.dart';
 import '../../application/coach_controller.dart';
 import '../../application/coach_turn_notice.dart';
 import '../../domain/coach.dart';
-import '../../../shell/presentation/widgets/app_header_actions.dart';
+import 'package:my_life_graph/composition/widgets/app_header_actions.dart';
 import '../providers/coach_providers.dart';
 
 class CoachPage extends ConsumerStatefulWidget {

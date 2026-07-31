@@ -3,7 +3,9 @@ import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_life_graph/core/config/app_config.dart';
+import 'package:my_life_graph/core/errors/app_exception.dart';
 import 'package:my_life_graph/core/network/api_client.dart';
+import 'package:my_life_graph/core/network/api_failure.dart';
 import 'package:my_life_graph/features/coach/data/coach_api_data_source.dart';
 import 'package:my_life_graph/features/coach/data/coach_repository_impl.dart';
 import 'package:my_life_graph/features/coach/domain/coach.dart';
@@ -89,6 +91,33 @@ void main() {
               .having((value) => value.isRateLimited, 'rate limited', isTrue),
         ),
       ]),
+    );
+  });
+
+  test('transport timeout becomes a typed replay-safe remote outcome',
+      () async {
+    final repository = _repository(
+      _TrackingApiClient(
+        requestError: const AppException(
+          'Network request failed',
+          cause: ApiFailure(kind: ApiFailureKind.timeout),
+        ),
+      ),
+      config: config,
+    );
+
+    await expectLater(
+      repository.getCapabilities(),
+      throwsA(
+        isA<CoachRemoteException>()
+            .having((value) => value.code, 'code', 'network_error')
+            .having((value) => value.timedOut, 'timedOut', isTrue)
+            .having(
+              (value) => value.preservesRequestIdentity,
+              'preservesRequestIdentity',
+              isTrue,
+            ),
+      ),
     );
   });
 
@@ -232,12 +261,14 @@ class _TrackingApiClient extends ApiClient {
     this.responseSse = '',
     this.responseBytes,
     this.throwOnRequest = false,
+    this.requestError,
   }) : super(Dio());
 
   final Map<String, Map<String, dynamic>> getResponses;
   final String responseSse;
   final List<int>? responseBytes;
   final bool throwOnRequest;
+  final Object? requestError;
   final List<String> getCalls = [];
   String? streamPath;
   Map<String, dynamic>? requestBody;
@@ -276,6 +307,8 @@ class _TrackingApiClient extends ApiClient {
   }
 
   void _guard() {
+    final error = requestError;
+    if (error != null) throw error;
     if (throwOnRequest) throw StateError('Unexpected HTTP request');
   }
 }

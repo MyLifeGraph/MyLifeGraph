@@ -5,7 +5,7 @@ import 'package:my_life_graph/features/dashboard/data/datasources/deadline_prepa
 import 'package:my_life_graph/features/dashboard/domain/entities/dashboard_snapshot.dart';
 import 'package:my_life_graph/features/dashboard/domain/entities/deadline_preparation_schedule_block.dart';
 import 'package:my_life_graph/features/dashboard/domain/repositories/dashboard_repository.dart';
-import 'package:my_life_graph/features/dashboard/presentation/providers/dashboard_providers.dart';
+import 'package:my_life_graph/composition/dashboard_providers.dart';
 
 void main() {
   test('Today reloads after its last route listener leaves', () async {

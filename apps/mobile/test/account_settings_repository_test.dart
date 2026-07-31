@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:my_life_graph/core/config/app_config.dart';
 import 'package:my_life_graph/core/errors/app_exception.dart';
 import 'package:my_life_graph/core/network/api_client.dart';
+import 'package:my_life_graph/core/network/api_failure.dart';
 import 'package:my_life_graph/features/settings/data/account_api_data_source.dart';
 import 'package:my_life_graph/features/settings/data/account_settings_repository_impl.dart';
 import 'package:my_life_graph/features/settings/domain/account_settings.dart';
@@ -151,13 +152,9 @@ void main() {
 
   test('export maps the hard server bound separately from retryable errors',
       () async {
-    final tooLarge = DioException(
-      requestOptions: RequestOptions(path: '/v1/account/export'),
-      response: Response<void>(
-        requestOptions: RequestOptions(path: '/v1/account/export'),
-        statusCode: 413,
-      ),
-      type: DioExceptionType.badResponse,
+    const tooLarge = ApiFailure(
+      kind: ApiFailureKind.response,
+      statusCode: 413,
     );
     await expectLater(
       AccountApiDataSource(
@@ -252,13 +249,9 @@ void main() {
       throwsA(isA<AccountDeletionOutcomeUnknownException>()),
     );
 
-    final unknownResponse = DioException(
-      requestOptions: RequestOptions(path: '/v1/account'),
-      response: Response<void>(
-        requestOptions: RequestOptions(path: '/v1/account'),
-        statusCode: 502,
-      ),
-      type: DioExceptionType.badResponse,
+    const unknownResponse = ApiFailure(
+      kind: ApiFailureKind.response,
+      statusCode: 502,
     );
     await expectLater(
       AccountApiDataSource(
@@ -267,10 +260,7 @@ void main() {
       throwsA(isA<AccountDeletionOutcomeUnknownException>()),
     );
 
-    final transportLoss = DioException(
-      requestOptions: RequestOptions(path: '/v1/account'),
-      type: DioExceptionType.receiveTimeout,
-    );
+    const transportLoss = ApiFailure(kind: ApiFailureKind.timeout);
     await expectLater(
       AccountApiDataSource(
         _TrackingApiClient(deleteError: transportLoss),
@@ -278,13 +268,9 @@ void main() {
       throwsA(isA<AccountDeletionOutcomeUnknownException>()),
     );
 
-    final gatewayTimeout = DioException(
-      requestOptions: RequestOptions(path: '/v1/account'),
-      response: Response<void>(
-        requestOptions: RequestOptions(path: '/v1/account'),
-        statusCode: 504,
-      ),
-      type: DioExceptionType.badResponse,
+    const gatewayTimeout = ApiFailure(
+      kind: ApiFailureKind.response,
+      statusCode: 504,
     );
     await expectLater(
       AccountApiDataSource(
@@ -295,13 +281,9 @@ void main() {
   });
 
   test('delete maps a recent-authentication rejection separately', () async {
-    final recentAuthenticationRequired = DioException(
-      requestOptions: RequestOptions(path: '/v1/account'),
-      response: Response<void>(
-        requestOptions: RequestOptions(path: '/v1/account'),
-        statusCode: 403,
-      ),
-      type: DioExceptionType.badResponse,
+    const recentAuthenticationRequired = ApiFailure(
+      kind: ApiFailureKind.response,
+      statusCode: 403,
     );
 
     await expectLater(
@@ -349,13 +331,9 @@ void main() {
       throwsA(isA<AccountProfileUpdateOutcomeUnknownException>()),
     );
 
-    final unknownResponse = DioException(
-      requestOptions: RequestOptions(path: '/v1/account/profile'),
-      response: Response<void>(
-        requestOptions: RequestOptions(path: '/v1/account/profile'),
-        statusCode: 502,
-      ),
-      type: DioExceptionType.badResponse,
+    const unknownResponse = ApiFailure(
+      kind: ApiFailureKind.response,
+      statusCode: 502,
     );
     await expectLater(
       AccountApiDataSource(
@@ -368,13 +346,24 @@ void main() {
       throwsA(isA<AccountProfileUpdateOutcomeUnknownException>()),
     );
 
-    final rejectedResponse = DioException(
-      requestOptions: RequestOptions(path: '/v1/account/profile'),
-      response: Response<void>(
-        requestOptions: RequestOptions(path: '/v1/account/profile'),
-        statusCode: 422,
+    const conflictResponse = ApiFailure(
+      kind: ApiFailureKind.response,
+      statusCode: 409,
+    );
+    await expectLater(
+      AccountApiDataSource(
+        _TrackingApiClient(patchError: conflictResponse),
+      ).updateTimezone(
+        accessToken: 'token',
+        expectedRevision: 1,
+        timezone: 'Europe/London',
       ),
-      type: DioExceptionType.badResponse,
+      throwsA(isA<AccountSettingConflictException>()),
+    );
+
+    const rejectedResponse = ApiFailure(
+      kind: ApiFailureKind.response,
+      statusCode: 422,
     );
     await expectLater(
       AccountApiDataSource(
@@ -470,13 +459,9 @@ void main() {
       throwsA(isA<AccountPreparationBudgetUpdateOutcomeUnknownException>()),
     );
 
-    final unknownResponse = DioException(
-      requestOptions: RequestOptions(path: '/v1/account/preparation-budget'),
-      response: Response<void>(
-        requestOptions: RequestOptions(path: '/v1/account/preparation-budget'),
-        statusCode: 502,
-      ),
-      type: DioExceptionType.badResponse,
+    const unknownResponse = ApiFailure(
+      kind: ApiFailureKind.response,
+      statusCode: 502,
     );
     await expectLater(
       AccountApiDataSource(
@@ -551,9 +536,9 @@ class _TrackingApiClient extends ApiClient {
   final Map<String, dynamic> patchResponse;
   final Map<String, dynamic> getResponse;
   final ApiMutationResponse deleteResponse;
-  final DioException? patchError;
-  final DioException? getError;
-  final DioException? deleteError;
+  final ApiFailure? patchError;
+  final ApiFailure? getError;
+  final ApiFailure? deleteError;
   final List<int>? getBytesResponse;
   final Object? getBytesError;
   final List<String> patchCalls = [];

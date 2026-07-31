@@ -1,8 +1,8 @@
 import 'dart:async';
 
-import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_life_graph/core/errors/app_exception.dart';
+import 'package:my_life_graph/core/network/api_failure.dart';
 import 'package:my_life_graph/features/notifications/application/notifications_controller.dart';
 import 'package:my_life_graph/features/notifications/domain/entities/app_notification.dart';
 import 'package:my_life_graph/features/notifications/domain/entities/notification_lifecycle.dart';
@@ -448,23 +448,18 @@ NotificationLifecycleResult _result(
 }
 
 AppException _transportFailure() {
-  return AppException(
+  return const AppException(
     'Network request failed',
-    cause: DioException(
-      requestOptions: RequestOptions(path: '/v1/notifications'),
-      type: DioExceptionType.connectionError,
-    ),
+    cause: ApiFailure(kind: ApiFailureKind.connection),
   );
 }
 
 AppException _httpFailure(int statusCode) {
-  final options = RequestOptions(path: '/v1/notifications');
   return AppException(
     'Network request failed',
-    cause: DioException(
-      requestOptions: options,
-      response: Response<void>(requestOptions: options, statusCode: statusCode),
-      type: DioExceptionType.badResponse,
+    cause: ApiFailure(
+      kind: ApiFailureKind.response,
+      statusCode: statusCode,
     ),
   );
 }

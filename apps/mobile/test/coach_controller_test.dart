@@ -223,6 +223,22 @@ void main() {
     controller.dispose();
   });
 
+  test('typed timeout keeps exact retry copy without exposing Dio', () {
+    const error = CoachRemoteException(
+      code: 'network_error',
+      message: 'Coach could not be reached.',
+      retryable: true,
+      statusCode: 503,
+      timedOut: true,
+    );
+
+    expect(
+      coachErrorMessage(error),
+      'Coach timed out. Retry the exact message.',
+    );
+    expect(coachFailurePreservesRequestIdentity(error), isTrue);
+  });
+
   test('contract failure preserves the exact request identity for retry',
       () async {
     final repository = _FakeCoachRepository(

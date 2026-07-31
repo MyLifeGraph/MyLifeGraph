@@ -23,6 +23,8 @@ dependencies:
   share_plus: ">=10.1.4 <11.0.0"
   shared_preferences: ^2.3.3
   supabase_flutter: ^2.8.2
+  # 0.10.2 requires Dart 3.10; keep the repository's Dart 3.4 floor.
+  timezone: 0.10.1
 
 dev_dependencies:
   flutter_test:

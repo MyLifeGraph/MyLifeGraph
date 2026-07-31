@@ -9,7 +9,7 @@ import 'package:my_life_graph/features/weekly_review/application/weekly_review_p
 import 'package:my_life_graph/features/weekly_review/domain/weekly_review.dart';
 import 'package:my_life_graph/features/weekly_review/domain/weekly_review_repository.dart';
 import 'package:my_life_graph/features/weekly_review/presentation/pages/weekly_review_page.dart';
-import 'package:my_life_graph/features/weekly_review/presentation/providers/weekly_review_providers.dart';
+import 'package:my_life_graph/composition/weekly_review_providers.dart';
 
 import 'support/weekly_review_fixtures.dart';
 

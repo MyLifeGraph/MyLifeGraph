@@ -19,15 +19,6 @@ class SnapshotRefreshService {
   final SnapshotAccessTokenProvider _accessTokenProvider;
   final bool _allowRemoteRefresh;
 
-  Future<void> refreshDailyAfterTaskChange({required String targetDate}) =>
-      refreshDailyAfterUserSignal(targetDate: targetDate);
-
-  Future<void> refreshDailyAfterHabitChange({required String targetDate}) =>
-      refreshDailyAfterUserSignal(targetDate: targetDate);
-
-  Future<void> refreshDailyAfterFocusChange({required String targetDate}) =>
-      refreshDailyAfterUserSignal(targetDate: targetDate);
-
   Future<void> refreshDailyAfterUserSignal({String? targetDate}) async {
     if (!_allowRemoteRefresh ||
         _config.useMockData ||

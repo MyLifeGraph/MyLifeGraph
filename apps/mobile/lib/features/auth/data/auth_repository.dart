@@ -3,35 +3,34 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../../../core/network/api_client.dart';
 import '../../../core/supabase/supabase_tables.dart';
-import '../../quick_action/data/guest_quick_check_in_data_source.dart';
-import '../../quick_action/data/quick_check_in_supabase_data_source.dart';
 import 'guest_setup_data_source.dart';
 import '../domain/app_session.dart';
+import '../domain/auth_failure.dart';
 import '../domain/intake_response.dart';
 
 const localDeviceTimezoneMarker = 'device-local';
 
 typedef GoogleOAuthLauncher = Future<bool> Function(String redirectTo);
+typedef GuestCheckInMigrator = Future<void> Function(String userId);
 
 class AuthRepository {
   AuthRepository(
     this._client, {
     required bool useMockData,
-    ApiClient? apiClient,
     GuestSetupDataSource guestSetupDataSource = const GuestSetupDataSource(),
     GoogleOAuthLauncher? googleOAuthLauncher,
+    GuestCheckInMigrator? guestCheckInMigrator,
   })  : _useMockData = useMockData,
-        _apiClient = apiClient,
         _guestSetupDataSource = guestSetupDataSource,
-        _googleOAuthLauncher = googleOAuthLauncher;
+        _googleOAuthLauncher = googleOAuthLauncher,
+        _guestCheckInMigrator = guestCheckInMigrator;
 
   final SupabaseClient _client;
   final bool _useMockData;
-  final ApiClient? _apiClient;
   final GuestSetupDataSource _guestSetupDataSource;
   final GoogleOAuthLauncher? _googleOAuthLauncher;
+  final GuestCheckInMigrator? _guestCheckInMigrator;
 
   Stream<AuthState> get authStateChanges => _client.auth.onAuthStateChange;
 
@@ -176,37 +175,12 @@ class AuthRepository {
     }
   }
 
-  Future<AppProfile> ensureProfileForAuthUser(
-    User user, {
-    String? preferredName,
-  }) async {
+  Future<AppProfile> requireProfileForAuthUser(User user) async {
     final existing = await _selectProfile(user.id);
-    if (existing != null) {
-      return _profileFromRow(existing, fallbackUser: user);
+    if (existing == null) {
+      throw const MissingProfileInvariantException();
     }
-
-    final now = DateTime.now().toIso8601String();
-    final email = user.email ?? '';
-    final name = preferredName?.trim().isNotEmpty == true
-        ? preferredName!.trim()
-        : user.userMetadata?['display_name']?.toString() ??
-            user.userMetadata?['full_name']?.toString() ??
-            (email.contains('@') ? email.split('@').first : 'New User');
-    final provider = user.appMetadata['provider']?.toString() ?? 'email';
-    final row = {
-      'id': user.id,
-      'email': email,
-      'display_name': name,
-      'timezone': 'UTC',
-      'auth_provider': provider,
-      'updated_at': now,
-      'role': AppRole.user.databaseValue,
-    };
-
-    await _client.from(SupabaseTables.profiles).upsert(row);
-
-    final inserted = await _selectProfile(user.id);
-    return _profileFromRow(inserted ?? row, fallbackUser: user);
+    return _profileFromRow(existing, fallbackUser: user);
   }
 
   Future<Map<String, dynamic>?> _selectProfile(String id) async {
@@ -266,10 +240,7 @@ class AuthRepository {
         return localProfile;
       }
     }
-    final profile = await ensureProfileForAuthUser(
-      user,
-      preferredName: preferredName,
-    );
+    final profile = await requireProfileForAuthUser(user);
     if (shouldMigrateGuestCheckIns(
       useMockData: _useMockData,
       profile: profile,
@@ -288,24 +259,8 @@ class AuthRepository {
   }
 
   Future<void> _migrateGuestCheckIns(String userId) async {
-    final prefs = await SharedPreferences.getInstance();
-    final raw = prefs.getString(_Prefs.guestQuickCheckIns);
-    if (raw == null || raw.isEmpty) {
-      return;
-    }
     try {
-      final entries = await GuestQuickCheckInDataSource().readAll();
-      final remote = QuickCheckInSupabaseDataSource(
-        _client,
-        apiClient: _apiClient,
-      );
-      for (final entry in entries) {
-        if (entry.evening == null && entry.morning == null) {
-          return;
-        }
-        await remote.mergeEntryForUser(userId: userId, entry: entry);
-      }
-      await prefs.remove(_Prefs.guestQuickCheckIns);
+      await _guestCheckInMigrator?.call(userId);
     } catch (_) {
       return;
     }
@@ -433,5 +388,4 @@ class _Prefs {
   static const guestActive = 'auth_guest_active';
   static const guestName = 'auth_guest_name';
   static const guestOnboardingDone = 'auth_guest_onboarding_done';
-  static const guestQuickCheckIns = 'guest_quick_checkins';
 }

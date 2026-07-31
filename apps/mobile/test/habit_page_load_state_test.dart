@@ -5,6 +5,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_life_graph/core/config/app_config.dart';
 import 'package:my_life_graph/core/theme/app_icons.dart';
+import 'package:my_life_graph/features/auth/application/profile_local_date_source.dart';
+import 'package:my_life_graph/features/auth/domain/app_session.dart';
+import 'package:my_life_graph/composition/profile_local_date_providers.dart';
 import 'package:my_life_graph/features/quick_action/data/habit_completion_supabase_data_source.dart';
 import 'package:my_life_graph/features/quick_action/domain/habit_v1.dart';
 import 'package:my_life_graph/features/quick_action/presentation/pages/habit_completion_page.dart';
@@ -22,6 +25,7 @@ void main() {
       ProviderScope(
         overrides: [
           appConfigProvider.overrideWithValue(_realConfig),
+          profileLocalDateSourceProvider.overrideWithValue(_deviceDateSource),
           habitCompletionPageDataSourceProvider.overrideWithValue(source),
         ],
         child: const MaterialApp(home: Scaffold(body: HabitCompletionPage())),
@@ -56,6 +60,7 @@ void main() {
       ProviderScope(
         overrides: [
           appConfigProvider.overrideWithValue(_realConfig),
+          profileLocalDateSourceProvider.overrideWithValue(_deviceDateSource),
           habitManagementPageDataSourceProvider.overrideWithValue(source),
         ],
         child: const MaterialApp(home: Scaffold(body: HabitManagementPage())),
@@ -83,11 +88,16 @@ void main() {
       (tester) async {
     final source = _ConcurrentCompletionSource();
     final snapshotRefresh = _RecordingSnapshotRefresh();
+    final profileDate = SessionProfileLocalDateSource(
+      session: AppSession.authenticated(_authenticatedProfile),
+      currentInstant: () => DateTime.utc(2026, 7, 22, 6, 30),
+    );
 
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
           appConfigProvider.overrideWithValue(_realConfig),
+          profileLocalDateSourceProvider.overrideWithValue(profileDate),
           habitCompletionPageDataSourceProvider.overrideWithValue(source),
           snapshotRefreshServiceProvider.overrideWithValue(snapshotRefresh),
         ],
@@ -132,7 +142,14 @@ void main() {
 
     expect(find.text('Latest response'), findsOneWidget);
     expect(find.text('Stale response'), findsNothing);
-    expect(snapshotRefresh.habitTargetDates, hasLength(2));
+    expect(
+      source.targetDates.map(habitDateKey),
+      everyElement('2026-07-21'),
+    );
+    expect(
+      snapshotRefresh.habitTargetDates,
+      ['2026-07-21', '2026-07-21'],
+    );
     expect(tester.takeException(), isNull);
   });
 
@@ -147,6 +164,7 @@ void main() {
       ProviderScope(
         overrides: [
           appConfigProvider.overrideWithValue(_realConfig),
+          profileLocalDateSourceProvider.overrideWithValue(_deviceDateSource),
           habitCompletionPageDataSourceProvider.overrideWithValue(source),
           snapshotRefreshServiceProvider.overrideWithValue(snapshotRefresh),
         ],
@@ -189,6 +207,7 @@ void main() {
       ProviderScope(
         overrides: [
           appConfigProvider.overrideWithValue(_realConfig),
+          profileLocalDateSourceProvider.overrideWithValue(_deviceDateSource),
           habitManagementPageDataSourceProvider.overrideWithValue(source),
           snapshotRefreshServiceProvider.overrideWithValue(snapshotRefresh),
         ],
@@ -246,6 +265,18 @@ const _realConfig = AppConfig(
   useMockData: false,
 );
 
+const _deviceDateSource = SessionProfileLocalDateSource(session: null);
+
+const _authenticatedProfile = AppProfile(
+  id: '10000000-0000-4000-8000-000000000001',
+  email: 'student@example.com',
+  name: 'Student',
+  timezone: 'America/Los_Angeles',
+  role: AppRole.user,
+  onboardingDone: true,
+  authProvider: 'email',
+);
+
 class _FailOnceActiveHabitSource extends HabitCompletionSupabaseDataSource {
   _FailOnceActiveHabitSource()
       : super(
@@ -300,6 +331,7 @@ class _ConcurrentCompletionSource extends HabitCompletionSupabaseDataSource {
   final secondWrite = Completer<void>();
   final staleLoad = Completer<List<HabitV1>>();
   final latestLoad = Completer<List<HabitV1>>();
+  final List<DateTime> targetDates = [];
   int loads = 0;
 
   @override
@@ -322,12 +354,14 @@ class _ConcurrentCompletionSource extends HabitCompletionSupabaseDataSource {
     required HabitOutcome outcome,
     required DateTime targetDate,
     String? notes,
-  }) =>
-      switch (habitId) {
-        'first' => firstWrite.future,
-        'second' => secondWrite.future,
-        _ => Future.error(StateError('unexpected habit')),
-      };
+  }) {
+    targetDates.add(targetDate);
+    return switch (habitId) {
+      'first' => firstWrite.future,
+      'second' => secondWrite.future,
+      _ => Future.error(StateError('unexpected habit')),
+    };
+  }
 }
 
 class _PendingCompletionSource extends HabitCompletionSupabaseDataSource {
@@ -382,24 +416,9 @@ class _RecordingSnapshotRefresh implements SnapshotRefreshService {
   final List<String> habitTargetDates = [];
 
   @override
-  Future<void> refreshDailyAfterHabitChange({
-    required String targetDate,
-  }) async {
-    habitTargetDates.add(targetDate);
+  Future<void> refreshDailyAfterUserSignal({String? targetDate}) async {
+    if (targetDate != null) habitTargetDates.add(targetDate);
   }
-
-  @override
-  Future<void> refreshDailyAfterFocusChange({
-    required String targetDate,
-  }) async {}
-
-  @override
-  Future<void> refreshDailyAfterTaskChange({
-    required String targetDate,
-  }) async {}
-
-  @override
-  Future<void> refreshDailyAfterUserSignal({String? targetDate}) async {}
 }
 
 HabitV1 _habit(String id, String title) {

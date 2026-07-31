@@ -1,25 +1,25 @@
 import '../../domain/entities/dashboard_snapshot.dart';
 import '../../domain/repositories/dashboard_repository.dart';
-import '../datasources/dashboard_mock_data_source.dart';
 import '../datasources/dashboard_supabase_data_source.dart';
 import '../datasources/today_overview_api_data_source.dart';
 
 typedef TodayAccessTokenProvider = Future<String?> Function();
+typedef DashboardMockSnapshotLoader = Future<DashboardSnapshot> Function();
 
 class DashboardRepositoryImpl implements DashboardRepository {
   const DashboardRepositoryImpl({
-    required DashboardMockDataSource mockDataSource,
+    required DashboardMockSnapshotLoader mockSnapshotLoader,
     DashboardSupabaseDataSource? supabaseDataSource,
     TodayOverviewApiDataSource? todayApiDataSource,
     TodayAccessTokenProvider? accessTokenProvider,
     required bool allowMockData,
-  })  : _mockDataSource = mockDataSource,
+  })  : _mockSnapshotLoader = mockSnapshotLoader,
         _supabaseDataSource = supabaseDataSource,
         _todayApiDataSource = todayApiDataSource,
         _accessTokenProvider = accessTokenProvider,
         _allowMockData = allowMockData;
 
-  final DashboardMockDataSource _mockDataSource;
+  final DashboardMockSnapshotLoader _mockSnapshotLoader;
   final DashboardSupabaseDataSource? _supabaseDataSource;
   final TodayOverviewApiDataSource? _todayApiDataSource;
   final TodayAccessTokenProvider? _accessTokenProvider;
@@ -28,7 +28,7 @@ class DashboardRepositoryImpl implements DashboardRepository {
   @override
   Future<DashboardSnapshot> getSnapshot() async {
     if (_allowMockData) {
-      return _mockDataSource.getSnapshot();
+      return _mockSnapshotLoader();
     }
     final todayApi = _todayApiDataSource;
     final tokenProvider = _accessTokenProvider;

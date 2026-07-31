@@ -4,12 +4,12 @@ import 'package:my_life_graph/core/constants/app_radii.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../composition/projection_refresh_providers.dart';
 import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/navigation/app_routes.dart';
-import '../../../dashboard/presentation/providers/dashboard_providers.dart';
-import '../../../snapshots/presentation/providers/snapshot_providers.dart';
+import 'package:my_life_graph/composition/profile_local_date_providers.dart';
 import '../../domain/quick_check_in.dart';
-import '../providers/quick_check_in_providers.dart';
+import 'package:my_life_graph/composition/quick_check_in_providers.dart';
 import '../widgets/daily_capture_controls.dart';
 
 class MorningCalibrationPage extends ConsumerStatefulWidget {
@@ -35,7 +35,11 @@ class _MorningCalibrationPageState
   @override
   void initState() {
     super.initState();
-    _draft = MorningCalibrationDraft.empty(DateTime.now());
+    final capturedAt = ref.read(currentInstantProvider)();
+    _draft = MorningCalibrationDraft.empty(
+      capturedAt,
+      entryDate: ref.read(profileLocalDateSourceProvider).dateKeyAt(capturedAt),
+    );
     Future<void>.microtask(_loadToday);
   }
 
@@ -288,13 +292,11 @@ class _MorningCalibrationPageState
     try {
       final store = ref.read(quickCheckInStoreProvider);
       await store.saveMorning(draft);
-      if (store.target == QuickCheckInSaveTarget.supabase) {
-        await ref
-            .read(snapshotRefreshServiceProvider)
-            .refreshDailyAfterUserSignal(targetDate: draft.entryDate);
-      }
-      ref.invalidate(latestQuickCheckInProvider);
-      ref.invalidate(dashboardSnapshotProvider);
+      await ref.read(projectionRefreshCoordinatorProvider).dailyCaptureChanged(
+            targetDate: draft.entryDate,
+            refreshDailySnapshot:
+                store.target == QuickCheckInSaveTarget.supabase,
+          );
       if (!mounted) {
         return;
       }
@@ -330,7 +332,9 @@ class _MorningCalibrationPageState
     });
     try {
       final store = ref.read(quickCheckInStoreProvider);
-      final entry = await store.loadToday(DateTime.now());
+      final entry = await store.loadToday(
+        ref.read(profileLocalDateSourceProvider).today(),
+      );
       _safeCaptureLoaded = true;
       EveningShutdownDraft? sleepPlan;
       try {

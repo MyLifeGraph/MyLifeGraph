@@ -4,14 +4,14 @@ import 'package:my_life_graph/core/theme/app_icons.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../composition/projection_refresh_providers.dart';
 import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/navigation/app_routes.dart';
-import '../../../dashboard/presentation/providers/dashboard_providers.dart';
+import 'package:my_life_graph/composition/profile_local_date_providers.dart';
 import '../../../focus/domain/focus_session.dart';
 import '../../../focus/presentation/widgets/focus_reflection_sheet.dart';
-import '../../../snapshots/presentation/providers/snapshot_providers.dart';
 import '../../domain/quick_check_in.dart';
-import '../providers/quick_check_in_providers.dart';
+import 'package:my_life_graph/composition/quick_check_in_providers.dart';
 import '../widgets/daily_capture_controls.dart';
 
 class QuickMoodCheckInPage extends ConsumerStatefulWidget {
@@ -62,7 +62,11 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
   @override
   void initState() {
     super.initState();
-    _draft = EveningShutdownDraft.empty(DateTime.now());
+    final capturedAt = ref.read(currentInstantProvider)();
+    _draft = EveningShutdownDraft.empty(
+      capturedAt,
+      entryDate: ref.read(profileLocalDateSourceProvider).dateKeyAt(capturedAt),
+    );
     Future<void>.microtask(_loadToday);
   }
 
@@ -338,13 +342,11 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
     try {
       final store = ref.read(quickCheckInStoreProvider);
       await store.saveEvening(draft);
-      if (store.target == QuickCheckInSaveTarget.supabase) {
-        await ref
-            .read(snapshotRefreshServiceProvider)
-            .refreshDailyAfterUserSignal(targetDate: draft.entryDate);
-      }
-      ref.invalidate(latestQuickCheckInProvider);
-      ref.invalidate(dashboardSnapshotProvider);
+      await ref.read(projectionRefreshCoordinatorProvider).dailyCaptureChanged(
+            targetDate: draft.entryDate,
+            refreshDailySnapshot:
+                store.target == QuickCheckInSaveTarget.supabase,
+          );
       if (!mounted) {
         return;
       }
@@ -378,7 +380,8 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
     });
     try {
       final store = ref.read(quickCheckInStoreProvider);
-      final entry = await store.loadToday(DateTime.now());
+      final targetDate = ref.read(profileLocalDateSourceProvider).today();
+      final entry = await store.loadToday(targetDate);
       _safeCaptureLoaded = true;
       EveningShutdownDraft? sleepPlan;
       try {
@@ -387,7 +390,9 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
         // A prior Evening value is only a convenience here. The current
         // branch read above is the required CAS baseline.
       }
-      final focusData = await _loadTodayFocusReflections();
+      final focusData = await _loadTodayFocusReflections(
+        dailyCaptureEntryDate(targetDate),
+      );
       final saved = entry?.evening;
       if (mounted) {
         final source = saved?.forEditing() ?? _draft;
@@ -427,16 +432,17 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
     }
   }
 
-  Future<_TodayFocusReflectionData?> _loadTodayFocusReflections() async {
+  Future<_TodayFocusReflectionData?> _loadTodayFocusReflections(
+    String targetDate,
+  ) async {
     try {
       final source = ref.read(eveningFocusReflectionSourceProvider);
       if (source == null) return null;
       final recent = await source.fetchRecentSessions(limit: 50);
-      final today = dailyCaptureEntryDate(DateTime.now());
       final sessions = recent
           .where(
             (session) =>
-                !session.isActive && session.snapshotEntryDate == today,
+                !session.isActive && session.snapshotEntryDate == targetDate,
           )
           .toList(growable: false);
       final reflections = await source.fetchReflectionsForSessions(sessions);

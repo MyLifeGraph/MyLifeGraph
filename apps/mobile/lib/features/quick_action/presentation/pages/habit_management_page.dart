@@ -4,24 +4,27 @@ import 'package:my_life_graph/core/theme/app_icons.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../composition/projection_refresh_providers.dart';
 import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/config/app_config.dart';
 import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/supabase/supabase_providers.dart';
 import '../../../../core/utils/client_uuid.dart';
-import '../../../../core/utils/local_date.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_page.dart';
-import '../../../dashboard/presentation/providers/dashboard_providers.dart';
-import '../../../snapshots/application/snapshot_refresh_service.dart';
-import '../../../snapshots/presentation/providers/snapshot_providers.dart';
+import 'package:my_life_graph/composition/profile_local_date_providers.dart';
 import '../../data/habit_completion_supabase_data_source.dart';
 import '../../domain/habit_v1.dart';
 
 final habitManagementPageDataSourceProvider =
     Provider<HabitCompletionSupabaseDataSource?>((ref) {
   final client = ref.watch(supabaseClientProvider);
-  return client == null ? null : HabitCompletionSupabaseDataSource(client);
+  return client == null
+      ? null
+      : HabitCompletionSupabaseDataSource(
+          client,
+          todayProvider: ref.watch(profileLocalDateSourceProvider).today,
+        );
 });
 
 class HabitManagementPage extends ConsumerStatefulWidget {
@@ -47,6 +50,7 @@ class _HabitManagementPageState extends ConsumerState<HabitManagementPage> {
 
   @override
   Widget build(BuildContext context) {
+    final today = ref.watch(profileLocalDateSourceProvider).today();
     final active = _byLifecycle(HabitLifecycle.active);
     final paused = _byLifecycle(HabitLifecycle.paused);
     final archived = _byLifecycle(HabitLifecycle.archived);
@@ -122,6 +126,7 @@ class _HabitManagementPageState extends ConsumerState<HabitManagementPage> {
           _HabitSection(
             title: 'Active',
             habits: active,
+            today: today,
             isSaving: _isSaving,
             onEdit: (habit) => _openEditor(habit: habit),
             onLifecycle: _setLifecycle,
@@ -129,6 +134,7 @@ class _HabitManagementPageState extends ConsumerState<HabitManagementPage> {
           _HabitSection(
             title: 'Paused',
             habits: paused,
+            today: today,
             isSaving: _isSaving,
             onEdit: (habit) => _openEditor(habit: habit),
             onLifecycle: _setLifecycle,
@@ -136,6 +142,7 @@ class _HabitManagementPageState extends ConsumerState<HabitManagementPage> {
           _HabitSection(
             title: 'Archived',
             habits: archived,
+            today: today,
             isSaving: _isSaving,
             onEdit: (habit) => _openEditor(habit: habit),
             onLifecycle: _setLifecycle,
@@ -232,8 +239,9 @@ class _HabitManagementPageState extends ConsumerState<HabitManagementPage> {
       return;
     }
 
-    final snapshotRefresh = ref.read(snapshotRefreshServiceProvider);
-    final snapshotTargetDate = localDateKey(DateTime.now());
+    final projectionRefresh = ref.read(projectionRefreshCoordinatorProvider);
+    final snapshotTargetDate =
+        ref.read(profileLocalDateSourceProvider).todayKey();
     setState(() => _isSaving = true);
     try {
       if (habit == null) {
@@ -252,7 +260,7 @@ class _HabitManagementPageState extends ConsumerState<HabitManagementPage> {
         );
       }
       await _afterDurableWrite(
-        snapshotRefresh: snapshotRefresh,
+        projectionRefresh: projectionRefresh,
         targetDate: snapshotTargetDate,
       );
       if (mounted) {
@@ -324,8 +332,9 @@ class _HabitManagementPageState extends ConsumerState<HabitManagementPage> {
       _showMessage('Supabase is not configured.');
       return;
     }
-    final snapshotRefresh = ref.read(snapshotRefreshServiceProvider);
-    final snapshotTargetDate = localDateKey(DateTime.now());
+    final projectionRefresh = ref.read(projectionRefreshCoordinatorProvider);
+    final snapshotTargetDate =
+        ref.read(profileLocalDateSourceProvider).todayKey();
     setState(() => _isSaving = true);
     try {
       await dataSource.setHabitLifecycle(
@@ -333,7 +342,7 @@ class _HabitManagementPageState extends ConsumerState<HabitManagementPage> {
         lifecycle: lifecycle,
       );
       await _afterDurableWrite(
-        snapshotRefresh: snapshotRefresh,
+        projectionRefresh: projectionRefresh,
         targetDate: snapshotTargetDate,
       );
       if (mounted) {
@@ -357,12 +366,11 @@ class _HabitManagementPageState extends ConsumerState<HabitManagementPage> {
   }
 
   Future<void> _afterDurableWrite({
-    required SnapshotRefreshService snapshotRefresh,
+    required ProjectionRefreshCoordinator projectionRefresh,
     required String targetDate,
   }) async {
-    await snapshotRefresh.refreshDailyAfterHabitChange(targetDate: targetDate);
+    await projectionRefresh.habitDefinitionChanged(targetDate: targetDate);
     if (!mounted) return;
-    ref.invalidate(dashboardSnapshotProvider);
     await _loadHabits();
   }
 
@@ -410,6 +418,7 @@ class _HabitSection extends StatelessWidget {
   const _HabitSection({
     required this.title,
     required this.habits,
+    required this.today,
     required this.isSaving,
     required this.onEdit,
     required this.onLifecycle,
@@ -417,6 +426,7 @@ class _HabitSection extends StatelessWidget {
 
   final String title;
   final List<HabitV1> habits;
+  final DateTime today;
   final bool isSaving;
   final ValueChanged<HabitV1> onEdit;
   final void Function(HabitV1, HabitLifecycle) onLifecycle;
@@ -439,6 +449,7 @@ class _HabitSection extends StatelessWidget {
           ...habits.map(
             (habit) => _HabitManagementTile(
               habit: habit,
+              today: today,
               isSaving: isSaving,
               onEdit: () => onEdit(habit),
               onLifecycle: (lifecycle) => onLifecycle(habit, lifecycle),
@@ -452,19 +463,21 @@ class _HabitSection extends StatelessWidget {
 class _HabitManagementTile extends StatelessWidget {
   const _HabitManagementTile({
     required this.habit,
+    required this.today,
     required this.isSaving,
     required this.onEdit,
     required this.onLifecycle,
   });
 
   final HabitV1 habit;
+  final DateTime today;
   final bool isSaving;
   final VoidCallback onEdit;
   final ValueChanged<HabitLifecycle> onLifecycle;
 
   @override
   Widget build(BuildContext context) {
-    final progress = habit.progressAt(DateTime.now());
+    final progress = habit.progressAt(today);
     return AppCard(
       child: Row(
         children: [

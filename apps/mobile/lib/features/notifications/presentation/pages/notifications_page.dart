@@ -14,7 +14,7 @@ import '../../application/notifications_controller.dart';
 import '../../domain/entities/app_notification.dart';
 import '../../domain/entities/notification_action_target.dart';
 import '../../domain/entities/notification_lifecycle.dart';
-import '../providers/notifications_providers.dart';
+import '../../../../composition/notifications_providers.dart';
 
 class NotificationsPage extends ConsumerWidget {
   const NotificationsPage({super.key});

@@ -6,8 +6,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_life_graph/core/capabilities/app_surface_capabilities.dart';
 import 'package:my_life_graph/core/network/api_client.dart';
+import 'package:my_life_graph/composition/projection_refresh_providers.dart';
 import 'package:my_life_graph/features/deadline_plans/domain/exam_week_outlook.dart';
-import 'package:my_life_graph/features/deadline_plans/presentation/providers/deadline_plan_providers.dart';
+import 'package:my_life_graph/composition/deadline_plan_providers.dart';
 import 'package:my_life_graph/features/planner/application/planner_controller.dart';
 import 'package:my_life_graph/features/planner/data/planner_api_data_source.dart';
 import 'package:my_life_graph/features/planner/presentation/pages/planner_page.dart';
@@ -16,6 +17,28 @@ import 'package:my_life_graph/features/planner/presentation/providers/planner_pr
 import 'support/planner_fixtures.dart';
 
 void main() {
+  test('scheduled Planner load is ignored after immediate disposal', () async {
+    final uncaughtErrors = <Object>[];
+    final backend = _PlannerBackend();
+
+    await runZonedGuarded(
+      () async {
+        final controller = PlannerController(
+          api: PlannerApiDataSource(ApiClient(backend.dio)),
+          accessTokenProvider: () => 'test-token',
+          canUseSyncedPlanner: true,
+          isBackendConfigured: true,
+        );
+        controller.dispose();
+        await Future<void>.delayed(Duration.zero);
+      },
+      (error, _) => uncaughtErrors.add(error),
+    );
+
+    expect(uncaughtErrors, isEmpty);
+    expect(backend.requests, isEmpty);
+  });
+
   test('late Planner overview response is ignored after disposal', () async {
     final requestStarted = Completer<void>();
     final releaseResponse = Completer<void>();
@@ -523,6 +546,12 @@ Future<void> _pumpPlanner(
     ProviderScope(
       overrides: [
         appSurfaceCapabilitiesProvider.overrideWithValue(capabilities),
+        projectionRefreshCoordinatorProvider.overrideWithValue(
+          ProjectionRefreshCoordinator(
+            refreshDailySnapshot: (_) async {},
+            invalidateProjection: (_) {},
+          ),
+        ),
         plannerControllerProvider.overrideWith((ref) => controller),
         examWeekOutlookProvider.overrideWith(
           (ref) => (outlookLoader ?? () async => null)(),

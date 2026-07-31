@@ -1,14 +1,13 @@
-import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/config/app_config.dart';
-import '../../../../core/errors/app_exception.dart';
+import '../../../../core/network/api_failure.dart';
 import '../../../../core/supabase/supabase_providers.dart';
 import '../../data/guest_setup_data_source.dart';
 import '../../data/intake_setup_repository.dart';
 import '../../domain/app_session.dart';
 import '../../domain/intake_response.dart';
-import 'auth_providers.dart';
+import 'package:my_life_graph/composition/auth_providers.dart';
 
 final guestSetupDataSourceProvider = Provider<GuestSetupDataSource>(
   (_) => const GuestSetupDataSource(),
@@ -271,7 +270,7 @@ bool setupSaveRequiresExactRetry(Object error) {
       error is GuestSetupIdempotencyException) {
     return false;
   }
-  final statusCode = _dioExceptionFrom(error)?.response?.statusCode;
+  final statusCode = apiFailureFrom(error)?.statusCode;
   if (statusCode != null && statusCode >= 400 && statusCode < 500) {
     return false;
   }
@@ -283,15 +282,7 @@ bool setupSaveSuggestsReload(Object error) {
       error is GuestSetupIdempotencyException) {
     return true;
   }
-  return _dioExceptionFrom(error)?.response?.statusCode == 409;
-}
-
-DioException? _dioExceptionFrom(Object error) {
-  if (error is DioException) {
-    return error;
-  }
-  final cause = error is AppException ? error.cause : null;
-  return cause is DioException ? cause : null;
+  return apiFailureFrom(error)?.isConflict ?? false;
 }
 
 const Object _unset = Object();

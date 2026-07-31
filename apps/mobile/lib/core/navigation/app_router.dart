@@ -6,7 +6,7 @@ import '../capabilities/app_surface_capabilities.dart';
 import '../../features/auth/presentation/pages/auth_page.dart';
 import '../../features/auth/presentation/pages/onboarding_page.dart';
 import '../../features/auth/presentation/pages/password_recovery_page.dart';
-import '../../features/auth/presentation/providers/auth_providers.dart';
+import 'package:my_life_graph/composition/auth_providers.dart';
 import '../../features/calendar_integration/presentation/pages/calendar_integration_page.dart';
 import '../../features/coach/presentation/pages/coach_page.dart';
 import '../../features/deadline_plans/domain/deadline_plan.dart';

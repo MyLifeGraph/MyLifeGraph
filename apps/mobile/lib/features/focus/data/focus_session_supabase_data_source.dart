@@ -7,12 +7,15 @@ import '../../../core/utils/local_date.dart';
 import '../domain/focus_session.dart';
 
 typedef FocusNowProvider = DateTime Function();
+typedef FocusEntryDateProvider = String Function(DateTime instant);
 
 class FocusSessionSupabaseDataSource {
   FocusSessionSupabaseDataSource(
     this._client, {
     FocusNowProvider? nowProvider,
-  }) : _nowProvider = nowProvider ?? DateTime.now;
+    FocusEntryDateProvider? entryDateProvider,
+  })  : _nowProvider = nowProvider ?? DateTime.now,
+        _entryDateProvider = entryDateProvider;
 
   static const _columns =
       'id,status,started_at,ended_at,planned_minutes,actual_minutes,label,'
@@ -23,6 +26,7 @@ class FocusSessionSupabaseDataSource {
 
   final SupabaseClient _client;
   final FocusNowProvider _nowProvider;
+  final FocusEntryDateProvider? _entryDateProvider;
 
   Future<FocusSession?> fetchActiveSession() async {
     final userId = await AppUserResolver(_client).resolveUserId();
@@ -288,6 +292,9 @@ class FocusSessionSupabaseDataSource {
         'Focus request identity is invalid.',
       );
     }
+    final startedAt = _nowProvider();
+    final entryDate =
+        _entryDateProvider?.call(startedAt) ?? localDateKey(startedAt);
     final userId = await AppUserResolver(_client).resolveUserId();
     final existing = await fetchActiveSession();
     if (existing != null) {
@@ -309,8 +316,7 @@ class FocusSessionSupabaseDataSource {
         targetId: draft.targetId!,
       );
     }
-    final nowValue = _nowProvider();
-    final now = _timestamp(nowValue);
+    final now = _timestamp(startedAt);
     final row = await _client
         .from(SupabaseTables.focusSessions)
         .upsert(
@@ -330,7 +336,7 @@ class FocusSessionSupabaseDataSource {
             'metadata': {
               'source': 'flutter-focus-v1',
               'contract_version': 'focus-session-v1',
-              'entry_date': localDateKey(nowValue),
+              'entry_date': entryDate,
               if (draft.recoveryMinutes > 0)
                 'recovery_minutes': draft.recoveryMinutes,
               'action_target': {

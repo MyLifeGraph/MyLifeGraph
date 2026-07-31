@@ -7,15 +7,17 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../../../composition/projection_refresh_providers.dart';
 import '../../../../core/capabilities/app_surface_capabilities.dart';
 import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/theme/app_category_visuals.dart';
+import '../../../../core/utils/local_date.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_page.dart';
 import '../../../deadline_plans/domain/exam_week_outlook.dart';
-import '../../../deadline_plans/presentation/providers/deadline_plan_providers.dart';
-import '../../../shell/presentation/widgets/app_header_actions.dart';
+import 'package:my_life_graph/composition/deadline_plan_providers.dart';
+import 'package:my_life_graph/composition/widgets/app_header_actions.dart';
 import '../../application/planner_controller.dart';
 import '../../domain/planner.dart';
 import '../providers/planner_providers.dart';
@@ -70,7 +72,12 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
             ? null
             : (value) async {
                 final saved = await controller.updateCalendarPreference(value);
-                if (mounted && !saved) _showFailure();
+                if (!mounted) return;
+                if (saved) {
+                  await _afterPlannerMutation();
+                } else {
+                  _showFailure();
+                }
               },
       ),
     ];
@@ -153,6 +160,7 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
                     if (retryingProposal && preview != null) {
                       await _showPreview(preview);
                     } else {
+                      await _afterPlannerMutation();
                       _showMessage('Planner change confirmed.');
                     }
                   }
@@ -337,6 +345,8 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
         await ref.read(plannerControllerProvider.notifier).confirm(plan);
     if (mounted) {
       if (saved) {
+        await _afterPlannerMutation();
+        if (!mounted) return saved;
         _showMessage(
           plan.pendingRevision?.plannedMinutes == 0
               ? 'Saved under Unscheduled.'
@@ -401,6 +411,8 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
         .createCommitment(draft);
     if (mounted) {
       if (saved) {
+        await _afterPlannerMutation();
+        if (!mounted) return;
         _retainedCommitmentDraft = null;
         _showMessage('Fixed commitment saved.');
       } else {
@@ -474,6 +486,10 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
         .read(plannerControllerProvider.notifier)
         .archiveCommitment(commitment);
     if (mounted) {
+      if (saved) {
+        await _afterPlannerMutation();
+        if (!mounted) return;
+      }
       _showMessage(
         saved ? 'Commitment archived.' : 'Could not archive commitment.',
       );
@@ -648,6 +664,10 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
     final saved =
         await ref.read(plannerControllerProvider.notifier).cancelPlan(plan);
     if (mounted) {
+      if (saved) {
+        await _afterPlannerMutation();
+        if (!mounted) return false;
+      }
       _showMessage(
         saved
             ? 'Future reservations released.'
@@ -679,7 +699,11 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
         .read(plannerControllerProvider.notifier)
         .updateCommitment(commitment, draft);
     if (mounted) {
-      if (saved) _retainedCommitmentDraft = null;
+      if (saved) {
+        await _afterPlannerMutation();
+        if (!mounted) return;
+        _retainedCommitmentDraft = null;
+      }
       _showMessage(
         saved
             ? 'Fixed commitment updated.'
@@ -697,6 +721,13 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
               ? 'Planner changed. Reload and create a new preview.'
               : 'Planner could not save that change. Your entered values are retained.',
     );
+  }
+
+  Future<void> _afterPlannerMutation() {
+    final localDate = ref.read(plannerControllerProvider).overview?.localDate;
+    return ref.read(projectionRefreshCoordinatorProvider).plannerChanged(
+          targetDate: localDate == null ? null : localDateKey(localDate),
+        );
   }
 
   void _showMessage(String message) {

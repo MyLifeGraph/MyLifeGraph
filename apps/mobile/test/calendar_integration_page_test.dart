@@ -1,8 +1,8 @@
-import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_life_graph/core/errors/app_exception.dart';
+import 'package:my_life_graph/core/network/api_failure.dart';
 import 'package:my_life_graph/features/calendar_integration/application/calendar_integration_controller.dart';
 import 'package:my_life_graph/features/calendar_integration/application/calendar_ics_file_picker.dart';
 import 'package:my_life_graph/features/calendar_integration/domain/calendar_integration.dart';
@@ -14,13 +14,10 @@ import 'support/calendar_integration_fixtures.dart';
 
 void main() {
   test('only ambiguous or server failures require exact unchanged retry', () {
-    DioException failure(int statusCode) {
-      final request = RequestOptions(path: '/calendar');
-      return DioException(
-        requestOptions: request,
-        response: Response(requestOptions: request, statusCode: statusCode),
-      );
-    }
+    ApiFailure failure(int statusCode) => ApiFailure(
+          kind: ApiFailureKind.response,
+          statusCode: statusCode,
+        );
 
     expect(calendarOperationRequiresExactRetry(failure(409)), isFalse);
     expect(calendarOperationRequiresExactRetry(failure(422)), isFalse);
@@ -33,10 +30,7 @@ void main() {
     );
     expect(
       calendarOperationRequiresExactRetry(
-        DioException(
-          requestOptions: RequestOptions(path: '/calendar'),
-          type: DioExceptionType.connectionTimeout,
-        ),
+        const ApiFailure(kind: ApiFailureKind.timeout),
       ),
       isTrue,
     );
@@ -394,10 +388,7 @@ class _FakeCalendarRepository implements CalendarIntegrationRepository {
       disconnectRequestIds.length +
       deleteRequestIds.length;
 
-  DioException get _ambiguous => DioException(
-        requestOptions: RequestOptions(path: '/calendar'),
-        type: DioExceptionType.connectionTimeout,
-      );
+  ApiFailure get _ambiguous => const ApiFailure(kind: ApiFailureKind.timeout);
 
   @override
   Future<CalendarIntegrationFeed> getIntegration() async {

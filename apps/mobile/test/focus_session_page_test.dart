@@ -1033,33 +1033,16 @@ class _CountingSnapshotRefresh implements SnapshotRefreshService {
   int focusCalls = 0;
 
   @override
-  Future<void> refreshDailyAfterFocusChange({
-    required String targetDate,
-  }) async {
+  Future<void> refreshDailyAfterUserSignal({String? targetDate}) async {
     focusCalls += 1;
   }
-
-  @override
-  Future<void> refreshDailyAfterHabitChange({
-    required String targetDate,
-  }) async {}
-
-  @override
-  Future<void> refreshDailyAfterTaskChange({
-    required String targetDate,
-  }) async {}
-
-  @override
-  Future<void> refreshDailyAfterUserSignal({String? targetDate}) async {}
 }
 
 class _BlockingSnapshotRefresh extends _CountingSnapshotRefresh {
   final Completer<void> _completer = Completer<void>();
 
   @override
-  Future<void> refreshDailyAfterFocusChange({
-    required String targetDate,
-  }) {
+  Future<void> refreshDailyAfterUserSignal({String? targetDate}) {
     focusCalls += 1;
     return _completer.future;
   }

@@ -11,11 +11,9 @@ import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_page.dart';
-import '../../../briefings/presentation/providers/briefing_providers.dart';
-import '../../../dashboard/presentation/providers/dashboard_providers.dart';
 import '../../application/weekly_review_proposal_applier.dart';
 import '../../domain/weekly_review.dart';
-import '../providers/weekly_review_providers.dart';
+import 'package:my_life_graph/composition/weekly_review_providers.dart';
 
 class WeeklyReviewPage extends ConsumerStatefulWidget {
   const WeeklyReviewPage({super.key});
@@ -173,8 +171,6 @@ class _WeeklyReviewPageState extends ConsumerState<WeeklyReviewPage> {
         case WeeklyReviewApplyStatus.applied:
           setState(() => _appliedProposalIds.add(proposal.id));
           ref.invalidate(latestWeeklyReviewProvider);
-          ref.invalidate(dashboardSnapshotProvider);
-          ref.invalidate(todayBriefingProvider);
           _showMessage(
             result.snapshotRefreshFailed
                 ? 'Habit saved; daily snapshot refresh failed.'

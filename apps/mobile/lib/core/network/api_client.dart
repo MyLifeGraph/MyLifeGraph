@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../config/app_config.dart';
 import '../errors/app_exception.dart';
+import 'api_failure.dart';
 
 final dioProvider = Provider<Dio>((ref) {
   final config = ref.watch(appConfigProvider);
@@ -39,7 +40,7 @@ class ApiClient {
       );
       return response.data ?? <String, dynamic>{};
     } on DioException catch (error) {
-      throw AppException('Network request failed', cause: error);
+      throw _networkRequestException(error);
     }
   }
 
@@ -85,7 +86,7 @@ class ApiClient {
       if (responseTooLarge) {
         throw const ApiResponseTooLargeException();
       }
-      throw AppException('Network request failed', cause: error);
+      throw _networkRequestException(error);
     }
   }
 
@@ -102,7 +103,7 @@ class ApiClient {
       );
       return response.data ?? <String, dynamic>{};
     } on DioException catch (error) {
-      throw AppException('Network request failed', cause: error);
+      throw _networkRequestException(error);
     }
   }
 
@@ -119,7 +120,7 @@ class ApiClient {
       );
       return response.data ?? <String, dynamic>{};
     } on DioException catch (error) {
-      throw AppException('Network request failed', cause: error);
+      throw _networkRequestException(error);
     }
   }
 
@@ -136,7 +137,7 @@ class ApiClient {
       );
       return response.data ?? <String, dynamic>{};
     } on DioException catch (error) {
-      throw AppException('Network request failed', cause: error);
+      throw _networkRequestException(error);
     }
   }
 
@@ -159,7 +160,7 @@ class ApiClient {
       );
       return response.data ?? <String, dynamic>{};
     } on DioException catch (error) {
-      throw AppException('Network request failed', cause: error);
+      throw _networkRequestException(error);
     }
   }
 
@@ -187,7 +188,7 @@ class ApiClient {
       }
       return stream;
     } on DioException catch (error) {
-      throw AppException('Network request failed', cause: error);
+      throw _networkRequestException(error);
     }
   }
 
@@ -202,7 +203,7 @@ class ApiClient {
       );
       return response.data ?? <String, dynamic>{};
     } on DioException catch (error) {
-      throw AppException('Network request failed', cause: error);
+      throw _networkRequestException(error);
     }
   }
 
@@ -231,9 +232,34 @@ class ApiClient {
         body: response.data,
       );
     } on DioException catch (error) {
-      throw AppException('Network request failed', cause: error);
+      throw _networkRequestException(error);
     }
   }
+}
+
+AppException _networkRequestException(DioException error) {
+  final response = error.response;
+  final kind = switch (error.type) {
+    DioExceptionType.connectionTimeout ||
+    DioExceptionType.sendTimeout ||
+    DioExceptionType.receiveTimeout =>
+      ApiFailureKind.timeout,
+    DioExceptionType.connectionError ||
+    DioExceptionType.badCertificate =>
+      ApiFailureKind.connection,
+    DioExceptionType.cancel => ApiFailureKind.cancelled,
+    DioExceptionType.badResponse => ApiFailureKind.response,
+    DioExceptionType.unknown when response != null => ApiFailureKind.response,
+    DioExceptionType.unknown => ApiFailureKind.unknown,
+  };
+  return AppException(
+    'Network request failed',
+    cause: ApiFailure(
+      kind: kind,
+      statusCode: response?.statusCode,
+      responseData: response?.data,
+    ),
+  );
 }
 
 class ApiResponseTooLargeException implements Exception {

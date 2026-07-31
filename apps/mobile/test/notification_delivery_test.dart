@@ -1,10 +1,10 @@
-import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:my_life_graph/core/capabilities/app_surface_capabilities.dart';
 import 'package:my_life_graph/core/errors/app_exception.dart';
+import 'package:my_life_graph/core/network/api_failure.dart';
 import 'package:my_life_graph/core/theme/app_theme.dart';
 import 'package:my_life_graph/features/notifications/application/notification_delivery_controller.dart';
 import 'package:my_life_graph/features/notifications/data/datasources/notifications_supabase_data_source.dart';
@@ -15,7 +15,7 @@ import 'package:my_life_graph/features/notifications/domain/repositories/notific
 import 'package:my_life_graph/features/notifications/domain/repositories/notifications_repository.dart';
 import 'package:my_life_graph/features/notifications/presentation/pages/notification_settings_page.dart';
 import 'package:my_life_graph/features/notifications/presentation/pages/notifications_page.dart';
-import 'package:my_life_graph/features/notifications/presentation/providers/notifications_providers.dart';
+import 'package:my_life_graph/composition/notifications_providers.dart';
 import 'package:my_life_graph/features/shell/presentation/main_shell.dart';
 
 const _notificationId = '11111111-1111-4111-8111-111111111111';
@@ -206,11 +206,9 @@ void main() {
       final repository = _DeliveryRepository(
         settings: NotificationSettings.fromJson(_settingsJson(enabled: false)),
       )..updateErrors.add(
-          AppException(
+          const AppException(
             'lost',
-            cause: DioException(
-              requestOptions: RequestOptions(path: '/settings'),
-            ),
+            cause: ApiFailure(kind: ApiFailureKind.connection),
           ),
         );
       final controller = NotificationSettingsController(
@@ -244,11 +242,9 @@ void main() {
       final repository = _DeliveryRepository(
         settings: NotificationSettings.fromJson(_settingsJson(enabled: false)),
       )..updateErrors.add(
-          AppException(
+          const AppException(
             'lost',
-            cause: DioException(
-              requestOptions: RequestOptions(path: '/settings'),
-            ),
+            cause: ApiFailure(kind: ApiFailureKind.connection),
           ),
         );
       final controller = NotificationSettingsController(
@@ -665,15 +661,11 @@ class _DeliveryRepository implements NotificationDeliveryRepository {
 }
 
 AppException _httpFailure(int statusCode) {
-  final options = RequestOptions(path: '/settings');
   return AppException(
     'request failed',
-    cause: DioException(
-      requestOptions: options,
-      response: Response<void>(
-        requestOptions: options,
-        statusCode: statusCode,
-      ),
+    cause: ApiFailure(
+      kind: ApiFailureKind.response,
+      statusCode: statusCode,
     ),
   );
 }
