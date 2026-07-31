@@ -3,9 +3,11 @@ from datetime import date
 
 import httpx
 
-from app.api.deps.auth import Principal
+from app.api.deps.auth import Principal, get_token_verifier
+from app.api.deps.services import get_weekly_review_service
 from app.main import create_app
 from app.services.weekly_review_service import WeeklyReviewPeriodError
+from tests.api_test_dependencies import override_dependency
 
 
 class FakeTokenVerifier:
@@ -55,13 +57,11 @@ def not_ready_response() -> dict:
 async def request(method: str, path: str, *, json=None, authenticated: bool = True):
     app = create_app()
     service = FakeWeeklyReviewService()
-    app.state.token_verifier = FakeTokenVerifier()
-    app.state.weekly_review_service = service
+    override_dependency(app, get_token_verifier, FakeTokenVerifier())
+    override_dependency(app, get_weekly_review_service, service)
     transport = httpx.ASGITransport(app=app)
     headers = (
-        {"Authorization": "Bearer valid-weekly-review-token"}
-        if authenticated
-        else {}
+        {"Authorization": "Bearer valid-weekly-review-token"} if authenticated else {}
     )
     async with httpx.AsyncClient(
         transport=transport,

@@ -1,6 +1,9 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.deps.auth import SupabaseTokenVerifier, UnconfiguredTokenVerifier
 from app.api.routes import (
     account,
     briefings,
@@ -21,7 +24,34 @@ from app.api.routes import (
     today,
     weekly_reviews,
 )
+from app.clients.supabase import SupabaseConfigurationError, SupabaseRestClient
+from app.composition import ApplicationComposition
 from app.core.config import settings
+
+
+@asynccontextmanager
+async def _lifespan(app: FastAPI):
+    try:
+        supabase_client = SupabaseRestClient.pooled_from_settings(settings)
+    except SupabaseConfigurationError:
+        app.state.composition = None
+        app.state.token_verifier = UnconfiguredTokenVerifier()
+        yield
+        return
+
+    app.state.composition = None
+    app.state.token_verifier = UnconfiguredTokenVerifier()
+    try:
+        app.state.composition = ApplicationComposition.build(
+            supabase_client=supabase_client,
+            settings=settings,
+        )
+        app.state.token_verifier = SupabaseTokenVerifier(supabase_client)
+        yield
+    finally:
+        await supabase_client.aclose()
+        app.state.composition = None
+        app.state.token_verifier = UnconfiguredTokenVerifier()
 
 
 def create_app() -> FastAPI:
@@ -30,6 +60,7 @@ def create_app() -> FastAPI:
         version="0.1.0",
         docs_url="/docs" if settings.app_env != "production" else None,
         redoc_url=None,
+        lifespan=_lifespan,
     )
 
     app.add_middleware(

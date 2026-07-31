@@ -4,7 +4,8 @@ from uuid import UUID
 
 import httpx
 
-from app.api.deps.auth import Principal
+from app.api.deps.auth import Principal, get_token_verifier
+from app.api.deps.services import get_calendar_integration_service
 from app.main import create_app
 from app.models.calendar_integrations import (
     CalendarConnection,
@@ -17,6 +18,7 @@ from app.models.calendar_integrations import (
     CalendarImportWindow,
 )
 from app.services.calendar_integration_service import CalendarConflictError
+from tests.api_test_dependencies import override_dependency
 
 
 USER_ID = "calendar-user"
@@ -164,13 +166,9 @@ async def _request(
 ):
     app = create_app()
     service = Service(disconnect_conflict=disconnect_conflict)
-    app.state.token_verifier = Verifier()
-    app.state.calendar_integration_service = service
-    headers = (
-        {"Authorization": "Bearer valid-calendar-token"}
-        if authenticated
-        else {}
-    )
+    override_dependency(app, get_token_verifier, Verifier())
+    override_dependency(app, get_calendar_integration_service, service)
+    headers = {"Authorization": "Bearer valid-calendar-token"} if authenticated else {}
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app),
         base_url="http://test",

@@ -1,8 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.api.deps.auth import Principal, get_current_principal
-from app.clients.supabase import SupabaseConfigurationError, SupabaseRestClient
-from app.core.config import settings
+from app.api.deps.services import get_learning_service
 from app.models.learning import (
     FocusReflectionHistoryClearRequest,
     FocusReflectionHistoryClearResponse,
@@ -15,26 +14,11 @@ from app.repositories.learning_repository import (
     LearningPersistenceError,
     LearningPersistenceNotFound,
     LearningPersistenceOutcomeUnknown,
-    SupabaseLearningRepository,
 )
 from app.services.learning_service import LearningContractError, LearningService
 
 
 router = APIRouter(prefix="/learning", tags=["learning"])
-
-
-async def get_learning_service(request: Request) -> LearningService:
-    injected = getattr(request.app.state, "learning_service", None)
-    if injected is not None:
-        return injected
-    try:
-        client = SupabaseRestClient.from_settings(settings)
-    except SupabaseConfigurationError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Personal learning persistence is not configured.",
-        ) from exc
-    return LearningService(repository=SupabaseLearningRepository(client))
 
 
 @router.get("/preferences", response_model=LearningPreferencesState)

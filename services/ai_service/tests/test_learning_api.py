@@ -4,7 +4,8 @@ from uuid import UUID
 
 import httpx
 
-from app.api.deps.auth import Principal
+from app.api.deps.auth import Principal, get_token_verifier
+from app.api.deps.services import get_learning_service
 from app.main import create_app
 from app.models.learning import (
     FocusReflectionHistoryClearResponse,
@@ -18,6 +19,7 @@ from app.repositories.learning_repository import (
     LearningPersistenceOutcomeUnknown,
 )
 from app.services.learning_service import LearningContractError
+from tests.api_test_dependencies import override_dependency
 
 
 USER_ID = "learning-owner"
@@ -57,15 +59,11 @@ class Service:
         return LearningPreferencesUpdateResponse(
             contract_version="learning-preferences-v1",
             revision=request.expected_revision + 1,
-            focus_reflection_prompt_enabled=(
-                request.focus_reflection_prompt_enabled
-            ),
+            focus_reflection_prompt_enabled=(request.focus_reflection_prompt_enabled),
             personal_pattern_analysis_enabled=(
                 request.personal_pattern_analysis_enabled
             ),
-            learned_focus_planning_enabled=(
-                request.learned_focus_planning_enabled
-            ),
+            learned_focus_planning_enabled=(request.learned_focus_planning_enabled),
             updated_at=NOW,
             replayed=False,
         )
@@ -93,13 +91,9 @@ async def _request(
 ):
     app = create_app()
     learning_service = service or Service()
-    app.state.token_verifier = Verifier()
-    app.state.learning_service = learning_service
-    headers = (
-        {"Authorization": "Bearer valid-learning-token"}
-        if authenticated
-        else {}
-    )
+    override_dependency(app, get_token_verifier, Verifier())
+    override_dependency(app, get_learning_service, learning_service)
+    headers = {"Authorization": "Bearer valid-learning-token"} if authenticated else {}
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app),
         base_url="http://test",

@@ -51,6 +51,12 @@ from app.repositories.planner_repository import (
     PlannerProjection,
     PlannerRepository,
 )
+from app.repositories.planning_writes import (
+    PlannerHabitSlotWrite,
+    PlannerProposalWrite,
+    PlannerRevisionWrite,
+    PlannerTaskBlockWrite,
+)
 from app.services.planning_availability import (
     BusySources,
     allocate_task_intervals,
@@ -266,8 +272,8 @@ class PlannerService:
             context=context,
             calendar_enabled=calendar_enabled,
         )
-        task_blocks: list[dict[str, Any]] = []
-        habit_slots: list[dict[str, Any]] = []
+        task_blocks: list[PlannerTaskBlockWrite] = []
+        habit_slots: list[PlannerHabitSlotWrite] = []
         planned_minutes = 0
         unscheduled_minutes = 0
         timing_preference = PlanningTimingProvenance(source="setup")
@@ -314,8 +320,7 @@ class PlannerService:
                     exact_session_blocks=use_study_rhythm,
                     learned_focus_window=(
                         timing_preference.window
-                        if timing_preference.source
-                        == "learned_personal_pattern"
+                        if timing_preference.source == "learned_personal_pattern"
                         else None
                     ),
                 )
@@ -331,26 +336,24 @@ class PlannerService:
                     )
                 for sequence, interval in enumerate(intervals, start=1):
                     task_blocks.append(
-                        {
-                            "id": str(
-                                uuid5(
-                                    NAMESPACE_URL,
-                                    f"{PLANNER_CONTRACT_VERSION}:{request.plan_id}:"
-                                    f"{request.request_id}:task:{sequence}",
-                                ),
+                        PlannerTaskBlockWrite(
+                            id=uuid5(
+                                NAMESPACE_URL,
+                                f"{PLANNER_CONTRACT_VERSION}:{request.plan_id}:"
+                                f"{request.request_id}:task:{sequence}",
                             ),
-                            "sequence": sequence,
-                            "starts_at": interval.starts_at.astimezone(UTC).isoformat(),
-                            "ends_at": interval.ends_at.astimezone(UTC).isoformat(),
-                            "recovery_minutes": interval.recovery_minutes,
-                            "reserved_ends_at": (
+                            sequence=sequence,
+                            starts_at=interval.starts_at.astimezone(UTC),
+                            ends_at=interval.ends_at.astimezone(UTC),
+                            recovery_minutes=interval.recovery_minutes,
+                            reserved_ends_at=(
                                 interval.reserved_ends_at or interval.ends_at
-                            ).astimezone(UTC).isoformat(),
-                            "local_date": interval.starts_at.date().isoformat(),
-                            "planned_minutes": interval.minutes,
-                        },
+                            ).astimezone(UTC),
+                            local_date=interval.starts_at.date(),
+                            planned_minutes=interval.minutes,
+                        ),
                     )
-                planned_minutes = sum(item["planned_minutes"] for item in task_blocks)
+                planned_minutes = sum(item.planned_minutes for item in task_blocks)
                 unscheduled_minutes = request.target.estimated_minutes - planned_minutes
             else:
                 unscheduled_minutes = request.target.estimated_minutes or 0
@@ -368,21 +371,19 @@ class PlannerService:
             )
             for slot in selected:
                 habit_slots.append(
-                    {
-                        "id": str(
-                            uuid5(
-                                NAMESPACE_URL,
-                                f"{PLANNER_CONTRACT_VERSION}:{request.plan_id}:"
-                                f"{request.request_id}:habit:{slot.weekday}",
-                            ),
+                    PlannerHabitSlotWrite(
+                        id=uuid5(
+                            NAMESPACE_URL,
+                            f"{PLANNER_CONTRACT_VERSION}:{request.plan_id}:"
+                            f"{request.request_id}:habit:{slot.weekday}",
                         ),
-                        "weekday": slot.weekday,
-                        "starts_at": slot.starts_at.isoformat(),
-                        "ends_at": slot.ends_at.isoformat(),
-                        "duration_minutes": slot.minutes,
-                    },
+                        weekday=slot.weekday,
+                        starts_at=slot.starts_at,
+                        ends_at=slot.ends_at,
+                        duration_minutes=slot.minutes,
+                    ),
                 )
-            planned_minutes = sum(item["duration_minutes"] for item in habit_slots)
+            planned_minutes = sum(item.duration_minutes for item in habit_slots)
             unscheduled_minutes = len(unplaced) * request.target.duration_minutes
 
         context_fingerprint = _fingerprint(
@@ -422,34 +423,44 @@ class PlannerService:
                 "timing_preference": timing_preference.model_dump(mode="json"),
             },
         )
-        target_payload = request.target.model_dump(mode="json")
-        revision_payload = {
-            "revision": request.base_revision + 1,
-            "base_revision": request.base_revision,
-            "target": target_payload,
-            "timezone": context.timezone,
-            "best_energy_window": context.best_energy_window,
-            "planning_start_on": request.planning_start_on.isoformat(),
-            "planning_fingerprint": _fingerprint(
-                {
-                    "contract_version": PLANNER_CONTRACT_VERSION,
-                    "request": request_input,
-                    "context_fingerprint": context_fingerprint,
-                    "task_blocks": task_blocks,
-                    "habit_slots": habit_slots,
-                },
+        write = PlannerProposalWrite(
+            target_kind=request.target.kind,
+            target_id=request.target.target_id,
+            target=request.target,
+            revision=PlannerRevisionWrite(
+                revision=request.base_revision + 1,
+                base_revision=request.base_revision,
+                target=request.target,
+                timezone=context.timezone,
+                best_energy_window=context.best_energy_window,
+                planning_start_on=request.planning_start_on,
+                planning_fingerprint=_fingerprint(
+                    {
+                        "contract_version": PLANNER_CONTRACT_VERSION,
+                        "request": request_input,
+                        "context_fingerprint": context_fingerprint,
+                        "task_blocks": [
+                            item.model_dump(mode="json") for item in task_blocks
+                        ],
+                        "habit_slots": [
+                            item.model_dump(mode="json") for item in habit_slots
+                        ],
+                    },
+                ),
+                timing_preference=timing_preference,
+                calendar_import_id=(
+                    context.calendar.import_id
+                    if calendar_enabled and context.calendar.import_id
+                    else None
+                ),
+                study_setup_revision=study_setup_revision,
+                recovery_minutes=recovery_minutes,
+                planned_minutes=planned_minutes,
+                unscheduled_minutes=unscheduled_minutes,
             ),
-            "timing_preference": timing_preference.model_dump(mode="json"),
-            "calendar_import_id": (
-                str(context.calendar.import_id)
-                if calendar_enabled and context.calendar.import_id
-                else None
-            ),
-            "study_setup_revision": study_setup_revision,
-            "recovery_minutes": recovery_minutes,
-            "planned_minutes": planned_minutes,
-            "unscheduled_minutes": unscheduled_minutes,
-        }
+            task_blocks=tuple(task_blocks),
+            habit_slots=tuple(habit_slots),
+        )
         try:
             await self._repository.persist_proposal(
                 user_id=user_id,
@@ -457,12 +468,7 @@ class PlannerService:
                 request_fingerprint=request_fingerprint,
                 plan_id=request.plan_id,
                 base_revision=request.base_revision,
-                target_kind=request.target.kind,
-                target_id=request.target.target_id,
-                target_payload=target_payload,
-                revision_payload=revision_payload,
-                task_blocks=task_blocks,
-                habit_slots=habit_slots,
+                write=write,
                 now=now,
             )
         except PlannerPersistenceConflict as exc:
@@ -715,43 +721,6 @@ class PlannerService:
             )
         except PlannerPersistenceNotFound as exc:
             raise PlannerNotFoundError(str(exc)) from exc
-        _validate_overview_bounds(context)
-        zone = _zone(context.timezone)
-        local_date = generated_at.astimezone(zone).date()
-        days = [local_date + timedelta(days=offset) for offset in range(7)]
-        action_plans = _plans_from_projection(context.plans)
-        plan_by_id = {str(plan.id): plan for plan in action_plans}
-        task_titles = _title_map(context.tasks)
-        habit_titles = _title_map(context.habits)
-        day_items: dict[date, list[PlannerDayItem]] = {day: [] for day in days}
-
-        _add_setup_commitments(
-            day_items=day_items,
-            rows=context.schedule_items,
-            days=days,
-            zone=zone,
-        )
-        _add_manual_commitments(
-            day_items=day_items,
-            rows=context.commitments,
-            days=days,
-            zone=zone,
-        )
-        _add_action_reservations(
-            day_items=day_items,
-            plans=action_plans,
-            days=days,
-            zone=zone,
-            task_titles=task_titles,
-            habit_titles=habit_titles,
-        )
-        _add_calendar_items(
-            day_items=day_items,
-            context=context,
-            days=days,
-            zone=zone,
-        )
-
         deadline_response = (
             await self._deadline_plans.list_plans(user_id=user_id)
             if self._deadline_plans is not None
@@ -761,126 +730,174 @@ class PlannerService:
                 plans=[],
             )
         )
-        ongoing_preparation: list[PlannerPreparationSummary] = []
-        for detail in deadline_response.plans:
-            projection = detail.active_revision or detail.pending_revision
-            next_block: datetime | None = None
-            if detail.active_revision is not None:
-                upcoming = [
-                    block
-                    for block in detail.active_revision.blocks
-                    if block.ends_at > generated_at
-                ]
-                if upcoming:
-                    next_block = min(block.starts_at for block in upcoming)
-                for block in detail.active_revision.blocks:
-                    if block.local_date not in day_items:
-                        continue
-                    day_items[block.local_date].append(
-                        PlannerDayItem(
-                            id=block.id,
-                            kind="preparation",
-                            title=detail.plan.title,
-                            source_id=detail.plan.id,
-                            starts_at=block.starts_at,
-                            ends_at=block.ends_at,
-                            recovery_minutes=block.recovery_minutes,
-                            reserved_ends_at=block.reserved_ends_at,
-                            all_day=False,
-                            state=block.state,
-                        ),
-                    )
-            if detail.plan.status in {"draft", "active"}:
-                ongoing_preparation.append(
-                    PlannerPreparationSummary(
-                        plan_id=detail.plan.id,
+        return build_planner_overview(
+            generated_at=generated_at,
+            context=context,
+            deadline_response=deadline_response,
+        )
+
+
+def build_planner_overview(
+    *,
+    generated_at: datetime,
+    context: PlannerOverviewContext,
+    deadline_response: DeadlinePlansResponse,
+) -> PlannerOverviewResponse:
+    _validate_overview_bounds(context)
+    zone = _zone(context.timezone)
+    local_date = generated_at.astimezone(zone).date()
+    days = [local_date + timedelta(days=offset) for offset in range(7)]
+    action_plans = _plans_from_projection(context.plans)
+    plan_by_id = {str(plan.id): plan for plan in action_plans}
+    task_titles = _title_map(context.tasks)
+    habit_titles = _title_map(context.habits)
+    day_items: dict[date, list[PlannerDayItem]] = {day: [] for day in days}
+
+    _add_setup_commitments(
+        day_items=day_items,
+        rows=context.schedule_items,
+        days=days,
+        zone=zone,
+    )
+    _add_manual_commitments(
+        day_items=day_items,
+        rows=context.commitments,
+        days=days,
+        zone=zone,
+    )
+    _add_action_reservations(
+        day_items=day_items,
+        plans=action_plans,
+        days=days,
+        zone=zone,
+        task_titles=task_titles,
+        habit_titles=habit_titles,
+    )
+    _add_calendar_items(
+        day_items=day_items,
+        context=context,
+        days=days,
+        zone=zone,
+    )
+
+    ongoing_preparation: list[PlannerPreparationSummary] = []
+    for detail in deadline_response.plans:
+        projection = detail.active_revision or detail.pending_revision
+        next_block: datetime | None = None
+        if detail.active_revision is not None:
+            upcoming = [
+                block
+                for block in detail.active_revision.blocks
+                if block.ends_at > generated_at
+            ]
+            if upcoming:
+                next_block = min(block.starts_at for block in upcoming)
+            for block in detail.active_revision.blocks:
+                if block.local_date not in day_items:
+                    continue
+                day_items[block.local_date].append(
+                    PlannerDayItem(
+                        id=block.id,
+                        kind="preparation",
                         title=detail.plan.title,
-                        status=detail.plan.status,
-                        remaining_minutes=detail.progress.remaining_minutes,
-                        next_block_starts_at=next_block,
-                        has_pending_preview=detail.pending_revision is not None,
+                        source_id=detail.plan.id,
+                        starts_at=block.starts_at,
+                        ends_at=block.ends_at,
+                        recovery_minutes=block.recovery_minutes,
+                        reserved_ends_at=block.reserved_ends_at,
+                        all_day=False,
+                        state=block.state,
                     ),
                 )
-            if projection is None and detail.plan.status == "active":
-                raise ValueError("Active preparation projection is incomplete.")
-
-        attention_days = _attention_horizon(
-            local_date=local_date,
-            context=context,
-            plans=action_plans,
-            deadline_response=deadline_response,
-            zone=zone,
-        )
-        attention = _attention_items(
-            context=context,
-            plans=action_plans,
-            days=attention_days,
-            zone=zone,
-        )
-        attention.extend(
-            _preparation_attention_items(
-                context=context,
-                deadline_response=deadline_response,
-                days=attention_days,
-                zone=zone,
-                generated_at=generated_at,
-            ),
-        )
-        attention = sorted(
-            {item.id: item for item in attention}.values(),
-            key=lambda item: (item.kind, item.title.casefold(), item.id),
-        )[:500]
-        unscheduled, history = _unscheduled_items(
-            context=context,
-            plans=action_plans,
-            plan_by_id=plan_by_id,
-        )
-        rendered_days: list[PlannerDay] = []
-        for day in days:
-            values = day_items[day]
-            values.sort(
-                key=lambda item: (
-                    item.starts_at
-                    or resolve_local_datetime(
-                        local_date=day,
-                        local_time=time.min,
-                        zone=zone,
-                        source_id=f"planner-item:{item.id}",
-                    ),
-                    _kind_order(item.kind),
-                    item.title.casefold(),
-                    str(item.id),
+        if detail.plan.status in {"draft", "active"}:
+            ongoing_preparation.append(
+                PlannerPreparationSummary(
+                    plan_id=detail.plan.id,
+                    title=detail.plan.title,
+                    status=detail.plan.status,
+                    remaining_minutes=detail.progress.remaining_minutes,
+                    next_block_starts_at=next_block,
+                    has_pending_preview=detail.pending_revision is not None,
                 ),
             )
-            rendered_days.append(PlannerDay(local_date=day, items=values))
-        ongoing_preparation.sort(
-            key=lambda item: (
-                item.next_block_starts_at or datetime.max.replace(tzinfo=UTC),
-                item.title.casefold(),
-                str(item.plan_id),
-            ),
-        )
-        return PlannerOverviewResponse(
-            contract_version=PLANNER_CONTRACT_VERSION,
-            origin="authenticated_backend",
+        if projection is None and detail.plan.status == "active":
+            raise ValueError("Active preparation projection is incomplete.")
+
+    attention_days = _attention_horizon(
+        local_date=local_date,
+        context=context,
+        plans=action_plans,
+        deadline_response=deadline_response,
+        zone=zone,
+    )
+    attention = _attention_items(
+        context=context,
+        plans=action_plans,
+        days=attention_days,
+        zone=zone,
+    )
+    attention.extend(
+        _preparation_attention_items(
+            context=context,
+            deadline_response=deadline_response,
+            days=attention_days,
+            zone=zone,
             generated_at=generated_at,
-            timezone=context.timezone,
-            local_date=local_date,
-            preferences=_preferences_response(
-                preference=context.preference,
-                calendar_import_id=context.calendar.import_id,
-                calendar_available=context.calendar.available,
+        ),
+    )
+    attention = sorted(
+        {item.id: item for item in attention}.values(),
+        key=lambda item: (item.kind, item.title.casefold(), item.id),
+    )[:500]
+    unscheduled, history = _unscheduled_items(
+        context=context,
+        plans=action_plans,
+        plan_by_id=plan_by_id,
+    )
+    rendered_days: list[PlannerDay] = []
+    for day in days:
+        values = day_items[day]
+        values.sort(
+            key=lambda item: (
+                item.starts_at
+                or resolve_local_datetime(
+                    local_date=day,
+                    local_time=time.min,
+                    zone=zone,
+                    source_id=f"planner-item:{item.id}",
+                ),
+                _kind_order(item.kind),
+                item.title.casefold(),
+                str(item.id),
             ),
-            action_plans=action_plans,
-            commitments=[
-                _commitment_from_row(row) for row in context.commitments
-            ],
-            needs_attention=attention,
-            days=rendered_days,
-            ongoing_preparation=ongoing_preparation,
-            unscheduled=unscheduled,
-            history=history,
         )
+        rendered_days.append(PlannerDay(local_date=day, items=values))
+    ongoing_preparation.sort(
+        key=lambda item: (
+            item.next_block_starts_at or datetime.max.replace(tzinfo=UTC),
+            item.title.casefold(),
+            str(item.plan_id),
+        ),
+    )
+    return PlannerOverviewResponse(
+        contract_version=PLANNER_CONTRACT_VERSION,
+        origin="authenticated_backend",
+        generated_at=generated_at,
+        timezone=context.timezone,
+        local_date=local_date,
+        preferences=_preferences_response(
+            preference=context.preference,
+            calendar_import_id=context.calendar.import_id,
+            calendar_available=context.calendar.available,
+        ),
+        action_plans=action_plans,
+        commitments=[_commitment_from_row(row) for row in context.commitments],
+        needs_attention=attention,
+        days=rendered_days,
+        ongoing_preparation=ongoing_preparation,
+        unscheduled=unscheduled,
+        history=history,
+    )
 
 
 _TARGET_ADAPTER = TypeAdapter(PlannerActionTarget)
@@ -939,9 +956,7 @@ def _plans_from_projection(projection: PlannerProjection) -> list[PlannerActionP
         key = str(plan_row["id"])
         revision_rows = revisions_by_plan.get(key, [])
         active_rows = [row for row in revision_rows if row.get("state") == "active"]
-        pending_rows = [
-            row for row in revision_rows if row.get("state") == "proposed"
-        ]
+        pending_rows = [row for row in revision_rows if row.get("state") == "proposed"]
         if len(active_rows) > 1 or len(pending_rows) > 1:
             raise ValueError("Planner revision lifecycle projection is ambiguous.")
         active = (
@@ -1350,9 +1365,8 @@ def _add_setup_commitments(
         starts = _time(row.get("starts_at"))
         ends = _time(row.get("ends_at"))
         for day in days:
-            if (
-                day.isoweekday() != weekday
-                or not recurring_commitment_applies_on(row, day)
+            if day.isoweekday() != weekday or not recurring_commitment_applies_on(
+                row, day
             ):
                 continue
             source_id = UUID(str(row["id"]))
@@ -1740,8 +1754,7 @@ def _pending_target_is_stale(
     if not isinstance(metadata, dict):
         raise ValueError("Habit metadata is invalid.")
     return (
-        row.get("active") is not True
-        or metadata.get("lifecycle", "active") != "active"
+        row.get("active") is not True or metadata.get("lifecycle", "active") != "active"
     )
 
 
@@ -1768,11 +1781,7 @@ def _course_selection_attention(
     return [
         PlannerAttentionItem(
             id=f"study-setup:course-selection:{starts_on.isoformat()}",
-            kind=(
-                "course_selection_overdue"
-                if overdue
-                else "course_selection_open"
-            ),
+            kind=("course_selection_overdue" if overdue else "course_selection_open"),
             target="study_setup",
             title="Choose next semester courses",
             detail=(
@@ -1795,10 +1804,7 @@ def _attention_horizon(
     zone: ZoneInfo,
 ) -> list[date]:
     last_date = local_date + timedelta(days=365)
-    values = {
-        local_date + timedelta(days=offset)
-        for offset in range(28)
-    }
+    values = {local_date + timedelta(days=offset) for offset in range(28)}
 
     def add(candidate: date) -> None:
         if local_date <= candidate <= last_date:
@@ -1859,10 +1865,7 @@ def _preparation_attention_items(
         ):
             result.append(
                 PlannerAttentionItem(
-                    id=(
-                        f"deadline:{detail.plan.id}:study-stale:"
-                        f"{pending.revision}"
-                    ),
+                    id=(f"deadline:{detail.plan.id}:study-stale:{pending.revision}"),
                     kind="stale_preview",
                     target="plan",
                     title=detail.plan.title,
@@ -1879,8 +1882,7 @@ def _preparation_attention_items(
         conflicts = any(
             block.reserved_ends_at > generated_at
             and any(
-                max(block.starts_at, starts_at)
-                < min(block.reserved_ends_at, ends_at)
+                max(block.starts_at, starts_at) < min(block.reserved_ends_at, ends_at)
                 for starts_at, ends_at in authoritative
             )
             for block in revision.blocks
@@ -1903,10 +1905,7 @@ def _preparation_attention_items(
         if revision.study_setup_revision != current_study_revision:
             result.append(
                 PlannerAttentionItem(
-                    id=(
-                        f"deadline:{detail.plan.id}:study-changed:"
-                        f"{revision.revision}"
-                    ),
+                    id=(f"deadline:{detail.plan.id}:study-changed:{revision.revision}"),
                     kind="study_rhythm_changed",
                     target="plan",
                     title=detail.plan.title,
@@ -1966,10 +1965,7 @@ def _authoritative_intervals(
                             starts_at=starts,
                             ends_at=ends,
                             zone=zone,
-                            source_id=(
-                                f"planner-commitment:"
-                                f"{row.get('id', weekday)}"
-                            ),
+                            source_id=(f"planner-commitment:{row.get('id', weekday)}"),
                         ),
                     )
     if calendar_enabled:
@@ -2074,11 +2070,7 @@ def _unscheduled_items(
                 id=UUID(target_id),
                 kind=kind,
                 title=_title(row),
-                reason=(
-                    "released"
-                    if key in released_targets
-                    else "not_planned"
-                ),
+                reason=("released" if key in released_targets else "not_planned"),
                 **_target_summary(kind=kind, row=row),
             )
             if terminal:

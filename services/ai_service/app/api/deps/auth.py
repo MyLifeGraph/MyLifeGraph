@@ -4,11 +4,11 @@ import json
 from datetime import UTC, datetime
 from uuid import UUID
 
-from fastapi import Header, HTTPException, Request, status
+from fastapi import Depends, Header, HTTPException, Request, status
 from pydantic import AwareDatetime, BaseModel
 
+from app.api.deps.supabase import get_supabase_client
 from app.clients.supabase import SupabaseConfigurationError, SupabaseRestClient
-from app.core.config import settings
 
 
 class Principal(BaseModel):
@@ -98,14 +98,14 @@ class TokenVerifier:
         raise NotImplementedError
 
 
-class UnconfiguredTokenVerifier:
+class UnconfiguredTokenVerifier(TokenVerifier):
     """PR1 placeholder until Supabase JWT/user lookup is wired in."""
 
     async def verify(self, token: str) -> Principal | None:
         return None
 
 
-class SupabaseTokenVerifier:
+class SupabaseTokenVerifier(TokenVerifier):
     """Verifies bearer tokens through Supabase Auth's user endpoint."""
 
     def __init__(self, client: SupabaseRestClient) -> None:
@@ -122,14 +122,6 @@ class SupabaseTokenVerifier:
             user_id=user_id,
             authenticated_at=_session_authentication_time(token, user_id=user_id),
         )
-
-
-def get_token_verifier() -> TokenVerifier:
-    try:
-        return SupabaseTokenVerifier(SupabaseRestClient.from_settings(settings))
-    except SupabaseConfigurationError:
-        pass
-    return UnconfiguredTokenVerifier()
 
 
 def _unauthorized() -> HTTPException:
@@ -154,12 +146,21 @@ def extract_bearer_token(authorization: str | None) -> str:
     return trimmed_token
 
 
+async def get_token_verifier(request: Request) -> TokenVerifier:
+    verifier = getattr(request.app.state, "token_verifier", None)
+    if isinstance(verifier, TokenVerifier):
+        return verifier
+    try:
+        return SupabaseTokenVerifier(get_supabase_client(request))
+    except SupabaseConfigurationError:
+        return UnconfiguredTokenVerifier()
+
+
 async def get_current_principal(
-    request: Request,
     authorization: str | None = Header(default=None, alias="Authorization"),
+    verifier: TokenVerifier = Depends(get_token_verifier),
 ) -> Principal:
     token = extract_bearer_token(authorization)
-    verifier = getattr(request.app.state, "token_verifier", get_token_verifier())
     principal = await verifier.verify(token)
     if principal is None:
         raise _unauthorized()

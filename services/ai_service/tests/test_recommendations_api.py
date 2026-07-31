@@ -3,9 +3,11 @@ from datetime import date
 
 import httpx
 
-from app.api.deps.auth import Principal
+from app.api.deps.auth import Principal, get_token_verifier
+from app.api.deps.services import get_recommendation_engine
 from app.main import create_app
 from app.services.recommendation_engine import current_period_key
+from tests.api_test_dependencies import override_dependency
 
 
 class FakeTokenVerifier:
@@ -25,8 +27,9 @@ class FakeRecommendationEngine:
 
 def make_app():
     app = create_app()
-    app.state.token_verifier = FakeTokenVerifier()
-    app.state.recommendation_engine = FakeRecommendationEngine()
+    engine = FakeRecommendationEngine()
+    override_dependency(app, get_token_verifier, FakeTokenVerifier())
+    override_dependency(app, get_recommendation_engine, engine)
     return app
 
 

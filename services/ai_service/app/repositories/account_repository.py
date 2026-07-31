@@ -5,6 +5,10 @@ from typing import Any, Protocol
 import httpx
 
 from app.clients.supabase import SupabaseResponseTooLargeError, SupabaseRestClient
+from app.owner_data_catalog import OwnerDataSource
+
+
+AccountExportTable = OwnerDataSource
 
 
 class AccountPersistenceError(RuntimeError):
@@ -33,15 +37,6 @@ class AccountExportSourceTooLargeError(RuntimeError):
 
 class AccountSettingConflictError(RuntimeError):
     pass
-
-
-@dataclass(frozen=True)
-class AccountExportTable:
-    name: str
-    owner_column: str
-    select: str
-    cursor_column: str
-    watermark_column: str
 
 
 @dataclass(frozen=True)
@@ -210,9 +205,7 @@ class SupabaseAccountRepository:
                 result = await self._replay_account_setting(
                     function="apply_account_preparation_budget_v2",
                     params=params,
-                    outcome_error=(
-                        AccountPreparationBudgetUpdateOutcomeUnknownError
-                    ),
+                    outcome_error=(AccountPreparationBudgetUpdateOutcomeUnknownError),
                 )
             else:
                 raise AccountPersistenceError(
@@ -417,9 +410,7 @@ def _is_exact_delete_result(*, result: object, user_id: str) -> bool:
         return False
     if not isinstance(result["user_id"], str) or result["user_id"] != user_id:
         return False
-    return (
-        result["deleted"] is True and result["not_found"] is False
-    ) or (
+    return (result["deleted"] is True and result["not_found"] is False) or (
         result["deleted"] is False and result["not_found"] is True
     )
 

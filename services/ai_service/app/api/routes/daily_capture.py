@@ -1,10 +1,9 @@
 from datetime import date
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Path, status
 
 from app.api.deps.auth import Principal, get_current_principal
-from app.clients.supabase import SupabaseConfigurationError, SupabaseRestClient
-from app.core.config import settings
+from app.api.deps.services import get_daily_capture_service
 from app.models.daily_capture import (
     DailyCaptureBranch,
     DailyCaptureWriteRequest,
@@ -13,7 +12,6 @@ from app.models.daily_capture import (
 from app.repositories.daily_capture_repository import (
     DailyCaptureConflictError,
     DailyCapturePersistenceError,
-    SupabaseDailyCaptureRepository,
 )
 from app.services.daily_capture_service import (
     DailyCaptureService,
@@ -22,22 +20,6 @@ from app.services.daily_capture_service import (
 
 
 router = APIRouter(prefix="/daily-capture", tags=["daily-capture"])
-
-
-async def get_daily_capture_service(request: Request) -> DailyCaptureService:
-    injected = getattr(request.app.state, "daily_capture_service", None)
-    if injected is not None:
-        return injected
-    try:
-        client = SupabaseRestClient.from_settings(settings)
-    except SupabaseConfigurationError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Daily Capture persistence is not configured.",
-        ) from exc
-    return DailyCaptureService(
-        repository=SupabaseDailyCaptureRepository(client),
-    )
 
 
 @router.put(

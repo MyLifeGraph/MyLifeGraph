@@ -5,7 +5,9 @@ from uuid import UUID
 
 import httpx
 
-from app.api.deps.auth import Principal
+from app.api.deps.auth import Principal, get_token_verifier
+from app.api.deps.coach import get_coach_services
+from app.composition import CoachServices
 from app.main import create_app
 from app.models.coach import (
     CoachCapabilitiesResponse,
@@ -16,6 +18,7 @@ from app.models.coach import (
     CoachMemorySelectionResponse,
     CoachResponse,
 )
+from tests.api_test_dependencies import override_dependency
 
 
 USER_ID = "coach-owner"
@@ -107,16 +110,14 @@ async def _request(
 ):
     app = create_app()
     service = Service()
-    app.state.token_verifier = Verifier()
-    app.state.coach_service = service
-    headers = (
-        {"Authorization": "Bearer valid-coach-token"} if authenticated else {}
+    override_dependency(app, get_token_verifier, Verifier())
+    override_dependency(
+        app,
+        get_coach_services,
+        CoachServices(current=service, legacy=service),
     )
-    request_body = (
-        {"content": content}
-        if content is not None
-        else {"json": json_body}
-    )
+    headers = {"Authorization": "Bearer valid-coach-token"} if authenticated else {}
+    request_body = {"content": content} if content is not None else {"json": json_body}
     if content is not None:
         headers["Content-Type"] = "application/json"
     async with httpx.AsyncClient(

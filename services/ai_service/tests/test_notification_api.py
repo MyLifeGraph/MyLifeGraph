@@ -5,7 +5,8 @@ from uuid import UUID
 import httpx
 import pytest
 
-from app.api.deps.auth import Principal
+from app.api.deps.auth import Principal, get_token_verifier
+from app.api.deps.services import get_notification_service
 from app.main import create_app
 from app.models.notifications import (
     NotificationCategories,
@@ -19,6 +20,7 @@ from app.services.notification_service import (
     NotificationOutcomeUnknownError,
     NotificationServiceUnavailableError,
 )
+from tests.api_test_dependencies import override_dependency
 
 
 USER_ID = "notification-owner"
@@ -110,8 +112,8 @@ def _body(**changes):
 async def _request(*, body=None, outcome=None, authenticated=True):
     app = create_app()
     service = Service(outcome)
-    app.state.token_verifier = Verifier()
-    app.state.notification_service = service
+    override_dependency(app, get_token_verifier, Verifier())
+    override_dependency(app, get_notification_service, service)
     headers = {"Authorization": "Bearer valid"} if authenticated else {}
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app),
@@ -134,8 +136,8 @@ async def _settings_request(
 ):
     app = create_app()
     service = Service(outcome)
-    app.state.token_verifier = Verifier()
-    app.state.notification_service = service
+    override_dependency(app, get_token_verifier, Verifier())
+    override_dependency(app, get_notification_service, service)
     headers = {"Authorization": "Bearer valid"} if authenticated else {}
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app),
@@ -153,8 +155,8 @@ async def _settings_request(
 async def _delivery_request(*, outcome=None, authenticated=True):
     app = create_app()
     service = Service(outcome)
-    app.state.token_verifier = Verifier()
-    app.state.notification_service = service
+    override_dependency(app, get_token_verifier, Verifier())
+    override_dependency(app, get_notification_service, service)
     headers = {"Authorization": "Bearer valid"} if authenticated else {}
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app),
@@ -228,7 +230,9 @@ def test_notification_action_requires_authentication() -> None:
     assert service.calls == []
 
 
-def test_notification_settings_start_disabled_without_reinterpreting_preferences() -> None:
+def test_notification_settings_start_disabled_without_reinterpreting_preferences() -> (
+    None
+):
     response, service = asyncio.run(_settings_request("GET"))
 
     assert response.status_code == 200
@@ -241,7 +245,9 @@ def test_notification_settings_start_disabled_without_reinterpreting_preferences
     assert service.calls == [("get_settings", USER_ID)]
 
 
-def test_notification_settings_patch_derives_owner_and_requires_consent_version() -> None:
+def test_notification_settings_patch_derives_owner_and_requires_consent_version() -> (
+    None
+):
     body = {
         "contract_version": "notification-settings-v1",
         "request_id": str(REQUEST_ID),

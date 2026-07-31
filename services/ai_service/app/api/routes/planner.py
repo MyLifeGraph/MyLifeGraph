@@ -1,10 +1,9 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.api.deps.auth import Principal, get_current_principal
-from app.clients.supabase import SupabaseConfigurationError, SupabaseRestClient
-from app.core.config import settings
+from app.api.deps.services import get_planner_service
 from app.models.planner import (
     PlannerActionMutationRequest,
     PlannerActionPlanResponse,
@@ -17,16 +16,6 @@ from app.models.planner import (
     PlannerPreferencesResponse,
     PlannerPreferencesUpdateRequest,
 )
-from app.repositories.deadline_plan_repository import SupabaseDeadlinePlanRepository
-from app.repositories.learning_repository import SupabaseLearningRepository
-from app.repositories.personal_patterns_repository import (
-    SupabasePersonalPatternsRepository,
-)
-from app.repositories.planner_repository import SupabasePlannerRepository
-from app.services.deadline_plan_service import DeadlinePlanService
-from app.services.learned_timing import LearnedTimingResolver
-from app.services.learning_service import LearningService
-from app.services.personal_patterns_service import PersonalPatternsService
 from app.services.planner_service import (
     PlannerConflictError,
     PlannerNotFoundError,
@@ -36,38 +25,6 @@ from app.services.planner_service import (
 
 
 router = APIRouter(prefix="/planner", tags=["planner"])
-
-
-async def get_planner_service(request: Request) -> PlannerService:
-    injected = getattr(request.app.state, "planner_service", None)
-    if injected is not None:
-        return injected
-    try:
-        client = SupabaseRestClient.from_settings(settings)
-    except SupabaseConfigurationError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Planner persistence is not configured.",
-        ) from exc
-    learning = LearningService(repository=SupabaseLearningRepository(client))
-    personal_patterns = PersonalPatternsService(
-        learning=learning,
-        repository=SupabasePersonalPatternsRepository(client),
-    )
-    return PlannerService(
-        repository=SupabasePlannerRepository(client),
-        deadline_plans=DeadlinePlanService(
-            repository=SupabaseDeadlinePlanRepository(client),
-        ),
-        learned_timing=LearnedTimingResolver(
-            learning=learning,
-            patterns=personal_patterns,
-            pilot_enabled=(
-                settings.learned_focus_planning_pilot_enabled
-                and settings.app_env != "production"
-            ),
-        ),
-    )
 
 
 @router.get(

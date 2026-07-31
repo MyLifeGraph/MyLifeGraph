@@ -8,6 +8,7 @@ from uuid import UUID
 import httpx
 
 from app.clients.supabase import SupabaseRestClient
+from app.repositories.planning_writes import PlannerProposalWrite
 
 
 class PlannerPersistenceConflict(RuntimeError):
@@ -71,8 +72,9 @@ class PlannerPreferenceContext:
 
 
 class PlannerRepository(Protocol):
-    async def get_request_identity(self, *, request_id: UUID) -> dict[str, Any] | None:
-        ...
+    async def get_request_identity(
+        self, *, request_id: UUID
+    ) -> dict[str, Any] | None: ...
 
     async def load_projection(
         self,
@@ -130,12 +132,7 @@ class PlannerRepository(Protocol):
         request_fingerprint: str,
         plan_id: UUID,
         base_revision: int,
-        target_kind: str,
-        target_id: UUID,
-        target_payload: dict[str, Any],
-        revision_payload: dict[str, Any],
-        task_blocks: list[dict[str, Any]],
-        habit_slots: list[dict[str, Any]],
+        write: PlannerProposalWrite,
         now: datetime,
     ) -> dict[str, Any]: ...
 
@@ -472,12 +469,7 @@ class SupabasePlannerRepository:
         request_fingerprint: str,
         plan_id: UUID,
         base_revision: int,
-        target_kind: str,
-        target_id: UUID,
-        target_payload: dict[str, Any],
-        revision_payload: dict[str, Any],
-        task_blocks: list[dict[str, Any]],
-        habit_slots: list[dict[str, Any]],
+        write: PlannerProposalWrite,
         now: datetime,
     ) -> dict[str, Any]:
         return await self._rpc(
@@ -488,12 +480,12 @@ class SupabasePlannerRepository:
                 "p_request_fingerprint": request_fingerprint,
                 "p_plan_id": str(plan_id),
                 "p_base_revision": base_revision,
-                "p_target_kind": target_kind,
-                "p_target_id": str(target_id),
-                "p_target_payload": target_payload,
-                "p_revision_payload": revision_payload,
-                "p_task_blocks": task_blocks,
-                "p_habit_slots": habit_slots,
+                "p_target_kind": write.target_kind,
+                "p_target_id": str(write.target_id),
+                "p_target_payload": write.target_json(),
+                "p_revision_payload": write.revision_json(),
+                "p_task_blocks": write.task_blocks_json(),
+                "p_habit_slots": write.habit_slots_json(),
                 "p_now": now.isoformat(),
             },
         )
@@ -673,10 +665,7 @@ class SupabasePlannerRepository:
                 "limit": "1",
             },
         )
-        if (
-            len(import_rows) != 1
-            or import_rows[0].get("planning_status") != "current"
-        ):
+        if len(import_rows) != 1 or import_rows[0].get("planning_status") != "current":
             return PlannerCalendarProjection(
                 False,
                 connection_id,

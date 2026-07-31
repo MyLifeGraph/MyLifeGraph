@@ -4,7 +4,8 @@ from uuid import UUID
 
 import httpx
 
-from app.api.deps.auth import Principal
+from app.api.deps.auth import Principal, get_token_verifier
+from app.api.deps.services import get_feedback_service
 from app.models.feedback import (
     DecisionFeedback,
     DecisionFeedbackDeleteResponse,
@@ -12,6 +13,7 @@ from app.models.feedback import (
     DecisionFeedbackResponse,
 )
 from app.main import create_app
+from tests.api_test_dependencies import override_dependency
 
 
 FEEDBACK_ID = UUID("33333333-3333-4333-8333-333333333333")
@@ -67,8 +69,8 @@ def _feedback():
 async def _request(method, path, *, json=None, authenticated=True):
     app = create_app()
     service = Service()
-    app.state.token_verifier = Verifier()
-    app.state.feedback_service = service
+    override_dependency(app, get_token_verifier, Verifier())
+    override_dependency(app, get_feedback_service, service)
     transport = httpx.ASGITransport(app=app)
     headers = {"Authorization": "Bearer valid"} if authenticated else {}
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:

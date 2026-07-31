@@ -24,7 +24,6 @@ from app.models.personal_patterns import (
     PersonalPatternsWindow,
 )
 from app.repositories.personal_patterns_repository import (
-    PersonalPatternsPersistenceError,
     PersonalPatternsRepository,
 )
 from app.services.daily_capture_parser import (

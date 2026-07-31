@@ -5,6 +5,7 @@ from datetime import UTC, date, datetime, timedelta
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
+from app.models.deadline_plans import DeadlinePlansResponse
 from app.models.planner import PlannerActionProposalRequest
 from app.models.planning_timing import PlanningTimingProvenance
 from app.repositories.planner_repository import (
@@ -19,6 +20,7 @@ from app.services.planner_service import (
     _add_setup_commitments,
     _attention_items,
     _course_selection_attention,
+    build_planner_overview,
 )
 
 
@@ -67,6 +69,16 @@ class Repository:
 
     async def persist_proposal(self, **values):
         self.persist_calls += 1
+        write = values["write"]
+        values = {
+            **values,
+            "target_kind": write.target_kind,
+            "target_id": write.target_id,
+            "target_payload": write.target_json(),
+            "revision_payload": write.revision_json(),
+            "task_blocks": write.task_blocks_json(),
+            "habit_slots": write.habit_slots_json(),
+        }
         now = values["now"]
         revision = values["revision_payload"]
         timing = revision["timing_preference"]
@@ -103,12 +115,8 @@ class Repository:
                     "timing_evidence_count": timing["evidence_count"],
                     "timing_evidence_starts_on": timing["evidence_starts_on"],
                     "timing_evidence_ends_on": timing["evidence_ends_on"],
-                    "timing_evidence_fingerprint": timing[
-                        "evidence_fingerprint"
-                    ],
-                    "timing_fell_back_to_setup": timing[
-                        "fell_back_to_setup"
-                    ],
+                    "timing_evidence_fingerprint": timing["evidence_fingerprint"],
+                    "timing_fell_back_to_setup": timing["fell_back_to_setup"],
                     "timing_warning": timing["warning"],
                     "calendar_import_id": revision["calendar_import_id"],
                     "study_setup_revision": revision["study_setup_revision"],
@@ -326,10 +334,7 @@ def test_task_preview_persists_exact_learned_timing_and_habit_does_not_use_it() 
         habit_service.propose(user_id=USER_ID, request=_habit_request()),
     )
     assert habit_response.plan.pending_revision is not None
-    assert (
-        habit_response.plan.pending_revision.timing_preference.source
-        == "setup"
-    )
+    assert habit_response.plan.pending_revision.timing_preference.source == "setup"
     assert habit_timing.resolve_calls == 0
 
 
@@ -465,10 +470,13 @@ def test_course_selection_attention_is_local_date_bounded_and_completed() -> Non
         },
     }
 
-    assert _course_selection_attention(
-        study_setup,
-        local_date=date(2026, 8, 14),
-    ) == []
+    assert (
+        _course_selection_attention(
+            study_setup,
+            local_date=date(2026, 8, 14),
+        )
+        == []
+    )
     open_items = _course_selection_attention(
         study_setup,
         local_date=date(2026, 8, 15),
@@ -600,6 +608,46 @@ def test_overview_marks_preview_stale_when_calendar_preference_changes() -> None
 
     assert [item.kind for item in attention] == ["stale_preview"]
     assert "calendar setting" in attention[0].detail
+
+
+def test_overview_builder_is_pure_and_independent_of_repository() -> None:
+    context = PlannerOverviewContext(
+        timezone="UTC",
+        best_energy_window="morning",
+        preference=None,
+        calendar=PlannerCalendarProjection(
+            available=False,
+            connection_id=None,
+            import_id=None,
+            timed_events=[],
+            all_day_events=[],
+        ),
+        schedule_items=[],
+        commitments=[],
+        tasks=[],
+        habits=[],
+        plans=PlannerProjection([], [], [], []),
+    )
+    deadline_response = DeadlinePlansResponse(
+        contract_version="deadline-plan-v1",
+        origin="authenticated_backend",
+        plans=[],
+    )
+
+    first = build_planner_overview(
+        generated_at=NOW,
+        context=context,
+        deadline_response=deadline_response,
+    )
+    second = build_planner_overview(
+        generated_at=NOW,
+        context=context,
+        deadline_response=deadline_response,
+    )
+
+    assert first == second
+    assert first.local_date == NOW.date()
+    assert len(first.days) == 7
 
 
 def test_overview_shows_setup_commitment_only_inside_semester_dates() -> None:

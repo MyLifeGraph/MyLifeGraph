@@ -3,7 +3,8 @@ from datetime import UTC, date, datetime
 
 import httpx
 
-from app.api.deps.auth import Principal
+from app.api.deps.auth import Principal, get_token_verifier
+from app.api.deps.services import get_today_overview_service
 from app.main import create_app
 from app.models.today_overview import (
     TodayCheckIns,
@@ -16,6 +17,7 @@ from app.models.today_overview import (
     TodayTasks,
     TodayTasksV2,
 )
+from tests.api_test_dependencies import override_dependency
 
 
 class Verifier:
@@ -100,8 +102,8 @@ class Service:
 async def _request(*, authenticated=True, path="/v1/today/overview"):
     app = create_app()
     service = Service()
-    app.state.token_verifier = Verifier()
-    app.state.today_overview_service = service
+    override_dependency(app, get_token_verifier, Verifier())
+    override_dependency(app, get_today_overview_service, service)
     headers = {"Authorization": "Bearer today-token"} if authenticated else {}
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app),

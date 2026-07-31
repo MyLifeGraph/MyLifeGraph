@@ -3,10 +3,10 @@ import json
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from decimal import Decimal
 from uuid import UUID
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from app.core.lossless_json import lossless_json_text
 from app.models.account import (
     ACCOUNT_EXPORT_CONTRACT_VERSION,
     ACCOUNT_EXPORT_MAX_JSON_BYTES,
@@ -23,18 +23,23 @@ from app.models.account import (
     DAILY_PREPARATION_BUDGET_MINUTES_MAX,
     DAILY_PREPARATION_BUDGET_MINUTES_MIN,
 )
+from app.owner_data_catalog import (
+    ACCOUNT_EXPORT_TABLES,
+    OWNER_DATA_PAGE_BYTE_CUSHION,
+    OWNER_DATA_PAGE_SIZE,
+    OWNER_DATA_WATERMARK_MAX_BYTES,
+)
 from app.repositories.account_repository import (
     AccountExportSourceTooLargeError,
-    AccountExportTable,
     AccountNotFoundError,
     AccountPersistenceError,
     AccountRepository,
 )
 
 
-ACCOUNT_EXPORT_PAGE_SIZE = 1_000
-ACCOUNT_EXPORT_PAGE_BYTE_CUSHION = 4096
-ACCOUNT_EXPORT_WATERMARK_MAX_BYTES = 4096
+ACCOUNT_EXPORT_PAGE_SIZE = OWNER_DATA_PAGE_SIZE
+ACCOUNT_EXPORT_PAGE_BYTE_CUSHION = OWNER_DATA_PAGE_BYTE_CUSHION
+ACCOUNT_EXPORT_WATERMARK_MAX_BYTES = OWNER_DATA_WATERMARK_MAX_BYTES
 
 
 class InvalidAccountTimezoneError(ValueError):
@@ -53,170 +58,6 @@ class AccountExportTooLargeError(RuntimeError):
 class PreparedAccountExport:
     envelope: AccountExportResponse
     content: bytes
-
-
-def _table(
-    name: str,
-    select: str,
-    *,
-    owner_column: str = "user_id",
-    cursor_column: str = "id",
-    watermark_column: str = "created_at",
-) -> AccountExportTable:
-    return AccountExportTable(
-        name=name,
-        owner_column=owner_column,
-        select=select,
-        cursor_column=cursor_column,
-        watermark_column=watermark_column,
-    )
-
-
-ACCOUNT_EXPORT_TABLES = (
-    _table(
-        "profiles",
-        "id,email,display_name,timezone,daily_preparation_budget_minutes,"
-        "timezone_revision,preparation_budget_revision,"
-        "role,auth_provider,"
-        "onboarding_completed_at,setup_revision,created_at,updated_at",
-        owner_column="id",
-        cursor_column="id",
-    ),
-    _table(
-        "notification_preferences",
-        "user_id,focus_prompts_enabled,recovery_prompts_enabled,"
-        "weekly_summary_enabled,quiet_hours_start,quiet_hours_end,"
-        "in_app_delivery_enabled,in_app_delivery_consent_version,"
-        "in_app_delivery_consented_at,in_app_delivery_disabled_at,"
-        "daily_notification_limit,"
-        "created_at,updated_at",
-        cursor_column="user_id",
-    ),
-    _table(
-        "learning_preferences",
-        "user_id,contract_version,revision,focus_reflection_prompt_enabled,"
-        "personal_pattern_analysis_enabled,learned_focus_planning_enabled,"
-        "created_at,updated_at",
-        cursor_column="user_id",
-    ),
-    _table("daily_logs", "*"),
-    _table("behavioral_events", "*"),
-    _table("lifestyle_entries", "*"),
-    _table("tasks", "*"),
-    _table("schedule_items", "*"),
-    _table("notifications", "*"),
-    _table(
-        "coach_messages",
-        "id,user_id,request_id,contract_version,role,content,metadata,created_at",
-    ),
-    _table("memory_entries", "*"),
-    _table("ai_insights", "*"),
-    _table("recommendations", "*", watermark_column="generated_at"),
-    _table("skillset_profiles", "*", watermark_column="generated_at"),
-    _table("goals", "*"),
-    _table("habits", "*"),
-    _table("habit_logs", "*"),
-    _table("focus_sessions", "*"),
-    _table("focus_session_reflections", "*", cursor_column="focus_session_id"),
-    _table("intake_responses", "*"),
-    _table(
-        "study_setup_profiles",
-        "user_id,contract_version,focus_minutes,recovery_minutes,"
-        "preparation_items,current_semester,next_semester,setup_revision,"
-        "created_at,updated_at",
-        cursor_column="user_id",
-    ),
-    _table(
-        "user_state_snapshots",
-        "*",
-        watermark_column="generated_at",
-    ),
-    _table("daily_briefings", "*"),
-    _table("decision_feedback", "*"),
-    _table("weekly_reviews", "*"),
-    _table(
-        "calendar_connections",
-        "id,user_id,contract_version,origin,source_kind,source_label,status,"
-        "consent_version,read_calendar_events,store_event_basics,provider_writes,"
-        "llm_processing,consented_at,connected_at,disconnected_at,"
-        "imported_data_deleted_at,last_import_id,created_at,updated_at",
-    ),
-    _table(
-        "calendar_imports",
-        "id,user_id,connection_id,contract_version,origin,source_kind,"
-        "window_starts_on,window_ends_before,timezone,accepted_count,"
-        "cancelled_count,out_of_window_count,unsupported_recurring_count,"
-        "invalid_count,profile_timezone_revision,planning_status,"
-        "imported_at,created_at",
-    ),
-    _table(
-        "calendar_events",
-        "id,user_id,connection_id,import_id,contract_version,origin,source_kind,"
-        "source_fingerprint,title,location,event_kind,busy_status,event_status,"
-        "event_timezone,timezone_source,starts_at,ends_at,local_starts_at,"
-        "local_ends_at,starts_on,ends_on,last_modified_at,imported_at,"
-        "last_seen_at,created_at,updated_at",
-    ),
-    _table(
-        "coach_requests",
-        "request_id,user_id,contract_version,context_scope,local_date,state,"
-        "provider,provider_mode,model_requested,model_reported,model_source,"
-        "prompt_version,context_version,response,used_context,created_at,"
-        "completed_at,failed_at,deleted_at,updated_at",
-        cursor_column="request_id",
-    ),
-    _table(
-        "coach_usage_events",
-        "request_id,user_id,local_date,outcome,provider,provider_mode,"
-        "model_requested,model_reported,model_source,error_code,counters,created_at",
-        cursor_column="request_id",
-    ),
-    _table(
-        "coach_memory_selections",
-        "user_id,memory_id,selection_version,selected_at",
-        cursor_column="memory_id",
-        watermark_column="selected_at",
-    ),
-    _table(
-        "deadline_plans",
-        "id,user_id,contract_version,origin,status,kind,title,managed_task_id,"
-        "original_estimated_total_minutes,original_credited_prior_minutes,"
-        "current_revision,latest_revision,first_activated_at,completed_at,"
-        "cancelled_at,attention_reasons,created_at,updated_at",
-    ),
-    _table(
-        "deadline_plan_revisions",
-        "id,user_id,plan_id,revision,base_revision,state,kind,title,deadline_at,"
-        "estimated_total_minutes,credited_prior_minutes,preferred_session_minutes,"
-        "max_daily_minutes,planning_start_on,buffer_days,source_kind,"
-        "source_calendar_event_id,source_calendar_event_fingerprint,"
-        "use_calendar_availability,availability_connection_id,"
-        "availability_import_id,timezone,best_energy_window,planning_fingerprint,"
-        "timing_preference_source,timing_preference_window,timing_evidence_count,"
-        "timing_evidence_starts_on,timing_evidence_ends_on,"
-        "timing_evidence_fingerprint,timing_fell_back_to_setup,timing_warning,"
-        "study_setup_revision,recovery_minutes,"
-        "tracked_focus_minutes_at_proposal,remaining_minutes_at_proposal,"
-        "planned_minutes,unscheduled_minutes,timezone_revision,created_at,"
-        "activated_at,superseded_at",
-    ),
-    _table(
-        "deadline_plan_blocks",
-        "id,user_id,plan_id,revision,sequence,reservation_state,starts_at,ends_at,"
-        "reserved_ends_at,local_date,local_start_time,local_end_time,"
-        "planned_minutes,recovery_minutes,created_at,updated_at",
-    ),
-    _table(
-        "planner_preferences",
-        "user_id,contract_version,use_calendar_busy_time,created_at,updated_at",
-        cursor_column="user_id",
-    ),
-    _table("planner_action_plans", "*"),
-    _table("planner_action_plan_revisions", "*"),
-    _table("planner_task_blocks", "*"),
-    _table("planner_habit_slots", "*"),
-    _table("planner_commitments", "*"),
-)
 
 
 ACCOUNT_EXPORT_LEDGER_POLICY = AccountExportLedgerPolicy(
@@ -344,9 +185,7 @@ class AccountService:
             while True:
                 remaining = ACCOUNT_EXPORT_MAX_ROWS_PER_TABLE - len(rows)
                 request_limit = min(ACCOUNT_EXPORT_PAGE_SIZE, remaining + 1)
-                response_budget = (
-                    ACCOUNT_EXPORT_MAX_JSON_BYTES - estimated_json_bytes
-                )
+                response_budget = ACCOUNT_EXPORT_MAX_JSON_BYTES - estimated_json_bytes
                 source_page_bound = max(
                     2,
                     min(
@@ -503,8 +342,7 @@ def _validate_export_configuration() -> None:
     )
     if (
         configured_sanitized != ACCOUNT_EXPORT_SANITIZED_TABLES
-        or ACCOUNT_EXPORT_LEDGER_POLICY.omitted_tables
-        != ACCOUNT_EXPORT_OMITTED_TABLES
+        or ACCOUNT_EXPORT_LEDGER_POLICY.omitted_tables != ACCOUNT_EXPORT_OMITTED_TABLES
     ):
         raise AccountPersistenceError(
             "Account export contract configuration is invalid.",
@@ -534,51 +372,8 @@ def _compact_json_bytes(value: AccountExportResponse | dict[str, object]) -> byt
         else value
     )
     try:
-        return _lossless_json_text(serializable, depth=0).encode("utf-8")
+        return lossless_json_text(serializable).encode("utf-8")
     except (RecursionError, TypeError, ValueError) as exc:
         raise AccountPersistenceError(
             "Account export persistence returned invalid JSON data.",
         ) from exc
-
-
-def _lossless_json_text(value: object, *, depth: int) -> str:
-    if depth > 64:
-        raise ValueError("Account export JSON nesting is too deep.")
-    if value is None:
-        return "null"
-    if value is True:
-        return "true"
-    if value is False:
-        return "false"
-    if isinstance(value, str):
-        return json.dumps(value, ensure_ascii=False)
-    if isinstance(value, int):
-        return str(value)
-    if isinstance(value, Decimal):
-        if not value.is_finite():
-            raise ValueError("Account export contains a non-finite number.")
-        return str(value)
-    if isinstance(value, float):
-        return json.dumps(value, allow_nan=False, separators=(",", ":"))
-    if isinstance(value, datetime):
-        if value.tzinfo is None:
-            raise ValueError("Account export contains a naive timestamp.")
-        timestamp = value.isoformat()
-        if value.utcoffset() == UTC.utcoffset(value):
-            timestamp = timestamp.replace("+00:00", "Z")
-        return json.dumps(timestamp, ensure_ascii=False)
-    if isinstance(value, (list, tuple)):
-        return "[" + ",".join(
-            _lossless_json_text(item, depth=depth + 1) for item in value
-        ) + "]"
-    if isinstance(value, dict):
-        chunks: list[str] = []
-        for key, item in value.items():
-            if not isinstance(key, str):
-                raise TypeError("Account export JSON keys must be strings.")
-            chunks.append(
-                f"{json.dumps(key, ensure_ascii=False)}:"
-                f"{_lossless_json_text(item, depth=depth + 1)}",
-            )
-        return "{" + ",".join(chunks) + "}"
-    raise TypeError("Account export contains a non-JSON value.")

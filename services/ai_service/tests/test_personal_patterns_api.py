@@ -3,7 +3,8 @@ from datetime import UTC, date, datetime, timedelta
 
 import httpx
 
-from app.api.deps.auth import Principal
+from app.api.deps.auth import Principal, get_token_verifier
+from app.api.deps.services import get_personal_patterns_service
 from app.main import create_app
 from app.models.personal_patterns import (
     LearnedFocusPlannerPreference,
@@ -11,6 +12,7 @@ from app.models.personal_patterns import (
     PersonalPatternsSample,
     PersonalPatternsWindow,
 )
+from tests.api_test_dependencies import override_dependency
 
 
 NOW = datetime(2026, 7, 26, 12, tzinfo=UTC)
@@ -71,11 +73,9 @@ class Service:
 async def _get(*, authenticated: bool):
     app = create_app()
     service = Service()
-    app.state.token_verifier = Verifier()
-    app.state.personal_patterns_service = service
-    headers = (
-        {"Authorization": "Bearer patterns-token"} if authenticated else {}
-    )
+    override_dependency(app, get_token_verifier, Verifier())
+    override_dependency(app, get_personal_patterns_service, service)
+    headers = {"Authorization": "Bearer patterns-token"} if authenticated else {}
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app),
         base_url="http://test",

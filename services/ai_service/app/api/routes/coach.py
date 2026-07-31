@@ -8,7 +8,8 @@ from fastapi.responses import StreamingResponse
 from pydantic import ValidationError
 
 from app.api.deps.auth import Principal, get_current_principal
-from app.api.deps.coach import get_coach_agent_service, get_coach_service
+from app.api.deps.coach import get_coach_services
+from app.composition import CoachServices
 from app.models.coach import (
     CoachAgentCapabilitiesResponse,
     CoachAgentHistoryResponse,
@@ -25,7 +26,7 @@ from app.models.coach import (
     CoachResponse,
 )
 from app.services.coach_agent_service import CoachAgentService
-from app.services.coach_service import CoachService, CoachServiceError
+from app.services.coach_service import CoachServiceError
 
 
 router = APIRouter(prefix="/coach", tags=["coach"])
@@ -44,18 +45,11 @@ _ACTIVITY_MESSAGES = {
     response_model=CoachAgentCapabilitiesResponse | CoachCapabilitiesResponse,
 )
 async def get_coach_capabilities(
-    http_request: Request,
     principal: Principal = Depends(get_current_principal),
+    services: CoachServices = Depends(get_coach_services),
 ) -> CoachAgentCapabilitiesResponse | CoachCapabilitiesResponse:
     try:
-        legacy = getattr(http_request.app.state, "coach_service", None)
-        if (
-            getattr(http_request.app.state, "coach_agent_service", None) is None
-            and legacy is not None
-        ):
-            return await legacy.capabilities(user_id=principal.user_id)
-        service = await get_coach_agent_service(http_request)
-        return await service.capabilities(user_id=principal.user_id)
+        return await services.current.capabilities(user_id=principal.user_id)
     except CoachServiceError as exc:
         raise _http_error(exc) from exc
     except Exception as exc:
@@ -69,19 +63,18 @@ async def get_coach_capabilities(
 async def respond_to_coach(
     http_request: Request,
     principal: Principal = Depends(get_current_principal),
+    services: CoachServices = Depends(get_coach_services),
 ) -> CoachAgentResponse | CoachResponse:
     raw = await _read_json_object(http_request)
     try:
         if raw.get("contract_version") == "coach-request-v3":
             request = CoachAgentRequest.model_validate(raw)
-            agent_service = await get_coach_agent_service(http_request)
-            return await agent_service.respond(
+            return await services.current.respond(
                 user_id=principal.user_id,
                 request=request,
             )
         request = CoachRequest.model_validate(raw)
-        legacy_service = await get_coach_service(http_request)
-        return await legacy_service.respond(
+        return await services.legacy.respond(
             user_id=principal.user_id,
             request=request,
         )
@@ -97,7 +90,7 @@ async def respond_to_coach(
 async def stream_coach_response(
     http_request: Request,
     principal: Principal = Depends(get_current_principal),
-    service: CoachAgentService = Depends(get_coach_agent_service),
+    services: CoachServices = Depends(get_coach_services),
 ) -> StreamingResponse:
     raw = await _read_json_object(http_request)
     try:
@@ -106,7 +99,7 @@ async def stream_coach_response(
         raise _invalid_request() from exc
     return StreamingResponse(
         _stream_turn(
-            service=service,
+            service=services.current,
             user_id=principal.user_id,
             request=request,
         ),
@@ -123,18 +116,11 @@ async def stream_coach_response(
     response_model=CoachAgentHistoryResponse | CoachHistoryResponse,
 )
 async def get_coach_history(
-    http_request: Request,
     principal: Principal = Depends(get_current_principal),
+    services: CoachServices = Depends(get_coach_services),
 ) -> CoachAgentHistoryResponse | CoachHistoryResponse:
     try:
-        legacy = getattr(http_request.app.state, "coach_service", None)
-        if (
-            getattr(http_request.app.state, "coach_agent_service", None) is None
-            and legacy is not None
-        ):
-            return await legacy.history(user_id=principal.user_id)
-        service = await get_coach_agent_service(http_request)
-        return await service.history(user_id=principal.user_id)
+        return await services.current.history(user_id=principal.user_id)
     except CoachServiceError as exc:
         raise _http_error(exc) from exc
     except Exception as exc:
@@ -145,15 +131,11 @@ async def get_coach_history(
 async def delete_coach_history(
     http_request: Request,
     principal: Principal = Depends(get_current_principal),
+    services: CoachServices = Depends(get_coach_services),
 ) -> CoachHistoryDeleteResponse:
     await _require_empty_body(http_request)
     try:
-        service = (
-            getattr(http_request.app.state, "coach_agent_service", None)
-            or getattr(http_request.app.state, "coach_service", None)
-            or await get_coach_agent_service(http_request)
-        )
-        return await service.delete_history(user_id=principal.user_id)
+        return await services.current.delete_history(user_id=principal.user_id)
     except CoachServiceError as exc:
         raise _http_error(exc) from exc
     except Exception as exc:
@@ -164,12 +146,11 @@ async def delete_coach_history(
 # never calls these endpoints and no V3 request can carry their mode selection.
 @router.get("/context-options", response_model=CoachContextOptionsResponse)
 async def get_legacy_coach_context_options(
-    http_request: Request,
     principal: Principal = Depends(get_current_principal),
+    services: CoachServices = Depends(get_coach_services),
 ) -> CoachContextOptionsResponse:
-    service = await get_coach_service(http_request)
     try:
-        return await service.context_options(user_id=principal.user_id)
+        return await services.legacy.context_options(user_id=principal.user_id)
     except CoachServiceError as exc:
         raise _http_error(exc) from exc
     except Exception as exc:
@@ -184,15 +165,15 @@ async def select_legacy_coach_memory(
     memory_id: str,
     http_request: Request,
     principal: Principal = Depends(get_current_principal),
+    services: CoachServices = Depends(get_coach_services),
 ) -> CoachMemorySelectionResponse:
     raw = await _read_json_object(http_request)
     try:
         selection = CoachMemorySelectionRequest.model_validate(raw)
     except ValidationError as exc:
         raise _invalid_request() from exc
-    service = await get_coach_service(http_request)
     try:
-        return await service.set_memory_selection(
+        return await services.legacy.set_memory_selection(
             user_id=principal.user_id,
             memory_id=_parse_uuid(memory_id),
             selected=selection.selected,
@@ -205,12 +186,11 @@ async def select_legacy_coach_memory(
 
 @router.get("/memories", response_model=CoachMemorySelectionResponse)
 async def get_legacy_coach_memories(
-    http_request: Request,
     principal: Principal = Depends(get_current_principal),
+    services: CoachServices = Depends(get_coach_services),
 ) -> CoachMemorySelectionResponse:
-    service = await get_coach_service(http_request)
     try:
-        return await service.memories(user_id=principal.user_id)
+        return await services.legacy.memories(user_id=principal.user_id)
     except CoachServiceError as exc:
         raise _http_error(exc) from exc
     except Exception as exc:
@@ -225,11 +205,11 @@ async def deselect_legacy_coach_memory(
     memory_id: str,
     http_request: Request,
     principal: Principal = Depends(get_current_principal),
+    services: CoachServices = Depends(get_coach_services),
 ) -> CoachMemorySelectionResponse:
     await _require_empty_body(http_request)
-    service = await get_coach_service(http_request)
     try:
-        return await service.set_memory_selection(
+        return await services.legacy.set_memory_selection(
             user_id=principal.user_id,
             memory_id=_parse_uuid(memory_id),
             selected=False,
@@ -250,9 +230,7 @@ async def _stream_turn(
 
     async def activity(message: str) -> None:
         safe = (
-            message
-            if message in _ACTIVITY_MESSAGES
-            else "Working with personal data …"
+            message if message in _ACTIVITY_MESSAGES else "Working with personal data …"
         )
         await queue.put(("activity", {"message": safe}))
 

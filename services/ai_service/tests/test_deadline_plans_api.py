@@ -4,7 +4,8 @@ from uuid import UUID
 
 import httpx
 
-from app.api.deps.auth import Principal
+from app.api.deps.auth import Principal, get_token_verifier
+from app.api.deps.services import get_deadline_plan_service
 from app.main import create_app
 from app.models.deadline_plans import (
     DeadlinePlanIdentity,
@@ -19,6 +20,7 @@ from app.models.deadline_plans import (
     PreparationWorkloadResponse,
 )
 from app.services.deadline_plan_service import DeadlinePlanConflictError
+from tests.api_test_dependencies import override_dependency
 
 
 USER_ID = "deadline-owner"
@@ -195,8 +197,8 @@ def _proposal() -> dict[str, object]:
 async def _request(method, path, *, json=None, authenticated=True, conflict=False):
     app = create_app()
     service = Service(conflict=conflict)
-    app.state.token_verifier = Verifier()
-    app.state.deadline_plan_service = service
+    override_dependency(app, get_token_verifier, Verifier())
+    override_dependency(app, get_deadline_plan_service, service)
     headers = {"Authorization": "Bearer deadline-token"} if authenticated else {}
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app),
@@ -241,8 +243,7 @@ def test_deadline_routes_derive_owner_and_keep_exact_envelopes() -> None:
     )
     assert workload_detail.status_code == 200
     assert (
-        workload_detail.json()["contract_version"]
-        == "preparation-workload-detail-v1"
+        workload_detail.json()["contract_version"] == "preparation-workload-detail-v1"
     )
     assert workload_detail.json()["contributions"][0]["plan_id"] == str(PLAN_ID)
     assert detail_service.calls == [

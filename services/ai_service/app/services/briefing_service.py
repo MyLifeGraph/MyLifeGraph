@@ -596,7 +596,6 @@ def _task_candidate(
     estimate = _bounded_int(task.get("estimated_minutes"), minimum=5, maximum=480)
     priority = str(task.get("priority") or "medium")
     deadline = _parse_optional_date(task.get("deadline"))
-    metadata = task.get("metadata") if isinstance(task.get("metadata"), dict) else {}
     score = {"low": 100, "medium": 180, "high": 270, "critical": 360}.get(
         priority,
         150,

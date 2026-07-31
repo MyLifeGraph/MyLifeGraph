@@ -47,6 +47,25 @@ class _AsyncClient:
         return _Response(self.content_range, self.preference_applied)
 
 
+class _SharedAsyncClient:
+    def __init__(self) -> None:
+        self.head_calls = []
+        self.close_calls = 0
+
+    async def head(self, url, *, params, headers):
+        self.head_calls.append(
+            {
+                "url": url,
+                "params": params,
+                "headers": headers,
+            },
+        )
+        return _Response("0-0/123", "count=exact")
+
+    async def aclose(self) -> None:
+        self.close_calls += 1
+
+
 def _client() -> SupabaseRestClient:
     return SupabaseRestClient(
         url="http://supabase.test",
@@ -84,6 +103,36 @@ def test_exact_count_uses_postgrest_head_without_transferring_rows(
     assert instance.head_call["headers"]["Prefer"] == "count=exact"
     assert instance.head_call["headers"]["Range-Unit"] == "items"
     assert instance.head_call["headers"]["Range"] == "0-0"
+
+
+def test_injected_http_pool_is_reused_and_closed_exactly_once() -> None:
+    transport = _SharedAsyncClient()
+    client = SupabaseRestClient(
+        url="http://supabase.test",
+        service_role_key="service-role",
+        timeout_seconds=7,
+        http_client=transport,
+    )
+
+    async def exercise() -> None:
+        assert await client.count_exact(
+            "focus_sessions",
+            params={"user_id": "eq.owner"},
+        ) == 123
+        assert await client.count_exact(
+            "tasks",
+            params={"user_id": "eq.owner"},
+        ) == 123
+        await client.aclose()
+        await client.aclose()
+
+    asyncio.run(exercise())
+
+    assert [call["url"] for call in transport.head_calls] == [
+        "http://supabase.test/rest/v1/focus_sessions",
+        "http://supabase.test/rest/v1/tasks",
+    ]
+    assert transport.close_calls == 1
 
 
 def test_exact_count_accepts_postgrest_empty_range(monkeypatch) -> None:

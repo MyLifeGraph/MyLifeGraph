@@ -7,6 +7,7 @@ import httpx
 import pytest
 
 from app.api.routes import scheduled
+from app.api.deps.services import get_scheduled_refresh_service
 from app.main import create_app
 from app.models.notifications import NotificationGenerationResult
 from app.models.recommendations import RecommendationListResponse
@@ -17,6 +18,7 @@ from app.repositories.scheduled_refresh_repository import (
 )
 from app.services.briefing_service import BriefingPreparationError
 from app.services.scheduled_refresh import ScheduledRefreshService
+from tests.api_test_dependencies import override_dependency
 
 
 RUN_AT = datetime(2026, 7, 12, 1, 30, tzinfo=UTC)
@@ -392,8 +394,9 @@ def test_scheduled_service_isolates_profile_snapshot_and_briefing_failures() -> 
     }
 
 
-def test_current_preparation_retries_recommendations_without_rewriting_briefing(
-) -> None:
+def test_current_preparation_retries_recommendations_without_rewriting_briefing() -> (
+    None
+):
     target = ScheduledRefreshTarget(
         user_id=USER_1,
         briefing_date=TODAY,
@@ -421,9 +424,7 @@ def test_current_preparation_retries_recommendations_without_rewriting_briefing(
     assert failed.results[0].failed_stage == "recommendations"
     assert failed.results[0].error == "RuntimeError"
     assert repository.calls[0]["include_current"] is True
-    assert repository.calls[0]["current_selection_reason"] == (
-        "recommendation_refresh"
-    )
+    assert repository.calls[0]["current_selection_reason"] == ("recommendation_refresh")
     assert briefing_service.calls[0]["briefing_date"] == TODAY
     recommendation_request = recommendation_engine.calls[0][1]
     assert recommendation_request.window_days == 21
@@ -467,9 +468,7 @@ def test_current_preparation_generates_notifications_with_one_pinned_run_time() 
     )
 
     assert repository.calls[0]["include_current"] is True
-    assert repository.calls[0]["current_selection_reason"] == (
-        "notification_delivery"
-    )
+    assert repository.calls[0]["current_selection_reason"] == ("notification_delivery")
     assert notifications.calls == [
         {
             "user_id": USER_1,
@@ -621,9 +620,7 @@ def test_repository_selects_only_consented_current_notification_targets() -> Non
             {
                 "user_id": USER_1,
                 "in_app_delivery_enabled": True,
-                "in_app_delivery_consent_version": (
-                    "in-app-notification-consent-v1"
-                ),
+                "in_app_delivery_consent_version": ("in-app-notification-consent-v1"),
             },
             {
                 "user_id": USER_2,
@@ -667,9 +664,7 @@ def test_repository_selects_only_consented_current_notification_targets() -> Non
             "select": "user_id",
             "user_id": f"in.({USER_1},{USER_2},{USER_3})",
             "in_app_delivery_enabled": "eq.true",
-            "in_app_delivery_consent_version": (
-                "eq.in-app-notification-consent-v1"
-            ),
+            "in_app_delivery_consent_version": ("eq.in-app-notification-consent-v1"),
             "limit": "3",
         },
     ]
@@ -719,7 +714,7 @@ async def request(
 ) -> httpx.Response:
     app = create_app()
     if service is not None:
-        app.state.scheduled_refresh_service = service
+        override_dependency(app, get_scheduled_refresh_service, service)
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(
         transport=transport,
@@ -791,8 +786,9 @@ def test_scheduled_refresh_endpoint_rejects_invalid_or_unbounded_body(body) -> N
     assert response.status_code == 422
 
 
-def test_scheduled_refresh_endpoint_runs_injected_service_with_strict_response(
-) -> None:
+def test_scheduled_refresh_endpoint_runs_injected_service_with_strict_response() -> (
+    None
+):
     original_token = scheduled.settings.scheduled_refresh_token
     scheduled.settings.scheduled_refresh_token = "test-scheduled-token"
     repository = FakeScheduledRefreshRepository(

@@ -350,7 +350,7 @@ class CoachAgentService:
                 prompt_bytes=len(prompt.encode("utf-8")),
                 snapshot_bytes=snapshot_source_bytes,
             )
-        except TimeoutError as exc:
+        except TimeoutError:
             await release_snapshot_or_fail()
             await self._fail_and_raise(
                 user_id=user_id,

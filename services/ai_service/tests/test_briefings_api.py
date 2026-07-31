@@ -3,8 +3,10 @@ from datetime import date
 
 import httpx
 
-from app.api.deps.auth import Principal
+from app.api.deps.auth import Principal, get_token_verifier
+from app.api.deps.services import get_briefing_service
 from app.main import create_app
+from tests.api_test_dependencies import override_dependency
 
 
 class FakeTokenVerifier:
@@ -42,8 +44,8 @@ def empty_response() -> dict:
 async def request(method: str, path: str, *, json=None):
     app = create_app()
     service = FakeBriefingService()
-    app.state.token_verifier = FakeTokenVerifier()
-    app.state.briefing_service = service
+    override_dependency(app, get_token_verifier, FakeTokenVerifier())
+    override_dependency(app, get_briefing_service, service)
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(
         transport=transport,
@@ -94,8 +96,9 @@ def test_generate_rejects_request_user_id() -> None:
 
 def test_briefing_routes_require_authentication() -> None:
     app = create_app()
-    app.state.token_verifier = FakeTokenVerifier()
-    app.state.briefing_service = FakeBriefingService()
+    service = FakeBriefingService()
+    override_dependency(app, get_token_verifier, FakeTokenVerifier())
+    override_dependency(app, get_briefing_service, service)
 
     async def unauthorized_requests():
         transport = httpx.ASGITransport(app=app)

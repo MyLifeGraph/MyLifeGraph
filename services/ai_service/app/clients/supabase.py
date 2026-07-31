@@ -1,5 +1,6 @@
 import json
-from collections.abc import Mapping, Sequence
+from collections.abc import AsyncIterator, Mapping, Sequence
+from contextlib import asynccontextmanager
 from decimal import Decimal
 from typing import Any
 
@@ -26,6 +27,7 @@ class SupabaseRestClient:
         url: str,
         service_role_key: str,
         timeout_seconds: float = 10,
+        http_client: httpx.AsyncClient | None = None,
     ) -> None:
         if not url.strip() or not service_role_key.strip():
             raise SupabaseConfigurationError(
@@ -34,14 +36,43 @@ class SupabaseRestClient:
         self._url = url.rstrip("/")
         self._service_role_key = service_role_key
         self._timeout_seconds = timeout_seconds
+        self._http_client = http_client
 
     @classmethod
-    def from_settings(cls, settings: Settings) -> "SupabaseRestClient":
+    def from_settings(
+        cls,
+        settings: Settings,
+        *,
+        http_client: httpx.AsyncClient | None = None,
+    ) -> "SupabaseRestClient":
         return cls(
             url=settings.supabase_url,
             service_role_key=settings.supabase_service_role_key,
             timeout_seconds=settings.supabase_timeout_seconds,
+            http_client=http_client,
         )
+
+    @classmethod
+    def pooled_from_settings(cls, settings: Settings) -> "SupabaseRestClient":
+        client = cls.from_settings(settings)
+        client._http_client = httpx.AsyncClient(
+            timeout=settings.supabase_timeout_seconds,
+        )
+        return client
+
+    async def aclose(self) -> None:
+        client = self._http_client
+        if client is not None:
+            self._http_client = None
+            await client.aclose()
+
+    @asynccontextmanager
+    async def _request_client(self) -> AsyncIterator[httpx.AsyncClient]:
+        if self._http_client is not None:
+            yield self._http_client
+            return
+        async with httpx.AsyncClient(timeout=self._timeout_seconds) as client:
+            yield client
 
     async def select(
         self,
@@ -56,7 +87,7 @@ class SupabaseRestClient:
                 params=params,
                 max_response_bytes=max_response_bytes,
             )
-        async with httpx.AsyncClient(timeout=self._timeout_seconds) as client:
+        async with self._request_client() as client:
             response = await client.get(
                 f"{self._url}/rest/v1/{table}",
                 params=params,
@@ -76,7 +107,7 @@ class SupabaseRestClient:
     ) -> int:
         """Return PostgREST's exact filtered row count without a response body."""
 
-        async with httpx.AsyncClient(timeout=self._timeout_seconds) as client:
+        async with self._request_client() as client:
             response = await client.head(
                 f"{self._url}/rest/v1/{table}",
                 params=params,
@@ -121,7 +152,7 @@ class SupabaseRestClient:
         if max_response_bytes <= 0:
             raise ValueError("max_response_bytes must be positive")
         body = bytearray()
-        async with httpx.AsyncClient(timeout=self._timeout_seconds) as client:
+        async with self._request_client() as client:
             async with client.stream(
                 "GET",
                 f"{self._url}/rest/v1/{table}",
@@ -168,7 +199,7 @@ class SupabaseRestClient:
     ) -> list[dict[str, Any]]:
         if not rows:
             return []
-        async with httpx.AsyncClient(timeout=self._timeout_seconds) as client:
+        async with self._request_client() as client:
             response = await client.post(
                 f"{self._url}/rest/v1/{table}",
                 json=rows,
@@ -193,7 +224,7 @@ class SupabaseRestClient:
         if not rows:
             return []
         params = {"on_conflict": on_conflict} if on_conflict else None
-        async with httpx.AsyncClient(timeout=self._timeout_seconds) as client:
+        async with self._request_client() as client:
             response = await client.post(
                 f"{self._url}/rest/v1/{table}",
                 params=params,
@@ -216,7 +247,7 @@ class SupabaseRestClient:
         values: dict[str, Any],
         params: dict[str, str],
     ) -> list[dict[str, Any]]:
-        async with httpx.AsyncClient(timeout=self._timeout_seconds) as client:
+        async with self._request_client() as client:
             response = await client.patch(
                 f"{self._url}/rest/v1/{table}",
                 params=params,
@@ -238,7 +269,7 @@ class SupabaseRestClient:
         *,
         params: dict[str, str],
     ) -> list[dict[str, Any]]:
-        async with httpx.AsyncClient(timeout=self._timeout_seconds) as client:
+        async with self._request_client() as client:
             response = await client.delete(
                 f"{self._url}/rest/v1/{table}",
                 params=params,
@@ -259,7 +290,7 @@ class SupabaseRestClient:
         *,
         params: dict[str, Any],
     ) -> Any:
-        async with httpx.AsyncClient(timeout=self._timeout_seconds) as client:
+        async with self._request_client() as client:
             response = await client.post(
                 f"{self._url}/rest/v1/rpc/{function}",
                 json=params,
@@ -269,7 +300,7 @@ class SupabaseRestClient:
         return response.json()
 
     async def get_user_for_token(self, token: str) -> dict[str, Any] | None:
-        async with httpx.AsyncClient(timeout=self._timeout_seconds) as client:
+        async with self._request_client() as client:
             response = await client.get(
                 f"{self._url}/auth/v1/user",
                 headers={

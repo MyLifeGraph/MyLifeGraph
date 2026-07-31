@@ -1,31 +1,15 @@
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.api.deps.auth import Principal, get_current_principal
-from app.clients.supabase import SupabaseConfigurationError, SupabaseRestClient
-from app.core.config import settings
+from app.api.deps.services import get_intake_service
 from app.models.intake import (
     IntakeCompleteRequest,
     IntakeCompleteResponse,
     IntakeSetupResponse,
 )
-from app.repositories.intake_repository import SupabaseIntakeRepository
 from app.services.intake_service import IntakeRevisionConflict, IntakeService
 
 router = APIRouter(prefix="/intake", tags=["intake"])
-
-
-async def get_intake_service(request: Request) -> IntakeService:
-    injected_service = getattr(request.app.state, "intake_service", None)
-    if injected_service is not None:
-        return injected_service
-    try:
-        client = SupabaseRestClient.from_settings(settings)
-    except SupabaseConfigurationError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Intake persistence is not configured.",
-        ) from exc
-    return IntakeService(repository=SupabaseIntakeRepository(client))
 
 
 @router.get(

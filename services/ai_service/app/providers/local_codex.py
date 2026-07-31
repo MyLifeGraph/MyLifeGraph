@@ -244,7 +244,7 @@ async def run_bounded_process(
         )
         for stream_result in stream_results:
             if isinstance(stream_result, CoachProviderError):
-                raise stream_result
+                raise stream_result from exc
             if isinstance(stream_result, ProcessOutputLimitError):
                 raise CoachProviderError(
                     "invalid_output",

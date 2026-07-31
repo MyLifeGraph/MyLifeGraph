@@ -1,12 +1,14 @@
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 from app.services.planning_availability import (
     BusySources,
     allocate_task_intervals,
     busy_intervals_by_day,
+    ceil_local_five_minutes,
     choose_recurring_habit_slots,
     is_unambiguous_local,
+    round_up_quarter_hour,
     used_setup_timing_fallback,
 )
 
@@ -31,6 +33,70 @@ def test_task_allocation_splits_on_five_minutes_and_reports_exact_remainder() ->
     assert all(block.starts_at.minute % 5 == 0 for block in blocks)
     assert all(block.ends_at > block.starts_at for block in blocks)
     assert blocks[0].starts_at.date() != blocks[1].starts_at.date()
+
+
+def test_ceiling_helpers_advance_subminute_values_only() -> None:
+    fixed_offset = timezone(timedelta(hours=5, minutes=30))
+
+    assert ceil_local_five_minutes(
+        datetime(2026, 7, 20, 8, tzinfo=fixed_offset),
+    ) == datetime(2026, 7, 20, 8, tzinfo=fixed_offset)
+    assert ceil_local_five_minutes(
+        datetime(2026, 7, 20, 8, 0, 30, tzinfo=fixed_offset),
+    ) == datetime(2026, 7, 20, 8, 5, tzinfo=fixed_offset)
+    assert ceil_local_five_minutes(
+        datetime(2026, 7, 20, 8, 0, 0, 1, tzinfo=fixed_offset),
+    ) == datetime(2026, 7, 20, 8, 5, tzinfo=fixed_offset)
+
+    assert round_up_quarter_hour(
+        datetime(2026, 7, 20, 8, 15, tzinfo=fixed_offset),
+    ) == datetime(2026, 7, 20, 8, 15, tzinfo=fixed_offset)
+    assert round_up_quarter_hour(
+        datetime(2026, 7, 20, 8, 15, 30, tzinfo=fixed_offset),
+    ) == datetime(2026, 7, 20, 8, 30, tzinfo=fixed_offset)
+    assert round_up_quarter_hour(
+        datetime(2026, 7, 20, 8, 15, 0, 1, tzinfo=fixed_offset),
+    ) == datetime(2026, 7, 20, 8, 30, tzinfo=fixed_offset)
+
+
+def test_subminute_busy_end_cannot_overlap_a_planned_block() -> None:
+    cases = (
+        (
+            ZoneInfo("UTC"),
+            "2026-07-20T07:59:00+00:00",
+            "2026-07-20T08:00:30+00:00",
+        ),
+        (
+            ZoneInfo("Asia/Kolkata"),
+            "2026-07-20T07:59:00+05:30",
+            "2026-07-20T08:00:00.000001+05:30",
+        ),
+    )
+
+    for zone, busy_start, busy_end in cases:
+        blocks = allocate_task_intervals(
+            starts_on=date(2026, 7, 20),
+            ends_on=date(2026, 7, 20),
+            total_minutes=30,
+            preferred_session_minutes=30,
+            max_daily_minutes=30,
+            zone=zone,
+            local_now=datetime(2026, 7, 19, 12, tzinfo=zone),
+            energy_window="morning",
+            busy_sources=BusySources(
+                timed_intervals=[
+                    {
+                        "starts_at": busy_start,
+                        "ends_at": busy_end,
+                    },
+                ],
+            ),
+            duration_increment_minutes=5,
+        )
+
+        assert len(blocks) == 1
+        assert blocks[0].starts_at == datetime(2026, 7, 20, 8, 5, tzinfo=zone)
+        assert blocks[0].starts_at >= datetime.fromisoformat(busy_end)
 
 
 def test_study_blocks_reserve_recovery_without_charging_focus_budget() -> None:
@@ -188,14 +254,17 @@ def test_habit_slot_must_fit_every_occurrence_in_four_week_horizon() -> None:
 def test_dst_gap_and_fold_wall_times_are_not_treated_as_safe_slots() -> None:
     zone = ZoneInfo("Europe/Berlin")
 
-    assert not is_unambiguous_local(
-        datetime(2026, 3, 29, 2, 30, tzinfo=zone),
-        zone,
+    gap_boundary = ceil_local_five_minutes(
+        datetime(2026, 3, 29, 1, 59, 30, tzinfo=zone),
     )
-    assert not is_unambiguous_local(
-        datetime(2026, 10, 25, 2, 30, tzinfo=zone),
-        zone,
+    fold_boundary = ceil_local_five_minutes(
+        datetime(2026, 10, 25, 2, 0, 30, tzinfo=zone, fold=0),
     )
+
+    assert gap_boundary.hour == 2
+    assert not is_unambiguous_local(gap_boundary, zone)
+    assert fold_boundary.hour == 2
+    assert not is_unambiguous_local(fold_boundary, zone)
     assert is_unambiguous_local(
         datetime(2026, 3, 29, 8, 0, tzinfo=zone),
         zone,

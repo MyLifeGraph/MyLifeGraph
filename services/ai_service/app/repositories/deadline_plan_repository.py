@@ -7,6 +7,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 import httpx
 
 from app.clients.supabase import SupabaseRestClient
+from app.repositories.planning_writes import DeadlineProposalWrite
 
 
 class DeadlinePlanPersistenceConflict(RuntimeError):
@@ -152,8 +153,7 @@ class DeadlinePlanRepository(Protocol):
         request_fingerprint: str,
         plan_id: UUID,
         base_revision: int,
-        proposal: dict[str, Any],
-        blocks: list[dict[str, Any]],
+        write: DeadlineProposalWrite,
         now: datetime,
     ) -> int: ...
 
@@ -440,10 +440,7 @@ class SupabaseDeadlinePlanRepository:
             max_rows=6_001,
         )
         plan_ids = sorted(
-            {
-                str(UUID(str(row.get("plan_id"))))
-                for row in confirmed_blocks
-            },
+            {str(UUID(str(row.get("plan_id")))) for row in confirmed_blocks},
         )
         plans: list[dict[str, Any]] = []
         if plan_ids:
@@ -557,8 +554,7 @@ class SupabaseDeadlinePlanRepository:
             },
         )
         planner_use_calendar_busy_time = bool(
-            preference_rows
-            and preference_rows[0].get("use_calendar_busy_time") is True
+            preference_rows and preference_rows[0].get("use_calendar_busy_time") is True
         )
         # Deadline Planner keeps its V1 request field for wire compatibility,
         # but Planner V1 owns the one explicit account preference.
@@ -790,9 +786,7 @@ class SupabaseDeadlinePlanRepository:
                 connection.get("imported_data_deleted_at") if connection else None
             ),
             "_import_planning_status": (
-                import_rows[0].get("planning_status")
-                if len(import_rows) == 1
-                else None
+                import_rows[0].get("planning_status") if len(import_rows) == 1 else None
             ),
         }
 
@@ -804,8 +798,7 @@ class SupabaseDeadlinePlanRepository:
         request_fingerprint: str,
         plan_id: UUID,
         base_revision: int,
-        proposal: dict[str, Any],
-        blocks: list[dict[str, Any]],
+        write: DeadlineProposalWrite,
         now: datetime,
     ) -> int:
         result = await self._rpc(
@@ -816,8 +809,8 @@ class SupabaseDeadlinePlanRepository:
                 "p_request_fingerprint": request_fingerprint,
                 "p_plan_id": str(plan_id),
                 "p_base_revision": base_revision,
-                "p_proposal": proposal,
-                "p_blocks": blocks,
+                "p_proposal": write.proposal_json(),
+                "p_blocks": write.blocks_json(),
                 "p_now": now.isoformat(),
             },
         )
@@ -898,12 +891,7 @@ def _profile_daily_preparation_budget(row: dict[str, Any]) -> int | None:
     value = row.get("daily_preparation_budget_minutes")
     if value is None:
         return None
-    if (
-        type(value) is not int
-        or value < 25
-        or value > 480
-        or value % 5 != 0
-    ):
+    if type(value) is not int or value < 25 or value > 480 or value % 5 != 0:
         raise ValueError("Profile daily preparation budget is invalid.")
     return value
 

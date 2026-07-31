@@ -41,7 +41,15 @@ FastAPI service boundary for recommendation and future ML workflows.
   generates or applies a proposal. See
   `../../docs/phase-3-executable-actions-contract.md`.
 - With backend Supabase settings configured, bearer tokens are verified through
-  Supabase Auth. Setup uses idempotent request ids, optimistic revisions,
+  Supabase Auth. One FastAPI-lifespan-owned `httpx.AsyncClient` is reused for
+  those Auth lookups and all Supabase REST repositories and is closed once at
+  shutdown. One typed application composition root builds and shares the
+  repository/service graph over that client; explicit router dependencies only
+  select services from the graph. Tests override those dependency functions
+  directly, without named service fields in app state. Missing configuration
+  remains fail-closed, and unit tests may still inject verifiers, services,
+  repositories, or direct short-lived clients. Setup uses idempotent request
+  ids, optimistic revisions,
   pending/applied state, deterministic UUIDv5 record ids, and server ownership
   metadata to reconcile only explicit Setup-owned records. Blank optionals
   materialize nothing; named routines remain response-only candidates until
@@ -109,6 +117,10 @@ FastAPI service boundary for recommendation and future ML workflows.
   watch/exam-week/overdue mode; no read creates a preview or changes a plan. See
   `../../docs/deadline-planner-v1-contract.md` and
   `../../docs/exam-week-outlook-v1-contract.md`.
+  Planner overview and Exam-Week assembly are pure builders behind the
+  asynchronous service facades. Planner and Deadline proposals cross their
+  repository boundaries as validated composite write models rather than
+  parallel raw dictionaries; the existing RPC JSON remains unchanged.
 - Phase 10 exposes authenticated free-question capability, streaming and
   non-streaming response, and mixed legacy/current history/delete contracts.
   Each V3 turn creates a fresh owner-only SQLite snapshot and gives the local
@@ -150,11 +162,29 @@ FastAPI service boundary for recommendation and future ML workflows.
 cd services/ai_service
 python -m venv .venv
 source .venv/bin/activate
-pip install -r requirements-dev.txt
+python -m pip install --require-hashes -r requirements-dev.txt
 ```
 
-`requirements.txt` contains runtime packages only; the development file adds
-the test runner. The equivalent project extra is `.[test]`.
+`pyproject.toml` owns the direct compatibility ranges.
+`requirements.txt` is the committed, hashed runtime lock;
+`requirements-dev.txt` is the committed, hashed runtime plus pytest/Ruff lock.
+CI and release-style installs must consume the appropriate lock with
+`--require-hashes`; they must not resolve directly from the open ranges. The
+equivalent project extra `.[test]` is metadata for dependency authorship, not
+the reproducible CI install path.
+
+To update the locks deliberately, use Python 3.12 and the pinned generator:
+
+```bash
+python -m pip install pip-tools==7.5.1
+PYTHON_BIN=python scripts/update_python_requirements.sh --upgrade
+```
+
+Run that command from the repository root, review all version changes, then run
+the complete backend tests and fast verification. Omitting `--upgrade`
+regenerates the current resolution without intentionally advancing compatible
+packages. This keeps security and compatibility updates explicit instead of
+freezing them indefinitely or changing them implicitly on every CI run.
 
 Windows PowerShell:
 
@@ -162,7 +192,7 @@ Windows PowerShell:
 cd services\ai_service
 python -m venv .venv
 .venv\Scripts\Activate.ps1
-pip install -r requirements-dev.txt
+python -m pip install --require-hashes -r requirements-dev.txt
 ```
 
 ## Run
@@ -637,6 +667,16 @@ Account Export
 includes the two owner-content projections and omits the backend retry ledger
 explicitly.
 
+The typed `app/owner_data_catalog.py` module is the single backend inventory for
+all repo-owned public tables. It derives the exact 40-table Account Export and
+37-table personal Coach Snapshot from separate per-table policies, including
+owner/cursor/watermark read shapes, sanitized export allowlists, omissions, and
+snapshot descriptions. A focused test compares that inventory with every
+public table created by the migration history, so a new table cannot silently
+miss both privacy decisions. Shared lossless serialization lives in
+`app/core/lossless_json.py`; Coach Snapshot no longer imports a private Account
+Service helper.
+
 Phase 3 client and snapshot behavior requires
 `20260711120000_phase_3_executable_action_schema.sql`. It adds bounded task
 estimates and terminal timestamps, authoritative completed/skipped habit-log
@@ -704,7 +744,9 @@ Setup cannot regress consent timestamp ordering or leave a stale replay identity
 
 JWT verification is isolated in the FastAPI auth dependency. Tests inject fake
 verifiers and repositories, so production or remote Supabase credentials are not
-required for the unit test suite. Intake tests cover authenticated read/save,
+required for the unit test suite. Client/lifespan tests additionally prove one
+shared Supabase transport across operations, exact once-only shutdown, and the
+unconfigured fail-closed boundary. Intake tests cover authenticated read/save,
 blank optional materialization, candidate cadence validation, request replay,
 stale revision conflicts, convergent retry/edit identities, lifecycle removal,
 legacy-key stripping, unchanged Reminder preferences, Setup-only Goal/memory

@@ -1,10 +1,9 @@
 from datetime import UTC, datetime, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 
 from app.api.deps.auth import Principal, get_current_principal
-from app.clients.supabase import SupabaseConfigurationError, SupabaseRestClient
-from app.core.config import settings
+from app.api.deps.services import get_account_service
 from app.models.account import (
     AccountDeleteRequest,
     AccountExportResponse,
@@ -20,7 +19,6 @@ from app.repositories.account_repository import (
     AccountPreparationBudgetUpdateOutcomeUnknownError,
     AccountProfileUpdateOutcomeUnknownError,
     AccountSettingConflictError,
-    SupabaseAccountRepository,
 )
 from app.services.account_service import (
     AccountExportTooLargeError,
@@ -60,20 +58,6 @@ def _require_recent_authentication(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=_RECENT_AUTHENTICATION_REQUIRED_DETAIL,
         )
-
-
-async def get_account_service(request: Request) -> AccountService:
-    injected = getattr(request.app.state, "account_service", None)
-    if injected is not None:
-        return injected
-    try:
-        client = SupabaseRestClient.from_settings(settings)
-    except SupabaseConfigurationError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Account persistence is not configured.",
-        ) from exc
-    return AccountService(repository=SupabaseAccountRepository(client))
 
 
 @router.patch(

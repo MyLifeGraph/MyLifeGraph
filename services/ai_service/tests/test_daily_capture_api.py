@@ -3,10 +3,12 @@ from datetime import UTC, date, datetime
 
 import httpx
 
-from app.api.deps.auth import Principal
+from app.api.deps.auth import Principal, get_token_verifier
+from app.api.deps.services import get_daily_capture_service
 from app.main import create_app
 from app.repositories.daily_capture_repository import DailyCaptureConflictError
 from app.services.daily_capture_service import DailyCaptureService
+from tests.api_test_dependencies import override_dependency
 
 
 USER_ID = "capture-owner"
@@ -64,11 +66,12 @@ async def _request(
     body: dict[str, object],
 ) -> httpx.Response:
     app = create_app()
-    app.state.token_verifier = Verifier()
-    app.state.daily_capture_service = DailyCaptureService(
+    service = DailyCaptureService(
         repository=repository,
         now=lambda: NOW,
     )
+    override_dependency(app, get_token_verifier, Verifier())
+    override_dependency(app, get_daily_capture_service, service)
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app),
         base_url="http://test",

@@ -4,66 +4,13 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from app.owner_data_catalog import (
+    ACCOUNT_EXPORT_OMITTED_TABLES,
+    ACCOUNT_EXPORT_SANITIZED_TABLES,
+    ACCOUNT_EXPORT_TABLE_NAMES,
+)
 
 ACCOUNT_EXPORT_CONTRACT_VERSION = "account-export-v2"
-ACCOUNT_EXPORT_TABLE_NAMES = (
-    "profiles",
-    "notification_preferences",
-    "learning_preferences",
-    "daily_logs",
-    "behavioral_events",
-    "lifestyle_entries",
-    "tasks",
-    "schedule_items",
-    "notifications",
-    "coach_messages",
-    "memory_entries",
-    "ai_insights",
-    "recommendations",
-    "skillset_profiles",
-    "goals",
-    "habits",
-    "habit_logs",
-    "focus_sessions",
-    "focus_session_reflections",
-    "intake_responses",
-    "study_setup_profiles",
-    "user_state_snapshots",
-    "daily_briefings",
-    "decision_feedback",
-    "weekly_reviews",
-    "calendar_connections",
-    "calendar_imports",
-    "calendar_events",
-    "coach_requests",
-    "coach_usage_events",
-    "coach_memory_selections",
-    "deadline_plans",
-    "deadline_plan_revisions",
-    "deadline_plan_blocks",
-    "planner_preferences",
-    "planner_action_plans",
-    "planner_action_plan_revisions",
-    "planner_task_blocks",
-    "planner_habit_slots",
-    "planner_commitments",
-)
-ACCOUNT_EXPORT_SANITIZED_TABLES = (
-    "calendar_connections",
-    "calendar_imports",
-    "calendar_events",
-    "coach_requests",
-    "coach_usage_events",
-)
-ACCOUNT_EXPORT_OMITTED_TABLES = {
-    "daily_capture_request_identities": "backend_only_anti_replay_ledger",
-    "account_setting_request_identities": "backend_only_anti_replay_ledger",
-    "calendar_request_identities": "backend_only_anti_replay_ledger",
-    "notification_action_requests": "backend_only_anti_replay_ledger",
-    "deadline_plan_request_identities": "backend_only_anti_replay_ledger",
-    "planner_request_identities": "backend_only_anti_replay_ledger",
-    "learning_request_identities": "backend_only_anti_replay_ledger",
-}
 ACCOUNT_EXPORT_MAX_ROWS_PER_TABLE = 10_000
 ACCOUNT_EXPORT_MAX_TOTAL_ROWS = 50_000
 ACCOUNT_EXPORT_MAX_JSON_BYTES = 8 * 1024 * 1024
@@ -206,8 +153,7 @@ class AccountExportResponse(BaseModel):
         if set(self.record_counts) != expected_tables:
             raise ValueError("record_counts must contain the exact V2 table set")
         if any(
-            self.record_counts[name] != len(rows)
-            for name, rows in self.data.items()
+            self.record_counts[name] != len(rows) for name, rows in self.data.items()
         ):
             raise ValueError("record_counts must match exported row counts")
         if any(

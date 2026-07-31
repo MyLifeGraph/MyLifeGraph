@@ -4,8 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import JSONResponse
 
 from app.api.deps.auth import Principal, get_current_principal
-from app.clients.supabase import SupabaseConfigurationError, SupabaseRestClient
-from app.core.config import settings
+from app.api.deps.services import get_calendar_integration_service
 from app.models.calendar_integrations import (
     CalendarConnectionCreateRequest,
     CalendarConnectionMutationRequest,
@@ -13,9 +12,6 @@ from app.models.calendar_integrations import (
     CalendarEventsResponse,
     CalendarFileImportRequest,
     CalendarImportResponse,
-)
-from app.repositories.calendar_integration_repository import (
-    SupabaseCalendarIntegrationRepository,
 )
 from app.services.calendar_ical_parser import CalendarParseError
 from app.services.calendar_integration_service import (
@@ -27,22 +23,6 @@ from app.services.calendar_integration_service import (
 )
 
 router = APIRouter(prefix="/calendar-integrations", tags=["calendar-integrations"])
-
-
-async def get_calendar_integration_service(request: Request) -> CalendarIntegrationService:
-    injected = getattr(request.app.state, "calendar_integration_service", None)
-    if injected is not None:
-        return injected
-    try:
-        client = SupabaseRestClient.from_settings(settings)
-    except SupabaseConfigurationError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Calendar integration persistence is not configured.",
-        ) from exc
-    return CalendarIntegrationService(
-        repository=SupabaseCalendarIntegrationRepository(client),
-    )
 
 
 @router.get(
@@ -79,7 +59,9 @@ async def create_calendar_connection(
             request=request,
         )
     except CalendarConflictError as exc:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail=str(exc)
+        ) from exc
 
 
 @router.post(
@@ -100,9 +82,13 @@ async def import_calendar_file(
             request=request,
         )
     except CalendarConnectionNotFoundError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)
+        ) from exc
     except CalendarConflictError as exc:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail=str(exc)
+        ) from exc
     except CalendarParseError as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -130,9 +116,13 @@ async def get_calendar_events(
             limit=limit,
         )
     except CalendarConnectionNotFoundError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)
+        ) from exc
     except CalendarCursorStaleError as exc:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail=str(exc)
+        ) from exc
     except CalendarCursorError as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -158,9 +148,13 @@ async def disconnect_calendar_connection(
             request=request,
         )
     except CalendarConnectionNotFoundError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)
+        ) from exc
     except CalendarConflictError as exc:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail=str(exc)
+        ) from exc
 
 
 @router.delete(
@@ -195,6 +189,10 @@ async def delete_calendar_imported_data(
             request_id=request_id,
         )
     except CalendarConnectionNotFoundError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)
+        ) from exc
     except CalendarConflictError as exc:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail=str(exc)
+        ) from exc

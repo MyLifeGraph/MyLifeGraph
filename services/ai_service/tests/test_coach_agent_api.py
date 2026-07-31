@@ -7,8 +7,10 @@ import httpx
 import pytest
 from pydantic import ValidationError
 
-from app.api.deps.auth import Principal
+from app.api.deps.auth import Principal, get_token_verifier
+from app.api.deps.coach import get_coach_services
 from app.api.routes.coach import _stream_turn
+from app.composition import CoachServices
 from app.main import create_app
 from app.models.coach import (
     CoachAgentCapabilitiesResponse,
@@ -20,6 +22,7 @@ from app.models.coach import (
     CoachHistoryDeleteResponse,
 )
 from app.services.coach_service import CoachServiceError
+from tests.api_test_dependencies import override_dependency
 
 
 USER_ID = "agent-owner"
@@ -113,8 +116,12 @@ async def _request(
 ):
     app = create_app()
     actual_service = service or AgentService()
-    app.state.token_verifier = Verifier()
-    app.state.coach_agent_service = actual_service
+    override_dependency(app, get_token_verifier, Verifier())
+    override_dependency(
+        app,
+        get_coach_services,
+        CoachServices(current=actual_service, legacy=actual_service),
+    )
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app),
         base_url="http://test",
@@ -244,8 +251,12 @@ def test_v3_rejects_json_escaped_lone_surrogate_before_service_call() -> None:
     async def request_escaped_json():
         app = create_app()
         service = AgentService()
-        app.state.token_verifier = Verifier()
-        app.state.coach_agent_service = service
+        override_dependency(app, get_token_verifier, Verifier())
+        override_dependency(
+            app,
+            get_coach_services,
+            CoachServices(current=service, legacy=service),
+        )
         async with httpx.AsyncClient(
             transport=httpx.ASGITransport(app=app),
             base_url="http://test",

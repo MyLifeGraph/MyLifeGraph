@@ -4,7 +4,8 @@ from datetime import date, datetime, timezone
 
 import httpx
 
-from app.api.deps.auth import Principal
+from app.api.deps.auth import Principal, get_token_verifier
+from app.api.deps.services import get_snapshot_aggregator
 from app.main import create_app
 from app.models.snapshots import SnapshotGenerateRequest, SnapshotGenerateResponse
 from app.repositories.snapshot_repository import (
@@ -12,6 +13,7 @@ from app.repositories.snapshot_repository import (
     SupabaseSnapshotRepository,
 )
 from app.services.snapshot_aggregator import SnapshotAggregator
+from tests.api_test_dependencies import override_dependency
 
 
 TODAY = date(2026, 7, 2)
@@ -280,8 +282,9 @@ def sample_inputs() -> SnapshotInputRows:
 
 def make_app(aggregator: FakeSnapshotAggregator | None = None):
     app = create_app()
-    app.state.token_verifier = FakeTokenVerifier()
-    app.state.snapshot_aggregator = aggregator or FakeSnapshotAggregator()
+    service = aggregator or FakeSnapshotAggregator()
+    override_dependency(app, get_token_verifier, FakeTokenVerifier())
+    override_dependency(app, get_snapshot_aggregator, service)
     return app
 
 
@@ -511,12 +514,8 @@ def test_action_outcomes_do_not_change_phase_two_daily_state() -> None:
         ),
     )
 
-    assert with_actions.summary["daily_state"] == without_actions.summary[
-        "daily_state"
-    ]
-    assert with_actions.signals["daily_state"] == without_actions.signals[
-        "daily_state"
-    ]
+    assert with_actions.summary["daily_state"] == without_actions.summary["daily_state"]
+    assert with_actions.signals["daily_state"] == without_actions.signals["daily_state"]
 
 
 def test_generate_snapshot_ignores_logs_outside_target_window():

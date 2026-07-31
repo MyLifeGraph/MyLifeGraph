@@ -108,10 +108,16 @@ jobs:
           cache-dependency-path: services/ai_service/requirements-dev.txt
 
       - name: Install backend test dependencies
-        run: python -m pip install -r services/ai_service/requirements-dev.txt
+        run: >-
+          python -m pip install --require-hashes
+          -r services/ai_service/requirements-dev.txt
 
       - name: Compile backend
         run: python -m compileall -q services/ai_service/app
+
+      - name: Lint backend
+        working-directory: services/ai_service
+        run: python -m ruff check app tests
 
       - name: Run all backend tests
         working-directory: services/ai_service
@@ -190,7 +196,7 @@ jobs:
         run: |
           npm ci
           npx playwright install --with-deps chromium
-          python -m pip install -r services/ai_service/requirements-dev.txt
+          python -m pip install --require-hashes -r services/ai_service/requirements-dev.txt
 
       - name: Run the full serial browser regression on a fresh database
         env:

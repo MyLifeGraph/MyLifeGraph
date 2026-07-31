@@ -613,7 +613,7 @@ class CoachService:
                 },
                 failed_at=self._now(),
             )
-        except Exception:
+        except Exception as exc:
             # The atomic failure write may have committed before its response
             # was lost. Force an exact same-id replay so the client cannot
             # silently abandon the persisted or still-leased request identity.
@@ -622,7 +622,7 @@ class CoachService:
                 "The Coach failure could not be confirmed. Retry the same request id.",
                 retryable=True,
                 status_code=409,
-            )
+            ) from exc
 
     def _response(
         self,

@@ -3,7 +3,8 @@ from datetime import UTC, date, datetime, timedelta
 
 import httpx
 
-from app.api.deps.auth import Principal
+from app.api.deps.auth import Principal, get_token_verifier
+from app.api.deps.services import get_planner_service
 from app.main import create_app
 from app.models.planner import (
     PlannerDay,
@@ -11,6 +12,7 @@ from app.models.planner import (
     PlannerPreferencesResponse,
 )
 from app.services.planner_service import PlannerConflictError
+from tests.api_test_dependencies import override_dependency
 
 
 class Verifier:
@@ -66,8 +68,8 @@ class Service:
 async def _request(method, path, *, body=None, authenticated=True):
     app = create_app()
     service = Service()
-    app.state.token_verifier = Verifier()
-    app.state.planner_service = service
+    override_dependency(app, get_token_verifier, Verifier())
+    override_dependency(app, get_planner_service, service)
     headers = {"Authorization": "Bearer planner-token"} if authenticated else {}
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app),

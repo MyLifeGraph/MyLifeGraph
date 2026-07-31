@@ -3,10 +3,12 @@ from datetime import UTC, datetime
 
 import httpx
 
-from app.api.deps.auth import Principal
+from app.api.deps.auth import Principal, get_token_verifier
+from app.api.deps.services import get_intake_service
 from app.main import create_app
 from app.models.intake import IntakeResponses, SnapshotSummary
 from app.services.intake_service import IntakeRevisionConflict
+from tests.api_test_dependencies import override_dependency
 
 
 REQUEST_ID = "00000000-0000-4000-8000-000000000001"
@@ -69,9 +71,10 @@ def summary() -> SnapshotSummary:
 
 def make_app(*, conflict: bool = False):
     app = create_app()
-    app.state.token_verifier = FakeTokenVerifier()
-    app.state.intake_service = FakeIntakeService(conflict=conflict)
-    return app
+    service = FakeIntakeService(conflict=conflict)
+    override_dependency(app, get_token_verifier, FakeTokenVerifier())
+    override_dependency(app, get_intake_service, service)
+    return app, service
 
 
 async def request(
@@ -82,14 +85,14 @@ async def request(
     json: dict | None = None,
     conflict: bool = False,
 ) -> httpx.Response:
-    app = make_app(conflict=conflict)
+    app, service = make_app(conflict=conflict)
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(
         transport=transport,
         base_url="http://testserver",
     ) as client:
         response = await client.request(method, url, headers=headers, json=json)
-    response.extensions["app"] = app
+    response.extensions["service"] = service
     return response
 
 
@@ -162,7 +165,7 @@ def test_get_setup_uses_principal_and_returns_explicit_empty_state() -> None:
         "revision": 0,
         "base_revision": 0,
     }
-    service = response.extensions["app"].state.intake_service
+    service = response.extensions["service"]
     assert service.calls == [("user-test-123", "get")]
 
 
@@ -203,7 +206,7 @@ def test_complete_intake_with_principal_returns_canonical_setup_envelope() -> No
     }.isdisjoint(body["responses"])
     assert body["responses"]["routines"][0]["status"] == "candidate"
     assert body["summary"]["routine_candidate_count"] == 1
-    service = response.extensions["app"].state.intake_service
+    service = response.extensions["service"]
     assert service.calls[0][0] == "user-test-123"
 
 

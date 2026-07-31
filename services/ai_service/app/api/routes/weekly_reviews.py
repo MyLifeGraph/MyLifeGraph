@@ -1,41 +1,18 @@
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.api.deps.auth import Principal, get_current_principal
-from app.clients.supabase import SupabaseConfigurationError, SupabaseRestClient
-from app.core.config import settings
+from app.api.deps.services import get_weekly_review_service
 from app.models.weekly_reviews import (
     WeeklyReviewGenerateRequest,
     WeeklyReviewGenerateResponse,
     WeeklyReviewReadResponse,
 )
-from app.repositories.snapshot_repository import SupabaseSnapshotRepository
-from app.repositories.weekly_review_repository import SupabaseWeeklyReviewRepository
-from app.services.snapshot_aggregator import SnapshotAggregator
 from app.services.weekly_review_service import (
     WeeklyReviewPeriodError,
     WeeklyReviewService,
 )
 
 router = APIRouter(prefix="/weekly-reviews", tags=["weekly-reviews"])
-
-
-async def get_weekly_review_service(request: Request) -> WeeklyReviewService:
-    injected = getattr(request.app.state, "weekly_review_service", None)
-    if injected is not None:
-        return injected
-    try:
-        client = SupabaseRestClient.from_settings(settings)
-    except SupabaseConfigurationError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Weekly review persistence is not configured.",
-        ) from exc
-    return WeeklyReviewService(
-        repository=SupabaseWeeklyReviewRepository(client),
-        snapshot_aggregator=SnapshotAggregator(
-            repository=SupabaseSnapshotRepository(client),
-        ),
-    )
 
 
 @router.get("/latest", response_model=WeeklyReviewReadResponse)

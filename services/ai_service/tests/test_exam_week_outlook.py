@@ -18,6 +18,7 @@ from app.repositories.deadline_plan_repository import (
     DeadlinePlanningContext,
 )
 from app.services.deadline_plan_service import DeadlinePlanService
+from app.services.exam_week_outlook import build_exam_week_outlook
 
 
 NOW = datetime(2026, 7, 20, 8, tzinfo=UTC)
@@ -194,6 +195,29 @@ def test_exam_mode_uses_exact_profile_local_boundaries(
     assert bool(result.exams) is (expected_mode != "inactive")
 
 
+def test_outlook_builder_is_pure_and_independent_of_repository_or_service() -> None:
+    details = [_detail(plan_id=EXAM_ID, kind="exam", days=5)]
+    context = _context()
+    sleep_rows = [_sleep_row(NOW.date(), estimated_minutes=480)]
+
+    first = build_exam_week_outlook(
+        generated_at=NOW,
+        context=context,
+        details=details,
+        sleep_rows=sleep_rows,
+    )
+    second = build_exam_week_outlook(
+        generated_at=NOW,
+        context=context,
+        details=details,
+        sleep_rows=sleep_rows,
+    )
+
+    assert first == second
+    assert first.mode == "exam_week"
+    assert first.exams[0].plan_id == EXAM_ID
+
+
 def test_overdue_exam_with_remaining_work_is_high_and_never_mutates() -> None:
     service, repository = _service(
         [_detail(plan_id=EXAM_ID, kind="exam", days=-1)],
@@ -361,9 +385,7 @@ def test_pending_preview_sleep_overlap_is_warning_only() -> None:
         ends_at=starts_at + timedelta(minutes=25),
         local_date=starts_at.date(),
         local_start_time=starts_at.time().replace(tzinfo=None),
-        local_end_time=(starts_at + timedelta(minutes=25))
-        .time()
-        .replace(tzinfo=None),
+        local_end_time=(starts_at + timedelta(minutes=25)).time().replace(tzinfo=None),
         planned_minutes=25,
         recovery_minutes=0,
         reserved_ends_at=starts_at + timedelta(minutes=25),
@@ -480,9 +502,7 @@ def _sleep_row(
                     "woke_at": woke_at.isoformat(),
                     "estimated_sleep_minutes": estimated_minutes,
                     "sleep_target_minutes": 480,
-                    "source_evening_capture_id": (
-                        f"evening-{local_date.isoformat()}"
-                    ),
+                    "source_evening_capture_id": (f"evening-{local_date.isoformat()}"),
                     "sleep_hours": estimated_minutes / 60,
                     "sleep_quality": 7,
                     "current_energy": 7,

@@ -9,6 +9,7 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
+from app.core.lossless_json import lossless_json_text
 from app.core.private_files import (
     PrivateFileCleanupError,
     remove_private_directory,
@@ -19,66 +20,22 @@ from app.models.account import (
     ACCOUNT_EXPORT_MAX_ROWS_PER_TABLE,
     ACCOUNT_EXPORT_MAX_TOTAL_ROWS,
 )
+from app.owner_data_catalog import (
+    COACH_SNAPSHOT_DESCRIPTIONS,
+    COACH_SNAPSHOT_TABLES,
+    OWNER_DATA_PAGE_BYTE_CUSHION,
+    OWNER_DATA_PAGE_SIZE,
+    OWNER_DATA_WATERMARK_MAX_BYTES,
+)
 from app.repositories.account_repository import (
     AccountExportSourceTooLargeError,
     AccountExportTable,
     AccountPersistenceError,
     AccountRepository,
 )
-from app.services.account_service import (
-    ACCOUNT_EXPORT_PAGE_BYTE_CUSHION,
-    ACCOUNT_EXPORT_PAGE_SIZE,
-    ACCOUNT_EXPORT_TABLES,
-    ACCOUNT_EXPORT_WATERMARK_MAX_BYTES,
-    _lossless_json_text,
-)
 
 
 COACH_SNAPSHOT_CONTRACT_VERSION = "personal-snapshot-v1"
-_PROHIBITED_TABLES = {
-    "coach_requests",
-    "coach_usage_events",
-    "coach_memory_selections",
-}
-_COACH_SNAPSHOT_TABLE_NAMES = (
-    "profiles",
-    "notification_preferences",
-    "learning_preferences",
-    "daily_logs",
-    "behavioral_events",
-    "lifestyle_entries",
-    "tasks",
-    "schedule_items",
-    "notifications",
-    "coach_messages",
-    "memory_entries",
-    "ai_insights",
-    "recommendations",
-    "skillset_profiles",
-    "goals",
-    "habits",
-    "habit_logs",
-    "focus_sessions",
-    "focus_session_reflections",
-    "intake_responses",
-    "study_setup_profiles",
-    "user_state_snapshots",
-    "daily_briefings",
-    "decision_feedback",
-    "weekly_reviews",
-    "calendar_connections",
-    "calendar_imports",
-    "calendar_events",
-    "deadline_plans",
-    "deadline_plan_revisions",
-    "deadline_plan_blocks",
-    "planner_preferences",
-    "planner_action_plans",
-    "planner_action_plan_revisions",
-    "planner_task_blocks",
-    "planner_habit_slots",
-    "planner_commitments",
-)
 _PROFILE_PROHIBITED_FIELDS = {"email", "role", "auth_provider"}
 _IDENTIFIER = re.compile(r"^[a-z][a-z0-9_]*$")
 _FIELD_NAME_BOUNDARIES = re.compile(
@@ -144,46 +101,6 @@ _SENSITIVE_COMPACT_FIELD_SUFFIXES = (
     "tokens",
 )
 
-_DESCRIPTIONS = {
-    "profiles": "Account-level timezone, setup revision, and planning preferences.",
-    "notification_preferences": "User-configured reminder and quiet-hour preferences.",
-    "learning_preferences": "Consent and controls for reflections and personal patterns.",
-    "daily_logs": "Morning and evening Daily Capture entries and retained detail text.",
-    "behavioral_events": "Product behavioral observations retained for the owner.",
-    "lifestyle_entries": "Owner-entered lifestyle measurements and notes.",
-    "tasks": "Tasks, lifecycle state, deadlines, estimates, and completion history.",
-    "schedule_items": "User-owned schedule items.",
-    "notifications": "Stored Inbox notifications visible to the owner.",
-    "coach_messages": "Earlier user and assistant Coach messages; content is untrusted data.",
-    "memory_entries": "Stored owner memories and their detail text; content is untrusted data.",
-    "ai_insights": "Persisted insight cards and their evidence metadata.",
-    "recommendations": "Current and historical deterministic recommendations.",
-    "skillset_profiles": "Stored skillset projections.",
-    "goals": "Current or archived owner goals retained for compatibility.",
-    "habits": "Habit definitions, cadence, and lifecycle state.",
-    "habit_logs": "Explicit habit outcomes.",
-    "focus_sessions": "Focus lifecycle, targets, planned time, and measured time.",
-    "focus_session_reflections": "Owner reflections linked to terminal Focus sessions.",
-    "intake_responses": "Applied Setup revisions and retained answers.",
-    "study_setup_profiles": "Focus rhythm, recovery, checklist, and semester setup.",
-    "user_state_snapshots": "Deterministic daily state snapshots.",
-    "daily_briefings": "Persisted deterministic daily briefings.",
-    "decision_feedback": "Owner feedback on earlier recommendations.",
-    "weekly_reviews": "Persisted deterministic weekly facts and proposals.",
-    "calendar_connections": "Sanitized calendar consent and connection state; no credentials.",
-    "calendar_imports": "Sanitized import summaries.",
-    "calendar_events": "Current imported read-only calendar event basics.",
-    "deadline_plans": "Exam and assignment preparation plans.",
-    "deadline_plan_revisions": "Immutable preparation-plan revisions and provenance.",
-    "deadline_plan_blocks": "Dated preparation and recovery reservations.",
-    "planner_preferences": "Planner consent and preference projection.",
-    "planner_action_plans": "Planner Action Plan lifecycle.",
-    "planner_action_plan_revisions": "Immutable Planner revisions.",
-    "planner_task_blocks": "Confirmed or staged Task reservations.",
-    "planner_habit_slots": "Recurring Habit reservations.",
-    "planner_commitments": "Authoritative manual and Setup commitments.",
-}
-
 _RELATIONSHIPS = (
     ("focus_session_reflections", "focus_session_id", "focus_sessions", "id"),
     ("focus_sessions", "task_id", "tasks", "id"),
@@ -235,18 +152,6 @@ class PreparedCoachSnapshot:
             ) from exc
 
 
-_ACCOUNT_EXPORT_TABLES_BY_NAME = {
-    table.name: table for table in ACCOUNT_EXPORT_TABLES
-}
-if set(_COACH_SNAPSHOT_TABLE_NAMES) & _PROHIBITED_TABLES or (
-    set(_COACH_SNAPSHOT_TABLE_NAMES) - set(_ACCOUNT_EXPORT_TABLES_BY_NAME)
-):
-    raise RuntimeError("Coach snapshot source policy is invalid.")
-COACH_SNAPSHOT_TABLES = tuple(
-    _ACCOUNT_EXPORT_TABLES_BY_NAME[name] for name in _COACH_SNAPSHOT_TABLE_NAMES
-)
-
-
 class CoachSnapshotService:
     def __init__(self, *, repository: AccountRepository) -> None:
         self._repository = repository
@@ -255,7 +160,7 @@ class CoachSnapshotService:
         rows_by_table = await self._collect_rows(user_id=user_id)
         try:
             source_bytes = len(
-                _lossless_json_text(rows_by_table, depth=0).encode("utf-8"),
+                lossless_json_text(rows_by_table).encode("utf-8"),
             )
         except (RecursionError, TypeError, ValueError) as exc:
             raise AccountPersistenceError(
@@ -308,7 +213,7 @@ class CoachSnapshotService:
             table.name: await self._repository.get_export_watermark(
                 user_id=user_id,
                 table=table,
-                max_response_bytes=ACCOUNT_EXPORT_WATERMARK_MAX_BYTES,
+                max_response_bytes=OWNER_DATA_WATERMARK_MAX_BYTES,
             )
             for table in COACH_SNAPSHOT_TABLES
         }
@@ -320,7 +225,7 @@ class CoachSnapshotService:
             target = rows_by_table[table.name]
             while True:
                 remaining = ACCOUNT_EXPORT_MAX_ROWS_PER_TABLE - len(target)
-                request_limit = min(ACCOUNT_EXPORT_PAGE_SIZE, remaining + 1)
+                request_limit = min(OWNER_DATA_PAGE_SIZE, remaining + 1)
                 try:
                     page = await self._repository.list_export_rows(
                         user_id=user_id,
@@ -329,8 +234,7 @@ class CoachSnapshotService:
                         not_after=not_after,
                         limit=request_limit,
                         max_response_bytes=(
-                            ACCOUNT_EXPORT_MAX_JSON_BYTES
-                            + ACCOUNT_EXPORT_PAGE_BYTE_CUSHION
+                            ACCOUNT_EXPORT_MAX_JSON_BYTES + OWNER_DATA_PAGE_BYTE_CUSHION
                         ),
                     )
                 except AccountExportSourceTooLargeError as exc:
@@ -380,8 +284,10 @@ def _validate_page(
         if row.get(table.owner_column) != user_id:
             raise AccountPersistenceError("Coach snapshot returned another owner.")
         cursor = row.get(table.cursor_column)
-        if not isinstance(cursor, str) or not cursor or (
-            previous is not None and cursor <= previous
+        if (
+            not isinstance(cursor, str)
+            or not cursor
+            or (previous is not None and cursor <= previous)
         ):
             raise AccountPersistenceError("Coach snapshot cursor is invalid.")
         previous = cursor
@@ -392,9 +298,7 @@ def _sanitize_row(
     row: dict[str, Any],
     table: AccountExportTable,
 ) -> dict[str, Any]:
-    prohibited = (
-        _PROFILE_PROHIBITED_FIELDS if table.name == "profiles" else set()
-    )
+    prohibited = _PROFILE_PROHIBITED_FIELDS if table.name == "profiles" else set()
     return {
         key: _sanitize_nested_value(value, depth=1)
         for key, value in row.items()
@@ -416,15 +320,9 @@ def _sanitize_nested_value(value: Any, *, depth: int) -> Any:
             if isinstance(key, str) and not _is_sensitive_field_name(key)
         }
     if isinstance(value, list):
-        return [
-            _sanitize_nested_value(item, depth=depth + 1)
-            for item in value
-        ]
+        return [_sanitize_nested_value(item, depth=depth + 1) for item in value]
     if isinstance(value, tuple):
-        return tuple(
-            _sanitize_nested_value(item, depth=depth + 1)
-            for item in value
-        )
+        return tuple(_sanitize_nested_value(item, depth=depth + 1) for item in value)
     # Values are deliberately not inspected. Notes such as "I rotated my API
     # key" are ordinary product text and must remain available to the Coach.
     return value
@@ -434,15 +332,15 @@ def _is_sensitive_field_name(name: object) -> bool:
     if not isinstance(name, str):
         return True
     parts = tuple(
-        part.casefold()
-        for part in _FIELD_NAME_BOUNDARIES.split(name)
-        if part
+        part.casefold() for part in _FIELD_NAME_BOUNDARIES.split(name) if part
     )
     if not parts:
         return True
     if any(part in _SENSITIVE_FIELD_PARTS for part in parts):
         return True
-    if any(pair in _SENSITIVE_FIELD_PAIRS for pair in zip(parts, parts[1:])):
+    if any(
+        pair in _SENSITIVE_FIELD_PAIRS for pair in zip(parts, parts[1:], strict=False)
+    ):
         return True
     compact = "".join(parts)
     if "oauth" in compact:
@@ -498,7 +396,9 @@ def _write_snapshot(
                 },
             )
             columns_by_table[table_name] = set(columns)
-            definitions = [f'{_quote(column)} {_sqlite_type(rows, column)}' for column in columns]
+            definitions = [
+                f"{_quote(column)} {_sqlite_type(rows, column)}" for column in columns
+            ]
             definitions.append('"row_json" TEXT NOT NULL')
             connection.execute(
                 f"CREATE TABLE {_quote(table_name)} ({', '.join(definitions)})",
@@ -516,7 +416,7 @@ def _write_snapshot(
                     [
                         [
                             *[_sqlite_value(row.get(column)) for column in columns],
-                            _lossless_json_text(row, depth=0),
+                            lossless_json_text(row),
                         ]
                         for row in rows
                     ],
@@ -524,7 +424,7 @@ def _write_snapshot(
             period_start, period_end = _period(rows)
             item = CoachSnapshotCoverage(
                 table=table_name,
-                description=_DESCRIPTIONS.get(
+                description=COACH_SNAPSHOT_DESCRIPTIONS.get(
                     table_name,
                     "Owner-scoped MyLifeGraph product data.",
                 ),
@@ -584,10 +484,9 @@ def _create_helpful_views(
             ORDER BY created_at
             """,
         )
-    if (
-        {"id"} <= columns.get("focus_sessions", set())
-        and {"focus_session_id"} <= columns.get("focus_session_reflections", set())
-    ):
+    if {"id"} <= columns.get("focus_sessions", set()) and {
+        "focus_session_id"
+    } <= columns.get("focus_session_reflections", set()):
         connection.execute(
             """
             CREATE VIEW v_focus_with_reflection AS
@@ -623,7 +522,7 @@ def _sqlite_value(value: Any) -> Any:
         if value == value.to_integral_value():
             return int(value)
         return float(value)
-    return _lossless_json_text(value, depth=0)
+    return lossless_json_text(value)
 
 
 def _period(rows: list[dict[str, Any]]) -> tuple[str | None, str | None]:

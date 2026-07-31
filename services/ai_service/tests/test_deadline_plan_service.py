@@ -95,7 +95,7 @@ def test_planner_spreads_first_sessions_and_treats_buffer_as_hard() -> None:
     assert block_days[-1] == date(2026, 7, 28)
     assert all(
         (right - left).days > 1
-        for left, right in zip(block_days, block_days[1:])
+        for left, right in zip(block_days, block_days[1:], strict=False)
     )
     assert all(day < date(2026, 7, 29) for day in block_days)
 

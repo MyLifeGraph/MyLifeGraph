@@ -559,18 +559,22 @@ def calendar_days(starts_on: date, ends_on: date) -> Iterable[date]:
 
 
 def round_up_quarter_hour(value: datetime) -> datetime:
-    rounded = value.replace(second=0, microsecond=0)
-    remainder = rounded.minute % 15
-    if remainder:
-        rounded += timedelta(minutes=15 - remainder)
-    return rounded
+    return _ceil_local_minutes(value, increment_minutes=15)
 
 
 def ceil_local_five_minutes(value: datetime) -> datetime:
+    return _ceil_local_minutes(value, increment_minutes=5)
+
+
+def _ceil_local_minutes(
+    value: datetime,
+    *,
+    increment_minutes: int,
+) -> datetime:
     rounded = value.replace(second=0, microsecond=0)
-    remainder = rounded.minute % 5
-    if remainder:
-        rounded += timedelta(minutes=5 - remainder)
+    remainder = rounded.minute % increment_minutes
+    if remainder or value.second or value.microsecond:
+        rounded += timedelta(minutes=increment_minutes - remainder)
     return rounded
 
 

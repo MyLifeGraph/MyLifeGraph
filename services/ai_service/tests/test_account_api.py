@@ -3,7 +3,8 @@ from datetime import UTC, datetime, timedelta
 
 import httpx
 
-from app.api.deps.auth import Principal
+from app.api.deps.auth import Principal, get_token_verifier
+from app.api.deps.services import get_account_service
 from app.main import create_app
 from app.models.account import (
     ACCOUNT_EXPORT_MAX_JSON_BYTES,
@@ -31,6 +32,7 @@ from app.services.account_service import (
     InvalidPreparationBudgetError,
     PreparedAccountExport,
 )
+from tests.api_test_dependencies import override_dependency
 
 
 USER_ID = "account-owner"
@@ -166,13 +168,9 @@ async def _request(
 ):
     app = create_app()
     account_service = service or Service()
-    app.state.token_verifier = Verifier(authenticated_at)
-    app.state.account_service = account_service
-    headers = (
-        {"Authorization": "Bearer valid-account-token"}
-        if authenticated
-        else {}
-    )
+    override_dependency(app, get_token_verifier, Verifier(authenticated_at))
+    override_dependency(app, get_account_service, account_service)
+    headers = {"Authorization": "Bearer valid-account-token"} if authenticated else {}
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app),
         base_url="http://test",
@@ -438,12 +436,11 @@ def test_delete_requires_recent_authentication_before_service_call() -> None:
     for authenticated_at in cases:
         service = Service()
         app = create_app()
-        app.state.token_verifier = ExplicitAuthenticationTimeVerifier(
-            authenticated_at,
-        )
-        app.state.account_service = service
+        verifier = ExplicitAuthenticationTimeVerifier(authenticated_at)
+        override_dependency(app, get_token_verifier, verifier)
+        override_dependency(app, get_account_service, service)
 
-        async def request_delete():
+        async def request_delete(app=app):
             async with httpx.AsyncClient(
                 transport=httpx.ASGITransport(app=app),
                 base_url="http://test",

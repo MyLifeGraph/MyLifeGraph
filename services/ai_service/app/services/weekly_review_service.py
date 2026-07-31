@@ -23,7 +23,6 @@ from app.models.weekly_reviews import (
     WeeklyReviewHabitCadence,
     WeeklyReviewHabitState,
     WeeklyReviewProposal,
-    WeeklyReviewProposalChange,
     WeeklyReviewProvenance,
     WeeklyReviewReadResponse,
     WeeklyTaskFacts,
@@ -761,7 +760,6 @@ def _proposals(
     for review in habit_reviews:
         if not review.stable:
             continue
-        habit_id = _row_id(review.row)
         title = _bounded_title(review.row.get("title"))
         updated_at = _aware_datetime(review.row.get("updated_at"))
         if title is None or updated_at is None:
