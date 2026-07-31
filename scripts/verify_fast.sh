@@ -31,6 +31,7 @@ run_source_checks() {
   bash -n scripts/verify_supabase_local.sh
   bash -n scripts/verify_web.sh
   bash -n scripts/verify_affected.sh
+  bash -n scripts/update_python_requirements.sh
   bash -n scripts/cleanup_local_e2e_users.sh
   bash -n scripts/seed_demo_data.sh
   bash scripts/test_local_supabase_migrations.sh
@@ -40,10 +41,11 @@ run_source_checks() {
   node --check scripts/check_docs_consistency.test.mjs
   node --check scripts/check_frontend_visual_contract.mjs
   node --check scripts/check_frontend_visual_contract.test.mjs
+  node --check scripts/check_e2e_split_contract.mjs
+  node --check scripts/check_e2e_split_contract.test.mjs
   node --check scripts/seed_demo_data.mjs
   node --check scripts/seed_demo_contract.mjs
   node --check scripts/seed_demo_contract.test.mjs
-  node --check e2e/web/legacy-full.mjs
   node --check e2e/web/playwright.config.mjs
   node --check e2e/web/fixtures/e2e.fixture.mjs
   node --check e2e/web/support/api-client.mjs
@@ -58,12 +60,14 @@ run_source_checks() {
   node --check scripts/verify_affected.mjs
   node --test scripts/check_docs_consistency.test.mjs
   node --test scripts/check_frontend_visual_contract.test.mjs
+  node --test scripts/check_e2e_split_contract.test.mjs
   node --test scripts/seed_demo_contract.test.mjs
   node --test e2e/web/support/local-auth-users.test.mjs
   node --test scripts/cleanup_local_e2e_users.test.mjs
   node --test scripts/verify_affected.test.mjs
   node scripts/check_docs_consistency.mjs
   node scripts/check_frontend_visual_contract.mjs
+  node scripts/check_e2e_split_contract.mjs
 
   python3 -m py_compile scripts/seed_student_feature_data.py
   python3 -m py_compile scripts/generate_brand_assets.py
@@ -81,6 +85,7 @@ run_backend_checks() {
   cd "$ROOT_DIR"
   "$PYTHON_BIN" -m compileall -q services/ai_service/app
   cd "$ROOT_DIR/services/ai_service"
+  "$PYTHON_BIN" -m ruff check app tests
   "$PYTHON_BIN" -m pytest
 }
 

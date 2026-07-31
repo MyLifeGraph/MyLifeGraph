@@ -142,12 +142,13 @@ export const test = base.extend({
         }
         setupComplete = true;
       },
-      async signInUi() {
+      async signInUi({ expectedPath = '/dashboard' } = {}) {
         await signInThroughFlutter({
           page,
           appUrl,
           email: identity.email,
           password: identity.password,
+          expectedPath,
         });
       },
     };

@@ -4,14 +4,23 @@ import { defineConfig } from 'playwright/test';
 
 const suite = process.env.E2E_SUITE ?? 'full';
 const suiteGrep = {
-  smoke:
-    /@(auth-capture-today|planner-confirm|authority|account-controls|coach|personal-learning)\b/,
-  'new-full':
-    /@(auth-capture-today|planner-confirm|authority|account-controls|coach|personal-learning)\b/,
+  smoke: /@(setup-onboarding|auth-capture-today|planner-confirm|coach)\b/,
   full: undefined,
 };
 if (!(suite in suiteGrep)) {
   throw new Error(`Unknown E2E_SUITE: ${suite}`);
+}
+const journey = process.env.E2E_JOURNEY ?? '';
+const knownJourneys = new Set([
+  'setup-onboarding',
+  'auth-capture-today',
+  'planner-confirm',
+  'account-controls',
+  'coach',
+  'personal-learning',
+]);
+if (journey !== '' && !knownJourneys.has(journey)) {
+  throw new Error(`Unknown E2E_JOURNEY: ${journey}`);
 }
 
 const artifactDir = path.resolve(
@@ -27,7 +36,7 @@ export default defineConfig({
   timeout: 30 * 60 * 1000,
   globalTimeout: 45 * 60 * 1000,
   expect: { timeout: 15000 },
-  grep: suiteGrep[suite],
+  grep: journey === '' ? suiteGrep[suite] : new RegExp(`@${journey}\\b`),
   reporter: [
     ['line'],
     ['./support/duration-reporter.mjs'],

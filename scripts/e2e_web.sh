@@ -5,6 +5,8 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$ROOT_DIR/scripts/lib/local_supabase_migrations.sh"
 
 FLUTTER_BIN="${FLUTTER_BIN:-flutter}"
+FLUTTER_WEB_MODE="${FLUTTER_WEB_MODE:-profile}"
+STATIC_SERVER_PYTHON="${STATIC_SERVER_PYTHON:-python3}"
 NODE_BIN="${NODE_BIN:-node}"
 HOST="${HOST:-127.0.0.1}"
 PORT="${PORT:-7357}"
@@ -14,10 +16,9 @@ AI_SERVICE_PORT="${AI_SERVICE_PORT:-8000}"
 AI_SERVICE_BASE_URL="${AI_SERVICE_BASE_URL:-http://$AI_SERVICE_HOST:$AI_SERVICE_PORT}"
 AI_SERVICE_START="${AI_SERVICE_START-true}"
 HEADED="${HEADED-false}"
-E2E_PHASE10_ONLY="${E2E_PHASE10_ONLY-false}"
-E2E_PERSONAL_LEARNING_ONLY="${E2E_PERSONAL_LEARNING_ONLY-false}"
 E2E_SEMANTICS_PRE_ENABLED="${E2E_SEMANTICS_PRE_ENABLED-true}"
 E2E_SUITE="${E2E_SUITE-full}"
+E2E_JOURNEY="${E2E_JOURNEY-}"
 LEARNED_FOCUS_PLANNING_PILOT_ENABLED="${LEARNED_FOCUS_PLANNING_PILOT_ENABLED-true}"
 RESET_DB="${RESET_DB-false}"
 APPLY_MIGRATIONS="${APPLY_MIGRATIONS-false}"
@@ -49,16 +50,21 @@ local_supabase_validate_migration_flags \
   "$RESET_DB" "$APPLY_MIGRATIONS" true || exit $?
 local_supabase_validate_boolean AI_SERVICE_START "$AI_SERVICE_START" || exit $?
 local_supabase_validate_boolean HEADED "$HEADED" || exit $?
-local_supabase_validate_boolean E2E_PHASE10_ONLY "$E2E_PHASE10_ONLY" || exit $?
-local_supabase_validate_boolean \
-  E2E_PERSONAL_LEARNING_ONLY \
-  "$E2E_PERSONAL_LEARNING_ONLY" || exit $?
 local_supabase_validate_boolean \
   E2E_SEMANTICS_PRE_ENABLED \
   "$E2E_SEMANTICS_PRE_ENABLED" || exit $?
 local_supabase_validate_boolean \
   LEARNED_FOCUS_PLANNING_PILOT_ENABLED \
   "$LEARNED_FOCUS_PLANNING_PILOT_ENABLED" || exit $?
+if [[ ! "$FLUTTER_WEB_MODE" =~ ^(debug|profile|release)$ ]]; then
+  echo "FLUTTER_WEB_MODE must be debug, profile, or release." >&2
+  exit 64
+fi
+if [[ "$FLUTTER_WEB_MODE" != "debug" ]] &&
+  ! command -v "$STATIC_SERVER_PYTHON" >/dev/null 2>&1; then
+  echo "Static-server Python is not available as '$STATIC_SERVER_PYTHON'." >&2
+  exit 127
+fi
 
 if [[ ! "$E2E_RUN_ID" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,57}$ ]]; then
   echo "E2E_RUN_ID must contain 1-58 safe filename/email-token characters." >&2
@@ -72,19 +78,22 @@ if [[ -e "$E2E_RUN_DIR" ]]; then
 fi
 mkdir -p "$E2E_RUN_DIR"
 
-if [[ "$E2E_PHASE10_ONLY" == "true" &&
-  "$E2E_PERSONAL_LEARNING_ONLY" == "true" ]]; then
-  echo "E2E_PHASE10_ONLY and E2E_PERSONAL_LEARNING_ONLY are mutually exclusive." >&2
+if [[ ! "$E2E_SUITE" =~ ^(smoke|full)$ ]]; then
+  echo "E2E_SUITE must be smoke or full." >&2
   exit 64
 fi
 
-if [[ ! "$E2E_SUITE" =~ ^(smoke|new-full|legacy|full)$ ]]; then
-  echo "E2E_SUITE must be smoke, new-full, legacy, or full." >&2
+if [[ -n "$E2E_JOURNEY" &&
+  ! "$E2E_JOURNEY" =~ ^(setup-onboarding|auth-capture-today|planner-confirm|account-controls|coach|personal-learning)$ ]]; then
+  echo "E2E_JOURNEY must name one current Playwright journey." >&2
   exit 64
 fi
 
-if [[ "$E2E_PHASE10_ONLY" != "true" &&
-  "$LEARNED_FOCUS_PLANNING_PILOT_ENABLED" != "true" ]]; then
+if [[
+  ( -z "$E2E_JOURNEY" && "$E2E_SUITE" == "full" ||
+    "$E2E_JOURNEY" == "personal-learning" ) &&
+  "$LEARNED_FOCUS_PLANNING_PILOT_ENABLED" != "true"
+]]; then
   echo "Personal Learning browser coverage requires LEARNED_FOCUS_PLANNING_PILOT_ENABLED=true." >&2
   exit 64
 fi
@@ -242,31 +251,41 @@ emit_timing "fastapi" "$fastapi_started_at"
 
 flutter_started_at="$(timer_now_ms)"
 cd "$ROOT_DIR/apps/mobile"
-USE_MOCK_DATA=false \
-APP_ENV=development \
-SUPABASE_URL="$api_url" \
-SUPABASE_ANON_KEY="$local_anon_key" \
-AI_SERVICE_BASE_URL="$AI_SERVICE_BASE_URL" \
-"$FLUTTER_BIN" run -d web-server \
-  --web-hostname "$HOST" \
-  --web-port "$PORT" \
-  --dart-define=APP_ENV=development \
-  --dart-define=USE_MOCK_DATA=false \
-  --dart-define=SUPABASE_URL="$api_url" \
-  --dart-define=SUPABASE_ANON_KEY="$local_anon_key" \
-  --dart-define=AI_SERVICE_BASE_URL="$AI_SERVICE_BASE_URL" \
-  --dart-define=COACH_SURFACE_ENABLED=true \
-  --dart-define=LEARNED_FOCUS_PLANNING_PILOT_ENABLED="$LEARNED_FOCUS_PLANNING_PILOT_ENABLED" \
-  --dart-define=E2E_ENABLE_SEMANTICS=true \
-  >"$FLUTTER_LOG" 2>&1 &
-FLUTTER_PID="$!"
+flutter_define_args=(
+  --dart-define=APP_ENV=development
+  --dart-define=USE_MOCK_DATA=false
+  --dart-define=SUPABASE_URL="$api_url"
+  --dart-define=SUPABASE_ANON_KEY="$local_anon_key"
+  --dart-define=AI_SERVICE_BASE_URL="$AI_SERVICE_BASE_URL"
+  --dart-define=COACH_SURFACE_ENABLED=true
+  --dart-define=LEARNED_FOCUS_PLANNING_PILOT_ENABLED="$LEARNED_FOCUS_PLANNING_PILOT_ENABLED"
+  --dart-define=E2E_ENABLE_SEMANTICS=true
+)
+if [[ "$FLUTTER_WEB_MODE" == "debug" ]]; then
+  "$FLUTTER_BIN" run -d web-server \
+    --debug \
+    --web-hostname "$HOST" \
+    --web-port "$PORT" \
+    "${flutter_define_args[@]}" \
+    >"$FLUTTER_LOG" 2>&1 &
+  FLUTTER_PID="$!"
+else
+  "$FLUTTER_BIN" build web \
+    "--$FLUTTER_WEB_MODE" \
+    "${flutter_define_args[@]}" \
+    >"$FLUTTER_LOG" 2>&1
+  "$STATIC_SERVER_PYTHON" -m http.server "$PORT" \
+    --bind "$HOST" \
+    --directory "$ROOT_DIR/apps/mobile/build/web" \
+    >>"$FLUTTER_LOG" 2>&1 &
+  FLUTTER_PID="$!"
+fi
 
 cd "$ROOT_DIR"
 echo "Waiting for Flutter Web at $APP_URL"
 flutter_ready=false
 for _ in {1..120}; do
-  if grep -q "is being served at" "$FLUTTER_LOG" &&
-    curl -fsS "$APP_URL/" >/dev/null 2>&1; then
+  if curl -fsS "$APP_URL/" >/dev/null 2>&1; then
     flutter_ready=true
     break
   fi
@@ -287,54 +306,20 @@ emit_timing "flutter" "$flutter_started_at"
 
 runner_started_at="$(timer_now_ms)"
 set +e
-if [[ "$E2E_PHASE10_ONLY" == "true" ||
-  "$E2E_PERSONAL_LEARNING_ONLY" == "true" ||
-  "$E2E_SUITE" == "legacy" ]]; then
-  APP_URL="$APP_URL" \
-  SUPABASE_URL="$api_url" \
-  SUPABASE_ANON_KEY="$local_anon_key" \
-  SUPABASE_SERVICE_ROLE_KEY="$local_service_role_key" \
-  AI_SERVICE_BASE_URL="$AI_SERVICE_BASE_URL" \
-  SCHEDULED_REFRESH_TOKEN="$SCHEDULED_REFRESH_TOKEN" \
-  E2E_PHASE10_ONLY="$E2E_PHASE10_ONLY" \
-  E2E_PERSONAL_LEARNING_ONLY="$E2E_PERSONAL_LEARNING_ONLY" \
-  E2E_SEMANTICS_PRE_ENABLED="$E2E_SEMANTICS_PRE_ENABLED" \
-  E2E_ARTIFACT_DIR="$E2E_RUN_DIR" \
-  E2E_RUN_ID="$E2E_RUN_ID" \
-  "$NODE_BIN" e2e/web/legacy-full.mjs
-  runner_status=$?
-else
-  APP_URL="$APP_URL" \
-  SUPABASE_URL="$api_url" \
-  SUPABASE_ANON_KEY="$local_anon_key" \
-  SUPABASE_SERVICE_ROLE_KEY="$local_service_role_key" \
-  AI_SERVICE_BASE_URL="$AI_SERVICE_BASE_URL" \
-  SCHEDULED_REFRESH_TOKEN="$SCHEDULED_REFRESH_TOKEN" \
-  E2E_PHASE10_ONLY=false \
-  E2E_PERSONAL_LEARNING_ONLY=false \
-  E2E_SEMANTICS_PRE_ENABLED="$E2E_SEMANTICS_PRE_ENABLED" \
-  E2E_ARTIFACT_DIR="$E2E_RUN_DIR" \
-  E2E_RUN_ID="$E2E_RUN_ID" \
-  E2E_SUITE="$E2E_SUITE" \
-  "$ROOT_DIR/node_modules/.bin/playwright" test \
-    --config e2e/web/playwright.config.mjs
-  runner_status=$?
-  if [[ "$runner_status" -eq 0 && "$E2E_SUITE" == "full" ]]; then
-    APP_URL="$APP_URL" \
-    SUPABASE_URL="$api_url" \
-    SUPABASE_ANON_KEY="$local_anon_key" \
-    SUPABASE_SERVICE_ROLE_KEY="$local_service_role_key" \
-    AI_SERVICE_BASE_URL="$AI_SERVICE_BASE_URL" \
-    SCHEDULED_REFRESH_TOKEN="$SCHEDULED_REFRESH_TOKEN" \
-    E2E_PHASE10_ONLY=false \
-    E2E_PERSONAL_LEARNING_ONLY=false \
-    E2E_SEMANTICS_PRE_ENABLED="$E2E_SEMANTICS_PRE_ENABLED" \
-    E2E_ARTIFACT_DIR="$E2E_RUN_DIR" \
-    E2E_RUN_ID="$E2E_RUN_ID" \
-    "$NODE_BIN" e2e/web/legacy-full.mjs
-    runner_status=$?
-  fi
-fi
+APP_URL="$APP_URL" \
+SUPABASE_URL="$api_url" \
+SUPABASE_ANON_KEY="$local_anon_key" \
+SUPABASE_SERVICE_ROLE_KEY="$local_service_role_key" \
+AI_SERVICE_BASE_URL="$AI_SERVICE_BASE_URL" \
+SCHEDULED_REFRESH_TOKEN="$SCHEDULED_REFRESH_TOKEN" \
+E2E_SEMANTICS_PRE_ENABLED="$E2E_SEMANTICS_PRE_ENABLED" \
+E2E_ARTIFACT_DIR="$E2E_RUN_DIR" \
+E2E_RUN_ID="$E2E_RUN_ID" \
+E2E_SUITE="$E2E_SUITE" \
+E2E_JOURNEY="$E2E_JOURNEY" \
+"$ROOT_DIR/node_modules/.bin/playwright" test \
+  --config e2e/web/playwright.config.mjs
+runner_status=$?
 set -e
 emit_timing "runner" "$runner_started_at"
 exit "$runner_status"

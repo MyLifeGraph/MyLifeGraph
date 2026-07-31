@@ -78,7 +78,7 @@ test('@planner-confirm proposes and confirms one immutable Task plan', async ({
 
   await e2e.signInUi();
   await openFlutterRoute(page, e2e.appUrl, '/planner');
-  await expectFlutterText(page, 'Add new');
+  await expectFlutterText(page, title);
 });
 
 function addDays(isoDate, days) {

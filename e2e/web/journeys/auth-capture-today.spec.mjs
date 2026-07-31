@@ -34,7 +34,7 @@ test('@auth-capture-today signs in, persists Evening, and renders Today', async 
           mood: 7,
           energy: 6,
           stress_intensity: 3,
-          stress_intensity_label: 'Low',
+          stress_intensity_label: 'low',
           planned_sleep_time: '23:00',
           sleep_target_minutes: 480,
         },
@@ -64,6 +64,7 @@ test('@auth-capture-today signs in, persists Evening, and renders Today', async 
     'Today overview after capture',
   );
   expect(today.json?.contract_version).toBe('today-overview-v2');
+  expect(today.json?.check_ins?.evening_saved).toBe(true);
   const persisted = await e2e.db.select(
     `daily_logs?select=entry_date,metadata&entry_date=eq.${localDate}`,
   );
@@ -72,4 +73,5 @@ test('@auth-capture-today signs in, persists Evening, and renders Today', async 
 
   await e2e.signInUi();
   await expectFlutterText(page, 'Today at a glance');
+  await expectFlutterText(page, 'Edit Evening check-in');
 });

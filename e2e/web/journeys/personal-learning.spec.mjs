@@ -50,4 +50,6 @@ test('@personal-learning updates preferences and renders transparent evidence', 
   await e2e.signInUi();
   await openFlutterRoute(page, e2e.appUrl, '/insights');
   await expectFlutterText(page, 'PERSONAL STUDY PATTERN');
+  await expectFlutterText(page, '0 rated sessions');
+  await expectFlutterText(page, '90-day window');
 });
