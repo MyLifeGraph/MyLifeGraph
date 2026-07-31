@@ -338,9 +338,14 @@ The AI service is optional for the default mock-data app preview.
 cd services/ai_service
 python -m venv .venv
 source .venv/bin/activate
-pip install -r requirements-dev.txt
+python -m pip install --require-hashes -r requirements-dev.txt
 uvicorn app.main:app --reload --port 8000
 ```
+
+The committed development lock installs the exact tested dependency graph,
+including pytest and the non-mutating Ruff check. Direct compatibility ranges
+remain in `pyproject.toml`; see `services/ai_service/README.md` for the
+deliberate lock-update workflow.
 
 Then check:
 
@@ -674,10 +679,10 @@ FLUTTER_BIN=/path/to/flutter npm run verify:fast
 ```
 
 This runs docs and visual contracts, Flutter dependency resolution, analysis
-and the complete Flutter suite, the complete FastAPI pytest suite, compile and
-source checks, and `git diff --check`. The compatible `npm run verify` and
-`scripts/verify.sh` aliases select the same gate. Run only the docs gate with
-`npm run verify:docs`.
+and the complete Flutter suite, the non-mutating FastAPI Ruff gate, the complete
+FastAPI pytest suite, compile and source checks, and `git diff --check`. The
+compatible `npm run verify` and `scripts/verify.sh` aliases select the same
+gate. Run only the docs gate with `npm run verify:docs`.
 
 The other stable verification interfaces are:
 
@@ -746,13 +751,12 @@ FLUTTER_BIN=/path/to/flutter npm run e2e:web:smoke
 FLUTTER_BIN=/path/to/flutter npm run e2e:web:full
 ```
 
-`e2e:web:smoke` runs six serial, independently provisioned wiring journeys for
-Auth/Capture/Today, Planner confirmation, authority, account controls, Coach,
-and Personal Learning. `e2e:web:full` first runs that split Playwright suite and
-then the unchanged detailed legacy regression as a coverage-parity oracle.
-During the migration, `e2e:web:new-full` and `e2e:web:legacy` can diagnose
-either half separately; the legacy oracle is removed only after its assertions
-have moved to isolated specs or lower-level tests.
+`e2e:web:smoke` runs four serial, independently provisioned critical UI
+journeys for Setup, Auth/Capture/Today, Planner confirmation, and Coach.
+`e2e:web:full` runs all six independent Playwright journeys, adding account
+controls and Personal Learning. Pure HTTP, persistence, replay, authorization,
+RLS, and database-constraint assertions stay in pytest or pgTAP instead of
+being duplicated in a browser script.
 
 The normal E2E command likewise requires current migration history and never
 applies pending SQL automatically. Use `APPLY_MIGRATIONS=true` only after
@@ -768,10 +772,10 @@ cleanup, prints per-test duration records, and retains a Playwright trace plus
 screenshot for a failed spec. Parallel execution stays disabled until the
 journeys are proven state-independent.
 
-For diagnosis only, `E2E_PHASE10_ONLY=true` plus a fresh unique run id creates
-a minimal eligible local principal and runs only the Coach portion. Reusing an
-id fails closed. It is not a substitute for the full command; see
-`docs/verification.md`.
+For diagnosis only, `E2E_JOURNEY=coach` plus a fresh unique run id runs the
+independent Coach journey. Any current journey filename without
+`.spec.mjs` is accepted. Reusing an id fails closed. A focused journey is not
+a substitute for the full command; see `docs/verification.md`.
 
 Old E2E accounts are intentionally not swept by normal runs. Preview the
 separate local-only cleanup with:
@@ -868,8 +872,6 @@ has the nvm bin directory on `PATH`.
 - `docs/deadline-planner-v1-contract.md` - Explicit exam/assignment estimates,
   staged deterministic blocks, revision confirmation, focus progress, calendar
   isolation, and retry-safe ownership.
-- `docs/product-polish-follow-up.md` - Completion status for capability-truth
-  and plain-language polish, with the manual student study still explicit.
 - `docs/ui-language-and-copy-contract.md` - English V1 language decision,
   canonical surface names, capability wording, and accessibility copy gate.
 - `docs/student-usability-test-script.md` - Ready-to-run five-student journey,
@@ -894,11 +896,6 @@ has the nvm bin directory on `PATH`.
 - `docs/v1-account-controls-contract.md` - Authenticated timezone and daily
   preparation budget, strict data export, password recovery, and permanent
   account-deletion contract.
-- `docs/local-product-completion-handoff.md` - Ordered local completion plan for
-  the real Coach, notifications, scheduling, visible actions, full-stack startup,
-  and release-candidate verification before Android production work.
-- `docs/next-chat-prompt.md` - Ready-to-use prompt for the next critical review
-  and test pass.
 - `apps/mobile/README.md` - Flutter app commands and configuration.
 - `services/ai_service/README.md` - FastAPI service setup and endpoints.
 - `AGENTS.md` - Instructions for agents working in this repo.

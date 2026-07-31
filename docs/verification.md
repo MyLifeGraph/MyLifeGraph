@@ -11,11 +11,47 @@ Capture V4, Daily State V2, Exam-Week Outlook V1, or Coach V3 expectations.
 
 ## Current Verified Baseline
 
-The post-review stabilization working tree was reverified locally on
-2026-07-30. The complete FastAPI suite reported
-`1115 passed, 2 skipped`; full Flutter verification reported `726` passing
-tests and clean analysis. The frontend visual contract and documentation
-consistency checks passed, and `git diff --check` was clean.
+The current architecture-remediation working tree was reverified locally on
+2026-07-31 through implementation and cleanup. The
+complete FastAPI suite reported `1132 passed, 2 skipped`; full Flutter
+verification reported `760` passing tests and clean analysis.
+The frontend visual contract and documentation consistency checks passed.
+The final six-journey Playwright gate passed against a statically served
+profile-mode Flutter bundle in 2:26 of journeys and 2:35 runner time. Each
+journey used an independent account; cleanup deleted five exact users and
+confirmed the UI account-deletion subject already absent. The four-journey
+smoke and isolated Setup journey also passed during migration.
+The affected full-gate components also passed against this working tree:
+repository/local migration history matched, all 142 pgTAP assertions passed,
+the debug web build completed, and all six isolated Playwright journeys
+passed. The now-retired monolithic regression then passed in 15:37 runner time
+with 14:48
+of journeys, 49 pre-enabled Semantics checks with a 0.425-second maximum, and
+exact cleanup of all six registered users (five deleted and the account-delete
+subject already absent). The final source and diff checks are rerun after each
+subsequent remediation item.
+After the application-owned Supabase HTTP pool was introduced, the six-spec
+split browser smoke passed again in 1:56 runner time and 1:48 of journeys,
+including exact per-spec Auth cleanup.
+The Python dependency and lint remediation was then verified from a fresh
+Python 3.12 virtual environment: the committed development lock installed with
+hash enforcement, Ruff passed without modifying source, the complete backend
+suite passed against that locked graph, and `verify:fast` passed with the same
+then-current backend and Flutter counts. Regenerating both locks without
+`--upgrade` retained their exact SHA-256 file digests.
+The profile-local Flutter date boundary is covered by focused IANA
+cross-midnight/DST, invalid-account-timezone, guest-device, standalone/embedded
+Habit, Daily Capture, Focus, and Deadline tests. Clean analysis and all `734`
+Flutter tests passed for this remediation item.
+The Flutter transport boundary has focused timeout, connection/offline,
+cancellation, response/status/body, authorization, conflict, and ambiguous
+mutation-outcome coverage. Controller and widget suites retain the existing
+Setup, Calendar, Planner, Deadline Planner, Notification, Account, Learning,
+and Coach retry/reload semantics. A source test fails if any feature
+application, domain, or presentation layer imports Dio. Clean analysis and all
+`742` Flutter tests passed; the final `verify:fast` run also passed the
+documentation, visual, source, diff, Ruff, and complete 1,121-passed/2-skipped
+backend gates.
 
 Before the P0 test-infrastructure work, the recorded warm timings were
 25.08 seconds for the standard repository gate, 23.10 seconds for the old
@@ -116,11 +152,9 @@ Use the lowest level that covers the change.
 | Local Supabase migration apply | `APPLY_MIGRATIONS=true npm run verify:db` | Explicitly applies reviewed pending SQL, verifies history, then runs pgTAP. | May change or delete local rows |
 | Local Supabase reset | `RESET_DB=true npm run verify:db` | Recreates local DB, applies migrations, then runs pgTAP. | Yes, local DB only |
 | Full | `FLUTTER_BIN=/path/to/flutter npm run verify:full` | Runs fast, database, web-build, and full browser E2E gates. | No reset; E2E writes and removes exact test users |
-| Browser smoke | `FLUTTER_BIN=/path/to/flutter npm run e2e:web:smoke` | Runs six representative tagged wiring specs serially with independent accounts. | No reset; removes each spec's exact users |
-| New split suite | `FLUTTER_BIN=/path/to/flutter npm run e2e:web:new-full` | Runs every independent Playwright journey currently migrated from the oracle. | No reset; removes each spec's exact users |
-| Browser full | `FLUTTER_BIN=/path/to/flutter npm run e2e:web:full` | Runs the split suite, then the unchanged detailed legacy assertion oracle. | No reset; removes all exact test users |
-| Legacy parity oracle | `FLUTTER_BIN=/path/to/flutter npm run e2e:web:legacy` | Diagnoses the retained detailed regression alone while assertions are migrated. | No reset; removes its exact test users |
-| Personal Learning E2E | `E2E_PERSONAL_LEARNING_ONLY=true FLUTTER_BIN=/path/to/flutter bash scripts/e2e_web.sh` | Runs the focused reflection, Evening edit, pattern, learned-Planner, export, clear, and account-cascade journey. | No reset; writes and then deletes one test account |
+| Browser smoke | `FLUTTER_BIN=/path/to/flutter npm run e2e:web:smoke` | Runs four representative tagged UI journeys serially with independent accounts. | No reset; removes each spec's exact users |
+| Browser full | `FLUTTER_BIN=/path/to/flutter npm run e2e:web:full` | Runs all six independent Playwright UI journeys. | No reset; removes each spec's exact users |
+| Focused browser journey | `E2E_JOURNEY=coach FLUTTER_BIN=/path/to/flutter bash scripts/e2e_web.sh` | Runs one named current journey for diagnosis; any journey filename without `.spec.mjs` is accepted. | No reset; removes the spec's exact users |
 | Browser E2E with reset | `RESET_DB=true FLUTTER_BIN=/path/to/flutter bash scripts/e2e_web.sh` | Recreates local DB, then runs browser E2E. | Yes, local DB only |
 | Demo seed | `npm run seed:demo` | Starts local Supabase and replaces only the four named local demo accounts: one fresh Setup identity and three populated scenarios. | Demo accounts only |
 
@@ -218,6 +252,7 @@ runs:
 - `flutter analyze`
 - the complete `flutter test` suite
 - `python3 -m compileall services/ai_service/app`
+- the non-mutating `python -m ruff check app tests` backend gate
 - the complete `python -m pytest` suite
 - `git diff --check`
 
@@ -227,7 +262,8 @@ migration-history checks plus pgTAP and never repeats Flutter tests.
 The stabilization evidence must include branch-CAS Capture writes, revisioned
 account settings, Setup-owned DML guards, timezone-bound Calendar/Planner
 races, observed Snapshot/Weekly Review ordering, Berlin DST gap/fold and
-cross-midnight cases, and Flutter durable-write/reload-failure states. The
+cross-midnight cases, Flutter profile/device date disagreement, and durable-
+write/reload-failure states. The
 strict source is `docs/stabilization-consistency-contract.md`. A Coach/LLM live
 smoke is not required for this package.
 
@@ -261,11 +297,15 @@ FastAPI unit tests are run separately:
 
 ```bash
 cd services/ai_service
+./.venv/bin/python -m ruff check app tests
 ./.venv/bin/python -m pytest
 ```
 
 Use `python -m pytest` from an environment with `services/ai_service`
-requirements installed if the local `.venv` does not exist.
+requirements installed if the local `.venv` does not exist. CI and clean
+environments install the committed `requirements-dev.txt` with
+`--require-hashes`; direct dependency ranges remain in `pyproject.toml` and are
+advanced only through the documented deliberate lock-update workflow.
 
 Phase 10 follows that locked separation: every normal FastAPI, Flutter,
 Supabase, and browser check uses an injected deterministic fake Coach provider.
@@ -365,6 +405,15 @@ arithmetic, and isolated source failures. Flutter tests repeat exact response
 and nested-key validation, reject inconsistent progress, prove authenticated
 GET versus local guest zero-call behavior, and cover section order, lazy `More`,
 all-task expansion, source-error truth, and 320-pixel/2.0-text-scale rendering.
+Feature-local controller tests separately cover every Today Task command port,
+Habit outcome targeting, in-flight deduplication, unconfirmed write failures,
+durable-write/failed-reload optimism, reload-only recovery, and invalid
+non-account projections. A source guard keeps concrete Task/Habit data sources
+out of Dashboard presentation. Focused section-widget tests exercise the typed
+streak/progress/agenda, Task, Habit, and lazy supporting-content boundaries
+independently of the page. A source assertion keeps those sections composed
+outside `dashboard_page.dart`, bounds the home constructor surface, and rejects
+the removed unreachable Task editor and page-local recommendation section.
 Phase 6 tests cover strict feedback parsing, exact owned-action validation,
 idempotent request replay/conflict, authenticated GET/POST/DELETE, local-demo
 isolation, 28-day context matching, decay/caps, unchanged original reasons, and
@@ -420,7 +469,10 @@ prove deterministic timezone-aware blocks, honest unscheduled minutes, staged-
 versus-active revisions, the 366-day horizon, separate latest/current revision
 semantics, task-free draft cancellation, and exact retry/conflict behavior,
 including replay returning a newer current detail projection without repeating
-the original mutation. `preparation-workload-v1` coverage must require exactly
+the original mutation. Focused persistence tests must prove that the composite
+Deadline write serializes the exact RPC proposal/block shape and that missing
+or invalid interval fields fail before repository I/O.
+`preparation-workload-v1` coverage must require exactly
 seven consecutive profile-local dates, strict arithmetic and provenance, active
 confirmed-reservation totals, distinct active-plan counts, merged recurring
 Setup commitments, and honest no-budget/over-budget/error states without
@@ -434,7 +486,8 @@ regular versus sleep-protected fit, missing sleep plan, DST gap/fold
 incompleteness, two-of-three recent shortfall, pending-preview overlap, bearer
 ownership, and a write-free GET. Flutter must cover loading/error/all modes,
 unknown capacity, card order, guest zero-call, navigation without proposal, and
-320 px/200-percent text.
+320 px/200-percent text. The pure outlook builder must also be exercised
+directly, without a repository or service facade, using identical inputs twice.
 `preparation-workload-detail-v1` coverage must independently require a date in
 that current seven-day profile-local window; exact owner/date active-block
 filters; at most 50 unique plan/title/minute/block contributions whose sum
@@ -459,7 +512,8 @@ confirmation conflict when capacity changed after preview.
 Normal GET, import, Dashboard, scheduler, and focus-completion paths must remain
 free of hidden proposal writes.
 Planner V1 focused coverage must prove strict Task/Habit proposal unions,
-explicit scheduling inputs, exact five-minute slotting and unplaced minutes,
+explicit scheduling inputs, exact five-minute slotting, seconds/microseconds
+free-start ceiling without busy overlap, and unplaced minutes,
 multi-block Tasks, all three Habit cadences over the bounded four-week preview,
 DST-safe profile-local slots, and the shared Availability inputs across
 Planner and Deadline Planner. Setup coverage must prove strict inclusive
@@ -470,6 +524,9 @@ API/service tests must cover read-only overview
 and detail GETs, seven consecutive local dates, explicit calendar consent and
 current-import fingerprinting, source-stale and reservation conflicts, target
 version conflicts, and preparation/manual/Setup/calendar/action-plan overlap.
+The pure overview builder must be tested directly, and typed proposal-write
+tests must reject mismatched target identity/kind, skipped revision numbers,
+and simultaneous Task/Habit persistence payloads before repository I/O.
 Migration tests must cover forced RLS, owner isolation, global request replay,
 concurrent confirmation, atomic target-plus-reservation activation,
 authoritative commitment conflicts, lifecycle release, restore-without-slot
@@ -479,9 +536,33 @@ gate, Settings through the top-right Today control, Inbox under Settings,
 Planner section order, all five create flows, preview/confirm, retained drafts,
 guest zero-call, seven-day and preparation projections, availability-readiness
 warning plus explicit override, calendar-intent omission from onboarding, and
-320 px/200-percent text. Today V2 tests must prove
+320 px/200-percent text. Auth coverage must prove that a missing canonical
+profile performs one read, makes no repair write, preserves the backend-owned
+identity boundary, distinguishes the failure from wrong credentials, and
+offers sign-out. Today V2 tests must prove
 the three added block kinds, exact `scheduled_today`, one target per progress
 denominator, and isolated source failures.
+
+Supabase client/lifespan coverage must prove that normal FastAPI operation
+reuses one application-owned HTTP pool across Auth and repository operations,
+shutdown closes it exactly once, direct unit-client substitution remains
+available, and missing backend configuration stays fail-closed. Route source
+must not construct a new settings-derived Supabase transport per request.
+Composition coverage additionally proves that shared Deadline/Planner/Today
+and Snapshot/Briefing/Scheduled collaborators are identical application-owned
+instances, router source constructs no Supabase repository, and API tests
+override asynchronous typed dependency callables rather than named
+`app.state` service or verifier fields.
+
+Owner-data policy coverage must compare the typed catalog with all 47
+repo-owned public tables created by migration history, reject duplicate or
+missing entries, and independently prove the exact 40-table Account Export,
+five sanitized export sources, seven named anti-replay omissions, and 37-table
+Coach Snapshot. Account Export, repository, API, deletion/privilege migration,
+Coach Snapshot, and Coach agent tests must continue to prove owner filtering,
+field sanitization, bounded failure, cleanup, ledger exclusion, and account
+cascade. Coach Snapshot source must not import Account Service implementation
+helpers.
 
 Study Setup V1 focused coverage must prove old Intake compatibility and strict
 new focus/semester shapes; collapsed optional onboarding; 45/10 defaults;
@@ -673,6 +754,18 @@ Current Flutter widget tests include:
 - Source-boundary provider tests keep Setup, Evening/Morning capture, Dashboard,
   and Insights on local/demo sources when `USE_MOCK_DATA=true`, even if an
   authenticated Supabase session exists.
+- The Flutter feature-boundary source test resolves relative and package
+  imports and rejects one feature importing another feature's `data` or
+  `presentation` internals. The exact Evening-Capture/Focus-sheet exception
+  includes a rationale, must remain observable, and becomes a test failure when
+  stale. Composition-provider tests additionally prove local
+  Dashboard/Capture/Insights selection after their factories moved to the
+  app-level composition directory.
+- Shell tests prove that one immutable destination descriptor owns unique
+  labels and paths, nested-route selection, responsive icon variants,
+  Quick-action emphasis, and Coach capability visibility. Widget coverage
+  retains keyboard operation, replacement navigation, large-text compact
+  labels, settings-owned unselected routes, and both responsive layouts.
 - Habit visibility tests exclude every Setup-managed habit from generic Habit
   Management while keeping active Setup habits in Habit Completion and hiding
   candidate/archived states.
@@ -833,26 +926,21 @@ FLUTTER_BIN=/path/to/flutter npm run e2e:web:smoke
 FLUTTER_BIN=/path/to/flutter npm run e2e:web:full
 ```
 
-The smoke runs these six representative, tagged wiring specs with one
+The smoke runs these four representative, tagged wiring specs with one
 Playwright worker:
 
+- `@setup-onboarding`;
 - `@auth-capture-today`;
 - `@planner-confirm`;
-- `@authority`;
-- `@account-controls`;
-- `@coach`;
-- `@personal-learning`.
+- `@coach`.
 
 Each spec receives a separately created account and an exact `finally`
-cleanup. `e2e:web:new-full` runs all independent specs (currently the same six
-that make up the critical smoke). The authoritative `e2e:web:full` then runs
-`e2e:web/legacy-full.mjs` in a separate browser process, preserving every
-detailed assertion from the former monolith while those assertions are moved
-incrementally into isolated specs, API tests, widget tests, or pgTAP.
-`e2e:web:legacy` runs only that parity oracle for diagnosis. Do not remove an
-oracle assertion merely because a representative split spec covers the same
-feature; remove it only after equivalent lower-level or independent-spec
-coverage is explicit.
+cleanup. `e2e:web:full` runs all six independent journeys and adds
+`@account-controls` plus `@personal-learning`. Every retained browser
+assertion crosses the Flutter UI boundary and checks a user-visible result.
+Pure HTTP validation, owner derivation, replay/conflict handling, RLS,
+privilege, cascade, and database-constraint assertions belong to pytest and
+pgTAP, where they are faster and more precisely isolated.
 
 This is the normal non-reset database path: the script starts or reuses the
 repository's local Supabase stack, skips `supabase db reset`, inspects
@@ -860,30 +948,24 @@ repository's local Supabase stack, skips `supabase db reset`, inspects
 history differ. It never applies pending SQL automatically. The suites write
 only run-unique local Auth users and their test rows. Do not set `RESET_DB=true`
 unless recreating the local database is explicitly intended.
+Run ids may contain the documented uppercase safe characters. Supabase
+normalizes Auth email addresses to lowercase, so persisted-email assertions use
+that canonical value rather than the unnormalized input token.
 
-Phase 10 can be run narrowly for diagnosis with a fresh unique run id:
+One journey can be run narrowly for diagnosis with a fresh unique run id:
 
 ```bash
-E2E_PHASE10_ONLY=true \
+E2E_JOURNEY=coach \
 E2E_RUN_ID=<new-unique-e2e-run-id> \
 FLUTTER_BIN=/path/to/flutter \
 bash scripts/e2e_web.sh
 ```
 
-This mode creates and signs in a confirmed `e2e-<run-id>@example.test`
-principal, applies only its minimal prerequisite Setup projection, resets only
-its Coach E2E state, and repeats the fake-provider Coach UI/API/RLS assertions.
-Every invocation must use a fresh run id. Reusing one fails closed when its
-run-specific artifact directory already exists, even though successful cleanup
-removed the Auth principal. The Coach request attempt id is additionally
-run/process/time scoped. Its UI path
-also retains a draft across Coach/Today navigation,
-holds the SSE request while navigating away, verifies completion without a
-Flutter disconnect, exercises the unread header message without navigation or
-acknowledgement, and confirms acknowledgement only after the newest answer end
-is reached. It does not exercise the normal Setup UI, capture, executable
-actions, briefing, feedback, weekly review, or calendar import. Treat it as a
-focused diagnosis path, never as a substitute for the full command.
+`E2E_JOURNEY` accepts any current filename below `e2e/web/journeys` without
+`.spec.mjs`. Every invocation must use a fresh run id. Reusing one fails closed
+when its run-specific artifact directory already exists, even though successful
+cleanup removed the Auth principal. A focused path never substitutes for the
+full command.
 
 For a fresh local database before the browser run:
 
@@ -928,25 +1010,28 @@ The script:
    never contacts a live Codex account.
 5. Starts Flutter Web on `127.0.0.1:7357` with `USE_MOCK_DATA=false` and
    `AI_SERVICE_BASE_URL` pointing at the local FastAPI service.
-6. Passes the same token only to the Node assertion processes. The Playwright
-   runner loads `e2e/web/journeys/*.spec.mjs` through
-   `e2e/web/fixtures/e2e.fixture.mjs`; the full gate subsequently runs
-   `e2e/web/legacy-full.mjs` as its assertion-parity oracle. The token is never
-   passed to Flutter.
+6. Passes the same token only to the Playwright fixture. The runner loads
+   `e2e/web/journeys/*.spec.mjs` through
+   `e2e/web/fixtures/e2e.fixture.mjs`. The token is never passed to Flutter.
 
 The script waits for the Flutter log line containing `is being served at` before
 starting Playwright. A plain `curl` response from `/` is not enough, because
-`flutter run -d web-server` can answer before the debug web bundle is ready; if
+`flutter run -d web-server` can answer before the web bundle is ready; if
 Playwright opens the page during that window, screenshots are often blank white.
 
 The E2E Flutter process also passes `--dart-define=E2E_ENABLE_SEMANTICS=true`.
 `apps/mobile/lib/main.dart` uses that test-only flag to keep Flutter Semantics
 enabled, which gives Playwright stable text fields, buttons, and labels instead
-of relying on canvas pixels. The standard runner also sets
+of relying on canvas pixels. The standard runner builds a profile-mode web app
+and serves its completed static bundle so serial independent browser contexts
+do not depend on a debug DWDS connection while development-only feature gates
+remain testable. `FLUTTER_WEB_MODE=debug` and `release` remain diagnostic
+overrides. The
+standard runner also sets
 `E2E_SEMANTICS_PRE_ENABLED=true`: after each Flutter shell it waits at most one
 second for a real `flt-semantics` node and never waits for or clicks the
-placeholder. The legacy placeholder/accessibility-button fallback remains only
-for deliberately reused, manually started builds with
+placeholder. The placeholder/accessibility-button fallback remains only for
+deliberately reused, manually started builds with
 `E2E_SEMANTICS_PRE_ENABLED=false`.
 
 All Auth UUIDs created during a run are registered immediately. The runner's
@@ -969,234 +1054,45 @@ npm run e2e:cleanup:local
 Only an explicit rerun with `--confirm <printed-fingerprint>` deletes that
 still-current selection, and the command also rejects non-loopback Supabase.
 
-The browser smoke creates a confirmed local Supabase Auth user through the local
-admin API and walks the Phase 0C Setup journeys before continuing through the
-existing product smoke. It covers required-only completion with zero optional
-owned records; one routine candidate and fixed commitment; retry after a
-response is lost; prefilled edit with stable identity; cadence confirmation;
-and review actions that pause/remove Setup-owned rows. It asserts the retired
-controls and JSON keys are absent, post-Setup Recommendations remain absent,
-the energy memory is retained, a legacy Setup Goal is archived, and a manual
-Goal survives unchanged. A personalized Reminder row is compared exactly
-before/after Setup edits.
+The current browser layer deliberately stays at the user-visible integration
+boundary. Its six independent journeys prove:
 
-After the Phase 3 action journeys, the smoke also exercises Phase 4 directly
-through authenticated FastAPI calls. It proves that the first briefing GET is
-read-only and missing, deliberate POST persists exactly one owner/local-date
-row, response and JSONB action payloads match, every returned target is an
-implemented strict command, and a repeated `force=false` request preserves the
-same id and timestamps.
-It then opens Dashboard and proves Phase 5 normal load issues no briefing POST,
-renders the exact persisted primary title, dispatches the returned real command,
-and sends exactly `{"force":true}` only after `Adjust today`, preserving the
-same daily briefing identity.
-Phase 6 then records `too_much` through Today, asserts the exact owner-scoped
-database row and ranking provenance after adjustment, opens history, deletes the
-entry, and proves a subsequent generation returns to zero feedback influence.
-It also proves Insights begins with one cautious observation and keeps the
-correlation controls inside explicit advanced exploration.
+- incomplete-account sign-in, required Setup submission, persisted Intake
+  projection, and navigation to Today;
+- authenticated Evening persistence followed by the exact saved check-in state
+  in Today;
+- Planner proposal/confirmation followed by the exact plan title in Flutter;
+- fake-provider Coach persistence followed by the exact message in Coach
+  history;
+- Settings-driven account export, byte-identical browser download, confirmed
+  deletion, sign-out, and user-visible completion; and
+- enabled Personal Learning preferences followed by the exact empty 90-day
+  evidence state in Insights.
 
-The Phase 7 portion calls the protected scheduler only with the uniquely named
-E2E profile through the bounded `profile_ids` filter; it does not run an
-unscoped batch against unrelated local accounts. It compares the scheduler's
-captured UTC `run_at` with the profile timezone, requires the exact local
-briefing date, and accepts only a missing snapshot or missing briefing as the
-first preparation reason. Database assertions prove one exact daily snapshot
-and one exact briefing identity, deterministic/no-LLM provenance, and exact
-source-snapshot id and timestamp linkage. A repeated scheduled request must
-process zero users and leave both rows and timestamps unchanged. The subsequent
-Dashboard path remains GET-only; the E2E scheduler token stays outside Flutter.
+The former all-in-one browser source also mixed UI wiring with lower-level
+contract assertions. Those assertions were retained at their narrowest useful
+test boundary before the monolith was removed:
 
-The Phase 8 portion seeds one completed profile-local ISO week with exact task,
-manual and Setup-owned habit, habit-outcome, focus, daily-state, and
-decision-feedback rows. Latest GET must report missing without a write;
-deliberate generation must persist exactly one owner/period review whose facts,
-fingerprint, no-LLM provenance, and at-most-two proposals match the response.
-A repeated read remains write-free. Cancelling the before/after dialog changes
-nothing; confirming the eligible manual weekly-target shrink must preserve the
-habit identity/ownership/logs, use its exact expected timestamp, and make the
-old review stale. Setup-owned review navigation must not write a Habit or Goal,
-and the compatible `goal_linked_completed` counter must remain zero. Deliberate
-refresh reuses the same weekly review identity. Authenticated REST
-assertions use a second principal to prove owner-only SELECT and rejection of
-direct review-table writes/cross-owner habit changes.
+| Concern previously mixed into browser E2E | Current authoritative evidence |
+| --- | --- |
+| Setup validation, retry identity, revisions, ownership, and atomic apply | `test_intake_api.py`, `test_intake_service.py`, `test_intake_repository.py`, `setup_controller_test.dart`, plus the `@setup-onboarding` UI journey |
+| Daily Capture validation, branch merge, retry reconciliation, `explainable-daily-state-v2`, and Today mapping | `test_daily_capture_api.py`, `quick_check_in_data_source_test.dart`, capture page/widget tests, plus `@auth-capture-today` |
+| Task, Habit, and Focus lifecycle constraints | `test_executable_actions.py`, executable-action Flutter tests, and migration contract tests |
+| Briefing, recommendation, and weekly-review determinism/replay | `test_briefing_service.py`, `test_weekly_review_service.py`, their API/repository tests, and corresponding Flutter widget/controller tests |
+| Calendar parsing, reconciliation, consent, identity, and isolation | `test_calendar_ical_parser.py`, Calendar API/service/repository/migration tests, and Calendar Flutter page/repository tests |
+| Notification lifecycle, delivery policy, conflicts, and Inbox behavior | Notification API/service/repository/migration tests and `notifications_page_test.dart`/`notification_delivery_test.dart` |
+| Deadline and central Planner calculations, writes, conflicts, and rendering | Deadline/Planner model, service, repository, API, migration, and Flutter page tests, plus `@planner-confirm` |
+| Coach safety, budget, evidence, persistence, and read-only authority | Coach API/service/repository/evidence/migration tests, Coach Flutter tests, plus `@coach` |
+| Personal Learning evidence, preferences, clearing, learned timing, and RLS | Personal-pattern/learning API/service/repository/migration tests, `personal_learning_v1_test.sql`, Flutter Learning tests, plus `@personal-learning` |
+| Account export/deletion contracts and authority | Account API/service/repository/migration tests and Settings widget/repository tests, plus `@account-controls` |
+| Global owner isolation, role authority, direct-DML denial, and protected-route authentication | `test_auth.py`, owner-derived API tests, privilege/RLS migration tests, and the pgTAP authority suites; these are intentionally not duplicated in Playwright |
 
-The Phase 9 source portion starts from an exact empty read, confirms explicit
-read/store consent, and proves that connection alone creates no import/event.
-It imports bounded `.ics` fixtures with duplicate, all-day, timezone-aware,
-materialized recurrence, unsupported recurrence, and cancellation cases;
-asserts stable retry/event identities plus paginated read-only provenance; and
-keeps `schedule_items` byte-for-byte unchanged. Separate confirmations prove
-disconnect retains the stale local copy while delete removes imported event
-content and retains only its bounded `deleted` audit row. The opaque
-fingerprint-free request ledger rejects reuse across operations and owners;
-exact completed replays remain valid after disconnect, supersession, or local
-deletion, while a non-current import never supplies Planner busy time. DELETE
-rejects a body. A second principal checks owner-only visibility and rejected
-direct/cross-owner writes. Guest/mock coverage remains zero-call.
-The complete combined browser command passed these assertions non-destructively
-in the 2026-07-13 Phase 9 implementation checkout.
-
-Deadline Planner interaction coverage is currently split honestly across two
-layers. Flutter widget tests drive the calendar prefill and three-step wizard,
-require explicit exam/assignment and distinctive total/prior inputs, inspect the
-staged preview, confirm explicitly, retain and rebase a draft after `409`, and
-exercise the narrow/large-text layout. They also prove that an active plan with
-no pending preview first opens a zero-request compact review, copies every saved
-proposal value while normalizing a historical start to today, preserves current
-reservations until confirmation, rejects passed deadlines and stale calendar
-sources, and exposes the full editor deliberately. Pending previews and retained
-conflict drafts remain on the full-editor path. They additionally cover Settings
-budget save/removal, the 320-pixel/200-percent dialog and seven-day card,
-account-cap deduction, and truthful loading/error/overage states. The
-browser/database journey creates and activates the lifecycle through the
-authenticated API, then verifies the real
-Flutter active-plan surface, managed-task/focus behavior, no `schedule_items` or
-imported-event mutation, owner/cross-owner authority, Account Export inclusion/
-cascade, and guest zero-call. It also sets and reads the budget through the
-authenticated product boundary, rejects direct profile mutation and request-
-provided identity, validates the strict seven-day workload, proves a stale
-preview cannot confirm after the budget is lowered, restores the setting, and
-checks Today/Preparation plans without broadening calendar claims. It does not
-currently claim that Playwright submits the wizard itself. It does verify the
-compact replan review, its no-automatic-change copy, the deliberate transition
-to the full editor, and modal cancellation; a single end-to-end browser wizard
-submission remains additional coverage rather than evidence already supplied by
-the API-seeded journey.
-
-The Phase 10 browser source uses only the deterministic fake provider. The
-current design asserts generation-free capability/history reads, message-only
-V3 streaming, safe activity, Cancel, a fixed direct answer with empty
-source-coverage/tool trace, exact persisted message/request/usage/response
-identity, same-id replay without another durable turn, changed-message
-conflict, mixed legacy/current history, deterministic safety bypass, expandable
-UI provenance, conversation deletion with retained tombstones/usage, owner-only
-reads, rejected authenticated mutations, and guest/mock zero calls. It also
-asserts that the current page has no fixed mode, horizon, Focus selector, prompt
-starter, memory selection, structured suggestion, or plot. Service/unit
-fixtures separately exercise scripted non-empty SQL/Python traces.
-
-Historical note: focused and full fixed-mode fake-provider browser runs passed
-on 2026-07-13. They do not prove the free-agent stream, snapshot, trace, Cancel,
-or current UI. Run the current source before making a current-checkout claim.
-
-The Setup assertions inspect exact `request_id`, base/revision, applied state,
-stable materialized ids, server ownership metadata, record counts, and the
-constant onboarding snapshot identity. A named unconfirmed routine must remain
-only in `intake_responses`; it must not appear as an active daily habit. Replaying
-one request must return the same result without another revision or owned row,
-while a real edit advances the revision and preserves stable record ids. After
-the UI journeys, two simultaneous authenticated POSTs with the same new request
-id must both return the same applied revision, produce exactly one
-`intake_responses` row, and advance `profiles.setup_revision` only once. This
-exercises the migrated advisory-lock RPC against real local PostgreSQL rather
-than only the in-memory concurrency tests.
-
-The smoke then creates a habit through Habit Management and follows
-`/daily-check-in` into the canonical Evening Shutdown at
-`/quick-mood-check-in`. It records distinctive mood `2`, Evening energy `9`,
-stress `8`, private/emotional hardly-controllable stress, reflection, and
-specific blocker. Every primary/additional friction control and
-the removed gentler and tomorrow-priority controls are asserted absent. The
-saved branch must omit a new `tomorrow_priority` value. Playwright lets the first
-`daily-capture-write-v1` PUT commit but drops its browser response, verifies
-that the exact draft remains available, then retries the byte-equivalent
-request and requires `replayed=true` without creating another daily row or
-event set.
-
-The browser first saves Evening sleep start `23:00` with an eight-hour target.
-The same user then completes `/morning-calibration` after correcting the
-estimated start to `00:00`, selecting wake `05:30`, and observing the derived
-5.5-hour duration, with Morning energy `4` and constrained day shape. Database assertions require
-exactly one `(user_id, entry_date)` row with
-`metadata.capture_version=daily-capture-v4`, both nested V4 capture branches,
-aware raw Morning instants, exact 330-minute arithmetic, the target/source
-identity, and raw-field absence from linked event metadata,
-absent blank optional keys, mood/stress from Evening, sleep from Morning, and
-Morning energy taking precedence in `energy_level`. It requires every friction
-key to be absent from the daily row, events, Daily State, and Coach context. The
-smoke reopens Evening, checks its saved state, edits stress to
-workload/mostly-controllable and the priority, and requires the exact Morning
-capture identity and values to remain.
-
-Linked current-event assertions require three explicit events after
-Evening-only and exactly four after Morning merge and Evening edit. All final
-events share the daily-log id, have unique deterministic ids, carry the correct
-numeric value/unit, and mirror their relevant `capture_kind`, `entry_date`,
-capture id/time, stress taxonomy, priority, or day-shape
-metadata. Capture success sends `POST /v1/snapshots/generate` with the explicit
-local `target_date`; the committed-response failure does not. Normal capture is
-also observed to make no browser request to
-`POST /v1/recommendations/generate` and to leave Setup revisions/profile
-projection plus unrelated task, Goal, habit, schedule, memory, notification,
-and recommendation identities unchanged.
-
-The browser also inspects each Phase 2 snapshot response. Evening-only
-private/emotional, hardly-controllable stress must produce partial `recover`
-state with exact source risks. Adding target-day Morning sleep `5.5`, energy
-`4`, and constrained day shape must produce current `recover` state. Editing
-Evening to workload/mostly-controllable must keep the same snapshot id, add
-workload risks, remove stale private/low-control risks, retain recovery because
-of current compound signals, and persist exactly one target-period row. The
-assertions require `explainable-daily-state-v2`, deterministic/no-baseline
-provenance, field-level non-friction evidence for the daily log, and absence of
-both original and edited free text from summary and signals.
-
-The Deadline Planner browser lifecycle also confirms one exam seven local days
-away plus one same-window competing assignment. Planner alone must show the
-Exam week/sleep/capacity card. The journey opens `Replan remaining time` only to
-the saved-value review, submits no proposal, and compares plan/revision/block
-state before and after the GET and navigation.
-
-After the Phase 1/2 assertions, the Phase 3 browser journey completes, undoes,
-skips, and undoes a manual habit; completes and undoes an active Setup-owned
-habit without mutating its definition; and asserts one explicit outcome row at
-most per habit/local date. It creates and edits one typed task without changing
-identity, postpones and undoes the deadline, completes/restores, and
-cancels/restores while checking exact status, estimate, and terminal timestamp
-rows. Habit and task creates deliberately lose one committed HTTP response, then
-prove that retained drafts and stable request ids converge on one row. Habit
-outcome and undo each lose a committed response; reconciliation must prove the
-exact row or its absence for the target date captured before the write, and
-refresh that same date.
-
-The journey then starts and finishes a task-linked focus session, proves that
-the task was not completed implicitly, and starts/abandons an independent
-session. Database assertions cover one active session at a time, terminal
-timestamps, measured whole elapsed minutes, target linkage, and no remaining
-active row. Focus start also loses one committed response and must reconcile the
-same active session before refreshing its persisted start date. Task completion,
-task undo, and focus finish each lose a committed transition response and must
-accept the exact stored result without a second transition. Negative database
-checks reject a task terminal without its timestamp, a second active focus
-session, terminal-focus lifecycle, `entry_date`, and `updated_at` rewrites, an
-out-of-range focus duration, and outcomes for an inactive or unscheduled
-selected-weekday habit. A refreshed daily snapshot must contain the explicit
-habit/focus input counts and neutral summaries while preserving the Phase 2
-Daily State, and observed task/habit/focus writes must make no
-recommendation-generate request.
-The smoke then uses deliberate recommendation refresh and exercises Inbox
-(`/alerts`) through one real unread/read/unread/dismiss lifecycle. It checks
-the exact FastAPI payload/result, persisted tombstone and three-row retry
-ledger, exact replay, request-id reinterpretation conflict, foreign-owner 404,
-owner/cross-owner SELECT, direct authenticated DML rejection, ledger
-invisibility, due filtering, and dismissal after reload. It then exercises the
-Controlled Coach journey against the deterministic fake provider, verifies real
-Deep Work, and checks the explicit payloads of manual snapshot/recommendation
-requests. Source coverage is not a current-checkout pass.
-
-These detailed assertions remain intact in `e2e/web/legacy-full.mjs`, which is
-part of `e2e:web:full`; run the full command to establish pass/fail for the
-current checkout. The six independent journey specs intentionally cover only
-representative critical wiring until assertion-by-assertion migration is
-complete. Documentation of either path is not evidence that a current full
-browser run passed.
-
-The split Flutter helper and the legacy oracle navigate through root hash URLs
-such as `/#/auth`, `/#/daily-check-in`, and `/#/morning-calibration`. This
-avoids direct deep-link requests against the `flutter run -d web-server`
-development server, which does not provide a production-style rewrite layer
-for every app path.
+The source guard `scripts/check_e2e_split_contract.mjs` fails if the retired
+monolith or transitional commands return, if an expected journey disappears,
+or if a journey no longer authenticates through Flutter and makes a
+user-visible assertion. The Flutter helper navigates through root hash URLs
+such as `/#/auth` and `/#/planner`, avoiding unsupported development-server
+deep-link rewrites.
 
 The service-role key is used only in the Node-side E2E process for local setup
 and assertions and in the FastAPI process for backend persistence. It must never
@@ -1223,10 +1119,13 @@ AI_SERVICE_PORT=8001
 AI_SERVICE_BASE_URL=http://127.0.0.1:8001
 AI_SERVICE_PYTHON=/path/to/python
 AI_SERVICE_START=false
+FLUTTER_WEB_MODE=profile
+STATIC_SERVER_PYTHON=python3
 SCHEDULED_REFRESH_TOKEN=local-e2e-override
 E2E_RUN_ID=manual-001
 E2E_SEMANTICS_PRE_ENABLED=true
 E2E_SUITE=smoke
+E2E_JOURNEY=coach
 ```
 
 By default, `scripts/e2e_web.sh` starts FastAPI from the current checkout and
@@ -1256,12 +1155,8 @@ run-specific output directory:
 .tools/e2e/runs/<run-id>/playwright/<spec-output>/test-failed-1.png
 ```
 
-The retained legacy oracle saves
-`failure-<run-id>.png` and `trace-<run-id>.zip` at the run-directory root only
-when it fails.
-
 The runner prints machine-readable `[e2e:timing]` JSON for Supabase, FastAPI,
-Flutter, Chromium, Semantics, journeys, exact-user cleanup, the Node runner,
+Flutter, Semantics, journeys, exact-user cleanup, the Playwright runner,
 and process cleanup. The split reporter additionally emits one
 `[e2e:test-timing]` JSON record per spec. `.tools/` is ignored by git.
 
@@ -1713,5 +1608,5 @@ Still missing for broader product verification:
   account migration.
 
 When changing E2E flows, keep `e2e/web/playwright.config.mjs`, the fixtures and
-tagged specs below `e2e/web/`, the retained `e2e/web/legacy-full.mjs` oracle,
+tagged specs below `e2e/web/`, `scripts/check_e2e_split_contract.mjs`,
 `scripts/e2e_web.sh`, and this document in sync.

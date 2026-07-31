@@ -269,6 +269,13 @@ The snapshot excludes `coach_requests`, `coach_usage_events`,
 internals, request-identity ledgers, operational retry state, and all other
 users.
 
+Snapshot participation is a separate field in the shared typed owner-data
+catalog; it is not inferred from Account Export inclusion. This keeps the three
+Coach operational tables exportable under their existing contract while
+excluding them from the 37-table personal snapshot. Snapshot serialization
+uses a neutral lossless-JSON helper and does not import Account Service
+implementation details.
+
 Each product table has sanitized typed columns when available plus `row_json`
 containing the complete sanitized source row. `_coach_catalog` describes every
 table, available columns, record count, and observed period. A separate
@@ -552,6 +559,11 @@ The opt-in live smoke must record current-machine evidence that:
 This provider smoke does not pass through FastAPI persistence or Flutter.
 Deterministic API/browser tests separately prove request replay, persisted
 response/history, deletion, budget behavior, and the expandable UI.
+
+Coach service factories and bearer verification now share the single
+application-lifespan-owned Supabase HTTP pool. This is transport reuse only:
+provider selection, owner locks, snapshots, evidence limits, budgets, retry
+identity, cancellation, deletion, and read-only tool authority are unchanged.
 
 ## Explicitly Later
 

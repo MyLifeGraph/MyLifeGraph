@@ -135,6 +135,11 @@ says `Early evidence`.
 - State the user outcome before implementation detail.
 - A retry message says: what happened, what input remains, and the next safe
   action.
+- When authentication succeeds but its backend-owned profile is missing, say
+  `Your sign-in succeeded, but this synced account could not be opened. No
+  account data was changed. Sign out, then try again. If it continues, the
+  account needs repair.` and offer `Sign out`. Do not present this invariant as
+  wrong credentials or attempt a client-side profile repair.
 - Use `Retry unchanged` only when the exact submitted payload is locked for an
   idempotent retry. Pair it with a plainly named reload action.
 - Say `rule-based` for deterministic personalized calculations, `fixed text`

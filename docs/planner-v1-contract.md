@@ -102,6 +102,13 @@ calendar/source mismatches. Ambiguous transport failure retains the exact
 request identity and body for unchanged retry; an exact `409` requires reload
 and a new preview.
 
+Inside FastAPI, overview assembly is a deterministic pure builder over one
+repository context and the current Deadline projection. The service performs
+the reads but does not interleave I/O with attention or day-item calculation.
+Proposal writes use one strict typed persistence object that binds target kind
+and identity, the exactly next revision, and the mutually exclusive Task-block
+or Habit-slot payload. This changes no HTTP or database contract.
+
 ## Deterministic Availability
 
 One shared availability component is used by Planner Task/Habit proposals and
@@ -120,6 +127,10 @@ The algorithm uses five-minute block boundaries, never overlaps a busy source,
 never plans before the captured current instant, and is bounded to 366
 profile-local days. It does not inspect Calendar titles or infer duration,
 deadline, cadence, priority, or effort.
+Free-start ceiling keeps the complete busy-end precision: a source that ends
+after an exact grid boundary, including by seconds or microseconds, releases
+time only at the following five-minute boundary. Exact grid boundaries remain
+unchanged.
 
 For Task previews only, Personal Learning V1 may add one soft first window
 before the Setup ordering when the user enabled learned planning, the
@@ -311,6 +322,11 @@ failed overview reload leaves the old overview visible but disables every
 derived mutation control. `Reload Planner` performs only the read and never
 replays the committed mutation. The shared unread Coach and Settings header
 controls do not change this projection or call a Planner/Coach endpoint.
+After a successful Planner mutation, the Planner controller owns its overview
+state while the app-level projection coordinator invalidates affected Today,
+Daily Briefing, Preparation Workload, and Exam Outlook reads. Planner callers
+do not enumerate those foreign providers, and this cache coordination never
+replays the mutation.
 
 ## Non-Claims
 

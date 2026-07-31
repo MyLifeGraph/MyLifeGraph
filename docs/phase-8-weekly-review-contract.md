@@ -239,6 +239,11 @@ habit edit/lifecycle command; the review API does not mutate the habit. A stale
 target is a conflict, not permission to overwrite. An ambiguous committed
 response succeeds only after the existing exact owner-scoped requested-field
 and mutation-timestamp readback.
+After a durable direct Habit change, Flutter refreshes Daily State for the
+current authenticated profile date from the shared date source. It does not
+derive that refresh target independently from the device timezone. The
+app-level Habit-definition impact also invalidates Today, Daily Briefing, and
+Planner reads; Weekly Review itself imports none of those foreign providers.
 
 Setup-owned targets use `application_mode=settings_setup`. Staged proposals use
 `application_mode=staged_only`. Neither path may call the generic manual Habit
@@ -309,6 +314,10 @@ Focused backend, Flutter, migration, and browser coverage must prove:
 
 Documentation or source assertions do not establish an E2E pass. Run the
 current-checkout browser command before claiming the Phase 8 journey passed.
+
+The Weekly Review route now reuses the application-lifespan-owned Supabase HTTP
+pool. This does not change ISO-week identity, freshness, observed-at ordering,
+source fingerprinting, proposal limits, confirmation authority, or RLS.
 
 ## Visual presentation
 

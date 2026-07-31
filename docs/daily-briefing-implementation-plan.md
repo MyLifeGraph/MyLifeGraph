@@ -3,8 +3,9 @@
 Status: historical phase plan with a current product-disposition summary,
 updated through Planner V1, Today Overview V2, Study Setup V1, and the Setup
 personalization retirement, Daily Capture V4, and Exam-Week Outlook V1 on
-2026-07-26. Detailed phase sections preserve their original implementation
-reasoning; current surface authority lives in the linked contracts.
+2026-07-26, plus the shared Flutter profile-local date boundary on 2026-07-31.
+Detailed phase sections preserve their original implementation reasoning;
+current surface authority lives in the linked contracts.
 
 `docs/setup-personalization-retirement-contract.md` is authoritative wherever
 historical sections below mention Goals as an active product object, Setup
@@ -145,6 +146,10 @@ authenticated capture refreshes the explicit local snapshot date, and Dashboard
 mapping remains direct and nullable. Phase 1 deliberately does not assign Daily
 Mode, rank actions, persist a briefing, generate recommendations on save, or call
 an LLM. The next gap was Phase 2's explainable deterministic daily state.
+Flutter now derives authenticated Capture identity from one captured instant
+and the session profile's IANA timezone through the shared
+`ProfileLocalDateSource`; invalid account timezone data fails closed. Guest
+Capture remains explicitly device-local.
 
 Phase 2 now interprets that context inside backend-owned snapshots. Its current
 `explainable-daily-state-v2` contract uses strict V2/V3/V4 branch-compatible
@@ -1227,6 +1232,14 @@ Implemented:
 - Authenticated writes refresh the exact local `target_date`; backend event
   filtering prefers `metadata.entry_date` after a broadened UTC read and falls
   back to the timestamp for legacy rows.
+- Flutter sends the typed Daily Capture impact through app composition, which
+  invalidates latest Capture, Today, persisted Briefing, and Exam Outlook
+  reads. Guest Capture performs the same local invalidation without a backend
+  Snapshot refresh.
+- Authenticated Flutter draft identity and the read target use one shared
+  profile-timezone date source. Guest/no-account drafts deliberately use the
+  device calendar, and invalid authenticated timezone data never falls back to
+  it.
 - Dashboard reads direct nullable numeric and structured capture values. No
   Daily Mode, action ranking, recommendation generation, or LLM was added.
 
@@ -1414,12 +1427,15 @@ Current presentation update (2026-07-21): the persisted Phase 4 briefing and
 Phase 6 feedback/ranking contracts remain implemented backend inputs, but the
 visible briefing-first card described in this historical phase is superseded by
 Today Overview. Today no longer labels a ranked recommendation as a decision
-made for the user. `GET /v1/today/overview` retains the compatible V1 read;
-Planner adds `GET /v1/today/overview-v2` with Setup, Planner, Preparation,
-Calendar, Focus, Task, Habit, and fixed-commitment facts. Supporting workload,
-review, saved signals, recommendations, feedback history, and full week remain
-lazy. Read `docs/today-overview-v1-contract.md`, `docs/planner-v1-contract.md`,
-and `docs/study-setup-v1-contract.md` before changing this surface.
+made for the user. Flutter therefore has no direct briefing repository/provider
+or `/v1/briefings/*` call path; backend persistence, scheduled preparation,
+notification generation, Coach context, and historical feedback remain
+implemented. `GET /v1/today/overview` retains the compatible V1 read; Planner
+adds `GET /v1/today/overview-v2` with Setup, Planner, Preparation, Calendar,
+Focus, Task, Habit, and fixed-commitment facts. Supporting workload, review,
+saved signals, recommendations, feedback history, and full week remain lazy.
+Read `docs/today-overview-v1-contract.md`, `docs/planner-v1-contract.md`, and
+`docs/study-setup-v1-contract.md` before changing this surface.
 
 ### Phase 6: Feedback And Useful Insights (Implemented)
 
@@ -1723,11 +1739,12 @@ streak length are not sufficient success measures.
 
 ## Current Recommendation
 
-The capability-truth and plain-language polish batches recorded in
-`docs/product-polish-follow-up.md` are implemented. Today Overview V2, central
-Planner V1, and Study Setup V1 are also implemented. The next product slice
-must come from a newly verified need or the still-unrun moderated student study;
-this historical phase plan does not nominate another feature by default.
+The capability-truth and plain-language polish batches are implemented in
+their owning notification, UI-copy, Setup-retirement, Coach, and visual
+contracts. Today Overview V2, central Planner V1, and Study Setup V1 are also
+implemented. The next product slice must come from a newly verified need or the
+still-unrun moderated student study; this historical phase plan does not
+nominate another feature by default.
 
 **Phase 0A, Phase 0B, Phase 0C, Phase 1, Phase 2, and Phase 3 are complete.**
 Real and demo source states remain distinct; Setup is revision-safe and

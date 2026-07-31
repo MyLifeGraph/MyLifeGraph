@@ -57,6 +57,13 @@ rewritten to make the estimate appear accurate.
    and, only while the task remains open, update exactly its title, deadline,
    and `updated_at` projection.
 
+FastAPI constructs the proposal and its dated blocks as one validated typed
+persistence value before crossing the repository boundary. It requires the
+complete key set, exact block intervals, sequence bounds, timing provenance,
+and minute fields before serializing the unchanged RPC JSON. This prevents
+service/repository key drift without adding another application layer or
+changing the database signature.
+
 The managed task is a Phase 3-compatible focus target but remains planner-owned.
 Generic task edit/complete/postpone/cancel/restore commands and the ordinary task
 editor reject it and direct the user to `/preparation-plans`; starting focus on
@@ -93,6 +100,10 @@ the exact end instant.
 If all requested preparation time cannot fit before the deadline, the proposal
 returns the exact unallocated minutes for explicit review. It never hides the
 deficit, schedules work after the deadline, or fabricates available time.
+The shared Availability grid keeps the complete busy-end precision when it
+ceilings a free start. A source ending after an exact boundary, including by
+seconds or microseconds, releases time only at the following five-minute
+boundary; an exact boundary remains unchanged.
 
 When the owner has a current Study focus rhythm, Deadline Planner must use it.
 Every normal block is exactly the saved focus duration and only the final
@@ -250,8 +261,15 @@ immediately before the deadline day. For example, a value of one leaves the
 whole preceding day clear, so the last preferred preparation day is two dates
 before the deadline. A value of zero may use the deadline day up to the exact
 aware `deadline_at`. Flutter labels these as clear days and normalizes a saved
-past `planning_start_on` to the current device date when opening a new replan;
-the backend still clamps effective planning to its profile-local current date.
+past `planning_start_on` to the current profile-local date when opening a new
+replan; the backend independently clamps effective planning to its
+profile-local current date. A durable plan mutation refreshes Today with that
+same Flutter profile-date source rather than the device calendar. One app-level
+typed Deadline Plan impact owns invalidation of Today, Daily Briefing, Planner,
+Preparation Workload, and Exam Outlook reads. It also refreshes the Daily
+Snapshot when a managed Task changed; a draft-only cancellation has no such
+Task/date impact. The Deadline feature does not enumerate those foreign
+providers.
 
 DST gaps or ambiguous local wall times are rejected or avoided rather than
 guessed. The planner has no LLM/provider call or model-provenance field; its

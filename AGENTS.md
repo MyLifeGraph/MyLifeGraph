@@ -69,7 +69,6 @@ Read these files before making changes:
 25. `docs/stabilization-consistency-contract.md` before changing Daily Capture
     write authority, revisioned account settings, timezone-bound planning,
     projection observation/freshness, or post-mutation Flutter reload states
-
 ## Current State
 
 MyLifeGraph is a Flutter web/mobile app with Supabase for auth and persistence
@@ -1069,17 +1068,17 @@ npx playwright install chromium
 FLUTTER_BIN=/home/gregor/tools/flutter/bin/flutter bash scripts/e2e_web.sh
 ```
 
-For a focused Phase 10 diagnosis only, reuse an existing eligible E2E principal:
+For a focused Coach diagnosis, select the independent journey:
 
 ```bash
-E2E_PHASE10_ONLY=true \
-E2E_RUN_ID=<existing-e2e-run-id> \
+E2E_JOURNEY=coach \
+E2E_RUN_ID=<new-unique-e2e-run-id> \
 FLUTTER_BIN=/home/gregor/tools/flutter/bin/flutter \
 bash scripts/e2e_web.sh
 ```
 
-That mode resets and repeats only the existing user's Coach assertions. It
-requires the prior E2E user and never substitutes for a full browser run.
+That mode provisions and cleans up its own account and runs only the Coach UI
+journey. It never substitutes for a full browser run.
 
 Browser E2E also requires real Ubuntu Node.js 20+ and npm. Windows `npm`/`npx`
 shims are not sufficient inside this WSL project.

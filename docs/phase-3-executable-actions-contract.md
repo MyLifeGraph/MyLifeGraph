@@ -148,6 +148,11 @@ New manual habits persist a local calendar `metadata.started_on`; progress uses
 that date instead of re-deriving creation day from a UTC timestamp. Calendar-day
 iteration and differences use date components, so Europe/Berlin 23/25-hour DST
 transition days still count as one scheduled day.
+For an authenticated account, `today`, `started_on`, the exact outcome target,
+and its post-write snapshot refresh are resolved through the profile's IANA
+timezone. The target is captured before asynchronous work and reused unchanged.
+Guest-only data uses the device calendar deliberately; an invalid account
+timezone never triggers that fallback.
 
 ### Focus Sessions
 
@@ -161,6 +166,9 @@ transition days still count as one scheduled day.
   prior linkage.
 - Finish and abandon operate only on the user's currently active session.
 - `actual_minutes` is elapsed wall-clock whole minutes, never planned time.
+- `metadata.entry_date` is derived from the captured start instant in the
+  authenticated profile timezone; it is not derived later from the device
+  timezone.
 - A committed finish/abandon response loss succeeds only when an owner-scoped
   readback matches the requested terminal status, exact end instant, and exact
   measured duration. A different terminal transition remains an error.
@@ -258,6 +266,15 @@ metadata key: `/preparation-plans` is a deliberate product surface governed by
 
 - A successful or exactly reconciled real task, habit, or focus write triggers
   daily snapshot refresh best-effort.
+- Flutter routes the downstream read-cache impact through one typed app
+  composition service. Habit outcome, Habit definition, Today-owned Task, and
+  Focus lifecycle changes remain distinct impacts; feature callers do not
+  enumerate Dashboard, Briefing, Planner, Workload, or Outlook providers.
+- Embedded Today Task/Habit execution uses narrow application command ports.
+  The controller owns in-flight dedupe, optimistic overlays,
+  committed-versus-unconfirmed results, and stale/reload-only state; the
+  Dashboard widget does not construct or invoke either concrete Supabase data
+  source.
 - Habit outcome/undo captures one local target date before its write, uses that
   date for exact response-loss reconciliation, and refreshes that same date.
 - Focus start persists its local `metadata.entry_date`. Start, finish, and

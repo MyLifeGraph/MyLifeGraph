@@ -67,6 +67,43 @@ Different changes from the same revision cannot both commit.
 old preparation-budget RPC is no longer executable by application or
 `service_role` callers.
 
+Flutter has one profile-local date boundary for authenticated product-day
+commands. It converts one captured instant using `profiles.timezone`, keeps
+timestamp clocks separate, and does not silently substitute the device
+timezone for invalid account data. Daily Capture identities, standalone Habit
+targets and refreshes, Focus start metadata, Weekly Review application refresh,
+recommendation refresh, Deadline planning start, and post-plan refresh use this
+boundary. Today inline Task/Habit commands continue to use the exact date in
+the loaded Today projection. Guest/no-account flows remain device-local by
+design.
+
+## Flutter Projection Impact Coordination
+
+After a durable Flutter mutation, callers name one typed domain impact through
+the app-level `ProjectionRefreshCoordinator`; they do not import and enumerate
+foreign feature providers. The coordinator may refresh the affected profile
+date's Daily Snapshot and always invalidates the mapped read caches even when
+that refresh fails. It never retries or rolls back the durable write and is not
+a broadcast event bus.
+
+| Durable impact | Invalidated read projections |
+| --- | --- |
+| Daily Capture | latest Capture, Today, Daily Briefing, Exam Outlook |
+| Habit outcome | Today, Daily Briefing |
+| Habit definition/lifecycle | Today, Daily Briefing, Planner |
+| Focus lifecycle | Today, Daily Briefing, Preparation Workload, Exam Outlook |
+| Deadline Plan | Today, Daily Briefing, Planner, Preparation Workload, Exam Outlook |
+| Planner | Today, Daily Briefing, Preparation Workload, Exam Outlook |
+| Setup | Today, Daily Briefing, Recommendations, Planner, Preparation Workload, Exam Outlook |
+| Timezone | every date-bound Capture, Today, Briefing, Recommendation, Planner, Workload, and Outlook read |
+| Preparation budget | Preparation Workload |
+
+Today-originated Task/Habit writes deliberately exclude Today from coordinator
+invalidation because Today performs exactly one owned reload and must retain
+its prior projection on failure. Planner similarly owns its updated/reloaded
+overview in its controller. Guest Daily Capture uses the same local
+invalidation mapping but skips the authenticated Daily Snapshot refresh.
+
 `account-export-v2` preserves the established owner-data set and the 10,000
 rows-per-table, 50,000 total-row, and 8 MiB bounds. It explicitly omits
 `daily_capture_request_identities` and
@@ -169,9 +206,16 @@ the overview; it never resends the mutation.
 
 Today derives authenticated Task/Habit mutation dates only from
 `DashboardSnapshot.localDate`. After a durable write it refreshes the Snapshot
-and Today Overview while all actions remain locked. A failed reload preserves
-the optimistic saved state, shows `Saved; Today could not reload.`, and offers
-a reload-only retry.
+through the coordinator, then reloads Today Overview itself while all actions
+remain locked. Foreign dependent reads are invalidated without triggering a
+second Today load. A failed reload preserves the optimistic saved state, shows
+`Saved; Today could not reload.`, and offers a reload-only retry.
+This lifecycle is owned by the feature-local `TodayCommandController`, not
+widget-local sets or concrete Supabase calls. Its narrow Task/Habit ports return
+only after their existing exact reconciliation rules have proved a write; a
+thrown or unavailable result remains uncommitted. A successful port result
+stays committed even if projection refresh fails, and `reloadToday` performs no
+command call.
 
 Notification lifecycle rows enter `committedRequiresReload` after every proven
 success, including replay. The row remains visible and locked until a reload
@@ -191,6 +235,14 @@ and contract diagnostics are not rendered. Calendar connection identity and
 status wrap into a stacked layout at narrow width and large text. All visible
 copy introduced here is English.
 
+The shared Flutter API client normalizes Dio failures before they reach feature
+application code. Timeout, connection/offline, cancellation, HTTP response,
+authorization, conflict, and server/unknown-outcome evidence therefore remains
+distinguishable without exposing Dio exceptions outside core/data transport
+code. Planner, Deadline Planner, Setup, Calendar, Notification, Account,
+Learning, and Coach continue to own their established feature-specific
+exact-retry, stale/reload, conflict-detail, and safe-copy behavior.
+
 ## Verification Boundary
 
 The stabilization is covered by:
@@ -203,6 +255,9 @@ The stabilization is covered by:
   cutoffs, and Berlin gap/fold/cross-midnight resolution;
 - Flutter tests for creation replay, Capture/Setup errors, projection locks,
   Planner/Today durable-success reload failure, the three Study Setup states,
-  Notification replay/reload, and narrow large-text layouts.
+  Notification replay/reload, profile/device cross-midnight and DST date
+  resolution, shared embedded/standalone Habit targets, managed-plan refresh
+  dates, transport-neutral API failure mapping, the Dio feature-layer source
+  guard, and narrow large-text layouts.
 
 An external Coach/LLM smoke is outside this stabilization boundary.

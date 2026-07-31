@@ -164,3 +164,8 @@ Local Supabase and browser verification must additionally prove all three
 commands, exact replay, request-id reinterpretation conflict, owner isolation,
 direct authenticated DML rejection, dismiss persistence, and disappearance on
 reload before this slice is called end-to-end complete.
+
+The FastAPI route now reuses the application-lifespan-owned Supabase HTTP pool.
+This does not change Notification ownership, action identity, ambiguous replay,
+RPC authority, lifecycle timestamps, dismissal, delivery non-claims, or
+account-export/deletion behavior.

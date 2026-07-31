@@ -50,6 +50,14 @@ or confirmed reservations. Open Planner and Deadline previews become
 unconfirmable; active plans receive `timezone_changed` attention. This
 timezone remains the authority for backend product-local dates. Authenticated
 Data API callers have no direct timezone write privilege.
+After a successful response Flutter updates the session profile and therefore
+the single profile-local date source used by Capture, Habit, Focus, Weekly
+Review, Today-adjacent refreshes, and Preparation. Invalid or missing
+authenticated IANA timezone data fails closed; only guest/no-account behavior
+uses the device-local calendar. A typed timezone-change impact invalidates all
+date-bound Flutter reads without importing their feature providers into
+Settings. A preparation-budget change invalidates only Preparation Workload;
+neither cache operation resends the committed account-setting mutation.
 
 ## Daily Preparation Budget
 
@@ -127,6 +135,14 @@ current owner projection only; transient preparation-checklist decisions and
 local recovery countdown state do not exist in the export. Personal Learning
 exports the current complete preference projection and raw owner reflection
 rows; clearing reflection history removes only those reflection rows.
+
+The table list, owner key, bounded cursor/watermark read shape, sanitized-export
+decision, omission decision, and separate Coach Snapshot participation are
+derived from the typed FastAPI owner-data catalog. Every repo-owned public
+table, including an operational ledger that participates in neither output,
+must have exactly one catalog entry. The export response contract remains the
+exact 40-table V2 shape above; this consolidation does not broaden export or
+snapshot disclosure.
 
 `20260714110000_account_export_lifestyle_entries_grant.sql` gives only the
 verified-bearer FastAPI path's `service_role` client the missing `SELECT` grant
@@ -255,3 +271,8 @@ text scaling. A live
 deletion requires an intentionally disposable local account and must never be
 performed as part of a non-destructive audit or against an unconfirmed remote
 project.
+
+The FastAPI route now obtains the application-lifespan-owned Supabase client
+instead of constructing a transport per request. This changes only connection
+reuse: bearer-derived ownership, streamed bounds, retry behavior, service-role
+authority, and every account RPC contract above are unchanged.

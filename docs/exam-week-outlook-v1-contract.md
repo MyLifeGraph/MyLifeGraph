@@ -148,6 +148,11 @@ its simulated intervals. It considers:
 - current imported busy time only when the account's separate Planner
   availability consent is enabled.
 
+The shared Availability grid keeps the complete busy-end precision. A source
+ending after an exact boundary, including by seconds or microseconds, releases
+simulated capacity only at the following five-minute boundary; an exact
+boundary remains unchanged.
+
 Future confirmed minutes on or before the warning buffer reduce the additional
 gap that must be simulated. Missed minutes do not. Future blocks after the
 warning buffer remain visible as a warning and do not weaken the recommended
@@ -250,6 +255,11 @@ outlook.
 This slice adds no table, column, RPC, migration, background job, or export
 projection. It stores Capture V4 only in existing `daily_logs` metadata and
 derives the outlook per GET.
+
+The derivation is implemented as a pure builder over an aware captured instant,
+the bounded planning context, typed Deadline details, and bounded Capture rows.
+Repository reads and persistence-error mapping stay in the Deadline service;
+the builder performs no I/O and is directly deterministic-testable.
 
 It adds no:
 

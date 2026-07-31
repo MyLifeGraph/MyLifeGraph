@@ -214,12 +214,18 @@ The AI service is optional for the default mock frontend.
 cd services/ai_service
 python -m venv .venv
 source .venv/bin/activate
-pip install -r requirements-dev.txt
+python -m pip install --require-hashes -r requirements-dev.txt
 uvicorn app.main:app --reload --port 8000
 ```
 
-`requirements.txt` is runtime-only. Local development uses
-`requirements-dev.txt` so the test runner is installed explicitly.
+`pyproject.toml` owns direct compatibility ranges. `requirements.txt` is the
+hashed runtime lock, while local development and CI use the hashed
+`requirements-dev.txt` lock so pytest and Ruff are installed explicitly.
+Installations use `--require-hashes` and therefore fail closed if an artifact
+does not match the reviewed lock. The canonical lock-update procedure is in
+`services/ai_service/README.md`; it requires Python 3.12, pinned
+`pip-tools==7.5.1`, an explicit `--upgrade`, review, and the normal verification
+gates.
 
 Health check:
 
@@ -1322,13 +1328,12 @@ FLUTTER_BIN=/path/to/flutter npm run e2e:web:full
 ```
 
 The smoke is the serial critical-wiring suite: one independently provisioned
-and cleaned-up spec for each of `auth-capture-today`, `planner-confirm`,
-`authority`, `account-controls`, `coach`, and `personal-learning`. The full
-command first runs all split specs and then the retained detailed
-`e2e/web/legacy-full.mjs` assertion oracle. For diagnosis,
-`e2e:web:new-full` runs only the independent specs and `e2e:web:legacy` runs
-only the oracle. Parallel workers remain disabled until the specs have proven
-state independence.
+and cleaned-up spec for each of `setup-onboarding`,
+`auth-capture-today`, `planner-confirm`, and `coach`. The full command runs all
+six independent specs and additionally covers `account-controls` and
+`personal-learning`. Pure HTTP, RLS, replay, and database-constraint
+invariants are verified by pytest and pgTAP. Parallel workers remain disabled
+until the specs have proven state independence.
 
 This is the normal non-reset path. It requires repository and local database
 migration history to match and never applies pending SQL automatically. It
@@ -1338,23 +1343,20 @@ split spec owns its account and exact `finally` cleanup. After reviewing pending
 SQL and local rows, `APPLY_MIGRATIONS=true` is the separate opt-in; it may
 change or delete those rows.
 
-For a narrow Phase 10 diagnosis, choose a fresh unique run id:
+For a narrow Coach diagnosis, choose a fresh unique run id:
 
 ```bash
-E2E_PHASE10_ONLY=true \
+E2E_JOURNEY=coach \
 E2E_RUN_ID=<new-unique-e2e-run-id> \
 FLUTTER_BIN=/path/to/flutter \
 bash scripts/e2e_web.sh
 ```
 
-This mode creates and signs in the confirmed
-`e2e-<run-id>@example.test` account, applies its minimal prerequisite Setup
-projection, clears only its Coach E2E state, and runs the bounded Coach
-browser/RLS assertions. The run id must be fresh; reuse fails closed against
-the run-specific artifact directory even after exact-user cleanup. It does
-not exercise the normal Setup UI, capture, action, briefing, review, or
-calendar journeys, so it is a diagnostic aid, never a substitute for the full
-command above.
+This mode runs only `coach.spec.mjs` with its own confirmed account, minimal
+Setup prerequisite, and exact cleanup. The run id must be fresh; reuse fails
+closed against the run-specific artifact directory even after cleanup. Any
+other current journey name can be selected the same way. A focused run is a
+diagnostic aid, never a substitute for the full command above.
 
 Exact current results live in
 [Current Verified Baseline](verification.md#current-verified-baseline).
@@ -1366,89 +1368,14 @@ Browser E2E with a fresh local database:
 RESET_DB=true FLUTTER_BIN=/path/to/flutter npm run e2e:web:full
 ```
 
-The E2E script starts local Supabase, starts the FastAPI AI service with the
-local Supabase backend settings and deterministic fake Coach provider, and
-starts Flutter Web on `http://127.0.0.1:7357`. The concise specs then exercise
-their independently owned wiring paths. In the full gate, the retained oracle
-creates its own confirmed local user, signs in through the app, completes
-required-only Setup, exercises retry/edit/review and ownership-safe
-reconciliation, proves retired Setup fields stay absent and Reminder
-preferences remain unchanged, then walks Evening Shutdown and Morning
-Calibration. Its implemented assertions cover a committed
-`daily_logs` response loss followed by exact retry, same-day Evening/Morning
-merge, Evening re-entry/edit, one `daily_logs` row, nested
-`daily-capture-v4` metadata without friction, required Evening sleep plan,
-Morning raw interval/derived duration, absent blank optionals, four deduplicated linked
-current events, Morning-over-Evening numeric energy precedence, capture-scoped
-snapshot refresh with `target_date`, and no recommendation-generate request
-during normal capture. The same responses and persisted row are checked for
-Daily State V2 partial/current quality, recovery-first classification, exact stress/
-sleep/energy/day-shape context, source-risk replacement after an Evening edit,
-stable same-period snapshot identity, field-level evidence, deterministic
-provenance, and capture free-text exclusion. It then continues through habit
-execution, deliberate dashboard recommendation refresh, Inbox (`/alerts`), and
-implemented compatibility routes.
-
-The Phase 3 portion contains exact assertions for a typed task's create/edit,
-postpone/undo, complete/restore, cancel/restore, stable identity, terminal
-timestamps, and estimate; manual and Setup-owned habit completion/skip/undo
-without duplicate outcomes or definition mutation; and linked plus independent
-focus start/finish/abandon with no implicit task completion. Committed responses
-are deliberately lost for task/habit create, habit outcome/undo, task
-completion/undo, and focus start/finish. Negative writes check task lifecycle,
-duplicate active focus, terminal focus immutability including `updated_at` and
-snapshot-date metadata, focus duration, inactive habit, and unscheduled weekday
-rejection. It also checks that the refreshed snapshot contains neutral action
-facts and that ordinary action writes did not call recommendation generation.
-
-The briefing portion first proves that authenticated GET is read-only while the
-daily briefing is missing. It then invokes the protected Phase 7 scheduler with
-`profile_ids` restricted to the smoke's unique test user. Database and response
-assertions require the profile-local date, exact source snapshot and briefing
-ids, deterministic no-LLM provenance, and one persisted daily identity. An
-immediate identical retry must select no current work and preserve both rows and
-their timestamps. Dashboard subsequently reads that prepared briefing with GET
-only; it still does not generate during normal load. The E2E script supplies a
-local scheduler token to FastAPI and the Node assertion process only, never to
-Flutter.
-
-The Phase 0C portion remains part of the detailed oracle: it verifies revisioned
-Setup ownership and retry/edit behavior, the service-role-only atomic apply RPC,
-manual-row preservation, profile projection, and concurrent same-request
-convergence before and after the capture journey. This describes the coverage
-implemented by `e2e/web/legacy-full.mjs`, which remains part of
-`e2e:web:full` until equivalent independent or lower-level assertions are
-explicit. The Phase 8 path adds read-only missing truth, deliberate generation,
-exact persisted weekly facts/proposals, confirmed manual Habit V1 adaptation,
-stale/refresh behavior, Setup non-mutation, and review-table RLS.
-
-The Phase 9 source journey additionally covers explicit consent, connection
-without import, retry-safe `.ics` reconciliation, stable paginated event reads,
-read-only provenance, all-day/timezone/recurrence/cancellation boundaries,
-disconnect-retains versus delete-local-only behavior, schedule preservation,
-and owner/cross-owner RLS. Phase 10 adds the deterministic fake-provider Coach
-journey. Personal Learning coverage finishes and rates a session, edits it from
-Evening, loads a stable 90-day fixture, enables the separate account
-permission, proves a preferred free Planner window and a busy-window Setup
-fallback, and verifies reflection/preferences export plus account-deletion
-cascade. Guest/demo remains zero-call. The focused Phase 10 rerun and
-subsequent full Phase 3-through-10 path
-passed non-destructively in the recorded 2026-07-13 checkout. Use the complete
-command above to establish a new result after later changes; the focused mode
-or source coverage alone is not a full-checkout pass.
-
-Deadline Planner source coverage must additionally prove explicit estimate and
-prior-credit input, deterministic bounded block totals, staged-versus-active
-revision truth, first-confirm task creation, linked-focus progress without
-implicit completion, calendar isolation/optional busy time, exact retry and
-cross-owner RLS, Account Export inclusion, and guest zero-call. The same
-journey now saves Evening 23:00 with an eight-hour target, corrects Morning
-start to 00:00 with a 05:30 wake, and verifies the derived 330 minutes plus raw
-field isolation. It confirms an exam seven local days away and a competing
-assignment, reads the Planner-only outlook, opens but does not submit the
-explicit replan path, and compares the persisted active revisions before and
-after. This paragraph describes intended assertions rather than a current pass;
-run the full command after implementation changes.
+The E2E script starts local Supabase, the FastAPI service with its deterministic
+fake Coach provider, and Flutter Web on `http://127.0.0.1:7357`. The smoke
+runs the four critical UI journeys; the full gate runs all six. Each journey
+owns a fresh confirmed account and exact cleanup. The browser layer proves only
+user-visible cross-stack wiring. Detailed validation, retry, RLS, privilege,
+and database-constraint coverage stays in the feature-specific Flutter,
+pytest, and pgTAP suites listed in
+[Browser E2E](verification.md#browser-e2e).
 
 By default the script starts FastAPI on `http://127.0.0.1:8000`. Useful AI
 service overrides:
@@ -1475,7 +1402,11 @@ The local service-role key is used only inside FastAPI and the Node E2E process
 for local test setup and assertions. It is not passed to Flutter.
 The standard Flutter start pre-enables Semantics. The Node runner waits for a
 real `flt-semantics` node in the explicit pre-enabled mode; the slower
-placeholder/button fallback is reserved for manually started builds. Each run
+placeholder/button fallback is reserved for manually started builds. Browser
+E2E builds and statically serves profile-mode Flutter Web by default so
+independent Playwright contexts do not share a debug DWDS connection while
+development-only gates remain available. `FLUTTER_WEB_MODE=debug` and
+`release` are diagnostic overrides. Each run
 records its exact created Auth UUIDs and removes only those users through the
 loopback local Admin API in `finally`. A cleanup failure fails an otherwise
 passing run, and an earlier test error remains primary if both fail. Old E2E
@@ -1484,9 +1415,8 @@ the separate fingerprint-confirmed local cleanup.
 
 Logs, screenshots, traces, and timing artifacts are run-specific under
 `.tools/e2e/runs/<run-id>/`. A failing split spec retains its Playwright trace
-and screenshot below the `playwright/` child; the legacy oracle writes its
-failure trace and screenshot at the run root. Supabase, FastAPI, Flutter,
-Chromium, Semantics, journeys, Auth cleanup, runner, and process-cleanup
+and screenshot below the `playwright/` child. Supabase, FastAPI, Flutter,
+Semantics, journeys, Auth cleanup, runner, and process-cleanup
 timings are emitted as structured `[e2e:timing]` records, with one additional
 `[e2e:test-timing]` record per split spec.
 

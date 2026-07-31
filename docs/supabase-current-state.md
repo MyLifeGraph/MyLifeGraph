@@ -624,6 +624,9 @@ backend-owned. Application roles cannot insert a profile or change `role` or
 projection columns. `20260713224500_phase_10_role_authority_guard.sql` makes
 `private.current_app_role()` read only canonical `profiles`, removes mutable
 legacy `"User"` fallback authority, and revokes authenticated profile deletion.
+The Flutter Auth repository therefore requires the trigger-created profile
+after one owner-scoped read. A missing row is an invariant failure and never
+causes an authenticated insert/upsert or a fabricated local profile.
 `20260713230000_phase_10_onboarding_eligibility_guard.sql` additionally revokes
 authenticated updates to `onboarding_completed_at` and blocks application-role
 identity/eligibility mutation in the profile trigger. Service role and the

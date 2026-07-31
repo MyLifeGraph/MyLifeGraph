@@ -20,6 +20,12 @@ categories, quiet hours, and daily limit remain independently editable in
 Settings. Applying or editing Setup must leave the complete
 `notification_preferences` row unchanged.
 
+Real Setup requires the canonical profile that the backend-owned Auth trigger
+creates with the authenticated identity. If that invariant is missing, Flutter
+fails closed before Setup, performs no profile insert/upsert, and offers
+sign-out before another sign-in attempt. Guest Setup remains local and does not
+use this remote profile boundary.
+
 The Goals table remains in the canonical schema and Account Export for
 compatibility. Goals have no active product surface or ranking role. Setup-owned
 Goal rows are archived; manual and foreign-managed rows are retained unchanged.
@@ -102,3 +108,7 @@ Flutter maps Setup load/save, HTTP, and contract failures through one
 student-facing message boundary. Widgets never display URLs, status codes,
 transport dumps, exception causes, or internal contract text. Unknown failures
 use short English retry guidance and explicitly retain the current draft.
+After a successful Setup apply, one typed app-composition impact invalidates
+Today, Daily Briefing, Recommendations, Planner, Preparation Workload, and Exam
+Outlook reads. Onboarding does not import or enumerate those foreign providers,
+and cache invalidation never repeats the applied Setup mutation.

@@ -39,13 +39,43 @@ connection.
 The Flutter app uses feature-first clean architecture:
 
 - `core` contains config, bootstrap, routing, network clients, Supabase access,
-  theme, and reusable widgets.
+  the IANA timezone resolver, theme, and reusable widgets.
 - `features/*/domain` contains entities and repository contracts.
 - `features/*/data` contains mock data sources, Supabase data sources, and
   repository implementations.
 - `features/*/application` contains orchestration that should not live in
   widgets.
-- `features/*/presentation` contains pages, widgets, and Riverpod providers.
+- `features/*/presentation` contains pages, widgets, and providers that are
+  private to that feature.
+- `composition` contains app-level wiring whose dependency knowledge cannot
+  belong to one feature without coupling that feature to its consumers.
+
+Cross-feature Riverpod factories, shared shell actions, and UI adapters that
+combine two feature-owned contracts live in `composition`. This includes Auth,
+profile-date, Capture, Dashboard, Deadline, Recommendation, Briefing, Weekly
+Review, Notification, projection-refresh, and Today-command wiring. The guest Dashboard
+snapshot adapter combines the Quick Action store with the Dashboard projection
+there, while `DashboardRepositoryImpl` depends only on a snapshot-loader
+function. Auth likewise receives a guest-capture migration callback instead of
+importing Quick Action data sources.
+
+An executable source guard rejects every new import from one feature into
+another feature's `data` or `presentation` directory. Its one current exact
+exception is the explicitly embedded Focus-reflection sheet in Evening
+Capture. The entry carries a rationale and the guard fails if it becomes stale.
+Cross-feature domain values and narrow application ports remain allowed; app
+composition may know concrete implementations. No barrel layer or
+dependency-injection framework is used.
+
+`ApiClient` is the Flutter HTTP exception boundary. It translates Dio timeout,
+connection, cancellation, response, and unknown failures into the small
+framework-neutral `ApiFailure` value while retaining only the status code and
+optional contract response data needed by a feature. Feature application,
+domain, and presentation layers do not import Dio. They keep their own
+conflict, stale-state, exact-retry, reload, and student-facing message rules;
+the Coach data boundary additionally converts transport evidence into its
+typed `CoachRemoteException`. Dio stream and cancellation types remain limited
+to `core/network` and the Coach data implementation that owns SSE transport.
 
 State management is Riverpod. Navigation is GoRouter. When the development
 Coach surface gate is enabled, the shell navigation maps to Today, Insights,
@@ -60,6 +90,11 @@ surface gate is off, its destination is omitted rather than replaced by
 Settings. Stored Inbox is reached from Settings; `/alerts` remains a compatible
 Settings-owned route. Auth, Setup, Capture, and other sub-routes do not inherit
 the main-page action group.
+One immutable Shell destination descriptor list owns each destination's label,
+path, active nested paths, desktop/mobile icon variants, emphasis, and Coach
+capability requirement. Desktop, mobile, and large-text compact navigation all
+derive from that list; GoRouter route declarations remain explicit in the app
+router.
 In-page calls to action push GoRouter history. Shell destinations, auth
 redirects, and completed flows replace it. `AppPage` owns the shared top-left
 back control: it pops actual history and otherwise uses an explicit
@@ -73,6 +108,40 @@ FastAPI Coach surface at `/coach`; `/more` aliases that route. Guest/mock render
 honest local unavailability and makes no Coach HTTP call.
 `/deep-work` now serves the real linked focus lifecycle only when synced
 execution is available; guest/demo sessions redirect to Quick Action.
+
+Cross-feature cache effects after durable Flutter writes are composed through
+one direct `ProjectionRefreshCoordinator`. A caller names the domain impact,
+such as Daily Capture, Habit outcome/definition, Focus, Deadline Plan, Planner,
+Setup, timezone, or preparation-budget change. Only the composition provider
+maps that impact to Daily Snapshot refresh and Riverpod read-projection
+invalidation. This is synchronous application orchestration, not a broadcast
+event bus. The screen that owns Today or Planner still owns its controlled
+reload and stale-after-mutation state; guest Capture invalidates local reads
+without calling the backend.
+
+Today Task/Habit writes are owned by the feature-local
+`TodayCommandController` in `features/dashboard/application`. It depends only
+on narrow Task/Habit command ports, the Dashboard repository contract, and the
+typed projection-refresh callbacks. App composition adapts the concrete
+Supabase sources to those ports. `dashboard_page.dart` retains dialogs,
+navigation, Undo presentation, and student-facing messages, but it neither
+constructs nor invokes a Supabase Task/Habit source. The former unreachable
+inline Task editor and its inert edit/cancel/postpone callback chain were
+removed; Task creation and editing continue through Planner. In-flight identity
+locks, optimistic
+status/outcome overlays, committed-versus-unconfirmed results, the single
+post-write Today reload, and stale/reload-only state are independently testable
+outside the widget.
+
+Dashboard presentation is split by product responsibility rather than by an
+arbitrary line limit. `TodayOverviewSections` owns capture streak, progress,
+and agenda; `TodayTaskSections` and `TodayHabitSection` own their typed display
+state and action callbacks; `DashboardMoreSection` owns the lazy workload,
+Weekly Review, saved-signal, recommendation, feedback-history, and full-week
+surface. `_DashboardHome` composes those section APIs instead of forwarding
+each leaf callback and optimistic collection independently. Shared visual
+primitives remain Dashboard-local and contain no feature command or data
+access.
 
 The Coach controller is app-scoped and bound to the currently eligible profile,
 not to the lifetime of the Coach route. Its draft, retry request identity, and
@@ -217,6 +286,16 @@ The current `daily-capture-v4` contract is:
   the capture's explicit local `target_date` best-effort; guest/mock writes do
   not call Supabase or FastAPI.
 
+Flutter resolves account-local calendar dates through one
+`ProfileLocalDateSource`. It converts one captured instant with the
+authenticated profile's IANA timezone and fails closed for an invalid account
+timezone. Guest and no-account flows deliberately retain device-local dates.
+Daily Capture identity, standalone Habit writes, Focus `entry_date`, Weekly
+Review application refresh, recommendation refresh, and managed Preparation
+refresh use that boundary; real timestamps remain independent UTC instants.
+The inline Today handlers continue to use the exact `local_date` returned by
+the Today projection.
+
 The cross-feature write-authority, timezone/DST, observation-ordering, and
 durable-mutation reload rules are defined together in
 `docs/stabilization-consistency-contract.md`.
@@ -240,7 +319,10 @@ optional estimate; recommendation reasons are no longer copied into unrelated
 task descriptions. Authenticated users can execute typed task commands from the
 existing task section. The primary Today area now reads the strict owner-scoped
 `today-overview-v2` contract through `GET /v1/today/overview-v2`; the V1 route
-remains available for existing clients. FastAPI captures
+remains available for existing clients and its focused contract tests. It may
+be removed only after an explicit API support decision establishes that no
+supported client still depends on it; Flutter's exclusive V2 use is not by
+itself sufficient evidence. FastAPI captures
 one UTC instant, resolves the profile-local date, and isolates check-in, task,
 habit, recurring Setup, confirmed Preparation, current imported Calendar, and
 actual Focus reads. Normal load is GET-only and never generates or adjusts a
@@ -267,6 +349,11 @@ FastAPI controller/data boundary; guest/demo is a zero-call locked surface.
 Task/Habit proposals are immutable previews and create or update their target
 atomically only on confirmation. Existing targets remain unscheduled until the
 user deliberately supplies the missing values and proposes a revision.
+The asynchronous Planner service only loads the overview inputs; a pure
+feature-local builder owns the seven-day, preparation, unscheduled/history, and
+attention projection. Proposal persistence crosses the repository boundary as
+one validated `PlannerProposalWrite`, so target identity, revision, Task
+blocks, and Habit slots cannot drift as independent dictionaries.
 
 The shared availability service composes Setup commitments, manual commitments,
 active Planner reservations, active Preparation blocks, the current instant,
@@ -299,7 +386,11 @@ The additive forced-RLS schema and exact routes are specified in
 
 Persisted `daily-briefing-v1` rows remain deterministic backend inputs for the
 scheduler, reminder generation, Coach context, and historical feedback. The
-Today UI no longer presents their ranking as a decision made for the user. A
+Today UI no longer presents their ranking as a decision made for the user, and
+Flutter has no direct `/v1/briefings/*` repository or provider: Today V2 is its
+read authority and deliberate briefing generation remains backend-owned. This
+client cleanup does not remove the persisted backend contract, scheduled
+preparation, notification provenance, Coach context, or readable history. A
 local guest dashboard derives only its real locally saved capture state and
 otherwise shows honest empty sections; it does not call FastAPI/Supabase or
 invent a personalized briefing, task, habit, or schedule.
@@ -351,7 +442,8 @@ Phase 3 keeps simple user-owned mutations in typed Flutter/Supabase boundaries:
   same date. Paginated reads load all habits plus outcomes beginning 370
   calendar days before today. Manual creation persists local `started_on`, and
   date-component arithmetic keeps scheduled opportunities stable across DST
-  boundaries.
+  boundaries. Account dates use the shared profile-local boundary; guest-only
+  state uses the device calendar explicitly.
 - `/deep-work` is a real focus-session screen for authenticated real accounts.
   It starts at most one active session, optionally links one owned open task or
   active habit, measures whole elapsed minutes at finish/abandon, and never
@@ -362,7 +454,9 @@ Phase 3 keeps simple user-owned mutations in typed Flutter/Supabase boundaries:
   reconstructs countdown, progress, and end time from persisted state after a
   reload, offers the latest/custom duration, and only after five completed
   sessions may show a reviewable median-duration suggestion. It infers no local
-  time-of-day preference and changes no setting automatically.
+  time-of-day preference and changes no setting automatically. A new session's
+  `metadata.entry_date` comes from its captured start instant in the
+  authenticated profile timezone.
 
 Flutter and FastAPI share a strict, ranking-independent
 `executable-action-v1` envelope for `open_task`, `complete_task`, `log_habit`,
@@ -396,6 +490,10 @@ one stable managed Phase 3 task with the plan id, and later confirmations retain
 that identity. The planning window is at most 366 profile-local calendar days;
 proposal concurrency follows the latest persisted revision while completion and
 cancellation require the current active revision.
+The Deadline service passes one validated `DeadlineProposalWrite` to its
+repository rather than parallel proposal/block dictionaries. The read-only
+Exam-Week calculation lives in a pure builder with no repository or service
+access; the service retains only bounded input loading and error mapping.
 
 The managed task is not generically editable. Task mutation/editor paths detect
 its planner source and route back to `/preparation-plans`; only planner confirm,
@@ -711,6 +809,22 @@ Current responsibilities:
   their existing daily identities. Recommendations remain disabled by default,
   and explicit opt-in still forces LLM wording off.
 
+FastAPI owns one pooled `httpx.AsyncClient` for Supabase Auth and REST during
+its application lifespan. One typed `ApplicationComposition` builds the
+repository/service graph over that shared `SupabaseRestClient` and reuses the
+same Snapshot, Briefing, Weekly Review, Recommendation, Learning, learned-
+timing, Deadline, Planner, Today, Scheduled, Notification, Account, and Coach
+collaborators where their contracts overlap. Router modules retain explicit
+FastAPI endpoints and error mapping; asynchronous dependency functions only
+select a typed service from that graph and construct no repository or
+transport. Tests override those dependency function objects rather than named
+`app.state` service fields. Shutdown closes the pool exactly once. Missing
+backend Supabase configuration creates neither a pool nor a graph and retains
+the existing fail-closed unauthorized/service-unavailable behavior. Repository
+protocols and direct unit-level service/repository injection remain unchanged;
+the graph is application-lifespan scoped, not a process-global service
+locator.
+
 Flutter reads persisted recommendations through `GET /v1/recommendations` when
 `USE_MOCK_DATA=false`, Supabase is configured, and a real Supabase session
 access token is available. The app attaches that token as a bearer token for the
@@ -895,7 +1009,10 @@ request and response shapes, context options, and memory-selection endpoints
 remain readable/available for compatibility but current Flutter does not call
 or display them. Their newest paired provenance remains
 `controlled-coach-prompt-v3`/`coach-context-v3`; current V3 uses the free-agent
-prompt and personal snapshot instead.
+prompt and personal snapshot instead. Focused API tests and readable stored
+V1/V2 history still exercise this boundary, so removal requires an explicit
+support-window/data-migration decision rather than inference from current
+Flutter call sites.
 
 The model returns only reply, uncertainty, and safety. FastAPI derives
 conservative snapshot-source coverage in the `evidence` field, actual
@@ -938,7 +1055,12 @@ it omits, includes Deadline Planner plan/revision/block rows while omitting its
 request ledger, and fails rather than truncating at a V1 bound. The exact
 40-table set includes `learning_preferences` and
 `focus_session_reflections`, while the learning request ledger is explicitly
-omitted. Flutter validates the
+omitted. FastAPI's typed owner-data catalog is the single code owner for all 47
+repo-owned public tables: each entry separately declares Account Export and
+Coach Snapshot participation, the bounded read shape when applicable, and the
+human-readable snapshot description. A focused migration-history completeness
+test fails when a newly created repo table has no deliberate policy. Flutter
+validates the
 entire envelope and counts before saving. Full deletion requires exact typed
 confirmation and one service-role-only database RPC. The RPC locks the existing
 owner workflows, removes restrict-linked focus history, deletes the Auth user,
@@ -1002,6 +1124,9 @@ accepted and historical rows even when the new set is empty.
   write `onboarding_completed_at`; authorization reads only `profiles` and
   never falls back to a mutable legacy `"User"` row. The service-role Intake
   apply path retains the authority needed to project onboarding state.
+- Flutter treats an authenticated identity without that canonical profile as an
+  explicit invariant failure. It performs one owner-scoped profile read, makes
+  no client repair write, and offers sign-out before another sign-in attempt.
 - Phase 3 preserves existing table RLS/grants. A locked habit trigger rejects
   cross-user, inactive, paused/archived/candidate, and unscheduled selected-
   weekday outcomes. Focus triggers reject invalid links and every update to a

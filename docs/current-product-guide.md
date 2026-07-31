@@ -1,7 +1,7 @@
 # MyLifeGraph: aktueller Produktleitfaden
 
 Status: Beschreibung des tatsächlich implementierten Repository-Stands vom
-28. Juli 2026. Dieses Dokument beschreibt den Ist-Zustand, nicht die Roadmap.
+31. Juli 2026. Dieses Dokument beschreibt den Ist-Zustand, nicht die Roadmap.
 Die verbindlichen technischen Detailverträge bleiben die am Ende verlinkten
 Contract-Dokumente.
 

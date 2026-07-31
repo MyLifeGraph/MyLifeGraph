@@ -27,6 +27,11 @@ FastAPI captures one timezone-aware UTC instant, loads the profile's IANA
 timezone, and derives one profile-local date. `generated_at`, `timezone`, and
 `local_date` must agree. Flutter uses that returned date for the Today header
 and outcome commands instead of independently choosing a device date.
+Standalone authenticated Habit actions resolve their target through the same
+profile-timezone source, capture it before the write, and reuse it for the
+snapshot refresh. Guest actions remain explicitly device-local. An invalid
+authenticated profile timezone is an error, not permission to fall back to the
+device date.
 
 ## Source Projection And Partial Failure
 
@@ -202,7 +207,28 @@ displayed `DashboardSnapshot.localDate`; device time is not a fallback. While
 the write and subsequent Snapshot/Today refresh are in flight, all Task/Habit
 actions are locked. If the write committed but the refresh fails, Flutter keeps
 the optimistic saved state, disables old projection controls, and shows
-`Saved; Today could not reload.` Its retry performs only a read.
+`Saved; Today could not reload.` Its retry performs only a read. The app-level
+projection coordinator refreshes the Daily Snapshot and invalidates foreign
+Briefing/Planner/Workload/Outlook dependencies, but deliberately does not
+invalidate Today for these inline writes. Today owns exactly one repository
+reload so an automatic provider rebuild cannot consume or obscure the explicit
+stale-after-mutation result.
+
+The feature-local `TodayCommandController` owns Task/Habit in-flight locks,
+optimistic overlays, committed-versus-unconfirmed outcomes, and the
+`current | refreshingAfterMutation | staleAfterMutation` lifecycle. It receives
+narrow command ports from app composition; Dashboard presentation contains no
+concrete Supabase Task/Habit source access. Navigation to managed Preparation,
+Undo presentation, and student-facing copy remain UI responsibilities. Task
+creation and editing stay in Planner; the former unreachable duplicate Today
+editor and its inert edit/cancel/postpone callback path are not retained.
+
+The Today surface order is composed from independently testable presentation
+sections with typed state/action inputs: streak/progress/agenda, Tasks, Habits,
+and the lazy `More` content. The page does not forward every leaf callback or
+optimistic collection through one large home-widget constructor. This boundary
+changes merge locality and test scope only; it does not add a second read model,
+command bus, or different student-visible order.
 
 ## Bounds And Non-Claims
 
@@ -210,6 +236,10 @@ Backend parsers reject unknown/coerced contract shapes and cap task, habit,
 timeline, focus, calendar, and paginated fact reads. Flutter repeats exact key,
 enum, timestamp, identity, source-state, and progress checks. A malformed
 response is an error, not partial invented content.
+
+The Today route now obtains the shared application-lifespan Supabase client
+instead of opening a transport per request. The read remains owner-scoped,
+GET-only, bounded, source-isolated, and free of generation or mutation.
 
 Today Overview does not infer free time, reschedule overlaps, complete a plan
 from tracked minutes, write to imported calendars, turn Focus into an

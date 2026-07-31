@@ -2,8 +2,9 @@
 
 Status: current whole-product review entry point for the checkout containing
 this document, updated through Today Overview V2, Planner V1, Study Setup V1,
-the Coach-enabled shell navigation, Setup personalization retirement, Daily
-Capture V4, and Exam-Week Outlook V1 on 2026-07-26.
+Personal Learning V1, the Coach-enabled shell navigation, Setup
+personalization retirement, Daily Capture V4, Exam-Week Outlook V1, and the
+stabilized application-composition boundaries on 2026-07-31.
 
 ## Objective
 
