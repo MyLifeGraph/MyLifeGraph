@@ -1,5 +1,12 @@
 # Architecture
 
+Android Focus Protection V1 adds a device-local adapter below the existing
+Flutter Focus presentation. Supabase remains the session authority; Flutter
+reconciles confirmed session identity and timing through an injectable channel,
+while native preferences, Accessibility, Alarm, Boot, and AutomaticZenRule
+components own only a temporary device lease. See
+`docs/android-focus-protection-v1-contract.md`.
+
 This document describes the current repository shape. It intentionally
 distinguishes implemented behavior from planned backend integration. For the
 target backend flow, product agents, LLM cost controls, and next implementation

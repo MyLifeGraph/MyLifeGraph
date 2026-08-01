@@ -11,6 +11,7 @@ import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/theme/theme_mode_provider.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_page.dart';
+import '../../../focus_protection/application/focus_protection_gateway.dart';
 import 'package:my_life_graph/composition/auth_providers.dart';
 import 'package:my_life_graph/composition/widgets/app_header_actions.dart';
 import '../../domain/account_settings.dart';
@@ -37,6 +38,8 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     final capabilities = ref.watch(appSurfaceCapabilitiesProvider);
     final themeMode = ref.watch(appThemeModeProvider);
     final lightModeEnabled = themeMode == ThemeMode.light;
+    final androidFocusProtection =
+        ref.watch(focusProtectionPlatformSupportedProvider);
     final syncedAccount =
         session?.isAuthenticated == true && capabilities.canUseSyncedExecution;
     final profileTimezone = capabilities.isLocalDemo && profile != null
@@ -110,6 +113,20 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             onTap: () => context.push('${AppRoutes.onboarding}?edit=1'),
           ),
         ),
+        if (syncedAccount && androidFocusProtection)
+          AppCard(
+            padding: EdgeInsets.zero,
+            child: ListTile(
+              key: const ValueKey('focus-protection-setting-entry'),
+              leading: const Icon(AppIcons.lockOutline),
+              title: const Text('Focus protection'),
+              subtitle: const Text(
+                'Optionally block selected apps and silence normal notifications during synced Focus sessions.',
+              ),
+              trailing: const Icon(AppIcons.chevronRight),
+              onTap: () => context.push(AppRoutes.focusProtection),
+            ),
+          ),
         AppCard(
           padding: EdgeInsets.zero,
           child: ListTile(

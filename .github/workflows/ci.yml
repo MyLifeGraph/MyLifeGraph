@@ -72,10 +72,21 @@ jobs:
           npm run verify:visual
 
   flutter:
-    name: Flutter analyze and complete test suite
+    name: Flutter and Android verification
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install pinned Android SDK components
+        run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
 
       - uses: subosito/flutter-action@v2
         with:
@@ -94,6 +105,10 @@ jobs:
       - name: Run all Flutter tests
         working-directory: apps/mobile
         run: flutter test
+
+      - name: Run Android JVM tests and lint
+        working-directory: apps/mobile/android
+        run: ./gradlew testDebugUnitTest lintDebug
 
   backend:
     name: Complete FastAPI test suite

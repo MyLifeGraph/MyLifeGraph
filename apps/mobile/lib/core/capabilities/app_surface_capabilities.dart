@@ -13,6 +13,7 @@ class AppSurfaceCapabilities {
     this.canUseWeeklyReview = false,
     this.canUseCalendarIntegration = false,
     this.canUseDeadlinePlanner = false,
+    this.canUseDeviceFocusProtection = false,
     this.canAccessCoachBackend = false,
     this.canShowCoachSurface = false,
   });
@@ -23,6 +24,7 @@ class AppSurfaceCapabilities {
   final bool canUseWeeklyReview;
   final bool canUseCalendarIntegration;
   final bool canUseDeadlinePlanner;
+  final bool canUseDeviceFocusProtection;
   final bool canAccessCoachBackend;
   final bool canShowCoachSurface;
 
@@ -50,6 +52,7 @@ class AppSurfaceCapabilities {
       canUseWeeklyReview: canUseSyncedExecution,
       canUseCalendarIntegration: canUseSyncedExecution,
       canUseDeadlinePlanner: canUseSyncedExecution,
+      canUseDeviceFocusProtection: canUseSyncedExecution,
       canAccessCoachBackend: coachSurfaceEnabled && canUseSyncedExecution,
       canShowCoachSurface: coachSurfaceEnabled,
     );

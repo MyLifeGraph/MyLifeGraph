@@ -9,6 +9,10 @@ way to explore the product today is the Flutter app in mock-data guest mode.
 ## Current Status
 
 - The Flutter app is the primary user experience.
+- Android real accounts have optional, off-by-default device-local Focus
+  protection. It may cover selected apps through a package-name-only
+  Accessibility service and silence normal notifications through one owned DND
+  rule; it never changes the canonical synced Focus lifecycle.
 - Mock/guest mode is the default local path and does not require Supabase keys.
 - Supabase Auth and persistence are wired in the app. The canonical snake_case
   migrations create the current app tables, including Intake V1 tables, for

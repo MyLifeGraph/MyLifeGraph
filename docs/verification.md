@@ -1,5 +1,24 @@
 # Verification And Agent Automation
 
+Android Focus Protection adds Flutter domain/widget/lifecycle coverage, native
+JVM lease/package/policy tests, and manifest/source guards. Run:
+
+```bash
+cd apps/mobile
+/home/gregor/tools/flutter/bin/flutter analyze
+/home/gregor/tools/flutter/bin/flutter test
+cd android
+ANDROID_HOME="$PWD/../../../.tools/android-sdk" \
+ANDROID_SDK_ROOT="$PWD/../../../.tools/android-sdk" \
+./gradlew testDebugUnitTest lintDebug
+cd ..
+/home/gregor/tools/flutter/bin/flutter build apk --debug
+```
+
+Real overlay, user/OEM Zen overrides, call/alarm policy, process death, and boot
+still require the physical matrix in
+`docs/android-focus-protection-v1-contract.md`.
+
 This document is the shared runbook for automated checks. It describes what can
 be verified by agents without manual app exploration, what requires local
 tooling, and what remains future work.
@@ -1600,12 +1619,13 @@ The FastAPI AI service must be healthy for the browser smoke to pass.
 ## Continuous Integration Gates
 
 `.github/workflows/ci.yml` runs documentation/visual contracts, clean Flutter
-analysis plus the complete Flutter suite, and the complete FastAPI pytest suite
-on every pull request. Path classification adds a debug web build for Flutter
-changes and a fresh ephemeral local migration chain plus pgTAP for Supabase,
-migration, or database-test changes. Full browser E2E runs nightly, on manual
-dispatch, and for Auth, routing, schema, core/configuration, unknown, or
-cross-stack pull-request changes. No local Git hook is required or installed.
+analysis plus the complete Flutter suite, Android JVM tests plus `lintDebug`,
+and the complete FastAPI pytest suite on every pull request. Path
+classification adds a debug web build for Flutter changes and a fresh ephemeral
+local migration chain plus pgTAP for Supabase, migration, or database-test
+changes. Full browser E2E runs nightly, on manual dispatch, and for Auth,
+routing, schema, core/configuration, unknown, or cross-stack pull-request
+changes. No local Git hook is required or installed.
 
 The same conservative rules are available locally through
 `npm run verify:affected -- --base-ref <ref>`. CI failure artifacts are retained

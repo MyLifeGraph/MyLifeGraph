@@ -14,6 +14,8 @@ import '../../features/deadline_plans/presentation/pages/deadline_plans_page.dar
 import '../../features/dashboard/presentation/pages/dashboard_page.dart';
 import '../../features/focus/domain/focus_session.dart';
 import '../../features/focus/presentation/pages/focus_session_page.dart';
+import '../../features/focus_protection/application/focus_protection_gateway.dart';
+import '../../features/focus_protection/presentation/pages/focus_protection_settings_page.dart';
 import '../../features/insights/presentation/pages/insights_page.dart';
 import '../../features/learning/presentation/pages/personal_learning_page.dart';
 import '../../features/notifications/presentation/pages/notifications_page.dart';
@@ -36,6 +38,7 @@ const _postAuthContinuationPaths = <String>{
   AppRoutes.onboarding,
   AppRoutes.settings,
   AppRoutes.notificationSettings,
+  AppRoutes.focusProtection,
   AppRoutes.personalLearning,
   AppRoutes.calendarIntegration,
   AppRoutes.preparationPlans,
@@ -164,6 +167,17 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             builder: (context, state) => const NotificationSettingsPage(),
           ),
           GoRoute(
+            path: AppRoutes.focusProtection,
+            redirect: (context, state) {
+              final capabilities = ref.read(appSurfaceCapabilitiesProvider);
+              return capabilities.canUseDeviceFocusProtection &&
+                      ref.read(focusProtectionPlatformSupportedProvider)
+                  ? null
+                  : AppRoutes.settings;
+            },
+            builder: (context, state) => const FocusProtectionSettingsPage(),
+          ),
+          GoRoute(
             path: AppRoutes.personalLearning,
             redirect: (context, state) =>
                 ref.read(appSurfaceCapabilitiesProvider).canUseSyncedExecution
@@ -285,6 +299,10 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   ref.listen(authControllerProvider, (_, __) => router.refresh());
   ref.listen(passwordRecoveryActiveProvider, (_, __) => router.refresh());
   ref.listen(appSurfaceCapabilitiesProvider, (_, __) => router.refresh());
+  ref.listen(
+    focusProtectionPlatformSupportedProvider,
+    (_, __) => router.refresh(),
+  );
   ref.onDispose(router.dispose);
   return router;
 });

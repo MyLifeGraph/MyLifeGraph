@@ -1,5 +1,17 @@
 # Local Development
 
+## Android SDK 36 And Wireless Device Setup
+
+Android Focus Protection uses compile/target SDK 36 and minSdk 24. Keep the
+official command-line SDK, Platform Tools, platform 36, and build tools 36 in
+the ignored `.tools/android-sdk`; ignored `apps/mobile/android/local.properties`
+points `sdk.dir` there. Android Studio and Windows ADB are not required.
+
+For Android 11+, enable Developer options and Wireless Debugging, then use the
+`adb pair`, `adb connect`, and `adb reverse` commands in
+`docs/android-focus-protection-v1-contract.md`. Install from WSL with
+`flutter run -d <device-id>`.
+
 This guide is written for a fresh clone. It avoids machine-specific paths and
 does not assume any user-local Codex skills.
 

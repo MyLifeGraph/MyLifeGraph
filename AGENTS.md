@@ -69,6 +69,9 @@ Read these files before making changes:
 25. `docs/stabilization-consistency-contract.md` before changing Daily Capture
     write authority, revisioned account settings, timezone-bound planning,
     projection observation/freshness, or post-mutation Flutter reload states
+26. `docs/android-focus-protection-v1-contract.md` before changing Android
+    Accessibility app blocking, DND/Zen rules, local Focus leases, device-only
+    Focus settings, or Focus lifecycle protection reconciliation
 ## Current State
 
 MyLifeGraph is a Flutter web/mobile app with Supabase for auth and persistence
@@ -417,6 +420,9 @@ roles no new write authority.
 - `docs/stabilization-consistency-contract.md` - current write-authority,
   timezone, observation-order, retry, and stale-projection consistency
   boundaries established by the whole-product stabilization review.
+- `docs/android-focus-protection-v1-contract.md` - Android-only device-local
+  Focus blocking, DND, disclosure, lease, emergency-release, and honest-limit
+  boundary.
 - `README.md` - high-level project overview.
 
 ## Next Implementation Direction

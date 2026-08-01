@@ -20,6 +20,8 @@ import '../../../../core/widgets/app_page.dart';
 import 'package:my_life_graph/composition/profile_local_date_providers.dart';
 import '../../data/focus_session_supabase_data_source.dart';
 import '../../domain/focus_session.dart';
+import '../../../focus_protection/application/focus_protection_gateway.dart';
+import '../../../focus_protection/domain/focus_protection.dart';
 import '../widgets/focus_reflection_sheet.dart';
 
 final focusSessionPageDataSourceProvider =
@@ -70,7 +72,8 @@ class FocusSessionPage extends ConsumerStatefulWidget {
   ConsumerState<FocusSessionPage> createState() => _FocusSessionPageState();
 }
 
-class _FocusSessionPageState extends ConsumerState<FocusSessionPage> {
+class _FocusSessionPageState extends ConsumerState<FocusSessionPage>
+    with WidgetsBindingObserver {
   FocusSession? _active;
   List<FocusSession> _recent = const [];
   Map<String, FocusReflection> _reflections = const {};
@@ -91,10 +94,15 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage> {
   bool _isLoading = true;
   bool _isSaving = false;
   String? _loadError;
+  FocusProtectionStatus? _protectionStatus;
+  bool _isChangingProtection = false;
+  int _loadGeneration = 0;
+  int _protectionGeneration = 0;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     final requestedMinutes = widget.initialPlannedMinutes;
     if (requestedMinutes != null &&
         requestedMinutes >= 5 &&
@@ -106,8 +114,18 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage> {
 
   @override
   void dispose() {
+    _loadGeneration++;
+    _protectionGeneration++;
+    WidgetsBinding.instance.removeObserver(this);
     _ticker?.cancel();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && !_isSaving) {
+      unawaited(_load());
+    }
   }
 
   @override
@@ -138,7 +156,7 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage> {
             message: _loadError!,
             onRetry: _load,
           )
-        else if (_active != null)
+        else if (_active != null) ...[
           _ActiveFocusCard(
             session: _active!,
             target: _targetFor(_active!),
@@ -146,8 +164,15 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage> {
             isSaving: _isSaving,
             onFinish: _finish,
             onAbandon: _abandon,
-          )
-        else if (_recoveryEndsAt?.isAfter(_clockNow) == true)
+          ),
+          if (_protectionStatus?.platformSupported == true)
+            _ActiveFocusProtectionCard(
+              status: _protectionStatus!,
+              sessionId: _active!.id,
+              isBusy: _isChangingProtection,
+              onEmergencyRelease: _emergencyRelease,
+            ),
+        ] else if (_recoveryEndsAt?.isAfter(_clockNow) == true)
           _RecoveryCard(
             endsAt: _recoveryEndsAt!,
             now: _clockNow,
@@ -193,11 +218,17 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage> {
 
   Future<void> _load() async {
     if (!mounted) return;
+    final loadGeneration = ++_loadGeneration;
+    final protectionGeneration = ++_protectionGeneration;
+    bool isCurrent() =>
+        mounted &&
+        loadGeneration == _loadGeneration &&
+        protectionGeneration == _protectionGeneration;
     final config = ref.read(appConfigProvider);
     final source = ref.read(focusSessionPageDataSourceProvider);
     final studySource = ref.read(focusStudySettingsDataSourceProvider);
     if (config.useMockData) {
-      if (mounted) {
+      if (isCurrent()) {
         setState(() {
           _loadError = null;
           _isLoading = false;
@@ -206,7 +237,7 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage> {
       return;
     }
     if (source == null) {
-      if (mounted) {
+      if (isCurrent()) {
         setState(() {
           _loadError = 'Synced focus sessions are not configured.';
           _isLoading = false;
@@ -230,6 +261,12 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage> {
       final targets = results[2] as List<FocusTargetOption>;
       final studyResult = results[3] as _StudySettingsResult;
       final studySettings = studyResult.settings;
+      if (!isCurrent()) return;
+      final protectionStatus = await _readAndReconcileProtection(
+        active,
+        shouldContinue: isCurrent,
+      );
+      if (!isCurrent()) return;
       Map<String, FocusReflection> reflections = const {};
       var reflectionPromptEnabled = false;
       var reflectionDataAvailable = true;
@@ -243,6 +280,7 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage> {
       } catch (_) {
         reflectionDataAvailable = false;
       }
+      if (!isCurrent()) return;
       var selected = _selectedTargetValue;
       final requestedKind = widget.initialTargetKind;
       final requestedId = widget.initialTargetId;
@@ -281,6 +319,7 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage> {
           : studySettings?.recoveryMinutes ?? 0;
       final recoveryEndsAt =
           active == null ? await _restoreRecoveryCountdown(recent) : null;
+      if (!isCurrent()) return;
       if (mounted) {
         setState(() {
           _active = active;
@@ -299,11 +338,12 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage> {
           _clockNow = DateTime.now();
           _loadError = null;
           _isLoading = false;
+          _protectionStatus = protectionStatus;
         });
         _syncTicker();
       }
     } catch (_) {
-      if (!mounted) return;
+      if (!isCurrent()) return;
       if (mounted) {
         setState(() {
           _loadError = 'Could not load focus sessions.';
@@ -451,6 +491,11 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage> {
         .firstOrNull;
     final requestId = newClientUuid();
     final projectionRefresh = ref.read(projectionRefreshCoordinatorProvider);
+    final protectionSupported =
+        ref.read(focusProtectionPlatformSupportedProvider);
+    final protectionGateway = ref.read(focusProtectionGatewayProvider);
+    _loadGeneration++;
+    _protectionGeneration++;
     setState(() => _isSaving = true);
     try {
       final started = await source.startSession(
@@ -463,6 +508,11 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage> {
           label: target?.title ?? 'Independent focus block',
         ),
       );
+      await _reconcileVisibleProtectionWith(
+        started,
+        gateway: protectionGateway,
+        platformSupported: protectionSupported,
+      );
       await _afterDurableWrite(started, projectionRefresh);
       if (mounted) {
         _showMessage('Focus session started.');
@@ -472,6 +522,11 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage> {
         try {
           final active = await source.fetchActiveSession();
           if (active?.id == requestId) {
+            await _reconcileVisibleProtectionWith(
+              active,
+              gateway: protectionGateway,
+              platformSupported: protectionSupported,
+            );
             await _afterDurableWrite(active!, projectionRefresh);
           }
         } catch (_) {
@@ -482,6 +537,11 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage> {
       await _load();
       if (!mounted) return;
       if (_active?.id == requestId) {
+        await _reconcileVisibleProtectionWith(
+          _active,
+          gateway: protectionGateway,
+          platformSupported: protectionSupported,
+        );
         await _afterDurableWrite(_active!, projectionRefresh);
         if (mounted) {
           _showMessage('Focus session started.');
@@ -509,9 +569,19 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage> {
       return;
     }
     final projectionRefresh = ref.read(projectionRefreshCoordinatorProvider);
+    final protectionSupported =
+        ref.read(focusProtectionPlatformSupportedProvider);
+    final protectionGateway = ref.read(focusProtectionGatewayProvider);
+    _loadGeneration++;
+    _protectionGeneration++;
     setState(() => _isSaving = true);
     try {
       final finished = await source.finishSession(active.id);
+      final protectionConfirmed = await _deactivateProtectionWith(
+        active.id,
+        gateway: protectionGateway,
+        platformSupported: protectionSupported,
+      );
       if (mounted) {
         setState(() {
           _active = null;
@@ -526,10 +596,13 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage> {
       await _startRecoveryCountdown(finished);
       unawaited(_refreshAfterTerminalWrite(finished, projectionRefresh));
       if (mounted) {
+        final focusMessage = finished.recoveryMinutes > 0
+            ? 'Focus session finished. Recovery started; linked actions were not completed automatically.'
+            : 'Focus session finished. Linked tasks and habits were not completed automatically.';
         _showMessage(
-          finished.recoveryMinutes > 0
-              ? 'Focus session finished. Recovery started; linked actions were not completed automatically.'
-              : 'Focus session finished. Linked tasks and habits were not completed automatically.',
+          protectionConfirmed
+              ? focusMessage
+              : '$focusMessage Android cleanup could not be confirmed; local expiry and the next device reconciliation will retry it.',
         );
       }
       await _maybePromptForReflection(finished);
@@ -762,9 +835,19 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage> {
       return;
     }
     final projectionRefresh = ref.read(projectionRefreshCoordinatorProvider);
+    final protectionSupported =
+        ref.read(focusProtectionPlatformSupportedProvider);
+    final protectionGateway = ref.read(focusProtectionGatewayProvider);
+    _loadGeneration++;
+    _protectionGeneration++;
     setState(() => _isSaving = true);
     try {
       final abandoned = await source.abandonSession(active.id);
+      final protectionConfirmed = await _deactivateProtectionWith(
+        active.id,
+        gateway: protectionGateway,
+        platformSupported: protectionSupported,
+      );
       if (mounted) {
         setState(() {
           _active = null;
@@ -778,7 +861,11 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage> {
       }
       unawaited(_refreshAfterTerminalWrite(abandoned, projectionRefresh));
       if (mounted) {
-        _showMessage('Focus session abandoned.');
+        _showMessage(
+          protectionConfirmed
+              ? 'Focus session abandoned.'
+              : 'Focus session abandoned. Android cleanup could not be confirmed; local expiry and the next device reconciliation will retry it.',
+        );
       }
       await _maybePromptForReflection(abandoned);
       if (mounted) await _load();
@@ -806,6 +893,125 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage> {
     );
     if (!mounted) return;
     await _load();
+  }
+
+  Future<FocusProtectionStatus?> _readAndReconcileProtection(
+    FocusSession? session, {
+    bool Function()? shouldContinue,
+  }) async {
+    final platformSupported =
+        ref.read(focusProtectionPlatformSupportedProvider);
+    final gateway = ref.read(focusProtectionGatewayProvider);
+    return _readAndReconcileProtectionWith(
+      session,
+      gateway: gateway,
+      platformSupported: platformSupported,
+      shouldContinue: shouldContinue,
+    );
+  }
+
+  Future<FocusProtectionStatus?> _readAndReconcileProtectionWith(
+    FocusSession? session, {
+    required FocusProtectionGateway gateway,
+    required bool platformSupported,
+    bool Function()? shouldContinue,
+  }) async {
+    if (!platformSupported) return null;
+    bool canContinue() => shouldContinue?.call() ?? true;
+    var lastKnownConfiguration = _protectionStatus?.configuration;
+    try {
+      var status = await gateway.readStatus();
+      lastKnownConfiguration = status.configuration;
+      if (!canContinue()) return null;
+      if (session == null && status.lease != null) {
+        status = await gateway.deactivateLease(status.lease!.sessionId);
+        if (!canContinue()) return null;
+      }
+      if (session != null && status.configuration.enabled) {
+        status = await gateway.activateLease(
+          sessionId: session.id,
+          startedAt: session.startedAt,
+          endsAt: session.startedAt.add(
+            Duration(minutes: session.plannedMinutes),
+          ),
+        );
+        if (!canContinue()) return null;
+      }
+      return status;
+    } catch (_) {
+      if (!canContinue()) return null;
+      return FocusProtectionStatus.nativeFailure(
+        configuration: lastKnownConfiguration,
+      );
+    }
+  }
+
+  Future<void> _reconcileVisibleProtectionWith(
+    FocusSession? session, {
+    required FocusProtectionGateway gateway,
+    required bool platformSupported,
+  }) async {
+    final status = await _readAndReconcileProtectionWith(
+      session,
+      gateway: gateway,
+      platformSupported: platformSupported,
+    );
+    if (mounted && status != null) {
+      setState(() => _protectionStatus = status);
+    }
+  }
+
+  Future<bool> _deactivateProtectionWith(
+    String sessionId, {
+    required FocusProtectionGateway gateway,
+    required bool platformSupported,
+  }) async {
+    if (!platformSupported) return true;
+    try {
+      final status = await gateway.deactivateLease(sessionId);
+      if (mounted) setState(() => _protectionStatus = status);
+      return !status.warnings.contains(FocusProtectionWarning.nativeFailure) &&
+          status.lease?.sessionId != sessionId;
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _protectionStatus = FocusProtectionStatus.nativeFailure(
+            configuration: _protectionStatus?.configuration,
+          );
+        });
+      }
+      return false;
+    }
+  }
+
+  Future<void> _emergencyRelease() async {
+    final active = _active;
+    if (active == null || _isChangingProtection) return;
+    final confirmed = await showDialog<bool>(
+          context: context,
+          barrierDismissible: false,
+          builder: (_) => const _EmergencyReleaseDialog(),
+        ) ??
+        false;
+    if (!confirmed || !mounted) return;
+    _protectionGeneration++;
+    setState(() => _isChangingProtection = true);
+    try {
+      final status = await ref
+          .read(focusProtectionGatewayProvider)
+          .emergencyRelease(active.id);
+      if (!mounted) return;
+      setState(() => _protectionStatus = status);
+      _showMessage(
+        'Device protection released. This Focus session remains active and will not be protected again.',
+      );
+    } catch (_) {
+      if (mounted) {
+        _showMessage('Could not release Android protection. Try again.');
+      }
+    } finally {
+      if (mounted) setState(() => _isChangingProtection = false);
+    }
   }
 
   Future<void> _refreshAfterTerminalWrite(
@@ -1240,6 +1446,173 @@ class _ActiveFocusCard extends StatelessWidget {
       ),
     );
   }
+}
+
+class _ActiveFocusProtectionCard extends StatelessWidget {
+  const _ActiveFocusProtectionCard({
+    required this.status,
+    required this.sessionId,
+    required this.isBusy,
+    required this.onEmergencyRelease,
+  });
+
+  final FocusProtectionStatus status;
+  final String sessionId;
+  final bool isBusy;
+  final VoidCallback onEmergencyRelease;
+
+  @override
+  Widget build(BuildContext context) {
+    final lease = status.lease;
+    final matchesSession = lease?.sessionId == sessionId;
+    final leaseActive = matchesSession && lease?.isActive == true;
+    final released = matchesSession &&
+        lease?.state == FocusProtectionLeaseState.emergencyReleased;
+    final mechanisms = <String>[
+      if (matchesSession && status.activeMechanisms.contains('app_blocking'))
+        'Selected apps',
+      if (matchesSession &&
+          status.activeMechanisms.contains('silence_notifications'))
+        'Normal notifications',
+    ];
+    final hasActiveMechanism = mechanisms.isNotEmpty;
+    final title = !status.configurationKnown
+        ? 'Device protection status unavailable'
+        : !status.configuration.enabled
+            ? 'Device protection is off'
+            : released
+                ? 'Device protection released'
+                : leaseActive && hasActiveMechanism
+                    ? 'Device protection active'
+                    : 'Focus continues with partial protection';
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(
+                hasActiveMechanism
+                    ? AppIcons.lockOutline
+                    : AppIcons.warningAmberOutlined,
+              ),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: AppSpacing.xs),
+                    Text(
+                      mechanisms.isEmpty
+                          ? released
+                              ? 'The synced Focus session is still active. Reloading will not restart protection for this session.'
+                              : 'No Android protection mechanism is currently active.'
+                          : 'Active: ${mechanisms.join(' and ')}.',
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          if (status.warnings.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.md),
+            for (final warning in status.warnings)
+              Padding(
+                padding: const EdgeInsets.only(bottom: AppSpacing.xs),
+                child: Text('• ${_focusProtectionWarningText(warning)}'),
+              ),
+          ],
+          if (leaseActive) ...[
+            const SizedBox(height: AppSpacing.md),
+            OutlinedButton.icon(
+              key: const ValueKey('focus-protection-emergency-release'),
+              onPressed: isBusy ? null : onEmergencyRelease,
+              icon: const Icon(AppIcons.lockResetOutlined),
+              label: const Text('Emergency release'),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _EmergencyReleaseDialog extends StatefulWidget {
+  const _EmergencyReleaseDialog();
+
+  @override
+  State<_EmergencyReleaseDialog> createState() =>
+      _EmergencyReleaseDialogState();
+}
+
+class _EmergencyReleaseDialogState extends State<_EmergencyReleaseDialog> {
+  static const _seconds = 5;
+  int _remaining = _seconds;
+  Timer? _timer;
+
+  @override
+  void initState() {
+    super.initState();
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) return;
+      setState(() => _remaining--);
+      if (_remaining <= 0) timer.cancel();
+    });
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Release device protection?'),
+      content: Text(
+        _remaining > 0
+            ? 'Wait $_remaining seconds, then confirm. The synced Focus session will keep running.'
+            : 'Confirm to stop only this device’s protection. This session will not be protected again after reload.',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(false),
+          child: const Text('Keep protection'),
+        ),
+        FilledButton(
+          key: const ValueKey('confirm-focus-protection-emergency-release'),
+          onPressed:
+              _remaining <= 0 ? () => Navigator.of(context).pop(true) : null,
+          child: Text(
+            _remaining > 0 ? 'Confirm in $_remaining' : 'Confirm release',
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+String _focusProtectionWarningText(FocusProtectionWarning warning) {
+  return switch (warning) {
+    FocusProtectionWarning.accessibilityDisabled =>
+      'Selected apps cannot be blocked without Accessibility access.',
+    FocusProtectionWarning.notificationPolicyMissing =>
+      'Notifications cannot be silenced without Do Not Disturb access.',
+    FocusProtectionWarning.dndUnsupported =>
+      'Notification silencing requires Android 10 or newer.',
+    FocusProtectionWarning.noAppsSelected =>
+      'No apps are selected for blocking.',
+    FocusProtectionWarning.zenRuleMissingOrOverridden =>
+      'Android could not confirm the Focus rule, or the rule was disabled, removed, or overridden.',
+    FocusProtectionWarning.nativeFailure =>
+      'Android protection status could not be confirmed; the Focus session continues.',
+  };
 }
 
 class _RecoveryCard extends StatelessWidget {

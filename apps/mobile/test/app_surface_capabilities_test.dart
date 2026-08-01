@@ -29,6 +29,7 @@ void main() {
     expect(capabilities.canUseSyncedExecution, isFalse);
     expect(capabilities.canUseWeeklyReview, isFalse);
     expect(capabilities.canUseCalendarIntegration, isFalse);
+    expect(capabilities.canUseDeviceFocusProtection, isFalse);
     expect(capabilities.canAccessCoachBackend, isFalse);
   });
 
@@ -49,6 +50,7 @@ void main() {
     expect(capabilities.canUseSyncedExecution, isFalse);
     expect(capabilities.canUseWeeklyReview, isFalse);
     expect(capabilities.canUseCalendarIntegration, isFalse);
+    expect(capabilities.canUseDeviceFocusProtection, isFalse);
     expect(capabilities.canAccessCoachBackend, isFalse);
   });
 
@@ -117,6 +119,7 @@ void main() {
     expect(capabilities.canUseSyncedExecution, isTrue);
     expect(capabilities.canUseWeeklyReview, isTrue);
     expect(capabilities.canUseCalendarIntegration, isTrue);
+    expect(capabilities.canUseDeviceFocusProtection, isTrue);
     expect(capabilities.canAccessCoachBackend, isTrue);
   });
 
@@ -134,6 +137,7 @@ void main() {
     expect(capabilities.canUseSyncedExecution, isFalse);
     expect(capabilities.canUseWeeklyReview, isFalse);
     expect(capabilities.canUseCalendarIntegration, isFalse);
+    expect(capabilities.canUseDeviceFocusProtection, isFalse);
     expect(capabilities.canAccessCoachBackend, isFalse);
   });
 }
