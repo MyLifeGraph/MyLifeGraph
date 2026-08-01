@@ -18,7 +18,22 @@ test('visual guard rejects uncontrolled route styling', () => {
     writeFixture(
       root,
       'apps/mobile/lib/features/example/presentation/example.dart',
-      'final x = Icons.star; final c = Color(0xFF123456);',
+      'final x = Icons.star; final c = Color(0xFF123456); BackdropFilter(filter: ImageFilter.blur());',
+    );
+    writeFixture(
+      root,
+      'apps/mobile/lib/features/shell/presentation/main_shell.dart',
+      'BackdropFilter(filter: ImageFilter.blur());',
+    );
+    writeFixture(
+      root,
+      'apps/mobile/lib/core/widgets/app_surface.dart',
+      'class _AppSurfaceHudPainter {}',
+    );
+    writeFixture(
+      root,
+      'apps/mobile/lib/core/theme/app_theme.dart',
+      'navigationBlurSigma: 8, surfaceMaterialOverride: AppSurfaceMaterial.disabled',
     );
     writeFixture(
       root,
@@ -26,11 +41,14 @@ test('visual guard rejects uncontrolled route styling', () => {
       [
         'flutter_svg: 2.1.0',
         'phosphor_flutter: 2.1.0',
+        '- assets/theme/',
         ...[400, 500, 600, 700].map((weight) => `weight: ${weight}`),
       ].join('\n'),
     );
     for (const asset of [
       'apps/mobile/assets/brand/app_brand_mark.svg',
+      'apps/mobile/assets/theme/space-deep-field-landscape.webp',
+      'apps/mobile/assets/theme/space-deep-field-portrait.webp',
       'apps/mobile/assets/fonts/InstrumentSans-Regular.ttf',
       'apps/mobile/assets/fonts/InstrumentSans-Medium.ttf',
       'apps/mobile/assets/fonts/InstrumentSans-SemiBold.ttf',
@@ -50,6 +68,12 @@ test('visual guard rejects uncontrolled route styling', () => {
     const errors = findVisualContractErrors(root);
     assert.ok(errors.some((error) => error.includes('Material Icons')));
     assert.ok(errors.some((error) => error.includes('hard color')));
+    assert.ok(
+      errors.some((error) => error.includes('only production BackdropFilter')),
+    );
+    assert.ok(
+      errors.some((error) => error.includes('only production ImageFilter.blur')),
+    );
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

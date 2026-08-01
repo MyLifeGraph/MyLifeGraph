@@ -6,11 +6,15 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../composition/projection_refresh_providers.dart';
 import '../../../../core/capabilities/app_surface_capabilities.dart';
+import '../../../../core/constants/app_radii.dart';
 import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/navigation/app_routes.dart';
-import '../../../../core/theme/theme_mode_provider.dart';
+import '../../../../core/theme/app_theme.dart';
+import '../../../../core/theme/app_theme_selection_provider.dart';
+import '../../../../core/theme/app_visual_tokens.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_page.dart';
+import '../../../../core/widgets/app_surface.dart';
 import '../../../focus_protection/application/focus_protection_gateway.dart';
 import 'package:my_life_graph/composition/auth_providers.dart';
 import 'package:my_life_graph/composition/widgets/app_header_actions.dart';
@@ -36,8 +40,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     final session = ref.watch(authControllerProvider).valueOrNull;
     final profile = session?.profile;
     final capabilities = ref.watch(appSurfaceCapabilitiesProvider);
-    final themeMode = ref.watch(appThemeModeProvider);
-    final lightModeEnabled = themeMode == ThemeMode.light;
+    final themeSelection = ref.watch(appThemeSelectionProvider);
     final androidFocusProtection =
         ref.watch(focusProtectionPlatformSupportedProvider);
     final syncedAccount =
@@ -277,16 +280,15 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
         ),
         AppCard(
           padding: EdgeInsets.zero,
-          child: SwitchListTile(
-            value: lightModeEnabled,
-            onChanged: _setLightMode,
-            secondary: Icon(
-              lightModeEnabled
-                  ? AppIcons.lightModeOutlined
-                  : AppIcons.darkModeOutlined,
+          child: ListTile(
+            key: const ValueKey('appearance-setting-entry'),
+            leading: Icon(_appearanceIcon(themeSelection)),
+            title: const Text('Appearance'),
+            subtitle: Text(
+              '${_appearanceLabel(themeSelection)} · Saved on this device.',
             ),
-            title: const Text('Light mode'),
-            subtitle: const Text('Saved on this device.'),
+            trailing: const Icon(AppIcons.chevronRight),
+            onTap: _chooseAppearance,
           ),
         ),
         AppCard(
@@ -525,9 +527,15 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     }
   }
 
-  Future<void> _setLightMode(bool enabled) async {
-    final controller = ref.read(appThemeModeProvider.notifier);
-    final saved = await controller.setLightMode(enabled);
+  Future<void> _chooseAppearance() async {
+    final current = ref.read(appThemeSelectionProvider);
+    final selected = await showDialog<AppThemeId>(
+      context: context,
+      builder: (_) => _AppearanceDialog(current: current),
+    );
+    if (!mounted || selected == null || selected == current) return;
+    final controller = ref.read(appThemeSelectionProvider.notifier);
+    final saved = await controller.select(selected);
     if (!saved && mounted) {
       _showMessage('Could not save the appearance setting. Try again.');
     }
@@ -575,6 +583,141 @@ String _formatMinutes(int minutes) {
   if (hours == 0) return '$minutes min';
   if (remainder == 0) return '${hours}h';
   return '${hours}h ${remainder}m';
+}
+
+String _appearanceLabel(AppThemeId id) => switch (id) {
+      AppThemeId.dark => 'Dark',
+      AppThemeId.light => 'Light',
+      AppThemeId.space => 'Space',
+    };
+
+String _appearanceDescription(AppThemeId id) => switch (id) {
+      AppThemeId.dark => 'Calm dark default',
+      AppThemeId.light => 'Bright neutral',
+      AppThemeId.space => 'Animated violet and cyan',
+    };
+
+IconData _appearanceIcon(AppThemeId id) => switch (id) {
+      AppThemeId.dark => AppIcons.darkModeOutlined,
+      AppThemeId.light => AppIcons.lightModeOutlined,
+      AppThemeId.space => AppIcons.autoAwesomeRounded,
+    };
+
+class _AppearanceDialog extends StatelessWidget {
+  const _AppearanceDialog({required this.current});
+
+  final AppThemeId current;
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      scrollable: true,
+      title: const Text('Choose appearance'),
+      content: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 420),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (final id in AppThemeId.values) ...[
+              _AppearanceOption(
+                id: id,
+                selected: current == id,
+                onTap: () => Navigator.of(context).pop(id),
+              ),
+              if (id != AppThemeId.values.last)
+                const SizedBox(height: AppSpacing.sm),
+            ],
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+      ],
+    );
+  }
+}
+
+class _AppearanceOption extends StatelessWidget {
+  const _AppearanceOption({
+    required this.id,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final AppThemeId id;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final previewTokens = AppTheme.resolve(id).extension<AppVisualTokens>()!;
+    final swatches = [
+      previewTokens.background,
+      previewTokens.surfaceInteractive,
+      previewTokens.brand,
+    ];
+    final label = _appearanceLabel(id);
+    final description = _appearanceDescription(id);
+    return AppSurface(
+      key: ValueKey('appearance-option-${id.name}'),
+      variant: AppSurfaceVariant.interactive,
+      selected: selected,
+      semanticLabel: '$label, $description',
+      onTap: onTap,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              AppIconBadge(icon: _appearanceIcon(id)),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(label, style: Theme.of(context).textTheme.titleMedium),
+                    const SizedBox(height: AppSpacing.xs),
+                    Text(
+                      description,
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                  ],
+                ),
+              ),
+              if (selected) ...[
+                const SizedBox(width: AppSpacing.xs),
+                const Icon(AppIcons.check, size: 20),
+              ],
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          ExcludeSemantics(
+            child: Wrap(
+              spacing: AppSpacing.xs,
+              children: [
+                for (final swatch in swatches)
+                  Container(
+                    width: 32,
+                    height: 20,
+                    decoration: BoxDecoration(
+                      color: swatch,
+                      borderRadius: BorderRadius.circular(AppRadii.sm),
+                      border: Border.all(
+                        color: context.visualTokens.focus,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _TimezoneDialog extends StatefulWidget {

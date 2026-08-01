@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../constants/app_radii.dart';
 import '../constants/app_spacing.dart';
 import '../theme/app_motion_tokens.dart';
+import '../theme/app_theme_effects.dart';
 import '../theme/app_visual_tokens.dart';
 
 enum AppSurfaceVariant {
@@ -42,25 +43,40 @@ class AppSurface extends StatefulWidget {
 class _AppSurfaceState extends State<AppSurface> {
   bool _focused = false;
   bool _hovered = false;
+  bool _pressed = false;
 
   @override
   Widget build(BuildContext context) {
     final tokens = context.visualTokens;
     final motion = context.motionTokens;
+    final effects = context.themeEffects;
+    final surfaceMaterial = effects.surfaceMaterial;
     final interactive =
         widget.onTap != null || widget.variant == AppSurfaceVariant.interactive;
     final background = switch (widget.variant) {
-      AppSurfaceVariant.plain => tokens.surface,
-      AppSurfaceVariant.subtle => tokens.surfaceSubtle,
-      AppSurfaceVariant.raised => tokens.surfaceRaised,
-      AppSurfaceVariant.interactive when _hovered => tokens.surfaceInteractive,
-      AppSurfaceVariant.interactive => tokens.surfaceSubtle,
-      AppSurfaceVariant.accent => tokens.brand.withValues(
-          alpha: Theme.of(context).brightness == Brightness.dark ? 0.14 : 0.09,
+      AppSurfaceVariant.plain => surfaceMaterial.plain(tokens.surface),
+      AppSurfaceVariant.subtle => surfaceMaterial.subtle(tokens.surfaceSubtle),
+      AppSurfaceVariant.raised => surfaceMaterial.raised(tokens.surfaceRaised),
+      AppSurfaceVariant.interactive => surfaceMaterial.interactive(
+          _hovered || _pressed ? tokens.surfaceRaised : tokens.surfaceSubtle,
+          hovered: _hovered,
+          pressed: _pressed,
         ),
-      AppSurfaceVariant.warning => tokens.attentionSurface,
-      AppSurfaceVariant.danger => tokens.dangerSurface,
+      AppSurfaceVariant.accent when surfaceMaterial.enabled => Color.alphaBlend(
+          tokens.brand.withValues(alpha: 0.10),
+          surfaceMaterial.subtle(tokens.surfaceSubtle),
+        ),
+      AppSurfaceVariant.accent => tokens.brand.withValues(
+          alpha: effects.accentSurfaceOpacity,
+        ),
+      AppSurfaceVariant.warning =>
+        surfaceMaterial.semantic(tokens.attentionSurface),
+      AppSurfaceVariant.danger =>
+        surfaceMaterial.semantic(tokens.dangerSurface),
     };
+    final hasAmbientOutline = effects.surfaceOutlineColor.a > 0 &&
+        widget.variant != AppSurfaceVariant.warning &&
+        widget.variant != AppSurfaceVariant.danger;
     final hasSemanticBorder = widget.selected ||
         _focused ||
         widget.variant == AppSurfaceVariant.warning ||
@@ -73,32 +89,87 @@ class _AppSurfaceState extends State<AppSurface> {
                 ? tokens.attention
                 : widget.variant == AppSurfaceVariant.danger
                     ? tokens.danger
-                    : Colors.transparent;
+                    : interactive && _hovered
+                        ? effects.surfaceHoverOutlineColor
+                        : effects.surfaceOutlineColor;
 
+    final shadows = <BoxShadow>[
+      if (widget.variant == AppSurfaceVariant.raised)
+        BoxShadow(
+          color: tokens.shadow,
+          blurRadius: 24,
+          spreadRadius: -16,
+          offset: const Offset(0, 12),
+        ),
+      if (widget.variant == AppSurfaceVariant.raised &&
+          effects.raisedSurfaceGlowColor.a > 0)
+        BoxShadow(
+          color: effects.raisedSurfaceGlowColor,
+          blurRadius: 32,
+          spreadRadius: -14,
+          offset: const Offset(0, 8),
+        ),
+      ...?effects.interactionGlow(
+        hovered: _hovered,
+        pressed: _pressed,
+        focused: _focused,
+      ),
+    ];
+    final hoverLift = interactive && _hovered && !_pressed
+        ? effects.interactiveSurfaceHoverLift
+        : 0.0;
+    final showsHudFrame = surfaceMaterial.hudFrameEnabled &&
+        widget.variant != AppSurfaceVariant.accent &&
+        widget.variant != AppSurfaceVariant.warning &&
+        widget.variant != AppSurfaceVariant.danger;
     final content = AnimatedContainer(
-      duration: motion.stateFor(context),
+      key: const ValueKey('app-surface-visual'),
+      duration:
+          _pressed ? motion.selectionFor(context) : motion.stateFor(context),
       curve: motion.curve,
-      padding: widget.padding,
+      transform: effects.interactiveSurfaceHoverLift > 0
+          ? Matrix4.translationValues(0, -hoverLift, 0)
+          : null,
+      transformAlignment: Alignment.center,
       decoration: BoxDecoration(
         color: background,
         borderRadius: BorderRadius.circular(widget.radius),
-        border: hasSemanticBorder
+        border: hasSemanticBorder || hasAmbientOutline
             ? Border.all(color: borderColor, width: _focused ? 2 : 1)
             : null,
-        boxShadow: widget.variant == AppSurfaceVariant.raised
-            ? [
-                BoxShadow(
-                  color: tokens.shadow,
-                  blurRadius: 24,
-                  spreadRadius: -16,
-                  offset: const Offset(0, 12),
-                ),
-              ]
-            : null,
+        boxShadow: shadows.isEmpty ? null : shadows,
       ),
-      child: Material(
-        type: MaterialType.transparency,
-        child: widget.child,
+      child: Stack(
+        children: [
+          Padding(
+            padding: widget.padding,
+            child: Material(
+              type: MaterialType.transparency,
+              child: widget.child,
+            ),
+          ),
+          if (showsHudFrame)
+            Positioned.fill(
+              child: IgnorePointer(
+                child: RepaintBoundary(
+                  child: CustomPaint(
+                    key: const ValueKey('app-surface-hud-frame'),
+                    painter: _AppSurfaceHudPainter(
+                      radius: widget.radius,
+                      emphasized: widget.variant == AppSurfaceVariant.raised ||
+                          widget.variant == AppSurfaceVariant.interactive,
+                      primaryColor: _pressed
+                          ? tokens.focus.withValues(alpha: 0.78)
+                          : tokens.brand.withValues(
+                              alpha: _hovered ? 0.82 : 0.72,
+                            ),
+                      secondaryColor: tokens.dataViolet.withValues(alpha: 0.60),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
     );
 
@@ -116,10 +187,21 @@ class _AppSurfaceState extends State<AppSurface> {
           color: Colors.transparent,
           child: InkWell(
             onTap: widget.onTap,
+            onHighlightChanged: (value) {
+              if (_pressed != value) setState(() => _pressed = value);
+            },
             borderRadius: BorderRadius.circular(widget.radius),
             overlayColor: WidgetStateProperty.resolveWith((states) {
               if (states.contains(WidgetState.pressed)) {
-                return tokens.brand.withValues(alpha: 0.12);
+                return effects.surfacePressedOverlay;
+              }
+              if (effects.interactionGlowEnabled &&
+                  states.contains(WidgetState.focused)) {
+                return effects.focusOverlay;
+              }
+              if (effects.interactionGlowEnabled &&
+                  states.contains(WidgetState.hovered)) {
+                return effects.hoverOverlay;
               }
               return Colors.transparent;
             }),
@@ -129,6 +211,60 @@ class _AppSurfaceState extends State<AppSurface> {
       ),
     );
   }
+}
+
+class _AppSurfaceHudPainter extends CustomPainter {
+  const _AppSurfaceHudPainter({
+    required this.radius,
+    required this.emphasized,
+    required this.primaryColor,
+    required this.secondaryColor,
+  });
+
+  final double radius;
+  final bool emphasized;
+  final Color primaryColor;
+  final Color secondaryColor;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (size.isEmpty) return;
+    final inset = emphasized ? 0.625 : 0.5;
+    final primaryLength = emphasized ? 24.0 : 18.0;
+    final secondaryLength = emphasized ? 16.0 : 12.0;
+    final strokeWidth = emphasized ? 1.25 : 1.0;
+    final primaryPaint = Paint()
+      ..color = primaryColor
+      ..strokeWidth = strokeWidth
+      ..strokeCap = StrokeCap.round
+      ..style = PaintingStyle.stroke;
+    final secondaryPaint = Paint()
+      ..color = secondaryColor
+      ..strokeWidth = strokeWidth
+      ..strokeCap = StrokeCap.round
+      ..style = PaintingStyle.stroke;
+
+    final primaryPath = Path()
+      ..moveTo(radius, inset)
+      ..lineTo(radius + primaryLength, inset)
+      ..moveTo(inset, radius)
+      ..lineTo(inset, radius + primaryLength);
+    final secondaryPath = Path()
+      ..moveTo(size.width - radius - secondaryLength, size.height - inset)
+      ..lineTo(size.width - radius, size.height - inset)
+      ..moveTo(size.width - inset, size.height - radius - secondaryLength)
+      ..lineTo(size.width - inset, size.height - radius);
+    canvas
+      ..drawPath(primaryPath, primaryPaint)
+      ..drawPath(secondaryPath, secondaryPaint);
+  }
+
+  @override
+  bool shouldRepaint(_AppSurfaceHudPainter oldDelegate) =>
+      radius != oldDelegate.radius ||
+      emphasized != oldDelegate.emphasized ||
+      primaryColor != oldDelegate.primaryColor ||
+      secondaryColor != oldDelegate.secondaryColor;
 }
 
 class AppSectionHeader extends StatelessWidget {

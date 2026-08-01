@@ -1,192 +1,244 @@
 import 'dart:async';
 
-import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:my_life_graph/core/theme/theme_mode_provider.dart';
+import 'package:my_life_graph/core/theme/app_theme.dart';
+import 'package:my_life_graph/core/theme/app_theme_selection_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
-  test('restores and persists the selected theme mode', () async {
-    final store = _MemoryThemeModeStore(ThemeMode.light);
+  test('restores and persists the selected Space theme', () async {
+    final store = _MemoryThemeSelectionStore(AppThemeId.space);
     final container = ProviderContainer(
-      overrides: [themeModeStoreProvider.overrideWithValue(store)],
+      overrides: [
+        appThemeSelectionStoreProvider.overrideWithValue(store),
+      ],
     );
     addTearDown(container.dispose);
 
-    expect(container.read(appThemeModeProvider), ThemeMode.dark);
+    expect(container.read(appThemeSelectionProvider), AppThemeId.dark);
     await Future<void>.delayed(Duration.zero);
-    expect(container.read(appThemeModeProvider), ThemeMode.light);
+    expect(container.read(appThemeSelectionProvider), AppThemeId.space);
 
-    final saved =
-        await container.read(appThemeModeProvider.notifier).setLightMode(false);
+    final saved = await container
+        .read(appThemeSelectionProvider.notifier)
+        .select(AppThemeId.light);
 
     expect(saved, isTrue);
-    expect(container.read(appThemeModeProvider), ThemeMode.dark);
-    expect(store.saved, ThemeMode.dark);
+    expect(container.read(appThemeSelectionProvider), AppThemeId.light);
+    expect(store.saved, AppThemeId.light);
+  });
+
+  for (final id in AppThemeId.values) {
+    test('shared preferences restores the existing ${id.name} value', () async {
+      SharedPreferences.setMockInitialValues({
+        SharedPreferencesAppThemeSelectionStore.preferenceKey: id.name,
+      });
+      const store = SharedPreferencesAppThemeSelectionStore();
+
+      expect(await store.read(), id);
+      await store.write(id);
+
+      final preferences = await SharedPreferences.getInstance();
+      expect(
+        preferences.getString(
+          SharedPreferencesAppThemeSelectionStore.preferenceKey,
+        ),
+        id.name,
+      );
+    });
+  }
+
+  test('unknown persisted values fall back to Dark', () async {
+    SharedPreferences.setMockInitialValues({
+      SharedPreferencesAppThemeSelectionStore.preferenceKey: 'sepia',
+    });
+
+    expect(
+      await const SharedPreferencesAppThemeSelectionStore().read(),
+      AppThemeId.dark,
+    );
   });
 
   test('a user choice wins over a slower restore', () async {
-    final store = _DelayedThemeModeStore();
+    final store = _DelayedThemeSelectionStore();
     final container = ProviderContainer(
-      overrides: [themeModeStoreProvider.overrideWithValue(store)],
+      overrides: [
+        appThemeSelectionStoreProvider.overrideWithValue(store),
+      ],
     );
     addTearDown(container.dispose);
 
-    container.read(appThemeModeProvider);
-    final choice =
-        container.read(appThemeModeProvider.notifier).setLightMode(true);
-    store.complete(ThemeMode.dark);
+    container.read(appThemeSelectionProvider);
+    final choice = container
+        .read(appThemeSelectionProvider.notifier)
+        .select(AppThemeId.space);
+    store.complete(AppThemeId.light);
     expect(await choice, isTrue);
     await Future<void>.delayed(Duration.zero);
 
-    expect(container.read(appThemeModeProvider), ThemeMode.light);
+    expect(container.read(appThemeSelectionProvider), AppThemeId.space);
   });
 
   test('storage failures stay observed and keep a truthful theme state',
       () async {
-    final store = _FailingThemeModeStore();
+    final store = _FailingThemeSelectionStore();
     final container = ProviderContainer(
-      overrides: [themeModeStoreProvider.overrideWithValue(store)],
+      overrides: [
+        appThemeSelectionStoreProvider.overrideWithValue(store),
+      ],
     );
     addTearDown(container.dispose);
 
-    expect(container.read(appThemeModeProvider), ThemeMode.dark);
+    expect(container.read(appThemeSelectionProvider), AppThemeId.dark);
     await Future<void>.delayed(Duration.zero);
-    expect(container.read(appThemeModeProvider), ThemeMode.dark);
+    expect(container.read(appThemeSelectionProvider), AppThemeId.dark);
 
-    final saved =
-        await container.read(appThemeModeProvider.notifier).setLightMode(true);
+    final saved = await container
+        .read(appThemeSelectionProvider.notifier)
+        .select(AppThemeId.space);
 
     expect(saved, isFalse);
-    expect(container.read(appThemeModeProvider), ThemeMode.dark);
+    expect(container.read(appThemeSelectionProvider), AppThemeId.dark);
   });
 
   test('rapid choices are persisted in invocation order', () async {
-    final store = _ControlledThemeModeStore();
+    final store = _ControlledThemeSelectionStore();
     final container = ProviderContainer(
-      overrides: [themeModeStoreProvider.overrideWithValue(store)],
+      overrides: [
+        appThemeSelectionStoreProvider.overrideWithValue(store),
+      ],
     );
     addTearDown(container.dispose);
 
-    container.read(appThemeModeProvider);
+    container.read(appThemeSelectionProvider);
     await Future<void>.delayed(Duration.zero);
-    final light =
-        container.read(appThemeModeProvider.notifier).setLightMode(true);
-    final dark =
-        container.read(appThemeModeProvider.notifier).setLightMode(false);
+    final space = container
+        .read(appThemeSelectionProvider.notifier)
+        .select(AppThemeId.space);
+    final light = container
+        .read(appThemeSelectionProvider.notifier)
+        .select(AppThemeId.light);
 
-    expect(container.read(appThemeModeProvider), ThemeMode.dark);
+    expect(container.read(appThemeSelectionProvider), AppThemeId.light);
     await Future<void>.delayed(Duration.zero);
-    expect(store.started, [ThemeMode.light]);
+    expect(store.started, [AppThemeId.space]);
     store.completeNext();
     await Future<void>.delayed(Duration.zero);
-    expect(store.started, [ThemeMode.light, ThemeMode.dark]);
+    expect(store.started, [AppThemeId.space, AppThemeId.light]);
     store.completeNext();
 
+    expect(await space, isTrue);
     expect(await light, isTrue);
-    expect(await dark, isTrue);
-    expect(store.completed, [ThemeMode.light, ThemeMode.dark]);
-    expect(container.read(appThemeModeProvider), ThemeMode.dark);
+    expect(store.completed, [AppThemeId.space, AppThemeId.light]);
+    expect(container.read(appThemeSelectionProvider), AppThemeId.light);
   });
 
   test('an older failed write cannot roll back a newer choice', () async {
-    final store = _ControlledThemeModeStore();
+    final store = _ControlledThemeSelectionStore();
     final container = ProviderContainer(
-      overrides: [themeModeStoreProvider.overrideWithValue(store)],
+      overrides: [
+        appThemeSelectionStoreProvider.overrideWithValue(store),
+      ],
     );
     addTearDown(container.dispose);
 
-    container.read(appThemeModeProvider);
+    container.read(appThemeSelectionProvider);
     await Future<void>.delayed(Duration.zero);
-    final light =
-        container.read(appThemeModeProvider.notifier).setLightMode(true);
-    final dark =
-        container.read(appThemeModeProvider.notifier).setLightMode(false);
+    final space = container
+        .read(appThemeSelectionProvider.notifier)
+        .select(AppThemeId.space);
+    final light = container
+        .read(appThemeSelectionProvider.notifier)
+        .select(AppThemeId.light);
     await Future<void>.delayed(Duration.zero);
     store.failNext();
     await Future<void>.delayed(Duration.zero);
-    expect(container.read(appThemeModeProvider), ThemeMode.dark);
+    expect(container.read(appThemeSelectionProvider), AppThemeId.light);
     store.completeNext();
 
-    expect(await light, isFalse);
-    expect(await dark, isTrue);
-    expect(container.read(appThemeModeProvider), ThemeMode.dark);
+    expect(await space, isFalse);
+    expect(await light, isTrue);
+    expect(container.read(appThemeSelectionProvider), AppThemeId.light);
   });
 
-  test('two rapid failed writes return to the last durable mode', () async {
-    final store = _ControlledThemeModeStore();
+  test('two rapid failed writes return to the last durable theme', () async {
+    final store = _ControlledThemeSelectionStore();
     final container = ProviderContainer(
-      overrides: [themeModeStoreProvider.overrideWithValue(store)],
+      overrides: [
+        appThemeSelectionStoreProvider.overrideWithValue(store),
+      ],
     );
     addTearDown(container.dispose);
 
-    container.read(appThemeModeProvider);
+    container.read(appThemeSelectionProvider);
     await Future<void>.delayed(Duration.zero);
-    final light =
-        container.read(appThemeModeProvider.notifier).setLightMode(true);
-    final dark =
-        container.read(appThemeModeProvider.notifier).setLightMode(false);
+    final space = container
+        .read(appThemeSelectionProvider.notifier)
+        .select(AppThemeId.space);
+    final light = container
+        .read(appThemeSelectionProvider.notifier)
+        .select(AppThemeId.light);
     await Future<void>.delayed(Duration.zero);
     store.failNext();
     await Future<void>.delayed(Duration.zero);
     store.failNext();
 
+    expect(await space, isFalse);
     expect(await light, isFalse);
-    expect(await dark, isFalse);
-    expect(container.read(appThemeModeProvider), ThemeMode.dark);
+    expect(container.read(appThemeSelectionProvider), AppThemeId.dark);
   });
 }
 
-class _MemoryThemeModeStore implements ThemeModeStore {
-  _MemoryThemeModeStore(this.initial);
+class _MemoryThemeSelectionStore implements AppThemeSelectionStore {
+  _MemoryThemeSelectionStore(this.initial);
 
-  final ThemeMode? initial;
-  ThemeMode? saved;
-
-  @override
-  Future<ThemeMode?> read() async => initial;
+  final AppThemeId? initial;
+  AppThemeId? saved;
 
   @override
-  Future<void> write(ThemeMode mode) async {
-    saved = mode;
+  Future<AppThemeId?> read() async => initial;
+
+  @override
+  Future<void> write(AppThemeId id) async {
+    saved = id;
   }
 }
 
-class _DelayedThemeModeStore implements ThemeModeStore {
-  final _completer = Completer<ThemeMode?>();
+class _DelayedThemeSelectionStore implements AppThemeSelectionStore {
+  final _completer = Completer<AppThemeId?>();
 
-  void complete(ThemeMode mode) => _completer.complete(mode);
-
-  @override
-  Future<ThemeMode?> read() => _completer.future;
+  void complete(AppThemeId id) => _completer.complete(id);
 
   @override
-  Future<void> write(ThemeMode mode) async {}
+  Future<AppThemeId?> read() => _completer.future;
+
+  @override
+  Future<void> write(AppThemeId id) async {}
 }
 
-class _FailingThemeModeStore implements ThemeModeStore {
+class _FailingThemeSelectionStore implements AppThemeSelectionStore {
   @override
-  Future<ThemeMode?> read() => Future.error(StateError('read failed'));
+  Future<AppThemeId?> read() => Future.error(StateError('read failed'));
 
   @override
-  Future<void> write(ThemeMode mode) =>
-      Future.error(StateError('write failed'));
+  Future<void> write(AppThemeId id) => Future.error(StateError('write failed'));
 }
 
-class _ControlledThemeModeStore implements ThemeModeStore {
-  final started = <ThemeMode>[];
-  final completed = <ThemeMode>[];
-  final _pending = <(ThemeMode, Completer<void>)>[];
+class _ControlledThemeSelectionStore implements AppThemeSelectionStore {
+  final started = <AppThemeId>[];
+  final completed = <AppThemeId>[];
+  final _pending = <(AppThemeId, Completer<void>)>[];
 
   @override
-  Future<ThemeMode?> read() async => null;
+  Future<AppThemeId?> read() async => null;
 
   @override
-  Future<void> write(ThemeMode mode) {
+  Future<void> write(AppThemeId id) {
     final completer = Completer<void>();
-    started.add(mode);
-    _pending.add((mode, completer));
-    return completer.future.then((_) => completed.add(mode));
+    started.add(id);
+    _pending.add((id, completer));
+    return completer.future.then((_) => completed.add(id));
   }
 
   void completeNext() {

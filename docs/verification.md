@@ -30,16 +30,19 @@ Capture V4, Daily State V2, Exam-Week Outlook V1, or Coach V3 expectations.
 
 ## Current Verified Baseline
 
-The current architecture-remediation follow-up working tree was reverified
-locally on 2026-07-31 through implementation and cleanup. `verify:fast`
-reported `762` passing Flutter tests, clean Flutter analysis, `1132 passed, 2
-skipped` for FastAPI, and passing documentation, visual, source, Ruff, and diff
-checks. Repository/local migration history matched and the complete eight-file
-pgTAP suite passed all `150` assertions without reset or migration application.
-The full eight-journey Playwright gate passed against a statically served
-profile-mode Flutter bundle in 4:10 of journeys and 4:26 runner time. Its specs
+The current Observatory visual-material working tree was reverified locally on
+2026-08-01 through implementation and cleanup. `verify:fast` reported `814`
+passing Flutter tests, clean Flutter analysis, `1146 passed, 2 skipped` for
+FastAPI, and passing documentation, visual, source, Ruff, and diff checks. The
+debug web build passed. Repository/local migration history matched before the
+full eight-journey Playwright gate, which passed against a statically served
+profile-mode Flutter bundle in 4:14 of journeys and 4:14 runner time. Its specs
 registered nine exact Auth users, deleted eight, and confirmed the
-account-deletion subject already absent.
+account-deletion subject already absent. A separate statically served
+debug/mock Chromium probe selected the persisted Space appearance and passed
+visual checks of Auth, Today, Planner, and Settings at 390×844. The previously
+verified complete eight-file pgTAP suite remains at `150` assertions; this
+presentation-only slice did not rerun or change database tests.
 
 Earlier architecture-remediation checkpoints below are historical evidence for
 their then-current checkout. The now-retired monolithic regression passed in
@@ -377,7 +380,8 @@ service calls, service-role-only RPC grants, both Phase 3 restrict links,
 focus-first deletion, and the profile-cascade postcondition. Flutter tests cover the exact export
 envelope/count parser, platform save/share cancellation truth, dedicated mobile
 temporary-source cleanup, password recovery state and password validation,
-rejected versus outcome-unknown timezone updates, device-persisted theme,
+rejected versus outcome-unknown timezone updates, device-persisted
+Dark/Light/Space appearance with ordered writes and rollback,
 Settings capability gates, typed recent-auth and ambiguous-deletion notices,
 and local session cleanup after a completed account deletion.
 The export path also proves receive-time cancellation above 8 MiB, invalid
@@ -668,6 +672,15 @@ deletion outcomes; rerun for the V3 RPC chain before a current claim.
 
 Current Flutter widget tests include:
 
+- App appearance tests cover all three persisted values, unknown-value Dark
+  fallback, slow restore, rapid ordered selection, failed-write rollback, the
+  320-pixel/200-percent Settings dialog, three-theme contrast, Space-only
+  ripple/glow, clear-material density, HUD depth edges, opaque High Contrast,
+  one responsive shell-navigation blur and blur-free cards, responsive local
+  portrait/landscape deep-field assets, deterministic stars, active lifecycle
+  animation, paused lifecycle, frozen Reduced Motion, and two frozen Space
+  reference goldens. The clear-material contrast test uses an all-white source
+  bound, which is conservatively brighter than any scrimmed backdrop pixel.
 - Auth gate renders.
 - Guest can complete required-only progressive Setup, persist exact empty
   optionals, and reach the dashboard with only Typical weekday and Best energy,

@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_life_graph/core/config/app_config.dart';
+import 'package:my_life_graph/core/theme/app_theme.dart';
+import 'package:my_life_graph/core/theme/app_theme_selection_provider.dart';
+import 'package:my_life_graph/core/theme/app_visual_tokens.dart';
 import 'package:my_life_graph/features/settings/presentation/pages/settings_page.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -17,17 +20,9 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          appConfigProvider.overrideWithValue(
-            const AppConfig(
-              environment: 'test',
-              supabaseUrl: '',
-              supabaseAnonKey: '',
-              aiServiceBaseUrl: 'http://localhost:8000',
-              useMockData: true,
-            ),
-          ),
+          appConfigProvider.overrideWithValue(_testConfig),
         ],
-        child: const MaterialApp(home: Scaffold(body: SettingsPage())),
+        child: const _ThemeAwareSettingsApp(),
       ),
     );
     await tester.pumpAndSettle();
@@ -88,15 +83,28 @@ void main() {
     expect(find.text('Personal memory'), findsNothing);
     expect(find.text('Biometric app lock'), findsNothing);
 
-    await _revealText(tester, 'Light mode', pageScrollable);
-    expect(find.text('Saved on this device.'), findsOneWidget);
+    await _revealText(tester, 'Appearance', pageScrollable);
+    expect(find.text('Dark · Saved on this device.'), findsOneWidget);
 
-    expect(tester.widget<Switch>(find.byType(Switch)).value, isFalse);
-    await tester.tap(find.text('Light mode'));
+    await tester.tap(find.text('Appearance'));
     await tester.pumpAndSettle();
-    expect(tester.widget<Switch>(find.byType(Switch)).value, isTrue);
+    expect(find.text('Choose appearance'), findsOneWidget);
+    expect(find.text('Calm dark default'), findsOneWidget);
+    expect(find.text('Bright neutral'), findsOneWidget);
+    expect(find.text('Animated violet and cyan'), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('appearance-option-space')));
+    await tester.pumpAndSettle();
+    expect(find.text('Space · Saved on this device.'), findsOneWidget);
+    expect(
+      Theme.of(
+        tester.element(
+          find.byKey(const ValueKey('appearance-setting-entry')),
+        ),
+      ).extension<AppVisualTokens>()?.background,
+      AppVisualTokens.space.background,
+    );
     final preferencesAfterTheme = await SharedPreferences.getInstance();
-    expect(preferencesAfterTheme.getString('app_theme_mode'), 'light');
+    expect(preferencesAfterTheme.getString('app_theme_mode'), 'space');
 
     await _revealText(tester, 'Sign out', pageScrollable);
     expect(find.text('Sign out'), findsOneWidget);
@@ -105,6 +113,125 @@ void main() {
     final preferences = await SharedPreferences.getInstance();
     expect(preferences.getBool('auth_guest_active'), isFalse);
   });
+
+  testWidgets('appearance dialog fits 320 px at 200 percent text',
+      (tester) async {
+    tester.view.physicalSize = const Size(320, 4000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    SharedPreferences.setMockInitialValues({
+      'auth_guest_active': true,
+      'auth_guest_onboarding_done': true,
+      'auth_guest_name': 'Review Guest',
+    });
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          appConfigProvider.overrideWithValue(_testConfig),
+        ],
+        child: MaterialApp(
+          theme: AppTheme.dark,
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(context).copyWith(
+              textScaler: const TextScaler.linear(2),
+            ),
+            child: child!,
+          ),
+          home: const Scaffold(body: SettingsPage()),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final pageScrollable = find
+        .descendant(
+          of: find.byType(CustomScrollView),
+          matching: find.byType(Scrollable),
+        )
+        .first;
+    await _revealText(tester, 'Appearance', pageScrollable);
+    await tester.tap(find.text('Appearance'));
+    tester.view.physicalSize = const Size(320, 720);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Choose appearance'), findsOneWidget);
+    for (final key in const ['dark', 'light', 'space']) {
+      expect(find.byKey(ValueKey('appearance-option-$key')), findsOneWidget);
+    }
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('failed appearance persistence rolls back and reports the error',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({
+      'auth_guest_active': true,
+      'auth_guest_onboarding_done': true,
+      'auth_guest_name': 'Review Guest',
+    });
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          appConfigProvider.overrideWithValue(_testConfig),
+          appThemeSelectionStoreProvider.overrideWithValue(
+            const _FailingThemeSelectionStore(),
+          ),
+        ],
+        child: const _ThemeAwareSettingsApp(),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final pageScrollable = find
+        .descendant(
+          of: find.byType(CustomScrollView),
+          matching: find.byType(Scrollable),
+        )
+        .first;
+    await _revealText(tester, 'Appearance', pageScrollable);
+    await tester.tap(find.text('Appearance'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('appearance-option-space')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Dark · Saved on this device.'), findsOneWidget);
+    expect(
+      find.text('Could not save the appearance setting. Try again.'),
+      findsOneWidget,
+    );
+  });
+}
+
+const _testConfig = AppConfig(
+  environment: 'test',
+  supabaseUrl: '',
+  supabaseAnonKey: '',
+  aiServiceBaseUrl: 'http://localhost:8000',
+  useMockData: true,
+);
+
+class _FailingThemeSelectionStore implements AppThemeSelectionStore {
+  const _FailingThemeSelectionStore();
+
+  @override
+  Future<AppThemeId?> read() async => AppThemeId.dark;
+
+  @override
+  Future<void> write(AppThemeId id) =>
+      Future<void>.error(StateError('write failed'));
+}
+
+class _ThemeAwareSettingsApp extends ConsumerWidget {
+  const _ThemeAwareSettingsApp();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final selection = ref.watch(appThemeSelectionProvider);
+    return MaterialApp(
+      theme: AppTheme.resolve(selection),
+      home: const Scaffold(body: SettingsPage()),
+    );
+  }
 }
 
 Future<void> _revealText(
@@ -113,7 +240,7 @@ Future<void> _revealText(
   Finder pageScrollable,
 ) async {
   final target = find.text(text, skipOffstage: false);
-  for (var attempt = 0; attempt < 12 && target.evaluate().isEmpty; attempt++) {
+  for (var attempt = 0; attempt < 30 && target.evaluate().isEmpty; attempt++) {
     await tester.drag(pageScrollable, const Offset(0, -180));
     await tester.pump();
   }

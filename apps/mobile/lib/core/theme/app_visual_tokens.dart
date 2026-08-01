@@ -104,6 +104,32 @@ class AppVisualTokens extends ThemeExtension<AppVisualTokens> {
     shadow: Color(0x26081410),
   );
 
+  static const space = AppVisualTokens(
+    background: Color(0xFF070814),
+    surface: Color(0xFF101329),
+    surfaceSubtle: Color(0xFF171A38),
+    surfaceRaised: Color(0xFF20244A),
+    surfaceInteractive: Color(0xFF292E5C),
+    textPrimary: Color(0xFFF6F3FF),
+    textSecondary: Color(0xFFD4CFEA),
+    brand: Color(0xFF67E8F9),
+    onBrand: Color(0xFF07272C),
+    focus: Color(0xFFC4B5FD),
+    outlineSoft: Color(0xFF353B68),
+    info: Color(0xFFA5B4FC),
+    infoSurface: Color(0xFF1D254A),
+    attention: Color(0xFFF6C76E),
+    attentionSurface: Color(0xFF352A18),
+    danger: Color(0xFFFF8E9E),
+    dangerSurface: Color(0xFF3B1D2A),
+    success: Color(0xFF7EE2B8),
+    successSurface: Color(0xFF14342D),
+    dataBlue: Color(0xFF6CB6FF),
+    dataViolet: Color(0xFFC4A7FF),
+    dataCoral: Color(0xFFFF9CA8),
+    shadow: Color(0xC4070814),
+  );
+
   @override
   AppVisualTokens copyWith({
     Color? background,

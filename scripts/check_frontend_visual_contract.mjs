@@ -49,13 +49,17 @@ function filesBelow(root, relativeRoot) {
 
 export function findVisualContractErrors(root = repositoryRoot) {
   const errors = [];
+  const productionFiles = filesBelow(root, 'apps/mobile/lib');
   const files = scannedRoots.flatMap((path) => filesBelow(root, path));
+  const backdropFilterUses = [];
+  const imageBlurUses = [];
   const bannedPatterns = [
     [/\bIcons\./, 'Material Icons; use AppIcons/Phosphor'],
     [
-      /\b(?:Linear|Radial|Sweep)Gradient\b|\bShaderMask\b|\bShimmer\b/,
+      /\b(?:Linear|Radial|Sweep)Gradient\b|\b(?:FragmentShader|ShaderMask)\b|\bShimmer\b/,
       'gradients, shimmer, or shader decoration',
     ],
+    [/\bsaveLayer\s*\(/, 'canvas saveLayer'],
     [
       /BorderRadius\.circular\(\s*\d/,
       'raw radius; use AppRadii tokens',
@@ -82,6 +86,61 @@ export function findVisualContractErrors(root = repositoryRoot) {
     }
   }
 
+  for (const file of productionFiles) {
+    const text = readFileSync(join(root, file), 'utf8');
+    for (const _match of text.matchAll(/\bBackdropFilter\s*\(/g)) {
+      backdropFilterUses.push(file);
+    }
+    for (const _match of text.matchAll(/\bImageFilter\.blur\s*\(/g)) {
+      imageBlurUses.push(file);
+    }
+  }
+
+  const navigationBlurOwner =
+    'apps/mobile/lib/features/shell/presentation/main_shell.dart';
+  if (
+    backdropFilterUses.length !== 1 ||
+    backdropFilterUses[0] !== navigationBlurOwner
+  ) {
+    errors.push(
+      `${navigationBlurOwner}: must own the only production BackdropFilter; found ${backdropFilterUses.length} across ${[...new Set(backdropFilterUses)].join(', ') || 'no files'}`,
+    );
+  }
+  if (imageBlurUses.length !== 1 || imageBlurUses[0] !== navigationBlurOwner) {
+    errors.push(
+      `${navigationBlurOwner}: must own the only production ImageFilter.blur; found ${imageBlurUses.length} across ${[...new Set(imageBlurUses)].join(', ') || 'no files'}`,
+    );
+  }
+
+  const appSurfacePath = 'apps/mobile/lib/core/widgets/app_surface.dart';
+  if (!existsSync(join(root, appSurfacePath))) {
+    errors.push(`${appSurfacePath}: shared surface source is missing`);
+  } else {
+    const appSurface = readFileSync(join(root, appSurfacePath), 'utf8');
+    if (!appSurface.includes('_AppSurfaceHudPainter')) {
+      errors.push(`${appSurfacePath}: missing the token-owned Space HUD frame`);
+    }
+  }
+
+  const appThemePath = 'apps/mobile/lib/core/theme/app_theme.dart';
+  if (!existsSync(join(root, appThemePath))) {
+    errors.push(`${appThemePath}: theme source is missing`);
+  } else {
+    const appTheme = readFileSync(join(root, appThemePath), 'utf8');
+    if (!/navigationBlurSigma:\s*8\b/.test(appTheme)) {
+      errors.push(`${appThemePath}: Space navigation blur must remain sigma 8`);
+    }
+    if (
+      !appTheme.includes(
+        'surfaceMaterialOverride: AppSurfaceMaterial.disabled',
+      )
+    ) {
+      errors.push(
+        `${appThemePath}: high contrast must disable clear Space materials`,
+      );
+    }
+  }
+
   const pubspecPath = join(root, 'apps/mobile/pubspec.yaml');
   const pubspec = readFileSync(pubspecPath, 'utf8');
   for (const dependency of [
@@ -97,9 +156,17 @@ export function findVisualContractErrors(root = repositoryRoot) {
       errors.push(`apps/mobile/pubspec.yaml: missing Instrument Sans ${weight}`);
     }
   }
+  if (!pubspec.includes('- assets/theme/')) {
+    errors.push('apps/mobile/pubspec.yaml: missing local theme assets');
+  }
 
+  const spaceBackdropAssets = [
+    'apps/mobile/assets/theme/space-deep-field-landscape.webp',
+    'apps/mobile/assets/theme/space-deep-field-portrait.webp',
+  ];
   const requiredAssets = [
     'apps/mobile/assets/brand/app_brand_mark.svg',
+    ...spaceBackdropAssets,
     'apps/mobile/assets/fonts/InstrumentSans-Regular.ttf',
     'apps/mobile/assets/fonts/InstrumentSans-Medium.ttf',
     'apps/mobile/assets/fonts/InstrumentSans-SemiBold.ttf',
@@ -111,6 +178,17 @@ export function findVisualContractErrors(root = repositoryRoot) {
   for (const asset of requiredAssets) {
     if (!existsSync(join(root, asset))) {
       errors.push(`${asset}: required visual-system asset is missing`);
+    }
+  }
+  if (spaceBackdropAssets.every((asset) => existsSync(join(root, asset)))) {
+    const totalBackdropBytes = spaceBackdropAssets.reduce(
+      (total, asset) => total + statSync(join(root, asset)).size,
+      0,
+    );
+    if (totalBackdropBytes > 2 * 1024 * 1024) {
+      errors.push(
+        'Space backdrop assets: combined size exceeds the two-megabyte budget',
+      );
     }
   }
 

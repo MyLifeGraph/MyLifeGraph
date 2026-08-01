@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -6,6 +7,8 @@ import 'package:go_router/go_router.dart';
 import 'package:my_life_graph/core/capabilities/app_surface_capabilities.dart';
 import 'package:my_life_graph/core/navigation/app_routes.dart';
 import 'package:my_life_graph/core/theme/app_theme.dart';
+import 'package:my_life_graph/core/theme/app_theme_effects.dart';
+import 'package:my_life_graph/core/theme/app_visual_tokens.dart';
 import 'package:my_life_graph/features/shell/presentation/main_shell.dart';
 import 'package:my_life_graph/features/shell/presentation/shell_destination_descriptor.dart';
 
@@ -233,6 +236,297 @@ void main() {
       _contrastRatio(colors.onPrimary, colors.primary),
       greaterThanOrEqualTo(4.5),
     );
+  });
+
+  testWidgets('Space applies the shared glow to quick action and navigation',
+      (tester) async {
+    final router = _router(initialLocation: AppRoutes.dashboard);
+    addTearDown(router.dispose);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          appSurfaceCapabilitiesProvider.overrideWithValue(
+            const AppSurfaceCapabilities(
+              isLocalDemo: false,
+              canUseSyncedHabits: true,
+              canShowCoachSurface: true,
+            ),
+          ),
+        ],
+        child: MaterialApp.router(
+          theme: AppTheme.space,
+          routerConfig: router,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    final idleQuickActionGlow = tester.widget<Container>(
+      find.byKey(const ValueKey('main-shell-add-signal-glow')),
+    );
+    final idleQuickActionShadows =
+        (idleQuickActionGlow.decoration! as BoxDecoration).boxShadow!;
+    expect(idleQuickActionShadows, hasLength(2));
+    expect(
+      idleQuickActionShadows.last.color,
+      AppTheme.space.extension<AppThemeEffects>()!.primaryControlIdleGlowColor,
+    );
+    final quickActionPress = await tester.startGesture(
+      tester.getCenter(
+        find.byKey(const ValueKey('main-shell-add-signal-control')),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 120));
+    expect(
+      tester
+          .widget<AnimatedScale>(
+            find.descendant(
+              of: find.byKey(
+                const ValueKey('main-shell-add-signal-control'),
+              ),
+              matching: find.byType(AnimatedScale),
+            ),
+          )
+          .scale,
+      0.94,
+    );
+    await quickActionPress.cancel();
+    await tester.pump(const Duration(milliseconds: 120));
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    addTearDown(mouse.removePointer);
+    await mouse.addPointer();
+
+    await mouse.moveTo(
+      tester.getCenter(
+        find.byKey(const ValueKey('main-shell-add-signal-control')),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 120));
+    final quickActionGlow = tester.widget<Container>(
+      find
+          .descendant(
+            of: find.byKey(
+              const ValueKey('main-shell-add-signal-control'),
+            ),
+            matching: find.byKey(
+              const ValueKey('main-shell-add-signal-glow'),
+            ),
+          )
+          .first,
+    );
+    expect(
+      (quickActionGlow.decoration! as BoxDecoration).boxShadow,
+      hasLength(2),
+    );
+
+    await mouse.moveTo(
+      tester.getCenter(
+        find.byKey(const ValueKey('main-nav-planner-control')),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 180));
+    final navigationGlow = tester.widget<AnimatedContainer>(
+      find.byKey(const ValueKey('main-nav-planner-glow')),
+    );
+    expect(
+      (navigationGlow.decoration! as BoxDecoration).boxShadow,
+      isNotEmpty,
+    );
+  });
+
+  testWidgets(
+      'Space shell renders one navigation blur and opaque themes render none',
+      (tester) async {
+    final router = _router(initialLocation: AppRoutes.dashboard);
+    addTearDown(router.dispose);
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    tester.view.devicePixelRatio = 1;
+
+    Future<void> pump(ThemeData theme, Size size) async {
+      tester.view.physicalSize = size;
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            appSurfaceCapabilitiesProvider.overrideWithValue(
+              const AppSurfaceCapabilities(
+                isLocalDemo: false,
+                canUseSyncedHabits: true,
+                canShowCoachSurface: true,
+              ),
+            ),
+          ],
+          child: MaterialApp.router(
+            theme: theme,
+            routerConfig: router,
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+    }
+
+    await pump(AppTheme.space, const Size(390, 844));
+    expect(find.byType(BackdropFilter), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('space-navigation-backdrop-filter')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('mobile-navigation-material')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('desktop-navigation-material')),
+      findsNothing,
+    );
+    final mobileSurface = tester.widget<ColoredBox>(
+      find
+          .descendant(
+            of: find.byKey(const ValueKey('mobile-navigation-material')),
+            matching: find.byType(ColoredBox),
+          )
+          .first,
+    );
+    final spaceTokens = AppTheme.space.extension<AppVisualTokens>()!;
+    expect(
+      mobileSurface.color,
+      spaceTokens.surface.withValues(alpha: 0.52),
+    );
+
+    await pump(AppTheme.dark, const Size(390, 844));
+    expect(find.byType(BackdropFilter), findsNothing);
+
+    final highContrast = AppTheme.resolve(AppThemeId.space, highContrast: true);
+    await pump(highContrast, const Size(390, 844));
+    expect(find.byType(BackdropFilter), findsNothing);
+    final opaqueMobileSurface = tester.widget<ColoredBox>(
+      find
+          .descendant(
+            of: find.byKey(const ValueKey('mobile-navigation-material')),
+            matching: find.byType(ColoredBox),
+          )
+          .first,
+    );
+    expect(opaqueMobileSurface.color, spaceTokens.surface);
+
+    await pump(AppTheme.space, const Size(1280, 800));
+    expect(find.byType(BackdropFilter), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('desktop-navigation-material')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('mobile-navigation-material')),
+      findsNothing,
+    );
+  });
+
+  testWidgets(
+      'Space mobile navigation signals selection without changing semantics',
+      (tester) async {
+    final semantics = tester.ensureSemantics();
+    final router = _router(initialLocation: AppRoutes.dashboard);
+    addTearDown(router.dispose);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          appSurfaceCapabilitiesProvider.overrideWithValue(
+            const AppSurfaceCapabilities(
+              isLocalDemo: false,
+              canUseSyncedHabits: true,
+              canShowCoachSurface: true,
+            ),
+          ),
+        ],
+        child: MaterialApp.router(
+          theme: AppTheme.space,
+          routerConfig: router,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final todaySignal =
+        find.byKey(const ValueKey('mobile-navigation-signal-today'));
+    final plannerSignal =
+        find.byKey(const ValueKey('mobile-navigation-signal-planner'));
+    expect(tester.getSize(todaySignal), const Size(24, 3));
+    expect(_signalOpacity(tester, todaySignal).opacity, 1);
+    expect(_signalOpacity(tester, plannerSignal).opacity, 0);
+    expect(
+      _signalOpacity(tester, todaySignal).duration,
+      const Duration(milliseconds: 180),
+    );
+    _expectSignalHalo(tester, todaySignal);
+    expect(_navigationIconScale(tester, 'today').scale, 1);
+    expect(_navigationIconScale(tester, 'planner').scale, 0.97);
+
+    await tester.tap(
+      find.byKey(const ValueKey('main-nav-planner-control')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(_signalOpacity(tester, todaySignal).opacity, 0);
+    expect(_signalOpacity(tester, plannerSignal).opacity, 1);
+    expect(_navigationIconScale(tester, 'today').scale, 0.97);
+    expect(_navigationIconScale(tester, 'planner').scale, 1);
+    expect(
+      tester.getSemantics(find.byKey(const ValueKey('main-nav-planner'))),
+      matchesSemantics(
+        label: 'Planner',
+        isButton: true,
+        hasSelectedState: true,
+        isSelected: true,
+        hasTapAction: true,
+      ),
+    );
+    semantics.dispose();
+  });
+
+  testWidgets('Space desktop navigation uses a three by twenty-eight signal',
+      (tester) async {
+    tester.view.physicalSize = const Size(1280, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final router = _router(initialLocation: AppRoutes.dashboard);
+    addTearDown(router.dispose);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          appSurfaceCapabilitiesProvider.overrideWithValue(
+            const AppSurfaceCapabilities(
+              isLocalDemo: false,
+              canUseSyncedHabits: true,
+              canShowCoachSurface: true,
+            ),
+          ),
+        ],
+        child: MaterialApp.router(
+          theme: AppTheme.space,
+          routerConfig: router,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final todaySignal =
+        find.byKey(const ValueKey('desktop-navigation-signal-today'));
+    final insightsSignal =
+        find.byKey(const ValueKey('desktop-navigation-signal-insights'));
+    expect(tester.getSize(todaySignal), const Size(3, 28));
+    expect(_signalOpacity(tester, todaySignal).opacity, 1);
+    expect(_signalOpacity(tester, insightsSignal).opacity, 0);
+    _expectSignalHalo(tester, todaySignal);
+
+    await tester.tap(
+      find.byKey(const ValueKey('main-nav-insights-control')),
+    );
+    await tester.pumpAndSettle();
+    expect(_signalOpacity(tester, todaySignal).opacity, 0);
+    expect(_signalOpacity(tester, insightsSignal).opacity, 1);
   });
 
   testWidgets('wide layouts expose a persistent desktop navigation',
@@ -510,6 +804,37 @@ void main() {
     );
     semantics.dispose();
   });
+}
+
+AnimatedOpacity _signalOpacity(WidgetTester tester, Finder signal) =>
+    tester.widget<AnimatedOpacity>(
+      find.descendant(
+        of: signal,
+        matching: find.byType(AnimatedOpacity),
+      ),
+    );
+
+AnimatedScale _navigationIconScale(WidgetTester tester, String label) =>
+    tester.widget<AnimatedScale>(
+      find
+          .descendant(
+            of: find.byKey(ValueKey('main-nav-$label-control')),
+            matching: find.byType(AnimatedScale),
+          )
+          .first,
+    );
+
+void _expectSignalHalo(WidgetTester tester, Finder signal) {
+  final container = tester.widget<Container>(
+    find.descendant(of: signal, matching: find.byType(Container)),
+  );
+  final decoration = container.decoration! as BoxDecoration;
+  final halo = decoration.boxShadow!.single;
+  final signalColor =
+      AppTheme.space.extension<AppThemeEffects>()!.navigationSignalColor;
+  expect(decoration.color, signalColor);
+  expect(halo.color, signalColor.withValues(alpha: 0.55));
+  expect(halo.blurRadius, 10);
 }
 
 double _contrastRatio(Color foreground, Color background) {

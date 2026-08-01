@@ -479,10 +479,10 @@ void main() {
     expect(find.text('Delete account'), findsOneWidget);
     await _scrollSliverUntilVisible(
       tester,
-      find.text('Light mode'),
+      find.text('Appearance'),
     );
-    expect(find.text('Light mode'), findsOneWidget);
-    expect(find.text('Saved on this device.'), findsOneWidget);
+    expect(find.text('Appearance'), findsOneWidget);
+    expect(find.text('Dark · Saved on this device.'), findsOneWidget);
     await _scrollSliverUntilVisible(
       tester,
       find.text('Sign out'),

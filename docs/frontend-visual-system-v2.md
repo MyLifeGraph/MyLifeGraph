@@ -1,7 +1,7 @@
 # Frontend Visual System V2
 
 Status: implemented repository visual contract for Flutter Web and Android as
-of 2026-07-29.
+of 2026-08-01.
 
 ## Product Intent
 
@@ -12,13 +12,22 @@ same hierarchy on desktop at 1280×960.
 
 This contract changes presentation only. It does not change navigation,
 student-facing capability truth, product copy, data contracts, persistence,
-backend APIs, or mutation authority. Dark remains the default. Light remains a
-persisted manual choice rather than a new system-theme mode.
+backend APIs, or mutation authority. Dark remains the default. Light and Space
+remain persisted, device-local manual choices rather than system-theme modes.
+Space is a dark violet/cyan theme; it has no separate light variant.
 
-The interface uses no gradients, glass effects, shimmer loops, confetti,
-decorative AI illustrations, or permanent animation. Mint is the only solid
-call-to-action color. Information blue, attention amber, danger red, and
-supporting data colors never replace a visible icon or text label.
+The interface uses no code-generated gradients, shimmer loops, confetti,
+illustrative scene decoration, or general-purpose blur-heavy glass system.
+Space is the only bounded clear-material exception: it combines tinted
+translucent surfaces and sparse HUD strokes with one of two approved local,
+photorealistic deep-field WebP backdrops, a restrained looping star overlay,
+and minimal closed-path camera drift on the photograph. Actual backdrop blur
+is restricted to the one currently visible shell-navigation surface. Both
+depth layers are presentation-only and change no content or layout; Reduced
+Motion freezes them at the same deterministic phase. Brand mint in Dark/Light
+and brand cyan in Space are the only solid call-to-action colors. Information
+blue, attention amber, danger red, and supporting data colors never replace a
+visible icon or text label.
 
 ## Brand
 
@@ -39,18 +48,26 @@ brand.
 
 ## Palette
 
-| Role | Dark | Light |
-| --- | --- | --- |
-| Background | `#08110F` | `#F6F6F1` |
-| Base surface | `#101A17` | `#FFFFFF` |
-| Subtle surface | `#15221E` | `#EEF2ED` |
-| Primary text | `#F2F6F3` | `#15201C` |
-| Secondary text | `#A8B6B0` | `#53625C` |
-| Brand mint | `#69E0BD` | `#087A65` |
-| Strong focus | `#9AAEA6` | `#687B73` |
-| Information | `#9CB7FF` | `#3F6399` |
-| Attention | `#F2C470` | `#7A5700` |
-| Danger | `#FF8E86` | `#B23B36` |
+| Role | Dark | Light | Space |
+| --- | --- | --- | --- |
+| Background | `#08110F` | `#F6F6F1` | `#070814` |
+| Base surface | `#101A17` | `#FFFFFF` | `#101329` |
+| Subtle surface | `#15221E` | `#EEF2ED` | `#171A38` |
+| Raised surface | `#1A2924` | `#E7ECE7` | `#20244A` |
+| Interactive surface | `#1D302A` | `#E1E9E3` | `#292E5C` |
+| Primary text | `#F2F6F3` | `#15201C` | `#F6F3FF` |
+| Secondary text | `#A8B6B0` | `#53625C` | `#D4CFEA` |
+| Brand | `#69E0BD` | `#087A65` | `#67E8F9` |
+| On brand | `#07352B` | `#FFFFFF` | `#07272C` |
+| Brand container | `#173B32` | `#D9F3EA` | `#20224A` |
+| On brand container | `#B9F6E3` | `#075F50` | `#DCD4FF` |
+| Strong focus | `#9AAEA6` | `#687B73` | `#C4B5FD` |
+| Soft outline | `#2B3A35` | `#D5DDD8` | `#353B68` |
+| Information / surface | `#9CB7FF` / `#1B2944` | `#3F6399` / `#E7EEFC` | `#A5B4FC` / `#1D254A` |
+| Attention / surface | `#F2C470` / `#342918` | `#7A5700` / `#FFF1CF` | `#F6C76E` / `#352A18` |
+| Danger / surface | `#FF8E86` / `#3B201F` | `#B23B36` / `#FFE9E6` | `#FF8E9E` / `#3B1D2A` |
+| Success / surface | `#82DE9A` / `#183322` | `#1D7045` / `#E2F3E7` | `#7EE2B8` / `#14342D` |
+| Data blue / violet / coral | `#75A7FF` / `#C8A5FF` / `#FF9E86` | `#416BA5` / `#72569A` / `#9A5547` | `#6CB6FF` / `#C4A7FF` / `#FF9CA8` |
 
 `AppVisualTokens` owns these values plus derived status surfaces, success, soft
 outline, shadow, and bounded data colors. Presentation code consumes
@@ -174,7 +191,19 @@ compatibility boundary.
 
 Every non-essential custom transition resolves its duration through
 `MediaQuery.disableAnimations`; reduced motion produces a zero-duration state
-change. There is no looping decorative motion.
+change. Space alone may render a deterministic overlay of `36..96` small cyan,
+violet, and quiet white stars based on area, including a few subdued four-point
+sparkles. The overlay uses a 24-second cycle; stars move by at most 14 logical
+pixels vertically and four horizontally. Independently, the approved photo may
+use one 48-second closed camera path: horizontal drift is at most six logical
+pixels, vertical drift at most four, and scale remains `1.036..1.044` around a
+`1.04` base. Only the image GPU layer moves; its readability scrim stays fixed.
+The app pauses both controllers outside the active lifecycle. Reduced Motion
+freezes photo and stars at deterministic phase `0.37` and replaces animated
+ripple/press feedback with immediate state feedback. No drawn planets,
+ribbons, orbits, constellations, input-driven parallax, mouse/scroll tracking,
+device sensors, or other camera paths are permitted. No other theme gains
+looping decorative motion.
 
 Controls use at least a 44×44 logical touch target. Keyboard focus uses a
 two-pixel strong-focus outline, including buttons, icon buttons, fields,
@@ -195,8 +224,9 @@ Primary shell destinations do not show a meaningless fallback back button.
 
 ## Material Coverage
 
-`AppTheme.dark` and `AppTheme.light` remain the only theme entry points. They
-fully define:
+`AppThemeId.dark`, `.light`, and `.space` are resolved through
+`AppTheme.resolve`; `AppTheme.dark`, `.light`, and `.space` remain direct test
+and component entry points. All three fully define:
 
 - app bars, cards, dividers, list rows, and scrollbars;
 - inputs and validation;
@@ -206,8 +236,71 @@ fully define:
 - dialogs, sheets, popup menus, menus, tooltips, and snackbars;
 - date and time pickers.
 
-The normal content surface is borderless. Material splash is disabled; state
-feedback comes from the explicit hover/press/focus layers and motion tokens.
+Settings exposes one `Appearance` row and a vertically scrollable
+`Choose appearance` dialog: Dark — `Calm dark default`, Light —
+`Bright neutral`, and Space — `Animated violet and cyan`. Each choice has a
+visible icon and three palette swatches and remains usable at 320 logical
+pixels with 200-percent text. Selection closes the dialog and changes the theme
+optimistically. The device-local `app_theme_mode` preference accepts exactly
+`dark`, `light`, or `space`; missing or unknown values resolve to Dark. Writes
+remain ordered, and a failed latest write rolls back to the last confirmed
+selection and reports the existing appearance-save failure.
+
+The normal Dark and Light content surfaces remain opaque and borderless. Space
+uses the following bounded clear-material alpha values; the underlying token
+color remains the tint:
+
+| Space material role | Alpha |
+| --- | --- |
+| Plain surface | `0.48` |
+| Subtle surface and idle interactive surface | `0.52` |
+| Raised and hovered interactive surface | `0.58` |
+| Pressed interactive surface and dense input/chip surface | `0.60` |
+| Semantic information, attention, danger, and success surface | `0.70` |
+| Dialog, menu, sheet, snackbar, and tooltip overlay | `0.82` |
+| Shell navigation | `0.52` |
+
+Space may add one hairline soft-violet depth edge to shared surfaces, cards,
+overlays, pickers, and mobile navigation; hover shifts that edge toward cyan
+and raised surfaces may carry one quiet violet ambient shadow. Plain and subtle
+`AppSurface` roles add two short opposing HUD corner strokes: `18` logical
+pixels in cyan and `12` in violet at one-pixel width. Raised and interactive
+roles use `24` and `16` logical pixels at `1.25` width; hover strengthens cyan
+and press makes violet primary. Accent, warning, and danger surfaces do not use
+the HUD frame. These presentation-only edges do not change layout or replace
+the stronger focus, selection, warning, or danger boundaries.
+
+No content card or `AppSurface` owns a `BackdropFilter`. The responsive shell
+owns exactly one filter at a time—desktop rail or mobile bottom navigation—with
+sigma `8`; no extra filter is retained behind the inactive layout. Card depth
+is tint, opacity, strokes, and existing shadows only. High Contrast replaces
+all Space material alpha with opaque `1.0`, disables HUD strokes, and sets the
+navigation blur to zero. This is a presentation fallback and leaves Dark and
+Light pixel output unchanged.
+
+Dark and Light keep Material splash disabled and retain their existing
+hover/press/focus layers. Space uses a cyan `InkRipple`, a violet press
+highlight, and short token-owned hover/press glows on shared interactive
+surfaces, buttons, shell navigation, and the Quick-action button. Button
+content compresses to `0.96` only while an enabled Space control is pressed;
+the Quick-action button retains its stronger `0.94` press scale. Interactive
+Space surfaces lift one logical pixel on hover and return to their base plane
+while pressed. Selected shell destinations use a cyan `3×28` desktop or `24×3`
+mobile signal with an 180 ms Reduced-Motion-aware fade. Disabled controls stay
+flat and glow-free.
+
+`AppThemeEffects` owns these differences. The app-level backdrop is behind the
+Navigator. It paints Space's fixed background, selects the approved portrait or
+landscape deep-field asset from the viewport aspect ratio, applies one uniform
+readability scrim at alpha `0.40`, and finally paints the deterministic star
+overlay while Space Scaffolds remain transparent. The two versioned local WebP
+files are the only decorative raster-asset exception and together remain below
+two megabytes; the app never fetches a runtime backdrop from the network. Their
+photographic tonal falloff and the clear material do not relax the ban on Dart
+gradients, shaders, `saveLayer`, shimmer, or route-local decorative images.
+Image and painter layers are pointer-ignoring, semantics-free
+`RepaintBoundary` content. Contrast tests use an all-white pre-scrim source as
+the conservative luminance bound for every possible backdrop pixel.
 
 ## Responsive And Accessibility Gates
 
@@ -219,7 +312,7 @@ The objective gate is:
 - minimum 44×44 targets;
 - no overflow or hidden action at 320 logical pixels and 2.0 text scale;
 - representative checks at 390×844 and 1280×960;
-- dark and light theme coverage;
+- dark, light, and Space theme coverage;
 - reduced-motion coverage;
 - visible labels and semantics remain equivalent.
 
@@ -234,6 +327,8 @@ rich authenticated fixture. The full review matrix includes:
 | Controls | Coach, Inbox, Reminder, Calendar, Settings, Account flows |
 | Cross-cutting | loading, empty, error, stale, offline, conflict, disabled |
 
+The tracked component-reference suite includes frozen Space goldens at
+390×844 and 1280×960; the existing Dark/Light goldens remain unchanged.
 Baseline screenshots from the pre-V2 build and generated review screenshots
 belong under ignored `.tools/visual-baseline/` and `.tools/visual-review/`.
 They are local review artifacts, not participant evidence and not substitutes
@@ -255,6 +350,10 @@ npm run verify:visual
 - uncontrolled named or hard colors outside the two documented exceptions;
 - route-local fonts;
 - route-local `TextStyle` outside the Insights canvas allowlist;
+- any production `BackdropFilter` or `ImageFilter.blur` outside the single
+  responsive shell-navigation owner, a missing Space HUD painter, blur sigma
+  other than `8`, or a High-Contrast path that leaves clear materials enabled;
+- canvas `saveLayer` in shared presentation code;
 - missing exact package pins, font weights, license, mark, icons, or manifest
   colors.
 

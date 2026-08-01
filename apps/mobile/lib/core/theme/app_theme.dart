@@ -2,62 +2,113 @@ import 'package:flutter/material.dart';
 
 import '../constants/app_radii.dart';
 import 'app_motion_tokens.dart';
+import 'app_theme_effects.dart';
 import 'app_visual_tokens.dart';
+
+enum AppThemeId { dark, light, space }
 
 class AppTheme {
   const AppTheme._();
 
-  static ThemeData get dark => _build(
-        brightness: Brightness.dark,
-        tokens: AppVisualTokens.dark,
-      );
+  static final ThemeData dark = _build(_AppThemeDefinition.dark);
 
-  static ThemeData get light => _build(
-        brightness: Brightness.light,
-        tokens: AppVisualTokens.light,
-      );
+  static final ThemeData light = _build(_AppThemeDefinition.light);
 
-  static ThemeData _build({
-    required Brightness brightness,
-    required AppVisualTokens tokens,
+  static final ThemeData space = _build(_AppThemeDefinition.space);
+
+  static final ThemeData _spaceHighContrast = _build(
+    _AppThemeDefinition.space,
+    surfaceMaterialOverride: AppSurfaceMaterial.disabled,
+  );
+
+  static ThemeData resolve(AppThemeId id, {bool highContrast = false}) {
+    if (highContrast && id == AppThemeId.space) return _spaceHighContrast;
+    return switch (id) {
+      AppThemeId.dark => dark,
+      AppThemeId.light => light,
+      AppThemeId.space => space,
+    };
+  }
+
+  static ThemeData withoutAnimations(ThemeData theme) {
+    ButtonStyle? reduced(ButtonStyle? style) => style?.copyWith(
+          animationDuration: Duration.zero,
+          splashFactory: NoSplash.splashFactory,
+        );
+
+    return theme.copyWith(
+      splashFactory: NoSplash.splashFactory,
+      splashColor: Colors.transparent,
+      filledButtonTheme: FilledButtonThemeData(
+        style: reduced(theme.filledButtonTheme.style),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: reduced(theme.outlinedButtonTheme.style),
+      ),
+      textButtonTheme: TextButtonThemeData(
+        style: reduced(theme.textButtonTheme.style),
+      ),
+      iconButtonTheme: IconButtonThemeData(
+        style: reduced(theme.iconButtonTheme.style),
+      ),
+      segmentedButtonTheme: SegmentedButtonThemeData(
+        style: reduced(theme.segmentedButtonTheme.style),
+      ),
+    );
+  }
+
+  static ThemeData _build(
+    _AppThemeDefinition definition, {
+    AppSurfaceMaterial? surfaceMaterialOverride,
   }) {
-    final dark = brightness == Brightness.dark;
+    final brightness = definition.brightness;
+    final tokens = definition.tokens;
+    final effects = surfaceMaterialOverride == null
+        ? definition.effects
+        : definition.effects.copyWith(
+            surfaceMaterial: surfaceMaterialOverride,
+          );
+    final surfaceMaterial = effects.surfaceMaterial;
+    final plainSurface = surfaceMaterial.plain(tokens.surface);
+    final subtleSurface = surfaceMaterial.subtle(tokens.surfaceSubtle);
+    final raisedSurface = surfaceMaterial.raised(tokens.surfaceRaised);
+    final denseSurface = surfaceMaterial.dense(tokens.surface);
+    final navigationSurface = surfaceMaterial.navigation(tokens.surface);
+    final overlaySurface = surfaceMaterial.overlay(tokens.surface);
     final scheme = ColorScheme(
       brightness: brightness,
       primary: tokens.brand,
       onPrimary: tokens.onBrand,
-      primaryContainer:
-          dark ? const Color(0xFF173B32) : const Color(0xFFD9F3EA),
-      onPrimaryContainer:
-          dark ? const Color(0xFFB9F6E3) : const Color(0xFF075F50),
+      primaryContainer: definition.primaryContainer,
+      onPrimaryContainer: definition.onPrimaryContainer,
       secondary: tokens.info,
-      onSecondary: dark ? const Color(0xFF12254C) : const Color(0xFFFFFFFF),
-      secondaryContainer: tokens.infoSurface,
+      onSecondary: definition.onSecondary,
+      secondaryContainer: surfaceMaterial.semantic(tokens.infoSurface),
       onSecondaryContainer: tokens.info,
       tertiary: tokens.attention,
-      onTertiary: dark ? const Color(0xFF3C2B00) : const Color(0xFFFFFFFF),
-      tertiaryContainer: tokens.attentionSurface,
+      onTertiary: definition.onTertiary,
+      tertiaryContainer: surfaceMaterial.semantic(tokens.attentionSurface),
       onTertiaryContainer: tokens.attention,
       error: tokens.danger,
-      onError: dark ? const Color(0xFF450905) : const Color(0xFFFFFFFF),
-      errorContainer: tokens.dangerSurface,
+      onError: definition.onError,
+      errorContainer: surfaceMaterial.semantic(tokens.dangerSurface),
       onErrorContainer: tokens.danger,
-      surface: tokens.surface,
+      surface: denseSurface,
       onSurface: tokens.textPrimary,
       onSurfaceVariant: tokens.textSecondary,
       outline: tokens.focus,
       outlineVariant: tokens.outlineSoft,
       shadow: tokens.shadow,
-      scrim: const Color(0xFF000000),
-      inverseSurface: dark ? tokens.textPrimary : const Color(0xFF26312D),
-      onInverseSurface: dark ? tokens.background : const Color(0xFFF2F6F3),
-      inversePrimary: dark ? const Color(0xFF087A65) : const Color(0xFF69E0BD),
+      scrim: definition.scrim,
+      inverseSurface: definition.inverseSurface,
+      onInverseSurface: definition.onInverseSurface,
+      inversePrimary: definition.inversePrimary,
       surfaceTint: Colors.transparent,
       surfaceContainerLowest: tokens.background,
-      surfaceContainerLow: tokens.surface,
-      surfaceContainer: tokens.surfaceSubtle,
-      surfaceContainerHigh: tokens.surfaceRaised,
-      surfaceContainerHighest: tokens.surfaceInteractive,
+      surfaceContainerLow: plainSurface,
+      surfaceContainer: subtleSurface,
+      surfaceContainerHigh: raisedSurface,
+      surfaceContainerHighest: raisedSurface,
     );
     final textTheme = _textTheme(tokens);
     final focusSide = WidgetStateProperty.resolveWith<BorderSide?>((states) {
@@ -66,27 +117,31 @@ class AppTheme {
       }
       return null;
     });
-    final interactionOverlay = _interactionOverlay(tokens.brand);
+    final interactionOverlay = WidgetStateProperty.resolveWith<Color?>(
+      effects.controlOverlay,
+    );
+    final controlForegroundBuilder = _controlForegroundBuilder(effects);
 
     final base = ThemeData(
       useMaterial3: true,
       brightness: brightness,
       colorScheme: scheme,
-      scaffoldBackgroundColor: tokens.background,
+      scaffoldBackgroundColor: definition.scaffoldBackground,
       canvasColor: tokens.background,
       fontFamily: 'InstrumentSans',
       textTheme: textTheme,
       visualDensity: VisualDensity.standard,
       materialTapTargetSize: MaterialTapTargetSize.padded,
-      splashFactory: NoSplash.splashFactory,
-      splashColor: Colors.transparent,
-      highlightColor: Colors.transparent,
-      focusColor: tokens.focus.withValues(alpha: dark ? 0.34 : 0.24),
-      hoverColor: tokens.brand.withValues(alpha: 0.08),
+      splashFactory: effects.splashFactory,
+      splashColor: effects.splashColor,
+      highlightColor: effects.highlightColor,
+      focusColor: effects.focusColor,
+      hoverColor: effects.hoverColor,
       disabledColor: tokens.textSecondary.withValues(alpha: 0.42),
       extensions: [
         const AppMotionTokens(),
         tokens,
+        effects,
       ],
     );
 
@@ -103,14 +158,12 @@ class AppTheme {
         toolbarHeight: 64,
       ),
       cardTheme: CardThemeData(
-        color: tokens.surfaceSubtle,
+        color: subtleSurface,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         margin: EdgeInsets.zero,
         clipBehavior: Clip.antiAlias,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppRadii.md),
-        ),
+        shape: _surfaceShape(AppRadii.md, effects),
       ),
       dividerTheme: DividerThemeData(
         color: tokens.outlineSoft,
@@ -119,7 +172,7 @@ class AppTheme {
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: tokens.surface,
+        fillColor: denseSurface,
         contentPadding: const EdgeInsets.symmetric(
           horizontal: 16,
           vertical: 16,
@@ -158,16 +211,67 @@ class AppTheme {
                 ? tokens.brand.withValues(alpha: 0.42)
                 : tokens.brand,
           ),
-          overlayColor: _interactionOverlay(tokens.onBrand),
-          side: focusSide,
+          overlayColor: WidgetStateProperty.resolveWith(
+            (states) => effects.filledControlOverlay(states, tokens.onBrand),
+          ),
+          side: WidgetStateProperty.resolveWith((states) {
+            if (!effects.interactionGlowEnabled) {
+              return focusSide.resolve(states);
+            }
+            if (states.contains(WidgetState.disabled)) {
+              return BorderSide.none;
+            }
+            if (states.contains(WidgetState.focused)) {
+              return BorderSide(color: tokens.focus, width: 2);
+            }
+            if (states.contains(WidgetState.pressed)) {
+              return BorderSide(
+                color: tokens.focus.withValues(alpha: 0.88),
+              );
+            }
+            if (states.contains(WidgetState.hovered)) {
+              return BorderSide(
+                color: tokens.brand.withValues(alpha: 0.88),
+              );
+            }
+            return BorderSide(
+              color: tokens.textPrimary.withValues(alpha: 0.44),
+            );
+          }),
           shape: WidgetStatePropertyAll(
             RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(AppRadii.md),
             ),
           ),
-          elevation: const WidgetStatePropertyAll(0),
+          elevation: WidgetStateProperty.resolveWith((states) {
+            if (!effects.interactionGlowEnabled ||
+                states.contains(WidgetState.disabled)) {
+              return 0;
+            }
+            if (states.contains(WidgetState.pressed)) return 1;
+            if (states.contains(WidgetState.hovered)) return 6;
+            return 2;
+          }),
+          shadowColor: effects.interactionGlowEnabled
+              ? WidgetStateProperty.resolveWith((states) {
+                  if (states.contains(WidgetState.disabled)) {
+                    return Colors.transparent;
+                  }
+                  if (states.contains(WidgetState.pressed)) {
+                    return tokens.focus.withValues(alpha: 0.36);
+                  }
+                  if (states.contains(WidgetState.focused)) {
+                    return tokens.focus.withValues(alpha: 0.48);
+                  }
+                  if (states.contains(WidgetState.hovered)) {
+                    return tokens.brand.withValues(alpha: 0.55);
+                  }
+                  return effects.primaryControlIdleGlowColor;
+                })
+              : null,
           animationDuration: const Duration(milliseconds: 120),
-          splashFactory: NoSplash.splashFactory,
+          splashFactory: effects.splashFactory,
+          foregroundBuilder: controlForegroundBuilder,
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
@@ -191,6 +295,14 @@ class AppTheme {
             if (states.contains(WidgetState.focused)) {
               return BorderSide(color: tokens.focus, width: 2);
             }
+            if (effects.interactionGlowEnabled &&
+                states.contains(WidgetState.pressed)) {
+              return BorderSide(color: tokens.focus);
+            }
+            if (effects.interactionGlowEnabled &&
+                states.contains(WidgetState.hovered)) {
+              return BorderSide(color: tokens.brand);
+            }
             return BorderSide(
               color: states.contains(WidgetState.disabled)
                   ? tokens.outlineSoft
@@ -203,8 +315,37 @@ class AppTheme {
             ),
           ),
           overlayColor: interactionOverlay,
+          elevation: effects.interactionGlowEnabled
+              ? WidgetStateProperty.resolveWith((states) {
+                  if (states.contains(WidgetState.disabled)) return 0;
+                  if (states.contains(WidgetState.pressed)) return 1;
+                  if (states.contains(WidgetState.hovered) ||
+                      states.contains(WidgetState.focused)) {
+                    return 3;
+                  }
+                  return 0;
+                })
+              : null,
+          shadowColor: effects.interactionGlowEnabled
+              ? WidgetStateProperty.resolveWith((states) {
+                  if (states.contains(WidgetState.disabled)) {
+                    return Colors.transparent;
+                  }
+                  if (states.contains(WidgetState.pressed)) {
+                    return tokens.focus.withValues(alpha: 0.38);
+                  }
+                  if (states.contains(WidgetState.focused)) {
+                    return tokens.focus.withValues(alpha: 0.36);
+                  }
+                  if (states.contains(WidgetState.hovered)) {
+                    return tokens.brand.withValues(alpha: 0.34);
+                  }
+                  return Colors.transparent;
+                })
+              : null,
           animationDuration: const Duration(milliseconds: 120),
-          splashFactory: NoSplash.splashFactory,
+          splashFactory: effects.splashFactory,
+          foregroundBuilder: controlForegroundBuilder,
         ),
       ),
       textButtonTheme: TextButtonThemeData(
@@ -227,7 +368,8 @@ class AppTheme {
           ),
           overlayColor: interactionOverlay,
           animationDuration: const Duration(milliseconds: 120),
-          splashFactory: NoSplash.splashFactory,
+          splashFactory: effects.splashFactory,
+          foregroundBuilder: controlForegroundBuilder,
         ),
       ),
       iconButtonTheme: IconButtonThemeData(
@@ -244,14 +386,56 @@ class AppTheme {
           ),
           minimumSize: const WidgetStatePropertyAll(Size.square(44)),
           padding: const WidgetStatePropertyAll(EdgeInsets.all(10)),
-          side: focusSide,
+          side: WidgetStateProperty.resolveWith((states) {
+            if (states.contains(WidgetState.focused)) {
+              return BorderSide(color: tokens.focus, width: 2);
+            }
+            if (effects.interactionGlowEnabled &&
+                states.contains(WidgetState.pressed)) {
+              return BorderSide(color: tokens.focus);
+            }
+            if (effects.interactionGlowEnabled &&
+                states.contains(WidgetState.hovered)) {
+              return BorderSide(color: tokens.brand);
+            }
+            return null;
+          }),
           shape: WidgetStatePropertyAll(
             RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(AppRadii.md),
             ),
           ),
           overlayColor: interactionOverlay,
-          splashFactory: NoSplash.splashFactory,
+          elevation: effects.interactionGlowEnabled
+              ? WidgetStateProperty.resolveWith((states) {
+                  if (states.contains(WidgetState.disabled)) return 0;
+                  if (states.contains(WidgetState.pressed)) return 1;
+                  if (states.contains(WidgetState.hovered) ||
+                      states.contains(WidgetState.focused)) {
+                    return 2;
+                  }
+                  return 0;
+                })
+              : null,
+          shadowColor: effects.interactionGlowEnabled
+              ? WidgetStateProperty.resolveWith((states) {
+                  if (states.contains(WidgetState.disabled)) {
+                    return Colors.transparent;
+                  }
+                  if (states.contains(WidgetState.pressed)) {
+                    return tokens.focus.withValues(alpha: 0.36);
+                  }
+                  if (states.contains(WidgetState.focused)) {
+                    return tokens.focus.withValues(alpha: 0.32);
+                  }
+                  if (states.contains(WidgetState.hovered)) {
+                    return tokens.brand.withValues(alpha: 0.30);
+                  }
+                  return Colors.transparent;
+                })
+              : null,
+          splashFactory: effects.splashFactory,
+          foregroundBuilder: controlForegroundBuilder,
         ),
       ),
       floatingActionButtonTheme: FloatingActionButtonThemeData(
@@ -261,13 +445,11 @@ class AppTheme {
         focusElevation: 0,
         hoverElevation: 1,
         highlightElevation: 0,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppRadii.lg),
-        ),
+        shape: _surfaceShape(AppRadii.lg, effects),
       ),
       navigationBarTheme: NavigationBarThemeData(
         height: 72,
-        backgroundColor: tokens.surface,
+        backgroundColor: navigationSurface,
         surfaceTintColor: Colors.transparent,
         indicatorColor: tokens.surfaceInteractive,
         elevation: 0,
@@ -291,7 +473,7 @@ class AppTheme {
         ),
       ),
       navigationRailTheme: NavigationRailThemeData(
-        backgroundColor: tokens.surface,
+        backgroundColor: navigationSurface,
         indicatorColor: tokens.surfaceInteractive,
         selectedIconTheme: IconThemeData(color: tokens.brand),
         unselectedIconTheme: IconThemeData(color: tokens.textSecondary),
@@ -316,7 +498,7 @@ class AppTheme {
           backgroundColor: WidgetStateProperty.resolveWith(
             (states) => states.contains(WidgetState.selected)
                 ? tokens.brand
-                : tokens.surface,
+                : denseSurface,
           ),
           side: WidgetStateProperty.resolveWith(
             (states) => BorderSide(
@@ -332,12 +514,13 @@ class AppTheme {
             ),
           ),
           overlayColor: interactionOverlay,
+          splashFactory: effects.splashFactory,
         ),
       ),
       chipTheme: base.chipTheme.copyWith(
-        backgroundColor: tokens.surface,
-        selectedColor: tokens.surfaceInteractive,
-        disabledColor: tokens.surfaceSubtle,
+        backgroundColor: denseSurface,
+        selectedColor: surfaceMaterial.dense(tokens.surfaceInteractive),
+        disabledColor: subtleSurface,
         side: BorderSide(color: tokens.outlineSoft),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppRadii.pill),
@@ -369,7 +552,7 @@ class AppTheme {
         trackColor: WidgetStateProperty.resolveWith(
           (states) => states.contains(WidgetState.selected)
               ? tokens.brand
-              : tokens.surfaceRaised,
+              : raisedSurface,
         ),
         trackOutlineColor: WidgetStateProperty.resolveWith(
           (states) => states.contains(WidgetState.focused)
@@ -407,87 +590,79 @@ class AppTheme {
         ),
       ),
       dialogTheme: DialogThemeData(
-        backgroundColor: tokens.surface,
+        backgroundColor: overlaySurface,
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         shadowColor: tokens.shadow,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppRadii.lg),
-        ),
+        shape: _surfaceShape(AppRadii.lg, effects),
         titleTextStyle: textTheme.headlineSmall,
         contentTextStyle: textTheme.bodyLarge,
       ),
       bottomSheetTheme: BottomSheetThemeData(
-        backgroundColor: tokens.surface,
-        modalBackgroundColor: tokens.surface,
+        backgroundColor: overlaySurface,
+        modalBackgroundColor: overlaySurface,
         surfaceTintColor: Colors.transparent,
         dragHandleColor: tokens.textSecondary,
         showDragHandle: true,
         elevation: 0,
         modalElevation: 0,
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(
+        shape: RoundedRectangleBorder(
+          borderRadius: const BorderRadius.vertical(
             top: Radius.circular(AppRadii.xl),
           ),
+          side: _surfaceBorderSide(effects),
         ),
       ),
       snackBarTheme: SnackBarThemeData(
         behavior: SnackBarBehavior.floating,
-        backgroundColor:
-            dark ? tokens.surfaceInteractive : const Color(0xFF26312D),
+        backgroundColor: surfaceMaterial.overlay(definition.snackBackground),
         contentTextStyle: textTheme.bodyMedium?.copyWith(
-          color: const Color(0xFFF2F6F3),
+          color: definition.snackForeground,
         ),
-        actionTextColor: const Color(0xFF69E0BD),
+        actionTextColor: definition.snackAction,
         elevation: 0,
         insetPadding: const EdgeInsets.all(16),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppRadii.md),
-        ),
+        shape: _surfaceShape(AppRadii.md, effects),
       ),
       progressIndicatorTheme: ProgressIndicatorThemeData(
         color: tokens.brand,
-        linearTrackColor: tokens.surfaceRaised,
-        circularTrackColor: tokens.surfaceRaised,
+        linearTrackColor: raisedSurface,
+        circularTrackColor: raisedSurface,
         linearMinHeight: 6,
         borderRadius: BorderRadius.circular(AppRadii.pill),
       ),
       sliderTheme: base.sliderTheme.copyWith(
         activeTrackColor: tokens.brand,
-        inactiveTrackColor: tokens.surfaceRaised,
+        inactiveTrackColor: raisedSurface,
         thumbColor: tokens.brand,
         overlayColor: tokens.brand.withValues(alpha: 0.12),
         valueIndicatorColor:
-            dark ? tokens.surfaceInteractive : const Color(0xFF26312D),
+            surfaceMaterial.overlay(definition.valueIndicatorBackground),
         valueIndicatorTextStyle: textTheme.labelMedium?.copyWith(
-          color: const Color(0xFFF2F6F3),
+          color: definition.valueIndicatorForeground,
         ),
       ),
       popupMenuTheme: PopupMenuThemeData(
-        color: tokens.surfaceRaised,
+        color: surfaceMaterial.overlay(tokens.surfaceRaised),
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         textStyle: textTheme.bodyLarge,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppRadii.md),
-        ),
+        shape: _surfaceShape(AppRadii.md, effects),
       ),
       menuTheme: MenuThemeData(
         style: MenuStyle(
-          backgroundColor: WidgetStatePropertyAll(tokens.surfaceRaised),
+          backgroundColor: WidgetStatePropertyAll(
+            surfaceMaterial.overlay(tokens.surfaceRaised),
+          ),
           surfaceTintColor: const WidgetStatePropertyAll(Colors.transparent),
           elevation: const WidgetStatePropertyAll(0),
-          shape: WidgetStatePropertyAll(
-            RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(AppRadii.md),
-            ),
-          ),
+          shape: WidgetStatePropertyAll(_surfaceShape(AppRadii.md, effects)),
         ),
       ),
       datePickerTheme: DatePickerThemeData(
-        backgroundColor: tokens.surface,
+        backgroundColor: overlaySurface,
         surfaceTintColor: Colors.transparent,
-        headerBackgroundColor: tokens.surfaceSubtle,
+        headerBackgroundColor: surfaceMaterial.overlay(tokens.surfaceSubtle),
         headerForegroundColor: tokens.textPrimary,
         todayForegroundColor: WidgetStatePropertyAll(tokens.brand),
         todayBorder: BorderSide(color: tokens.brand),
@@ -501,23 +676,19 @@ class AppTheme {
               ? tokens.brand
               : Colors.transparent,
         ),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppRadii.lg),
-        ),
+        shape: _surfaceShape(AppRadii.lg, effects),
       ),
       timePickerTheme: TimePickerThemeData(
-        backgroundColor: tokens.surface,
-        hourMinuteColor: tokens.surfaceSubtle,
+        backgroundColor: overlaySurface,
+        hourMinuteColor: surfaceMaterial.overlay(tokens.surfaceSubtle),
         hourMinuteTextColor: tokens.textPrimary,
-        dayPeriodColor: tokens.surfaceSubtle,
+        dayPeriodColor: surfaceMaterial.overlay(tokens.surfaceSubtle),
         dayPeriodTextColor: tokens.textPrimary,
-        dialBackgroundColor: tokens.surfaceSubtle,
+        dialBackgroundColor: surfaceMaterial.overlay(tokens.surfaceSubtle),
         dialHandColor: tokens.brand,
         dialTextColor: tokens.textPrimary,
         entryModeIconColor: tokens.textSecondary,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppRadii.lg),
-        ),
+        shape: _surfaceShape(AppRadii.lg, effects),
       ),
       scrollbarTheme: ScrollbarThemeData(
         radius: const Radius.circular(AppRadii.pill),
@@ -530,11 +701,11 @@ class AppTheme {
       ),
       tooltipTheme: TooltipThemeData(
         decoration: BoxDecoration(
-          color: dark ? tokens.surfaceInteractive : const Color(0xFF26312D),
+          color: surfaceMaterial.overlay(definition.tooltipBackground),
           borderRadius: BorderRadius.circular(AppRadii.sm),
         ),
         textStyle: textTheme.bodySmall?.copyWith(
-          color: const Color(0xFFF2F6F3),
+          color: definition.tooltipForeground,
         ),
         waitDuration: const Duration(milliseconds: 500),
       ),
@@ -644,18 +815,254 @@ class AppTheme {
     );
   }
 
-  static WidgetStateProperty<Color?> _interactionOverlay(Color color) {
-    return WidgetStateProperty.resolveWith((states) {
-      if (states.contains(WidgetState.focused)) {
-        return color.withValues(alpha: 0.20);
-      }
-      if (states.contains(WidgetState.pressed)) {
-        return color.withValues(alpha: 0.14);
-      }
-      if (states.contains(WidgetState.hovered)) {
-        return color.withValues(alpha: 0.08);
-      }
-      return null;
-    });
+  static RoundedRectangleBorder _surfaceShape(
+    double radius,
+    AppThemeEffects effects,
+  ) {
+    return RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(radius),
+      side: _surfaceBorderSide(effects),
+    );
+  }
+
+  static BorderSide _surfaceBorderSide(AppThemeEffects effects) =>
+      effects.surfaceOutlineColor.a > 0
+          ? BorderSide(color: effects.surfaceOutlineColor)
+          : BorderSide.none;
+
+  static ButtonLayerBuilder? _controlForegroundBuilder(
+    AppThemeEffects effects,
+  ) {
+    if (effects.controlPressedScale == 1) return null;
+    return (context, states, child) => AnimatedScale(
+          key: const ValueKey('space-control-foreground-scale'),
+          scale: states.contains(WidgetState.pressed) &&
+                  !states.contains(WidgetState.disabled)
+              ? effects.controlPressedScale
+              : 1,
+          duration: context.motionTokens.selectionFor(context),
+          curve: context.motionTokens.curve,
+          child: child,
+        );
+  }
+}
+
+@immutable
+class _AppThemeDefinition {
+  const _AppThemeDefinition({
+    required this.brightness,
+    required this.tokens,
+    required this.primaryContainer,
+    required this.onPrimaryContainer,
+    required this.onSecondary,
+    required this.onTertiary,
+    required this.onError,
+    required this.scrim,
+    required this.inverseSurface,
+    required this.onInverseSurface,
+    required this.inversePrimary,
+    required this.scaffoldBackground,
+    required this.snackBackground,
+    required this.snackForeground,
+    required this.snackAction,
+    required this.valueIndicatorBackground,
+    required this.valueIndicatorForeground,
+    required this.tooltipBackground,
+    required this.tooltipForeground,
+    required this.effects,
+  });
+
+  final Brightness brightness;
+  final AppVisualTokens tokens;
+  final Color primaryContainer;
+  final Color onPrimaryContainer;
+  final Color onSecondary;
+  final Color onTertiary;
+  final Color onError;
+  final Color scrim;
+  final Color inverseSurface;
+  final Color onInverseSurface;
+  final Color inversePrimary;
+  final Color scaffoldBackground;
+  final Color snackBackground;
+  final Color snackForeground;
+  final Color snackAction;
+  final Color valueIndicatorBackground;
+  final Color valueIndicatorForeground;
+  final Color tooltipBackground;
+  final Color tooltipForeground;
+  final AppThemeEffects effects;
+
+  static final dark = _AppThemeDefinition(
+    brightness: Brightness.dark,
+    tokens: AppVisualTokens.dark,
+    primaryContainer: const Color(0xFF173B32),
+    onPrimaryContainer: const Color(0xFFB9F6E3),
+    onSecondary: const Color(0xFF12254C),
+    onTertiary: const Color(0xFF3C2B00),
+    onError: const Color(0xFF450905),
+    scrim: const Color(0xFF000000),
+    inverseSurface: AppVisualTokens.dark.textPrimary,
+    onInverseSurface: AppVisualTokens.dark.background,
+    inversePrimary: const Color(0xFF087A65),
+    scaffoldBackground: AppVisualTokens.dark.background,
+    snackBackground: AppVisualTokens.dark.surfaceInteractive,
+    snackForeground: const Color(0xFFF2F6F3),
+    snackAction: const Color(0xFF69E0BD),
+    valueIndicatorBackground: AppVisualTokens.dark.surfaceInteractive,
+    valueIndicatorForeground: const Color(0xFFF2F6F3),
+    tooltipBackground: AppVisualTokens.dark.surfaceInteractive,
+    tooltipForeground: const Color(0xFFF2F6F3),
+    effects: _standardEffects(
+      tokens: AppVisualTokens.dark,
+      focusOpacity: 0.34,
+      accentSurfaceOpacity: 0.14,
+    ),
+  );
+
+  static final light = _AppThemeDefinition(
+    brightness: Brightness.light,
+    tokens: AppVisualTokens.light,
+    primaryContainer: const Color(0xFFD9F3EA),
+    onPrimaryContainer: const Color(0xFF075F50),
+    onSecondary: const Color(0xFFFFFFFF),
+    onTertiary: const Color(0xFFFFFFFF),
+    onError: const Color(0xFFFFFFFF),
+    scrim: const Color(0xFF000000),
+    inverseSurface: const Color(0xFF26312D),
+    onInverseSurface: const Color(0xFFF2F6F3),
+    inversePrimary: const Color(0xFF69E0BD),
+    scaffoldBackground: AppVisualTokens.light.background,
+    snackBackground: const Color(0xFF26312D),
+    snackForeground: const Color(0xFFF2F6F3),
+    snackAction: const Color(0xFF69E0BD),
+    valueIndicatorBackground: const Color(0xFF26312D),
+    valueIndicatorForeground: const Color(0xFFF2F6F3),
+    tooltipBackground: const Color(0xFF26312D),
+    tooltipForeground: const Color(0xFFF2F6F3),
+    effects: _standardEffects(
+      tokens: AppVisualTokens.light,
+      focusOpacity: 0.24,
+      accentSurfaceOpacity: 0.09,
+    ),
+  );
+
+  static final space = _AppThemeDefinition(
+    brightness: Brightness.dark,
+    tokens: AppVisualTokens.space,
+    primaryContainer: const Color(0xFF20224A),
+    onPrimaryContainer: const Color(0xFFDCD4FF),
+    onSecondary: AppVisualTokens.space.infoSurface,
+    onTertiary: AppVisualTokens.space.attentionSurface,
+    onError: AppVisualTokens.space.dangerSurface,
+    scrim: const Color(0xFF000000),
+    inverseSurface: AppVisualTokens.space.textPrimary,
+    onInverseSurface: AppVisualTokens.space.background,
+    inversePrimary: AppVisualTokens.space.brand,
+    scaffoldBackground: Colors.transparent,
+    snackBackground: AppVisualTokens.space.surfaceInteractive,
+    snackForeground: AppVisualTokens.space.textPrimary,
+    snackAction: AppVisualTokens.space.brand,
+    valueIndicatorBackground: AppVisualTokens.space.surfaceInteractive,
+    valueIndicatorForeground: AppVisualTokens.space.textPrimary,
+    tooltipBackground: AppVisualTokens.space.surfaceInteractive,
+    tooltipForeground: AppVisualTokens.space.textPrimary,
+    effects: AppThemeEffects(
+      starfieldEnabled: true,
+      interactionGlowEnabled: true,
+      backdropPortraitAsset: 'assets/theme/space-deep-field-portrait.webp',
+      backdropLandscapeAsset: 'assets/theme/space-deep-field-landscape.webp',
+      backdropScrimOpacity: 0.40,
+      splashFactory: InkRipple.splashFactory,
+      splashColor: AppVisualTokens.space.brand.withValues(alpha: 0.22),
+      highlightColor: AppVisualTokens.space.focus.withValues(alpha: 0.16),
+      focusColor: AppVisualTokens.space.focus.withValues(alpha: 0.34),
+      hoverColor: AppVisualTokens.space.brand.withValues(alpha: 0.10),
+      focusOverlay: AppVisualTokens.space.focus.withValues(alpha: 0.22),
+      pressedOverlay: AppVisualTokens.space.focus.withValues(alpha: 0.18),
+      hoverOverlay: AppVisualTokens.space.brand.withValues(alpha: 0.10),
+      surfacePressedOverlay:
+          AppVisualTokens.space.focus.withValues(alpha: 0.18),
+      quickActionPressedColor: Color.alphaBlend(
+        AppVisualTokens.space.focus.withValues(alpha: 0.20),
+        AppVisualTokens.space.brand,
+      ),
+      interactionGlowColor: AppVisualTokens.space.brand,
+      primaryControlIdleGlowColor:
+          AppVisualTokens.space.brand.withValues(alpha: 0.26),
+      controlPressedScale: 0.96,
+      interactiveSurfaceHoverLift: 1,
+      navigationSignalColor: AppVisualTokens.space.brand,
+      surfaceOutlineColor:
+          AppVisualTokens.space.outlineSoft.withValues(alpha: 0.82),
+      surfaceHoverOutlineColor:
+          AppVisualTokens.space.brand.withValues(alpha: 0.58),
+      raisedSurfaceGlowColor:
+          AppVisualTokens.space.dataViolet.withValues(alpha: 0.22),
+      accentSurfaceOpacity: 0.14,
+      starCyan: AppVisualTokens.space.brand,
+      starViolet: AppVisualTokens.space.dataViolet,
+      starNeutral: AppVisualTokens.space.textPrimary,
+      surfaceMaterial: const AppSurfaceMaterial(
+        enabled: true,
+        hudFrameEnabled: true,
+        plainOpacity: 0.48,
+        subtleOpacity: 0.52,
+        raisedOpacity: 0.58,
+        interactiveOpacity: 0.52,
+        interactiveHoverOpacity: 0.58,
+        interactivePressedOpacity: 0.60,
+        denseOpacity: 0.60,
+        semanticOpacity: 0.70,
+        overlayOpacity: 0.82,
+        navigationOpacity: 0.52,
+        navigationBlurSigma: 8,
+      ),
+      backdropMotion: const AppBackdropMotion(
+        enabled: true,
+        cycle: Duration(seconds: 48),
+        fixedPhase: 0.37,
+        maxHorizontalDrift: 6,
+        maxVerticalDrift: 4,
+        baseScale: 1.04,
+        scaleAmplitude: 0.004,
+      ),
+    ),
+  );
+
+  static AppThemeEffects _standardEffects({
+    required AppVisualTokens tokens,
+    required double focusOpacity,
+    required double accentSurfaceOpacity,
+  }) {
+    return AppThemeEffects(
+      starfieldEnabled: false,
+      interactionGlowEnabled: false,
+      backdropPortraitAsset: null,
+      backdropLandscapeAsset: null,
+      backdropScrimOpacity: 0,
+      splashFactory: NoSplash.splashFactory,
+      splashColor: Colors.transparent,
+      highlightColor: Colors.transparent,
+      focusColor: tokens.focus.withValues(alpha: focusOpacity),
+      hoverColor: tokens.brand.withValues(alpha: 0.08),
+      focusOverlay: tokens.brand.withValues(alpha: 0.20),
+      pressedOverlay: tokens.brand.withValues(alpha: 0.14),
+      hoverOverlay: tokens.brand.withValues(alpha: 0.08),
+      surfacePressedOverlay: tokens.brand.withValues(alpha: 0.12),
+      quickActionPressedColor: Color.lerp(tokens.brand, Colors.black, 0.12)!,
+      interactionGlowColor: tokens.brand,
+      primaryControlIdleGlowColor: Colors.transparent,
+      controlPressedScale: 1,
+      interactiveSurfaceHoverLift: 0,
+      navigationSignalColor: Colors.transparent,
+      surfaceOutlineColor: Colors.transparent,
+      surfaceHoverOutlineColor: Colors.transparent,
+      raisedSurfaceGlowColor: Colors.transparent,
+      accentSurfaceOpacity: accentSurfaceOpacity,
+      starCyan: tokens.brand,
+      starViolet: tokens.dataViolet,
+      starNeutral: tokens.textPrimary,
+    );
   }
 }

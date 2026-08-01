@@ -46,7 +46,8 @@ way to explore the product today is the Flutter app in mock-data guest mode.
   recovery, and confirmed permanent account deletion. The deletion is one
   service-role-only database transaction and requires session-bound Supabase
   sign-in evidence no more than 15 minutes old; guest/mock exposes none of
-  these as synced operations. Theme choice is persisted on the current device.
+  these as synced operations. Dark, Light, or animated Space appearance is
+  persisted on the current device; Dark remains the fallback.
 - A global offline banner distinguishes local guest/demo persistence from
   unavailable synced writes. It reports network transport only; it is not a
   Supabase/FastAPI health check and the app does not claim an offline sync queue.
