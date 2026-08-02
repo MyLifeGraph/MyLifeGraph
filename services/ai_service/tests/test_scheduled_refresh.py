@@ -139,7 +139,7 @@ class FakeNotificationGenerationService:
             raise RuntimeError("notification generation failed")
         return NotificationGenerationResult(
             status="created",
-            category="focus_prompt",
+            category="recovery_prompt",
             delivery_date=kwargs["delivery_date"],
             created_count=1,
             duplicate_count=0,

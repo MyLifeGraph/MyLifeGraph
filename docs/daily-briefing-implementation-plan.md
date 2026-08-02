@@ -671,7 +671,7 @@ the separate local foreground boundary in
 
 - Existing reminder preferences do not grant delivery; dedicated consent
   defaults off and is explicitly confirmed in Flutter.
-- The local scheduler can create fixed, non-LLM focus, recovery, and exact-week
+- The local scheduler can create fixed, non-LLM recovery and exact-week
   items with timezone, quiet-hour, category, local-day cap, dedupe, provenance,
   and sensitive-copy guards revalidated in the database.
 - Missing/stale daily preparation stays independent of consent; only actively
@@ -683,8 +683,8 @@ Still future:
 
 - Start with explicit user-selected check-in and commitment reminders.
 - Add user-selected check-in/commitment reminder identities only under a new
-  directly verified source contract; the current slice uses briefing/recovery
-  and completed-week sources only.
+  directly verified source contract; the current slice uses recovery and
+  completed-week sources only. A current briefing alone creates no reminder.
 - Route each notification to the exact capture, task, habit, or briefing action;
   never to a generic dashboard with no obvious next step.
 - Snooze and every push/browser/Android/background delivery channel remain

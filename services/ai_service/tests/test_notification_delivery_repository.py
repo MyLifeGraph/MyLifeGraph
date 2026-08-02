@@ -76,8 +76,6 @@ class ContextClient:
                     "updated_at": UPDATED_AT.isoformat(),
                 },
             ]
-        if table == "daily_briefings":
-            return [{"id": "briefing-1"}]
         if table == "user_state_snapshots":
             return [{"id": "snapshot-1"}]
         raise AssertionError(table)
@@ -177,12 +175,10 @@ def test_generation_context_is_owner_scoped_and_keeps_consent_separate() -> None
     assert context.timezone == "Europe/Berlin"
     assert context.settings.in_app_delivery_enabled is False
     assert context.settings.categories.focus_prompt is True
-    assert context.briefing == {"id": "briefing-1"}
     assert context.daily_snapshot == {"id": "snapshot-1"}
     assert {table for table, _ in client.calls} == {
         "profiles",
         "notification_preferences",
-        "daily_briefings",
         "user_state_snapshots",
     }
     for table, params in client.calls:

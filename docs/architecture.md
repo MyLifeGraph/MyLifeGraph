@@ -1248,14 +1248,15 @@ accepted and historical rows even when the new set is empty.
   and supported `action_url` are shown; authenticated real accounts use the
   FastAPI `notification-lifecycle-v1` boundary to mark rows read/unread or keep
   a dismiss tombstone. Guest/mock stays local and zero-call. Explicit in-app
-  consent now permits only fixed deterministic current briefing/recovery and
-  exact completed-week items. The local runner creates bounded stored rows and
+  consent now permits only fixed deterministic recovery and exact completed-week
+  items. The local runner creates bounded stored rows and
   an open authenticated Flutter app may acknowledge/show one at-most-once
-  foreground banner. Recovery mode suppresses focus even when the recovery
-  category is off, and weekly copy reuses the full Phase 8 source-fingerprint
-  freshness check. Pending polling filters currently disabled categories before
-  its bounded query. Existing reminder preferences alone grant no delivery;
-  push/system delivery and deployed scheduling remain absent.
+  foreground banner. A current briefing alone creates no reminder; the legacy
+  focus setting/row shape remains readable for compatibility but is not eligible
+  for current foreground delivery. Weekly copy reuses the full Phase 8 source-
+  fingerprint freshness check. Pending polling filters ineligible categories
+  before its bounded query. Existing reminder preferences alone grant no
+  delivery; push/system delivery and deployed scheduling remain absent.
 - Phase 4 persists one deterministic daily briefing per user/local date and
   ranks only strict Phase 3 targets. `GET /v1/briefings/today` is read-only and
   reports missing/current/stale state; deliberate

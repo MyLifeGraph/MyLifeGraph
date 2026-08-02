@@ -328,10 +328,6 @@ def _generation_candidates(
         context.daily_snapshot,
         delivery_date=delivery_date,
     )
-    briefing = _valid_briefing(
-        context.briefing,
-        snapshot=context.daily_snapshot,
-    )
     date_key = delivery_date.isoformat()
 
     if daily_state is not None and daily_state.get("mode") == "recover":
@@ -359,24 +355,6 @@ def _generation_candidates(
                     source_generated_at=generated_at,
                 ),
             )
-    elif briefing is not None and context.settings.categories.focus_prompt:
-        source_id, generated_at = _source_identity(briefing)
-        candidates.append(
-            _NotificationCandidate(
-                category="focus_prompt",
-                generation_key=f"notification-generation-v1:focus_prompt:{date_key}",
-                title="Today's overview is ready",
-                message="Open Today to review your schedule and actions.",
-                notification_type="reminder",
-                priority="medium",
-                action_url="/dashboard",
-                reason_code="current_daily_briefing",
-                source_kind="daily_briefing",
-                source_id=source_id,
-                source_generated_at=generated_at,
-            ),
-        )
-
     if (
         delivery_date.isoweekday() == 1
         and context.settings.categories.weekly_summary
@@ -441,30 +419,6 @@ def _valid_daily_state(
     return daily_state
 
 
-def _valid_briefing(
-    briefing: dict[str, Any] | None,
-    *,
-    snapshot: dict[str, Any] | None,
-) -> dict[str, Any] | None:
-    if briefing is None or snapshot is None:
-        return None
-    provenance = briefing.get("provenance")
-    if not isinstance(provenance, dict):
-        return None
-    snapshot_id = snapshot.get("id")
-    snapshot_generated_at = snapshot.get("generated_at")
-    if (
-        not isinstance(snapshot_id, str)
-        or provenance.get("source_snapshot_id") != snapshot_id
-        or not _same_aware_datetime(
-            provenance.get("source_snapshot_generated_at"),
-            snapshot_generated_at,
-        )
-    ):
-        return None
-    return briefing
-
-
 def _source_identity(row: dict[str, Any]) -> tuple[str, datetime]:
     source_id = row.get("id")
     if not isinstance(source_id, str) or not source_id:
@@ -473,13 +427,6 @@ def _source_identity(row: dict[str, Any]) -> tuple[str, datetime]:
         )
     generated_at = _parse_aware_datetime(row.get("generated_at"))
     return source_id, generated_at
-
-
-def _same_aware_datetime(left: Any, right: Any) -> bool:
-    try:
-        return _parse_aware_datetime(left) == _parse_aware_datetime(right)
-    except NotificationServiceUnavailableError:
-        return False
 
 
 def _parse_aware_datetime(value: Any) -> datetime:

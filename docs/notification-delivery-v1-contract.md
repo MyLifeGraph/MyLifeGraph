@@ -33,6 +33,11 @@ and latest settings request identity. The follow-up guard stores a SHA-256 of
 the full request, including `expected_updated_at`; a matching UUID with a
 different base revision or payload is a conflict, not a replay.
 
+`focus_prompts_enabled` remains in the settings wire contract and database for
+stored-data and older-client compatibility. Current Flutter no longer exposes
+that switch, treats `focus_prompt` as ineligible for foreground delivery, and
+FastAPI no longer generates the redundant generic Today reminder.
+
 Flutter uses bearer-derived FastAPI routes:
 
 - `GET /v1/notifications/settings`
@@ -68,14 +73,14 @@ profiles cannot consume the bounded current-delivery slots.
 For each eligible onboarded non-guest profile, FastAPI loads owner-scoped
 settings and exact current sources, then proposes at most two candidates:
 
-1. `recovery_prompt` for a valid current `recover` Daily State. It suppresses
-   the generic focus candidate for that date.
-2. Otherwise `focus_prompt` for a briefing whose snapshot id and generation
-   time match the current daily snapshot.
-3. On Monday only, `weekly_summary` for the exact immediately completed ISO
+1. `recovery_prompt` for a valid current `recover` Daily State.
+2. On Monday only, `weekly_summary` for the exact immediately completed ISO
    week. Generation reuses the Phase 8 read service, including its current
    source-fingerprint and snapshot check; an older or stale same-period review
    is not presented as current.
+
+A current daily briefing alone creates no notification. On an ordinary steady
+day without a current Monday review, generation returns `no_candidate`.
 
 The database RPC revalidates the profile timezone, local date, active explicit
 consent, current category flag, quiet hours, daily limit, and owner-scoped
@@ -95,9 +100,10 @@ dismissal cannot create delivery churn.
 
 Flutter polls only for an authenticated real account. It first reads current
 delivery settings; consent-off performs no pending-row query or acknowledgement.
-The bounded pending query filters by the currently enabled category codes before
-ordering and limiting, so old rows from a disabled category cannot starve a
-later allowed banner. The controller validates the category again before ack.
+The bounded pending query filters by the currently deliverable recovery and
+weekly category codes before ordering and limiting. Legacy `focus_prompt` rows
+remain readable in Inbox/export history but cannot starve or become a current
+foreground banner. The controller validates the category again before ack.
 For a pending generated row Flutter calls:
 
 `POST /v1/notifications/{notification_id}/delivery`
@@ -111,7 +117,8 @@ first HTTP result is lost, the retry returns a replay and the client conserves
 at-most-once presentation rather than inventing delivery.
 
 The banner and Inbox expose deterministic/no-LLM truth. `action_url` still goes
-through the internal allowlist; generated rows use only Today or Weekly Review.
+through the internal allowlist; newly generated rows use Today for recovery or
+Weekly Review for the exact completed week.
 An actionable foreground banner uses a compact destination-specific label such
 as `Open Today`; both that action and the banner body open the same allowlisted
 route. The matching Inbox card uses the same destination label. Opening either
@@ -120,11 +127,9 @@ or delivery mutation.
 Those in-page internal actions push route history; the destination's shared
 Back action therefore returns to the originating banner or Inbox surface. Shell
 navigation still replaces history. This changes no lifecycle or delivery
-receipt.
-The fixed generic Today copy is `Today's overview is ready` / `Open Today to
-review your schedule and actions.` Recovery copy similarly describes a gentler
-overview and never exposes private capture details. It does not claim that the
-app created, optimized, or chose a plan.
+receipt. Recovery copy describes a gentler overview and never exposes private
+capture details. It does not claim that the app created, optimized, or chose a
+plan. The former `Today's overview is ready` generic copy is retired.
 
 ## Authority And Data Lifecycle
 

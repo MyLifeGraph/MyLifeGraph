@@ -23,7 +23,6 @@ DELIVERY_DATE = date(2026, 7, 13)
 RUN_AT = datetime(2026, 7, 13, 8, 0, tzinfo=UTC)
 GENERATED_AT = "2026-07-13T07:30:00+00:00"
 SNAPSHOT_ID = "22222222-2222-4222-8222-222222222222"
-BRIEFING_ID = "33333333-3333-4333-8333-333333333333"
 REVIEW_ID = "44444444-4444-4444-8444-444444444444"
 
 
@@ -80,14 +79,6 @@ def _context(
             weekly_summary=weekly_summary,
         ),
         daily_snapshot=snapshot,
-        briefing={
-            "id": BRIEFING_ID,
-            "generated_at": GENERATED_AT,
-            "provenance": {
-                "source_snapshot_id": SNAPSHOT_ID,
-                "source_snapshot_generated_at": GENERATED_AT,
-            },
-        },
     )
 
 
@@ -173,7 +164,7 @@ def test_generation_requires_explicit_in_app_consent_before_any_write() -> None:
     assert repository.write_calls == []
 
 
-def test_recovery_mode_suppresses_generic_focus_and_uses_safe_fixed_copy() -> None:
+def test_recovery_mode_uses_safe_fixed_copy() -> None:
     repository = Repository(_context(mode="recover"), ["created"])
 
     result = _generate(repository)
@@ -194,7 +185,7 @@ def test_recovery_mode_suppresses_generic_focus_and_uses_safe_fixed_copy() -> No
     assert "private check-in details" in write["message"]
 
 
-def test_recovery_mode_still_suppresses_focus_when_recovery_category_is_off() -> None:
+def test_recovery_mode_has_no_candidate_when_recovery_category_is_off() -> None:
     repository = Repository(
         _context(
             mode="recover",
@@ -210,7 +201,19 @@ def test_recovery_mode_still_suppresses_focus_when_recovery_category_is_off() ->
     assert repository.write_calls == []
 
 
-def test_current_monday_review_adds_one_exact_weekly_candidate() -> None:
+def test_current_briefing_does_not_create_a_generic_today_candidate() -> None:
+    repository = Repository(
+        _context(weekly_summary=False, focus_prompt=True),
+    )
+
+    result = _generate(repository)
+
+    assert result.status == "no_candidate"
+    assert result.created_count == 0
+    assert repository.write_calls == []
+
+
+def test_current_monday_review_creates_one_exact_weekly_candidate() -> None:
     repository = Repository(_context())
 
     result = _generate(
@@ -218,36 +221,33 @@ def test_current_monday_review_adds_one_exact_weekly_candidate() -> None:
         weekly_response=_weekly_response(freshness="current"),
     )
 
-    assert result.created_count == 2
+    assert result.created_count == 1
     assert [call["category"] for call in repository.write_calls] == [
-        "focus_prompt",
         "weekly_summary",
     ]
-    assert repository.write_calls[0]["title"] == "Today's overview is ready"
-    assert repository.write_calls[0]["message"] == (
-        "Open Today to review your schedule and actions."
-    )
-    assert repository.write_calls[1]["generation_key"] == (
+    assert repository.write_calls[0]["generation_key"] == (
         "notification-generation-v1:weekly_summary:2026-W28"
     )
 
 
 def test_stale_weekly_review_is_not_presented_as_current() -> None:
-    repository = Repository(_context(), ["created"])
+    repository = Repository(_context())
 
     result = _generate(
         repository,
         weekly_response=_weekly_response(freshness="stale"),
     )
 
-    assert result.created_count == 1
-    assert [call["category"] for call in repository.write_calls] == [
-        "focus_prompt",
-    ]
+    assert result.status == "no_candidate"
+    assert result.created_count == 0
+    assert repository.write_calls == []
 
 
 def test_generation_keeps_successful_category_when_later_candidate_hits_cap() -> None:
-    repository = Repository(_context(), ["created", "daily_limit"])
+    repository = Repository(
+        _context(mode="recover"),
+        ["created", "daily_limit"],
+    )
 
     result = _generate(
         repository,
@@ -255,7 +255,7 @@ def test_generation_keeps_successful_category_when_later_candidate_hits_cap() ->
     )
 
     assert result.status == "created"
-    assert result.category == "focus_prompt"
+    assert result.category == "recovery_prompt"
     assert result.created_count == 1
 
 

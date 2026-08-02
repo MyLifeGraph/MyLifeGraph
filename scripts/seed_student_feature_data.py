@@ -884,7 +884,7 @@ async def _verify(
         "decision_feedback": 5,
         "weekly_reviews": 1,
         "calendar_events": 5,
-        "notifications": 4,
+        "notifications": 3,
         "coach_requests": 2,
         "coach_messages": 6,
         "deadline_plans": 3,
@@ -924,18 +924,6 @@ async def _verify(
         raise RuntimeError(
             "Student demo must have exactly one resumable Focus session."
         )
-    generated = await client.select(
-        "notifications",
-        params={
-            "select": "id",
-            "user_id": f"eq.{user_id}",
-            "generation_key": "not.is.null",
-            "delivery_date": f"eq.{today.isoformat()}",
-            "limit": "3",
-        },
-    )
-    if not generated:
-        raise RuntimeError("Student demo has no pending generated notification.")
     print(
         "Personal Learning: "
         f"{patterns.sample.rated_sessions} rated sessions over "
@@ -1060,15 +1048,13 @@ async def main() -> None:
         briefing_service=briefing_service,
         weekly_service=weekly_service,
     )
-    notification_service, generation = await _seed_notifications(
+    notification_service, _ = await _seed_notifications(
         client=client,
         user_id=user_id,
         today=today,
         now=now,
         weekly_service=weekly_service,
     )
-    if generation.created_count < 1:
-        raise RuntimeError("Student notification generation produced no demo row.")
 
     counts = await _verify(
         client=client,

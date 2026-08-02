@@ -95,9 +95,9 @@ the schedule is complete or that an override makes conflicting time safe.
 Do not title the overview `Today's decision`, label a recommendation `Primary
 action`, claim a fixed number of daily steps, or imply the app chose the user's
 day. A source failure says the affected section or `Progress unavailable` and
-must not replace persisted facts with examples. Notification fixed copy uses
-`Today's overview is ready` and invites the user to review their schedule and
-actions.
+must not replace persisted facts with examples. A current Today overview alone
+must not trigger a generic banner. Recovery and Weekly Review notifications use
+fixed, destination-specific copy without private capture details.
 
 ## Personal Learning Copy
 

@@ -1421,7 +1421,8 @@ policy rejection, foreground receipt, banner, Inbox refresh/provenance, dedupe,
 and replay boundaries. It exposed and fixed a stale Inbox provider after a
 foreground receipt before the recorded passing rerun.
 Focused source tests also cover recovery opt-out suppression, Phase 8
-fingerprint freshness,
+fingerprint freshness, retirement of the generic Today candidate and legacy
+focus banner delivery,
 request-exact Settings replay, monotone cross-writer revisions, category
 starvation, and the reload-required Flutter state.
 

@@ -44,14 +44,15 @@ class NotificationCategories {
   final bool recoveryPrompt;
   final bool weeklySummary;
 
+  // `focus_prompt` stays on the wire for stored-data and older-client
+  // compatibility, but the redundant generic Today banner is retired.
   List<String> get enabledCategoryCodes => List.unmodifiable([
-        if (focusPrompt) 'focus_prompt',
         if (recoveryPrompt) 'recovery_prompt',
         if (weeklySummary) 'weekly_summary',
       ]);
 
   bool allows(String? category) => switch (category) {
-        'focus_prompt' => focusPrompt,
+        'focus_prompt' => false,
         'recovery_prompt' => recoveryPrompt,
         'weekly_summary' => weeklySummary,
         _ => false,

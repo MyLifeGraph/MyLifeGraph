@@ -108,19 +108,9 @@ class _NotificationSettingsPageState
               ),
               const SizedBox(height: AppSpacing.sm),
               _categorySwitch(
-                key: 'notification-category-focus',
-                title: 'Today focus prompt',
-                subtitle: 'Available only when today\'s plan is up to date.',
-                value: _focusPrompt,
-                enabled: controlsEnabled,
-                onChanged: (value) => _setDraft(
-                  () => _focusPrompt = value,
-                ),
-              ),
-              _categorySwitch(
                 key: 'notification-category-recovery',
                 title: 'Recovery prompt',
-                subtitle: 'Replaces the generic focus prompt on recovery days.',
+                subtitle: 'Only when Today is in recovery mode.',
                 value: _recoveryPrompt,
                 enabled: controlsEnabled,
                 onChanged: (value) => _setDraft(

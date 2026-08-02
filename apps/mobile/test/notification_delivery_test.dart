@@ -75,9 +75,9 @@ void main() {
       });
     });
 
-    test('exposes only enabled deterministic category wire values', () {
+    test('retires focus prompts from foreground delivery', () {
       const categories = NotificationCategories(
-        focusPrompt: false,
+        focusPrompt: true,
         recoveryPrompt: true,
         weeklySummary: true,
       );
@@ -91,8 +91,7 @@ void main() {
       expect(categories.allows('unknown'), isFalse);
     });
 
-    test('strictly maps deterministic provenance and pending delivery state',
-        () {
+    test('strictly maps legacy deterministic provenance and pending state', () {
       const mapper = NotificationsSupabaseRowMapper();
       final notification = mapper.fromRow(_generatedRow());
 
@@ -170,18 +169,18 @@ void main() {
       expect(controller.state.sequence, 1);
     });
 
-    test('disabled older categories cannot starve an allowed banner', () async {
+    test('retired focus rows cannot starve an allowed banner', () async {
       const weeklyId = '22222222-2222-4222-8222-222222222222';
       final repository = _DeliveryRepository(
         settings: NotificationSettings.fromJson(
           _settingsJson(
             enabled: true,
-            focusPrompt: false,
+            focusPrompt: true,
             recoveryPrompt: false,
           ),
         ),
         pending: [
-          _notification(),
+          _notification(category: 'focus_prompt'),
           _notification(id: weeklyId, category: 'weekly_summary'),
         ],
       );
@@ -340,6 +339,15 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    expect(
+      find.byKey(const ValueKey('notification-category-focus')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('notification-category-recovery')),
+      findsOneWidget,
+    );
+
     await tester.tap(
       find.byKey(const ValueKey('notification-delivery-consent')),
     );
@@ -425,7 +433,7 @@ void main() {
       ),
       findsOneWidget,
     );
-    expect(find.text("Today's overview is ready"), findsWidgets);
+    expect(find.text('A gentler overview is ready'), findsWidgets);
     expect(find.text('Your inbox is empty.'), findsNothing);
     expect(inboxRepository.calls, greaterThanOrEqualTo(2));
     expect(
@@ -440,7 +448,7 @@ void main() {
     );
     expect(
       find.text(
-        'Based on today\'s current plan for 2026-07-14 in Europe/Berlin.',
+        'Based on your current check-in state for 2026-07-14 in Europe/Berlin.',
       ),
       findsOneWidget,
     );
@@ -572,14 +580,18 @@ Map<String, dynamic> _generatedRow() => {
 
 AppNotification _notification({
   String id = _notificationId,
-  String category = 'focus_prompt',
+  String category = 'recovery_prompt',
 }) =>
     AppNotification(
       id: id,
       title: category == 'weekly_summary'
           ? 'Your weekly review is ready'
-          : "Today's overview is ready",
-      body: 'Open Today to review your schedule and actions.',
+          : category == 'focus_prompt'
+              ? "Today's overview is ready"
+              : 'A gentler overview is ready',
+      body: category == 'recovery_prompt'
+          ? 'Open Today to review a manageable schedule and actions.'
+          : 'Open Today to review your schedule and actions.',
       type: 'reminder',
       priority: 'medium',
       actionUrl: '/dashboard',
@@ -593,10 +605,13 @@ AppNotification _notification({
       generationCategory: category,
       deliveryDate: '2026-07-14',
       generationProvenance: NotificationGenerationProvenance(
-        reasonCode: 'current_daily_briefing',
+        reasonCode: category == 'recovery_prompt'
+            ? 'current_recovery_mode'
+            : 'current_daily_briefing',
         timezone: 'Europe/Berlin',
-        sourceKind: 'daily_briefing',
-        sourceId: 'briefing-1',
+        sourceKind:
+            category == 'recovery_prompt' ? 'daily_state' : 'daily_briefing',
+        sourceId: category == 'recovery_prompt' ? 'snapshot-1' : 'briefing-1',
         sourceGeneratedAt: DateTime.parse('2026-07-14T08:20:00Z'),
       ),
     );

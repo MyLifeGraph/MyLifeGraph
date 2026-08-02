@@ -41,7 +41,6 @@ class NotificationPersistenceOutcomeUnknown(NotificationPersistenceError):
 class NotificationGenerationContext:
     timezone: str
     settings: NotificationSettingsResponse
-    briefing: dict[str, Any] | None
     daily_snapshot: dict[str, Any] | None
 
 
@@ -260,7 +259,7 @@ class SupabaseNotificationRepository:
         user_id: str,
         delivery_date: date,
     ) -> NotificationGenerationContext:
-        profile_rows, settings, briefing_rows, snapshot_rows = (
+        profile_rows, settings, snapshot_rows = (
             await asyncio.gather(
                 self._client.select(
                     "profiles",
@@ -273,15 +272,6 @@ class SupabaseNotificationRepository:
                     },
                 ),
                 self.get_settings(user_id=user_id),
-                self._client.select(
-                    "daily_briefings",
-                    params={
-                        "select": "id,generated_at,mode,data_quality,provenance",
-                        "user_id": f"eq.{user_id}",
-                        "briefing_date": f"eq.{delivery_date.isoformat()}",
-                        "limit": "1",
-                    },
-                ),
                 self._client.select(
                     "user_state_snapshots",
                     params={
@@ -306,7 +296,6 @@ class SupabaseNotificationRepository:
         return NotificationGenerationContext(
             timezone=timezone,
             settings=settings,
-            briefing=_optional_single_row(briefing_rows),
             daily_snapshot=_optional_single_row(snapshot_rows),
         )
 

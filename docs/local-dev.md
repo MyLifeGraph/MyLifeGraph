@@ -655,9 +655,11 @@ Recommendation refresh is off by default. Explicit
 `include_recommendations=true` runs only the deterministic recommendation path
 and keeps LLM wording disabled. The supported local stack runner sends
 `include_notifications=true` every 15 minutes. Only separately consented real
-accounts can receive fixed current-day deterministic rows; the database
+accounts can receive fixed deterministic recovery or exact completed-week rows;
+a current briefing alone creates no generic Today reminder. The database
 revalidates timezone, quiet hours, category flags, daily cap, and dedupe. An
-open Flutter app acknowledges a row before showing a foreground banner.
+open Flutter app acknowledges an eligible row before showing a foreground
+banner.
 Missing/stale Phase 7 preparation remains independent of consent, while a fully
 current profile is selected for a notification-only runner pass only with active
 in-app consent so consent-off current rows do not exhaust the bounded batch.
@@ -1196,8 +1198,8 @@ The script:
 - replaces their base demo app rows, then enriches `student@example.test`
   through the real FastAPI service classes with current snapshots/briefings,
   feedback, Weekly Review, Personal Learning, Calendar Import, Preparation
-  Plans, foreground notification consent/generation, and fake-provider Coach
-  persistence;
+  Plans, foreground notification consent, conditional recovery/weekly
+  generation, and fake-provider Coach persistence;
 - verifies the student coverage and realistic Capture bounds before reporting
   success: 43 profile-local V4 days, estimated sleep between 7 hours 15 minutes
   and 8 hours 30 minutes, sleep quality `6..9`, energy `5..8`, stress `3..8`,

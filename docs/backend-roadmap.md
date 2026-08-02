@@ -898,9 +898,10 @@ production provider or autonomous agent platform by default.
   strict allowlist of implemented internal `action_url` targets. Notification
   Lifecycle V1 adds owner-scoped, retry-safe read/unread/dismiss tombstones
   independently of delivery. Notification Delivery V1 later adds separate
-  fail-closed foreground consent, deterministic current briefing/recovery and
-  exact-week generation, a local runner, and acknowledged in-app banners; it
-  adds no push/system or deployed delivery channel.
+  fail-closed foreground consent, deterministic recovery and exact-week
+  generation, a local runner, and acknowledged in-app banners. The redundant
+  generic current-briefing banner is retired; there is still no push/system or
+  deployed delivery channel.
 - Verified with mapper, repository, provider, widget, route-capability,
   notification-target, and browser smoke coverage.
 
