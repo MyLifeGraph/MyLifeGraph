@@ -60,6 +60,64 @@ void main() {
       reason: 'Boundary exceptions require a useful rationale.',
     );
   });
+
+  test('extracted page widgets stay presentation-only and feature-private', () {
+    const parts = <String, String>{
+      'lib/features/insights/presentation/widgets/'
+              'insights_summary_widgets.dart':
+          "part of '../pages/insights_page.dart';",
+      'lib/features/insights/presentation/widgets/'
+              'insights_exploration_widgets.dart':
+          "part of '../pages/insights_page.dart';",
+      'lib/features/deadline_plans/presentation/widgets/'
+              'deadline_plan_card.dart':
+          "part of '../pages/deadline_plans_page.dart';",
+      'lib/features/deadline_plans/presentation/widgets/'
+              'deadline_plan_editor_sheet.dart':
+          "part of '../pages/deadline_plans_page.dart';",
+      'lib/features/deadline_plans/presentation/widgets/'
+              'deadline_plan_support_widgets.dart':
+          "part of '../pages/deadline_plans_page.dart';",
+    };
+    final forbidden = <String, RegExp>{
+      'Riverpod access': RegExp(
+        r'\b(?:WidgetRef|ConsumerWidget|ConsumerState|ProviderRef)\b|\bref\.',
+      ),
+      'repository or controller access': RegExp(
+        r'\b(?:Repository|Controller)\b|\b(?:insights|deadlinePlan)Provider\b',
+      ),
+      'route ownership': RegExp(r'\bGoRouter\b|\bAppRoutes\.|\bcontext\.go\('),
+      'direct persistence': RegExp(
+        r'\.(?:insert|upsert|update|delete|propose|confirm|complete|cancel)\(',
+      ),
+    };
+
+    for (final entry in parts.entries) {
+      final file = File(entry.key);
+      expect(file.existsSync(), isTrue, reason: '${entry.key} must exist.');
+      final source = file.readAsStringSync();
+      expect(source, startsWith(entry.value));
+      for (final rule in forbidden.entries) {
+        expect(
+          rule.value.hasMatch(source),
+          isFalse,
+          reason: '${entry.key} must not take on ${rule.key}.',
+        );
+      }
+    }
+
+    final insightsPage = File(
+      'lib/features/insights/presentation/pages/insights_page.dart',
+    ).readAsStringSync();
+    final deadlinePage = File(
+      'lib/features/deadline_plans/presentation/pages/deadline_plans_page.dart',
+    ).readAsStringSync();
+    expect(insightsPage, contains('ref.watch(insightsProvider)'));
+    expect(deadlinePage, contains('ref.watch(deadlinePlanControllerProvider)'));
+    expect(deadlinePage, contains('context.go(AppRoutes.planner)'));
+    expect(insightsPage, isNot(contains('class _ControlsPanel')));
+    expect(deadlinePage, isNot(contains('class _DeadlinePlanCard')));
+  });
 }
 
 final _importPattern = RegExp(

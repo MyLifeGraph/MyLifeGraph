@@ -245,6 +245,12 @@ explicitly chooses to create a preview, and the preview still requires explicit
 confirmation. Confirmation returns to Planner and reloads the outlook; leaving
 an unconfirmed preview preserves it as staged.
 
+The destination route continues to own that navigation and every provider or
+mutation call after its internal presentation widgets are split into
+feature-private parts. The split does not move the Outlook card out of Planner
+or change its read-only behavior, order, focus handling, copy, semantics, or
+responsive layout.
+
 The card labels assignments as capacity consumers and states that it is
 read-only. It is absent from Today, Inbox, notification generation, and guest/
 demo surfaces. Guest/demo does not call the endpoint and does not fabricate an

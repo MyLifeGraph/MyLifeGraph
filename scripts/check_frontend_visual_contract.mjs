@@ -19,14 +19,14 @@ const colorAllowlist = new Map([
     'Google sign-in logo brand colors',
   ],
   [
-    'apps/mobile/lib/features/insights/presentation/pages/insights_page.dart',
+    'apps/mobile/lib/features/insights/presentation/widgets/insights_exploration_widgets.dart',
     'bounded data-visualization series palette',
   ],
 ]);
 
 const textStyleAllowlist = new Map([
   [
-    'apps/mobile/lib/features/insights/presentation/pages/insights_page.dart',
+    'apps/mobile/lib/features/insights/presentation/widgets/insights_exploration_widgets.dart',
     'canvas chart labels, derived from themed colors and font sizes',
   ],
 ]);

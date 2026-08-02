@@ -478,6 +478,13 @@ and actions are visible only after expansion. A lifecycle failure stays inline
 with the affected expanded plan. Successful completion collapses that same plan
 as a visible Completed history row instead of replacing the scroll viewport.
 
+The route library retains Riverpod reads, controller calls, mutation ownership,
+and route navigation. Its feature-private plan-card, editor-sheet, and support
+widget parts receive domain values and callbacks only; they do not access a
+provider, repository, or persistence API. This source split changes no widget
+order, focus behavior, retained editor/accordion state, copy, semantics, or
+responsive layout.
+
 `Review plan` opens the owner-scoped plan surface. `Replan remaining time` uses
 `/planner/replan?plan_id=<uuid>` and renders only the selected plan. For an
 active plan without a pending revision, it first opens a compact review of the

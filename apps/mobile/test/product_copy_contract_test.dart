@@ -56,9 +56,12 @@ void main() {
     expect(coach, contains('Local development-only agent'));
     expect(coach, contains('This is not a production service'));
 
-    final insights = File(
-      'lib/features/insights/presentation/pages/insights_page.dart',
-    ).readAsStringSync();
+    final insights = Directory('lib/features/insights/presentation')
+        .listSync(recursive: true)
+        .whereType<File>()
+        .where((file) => file.path.endsWith('.dart'))
+        .map((file) => file.readAsStringSync())
+        .join();
     expect(insights, contains('EXAMPLE SKILL PROFILE'));
     expect(insights, contains('example data only'));
   });

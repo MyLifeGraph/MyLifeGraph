@@ -339,7 +339,7 @@ chat must run this exact closeout sequence:
 
 ## Tranche 9: Split Large Flutter Presentation Components
 
-- State: `pending`
+- State: `completed`
 - Depends on: Tranche 8 completed.
 - Goal: Move already independent Insights and Deadline Planner presentation
   components into feature-private widget files; touch Onboarding only if a real
@@ -359,7 +359,15 @@ chat must run this exact closeout sequence:
   tests, optional Setup widget tests only if touched, visual/feature-boundary
   source tests, and `flutter analyze`.
 - Commit subject: `refactor: split large Flutter presentation components`
-- Result: _Not started._
+- Result: _Completed. Split Insights summary/correlation presentation and
+  Deadline plan-card/editor/support presentation into feature-private widget
+  parts while their pages retain provider, mutation, and route ownership.
+  Onboarding remained unchanged. Added presentation-only boundary coverage and
+  taught the existing copy guard to scan the complete Insights presentation
+  library. Final: 56 focused Insights, Deadline Planner, copy, and boundary
+  tests, `npm run verify:visual`, `npm run verify:docs`, Flutter analysis,
+  `git diff --check`, and `npm run verify:fast` with the complete Flutter and
+  backend suites and 2 expected backend skips passed._
 
 ## Tranche 10: Centralize Current-State Metadata
 
