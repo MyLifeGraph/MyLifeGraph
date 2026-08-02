@@ -144,6 +144,12 @@ plan. The former `Today's overview is ready` generic copy is retired.
 - Account deletion continues to cascade these rows with the existing owner
   data.
 
+Notification settings, lifecycle, and foreground-delivery routes now delegate
+their operation-specific service failures to typed feature-owned HTTP problem
+translators. Existing not-found, conflict, outcome-unknown, unavailable status/
+detail pairs and all consent, owner-lock, and acknowledgement authority remain
+unchanged.
+
 ## Explicit Non-Claims
 
 This contract does not claim remote Supabase verification, deployed scheduling,

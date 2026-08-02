@@ -279,7 +279,7 @@ chat must run this exact closeout sequence:
 
 ## Tranche 7: Centralize API Problem Translation
 
-- State: `pending`
+- State: `completed`
 - Depends on: Tranche 6 completed.
 - Goal: Introduce typed, feature-near HTTP problem translators and remove
   repeated FastAPI route exception boilerplate.
@@ -297,7 +297,14 @@ chat must run this exact closeout sequence:
 - Focused tests: all migrated `test_*_api.py` modules, auth/dependency tests,
   route source-boundary tests, and the complete FastAPI suite.
 - Commit subject: `refactor: centralize API problem translation`
-- Result: _Not started._
+- Result: _Completed. Added typed feature-owned problem translators with exact
+  operation catch sets, moved repeated route mappings behind that boundary,
+  retained route-local request/security checks and Coach sanitization, and
+  added the complete public problem matrix plus a repository-import source
+  guard. Baseline: 117 focused tests. Final: 185 focused API/auth/boundary tests,
+  1,287 FastAPI tests with 2 expected skips, `npm run verify:docs`,
+  `npm run verify:fast` (Flutter analysis/tests and 1,287 backend tests with 2
+  expected skips), Ruff, and `git diff --check` passed._
 
 ## Tranche 8: Layer Migration Verification
 

@@ -130,6 +130,11 @@ retaining offset pagination, every owner/filter parameter, stable ordering,
 1,000-row pages, per-source sentinel maximums, and the existing Planner-specific
 overfull-response error. No cursor is added to an HTTP contract.
 
+All Planner routes now share one exhaustive typed service-error-to-HTTP
+translator. The operation catch boundary and existing not-found, conflict, and
+validation statuses/details remain unchanged; repository exceptions still stop
+below `app/api`.
+
 ## Deterministic Availability
 
 One shared availability component is used by Planner Task/Habit proposals and

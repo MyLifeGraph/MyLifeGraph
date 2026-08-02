@@ -598,6 +598,11 @@ application-lifespan-owned Supabase HTTP pool. This is transport reuse only:
 provider selection, owner locks, snapshots, evidence limits, budgets, retry
 identity, cancellation, deletion, and read-only tool authority are unchanged.
 
+The Coach API's structured service, invalid-request, and sanitized unavailable
+problems now live in its feature-owned HTTP translator. The existing JSON/SSE
+detail objects, status codes, deliberate unexpected-error sanitization, and
+stream failure behavior are unchanged; no global exception handler is added.
+
 ## Explicitly Later
 
 - a production Responses API provider and deployable credential strategy;

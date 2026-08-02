@@ -1,9 +1,10 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends
 
 from app.api.deps.auth import Principal, get_current_principal
 from app.api.deps.services import get_planner_service
+from app.api.problems.planner import PLANNER_ERRORS, planner_problem
 from app.models.planner import (
     PlannerActionMutationRequest,
     PlannerActionPlanResponse,
@@ -16,12 +17,7 @@ from app.models.planner import (
     PlannerPreferencesResponse,
     PlannerPreferencesUpdateRequest,
 )
-from app.services.planner_service import (
-    PlannerConflictError,
-    PlannerNotFoundError,
-    PlannerService,
-    PlannerValidationError,
-)
+from app.services.planner_service import PlannerService
 
 
 router = APIRouter(prefix="/planner", tags=["planner"])
@@ -38,8 +34,8 @@ async def get_planner_overview(
 ) -> PlannerOverviewResponse:
     try:
         return await service.get_overview(user_id=principal.user_id)
-    except (PlannerNotFoundError, PlannerConflictError, PlannerValidationError) as exc:
-        _raise_http(exc)
+    except PLANNER_ERRORS as exc:
+        raise planner_problem(exc) from exc
 
 
 @router.get(
@@ -53,8 +49,8 @@ async def get_planner_preferences(
 ) -> PlannerPreferencesResponse:
     try:
         return await service.get_preferences(user_id=principal.user_id)
-    except (PlannerNotFoundError, PlannerConflictError, PlannerValidationError) as exc:
-        _raise_http(exc)
+    except PLANNER_ERRORS as exc:
+        raise planner_problem(exc) from exc
 
 
 @router.patch(
@@ -72,8 +68,8 @@ async def update_planner_preferences(
             user_id=principal.user_id,
             request=body,
         )
-    except (PlannerNotFoundError, PlannerConflictError, PlannerValidationError) as exc:
-        _raise_http(exc)
+    except PLANNER_ERRORS as exc:
+        raise planner_problem(exc) from exc
 
 
 @router.get(
@@ -91,8 +87,8 @@ async def get_planner_action_plan(
             user_id=principal.user_id,
             plan_id=plan_id,
         )
-    except (PlannerNotFoundError, PlannerConflictError, PlannerValidationError) as exc:
-        _raise_http(exc)
+    except PLANNER_ERRORS as exc:
+        raise planner_problem(exc) from exc
 
 
 @router.post(
@@ -107,8 +103,8 @@ async def propose_planner_action_plan(
 ) -> PlannerActionPlanResponse:
     try:
         return await service.propose(user_id=principal.user_id, request=body)
-    except (PlannerNotFoundError, PlannerConflictError, PlannerValidationError) as exc:
-        _raise_http(exc)
+    except PLANNER_ERRORS as exc:
+        raise planner_problem(exc) from exc
 
 
 @router.post(
@@ -128,8 +124,8 @@ async def confirm_planner_action_plan(
             plan_id=plan_id,
             request=body,
         )
-    except (PlannerNotFoundError, PlannerConflictError, PlannerValidationError) as exc:
-        _raise_http(exc)
+    except PLANNER_ERRORS as exc:
+        raise planner_problem(exc) from exc
 
 
 @router.post(
@@ -149,8 +145,8 @@ async def cancel_planner_action_plan(
             plan_id=plan_id,
             request=body,
         )
-    except (PlannerNotFoundError, PlannerConflictError, PlannerValidationError) as exc:
-        _raise_http(exc)
+    except PLANNER_ERRORS as exc:
+        raise planner_problem(exc) from exc
 
 
 @router.post(
@@ -168,8 +164,8 @@ async def create_planner_commitment(
             user_id=principal.user_id,
             request=body,
         )
-    except (PlannerNotFoundError, PlannerConflictError, PlannerValidationError) as exc:
-        _raise_http(exc)
+    except PLANNER_ERRORS as exc:
+        raise planner_problem(exc) from exc
 
 
 @router.patch(
@@ -189,8 +185,8 @@ async def update_planner_commitment(
             commitment_id=commitment_id,
             request=body,
         )
-    except (PlannerNotFoundError, PlannerConflictError, PlannerValidationError) as exc:
-        _raise_http(exc)
+    except PLANNER_ERRORS as exc:
+        raise planner_problem(exc) from exc
 
 
 @router.post(
@@ -210,16 +206,5 @@ async def archive_planner_commitment(
             commitment_id=commitment_id,
             request=body,
         )
-    except (PlannerNotFoundError, PlannerConflictError, PlannerValidationError) as exc:
-        _raise_http(exc)
-
-
-def _raise_http(exc: Exception) -> None:
-    if isinstance(exc, PlannerNotFoundError):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
-    if isinstance(exc, PlannerValidationError):
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail=str(exc),
-        )
-    raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
+    except PLANNER_ERRORS as exc:
+        raise planner_problem(exc) from exc

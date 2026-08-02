@@ -360,7 +360,13 @@ development-only `local_codex_oauth` adapter is covered with fake process
 runners. See `docs/phase-10-controlled-coach-plan.md`.
 
 FastAPI tests cover authenticated Setup/Intake, deterministic recommendations,
-and the snapshot aggregator endpoint. Setup coverage includes principal-derived
+and the snapshot aggregator endpoint. The feature-owned API problem-translation
+suite enumerates the exact public status/detail/header matrix, including the
+structured Intake and Coach details. Source-boundary coverage additionally
+rejects repository imports anywhere under `app/api`, while route tests continue
+to exercise authentication, request validation, operation-specific catches,
+and the Coach's established sanitized unexpected-error behavior. Setup coverage
+includes principal-derived
 identity for both `GET /v1/intake/setup` and `POST /v1/intake/complete`, strict
 structured item/cadence validation, zero materialized optional rows for blank
 answers, idempotent request replay, stale base-revision conflicts, recovery from

@@ -1,21 +1,18 @@
 from typing import Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends
 
 from app.api.deps.auth import Principal, get_current_principal
 from app.api.deps.services import get_focus_service
+from app.api.problems.focus import FOCUS_ERRORS, focus_problem
 from app.models.focus import (
     FocusCapabilitiesResponse,
     FocusSessionResponse,
     FocusStartContextResponse,
     FocusStartRequest,
 )
-from app.services.focus_service import (
-    FocusConflictError,
-    FocusNotFoundError,
-    FocusService,
-)
+from app.services.focus_service import FocusService
 
 
 router = APIRouter(prefix="/focus", tags=["focus"])
@@ -48,14 +45,8 @@ async def get_focus_start_context(
             source_kind=source_kind,
             block_id=block_id,
         )
-    except FocusNotFoundError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)
-        ) from exc
-    except FocusConflictError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT, detail=str(exc)
-        ) from exc
+    except FOCUS_ERRORS as exc:
+        raise focus_problem(exc) from exc
 
 
 @router.post(
@@ -115,14 +106,8 @@ async def _start(
 ) -> FocusSessionResponse:
     try:
         return await service.start(user_id=user_id, request=request)
-    except FocusNotFoundError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)
-        ) from exc
-    except FocusConflictError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT, detail=str(exc)
-        ) from exc
+    except FOCUS_ERRORS as exc:
+        raise focus_problem(exc) from exc
 
 
 async def _finish(
@@ -138,11 +123,5 @@ async def _finish(
             session_id=session_id,
             terminal_status=terminal_status,
         )
-    except FocusNotFoundError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)
-        ) from exc
-    except FocusConflictError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT, detail=str(exc)
-        ) from exc
+    except FOCUS_ERRORS as exc:
+        raise focus_problem(exc) from exc

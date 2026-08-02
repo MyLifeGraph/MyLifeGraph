@@ -1,16 +1,17 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends
 
 from app.api.deps.auth import Principal, get_current_principal
 from app.api.deps.services import get_weekly_review_service
+from app.api.problems.weekly_reviews import (
+    WEEKLY_REVIEW_PERIOD_ERRORS,
+    weekly_review_problem,
+)
 from app.models.weekly_reviews import (
     WeeklyReviewGenerateRequest,
     WeeklyReviewGenerateResponse,
     WeeklyReviewReadResponse,
 )
-from app.services.weekly_review_service import (
-    WeeklyReviewPeriodError,
-    WeeklyReviewService,
-)
+from app.services.weekly_review_service import WeeklyReviewService
 
 router = APIRouter(prefix="/weekly-reviews", tags=["weekly-reviews"])
 
@@ -34,11 +35,8 @@ async def get_weekly_review(
             user_id=principal.user_id,
             period_key=period_key,
         )
-    except WeeklyReviewPeriodError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail=str(exc),
-        ) from exc
+    except WEEKLY_REVIEW_PERIOD_ERRORS as exc:
+        raise weekly_review_problem(exc) from exc
 
 
 @router.post("/generate", response_model=WeeklyReviewGenerateResponse)
@@ -49,8 +47,5 @@ async def generate_weekly_review(
 ) -> WeeklyReviewGenerateResponse:
     try:
         return await service.generate(user_id=principal.user_id, request=request)
-    except WeeklyReviewPeriodError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail=str(exc),
-        ) from exc
+    except WEEKLY_REVIEW_PERIOD_ERRORS as exc:
+        raise weekly_review_problem(exc) from exc

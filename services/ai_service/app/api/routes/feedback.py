@@ -1,9 +1,14 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends
 
 from app.api.deps.auth import Principal, get_current_principal
 from app.api.deps.services import get_feedback_service
+from app.api.problems.feedback import (
+    FEEDBACK_CREATE_ERRORS,
+    FEEDBACK_DELETE_ERRORS,
+    feedback_problem,
+)
 from app.models.feedback import (
     DecisionFeedbackCreateRequest,
     DecisionFeedbackDeleteResponse,
@@ -11,8 +16,6 @@ from app.models.feedback import (
     DecisionFeedbackResponse,
 )
 from app.services.feedback_service import (
-    FeedbackConflictError,
-    FeedbackNotFoundError,
     FeedbackService,
 )
 
@@ -35,14 +38,8 @@ async def create_feedback(
 ) -> DecisionFeedbackResponse:
     try:
         return await service.create(user_id=principal.user_id, request=request)
-    except FeedbackConflictError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT, detail=str(exc)
-        ) from exc
-    except FeedbackNotFoundError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)
-        ) from exc
+    except FEEDBACK_CREATE_ERRORS as exc:
+        raise feedback_problem(exc) from exc
 
 
 @router.delete("/{feedback_id}", response_model=DecisionFeedbackDeleteResponse)
@@ -53,7 +50,5 @@ async def delete_feedback(
 ) -> DecisionFeedbackDeleteResponse:
     try:
         return await service.delete(user_id=principal.user_id, feedback_id=feedback_id)
-    except FeedbackNotFoundError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)
-        ) from exc
+    except FEEDBACK_DELETE_ERRORS as exc:
+        raise feedback_problem(exc) from exc

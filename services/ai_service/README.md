@@ -80,11 +80,15 @@ FastAPI service boundary for recommendation and future ML workflows.
   `recommendations`. Snapshot generation reuses `user_state_snapshots`, keeps
   recommendation rules unchanged, excludes capture free text from Daily State,
   and does not require an LLM provider.
-- API routes translate only service-level failures to HTTP responses; concrete
-  repository errors terminate at their owning service. Pure Daily Capture V4
-  parsing/new-write validation lives in `app/contracts/daily_capture_v4.py`,
-  avoiding repository-to-service dependencies and keeping saved V4 branches
-  readable by the same strict contract.
+- API routes catch only their operation-specific service failures and delegate
+  HTTP translation to typed, feature-owned modules under `app/api/problems`.
+  Those mappings preserve the existing status, detail, header, and unexpected-
+  error behavior; request-shape and security failures remain at their owning
+  route or dependency. Concrete repository errors terminate at their owning
+  service. Pure Daily Capture V4 parsing/new-write validation lives in
+  `app/contracts/daily_capture_v4.py`, avoiding repository-to-service
+  dependencies and keeping saved V4 branches readable by the same strict
+  contract.
 - Planner and Deadline service modules own I/O orchestration; deterministic
   overview, projection, availability, block, and serialization helpers live in
   `planner_builder.py` and `deadline_plan_builder.py`. Local Codex command

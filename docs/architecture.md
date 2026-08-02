@@ -852,18 +852,23 @@ repository/service graph over that shared `SupabaseRestClient` and reuses the
 same Snapshot, Briefing, Weekly Review, Recommendation, Learning, learned-
 timing, Deadline, Planner, Today, Scheduled, Notification, Account, and Coach
 collaborators where their contracts overlap. Router modules retain explicit
-FastAPI endpoints and error mapping; asynchronous dependency functions only
-select a typed service from that graph and construct no repository or
-transport. Tests override those dependency function objects rather than named
-`app.state` service fields. Shutdown closes the pool exactly once. Missing
+FastAPI endpoints and delegate service-failure mapping to feature-owned,
+typed `app/api/problems` translators. Operation-specific catch sets preserve
+each route's existing public status, detail, headers, and unexpected-error
+behavior; request-shape and security checks remain at their owning route or
+dependency. Asynchronous dependency functions only select a typed service from
+that graph and construct no repository or transport. Tests override those
+dependency function objects rather than named `app.state` service fields.
+Shutdown closes the pool exactly once. Missing
 backend Supabase configuration creates neither a pool nor a graph and retains
 the existing fail-closed unauthorized/service-unavailable behavior. Repository
 protocols and direct unit-level service/repository injection remain unchanged;
 the graph is application-lifespan scoped, not a process-global service
 locator.
 
-FastAPI routes depend only on service-level errors and models; repository
-exception types do not cross into `app/api`. Daily Capture V4 parsing and
+FastAPI routes and their feature-owned problem translators depend only on
+service-level errors and models; repository exception types do not cross into
+`app/api`. Daily Capture V4 parsing and
 new-write validation share the framework-neutral
 `app/contracts/daily_capture_v4.py` boundary, so repositories and deterministic
 read builders do not import a service module. Planner and Deadline orchestration

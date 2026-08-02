@@ -1,13 +1,14 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends
 
 from app.api.deps.auth import Principal, get_current_principal
 from app.api.deps.services import get_personal_patterns_service
+from app.api.problems.insights import (
+    PERSONAL_PATTERNS_ERRORS,
+    personal_patterns_problem,
+)
 from app.models.personal_patterns import PersonalPatternsResponse
 from app.services.personal_patterns_service import (
-    PersonalPatternsDataError,
-    PersonalPatternsNotFoundError,
     PersonalPatternsService,
-    PersonalPatternsUnavailableError,
 )
 
 
@@ -24,16 +25,5 @@ async def get_personal_patterns(
 ) -> PersonalPatternsResponse:
     try:
         return await service.get_patterns(user_id=principal.user_id)
-    except PersonalPatternsNotFoundError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Personal pattern profile is unavailable.",
-        ) from exc
-    except (
-        PersonalPatternsUnavailableError,
-        PersonalPatternsDataError,
-    ) as exc:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Personal patterns could not be loaded.",
-        ) from exc
+    except PERSONAL_PATTERNS_ERRORS as exc:
+        raise personal_patterns_problem(exc) from exc

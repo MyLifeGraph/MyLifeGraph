@@ -112,3 +112,8 @@ After a successful Setup apply, one typed app-composition impact invalidates
 Today, Daily Briefing, Recommendations, Planner, Preparation Workload, and Exam
 Outlook reads. Onboarding does not import or enumerate those foreign providers,
 and cache invalidation never repeats the applied Setup mutation.
+
+The FastAPI Intake route now delegates its existing structured revision
+conflict to a typed feature-owned HTTP problem translator. The `409` detail
+object, strict request validation, replay semantics, and bearer-derived owner
+boundary are unchanged.

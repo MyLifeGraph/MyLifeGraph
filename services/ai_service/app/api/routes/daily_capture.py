@@ -1,19 +1,17 @@
 from datetime import date
 
-from fastapi import APIRouter, Depends, HTTPException, Path, status
+from fastapi import APIRouter, Depends, Path
 
 from app.api.deps.auth import Principal, get_current_principal
 from app.api.deps.services import get_daily_capture_service
+from app.api.problems.daily_capture import DAILY_CAPTURE_ERRORS, daily_capture_problem
 from app.models.daily_capture import (
     DailyCaptureBranch,
     DailyCaptureWriteRequest,
     DailyCaptureWriteResponse,
 )
 from app.services.daily_capture_service import (
-    DailyCaptureConflictError,
     DailyCaptureService,
-    DailyCaptureUnavailableError,
-    InvalidDailyCaptureError,
 )
 
 
@@ -38,18 +36,5 @@ async def write_daily_capture_branch(
             branch=branch,
             request=body,
         )
-    except InvalidDailyCaptureError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail=str(exc),
-        ) from exc
-    except DailyCaptureConflictError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=str(exc),
-        ) from exc
-    except DailyCaptureUnavailableError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Daily Capture could not be saved.",
-        ) from exc
+    except DAILY_CAPTURE_ERRORS as exc:
+        raise daily_capture_problem(exc) from exc

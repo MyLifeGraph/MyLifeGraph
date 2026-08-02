@@ -623,6 +623,11 @@ records do not establish remote migration state, provider-calendar behavior,
 installed-device behavior, notification delivery, participant evidence, or
 long-term outcomes.
 
+Deadline route service failures now use one typed feature-owned HTTP problem
+translator while each operation retains its exact catch set. Existing not-
+found, conflict, and validation statuses/details and all unexpected-error
+behavior remain unchanged.
+
 ## Visual presentation
 
 Deadline Planner uses the shared

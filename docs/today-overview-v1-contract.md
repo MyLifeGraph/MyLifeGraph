@@ -274,6 +274,10 @@ The Today route now obtains the shared application-lifespan Supabase client
 instead of opening a transport per request. The read remains owner-scoped,
 GET-only, bounded, source-isolated, and free of generation or mutation.
 
+Both Today overview routes now delegate their existing service-unavailable
+failure to one typed feature-owned HTTP problem translator. The `503` detail,
+source-isolation rules, and unexpected-error behavior remain unchanged.
+
 Today Overview does not infer free time, reschedule overlaps, complete a plan
 from tracked minutes, write to imported calendars, turn Focus into an
 obligation, learn from check-in free text, generate an AI plan, or claim that

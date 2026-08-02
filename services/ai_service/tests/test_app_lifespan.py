@@ -126,6 +126,19 @@ def test_routes_do_not_construct_persistence_or_use_named_service_state() -> Non
     ] == []
 
 
+def test_api_boundary_does_not_import_repository_exceptions() -> None:
+    api_sources = sorted((APP_ROOT / "api").rglob("*.py"))
+    repository_import = re.compile(
+        r"(?:from\s+app\.repositories|import\s+app\.repositories)",
+    )
+
+    assert [
+        str(path.relative_to(APP_ROOT))
+        for path in api_sources
+        if repository_import.search(path.read_text())
+    ] == []
+
+
 def test_api_tests_override_typed_dependencies_instead_of_named_state() -> None:
     named_service_state = re.compile(
         r"\.state\.(?:token_verifier|[a-z_]+(?:service|engine|aggregator))",

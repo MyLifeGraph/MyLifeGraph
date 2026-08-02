@@ -325,6 +325,10 @@ from `deadline_plan_builder.py`; neither module performs repository I/O. This
 module split changes no activation window, timezone, sleep protection,
 availability, capacity, or response contract.
 
+The read route delegates its existing Deadline service failures to the typed
+Deadline HTTP problem translator. Its not-found/conflict statuses and details,
+read-only authority, and unexpected-error behavior remain unchanged.
+
 Passing repository automation proves only this deterministic local boundary. It
 does not prove remote deployment, provider freshness, installed-device
 behavior, clinical value, academic outcomes, or long-term sleep behavior.

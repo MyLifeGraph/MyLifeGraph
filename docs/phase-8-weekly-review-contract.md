@@ -329,6 +329,11 @@ The Weekly Review route now reuses the application-lifespan-owned Supabase HTTP
 pool. This does not change ISO-week identity, freshness, observed-at ordering,
 source fingerprinting, proposal limits, confirmation authority, or RLS.
 
+Its explicit-period read and generation routes now delegate the same typed
+period failure to a feature-owned HTTP problem translator. The existing `422`
+detail, latest-read behavior, authentication, and unexpected-error boundary are
+unchanged.
+
 ## Visual presentation
 
 Weekly Review uses the shared

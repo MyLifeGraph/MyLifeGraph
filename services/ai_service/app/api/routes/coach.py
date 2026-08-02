@@ -3,12 +3,18 @@ import json
 from collections.abc import AsyncIterator
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 from pydantic import ValidationError
 
 from app.api.deps.auth import Principal, get_current_principal
 from app.api.deps.coach import get_coach_services
+from app.api.problems.coach import (
+    coach_error_detail,
+    coach_service_problem,
+    coach_unavailable_problem,
+    invalid_coach_request_problem,
+)
 from app.composition import CoachServices
 from app.models.coach import (
     CoachAgentCapabilitiesResponse,
@@ -17,7 +23,6 @@ from app.models.coach import (
     CoachAgentResponse,
     CoachCapabilitiesResponse,
     CoachContextOptionsResponse,
-    CoachErrorDetail,
     CoachHistoryDeleteResponse,
     CoachHistoryResponse,
     CoachMemorySelectionRequest,
@@ -51,9 +56,9 @@ async def get_coach_capabilities(
     try:
         return await services.current.capabilities(user_id=principal.user_id)
     except CoachServiceError as exc:
-        raise _http_error(exc) from exc
+        raise coach_service_problem(exc) from exc
     except Exception as exc:
-        raise _generic_error() from exc
+        raise coach_unavailable_problem() from exc
 
 
 @router.post(
@@ -79,11 +84,11 @@ async def respond_to_coach(
             request=request,
         )
     except ValidationError as exc:
-        raise _invalid_request() from exc
+        raise invalid_coach_request_problem() from exc
     except CoachServiceError as exc:
-        raise _http_error(exc) from exc
+        raise coach_service_problem(exc) from exc
     except Exception as exc:
-        raise _generic_error() from exc
+        raise coach_unavailable_problem() from exc
 
 
 @router.post("/respond/stream")
@@ -96,7 +101,7 @@ async def stream_coach_response(
     try:
         request = CoachAgentRequest.model_validate(raw)
     except ValidationError as exc:
-        raise _invalid_request() from exc
+        raise invalid_coach_request_problem() from exc
     return StreamingResponse(
         _stream_turn(
             service=services.current,
@@ -122,9 +127,9 @@ async def get_coach_history(
     try:
         return await services.current.history(user_id=principal.user_id)
     except CoachServiceError as exc:
-        raise _http_error(exc) from exc
+        raise coach_service_problem(exc) from exc
     except Exception as exc:
-        raise _generic_error() from exc
+        raise coach_unavailable_problem() from exc
 
 
 @router.delete("/history", response_model=CoachHistoryDeleteResponse)
@@ -137,9 +142,9 @@ async def delete_coach_history(
     try:
         return await services.current.delete_history(user_id=principal.user_id)
     except CoachServiceError as exc:
-        raise _http_error(exc) from exc
+        raise coach_service_problem(exc) from exc
     except Exception as exc:
-        raise _generic_error() from exc
+        raise coach_unavailable_problem() from exc
 
 
 # Deprecated compatibility reads for pre-V3 clients. The current Coach surface
@@ -152,9 +157,9 @@ async def get_legacy_coach_context_options(
     try:
         return await services.legacy.context_options(user_id=principal.user_id)
     except CoachServiceError as exc:
-        raise _http_error(exc) from exc
+        raise coach_service_problem(exc) from exc
     except Exception as exc:
-        raise _generic_error() from exc
+        raise coach_unavailable_problem() from exc
 
 
 @router.post(
@@ -171,7 +176,7 @@ async def select_legacy_coach_memory(
     try:
         selection = CoachMemorySelectionRequest.model_validate(raw)
     except ValidationError as exc:
-        raise _invalid_request() from exc
+        raise invalid_coach_request_problem() from exc
     try:
         return await services.legacy.set_memory_selection(
             user_id=principal.user_id,
@@ -179,9 +184,9 @@ async def select_legacy_coach_memory(
             selected=selection.selected,
         )
     except CoachServiceError as exc:
-        raise _http_error(exc) from exc
+        raise coach_service_problem(exc) from exc
     except Exception as exc:
-        raise _generic_error() from exc
+        raise coach_unavailable_problem() from exc
 
 
 @router.get("/memories", response_model=CoachMemorySelectionResponse)
@@ -192,9 +197,9 @@ async def get_legacy_coach_memories(
     try:
         return await services.legacy.memories(user_id=principal.user_id)
     except CoachServiceError as exc:
-        raise _http_error(exc) from exc
+        raise coach_service_problem(exc) from exc
     except Exception as exc:
-        raise _generic_error() from exc
+        raise coach_unavailable_problem() from exc
 
 
 @router.delete(
@@ -215,9 +220,9 @@ async def deselect_legacy_coach_memory(
             selected=False,
         )
     except CoachServiceError as exc:
-        raise _http_error(exc) from exc
+        raise coach_service_problem(exc) from exc
     except Exception as exc:
-        raise _generic_error() from exc
+        raise coach_unavailable_problem() from exc
 
 
 async def _stream_turn(
@@ -261,7 +266,7 @@ async def _stream_turn(
                 (
                     "failed",
                     {
-                        "error": _detail(
+                        "error": coach_error_detail(
                             "provider_failure",
                             "The Coach service is temporarily unavailable.",
                             retryable=True,
@@ -311,13 +316,13 @@ async def _read_json_object(http_request: Request) -> dict[str, object]:
             raise ValueError
         return value
     except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as exc:
-        raise _invalid_request() from exc
+        raise invalid_coach_request_problem() from exc
 
 
 async def _require_empty_body(http_request: Request) -> None:
     async for chunk in http_request.stream():
         if chunk:
-            raise _invalid_request(
+            raise invalid_coach_request_problem(
                 "This Coach operation does not accept a request body.",
             )
 
@@ -326,39 +331,4 @@ def _parse_uuid(value: str) -> UUID:
     try:
         return UUID(value)
     except (ValueError, AttributeError) as exc:
-        raise _invalid_request("The Coach id is invalid.") from exc
-
-
-def _invalid_request(
-    message: str = "The Coach request body does not match its strict contract.",
-) -> HTTPException:
-    return HTTPException(
-        status_code=422,
-        detail=_detail("invalid_request", message, retryable=False),
-    )
-
-
-def _http_error(error: CoachServiceError) -> HTTPException:
-    return HTTPException(
-        status_code=error.status_code,
-        detail=error.detail.model_dump(mode="json"),
-    )
-
-
-def _generic_error() -> HTTPException:
-    return HTTPException(
-        status_code=503,
-        detail=_detail(
-            "provider_failure",
-            "The Coach service is temporarily unavailable.",
-            retryable=True,
-        ),
-    )
-
-
-def _detail(code: str, message: str, *, retryable: bool) -> dict[str, object]:
-    return CoachErrorDetail(
-        code=code,
-        message=message,
-        retryable=retryable,
-    ).model_dump(mode="json")
+        raise invalid_coach_request_problem("The Coach id is invalid.") from exc

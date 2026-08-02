@@ -1,13 +1,14 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends
 
 from app.api.deps.auth import Principal, get_current_principal
 from app.api.deps.services import get_intake_service
+from app.api.problems.intake import INTAKE_COMPLETE_ERRORS, intake_problem
 from app.models.intake import (
     IntakeCompleteRequest,
     IntakeCompleteResponse,
     IntakeSetupResponse,
 )
-from app.services.intake_service import IntakeRevisionConflict, IntakeService
+from app.services.intake_service import IntakeService
 
 router = APIRouter(prefix="/intake", tags=["intake"])
 
@@ -39,8 +40,5 @@ async def complete_intake(
             user_id=principal.user_id,
             request=request,
         )
-    except IntakeRevisionConflict as exc:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=exc.as_detail(),
-        ) from exc
+    except INTAKE_COMPLETE_ERRORS as exc:
+        raise intake_problem(exc) from exc

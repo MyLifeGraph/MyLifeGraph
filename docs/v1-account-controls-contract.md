@@ -300,3 +300,8 @@ not-found, conflict, outcome-unknown, unavailable, or export-too-large service
 outcomes before the route maps them to status codes. This is a layering change
 only; it does not broaden retries, expose provider detail, or alter any owner,
 watermark, page, JSON, CAS, or deletion boundary.
+
+The route delegates those service outcomes to typed, operation-specific
+account problem translators. The established status codes, public details,
+export headers, recent-authentication guard, and unexpected-error behavior are
+unchanged.

@@ -1,7 +1,14 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends
 
 from app.api.deps.auth import Principal, get_current_principal
 from app.api.deps.services import get_learning_service
+from app.api.problems.learning import (
+    LEARNING_MUTATION_ERRORS,
+    LEARNING_READ_ERRORS,
+    learning_clear_problem,
+    learning_read_problem,
+    learning_update_problem,
+)
 from app.models.learning import (
     FocusReflectionHistoryClearRequest,
     FocusReflectionHistoryClearResponse,
@@ -10,12 +17,7 @@ from app.models.learning import (
     LearningPreferencesUpdateResponse,
 )
 from app.services.learning_service import (
-    LearningConflictError,
-    LearningContractError,
-    LearningNotFoundError,
-    LearningOutcomeUnknownError,
     LearningService,
-    LearningUnavailableError,
 )
 
 
@@ -29,16 +31,8 @@ async def get_learning_preferences(
 ) -> LearningPreferencesState:
     try:
         return await service.get_preferences(user_id=principal.user_id)
-    except LearningNotFoundError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Personal learning settings are unavailable.",
-        ) from exc
-    except (LearningUnavailableError, LearningContractError) as exc:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Personal learning settings could not be loaded.",
-        ) from exc
+    except LEARNING_READ_ERRORS as exc:
+        raise learning_read_problem(exc) from exc
 
 
 @router.patch(
@@ -55,31 +49,8 @@ async def update_learning_preferences(
             user_id=principal.user_id,
             request=body,
         )
-    except LearningConflictError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=str(exc),
-        ) from exc
-    except LearningNotFoundError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Personal learning settings are unavailable.",
-        ) from exc
-    except LearningOutcomeUnknownError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="Personal learning update outcome could not be determined.",
-        ) from exc
-    except LearningContractError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="Personal learning update returned an invalid result.",
-        ) from exc
-    except LearningUnavailableError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Personal learning settings could not be updated.",
-        ) from exc
+    except LEARNING_MUTATION_ERRORS as exc:
+        raise learning_update_problem(exc) from exc
 
 
 @router.post(
@@ -96,28 +67,5 @@ async def clear_focus_reflection_history(
             user_id=principal.user_id,
             request=body,
         )
-    except LearningConflictError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=str(exc),
-        ) from exc
-    except LearningNotFoundError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Personal learning settings are unavailable.",
-        ) from exc
-    except LearningOutcomeUnknownError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="Focus reflection clear outcome could not be determined.",
-        ) from exc
-    except LearningContractError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="Focus reflection clear returned an invalid result.",
-        ) from exc
-    except LearningUnavailableError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Focus reflection history could not be cleared.",
-        ) from exc
+    except LEARNING_MUTATION_ERRORS as exc:
+        raise learning_clear_problem(exc) from exc

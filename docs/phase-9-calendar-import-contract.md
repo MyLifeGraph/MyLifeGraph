@@ -464,6 +464,11 @@ instead of constructing a transport per request. Connection reuse does not
 change Calendar consent, request identity, owner derivation, `.ics` parsing,
 disconnect/delete separation, RLS, or provider-write authority.
 
+Calendar service failures now pass through a typed feature-owned HTTP problem
+translator with operation-specific catch sets. Not-found, conflict, stale-
+cursor, invalid-cursor, and parse statuses/details remain exact; request-body
+and query-shape validation remains route-local.
+
 ## Visual presentation
 
 Calendar surfaces use the shared

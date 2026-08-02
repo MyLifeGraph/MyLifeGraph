@@ -1,12 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends
 
 from app.api.deps.auth import Principal, get_current_principal
 from app.api.deps.services import get_today_overview_service
+from app.api.problems.today import TODAY_OVERVIEW_ERRORS, today_overview_problem
 from app.models.today_overview import TodayOverviewResponse, TodayOverviewV2Response
-from app.services.today_overview_service import (
-    TodayOverviewService,
-    TodayOverviewUnavailableError,
-)
+from app.services.today_overview_service import TodayOverviewService
 
 
 router = APIRouter(prefix="/today", tags=["today"])
@@ -23,11 +21,8 @@ async def get_today_overview(
 ) -> TodayOverviewResponse:
     try:
         return await service.get_overview(user_id=principal.user_id)
-    except TodayOverviewUnavailableError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=str(exc),
-        ) from exc
+    except TODAY_OVERVIEW_ERRORS as exc:
+        raise today_overview_problem(exc) from exc
 
 
 @router.get(
@@ -41,8 +36,5 @@ async def get_today_overview_v2(
 ) -> TodayOverviewV2Response:
     try:
         return await service.get_overview_v2(user_id=principal.user_id)
-    except TodayOverviewUnavailableError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail=str(exc),
-        ) from exc
+    except TODAY_OVERVIEW_ERRORS as exc:
+        raise today_overview_problem(exc) from exc

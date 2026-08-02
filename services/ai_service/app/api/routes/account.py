@@ -4,6 +4,16 @@ from fastapi import APIRouter, Depends, HTTPException, Response, status
 
 from app.api.deps.auth import Principal, get_current_principal
 from app.api.deps.services import get_account_service
+from app.api.problems.account import (
+    ACCOUNT_DELETE_ERRORS,
+    ACCOUNT_EXPORT_ERRORS,
+    ACCOUNT_PREPARATION_BUDGET_ERRORS,
+    ACCOUNT_PROFILE_ERRORS,
+    account_delete_problem,
+    account_export_problem,
+    account_preparation_budget_problem,
+    account_profile_problem,
+)
 from app.models.account import (
     AccountDeleteRequest,
     AccountExportResponse,
@@ -13,14 +23,7 @@ from app.models.account import (
     AccountProfileUpdateRequest,
 )
 from app.services.account_service import (
-    AccountConflictError,
-    AccountExportTooLargeError,
-    AccountNotFoundError,
-    AccountOutcomeUnknownError,
     AccountService,
-    AccountUnavailableError,
-    InvalidAccountTimezoneError,
-    InvalidPreparationBudgetError,
 )
 
 
@@ -72,31 +75,8 @@ async def update_account_profile(
             expected_revision=body.expected_revision,
             timezone=body.timezone,
         )
-    except InvalidAccountTimezoneError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail=str(exc),
-        ) from exc
-    except AccountNotFoundError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Account profile is unavailable.",
-        ) from exc
-    except AccountConflictError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=str(exc),
-        ) from exc
-    except AccountOutcomeUnknownError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="Account profile update outcome could not be determined.",
-        ) from exc
-    except AccountUnavailableError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Account profile could not be updated.",
-        ) from exc
+    except ACCOUNT_PROFILE_ERRORS as exc:
+        raise account_profile_problem(exc) from exc
 
 
 @router.patch(
@@ -115,31 +95,8 @@ async def update_account_preparation_budget(
             expected_revision=body.expected_revision,
             minutes=body.daily_preparation_budget_minutes,
         )
-    except InvalidPreparationBudgetError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail=str(exc),
-        ) from exc
-    except AccountNotFoundError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Account profile is unavailable.",
-        ) from exc
-    except AccountConflictError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=str(exc),
-        ) from exc
-    except AccountOutcomeUnknownError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="Preparation budget update outcome could not be determined.",
-        ) from exc
-    except AccountUnavailableError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Preparation budget could not be updated.",
-        ) from exc
+    except ACCOUNT_PREPARATION_BUDGET_ERRORS as exc:
+        raise account_preparation_budget_problem(exc) from exc
 
 
 @router.get(
@@ -152,16 +109,8 @@ async def export_account(
 ) -> Response:
     try:
         export = await service.export_account(user_id=principal.user_id)
-    except AccountExportTooLargeError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
-            detail=str(exc),
-        ) from exc
-    except AccountUnavailableError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Account export could not be generated.",
-        ) from exc
+    except ACCOUNT_EXPORT_ERRORS as exc:
+        raise account_export_problem(exc) from exc
     return Response(
         content=export.content,
         media_type="application/json",
@@ -186,19 +135,6 @@ async def delete_account(
             user_id=principal.user_id,
             confirmation=body.confirmation,
         )
-    except AccountNotFoundError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Account is unavailable.",
-        ) from exc
-    except AccountOutcomeUnknownError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail="Account deletion outcome could not be determined.",
-        ) from exc
-    except AccountUnavailableError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Account deletion could not be completed.",
-        ) from exc
+    except ACCOUNT_DELETE_ERRORS as exc:
+        raise account_delete_problem(exc) from exc
     return Response(status_code=status.HTTP_204_NO_CONTENT)
