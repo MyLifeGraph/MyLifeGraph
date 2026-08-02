@@ -181,9 +181,10 @@ those values. Dated evidence below is historical run history and does not prove
 a later checkout.
 
 The current repository migration boundary is owned by
-`docs/supabase-current-state.md`. Machine-checked current contract versions,
-their canonical code sources, and their documentation owners are declared in
-`docs/current-contracts.json`.
+`docs/supabase-current-state.md`. The scoped synchronization catalog in
+`docs/current-contracts.json` records current named Flutter/FastAPI versions,
+explicit exceptions, their exact code selectors, and their documentation
+owners. Feature contracts remain the complete wire-format authority.
 
 ## Verification Levels
 
@@ -303,12 +304,20 @@ runs:
 - `git diff --check`
 
 The documentation checker validates the strict, sorted
-`docs/current-contracts.json` schema, requires every declared source and owner
-to exist, compares each version with canonical Flutter/FastAPI code, and checks
-that every owner names its declared version. Only
-`docs/supabase-current-state.md` is required to name the latest repository
-migration; other current documents route readers there instead of duplicating
-that moving boundary.
+`docs/current-contracts.json` schema, reads every declared code symbol or
+literal locator, compares it with the catalog version, and checks that every
+listed owner names that version. `coverage: shared_named` entries are discovered
+from named version constants shared by production Flutter and FastAPI; the
+checker fails when the catalog omits the contract or one of those declarations.
+`coverage: explicit` records the deliberate single-runtime or literal-based
+exceptions. This makes the catalog exhaustive for its declared scope without
+hard-coding feature paths in the checker.
+
+Only `docs/supabase-current-state.md` is required to name the latest repository
+migration. A migration diff must also update this verification owner and the
+affected feature contract, but it updates `AGENTS.md` only when the stable agent
+workflow or a safety rule changes. Other current documents route readers to the
+Supabase owner instead of duplicating the moving filename.
 
 Database integration is deliberately separate: `npm run verify:db` runs
 migration-history checks plus pgTAP and never repeats Flutter tests.
@@ -338,10 +347,11 @@ Material icons, gradients, colors, radii, fonts, and route-local text styles.
 It complements rather than replaces viewport screenshots, accessibility
 checks, and human visual review. See `docs/frontend-visual-system-v2.md`.
 
-It checks local Markdown links and anchors; code-owned Capture, Daily State,
-Coach, and Exam-Week Outlook versions; the newest migration references;
-documented FastAPI routes; centralized verification evidence; known superseded
-claims; and changed-code ownership by an appropriate contract or runbook.
+It checks local Markdown links and anchors; cataloged code-owned contract
+versions and shared Flutter/FastAPI declaration coverage; the newest migration
+references; documented FastAPI routes; centralized verification evidence;
+known superseded claims; and changed-code ownership by an appropriate contract
+or runbook.
 Locally it compares uncommitted work with `HEAD`.
 `.github/workflows/docs-consistency.yml` runs the same gate for pushes and pull
 requests with `DOCS_BASE_REF` set to the event's base commit, so committed

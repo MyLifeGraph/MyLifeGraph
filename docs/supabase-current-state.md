@@ -5,9 +5,10 @@ project state. The repo does not contain credentials, so a live remote database
 must be inspected through the Supabase dashboard or CLI by someone with access.
 
 This file is the sole current owner of the latest repository migration filename
-and reset boundary. Machine-checked cross-document contract versions, canonical
-code sources, and documentation owners are declared in
-`docs/current-contracts.json`.
+and reset boundary. The scoped synchronization catalog for named
+Flutter/FastAPI contract versions and explicit exceptions, including exact code
+selectors and documentation owners, is `docs/current-contracts.json`; feature
+contracts remain authoritative for complete wire formats.
 
 The current Setup/Goal/friction cleanup and compatibility boundary is recorded
 in `docs/setup-personalization-retirement-contract.md` and migration

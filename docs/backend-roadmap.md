@@ -219,9 +219,10 @@ Already implemented:
     and at most two support actions from open tasks, due habits, and conservative
     capture fallback. Every target passes `executable-action-v1`; no LLM is used.
 - Phase 6 feedback and useful Insights:
-  - `GET|POST|DELETE /v1/feedback` derives the owner from the bearer token,
-    validates an exact action inside an owned briefing, and makes create retries
-    idempotent through `(user_id, request_id)`.
+  - `GET|POST|DELETE /v1/feedback` uses the strict `decision-feedback-v1`
+    boundary, derives the owner from the bearer token, validates an exact action
+    inside an owned briefing, and makes create retries idempotent through
+    `(user_id, request_id)`.
   - `decision_feedback` remains separate append-only evidence; users can delete
     a mistaken entry and original briefing/recommendation reasons never change.
   - `feedback-ranking-v1` applies only a 28-day mode/kind/rule match, decays by

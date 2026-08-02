@@ -17,8 +17,8 @@ Read these for every repository change:
 2. `docs/local-dev.md` for supported local workflows and environment setup.
 3. `docs/architecture.md` for system boundaries and dependency direction.
 4. `docs/verification.md` before running, changing, or claiming verification.
-5. `docs/current-contracts.json` for machine-checked current cross-document
-   contract versions, canonical code sources, and owning documents.
+5. `docs/current-contracts.json` for the scoped, machine-checked cross-runtime
+   version registry, exact code selectors, and owning documents.
 
 Read the additional owner before touching its area:
 
@@ -107,10 +107,15 @@ otherwise:
 - Dependency or SDK upgrades are separate compatibility work and must not be
   folded into an unrelated refactor.
 
-Current contract strings that must agree across code and documents are listed
-in `docs/current-contracts.json`. When one changes, update its canonical code,
-metadata entry, and every listed owner in the same change. The documentation
-checker verifies both directions.
+`docs/current-contracts.json` tracks every current version declared through
+named constants in both Flutter and FastAPI, plus the explicit single-runtime
+or literal-based exceptions recorded there. It is a synchronization registry,
+not a replacement for the complete wire formats in feature contracts. New
+cross-runtime versions must use named constants in both runtimes and be added to
+the registry with `coverage: shared_named`; existing deliberate exceptions use
+`coverage: explicit`. Each source entry identifies the exact symbol or locator
+that the documentation checker reads; when a tracked version changes, update
+its code sources, metadata entry, and every listed owner in the same change.
 
 ## Documentation Ownership
 
@@ -130,8 +135,13 @@ At minimum, keep these owners aligned:
 - Local environment, commands, or setup: `docs/local-dev.md`.
 - Agent workflow or safety: this file.
 - Verification automation or evidence: `docs/verification.md`.
-- Cross-document current contract versions and owner routing:
+- Scoped cross-runtime version synchronization and owner routing:
   `docs/current-contracts.json`.
+
+Adding a Supabase migration normally updates
+`docs/supabase-current-state.md`, `docs/verification.md`, and the affected
+feature owner. Update this file only when the stable agent workflow or a safety
+boundary itself changes; a new migration filename alone does not belong here.
 
 `docs/verification.md#current-verified-baseline` is the sole current source for
 exact test counts, commit ids, E2E identities, and checkout evidence. Other

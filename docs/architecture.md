@@ -1282,8 +1282,9 @@ accepted and historical rows even when the new set is empty.
   contract in Flutter: a normal
   Dashboard read never posts, stale actions are disabled until deliberate
   `force=true` adjustment, and current primary/support actions reuse Phase 3
-  handlers. Phase 6 adds `/v1/feedback` GET/POST/DELETE, exact owned-action
-  validation, and a deterministic 28-day `feedback-ranking-v1` contribution.
+  handlers. Phase 6 adds the strict `decision-feedback-v1` boundary through
+  `/v1/feedback` GET/POST/DELETE, exact owned-action validation, and a
+  deterministic 28-day `feedback-ranking-v1` contribution.
   Original action reasons remain immutable; bounded contribution and reason
   codes are additive briefing provenance. Insights starts with one cautious
   observation and keeps full correlation analytics as advanced exploration.

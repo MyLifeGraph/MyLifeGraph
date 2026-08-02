@@ -13,6 +13,22 @@ import { fileURLToPath } from 'node:url';
 const SCRIPT_PATH = fileURLToPath(import.meta.url);
 const DEFAULT_ROOT = resolve(dirname(SCRIPT_PATH), '..');
 const CURRENT_CONTRACTS_PATH = 'docs/current-contracts.json';
+const CURRENT_CONTRACTS_SCHEMA_VERSION = 2;
+const CURRENT_CONTRACTS_SCOPE =
+  'named_cross_runtime_versions_and_explicit_exceptions';
+const CONTRACT_SOURCE_SUFFIXES = [
+  '.cjs',
+  '.dart',
+  '.js',
+  '.json',
+  '.mjs',
+  '.py',
+  '.sql',
+  '.ts',
+  '.tsx',
+  '.yaml',
+  '.yml',
+];
 
 const IGNORED_DIRECTORIES = new Set([
   '.dart_tool',
@@ -33,7 +49,6 @@ export const DOCS_IMPACT_RULES = [
     name: 'Supabase migration',
     triggers: [/^supabase\/migrations\/.*\.sql$/],
     requiredAll: [
-      'AGENTS.md',
       'docs/supabase-current-state.md',
       'docs/verification.md',
     ],
@@ -262,11 +277,21 @@ function isSorted(values) {
   );
 }
 
-function validatePathArray(
-  value,
-  { contractKey, field, suffixes },
-  errors,
-) {
+function isNormalizedRepositoryPath(path, suffixes) {
+  return (
+    typeof path === 'string' &&
+    path.length > 0 &&
+    !path.startsWith('/') &&
+    !path.startsWith('./') &&
+    !path.includes('\\') &&
+    !path.includes('//') &&
+    !path.split('/').includes('.') &&
+    !path.split('/').includes('..') &&
+    suffixes.some((suffix) => path.endsWith(suffix))
+  );
+}
+
+function validatePathArray(value, { contractKey, field, suffixes }, errors) {
   if (!Array.isArray(value) || value.length === 0) {
     errors.push(
       `${CURRENT_CONTRACTS_PATH}: contract '${contractKey}' must have a non-empty ${field} array.`,
@@ -279,18 +304,7 @@ function validatePathArray(
       `${CURRENT_CONTRACTS_PATH}: contract '${contractKey}' ${field} must contain non-empty strings only.`,
     );
   }
-  if (
-    paths.some(
-      (path) =>
-        path.startsWith('/') ||
-        path.startsWith('./') ||
-        path.includes('\\') ||
-        path.includes('//') ||
-        path.split('/').includes('.') ||
-        path.split('/').includes('..') ||
-        !suffixes.some((suffix) => path.endsWith(suffix)),
-    )
-  ) {
+  if (paths.some((path) => !isNormalizedRepositoryPath(path, suffixes))) {
     errors.push(
       `${CURRENT_CONTRACTS_PATH}: contract '${contractKey}' ${field} must contain normalized repository-relative ${suffixes.join(' or ')} paths.`,
     );
@@ -305,7 +319,85 @@ function validatePathArray(
       `${CURRENT_CONTRACTS_PATH}: contract '${contractKey}' ${field} must be sorted.`,
     );
   }
-  return paths;
+  return paths.filter((path) => isNormalizedRepositoryPath(path, suffixes));
+}
+
+function sourceSortKey(source) {
+  return `${source.path}\u0000${source.symbol ?? ''}\u0000${source.locator ?? ''}`;
+}
+
+function validateSourceArray(value, contractKey, errors) {
+  if (!Array.isArray(value) || value.length === 0) {
+    errors.push(
+      `${CURRENT_CONTRACTS_PATH}: contract '${contractKey}' must have a non-empty sources array.`,
+    );
+    return [];
+  }
+
+  const sources = [];
+  for (const [index, source] of value.entries()) {
+    if (!isPlainObject(source)) {
+      errors.push(
+        `${CURRENT_CONTRACTS_PATH}: contract '${contractKey}' sources[${index}] must be an object.`,
+      );
+      continue;
+    }
+    const isSymbolSource = exactKeys(source, ['path', 'symbol']);
+    const isLocatorSource = exactKeys(source, ['locator', 'path']);
+    if (!isSymbolSource && !isLocatorSource) {
+      errors.push(
+        `${CURRENT_CONTRACTS_PATH}: contract '${contractKey}' sources[${index}] must have exactly path and either symbol or locator.`,
+      );
+      continue;
+    }
+
+    if (!isNormalizedRepositoryPath(source.path, CONTRACT_SOURCE_SUFFIXES)) {
+      errors.push(
+        `${CURRENT_CONTRACTS_PATH}: contract '${contractKey}' sources[${index}].path must be a normalized repository-relative source path.`,
+      );
+      continue;
+    }
+    if (
+      isSymbolSource &&
+      (typeof source.symbol !== 'string' ||
+        !/^[A-Za-z_][A-Za-z0-9_]*$/.test(source.symbol))
+    ) {
+      errors.push(
+        `${CURRENT_CONTRACTS_PATH}: contract '${contractKey}' sources[${index}].symbol must be an identifier.`,
+      );
+      continue;
+    }
+    if (isLocatorSource) {
+      const placeholderCount =
+        typeof source.locator === 'string'
+          ? source.locator.split('{version}').length - 1
+          : 0;
+      if (placeholderCount !== 1) {
+        errors.push(
+          `${CURRENT_CONTRACTS_PATH}: contract '${contractKey}' sources[${index}].locator must contain exactly one {version} placeholder.`,
+        );
+        continue;
+      }
+    }
+    sources.push(
+      isSymbolSource
+        ? { path: source.path, symbol: source.symbol }
+        : { locator: source.locator, path: source.path },
+    );
+  }
+
+  const sourceKeys = sources.map(sourceSortKey);
+  if (new Set(sourceKeys).size !== sourceKeys.length) {
+    errors.push(
+      `${CURRENT_CONTRACTS_PATH}: contract '${contractKey}' sources contains duplicates.`,
+    );
+  }
+  if (!isSorted(sourceKeys)) {
+    errors.push(
+      `${CURRENT_CONTRACTS_PATH}: contract '${contractKey}' sources must be sorted by path and selector.`,
+    );
+  }
+  return sources;
 }
 
 export function validateCurrentContractsMetadata(value) {
@@ -316,13 +408,20 @@ export function validateCurrentContractsMetadata(value) {
       errors: [`${CURRENT_CONTRACTS_PATH}: root must be an object.`],
     };
   }
-  if (!exactKeys(value, ['schema_version', 'contracts'])) {
+  if (!exactKeys(value, ['schema_version', 'scope', 'contracts'])) {
     errors.push(
-      `${CURRENT_CONTRACTS_PATH}: root keys must be exactly 'schema_version' and 'contracts'.`,
+      `${CURRENT_CONTRACTS_PATH}: root keys must be exactly 'schema_version', 'scope', and 'contracts'.`,
     );
   }
-  if (value.schema_version !== 1) {
-    errors.push(`${CURRENT_CONTRACTS_PATH}: schema_version must be 1.`);
+  if (value.schema_version !== CURRENT_CONTRACTS_SCHEMA_VERSION) {
+    errors.push(
+      `${CURRENT_CONTRACTS_PATH}: schema_version must be ${CURRENT_CONTRACTS_SCHEMA_VERSION}.`,
+    );
+  }
+  if (value.scope !== CURRENT_CONTRACTS_SCOPE) {
+    errors.push(
+      `${CURRENT_CONTRACTS_PATH}: scope must be '${CURRENT_CONTRACTS_SCOPE}'.`,
+    );
   }
   if (!Array.isArray(value.contracts) || value.contracts.length === 0) {
     errors.push(`${CURRENT_CONTRACTS_PATH}: contracts must be a non-empty array.`);
@@ -337,13 +436,25 @@ export function validateCurrentContractsMetadata(value) {
       );
       continue;
     }
-    if (!exactKeys(entry, ['key', 'version', 'sources', 'owners'])) {
+    if (
+      !exactKeys(entry, [
+        'coverage',
+        'key',
+        'version',
+        'sources',
+        'owners',
+      ])
+    ) {
       errors.push(
-        `${CURRENT_CONTRACTS_PATH}: contract at index ${index} must have exactly key, version, sources, and owners.`,
+        `${CURRENT_CONTRACTS_PATH}: contract at index ${index} must have exactly coverage, key, version, sources, and owners.`,
       );
     }
     const key = typeof entry.key === 'string' ? entry.key : '';
     const version = typeof entry.version === 'string' ? entry.version : '';
+    const coverage =
+      entry.coverage === 'shared_named' || entry.coverage === 'explicit'
+        ? entry.coverage
+        : '';
     if (!/^[a-z][A-Za-z0-9]*$/.test(key)) {
       errors.push(
         `${CURRENT_CONTRACTS_PATH}: contract at index ${index} has an invalid key.`,
@@ -354,13 +465,14 @@ export function validateCurrentContractsMetadata(value) {
         `${CURRENT_CONTRACTS_PATH}: contract '${key || index}' has an invalid version.`,
       );
     }
-    const sources = validatePathArray(
+    if (!coverage) {
+      errors.push(
+        `${CURRENT_CONTRACTS_PATH}: contract '${key || index}' coverage must be 'shared_named' or 'explicit'.`,
+      );
+    }
+    const sources = validateSourceArray(
       entry.sources,
-      {
-        contractKey: key || String(index),
-        field: 'sources',
-        suffixes: ['.dart', '.py'],
-      },
+      key || String(index),
       errors,
     );
     const owners = validatePathArray(
@@ -372,12 +484,16 @@ export function validateCurrentContractsMetadata(value) {
       },
       errors,
     );
-    contracts.push({ key, version, sources, owners });
+    contracts.push({ coverage, key, version, sources, owners });
   }
 
   const keys = contracts.map((contract) => contract.key);
+  const versions = contracts.map((contract) => contract.version);
   if (new Set(keys).size !== keys.length) {
     errors.push(`${CURRENT_CONTRACTS_PATH}: contract keys must be unique.`);
+  }
+  if (new Set(versions).size !== versions.length) {
+    errors.push(`${CURRENT_CONTRACTS_PATH}: contract versions must be unique.`);
   }
   if (!isSorted(keys)) {
     errors.push(`${CURRENT_CONTRACTS_PATH}: contracts must be sorted by key.`);
@@ -406,7 +522,10 @@ export function loadCurrentContractsMetadata(root) {
   }
   const result = validateCurrentContractsMetadata(value);
   for (const contract of result.contracts) {
-    for (const repositoryPath of [...contract.sources, ...contract.owners]) {
+    for (const repositoryPath of [
+      ...contract.sources.map((source) => source.path),
+      ...contract.owners,
+    ]) {
       const absolutePath = resolve(root, repositoryPath);
       if (!existsSync(absolutePath) || !statSync(absolutePath).isFile()) {
         result.errors.push(
@@ -559,188 +678,185 @@ export function findMarkdownLinkErrors(root, markdownFiles = listMarkdownFiles(r
   return errors;
 }
 
-function requiredMatch(text, pattern, label, errors) {
-  const match = pattern.exec(text);
-  if (!match) {
-    errors.push(`Could not read ${label} from its canonical code source.`);
-    return null;
+const CONTRACT_VERSION_PATTERN =
+  '[a-z0-9]+(?:-[a-z0-9]+)*-v[0-9]+';
+
+function canonicalSourceMatches(text, source) {
+  let pattern;
+  if (source.symbol) {
+    pattern = new RegExp(
+      `\\b${escapeRegExp(source.symbol)}\\b\\s*(?::[^=\\n]+)?=\\s*['"](${CONTRACT_VERSION_PATTERN})['"]`,
+      'g',
+    );
+  } else {
+    const [before, after] = source.locator.split('{version}');
+    pattern = new RegExp(
+      `${escapeRegExp(before)}(${CONTRACT_VERSION_PATTERN})${escapeRegExp(after)}`,
+      'g',
+    );
   }
-  return match[1];
+  return [...text.matchAll(pattern)].map((match) => match[1]);
 }
 
-export function extractCanonicalVersions(root) {
+export function extractCanonicalVersions(root, contracts) {
   const errors = [];
-  const captureDart = readUtf8(
-    resolve(
-      root,
-      'apps/mobile/lib/features/quick_action/domain/quick_check_in.dart',
-    ),
-  );
-  const dailyStatePython = readUtf8(
-    resolve(root, 'services/ai_service/app/services/snapshot_daily_state.py'),
-  );
-  const coachPython = readUtf8(
-    resolve(root, 'services/ai_service/app/models/coach.py'),
-  );
-  const coachDart = readUtf8(
-    resolve(root, 'apps/mobile/lib/features/coach/domain/coach.dart'),
-  );
-  const outlookPython = readUtf8(
-    resolve(root, 'services/ai_service/app/models/deadline_plans.py'),
-  );
-  const outlookDart = readUtf8(
-    resolve(
-      root,
-      'apps/mobile/lib/features/deadline_plans/domain/exam_week_outlook.dart',
-    ),
-  );
+  const versions = {};
 
-  const versions = {
-    capture: requiredMatch(
-      captureDart,
-      /\bconst\s+dailyCaptureV4\s*=\s*['"]([^'"]+)['"]/,
-      'Flutter Daily Capture version',
-      errors,
-    ),
-    dailyState: requiredMatch(
-      dailyStatePython,
-      /\bDAILY_STATE_CONTRACT_VERSION\s*=\s*['"]([^'"]+)['"]/,
-      'FastAPI Daily State version',
-      errors,
-    ),
-    coachContextPython: requiredMatch(
-      coachPython,
-      /\bCOACH_AGENT_CONTEXT_VERSION\s*=\s*['"]([^'"]+)['"]/,
-      'FastAPI current Coach context version',
-      errors,
-    ),
-    coachPromptPython: requiredMatch(
-      coachPython,
-      /\bCOACH_AGENT_PROMPT_VERSION\s*=\s*['"]([^'"]+)['"]/,
-      'FastAPI current Coach prompt version',
-      errors,
-    ),
-    coachContextDart: requiredMatch(
-      coachDart,
-      /\bconst\s+coachAgentContextVersion\s*=\s*['"]([^'"]+)['"]/,
-      'Flutter Coach context version',
-      errors,
-    ),
-    coachPromptDart: requiredMatch(
-      coachDart,
-      /\bconst\s+coachAgentPromptVersion\s*=\s*['"]([^'"]+)['"]/,
-      'Flutter Coach prompt version',
-      errors,
-    ),
-    outlookPython: requiredMatch(
-      outlookPython,
-      /\bEXAM_WEEK_OUTLOOK_CONTRACT_VERSION\s*=\s*['"]([^'"]+)['"]/,
-      'FastAPI Exam-Week Outlook version',
-      errors,
-    ),
-    outlookDart: requiredMatch(
-      outlookDart,
-      /json\[['"]contract_version['"]]\s*!=\s*['"]([^'"]+)['"]/,
-      'Flutter Exam-Week Outlook version',
-      errors,
-    ),
-  };
-
-  const captureSetMatch =
-    /_DAILY_CAPTURE_VERSIONS\s*=\s*frozenset\(\s*\{([^}]*)\}/s.exec(
-      dailyStatePython,
-    );
-  const supportedCaptures = new Set(
-    captureSetMatch
-      ? [...captureSetMatch[1].matchAll(/['"]([^'"]+)['"]/g)].map(
-          (match) => match[1],
-        )
-      : [],
-  );
-  if (!captureSetMatch) {
-    errors.push('Could not read FastAPI supported Daily Capture versions.');
+  for (const contract of contracts) {
+    const sourceVersions = [];
+    for (const source of contract.sources) {
+      const absolutePath = resolve(root, source.path);
+      if (!existsSync(absolutePath) || !statSync(absolutePath).isFile()) {
+        continue;
+      }
+      const matches = canonicalSourceMatches(readUtf8(absolutePath), source);
+      const selector = source.symbol
+        ? `symbol '${source.symbol}'`
+        : `locator '${source.locator}'`;
+      if (matches.length === 0) {
+        errors.push(
+          `${source.path}: could not extract contract '${contract.key}' through ${selector}.`,
+        );
+        continue;
+      }
+      if (matches.length > 1) {
+        errors.push(
+          `${source.path}: ${selector} is ambiguous for contract '${contract.key}' (${matches.length} matches).`,
+        );
+        continue;
+      }
+      const sourceVersion = matches[0];
+      sourceVersions.push(sourceVersion);
+      if (sourceVersion !== contract.version) {
+        errors.push(
+          `${CURRENT_CONTRACTS_PATH}: contract '${contract.key}' declares '${contract.version}', but ${source.path} ${selector} declares '${sourceVersion}'.`,
+        );
+      }
+    }
+    versions[contract.key] = sourceVersions[0] ?? null;
   }
 
-  if (versions.capture && !supportedCaptures.has(versions.capture)) {
-    errors.push(
-      `FastAPI Daily State does not accept Flutter's current capture contract '${versions.capture}'.`,
-    );
+  return { errors, versions };
+}
+
+function listFilesBySuffix(root, suffix) {
+  if (!existsSync(root)) {
+    return [];
   }
-  for (const compatibleVersion of [
-    'daily-capture-v2',
-    'daily-capture-v3',
-    versions.capture,
-  ]) {
-    if (compatibleVersion && !supportedCaptures.has(compatibleVersion)) {
-      errors.push(
-        `FastAPI Daily State lost required capture compatibility '${compatibleVersion}'.`,
-      );
+  const files = [];
+  function visit(directory) {
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      if (entry.isDirectory() && IGNORED_DIRECTORIES.has(entry.name)) {
+        continue;
+      }
+      const absolutePath = join(directory, entry.name);
+      if (entry.isDirectory()) {
+        visit(absolutePath);
+      } else if (entry.isFile() && entry.name.endsWith(suffix)) {
+        files.push(absolutePath);
+      }
     }
   }
-  if (
-    versions.coachContextPython &&
-    versions.coachContextDart &&
-    versions.coachContextPython !== versions.coachContextDart
-  ) {
-    errors.push(
-      `Coach context version differs between FastAPI ('${versions.coachContextPython}') and Flutter ('${versions.coachContextDart}').`,
-    );
-  }
-  if (
-    versions.coachPromptPython &&
-    versions.coachPromptDart &&
-    versions.coachPromptPython !== versions.coachPromptDart
-  ) {
-    errors.push(
-      `Coach prompt version differs between FastAPI ('${versions.coachPromptPython}') and Flutter ('${versions.coachPromptDart}').`,
-    );
-  }
-  if (
-    versions.outlookPython &&
-    versions.outlookDart &&
-    versions.outlookPython !== versions.outlookDart
-  ) {
-    errors.push(
-      `Exam-Week Outlook version differs between FastAPI ('${versions.outlookPython}') and Flutter ('${versions.outlookDart}').`,
-    );
-  }
-
-  return {
-    errors,
-    versions: {
-      capture: versions.capture,
-      dailyState: versions.dailyState,
-      coachContext:
-        versions.coachContextPython ?? versions.coachContextDart,
-      coachPrompt: versions.coachPromptPython ?? versions.coachPromptDart,
-      outlook: versions.outlookPython ?? versions.outlookDart,
-    },
-  };
+  visit(root);
+  return files.sort();
 }
 
-export function findCanonicalMetadataErrors(versions, contracts) {
+function namedContractDeclarations(root, runtime) {
+  const configuration =
+    runtime === 'flutter'
+      ? {
+          directory: 'apps/mobile/lib',
+          pattern: new RegExp(
+            `^[ \\t]*(?:static[ \\t]+)?const[ \\t]+(?:String[ \\t]+)?([A-Za-z_][A-Za-z0-9_]*)[ \\t]*=[ \\t\\r\\n]*['"](${CONTRACT_VERSION_PATTERN})['"]`,
+            'gm',
+          ),
+          suffix: '.dart',
+        }
+      : {
+          directory: 'services/ai_service/app',
+          pattern: new RegExp(
+            `^[ \\t]*([A-Z][A-Z0-9_]*)[ \\t]*(?::[^=\\n]+)?=[ \\t]*['"](${CONTRACT_VERSION_PATTERN})['"]`,
+            'gm',
+          ),
+          suffix: '.py',
+        };
+  const declarations = [];
+  const directory = resolve(root, configuration.directory);
+  for (const absolutePath of listFilesBySuffix(directory, configuration.suffix)) {
+    const text = readUtf8(absolutePath);
+    for (const match of text.matchAll(configuration.pattern)) {
+      const symbol = match[1];
+      if (/(?:legacy|previous|prior)/i.test(symbol)) {
+        continue;
+      }
+      declarations.push({
+        path: normalizePath(relative(root, absolutePath)),
+        runtime,
+        symbol,
+        version: match[2],
+      });
+    }
+  }
+  return declarations;
+}
+
+export function findCrossRuntimeContractCoverageErrors(root, contracts) {
   const errors = [];
-  const metadataByKey = new Map(
-    contracts.map((contract) => [contract.key, contract]),
+  const declarations = [
+    ...namedContractDeclarations(root, 'flutter'),
+    ...namedContractDeclarations(root, 'fastapi'),
+  ];
+  const runtimesByVersion = new Map();
+  for (const declaration of declarations) {
+    if (!runtimesByVersion.has(declaration.version)) {
+      runtimesByVersion.set(declaration.version, new Set());
+    }
+    runtimesByVersion.get(declaration.version).add(declaration.runtime);
+  }
+  const sharedVersions = new Set(
+    [...runtimesByVersion]
+      .filter(([, runtimes]) => runtimes.size === 2)
+      .map(([version]) => version),
   );
-  for (const [key, version] of Object.entries(versions)) {
-    const metadata = metadataByKey.get(key);
-    if (!metadata) {
+  const metadataByVersion = new Map(
+    contracts.map((contract) => [contract.version, contract]),
+  );
+
+  for (const version of [...sharedVersions].sort()) {
+    const contract = metadataByVersion.get(version);
+    if (!contract) {
       errors.push(
-        `${CURRENT_CONTRACTS_PATH}: missing canonical contract key '${key}'.`,
+        `${CURRENT_CONTRACTS_PATH}: shared named Flutter/FastAPI contract '${version}' is not registered.`,
       );
       continue;
     }
-    if (version && metadata.version !== version) {
+    if (contract.coverage !== 'shared_named') {
       errors.push(
-        `${CURRENT_CONTRACTS_PATH}: contract '${key}' declares '${metadata.version}', but canonical code declares '${version}'.`,
+        `${CURRENT_CONTRACTS_PATH}: shared named contract '${contract.key}' must use coverage 'shared_named'.`,
       );
+    }
+    for (const declaration of declarations.filter(
+      (candidate) => candidate.version === version,
+    )) {
+      const registered = contract.sources.some(
+        (source) =>
+          source.path === declaration.path &&
+          source.symbol === declaration.symbol,
+      );
+      if (!registered) {
+        errors.push(
+          `${CURRENT_CONTRACTS_PATH}: contract '${contract.key}' must register shared named source ${declaration.path}:${declaration.symbol}.`,
+        );
+      }
     }
   }
   for (const contract of contracts) {
-    if (!Object.hasOwn(versions, contract.key)) {
+    if (
+      contract.coverage === 'shared_named' &&
+      !sharedVersions.has(contract.version)
+    ) {
       errors.push(
-        `${CURRENT_CONTRACTS_PATH}: contract key '${contract.key}' has no canonical code extractor.`,
+        `${CURRENT_CONTRACTS_PATH}: contract '${contract.key}' uses coverage 'shared_named', but no named Flutter/FastAPI declaration pair was found.`,
       );
     }
   }
@@ -757,7 +873,12 @@ export function findRequiredVersionErrors(
       const text = documents.get(path);
       if (text === undefined) {
         errors.push(`${path}: required version document is missing.`);
-      } else if (!text.includes(contract.version)) {
+      } else if (
+        !new RegExp(
+          `(?:^|[^a-z0-9-])${escapeRegExp(contract.version)}(?![a-z0-9-])`,
+          'i',
+        ).test(text)
+      ) {
         errors.push(
           `${path}: missing canonical ${contract.key} contract '${contract.version}'.`,
         );
@@ -1061,10 +1182,10 @@ export function runDocumentationChecks(
   const metadata = loadCurrentContractsMetadata(root);
   errors.push(...metadata.errors);
 
-  const canonical = extractCanonicalVersions(root);
+  const canonical = extractCanonicalVersions(root, metadata.contracts);
   errors.push(...canonical.errors);
   errors.push(
-    ...findCanonicalMetadataErrors(canonical.versions, metadata.contracts),
+    ...findCrossRuntimeContractCoverageErrors(root, metadata.contracts),
   );
   errors.push(...findRequiredVersionErrors(metadata.contracts, documents));
 

@@ -10,8 +10,9 @@ import { dirname, join } from 'node:path';
 import test from 'node:test';
 
 import {
+  extractCanonicalVersions,
   extractFastApiRoutesFromTexts,
-  findCanonicalMetadataErrors,
+  findCrossRuntimeContractCoverageErrors,
   findDocsImpactErrors,
   findDocumentedRouteErrorsFromTexts,
   findLatestMigrationErrors,
@@ -172,7 +173,7 @@ test('canonical versions must appear in every owning document', () => {
     {
       key: 'capture',
       version: 'daily-capture-v4',
-      sources: ['lib/capture.dart'],
+      sources: [{ path: 'lib/capture.dart', symbol: 'captureVersion' }],
       owners: ['README.md', 'docs/capture.md'],
     },
   ];
@@ -201,12 +202,20 @@ test('canonical versions must appear in every owning document', () => {
 
 test('current-contract metadata has a strict deterministic schema', () => {
   const metadata = {
-    schema_version: 1,
+    schema_version: 2,
+    scope: 'named_cross_runtime_versions_and_explicit_exceptions',
     contracts: [
       {
+        coverage: 'shared_named',
         key: 'capture',
         version: 'daily-capture-v4',
-        sources: ['lib/capture.dart', 'service/capture.py'],
+        sources: [
+          { path: 'lib/capture.dart', symbol: 'captureVersion' },
+          {
+            locator: 'CURRENT_CAPTURE = "{version}"',
+            path: 'service/capture.py',
+          },
+        ],
         owners: ['README.md', 'docs/capture.md'],
       },
     ],
@@ -219,11 +228,12 @@ test('current-contract metadata has a strict deterministic schema', () => {
     './README.md',
     './README.md',
   ];
+  invalid.contracts[0].coverage = 'unknown';
   invalid.contracts[0].unexpected = true;
   const errors = validateCurrentContractsMetadata(invalid).errors;
   assert.ok(
     errors.some((error) =>
-      /exactly key, version, sources, and owners/.test(error),
+      /exactly coverage, key, version, sources, and owners/.test(error),
     ),
   );
   assert.ok(
@@ -231,23 +241,28 @@ test('current-contract metadata has a strict deterministic schema', () => {
   );
   assert.ok(errors.some((error) => /owners contains duplicates/.test(error)));
   assert.ok(errors.some((error) => /owners must be sorted/.test(error)));
+  assert.ok(errors.some((error) => /coverage must be/.test(error)));
 });
 
 test('current-contract metadata references real sources and owners', () => {
   withFixture(
     {
       'docs/current-contracts.json': JSON.stringify({
-        schema_version: 1,
+        schema_version: 2,
+        scope: 'named_cross_runtime_versions_and_explicit_exceptions',
         contracts: [
           {
+            coverage: 'shared_named',
             key: 'capture',
             version: 'daily-capture-v4',
-            sources: ['lib/capture.dart'],
+            sources: [
+              { path: 'lib/capture.dart', symbol: 'captureVersion' },
+            ],
             owners: ['README.md'],
           },
         ],
       }),
-      'lib/capture.dart': "const version = 'daily-capture-v4';\n",
+      'lib/capture.dart': "const captureVersion = 'daily-capture-v4';\n",
       'README.md': 'daily-capture-v4\n',
     },
     (root) => {
@@ -256,38 +271,95 @@ test('current-contract metadata references real sources and owners', () => {
   );
 });
 
-test('current-contract metadata must match every canonical code version', () => {
-  const versions = {
-    capture: 'daily-capture-v4',
-    outlook: 'exam-week-outlook-v1',
-  };
-  const contracts = [
+test('current-contract source selectors drive canonical version extraction', () => {
+  withFixture(
     {
-      key: 'capture',
-      version: 'daily-capture-v3',
-      sources: [],
-      owners: [],
+      'lib/capture.dart': "const captureVersion = 'daily-capture-v4';\n",
+      'service/capture.py':
+        'SUPPORTED = {"daily-capture-v2", "daily-capture-v3", "daily-capture-v4"}\n',
     },
+    (root) => {
+      const contracts = [
+        {
+          key: 'dailyCapture',
+          version: 'daily-capture-v4',
+          sources: [
+            { path: 'lib/capture.dart', symbol: 'captureVersion' },
+            {
+              locator:
+                '{"daily-capture-v2", "daily-capture-v3", "{version}"}',
+              path: 'service/capture.py',
+            },
+          ],
+          owners: [],
+        },
+      ];
+      assert.deepEqual(extractCanonicalVersions(root, contracts), {
+        errors: [],
+        versions: { dailyCapture: 'daily-capture-v4' },
+      });
+
+      writeFileSync(
+        join(root, 'lib/capture.dart'),
+        "const captureVersion = 'daily-capture-v5';\n",
+        'utf8',
+      );
+      assert.match(
+        extractCanonicalVersions(root, contracts).errors[0],
+        /declares 'daily-capture-v4'.*declares 'daily-capture-v5'/,
+      );
+    },
+  );
+});
+
+test('every named version shared by Flutter and FastAPI is registered', () => {
+  withFixture(
     {
-      key: 'unknown',
-      version: 'unknown-v1',
-      sources: [],
-      owners: [],
+      'apps/mobile/lib/shared.dart':
+        "const String sharedContractVersion = 'shared-contract-v1';\n",
+      'services/ai_service/app/shared.py':
+        'SHARED_CONTRACT_VERSION = "shared-contract-v1"\n',
     },
-  ];
-  const errors = findCanonicalMetadataErrors(versions, contracts);
-  assert.ok(
-    errors.some((error) =>
-      /canonical code declares 'daily-capture-v4'/.test(error),
-    ),
-  );
-  assert.ok(
-    errors.some((error) =>
-      /missing canonical contract key 'outlook'/.test(error),
-    ),
-  );
-  assert.ok(
-    errors.some((error) => /has no canonical code extractor/.test(error)),
+    (root) => {
+      assert.match(
+        findCrossRuntimeContractCoverageErrors(root, [])[0],
+        /shared named Flutter\/FastAPI contract 'shared-contract-v1' is not registered/,
+      );
+
+      const incomplete = [
+        {
+          coverage: 'shared_named',
+          key: 'shared',
+          version: 'shared-contract-v1',
+          sources: [
+            {
+              path: 'apps/mobile/lib/shared.dart',
+              symbol: 'sharedContractVersion',
+            },
+          ],
+          owners: [],
+        },
+      ];
+      assert.match(
+        findCrossRuntimeContractCoverageErrors(root, incomplete)[0],
+        /services\/ai_service\/app\/shared\.py:SHARED_CONTRACT_VERSION/,
+      );
+
+      incomplete[0].sources.push({
+        path: 'services/ai_service/app/shared.py',
+        symbol: 'SHARED_CONTRACT_VERSION',
+      });
+      incomplete[0].coverage = 'explicit';
+      assert.match(
+        findCrossRuntimeContractCoverageErrors(root, incomplete)[0],
+        /must use coverage 'shared_named'/,
+      );
+      incomplete[0].coverage = 'shared_named';
+      assert.deepEqual(
+        findCrossRuntimeContractCoverageErrors(root, incomplete),
+        [],
+      );
+    },
   );
 });
 
@@ -309,6 +381,26 @@ test('changed product code requires its owning documentation in the same diff', 
     ]),
     [],
   );
+});
+
+test('a migration updates migration owners without churning AGENTS.md', () => {
+  const migration = 'supabase/migrations/20260101000000_example.sql';
+  assert.deepEqual(
+    findDocsImpactErrors([
+      migration,
+      'docs/supabase-current-state.md',
+      'docs/verification.md',
+    ]),
+    [],
+  );
+
+  const errors = findDocsImpactErrors([
+    migration,
+    'docs/supabase-current-state.md',
+  ]);
+  assert.equal(errors.length, 1);
+  assert.match(errors[0], /docs\/verification\.md/);
+  assert.doesNotMatch(errors[0], /AGENTS\.md/);
 });
 
 test('known superseded current-state wording fails outside historical docs', () => {

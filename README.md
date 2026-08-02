@@ -569,92 +569,16 @@ Supabase is the intended auth and persistence backend. The current app supports:
   `POST /v1/notifications/{notification_id}/delivery` only after explicit
   consent and deterministic generation through the protected local scheduler.
 
-Important current caveat: the Flutter app targets the canonical snake_case
+Important current boundary: the Flutter app targets the canonical snake_case
 schema. The authoritative migration inventory and latest repository boundary
-are maintained in `docs/supabase-current-state.md`; current cross-document
-contract versions and their owners are maintained in
-`docs/current-contracts.json`. The latest contract-neutral cleanup keeps a
-locked-down legacy role-helper compatibility identity while removing the final
-Account Delete and Coach V3 PL/pgSQL lint diagnostics without changing their
-contracts or grants. The preceding Focus migration adds immutable
-scheduled-Focus provenance, owner-locked retry-safe V2 lifecycle RPCs,
-collision-safe makeup sessions, and source-aware Deadline credit. The earlier
-Coach migration admits paired free-agent prompt V1/V2 provenance and
-adds the service-role-only V4
-claim wrapper without rewriting existing requests. The preceding write
-stabilization migration cuts Capture and account settings over to owner-locked
-CAS/RPC paths and adds timezone-bound Calendar/Planner truth. The earlier free
-Coach migration preserves existing fixed-mode rows while adding message-only
-V3 claim, V2 response, evidence/trace/Fast provenance, and service-role-only
-completion. The preceding
-longitudinal migration keeps exact V2 scope/parameter replay and partial
-terminal Task history indexes for compatible clients. The preceding learned
-timing migration retains learned evidence while recording when actual
-allocation used Setup timing. The earlier confirmation-time and proposal-RPC
-guards preserve monotone audit timestamps, strict established payloads, and
-exact retries. The preceding
-Recommendation migration atomically replaces the current generated set while
-preserving historical decisions. The earlier learned-planning migration adds
-immutable Planner/Deadline timing provenance and confirmation permission
-guards; the Personal Learning migration adds forced-RLS reflections, revisioned
-preferences, and a backend retry ledger. The earlier
-`20260725120000_retire_setup_goals_and_friction.sql` removes retired Setup/
-friction state under owner-safe compatibility rules while preserving Reminder
-settings and readable Coach V1 history. The preceding
-`20260723200707_optimize_canonical_rls_policies.sql` removes superseded initial
-policies and makes the unchanged canonical owner/admin predicates
-initialization-plan safe without changing grants. The preceding
-`20260723120000_study_setup_v1.sql` adds the forced-RLS optional Study
-projection, composes it with atomic Intake apply, and extends Planner/Deadline
-revisions and blocks with recovery-reservation and Study-revision truth. The
-preceding Setup guard keeps Planner and Deadline Planner confirmation aligned
-with optional inclusive Setup semester bounds and fails closed on
-protected-function drift. The earlier Planner migration adds its seven
-forced-RLS tables. The earlier account preparation migration adds the nullable bounded profile rule,
-service-role-only owner-locked setter, and database-boundary confirmation
-recheck without rewriting existing plans. The earlier
-`20260714143000_notification_delivery_settings_guard.sql` follow-up makes
-Notification Settings replays request-exact across the shared Setup writer and
-keeps the preference revision monotone. The preceding Notification Delivery
-migration adds explicit consent, deterministic generation, and foreground
-receipts. The earlier Account Export
-grant restores only FastAPI's service-role read access to `lifestyle_entries`,
-which was required by the then-31-table Account Export V1 contract. Planner V1
-and Study Setup later extended it to 38 tables; Personal Learning brought it
-to 40 tables, and immutable Focus schedule-source provenance now makes the
-current exact owner-content export 41 tables.
-Phase 3 adds task
-estimates/terminal times, locked cadence-aware habit outcomes, immutable linked
-focus history, and restricted target deletion without replacing existing RLS
-or table grants.
-Phase 4 adds the persisted owner-scoped daily briefing identity and policies.
-Phase 8 adds the backend-owned owner-readable weekly review identity, forced
-RLS, and a strict deterministic-provenance guard; it does not grant
-authenticated review writes.
-Phase 10 adds `coach_requests`, `coach_usage_events`, and
-`coach_memory_selections`, hardens Coach/message-memory grants and forced RLS,
-and installs service-role-only atomic request, turn, selection, and deletion
-RPCs. Its follow-up guard aligns claim/complete/fail with history deletion on an
-owner-first advisory-lock order. The later Phase 10 guards preserve whether a
-safety redirect called the provider, make profile identity/role authority
-canonical and backend-owned, remove legacy-role fallback and authenticated
-profile deletion, and reserve onboarding eligibility projection for the atomic
-backend Intake path. Real local PostgreSQL parallel claim/completion/deletion
-smokes completed without deadlock or timeout and converged on the expected
-message/usage/tombstone outcomes.
-The V1 account migration adds a service-role-only full-account deletion RPC;
-it removes restrict-linked focus history before the Auth/profile/product
-cascade and does not weaken normal task or habit deletion.
-The Notification lifecycle migration adds its owner-locked read/unread/dismiss
-RPC and retry ledger. The subsequent application-table privilege guard makes
-`anon` fail closed across every repo-owned product/ledger table, removes
-authenticated `TRUNCATE`, `REFERENCES`, and `TRIGGER` authority while preserving
-the intended per-table DML, and retains backend projections as read-only. It
-also freezes optional legacy tables, hardens future `postgres` public-table
-defaults, prevents reuse of the installed Auth trigger functions without
-removing their triggers, and adds the Notification-ledger lookup index plus
-non-validating timestamp-order checks for new or updated rows.
-Remote projects still need to be inspected directly before relying on
+live in `docs/supabase-current-state.md`. The scoped, machine-checked
+cross-runtime version registry lives in `docs/current-contracts.json`; owning
+feature contracts remain authoritative for complete wire formats and
+compatibility behavior. Exact current verification evidence lives only in
+`docs/verification.md`.
+
+Repository source proves neither an applied remote migration nor live project
+configuration. Remote projects still need direct inspection before relying on
 `USE_MOCK_DATA=false`.
 
 See `docs/supabase-current-state.md` before changing Supabase schema or relying
