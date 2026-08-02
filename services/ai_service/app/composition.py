@@ -38,6 +38,9 @@ from app.repositories.snapshot_repository import SupabaseSnapshotRepository
 from app.repositories.today_overview_repository import (
     SupabaseTodayOverviewRepository,
 )
+from app.repositories.today_planner_read_repository import (
+    SupabaseTodayPlannerReadRepository,
+)
 from app.repositories.user_context_repository import SupabaseUserContextRepository
 from app.repositories.weekly_review_repository import (
     SupabaseWeeklyReviewRepository,
@@ -67,6 +70,7 @@ from app.services.recommendation_engine import RecommendationEngine
 from app.services.scheduled_refresh import ScheduledRefreshService
 from app.services.snapshot_aggregator import SnapshotAggregator
 from app.services.today_overview_service import TodayOverviewService
+from app.services.today_planner_read_context import TodayPlannerReadContextFactory
 from app.services.weekly_review_service import WeeklyReviewService
 
 
@@ -141,10 +145,17 @@ class ApplicationComposition:
             repository=SupabaseDeadlinePlanRepository(supabase_client),
             learned_timing=learned_timing,
         )
+        planner_repository = SupabasePlannerRepository(supabase_client)
+        today_repository = SupabaseTodayOverviewRepository(supabase_client)
+        today_planner_read_contexts = TodayPlannerReadContextFactory(
+            repository=SupabaseTodayPlannerReadRepository(supabase_client),
+            deadline_plans=deadline_plan_service,
+        )
         planner_service = PlannerService(
-            repository=SupabasePlannerRepository(supabase_client),
+            repository=planner_repository,
             deadline_plans=deadline_plan_service,
             learned_timing=learned_timing,
+            read_context_factory=today_planner_read_contexts,
         )
         recommendation_engine = RecommendationEngine(
             user_context_repository=SupabaseUserContextRepository(supabase_client),
@@ -234,9 +245,10 @@ class ApplicationComposition:
             scheduled_refresh_service=scheduled_refresh_service,
             snapshot_aggregator=snapshot_aggregator,
             today_overview_service=TodayOverviewService(
-                repository=SupabaseTodayOverviewRepository(supabase_client),
+                repository=today_repository,
                 deadline_plan_service=deadline_plan_service,
                 planner_service=planner_service,
+                read_context_factory=today_planner_read_contexts,
             ),
             weekly_review_service=weekly_review_service,
         )

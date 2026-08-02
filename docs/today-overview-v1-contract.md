@@ -257,6 +257,14 @@ with their existing offset queries. Owner predicates, stable ordering,
 overfull-response error remain unchanged; the separate streak reader keeps its
 own gap-driven paging semantics.
 
+Each Today request owns one short-lived read context. V1 uses it for its direct
+read; V2 passes the same context through the V1 and Planner projections so the
+profile timezone, active Habit definitions and logs, and current Deadline
+projection are loaded once. Independent source families run with a fixed
+concurrency bound, while response assembly order, per-source failure isolation,
+and both wire contracts remain unchanged. The context is settled at request end
+and is never reused as a cross-request cache.
+
 The Today route now obtains the shared application-lifespan Supabase client
 instead of opening a transport per request. The read remains owner-scoped,
 GET-only, bounded, source-isolated, and free of generation or mutation.

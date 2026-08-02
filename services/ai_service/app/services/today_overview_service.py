@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from datetime import UTC, date, datetime, time, timedelta
 from typing import Any, Protocol, TypeVar
 from uuid import UUID, uuid5
@@ -38,11 +38,19 @@ from app.models.today_overview import (
 )
 from app.repositories.today_overview_repository import (
     TodayCalendarRows,
+    TodayHabitRows,
     TodayOverviewRepository,
+)
+from app.repositories.today_planner_read_repository import (
+    TodayPlannerProfileNotFoundError,
 )
 from app.services.deadline_plan_service import DeadlinePlanService
 from app.services.planning_availability import recurring_commitment_applies_on
 from app.services.snapshot_daily_state import valid_explicit_capture_kinds
+from app.services.today_planner_read_context import (
+    TodayPlannerReadContext,
+    TodayPlannerReadContextFactory,
+)
 
 
 class TodayOverviewUnavailableError(RuntimeError):
@@ -50,7 +58,12 @@ class TodayOverviewUnavailableError(RuntimeError):
 
 
 class PlannerOverviewReader(Protocol):
-    async def get_overview(self, *, user_id: str) -> PlannerOverviewResponse: ...
+    async def get_overview(
+        self,
+        *,
+        user_id: str,
+        read_context: TodayPlannerReadContext | None = None,
+    ) -> PlannerOverviewResponse: ...
 
 
 _T = TypeVar("_T")
@@ -64,19 +77,63 @@ class TodayOverviewService:
         repository: TodayOverviewRepository,
         deadline_plan_service: DeadlinePlanService,
         planner_service: PlannerOverviewReader | None = None,
+        read_context_factory: TodayPlannerReadContextFactory | None = None,
         now: Callable[[], datetime] | None = None,
     ) -> None:
         self._repository = repository
         self._deadline_plan_service = deadline_plan_service
         self._planner_service = planner_service
+        self._read_context_factory = read_context_factory
         self._now = now or (lambda: datetime.now(UTC))
 
-    async def get_overview(self, *, user_id: str) -> TodayOverviewResponse:
-        generated_at = _aware_utc(self._now())
+    async def get_overview(
+        self,
+        *,
+        user_id: str,
+        read_context: TodayPlannerReadContext | None = None,
+    ) -> TodayOverviewResponse:
+        owns_context = False
+        if read_context is None and self._read_context_factory is not None:
+            read_context = self._read_context_factory.create(
+                user_id=user_id,
+                generated_at=_aware_utc(self._now()),
+            )
+            owns_context = True
         try:
-            timezone = await self._repository.get_profile_timezone(user_id=user_id)
+            return await self._get_overview(
+                user_id=user_id,
+                read_context=read_context,
+            )
+        finally:
+            if owns_context:
+                assert read_context is not None
+                await read_context.aclose()
+
+    async def _get_overview(
+        self,
+        *,
+        user_id: str,
+        read_context: TodayPlannerReadContext | None,
+    ) -> TodayOverviewResponse:
+        if read_context is not None and read_context.user_id != user_id:
+            raise ValueError("Today read context belongs to another owner.")
+        generated_at = (
+            read_context.generated_at
+            if read_context is not None
+            else _aware_utc(self._now())
+        )
+        try:
+            timezone = (
+                await read_context.profile_timezone()
+                if read_context is not None
+                else await self._repository.get_profile_timezone(user_id=user_id)
+            )
             zone = ZoneInfo(timezone)
-        except (ValueError, ZoneInfoNotFoundError) as exc:
+        except (
+            TodayPlannerProfileNotFoundError,
+            ValueError,
+            ZoneInfoNotFoundError,
+        ) as exc:
             raise TodayOverviewUnavailableError(
                 "Today is unavailable because the account timezone could not "
                 "be loaded.",
@@ -97,32 +154,64 @@ class TodayOverviewService:
         )
 
         results = await asyncio.gather(
-            self._load_check_ins(user_id=user_id, local_date=local_date),
-            self._load_tasks(user_id=user_id, local_date=local_date, zone=zone),
+            _read_source(
+                read_context,
+                "today:check_ins",
+                lambda: self._load_check_ins(
+                    user_id=user_id,
+                    local_date=local_date,
+                ),
+            ),
+            _read_source(
+                read_context,
+                "today:tasks",
+                lambda: self._load_tasks(
+                    user_id=user_id,
+                    local_date=local_date,
+                    zone=zone,
+                ),
+            ),
             self._load_habits(
                 user_id=user_id,
                 week_starts_on=week_starts_on,
                 local_date=local_date,
+                read_context=read_context,
             ),
-            self._load_setup_commitments(
+            _read_source(
+                read_context,
+                "today:setup_commitments",
+                lambda: self._load_setup_commitments(
+                    user_id=user_id,
+                    local_date=local_date,
+                    zone=zone,
+                    range_starts_at=range_starts_at,
+                    range_ends_at=range_ends_at,
+                ),
+            ),
+            self._load_preparation(
                 user_id=user_id,
                 local_date=local_date,
-                zone=zone,
-                range_starts_at=range_starts_at,
-                range_ends_at=range_ends_at,
+                read_context=read_context,
             ),
-            self._load_preparation(user_id=user_id, local_date=local_date),
-            self._load_calendar(
-                user_id=user_id,
-                local_date=local_date,
-                range_starts_at=range_starts_at,
-                range_ends_at=range_ends_at,
+            _read_source(
+                read_context,
+                "today:calendar",
+                lambda: self._load_calendar(
+                    user_id=user_id,
+                    local_date=local_date,
+                    range_starts_at=range_starts_at,
+                    range_ends_at=range_ends_at,
+                ),
             ),
-            self._load_focus(
-                user_id=user_id,
-                generated_at=generated_at,
-                range_starts_at=range_starts_at,
-                range_ends_at=range_ends_at,
+            _read_source(
+                read_context,
+                "today:focus",
+                lambda: self._load_focus(
+                    user_id=user_id,
+                    generated_at=generated_at,
+                    range_starts_at=range_starts_at,
+                    range_ends_at=range_ends_at,
+                ),
             ),
             return_exceptions=True,
         )
@@ -182,12 +271,7 @@ class TodayOverviewService:
                     + sum(habit.outcome == "completed" for habit in safe_habits)
                     + sum(block.state == "completed" for block in preparation)
                 ),
-                total=(
-                    2
-                    + len(safe_tasks.today)
-                    + len(safe_habits)
-                    + len(preparation)
-                ),
+                total=(2 + len(safe_tasks.today) + len(safe_habits) + len(preparation)),
             )
 
         return TodayOverviewResponse(
@@ -206,10 +290,45 @@ class TodayOverviewService:
         )
 
     async def get_overview_v2(self, *, user_id: str) -> TodayOverviewV2Response:
+        read_context = (
+            self._read_context_factory.create(
+                user_id=user_id,
+                generated_at=_aware_utc(self._now()),
+            )
+            if self._read_context_factory is not None
+            else None
+        )
+        try:
+            return await self._get_overview_v2(
+                user_id=user_id,
+                read_context=read_context,
+            )
+        finally:
+            if read_context is not None:
+                await read_context.aclose()
+
+    async def _get_overview_v2(
+        self,
+        *,
+        user_id: str,
+        read_context: TodayPlannerReadContext | None,
+    ) -> TodayOverviewV2Response:
         base_result, planner_result = await asyncio.gather(
-            self.get_overview(user_id=user_id),
             (
-                self._planner_service.get_overview(user_id=user_id)
+                self._get_overview(
+                    user_id=user_id,
+                    read_context=read_context,
+                )
+                if read_context is not None
+                else self.get_overview(user_id=user_id)
+            ),
+            (
+                self._planner_service.get_overview(
+                    user_id=user_id,
+                    read_context=read_context,
+                )
+                if self._planner_service is not None and read_context is not None
+                else self._planner_service.get_overview(user_id=user_id)
                 if self._planner_service is not None
                 else _missing_planner()
             ),
@@ -218,7 +337,9 @@ class TodayOverviewService:
         if isinstance(base_result, BaseException):
             if isinstance(base_result, TodayOverviewUnavailableError):
                 raise base_result
-            raise TodayOverviewUnavailableError("Today could not be loaded.") from base_result
+            raise TodayOverviewUnavailableError(
+                "Today could not be loaded."
+            ) from base_result
         if not isinstance(base_result, TodayOverviewResponse):
             raise TypeError("Today V1 returned an unexpected projection.")
         base = base_result
@@ -231,7 +352,9 @@ class TodayOverviewService:
         )
         planner_state = TodaySourceState(
             status="current" if planner is not None else "unavailable",
-            message=None if planner is not None else "Planned blocks could not be loaded.",
+            message=None
+            if planner is not None
+            else "Planned blocks could not be loaded.",
         )
         planner_items = planner.days[0].items if planner is not None else []
         scheduled_task_ids = {
@@ -251,7 +374,9 @@ class TodayOverviewService:
             )
             source_values["tasks"] = tasks_state.model_dump()
         safe_tasks = _today_v2_tasks(
-            base.tasks if tasks_state.status == "current" else TodayTasks(today=[], all=[]),
+            base.tasks
+            if tasks_state.status == "current"
+            else TodayTasks(today=[], all=[]),
             scheduled_ids=scheduled_task_ids,
         )
 
@@ -267,6 +392,7 @@ class TodayOverviewService:
                     week_starts_on=week_starts_on,
                     local_date=base.local_date,
                     forced_ids=scheduled_habit_ids,
+                    read_context=read_context,
                 )
                 safe_habits = [
                     TodayHabitV2(
@@ -362,12 +488,7 @@ class TodayOverviewService:
                     + sum(habit.outcome == "completed" for habit in safe_habits)
                     + sum(block.state == "completed" for block in preparation)
                 ),
-                total=(
-                    2
-                    + len(safe_tasks.today)
-                    + len(safe_habits)
-                    + len(preparation)
-                ),
+                total=(2 + len(safe_tasks.today) + len(safe_habits) + len(preparation)),
             )
         return TodayOverviewV2Response(
             contract_version=TODAY_OVERVIEW_V2_CONTRACT_VERSION,
@@ -509,12 +630,28 @@ class TodayOverviewService:
         week_starts_on: date,
         local_date: date,
         forced_ids: set[UUID] | None = None,
+        read_context: TodayPlannerReadContext | None = None,
     ) -> list[TodayHabit]:
-        source = await self._repository.load_habits(
-            user_id=user_id,
-            week_starts_on=week_starts_on,
-            local_date=local_date,
-        )
+        if read_context is None:
+            source = await self._repository.load_habits(
+                user_id=user_id,
+                week_starts_on=week_starts_on,
+                local_date=local_date,
+            )
+        else:
+            habits, logs = await asyncio.gather(
+                read_context.active_habits(),
+                read_context.read(
+                    "today:habit_logs:"
+                    f"{week_starts_on.isoformat()}:{local_date.isoformat()}",
+                    lambda: self._repository.list_habit_logs(
+                        user_id=user_id,
+                        week_starts_on=week_starts_on,
+                        local_date=local_date,
+                    ),
+                ),
+            )
+            source = TodayHabitRows(habits=habits, logs=logs)
         if len(source.habits) > 500 or len(source.logs) > 5_000:
             raise ValueError("Today habit projection exceeds its response bound.")
         logs_by_habit: dict[UUID, dict[date, str]] = {}
@@ -535,6 +672,8 @@ class TodayOverviewService:
 
         habits: list[TodayHabit] = []
         for row in source.habits:
+            if row.get("active") is not True:
+                continue
             metadata = _metadata(row.get("metadata"))
             setup_state = str(
                 metadata.get("setup_state") or metadata.get("status") or "",
@@ -634,8 +773,13 @@ class TodayOverviewService:
         *,
         user_id: str,
         local_date: date,
+        read_context: TodayPlannerReadContext | None = None,
     ) -> list[TodayPreparationBlock]:
-        response = await self._deadline_plan_service.list_plans(user_id=user_id)
+        response = (
+            await read_context.deadline_response()
+            if read_context is not None
+            else await self._deadline_plan_service.list_plans(user_id=user_id)
+        )
         return _preparation_items(response, local_date=local_date)
 
     async def _load_calendar(
@@ -712,6 +856,16 @@ class TodayOverviewService:
                 ),
             )
         return items
+
+
+async def _read_source(
+    read_context: TodayPlannerReadContext | None,
+    key: str,
+    operation: Callable[[], Awaitable[_T]],
+) -> _T:
+    if read_context is None:
+        return await operation()
+    return await read_context.read(key, operation)
 
 
 def _source_state(value: object, message: str) -> TodaySourceState:

@@ -168,6 +168,12 @@ def test_application_composition_reuses_the_common_service_graph() -> None:
     assert composition.deadline_plan_service is (
         composition.today_overview_service._deadline_plan_service
     )
+    assert composition.planner_service._read_context_factory is (
+        composition.today_overview_service._read_context_factory
+    )
+    assert composition.deadline_plan_service is (
+        composition.planner_service._read_context_factory._deadline_plans
+    )
     assert composition.snapshot_aggregator is (
         composition.briefing_service._snapshot_aggregator
     )

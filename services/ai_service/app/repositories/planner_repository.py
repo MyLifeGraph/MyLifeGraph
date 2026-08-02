@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from datetime import date, datetime
-from typing import Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 from uuid import UUID
 
 import httpx
@@ -10,6 +11,13 @@ import httpx
 from app.clients.supabase import SupabaseRestClient
 from app.repositories.planning_writes import PlannerProposalWrite
 from app.repositories.repository_pagination import select_offset_pages
+from app.repositories.today_planner_read_repository import (
+    TodayPlannerInvalidTimezoneError,
+    TodayPlannerProfileNotFoundError,
+)
+
+if TYPE_CHECKING:
+    from app.services.today_planner_read_context import TodayPlannerReadContext
 
 
 class PlannerPersistenceConflict(RuntimeError):
@@ -102,6 +110,7 @@ class PlannerRepository(Protocol):
         *,
         user_id: str,
         generated_at: datetime,
+        read_context: TodayPlannerReadContext | None = None,
     ) -> PlannerOverviewContext: ...
 
     async def load_availability_context(
@@ -280,8 +289,91 @@ class SupabasePlannerRepository:
         *,
         user_id: str,
         generated_at: datetime,
+        read_context: TodayPlannerReadContext | None = None,
     ) -> PlannerOverviewContext:
         del generated_at
+        if read_context is not None:
+            try:
+                (
+                    timezone,
+                    energy,
+                    preference,
+                    calendar,
+                    schedule_items,
+                    commitments,
+                    tasks,
+                    active_habits,
+                    inactive_habits,
+                    projection,
+                    study_setup,
+                ) = await asyncio.gather(
+                    read_context.profile_timezone(),
+                    read_context.read(
+                        "planner:best_energy_window",
+                        lambda: self._best_energy_window(user_id=user_id),
+                    ),
+                    read_context.read(
+                        "planner:preference",
+                        lambda: self._preference(user_id=user_id),
+                    ),
+                    read_context.read(
+                        "planner:calendar",
+                        lambda: self._calendar(
+                            user_id=user_id,
+                            include_events=True,
+                        ),
+                    ),
+                    read_context.read(
+                        "planner:schedule_items",
+                        lambda: self._overview_schedule_items(user_id=user_id),
+                    ),
+                    read_context.read(
+                        "planner:commitments",
+                        lambda: self._overview_commitments(user_id=user_id),
+                    ),
+                    read_context.read(
+                        "planner:tasks",
+                        lambda: self._overview_tasks(user_id=user_id),
+                    ),
+                    read_context.active_habits(),
+                    read_context.read(
+                        "planner:inactive_habits",
+                        lambda: self._overview_inactive_habits(user_id=user_id),
+                    ),
+                    read_context.read(
+                        "planner:projection",
+                        lambda: self.load_projection(
+                            user_id=user_id,
+                            plan_id=None,
+                        ),
+                    ),
+                    read_context.read(
+                        "planner:study_setup",
+                        lambda: self._study_setup(user_id=user_id),
+                    ),
+                )
+            except TodayPlannerProfileNotFoundError as exc:
+                raise PlannerPersistenceNotFound(
+                    "Planner profile is unavailable.",
+                ) from exc
+            except TodayPlannerInvalidTimezoneError as exc:
+                raise ValueError("Planner profile timezone is invalid.") from exc
+            habits = _planner_habits(
+                active=active_habits,
+                inactive=inactive_habits,
+            )
+            return PlannerOverviewContext(
+                timezone=timezone,
+                best_energy_window=energy,
+                preference=preference,
+                calendar=calendar,
+                schedule_items=schedule_items,
+                commitments=commitments,
+                tasks=tasks,
+                habits=habits,
+                plans=projection,
+                study_setup=study_setup,
+            )
         timezone, energy = await self._profile(user_id=user_id)
         preference = await self._preference(user_id=user_id)
         calendar = await self._calendar(
@@ -336,6 +428,69 @@ class SupabasePlannerRepository:
             habits=habits,
             plans=projection,
             study_setup=await self._study_setup(user_id=user_id),
+        )
+
+    async def _overview_schedule_items(
+        self,
+        *,
+        user_id: str,
+    ) -> list[dict[str, Any]]:
+        return await self._select_pages(
+            "schedule_items",
+            params={
+                "select": "id,title,location,weekday,starts_at,ends_at,source,metadata",
+                "user_id": f"eq.{user_id}",
+                "order": "weekday.asc,starts_at.asc,id.asc",
+            },
+            max_rows=1_001,
+        )
+
+    async def _overview_commitments(
+        self,
+        *,
+        user_id: str,
+    ) -> list[dict[str, Any]]:
+        return await self._select_pages(
+            "planner_commitments",
+            params={
+                "select": "*",
+                "user_id": f"eq.{user_id}",
+                "order": "created_at.asc,id.asc",
+            },
+            max_rows=1_001,
+        )
+
+    async def _overview_tasks(
+        self,
+        *,
+        user_id: str,
+    ) -> list[dict[str, Any]]:
+        return await self._select_pages(
+            "tasks",
+            params={
+                "select": "id,title,description,status,priority,source,metadata,"
+                "updated_at,deadline,estimated_minutes",
+                "user_id": f"eq.{user_id}",
+                "order": "created_at.asc,id.asc",
+            },
+            max_rows=1_001,
+        )
+
+    async def _overview_inactive_habits(
+        self,
+        *,
+        user_id: str,
+    ) -> list[dict[str, Any]]:
+        return await self._select_pages(
+            "habits",
+            params={
+                "select": "id,title,description,frequency,target,active,metadata,"
+                "created_at,updated_at",
+                "user_id": f"eq.{user_id}",
+                "active": "eq.false",
+                "order": "created_at.asc,id.asc",
+            },
+            max_rows=1_001,
         )
 
     async def load_availability_context(
@@ -575,6 +730,9 @@ class SupabasePlannerRepository:
         timezone = profile_rows[0].get("timezone")
         if not isinstance(timezone, str) or not timezone:
             raise ValueError("Planner profile timezone is invalid.")
+        return timezone, await self._best_energy_window(user_id=user_id)
+
+    async def _best_energy_window(self, *, user_id: str) -> str:
         intake = await self._client.select(
             "intake_responses",
             params={
@@ -597,7 +755,7 @@ class SupabasePlannerRepository:
                 "variable",
             }:
                 energy = candidate
-        return timezone, energy
+        return energy
 
     async def _preference(self, *, user_id: str) -> dict[str, Any] | None:
         rows = await self._client.select(
@@ -721,6 +879,24 @@ class SupabasePlannerRepository:
         if not isinstance(result, dict):
             raise ValueError("Planner persistence returned an invalid response.")
         return result
+
+
+def _planner_habits(
+    *,
+    active: list[dict[str, Any]],
+    inactive: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    rows = [*active, *inactive]
+    rows.sort(
+        key=lambda row: (
+            str(row.get("created_at") or ""),
+            str(row.get("id") or ""),
+        ),
+    )
+    return [
+        {key: value for key, value in row.items() if key != "created_at"}
+        for row in rows[:1_001]
+    ]
 
 
 def _postgres_error(exc: httpx.HTTPStatusError) -> tuple[str | None, str]:

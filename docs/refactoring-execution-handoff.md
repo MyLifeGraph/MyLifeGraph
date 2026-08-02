@@ -135,7 +135,7 @@ chat must run this exact closeout sequence:
 
 ## Tranche 3: Reuse Today And Planner Read Context
 
-- State: `pending`
+- State: `completed`
 - Depends on: Tranche 2 completed.
 - Goal: Introduce one request-local read context for Today/Planner shared source
   facts, remove duplicate profile, Habit, and Deadline loads, and run independent
@@ -159,7 +159,17 @@ chat must run this exact closeout sequence:
   `tests/test_planner_api.py`, `tests/test_app_lifespan.py`, and application
   composition identity tests.
 - Commit subject: `perf: reuse today and planner read context`
-- Result: _Not started._
+- Result: _Completed on 2026-08-02. Today V1 and direct Planner reads now own a
+  request-local, concurrency-bounded read context; Today V2 shares that exact
+  context across both branches and loads profile timezone, active Habits, Habit
+  logs, and Deadline projection once. Planner retains its all-Habit projection
+  through the inactive complement, and no state survives the request. Focused
+  Ruff/format and 40 tests verified call counts, concurrency, cancellation,
+  source isolation, public error mapping, and byte-identical Today V1/V2 wire
+  models. `npm run verify:docs`,
+  `FLUTTER_BIN=/home/gregor/tools/flutter/bin/flutter npm run verify:fast`, and
+  `git diff --check` passed; the full gate included clean Flutter analysis/tests
+  and the complete backend suite with two expected skips._
 
 ## Tranche 4: Extract Focus Session Lifecycle Controller
 

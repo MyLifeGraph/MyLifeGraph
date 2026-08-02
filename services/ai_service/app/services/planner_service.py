@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any, Protocol
@@ -68,6 +69,10 @@ from app.services.planner_errors import (
     PlannerNotFoundError,
     PlannerValidationError,
 )
+from app.services.today_planner_read_context import (
+    TodayPlannerReadContext,
+    TodayPlannerReadContextFactory,
+)
 
 
 class DeadlinePlanReader(Protocol):
@@ -81,11 +86,13 @@ class PlannerService:
         repository: PlannerRepository,
         deadline_plans: DeadlinePlanReader | None = None,
         learned_timing: LearnedTimingResolver | None = None,
+        read_context_factory: TodayPlannerReadContextFactory | None = None,
         now: Callable[[], datetime] | None = None,
     ) -> None:
         self._repository = repository
         self._deadline_plans = deadline_plans
         self._learned_timing = learned_timing
+        self._read_context_factory = read_context_factory
         self._now = now or (lambda: datetime.now(UTC))
 
     async def get_preferences(self, *, user_id: str) -> PlannerPreferencesResponse:
@@ -703,24 +710,61 @@ class PlannerService:
             replayed=False,
         )
 
-    async def get_overview(self, *, user_id: str) -> PlannerOverviewResponse:
-        generated_at = _aware_utc(self._now())
-        try:
-            context = await self._repository.load_overview_context(
+    async def get_overview(
+        self,
+        *,
+        user_id: str,
+        read_context: TodayPlannerReadContext | None = None,
+    ) -> PlannerOverviewResponse:
+        owns_context = False
+        if read_context is None and self._read_context_factory is not None:
+            read_context = self._read_context_factory.create(
                 user_id=user_id,
-                generated_at=generated_at,
+                generated_at=_aware_utc(self._now()),
             )
+            owns_context = True
+        if read_context is not None and read_context.user_id != user_id:
+            raise ValueError("Planner read context belongs to another owner.")
+        generated_at = (
+            read_context.generated_at
+            if read_context is not None
+            else _aware_utc(self._now())
+        )
+        try:
+            context_load = (
+                self._repository.load_overview_context(
+                    user_id=user_id,
+                    generated_at=generated_at,
+                    read_context=read_context,
+                )
+                if read_context is not None
+                else self._repository.load_overview_context(
+                    user_id=user_id,
+                    generated_at=generated_at,
+                )
+            )
+            if read_context is not None:
+                context, deadline_response = await asyncio.gather(
+                    context_load,
+                    read_context.deadline_response(),
+                )
+            else:
+                context = await context_load
+                deadline_response = (
+                    await self._deadline_plans.list_plans(user_id=user_id)
+                    if self._deadline_plans is not None
+                    else DeadlinePlansResponse(
+                        contract_version="deadline-plan-v1",
+                        origin="authenticated_backend",
+                        plans=[],
+                    )
+                )
         except PlannerPersistenceNotFound as exc:
             raise PlannerNotFoundError(str(exc)) from exc
-        deadline_response = (
-            await self._deadline_plans.list_plans(user_id=user_id)
-            if self._deadline_plans is not None
-            else DeadlinePlansResponse(
-                contract_version="deadline-plan-v1",
-                origin="authenticated_backend",
-                plans=[],
-            )
-        )
+        finally:
+            if owns_context:
+                assert read_context is not None
+                await read_context.aclose()
         return build_planner_overview(
             generated_at=generated_at,
             context=context,

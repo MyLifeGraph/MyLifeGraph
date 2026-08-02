@@ -5,6 +5,8 @@ from datetime import UTC, date, datetime, timedelta
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
+import pytest
+
 from app.models.deadline_plans import DeadlinePlansResponse
 from app.models.planner import PlannerActionProposalRequest
 from app.models.planning_timing import PlanningTimingProvenance
@@ -13,15 +15,21 @@ from app.repositories.planner_repository import (
     PlannerCalendarProjection,
     PlannerOverviewContext,
     PlannerProjection,
+    SupabasePlannerRepository,
+)
+from app.repositories.today_planner_read_repository import (
+    SupabaseTodayPlannerReadRepository,
 )
 from app.services.planner_service import (
     PlannerConflictError,
+    PlannerNotFoundError,
     PlannerService,
     _add_setup_commitments,
     _attention_items,
     _course_selection_attention,
     build_planner_overview,
 )
+from app.services.today_planner_read_context import TodayPlannerReadContextFactory
 
 
 NOW = datetime(2026, 7, 20, 7, tzinfo=UTC)
@@ -648,6 +656,39 @@ def test_overview_builder_is_pure_and_independent_of_repository() -> None:
     assert first == second
     assert first.local_date == NOW.date()
     assert len(first.days) == 7
+
+
+def test_shared_profile_absence_keeps_planner_not_found_mapping() -> None:
+    class Client:
+        async def select(self, table, *, params):
+            return []
+
+    class Deadlines:
+        async def list_plans(self, *, user_id):
+            return DeadlinePlansResponse(
+                contract_version="deadline-plan-v1",
+                origin="authenticated_backend",
+                plans=[],
+            )
+
+    client = Client()
+    deadlines = Deadlines()
+    read_contexts = TodayPlannerReadContextFactory(
+        repository=SupabaseTodayPlannerReadRepository(client),
+        deadline_plans=deadlines,
+    )
+    service = PlannerService(
+        repository=SupabasePlannerRepository(client),
+        deadline_plans=deadlines,
+        read_context_factory=read_contexts,
+        now=lambda: NOW,
+    )
+
+    with pytest.raises(
+        PlannerNotFoundError,
+        match="Planner profile is unavailable.",
+    ):
+        asyncio.run(service.get_overview(user_id=USER_ID))
 
 
 def test_overview_shows_setup_commitment_only_inside_semester_dates() -> None:

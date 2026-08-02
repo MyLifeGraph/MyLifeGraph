@@ -109,6 +109,14 @@ Proposal writes use one strict typed persistence object that binds target kind
 and identity, the exactly next revision, and the mutually exclusive Task-block
 or Habit-slot payload. This changes no HTTP or database contract.
 
+The Planner overview captures one UTC instant and uses a request-local read
+context. A direct Planner read owns that context; Today V2 supplies its existing
+context so both projections reuse the profile timezone, active Habits, and
+Deadline projection. Planner adds the inactive-Habit complement before applying
+its unchanged all-Habit bound and ordering. Other independent reads run with a
+fixed concurrency bound. The context is settled at request end, never cached
+across requests, and does not change source errors or their HTTP translation.
+
 That boundary is physical as well as conceptual: `planner_service.py` contains
 repository orchestration and mutation sequencing, while `planner_builder.py`
 contains overview/projection/availability and serialization helpers. Shared

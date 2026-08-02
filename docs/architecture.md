@@ -383,6 +383,15 @@ attention projection. Proposal persistence crosses the repository boundary as
 one validated `PlannerProposalWrite`, so target identity, revision, Task
 blocks, and Habit slots cannot drift as independent dictionaries.
 
+Today and Planner reads share a request-local, concurrency-bounded context.
+Today V2 reuses one captured instant plus the profile timezone, active Habits,
+and Deadline projection across its Today V1 and Planner branches, and reuses
+Habit logs when scheduled Planner Habits extend the Today selection. Planner
+loads only its inactive-Habit complement and feature-specific sources. The
+context is settled after the response and never survives as an application
+cache. Existing owner predicates, row limits, source-failure isolation, and
+V1/V2 response shapes remain unchanged.
+
 The shared availability service composes Setup commitments, manual commitments,
 active Planner reservations, active Preparation blocks, the current instant,
 profile timezone/energy window, and optionally consented current `.ics` busy

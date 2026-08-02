@@ -14,7 +14,13 @@ from app.repositories.today_overview_repository import (
     TodayCalendarRows,
     TodayHabitRows,
 )
+from app.repositories.planner_repository import SupabasePlannerRepository
+from app.repositories.today_planner_read_repository import (
+    SupabaseTodayPlannerReadRepository,
+)
+from app.services.planner_service import PlannerService
 from app.services.today_overview_service import TodayOverviewService
+from app.services.today_planner_read_context import TodayPlannerReadContextFactory
 
 
 NOW = datetime(2026, 7, 21, 20, tzinfo=UTC)
@@ -83,8 +89,12 @@ class SelectClient:
 
 
 class DeadlineService:
+    def __init__(self) -> None:
+        self.calls = 0
+
     async def list_plans(self, *, user_id):
         assert user_id == USER_ID
+        self.calls += 1
         return DeadlinePlansResponse(
             contract_version="deadline-plan-v1",
             origin="authenticated_backend",
@@ -100,6 +110,63 @@ def _service(repository: Repository) -> TodayOverviewService:
     )
 
 
+class OverviewSelectClient:
+    def __init__(self) -> None:
+        self.calls = []
+
+    async def select(self, table, *, params):
+        self.calls.append((table, params))
+        if table == "profiles":
+            return [{"timezone": "Europe/Berlin"}]
+        if table == "intake_responses":
+            return [{"responses": {"best_energy_window": "morning"}}]
+        if table == "habits":
+            rows = [
+                {
+                    "id": "10000000-0000-4000-8000-000000000001",
+                    "title": "Daily review",
+                    "description": None,
+                    "frequency": "daily",
+                    "target": 1,
+                    "active": True,
+                    "metadata": {
+                        "contract_version": "habit-v1",
+                        "cadence": "daily",
+                    },
+                    "created_at": "2026-07-02T10:00:00Z",
+                    "updated_at": "2026-07-02T10:00:00Z",
+                },
+                {
+                    "id": "10000000-0000-4000-8000-000000000002",
+                    "title": "Archived review",
+                    "description": None,
+                    "frequency": "daily",
+                    "target": 1,
+                    "active": False,
+                    "metadata": {
+                        "contract_version": "habit-v1",
+                        "cadence": "daily",
+                    },
+                    "created_at": "2026-07-01T10:00:00Z",
+                    "updated_at": "2026-07-01T10:00:00Z",
+                },
+            ]
+            active = params.get("active")
+            if active == "eq.true":
+                return [row for row in rows if row["active"] is True]
+            if active == "eq.false":
+                return [row for row in rows if row["active"] is False]
+            return rows
+        return []
+
+
+class FailingOverviewSelectClient(OverviewSelectClient):
+    async def select(self, table, *, params):
+        if table == "planner_preferences":
+            raise RuntimeError("private Planner source failure")
+        return await super().select(table, params=params)
+
+
 def test_today_schedule_read_includes_semester_metadata() -> None:
     client = SelectClient()
     repository = SupabaseTodayOverviewRepository(client)
@@ -107,10 +174,115 @@ def test_today_schedule_read_includes_semester_metadata() -> None:
     rows = asyncio.run(repository.list_schedule_items(user_id=USER_ID))
 
     assert rows == []
-    params = next(
-        params for table, params in client.calls if table == "schedule_items"
-    )
+    params = next(params for table, params in client.calls if table == "schedule_items")
     assert "metadata" in params["select"]
+
+
+def test_v2_reuses_profile_active_habits_and_deadlines_within_request() -> None:
+    client = OverviewSelectClient()
+    deadline = DeadlineService()
+    read_contexts = TodayPlannerReadContextFactory(
+        repository=SupabaseTodayPlannerReadRepository(client),
+        deadline_plans=deadline,
+    )
+    planner = PlannerService(
+        repository=SupabasePlannerRepository(client),
+        deadline_plans=deadline,
+        read_context_factory=read_contexts,
+        now=lambda: NOW,
+    )
+    service = TodayOverviewService(
+        repository=SupabaseTodayOverviewRepository(client),
+        deadline_plan_service=deadline,
+        planner_service=planner,
+        read_context_factory=read_contexts,
+        now=lambda: NOW,
+    )
+
+    response = asyncio.run(service.get_overview_v2(user_id=USER_ID))
+
+    assert response.contract_version == "today-overview-v2"
+    assert response.source_states.planner.status == "current"
+    assert [table for table, _params in client.calls].count("profiles") == 1
+    habit_calls = [params for table, params in client.calls if table == "habits"]
+    assert len(habit_calls) == 2
+    assert {params["active"] for params in habit_calls} == {
+        "eq.true",
+        "eq.false",
+    }
+    assert [table for table, _params in client.calls].count("habit_logs") == 1
+    assert deadline.calls == 1
+
+
+def test_request_context_preserves_v1_and_v2_wire_models() -> None:
+    def build(*, shared: bool) -> TodayOverviewService:
+        client = OverviewSelectClient()
+        deadline = DeadlineService()
+        read_contexts = (
+            TodayPlannerReadContextFactory(
+                repository=SupabaseTodayPlannerReadRepository(client),
+                deadline_plans=deadline,
+            )
+            if shared
+            else None
+        )
+        planner = PlannerService(
+            repository=SupabasePlannerRepository(client),
+            deadline_plans=deadline,
+            read_context_factory=read_contexts,
+            now=lambda: NOW,
+        )
+        return TodayOverviewService(
+            repository=SupabaseTodayOverviewRepository(client),
+            deadline_plan_service=deadline,
+            planner_service=planner,
+            read_context_factory=read_contexts,
+            now=lambda: NOW,
+        )
+
+    legacy = build(shared=False)
+    shared = build(shared=True)
+
+    legacy_v1 = asyncio.run(legacy.get_overview(user_id=USER_ID))
+    shared_v1 = asyncio.run(shared.get_overview(user_id=USER_ID))
+    legacy_v2 = asyncio.run(legacy.get_overview_v2(user_id=USER_ID))
+    shared_v2 = asyncio.run(shared.get_overview_v2(user_id=USER_ID))
+
+    assert [habit.title for habit in shared_v1.habits] == ["Daily review"]
+    assert [habit.title for habit in shared_v2.habits] == ["Daily review"]
+    assert shared_v1.model_dump_json() == legacy_v1.model_dump_json()
+    assert shared_v2.model_dump_json() == legacy_v2.model_dump_json()
+
+
+def test_request_context_keeps_planner_only_failure_isolated() -> None:
+    client = FailingOverviewSelectClient()
+    deadline = DeadlineService()
+    read_contexts = TodayPlannerReadContextFactory(
+        repository=SupabaseTodayPlannerReadRepository(client),
+        deadline_plans=deadline,
+    )
+    planner = PlannerService(
+        repository=SupabasePlannerRepository(client),
+        deadline_plans=deadline,
+        read_context_factory=read_contexts,
+        now=lambda: NOW,
+    )
+    service = TodayOverviewService(
+        repository=SupabaseTodayOverviewRepository(client),
+        deadline_plan_service=deadline,
+        planner_service=planner,
+        read_context_factory=read_contexts,
+        now=lambda: NOW,
+    )
+
+    response = asyncio.run(service.get_overview_v2(user_id=USER_ID))
+
+    assert response.progress is None
+    assert response.progress_unavailable_sources == ["planner"]
+    assert response.source_states.planner.status == "unavailable"
+    assert response.source_states.check_ins.status == "current"
+    assert response.source_states.habits.status == "current"
+    assert "private" not in (response.source_states.planner.message or "")
 
 
 def _capture_row(entry_date: date, *, morning=True, evening=True, malformed=False):
@@ -159,10 +331,7 @@ def test_streak_paginates_and_today_incomplete_is_a_grace_day() -> None:
     today = date(2026, 7, 21)
     repository.daily_logs = [
         _capture_row(today, morning=True, evening=False),
-        *[
-            _capture_row(today - timedelta(days=offset))
-            for offset in range(1, 126)
-        ],
+        *[_capture_row(today - timedelta(days=offset)) for offset in range(1, 126)],
         _capture_row(today - timedelta(days=126), malformed=True),
     ]
 
@@ -404,10 +573,10 @@ def test_v2_adds_planner_blocks_without_counting_a_target_twice() -> None:
             kind="task_block",
             title="Future scheduled Task",
             source_id=UUID(task_id),
-                starts_at=datetime(2026, 7, 21, 8, tzinfo=UTC),
-                ends_at=datetime(2026, 7, 21, 8, 30, tzinfo=UTC),
-                recovery_minutes=0,
-                reserved_ends_at=datetime(2026, 7, 21, 8, 30, tzinfo=UTC),
+            starts_at=datetime(2026, 7, 21, 8, tzinfo=UTC),
+            ends_at=datetime(2026, 7, 21, 8, 30, tzinfo=UTC),
+            recovery_minutes=0,
+            reserved_ends_at=datetime(2026, 7, 21, 8, 30, tzinfo=UTC),
             all_day=False,
             state="active",
         ),
@@ -416,10 +585,10 @@ def test_v2_adds_planner_blocks_without_counting_a_target_twice() -> None:
             kind="task_block",
             title="Future scheduled Task",
             source_id=UUID(task_id),
-                starts_at=datetime(2026, 7, 21, 9, tzinfo=UTC),
-                ends_at=datetime(2026, 7, 21, 9, 30, tzinfo=UTC),
-                recovery_minutes=0,
-                reserved_ends_at=datetime(2026, 7, 21, 9, 30, tzinfo=UTC),
+            starts_at=datetime(2026, 7, 21, 9, tzinfo=UTC),
+            ends_at=datetime(2026, 7, 21, 9, 30, tzinfo=UTC),
+            recovery_minutes=0,
+            reserved_ends_at=datetime(2026, 7, 21, 9, 30, tzinfo=UTC),
             all_day=False,
             state="active",
         ),
@@ -428,10 +597,10 @@ def test_v2_adds_planner_blocks_without_counting_a_target_twice() -> None:
             kind="habit_slot",
             title="Tuesday Habit",
             source_id=UUID(habit_id),
-                starts_at=datetime(2026, 7, 21, 10, tzinfo=UTC),
-                ends_at=datetime(2026, 7, 21, 10, 20, tzinfo=UTC),
-                recovery_minutes=0,
-                reserved_ends_at=datetime(2026, 7, 21, 10, 20, tzinfo=UTC),
+            starts_at=datetime(2026, 7, 21, 10, tzinfo=UTC),
+            ends_at=datetime(2026, 7, 21, 10, 20, tzinfo=UTC),
+            recovery_minutes=0,
+            reserved_ends_at=datetime(2026, 7, 21, 10, 20, tzinfo=UTC),
             all_day=False,
             state="active",
         ),
@@ -440,10 +609,10 @@ def test_v2_adds_planner_blocks_without_counting_a_target_twice() -> None:
             kind="manual_commitment",
             title="Tutoring",
             source_id=UUID("90000000-0000-4000-8000-000000000001"),
-                starts_at=datetime(2026, 7, 21, 11, tzinfo=UTC),
-                ends_at=datetime(2026, 7, 21, 12, tzinfo=UTC),
-                recovery_minutes=0,
-                reserved_ends_at=datetime(2026, 7, 21, 12, tzinfo=UTC),
+            starts_at=datetime(2026, 7, 21, 11, tzinfo=UTC),
+            ends_at=datetime(2026, 7, 21, 12, tzinfo=UTC),
+            recovery_minutes=0,
+            reserved_ends_at=datetime(2026, 7, 21, 12, tzinfo=UTC),
             all_day=False,
             state="active",
         ),

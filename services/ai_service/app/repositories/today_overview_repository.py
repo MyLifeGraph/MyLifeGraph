@@ -41,6 +41,14 @@ class TodayOverviewRepository(Protocol):
         local_date: date,
     ) -> TodayHabitRows: ...
 
+    async def list_habit_logs(
+        self,
+        *,
+        user_id: str,
+        week_starts_on: date,
+        local_date: date,
+    ) -> list[dict[str, Any]]: ...
+
     async def list_schedule_items(
         self,
         *,
@@ -134,7 +142,21 @@ class SupabaseTodayOverviewRepository:
             },
             max_rows=501,
         )
-        logs = await self._select_pages(
+        logs = await self.list_habit_logs(
+            user_id=user_id,
+            week_starts_on=week_starts_on,
+            local_date=local_date,
+        )
+        return TodayHabitRows(habits=habits, logs=logs)
+
+    async def list_habit_logs(
+        self,
+        *,
+        user_id: str,
+        week_starts_on: date,
+        local_date: date,
+    ) -> list[dict[str, Any]]:
+        return await self._select_pages(
             "habit_logs",
             params=[
                 (
@@ -148,7 +170,6 @@ class SupabaseTodayOverviewRepository:
             ],
             max_rows=5_001,
         )
-        return TodayHabitRows(habits=habits, logs=logs)
 
     async def list_schedule_items(
         self,
