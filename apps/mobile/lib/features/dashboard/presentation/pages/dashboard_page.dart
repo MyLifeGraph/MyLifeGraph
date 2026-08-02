@@ -94,8 +94,14 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
             queryParameters: {'plan_id': planId},
           ).toString(),
         ),
-        onStartPreparationFocus: (taskId) => context.push(
-          '${AppRoutes.deepWork}?target_kind=task&target_id=$taskId',
+        onStartPreparationFocus: (blockId) => context.push(
+          Uri(
+            path: AppRoutes.deepWork,
+            queryParameters: {
+              'source_kind': 'deadline_plan_block',
+              'source_block_id': blockId,
+            },
+          ).toString(),
         ),
       ),
       taskVisibility: TodayTaskVisibility(

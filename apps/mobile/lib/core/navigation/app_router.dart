@@ -254,6 +254,12 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               initialRecoveryMinutes: _recoveryMinutes(
                 state.uri.queryParameters['recovery_minutes'],
               ),
+              initialSourceKind: FocusScheduleSourceKind.fromCode(
+                state.uri.queryParameters['source_kind'],
+              ),
+              initialSourceBlockId:
+                  state.uri.queryParameters['source_block_id'],
+              initialSessionId: state.uri.queryParameters['session_id'],
             ),
           ),
           GoRoute(

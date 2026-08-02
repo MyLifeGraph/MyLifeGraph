@@ -571,8 +571,14 @@ Supabase is the intended auth and persistence backend. The current app supports:
 
 Important current caveat: the Flutter app targets the canonical snake_case
 schema. The migration chain currently ends at
-`20260729160000_coach_english_prompt_v2.sql`. The current migration admits
-paired free-agent prompt V1/V2 provenance and adds the service-role-only V4
+`20260802111518_privileged_function_lint_cleanup.sql`. The current migration
+keeps a locked-down legacy role-helper compatibility identity while removing
+the final Account Delete and Coach V3 PL/pgSQL lint diagnostics without changing
+their contracts or grants. The preceding Focus migration adds immutable
+scheduled-Focus provenance, owner-locked retry-safe V2 lifecycle RPCs,
+collision-safe makeup sessions, and source-aware Deadline credit. The earlier
+Coach migration admits paired free-agent prompt V1/V2 provenance and
+adds the service-role-only V4
 claim wrapper without rewriting existing requests. The preceding write
 stabilization migration cuts Capture and account settings over to owner-locked
 CAS/RPC paths and adds timezone-bound Calendar/Planner truth. The earlier free
@@ -612,8 +618,9 @@ migration adds explicit consent, deterministic generation, and foreground
 receipts. The earlier Account Export
 grant restores only FastAPI's service-role read access to `lifestyle_entries`,
 which was required by the then-31-table Account Export V1 contract. Planner V1
-and Study Setup later extended it to 38 tables; Personal Learning now brings
-the current exact owner-content export to 40 tables.
+and Study Setup later extended it to 38 tables; Personal Learning brought it
+to 40 tables, and immutable Focus schedule-source provenance now makes the
+current exact owner-content export 41 tables.
 Phase 3 adds task
 estimates/terminal times, locked cadence-aware habit outcomes, immutable linked
 focus history, and restricted target deletion without replacing existing RLS

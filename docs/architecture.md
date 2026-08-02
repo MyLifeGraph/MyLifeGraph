@@ -355,7 +355,16 @@ events precede timed entries; overlaps remain separate. Selected Tasks and
 Habits reuse the existing Phase 3 handlers for inline completion, skip, undo,
 and Focus. Deadline Planner-managed tasks stay outside Today progress and
 redirect to their owning Preparation plan. A counted-source failure makes progress explicitly
-unavailable while unaffected agenda/sections remain usable. Workload, Weekly
+unavailable while unaffected agenda/sections remain usable. Actionable agenda
+rows route by exact identity: scheduled Preparation/Planner Task blocks load
+`GET /v1/focus/start-context/{source_kind}/{block_id}`, active Focus opens its
+timer, and terminal Focus
+loads its exact reflection. V2 Focus lifecycle writes use FastAPI service-only
+RPCs and retain an optional immutable planned-source row. The authenticated
+`GET /v1/focus/capabilities` read permits mixed-version fallback only for
+manual V1 lifecycle writes after a definitive missing-route response; scheduled
+or already persisted V2 sessions never downgrade. All daily and
+learning projections continue to consume actual Focus timestamps. Workload, Weekly
 review, saved signals, recommendations, decision-feedback history, and the full
 week load lazily under `More`. The exact rules live in
 `docs/today-overview-v1-contract.md`.
@@ -1083,9 +1092,9 @@ current Study Setup and Personal Learning projections, applies field
 allowlists to backend-owned Calendar/Coach ledgers, names the anti-replay ledger
 it omits, includes Deadline Planner plan/revision/block rows while omitting its
 request ledger, and fails rather than truncating at a V1 bound. The exact
-40-table set includes `learning_preferences` and
-`focus_session_reflections`, while the learning request ledger is explicitly
-omitted. FastAPI's typed owner-data catalog is the single code owner for all 47
+41-table set includes `learning_preferences`, `focus_session_reflections`, and
+`focus_session_schedule_sources`, while the learning request ledger is
+explicitly omitted. FastAPI's typed owner-data catalog is the single code owner for all 48
 repo-owned public tables: each entry separately declares Account Export and
 Coach Snapshot participation, the bounded read shape when applicable, and the
 human-readable snapshot description. A focused migration-history completeness

@@ -196,6 +196,31 @@ and the 25-minute fallback. Saved active preparation items appear as a
 transient Ready/Not-needed checklist with an explicit skip; choices are never
 stored. A manual session may override its duration once.
 
+Scheduled Focus uses the additive `focus-start-v2` backend path. A session may
+retain one immutable `focus_session_schedule_sources` row pointing to its
+Deadline or Planner Task block and snapshotting the original Focus interval and
+recovery. The server supplies the actual start and terminal instants. The
+selected target and recovery remain fixed; the student may shorten only the
+remaining block duration. The complete actual Focus-plus-recovery interval must
+be free of active Focus, Setup/fixed commitments, active Planner/Preparation
+reservations, Habit slots, and current consented Calendar busy time. The chosen
+source block alone is excluded, and adjacent half-open boundaries are allowed.
+Missing current Calendar truth fails closed. Manual Quick Action starts retain
+their existing behavior. Flutter first reads the authenticated strict
+`focus-capabilities-v1` contract. Only a definitive `404` for that side-effect-
+free capability route selects the legacy direct path for a manual V1 start or
+an already stored V1 lifecycle write; auth, network, malformed-response, and
+server failures remain honest errors. Scheduled starts never use that fallback,
+and a stored `focus-session-v2` row always requires the backend for terminal
+server-time truth.
+
+`request_id` is also the Focus session id. Exact content replay returns the
+same `focus-session-v2` row; different content returns
+`409 focus_request_conflict`. Reflection, local-day assignment, Today,
+Personal Learning, and recommendations continue to use only actual
+`started_at`, `ended_at`, and `actual_minutes`; planned provenance is display
+and credit-routing context only.
+
 The selected recovery duration is copied to
 `focus_sessions.metadata.recovery_minutes`. Completing, but not abandoning, the
 session starts a skippable device-local countdown that can be restored while

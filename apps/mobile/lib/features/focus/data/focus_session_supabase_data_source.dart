@@ -1,5 +1,7 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../core/network/api_client.dart';
+import '../../../core/network/api_failure.dart';
 import '../../../core/supabase/app_user_resolver.dart';
 import '../../../core/supabase/supabase_tables.dart';
 import '../../../core/utils/client_uuid.dart';
@@ -8,14 +10,19 @@ import '../domain/focus_session.dart';
 
 typedef FocusNowProvider = DateTime Function();
 typedef FocusEntryDateProvider = String Function(DateTime instant);
+typedef FocusAccessTokenProvider = Future<String?> Function();
 
 class FocusSessionSupabaseDataSource {
   FocusSessionSupabaseDataSource(
     this._client, {
     FocusNowProvider? nowProvider,
     FocusEntryDateProvider? entryDateProvider,
+    ApiClient? apiClient,
+    FocusAccessTokenProvider? accessTokenProvider,
   })  : _nowProvider = nowProvider ?? DateTime.now,
-        _entryDateProvider = entryDateProvider;
+        _entryDateProvider = entryDateProvider,
+        _apiClient = apiClient,
+        _accessTokenProvider = accessTokenProvider;
 
   static const _columns =
       'id,status,started_at,ended_at,planned_minutes,actual_minutes,label,'
@@ -27,6 +34,8 @@ class FocusSessionSupabaseDataSource {
   final SupabaseClient _client;
   final FocusNowProvider _nowProvider;
   final FocusEntryDateProvider? _entryDateProvider;
+  final ApiClient? _apiClient;
+  final FocusAccessTokenProvider? _accessTokenProvider;
 
   Future<FocusSession?> fetchActiveSession() async {
     final userId = await AppUserResolver(_client).resolveUserId();
@@ -52,6 +61,29 @@ class FocusSessionSupabaseDataSource {
     return List<Map<String, dynamic>>.from(rows as List)
         .map(FocusSession.fromRow)
         .toList();
+  }
+
+  Future<FocusSession> fetchSessionById(String sessionId) async {
+    final userId = await AppUserResolver(_client).resolveUserId();
+    return _requireOwnedSession(sessionId, userId: userId);
+  }
+
+  Future<FocusStartContext> fetchScheduledStartContext({
+    required FocusScheduleSourceKind sourceKind,
+    required String blockId,
+  }) async {
+    final apiClient = _apiClient;
+    if (apiClient == null || !isCanonicalUuid(blockId)) {
+      throw const FocusCommandException(
+        'Scheduled Focus start is unavailable.',
+      );
+    }
+    final token = await _requireAccessToken();
+    final json = await apiClient.getJson(
+      '/v1/focus/start-context/${sourceKind.code}/$blockId',
+      headers: {'Authorization': 'Bearer $token'},
+    );
+    return FocusStartContext.fromJson(json);
   }
 
   Future<Map<String, FocusReflection>> fetchReflectionsForSessions(
@@ -292,6 +324,21 @@ class FocusSessionSupabaseDataSource {
         'Focus request identity is invalid.',
       );
     }
+    if (_apiClient != null && await fetchFocusV2Availability()) {
+      return _startV2(
+        sessionId: sessionId,
+        body: {
+          'contract_version': 'focus-start-v2',
+          'request_id': sessionId,
+          'source_kind': 'manual',
+          'planned_minutes': draft.plannedMinutes,
+          'recovery_minutes': draft.recoveryMinutes,
+          'target_kind': draft.targetKind?.code,
+          'target_id': draft.targetId,
+          'label': draft.label,
+        },
+      );
+    }
     final startedAt = _nowProvider();
     final entryDate =
         _entryDateProvider?.call(startedAt) ?? localDateKey(startedAt);
@@ -363,6 +410,52 @@ class FocusSessionSupabaseDataSource {
     return FocusSession.fromRow(Map<String, dynamic>.from(row));
   }
 
+  Future<FocusSession> startScheduledSession({
+    required String sessionId,
+    required FocusScheduleSourceKind sourceKind,
+    required String blockId,
+    required int plannedMinutes,
+  }) async {
+    if (_apiClient == null ||
+        !isClientUuid(sessionId) ||
+        !isCanonicalUuid(blockId) ||
+        plannedMinutes < 5 ||
+        plannedMinutes > 240) {
+      throw const FocusCommandException(
+        'Scheduled Focus start is unavailable.',
+      );
+    }
+    return _startV2(
+      sessionId: sessionId,
+      body: {
+        'contract_version': 'focus-start-v2',
+        'request_id': sessionId,
+        'source_kind': sourceKind.code,
+        'source_block_id': blockId,
+        'planned_minutes': plannedMinutes,
+      },
+    );
+  }
+
+  Future<FocusSession> _startV2({
+    required String sessionId,
+    required Map<String, dynamic> body,
+  }) async {
+    final token = await _requireAccessToken();
+    final json = await _apiClient!.postJson(
+      '/v1/focus/sessions/start',
+      headers: {'Authorization': 'Bearer $token'},
+      body: body,
+    );
+    final session = FocusSession.fromV2Json(json);
+    if (session.id != sessionId) {
+      throw const FocusCommandException(
+        'Focus start returned another session.',
+      );
+    }
+    return session;
+  }
+
   Future<FocusSession> finishSession(String sessionId) {
     return _endSession(
       sessionId,
@@ -381,8 +474,30 @@ class FocusSessionSupabaseDataSource {
     String sessionId, {
     required FocusSessionStatus terminalStatus,
   }) async {
+    final apiClient = _apiClient;
+    if (apiClient != null && await fetchFocusV2Availability()) {
+      final token = await _requireAccessToken();
+      final operation =
+          terminalStatus == FocusSessionStatus.completed ? 'finish' : 'abandon';
+      final json = await apiClient.postJson(
+        '/v1/focus/sessions/$sessionId/$operation',
+        headers: {'Authorization': 'Bearer $token'},
+      );
+      final session = FocusSession.fromV2Json(json);
+      if (session.id != sessionId || session.status != terminalStatus) {
+        throw const FocusCommandException(
+          'Focus session transition returned a mismatched result.',
+        );
+      }
+      return session;
+    }
     final userId = await AppUserResolver(_client).resolveUserId();
     final session = await _requireOwnedSession(sessionId, userId: userId);
+    if (session.requiresBackendLifecycle) {
+      throw const FocusCommandException(
+        'This Focus session requires the V2 backend to finish safely.',
+      );
+    }
     if (session.status == terminalStatus) {
       return session;
     }
@@ -427,6 +542,40 @@ class FocusSessionSupabaseDataSource {
       } catch (_) {
         // Preserve the original ambiguous transition failure below.
       }
+      rethrow;
+    }
+  }
+
+  Future<String> _requireAccessToken() async {
+    final token = await _accessTokenProvider?.call();
+    if (token == null || token.isEmpty) {
+      throw const FocusCommandException(
+        'Focus requires an authenticated session.',
+      );
+    }
+    return token;
+  }
+
+  Future<bool> fetchFocusV2Availability() async {
+    final apiClient = _apiClient;
+    if (apiClient == null) return false;
+    final token = await _requireAccessToken();
+    try {
+      final json = await apiClient.getJson(
+        '/v1/focus/capabilities',
+        headers: {'Authorization': 'Bearer $token'},
+      );
+      if (json.length != 3 ||
+          json['contract_version'] != 'focus-capabilities-v1' ||
+          json['origin'] != 'authenticated_backend' ||
+          json['focus_session_v2'] != true) {
+        throw const FocusCommandException(
+          'Focus backend capability response is invalid.',
+        );
+      }
+      return true;
+    } catch (error) {
+      if (apiFailureFrom(error)?.statusCode == 404) return false;
       rethrow;
     }
   }

@@ -27,22 +27,25 @@ export async function waitForFlutterShell(page) {
 export async function enableFlutterSemantics(page) {
   const preEnabled = process.env.E2E_SEMANTICS_PRE_ENABLED === 'true';
   const startedAt = performance.now();
+  const semantics = page.locator('flt-semantics').first();
+  let mode = preEnabled ? 'pre_enabled' : 'click_fallback';
   if (preEnabled) {
-    await page.locator('flt-semantics').first().waitFor({
-      state: 'attached',
-      timeout: 1000,
+    await semantics.waitFor({ state: 'attached', timeout: 1000 }).catch(() => {});
+  }
+  if ((await semantics.count()) === 0) {
+    mode = 'click_fallback';
+    const accessibilityButton = page.getByRole('button', {
+      name: /enable accessibility/i,
     });
-  } else {
-    const placeholder = page.locator('flt-semantics-placeholder');
     try {
-      await placeholder.click({ force: true, timeout: 10000 });
+      await accessibilityButton.waitFor({ state: 'attached', timeout: 10000 });
+      await accessibilityButton.evaluate((element) => element.click());
     } catch {
-      await page
-        .getByRole('button', { name: /enable accessibility/i })
-        .click({ timeout: 2000 })
-        .catch(() => {});
+      await page.locator('flt-semantics-placeholder').evaluate(
+        (element) => element.click(),
+      );
     }
-    await page.locator('flt-semantics').first().waitFor({
+    await semantics.waitFor({
       state: 'attached',
       timeout: 10000,
     });
@@ -51,7 +54,7 @@ export async function enableFlutterSemantics(page) {
     `[e2e:timing] ${JSON.stringify({
       phase: 'semantics_spec',
       duration_ms: Math.round(performance.now() - startedAt),
-      mode: preEnabled ? 'pre_enabled' : 'click_fallback',
+      mode,
     })}`,
   );
 }

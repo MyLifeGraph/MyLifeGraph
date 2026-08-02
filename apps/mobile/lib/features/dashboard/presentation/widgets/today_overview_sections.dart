@@ -318,123 +318,197 @@ class _AgendaItem extends StatelessWidget {
   Widget build(BuildContext context) {
     final appearance = _agendaAppearance(context, item.kind);
     final detail = _agendaDetail(item);
+    final rowAction = _rowAction(context);
     return Semantics(
       container: true,
+      button: rowAction != null,
+      enabled: rowAction != null,
       label: '${appearance.label}. ${item.title}. ${_agendaTime(item)}.',
-      child: Container(
-        decoration: BoxDecoration(
-          color: appearance.background,
+      child: Material(
+        color: appearance.background,
+        shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppRadii.sm),
-          border:
-              Border.all(color: appearance.foreground.withValues(alpha: .3)),
+          side: BorderSide(
+            color: appearance.foreground.withValues(alpha: .3),
+          ),
         ),
-        padding: const EdgeInsets.all(AppSpacing.md),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            SizedBox(
-              width: 76,
-              child: Text(
-                _agendaTime(item),
-                style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                      color: appearance.foreground,
-                    ),
-              ),
-            ),
-            const SizedBox(width: AppSpacing.sm),
-            Icon(appearance.icon, color: appearance.foreground, size: 21),
-            const SizedBox(width: AppSpacing.sm),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    appearance.label,
-                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                          color: appearance.foreground,
-                          fontWeight: FontWeight.w700,
-                        ),
-                  ),
-                  const SizedBox(height: AppSpacing.xs),
-                  Text(
-                    item.title,
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+        child: InkWell(
+          onTap: rowAction,
+          borderRadius: BorderRadius.circular(AppRadii.sm),
+          child: Padding(
+            padding: const EdgeInsets.all(AppSpacing.md),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SizedBox(
+                  width: 76,
+                  child: Text(
+                    _agendaTime(item),
+                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
                           color: appearance.foreground,
                         ),
                   ),
-                  if (detail != null) ...[
-                    const SizedBox(height: AppSpacing.xs),
-                    Text(
-                      detail,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: appearance.foreground,
-                          ),
-                    ),
-                  ],
-                  if (item.location != null) ...[
-                    const SizedBox(height: AppSpacing.xs),
-                    Text(
-                      item.location!,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: appearance.foreground,
-                          ),
-                    ),
-                  ],
-                  if (item.kind == TodayTimelineKind.preparation &&
-                      item.planId != null) ...[
-                    const SizedBox(height: AppSpacing.sm),
-                    Wrap(
-                      spacing: AppSpacing.sm,
-                      runSpacing: AppSpacing.sm,
-                      children: [
-                        OutlinedButton(
-                          onPressed: () => onOpenPreparationPlan(item.planId!),
-                          child: const Text('Open plan'),
-                        ),
-                        if (canExecute &&
-                            item.managedTaskId != null &&
-                            const {'upcoming', 'partial'}.contains(item.state))
-                          FilledButton.tonalIcon(
-                            onPressed: () => onStartPreparationFocus(
-                              item.managedTaskId!,
-                            ),
-                            icon: const Icon(AppIcons.timerOutlined),
-                            label: const Text('Start focus'),
-                          ),
-                      ],
-                    ),
-                  ],
-                  if (canExecute &&
-                      item.kind == TodayTimelineKind.taskBlock &&
-                      item.taskId != null) ...[
-                    const SizedBox(height: AppSpacing.sm),
-                    FilledButton.tonalIcon(
-                      onPressed: () => context.push(
-                        '${AppRoutes.deepWork}?target_kind=task&target_id=${item.taskId}',
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                Icon(appearance.icon, color: appearance.foreground, size: 21),
+                const SizedBox(width: AppSpacing.sm),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        appearance.label,
+                        style:
+                            Theme.of(context).textTheme.labelMedium?.copyWith(
+                                  color: appearance.foreground,
+                                  fontWeight: FontWeight.w700,
+                                ),
                       ),
-                      icon: const Icon(AppIcons.timerOutlined),
-                      label: const Text('Start focus'),
-                    ),
-                  ],
-                  if (canExecute &&
-                      item.kind == TodayTimelineKind.habitSlot &&
-                      item.habitId != null) ...[
-                    const SizedBox(height: AppSpacing.sm),
-                    FilledButton.tonalIcon(
-                      onPressed: () => context.push(AppRoutes.habitCompletion),
-                      icon: const Icon(AppIcons.checkCircleOutline),
-                      label: const Text('Log habit'),
-                    ),
-                  ],
-                ],
-              ),
+                      const SizedBox(height: AppSpacing.xs),
+                      Text(
+                        item.title,
+                        style:
+                            Theme.of(context).textTheme.titleMedium?.copyWith(
+                                  color: appearance.foreground,
+                                ),
+                      ),
+                      if (detail != null) ...[
+                        const SizedBox(height: AppSpacing.xs),
+                        Text(
+                          detail,
+                          style:
+                              Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color: appearance.foreground,
+                                  ),
+                        ),
+                      ],
+                      if (item.location != null) ...[
+                        const SizedBox(height: AppSpacing.xs),
+                        Text(
+                          item.location!,
+                          style:
+                              Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color: appearance.foreground,
+                                  ),
+                        ),
+                      ],
+                      if (item.kind == TodayTimelineKind.preparation &&
+                          item.planId != null) ...[
+                        const SizedBox(height: AppSpacing.sm),
+                        Wrap(
+                          spacing: AppSpacing.sm,
+                          runSpacing: AppSpacing.sm,
+                          children: [
+                            OutlinedButton(
+                              onPressed: () =>
+                                  onOpenPreparationPlan(item.planId!),
+                              child: const Text('Open plan'),
+                            ),
+                            if (canExecute &&
+                                item.blockId != null &&
+                                const {
+                                  'upcoming',
+                                  'partial',
+                                  'missed',
+                                }.contains(item.state))
+                              FilledButton.tonalIcon(
+                                onPressed: () => onStartPreparationFocus(
+                                  item.blockId!,
+                                ),
+                                icon: const Icon(AppIcons.timerOutlined),
+                                label: const Text('Start focus'),
+                              ),
+                          ],
+                        ),
+                      ],
+                      if (canExecute &&
+                          item.kind == TodayTimelineKind.taskBlock) ...[
+                        const SizedBox(height: AppSpacing.sm),
+                        FilledButton.tonalIcon(
+                          onPressed: () => context.push(
+                            _scheduledFocusRoute(
+                              sourceKind: 'planner_task_block',
+                              blockId: item.id,
+                            ),
+                          ),
+                          icon: const Icon(AppIcons.timerOutlined),
+                          label: const Text('Start focus'),
+                        ),
+                      ],
+                      if (canExecute &&
+                          item.kind == TodayTimelineKind.habitSlot &&
+                          item.habitId != null) ...[
+                        const SizedBox(height: AppSpacing.sm),
+                        FilledButton.tonalIcon(
+                          onPressed: () =>
+                              context.push(AppRoutes.habitCompletion),
+                          icon: const Icon(AppIcons.checkCircleOutline),
+                          label: const Text('Log habit'),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
   }
+
+  VoidCallback? _rowAction(BuildContext context) {
+    switch (item.kind) {
+      case TodayTimelineKind.focusSession:
+        return () => context.push(
+              Uri(
+                path: AppRoutes.deepWork,
+                queryParameters: {'session_id': item.id},
+              ).toString(),
+            );
+      case TodayTimelineKind.preparation:
+        final planId = item.planId;
+        if (!canExecute || item.state == 'completed') {
+          return planId == null ? null : () => onOpenPreparationPlan(planId);
+        }
+        final blockId = item.blockId;
+        if (blockId == null ||
+            !const {'upcoming', 'partial', 'missed'}.contains(item.state)) {
+          return planId == null ? null : () => onOpenPreparationPlan(planId);
+        }
+        return () => onStartPreparationFocus(blockId);
+      case TodayTimelineKind.taskBlock:
+        return canExecute
+            ? () => context.push(
+                  _scheduledFocusRoute(
+                    sourceKind: 'planner_task_block',
+                    blockId: item.id,
+                  ),
+                )
+            : null;
+      case TodayTimelineKind.habitSlot:
+        return canExecute
+            ? () => context.push(AppRoutes.habitCompletion)
+            : null;
+      case TodayTimelineKind.setupCommitment:
+      case TodayTimelineKind.calendarEvent:
+      case TodayTimelineKind.manualCommitment:
+        return null;
+    }
+  }
 }
+
+String _scheduledFocusRoute({
+  required String sourceKind,
+  required String blockId,
+}) =>
+    Uri(
+      path: AppRoutes.deepWork,
+      queryParameters: {
+        'source_kind': sourceKind,
+        'source_block_id': blockId,
+      },
+    ).toString();
 
 String _agendaTime(TodayTimelineItem item) {
   if (item.allDay) return 'All day';

@@ -44,6 +44,9 @@ final eveningFocusReflectionSourceProvider =
   return FocusSessionSupabaseDataSource(
     client!,
     entryDateProvider: profileDate.dateKeyAt,
+    apiClient: ref.watch(apiClientProvider),
+    accessTokenProvider: () async =>
+        ref.read(supabaseClientProvider)?.auth.currentSession?.accessToken,
   );
 });
 

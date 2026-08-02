@@ -109,6 +109,21 @@ void main() {
       }
     });
 
+    test('retains whether a stored session requires backend lifecycle writes',
+        () {
+      final legacy = FocusSession.fromRow(
+        _activeRow()
+          ..['metadata'] = const {'contract_version': 'focus-session-v1'},
+      );
+      final backendOwned = FocusSession.fromRow(
+        _activeRow()
+          ..['metadata'] = const {'contract_version': 'focus-session-v2'},
+      );
+
+      expect(legacy.requiresBackendLifecycle, isFalse);
+      expect(backendOwned.requiresBackendLifecycle, isTrue);
+    });
+
     test('missing or invalid metadata entry dates safely fall back to absent',
         () {
       expect(FocusSession.fromRow(_activeRow()).entryDate, isNull);
@@ -648,6 +663,37 @@ void main() {
     });
   });
 
+  group('Focus V2 transport contracts', () {
+    test('scheduled session keeps actual time separate from planned origin',
+        () {
+      final session = FocusSession.fromV2Json(_scheduledSessionV2());
+
+      expect(session.startedAt, DateTime.parse('2026-08-02T10:00:00Z'));
+      expect(
+        session.scheduleSource?.originalStartsAt,
+        DateTime.parse('2026-08-01T08:00:00Z'),
+      );
+      expect(session.recoveryMinutes, 10);
+      expect(session.targetKind, FocusTargetKind.task);
+      expect(session.requiresBackendLifecycle, isTrue);
+    });
+
+    test('start context accepts missed and rejects unknown contract fields',
+        () {
+      final context = FocusStartContext.fromJson(_startContextV2());
+      expect(context.sourceState, 'missed');
+      expect(context.remainingMinutes, 20);
+      expect(context.canStart, isTrue);
+
+      expect(
+        () => FocusStartContext.fromJson(
+          _startContextV2()..['client_guess'] = true,
+        ),
+        throwsA(isA<FocusCommandException>()),
+      );
+    });
+  });
+
   group('measuredFocusMinutes', () {
     final start = DateTime.parse('2026-07-11T10:00:00Z');
 
@@ -737,4 +783,48 @@ Map<String, dynamic> _terminalRow(FocusSessionStatus status) => {
       'task_id': null,
       'habit_id': null,
       'updated_at': '2026-07-11T10:45:00Z',
+    };
+
+Map<String, dynamic> _scheduledSessionV2() => {
+      'contract_version': 'focus-session-v2',
+      'origin': 'authenticated_backend',
+      'replayed': false,
+      'id': 'f6000000-0000-4000-8000-000000000001',
+      'status': 'active',
+      'started_at': '2026-08-02T10:00:00Z',
+      'ended_at': null,
+      'planned_minutes': 20,
+      'actual_minutes': null,
+      'label': 'Read',
+      'task_id': 'f6000000-0000-4000-8000-000000000002',
+      'habit_id': null,
+      'entry_date': '2026-08-02',
+      'recovery_minutes': 10,
+      'updated_at': '2026-08-02T10:00:00Z',
+      'schedule_source': {
+        'source_kind': 'planner_task_block',
+        'block_id': 'f6000000-0000-4000-8000-000000000003',
+        'original_starts_at': '2026-08-01T08:00:00Z',
+        'original_ends_at': '2026-08-01T08:30:00Z',
+        'original_recovery_minutes': 10,
+      },
+    };
+
+Map<String, dynamic> _startContextV2() => {
+      'contract_version': 'focus-start-context-v2',
+      'origin': 'authenticated_backend',
+      'source_kind': 'planner_task_block',
+      'block_id': 'f6000000-0000-4000-8000-000000000003',
+      'target': {
+        'kind': 'task',
+        'id': 'f6000000-0000-4000-8000-000000000002',
+        'title': 'Read',
+      },
+      'original_starts_at': '2026-08-01T08:00:00Z',
+      'original_ends_at': '2026-08-01T08:30:00Z',
+      'recovery_minutes': 10,
+      'remaining_minutes': 20,
+      'source_state': 'missed',
+      'can_start': true,
+      'blocking_reason': null,
     };

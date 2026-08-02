@@ -16,6 +16,7 @@ from app.repositories.deadline_plan_repository import (
 from app.services.deadline_plan_service import (
     DeadlinePlanService,
     DeadlinePlanValidationError,
+    _deadline_block_credits,
     _fingerprint,
     _plan_blocks,
 )
@@ -24,6 +25,47 @@ from app.services.deadline_plan_service import (
 PLAN_ID = UUID("22222222-2222-4222-8222-222222222222")
 REQUEST_ID = UUID("11111111-1111-4111-8111-111111111111")
 NOW = datetime(2026, 7, 20, 8, tzinfo=UTC)
+
+
+def test_deadline_credit_consumes_proposal_truth_then_prefers_source_block() -> None:
+    block_one = "40000000-0000-4000-8000-000000000001"
+    block_two = "40000000-0000-4000-8000-000000000002"
+    blocks = [
+        {"id": block_one, "sequence": 1, "planned_minutes": 40},
+        {"id": block_two, "sequence": 2, "planned_minutes": 40},
+    ]
+    facts = [
+        {
+            "id": "focus-1",
+            "started_at": "2026-07-20T08:00:00Z",
+            "actual_minutes": 10,
+            "deadline_plan_block_id": None,
+        },
+        {
+            "id": "focus-2",
+            "started_at": "2026-07-20T09:00:00Z",
+            "actual_minutes": 20,
+            "deadline_plan_block_id": block_two,
+        },
+        {
+            "id": "focus-3",
+            "started_at": "2026-07-20T10:00:00Z",
+            "actual_minutes": 15,
+            "deadline_plan_block_id": None,
+        },
+        {
+            "id": "focus-4",
+            "started_at": "2026-07-20T11:00:00Z",
+            "actual_minutes": 25,
+            "deadline_plan_block_id": block_two,
+        },
+    ]
+
+    assert _deadline_block_credits(
+        blocks,
+        facts,
+        tracked_focus_minutes_at_proposal=10,
+    ) == {block_one: 20, block_two: 40}
 
 
 def _request(**overrides) -> DeadlinePlanProposalRequest:

@@ -120,9 +120,14 @@ color is reinforced by icon and text: teal/primary for Setup, blue/secondary
 for Preparation, amber/tertiary for Calendar, and an accessible purple for
 Focus.
 
-Preparation entries may open their owning plan. An upcoming or partial block
-may start Focus on its stable managed task. Imported events and recurring Setup
-commitments remain non-executable context.
+The complete actionable agenda row is a touch/semantics target. Preparation
+rows in `upcoming`, `partial`, or `missed` state open scheduled Focus for their
+exact block; fully credited rows still open the owning plan. Planner Task rows
+open scheduled Focus for their exact block. Active Focus rows open the current
+timer, while completed or abandoned rows load that exact session id and open
+its new or existing reflection even outside recent history and independently
+of the automatic prompt preference. Imported events and recurring Setup or
+fixed commitments remain non-executable context.
 
 ## Task And Habit Selection
 

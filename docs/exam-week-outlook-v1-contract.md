@@ -261,6 +261,12 @@ the bounded planning context, typed Deadline details, and bounded Capture rows.
 Repository reads and persistence-error mapping stay in the Deadline service;
 the builder performs no I/O and is directly deterministic-testable.
 
+Scheduled Focus makeup and source-aware block credit change only the underlying
+active Deadline detail after an actual session completes. They do not change
+this endpoint's contract, mode activation, sleep simulation, warning rules, or
+read-only authority; the outlook continues to consume the same total remaining
+and block-state projection.
+
 It adds no:
 
 - clinical sleep, fatigue, stress, or health diagnosis;

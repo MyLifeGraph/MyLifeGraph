@@ -392,6 +392,13 @@ service-role-only `claim_coach_request_v4`, and advances only a newly claimed
 pending request to V2. An existing V1 request or terminal response keeps its
 original prompt provenance on exact replay.
 
+Migration `20260802111518_privileged_function_lint_cleanup.sql` redefines the
+same service-role-only `claim_coach_request_v3` contract with a
+`pg_catalog, pg_temp` search path and `PERFORM` for the intentionally discarded
+expiry-failure result. Request validation, owner/request/row lock order,
+interrupted state, usage-ledger truth, replay output, signature, and grants are
+unchanged.
+
 Application roles receive no new Coach write authority. Authenticated owners
 retain only the intended bounded reads. The FastAPI service role remains the
 only normal claim/complete/fail/delete mutation path.

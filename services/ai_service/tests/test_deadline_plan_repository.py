@@ -362,7 +362,7 @@ class BulkClient:
 
     async def rpc(self, function, *, params):
         self.calls.append(("rpc", function, params))
-        if function == "get_deadline_plan_projection_v1":
+        if function == "get_deadline_plan_projection_v2":
             plans = [{"id": str(plan_id)} for plan_id in self.plan_ids]
             blocks = [
                 {
@@ -388,6 +388,8 @@ class BulkClient:
                 "blocks": blocks,
                 "focus_total_count": len(focus),
                 "focus_totals": focus,
+                "focus_fact_count": 0,
+                "focus_facts": [],
                 "calendar_event_count": 0,
                 "calendar_events": [],
             }
@@ -405,7 +407,7 @@ def test_fifty_plan_projection_uses_one_atomic_backend_call() -> None:
 
     assert len(projection.focus_totals) == 50
     assert len(client.calls) == 1
-    assert client.calls[0][1] == "get_deadline_plan_projection_v1"
+    assert client.calls[0][1] == "get_deadline_plan_projection_v2"
     assert client.calls[0][2] == {"p_user_id": USER_ID}
 
 
@@ -433,7 +435,7 @@ def test_detail_projection_passes_exact_plan_to_same_snapshot_rpc() -> None:
     assert client.calls == [
         (
             "rpc",
-            "get_deadline_plan_projection_v1",
+            "get_deadline_plan_projection_v2",
             {"p_user_id": USER_ID, "p_plan_id": str(PLAN_ID)},
         ),
     ]
@@ -466,6 +468,8 @@ class AtomicSourceClient:
                     "tracked_focus_minutes": 0,
                 },
             ],
+            "focus_fact_count": 0,
+            "focus_facts": [],
             "calendar_event_count": 1,
             "calendar_events": [
                 {
@@ -495,7 +499,7 @@ def test_calendar_source_and_revision_share_one_atomic_snapshot_call() -> None:
     assert source["_connection_last_import_id"] == IMPORT_ID
     assert client.calls == [
         (
-            "get_deadline_plan_projection_v1",
+            "get_deadline_plan_projection_v2",
             {"p_user_id": USER_ID, "p_plan_id": str(PLAN_ID)},
         ),
     ]

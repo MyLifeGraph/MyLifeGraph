@@ -28,7 +28,7 @@ def test_every_repo_owned_public_table_has_one_deliberate_policy() -> None:
     }
     catalog_names = [entry.name for entry in OWNER_DATA_CATALOG]
 
-    assert len(catalog_names) == len(set(catalog_names)) == 47
+    assert len(catalog_names) == len(set(catalog_names)) == 48
     assert set(catalog_names) == migration_tables
     assert all(
         type(entry.export_policy) is OwnerDataExportPolicy
@@ -45,7 +45,7 @@ def test_export_and_snapshot_are_independent_catalog_projections() -> None:
     export_names = tuple(table.name for table in ACCOUNT_EXPORT_TABLES)
     snapshot_names = tuple(table.name for table in COACH_SNAPSHOT_TABLES)
 
-    assert len(export_names) == 40
+    assert len(export_names) == 41
     assert len(snapshot_names) == 37
     assert tuple(ACCOUNT_EXPORT_OMITTED_TABLES) == (
         "daily_capture_request_identities",

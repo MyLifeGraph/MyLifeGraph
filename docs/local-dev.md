@@ -1058,7 +1058,12 @@ onboarding projection changes; and remove legacy `"User"` fallback from role
 authority. Authenticated profile edits are limited to non-authority fields;
 service role and the atomic Intake apply RPC retain the required backend
 projection authority. A fresh migration-chain verification should end at
-`20260729160000_coach_english_prompt_v2.sql`. The longitudinal Coach
+`20260802111518_privileged_function_lint_cleanup.sql`. That lint-only follow-up
+keeps the legacy public role-helper identity but delegates to canonical role
+truth, preserves Account Delete and Coach V3 behavior, and adds no application
+authority. The preceding additive scheduled-Focus migration follows the Coach
+prompt migration and adds immutable planned-source provenance plus service-only
+V2 lifecycle/projection RPCs. The longitudinal Coach
 migration keeps exact V2 scope parameters and fixed-mode history compatible.
 The free-agent migration admits message-only V3 claims and V2 responses, stores
 backend-derived evidence, bounded tool trace/count, and service-tier truth,

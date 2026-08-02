@@ -32,6 +32,19 @@ FastAPI service boundary for recommendation and future ML workflows.
   use deterministic, stably ordered 1,000-row pagination through the complete
   window and remain additive; they do not change `summary.daily_state`,
   `signals.daily_state`, or the `snapshot-aggregator-v1` marker.
+- Focus V2 exposes
+  authenticated `GET /v1/focus/capabilities`,
+  `GET /v1/focus/start-context/{source_kind}/{block_id}`, and
+  `POST /v1/focus/sessions/start`,
+  `POST /v1/focus/sessions/{session_id}/finish`, and
+  `POST /v1/focus/sessions/{session_id}/abandon`. Manual starts remain
+  compatible; scheduled starts bind one immutable Planner/Deadline block
+  origin, use actual backend timestamps, check the complete Focus-plus-recovery
+  interval, and never fall back to an unproven direct start. The capability
+  read lets a mixed-version client retain legacy manual V1 behavior only when
+  the backend explicitly lacks V2; auth, network, and server failures never
+  trigger that downgrade. See
+  `../../docs/phase-3-executable-actions-contract.md`.
 - FastAPI defines the strict, ranking-independent `executable-action-v1` model
   in parser parity with Flutter. Both reject unknown top-level/metadata fields,
   null/non-object metadata, explicit-null metadata fields, numeric coercion,
@@ -680,7 +693,7 @@ includes the two owner-content projections and omits the backend retry ledger
 explicitly.
 
 The typed `app/owner_data_catalog.py` module is the single backend inventory for
-all repo-owned public tables. It derives the exact 40-table Account Export and
+all repo-owned public tables. It derives the exact 41-table Account Export and
 37-table personal Coach Snapshot from separate per-table policies, including
 owner/cursor/watermark read shapes, sanitized export allowlists, omissions, and
 snapshot descriptions. A focused test compares that inventory with every

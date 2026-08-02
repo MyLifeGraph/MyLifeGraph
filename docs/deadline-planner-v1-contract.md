@@ -162,6 +162,14 @@ unchanged. Focus completed before first activation or against another task is
 not discoverable as qualifying plan progress and must be entered deliberately
 as prior credit if the user wants it included.
 
+For newly completed scheduled Focus, credit remains total-preserving but is
+block-aware. Minutes already captured by
+`tracked_focus_minutes_at_proposal` are removed chronologically first. New
+minutes carrying the current revision's Deadline block provenance fill that
+block first; unlinked, older-revision, and overflow minutes then fill remaining
+blocks chronologically. This changes no total plan progression and cannot
+double-count a minute.
+
 ## Calendar And Busy-Time Use
 
 A manual plan has no calendar dependency. An imported-event plan requires one
@@ -490,7 +498,11 @@ Exam Outlook, and relevant Today projections. Guest/mock shows honest
 unavailability and makes zero planner calls.
 
 An active plan with passed `missed` blocks shows the number of affected blocks
-and still-uncredited minutes. `Replan remaining time` opens the existing staged
+and still-uncredited minutes. A `missed` or `partial` block with at least five
+minutes remaining also exposes scheduled Focus start at the actual current
+time when the target and complete Focus-plus-recovery interval are still valid.
+This makeup path preserves the original block and performs no replanning.
+`Replan remaining time` remains available and opens the existing staged
 proposal flow from the current date. It does not mutate reservations in the
 background, and previously completed qualifying focus remains credited to the
 plan as a whole. The active warning remains visible while a replacement

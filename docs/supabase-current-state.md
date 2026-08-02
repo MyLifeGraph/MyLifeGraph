@@ -23,7 +23,11 @@ The current repository boundary then adds write stabilization and
 observation-ordered persistence through
 `20260729130000_observed_projection_persistence.sql`, followed by rolling-safe
 English-only Coach prompt provenance in
-`20260729160000_coach_english_prompt_v2.sql`.
+`20260729160000_coach_english_prompt_v2.sql`, and immutable scheduled-Focus
+provenance plus V2 lifecycle RPCs in
+`20260802083219_focus_schedule_sources_v2.sql`. The current boundary is the
+contract-neutral privileged-function cleanup in
+`20260802111518_privileged_function_lint_cleanup.sql`.
 
 ## Runtime Activation
 
@@ -80,6 +84,7 @@ The app table constants live in
 | `coach_messages` | Bounded validated user/assistant history linked to a retry-safe backend request. Authenticated owners can read; only FastAPI inserts/deletes turns. V3 answers use `coach-response-v2`; legacy and fixed-mode V1/V2 rows remain readable. |
 | `memory_entries` | Durable Setup/manual memory content. Authenticated owners can read it. Current free-question Coach snapshots may include sanitized owner memory detail as untrusted data; the old explicit selection projection remains only for V1/V2 compatibility and never changes content ownership. |
 | `focus_sessions` | Real one-active-session Deep Work lifecycle with bounded planned/measured duration, fully immutable terminal history, persisted local start date, and at most one owned task or active-habit target whose deletion is restricted. |
+| `focus_session_schedule_sources` | Immutable optional origin for a scheduled Focus session: one owned Deadline or Planner Task block plus its original Focus interval and recovery snapshot. Forced owner-read RLS; direct application DML is forbidden and source deletion is restricted until Focus/account deletion removes the provenance. |
 | `focus_session_reflections` | At most one editable `focus-reflection-v1` rating per owned terminal Focus session, with two bounded scores and up to two controlled obstacles. Forced owner RLS; account deletion cascades it. |
 | `learning_preferences` | One revisioned `learning-preferences-v1` projection per owner for prompt, analysis, and separately gated learned-Planning choices. Learned planning cannot remain enabled while analysis is disabled. |
 | `learning_request_identities` | Backend-only global retry/result ledger for exact preference updates and confirmed reflection-history clearing; omitted from Account Export. |
@@ -284,10 +289,11 @@ evidence and mark `timing_fell_back_to_setup=true` after allocation uses an
 ordinary Setup window. It changes no grant, active block, or confirmation
 authority.
 
-Account Export now contains exactly 40 owner-content tables, including
-`learning_preferences` and `focus_session_reflections`, and names the learning
-retry ledger under its omission policy. Canonical profile deletion cascades the
-two product projections. See `docs/personal-learning-v1-contract.md`.
+Account Export now contains exactly 41 owner-content tables, including
+`learning_preferences`, `focus_session_reflections`, and
+`focus_session_schedule_sources`, and names the learning retry ledger under its
+omission policy. Canonical profile deletion cascades the product projections.
+See `docs/personal-learning-v1-contract.md`.
 
 Phase 0B did not require a migration. Flutter now treats missing or failing real
 Dashboard/Inbox/Recommendation sources as empty or error according to
@@ -713,6 +719,9 @@ transaction deletes only that owner's `focus_sessions` first. Deleting the Auth
 user then activates the canonical `auth.users -> profiles -> owned tables`
 cascade. A missing Auth user and a completed deletion have distinct exact JSON
 results; success additionally requires that the profile no longer exists.
+The scheduled-Focus provenance rows cascade from Focus before their restricted
+Planner/Deadline block references are reached, so this ordering also preserves
+the existing complete-account deletion path.
 Normal task/habit lifecycle and deletion constraints are unchanged.
 
 The same migration gives new canonical and legacy Auth profile projections a
@@ -1025,12 +1034,26 @@ upgrades only a newly claimed pending request to V2, so existing V1 requests
 and exact replays retain their original provenance. Application roles receive
 no new table or RPC write authority.
 
+`20260802083219_focus_schedule_sources_v2.sql` adds immutable optional
+planned-block provenance, owner-locked replay-safe Focus V2 lifecycle RPCs,
+scheduled interval collision checks, and an internal source-aware Deadline
+projection. It changes no historical Focus row and keeps V1 writes available
+for older clients.
+
+`20260802111518_privileged_function_lint_cleanup.sql` replaces the retained
+public legacy role helper with an application-inaccessible `SECURITY INVOKER`
+wrapper over `private.current_app_role()`, removes only the shadowed Account
+Delete loop-variable declaration, and uses `PERFORM` for the deliberately
+discarded Coach V3 expiry-failure response. It restates the existing minimal
+grants, hardens fixed search paths, and changes no Account or Coach result,
+lock, replay, deletion, or application-authority contract.
+
 ## Local Verification Workflow
 
 For local Supabase-backed testing, the reset should complete through:
 
 ```text
-20260729160000_coach_english_prompt_v2.sql
+20260802111518_privileged_function_lint_cleanup.sql
 ```
 
 Then configure `.env` with:
@@ -1078,7 +1101,7 @@ RESET_DB=true npm run verify:db
 ```
 
 The reset form should apply all migrations through
-`20260729160000_coach_english_prompt_v2.sql`; expected legacy-table
+`20260802111518_privileged_function_lint_cleanup.sql`; expected legacy-table
 skip notices may be emitted for missing CamelCase tables. Use reset when proving
 the full migration/backfill/constraint chain from a fresh local database, not
 merely because a reviewed migration is pending.
@@ -1204,9 +1227,14 @@ legacy compatibility only and should be dropped in a later dedicated migration
 after data migration and app verification are complete.
 
 The latest migration is
-`20260729160000_coach_english_prompt_v2.sql`. It adds rolling-safe English-only
-Coach prompt provenance and a service-role-only V4 claim wrapper without
-changing application-role authority. The preceding stabilization migrations
+`20260802111518_privileged_function_lint_cleanup.sql`. It removes the final
+privileged-function schema-lint diagnostics without changing Account Delete,
+Coach replay, role authority, or application grants. The preceding Focus
+migration adds scheduled-Focus provenance and service-role-only V2 lifecycle/
+projection RPCs without changing legacy client write authority. The earlier
+Coach migration adds rolling-safe
+English-only prompt provenance and a service-role-only V4 claim wrapper. The
+preceding stabilization migrations
 establish retry-safe write authority and observation-order persistence. The
 earlier `20260728160000_free_read_only_coach_agent_v1.sql` preserves fixed-mode
 V1/V2 rows while adding message-only V3 claim, exact V2 response, backend-owned

@@ -841,17 +841,14 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
   }
 
   void _startBlock(DeadlinePlan plan, DeadlinePlanBlock block) {
-    final taskId = plan.taskId;
     final remainingMinutes =
         block.plannedMinutes - block.creditedTrackedMinutes;
-    if (!plan.isActive || taskId == null || remainingMinutes < 5) return;
+    if (!plan.isActive || remainingMinutes < 5) return;
     final query = Uri(
       path: AppRoutes.deepWork,
       queryParameters: {
-        'target_kind': 'task',
-        'target_id': taskId,
-        'planned_minutes': '$remainingMinutes',
-        'recovery_minutes': '${block.recoveryMinutes}',
+        'source_kind': 'deadline_plan_block',
+        'source_block_id': block.id,
       },
     );
     context.push(query.toString());
@@ -1249,7 +1246,7 @@ class _DeadlinePlanCardState extends State<_DeadlinePlanCard> {
                   ),
                   const SizedBox(height: AppSpacing.xs),
                   Text(
-                    '${missedBlocks.length} reserved ${missedBlocks.length == 1 ? 'block has' : 'blocks have'} passed with ${_duration(missedMinutes)} still uncredited. Replan from today; completed focus remains counted.',
+                    '${missedBlocks.length} reserved ${missedBlocks.length == 1 ? 'block has' : 'blocks have'} passed with ${_duration(missedMinutes)} still uncredited. Start a missed block now if the actual time is free, or replan the remainder.',
                   ),
                   if (pending) ...[
                     const SizedBox(height: AppSpacing.xs),
@@ -1279,7 +1276,8 @@ class _DeadlinePlanCardState extends State<_DeadlinePlanCard> {
                   !pending &&
                   block.plannedMinutes - block.creditedTrackedMinutes >= 5 &&
                   (block.state == DeadlinePlanBlockState.upcoming ||
-                      block.state == DeadlinePlanBlockState.partial),
+                      block.state == DeadlinePlanBlockState.partial ||
+                      block.state == DeadlinePlanBlockState.missed),
               onStart: () => onStartBlock(block),
             ),
           if (revision.blocks.length > _collapsedBlockLimit)
@@ -1323,7 +1321,8 @@ class _DeadlinePlanCardState extends State<_DeadlinePlanCard> {
                 canStart:
                     block.plannedMinutes - block.creditedTrackedMinutes >= 5 &&
                         (block.state == DeadlinePlanBlockState.upcoming ||
-                            block.state == DeadlinePlanBlockState.partial),
+                            block.state == DeadlinePlanBlockState.partial ||
+                            block.state == DeadlinePlanBlockState.missed),
                 onStart: () => onStartBlock(block),
               ),
             if (active.blocks.length > _collapsedBlockLimit)

@@ -96,6 +96,37 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('active timer survives stale scheduled and exact route context',
+      (tester) async {
+    final source = _ActiveWithBrokenRouteContextFocusSource();
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          appConfigProvider.overrideWithValue(_realConfig),
+          focusSessionPageDataSourceProvider.overrideWithValue(source),
+        ],
+        child: const MaterialApp(
+          home: Scaffold(
+            body: FocusSessionPage(
+              initialSourceKind: FocusScheduleSourceKind.plannerTaskBlock,
+              initialSourceBlockId: 'f5000000-0000-4000-8000-000000000001',
+              initialSessionId: 'terminal-session-no-longer-readable',
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Focus active'), findsOneWidget);
+    expect(find.byKey(const ValueKey('focus-countdown')), findsOneWidget);
+    expect(find.text('Could not load focus sessions.'), findsNothing);
+    expect(source.scheduledContextLoads, 0);
+    expect(source.exactSessionLoads, 1);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('start duration choices stack at 320 pixels and 200% text',
       (tester) async {
     await tester.binding.setSurfaceSize(const Size(320, 568));
@@ -272,6 +303,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    await tester.ensureVisible(find.text('Start focus session'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Start focus session'));
     await tester.pump();
     showFocus.value = false;
@@ -702,6 +735,100 @@ void main() {
     expect(find.text('Start a focus block'), findsOneWidget);
     expect(source.savedDraft, isNull);
   });
+
+  testWidgets(
+      'scheduled source locks target and recovery, then starts by block id',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(800, 1000));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final source = _ScheduledFocusSource();
+    final snapshotRefresh = _CountingSnapshotRefresh();
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          appConfigProvider.overrideWithValue(_realConfig),
+          focusSessionPageDataSourceProvider.overrideWithValue(source),
+          snapshotRefreshServiceProvider.overrideWithValue(snapshotRefresh),
+        ],
+        child: const MaterialApp(
+          home: Scaffold(
+            body: FocusSessionPage(
+              initialSourceKind: FocusScheduleSourceKind.plannerTaskBlock,
+              initialSourceBlockId: 'f5000000-0000-4000-8000-000000000001',
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('focus-scheduled-origin')),
+      findsOneWidget,
+    );
+    expect(find.textContaining('20 min remaining'), findsOneWidget);
+    expect(find.text('10 min recovery is fixed by the plan.'), findsOneWidget);
+    expect(
+      tester
+          .widget<SegmentedButton<int>>(find.byType(SegmentedButton<int>))
+          .selected,
+      {20},
+    );
+    expect(find.text('25 min'), findsNothing);
+    expect(
+      tester
+          .widget<DropdownButtonFormField<String?>>(
+            find.byType(DropdownButtonFormField<String?>),
+          )
+          .onChanged,
+      isNull,
+    );
+
+    await tester.tap(find.text('Start focus session'));
+    await tester.pumpAndSettle();
+
+    expect(source.scheduledStarts, 1);
+    expect(source.lastBlockId, 'f5000000-0000-4000-8000-000000000001');
+    expect(source.lastPlannedMinutes, 20);
+    expect(source.manualStarts, 0);
+    expect(find.text('Focus active'), findsOneWidget);
+    expect(snapshotRefresh.focusCalls, 1);
+  });
+
+  testWidgets(
+      'exact terminal session opens reflection even outside recent history and with prompts off',
+      (tester) async {
+    final source = _ExactTerminalFocusSource();
+    Widget page({String? sessionId}) => ProviderScope(
+          overrides: [
+            appConfigProvider.overrideWithValue(_realConfig),
+            focusSessionPageDataSourceProvider.overrideWithValue(source),
+          ],
+          child: MaterialApp(
+            home: Scaffold(
+              body: FocusSessionPage(initialSessionId: sessionId),
+            ),
+          ),
+        );
+
+    await tester.pumpWidget(page());
+    await tester.pumpAndSettle();
+    expect(find.text('Start a focus block'), findsOneWidget);
+
+    await tester.pumpWidget(
+      page(sessionId: 'f5000000-0000-4000-8000-000000000099'),
+    );
+    await tester.pumpAndSettle();
+
+    expect(source.requestedSessionId, 'f5000000-0000-4000-8000-000000000099');
+    expect(source.promptEnabledLoads, 2);
+    expect(
+      find.byKey(const ValueKey('focus-reflection-sheet')),
+      findsOneWidget,
+    );
+    expect(find.text('How focused did the session feel?'), findsOneWidget);
+  });
 }
 
 const _realConfig = AppConfig(
@@ -779,6 +906,26 @@ class _ActiveFocusSource extends FocusSessionSupabaseDataSource {
   @override
   Future<List<FocusTargetOption>> fetchAvailableTargets() async {
     return const [];
+  }
+}
+
+class _ActiveWithBrokenRouteContextFocusSource extends _ActiveFocusSource {
+  int scheduledContextLoads = 0;
+  int exactSessionLoads = 0;
+
+  @override
+  Future<FocusSession> fetchSessionById(String sessionId) async {
+    exactSessionLoads += 1;
+    throw StateError('terminal session was removed');
+  }
+
+  @override
+  Future<FocusStartContext> fetchScheduledStartContext({
+    required FocusScheduleSourceKind sourceKind,
+    required String blockId,
+  }) async {
+    scheduledContextLoads += 1;
+    throw StateError('source plan is stale');
   }
 }
 
@@ -1027,6 +1174,151 @@ class _RecoveryFocusSource extends FocusSessionSupabaseDataSource {
 
   @override
   Future<StudyFocusSettings?> fetchStudyFocusSettings() async => null;
+}
+
+class _ScheduledFocusSource extends FocusSessionSupabaseDataSource {
+  _ScheduledFocusSource()
+      : super(
+          SupabaseClient(
+            'http://localhost:54321',
+            'test-anon-key',
+            authOptions: const AuthClientOptions(autoRefreshToken: false),
+          ),
+        );
+
+  FocusSession? active;
+  int scheduledStarts = 0;
+  int manualStarts = 0;
+  String? lastBlockId;
+  int? lastPlannedMinutes;
+
+  @override
+  Future<FocusSession?> fetchActiveSession() async => active;
+
+  @override
+  Future<List<FocusSession>> fetchRecentSessions({int limit = 10}) async =>
+      const [];
+
+  @override
+  Future<List<FocusTargetOption>> fetchAvailableTargets() async => const [];
+
+  @override
+  Future<StudyFocusSettings?> fetchStudyFocusSettings() async => null;
+
+  @override
+  Future<bool> fetchFocusReflectionPromptEnabled() async => false;
+
+  @override
+  Future<FocusStartContext> fetchScheduledStartContext({
+    required FocusScheduleSourceKind sourceKind,
+    required String blockId,
+  }) async {
+    return FocusStartContext(
+      sourceKind: sourceKind,
+      blockId: blockId,
+      target: const FocusTargetOption(
+        kind: FocusTargetKind.task,
+        id: 'f5000000-0000-4000-8000-000000000002',
+        title: 'Read the assigned chapter',
+      ),
+      originalStartsAt: DateTime.utc(2026, 8, 1, 8),
+      originalEndsAt: DateTime.utc(2026, 8, 1, 8, 30),
+      recoveryMinutes: 10,
+      remainingMinutes: 20,
+      sourceState: 'partial',
+      canStart: true,
+      blockingReason: null,
+    );
+  }
+
+  @override
+  Future<FocusSession> startSession({
+    required String sessionId,
+    required FocusStartDraft draft,
+  }) async {
+    manualStarts += 1;
+    throw StateError('manual start must not be used');
+  }
+
+  @override
+  Future<FocusSession> startScheduledSession({
+    required String sessionId,
+    required FocusScheduleSourceKind sourceKind,
+    required String blockId,
+    required int plannedMinutes,
+  }) async {
+    scheduledStarts += 1;
+    lastBlockId = blockId;
+    lastPlannedMinutes = plannedMinutes;
+    final now = DateTime.now();
+    active = FocusSession(
+      id: sessionId,
+      status: FocusSessionStatus.active,
+      startedAt: now,
+      plannedMinutes: plannedMinutes,
+      recoveryMinutes: 10,
+      label: 'Read the assigned chapter',
+      targetKind: FocusTargetKind.task,
+      targetId: 'f5000000-0000-4000-8000-000000000002',
+      updatedAt: now,
+    );
+    return active!;
+  }
+}
+
+class _ExactTerminalFocusSource extends FocusSessionSupabaseDataSource {
+  _ExactTerminalFocusSource()
+      : super(
+          SupabaseClient(
+            'http://localhost:54321',
+            'test-anon-key',
+            authOptions: const AuthClientOptions(autoRefreshToken: false),
+          ),
+        );
+
+  String? requestedSessionId;
+  int promptEnabledLoads = 0;
+
+  @override
+  Future<FocusSession?> fetchActiveSession() async => null;
+
+  @override
+  Future<List<FocusSession>> fetchRecentSessions({int limit = 10}) async =>
+      const [];
+
+  @override
+  Future<List<FocusTargetOption>> fetchAvailableTargets() async => const [];
+
+  @override
+  Future<StudyFocusSettings?> fetchStudyFocusSettings() async => null;
+
+  @override
+  Future<FocusSession> fetchSessionById(String sessionId) async {
+    requestedSessionId = sessionId;
+    final start = DateTime.utc(2026, 7, 1, 9);
+    return FocusSession(
+      id: sessionId,
+      status: FocusSessionStatus.completed,
+      startedAt: start,
+      endedAt: start.add(const Duration(minutes: 25)),
+      plannedMinutes: 25,
+      actualMinutes: 25,
+      label: 'Older exact session',
+      updatedAt: start.add(const Duration(minutes: 25)),
+    );
+  }
+
+  @override
+  Future<Map<String, FocusReflection>> fetchReflectionsForSessions(
+    Iterable<FocusSession> sessions,
+  ) async =>
+      const {};
+
+  @override
+  Future<bool> fetchFocusReflectionPromptEnabled() async {
+    promptEnabledLoads += 1;
+    return false;
+  }
 }
 
 class _CountingSnapshotRefresh implements SnapshotRefreshService {

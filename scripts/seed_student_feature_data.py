@@ -75,7 +75,7 @@ from app.services.calendar_integration_service import (  # noqa: E402
 from app.services.coach_context import CoachContextService  # noqa: E402
 from app.services.coach_service import CoachService  # noqa: E402
 from app.services.deadline_plan_service import DeadlinePlanService  # noqa: E402
-from app.services.daily_capture_parser import (  # noqa: E402
+from app.contracts.daily_capture_v4 import (  # noqa: E402
     DailyCaptureV4SleepEpisode,
     DailyCaptureV4SleepPlan,
     parse_daily_capture_v4_sleep_episode,

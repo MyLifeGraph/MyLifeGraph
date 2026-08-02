@@ -32,7 +32,8 @@ protection lease exists.
 
 ## Synced Focus Reconciliation
 
-After `startSession` returns a confirmed row, Flutter calls `activateLease`
+After the manual or scheduled backend `startSession` returns a confirmed row,
+Flutter calls `activateLease`
 before the slower projection refresh. An ambiguous committed start is first
 reconciled against the exact active Focus id. Every Focus-page load and Android
 app resume refetches the canonical active row and reconciles it idempotently.
@@ -45,6 +46,10 @@ The lease interval is exactly:
 ```text
 [FocusSession.startedAt, FocusSession.startedAt + plannedMinutes)
 ```
+
+For a makeup session, `startedAt` is the actual server-confirmed start rather
+than the planned source time. Scheduled recovery remains outside this lease,
+exactly like manual recovery.
 
 Only a confirmed `finishSession` or `abandonSession` deactivates the matching
 lease. A different session id cannot clear it. A native cleanup failure is

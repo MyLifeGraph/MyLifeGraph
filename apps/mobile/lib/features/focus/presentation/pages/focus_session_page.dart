@@ -12,6 +12,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../composition/projection_refresh_providers.dart';
 import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/config/app_config.dart';
+import '../../../../core/network/api_client.dart';
+import '../../../../core/network/api_failure.dart';
 import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/supabase/supabase_providers.dart';
 import '../../../../core/utils/client_uuid.dart';
@@ -33,6 +35,12 @@ final focusSessionPageDataSourceProvider =
           client,
           entryDateProvider:
               ref.watch(profileLocalDateSourceProvider).dateKeyAt,
+          apiClient: ref.watch(apiClientProvider),
+          accessTokenProvider: () async => ref
+              .read(supabaseClientProvider)
+              ?.auth
+              .currentSession
+              ?.accessToken,
         );
 });
 
@@ -61,12 +69,18 @@ class FocusSessionPage extends ConsumerStatefulWidget {
     this.initialTargetId,
     this.initialPlannedMinutes,
     this.initialRecoveryMinutes,
+    this.initialSourceKind,
+    this.initialSourceBlockId,
+    this.initialSessionId,
   });
 
   final FocusTargetKind? initialTargetKind;
   final String? initialTargetId;
   final int? initialPlannedMinutes;
   final int? initialRecoveryMinutes;
+  final FocusScheduleSourceKind? initialSourceKind;
+  final String? initialSourceBlockId;
+  final String? initialSessionId;
 
   @override
   ConsumerState<FocusSessionPage> createState() => _FocusSessionPageState();
@@ -83,6 +97,7 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage>
   String? _selectedTargetValue;
   bool _initialTargetApplied = false;
   bool _initialDurationApplied = false;
+  bool _initialReflectionOpened = false;
   int _plannedMinutes = 25;
   int _recoveryMinutes = 0;
   StudyFocusSettings? _studySettings;
@@ -94,6 +109,8 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage>
   bool _isLoading = true;
   bool _isSaving = false;
   String? _loadError;
+  FocusStartContext? _scheduledContext;
+  String? _startConflictMessage;
   FocusProtectionStatus? _protectionStatus;
   bool _isChangingProtection = false;
   int _loadGeneration = 0;
@@ -103,13 +120,41 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    final requestedMinutes = widget.initialPlannedMinutes;
-    if (requestedMinutes != null &&
-        requestedMinutes >= 5 &&
-        requestedMinutes <= 240) {
-      _plannedMinutes = requestedMinutes;
-    }
+    _applyInitialDuration();
     Future.microtask(_load);
+  }
+
+  @override
+  void didUpdateWidget(covariant FocusSessionPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.initialTargetKind == widget.initialTargetKind &&
+        oldWidget.initialTargetId == widget.initialTargetId &&
+        oldWidget.initialPlannedMinutes == widget.initialPlannedMinutes &&
+        oldWidget.initialRecoveryMinutes == widget.initialRecoveryMinutes &&
+        oldWidget.initialSourceKind == widget.initialSourceKind &&
+        oldWidget.initialSourceBlockId == widget.initialSourceBlockId &&
+        oldWidget.initialSessionId == widget.initialSessionId) {
+      return;
+    }
+    _initialTargetApplied = false;
+    _initialDurationApplied = false;
+    _initialReflectionOpened = false;
+    _selectedTargetValue = null;
+    _scheduledContext = null;
+    _startConflictMessage = null;
+    _loadError = null;
+    _isLoading = true;
+    _applyInitialDuration();
+    Future.microtask(_load);
+  }
+
+  void _applyInitialDuration() {
+    final requestedMinutes = widget.initialPlannedMinutes;
+    _plannedMinutes = requestedMinutes != null &&
+            requestedMinutes >= 5 &&
+            requestedMinutes <= 240
+        ? requestedMinutes
+        : 25;
   }
 
   @override
@@ -179,7 +224,8 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage>
             onSkip: _skipRecovery,
           )
         else ...[
-          if (_studySetupStatus == StudySetupLoadStatus.unavailable &&
+          if (_scheduledContext == null &&
+              _studySetupStatus == StudySetupLoadStatus.unavailable &&
               !_continueWithoutStudySetup)
             _StudySetupUnavailableCard(
               onRetry: _retryStudySettings,
@@ -193,10 +239,22 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage>
             selectedTargetValue: _selectedTargetValue,
             isSaving: _isSaving,
             startEnabled:
-                _studySetupStatus != StudySetupLoadStatus.unavailable ||
-                    _continueWithoutStudySetup,
+                (_studySetupStatus != StudySetupLoadStatus.unavailable ||
+                        _continueWithoutStudySetup ||
+                        _scheduledContext != null) &&
+                    (_scheduledContext?.canStart ?? true),
+            scheduledContext: _scheduledContext,
+            inlineError: _startConflictMessage ??
+                (_scheduledContext?.canStart == false
+                    ? _focusStartBlockingText(
+                        _scheduledContext!.blockingReason,
+                      )
+                    : null),
             onDurationChanged: (value) {
-              setState(() => _plannedMinutes = value);
+              setState(() {
+                _plannedMinutes = value;
+                _startConflictMessage = null;
+              });
             },
             onCustomDuration: _chooseCustomDuration,
             onTargetChanged: (value) {
@@ -250,16 +308,49 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage>
       _isLoading = true;
     });
     try {
+      final active = await source.fetchActiveSession();
+      if (!isCurrent()) return;
+      final requestedSessionId = widget.initialSessionId;
+      final exactSessionFuture = requestedSessionId == null
+          ? Future<FocusSession?>.value()
+          : requestedSessionId == active?.id
+              ? Future<FocusSession?>.value(active)
+              : active == null
+                  ? source.fetchSessionById(requestedSessionId)
+                  : _fetchExactSessionWithoutHidingActive(
+                      source,
+                      requestedSessionId,
+                    );
+      final scheduledContextFuture = active != null ||
+              widget.initialSourceKind == null ||
+              widget.initialSourceBlockId == null
+          ? Future<FocusStartContext?>.value()
+          : source.fetchScheduledStartContext(
+              sourceKind: widget.initialSourceKind!,
+              blockId: widget.initialSourceBlockId!,
+            );
       final results = await Future.wait([
-        source.fetchActiveSession(),
         source.fetchRecentSessions(),
         source.fetchAvailableTargets(),
         _fetchStudySettings(studySource),
+        exactSessionFuture,
+        scheduledContextFuture,
       ]);
-      final active = results[0] as FocusSession?;
-      final recent = results[1] as List<FocusSession>;
-      final targets = results[2] as List<FocusTargetOption>;
-      final studyResult = results[3] as _StudySettingsResult;
+      final exactSession = results[3] as FocusSession?;
+      final recent = <FocusSession>[
+        if (exactSession != null) exactSession,
+        ...(results[0] as List<FocusSession>)
+            .where((session) => session.id != exactSession?.id),
+      ];
+      final scheduledContext = results[4] as FocusStartContext?;
+      final targets = <FocusTargetOption>[
+        ...(results[1] as List<FocusTargetOption>),
+        if (scheduledContext != null &&
+            !(results[1] as List<FocusTargetOption>)
+                .any((target) => target.value == scheduledContext.target.value))
+          scheduledContext.target,
+      ];
+      final studyResult = results[2] as _StudySettingsResult;
       final studySettings = studyResult.settings;
       if (!isCurrent()) return;
       final protectionStatus = await _readAndReconcileProtection(
@@ -286,7 +377,11 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage>
       final requestedId = widget.initialTargetId;
       if (!_initialTargetApplied) {
         _initialTargetApplied = true;
-        if (selected == null && requestedKind != null && requestedId != null) {
+        if (scheduledContext != null) {
+          selected = scheduledContext.target.value;
+        } else if (selected == null &&
+            requestedKind != null &&
+            requestedId != null) {
           final requested = '${requestedKind.code}:$requestedId';
           if (targets.any((target) => target.value == requested)) {
             selected = requested;
@@ -300,7 +395,9 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage>
       var plannedMinutes = _plannedMinutes;
       if (!_initialDurationApplied) {
         _initialDurationApplied = true;
-        if (widget.initialPlannedMinutes == null && active == null) {
+        if (scheduledContext != null) {
+          plannedMinutes = scheduledContext.remainingMinutes;
+        } else if (widget.initialPlannedMinutes == null && active == null) {
           final terminal = recent.where((session) => !session.isActive);
           if (studySettings != null) {
             plannedMinutes = studySettings.focusMinutes;
@@ -310,13 +407,14 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage>
         }
       }
       final requestedRecovery = widget.initialRecoveryMinutes;
-      final recoveryMinutes = requestedRecovery != null &&
-              (requestedRecovery == 0 ||
-                  requestedRecovery >= 5 &&
-                      requestedRecovery <= 60 &&
-                      requestedRecovery.remainder(5) == 0)
-          ? requestedRecovery
-          : studySettings?.recoveryMinutes ?? 0;
+      final recoveryMinutes = scheduledContext?.recoveryMinutes ??
+          (requestedRecovery != null &&
+                  (requestedRecovery == 0 ||
+                      requestedRecovery >= 5 &&
+                          requestedRecovery <= 60 &&
+                          requestedRecovery.remainder(5) == 0)
+              ? requestedRecovery
+              : studySettings?.recoveryMinutes ?? 0);
       final recoveryEndsAt =
           active == null ? await _restoreRecoveryCountdown(recent) : null;
       if (!isCurrent()) return;
@@ -337,10 +435,20 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage>
           _recoveryEndsAt = recoveryEndsAt;
           _clockNow = DateTime.now();
           _loadError = null;
+          _scheduledContext = scheduledContext;
+          _startConflictMessage = null;
           _isLoading = false;
           _protectionStatus = protectionStatus;
         });
         _syncTicker();
+        if (!_initialReflectionOpened &&
+            exactSession != null &&
+            !exactSession.isActive) {
+          _initialReflectionOpened = true;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) unawaited(_openReflection(exactSession));
+          });
+        }
       }
     } catch (_) {
       if (!isCurrent()) return;
@@ -350,6 +458,17 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage>
           _isLoading = false;
         });
       }
+    }
+  }
+
+  Future<FocusSession?> _fetchExactSessionWithoutHidingActive(
+    FocusSessionSupabaseDataSource source,
+    String sessionId,
+  ) async {
+    try {
+      return await source.fetchSessionById(sessionId);
+    } catch (_) {
+      return null;
     }
   }
 
@@ -422,6 +541,10 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage>
   }
 
   void _continueWithoutSavedStudySetup() {
+    if (_scheduledContext != null) {
+      setState(() => _continueWithoutStudySetup = true);
+      return;
+    }
     final terminal = _recent.where((session) => !session.isActive);
     setState(() {
       _continueWithoutStudySetup = true;
@@ -436,6 +559,7 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage>
   }
 
   Future<void> _chooseCustomDuration() async {
+    final maximum = _scheduledContext?.remainingMinutes ?? 240;
     final controller = TextEditingController(text: '$_plannedMinutes');
     final selected = await showDialog<int>(
       context: context,
@@ -446,9 +570,9 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage>
           controller: controller,
           autofocus: true,
           keyboardType: TextInputType.number,
-          decoration: const InputDecoration(
+          decoration: InputDecoration(
             labelText: 'Minutes',
-            helperText: 'Between 5 and 240 minutes',
+            helperText: 'Between 5 and $maximum minutes',
           ),
         ),
         actions: [
@@ -459,7 +583,7 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage>
           FilledButton(
             onPressed: () {
               final value = int.tryParse(controller.text.trim());
-              if (value != null && value >= 5 && value <= 240) {
+              if (value != null && value >= 5 && value <= maximum) {
                 Navigator.of(context).pop(value);
               }
             },
@@ -470,7 +594,10 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage>
     );
     controller.dispose();
     if (selected != null && mounted) {
-      setState(() => _plannedMinutes = selected);
+      setState(() {
+        _plannedMinutes = selected;
+        _startConflictMessage = null;
+      });
     }
   }
 
@@ -479,7 +606,8 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage>
     if (source == null ||
         _isSaving ||
         _studySetupStatus == StudySetupLoadStatus.unavailable &&
-            !_continueWithoutStudySetup) {
+            !_continueWithoutStudySetup &&
+            _scheduledContext == null) {
       return;
     }
     final prepared = await _confirmPreparation();
@@ -498,16 +626,24 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage>
     _protectionGeneration++;
     setState(() => _isSaving = true);
     try {
-      final started = await source.startSession(
-        sessionId: requestId,
-        draft: FocusStartDraft(
-          plannedMinutes: _plannedMinutes,
-          recoveryMinutes: _recoveryMinutes,
-          targetKind: target?.kind,
-          targetId: target?.id,
-          label: target?.title ?? 'Independent focus block',
-        ),
-      );
+      final scheduled = _scheduledContext;
+      final started = scheduled == null
+          ? await source.startSession(
+              sessionId: requestId,
+              draft: FocusStartDraft(
+                plannedMinutes: _plannedMinutes,
+                recoveryMinutes: _recoveryMinutes,
+                targetKind: target?.kind,
+                targetId: target?.id,
+                label: target?.title ?? 'Independent focus block',
+              ),
+            )
+          : await source.startScheduledSession(
+              sessionId: requestId,
+              sourceKind: scheduled.sourceKind,
+              blockId: scheduled.blockId,
+              plannedMinutes: _plannedMinutes,
+            );
       await _reconcileVisibleProtectionWith(
         started,
         gateway: protectionGateway,
@@ -518,6 +654,7 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage>
         _showMessage('Focus session started.');
       }
     } catch (error) {
+      final conflictMessage = _focusStartErrorText(error);
       if (!mounted) {
         try {
           final active = await source.fetchActiveSession();
@@ -536,19 +673,23 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage>
       }
       await _load();
       if (!mounted) return;
-      if (_active?.id == requestId) {
+      if (_active != null) {
         await _reconcileVisibleProtectionWith(
           _active,
           gateway: protectionGateway,
           platformSupported: protectionSupported,
         );
-        await _afterDurableWrite(_active!, projectionRefresh);
-        if (mounted) {
+        if (_active?.id == requestId) {
+          await _afterDurableWrite(_active!, projectionRefresh);
+        }
+        if (mounted && _active?.id == requestId) {
           _showMessage('Focus session started.');
         }
         return;
       }
-      if (mounted) {
+      if (mounted && _scheduledContext != null && conflictMessage != null) {
+        setState(() => _startConflictMessage = conflictMessage);
+      } else if (mounted) {
         _showMessage(
           error is FocusCommandException
               ? error.message
@@ -1140,6 +1281,8 @@ class _StartFocusCard extends StatelessWidget {
     required this.selectedTargetValue,
     required this.isSaving,
     required this.startEnabled,
+    required this.scheduledContext,
+    required this.inlineError,
     required this.onDurationChanged,
     required this.onCustomDuration,
     required this.onTargetChanged,
@@ -1153,6 +1296,8 @@ class _StartFocusCard extends StatelessWidget {
   final String? selectedTargetValue;
   final bool isSaving;
   final bool startEnabled;
+  final FocusStartContext? scheduledContext;
+  final String? inlineError;
   final ValueChanged<int> onDurationChanged;
   final VoidCallback onCustomDuration;
   final ValueChanged<String?> onTargetChanged;
@@ -1160,13 +1305,14 @@ class _StartFocusCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final maximum = scheduledContext?.remainingMinutes ?? 240;
     final durations = <int>{
       25,
       50,
       90,
       plannedMinutes,
       if (suggestion != null) suggestion!.durationMinutes,
-    }.toList()
+    }.where((minutes) => minutes >= 5 && minutes <= maximum).toList()
       ..sort();
     return AppCard(
       child: Column(
@@ -1181,6 +1327,21 @@ class _StartFocusCard extends StatelessWidget {
             'Finishing records focused time. It never completes a linked '
             'task or habit automatically.',
           ),
+          if (scheduledContext != null) ...[
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              'Planned '
+              '${DateFormat.MMMd().add_Hm().format(scheduledContext!.originalStartsAt.toLocal())}–'
+              '${DateFormat.Hm().format(scheduledContext!.originalEndsAt.toLocal())} · '
+              '${scheduledContext!.remainingMinutes} min remaining',
+              key: const ValueKey('focus-scheduled-origin'),
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            const Text(
+              'This session starts now. Its actual timestamps are used for progress and reflection.',
+            ),
+          ],
           if (recoveryMinutes > 0) ...[
             const SizedBox(height: AppSpacing.sm),
             Text(
@@ -1212,7 +1373,7 @@ class _StartFocusCard extends StatelessWidget {
               label: const Text('Custom duration'),
             ),
           ),
-          if (suggestion != null) ...[
+          if (suggestion != null && scheduledContext == null) ...[
             const SizedBox(height: AppSpacing.sm),
             Container(
               padding: const EdgeInsets.all(AppSpacing.md),
@@ -1241,8 +1402,10 @@ class _StartFocusCard extends StatelessWidget {
             key: ValueKey('focus-target-selector-$selectedTargetValue'),
             initialValue: selectedTargetValue,
             isExpanded: true,
-            decoration: const InputDecoration(
-              labelText: 'Linked action optional',
+            decoration: InputDecoration(
+              labelText: scheduledContext == null
+                  ? 'Linked action optional'
+                  : 'Linked planned task',
             ),
             items: [
               const DropdownMenuItem<String?>(
@@ -1265,8 +1428,40 @@ class _StartFocusCard extends StatelessWidget {
                 ),
               ),
             ],
-            onChanged: isSaving ? null : onTargetChanged,
+            onChanged:
+                isSaving || scheduledContext != null ? null : onTargetChanged,
           ),
+          if (scheduledContext != null) ...[
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              recoveryMinutes == 0
+                  ? 'No recovery is reserved for this block.'
+                  : '$recoveryMinutes min recovery is fixed by the plan.',
+              key: const ValueKey('focus-scheduled-recovery'),
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ],
+          if (inlineError != null) ...[
+            const SizedBox(height: AppSpacing.md),
+            Semantics(
+              liveRegion: true,
+              child: Container(
+                key: const ValueKey('focus-start-inline-conflict'),
+                width: double.infinity,
+                padding: const EdgeInsets.all(AppSpacing.md),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.errorContainer,
+                  borderRadius: BorderRadius.circular(AppRadii.sm),
+                ),
+                child: Text(
+                  inlineError!,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Theme.of(context).colorScheme.onErrorContainer,
+                      ),
+                ),
+              ),
+            ),
+          ],
           const SizedBox(height: AppSpacing.lg),
           Align(
             alignment: Alignment.centerRight,
@@ -1612,6 +1807,44 @@ String _focusProtectionWarningText(FocusProtectionWarning warning) {
       'Android could not confirm the Focus rule, or the rule was disabled, removed, or overridden.',
     FocusProtectionWarning.nativeFailure =>
       'Android protection status could not be confirmed; the Focus session continues.',
+  };
+}
+
+String? _focusStartErrorText(Object error) {
+  final failure = apiFailureFrom(error);
+  if (failure?.isConflict != true) return null;
+  final data = failure?.responseData;
+  final detail = data is Map ? data['detail'] : null;
+  return _focusStartBlockingText(detail is String ? detail : null);
+}
+
+String _focusStartBlockingText(String? reason) {
+  return switch (reason) {
+    'source_fully_credited' =>
+      'This planned block has already received all of its focus credit.',
+    'source_remaining_too_short' =>
+      'Fewer than five planned minutes remain, so another session cannot be started.',
+    'active_focus_session' =>
+      'Another focus session is already active. Open its timer first.',
+    'deadline_plan_block' =>
+      'Another preparation block overlaps this focus and recovery time.',
+    'planner_task_block' =>
+      'Another planned task overlaps this focus and recovery time.',
+    'fixed_commitment' =>
+      'A fixed commitment overlaps this focus and recovery time.',
+    'recurring_commitment' =>
+      'A recurring commitment overlaps this focus and recovery time.',
+    'calendar_availability_unavailable' =>
+      'Calendar busy time is enabled, but its current projection is unavailable.',
+    'calendar_busy' =>
+      'Imported calendar busy time overlaps this focus and recovery time.',
+    'availability_unavailable' =>
+      'Saved availability could not be resolved safely for this time.',
+    'Scheduled Focus duration exceeds remaining minutes.' =>
+      'Choose a duration no longer than the remaining planned time.',
+    'focus_request_conflict' =>
+      'This start request was already used with different details. Try again.',
+    _ => 'This planned session cannot start at the selected duration now.',
   };
 }
 

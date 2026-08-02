@@ -109,7 +109,8 @@ rows as V1: `profiles`, `notification_preferences`,
 `behavioral_events`, `lifestyle_entries`, `tasks`, `schedule_items`,
 `notifications`, `coach_messages`, `memory_entries`, `ai_insights`,
 `recommendations`, `skillset_profiles`, `goals`, `habits`, `habit_logs`,
-`focus_sessions`, `focus_session_reflections`, `intake_responses`,
+`focus_sessions`, `focus_session_schedule_sources`,
+`focus_session_reflections`, `intake_responses`,
 `study_setup_profiles`,
 `user_state_snapshots`, `daily_briefings`, `decision_feedback`,
 `weekly_reviews`, `calendar_connections`,
@@ -141,7 +142,7 @@ decision, omission decision, and separate Coach Snapshot participation are
 derived from the typed FastAPI owner-data catalog. Every repo-owned public
 table, including an operational ledger that participates in neither output,
 must have exactly one catalog entry. The export response contract remains the
-exact 40-table V2 shape above; this consolidation does not broaden export or
+exact 41-table V2 shape above; this consolidation does not broaden export or
 snapshot disclosure.
 
 `20260714110000_account_export_lifestyle_entries_grant.sql` gives only the
@@ -233,6 +234,13 @@ Normal task/habit deletion semantics remain unchanged. Only this full-account
 RPC may remove focus history before deleting its targets. After a confirmed
 backend deletion, Flutter clears local auth state even if a remote sign-out can
 no longer find the deleted user.
+
+Migration `20260802111518_privileged_function_lint_cleanup.sql` redefines the
+same service-role-only Account Delete RPC without its redundant declared loop
+index. The three integer `FOR` loops still use their identical automatically
+scoped index, and confirmation, locks, dynamic legacy validation/deletion,
+canonical/Auth cascade, result, fixed search path, signature, and grants remain
+unchanged.
 
 The account-deletion migration also revokes application-role mutation of all
 known CamelCase tables. Those tables have no canonical profile FK, so this

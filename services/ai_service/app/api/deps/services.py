@@ -12,6 +12,7 @@ from app.services.calendar_integration_service import CalendarIntegrationService
 from app.services.daily_capture_service import DailyCaptureService
 from app.services.deadline_plan_service import DeadlinePlanService
 from app.services.feedback_service import FeedbackService
+from app.services.focus_service import FocusService
 from app.services.intake_service import IntakeService
 from app.services.learning_service import LearningService
 from app.services.notification_service import NotificationService
@@ -89,6 +90,14 @@ async def get_feedback_service(request: Request) -> FeedbackService:
         request,
         select=lambda composition: composition.feedback_service,
         unavailable_detail="Feedback persistence is not configured.",
+    )
+
+
+async def get_focus_service(request: Request) -> FocusService:
+    return _service(
+        request,
+        select=lambda composition: composition.focus_service,
+        unavailable_detail="Focus persistence is not configured.",
     )
 
 

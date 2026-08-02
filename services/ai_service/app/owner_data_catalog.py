@@ -203,6 +203,14 @@ OWNER_DATA_CATALOG = (
         "focus_sessions",
         "Focus lifecycle, targets, planned time, and measured time.",
     ),
+    _export_only(
+        "focus_session_schedule_sources",
+        "Immutable planned-block origin retained for scheduled Focus sessions.",
+        "focus_session_id,user_id,source_kind,deadline_plan_block_id,"
+        "planner_task_block_id,original_starts_at,original_ends_at,"
+        "original_recovery_minutes,created_at",
+        cursor_column="focus_session_id",
+    ),
     _shared(
         "focus_session_reflections",
         "Owner reflections linked to terminal Focus sessions.",

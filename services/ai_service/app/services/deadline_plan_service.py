@@ -730,6 +730,21 @@ class DeadlinePlanService:
             focus_by_plan[key] = row
         if set(focus_by_plan) != set(plan_ids):
             raise ValueError("Deadline focus total projection is incomplete.")
+        focus_facts_by_plan: dict[str, list[dict[str, Any]]] = {}
+        focus_fact_ids: set[str] = set()
+        for row in projection.focus_facts:
+            plan_key = str(row.get("plan_id"))
+            fact_id = str(row.get("id"))
+            if (
+                plan_key not in plan_ids
+                or fact_id == "None"
+                or fact_id in focus_fact_ids
+            ):
+                raise ValueError("Deadline focus fact projection is inconsistent.")
+            focus_fact_ids.add(fact_id)
+            focus_facts_by_plan.setdefault(plan_key, []).append(row)
+        if any(len(rows) > 10_000 for rows in focus_facts_by_plan.values()):
+            raise ValueError("Deadline focus history exceeds its V2 bound.")
         if not set(projection.calendar_events).issubset(source_event_ids):
             raise ValueError("Deadline calendar projection contains unrelated rows.")
         details: list[DeadlinePlanDetail] = []
@@ -744,6 +759,7 @@ class DeadlinePlanService:
                     tracked=_int(
                         focus_by_plan[plan_key].get("tracked_focus_minutes"),
                     ),
+                    focus_facts=focus_facts_by_plan.get(plan_key, []),
                     calendar_events=projection.calendar_events,
                 ),
             )
@@ -757,6 +773,7 @@ class DeadlinePlanService:
         revisions: list[dict[str, Any]],
         blocks: list[dict[str, Any]],
         tracked: int,
+        focus_facts: list[dict[str, Any]],
         calendar_events: dict[str, dict[str, Any]] | None,
     ) -> DeadlinePlanDetail:
         active_row = next(
@@ -779,12 +796,21 @@ class DeadlinePlanService:
             else _int(plan_row["original_credited_prior_minutes"])
         )
         accounted = min(estimate, prior + tracked)
+        if (
+            sum(
+                max(0, _int(row.get("actual_minutes")))
+                for row in focus_facts
+            )
+            != tracked
+        ):
+            raise ValueError("Deadline focus facts do not match the tracked total.")
         now = _aware_utc(self._now())
         active_revision = await self._revision_from_row(
             user_id=user_id,
             row=active_row,
             block_rows=blocks,
             tracked_focus_minutes=tracked,
+            focus_facts=focus_facts,
             now=now,
             plan_status=plan_row["status"],
             calendar_events=calendar_events,
@@ -794,6 +820,7 @@ class DeadlinePlanService:
             row=pending_row,
             block_rows=blocks,
             tracked_focus_minutes=0,
+            focus_facts=[],
             now=now,
             plan_status=plan_row["status"],
             calendar_events=calendar_events,
@@ -822,6 +849,7 @@ class DeadlinePlanService:
         now: datetime,
         plan_status: str,
         calendar_events: dict[str, dict[str, Any]] | None,
+        focus_facts: list[dict[str, Any]] | None = None,
     ) -> DeadlinePlanRevision | None:
         if row is None:
             return None
@@ -833,20 +861,36 @@ class DeadlinePlanService:
             if _int(block.get("revision")) == revision_number
         ]
         matching_blocks.sort(key=lambda item: (_int(item["sequence"]), str(item["id"])))
-        credit_left = (
-            max(
-                0,
-                tracked_focus_minutes
-                - _int(row.get("tracked_focus_minutes_at_proposal")),
+        credit_facts = focus_facts
+        if credit_facts is None:
+            credit_facts = (
+                [
+                    {
+                        "id": "legacy-total",
+                        "started_at": row.get("activated_at")
+                        or row.get("created_at"),
+                        "actual_minutes": tracked_focus_minutes,
+                        "deadline_plan_block_id": None,
+                    },
+                ]
+                if tracked_focus_minutes > 0
+                else []
+            )
+        credits = (
+            _deadline_block_credits(
+                matching_blocks,
+                credit_facts,
+                tracked_focus_minutes_at_proposal=_int(
+                    row.get("tracked_focus_minutes_at_proposal"),
+                ),
             )
             if row.get("state") == "active"
-            else 0
+            else {}
         )
         rendered_blocks: list[DeadlinePlanBlock] = []
         for block in matching_blocks:
             planned = _int(block["planned_minutes"])
-            credit = min(planned, credit_left)
-            credit_left -= credit
+            credit = credits.get(str(block["id"]), 0)
             starts_at = _datetime(block["starts_at"])
             ends_at = _datetime(block["ends_at"])
             if row.get("state") == "proposed":
@@ -978,3 +1022,51 @@ class DeadlinePlanService:
         if len(rows) > 10_000:
             raise ValueError("Deadline focus history exceeds its V1 bound.")
         return sum(max(0, _int(row.get("actual_minutes"))) for row in rows)
+
+
+def _deadline_block_credits(
+    blocks: list[dict[str, Any]],
+    focus_facts: list[dict[str, Any]],
+    *,
+    tracked_focus_minutes_at_proposal: int,
+) -> dict[str, int]:
+    ordered_blocks = sorted(
+        blocks,
+        key=lambda block: (_int(block["sequence"]), str(block["id"])),
+    )
+    capacities = {
+        str(block["id"]): _int(block["planned_minutes"])
+        for block in ordered_blocks
+    }
+    credits = {block_id: 0 for block_id in capacities}
+    proposal_credit_left = max(0, tracked_focus_minutes_at_proposal)
+    generic_credit = 0
+    ordered_facts = sorted(
+        focus_facts,
+        key=lambda fact: (_datetime(fact["started_at"]), str(fact["id"])),
+    )
+    for fact in ordered_facts:
+        minutes = max(0, _int(fact.get("actual_minutes")))
+        already_considered = min(minutes, proposal_credit_left)
+        proposal_credit_left -= already_considered
+        minutes -= already_considered
+        if minutes <= 0:
+            continue
+        source_block_id = fact.get("deadline_plan_block_id")
+        source_key = str(source_block_id) if source_block_id is not None else None
+        if source_key in capacities:
+            source_available = capacities[source_key] - credits[source_key]
+            source_credit = min(minutes, max(0, source_available))
+            credits[source_key] += source_credit
+            minutes -= source_credit
+        generic_credit += minutes
+
+    for block in ordered_blocks:
+        if generic_credit <= 0:
+            break
+        block_key = str(block["id"])
+        available = capacities[block_key] - credits[block_key]
+        applied = min(generic_credit, max(0, available))
+        credits[block_key] += applied
+        generic_credit -= applied
+    return credits

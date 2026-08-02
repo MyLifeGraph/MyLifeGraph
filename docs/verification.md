@@ -30,7 +30,32 @@ Capture V4, Daily State V2, Exam-Week Outlook V1, or Coach V3 expectations.
 
 ## Current Verified Baseline
 
-The current Observatory visual-material working tree was reverified locally on
+The current Focus schedule-source V2 and privileged-function cleanup working
+tree was reverified locally on 2026-08-02. A fresh local reset applied the
+complete migration chain through
+`20260802111518_privileged_function_lint_cleanup.sql`; the matching-history
+database gate then passed all `203` assertions across ten pgTAP files.
+`verify:fast` reported `827` passing Flutter tests, clean Flutter analysis,
+`1165 passed, 2 skipped` for FastAPI, and passing documentation, visual, source,
+Ruff, and diff
+checks. The debug web build, Android unit/lint gate, and debug APK passed. The
+focused `planner-confirm` profile-mode browser journey passed in 1:56 of test
+time and removed its exact Auth user. It first proved two concurrent manual V2
+starts produce exactly one success and one `409 active_focus_session`, then
+used a real confirmed Preparation block to confirm the planned-source snapshot,
+different actual start, server-side finish with non-zero actual minutes, exact
+chosen-block credit, exact-session reflection, and persisted reflection reload.
+The pgTAP suite separately proves that a genuinely past `missed` Preparation
+block can start at a free current instant, excludes only its own source block,
+and credits the chosen block without changing total plan progression.
+`supabase db lint --local --schema public,private --level warning
+--fail-on warning` returned an empty result with no schema error or warning.
+The local security and performance advisors also returned no issue. The cleanup
+pgTAP file separately proves the closed canonical role wrapper, unchanged
+Account/Auth cascade, service-only grants, and durable interrupted Coach replay
+plus its single usage-ledger fact.
+
+The preceding Observatory visual-material working tree was reverified locally on
 2026-08-01 through implementation and cleanup. `verify:fast` reported `814`
 passing Flutter tests, clean Flutter analysis, `1146 passed, 2 skipped` for
 FastAPI, and passing documentation, visual, source, Ruff, and diff checks. The
@@ -157,7 +182,7 @@ those values. Dated evidence below is historical run history and does not prove
 a later checkout.
 
 The current repository migration boundary ends at
-`20260729160000_coach_english_prompt_v2.sql`.
+`20260802111518_privileged_function_lint_cleanup.sql`.
 
 ## Verification Levels
 
@@ -575,9 +600,9 @@ instances, router source constructs no Supabase repository, and API tests
 override asynchronous typed dependency callables rather than named
 `app.state` service or verifier fields.
 
-Owner-data policy coverage must compare the typed catalog with all 47
+Owner-data policy coverage must compare the typed catalog with all 48
 repo-owned public tables created by migration history, reject duplicate or
-missing entries, and independently prove the exact 40-table Account Export,
+missing entries, and independently prove the exact 41-table Account Export,
 five sanitized export sources, seven named anti-replay omissions, and 37-table
 Coach Snapshot. Account Export, repository, API, deletion/privilege migration,
 Coach Snapshot, and Coach agent tests must continue to prove owner filtering,
@@ -603,7 +628,7 @@ Personal Learning V1 focused coverage must prove:
 - SQL rating/obstacle bounds, one reflection per terminal session, composite
   owner linkage, active/cross-owner rejection, forced RLS, conflict updates,
   preference dependency, exact update replay, retry-safe confirmed clear,
-  40-table export inclusion, ledger omission, and account cascade;
+  41-table export inclusion, ledger omission, and account cascade;
 - backend disabled-before-evidence short-circuit, profile timezone and DST,
   strict shared V4 sleep parsing, exact local wake/Focus-date matching,
   sleep-before-session ordering, rejected prior-day 36-hour fallback,
@@ -904,7 +929,7 @@ supabase db reset
 Expected successful reset output applies migrations through:
 
 ```text
-20260729160000_coach_english_prompt_v2.sql
+20260802111518_privileged_function_lint_cleanup.sql
 ```
 
 Expected notices include skipped legacy CamelCase tables and already-existing

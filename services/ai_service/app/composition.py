@@ -20,6 +20,7 @@ from app.repositories.coach_repository import SupabaseCoachRepository
 from app.repositories.daily_capture_repository import SupabaseDailyCaptureRepository
 from app.repositories.deadline_plan_repository import SupabaseDeadlinePlanRepository
 from app.repositories.feedback_repository import SupabaseFeedbackRepository
+from app.repositories.focus_repository import SupabaseFocusRepository
 from app.repositories.intake_repository import SupabaseIntakeRepository
 from app.repositories.learning_repository import SupabaseLearningRepository
 from app.repositories.notification_repository import SupabaseNotificationRepository
@@ -52,6 +53,7 @@ from app.services.coach_snapshot import CoachSnapshotService
 from app.services.daily_capture_service import DailyCaptureService
 from app.services.deadline_plan_service import DeadlinePlanService
 from app.services.feedback_service import FeedbackService
+from app.services.focus_service import FocusService
 from app.services.intake_service import IntakeService
 from app.services.learned_timing import LearnedTimingResolver
 from app.services.learning_service import LearningService
@@ -86,6 +88,7 @@ class ApplicationComposition:
     daily_capture_service: DailyCaptureService
     deadline_plan_service: DeadlinePlanService
     feedback_service: FeedbackService
+    focus_service: FocusService
     intake_service: IntakeService
     learning_service: LearningService
     notification_service: NotificationService
@@ -216,6 +219,9 @@ class ApplicationComposition:
             deadline_plan_service=deadline_plan_service,
             feedback_service=FeedbackService(
                 repository=SupabaseFeedbackRepository(supabase_client),
+            ),
+            focus_service=FocusService(
+                repository=SupabaseFocusRepository(supabase_client),
             ),
             intake_service=IntakeService(
                 repository=SupabaseIntakeRepository(supabase_client),

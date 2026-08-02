@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from typing import Any, Protocol
 from uuid import UUID
@@ -60,6 +60,7 @@ class DeadlinePlanProjection:
     blocks: list[dict[str, Any]]
     focus_totals: list[dict[str, Any]]
     calendar_events: dict[str, dict[str, Any]]
+    focus_facts: list[dict[str, Any]] = field(default_factory=list)
 
 
 class DeadlinePlanRepository(Protocol):
@@ -238,7 +239,7 @@ class SupabaseDeadlinePlanRepository:
         if plan_id is not None:
             params["p_plan_id"] = str(plan_id)
         result = await self._client.rpc(
-            "get_deadline_plan_projection_v1",
+            "get_deadline_plan_projection_v2",
             params=params,
         )
         return _parse_projection(result)
@@ -915,6 +916,7 @@ _PROJECTION_ARRAYS = (
     "revisions",
     "blocks",
     "focus_totals",
+    "focus_facts",
     "calendar_events",
 )
 _PROJECTION_KEYS = {
@@ -954,5 +956,6 @@ def _parse_projection(result: object) -> DeadlinePlanProjection:
         revisions=parsed["revisions"],
         blocks=parsed["blocks"],
         focus_totals=parsed["focus_totals"],
+        focus_facts=parsed["focus_facts"],
         calendar_events=events,
     )

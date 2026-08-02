@@ -35,6 +35,22 @@ enum FocusTargetKind {
   }
 }
 
+enum FocusScheduleSourceKind {
+  deadlinePlanBlock('deadline_plan_block'),
+  plannerTaskBlock('planner_task_block');
+
+  const FocusScheduleSourceKind(this.code);
+
+  final String code;
+
+  static FocusScheduleSourceKind? fromCode(Object? value) {
+    for (final kind in values) {
+      if (kind.code == value) return kind;
+    }
+    return null;
+  }
+}
+
 enum FocusObstacle {
   tired('tired', 'Tired'),
   distracted('distracted', 'Distracted'),
@@ -170,7 +186,86 @@ class FocusSession {
     this.label,
     this.targetKind,
     this.targetId,
+    this.scheduleSource,
+    this.requiresBackendLifecycle = false,
   });
+
+  factory FocusSession.fromV2Json(Map<String, dynamic> json) {
+    _exactKeys(
+      json,
+      const {
+        'contract_version',
+        'origin',
+        'replayed',
+        'id',
+        'status',
+        'started_at',
+        'ended_at',
+        'planned_minutes',
+        'actual_minutes',
+        'label',
+        'task_id',
+        'habit_id',
+        'entry_date',
+        'recovery_minutes',
+        'updated_at',
+        'schedule_source',
+      },
+      'Focus session V2',
+    );
+    if (json['contract_version'] != 'focus-session-v2' ||
+        json['origin'] != 'authenticated_backend' ||
+        json['replayed'] is! bool ||
+        json['entry_date'] is! String ||
+        json['recovery_minutes'] is! int) {
+      throw const FocusCommandException('Focus session response is invalid.');
+    }
+    final recoveryMinutes = json['recovery_minutes'] as int;
+    final scheduleSource = json['schedule_source'] == null
+        ? null
+        : FocusScheduleSource.fromJson(
+            _stringMap(json['schedule_source'], 'Focus schedule source'),
+          );
+    final base = FocusSession.fromRow({
+      'id': json['id'],
+      'status': json['status'],
+      'started_at': json['started_at'],
+      'ended_at': json['ended_at'],
+      'planned_minutes': json['planned_minutes'],
+      'actual_minutes': json['actual_minutes'],
+      'label': json['label'],
+      'task_id': json['task_id'],
+      'habit_id': json['habit_id'],
+      'metadata': {
+        'entry_date': json['entry_date'],
+        if (recoveryMinutes > 0) 'recovery_minutes': recoveryMinutes,
+      },
+      'updated_at': json['updated_at'],
+    });
+    if (scheduleSource != null &&
+        (base.targetKind != FocusTargetKind.task ||
+            scheduleSource.originalRecoveryMinutes != base.recoveryMinutes)) {
+      throw const FocusCommandException(
+        'Scheduled Focus session response is inconsistent.',
+      );
+    }
+    return FocusSession(
+      id: base.id,
+      status: base.status,
+      startedAt: base.startedAt,
+      endedAt: base.endedAt,
+      plannedMinutes: base.plannedMinutes,
+      recoveryMinutes: base.recoveryMinutes,
+      actualMinutes: base.actualMinutes,
+      label: base.label,
+      targetKind: base.targetKind,
+      targetId: base.targetId,
+      updatedAt: base.updatedAt,
+      entryDate: base.entryDate,
+      scheduleSource: scheduleSource,
+      requiresBackendLifecycle: true,
+    );
+  }
 
   factory FocusSession.fromRow(Map<String, dynamic> row) {
     if (row['id'] is! String ||
@@ -230,6 +325,7 @@ class FocusSession {
       targetId: taskId ?? habitId,
       updatedAt: updatedAt,
       entryDate: entryDate,
+      requiresBackendLifecycle: _requiresBackendLifecycle(row['metadata']),
     );
   }
 
@@ -243,6 +339,8 @@ class FocusSession {
   final String? label;
   final FocusTargetKind? targetKind;
   final String? targetId;
+  final FocusScheduleSource? scheduleSource;
+  final bool requiresBackendLifecycle;
   final DateTime updatedAt;
   final String? entryDate;
 
@@ -325,6 +423,11 @@ class FocusSession {
     return rawValue;
   }
 
+  static bool _requiresBackendLifecycle(Object? metadata) {
+    if (metadata is! Map) return false;
+    return metadata['contract_version'] == 'focus-session-v2';
+  }
+
   static String? _optionalText(Object? value) {
     if (value == null) {
       return null;
@@ -345,6 +448,190 @@ class FocusSession {
     }
     return value.trim();
   }
+}
+
+class FocusScheduleSource {
+  const FocusScheduleSource({
+    required this.kind,
+    required this.blockId,
+    required this.originalStartsAt,
+    required this.originalEndsAt,
+    required this.originalRecoveryMinutes,
+  });
+
+  factory FocusScheduleSource.fromJson(Map<String, dynamic> json) {
+    _exactKeys(
+      json,
+      const {
+        'source_kind',
+        'block_id',
+        'original_starts_at',
+        'original_ends_at',
+        'original_recovery_minutes',
+      },
+      'Focus schedule source',
+    );
+    final kind = FocusScheduleSourceKind.fromCode(json['source_kind']);
+    final blockId = json['block_id'];
+    final startsAt = json['original_starts_at'] is String
+        ? DateTime.tryParse(json['original_starts_at'] as String)
+        : null;
+    final endsAt = json['original_ends_at'] is String
+        ? DateTime.tryParse(json['original_ends_at'] as String)
+        : null;
+    final recovery = json['original_recovery_minutes'];
+    if (kind == null ||
+        blockId is! String ||
+        !_uuidPattern.hasMatch(blockId) ||
+        startsAt == null ||
+        endsAt == null ||
+        !endsAt.isAfter(startsAt) ||
+        recovery is! int ||
+        recovery < 0 ||
+        recovery > 60 ||
+        recovery.remainder(5) != 0) {
+      throw const FocusCommandException(
+        'Focus schedule source response is invalid.',
+      );
+    }
+    return FocusScheduleSource(
+      kind: kind,
+      blockId: blockId,
+      originalStartsAt: startsAt,
+      originalEndsAt: endsAt,
+      originalRecoveryMinutes: recovery,
+    );
+  }
+
+  final FocusScheduleSourceKind kind;
+  final String blockId;
+  final DateTime originalStartsAt;
+  final DateTime originalEndsAt;
+  final int originalRecoveryMinutes;
+}
+
+class FocusStartContext {
+  const FocusStartContext({
+    required this.sourceKind,
+    required this.blockId,
+    required this.target,
+    required this.originalStartsAt,
+    required this.originalEndsAt,
+    required this.recoveryMinutes,
+    required this.remainingMinutes,
+    required this.sourceState,
+    required this.canStart,
+    required this.blockingReason,
+  });
+
+  factory FocusStartContext.fromJson(Map<String, dynamic> json) {
+    _exactKeys(
+      json,
+      const {
+        'contract_version',
+        'origin',
+        'source_kind',
+        'block_id',
+        'target',
+        'original_starts_at',
+        'original_ends_at',
+        'recovery_minutes',
+        'remaining_minutes',
+        'source_state',
+        'can_start',
+        'blocking_reason',
+      },
+      'Focus start context',
+    );
+    final sourceKind = FocusScheduleSourceKind.fromCode(json['source_kind']);
+    final blockId = json['block_id'];
+    final targetJson = _stringMap(json['target'], 'Focus start target');
+    _exactKeys(targetJson, const {'kind', 'id', 'title'}, 'Focus start target');
+    final targetId = targetJson['id'];
+    final targetTitle = targetJson['title'];
+    final starts = json['original_starts_at'] is String
+        ? DateTime.tryParse(json['original_starts_at'] as String)
+        : null;
+    final ends = json['original_ends_at'] is String
+        ? DateTime.tryParse(json['original_ends_at'] as String)
+        : null;
+    final recovery = json['recovery_minutes'];
+    final remaining = json['remaining_minutes'];
+    final sourceState = json['source_state'];
+    final canStart = json['can_start'];
+    final blockingReason = json['blocking_reason'];
+    const states = {'upcoming', 'partial', 'completed', 'missed'};
+    const reasons = {
+      'source_fully_credited',
+      'source_remaining_too_short',
+      'active_focus_session',
+      'deadline_plan_block',
+      'planner_task_block',
+      'fixed_commitment',
+      'recurring_commitment',
+      'availability_unavailable',
+      'calendar_availability_unavailable',
+      'calendar_busy',
+    };
+    if (json['contract_version'] != 'focus-start-context-v2' ||
+        json['origin'] != 'authenticated_backend' ||
+        sourceKind == null ||
+        blockId is! String ||
+        !_uuidPattern.hasMatch(blockId) ||
+        targetJson['kind'] != 'task' ||
+        targetId is! String ||
+        !_uuidPattern.hasMatch(targetId) ||
+        targetTitle is! String ||
+        targetTitle.trim().isEmpty ||
+        targetTitle != targetTitle.trim() ||
+        starts == null ||
+        ends == null ||
+        !ends.isAfter(starts) ||
+        recovery is! int ||
+        recovery < 0 ||
+        recovery > 60 ||
+        recovery.remainder(5) != 0 ||
+        remaining is! int ||
+        remaining < 0 ||
+        remaining > 240 ||
+        sourceState is! String ||
+        !states.contains(sourceState) ||
+        canStart is! bool ||
+        blockingReason != null && !reasons.contains(blockingReason) ||
+        canStart != (blockingReason == null) ||
+        (remaining == 0) != (sourceState == 'completed')) {
+      throw const FocusCommandException(
+        'Focus start context response is invalid.',
+      );
+    }
+    return FocusStartContext(
+      sourceKind: sourceKind,
+      blockId: blockId,
+      target: FocusTargetOption(
+        kind: FocusTargetKind.task,
+        id: targetId,
+        title: targetTitle,
+      ),
+      originalStartsAt: starts,
+      originalEndsAt: ends,
+      recoveryMinutes: recovery,
+      remainingMinutes: remaining,
+      sourceState: sourceState,
+      canStart: canStart,
+      blockingReason: blockingReason as String?,
+    );
+  }
+
+  final FocusScheduleSourceKind sourceKind;
+  final String blockId;
+  final FocusTargetOption target;
+  final DateTime originalStartsAt;
+  final DateTime originalEndsAt;
+  final int recoveryMinutes;
+  final int remainingMinutes;
+  final String sourceState;
+  final bool canStart;
+  final String? blockingReason;
 }
 
 class FocusTargetOption {
@@ -532,6 +819,24 @@ final _uuidPattern = RegExp(
   r'^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-'
   r'[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
 );
+
+void _exactKeys(
+  Map<String, dynamic> json,
+  Set<String> expected,
+  String label,
+) {
+  if (json.keys.toSet().difference(expected).isNotEmpty ||
+      expected.difference(json.keys.toSet()).isNotEmpty) {
+    throw FocusCommandException('$label response is invalid.');
+  }
+}
+
+Map<String, dynamic> _stringMap(Object? value, String label) {
+  if (value is! Map) {
+    throw FocusCommandException('$label response is invalid.');
+  }
+  return Map<String, dynamic>.from(value);
+}
 
 int measuredFocusMinutes({
   required DateTime startedAt,

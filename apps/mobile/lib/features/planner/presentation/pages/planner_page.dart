@@ -581,9 +581,13 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
     if (!mounted || !execute) return;
     if (kind == 'task') {
       context.push(
-        '${AppRoutes.deepWork}?target_kind=task&target_id=${item.sourceId}'
-        '&planned_minutes=${item.endsAt!.difference(item.startsAt!).inMinutes}'
-        '&recovery_minutes=${item.recoveryMinutes}',
+        Uri(
+          path: AppRoutes.deepWork,
+          queryParameters: {
+            'source_kind': 'planner_task_block',
+            'source_block_id': item.id,
+          },
+        ).toString(),
       );
     } else {
       context.push(AppRoutes.habitCompletion);

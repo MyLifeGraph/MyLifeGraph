@@ -3,6 +3,9 @@ import 'dart:math';
 final _uuidV4Pattern = RegExp(
   r'^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
 );
+final _canonicalUuidPattern = RegExp(
+  r'^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
+);
 
 String newClientUuid() {
   final random = Random.secure();
@@ -17,3 +20,5 @@ String newClientUuid() {
 }
 
 bool isClientUuid(String value) => _uuidV4Pattern.hasMatch(value);
+
+bool isCanonicalUuid(String value) => _canonicalUuidPattern.hasMatch(value);

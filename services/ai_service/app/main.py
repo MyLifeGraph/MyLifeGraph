@@ -12,6 +12,7 @@ from app.api.routes import (
     daily_capture,
     deadline_plans,
     feedback,
+    focus,
     health,
     intake,
     insights,
@@ -84,6 +85,7 @@ def create_app() -> FastAPI:
     app.include_router(today.router, prefix=settings.api_prefix)
     app.include_router(briefings.router, prefix=settings.api_prefix)
     app.include_router(feedback.router, prefix=settings.api_prefix)
+    app.include_router(focus.router, prefix=settings.api_prefix)
     app.include_router(scheduled.router, prefix=settings.api_prefix)
     app.include_router(weekly_reviews.router, prefix=settings.api_prefix)
     app.include_router(calendar_integrations.router, prefix=settings.api_prefix)

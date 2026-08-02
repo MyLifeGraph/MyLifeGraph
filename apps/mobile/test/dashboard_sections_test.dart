@@ -3,7 +3,9 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:my_life_graph/composition/briefing_providers.dart';
+import 'package:my_life_graph/core/navigation/app_routes.dart';
 import 'package:my_life_graph/features/dashboard/application/today_command_controller.dart';
 import 'package:my_life_graph/features/dashboard/domain/entities/dashboard_snapshot.dart';
 import 'package:my_life_graph/features/dashboard/presentation/widgets/dashboard_more_section.dart';
@@ -79,6 +81,118 @@ void main() {
 
     expect(morningCalls, 1);
     expect(openedPlan, 'plan-1');
+  });
+
+  testWidgets('whole missed preparation row opens its exact scheduled block',
+      (tester) async {
+    String? startedBlock;
+    await _pump(
+      tester,
+      TodayOverviewSections(
+        snapshot: _snapshot(
+          timeline: [
+            TodayTimelineItem(
+              kind: TodayTimelineKind.preparation,
+              id: 'block-1',
+              title: 'Missed mathematics block',
+              allDay: false,
+              startsAt: DateTime(2026, 7, 30, 9),
+              endsAt: DateTime(2026, 7, 30, 10),
+              planId: 'plan-1',
+              blockId: 'block-1',
+              state: 'missed',
+              plannedMinutes: 60,
+            ),
+          ],
+        ),
+        canExecute: true,
+        actions: TodayOverviewActions(
+          onAddEvening: () {},
+          onAddMorning: () {},
+          onOpenPreparationPlan: (_) {},
+          onStartPreparationFocus: (value) => startedBlock = value,
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Missed mathematics block'));
+    expect(startedBlock, 'block-1');
+    expect(find.text('Start focus'), findsOneWidget);
+  });
+
+  testWidgets('whole Focus and Task rows navigate with exact identities',
+      (tester) async {
+    final router = GoRouter(
+      routes: [
+        GoRoute(
+          path: '/',
+          builder: (context, state) => Scaffold(
+            body: SingleChildScrollView(
+              child: TodayOverviewSections(
+                snapshot: _snapshot(
+                  timeline: [
+                    TodayTimelineItem(
+                      kind: TodayTimelineKind.focusSession,
+                      id: 'focus-session-42',
+                      title: 'Running focus',
+                      allDay: false,
+                      startsAt: DateTime(2026, 7, 31, 9),
+                      endsAt: DateTime(2026, 7, 31, 10),
+                      state: 'active',
+                    ),
+                    TodayTimelineItem(
+                      kind: TodayTimelineKind.taskBlock,
+                      id: 'planner-block-7',
+                      title: 'Planned reading',
+                      allDay: false,
+                      startsAt: DateTime(2026, 7, 31, 11),
+                      endsAt: DateTime(2026, 7, 31, 11, 30),
+                      taskId: 'task-7',
+                      plannedMinutes: 30,
+                    ),
+                  ],
+                ),
+                canExecute: true,
+                actions: TodayOverviewActions(
+                  onAddEvening: () {},
+                  onAddMorning: () {},
+                  onOpenPreparationPlan: (_) {},
+                  onStartPreparationFocus: (_) {},
+                ),
+              ),
+            ),
+          ),
+        ),
+        GoRoute(
+          path: AppRoutes.deepWork,
+          builder: (context, state) => Scaffold(
+            body: Text(state.uri.queryParameters.toString()),
+          ),
+        ),
+      ],
+    );
+    addTearDown(router.dispose);
+    await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Running focus'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('session_id: focus-session-42'), findsOneWidget);
+
+    router.go('/');
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Planned reading'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Planned reading'));
+    await tester.pumpAndSettle();
+    expect(
+      find.textContaining('source_kind: planner_task_block'),
+      findsOneWidget,
+    );
+    expect(
+      find.textContaining('source_block_id: planner-block-7'),
+      findsOneWidget,
+    );
   });
 
   testWidgets('Task sections expose only their typed action boundary',

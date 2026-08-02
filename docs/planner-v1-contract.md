@@ -309,6 +309,12 @@ progress denominator item. Habit slots likewise do not duplicate a Habit.
 Planner blocks remain agenda context; Task status, Habit outcome, check-ins, and
 Preparation state keep the exact V1 progress authority.
 
+An actionable Planner Task block opens the scheduled Focus composer with its
+stable block id. Backend context owns the task, original interval, recovery,
+remaining duration, and actual-time collision decision; Flutter does not fall
+back to an unproven direct Task start if V2 context is unavailable. Starting
+Focus does not move or mutate the Planner block.
+
 Planner failure is isolated with its own source state. Independent Today facts
 remain visible, while progress is unavailable when scheduled target selection
 cannot be proven. Flutter and FastAPI both verify that every

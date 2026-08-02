@@ -96,6 +96,7 @@ databases may still contain legacy CamelCase tables such as `"User"`,
 - `skillset_profiles`
 - `notification_preferences`
 - `goals`, `habits`, `habit_logs`, `focus_sessions`
+- `focus_session_schedule_sources`
 - `focus_session_reflections`, `learning_preferences`
 - `learning_request_identities`
 - `daily_capture_request_identities`, `account_setting_request_identities`
@@ -363,6 +364,19 @@ adds rolling-safe English-only Coach prompt provenance. New free-agent claims
 use `free-coach-agent-prompt-v2`; exact replays retain their originally stored
 V1 or V2 prompt, and the service-role-only V4 claim wrapper gives application
 roles no new write authority.
+The migration
+`supabase/migrations/20260802083219_focus_schedule_sources_v2.sql`
+adds immutable owner-readable planned-block provenance for Focus, service-only
+retry-safe V2 start/finish RPCs with actual server timestamps and complete
+scheduled-interval collision checks, plus source-aware Deadline credit facts.
+Existing Focus rows and V1 client writes remain compatible.
+The migration
+`supabase/migrations/20260802111518_privileged_function_lint_cleanup.sql`
+retains the legacy public role-helper identity as an application-inaccessible
+invoker wrapper over canonical role truth, removes one shadow-only Account
+Delete declaration, and explicitly discards the Coach V3 expiry-failure return.
+It changes no public contract, lock order, deletion result, replay outcome, or
+application-role grant and leaves local schema lint clean.
 
 ## Important Docs
 
@@ -871,7 +885,7 @@ you actually intend to run `supabase db reset`.
 `supabase db reset` must complete through:
 
 ```text
-20260729160000_coach_english_prompt_v2.sql
+20260802111518_privileged_function_lint_cleanup.sql
 ```
 
 Expected local reset notices include skipped legacy CamelCase tables and
