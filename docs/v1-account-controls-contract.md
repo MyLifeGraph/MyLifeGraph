@@ -143,7 +143,9 @@ derived from the typed FastAPI owner-data catalog. Every repo-owned public
 table, including an operational ledger that participates in neither output,
 must have exactly one catalog entry. The export response contract remains the
 exact 41-table V2 shape above; this consolidation does not broaden export or
-snapshot disclosure.
+snapshot disclosure. Flutter's strict export allowlist uses the same catalog
+order, including `focus_session_schedule_sources`, before it accepts the record
+counts or saves the original response bytes.
 
 `20260714110000_account_export_lifestyle_entries_grant.sql` gives only the
 verified-bearer FastAPI path's `service_role` client the missing `SELECT` grant

@@ -20,8 +20,16 @@ void main() {
     useMockData: false,
   );
 
-  test('export contract includes Planner content and omits its retry ledger',
-      () {
+  test('export contract includes Focus provenance and Planner content', () {
+    expect(accountExportV1TableNames, hasLength(41));
+    expect(
+      accountExportV1TableNames,
+      containsAllInOrder(const [
+        'focus_sessions',
+        'focus_session_schedule_sources',
+        'focus_session_reflections',
+      ]),
+    );
     expect(
       accountExportV1TableNames,
       containsAllInOrder(const [

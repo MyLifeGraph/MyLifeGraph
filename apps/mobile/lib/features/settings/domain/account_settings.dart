@@ -22,6 +22,7 @@ const accountExportV1TableNames = <String>[
   'habits',
   'habit_logs',
   'focus_sessions',
+  'focus_session_schedule_sources',
   'focus_session_reflections',
   'intake_responses',
   'study_setup_profiles',

@@ -276,8 +276,10 @@ it does not prove Supabase or FastAPI reachability. Synced writes are not queued
 Guest/demo local persistence continues on the current device while offline.
 
 The synced-account JSON export is bounded and is not a backup, restore format,
-or transaction-wide snapshot. Web downloads and desktop saves use a chosen
-destination. Android uses the platform share sheet; the app removes its own
+or transaction-wide snapshot. Its strict client allowlist matches the complete
+41-table backend contract, including scheduled Focus provenance. Web downloads
+and desktop saves use a chosen destination. Android uses the platform share
+sheet; the app removes its own
 dedicated temporary source best-effort, while the plugin or operating system
 may retain a protected cache copy until its cleanup. The source has an iOS
 branch, but this repository has no iOS runner or installed-iOS acceptance claim.
