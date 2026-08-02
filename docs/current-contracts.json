@@ -1,0 +1,100 @@
+{
+  "schema_version": 1,
+  "contracts": [
+    {
+      "key": "capture",
+      "version": "daily-capture-v4",
+      "sources": [
+        "apps/mobile/lib/features/quick_action/domain/quick_check_in.dart",
+        "services/ai_service/app/services/snapshot_daily_state.py"
+      ],
+      "owners": [
+        "README.md",
+        "apps/mobile/README.md",
+        "docs/architecture.md",
+        "docs/current-product-guide.md",
+        "docs/daily-briefing-implementation-plan.md",
+        "docs/exam-week-outlook-v1-contract.md",
+        "docs/local-dev.md",
+        "docs/setup-personalization-retirement-contract.md",
+        "docs/supabase-current-state.md",
+        "docs/verification.md"
+      ]
+    },
+    {
+      "key": "coachContext",
+      "version": "personal-snapshot-v1",
+      "sources": [
+        "apps/mobile/lib/features/coach/domain/coach.dart",
+        "services/ai_service/app/models/coach.py"
+      ],
+      "owners": [
+        "README.md",
+        "docs/architecture.md",
+        "docs/backend-roadmap.md",
+        "docs/daily-briefing-implementation-plan.md",
+        "docs/phase-10-controlled-coach-plan.md",
+        "docs/setup-personalization-retirement-contract.md",
+        "docs/verification.md",
+        "services/ai_service/README.md"
+      ]
+    },
+    {
+      "key": "coachPrompt",
+      "version": "free-coach-agent-prompt-v2",
+      "sources": [
+        "apps/mobile/lib/features/coach/domain/coach.dart",
+        "services/ai_service/app/models/coach.py"
+      ],
+      "owners": [
+        "README.md",
+        "docs/architecture.md",
+        "docs/backend-roadmap.md",
+        "docs/daily-briefing-implementation-plan.md",
+        "docs/phase-10-controlled-coach-plan.md",
+        "docs/setup-personalization-retirement-contract.md",
+        "docs/verification.md",
+        "services/ai_service/README.md"
+      ]
+    },
+    {
+      "key": "dailyState",
+      "version": "explainable-daily-state-v2",
+      "sources": [
+        "services/ai_service/app/services/snapshot_daily_state.py"
+      ],
+      "owners": [
+        "README.md",
+        "docs/architecture.md",
+        "docs/backend-roadmap.md",
+        "docs/current-product-guide.md",
+        "docs/daily-briefing-implementation-plan.md",
+        "docs/exam-week-outlook-v1-contract.md",
+        "docs/local-dev.md",
+        "docs/setup-personalization-retirement-contract.md",
+        "docs/supabase-current-state.md",
+        "docs/verification.md",
+        "services/ai_service/README.md"
+      ]
+    },
+    {
+      "key": "outlook",
+      "version": "exam-week-outlook-v1",
+      "sources": [
+        "apps/mobile/lib/features/deadline_plans/domain/exam_week_outlook.dart",
+        "services/ai_service/app/models/deadline_plans.py"
+      ],
+      "owners": [
+        "README.md",
+        "apps/mobile/README.md",
+        "docs/architecture.md",
+        "docs/daily-briefing-implementation-plan.md",
+        "docs/exam-week-outlook-v1-contract.md",
+        "docs/local-dev.md",
+        "docs/planner-v1-contract.md",
+        "docs/verification.md",
+        "services/ai_service/README.md"
+      ]
+    }
+  ]
+}

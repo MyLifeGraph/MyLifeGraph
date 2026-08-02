@@ -570,11 +570,13 @@ Supabase is the intended auth and persistence backend. The current app supports:
   consent and deterministic generation through the protected local scheduler.
 
 Important current caveat: the Flutter app targets the canonical snake_case
-schema. The migration chain currently ends at
-`20260802111518_privileged_function_lint_cleanup.sql`. The current migration
-keeps a locked-down legacy role-helper compatibility identity while removing
-the final Account Delete and Coach V3 PL/pgSQL lint diagnostics without changing
-their contracts or grants. The preceding Focus migration adds immutable
+schema. The authoritative migration inventory and latest repository boundary
+are maintained in `docs/supabase-current-state.md`; current cross-document
+contract versions and their owners are maintained in
+`docs/current-contracts.json`. The latest contract-neutral cleanup keeps a
+locked-down legacy role-helper compatibility identity while removing the final
+Account Delete and Coach V3 PL/pgSQL lint diagnostics without changing their
+contracts or grants. The preceding Focus migration adds immutable
 scheduled-Focus provenance, owner-locked retry-safe V2 lifecycle RPCs,
 collision-safe makeup sessions, and source-aware Deadline credit. The earlier
 Coach migration admits paired free-agent prompt V1/V2 provenance and

@@ -31,11 +31,10 @@ Capture V4, Daily State V2, Exam-Week Outlook V1, or Coach V3 expectations.
 ## Current Verified Baseline
 
 The current database-verification working tree was reverified locally on
-2026-08-02. A fresh local reset applied the
-complete migration chain through
-`20260802111518_privileged_function_lint_cleanup.sql`; the matching-history
-database gate then passed all `213` assertions across eleven pgTAP files.
-`verify:fast` reported `846` passing Flutter tests, clean Flutter analysis,
+2026-08-02. A fresh local reset applied the complete repository migration chain
+documented in `docs/supabase-current-state.md`; the matching-history database
+gate then passed all `213` assertions across eleven pgTAP files.
+`verify:fast` reported `847` passing Flutter tests, clean Flutter analysis,
 `1293 passed, 2 skipped` for FastAPI, and passing documentation, visual, source,
 Ruff, and diff
 checks. The debug web build, Android unit/lint gate, and debug APK passed. The
@@ -181,8 +180,10 @@ counts, commit id, and E2E identity. Current docs link here instead of copying
 those values. Dated evidence below is historical run history and does not prove
 a later checkout.
 
-The current repository migration boundary ends at
-`20260802111518_privileged_function_lint_cleanup.sql`.
+The current repository migration boundary is owned by
+`docs/supabase-current-state.md`. Machine-checked current contract versions,
+their canonical code sources, and their documentation owners are declared in
+`docs/current-contracts.json`.
 
 ## Verification Levels
 
@@ -300,6 +301,14 @@ runs:
 - the non-mutating `python -m ruff check app tests` backend gate
 - the complete `python -m pytest` suite
 - `git diff --check`
+
+The documentation checker validates the strict, sorted
+`docs/current-contracts.json` schema, requires every declared source and owner
+to exist, compares each version with canonical Flutter/FastAPI code, and checks
+that every owner names its declared version. Only
+`docs/supabase-current-state.md` is required to name the latest repository
+migration; other current documents route readers there instead of duplicating
+that moving boundary.
 
 Database integration is deliberately separate: `npm run verify:db` runs
 migration-history checks plus pgTAP and never repeats Flutter tests.
@@ -947,11 +956,8 @@ This executes:
 supabase db reset
 ```
 
-Expected successful reset output applies migrations through:
-
-```text
-20260802111518_privileged_function_lint_cleanup.sql
-```
+Expected successful reset output applies every migration through the current
+repository boundary named in `docs/supabase-current-state.md`.
 
 Expected notices include skipped legacy CamelCase tables and already-existing
 canonical objects. Those notices are normal. Errors are not normal.

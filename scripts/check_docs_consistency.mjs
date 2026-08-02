@@ -12,6 +12,7 @@ import { fileURLToPath } from 'node:url';
 
 const SCRIPT_PATH = fileURLToPath(import.meta.url);
 const DEFAULT_ROOT = resolve(dirname(SCRIPT_PATH), '..');
+const CURRENT_CONTRACTS_PATH = 'docs/current-contracts.json';
 
 const IGNORED_DIRECTORIES = new Set([
   '.dart_tool',
@@ -24,76 +25,8 @@ const IGNORED_DIRECTORIES = new Set([
 ]);
 
 const REQUIRED_MIGRATION_DOCS = [
-  'AGENTS.md',
-  'README.md',
-  'docs/local-dev.md',
   'docs/supabase-current-state.md',
-  'docs/verification.md',
 ];
-
-const VERSION_REQUIREMENT_PATHS = {
-  capture: [
-    'AGENTS.md',
-    'README.md',
-    'apps/mobile/README.md',
-    'docs/architecture.md',
-    'docs/current-product-guide.md',
-    'docs/daily-briefing-implementation-plan.md',
-    'docs/exam-week-outlook-v1-contract.md',
-    'docs/local-dev.md',
-    'docs/setup-personalization-retirement-contract.md',
-    'docs/supabase-current-state.md',
-    'docs/verification.md',
-  ],
-  dailyState: [
-    'AGENTS.md',
-    'README.md',
-    'docs/architecture.md',
-    'docs/backend-roadmap.md',
-    'docs/current-product-guide.md',
-    'docs/daily-briefing-implementation-plan.md',
-    'docs/exam-week-outlook-v1-contract.md',
-    'docs/local-dev.md',
-    'docs/setup-personalization-retirement-contract.md',
-    'docs/supabase-current-state.md',
-    'docs/verification.md',
-    'services/ai_service/README.md',
-  ],
-  coachContext: [
-    'AGENTS.md',
-    'README.md',
-    'docs/architecture.md',
-    'docs/backend-roadmap.md',
-    'docs/daily-briefing-implementation-plan.md',
-    'docs/phase-10-controlled-coach-plan.md',
-    'docs/setup-personalization-retirement-contract.md',
-    'docs/verification.md',
-    'services/ai_service/README.md',
-  ],
-  coachPrompt: [
-    'AGENTS.md',
-    'README.md',
-    'docs/architecture.md',
-    'docs/backend-roadmap.md',
-    'docs/daily-briefing-implementation-plan.md',
-    'docs/phase-10-controlled-coach-plan.md',
-    'docs/setup-personalization-retirement-contract.md',
-    'docs/verification.md',
-    'services/ai_service/README.md',
-  ],
-  outlook: [
-    'AGENTS.md',
-    'README.md',
-    'apps/mobile/README.md',
-    'docs/architecture.md',
-    'docs/daily-briefing-implementation-plan.md',
-    'docs/exam-week-outlook-v1-contract.md',
-    'docs/local-dev.md',
-    'docs/planner-v1-contract.md',
-    'docs/verification.md',
-    'services/ai_service/README.md',
-  ],
-};
 
 export const DOCS_IMPACT_RULES = [
   {
@@ -263,7 +196,7 @@ const STALE_CURRENT_CLAIMS = [
   },
   {
     pattern: /\bcoach-context-v1 data\b/gi,
-    message: 'New Coach context uses coach-context-v2.',
+    message: 'Current Coach agent context uses personal-snapshot-v1.',
   },
   {
     pattern: /\breconciles notification preferences\b/gi,
@@ -308,6 +241,181 @@ function lineNumberAt(text, index) {
 
 function readUtf8(path) {
   return readFileSync(path, 'utf8');
+}
+
+function isPlainObject(value) {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function exactKeys(value, expected) {
+  const actual = Object.keys(value).sort();
+  const sortedExpected = [...expected].sort();
+  return (
+    actual.length === sortedExpected.length &&
+    actual.every((key, index) => key === sortedExpected[index])
+  );
+}
+
+function isSorted(values) {
+  return values.every(
+    (value, index) => index === 0 || values[index - 1] <= value,
+  );
+}
+
+function validatePathArray(
+  value,
+  { contractKey, field, suffixes },
+  errors,
+) {
+  if (!Array.isArray(value) || value.length === 0) {
+    errors.push(
+      `${CURRENT_CONTRACTS_PATH}: contract '${contractKey}' must have a non-empty ${field} array.`,
+    );
+    return [];
+  }
+  const paths = value.filter((path) => typeof path === 'string');
+  if (paths.length !== value.length || paths.some((path) => path.length === 0)) {
+    errors.push(
+      `${CURRENT_CONTRACTS_PATH}: contract '${contractKey}' ${field} must contain non-empty strings only.`,
+    );
+  }
+  if (
+    paths.some(
+      (path) =>
+        path.startsWith('/') ||
+        path.startsWith('./') ||
+        path.includes('\\') ||
+        path.includes('//') ||
+        path.split('/').includes('.') ||
+        path.split('/').includes('..') ||
+        !suffixes.some((suffix) => path.endsWith(suffix)),
+    )
+  ) {
+    errors.push(
+      `${CURRENT_CONTRACTS_PATH}: contract '${contractKey}' ${field} must contain normalized repository-relative ${suffixes.join(' or ')} paths.`,
+    );
+  }
+  if (new Set(paths).size !== paths.length) {
+    errors.push(
+      `${CURRENT_CONTRACTS_PATH}: contract '${contractKey}' ${field} contains duplicates.`,
+    );
+  }
+  if (!isSorted(paths)) {
+    errors.push(
+      `${CURRENT_CONTRACTS_PATH}: contract '${contractKey}' ${field} must be sorted.`,
+    );
+  }
+  return paths;
+}
+
+export function validateCurrentContractsMetadata(value) {
+  const errors = [];
+  if (!isPlainObject(value)) {
+    return {
+      contracts: [],
+      errors: [`${CURRENT_CONTRACTS_PATH}: root must be an object.`],
+    };
+  }
+  if (!exactKeys(value, ['schema_version', 'contracts'])) {
+    errors.push(
+      `${CURRENT_CONTRACTS_PATH}: root keys must be exactly 'schema_version' and 'contracts'.`,
+    );
+  }
+  if (value.schema_version !== 1) {
+    errors.push(`${CURRENT_CONTRACTS_PATH}: schema_version must be 1.`);
+  }
+  if (!Array.isArray(value.contracts) || value.contracts.length === 0) {
+    errors.push(`${CURRENT_CONTRACTS_PATH}: contracts must be a non-empty array.`);
+    return { contracts: [], errors };
+  }
+
+  const contracts = [];
+  for (const [index, entry] of value.contracts.entries()) {
+    if (!isPlainObject(entry)) {
+      errors.push(
+        `${CURRENT_CONTRACTS_PATH}: contracts[${index}] must be an object.`,
+      );
+      continue;
+    }
+    if (!exactKeys(entry, ['key', 'version', 'sources', 'owners'])) {
+      errors.push(
+        `${CURRENT_CONTRACTS_PATH}: contract at index ${index} must have exactly key, version, sources, and owners.`,
+      );
+    }
+    const key = typeof entry.key === 'string' ? entry.key : '';
+    const version = typeof entry.version === 'string' ? entry.version : '';
+    if (!/^[a-z][A-Za-z0-9]*$/.test(key)) {
+      errors.push(
+        `${CURRENT_CONTRACTS_PATH}: contract at index ${index} has an invalid key.`,
+      );
+    }
+    if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(version)) {
+      errors.push(
+        `${CURRENT_CONTRACTS_PATH}: contract '${key || index}' has an invalid version.`,
+      );
+    }
+    const sources = validatePathArray(
+      entry.sources,
+      {
+        contractKey: key || String(index),
+        field: 'sources',
+        suffixes: ['.dart', '.py'],
+      },
+      errors,
+    );
+    const owners = validatePathArray(
+      entry.owners,
+      {
+        contractKey: key || String(index),
+        field: 'owners',
+        suffixes: ['.md'],
+      },
+      errors,
+    );
+    contracts.push({ key, version, sources, owners });
+  }
+
+  const keys = contracts.map((contract) => contract.key);
+  if (new Set(keys).size !== keys.length) {
+    errors.push(`${CURRENT_CONTRACTS_PATH}: contract keys must be unique.`);
+  }
+  if (!isSorted(keys)) {
+    errors.push(`${CURRENT_CONTRACTS_PATH}: contracts must be sorted by key.`);
+  }
+  return { contracts, errors };
+}
+
+export function loadCurrentContractsMetadata(root) {
+  const path = resolve(root, CURRENT_CONTRACTS_PATH);
+  if (!existsSync(path)) {
+    return {
+      contracts: [],
+      errors: [`${CURRENT_CONTRACTS_PATH}: metadata file is missing.`],
+    };
+  }
+  let value;
+  try {
+    value = JSON.parse(readUtf8(path));
+  } catch (error) {
+    return {
+      contracts: [],
+      errors: [
+        `${CURRENT_CONTRACTS_PATH}: invalid JSON (${error instanceof Error ? error.message : String(error)}).`,
+      ],
+    };
+  }
+  const result = validateCurrentContractsMetadata(value);
+  for (const contract of result.contracts) {
+    for (const repositoryPath of [...contract.sources, ...contract.owners]) {
+      const absolutePath = resolve(root, repositoryPath);
+      if (!existsSync(absolutePath) || !statSync(absolutePath).isFile()) {
+        result.errors.push(
+          `${CURRENT_CONTRACTS_PATH}: contract '${contract.key}' references missing file '${repositoryPath}'.`,
+        );
+      }
+    }
+  }
+  return result;
 }
 
 function escapeRegExp(value) {
@@ -610,24 +718,48 @@ export function extractCanonicalVersions(root) {
   };
 }
 
-export function findRequiredVersionErrors(
-  versions,
-  documents,
-  requirements = VERSION_REQUIREMENT_PATHS,
-) {
+export function findCanonicalMetadataErrors(versions, contracts) {
   const errors = [];
-  for (const [versionKey, paths] of Object.entries(requirements)) {
-    const version = versions[versionKey];
-    if (!version) {
+  const metadataByKey = new Map(
+    contracts.map((contract) => [contract.key, contract]),
+  );
+  for (const [key, version] of Object.entries(versions)) {
+    const metadata = metadataByKey.get(key);
+    if (!metadata) {
+      errors.push(
+        `${CURRENT_CONTRACTS_PATH}: missing canonical contract key '${key}'.`,
+      );
       continue;
     }
-    for (const path of paths) {
+    if (version && metadata.version !== version) {
+      errors.push(
+        `${CURRENT_CONTRACTS_PATH}: contract '${key}' declares '${metadata.version}', but canonical code declares '${version}'.`,
+      );
+    }
+  }
+  for (const contract of contracts) {
+    if (!Object.hasOwn(versions, contract.key)) {
+      errors.push(
+        `${CURRENT_CONTRACTS_PATH}: contract key '${contract.key}' has no canonical code extractor.`,
+      );
+    }
+  }
+  return errors;
+}
+
+export function findRequiredVersionErrors(
+  contracts,
+  documents,
+) {
+  const errors = [];
+  for (const contract of contracts) {
+    for (const path of contract.owners) {
       const text = documents.get(path);
       if (text === undefined) {
         errors.push(`${path}: required version document is missing.`);
-      } else if (!text.includes(version)) {
+      } else if (!text.includes(contract.version)) {
         errors.push(
-          `${path}: missing canonical ${versionKey} contract '${version}'.`,
+          `${path}: missing canonical ${contract.key} contract '${contract.version}'.`,
         );
       }
     }
@@ -926,9 +1058,15 @@ export function runDocumentationChecks(
 
   errors.push(...findMarkdownLinkErrors(root, markdownFiles));
 
+  const metadata = loadCurrentContractsMetadata(root);
+  errors.push(...metadata.errors);
+
   const canonical = extractCanonicalVersions(root);
   errors.push(...canonical.errors);
-  errors.push(...findRequiredVersionErrors(canonical.versions, documents));
+  errors.push(
+    ...findCanonicalMetadataErrors(canonical.versions, metadata.contracts),
+  );
+  errors.push(...findRequiredVersionErrors(metadata.contracts, documents));
 
   errors.push(...findLatestMigrationErrors(root, documents));
 

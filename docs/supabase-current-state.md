@@ -4,6 +4,11 @@ This document captures the repository state, not the live remote Supabase
 project state. The repo does not contain credentials, so a live remote database
 must be inspected through the Supabase dashboard or CLI by someone with access.
 
+This file is the sole current owner of the latest repository migration filename
+and reset boundary. Machine-checked cross-document contract versions, canonical
+code sources, and documentation owners are declared in
+`docs/current-contracts.json`.
+
 The current Setup/Goal/friction cleanup and compatibility boundary is recorded
 in `docs/setup-personalization-retirement-contract.md` and migration
 `20260725120000_retire_setup_goals_and_friction.sql`.

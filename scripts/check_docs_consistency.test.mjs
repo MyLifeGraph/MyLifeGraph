@@ -11,6 +11,7 @@ import test from 'node:test';
 
 import {
   extractFastApiRoutesFromTexts,
+  findCanonicalMetadataErrors,
   findDocsImpactErrors,
   findDocumentedRouteErrorsFromTexts,
   findLatestMigrationErrors,
@@ -19,6 +20,8 @@ import {
   findStaleClaimErrors,
   findVerificationEvidenceErrors,
   isHistoricalDocument,
+  loadCurrentContractsMetadata,
+  validateCurrentContractsMetadata,
 } from './check_docs_consistency.mjs';
 
 function withFixture(files, callback) {
@@ -126,7 +129,7 @@ test('exact verification evidence is centralized unless a report is historical',
   assert.match(errors[0], /README\.md/);
 });
 
-test('latest migration must be named by required current docs', () => {
+test('latest migration must be named by the Supabase current-state doc', () => {
   withFixture(
     {
       'supabase/migrations/20260101000000_first.sql': '-- first\n',
@@ -135,7 +138,7 @@ test('latest migration must be named by required current docs', () => {
     (root) => {
       const staleDocuments = new Map([
         [
-          'AGENTS.md',
+          'docs/supabase-current-state.md',
           [
             'Latest inventory: `20260102000000_second.sql`.',
             '`supabase db reset` must complete through:',
@@ -146,18 +149,18 @@ test('latest migration must be named by required current docs', () => {
         ],
       ]);
       assert.match(
-        findLatestMigrationErrors(root, staleDocuments, ['AGENTS.md'])[0],
+        findLatestMigrationErrors(root, staleDocuments)[0],
         /current migration boundary/,
       );
 
       const currentDocuments = new Map([
         [
-          'AGENTS.md',
+          'docs/supabase-current-state.md',
           '`supabase db reset` must complete through:\n\n```text\n20260102000000_second.sql\n```',
         ],
       ]);
       assert.deepEqual(
-        findLatestMigrationErrors(root, currentDocuments, ['AGENTS.md']),
+        findLatestMigrationErrors(root, currentDocuments),
         [],
       );
     },
@@ -165,30 +168,126 @@ test('latest migration must be named by required current docs', () => {
 });
 
 test('canonical versions must appear in every owning document', () => {
-  const requirements = { capture: ['README.md', 'docs/capture.md'] };
-  const versions = { capture: 'daily-capture-v4' };
+  const contracts = [
+    {
+      key: 'capture',
+      version: 'daily-capture-v4',
+      sources: ['lib/capture.dart'],
+      owners: ['README.md', 'docs/capture.md'],
+    },
+  ];
 
   assert.deepEqual(
     findRequiredVersionErrors(
-      versions,
+      contracts,
       new Map([
         ['README.md', 'daily-capture-v4'],
         ['docs/capture.md', 'daily-capture-v4'],
       ]),
-      requirements,
     ),
     [],
   );
   assert.match(
     findRequiredVersionErrors(
-      versions,
+      contracts,
       new Map([
         ['README.md', 'daily-capture-v3'],
         ['docs/capture.md', 'daily-capture-v4'],
       ]),
-      requirements,
     )[0],
     /README\.md.*daily-capture-v4/,
+  );
+});
+
+test('current-contract metadata has a strict deterministic schema', () => {
+  const metadata = {
+    schema_version: 1,
+    contracts: [
+      {
+        key: 'capture',
+        version: 'daily-capture-v4',
+        sources: ['lib/capture.dart', 'service/capture.py'],
+        owners: ['README.md', 'docs/capture.md'],
+      },
+    ],
+  };
+  assert.deepEqual(validateCurrentContractsMetadata(metadata).errors, []);
+
+  const invalid = structuredClone(metadata);
+  invalid.contracts[0].owners = [
+    'docs/capture.md',
+    './README.md',
+    './README.md',
+  ];
+  invalid.contracts[0].unexpected = true;
+  const errors = validateCurrentContractsMetadata(invalid).errors;
+  assert.ok(
+    errors.some((error) =>
+      /exactly key, version, sources, and owners/.test(error),
+    ),
+  );
+  assert.ok(
+    errors.some((error) => /normalized repository-relative/.test(error)),
+  );
+  assert.ok(errors.some((error) => /owners contains duplicates/.test(error)));
+  assert.ok(errors.some((error) => /owners must be sorted/.test(error)));
+});
+
+test('current-contract metadata references real sources and owners', () => {
+  withFixture(
+    {
+      'docs/current-contracts.json': JSON.stringify({
+        schema_version: 1,
+        contracts: [
+          {
+            key: 'capture',
+            version: 'daily-capture-v4',
+            sources: ['lib/capture.dart'],
+            owners: ['README.md'],
+          },
+        ],
+      }),
+      'lib/capture.dart': "const version = 'daily-capture-v4';\n",
+      'README.md': 'daily-capture-v4\n',
+    },
+    (root) => {
+      assert.deepEqual(loadCurrentContractsMetadata(root).errors, []);
+    },
+  );
+});
+
+test('current-contract metadata must match every canonical code version', () => {
+  const versions = {
+    capture: 'daily-capture-v4',
+    outlook: 'exam-week-outlook-v1',
+  };
+  const contracts = [
+    {
+      key: 'capture',
+      version: 'daily-capture-v3',
+      sources: [],
+      owners: [],
+    },
+    {
+      key: 'unknown',
+      version: 'unknown-v1',
+      sources: [],
+      owners: [],
+    },
+  ];
+  const errors = findCanonicalMetadataErrors(versions, contracts);
+  assert.ok(
+    errors.some((error) =>
+      /canonical code declares 'daily-capture-v4'/.test(error),
+    ),
+  );
+  assert.ok(
+    errors.some((error) =>
+      /missing canonical contract key 'outlook'/.test(error),
+    ),
+  );
+  assert.ok(
+    errors.some((error) => /has no canonical code extractor/.test(error)),
   );
 });
 

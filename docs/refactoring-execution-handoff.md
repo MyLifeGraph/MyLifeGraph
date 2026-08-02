@@ -371,7 +371,7 @@ chat must run this exact closeout sequence:
 
 ## Tranche 10: Centralize Current-State Metadata
 
-- State: `pending`
+- State: `completed`
 - Depends on: Tranche 9 completed.
 - Goal: Add `docs/current-contracts.json` as the machine-readable source for
   current contract versions and owning documents, update the docs checker to
@@ -397,7 +397,15 @@ chat must run this exact closeout sequence:
   `node scripts/check_docs_consistency.mjs`, `npm run verify:docs`, JSON parse/
   schema tests, link/anchor checks, and changed-doc ownership checks.
 - Commit subject: `docs: centralize current contract metadata`
-- Result: _Not started._
+- Result: _Completed. Added the strict, deterministically ordered
+  `docs/current-contracts.json` registry and made the documentation checker
+  validate its schema, file references, canonical code versions, and owning
+  documents. The newest migration is now required only in the Supabase
+  current-state owner; stable workflow and safety routing replaced the volatile
+  inventories in `AGENTS.md`, and duplicated current-boundary wording was
+  removed from general docs. The checker unit tests, direct consistency check,
+  `npm run verify:docs`, JSON parsing, `git diff --check`, and the complete
+  `npm run verify:fast` gate passed._
 
 ## Sequence-Wide Non-Goals And Invariants
 
