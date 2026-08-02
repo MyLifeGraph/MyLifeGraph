@@ -269,6 +269,9 @@ projection are loaded once. Independent source families run with a fixed
 concurrency bound, while response assembly order, per-source failure isolation,
 and both wire contracts remain unchanged. The context is settled at request end
 and is never reused as a cross-request cache.
+Today orders its local view of the shared active Habit rows by the established
+`updated_at DESC, id ASC` key; it does not mutate the shared value or Planner's
+separate `created_at ASC, id ASC` view.
 
 The Today route now obtains the shared application-lifespan Supabase client
 instead of opening a transport per request. The read remains owner-scoped,

@@ -137,6 +137,20 @@ class OverviewSelectClient:
                     "updated_at": "2026-07-02T10:00:00Z",
                 },
                 {
+                    "id": "10000000-0000-4000-8000-000000000003",
+                    "title": "Morning plan",
+                    "description": None,
+                    "frequency": "daily",
+                    "target": 1,
+                    "active": True,
+                    "metadata": {
+                        "contract_version": "habit-v1",
+                        "cadence": "daily",
+                    },
+                    "created_at": "2026-07-01T09:00:00Z",
+                    "updated_at": "2026-07-01T09:00:00Z",
+                },
+                {
                     "id": "10000000-0000-4000-8000-000000000002",
                     "title": "Archived review",
                     "description": None,
@@ -153,9 +167,14 @@ class OverviewSelectClient:
             ]
             active = params.get("active")
             if active == "eq.true":
-                return [row for row in rows if row["active"] is True]
-            if active == "eq.false":
-                return [row for row in rows if row["active"] is False]
+                rows = [row for row in rows if row["active"] is True]
+            elif active == "eq.false":
+                rows = [row for row in rows if row["active"] is False]
+            if params.get("order") == "created_at.asc,id.asc":
+                rows.sort(key=lambda row: (row["created_at"], row["id"]))
+            elif params.get("order") == "updated_at.desc,id.asc":
+                rows.sort(key=lambda row: row["id"])
+                rows.sort(key=lambda row: row["updated_at"], reverse=True)
             return rows
         return []
 
@@ -248,8 +267,14 @@ def test_request_context_preserves_v1_and_v2_wire_models() -> None:
     legacy_v2 = asyncio.run(legacy.get_overview_v2(user_id=USER_ID))
     shared_v2 = asyncio.run(shared.get_overview_v2(user_id=USER_ID))
 
-    assert [habit.title for habit in shared_v1.habits] == ["Daily review"]
-    assert [habit.title for habit in shared_v2.habits] == ["Daily review"]
+    assert [habit.title for habit in shared_v1.habits] == [
+        "Daily review",
+        "Morning plan",
+    ]
+    assert [habit.title for habit in shared_v2.habits] == [
+        "Daily review",
+        "Morning plan",
+    ]
     assert shared_v1.model_dump_json() == legacy_v1.model_dump_json()
     assert shared_v2.model_dump_json() == legacy_v2.model_dump_json()
 

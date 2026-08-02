@@ -651,6 +651,11 @@ class TodayOverviewService:
                     ),
                 ),
             )
+            habits = sorted(habits, key=lambda row: str(_uuid(row.get("id"))))
+            habits.sort(
+                key=lambda row: _datetime(row.get("updated_at")),
+                reverse=True,
+            )
             source = TodayHabitRows(habits=habits, logs=logs)
         if len(source.habits) > 500 or len(source.logs) > 5_000:
             raise ValueError("Today habit projection exceeds its response bound.")
