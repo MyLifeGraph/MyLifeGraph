@@ -1,6 +1,7 @@
 import re
 from pathlib import Path
 
+import app.services.account_service as account_service_module
 import app.services.coach_snapshot as coach_snapshot_module
 from app.owner_data_catalog import (
     ACCOUNT_EXPORT_OMITTED_TABLES,
@@ -68,8 +69,12 @@ def test_export_and_snapshot_are_independent_catalog_projections() -> None:
     assert set(COACH_SNAPSHOT_DESCRIPTIONS) == set(snapshot_names)
 
 
-def test_coach_snapshot_does_not_import_account_service_implementation() -> None:
-    source = Path(coach_snapshot_module.__file__).read_text()
+def test_consumers_share_neutral_reader_without_importing_each_other() -> None:
+    account_source = Path(account_service_module.__file__).read_text()
+    coach_source = Path(coach_snapshot_module.__file__).read_text()
 
-    assert "app.services.account_service" not in source
-    assert "_lossless_json_text" not in source
+    assert "OwnerDataReader(" in account_source
+    assert "OwnerDataReader(" in coach_source
+    assert "app.services.coach_snapshot" not in account_source
+    assert "app.services.account_service" not in coach_source
+    assert "_lossless_json_text" not in coach_source

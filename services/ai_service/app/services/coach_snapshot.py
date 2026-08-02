@@ -33,6 +33,16 @@ from app.repositories.account_repository import (
     AccountPersistenceError,
     AccountRepository,
 )
+from app.services.owner_data_reader import (
+    OwnerDataInvalidCursorError,
+    OwnerDataInvalidOwnerError,
+    OwnerDataInvalidPageError,
+    OwnerDataReadPolicy,
+    OwnerDataReader,
+    OwnerDataSerializedBytesExceededError,
+    OwnerDataSourceRowsExceededError,
+    OwnerDataTotalRowsExceededError,
+)
 
 
 COACH_SNAPSHOT_CONTRACT_VERSION = "personal-snapshot-v1"
@@ -155,6 +165,7 @@ class PreparedCoachSnapshot:
 class CoachSnapshotService:
     def __init__(self, *, repository: AccountRepository) -> None:
         self._repository = repository
+        self._owner_data_reader = OwnerDataReader(repository=repository)
 
     async def create(self, *, user_id: str) -> PreparedCoachSnapshot:
         rows_by_table = await self._collect_rows(user_id=user_id)
@@ -207,90 +218,64 @@ class CoachSnapshotService:
         *,
         user_id: str,
     ) -> dict[str, list[dict[str, Any]]]:
-        rows_by_table = {table.name: [] for table in COACH_SNAPSHOT_TABLES}
-        total_rows = 0
-        watermarks = {
-            table.name: await self._repository.get_export_watermark(
-                user_id=user_id,
-                table=table,
-                max_response_bytes=OWNER_DATA_WATERMARK_MAX_BYTES,
+        empty_rows = {table.name: [] for table in COACH_SNAPSHOT_TABLES}
+        try:
+            initial_serialized_bytes = len(
+                lossless_json_text(empty_rows).encode("utf-8"),
             )
-            for table in COACH_SNAPSHOT_TABLES
-        }
-        for table in COACH_SNAPSHOT_TABLES:
-            not_after = watermarks[table.name]
-            if not_after is None:
-                continue
-            after_cursor: str | None = None
-            target = rows_by_table[table.name]
-            while True:
-                remaining = ACCOUNT_EXPORT_MAX_ROWS_PER_TABLE - len(target)
-                request_limit = min(OWNER_DATA_PAGE_SIZE, remaining + 1)
-                try:
-                    page = await self._repository.list_export_rows(
-                        user_id=user_id,
-                        table=table,
-                        after_cursor=after_cursor,
-                        not_after=not_after,
-                        limit=request_limit,
-                        max_response_bytes=(
-                            ACCOUNT_EXPORT_MAX_JSON_BYTES + OWNER_DATA_PAGE_BYTE_CUSHION
-                        ),
-                    )
-                except AccountExportSourceTooLargeError as exc:
-                    raise CoachSnapshotTooLargeError(
-                        "Personal data exceeds the 8 MiB Coach snapshot limit.",
-                    ) from exc
-                _validate_page(
-                    page=page,
+            collection = await self._owner_data_reader.collect(
+                user_id=user_id,
+                sources=COACH_SNAPSHOT_TABLES,
+                policy=OwnerDataReadPolicy(
+                    page_size=OWNER_DATA_PAGE_SIZE,
+                    max_rows_per_source=ACCOUNT_EXPORT_MAX_ROWS_PER_TABLE,
+                    max_total_rows=ACCOUNT_EXPORT_MAX_TOTAL_ROWS,
+                    max_serialized_bytes=ACCOUNT_EXPORT_MAX_JSON_BYTES,
+                    watermark_max_response_bytes=(OWNER_DATA_WATERMARK_MAX_BYTES),
+                ),
+                initial_serialized_bytes=initial_serialized_bytes,
+                transform_row=lambda table, row: _sanitize_row(
+                    row=row,
                     table=table,
-                    user_id=user_id,
-                    after_cursor=after_cursor,
-                    request_limit=request_limit,
-                )
-                if len(page) > remaining:
-                    raise CoachSnapshotTooLargeError(
-                        f"{table.name} exceeds the 10,000-row snapshot limit.",
-                    )
-                if total_rows + len(page) > ACCOUNT_EXPORT_MAX_TOTAL_ROWS:
-                    raise CoachSnapshotTooLargeError(
-                        "Personal data exceeds the 50,000-row Coach snapshot limit.",
-                    )
-                for row in page:
-                    after_cursor = str(row[table.cursor_column])
-                    target.append(_sanitize_row(row=row, table=table))
-                    total_rows += 1
-                if len(page) < request_limit:
-                    break
-        return rows_by_table
-
-
-def _validate_page(
-    *,
-    page: object,
-    table: AccountExportTable,
-    user_id: str,
-    after_cursor: str | None,
-    request_limit: int,
-) -> None:
-    if (
-        not isinstance(page, list)
-        or len(page) > request_limit
-        or any(not isinstance(row, dict) for row in page)
-    ):
-        raise AccountPersistenceError("Coach snapshot returned an invalid page.")
-    previous = after_cursor
-    for row in page:
-        if row.get(table.owner_column) != user_id:
-            raise AccountPersistenceError("Coach snapshot returned another owner.")
-        cursor = row.get(table.cursor_column)
-        if (
-            not isinstance(cursor, str)
-            or not cursor
-            or (previous is not None and cursor <= previous)
-        ):
-            raise AccountPersistenceError("Coach snapshot cursor is invalid.")
-        previous = cursor
+                ),
+                serialized_row_growth=_coach_snapshot_row_growth,
+                page_response_bytes=lambda _serialized_bytes: (
+                    ACCOUNT_EXPORT_MAX_JSON_BYTES + OWNER_DATA_PAGE_BYTE_CUSHION
+                ),
+            )
+        except (RecursionError, TypeError, ValueError) as exc:
+            raise AccountPersistenceError(
+                "Coach snapshot returned invalid JSON data.",
+            ) from exc
+        except AccountExportSourceTooLargeError as exc:
+            raise CoachSnapshotTooLargeError(
+                "Personal data exceeds the 8 MiB Coach snapshot limit.",
+            ) from exc
+        except OwnerDataInvalidPageError as exc:
+            raise AccountPersistenceError(
+                "Coach snapshot returned an invalid page.",
+            ) from exc
+        except OwnerDataInvalidOwnerError as exc:
+            raise AccountPersistenceError(
+                "Coach snapshot returned another owner.",
+            ) from exc
+        except OwnerDataInvalidCursorError as exc:
+            raise AccountPersistenceError(
+                "Coach snapshot cursor is invalid.",
+            ) from exc
+        except OwnerDataSourceRowsExceededError as exc:
+            raise CoachSnapshotTooLargeError(
+                f"{exc.source_name} exceeds the 10,000-row snapshot limit.",
+            ) from exc
+        except OwnerDataTotalRowsExceededError as exc:
+            raise CoachSnapshotTooLargeError(
+                "Personal data exceeds the 50,000-row Coach snapshot limit.",
+            ) from exc
+        except OwnerDataSerializedBytesExceededError as exc:
+            raise CoachSnapshotTooLargeError(
+                "Personal data exceeds the 8 MiB Coach snapshot limit.",
+            ) from exc
+        return collection.rows_by_source
 
 
 def _sanitize_row(
@@ -306,6 +291,20 @@ def _sanitize_row(
         and key not in prohibited
         and not _is_sensitive_field_name(key)
     }
+
+
+def _coach_snapshot_row_growth(
+    _table: AccountExportTable,
+    current_table_rows: int,
+    row: dict[str, Any],
+) -> int:
+    try:
+        row_bytes = len(lossless_json_text(row).encode("utf-8"))
+    except (RecursionError, TypeError, ValueError) as exc:
+        raise AccountPersistenceError(
+            "Coach snapshot returned invalid JSON data.",
+        ) from exc
+    return row_bytes + (1 if current_table_rows else 0)
 
 
 def _sanitize_nested_value(value: Any, *, depth: int) -> Any:

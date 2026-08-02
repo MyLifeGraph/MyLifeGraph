@@ -1094,13 +1094,16 @@ it omits, includes Deadline Planner plan/revision/block rows while omitting its
 request ledger, and fails rather than truncating at a V1 bound. The exact
 41-table set includes `learning_preferences`, `focus_session_reflections`, and
 `focus_session_schedule_sources`, while the learning request ledger is
-explicitly omitted. FastAPI's typed owner-data catalog is the single code owner for all 48
-repo-owned public tables: each entry separately declares Account Export and
-Coach Snapshot participation, the bounded read shape when applicable, and the
-human-readable snapshot description. A focused migration-history completeness
-test fails when a newly created repo table has no deliberate policy. Flutter
-validates the
-entire envelope and counts before saving. Full deletion requires exact typed
+explicitly omitted. FastAPI's typed owner-data catalog is the single code owner
+for all 48 repo-owned public tables: each entry separately declares Account
+Export and Coach Snapshot participation, the bounded read shape when applicable,
+and the human-readable snapshot description. A focused migration-history
+completeness test fails when a newly created repo table has no deliberate
+policy. One feature-neutral reader captures every selected table's watermark
+before rows, loads independent sources with bounded concurrency, and returns
+catalog-ordered tables to both Account Export and Coach Snapshot. Flutter
+validates the entire envelope and counts before saving. Full deletion requires
+exact typed
 confirmation and one service-role-only database RPC. The RPC locks the existing
 owner workflows, removes restrict-linked focus history, deletes the Auth user,
 and verifies the profile/product cascade in one transaction. The client then

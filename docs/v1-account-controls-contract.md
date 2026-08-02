@@ -157,7 +157,11 @@ Supabase pages are stream-bounded before JSON materialization, and cumulative
 JSON growth is checked before retaining each row. Reads use immutable keyset
 cursors plus a server-derived upper watermark per table, avoiding offset skips
 and excluding normal later inserts. These separate reads are intentionally not
-a cross-table point-in-time transaction snapshot.
+a cross-table point-in-time transaction snapshot. The neutral owner-data reader
+captures every table-local watermark before starting row collection, then loads
+independent tables through a bounded task pool. Page order remains keyset order,
+the final envelope remains catalog ordered regardless of completion order, and
+failure or cancellation cancels and settles sibling reads before returning.
 The backend requests at most 1,000 bounded rows per page, so the 50,000-row
 contract edge does not devolve into thousands of serial REST round trips.
 Responses use `Cache-Control: no-store` and a download filename. Flutter

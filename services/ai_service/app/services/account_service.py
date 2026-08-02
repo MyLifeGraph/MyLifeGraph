@@ -39,6 +39,16 @@ from app.repositories.account_repository import (
     AccountRepository,
     AccountSettingConflictError as AccountPersistenceConflict,
 )
+from app.services.owner_data_reader import (
+    OwnerDataInvalidCursorError,
+    OwnerDataInvalidOwnerError,
+    OwnerDataInvalidPageError,
+    OwnerDataReadPolicy,
+    OwnerDataReader,
+    OwnerDataSerializedBytesExceededError,
+    OwnerDataSourceRowsExceededError,
+    OwnerDataTotalRowsExceededError,
+)
 
 
 ACCOUNT_EXPORT_PAGE_SIZE = OWNER_DATA_PAGE_SIZE
@@ -94,6 +104,7 @@ class AccountService:
         now: Callable[[], datetime] | None = None,
     ) -> None:
         self._repository = repository
+        self._owner_data_reader = OwnerDataReader(repository=repository)
         self._now = now or (lambda: datetime.now(UTC))
 
     async def update_timezone(
@@ -193,126 +204,72 @@ class AccountService:
     async def export_account(self, *, user_id: str) -> PreparedAccountExport:
         _validate_export_configuration()
         exported_at = self._now()
-        data: dict[str, list[dict[str, object]]] = {
+        empty_data: dict[str, list[dict[str, object]]] = {
             name: [] for name in ACCOUNT_EXPORT_TABLE_NAMES
         }
         empty_response = AccountExportResponse(
             contract_version=ACCOUNT_EXPORT_CONTRACT_VERSION,
             exported_at=exported_at,
-            data=data,
+            data=empty_data,
             record_counts={name: 0 for name in ACCOUNT_EXPORT_TABLE_NAMES},
             ledger_policy=ACCOUNT_EXPORT_LEDGER_POLICY,
             limits=_export_limits(),
         )
-        estimated_json_bytes = len(_compact_json_bytes(empty_response))
-        total_rows = 0
         # Capture all table-local upper bounds before retaining any product
         # rows. Together with immutable keyset cursors this prevents offset
         # shifts and excludes normal inserts committed after each watermark.
         # This deliberately does not claim a cross-table transaction snapshot.
         try:
-            watermarks = {
-                table.name: await self._repository.get_export_watermark(
-                    user_id=user_id,
-                    table=table,
-                    max_response_bytes=ACCOUNT_EXPORT_WATERMARK_MAX_BYTES,
-                )
-                for table in ACCOUNT_EXPORT_TABLES
-            }
+            collection = await self._owner_data_reader.collect(
+                user_id=user_id,
+                sources=ACCOUNT_EXPORT_TABLES,
+                policy=OwnerDataReadPolicy(
+                    page_size=ACCOUNT_EXPORT_PAGE_SIZE,
+                    max_rows_per_source=ACCOUNT_EXPORT_MAX_ROWS_PER_TABLE,
+                    max_total_rows=ACCOUNT_EXPORT_MAX_TOTAL_ROWS,
+                    max_serialized_bytes=ACCOUNT_EXPORT_MAX_JSON_BYTES,
+                    watermark_max_response_bytes=(ACCOUNT_EXPORT_WATERMARK_MAX_BYTES),
+                ),
+                initial_serialized_bytes=len(_compact_json_bytes(empty_response)),
+                transform_row=lambda _source, row: row,
+                serialized_row_growth=_account_export_row_growth,
+                page_response_bytes=_account_export_page_response_bytes,
+            )
+        except AccountPersistenceSourceTooLarge as exc:
+            raise AccountExportTooLargeError(
+                "Account export exceeds the V2 JSON size bound.",
+            ) from exc
         except AccountPersistenceError as exc:
             raise AccountUnavailableError(
                 "Account export could not be generated.",
             ) from exc
-        for table in ACCOUNT_EXPORT_TABLES:
-            rows = data[table.name]
-            not_after = watermarks[table.name]
-            if not_after is None:
-                continue
-            after_cursor: str | None = None
-            while True:
-                remaining = ACCOUNT_EXPORT_MAX_ROWS_PER_TABLE - len(rows)
-                request_limit = min(ACCOUNT_EXPORT_PAGE_SIZE, remaining + 1)
-                response_budget = ACCOUNT_EXPORT_MAX_JSON_BYTES - estimated_json_bytes
-                source_page_bound = max(
-                    2,
-                    min(
-                        ACCOUNT_EXPORT_MAX_JSON_BYTES,
-                        response_budget + ACCOUNT_EXPORT_PAGE_BYTE_CUSHION,
-                    ),
-                )
-                try:
-                    page = await self._repository.list_export_rows(
-                        user_id=user_id,
-                        table=table,
-                        after_cursor=after_cursor,
-                        not_after=not_after,
-                        limit=request_limit,
-                        max_response_bytes=source_page_bound,
-                    )
-                except AccountPersistenceSourceTooLarge as exc:
-                    raise AccountExportTooLargeError(
-                        "Account export exceeds the V2 JSON size bound.",
-                    ) from exc
-                except AccountPersistenceError as exc:
-                    raise AccountUnavailableError(
-                        "Account export could not be generated.",
-                    ) from exc
-                if not isinstance(page, list) or any(
-                    not isinstance(row, dict) for row in page
-                ):
-                    raise AccountUnavailableError(
-                        "Account export persistence returned an invalid page.",
-                    )
-                if len(page) > request_limit:
-                    raise AccountUnavailableError(
-                        "Account export persistence returned an invalid page.",
-                    )
-                if any(
-                    not isinstance(row.get(table.owner_column), str)
-                    or row[table.owner_column] != user_id
-                    for row in page
-                ):
-                    raise AccountUnavailableError(
-                        "Account export persistence returned an invalid owner.",
-                    )
-                if len(page) > remaining:
-                    raise AccountExportTooLargeError(
-                        f"Account export table {table.name} exceeds the V2 row bound.",
-                    )
-                if total_rows + len(page) > ACCOUNT_EXPORT_MAX_TOTAL_ROWS:
-                    raise AccountExportTooLargeError(
-                        "Account export exceeds the V2 total row bound.",
-                    )
-                for row in page:
-                    cursor = row.get(table.cursor_column)
-                    if (
-                        not isinstance(cursor, str)
-                        or not cursor
-                        or (after_cursor is not None and cursor <= after_cursor)
-                    ):
-                        raise AccountUnavailableError(
-                            "Account export persistence returned an invalid cursor.",
-                        )
-                    row_bytes = len(_compact_json_bytes(row))
-                    separator_bytes = 1 if rows else 0
-                    old_count_digits = len(str(len(rows)))
-                    new_count_digits = len(str(len(rows) + 1))
-                    growth = (
-                        row_bytes
-                        + separator_bytes
-                        + new_count_digits
-                        - old_count_digits
-                    )
-                    if estimated_json_bytes + growth > ACCOUNT_EXPORT_MAX_JSON_BYTES:
-                        raise AccountExportTooLargeError(
-                            "Account export exceeds the V2 JSON size bound.",
-                        )
-                    rows.append(row)
-                    total_rows += 1
-                    estimated_json_bytes += growth
-                    after_cursor = cursor
-                if len(page) < request_limit:
-                    break
+        except OwnerDataInvalidPageError as exc:
+            raise AccountUnavailableError(
+                "Account export persistence returned an invalid page.",
+            ) from exc
+        except OwnerDataInvalidOwnerError as exc:
+            raise AccountUnavailableError(
+                "Account export persistence returned an invalid owner.",
+            ) from exc
+        except OwnerDataInvalidCursorError as exc:
+            raise AccountUnavailableError(
+                "Account export persistence returned an invalid cursor.",
+            ) from exc
+        except OwnerDataSourceRowsExceededError as exc:
+            raise AccountExportTooLargeError(
+                f"Account export table {exc.source_name} exceeds the V2 row bound.",
+            ) from exc
+        except OwnerDataTotalRowsExceededError as exc:
+            raise AccountExportTooLargeError(
+                "Account export exceeds the V2 total row bound.",
+            ) from exc
+        except OwnerDataSerializedBytesExceededError as exc:
+            raise AccountExportTooLargeError(
+                "Account export exceeds the V2 JSON size bound.",
+            ) from exc
+
+        data = collection.rows_by_source
+        estimated_json_bytes = collection.serialized_bytes
 
         envelope = AccountExportResponse(
             contract_version=ACCOUNT_EXPORT_CONTRACT_VERSION,
@@ -422,6 +379,29 @@ def _export_limits() -> AccountExportLimits:
         max_rows_per_table=ACCOUNT_EXPORT_MAX_ROWS_PER_TABLE,
         max_total_rows=ACCOUNT_EXPORT_MAX_TOTAL_ROWS,
         max_json_bytes=ACCOUNT_EXPORT_MAX_JSON_BYTES,
+    )
+
+
+def _account_export_row_growth(
+    _source: object,
+    current_source_rows: int,
+    row: dict[str, object],
+) -> int:
+    row_bytes = len(_compact_json_bytes(row))
+    separator_bytes = 1 if current_source_rows else 0
+    old_count_digits = len(str(current_source_rows))
+    new_count_digits = len(str(current_source_rows + 1))
+    return row_bytes + separator_bytes + new_count_digits - old_count_digits
+
+
+def _account_export_page_response_bytes(serialized_bytes: int) -> int:
+    response_budget = ACCOUNT_EXPORT_MAX_JSON_BYTES - serialized_bytes
+    return max(
+        2,
+        min(
+            ACCOUNT_EXPORT_MAX_JSON_BYTES,
+            response_budget + ACCOUNT_EXPORT_PAGE_BYTE_CUSHION,
+        ),
     )
 
 

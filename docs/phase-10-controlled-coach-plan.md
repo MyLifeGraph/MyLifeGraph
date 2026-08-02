@@ -244,7 +244,12 @@ compatibility. The current Flutter client does not call them.
 FastAPI builds a new `personal-snapshot-v1` SQLite file for each non-safety
 turn. It takes bounded export watermarks first, paginates every source with an
 explicit owner filter, verifies cursor order and ownership again, and only then
-writes the file. Another owner's row fails the turn.
+writes the file. Account Export and Coach Snapshot use the same neutral
+owner-data reader: all table-local watermarks finish before row collection,
+independent sources load through a bounded task pool, and the resulting tables
+remain in catalog order regardless of completion order. A source failure or
+request cancellation cancels and settles sibling reads without exposing a
+partial snapshot. Another owner's row fails the turn.
 
 The snapshot includes the retained relevant product projections available
 through the account-export boundary:

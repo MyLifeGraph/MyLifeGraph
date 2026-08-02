@@ -97,7 +97,7 @@ chat must run this exact closeout sequence:
 
 ## Tranche 2: Share Owner Data Collection
 
-- State: `pending`
+- State: `completed`
 - Depends on: Tranche 1 completed.
 - Goal: Move Account Export and Coach Snapshot onto one neutral owner-data
   reader that captures source watermarks, loads bounded table pages with limited
@@ -123,7 +123,15 @@ chat must run this exact closeout sequence:
   `tests/test_account_service.py`, `tests/test_account_export_stream_bound.py`,
   `tests/test_coach_snapshot.py`, and `tests/test_owner_data_catalog.py`.
 - Commit subject: `refactor: share owner data collection`
-- Result: _Not started._
+- Result: _Completed on 2026-08-02. Account Export and Coach Snapshot now use
+  one neutral reader that captures every source watermark before bounded
+  parallel row collection and preserves catalog order, exact limits,
+  sanitization, and feature-specific errors. Failed and cancelled reads settle
+  sibling work. The focused Ruff/format and 59-test suite, `npm run
+  verify:docs`, `FLUTTER_BIN=/home/gregor/tools/flutter/bin/flutter npm run
+  verify:fast`, and `git diff --check` passed; the full gate included clean
+  Flutter analysis/tests and the complete backend suite with two expected
+  skips._
 
 ## Tranche 3: Reuse Today And Planner Read Context
 
