@@ -173,7 +173,7 @@ chat must run this exact closeout sequence:
 
 ## Tranche 4: Extract Focus Session Lifecycle Controller
 
-- State: `pending`
+- State: `completed`
 - Depends on: Tranche 3 completed.
 - Goal: Move the Focus session lifecycle from the Flutter page into an explicit
   `FocusSessionController` or equivalent state machine and isolate Android
@@ -195,7 +195,16 @@ chat must run this exact closeout sequence:
   Focus Protection Flutter tests, Android JVM lease/policy tests, Flutter
   analysis, and the relevant Android source guards.
 - Commit subject: `refactor: extract focus session lifecycle controller`
-- Result: _Not started._
+- Result: _Completed on 2026-08-02. `FocusSessionController` now owns the
+  explicit load/retry, start reconciliation, timer, terminal mutation,
+  recovery, reflection, and emergency-release transitions; a narrow adapter
+  contains Android lease reconciliation and native failures without changing
+  canonical Focus state. The Page retains dialogs, messages, navigation, and
+  widget composition. The focused Flutter regression/controller suite, clean
+  Flutter analysis, Android `testDebugUnitTest` plus `lintDebug`, `npm run
+  verify:docs`, `FLUTTER_BIN=/home/gregor/tools/flutter/bin/flutter npm run
+  verify:fast`, and `git diff --check` passed; the full gate included the
+  complete Flutter and backend suites with two expected backend skips._
 
 ## Tranche 5: Centralize Strict Flutter Contract Primitives
 

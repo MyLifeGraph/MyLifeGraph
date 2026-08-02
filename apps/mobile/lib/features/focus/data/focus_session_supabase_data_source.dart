@@ -6,13 +6,14 @@ import '../../../core/supabase/app_user_resolver.dart';
 import '../../../core/supabase/supabase_tables.dart';
 import '../../../core/utils/client_uuid.dart';
 import '../../../core/utils/local_date.dart';
+import '../application/focus_session_controller.dart';
 import '../domain/focus_session.dart';
 
 typedef FocusNowProvider = DateTime Function();
 typedef FocusEntryDateProvider = String Function(DateTime instant);
 typedef FocusAccessTokenProvider = Future<String?> Function();
 
-class FocusSessionSupabaseDataSource {
+class FocusSessionSupabaseDataSource implements FocusSessionLifecyclePort {
   FocusSessionSupabaseDataSource(
     this._client, {
     FocusNowProvider? nowProvider,
@@ -37,6 +38,7 @@ class FocusSessionSupabaseDataSource {
   final ApiClient? _apiClient;
   final FocusAccessTokenProvider? _accessTokenProvider;
 
+  @override
   Future<FocusSession?> fetchActiveSession() async {
     final userId = await AppUserResolver(_client).resolveUserId();
     final row = await _client
@@ -50,6 +52,7 @@ class FocusSessionSupabaseDataSource {
         : FocusSession.fromRow(Map<String, dynamic>.from(row));
   }
 
+  @override
   Future<List<FocusSession>> fetchRecentSessions({int limit = 10}) async {
     final userId = await AppUserResolver(_client).resolveUserId();
     final rows = await _client
@@ -63,11 +66,13 @@ class FocusSessionSupabaseDataSource {
         .toList();
   }
 
+  @override
   Future<FocusSession> fetchSessionById(String sessionId) async {
     final userId = await AppUserResolver(_client).resolveUserId();
     return _requireOwnedSession(sessionId, userId: userId);
   }
 
+  @override
   Future<FocusStartContext> fetchScheduledStartContext({
     required FocusScheduleSourceKind sourceKind,
     required String blockId,
@@ -86,6 +91,7 @@ class FocusSessionSupabaseDataSource {
     return FocusStartContext.fromJson(json);
   }
 
+  @override
   Future<Map<String, FocusReflection>> fetchReflectionsForSessions(
     Iterable<FocusSession> sessions,
   ) async {
@@ -115,6 +121,7 @@ class FocusSessionSupabaseDataSource {
     return Map.unmodifiable(reflections);
   }
 
+  @override
   Future<bool> fetchFocusReflectionPromptEnabled() async {
     final userId = await AppUserResolver(_client).resolveUserId();
     final row = await _client
@@ -132,6 +139,7 @@ class FocusSessionSupabaseDataSource {
     return row['focus_reflection_prompt_enabled'] as bool;
   }
 
+  @override
   Future<FocusReflection> saveReflection({
     required FocusSession session,
     required FocusReflectionDraft draft,
@@ -228,6 +236,7 @@ class FocusSessionSupabaseDataSource {
     );
   }
 
+  @override
   Future<void> deleteReflection(FocusReflection reflection) async {
     final userId = await AppUserResolver(_client).resolveUserId();
     final rows = await _client
@@ -269,6 +278,7 @@ class FocusSessionSupabaseDataSource {
         : FocusReflection.fromRow(Map<String, dynamic>.from(row));
   }
 
+  @override
   Future<List<FocusTargetOption>> fetchAvailableTargets() async {
     final userId = await AppUserResolver(_client).resolveUserId();
     final results = await Future.wait([
@@ -298,6 +308,7 @@ class FocusSessionSupabaseDataSource {
     return targets;
   }
 
+  @override
   Future<StudyFocusSettings?> fetchStudyFocusSettings() async {
     final userId = await AppUserResolver(_client).resolveUserId();
     final row = await _client
@@ -315,6 +326,7 @@ class FocusSessionSupabaseDataSource {
     return StudyFocusSettings.fromRow(Map<String, dynamic>.from(row));
   }
 
+  @override
   Future<FocusSession> startSession({
     required String sessionId,
     required FocusStartDraft draft,
@@ -410,6 +422,7 @@ class FocusSessionSupabaseDataSource {
     return FocusSession.fromRow(Map<String, dynamic>.from(row));
   }
 
+  @override
   Future<FocusSession> startScheduledSession({
     required String sessionId,
     required FocusScheduleSourceKind sourceKind,
@@ -456,6 +469,7 @@ class FocusSessionSupabaseDataSource {
     return session;
   }
 
+  @override
   Future<FocusSession> finishSession(String sessionId) {
     return _endSession(
       sessionId,
@@ -463,6 +477,7 @@ class FocusSessionSupabaseDataSource {
     );
   }
 
+  @override
   Future<FocusSession> abandonSession(String sessionId) {
     return _endSession(
       sessionId,

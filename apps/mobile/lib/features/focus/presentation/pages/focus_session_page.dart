@@ -1,66 +1,28 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-
-import 'package:my_life_graph/core/constants/app_radii.dart';
-
-import 'package:my_life_graph/core/theme/app_icons.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:my_life_graph/core/constants/app_radii.dart';
+import 'package:my_life_graph/core/theme/app_icons.dart';
 
-import '../../../../composition/projection_refresh_providers.dart';
+import '../../../../composition/focus_session_providers.dart';
 import '../../../../core/constants/app_spacing.dart';
-import '../../../../core/config/app_config.dart';
-import '../../../../core/network/api_client.dart';
-import '../../../../core/network/api_failure.dart';
 import '../../../../core/navigation/app_routes.dart';
-import '../../../../core/supabase/supabase_providers.dart';
-import '../../../../core/utils/client_uuid.dart';
+import '../../../../core/network/api_failure.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_page.dart';
-import 'package:my_life_graph/composition/profile_local_date_providers.dart';
-import '../../data/focus_session_supabase_data_source.dart';
+import '../../application/focus_session_controller.dart';
 import '../../domain/focus_session.dart';
-import '../../../focus_protection/application/focus_protection_gateway.dart';
 import '../../../focus_protection/domain/focus_protection.dart';
 import '../widgets/focus_reflection_sheet.dart';
 
-final focusSessionPageDataSourceProvider =
-    Provider<FocusSessionSupabaseDataSource?>((ref) {
-  final client = ref.watch(supabaseClientProvider);
-  return client == null
-      ? null
-      : FocusSessionSupabaseDataSource(
-          client,
-          entryDateProvider:
-              ref.watch(profileLocalDateSourceProvider).dateKeyAt,
-          apiClient: ref.watch(apiClientProvider),
-          accessTokenProvider: () async => ref
-              .read(supabaseClientProvider)
-              ?.auth
-              .currentSession
-              ?.accessToken,
-        );
-});
-
-final focusStudySettingsDataSourceProvider =
-    Provider<FocusSessionSupabaseDataSource?>(
-  (ref) => ref.watch(focusSessionPageDataSourceProvider),
-);
-
-const _recoveryPreferenceKey = 'focus-recovery-countdown-v1';
+export '../../../../composition/focus_session_providers.dart'
+    show
+        focusSessionPageDataSourceProvider,
+        focusStudySettingsDataSourceProvider;
 
 enum _PreparationChoice { ready, notNeeded }
-
-enum StudySetupLoadStatus { configured, notConfigured, unavailable }
-
-class _StudySettingsResult {
-  const _StudySettingsResult(this.status, this.settings);
-
-  final StudySetupLoadStatus status;
-  final StudyFocusSettings? settings;
-}
 
 class FocusSessionPage extends ConsumerStatefulWidget {
   const FocusSessionPage({
@@ -88,39 +50,23 @@ class FocusSessionPage extends ConsumerStatefulWidget {
 
 class _FocusSessionPageState extends ConsumerState<FocusSessionPage>
     with WidgetsBindingObserver {
-  FocusSession? _active;
-  List<FocusSession> _recent = const [];
-  Map<String, FocusReflection> _reflections = const {};
-  bool _reflectionPromptEnabled = false;
-  bool _reflectionDataAvailable = true;
-  List<FocusTargetOption> _targets = const [];
-  String? _selectedTargetValue;
-  bool _initialTargetApplied = false;
-  bool _initialDurationApplied = false;
-  bool _initialReflectionOpened = false;
-  int _plannedMinutes = 25;
-  int _recoveryMinutes = 0;
-  StudyFocusSettings? _studySettings;
-  StudySetupLoadStatus _studySetupStatus = StudySetupLoadStatus.unavailable;
-  bool _continueWithoutStudySetup = false;
-  DateTime? _recoveryEndsAt;
-  DateTime _clockNow = DateTime.now();
-  Timer? _ticker;
-  bool _isLoading = true;
-  bool _isSaving = false;
-  String? _loadError;
-  FocusStartContext? _scheduledContext;
-  String? _startConflictMessage;
-  FocusProtectionStatus? _protectionStatus;
-  bool _isChangingProtection = false;
-  int _loadGeneration = 0;
-  int _protectionGeneration = 0;
+  FocusSessionLaunch get _launch => FocusSessionLaunch(
+        initialTargetKind: widget.initialTargetKind,
+        initialTargetId: widget.initialTargetId,
+        initialPlannedMinutes: widget.initialPlannedMinutes,
+        initialRecoveryMinutes: widget.initialRecoveryMinutes,
+        initialSourceKind: widget.initialSourceKind,
+        initialSourceBlockId: widget.initialSourceBlockId,
+        initialSessionId: widget.initialSessionId,
+      );
+
+  FocusSessionController get _controller =>
+      ref.read(focusSessionControllerProvider(_launch).notifier);
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _applyInitialDuration();
     Future.microtask(_load);
   }
 
@@ -136,45 +82,26 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage>
         oldWidget.initialSessionId == widget.initialSessionId) {
       return;
     }
-    _initialTargetApplied = false;
-    _initialDurationApplied = false;
-    _initialReflectionOpened = false;
-    _selectedTargetValue = null;
-    _scheduledContext = null;
-    _startConflictMessage = null;
-    _loadError = null;
-    _isLoading = true;
-    _applyInitialDuration();
     Future.microtask(_load);
-  }
-
-  void _applyInitialDuration() {
-    final requestedMinutes = widget.initialPlannedMinutes;
-    _plannedMinutes = requestedMinutes != null &&
-            requestedMinutes >= 5 &&
-            requestedMinutes <= 240
-        ? requestedMinutes
-        : 25;
   }
 
   @override
   void dispose() {
-    _loadGeneration++;
-    _protectionGeneration++;
     WidgetsBinding.instance.removeObserver(this);
-    _ticker?.cancel();
     super.dispose();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed && !_isSaving) {
+    if (state == AppLifecycleState.resumed &&
+        !ref.read(focusSessionControllerProvider(_launch)).isSaving) {
       unawaited(_load());
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final state = ref.watch(focusSessionControllerProvider(_launch));
     return AppPage(
       title: 'Focus session',
       subtitle: 'A real timed execution block linked to an optional action',
@@ -182,12 +109,12 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage>
       actions: [
         IconButton(
           tooltip: 'Refresh focus sessions',
-          onPressed: _isLoading || _isSaving ? null : _load,
+          onPressed: state.isLoading || state.isSaving ? null : _load,
           icon: const Icon(AppIcons.refresh),
         ),
       ],
       children: [
-        if (_isLoading)
+        if (state.isLoading)
           const AppCard(
             child: Center(
               child: Padding(
@@ -196,78 +123,67 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage>
               ),
             ),
           )
-        else if (_loadError != null)
+        else if (state.loadError != null)
           _FocusLoadErrorCard(
-            message: _loadError!,
+            message: state.loadError!,
             onRetry: _load,
           )
-        else if (_active != null) ...[
+        else if (state.active != null) ...[
           _ActiveFocusCard(
-            session: _active!,
-            target: _targetFor(_active!),
-            now: _clockNow,
-            isSaving: _isSaving,
+            session: state.active!,
+            target: state.targetFor(state.active!),
+            now: state.clockNow,
+            isSaving: state.isSaving,
             onFinish: _finish,
             onAbandon: _abandon,
           ),
-          if (_protectionStatus?.platformSupported == true)
+          if (state.protectionStatus?.platformSupported == true)
             _ActiveFocusProtectionCard(
-              status: _protectionStatus!,
-              sessionId: _active!.id,
-              isBusy: _isChangingProtection,
+              status: state.protectionStatus!,
+              sessionId: state.active!.id,
+              isBusy: state.isChangingProtection,
               onEmergencyRelease: _emergencyRelease,
             ),
-        ] else if (_recoveryEndsAt?.isAfter(_clockNow) == true)
+        ] else if (state.recoveryEndsAt?.isAfter(state.clockNow) == true)
           _RecoveryCard(
-            endsAt: _recoveryEndsAt!,
-            now: _clockNow,
-            onSkip: _skipRecovery,
+            endsAt: state.recoveryEndsAt!,
+            now: state.clockNow,
+            onSkip: _controller.skipRecovery,
           )
         else ...[
-          if (_scheduledContext == null &&
-              _studySetupStatus == StudySetupLoadStatus.unavailable &&
-              !_continueWithoutStudySetup)
+          if (state.scheduledContext == null &&
+              state.studySetupStatus == StudySetupLoadStatus.unavailable &&
+              !state.continueWithoutStudySetup)
             _StudySetupUnavailableCard(
-              onRetry: _retryStudySettings,
-              onContinue: _continueWithoutSavedStudySetup,
+              onRetry: _controller.retryStudySettings,
+              onContinue: _controller.continueWithoutSavedStudySetup,
             ),
           _StartFocusCard(
-            plannedMinutes: _plannedMinutes,
-            recoveryMinutes: _recoveryMinutes,
-            suggestion: FocusPreferenceSuggestion.fromSessions(_recent),
-            targets: _targets,
-            selectedTargetValue: _selectedTargetValue,
-            isSaving: _isSaving,
-            startEnabled:
-                (_studySetupStatus != StudySetupLoadStatus.unavailable ||
-                        _continueWithoutStudySetup ||
-                        _scheduledContext != null) &&
-                    (_scheduledContext?.canStart ?? true),
-            scheduledContext: _scheduledContext,
-            inlineError: _startConflictMessage ??
-                (_scheduledContext?.canStart == false
+            plannedMinutes: state.plannedMinutes,
+            recoveryMinutes: state.recoveryMinutes,
+            suggestion: FocusPreferenceSuggestion.fromSessions(state.recent),
+            targets: state.targets,
+            selectedTargetValue: state.selectedTargetValue,
+            isSaving: state.isSaving,
+            startEnabled: state.canStart,
+            scheduledContext: state.scheduledContext,
+            inlineError: state.startConflictMessage ??
+                (state.scheduledContext?.canStart == false
                     ? _focusStartBlockingText(
-                        _scheduledContext!.blockingReason,
+                        state.scheduledContext!.blockingReason,
                       )
                     : null),
-            onDurationChanged: (value) {
-              setState(() {
-                _plannedMinutes = value;
-                _startConflictMessage = null;
-              });
-            },
+            onDurationChanged: _controller.setPlannedMinutes,
             onCustomDuration: _chooseCustomDuration,
-            onTargetChanged: (value) {
-              setState(() => _selectedTargetValue = value);
-            },
+            onTargetChanged: _controller.selectTarget,
             onStart: _start,
           ),
         ],
-        if (!_isLoading && _loadError == null)
+        if (!state.isLoading && state.loadError == null)
           _FocusHistoryCard(
-            sessions: _recent,
-            reflections: _reflections,
-            reflectionDataAvailable: _reflectionDataAvailable,
+            sessions: state.recent,
+            reflections: state.reflections,
+            reflectionDataAvailable: state.reflectionDataAvailable,
             onRate: _openReflection,
           ),
       ],
@@ -275,299 +191,27 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage>
   }
 
   Future<void> _load() async {
-    if (!mounted) return;
-    final loadGeneration = ++_loadGeneration;
-    final protectionGeneration = ++_protectionGeneration;
-    bool isCurrent() =>
-        mounted &&
-        loadGeneration == _loadGeneration &&
-        protectionGeneration == _protectionGeneration;
-    final config = ref.read(appConfigProvider);
-    final source = ref.read(focusSessionPageDataSourceProvider);
-    final studySource = ref.read(focusStudySettingsDataSourceProvider);
-    if (config.useMockData) {
-      if (isCurrent()) {
-        setState(() {
-          _loadError = null;
-          _isLoading = false;
-        });
-      }
-      return;
-    }
-    if (source == null) {
-      if (isCurrent()) {
-        setState(() {
-          _loadError = 'Synced focus sessions are not configured.';
-          _isLoading = false;
-        });
-      }
-      return;
-    }
-    setState(() {
-      _loadError = null;
-      _isLoading = true;
-    });
-    try {
-      final active = await source.fetchActiveSession();
-      if (!isCurrent()) return;
-      final requestedSessionId = widget.initialSessionId;
-      final exactSessionFuture = requestedSessionId == null
-          ? Future<FocusSession?>.value()
-          : requestedSessionId == active?.id
-              ? Future<FocusSession?>.value(active)
-              : active == null
-                  ? source.fetchSessionById(requestedSessionId)
-                  : _fetchExactSessionWithoutHidingActive(
-                      source,
-                      requestedSessionId,
-                    );
-      final scheduledContextFuture = active != null ||
-              widget.initialSourceKind == null ||
-              widget.initialSourceBlockId == null
-          ? Future<FocusStartContext?>.value()
-          : source.fetchScheduledStartContext(
-              sourceKind: widget.initialSourceKind!,
-              blockId: widget.initialSourceBlockId!,
-            );
-      final results = await Future.wait([
-        source.fetchRecentSessions(),
-        source.fetchAvailableTargets(),
-        _fetchStudySettings(studySource),
-        exactSessionFuture,
-        scheduledContextFuture,
-      ]);
-      final exactSession = results[3] as FocusSession?;
-      final recent = <FocusSession>[
-        if (exactSession != null) exactSession,
-        ...(results[0] as List<FocusSession>)
-            .where((session) => session.id != exactSession?.id),
-      ];
-      final scheduledContext = results[4] as FocusStartContext?;
-      final targets = <FocusTargetOption>[
-        ...(results[1] as List<FocusTargetOption>),
-        if (scheduledContext != null &&
-            !(results[1] as List<FocusTargetOption>)
-                .any((target) => target.value == scheduledContext.target.value))
-          scheduledContext.target,
-      ];
-      final studyResult = results[2] as _StudySettingsResult;
-      final studySettings = studyResult.settings;
-      if (!isCurrent()) return;
-      final protectionStatus = await _readAndReconcileProtection(
-        active,
-        shouldContinue: isCurrent,
-      );
-      if (!isCurrent()) return;
-      Map<String, FocusReflection> reflections = const {};
-      var reflectionPromptEnabled = false;
-      var reflectionDataAvailable = true;
-      try {
-        final reflectionResults = await Future.wait([
-          source.fetchReflectionsForSessions(recent),
-          source.fetchFocusReflectionPromptEnabled(),
-        ]);
-        reflections = reflectionResults[0] as Map<String, FocusReflection>;
-        reflectionPromptEnabled = reflectionResults[1] as bool;
-      } catch (_) {
-        reflectionDataAvailable = false;
-      }
-      if (!isCurrent()) return;
-      var selected = _selectedTargetValue;
-      final requestedKind = widget.initialTargetKind;
-      final requestedId = widget.initialTargetId;
-      if (!_initialTargetApplied) {
-        _initialTargetApplied = true;
-        if (scheduledContext != null) {
-          selected = scheduledContext.target.value;
-        } else if (selected == null &&
-            requestedKind != null &&
-            requestedId != null) {
-          final requested = '${requestedKind.code}:$requestedId';
-          if (targets.any((target) => target.value == requested)) {
-            selected = requested;
-          }
-        }
-      }
-      if (selected != null &&
-          !targets.any((target) => target.value == selected)) {
-        selected = null;
-      }
-      var plannedMinutes = _plannedMinutes;
-      if (!_initialDurationApplied) {
-        _initialDurationApplied = true;
-        if (scheduledContext != null) {
-          plannedMinutes = scheduledContext.remainingMinutes;
-        } else if (widget.initialPlannedMinutes == null && active == null) {
-          final terminal = recent.where((session) => !session.isActive);
-          if (studySettings != null) {
-            plannedMinutes = studySettings.focusMinutes;
-          } else if (terminal.isNotEmpty) {
-            plannedMinutes = terminal.first.plannedMinutes;
-          }
-        }
-      }
-      final requestedRecovery = widget.initialRecoveryMinutes;
-      final recoveryMinutes = scheduledContext?.recoveryMinutes ??
-          (requestedRecovery != null &&
-                  (requestedRecovery == 0 ||
-                      requestedRecovery >= 5 &&
-                          requestedRecovery <= 60 &&
-                          requestedRecovery.remainder(5) == 0)
-              ? requestedRecovery
-              : studySettings?.recoveryMinutes ?? 0);
-      final recoveryEndsAt =
-          active == null ? await _restoreRecoveryCountdown(recent) : null;
-      if (!isCurrent()) return;
-      if (mounted) {
-        setState(() {
-          _active = active;
-          _recent = recent;
-          _reflections = reflections;
-          _reflectionPromptEnabled = reflectionPromptEnabled;
-          _reflectionDataAvailable = reflectionDataAvailable;
-          _targets = targets;
-          _selectedTargetValue = selected;
-          _plannedMinutes = plannedMinutes;
-          _recoveryMinutes = recoveryMinutes;
-          _studySettings = studySettings;
-          _studySetupStatus = studyResult.status;
-          _continueWithoutStudySetup = false;
-          _recoveryEndsAt = recoveryEndsAt;
-          _clockNow = DateTime.now();
-          _loadError = null;
-          _scheduledContext = scheduledContext;
-          _startConflictMessage = null;
-          _isLoading = false;
-          _protectionStatus = protectionStatus;
-        });
-        _syncTicker();
-        if (!_initialReflectionOpened &&
-            exactSession != null &&
-            !exactSession.isActive) {
-          _initialReflectionOpened = true;
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted) unawaited(_openReflection(exactSession));
-          });
-        }
-      }
-    } catch (_) {
-      if (!isCurrent()) return;
-      if (mounted) {
-        setState(() {
-          _loadError = 'Could not load focus sessions.';
-          _isLoading = false;
-        });
-      }
-    }
-  }
-
-  Future<FocusSession?> _fetchExactSessionWithoutHidingActive(
-    FocusSessionSupabaseDataSource source,
-    String sessionId,
-  ) async {
-    try {
-      return await source.fetchSessionById(sessionId);
-    } catch (_) {
-      return null;
-    }
-  }
-
-  void _syncTicker() {
-    _ticker?.cancel();
-    _ticker = null;
-    if (_active == null && _recoveryEndsAt?.isAfter(DateTime.now()) != true) {
-      return;
-    }
-    _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (!mounted) return;
-      final now = DateTime.now();
-      final recoveryEndsAt = _recoveryEndsAt;
-      if (_active == null &&
-          recoveryEndsAt != null &&
-          !recoveryEndsAt.isAfter(now)) {
-        setState(() {
-          _clockNow = now;
-          _recoveryEndsAt = null;
-        });
-        _ticker?.cancel();
-        _ticker = null;
-        unawaited(_clearStoredRecovery());
-        return;
-      }
-      setState(() => _clockNow = now);
-    });
-  }
-
-  Future<_StudySettingsResult> _fetchStudySettings(
-    FocusSessionSupabaseDataSource? source,
-  ) async {
-    if (source == null) {
-      return const _StudySettingsResult(
-        StudySetupLoadStatus.unavailable,
-        null,
-      );
-    }
-    try {
-      final settings = await source.fetchStudyFocusSettings();
-      return _StudySettingsResult(
-        settings == null
-            ? StudySetupLoadStatus.notConfigured
-            : StudySetupLoadStatus.configured,
-        settings,
-      );
-    } catch (_) {
-      return const _StudySettingsResult(
-        StudySetupLoadStatus.unavailable,
-        null,
-      );
-    }
-  }
-
-  Future<void> _retryStudySettings() async {
-    if (_isSaving) return;
-    final result = await _fetchStudySettings(
-      ref.read(focusStudySettingsDataSourceProvider),
-    );
-    if (!mounted) return;
-    setState(() {
-      _studySetupStatus = result.status;
-      _studySettings = result.settings;
-      _continueWithoutStudySetup = false;
-      if (result.settings != null) {
-        _plannedMinutes = result.settings!.focusMinutes;
-        _recoveryMinutes = result.settings!.recoveryMinutes;
-      }
-    });
-  }
-
-  void _continueWithoutSavedStudySetup() {
-    if (_scheduledContext != null) {
-      setState(() => _continueWithoutStudySetup = true);
-      return;
-    }
-    final terminal = _recent.where((session) => !session.isActive);
-    setState(() {
-      _continueWithoutStudySetup = true;
-      _studySettings = null;
-      _plannedMinutes = terminal.isNotEmpty
-          ? terminal.first.plannedMinutes
-          : (_plannedMinutes >= 5 && _plannedMinutes <= 240
-              ? _plannedMinutes
-              : 25);
-      _recoveryMinutes = 0;
+    final result = await _controller.load();
+    final reflection = result.initialReflection;
+    if (reflection == null || !mounted) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) unawaited(_openReflection(reflection));
     });
   }
 
   Future<void> _chooseCustomDuration() async {
-    final maximum = _scheduledContext?.remainingMinutes ?? 240;
-    final controller = TextEditingController(text: '$_plannedMinutes');
+    final state = ref.read(focusSessionControllerProvider(_launch));
+    final maximum = state.scheduledContext?.remainingMinutes ?? 240;
+    final textController = TextEditingController(
+      text: '${state.plannedMinutes}',
+    );
     final selected = await showDialog<int>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Custom focus duration'),
         content: TextField(
           key: const ValueKey('custom-focus-duration'),
-          controller: controller,
+          controller: textController,
           autofocus: true,
           keyboardType: TextInputType.number,
           decoration: InputDecoration(
@@ -582,7 +226,7 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage>
           ),
           FilledButton(
             onPressed: () {
-              final value = int.tryParse(controller.text.trim());
+              final value = int.tryParse(textController.text.trim());
               if (value != null && value >= 5 && value <= maximum) {
                 Navigator.of(context).pop(value);
               }
@@ -592,151 +236,46 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage>
         ],
       ),
     );
-    controller.dispose();
+    textController.dispose();
     if (selected != null && mounted) {
-      setState(() {
-        _plannedMinutes = selected;
-        _startConflictMessage = null;
-      });
+      _controller.setPlannedMinutes(selected);
     }
   }
 
   Future<void> _start() async {
-    final source = ref.read(focusSessionPageDataSourceProvider);
-    if (source == null ||
-        _isSaving ||
-        _studySetupStatus == StudySetupLoadStatus.unavailable &&
-            !_continueWithoutStudySetup &&
-            _scheduledContext == null) {
-      return;
-    }
+    final state = ref.read(focusSessionControllerProvider(_launch));
+    if (state.isSaving || !state.canStart) return;
     final prepared = await _confirmPreparation();
-    if (prepared != true || !mounted) {
-      return;
-    }
-    final target = _targets
-        .where((candidate) => candidate.value == _selectedTargetValue)
-        .firstOrNull;
-    final requestId = newClientUuid();
-    final projectionRefresh = ref.read(projectionRefreshCoordinatorProvider);
-    final protectionSupported =
-        ref.read(focusProtectionPlatformSupportedProvider);
-    final protectionGateway = ref.read(focusProtectionGatewayProvider);
-    _loadGeneration++;
-    _protectionGeneration++;
-    setState(() => _isSaving = true);
-    try {
-      final scheduled = _scheduledContext;
-      final started = scheduled == null
-          ? await source.startSession(
-              sessionId: requestId,
-              draft: FocusStartDraft(
-                plannedMinutes: _plannedMinutes,
-                recoveryMinutes: _recoveryMinutes,
-                targetKind: target?.kind,
-                targetId: target?.id,
-                label: target?.title ?? 'Independent focus block',
-              ),
-            )
-          : await source.startScheduledSession(
-              sessionId: requestId,
-              sourceKind: scheduled.sourceKind,
-              blockId: scheduled.blockId,
-              plannedMinutes: _plannedMinutes,
-            );
-      await _reconcileVisibleProtectionWith(
-        started,
-        gateway: protectionGateway,
-        platformSupported: protectionSupported,
-      );
-      await _afterDurableWrite(started, projectionRefresh);
-      if (mounted) {
+    if (prepared != true || !mounted) return;
+    final result = await _controller.start();
+    if (!mounted) return;
+    switch (result.outcome) {
+      case FocusStartOutcome.started:
         _showMessage('Focus session started.');
-      }
-    } catch (error) {
-      final conflictMessage = _focusStartErrorText(error);
-      if (!mounted) {
-        try {
-          final active = await source.fetchActiveSession();
-          if (active?.id == requestId) {
-            await _reconcileVisibleProtectionWith(
-              active,
-              gateway: protectionGateway,
-              platformSupported: protectionSupported,
-            );
-            await _afterDurableWrite(active!, projectionRefresh);
-          }
-        } catch (_) {
-          // The mutation remains honestly unconfirmed after navigation.
+        break;
+      case FocusStartOutcome.failed:
+        final conflictMessage = _focusStartErrorText(result.error!);
+        final current = ref.read(focusSessionControllerProvider(_launch));
+        if (current.scheduledContext != null && conflictMessage != null) {
+          _controller.setStartConflictMessage(conflictMessage);
+        } else {
+          _showMessage(
+            result.error is FocusCommandException
+                ? (result.error! as FocusCommandException).message
+                : 'Could not start focus session.',
+          );
         }
-        return;
-      }
-      await _load();
-      if (!mounted) return;
-      if (_active != null) {
-        await _reconcileVisibleProtectionWith(
-          _active,
-          gateway: protectionGateway,
-          platformSupported: protectionSupported,
-        );
-        if (_active?.id == requestId) {
-          await _afterDurableWrite(_active!, projectionRefresh);
-        }
-        if (mounted && _active?.id == requestId) {
-          _showMessage('Focus session started.');
-        }
-        return;
-      }
-      if (mounted && _scheduledContext != null && conflictMessage != null) {
-        setState(() => _startConflictMessage = conflictMessage);
-      } else if (mounted) {
-        _showMessage(
-          error is FocusCommandException
-              ? error.message
-              : 'Could not start focus session.',
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isSaving = false);
-      }
+        break;
+      case FocusStartOutcome.ignored:
+      case FocusStartOutcome.anotherSessionActive:
+        break;
     }
   }
 
   Future<void> _finish() async {
-    final active = _active;
-    final source = ref.read(focusSessionPageDataSourceProvider);
-    if (active == null || source == null || _isSaving) {
-      return;
-    }
-    final projectionRefresh = ref.read(projectionRefreshCoordinatorProvider);
-    final protectionSupported =
-        ref.read(focusProtectionPlatformSupportedProvider);
-    final protectionGateway = ref.read(focusProtectionGatewayProvider);
-    _loadGeneration++;
-    _protectionGeneration++;
-    setState(() => _isSaving = true);
-    try {
-      final finished = await source.finishSession(active.id);
-      final protectionConfirmed = await _deactivateProtectionWith(
-        active.id,
-        gateway: protectionGateway,
-        platformSupported: protectionSupported,
-      );
-      if (mounted) {
-        setState(() {
-          _active = null;
-          _selectedTargetValue = null;
-          _recent = [
-            finished,
-            ..._recent.where((session) => session.id != finished.id),
-          ];
-        });
-        _syncTicker();
-      }
-      await _startRecoveryCountdown(finished);
-      unawaited(_refreshAfterTerminalWrite(finished, projectionRefresh));
-      if (mounted) {
+    final result = await _controller.finish(
+      onCommitted: (finished, protectionConfirmed) async {
+        if (!mounted) return;
         final focusMessage = finished.recoveryMinutes > 0
             ? 'Focus session finished. Recovery started; linked actions were not completed automatically.'
             : 'Focus session finished. Linked tasks and habits were not completed automatically.';
@@ -745,26 +284,23 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage>
               ? focusMessage
               : '$focusMessage Android cleanup could not be confirmed; local expiry and the next device reconciliation will retry it.',
         );
-      }
-      await _maybePromptForReflection(finished);
-      if (mounted) await _load();
-    } catch (error) {
-      if (mounted) {
-        _showMessage(
-          error is FocusCommandException
-              ? error.message
-              : 'Could not finish focus session.',
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isSaving = false);
-      }
+        await _maybePromptForReflection(finished);
+      },
+    );
+    if (mounted && result.error != null) {
+      _showMessage(
+        result.error is FocusCommandException
+            ? (result.error! as FocusCommandException).message
+            : 'Could not finish focus session.',
+      );
     }
   }
 
   Future<bool?> _confirmPreparation() {
-    final items = _studySettings?.preparationItems
+    final items = ref
+            .read(focusSessionControllerProvider(_launch))
+            .studySettings
+            ?.preparationItems
             .where((item) => item.active)
             .toList(growable: false) ??
         const <FocusPreparationItem>[];
@@ -864,95 +400,9 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage>
     );
   }
 
-  Future<void> _startRecoveryCountdown(FocusSession session) async {
-    if (session.recoveryMinutes <= 0 ||
-        session.status != FocusSessionStatus.completed) {
-      return;
-    }
-    final startedAt = session.endedAt ?? DateTime.now();
-    final endsAt = startedAt.add(
-      Duration(minutes: session.recoveryMinutes),
-    );
-    try {
-      final preferences = await SharedPreferences.getInstance();
-      await preferences.setString(
-        _recoveryPreferenceKey,
-        '${session.id}|${endsAt.toUtc().toIso8601String()}',
-      );
-    } catch (_) {
-      // The visible countdown still works for this app process.
-    }
-    if (mounted) {
-      setState(() {
-        _clockNow = DateTime.now();
-        _recoveryEndsAt = endsAt;
-      });
-      _syncTicker();
-    }
-  }
-
-  Future<DateTime?> _restoreRecoveryCountdown(
-    List<FocusSession> recent,
-  ) async {
-    final completedRecoveryIds = recent
-        .where(
-          (session) =>
-              session.status == FocusSessionStatus.completed &&
-              session.recoveryMinutes > 0,
-        )
-        .map((session) => session.id)
-        .toSet();
-    if (completedRecoveryIds.isEmpty) {
-      return null;
-    }
-    try {
-      final preferences = await SharedPreferences.getInstance();
-      final raw = preferences.getString(_recoveryPreferenceKey);
-      if (raw == null) return null;
-      final separator = raw.indexOf('|');
-      if (separator <= 0) {
-        await preferences.remove(_recoveryPreferenceKey);
-        return null;
-      }
-      final sessionId = raw.substring(0, separator);
-      final endsAt = DateTime.tryParse(raw.substring(separator + 1));
-      if (!completedRecoveryIds.contains(sessionId) ||
-          endsAt == null ||
-          !endsAt.isAfter(DateTime.now())) {
-        await preferences.remove(_recoveryPreferenceKey);
-        return null;
-      }
-      return endsAt.toLocal();
-    } catch (_) {
-      return null;
-    }
-  }
-
-  Future<void> _skipRecovery() async {
-    await _clearStoredRecovery();
-    if (!mounted) return;
-    setState(() {
-      _recoveryEndsAt = null;
-      _clockNow = DateTime.now();
-    });
-    _syncTicker();
-  }
-
-  Future<void> _clearStoredRecovery() async {
-    try {
-      final preferences = await SharedPreferences.getInstance();
-      await preferences.remove(_recoveryPreferenceKey);
-    } catch (_) {
-      // Local storage availability must not block Focus.
-    }
-  }
-
   Future<void> _abandon() async {
-    final active = _active;
-    final source = ref.read(focusSessionPageDataSourceProvider);
-    if (active == null || source == null || _isSaving) {
-      return;
-    }
+    final state = ref.read(focusSessionControllerProvider(_launch));
+    if (state.active == null || state.isSaving) return;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -972,162 +422,30 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage>
         ],
       ),
     );
-    if (confirmed != true || !mounted) {
-      return;
-    }
-    final projectionRefresh = ref.read(projectionRefreshCoordinatorProvider);
-    final protectionSupported =
-        ref.read(focusProtectionPlatformSupportedProvider);
-    final protectionGateway = ref.read(focusProtectionGatewayProvider);
-    _loadGeneration++;
-    _protectionGeneration++;
-    setState(() => _isSaving = true);
-    try {
-      final abandoned = await source.abandonSession(active.id);
-      final protectionConfirmed = await _deactivateProtectionWith(
-        active.id,
-        gateway: protectionGateway,
-        platformSupported: protectionSupported,
-      );
-      if (mounted) {
-        setState(() {
-          _active = null;
-          _selectedTargetValue = null;
-          _recent = [
-            abandoned,
-            ..._recent.where((session) => session.id != abandoned.id),
-          ];
-        });
-        _syncTicker();
-      }
-      unawaited(_refreshAfterTerminalWrite(abandoned, projectionRefresh));
-      if (mounted) {
+    if (confirmed != true || !mounted) return;
+    final result = await _controller.abandon(
+      onCommitted: (abandoned, protectionConfirmed) async {
+        if (!mounted) return;
         _showMessage(
           protectionConfirmed
               ? 'Focus session abandoned.'
               : 'Focus session abandoned. Android cleanup could not be confirmed; local expiry and the next device reconciliation will retry it.',
         );
-      }
-      await _maybePromptForReflection(abandoned);
-      if (mounted) await _load();
-    } catch (error) {
-      if (mounted) {
-        _showMessage(
-          error is FocusCommandException
-              ? error.message
-              : 'Could not abandon focus session.',
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isSaving = false);
-      }
-    }
-  }
-
-  Future<void> _afterDurableWrite(
-    FocusSession session,
-    ProjectionRefreshCoordinator projectionRefresh,
-  ) async {
-    await projectionRefresh.focusChanged(
-      targetDate: session.snapshotEntryDate,
+        await _maybePromptForReflection(abandoned);
+      },
     );
-    if (!mounted) return;
-    await _load();
-  }
-
-  Future<FocusProtectionStatus?> _readAndReconcileProtection(
-    FocusSession? session, {
-    bool Function()? shouldContinue,
-  }) async {
-    final platformSupported =
-        ref.read(focusProtectionPlatformSupportedProvider);
-    final gateway = ref.read(focusProtectionGatewayProvider);
-    return _readAndReconcileProtectionWith(
-      session,
-      gateway: gateway,
-      platformSupported: platformSupported,
-      shouldContinue: shouldContinue,
-    );
-  }
-
-  Future<FocusProtectionStatus?> _readAndReconcileProtectionWith(
-    FocusSession? session, {
-    required FocusProtectionGateway gateway,
-    required bool platformSupported,
-    bool Function()? shouldContinue,
-  }) async {
-    if (!platformSupported) return null;
-    bool canContinue() => shouldContinue?.call() ?? true;
-    var lastKnownConfiguration = _protectionStatus?.configuration;
-    try {
-      var status = await gateway.readStatus();
-      lastKnownConfiguration = status.configuration;
-      if (!canContinue()) return null;
-      if (session == null && status.lease != null) {
-        status = await gateway.deactivateLease(status.lease!.sessionId);
-        if (!canContinue()) return null;
-      }
-      if (session != null && status.configuration.enabled) {
-        status = await gateway.activateLease(
-          sessionId: session.id,
-          startedAt: session.startedAt,
-          endsAt: session.startedAt.add(
-            Duration(minutes: session.plannedMinutes),
-          ),
-        );
-        if (!canContinue()) return null;
-      }
-      return status;
-    } catch (_) {
-      if (!canContinue()) return null;
-      return FocusProtectionStatus.nativeFailure(
-        configuration: lastKnownConfiguration,
+    if (mounted && result.error != null) {
+      _showMessage(
+        result.error is FocusCommandException
+            ? (result.error! as FocusCommandException).message
+            : 'Could not abandon focus session.',
       );
     }
   }
 
-  Future<void> _reconcileVisibleProtectionWith(
-    FocusSession? session, {
-    required FocusProtectionGateway gateway,
-    required bool platformSupported,
-  }) async {
-    final status = await _readAndReconcileProtectionWith(
-      session,
-      gateway: gateway,
-      platformSupported: platformSupported,
-    );
-    if (mounted && status != null) {
-      setState(() => _protectionStatus = status);
-    }
-  }
-
-  Future<bool> _deactivateProtectionWith(
-    String sessionId, {
-    required FocusProtectionGateway gateway,
-    required bool platformSupported,
-  }) async {
-    if (!platformSupported) return true;
-    try {
-      final status = await gateway.deactivateLease(sessionId);
-      if (mounted) setState(() => _protectionStatus = status);
-      return !status.warnings.contains(FocusProtectionWarning.nativeFailure) &&
-          status.lease?.sessionId != sessionId;
-    } catch (_) {
-      if (mounted) {
-        setState(() {
-          _protectionStatus = FocusProtectionStatus.nativeFailure(
-            configuration: _protectionStatus?.configuration,
-          );
-        });
-      }
-      return false;
-    }
-  }
-
   Future<void> _emergencyRelease() async {
-    final active = _active;
-    if (active == null || _isChangingProtection) return;
+    final state = ref.read(focusSessionControllerProvider(_launch));
+    if (state.active == null || state.isChangingProtection) return;
     final confirmed = await showDialog<bool>(
           context: context,
           barrierDismissible: false,
@@ -1135,77 +453,46 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage>
         ) ??
         false;
     if (!confirmed || !mounted) return;
-    _protectionGeneration++;
-    setState(() => _isChangingProtection = true);
-    try {
-      final status = await ref
-          .read(focusProtectionGatewayProvider)
-          .emergencyRelease(active.id);
-      if (!mounted) return;
-      setState(() => _protectionStatus = status);
-      _showMessage(
-        'Device protection released. This Focus session remains active and will not be protected again.',
-      );
-    } catch (_) {
-      if (mounted) {
-        _showMessage('Could not release Android protection. Try again.');
-      }
-    } finally {
-      if (mounted) setState(() => _isChangingProtection = false);
-    }
-  }
-
-  Future<void> _refreshAfterTerminalWrite(
-    FocusSession session,
-    ProjectionRefreshCoordinator projectionRefresh,
-  ) async {
-    try {
-      await projectionRefresh.focusChanged(
-        targetDate: session.snapshotEntryDate,
-      );
-    } catch (_) {
-      // The terminal Focus write remains durable even when its derived
-      // snapshot cannot be refreshed immediately.
-    }
+    final result = await _controller.emergencyRelease();
+    if (!mounted || !result.accepted) return;
+    _showMessage(
+      result.released
+          ? 'Device protection released. This Focus session remains active and will not be protected again.'
+          : 'Could not release Android protection. Try again.',
+    );
   }
 
   Future<void> _maybePromptForReflection(FocusSession session) async {
-    if (!_reflectionPromptEnabled || !_reflectionDataAvailable || !mounted) {
+    final state = ref.read(focusSessionControllerProvider(_launch));
+    if (!state.reflectionPromptEnabled ||
+        !state.reflectionDataAvailable ||
+        !mounted) {
       return;
     }
     await _openReflection(session);
   }
 
   Future<void> _openReflection(FocusSession session) async {
-    final source = ref.read(focusSessionPageDataSourceProvider);
-    if (source == null || session.isActive || !mounted) return;
-    final existing = _reflections[session.id];
+    if (session.isActive || !mounted) return;
+    final existing = ref
+        .read(focusSessionControllerProvider(_launch))
+        .reflections[session.id];
     final outcome = await showFocusReflectionSheet(
       context: context,
       session: session,
       existing: existing,
       onSave: (draft) async {
-        final saved = await source.saveReflection(
+        return _controller.saveReflection(
           session: session,
           draft: draft,
           existing: existing,
         );
-        if (mounted) {
-          setState(() {
-            _reflections = {..._reflections, session.id: saved};
-            _reflectionDataAvailable = true;
-          });
-        }
-        return saved;
       },
       onDelete: (reflection) async {
-        await source.deleteReflection(reflection);
-        if (mounted) {
-          setState(() {
-            final updated = {..._reflections}..remove(session.id);
-            _reflections = updated;
-          });
-        }
+        await _controller.deleteReflection(
+          session: session,
+          reflection: reflection,
+        );
       },
     );
     if (!mounted) return;
@@ -1220,16 +507,6 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage>
       case null:
         break;
     }
-  }
-
-  FocusTargetOption? _targetFor(FocusSession session) {
-    return _targets
-        .where(
-          (target) =>
-              target.kind == session.targetKind &&
-              target.id == session.targetId,
-        )
-        .firstOrNull;
   }
 
   void _showMessage(String message) {
@@ -1993,8 +1270,4 @@ class _FocusHistoryCard extends StatelessWidget {
       ),
     );
   }
-}
-
-extension _FirstOrNull<T> on Iterable<T> {
-  T? get firstOrNull => isEmpty ? null : first;
 }
