@@ -208,7 +208,7 @@ chat must run this exact closeout sequence:
 
 ## Tranche 5: Centralize Strict Flutter Contract Primitives
 
-- State: `pending`
+- State: `completed`
 - Depends on: Tranche 4 completed.
 - Goal: Provide shared strict Flutter JSON primitives for exact keys, UUIDs,
   timestamps/dates, lists, maps, scalar types, and numeric/string bounds, then
@@ -230,7 +230,17 @@ chat must run this exact closeout sequence:
 - Focused tests: strict contract/model tests for every migrated feature plus a
   dedicated core parser test and `flutter analyze`.
 - Commit subject: `refactor: centralize strict Flutter contract parsing`
-- Result: _Not started._
+- Result: _Added a framework-neutral strict contract parser for exact keys,
+  string-keyed maps, bounded lists, strings, booleans, integers, configurable
+  UUIDs, local dates/times, and aware timestamps. Migrated compatible Intake,
+  Deadline/Exam Outlook, Planner, Today, Weekly Review, Calendar,
+  Notification, Coach, Learning, and Account parsers while retaining
+  feature-owned cross-field rules, errors, null handling, rune/code-unit
+  limits, and legacy timestamp normalization where required. The focused
+  parser matrix, `npm run verify:docs`,
+  `FLUTTER_BIN=/home/gregor/tools/flutter/bin/flutter npm run verify:fast`,
+  and `git diff --check` passed. The full fast gate included Flutter analysis
+  and the complete Flutter/backend suites with two expected backend skips._
 
 ## Tranche 6: Share Coach Turn Lifecycle Primitives
 

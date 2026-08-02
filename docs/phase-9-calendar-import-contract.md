@@ -454,6 +454,11 @@ documentation assertions alone do not establish a current-checkout E2E pass.
 The complete combined Phase 3 through Phase 9 browser journey passed this
 contract non-destructively in the 2026-07-13 Phase 9 implementation checkout.
 
+The Flutter Calendar parser reuses framework-neutral strict primitives for
+exact required/optional keys, scalar and rune bounds, UUIDs, dates, times, and
+timestamps. Calendar-specific request/replay relationships and event interval
+rules remain beside the aggregate with the same typed errors and V2 wire shape.
+
 The FastAPI route now obtains the application-lifespan-owned Supabase client
 instead of constructing a transport per request. Connection reuse does not
 change Calendar consent, request identity, owner derivation, `.ics` parsing,

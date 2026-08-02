@@ -284,6 +284,11 @@ deletion requires an intentionally disposable local account and must never be
 performed as part of a non-destructive audit or against an unconfirmed remote
 project.
 
+The Flutter account parsers reuse framework-neutral strict primitives for
+exact keys, string-keyed objects, aware timestamps, and integer bounds. Account
+export table/count equality, ledger policy, byte/row ceilings, and typed account
+errors remain feature-owned; this changes no V2 wire value or rejection.
+
 The FastAPI route now obtains the application-lifespan-owned Supabase client
 instead of constructing a transport per request. This changes only connection
 reuse: bearer-derived ownership, streamed bounds, retry behavior, service-role

@@ -1,3 +1,4 @@
+import '../../../core/contracts/strict_contract.dart';
 import '../../../core/planning/planning_timing_preference.dart';
 
 const deadlinePlanContractVersion = 'deadline-plan-v1';
@@ -1378,19 +1379,10 @@ class DeadlinePlanAccessException implements Exception {
   String toString() => message;
 }
 
-final _uuidPattern = RegExp(
-  r'^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
-);
 final _fingerprintPattern = RegExp(r'^[0-9a-f]{64}$');
-final _datePattern = RegExp(r'^\d{4}-\d{2}-\d{2}$');
-final _timePattern = RegExp(
-  r'^([01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d{1,6})?$',
-);
-final _awarePattern = RegExp(
-  r'^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})$',
-);
 
-bool isDeadlinePlanUuid(String value) => _uuidPattern.hasMatch(value);
+bool isDeadlinePlanUuid(String value) =>
+    isStrictUuid(value, minVersion: 1, maxVersion: 5);
 
 bool isDeadlinePlanDate(String value) => _isDate(value);
 
@@ -1408,10 +1400,13 @@ void _expectExactKeys(
   Set<String> keys,
   String model,
 ) {
-  if (json.keys.toSet().difference(keys).isNotEmpty ||
-      keys.difference(json.keys.toSet()).isNotEmpty) {
-    throw DeadlinePlanContractException('$model fields are invalid.');
-  }
+  requireStrictKeys(
+    json,
+    requiredKeys: keys,
+    onFailure: () => throw DeadlinePlanContractException(
+      '$model fields are invalid.',
+    ),
+  );
 }
 
 void _expectRequiredAndOptionalKeys(
@@ -1420,25 +1415,31 @@ void _expectRequiredAndOptionalKeys(
   required Set<String> optional,
   required String model,
 }) {
-  if (required.difference(json.keys.toSet()).isNotEmpty ||
-      json.keys.toSet().difference({...required, ...optional}).isNotEmpty ||
-      optional.any((key) => json.containsKey(key) && json[key] == null)) {
-    throw DeadlinePlanContractException('$model fields are invalid.');
-  }
+  requireStrictKeys(
+    json,
+    requiredKeys: required,
+    optionalKeys: optional,
+    rejectExplicitNullOptionalKeys: true,
+    onFailure: () => throw DeadlinePlanContractException(
+      '$model fields are invalid.',
+    ),
+  );
 }
 
 Map<String, dynamic> _requiredStringMap(Object? value, String field) {
-  if (value is! Map || value.keys.any((key) => key is! String)) {
-    throw DeadlinePlanContractException('$field is invalid.');
-  }
-  return Map<String, dynamic>.from(value);
+  return requireStrictMap(
+    value,
+    onFailure: () => throw DeadlinePlanContractException('$field is invalid.'),
+  );
 }
 
 String _requiredUuid(Object? value, String field) {
-  if (value is! String || !isDeadlinePlanUuid(value)) {
-    throw DeadlinePlanContractException('$field is invalid.');
-  }
-  return value;
+  return requireStrictUuid(
+    value,
+    minVersion: 1,
+    maxVersion: 5,
+    onFailure: () => throw DeadlinePlanContractException('$field is invalid.'),
+  );
 }
 
 String? _optionalUuid(Map<String, dynamic> json, String key) =>
@@ -1455,34 +1456,31 @@ String? _optionalFingerprint(Map<String, dynamic> json, String key) =>
     json.containsKey(key) ? _requiredFingerprint(json[key], key) : null;
 
 String _requiredString(Object? value, String field, {required int maxLength}) {
-  if (value is! String ||
-      value.trim() != value ||
-      value.isEmpty ||
-      value.runes.length > maxLength) {
-    throw DeadlinePlanContractException('$field is invalid.');
-  }
-  return value;
+  return requireStrictString(
+    value,
+    maxLength: maxLength,
+    length: StrictStringLength.runes,
+    onFailure: () => throw DeadlinePlanContractException('$field is invalid.'),
+  );
 }
 
 int _requiredInt(Object? value, String field) {
-  if (value is! int) {
-    throw DeadlinePlanContractException('$field is invalid.');
-  }
-  return value;
+  return requireStrictInt(
+    value,
+    onFailure: () => throw DeadlinePlanContractException('$field is invalid.'),
+  );
 }
 
 int? _optionalInt(Map<String, dynamic> json, String key) =>
     json.containsKey(key) ? _requiredInt(json[key], key) : null;
 
 DateTime _requiredAwareDateTime(Object? value, String field) {
-  if (value is! String || !_awarePattern.hasMatch(value)) {
-    throw DeadlinePlanContractException('$field is invalid.');
-  }
-  final parsed = DateTime.tryParse(value);
-  if (parsed == null) {
-    throw DeadlinePlanContractException('$field is invalid.');
-  }
-  return parsed;
+  return requireStrictAwareDateTime(
+    value,
+    maxFractionDigits: 6,
+    validateDateAndTimeComponents: false,
+    onFailure: () => throw DeadlinePlanContractException('$field is invalid.'),
+  );
 }
 
 DateTime? _optionalAwareDateTime(Map<String, dynamic> json, String key) =>
@@ -1496,12 +1494,7 @@ String _requiredDate(Object? value, String field) {
 }
 
 bool _isDate(String value) {
-  if (!_datePattern.hasMatch(value)) return false;
-  final parsed = DateTime.tryParse(value);
-  return parsed != null &&
-      parsed.year.toString().padLeft(4, '0') == value.substring(0, 4) &&
-      parsed.month.toString().padLeft(2, '0') == value.substring(5, 7) &&
-      parsed.day.toString().padLeft(2, '0') == value.substring(8, 10);
+  return isStrictLocalDate(value);
 }
 
 String _dateOnlyKey(DateTime value) {
@@ -1511,18 +1504,22 @@ String _dateOnlyKey(DateTime value) {
 }
 
 String _requiredTime(Object? value, String field) {
-  if (value is! String || !_timePattern.hasMatch(value)) {
-    throw DeadlinePlanContractException('$field is invalid.');
-  }
-  return value;
+  return requireStrictLocalTime(
+    value,
+    maxFractionDigits: 6,
+    onFailure: () => throw DeadlinePlanContractException('$field is invalid.'),
+  );
 }
 
 List<String> _stringList(Object? value, String field) {
-  if (value is! List ||
-      value.any((item) => item is! String || item.trim().isEmpty)) {
+  final values = requireStrictList(
+    value,
+    onFailure: () => throw DeadlinePlanContractException('$field is invalid.'),
+  );
+  if (values.any((item) => item is! String || item.trim().isEmpty)) {
     throw DeadlinePlanContractException('$field is invalid.');
   }
-  return List<String>.unmodifiable(value.cast<String>());
+  return List<String>.unmodifiable(values.cast<String>());
 }
 
 T? _optionalModel<T>(

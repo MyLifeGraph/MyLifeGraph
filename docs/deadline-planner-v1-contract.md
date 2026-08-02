@@ -556,6 +556,10 @@ that the seven-day workload is a complete calendar/free-time model.
 
 Focused backend, Flutter, migration, and browser coverage must prove:
 
+- Flutter parsing may reuse framework-neutral exact-key, object/list, scalar,
+  UUID, date/time, timestamp, and bound primitives while Deadline revision,
+  block, progress, workload, and source relationships remain feature-owned;
+
 - explicit estimate/prior-spent input and absence of inferred defaults;
 - strict request/response parsing and bearer-derived ownership;
 - deterministic block identity, ordering, totals, timezone/DST behavior,

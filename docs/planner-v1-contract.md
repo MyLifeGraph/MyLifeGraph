@@ -355,6 +355,11 @@ Daily Briefing, Preparation Workload, and Exam Outlook reads. Planner callers
 do not enumerate those foreign providers, and this cache coordination never
 replays the mutation.
 
+Flutter Planner models reuse framework-neutral strict primitives for exact
+keys, objects/lists, scalars, UUIDs, local dates/times, aware timestamps, and
+bounds. Availability, target, revision, reservation, and mutation-state
+relationships remain feature-owned with the same error and wire contracts.
+
 ## Non-Claims
 
 Planner V1 adds no LLM planning, hidden generation, background scheduler,

@@ -164,6 +164,12 @@ Local Supabase and browser verification must additionally prove all three
 commands, exact replay, request-id reinterpretation conflict, owner isolation,
 direct authenticated DML rejection, dismiss persistence, and disappearance on
 reload before this slice is called end-to-end complete.
+
+Flutter lifecycle models reuse framework-neutral exact-key, UUID, boolean, and
+aware-timestamp primitives. Command/state coherence, timestamp ordering,
+request matching, typed lifecycle failures, and the V1 envelope remain owned by
+the Notification feature and are unchanged.
+
 The independent Playwright journey
 `e2e/web/journeys/notification-lifecycle.spec.mjs` now proves that complete
 boundary through visible Flutter Inbox controls. Its Node-only fixture creates

@@ -287,6 +287,10 @@ It adds no:
 
 Automated coverage must prove:
 
+- Flutter parsing may reuse framework-neutral exact-key, nested collection,
+  scalar, UUID, date, and aware-timestamp primitives without changing the
+  feature-owned capacity arithmetic, mode/warning relationships, or V1 shape;
+
 - required Evening plan values, first-visible 480-minute target, latest-value
   prefill, target grid, interval ordering, 16-hour bound, and 02:00–10:00 plus
   23:00–07:00 derivation;

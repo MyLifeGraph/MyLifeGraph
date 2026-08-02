@@ -1,3 +1,5 @@
+import '../../../core/contracts/strict_contract.dart';
+
 class ExamWeekOutlookContractException implements Exception {
   const ExamWeekOutlookContractException(this.message);
 
@@ -417,87 +419,101 @@ void _expectKeys(
   Set<String> expected,
   String label,
 ) {
-  if (json.keys.toSet().difference(expected).isNotEmpty ||
-      expected.difference(json.keys.toSet()).isNotEmpty) {
-    throw ExamWeekOutlookContractException('$label shape is invalid.');
-  }
+  requireStrictKeys(
+    json,
+    requiredKeys: expected,
+    onFailure: () => throw ExamWeekOutlookContractException(
+      '$label shape is invalid.',
+    ),
+  );
 }
 
 Map<String, dynamic> _object(Object? value) {
-  if (value is! Map) {
-    throw const ExamWeekOutlookContractException('Expected an object.');
-  }
-  return Map<String, dynamic>.from(value);
+  return requireStrictMap(
+    value,
+    onFailure: () => throw const ExamWeekOutlookContractException(
+      'Expected an object.',
+    ),
+  );
 }
 
 List<Map<String, dynamic>> _objects(Object? value) {
-  if (value is! List || value.length > 50) {
-    throw const ExamWeekOutlookContractException('Expected a bounded list.');
-  }
-  return value.map(_object).toList(growable: false);
+  final values = requireStrictList(
+    value,
+    maxItems: 50,
+    onFailure: () => throw const ExamWeekOutlookContractException(
+      'Expected a bounded list.',
+    ),
+  );
+  return values.map(_object).toList(growable: false);
 }
 
 List<String> _strings(Object? value) {
-  if (value is! List ||
-      value.length > 9 ||
-      value.any((item) => item is! String)) {
+  final values = requireStrictList(
+    value,
+    maxItems: 9,
+    onFailure: () => throw const ExamWeekOutlookContractException(
+      'Expected a bounded string list.',
+    ),
+  );
+  if (values.any((item) => item is! String)) {
     throw const ExamWeekOutlookContractException(
       'Expected a bounded string list.',
     );
   }
-  return value.cast<String>();
+  return values.cast<String>();
 }
 
 String _boundedString(Object? value, int maximum) {
-  if (value is! String ||
-      value.isEmpty ||
-      value.trim() != value ||
-      value.length > maximum) {
-    throw const ExamWeekOutlookContractException('Expected bounded text.');
-  }
-  return value;
+  return requireStrictString(
+    value,
+    maxLength: maximum,
+    onFailure: () => throw const ExamWeekOutlookContractException(
+      'Expected bounded text.',
+    ),
+  );
 }
 
 String _localDate(Object? value) {
   final raw = '$value';
-  final parsed = DateTime.tryParse(raw);
-  if (!RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(raw) ||
-      parsed == null ||
-      '${parsed.year.toString().padLeft(4, '0')}-'
-              '${parsed.month.toString().padLeft(2, '0')}-'
-              '${parsed.day.toString().padLeft(2, '0')}' !=
-          raw) {
-    throw const ExamWeekOutlookContractException('Expected a local date.');
-  }
-  return raw;
+  return requireStrictLocalDate(
+    raw,
+    onFailure: () => throw const ExamWeekOutlookContractException(
+      'Expected a local date.',
+    ),
+  );
 }
 
 DateTime _awareDateTime(Object? value) {
   final raw = '$value';
-  final parsed = DateTime.tryParse(raw);
-  if (parsed == null || !RegExp(r'(?:Z|[+-]\d{2}:\d{2})$').hasMatch(raw)) {
-    throw const ExamWeekOutlookContractException(
+  return requireStrictAwareDateTime(
+    raw,
+    exactSecondsFormat: false,
+    onFailure: () => throw const ExamWeekOutlookContractException(
       'Expected a timezone-aware timestamp.',
-    );
-  }
-  return parsed;
+    ),
+  );
 }
 
 String _uuid(Object? value) {
   final raw = '$value';
-  if (!RegExp(
-    r'^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
-  ).hasMatch(raw)) {
-    throw const ExamWeekOutlookContractException('Expected a UUID.');
-  }
-  return raw;
+  return requireStrictUuid(
+    raw,
+    minVersion: 1,
+    maxVersion: 5,
+    onFailure: () => throw const ExamWeekOutlookContractException(
+      'Expected a UUID.',
+    ),
+  );
 }
 
 int _integer(Object? value) {
-  if (value is! int) {
-    throw const ExamWeekOutlookContractException('Expected a whole number.');
-  }
-  return value;
+  return requireStrictInt(
+    value,
+    onFailure: () => throw const ExamWeekOutlookContractException(
+      'Expected a whole number.',
+    ),
+  );
 }
 
 int _nonNegative(Object? value) {
@@ -525,8 +541,10 @@ int? _optionalNonNegative(Object? value) =>
     value == null ? null : _nonNegative(value);
 
 bool _boolean(Object? value) {
-  if (value is! bool) {
-    throw const ExamWeekOutlookContractException('Expected a boolean.');
-  }
-  return value;
+  return requireStrictBool(
+    value,
+    onFailure: () => throw const ExamWeekOutlookContractException(
+      'Expected a boolean.',
+    ),
+  );
 }

@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 
+import '../../../core/contracts/strict_contract.dart';
 import '../../../core/errors/app_exception.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/network/api_failure.dart';
@@ -57,8 +58,22 @@ class AccountApiDataSource {
       }
       rethrow;
     }
-    if (json.length != 5 ||
-        json['contract_version'] != 'account-profile-v2' ||
+    Never invalidProfile() =>
+        throw const AccountProfileUpdateOutcomeUnknownException(
+          'Account profile update returned an invalid result.',
+        );
+    requireStrictKeys(
+      json,
+      requiredKeys: const {
+        'contract_version',
+        'timezone',
+        'revision',
+        'updated_at',
+        'replayed',
+      },
+      onFailure: invalidProfile,
+    );
+    if (json['contract_version'] != 'account-profile-v2' ||
         json['timezone'] is! String ||
         json['revision'] is! int ||
         json['updated_at'] is! String ||
@@ -132,9 +147,22 @@ class AccountApiDataSource {
       }
       rethrow;
     }
-    if (json.length != 5 ||
-        json['contract_version'] != 'account-preparation-budget-v2' ||
-        !json.containsKey('daily_preparation_budget_minutes')) {
+    Never invalidBudget() =>
+        throw const AccountPreparationBudgetUpdateOutcomeUnknownException(
+          'Preparation budget update returned an invalid result.',
+        );
+    requireStrictKeys(
+      json,
+      requiredKeys: const {
+        'contract_version',
+        'daily_preparation_budget_minutes',
+        'revision',
+        'updated_at',
+        'replayed',
+      },
+      onFailure: invalidBudget,
+    );
+    if (json['contract_version'] != 'account-preparation-budget-v2') {
       throw const AccountPreparationBudgetUpdateOutcomeUnknownException(
         'Preparation budget update returned an invalid result.',
       );

@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:dio/dio.dart';
 
+import '../../../core/contracts/strict_contract.dart';
 import '../../../core/errors/app_exception.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/network/api_failure.dart';
@@ -248,9 +249,13 @@ void _expectKeys(
   Set<String> keys,
   String label,
 ) {
-  if (value.length != keys.length || !value.keys.every(keys.contains)) {
-    throw CoachContractException('Coach $label is invalid.');
-  }
+  requireStrictKeys(
+    value,
+    requiredKeys: keys,
+    onFailure: () => throw CoachContractException(
+      'Coach $label is invalid.',
+    ),
+  );
 }
 
 Future<Map<String, dynamic>> _guardRemote(

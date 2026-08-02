@@ -1,3 +1,5 @@
+import '../../../core/contracts/strict_contract.dart';
+
 const calendarImportContractVersion = 'calendar-import-v2';
 const calendarImportConsentVersion = 'calendar-import-consent-v1';
 const calendarImportMaxFileBytes = 512 * 1024;
@@ -739,19 +741,13 @@ class CalendarIntegrationContractException implements Exception {
   String toString() => 'CalendarIntegrationContractException: $message';
 }
 
-final _uuidPattern = RegExp(
-  r'^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
-);
 final _fingerprintPattern = RegExp(r'^[0-9a-f]{64}$');
-final _datePattern = RegExp(r'^\d{4}-\d{2}-\d{2}$');
 final _localDateTimePattern = RegExp(
   r'^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?$',
 );
-final _awareDateTimePattern = RegExp(
-  r'^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d{1,6})?(Z|[+-]\d{2}:\d{2})$',
-);
 
-bool isCalendarUuid(String value) => _uuidPattern.hasMatch(value);
+bool isCalendarUuid(String value) =>
+    isStrictUuid(value, minVersion: 1, maxVersion: 5);
 
 void _requireContract(Object? value) {
   if (value != calendarImportContractVersion) {
@@ -766,13 +762,13 @@ void _expectExactKeys(
   Set<String> keys,
   String model,
 ) {
-  if (json.length != keys.length ||
-      json.keys.toSet().difference(keys).isNotEmpty ||
-      keys.difference(json.keys.toSet()).isNotEmpty) {
-    throw CalendarIntegrationContractException(
+  requireStrictKeys(
+    json,
+    requiredKeys: keys,
+    onFailure: () => throw CalendarIntegrationContractException(
       '$model fields do not match the contract.',
-    );
-  }
+    ),
+  );
 }
 
 void _expectRequiredAndOptionalKeys(
@@ -781,24 +777,26 @@ void _expectRequiredAndOptionalKeys(
   required Set<String> optional,
   required String model,
 }) {
-  final keys = json.keys.toSet();
-  if (required.difference(keys).isNotEmpty ||
-      keys.difference({...required, ...optional}).isNotEmpty ||
-      optional.any((key) => json.containsKey(key) && json[key] == null)) {
-    throw CalendarIntegrationContractException(
+  requireStrictKeys(
+    json,
+    requiredKeys: required,
+    optionalKeys: optional,
+    rejectExplicitNullOptionalKeys: true,
+    onFailure: () => throw CalendarIntegrationContractException(
       '$model fields do not match the contract.',
-    );
-  }
+    ),
+  );
 }
 
 String _requiredString(Object? value, String field, {required int maxLength}) {
-  if (value is! String ||
-      value.isEmpty ||
-      value.trim() != value ||
-      value.runes.length > maxLength) {
-    throw CalendarIntegrationContractException('$field is invalid.');
-  }
-  return value;
+  return requireStrictString(
+    value,
+    maxLength: maxLength,
+    length: StrictStringLength.runes,
+    onFailure: () => throw CalendarIntegrationContractException(
+      '$field is invalid.',
+    ),
+  );
 }
 
 String? _optionalString(
@@ -811,11 +809,14 @@ String? _optionalString(
 }
 
 String _requiredUuid(Object? value, String field) {
-  final result = _requiredString(value, field, maxLength: 36);
-  if (!_uuidPattern.hasMatch(result)) {
-    throw CalendarIntegrationContractException('$field is invalid.');
-  }
-  return result;
+  return requireStrictUuid(
+    value,
+    minVersion: 1,
+    maxVersion: 5,
+    onFailure: () => throw CalendarIntegrationContractException(
+      '$field is invalid.',
+    ),
+  );
 }
 
 String? _optionalUuid(Map<String, dynamic> json, String key) {
@@ -832,58 +833,32 @@ String _requiredFingerprint(Object? value, String field) {
 }
 
 int _requiredBoundedInt(Object? value, String field) {
-  if (value is! int || value < 0 || value > 2000) {
-    throw CalendarIntegrationContractException('$field is invalid.');
-  }
-  return value;
+  return requireStrictInt(
+    value,
+    min: 0,
+    max: 2000,
+    onFailure: () => throw CalendarIntegrationContractException(
+      '$field is invalid.',
+    ),
+  );
 }
 
 String _requiredDate(Object? value, String field) {
-  final result = _requiredString(value, field, maxLength: 10);
-  if (!_datePattern.hasMatch(result) || result.startsWith('0000-')) {
-    throw CalendarIntegrationContractException('$field is invalid.');
-  }
-  final parsed = DateTime.tryParse('${result}T00:00:00Z');
-  if (parsed == null ||
-      '${parsed.year.toString().padLeft(4, '0')}-'
-              '${parsed.month.toString().padLeft(2, '0')}-'
-              '${parsed.day.toString().padLeft(2, '0')}' !=
-          result) {
-    throw CalendarIntegrationContractException('$field is invalid.');
-  }
-  return result;
+  return requireStrictLocalDate(
+    value,
+    minimumYear: 1,
+    onFailure: () => throw CalendarIntegrationContractException(
+      '$field is invalid.',
+    ),
+  );
 }
 
 DateTime _dateValue(String value) => DateTime.parse('${value}T00:00:00Z');
 
 String _requiredAwareDateTimeText(Object? value, String field) {
   final result = _requiredString(value, field, maxLength: 40);
-  final match = _awareDateTimePattern.firstMatch(result);
-  if (match == null) {
-    throw CalendarIntegrationContractException('$field is invalid.');
-  }
-  final year = int.parse(match.group(1)!);
-  final month = int.parse(match.group(2)!);
-  final day = int.parse(match.group(3)!);
-  final hour = int.parse(match.group(4)!);
-  final minute = int.parse(match.group(5)!);
-  final second = int.parse(match.group(6)!);
-  final offset = match.group(7)!;
-  final date = DateTime.utc(year, month, day);
-  final validDate =
-      year >= 1 && date.year == year && date.month == month && date.day == day;
-  var validOffset = true;
-  if (offset != 'Z') {
-    final offsetHour = int.parse(offset.substring(1, 3));
-    final offsetMinute = int.parse(offset.substring(4, 6));
-    validOffset = offsetHour <= 23 && offsetMinute <= 59;
-  }
-  if (!validDate ||
-      hour > 23 ||
-      minute > 59 ||
-      second > 59 ||
-      !validOffset ||
-      DateTime.tryParse(result) == null) {
+  if (!isStrictAwareDateTime(result, maxFractionDigits: 6) ||
+      result.startsWith('0000-')) {
     throw CalendarIntegrationContractException('$field is invalid.');
   }
   return result;
@@ -904,17 +879,7 @@ String _requiredLocalDateTime(Object? value, String field) {
   }
   final date = _requiredDate(result.substring(0, 10), '$field date');
   final time = result.substring(11);
-  final parts = time.split(RegExp(r'[:.]'));
-  final hour = int.tryParse(parts[0]);
-  final minute = int.tryParse(parts[1]);
-  final second = int.tryParse(parts[2]);
-  if (date.isEmpty ||
-      hour == null ||
-      minute == null ||
-      second == null ||
-      hour > 23 ||
-      minute > 59 ||
-      second > 59) {
+  if (date.isEmpty || !isStrictLocalTime(time, maxFractionDigits: 6)) {
     throw CalendarIntegrationContractException('$field is invalid.');
   }
   return result;

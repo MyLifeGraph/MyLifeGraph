@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:typed_data';
 
+import '../../../core/contracts/strict_contract.dart';
+
 const accountExportV1TableNames = <String>[
   'profiles',
   'notification_preferences',
@@ -265,17 +267,18 @@ class AccountExportEnvelope {
       'ledger_policy',
       'limits',
     };
-    if (json.keys.toSet().difference(topLevelKeys).isNotEmpty ||
-        topLevelKeys.difference(json.keys.toSet()).isNotEmpty ||
-        json['contract_version'] != 'account-export-v2') {
-      throw const AccountSettingsContractException(
-        'The account export response has an invalid top-level contract.',
-      );
-    }
+    Never invalidTopLevel() => throw const AccountSettingsContractException(
+          'The account export response has an invalid top-level contract.',
+        );
+    requireStrictKeys(
+      json,
+      requiredKeys: topLevelKeys,
+      onFailure: invalidTopLevel,
+    );
+    if (json['contract_version'] != 'account-export-v2') invalidTopLevel();
     final exportedAt = json['exported_at'];
     if (exportedAt is! String ||
-        !RegExp(r'(Z|[+-][0-9]{2}:[0-9]{2})$').hasMatch(exportedAt) ||
-        DateTime.tryParse(exportedAt) == null) {
+        !isStrictAwareDateTime(exportedAt, exactSecondsFormat: false)) {
       throw const AccountSettingsContractException(
         'The account export timestamp is invalid.',
       );
@@ -296,23 +299,31 @@ class AccountExportEnvelope {
       }
       final rows = <Map<String, dynamic>>[];
       for (final row in entry.value as List) {
-        if (row is! Map || row.keys.any((key) => key is! String)) {
-          throw const AccountSettingsContractException(
-            'An account export row is invalid.',
-          );
-        }
-        rows.add(Map<String, dynamic>.from(row));
+        rows.add(
+          requireStrictMap(
+            row,
+            onFailure: () => throw const AccountSettingsContractException(
+              'An account export row is invalid.',
+            ),
+          ),
+        );
       }
       data[entry.key as String] = rows;
     }
     final recordCounts = <String, int>{};
     for (final entry in rawCounts.entries) {
-      if (entry.key is! String || entry.value is! int || entry.value < 0) {
+      if (entry.key is! String) {
         throw const AccountSettingsContractException(
           'The account export record counts are invalid.',
         );
       }
-      recordCounts[entry.key as String] = entry.value as int;
+      recordCounts[entry.key as String] = requireStrictInt(
+        entry.value,
+        min: 0,
+        onFailure: () => throw const AccountSettingsContractException(
+          'The account export record counts are invalid.',
+        ),
+      );
     }
     if (data.keys.toSet().difference(recordCounts.keys.toSet()).isNotEmpty ||
         recordCounts.keys.toSet().difference(data.keys.toSet()).isNotEmpty ||
@@ -333,18 +344,26 @@ class AccountExportEnvelope {
     }
 
     final ledgerPolicy = json['ledger_policy'];
-    if (ledgerPolicy is! Map ||
-        ledgerPolicy.keys.toSet().difference(
-          const {'sanitized_tables', 'omitted_tables'},
-        ).isNotEmpty ||
-        !ledgerPolicy.containsKey('sanitized_tables') ||
-        !ledgerPolicy.containsKey('omitted_tables')) {
+    if (ledgerPolicy is! Map) {
       throw const AccountSettingsContractException(
         'The account export ledger policy is invalid.',
       );
     }
-    final rawSanitized = ledgerPolicy['sanitized_tables'];
-    final rawOmitted = ledgerPolicy['omitted_tables'];
+    final ledgerPolicyMap = requireStrictMap(
+      ledgerPolicy,
+      onFailure: () => throw const AccountSettingsContractException(
+        'The account export ledger policy is invalid.',
+      ),
+    );
+    requireStrictKeys(
+      ledgerPolicyMap,
+      requiredKeys: const {'sanitized_tables', 'omitted_tables'},
+      onFailure: () => throw const AccountSettingsContractException(
+        'The account export ledger policy is invalid.',
+      ),
+    );
+    final rawSanitized = ledgerPolicyMap['sanitized_tables'];
+    final rawOmitted = ledgerPolicyMap['omitted_tables'];
     if (rawSanitized is! List ||
         rawSanitized.any((value) => value is! String) ||
         rawOmitted is! Map ||
@@ -371,17 +390,40 @@ class AccountExportEnvelope {
       'max_total_rows',
       'max_json_bytes',
     };
-    if (limits is! Map ||
-        limits.keys.toSet().difference(limitKeys).isNotEmpty ||
-        limitKeys.difference(limits.keys.toSet()).isNotEmpty ||
-        limits.values.any((value) => value is! int || value <= 0)) {
+    if (limits is! Map) {
       throw const AccountSettingsContractException(
         'The account export limits are invalid.',
       );
     }
-    final maxRowsPerTable = limits['max_rows_per_table'] as int;
-    final maxTotalRows = limits['max_total_rows'] as int;
-    final maxJsonBytes = limits['max_json_bytes'] as int;
+    final limitsMap = requireStrictMap(
+      limits,
+      onFailure: () => throw const AccountSettingsContractException(
+        'The account export limits are invalid.',
+      ),
+    );
+    Never invalidLimits() => throw const AccountSettingsContractException(
+          'The account export limits are invalid.',
+        );
+    requireStrictKeys(
+      limitsMap,
+      requiredKeys: limitKeys,
+      onFailure: invalidLimits,
+    );
+    final maxRowsPerTable = requireStrictInt(
+      limitsMap['max_rows_per_table'],
+      min: 1,
+      onFailure: invalidLimits,
+    );
+    final maxTotalRows = requireStrictInt(
+      limitsMap['max_total_rows'],
+      min: 1,
+      onFailure: invalidLimits,
+    );
+    final maxJsonBytes = requireStrictInt(
+      limitsMap['max_json_bytes'],
+      min: 1,
+      onFailure: invalidLimits,
+    );
     if (maxRowsPerTable != accountExportV1MaxRowsPerTable ||
         maxTotalRows != accountExportV1MaxTotalRows ||
         maxJsonBytes != accountExportV1MaxJsonBytes) {

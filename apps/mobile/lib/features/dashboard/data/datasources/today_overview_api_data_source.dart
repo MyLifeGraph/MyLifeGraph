@@ -1,3 +1,4 @@
+import '../../../../core/contracts/strict_contract.dart';
 import '../../../../core/network/api_client.dart';
 import '../../domain/entities/dashboard_snapshot.dart';
 
@@ -793,34 +794,38 @@ void _exactKeys(
   Set<String> expected,
   String label,
 ) {
-  if (json.keys.toSet().difference(expected).isNotEmpty ||
-      expected.difference(json.keys.toSet()).isNotEmpty) {
-    throw TodayOverviewContractException('$label has an invalid shape.');
-  }
+  requireStrictKeys(
+    json,
+    requiredKeys: expected,
+    onFailure: () => throw TodayOverviewContractException(
+      '$label has an invalid shape.',
+    ),
+  );
 }
 
 Map<String, dynamic> _map(Object? value, String label) {
-  if (value is! Map) {
-    throw TodayOverviewContractException('$label must be an object.');
-  }
-  return Map<String, dynamic>.from(value);
+  return requireStrictMap(
+    value,
+    onFailure: () => throw TodayOverviewContractException(
+      '$label must be an object.',
+    ),
+  );
 }
 
 List<dynamic> _list(Object? value, String label, int maximum) {
-  if (value is! List || value.length > maximum) {
-    throw TodayOverviewContractException('$label is invalid.');
-  }
-  return value;
+  return requireStrictList(
+    value,
+    maxItems: maximum,
+    onFailure: () => throw TodayOverviewContractException('$label is invalid.'),
+  );
 }
 
 String _string(Object? value, String label, int maximum) {
-  if (value is! String ||
-      value.isEmpty ||
-      value != value.trim() ||
-      value.length > maximum) {
-    throw TodayOverviewContractException('$label is invalid.');
-  }
-  return value;
+  return requireStrictString(
+    value,
+    maxLength: maximum,
+    onFailure: () => throw TodayOverviewContractException('$label is invalid.'),
+  );
 }
 
 String? _optionalString(Object? value, String label, int maximum) =>
@@ -846,10 +851,10 @@ String? _optionalEnumString(
     value == null ? null : _enumString(value, label, allowed);
 
 bool _boolean(Object? value, String label) {
-  if (value is! bool) {
-    throw TodayOverviewContractException('$label is invalid.');
-  }
-  return value;
+  return requireStrictBool(
+    value,
+    onFailure: () => throw TodayOverviewContractException('$label is invalid.'),
+  );
 }
 
 int _integer(
@@ -858,10 +863,12 @@ int _integer(
   required int minimum,
   int? maximum,
 }) {
-  if (value is! int || value < minimum || maximum != null && value > maximum) {
-    throw TodayOverviewContractException('$label is invalid.');
-  }
-  return value;
+  return requireStrictInt(
+    value,
+    min: minimum,
+    max: maximum,
+    onFailure: () => throw TodayOverviewContractException('$label is invalid.'),
+  );
 }
 
 int? _optionalInteger(
@@ -875,49 +882,34 @@ int? _optionalInteger(
         : _integer(value, label, minimum: minimum, maximum: maximum);
 
 DateTime _awareDateTime(Object? value, String label) {
-  if (value is! String ||
-      !RegExp(
-        r'^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$',
-      ).hasMatch(value)) {
-    throw TodayOverviewContractException('$label is invalid.');
-  }
-  final parsed = DateTime.tryParse(value);
-  if (parsed == null ||
-      !parsed.isUtc && !value.contains(RegExp(r'[+-]\d{2}:\d{2}$'))) {
-    throw TodayOverviewContractException('$label is invalid.');
-  }
-  return parsed;
+  return requireStrictAwareDateTime(
+    value,
+    validateDateAndTimeComponents: false,
+    onFailure: () => throw TodayOverviewContractException('$label is invalid.'),
+  );
 }
 
 DateTime? _optionalAwareDateTime(Object? value, String label) =>
     value == null ? null : _awareDateTime(value, label);
 
 DateTime _date(Object? value, String label) {
-  if (value is! String || !RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(value)) {
-    throw TodayOverviewContractException('$label is invalid.');
-  }
-  final parsed = DateTime.tryParse(value);
-  if (parsed == null ||
-      '${parsed.year.toString().padLeft(4, '0')}-'
-              '${parsed.month.toString().padLeft(2, '0')}-'
-              '${parsed.day.toString().padLeft(2, '0')}' !=
-          value) {
-    throw TodayOverviewContractException('$label is invalid.');
-  }
-  return parsed;
+  final text = requireStrictLocalDate(
+    value,
+    onFailure: () => throw TodayOverviewContractException('$label is invalid.'),
+  );
+  return DateTime.parse(text);
 }
 
 DateTime? _optionalDate(Object? value, String label) =>
     value == null ? null : _date(value, label);
 
 String _uuid(Object? value, String label) {
-  if (value is! String ||
-      !RegExp(
-        r'^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
-      ).hasMatch(value)) {
-    throw TodayOverviewContractException('$label is invalid.');
-  }
-  return value;
+  return requireStrictUuid(
+    value,
+    minVersion: 1,
+    maxVersion: 5,
+    onFailure: () => throw TodayOverviewContractException('$label is invalid.'),
+  );
 }
 
 String? _optionalUuid(Object? value, String label) =>

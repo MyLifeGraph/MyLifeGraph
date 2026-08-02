@@ -249,6 +249,11 @@ Repository tests and local Supabase/browser verification establish only the
 current local checkout. They do not prove remote migration state, installed-
 device timer behavior, longitudinal study outcomes, or production scheduling.
 
+The Flutter Intake/Study parser reuses framework-neutral exact-key, scalar,
+list, UUID, date, and text-bound primitives. Optional-null semantics, Setup
+aggregate relationships, feature `FormatException` messages, and the persisted
+Intake/Study shapes remain unchanged.
+
 ## Visual presentation
 
 Setup and Study Setup use the shared

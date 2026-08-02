@@ -1,3 +1,5 @@
+import '../../../core/contracts/strict_contract.dart';
+
 const learningPreferencesContractVersion = 'learning-preferences-v1';
 const focusReflectionContractVersion = 'focus-reflection-v1';
 
@@ -20,32 +22,45 @@ class LearningPreferences {
       'updated_at',
     };
     const optionalKeys = {'replayed'};
-    final keys = json.keys.toSet();
-    if (requiredKeys.difference(keys).isNotEmpty ||
-        keys.difference({...requiredKeys, ...optionalKeys}).isNotEmpty ||
-        json['contract_version'] != learningPreferencesContractVersion ||
-        json['revision'] is! int ||
-        (json['revision'] as int) < 0 ||
-        json['focus_reflection_prompt_enabled'] is! bool ||
-        json['personal_pattern_analysis_enabled'] is! bool ||
-        json['learned_focus_planning_enabled'] is! bool ||
-        json.containsKey('replayed') && json['replayed'] is! bool) {
-      throw const LearningContractException(
-        'Personal learning settings response is invalid.',
-      );
+    Never invalid() => throw const LearningContractException(
+          'Personal learning settings response is invalid.',
+        );
+    requireStrictKeys(
+      json,
+      requiredKeys: requiredKeys,
+      optionalKeys: optionalKeys,
+      onFailure: invalid,
+    );
+    if (json['contract_version'] != learningPreferencesContractVersion) {
+      invalid();
+    }
+    final revision = requireStrictInt(
+      json['revision'],
+      min: 0,
+      onFailure: invalid,
+    );
+    final reflectionPrompt = requireStrictBool(
+      json['focus_reflection_prompt_enabled'],
+      onFailure: invalid,
+    );
+    final analysis = requireStrictBool(
+      json['personal_pattern_analysis_enabled'],
+      onFailure: invalid,
+    );
+    final learned = requireStrictBool(
+      json['learned_focus_planning_enabled'],
+      onFailure: invalid,
+    );
+    if (json.containsKey('replayed')) {
+      requireStrictBool(json['replayed'], onFailure: invalid);
     }
     final updatedAt = _optionalAwareDateTime(json['updated_at']);
-    final analysis = json['personal_pattern_analysis_enabled'] as bool;
-    final learned = json['learned_focus_planning_enabled'] as bool;
     if (learned && !analysis) {
-      throw const LearningContractException(
-        'Personal learning settings response is invalid.',
-      );
+      invalid();
     }
     return LearningPreferences(
-      revision: json['revision'] as int,
-      focusReflectionPromptEnabled:
-          json['focus_reflection_prompt_enabled'] as bool,
+      revision: revision,
+      focusReflectionPromptEnabled: reflectionPrompt,
       personalPatternAnalysisEnabled: analysis,
       learnedFocusPlanningEnabled: learned,
       updatedAt: updatedAt,
@@ -131,25 +146,29 @@ class FocusReflectionHistoryClearResult {
       'cleared_at',
       'replayed',
     };
+    Never invalid() => throw const LearningContractException(
+          'Focus reflection history clear response is invalid.',
+        );
+    requireStrictKeys(json, requiredKeys: keys, onFailure: invalid);
+    if (json['contract_version'] != focusReflectionContractVersion) invalid();
+    final revision = requireStrictInt(
+      json['revision'],
+      min: 0,
+      onFailure: invalid,
+    );
+    final deletedCount = requireStrictInt(
+      json['deleted_count'],
+      min: 0,
+      onFailure: invalid,
+    );
     final clearedAt = _optionalAwareDateTime(json['cleared_at']);
-    if (json.keys.toSet().difference(keys).isNotEmpty ||
-        keys.difference(json.keys.toSet()).isNotEmpty ||
-        json['contract_version'] != focusReflectionContractVersion ||
-        json['revision'] is! int ||
-        (json['revision'] as int) < 0 ||
-        json['deleted_count'] is! int ||
-        (json['deleted_count'] as int) < 0 ||
-        clearedAt == null ||
-        json['replayed'] is! bool) {
-      throw const LearningContractException(
-        'Focus reflection history clear response is invalid.',
-      );
-    }
+    if (clearedAt == null) invalid();
+    final replayed = requireStrictBool(json['replayed'], onFailure: invalid);
     return FocusReflectionHistoryClearResult(
-      revision: json['revision'] as int,
-      deletedCount: json['deleted_count'] as int,
+      revision: revision,
+      deletedCount: deletedCount,
       clearedAt: clearedAt,
-      replayed: json['replayed'] as bool,
+      replayed: replayed,
     );
   }
 
@@ -161,25 +180,16 @@ class FocusReflectionHistoryClearResult {
 
 DateTime? _optionalAwareDateTime(Object? value) {
   if (value == null) return null;
-  if (value is! String ||
-      !RegExp(r'(Z|[+-][0-9]{2}:[0-9]{2})$').hasMatch(value)) {
-    throw const LearningContractException(
+  return requireStrictAwareDateTime(
+    value,
+    exactSecondsFormat: false,
+    onFailure: () => throw const LearningContractException(
       'Personal learning timestamp is invalid.',
-    );
-  }
-  final parsed = DateTime.tryParse(value);
-  if (parsed == null) {
-    throw const LearningContractException(
-      'Personal learning timestamp is invalid.',
-    );
-  }
-  return parsed;
+    ),
+  );
 }
 
-bool _isUuid(String value) => RegExp(
-      r'^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-'
-      r'[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
-    ).hasMatch(value);
+bool _isUuid(String value) => isStrictUuid(value, minVersion: 1, maxVersion: 5);
 
 class LearningException implements Exception {
   const LearningException(this.message);

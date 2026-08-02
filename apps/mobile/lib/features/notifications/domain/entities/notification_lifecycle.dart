@@ -1,11 +1,6 @@
-const notificationLifecycleContractVersion = 'notification-lifecycle-v1';
+import '../../../../core/contracts/strict_contract.dart';
 
-final _notificationUuidPattern = RegExp(
-  r'^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
-);
-final _requestUuidV4Pattern = RegExp(
-  r'^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
-);
+const notificationLifecycleContractVersion = 'notification-lifecycle-v1';
 
 enum NotificationLifecycleCommand {
   markRead('mark_read'),
@@ -33,12 +28,12 @@ class NotificationLifecycleRequest {
     required this.command,
     required this.expectedUpdatedAt,
   }) {
-    if (!_notificationUuidPattern.hasMatch(notificationId)) {
+    if (!isNotificationUuid(notificationId)) {
       throw const NotificationLifecycleContractException(
         'Notification id is invalid.',
       );
     }
-    if (!_requestUuidV4Pattern.hasMatch(requestId)) {
+    if (!isStrictUuid(requestId, minVersion: 4, maxVersion: 4)) {
       throw const NotificationLifecycleContractException(
         'Notification lifecycle request id is invalid.',
       );
@@ -95,8 +90,7 @@ class NotificationLifecycleResult {
       );
     }
     final notificationId = json['notification_id'];
-    if (notificationId is! String ||
-        !_notificationUuidPattern.hasMatch(notificationId)) {
+    if (notificationId is! String || !isNotificationUuid(notificationId)) {
       throw const NotificationLifecycleContractException(
         'Notification lifecycle response id is invalid.',
       );
@@ -183,7 +177,7 @@ DateTime? optionalNotificationAwareDateTime(Object? value, String field) {
 }
 
 bool isNotificationUuid(String value) =>
-    _notificationUuidPattern.hasMatch(value);
+    isStrictUuid(value, minVersion: 1, maxVersion: 5);
 
 void requireNotificationExactKeys(
   Map<String, dynamic> json,
@@ -194,18 +188,14 @@ void requireNotificationExactKeys(
 }
 
 DateTime _requiredAwareDateTime(Object? value, String field) {
-  if (value is! String) {
-    throw NotificationLifecycleContractException(
+  return requireStrictAwareDateTime(
+    value,
+    exactSecondsFormat: false,
+    requireUtcResult: true,
+    onFailure: () => throw NotificationLifecycleContractException(
       'Notification $field must be a timezone-aware timestamp.',
-    );
-  }
-  final parsed = DateTime.tryParse(value);
-  if (parsed == null || !parsed.isUtc) {
-    throw NotificationLifecycleContractException(
-      'Notification $field must be a timezone-aware timestamp.',
-    );
-  }
-  return parsed;
+    ),
+  );
 }
 
 DateTime? _optionalAwareDateTime(Object? value, String field) {
@@ -218,12 +208,13 @@ void _requireExactKeys(
   Set<String> expected,
   String label,
 ) {
-  final keys = json.keys.toSet();
-  if (keys.length != expected.length ||
-      keys.difference(expected).isNotEmpty ||
-      expected.difference(keys).isNotEmpty) {
-    throw NotificationLifecycleContractException('$label shape is invalid.');
-  }
+  requireStrictKeys(
+    json,
+    requiredKeys: expected,
+    onFailure: () => throw NotificationLifecycleContractException(
+      '$label shape is invalid.',
+    ),
+  );
 }
 
 class NotificationLifecycleContractException implements Exception {

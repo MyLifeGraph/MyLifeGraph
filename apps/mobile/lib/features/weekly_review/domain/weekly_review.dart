@@ -1,3 +1,5 @@
+import '../../../core/contracts/strict_contract.dart';
+
 const weeklyReviewContractVersion = 'weekly-review-v1';
 
 enum WeeklyReviewOrigin { authenticatedBackend, localDemo }
@@ -1136,10 +1138,12 @@ WeeklyReviewEvidenceRef _evidenceFromObject(Object? value) {
 }
 
 Map<String, dynamic> _requiredMap(Object? value, String field) {
-  if (value is! Map) {
-    throw WeeklyReviewContractException('$field must be an object.');
-  }
-  return Map<String, dynamic>.from(value);
+  return requireStrictMap(
+    value,
+    onFailure: () => throw WeeklyReviewContractException(
+      '$field must be an object.',
+    ),
+  );
 }
 
 void _expectExactKeys(
@@ -1147,25 +1151,38 @@ void _expectExactKeys(
   Set<String> expected,
   String label,
 ) {
-  if (json.length != expected.length ||
-      json.keys.any((key) => !expected.contains(key)) ||
-      expected.any((key) => !json.containsKey(key))) {
-    throw WeeklyReviewContractException('$label fields are invalid.');
-  }
+  requireStrictKeys(
+    json,
+    requiredKeys: expected,
+    onFailure: () => throw WeeklyReviewContractException(
+      '$label fields are invalid.',
+    ),
+  );
 }
 
 String _requiredString(Object? value, String field, {required int maxLength}) {
-  if (!_isBoundedTrimmedString(value, maxLength: maxLength)) {
-    throw WeeklyReviewContractException('$field is invalid.');
-  }
-  return value! as String;
+  return requireStrictString(
+    value,
+    maxLength: maxLength,
+    onFailure: () => throw WeeklyReviewContractException('$field is invalid.'),
+  );
 }
 
 bool _isBoundedTrimmedString(Object? value, {required int maxLength}) =>
-    value is String &&
-    value.isNotEmpty &&
-    value.length <= maxLength &&
-    value == value.trim();
+    value is String && _acceptsStrictString(value, maxLength: maxLength);
+
+bool _acceptsStrictString(String value, {required int maxLength}) {
+  try {
+    requireStrictString(
+      value,
+      maxLength: maxLength,
+      onFailure: () => throw const FormatException(),
+    );
+    return true;
+  } on FormatException {
+    return false;
+  }
+}
 
 int _nonNegativeInt(Object? value, String field) =>
     _boundedInt(value, field, minimum: 0);
@@ -1176,10 +1193,12 @@ int _boundedInt(
   required int minimum,
   int? maximum,
 }) {
-  if (value is! int || value < minimum || maximum != null && value > maximum) {
-    throw WeeklyReviewContractException('$field is invalid.');
-  }
-  return value;
+  return requireStrictInt(
+    value,
+    min: minimum,
+    max: maximum,
+    onFailure: () => throw WeeklyReviewContractException('$field is invalid.'),
+  );
 }
 
 String _requiredPeriodKey(Object? value) {
@@ -1192,23 +1211,19 @@ String _requiredPeriodKey(Object? value) {
 }
 
 DateTime _requiredDate(Object? value, String field) {
-  if (value is! String || !RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(value)) {
-    throw WeeklyReviewContractException('$field is invalid.');
-  }
-  final parsed = DateTime.tryParse('${value}T00:00:00');
-  if (parsed == null || _dateKey(parsed) != value) {
-    throw WeeklyReviewContractException('$field is invalid.');
-  }
-  return parsed;
+  final text = requireStrictLocalDate(
+    value,
+    onFailure: () => throw WeeklyReviewContractException('$field is invalid.'),
+  );
+  return DateTime.parse('${text}T00:00:00');
 }
 
 DateTime _requiredDateTime(Object? value, String field) {
-  if (value is! String ||
-      !RegExp(r'(Z|[+-]\d{2}:\d{2})$').hasMatch(value) ||
-      DateTime.tryParse(value) == null) {
-    throw WeeklyReviewContractException('$field is invalid.');
-  }
-  return DateTime.parse(value);
+  return requireStrictAwareDateTime(
+    value,
+    exactSecondsFormat: false,
+    onFailure: () => throw WeeklyReviewContractException('$field is invalid.'),
+  );
 }
 
 String _isoPeriodKey(DateTime monday) {
@@ -1227,10 +1242,6 @@ String _isoPeriodKey(DateTime monday) {
 
 DateTime _addCalendarDays(DateTime value, int days) =>
     DateTime(value.year, value.month, value.day + days);
-
-String _dateKey(DateTime value) => '${value.year.toString().padLeft(4, '0')}-'
-    '${value.month.toString().padLeft(2, '0')}-'
-    '${value.day.toString().padLeft(2, '0')}';
 
 bool _sameDate(DateTime left, DateTime right) =>
     left.year == right.year &&

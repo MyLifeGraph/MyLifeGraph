@@ -320,6 +320,11 @@ Focused backend, Flutter, migration, and browser coverage must prove:
 Documentation or source assertions do not establish an E2E pass. Run the
 current-checkout browser command before claiming the Phase 8 journey passed.
 
+Flutter Weekly Review models reuse framework-neutral strict primitives for
+exact keys, objects, strings, integers, local dates, and aware timestamps.
+ISO-week identity, freshness, evidence/proposal relationships, application
+authority, feature errors, and the V1 envelope remain unchanged.
+
 The Weekly Review route now reuses the application-lifespan-owned Supabase HTTP
 pool. This does not change ISO-week identity, freshness, observed-at ordering,
 source fingerprinting, proposal limits, confirmation authority, or RLS.

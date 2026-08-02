@@ -1,5 +1,7 @@
 import 'dart:math';
 
+import '../../../core/contracts/strict_contract.dart';
+
 const _allowedEnergyWindows = {
   'early_morning',
   'morning',
@@ -1328,17 +1330,15 @@ StudySetupDraft? _normalizedStudySetup(StudySetupDraft? value) {
 }
 
 bool isSetupUuid(String value) {
-  return RegExp(
-    r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-'
-    r'[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
-  ).hasMatch(value);
+  return isStrictUuid(
+    value,
+    lowercaseOnly: false,
+    requireRfcVariant: false,
+  );
 }
 
 bool isCanonicalStudyUuid(String value) {
-  return RegExp(
-    r'^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-'
-    r'[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
-  ).hasMatch(value);
+  return isStrictUuid(value, minVersion: 1, maxVersion: 5);
 }
 
 const Object _unset = Object();
@@ -1376,11 +1376,10 @@ String? _optionalTime(Object? value) {
 }
 
 bool _requiredBool(Map<String, dynamic> json, String field) {
-  final value = json[field];
-  if (value is! bool) {
-    throw FormatException('Expected a boolean $field.');
-  }
-  return value;
+  return requireStrictBool(
+    json[field],
+    onFailure: () => throw FormatException('Expected a boolean $field.'),
+  );
 }
 
 int? _intValue(Object? value, {required String field}) {
@@ -1394,20 +1393,19 @@ int? _intValue(Object? value, {required String field}) {
 }
 
 int _requiredExactInt(Object? value, String field) {
-  if (value is! int) {
-    throw FormatException('Expected an exact integer $field.');
-  }
-  return value;
+  return requireStrictInt(
+    value,
+    onFailure: () => throw FormatException('Expected an exact integer $field.'),
+  );
 }
 
 String _requiredExactText(Object? value, String field, int maxLength) {
-  if (value is! String ||
-      value.isEmpty ||
-      value != value.trim() ||
-      _textLength(value) > maxLength) {
-    throw FormatException('Invalid exact text $field.');
-  }
-  return value;
+  return requireStrictString(
+    value,
+    maxLength: maxLength,
+    length: StrictStringLength.runes,
+    onFailure: () => throw FormatException('Invalid exact text $field.'),
+  );
 }
 
 DateTime _requiredCalendarDate(Object? value, String field) {
@@ -1424,10 +1422,12 @@ List<String> _exactTextList(
   required int maxItems,
   required int maxLength,
 }) {
-  if (value is! List || value.length > maxItems) {
-    throw FormatException('Invalid list $field.');
-  }
-  return value
+  final values = requireStrictList(
+    value,
+    maxItems: maxItems,
+    onFailure: () => throw FormatException('Invalid list $field.'),
+  );
+  return values
       .map((item) => _requiredExactText(item, field, maxLength))
       .toList(growable: false);
 }
@@ -1438,11 +1438,14 @@ void _expectExactKeys(
   String label, {
   Set<String> optional = const {},
 }) {
-  final keys = json.keys.toSet();
-  final required = allowed.difference(optional);
-  if (!allowed.containsAll(keys) || !keys.containsAll(required)) {
-    throw FormatException('$label has an invalid field set.');
-  }
+  requireStrictKeys(
+    json,
+    requiredKeys: allowed.difference(optional),
+    optionalKeys: optional,
+    onFailure: () => throw FormatException(
+      '$label has an invalid field set.',
+    ),
+  );
 }
 
 DateTime? _optionalDateTime(Object? value) {
@@ -1459,15 +1462,11 @@ DateTime? _optionalDateTime(Object? value) {
 
 DateTime? _optionalCalendarDate(Object? value) {
   final text = _optionalString(value);
-  if (text == null || !RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(text)) {
+  if (text == null || !isStrictLocalDate(text)) {
     if (text == null) return null;
     throw FormatException('Invalid calendar date: $text');
   }
-  final parsed = DateTime.tryParse('${text}T00:00:00Z');
-  if (parsed == null || _calendarDate(parsed) != text) {
-    throw FormatException('Invalid calendar date: $text');
-  }
-  return parsed;
+  return DateTime.parse('${text}T00:00:00Z');
 }
 
 String _calendarDate(DateTime value) {

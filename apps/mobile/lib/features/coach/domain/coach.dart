@@ -1,3 +1,5 @@
+import '../../../core/contracts/strict_contract.dart';
+
 const coachRequestContractVersion = 'coach-request-v3';
 const coachResponseContractVersion = 'coach-response-v2';
 const _legacyCoachResponseContractVersion = 'coach-response-v1';
@@ -251,7 +253,11 @@ class CoachCapabilities {
 class CoachRequest {
   CoachRequest({required this.requestId, required String message})
       : message = message.trim() {
-    if (!_uuid.hasMatch(requestId)) {
+    if (!isStrictUuid(
+      requestId,
+      lowercaseOnly: false,
+      requireRfcVariant: false,
+    )) {
       throw const CoachInputException('Coach request id is invalid.');
     }
     if (this.message.isEmpty ||
@@ -929,46 +935,56 @@ class CoachContractException implements Exception {
 }
 
 Map<String, dynamic> _map(Object? value, String name) {
-  if (value is! Map) {
-    throw CoachContractException('Coach $name is invalid.');
-  }
-  return Map<String, dynamic>.from(value);
+  return requireStrictMap(
+    value,
+    onFailure: () => throw CoachContractException('Coach $name is invalid.'),
+  );
 }
 
 String _text(Object? value, int max) {
-  if (value is! String || value.trim().isEmpty || value.runes.length > max) {
-    throw const CoachContractException('Coach text is invalid.');
-  }
-  return value.trim();
+  return requireStrictString(
+    value,
+    maxLength: max,
+    whitespace: StrictStringWhitespace.trim,
+    length: StrictStringLength.runes,
+    measureBeforeWhitespace: true,
+    onFailure: () => throw const CoachContractException(
+      'Coach text is invalid.',
+    ),
+  );
 }
 
 String? _optionalText(Object? value, int max) =>
     value == null ? null : _text(value, max);
 
 int _int(Object? value) {
-  if (value is! int) {
-    throw const CoachContractException('Coach number is invalid.');
-  }
-  return value;
+  return requireStrictInt(
+    value,
+    onFailure: () => throw const CoachContractException(
+      'Coach number is invalid.',
+    ),
+  );
 }
 
 DateTime _dateTime(Object? value) {
-  if (value is! String ||
-      !RegExp(r'(Z|[+-][0-9]{2}:[0-9]{2})$').hasMatch(value)) {
-    throw const CoachContractException('Coach date is invalid.');
-  }
-  final parsed = DateTime.tryParse(value);
-  if (parsed == null) {
-    throw const CoachContractException('Coach date is invalid.');
-  }
-  return parsed;
+  return requireStrictAwareDateTime(
+    value,
+    exactSecondsFormat: false,
+    onFailure: () => throw const CoachContractException(
+      'Coach date is invalid.',
+    ),
+  );
 }
 
 String _uuidText(Object? value) {
-  if (value is! String || !_uuid.hasMatch(value)) {
-    throw const CoachContractException('Coach request id is invalid.');
-  }
-  return value.toLowerCase();
+  return requireStrictUuid(
+    value,
+    lowercaseOnly: false,
+    requireRfcVariant: false,
+    onFailure: () => throw const CoachContractException(
+      'Coach request id is invalid.',
+    ),
+  ).toLowerCase();
 }
 
 void _expectExactKeys(
@@ -976,11 +992,11 @@ void _expectExactKeys(
   Set<String> keys,
   String name,
 ) {
-  if (json.length != keys.length || !json.keys.every(keys.contains)) {
-    throw CoachContractException('$name has unexpected or missing fields.');
-  }
+  requireStrictKeys(
+    json,
+    requiredKeys: keys,
+    onFailure: () => throw CoachContractException(
+      '$name has unexpected or missing fields.',
+    ),
+  );
 }
-
-final _uuid = RegExp(
-  r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
-);

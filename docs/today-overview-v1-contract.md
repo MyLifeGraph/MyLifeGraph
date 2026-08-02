@@ -251,6 +251,11 @@ timeline, focus, calendar, and paginated fact reads. Flutter repeats exact key,
 enum, timestamp, identity, source-state, and progress checks. A malformed
 response is an error, not partial invented content.
 
+The Flutter Today mapper reuses framework-neutral strict primitives for those
+exact keys, objects/lists, scalars, UUIDs, dates, timestamps, and bounds.
+Selection, progress, source isolation, and cross-field consistency remain
+feature-owned with the same V2 wire shape and typed contract errors.
+
 The bounded Today repository sources use the shared repository page collector
 with their existing offset queries. Owner predicates, stable ordering,
 1,000-row pages, source-specific sentinel maximums, and the exact Today

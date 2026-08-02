@@ -447,6 +447,11 @@ again. Loading, empty, and error states retain the same actions. Sub-pages,
 Auth, Setup, and Capture flows remain outside this header contract. Release
 builds and `APP_ENV=production` hide Coach regardless of Flutter defines.
 
+Flutter Coach contract models and SSE envelopes reuse framework-neutral strict
+key, object, text, integer, UUID, and aware-timestamp primitives. Coach-specific
+provenance, safety, trace, evidence, replay, and feature error rules remain in
+the Coach layer; persisted V1/V2 history and current wire formats are unchanged.
+
 The profile-bound Coach controller lives for the app session rather than the
 Coach route. Its draft is the field's source of truth, and its request id and
 active SSE subscription survive navigation among shell pages. Success clears

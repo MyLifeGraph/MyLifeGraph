@@ -1,3 +1,4 @@
+import '../../../core/contracts/strict_contract.dart';
 import '../../../core/planning/planning_timing_preference.dart';
 
 class PlannerContractException implements Exception {
@@ -1554,25 +1555,33 @@ void _expectEnvelope(
 }
 
 void _expectKeys(Map<String, dynamic> json, Set<String> keys, String label) {
-  if (json.length != keys.length ||
-      json.keys.any((key) => !keys.contains(key))) {
-    throw PlannerContractException('$label has an unexpected shape.');
-  }
+  requireStrictKeys(
+    json,
+    requiredKeys: keys,
+    onFailure: () => throw PlannerContractException(
+      '$label has an unexpected shape.',
+    ),
+  );
 }
 
 Map<String, dynamic> _object(Object? value, String label) {
-  if (value is! Map) {
-    throw PlannerContractException('$label must be an object.');
-  }
-  return Map<String, dynamic>.from(value);
+  return requireStrictMap(
+    value,
+    onFailure: () => throw PlannerContractException(
+      '$label must be an object.',
+    ),
+  );
 }
 
 Map<String, dynamic>? _optionalObject(Object? value, String label) =>
     value == null ? null : _object(value, label);
 
 List<Map<String, dynamic>> _objects(Object? value, String label) {
-  if (value is! List) throw PlannerContractException('$label must be a list.');
-  return value.map((item) => _object(item, label)).toList(growable: false);
+  final values = requireStrictList(
+    value,
+    onFailure: () => throw PlannerContractException('$label must be a list.'),
+  );
+  return values.map((item) => _object(item, label)).toList(growable: false);
 }
 
 List<String> _strings(Object? value, String label) {
@@ -1605,13 +1614,11 @@ List<int> _integers(
 }
 
 String _text(Object? value, String label, {required int max}) {
-  if (value is! String ||
-      value.isEmpty ||
-      value.trim() != value ||
-      value.length > max) {
-    throw PlannerContractException('$label is invalid.');
-  }
-  return value;
+  return requireStrictString(
+    value,
+    maxLength: max,
+    onFailure: () => throw PlannerContractException('$label is invalid.'),
+  );
 }
 
 String? _optionalText(Object? value, String label, {required int max}) =>
@@ -1626,15 +1633,19 @@ String _enumText(Object? value, String label, Set<String> values) {
 }
 
 bool _bool(Object? value, String label) {
-  if (value is! bool) throw PlannerContractException('$label must be boolean.');
-  return value;
+  return requireStrictBool(
+    value,
+    onFailure: () => throw PlannerContractException('$label must be boolean.'),
+  );
 }
 
 int _int(Object? value, String label, {required int min, int? max}) {
-  if (value is! int || value < min || max != null && value > max) {
-    throw PlannerContractException('$label is invalid.');
-  }
-  return value;
+  return requireStrictInt(
+    value,
+    min: min,
+    max: max,
+    onFailure: () => throw PlannerContractException('$label is invalid.'),
+  );
 }
 
 int? _optionalInt(
@@ -1646,54 +1657,39 @@ int? _optionalInt(
     value == null ? null : _int(value, label, min: min, max: max);
 
 DateTime _dateTime(Object? value, String label) {
-  if (value is! String ||
-      !RegExp(
-        r'^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?(?:Z|[+-]\d{2}:\d{2})$',
-      ).hasMatch(value)) {
-    throw PlannerContractException('$label is invalid.');
-  }
-  final parsed = DateTime.tryParse(value);
-  if (parsed == null ||
-      !parsed.isUtc && !value.contains(RegExp(r'[+-]\d\d:\d\d$'))) {
-    throw PlannerContractException('$label must include a timezone.');
-  }
-  return parsed;
+  return requireStrictAwareDateTime(
+    value,
+    maxFractionDigits: 6,
+    validateDateAndTimeComponents: false,
+    onFailure: () => throw PlannerContractException('$label is invalid.'),
+  );
 }
 
 DateTime? _optionalDateTime(Object? value, String label) =>
     value == null ? null : _dateTime(value, label);
 
 DateTime _date(Object? value, String label) {
-  if (value is! String || !RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(value)) {
-    throw PlannerContractException('$label is invalid.');
-  }
-  final parsed = DateTime.tryParse('${value}T00:00:00Z');
-  if (parsed == null ||
-      '${parsed.year.toString().padLeft(4, '0')}-'
-              '${parsed.month.toString().padLeft(2, '0')}-'
-              '${parsed.day.toString().padLeft(2, '0')}' !=
-          value) {
-    throw PlannerContractException('$label is invalid.');
-  }
-  return parsed;
+  final text = requireStrictLocalDate(
+    value,
+    onFailure: () => throw PlannerContractException('$label is invalid.'),
+  );
+  return DateTime.parse('${text}T00:00:00Z');
 }
 
 String _time(Object? value, String label) {
-  if (value is! String ||
-      !RegExp(r'^([01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?$').hasMatch(value)) {
-    throw PlannerContractException('$label is invalid.');
-  }
-  return value;
+  return requireStrictLocalTime(
+    value,
+    onFailure: () => throw PlannerContractException('$label is invalid.'),
+  );
 }
 
 String _uuid(Object? value, String label) {
-  if (value is! String ||
-      !RegExp(
-        r'^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$',
-      ).hasMatch(value)) {
-    throw PlannerContractException('$label is invalid.');
-  }
-  return value;
+  return requireStrictUuid(
+    value,
+    minVersion: 1,
+    maxVersion: 8,
+    onFailure: () => throw PlannerContractException('$label is invalid.'),
+  );
 }
 
 String? _optionalUuid(Object? value, String label) =>
