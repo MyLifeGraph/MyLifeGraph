@@ -261,6 +261,11 @@ the bounded planning context, typed Deadline details, and bounded Capture rows.
 Repository reads and persistence-error mapping stay in the Deadline service;
 the builder performs no I/O and is directly deterministic-testable.
 
+Those bounded Deadline source reads use the shared repository offset-page
+collector. Existing owner predicates, stable ordering, page and row limits,
+and the exact overfull-response failure remain unchanged; the outlook exposes
+no pagination cursor.
+
 Scheduled Focus makeup and source-aware block credit change only the underlying
 active Deadline detail after an actual session completes. They do not change
 this endpoint's contract, mode activation, sleep simulation, warning rules, or

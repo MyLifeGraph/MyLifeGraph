@@ -3,6 +3,7 @@ from datetime import date, datetime, time, timedelta, timezone
 from typing import Any, Protocol
 
 from app.clients.supabase import SupabaseRestClient
+from app.repositories.repository_pagination import select_keyset_pages
 
 
 @dataclass(frozen=True)
@@ -188,21 +189,12 @@ class SupabaseSnapshotRepository:
         params: list[tuple[str, str]],
         page_size: int = 1000,
     ) -> list[dict[str, Any]]:
-        rows: list[dict[str, Any]] = []
-        order = _order_columns(params)
-        cursor: dict[str, Any] | None = None
-        while True:
-            page_params = [*params, ("limit", str(page_size))]
-            if cursor is not None:
-                page_params.append(("or", _keyset_filter(order, cursor)))
-            page = await self._client.select(
-                table,
-                params=page_params,
-            )
-            rows.extend(page)
-            if len(page) < page_size:
-                return rows
-            cursor = page[-1]
+        return await select_keyset_pages(
+            self._client,
+            table,
+            params=params,
+            page_size=page_size,
+        )
 
     async def persist_user_state_snapshot(
         self,
@@ -228,42 +220,3 @@ class SupabaseSnapshotRepository:
         if not isinstance(result, dict):
             raise ValueError("Snapshot persistence returned no row.")
         return result
-
-
-def _order_columns(
-    params: list[tuple[str, str]],
-) -> list[tuple[str, str]]:
-    values = [value for key, value in params if key == "order"]
-    if len(values) != 1:
-        raise ValueError("Keyset pagination requires one explicit order.")
-    order: list[tuple[str, str]] = []
-    for item in values[0].split(","):
-        pieces = item.split(".")
-        direction = pieces[1] if len(pieces) > 1 else "asc"
-        if direction not in {"asc", "desc"}:
-            raise ValueError("Keyset pagination order is invalid.")
-        order.append((pieces[0], direction))
-    if not order or order[-1][0] != "id":
-        raise ValueError("Keyset pagination requires id as the tie-breaker.")
-    return order
-
-
-def _keyset_filter(
-    order: list[tuple[str, str]],
-    cursor: dict[str, Any],
-) -> str:
-    branches: list[str] = []
-    equals: list[str] = []
-    for column, direction in order:
-        if column not in cursor or cursor[column] is None:
-            raise ValueError("Keyset page is missing an ordered value.")
-        value = str(cursor[column])
-        operator = "gt" if direction == "asc" else "lt"
-        comparison = f"{column}.{operator}.{value}"
-        branches.append(
-            comparison
-            if not equals
-            else f"and({','.join([*equals, comparison])})"
-        )
-        equals.append(f"{column}.eq.{value}")
-    return f"({','.join(branches)})"

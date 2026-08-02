@@ -71,6 +71,11 @@ context fingerprints, DST-safe rounding, and response construction. The
 service passes complete contexts into those pure helpers; the split introduces
 no alternate proposal path and changes no HTTP, typed-write, or RPC payload.
 
+Bounded Deadline repository reads use the shared repository page collector.
+They retain their established offset queries, stable sort fields, 1,000-row
+page size, per-source sentinel maximums, and exact overfull-response error.
+This is an internal read-path boundary and does not introduce a public cursor.
+
 The managed task is a Phase 3-compatible focus target but remains planner-owned.
 Generic task edit/complete/postpone/cancel/restore commands and the ordinary task
 editor reject it and direct the user to `/preparation-plans`; starting focus on

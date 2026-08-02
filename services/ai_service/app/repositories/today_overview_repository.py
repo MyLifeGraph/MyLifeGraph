@@ -5,6 +5,7 @@ from datetime import date, datetime, timedelta
 from typing import Any, Protocol
 
 from app.clients.supabase import SupabaseRestClient
+from app.repositories.repository_pagination import select_offset_pages
 
 
 @dataclass(frozen=True)
@@ -244,25 +245,11 @@ class SupabaseTodayOverviewRepository:
         params: dict[str, Any] | list[tuple[str, str]],
         max_rows: int,
     ) -> list[dict[str, Any]]:
-        rows: list[dict[str, Any]] = []
-        while len(rows) < max_rows:
-            page_limit = min(self._page_size, max_rows - len(rows))
-            if isinstance(params, list):
-                page_params: dict[str, Any] | list[tuple[str, str]] = [
-                    *params,
-                    ("limit", str(page_limit)),
-                    ("offset", str(len(rows))),
-                ]
-            else:
-                page_params = {
-                    **params,
-                    "limit": str(page_limit),
-                    "offset": str(len(rows)),
-                }
-            page = await self._client.select(table, params=page_params)
-            if len(page) > page_limit:
-                raise ValueError("PostgREST returned more Today rows than requested.")
-            rows.extend(page)
-            if len(page) < page_limit:
-                break
-        return rows
+        return await select_offset_pages(
+            self._client,
+            table,
+            params=params,
+            page_size=self._page_size,
+            max_rows=max_rows,
+            overfull_error="PostgREST returned more Today rows than requested.",
+        )

@@ -269,6 +269,11 @@ sort fields and `id` as the tie-breaker, and exclude rows created or changed
 after that boundary. Generation stores a SHA-256 fingerprint of those canonical
 source facts. `GET` recomputes that fingerprint without writing:
 
+The shared repository page collector owns advancement and short-page
+termination for these reads. It preserves the 1,000-row page size, compound
+PostgREST cursor filter, row order, and cursor-validation failures; Weekly
+Review does not switch to offsets or expose a public cursor.
+
 - equal fingerprint: `current`;
 - changed source facts or target definition: `stale` with bounded reason codes;
 - no persisted row: `missing`.

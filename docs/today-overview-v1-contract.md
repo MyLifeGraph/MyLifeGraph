@@ -251,6 +251,12 @@ timeline, focus, calendar, and paginated fact reads. Flutter repeats exact key,
 enum, timestamp, identity, source-state, and progress checks. A malformed
 response is an error, not partial invented content.
 
+The bounded Today repository sources use the shared repository page collector
+with their existing offset queries. Owner predicates, stable ordering,
+1,000-row pages, source-specific sentinel maximums, and the exact Today
+overfull-response error remain unchanged; the separate streak reader keeps its
+own gap-driven paging semantics.
+
 The Today route now obtains the shared application-lifespan Supabase client
 instead of opening a transport per request. The read remains owner-scoped,
 GET-only, bounded, source-isolated, and free of generation or mutation.

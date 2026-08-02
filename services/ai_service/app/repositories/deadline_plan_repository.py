@@ -8,6 +8,7 @@ import httpx
 
 from app.clients.supabase import SupabaseRestClient
 from app.repositories.planning_writes import DeadlineProposalWrite
+from app.repositories.repository_pagination import select_offset_pages
 
 
 class DeadlinePlanPersistenceConflict(RuntimeError):
@@ -195,23 +196,14 @@ class SupabaseDeadlinePlanRepository:
         params: dict[str, Any],
         max_rows: int,
     ) -> list[dict[str, Any]]:
-        rows: list[dict[str, Any]] = []
-        while len(rows) < max_rows:
-            page_limit = min(self._page_size, max_rows - len(rows))
-            page = await self._client.select(
-                table,
-                params={
-                    **params,
-                    "limit": str(page_limit),
-                    "offset": str(len(rows)),
-                },
-            )
-            if len(page) > page_limit:
-                raise ValueError("PostgREST returned more rows than requested.")
-            rows.extend(page)
-            if len(page) < page_limit:
-                break
-        return rows
+        return await select_offset_pages(
+            self._client,
+            table,
+            params=params,
+            page_size=self._page_size,
+            max_rows=max_rows,
+            overfull_error="PostgREST returned more rows than requested.",
+        )
 
     async def get_request_identity(
         self,

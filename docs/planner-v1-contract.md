@@ -117,6 +117,11 @@ Planner error types remain stable through the service facade. In Flutter,
 section and dialog modules render projections and collect drafts without
 reading providers or writing data.
 
+Bounded Planner repository reads use the shared repository page collector while
+retaining offset pagination, every owner/filter parameter, stable ordering,
+1,000-row pages, per-source sentinel maximums, and the existing Planner-specific
+overfull-response error. No cursor is added to an HTTP contract.
+
 ## Deterministic Availability
 
 One shared availability component is used by Planner Task/Habit proposals and

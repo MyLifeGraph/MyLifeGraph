@@ -59,7 +59,7 @@ chat must run this exact closeout sequence:
 
 ## Tranche 1: Centralize Bounded Backend Repository Pagination
 
-- State: `pending`
+- State: `completed`
 - Depends on: baseline ledger commit only.
 - Goal: Extract a shared, bounded repository pagination primitive and use it for
   the existing semantically equivalent FastAPI repository page loops.
@@ -87,7 +87,13 @@ chat must run this exact closeout sequence:
   `tests/test_deadline_plan_repository.py`, `tests/test_planner_repository.py`,
   and Today repository/service tests affected by the extracted helper.
 - Commit subject: `refactor: centralize bounded repository pagination`
-- Result: _Not started._
+- Result: _Completed on 2026-08-02. Snapshot and Weekly Review retain their
+  compound keyset reads; Deadline Planner, Planner, and Today retain their
+  bounded offset reads and feature-specific overfull errors through one shared
+  collector. The focused Ruff and 63-test repository suite passed. `npm run
+  verify:docs`, `FLUTTER_BIN=/home/gregor/tools/flutter/bin/flutter npm run
+  verify:fast`, and `git diff --check` passed; the full gate included clean
+  Flutter analysis/tests and the FastAPI suite with its two expected skips._
 
 ## Tranche 2: Share Owner Data Collection
 

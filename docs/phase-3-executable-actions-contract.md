@@ -313,7 +313,9 @@ metadata key: `/preparation-plans` is a deliberate product surface governed by
   UTC date only for legacy/invalid metadata.
 - Backend habit-log and focus-session inputs paginate in stably ordered
   1,000-row pages until a short page, so snapshot counts and minutes cover the
-  complete requested action-fact window.
+  complete requested action-fact window. A shared repository page collector now
+  owns advancement and final-page detection while retaining the compound
+  keyset filter, `id` tie-breaker, owner/date filters, and validation errors.
 - Snapshot refresh failure never rolls back the original durable write.
 - Normal Dashboard reads remain read-only for recommendations.
 - Task/habit/focus writes never generate recommendations or call an LLM.

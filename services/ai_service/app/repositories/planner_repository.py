@@ -9,6 +9,7 @@ import httpx
 
 from app.clients.supabase import SupabaseRestClient
 from app.repositories.planning_writes import PlannerProposalWrite
+from app.repositories.repository_pagination import select_offset_pages
 
 
 class PlannerPersistenceConflict(RuntimeError):
@@ -698,28 +699,14 @@ class SupabasePlannerRepository:
         params: dict[str, Any] | list[tuple[str, str]],
         max_rows: int,
     ) -> list[dict[str, Any]]:
-        rows: list[dict[str, Any]] = []
-        while len(rows) < max_rows:
-            page_limit = min(self._page_size, max_rows - len(rows))
-            if isinstance(params, list):
-                page_params: dict[str, Any] | list[tuple[str, str]] = [
-                    *params,
-                    ("limit", str(page_limit)),
-                    ("offset", str(len(rows))),
-                ]
-            else:
-                page_params = {
-                    **params,
-                    "limit": str(page_limit),
-                    "offset": str(len(rows)),
-                }
-            page = await self._client.select(table, params=page_params)
-            if len(page) > page_limit:
-                raise ValueError("Planner source returned more rows than requested.")
-            rows.extend(page)
-            if len(page) < page_limit:
-                break
-        return rows
+        return await select_offset_pages(
+            self._client,
+            table,
+            params=params,
+            page_size=self._page_size,
+            max_rows=max_rows,
+            overfull_error="Planner source returned more rows than requested.",
+        )
 
     async def _rpc(self, function: str, *, params: dict[str, Any]) -> dict[str, Any]:
         try:
