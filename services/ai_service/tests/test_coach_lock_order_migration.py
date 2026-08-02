@@ -1,18 +1,14 @@
-from pathlib import Path
+from tests.migration_source import (
+    extract_function,
+    extract_grants,
+    extract_revokes,
+    load_migration,
+    normalize_sql,
+)
 
 
-MIGRATION = (
-    Path(__file__).resolve().parents[3]
-    / "supabase"
-    / "migrations"
-    / "20260713213000_phase_10_coach_lock_order_guard.sql"
-).read_text(encoding="utf-8")
-BASE_MIGRATION = (
-    Path(__file__).resolve().parents[3]
-    / "supabase"
-    / "migrations"
-    / "20260713200000_phase_10_controlled_coach.sql"
-).read_text(encoding="utf-8")
+MIGRATION = load_migration("20260713213000_phase_10_coach_lock_order_guard.sql")
+BASE_MIGRATION = load_migration("20260713200000_phase_10_controlled_coach.sql")
 
 
 OWNER_LOCK = (
@@ -21,35 +17,29 @@ OWNER_LOCK = (
 )
 
 
-def _function_body(sql: str, marker: str) -> str:
-    start = sql.index(marker)
-    end = sql.index("end;\n$$;", start)
-    return sql[start:end]
-
-
 def test_request_wrappers_take_owner_lock_before_existing_rpc_body() -> None:
     wrappers = {
-        "create function public.claim_coach_request_v1(": (
+        "public.claim_coach_request_v1": (
             "return public.coach_claim_request_v1_locked_body("
         ),
-        "create function public.complete_coach_request_v1(": (
+        "public.complete_coach_request_v1": (
             "return public.coach_complete_request_v1_locked_body("
         ),
-        "create function public.fail_coach_request_v1(": (
+        "public.fail_coach_request_v1": (
             "return public.coach_fail_request_v1_locked_body("
         ),
     }
 
-    for marker, body_call in wrappers.items():
-        body = _function_body(MIGRATION, marker)
+    for qualified_name, body_call in wrappers.items():
+        body = extract_function(MIGRATION, qualified_name)
         assert body.index(OWNER_LOCK) < body.index(body_call)
         assert "security definer" in body
 
 
 def test_history_delete_takes_the_same_owner_lock_before_request_row_lock() -> None:
-    body = _function_body(
+    body = extract_function(
         BASE_MIGRATION,
-        "create or replace function public.delete_coach_history_v1(",
+        "public.delete_coach_history_v1",
     )
 
     assert body.index(OWNER_LOCK) < body.index("select * into active_request")
@@ -76,21 +66,24 @@ def test_renamed_rpc_bodies_are_not_executable_by_application_roles() -> None:
 
 
 def test_public_wrappers_remain_service_role_only() -> None:
+    revokes = tuple(normalize_sql(statement) for statement in extract_revokes(MIGRATION))
+    grants = tuple(normalize_sql(statement) for statement in extract_grants(MIGRATION))
     for function_name in [
         "claim_coach_request_v1",
         "complete_coach_request_v1",
         "fail_coach_request_v1",
     ]:
-        revoke_start = MIGRATION.index(
-            f"revoke all on function public.{function_name}("
+        assert any(
+            revoke.startswith(
+                f"revoke all on function public.{function_name}(",
+            )
+            and "from public, anon, authenticated, service_role" in revoke
+            for revoke in revokes
         )
-        revoke_end = MIGRATION.index(";", revoke_start)
-        revoke = MIGRATION[revoke_start:revoke_end]
-        assert "from public, anon, authenticated, service_role" in revoke
-
-        grant_start = MIGRATION.index(
-            f"grant execute on function public.{function_name}("
+        assert any(
+            grant.startswith(
+                f"grant execute on function public.{function_name}(",
+            )
+            and grant.endswith("to service_role;")
+            for grant in grants
         )
-        grant_end = MIGRATION.index(";", grant_start)
-        grant = MIGRATION[grant_start:grant_end]
-        assert ") to service_role" in grant

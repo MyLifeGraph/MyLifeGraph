@@ -1,16 +1,13 @@
-from pathlib import Path
+from tests.migration_source import extract_function, load_migration
 
 
-ROOT = Path(__file__).resolve().parents[3]
-MIGRATION = (
-    ROOT
-    / "supabase/migrations/20260802111518_privileged_function_lint_cleanup.sql"
-).read_text(encoding="utf-8")
+MIGRATION = load_migration(
+    "20260802111518_privileged_function_lint_cleanup.sql",
+)
 
 
 def _function_sql(name: str) -> str:
-    start = MIGRATION.index(f"create or replace function public.{name}(")
-    return MIGRATION[start : MIGRATION.index("\n$$;", start)]
+    return extract_function(MIGRATION, f"public.{name}")
 
 
 def test_legacy_role_helper_is_a_closed_canonical_compatibility_wrapper() -> None:

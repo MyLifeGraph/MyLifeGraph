@@ -1,16 +1,12 @@
-from pathlib import Path
+from tests.migration_source import extract_function, load_migration, normalize_sql
 
 
-ROOT = Path(__file__).resolve().parents[3]
-MIGRATION = (
-    ROOT / "supabase/migrations/20260714130000_notification_delivery_v1.sql"
-).read_text(encoding="utf-8")
-NORMALIZED = " ".join(MIGRATION.lower().split())
+MIGRATION = load_migration("20260714130000_notification_delivery_v1.sql")
+NORMALIZED = normalize_sql(MIGRATION)
 
 
 def _function_body(name: str) -> str:
-    start = MIGRATION.index(f"create or replace function public.{name}(")
-    return MIGRATION[start : MIGRATION.index("\n$$;", start)]
+    return extract_function(MIGRATION, f"public.{name}")
 
 
 def test_existing_preferences_default_to_no_delivery_consent() -> None:
@@ -27,7 +23,7 @@ def test_existing_preferences_default_to_no_delivery_consent() -> None:
 
 def test_settings_rpc_is_owner_locked_retry_checked_and_service_role_only() -> None:
     body = _function_body("update_notification_settings_v1")
-    normalized = " ".join(body.lower().split())
+    normalized = normalize_sql(body)
 
     assert "pg_advisory_xact_lock(hashtextextended(p_user_id::text, 0))" in body
     assert "delivery_settings_request_id = p_request_id" in body

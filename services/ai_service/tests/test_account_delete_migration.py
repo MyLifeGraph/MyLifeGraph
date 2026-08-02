@@ -1,22 +1,16 @@
 import re
-from pathlib import Path
+
+from tests.migration_source import extract_function, load_migration, normalize_sql
 
 
-ROOT = Path(__file__).resolve().parents[3]
-MIGRATION = (
-    ROOT / "supabase/migrations/20260713233000_v1_account_delete.sql"
-).read_text(encoding="utf-8")
-PHASE_3 = (
-    ROOT
-    / "supabase/migrations/20260711120000_phase_3_executable_action_schema.sql"
-).read_text(encoding="utf-8")
-LEGACY_RLS = (
-    ROOT / "supabase/migrations/20260613190000_restrict_security_definer_functions.sql"
-).read_text(encoding="utf-8")
-CALENDAR_GUARD = (
-    ROOT
-    / "supabase/migrations/20260713143000_phase_9_calendar_request_identity_guard.sql"
-).read_text(encoding="utf-8")
+MIGRATION = load_migration("20260713233000_v1_account_delete.sql")
+PHASE_3 = load_migration("20260711120000_phase_3_executable_action_schema.sql")
+LEGACY_RLS = load_migration(
+    "20260613190000_restrict_security_definer_functions.sql",
+)
+CALENDAR_GUARD = load_migration(
+    "20260713143000_phase_9_calendar_request_identity_guard.sql",
+)
 
 LEGACY_CHILD_TABLES = (
     "FocusSession",
@@ -42,8 +36,7 @@ AUTHENTICATED_READ_ONLY_OUTPUT_TABLES = (
 
 
 def _function_body() -> str:
-    start = MIGRATION.index("create or replace function public.delete_account_v1(")
-    return MIGRATION[start : MIGRATION.index("\n$$;", start)]
+    return extract_function(MIGRATION, "public.delete_account_v1")
 
 
 def _text_array(name: str) -> tuple[str, ...]:
@@ -53,8 +46,7 @@ def _text_array(name: str) -> tuple[str, ...]:
 
 
 def _calendar_function_body(name: str) -> str:
-    start = CALENDAR_GUARD.index(f"create or replace function public.{name}(")
-    return CALENDAR_GUARD[start : CALENDAR_GUARD.index("\n$$;", start)]
+    return extract_function(CALENDAR_GUARD, f"public.{name}")
 
 
 def test_account_delete_handles_the_two_restrict_linked_focus_targets_first() -> None:
@@ -200,7 +192,7 @@ def test_not_found_result_still_converges_legacy_cleanup_first() -> None:
 
 
 def test_account_delete_rpc_is_service_role_only() -> None:
-    normalized = " ".join(MIGRATION.lower().split())
+    normalized = normalize_sql(MIGRATION)
 
     assert (
         "revoke all on function public.delete_account_v1(uuid, text) "
@@ -242,7 +234,7 @@ def test_generated_outputs_and_notifications_are_authenticated_read_only() -> No
         "create or replace function public.delete_account_v1(",
     )
     hardening = MIGRATION[start:end]
-    normalized = " ".join(hardening.lower().split())
+    normalized = normalize_sql(hardening)
 
     assert (
         "revoke insert, update, delete, truncate on table "

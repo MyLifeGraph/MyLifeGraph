@@ -1,24 +1,21 @@
-from pathlib import Path
+from tests.migration_source import load_migration, migration_path
 
 
-ROOT = Path(__file__).resolve().parents[3]
-MIGRATION = (
-    ROOT
-    / "supabase"
-    / "migrations"
-    / "20260722234000_setup_commitment_validity_guards.sql"
-)
-PLANNER_MIGRATION = (
-    ROOT / "supabase" / "migrations" / "20260722120000_planner_v1.sql"
+MIGRATION_NAME = "20260722234000_setup_commitment_validity_guards.sql"
+PLANNER_MIGRATION_NAME = "20260722120000_planner_v1.sql"
+MIGRATION = load_migration(
+    MIGRATION_NAME,
 )
 
 
 def _sql() -> str:
-    return MIGRATION.read_text().lower()
+    return MIGRATION.lower()
 
 
 def test_validity_guard_runs_after_planner_foundation() -> None:
-    assert MIGRATION.name > PLANNER_MIGRATION.name
+    assert migration_path(MIGRATION_NAME).name > migration_path(
+        PLANNER_MIGRATION_NAME,
+    ).name
 
 
 def test_guard_keeps_undated_rows_and_uses_inclusive_setup_bounds() -> None:

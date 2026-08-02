@@ -1,18 +1,16 @@
-from pathlib import Path
-
 from app.models.account import (
     ACCOUNT_EXPORT_OMITTED_TABLES,
     ACCOUNT_EXPORT_TABLE_NAMES,
 )
 from app.services.account_service import ACCOUNT_EXPORT_TABLES
+from tests.migration_source import extract_function, load_migration
 
 
-ROOT = Path(__file__).resolve().parents[3]
-MIGRATION = ROOT / "supabase/migrations/20260722120000_planner_v1.sql"
+MIGRATION = load_migration("20260722120000_planner_v1.sql")
 
 
 def _sql() -> str:
-    return MIGRATION.read_text(encoding="utf-8")
+    return MIGRATION
 
 
 def test_planner_tables_are_additive_owner_scoped_and_backend_written() -> None:
@@ -73,14 +71,11 @@ def test_planner_rpcs_are_retry_safe_owner_locked_and_service_only() -> None:
 
 def test_confirmation_rechecks_target_calendar_and_every_reservation_kind() -> None:
     sql = _sql()
-    confirmation = sql[
-        sql.index("create or replace function public.confirm_planner_action_plan_v1") :
-        sql.index("create or replace function public.cancel_planner_action_plan_v1")
-    ]
-    conflicts = sql[
-        sql.index("create or replace function private.planner_revision_conflicts") :
-        sql.index("create or replace function public.confirm_planner_action_plan_v1")
-    ]
+    confirmation = extract_function(
+        sql,
+        "public.confirm_planner_action_plan_v1",
+    )
+    conflicts = extract_function(sql, "private.planner_revision_conflicts")
     assert "for update" in confirmation
     assert "updated_at = (payload ->> 'expected_updated_at')::timestamptz" in confirmation
     assert "connection.last_import_id = revision_row.calendar_import_id" in confirmation

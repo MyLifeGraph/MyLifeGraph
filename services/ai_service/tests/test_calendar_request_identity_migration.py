@@ -1,22 +1,17 @@
-from pathlib import Path
+from tests.migration_source import extract_function, load_migration
 
 
-MIGRATION = (
-    Path(__file__).resolve().parents[3]
-    / "supabase"
-    / "migrations"
-    / "20260713143000_phase_9_calendar_request_identity_guard.sql"
+MIGRATION = load_migration(
+    "20260713143000_phase_9_calendar_request_identity_guard.sql",
 )
 
 
 def _migration_sql() -> str:
-    return MIGRATION.read_text(encoding="utf-8")
+    return MIGRATION
 
 
 def _function_sql(sql: str, function_name: str) -> str:
-    start = sql.index(f"create or replace function public.{function_name}(")
-    end = sql.index("\n$$;", start) + len("\n$$;")
-    return sql[start:end]
+    return extract_function(sql, f"public.{function_name}")
 
 
 def test_calendar_request_registry_is_global_minimal_and_backend_only() -> None:

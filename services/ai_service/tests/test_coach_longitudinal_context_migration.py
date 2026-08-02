@@ -1,22 +1,17 @@
-from pathlib import Path
+from tests.migration_source import extract_function, load_migration
 
 
-MIGRATION = (
-    Path(__file__).resolve().parents[3]
-    / "supabase"
-    / "migrations"
-    / "20260728120000_coach_longitudinal_context_v1.sql"
+MIGRATION = load_migration(
+    "20260728120000_coach_longitudinal_context_v1.sql",
 )
 
 
 def _migration_sql() -> str:
-    return MIGRATION.read_text(encoding="utf-8")
+    return MIGRATION
 
 
 def _function_sql(sql: str, qualified_name: str) -> str:
-    start = sql.index(f"create or replace function {qualified_name}(")
-    end = sql.index("\n$$;", start) + len("\n$$;")
-    return sql[start:end]
+    return extract_function(sql, qualified_name)
 
 
 def test_request_contracts_bind_versions_scopes_and_exact_parameters() -> None:

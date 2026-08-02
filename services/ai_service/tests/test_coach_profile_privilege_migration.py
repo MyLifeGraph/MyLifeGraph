@@ -1,17 +1,13 @@
-from pathlib import Path
+from tests.migration_source import load_migration, normalize_sql
 
 
-ROOT = Path(__file__).resolve().parents[3]
-MIGRATION = (
-    ROOT
-    / "supabase"
-    / "migrations"
-    / "20260713223000_phase_10_profile_privilege_guard.sql"
-).read_text()
+MIGRATION = load_migration(
+    "20260713223000_phase_10_profile_privilege_guard.sql",
+)
 
 
 def test_profile_identity_fields_are_not_owner_writable() -> None:
-    normalized = " ".join(MIGRATION.lower().split())
+    normalized = normalize_sql(MIGRATION)
 
     assert (
         "revoke insert, update on table public.profiles from authenticated"
@@ -29,7 +25,7 @@ def test_profile_identity_fields_are_not_owner_writable() -> None:
 
 
 def test_profile_guard_is_not_publicly_callable() -> None:
-    normalized = " ".join(MIGRATION.lower().split())
+    normalized = normalize_sql(MIGRATION)
 
     assert (
         "revoke all on function private.guard_profile_privileged_fields() from public"

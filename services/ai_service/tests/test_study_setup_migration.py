@@ -1,15 +1,13 @@
-from pathlib import Path
-
 from app.models.account import ACCOUNT_EXPORT_TABLE_NAMES
 from app.services.account_service import ACCOUNT_EXPORT_TABLES
+from tests.migration_source import load_migration
 
 
-ROOT = Path(__file__).resolve().parents[3]
-MIGRATION = ROOT / "supabase/migrations/20260723120000_study_setup_v1.sql"
+MIGRATION = load_migration("20260723120000_study_setup_v1.sql")
 
 
 def _sql() -> str:
-    return MIGRATION.read_text(encoding="utf-8")
+    return MIGRATION
 
 
 def test_study_profile_is_owner_scoped_backend_written_and_cascade_deleted() -> None:

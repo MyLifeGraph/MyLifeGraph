@@ -1,24 +1,16 @@
-from pathlib import Path
+from tests.migration_source import load_normalized_migration
 
 
-ROOT = Path(__file__).resolve().parents[3]
-MIGRATION = (
-    ROOT
-    / "supabase"
-    / "migrations"
-    / "20260719120000_account_preparation_budget_v1.sql"
+MIGRATION = load_normalized_migration(
+    "20260719120000_account_preparation_budget_v1.sql",
 )
-DEADLINE_MIGRATION = (
-    ROOT / "supabase" / "migrations" / "20260718120000_deadline_planner_v1.sql"
+DEADLINE_MIGRATION = load_normalized_migration(
+    "20260718120000_deadline_planner_v1.sql",
 )
-
-
-def _normalized(path: Path) -> str:
-    return " ".join(path.read_text(encoding="utf-8").lower().split())
 
 
 def test_budget_column_is_nullable_bounded_and_not_directly_owner_writable() -> None:
-    sql = _normalized(MIGRATION)
+    sql = MIGRATION
 
     assert "add column if not exists daily_preparation_budget_minutes int" in sql
     assert "daily_preparation_budget_minutes between 25 and 480" in sql
@@ -30,7 +22,7 @@ def test_budget_column_is_nullable_bounded_and_not_directly_owner_writable() -> 
 
 
 def test_budget_rpc_is_service_role_only_owner_locked_and_idempotent() -> None:
-    sql = _normalized(MIGRATION)
+    sql = MIGRATION
 
     assert (
         "create or replace function public.set_daily_preparation_budget_v1( "
@@ -54,8 +46,8 @@ def test_budget_rpc_is_service_role_only_owner_locked_and_idempotent() -> None:
 
 
 def test_confirmation_trigger_rechecks_total_budget_under_shared_owner_lock() -> None:
-    sql = _normalized(MIGRATION)
-    deadline_sql = _normalized(DEADLINE_MIGRATION)
+    sql = MIGRATION
+    deadline_sql = DEADLINE_MIGRATION
 
     assert (
         "old.reservation_state = 'proposed' and new.reservation_state = 'active'"

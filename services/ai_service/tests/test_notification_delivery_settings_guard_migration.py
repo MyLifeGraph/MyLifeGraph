@@ -1,17 +1,14 @@
-from pathlib import Path
+from tests.migration_source import extract_function, load_migration, normalize_sql
 
 
-ROOT = Path(__file__).resolve().parents[3]
-MIGRATION = (
-    ROOT
-    / "supabase/migrations/20260714143000_notification_delivery_settings_guard.sql"
-).read_text(encoding="utf-8")
-NORMALIZED = " ".join(MIGRATION.lower().split())
+MIGRATION = load_migration(
+    "20260714143000_notification_delivery_settings_guard.sql",
+)
+NORMALIZED = normalize_sql(MIGRATION)
 
 
 def _function_body(name: str) -> str:
-    start = MIGRATION.index(f"create or replace function public.{name}(")
-    return MIGRATION[start : MIGRATION.index("\n$$;", start)]
+    return extract_function(MIGRATION, f"public.{name}")
 
 
 def test_settings_replay_fingerprints_the_expected_revision_and_full_payload() -> None:

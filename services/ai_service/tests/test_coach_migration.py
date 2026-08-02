@@ -1,22 +1,17 @@
-from pathlib import Path
+from tests.migration_source import extract_function, load_migration
 
 
-MIGRATION = (
-    Path(__file__).resolve().parents[3]
-    / "supabase"
-    / "migrations"
-    / "20260713200000_phase_10_controlled_coach.sql"
+MIGRATION = load_migration(
+    "20260713200000_phase_10_controlled_coach.sql",
 )
 
 
 def _migration_sql() -> str:
-    return MIGRATION.read_text(encoding="utf-8")
+    return MIGRATION
 
 
 def _function_sql(sql: str, function_name: str) -> str:
-    start = sql.index(f"create or replace function public.{function_name}(")
-    end = sql.index("\n$$;", start) + len("\n$$;")
-    return sql[start:end]
+    return extract_function(sql, f"public.{function_name}")
 
 
 def test_coach_tables_are_bounded_owner_linked_and_retry_safe() -> None:
@@ -205,9 +200,7 @@ def test_coach_rls_removes_authenticated_mutation_and_rpcs_are_service_only() ->
 
 def test_exact_key_helper_rejects_null_and_non_object_values_before_iteration() -> None:
     sql = _migration_sql()
-    start = sql.index("create or replace function private.coach_jsonb_has_exact_keys(")
-    end = sql.index("\n$$;", start) + len("\n$$;")
-    helper = sql[start:end]
+    helper = extract_function(sql, "private.coach_jsonb_has_exact_keys")
 
     assert "p_value is null" in helper
     assert "jsonb_typeof(p_value) <> 'object'" in helper

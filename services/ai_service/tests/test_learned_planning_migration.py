@@ -1,49 +1,35 @@
-from pathlib import Path
-
 from app.services.account_service import ACCOUNT_EXPORT_TABLES
+from tests.migration_source import load_migration
 
 
-ROOT = Path(__file__).resolve().parents[3]
-MIGRATION = (
-    ROOT
-    / "supabase"
-    / "migrations"
-    / "20260726150000_learned_focus_planning_v1.sql"
+MIGRATION = load_migration(
+    "20260726150000_learned_focus_planning_v1.sql",
 )
-RPC_GUARD_MIGRATION = (
-    ROOT
-    / "supabase"
-    / "migrations"
-    / "20260726180000_learned_focus_planning_rpc_guard.sql"
+RPC_GUARD_MIGRATION = load_migration(
+    "20260726180000_learned_focus_planning_rpc_guard.sql",
 )
-CONFIRMATION_TIME_GUARD_MIGRATION = (
-    ROOT
-    / "supabase"
-    / "migrations"
-    / "20260726190000_planning_confirmation_timestamp_guard.sql"
+CONFIRMATION_TIME_GUARD_MIGRATION = load_migration(
+    "20260726190000_planning_confirmation_timestamp_guard.sql",
 )
-SETUP_FALLBACK_PROVENANCE_MIGRATION = (
-    ROOT
-    / "supabase"
-    / "migrations"
-    / "20260726200000_learned_timing_setup_fallback_provenance.sql"
+SETUP_FALLBACK_PROVENANCE_MIGRATION = load_migration(
+    "20260726200000_learned_timing_setup_fallback_provenance.sql",
 )
 
 
 def _sql() -> str:
-    return MIGRATION.read_text(encoding="utf-8")
+    return MIGRATION
 
 
 def _rpc_guard_sql() -> str:
-    return RPC_GUARD_MIGRATION.read_text(encoding="utf-8")
+    return RPC_GUARD_MIGRATION
 
 
 def _confirmation_time_guard_sql() -> str:
-    return CONFIRMATION_TIME_GUARD_MIGRATION.read_text(encoding="utf-8")
+    return CONFIRMATION_TIME_GUARD_MIGRATION
 
 
 def _setup_fallback_provenance_sql() -> str:
-    return SETUP_FALLBACK_PROVENANCE_MIGRATION.read_text(encoding="utf-8")
+    return SETUP_FALLBACK_PROVENANCE_MIGRATION
 
 
 def test_revision_provenance_is_bounded_and_habits_cannot_use_it() -> None:

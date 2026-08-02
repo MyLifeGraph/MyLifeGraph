@@ -1,17 +1,13 @@
-from pathlib import Path
+from tests.migration_source import load_migration, normalize_sql
 
 
-ROOT = Path(__file__).resolve().parents[3]
-MIGRATION = (
-    ROOT
-    / "supabase"
-    / "migrations"
-    / "20260713230000_phase_10_onboarding_eligibility_guard.sql"
-).read_text()
+MIGRATION = load_migration(
+    "20260713230000_phase_10_onboarding_eligibility_guard.sql",
+)
 
 
 def test_authenticated_cannot_write_onboarding_eligibility_projection() -> None:
-    normalized = " ".join(MIGRATION.lower().split())
+    normalized = normalize_sql(MIGRATION)
 
     assert (
         "revoke update (onboarding_completed_at) on table public.profiles "
@@ -27,7 +23,7 @@ def test_authenticated_cannot_write_onboarding_eligibility_projection() -> None:
 
 
 def test_profile_privilege_trigger_remains_private() -> None:
-    normalized = " ".join(MIGRATION.lower().split())
+    normalized = normalize_sql(MIGRATION)
 
     assert (
         "revoke all on function private.guard_profile_privileged_fields() "

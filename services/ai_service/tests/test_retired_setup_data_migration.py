@@ -1,21 +1,16 @@
-from pathlib import Path
-
 from app.models.account import ACCOUNT_EXPORT_TABLE_NAMES
 from app.services.account_service import ACCOUNT_EXPORT_TABLES
+from tests.migration_source import extract_function, load_migration, normalize_sql
 
 
-ROOT = Path(__file__).resolve().parents[3]
-MIGRATION_PATH = (
-    ROOT
-    / "supabase/migrations/20260725120000_retire_setup_goals_and_friction.sql"
+MIGRATION = load_migration(
+    "20260725120000_retire_setup_goals_and_friction.sql",
 )
-MIGRATION = MIGRATION_PATH.read_text(encoding="utf-8")
-NORMALIZED = " ".join(MIGRATION.lower().split())
+NORMALIZED = normalize_sql(MIGRATION)
 
 
 def _function_body(name: str) -> str:
-    start = MIGRATION.index(f"create or replace function public.{name}(")
-    return MIGRATION[start : MIGRATION.index("\n$$;", start)]
+    return extract_function(MIGRATION, f"public.{name}")
 
 
 def test_compatibility_adapter_discards_reminder_and_goal_arguments() -> None:

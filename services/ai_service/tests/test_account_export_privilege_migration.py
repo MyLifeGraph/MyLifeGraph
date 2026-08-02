@@ -1,18 +1,16 @@
-from pathlib import Path
+from tests.migration_source import extract_grants, load_migration, normalize_sql
 
 
-ROOT = Path(__file__).resolve().parents[3]
-MIGRATION_PATH = (
-    ROOT
-    / "supabase/migrations/20260714110000_account_export_lifestyle_entries_grant.sql"
+MIGRATION = load_migration(
+    "20260714110000_account_export_lifestyle_entries_grant.sql",
 )
-MIGRATION = " ".join(MIGRATION_PATH.read_text(encoding="utf-8").lower().split())
+GRANTS = tuple(normalize_sql(grant) for grant in extract_grants(MIGRATION))
 
 
 def test_account_export_can_read_every_v1_table_created_before_service_role_grants() -> None:
     assert (
-        "grant select on table public.lifestyle_entries to service_role"
-        in MIGRATION
+        "grant select on table public.lifestyle_entries to service_role;"
+        in GRANTS
     )
-    assert "to authenticated" not in MIGRATION
-    assert "to anon" not in MIGRATION
+    assert all("to authenticated" not in grant for grant in GRANTS)
+    assert all("to anon" not in grant for grant in GRANTS)

@@ -308,7 +308,7 @@ chat must run this exact closeout sequence:
 
 ## Tranche 8: Layer Migration Verification
 
-- State: `pending`
+- State: `completed`
 - Depends on: Tranche 7 completed.
 - Goal: Centralize repeated SQL-source inspection helpers and clearly separate
   historical migration source guards from final-state database behavior checks.
@@ -326,7 +326,16 @@ chat must run this exact closeout sequence:
   `npm run verify:db`, `supabase migration list --local`, and relevant pgTAP
   files.
 - Commit subject: `test: strengthen final-state database contract checks`
-- Result: _Not started._
+- Result: _Completed. Centralized loading, normalization, and function/policy/
+  grant extraction across all 28 historical migration-test modules, documented
+  why those guards protect rollout identity, and added applied-catalog pgTAP
+  coverage for RLS, role privileges, RPC authority, policies, constraints, and
+  Auth triggers. No migration changed. Baseline: 146 source tests and 203 pgTAP
+  assertions. Final: 152 focused source/helper tests, matching local migration
+  history, 213 pgTAP assertions across eleven files, `npm run verify:docs`,
+  Ruff, `git diff --check`, and `npm run verify:fast` with clean Flutter
+  analysis and the complete Flutter/backend suites with 2 expected backend
+  skips._
 
 ## Tranche 9: Split Large Flutter Presentation Components
 

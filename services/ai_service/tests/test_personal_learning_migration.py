@@ -1,26 +1,22 @@
 import re
-from pathlib import Path
 
 from app.models.account import (
     ACCOUNT_EXPORT_OMITTED_TABLES,
     ACCOUNT_EXPORT_TABLE_NAMES,
 )
 from app.services.account_service import ACCOUNT_EXPORT_TABLES
+from tests.migration_source import extract_function, load_migration, normalize_sql
 
 
-ROOT = Path(__file__).resolve().parents[3]
-MIGRATION = (
-    ROOT / "supabase/migrations/20260726120000_personal_learning_v1.sql"
-).read_text(encoding="utf-8")
+MIGRATION = load_migration("20260726120000_personal_learning_v1.sql")
 
 
 def _function_body(name: str) -> str:
-    start = MIGRATION.index(f"create or replace function public.{name}(")
-    return MIGRATION[start : MIGRATION.index("\n$$;", start)]
+    return extract_function(MIGRATION, f"public.{name}")
 
 
 def test_reflections_are_one_per_terminal_owned_session_with_exact_bounds() -> None:
-    normalized = " ".join(MIGRATION.lower().split())
+    normalized = normalize_sql(MIGRATION)
     assert "create table public.focus_session_reflections" in normalized
     assert "focus_session_id uuid primary key" in normalized
     assert "focus_quality smallint not null check (focus_quality between 1 and 5)" in normalized
@@ -48,7 +44,7 @@ def test_reflections_are_one_per_terminal_owned_session_with_exact_bounds() -> N
 
 
 def test_reflection_rls_is_forced_owner_crud_and_guest_has_no_grant() -> None:
-    normalized = " ".join(MIGRATION.lower().split())
+    normalized = normalize_sql(MIGRATION)
     assert (
         "alter table public.focus_session_reflections force row level security"
         in normalized
@@ -66,7 +62,7 @@ def test_reflection_rls_is_forced_owner_crud_and_guest_has_no_grant() -> None:
 
 
 def test_preferences_enforce_defaults_dependency_and_future_profile_creation() -> None:
-    normalized = " ".join(MIGRATION.lower().split())
+    normalized = normalize_sql(MIGRATION)
     assert "focus_reflection_prompt_enabled boolean not null default true" in normalized
     assert "personal_pattern_analysis_enabled boolean not null default true" in normalized
     assert "learned_focus_planning_enabled boolean not null default false" in normalized
@@ -104,7 +100,7 @@ def test_preference_rpc_is_revisioned_payload_bound_and_exactly_replayable() -> 
 
 def test_clear_is_retry_safe_revision_bound_and_deletes_only_reflections() -> None:
     body = _function_body("clear_focus_reflection_history_v1")
-    normalized = " ".join(body.lower().split())
+    normalized = normalize_sql(body)
     assert "p_confirmation is distinct from 'CLEAR'" in body
     assert "current_preferences.revision <> p_expected_revision" in body
     assert (
@@ -118,7 +114,7 @@ def test_clear_is_retry_safe_revision_bound_and_deletes_only_reflections() -> No
 
 
 def test_learning_commands_are_service_role_only_and_ledger_is_omitted() -> None:
-    normalized = " ".join(MIGRATION.lower().split())
+    normalized = normalize_sql(MIGRATION)
     for signature in (
         "public.update_learning_preferences_v1( "
         "uuid, uuid, int, boolean, boolean, boolean )",

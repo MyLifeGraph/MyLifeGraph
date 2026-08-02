@@ -1,14 +1,18 @@
 import re
-from pathlib import Path
 
-
-ROOT = Path(__file__).resolve().parents[3]
-MIGRATION_PATH = (
-    ROOT
-    / "supabase/migrations/20260714103000_application_table_privilege_guard.sql"
+from tests.migration_source import (
+    MIGRATIONS_DIR,
+    load_migration,
+    migration_path,
+    normalize_sql,
 )
-MIGRATION = MIGRATION_PATH.read_text(encoding="utf-8")
-NORMALIZED = " ".join(MIGRATION.lower().split())
+
+
+MIGRATION_PATH = migration_path(
+    "20260714103000_application_table_privilege_guard.sql",
+)
+MIGRATION = load_migration(MIGRATION_PATH.name)
+NORMALIZED = normalize_sql(MIGRATION)
 
 PROJECTION_TABLES = (
     "notifications",
@@ -45,9 +49,8 @@ def _guard_array(block_name: str) -> set[str]:
 
 
 def test_guard_runs_after_the_notification_lifecycle_migration() -> None:
-    lifecycle_path = (
-        ROOT
-        / "supabase/migrations/20260714100000_notification_lifecycle_v1.sql"
+    lifecycle_path = migration_path(
+        "20260714100000_notification_lifecycle_v1.sql",
     )
 
     assert lifecycle_path.exists()
@@ -60,10 +63,10 @@ def test_guard_lists_every_repo_owned_product_and_ledger_table_created_so_far() 
         r"create\s+table(?:\s+if\s+not\s+exists)?\s+public\.([a-z][a-z0-9_]*)",
         flags=re.IGNORECASE,
     )
-    for path in (ROOT / "supabase/migrations").glob("*.sql"):
+    for path in MIGRATIONS_DIR.glob("*.sql"):
         if path.name >= MIGRATION_PATH.name:
             continue
-        created_tables.update(pattern.findall(path.read_text(encoding="utf-8")))
+        created_tables.update(pattern.findall(load_migration(path.name)))
 
     assert _guard_array("application_table_privilege_guard") == created_tables
     assert "lifestyle_entries" in created_tables
@@ -174,13 +177,10 @@ def test_auth_trigger_functions_are_not_executable_by_reusable_roles() -> None:
 
 
 def test_execute_revokes_leave_the_preexisting_auth_triggers_installed() -> None:
-    canonical = (
-        ROOT
-        / "supabase/migrations/20260618170000_create_canonical_app_schema.sql"
-    ).read_text(encoding="utf-8")
-    legacy = (
-        ROOT / "supabase/migrations/20260602162000_auth_roles_rls.sql"
-    ).read_text(encoding="utf-8")
+    canonical = load_migration(
+        "20260618170000_create_canonical_app_schema.sql",
+    )
+    legacy = load_migration("20260602162000_auth_roles_rls.sql")
 
     assert "create trigger on_auth_user_created" in canonical.lower()
     assert "execute function public.handle_new_user()" in canonical.lower()

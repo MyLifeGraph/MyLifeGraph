@@ -1,16 +1,13 @@
-from pathlib import Path
+from tests.migration_source import load_migration
 
 
-MIGRATION = (
-    Path(__file__).resolve().parents[3]
-    / "supabase"
-    / "migrations"
-    / "20260713220000_phase_10_coach_safety_provenance_guard.sql"
+MIGRATION = load_migration(
+    "20260713220000_phase_10_coach_safety_provenance_guard.sql",
 )
 
 
 def _migration_sql() -> str:
-    return MIGRATION.read_text(encoding="utf-8")
+    return MIGRATION
 
 
 def test_follow_up_replaces_only_the_private_response_validator() -> None:

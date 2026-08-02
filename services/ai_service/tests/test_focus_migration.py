@@ -1,18 +1,15 @@
-from pathlib import Path
+from tests.migration_source import extract_function, load_migration
 
 
-ROOT = Path(__file__).resolve().parents[3]
-MIGRATION = ROOT / ("supabase/migrations/20260802083219_focus_schedule_sources_v2.sql")
+MIGRATION = load_migration("20260802083219_focus_schedule_sources_v2.sql")
 
 
 def _sql() -> str:
-    return MIGRATION.read_text(encoding="utf-8")
+    return MIGRATION
 
 
 def _function(sql: str, name: str) -> str:
-    start = sql.index(f"create or replace function {name}")
-    end = sql.index("\n$$;", start) + 4
-    return sql[start:end]
+    return extract_function(sql, name)
 
 
 def test_schedule_source_table_is_owner_read_only_and_restrict_linked() -> None:

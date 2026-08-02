@@ -1,14 +1,16 @@
 import re
-from pathlib import Path
 
-
-ROOT = Path(__file__).resolve().parents[3]
-MIGRATION_PATH = (
-    ROOT
-    / "supabase/migrations/20260723200707_optimize_canonical_rls_policies.sql"
+from tests.migration_source import (
+    extract_dropped_policy_names,
+    extract_policy,
+    load_migration,
+    normalize_sql,
 )
-MIGRATION = MIGRATION_PATH.read_text(encoding="utf-8")
-NORMALIZED = " ".join(MIGRATION.lower().split())
+
+MIGRATION = load_migration(
+    "20260723200707_optimize_canonical_rls_policies.sql",
+)
+NORMALIZED = normalize_sql(MIGRATION)
 
 SUPERSEDED_POLICIES = {
     "profiles_select_own",
@@ -34,9 +36,7 @@ OWNER_ADMIN_TABLES = {
 
 
 def test_migration_drops_every_superseded_initial_policy() -> None:
-    dropped = set(
-        re.findall(r'drop policy if exists "([a-z0-9_]+)"', MIGRATION)
-    )
+    dropped = set(extract_dropped_policy_names(MIGRATION))
 
     assert SUPERSEDED_POLICIES <= dropped
 
@@ -47,7 +47,10 @@ def test_migration_rebuilds_the_complete_canonical_owner_admin_set() -> None:
     tables = set(re.findall(r"'([a-z0-9_]+)'", MIGRATION[block_start:block_end]))
 
     assert tables == OWNER_ADMIN_TABLES
-    assert 'create policy "profiles_own_or_admin_all"' in MIGRATION
+    assert "on public.profiles" in extract_policy(
+        MIGRATION,
+        "profiles_own_or_admin_all",
+    )
 
 
 def test_identity_and_role_helpers_are_initplan_safe() -> None:

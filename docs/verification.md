@@ -30,13 +30,13 @@ Capture V4, Daily State V2, Exam-Week Outlook V1, or Coach V3 expectations.
 
 ## Current Verified Baseline
 
-The current Focus schedule-source V2 and privileged-function cleanup working
-tree was reverified locally on 2026-08-02. A fresh local reset applied the
+The current database-verification working tree was reverified locally on
+2026-08-02. A fresh local reset applied the
 complete migration chain through
 `20260802111518_privileged_function_lint_cleanup.sql`; the matching-history
-database gate then passed all `203` assertions across ten pgTAP files.
-`verify:fast` reported `827` passing Flutter tests, clean Flutter analysis,
-`1165 passed, 2 skipped` for FastAPI, and passing documentation, visual, source,
+database gate then passed all `213` assertions across eleven pgTAP files.
+`verify:fast` reported `846` passing Flutter tests, clean Flutter analysis,
+`1293 passed, 2 skipped` for FastAPI, and passing documentation, visual, source,
 Ruff, and diff
 checks. The debug web build, Android unit/lint gate, and debug APK passed. The
 focused `planner-confirm` profile-mode browser journey passed in 1:56 of test
@@ -900,12 +900,27 @@ The script:
 3. Starts the local Supabase stack.
 4. Redacts Supabase keys from CLI output.
 5. Requires repository and local migration history to match.
-6. Runs all seven pgTAP files and their 142 assertions.
+6. Runs the complete pgTAP suite.
 
 With the default `RESET_DB=false` and `APPLY_MIGRATIONS=false`, the script runs
 `supabase migration list --local` and requires every repository/DB history row
 to match. It never applies pending SQL automatically. A mismatch fails before
 pgTAP and explains the two explicit choices.
+
+Migration verification has two deliberately separate layers:
+
+- `services/ai_service/tests/test_*_migration.py` uses
+  `tests/migration_source.py` for historical source guards. Those tests protect
+  rollout-sensitive file identity such as an exact wrapper, declaration, lock
+  order, policy, or grant in the migration where it was introduced.
+- `supabase/tests/*.sql` proves the final state after the complete chain is
+  applied. Current RLS mode, catalog objects, effective role privileges,
+  installed triggers, constraints, and database behavior must be asserted
+  there with pgTAP/catalog/role checks rather than inferred from source text.
+
+Neither layer substitutes for the other: historical source identity supports
+safe rolling upgrades, while the applied database is authoritative for current
+behavior and authority.
 
 After reviewing the pending SQL and affected local rows, apply intentionally:
 

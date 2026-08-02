@@ -1,20 +1,18 @@
-from pathlib import Path
-
 from app.models.account import (
     ACCOUNT_EXPORT_OMITTED_TABLES,
     ACCOUNT_EXPORT_TABLE_NAMES,
 )
 from app.services.account_service import ACCOUNT_EXPORT_TABLES
+from tests.migration_source import load_migration
 
 
-ROOT = Path(__file__).resolve().parents[3]
-MIGRATION = ROOT / (
-    "supabase/migrations/20260718120000_deadline_planner_v1.sql"
+MIGRATION = load_migration(
+    "20260718120000_deadline_planner_v1.sql",
 )
 
 
 def _sql() -> str:
-    return MIGRATION.read_text(encoding="utf-8")
+    return MIGRATION
 
 
 def test_deadline_migration_creates_backend_owned_owner_scoped_tables() -> None:

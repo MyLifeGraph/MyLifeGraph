@@ -1,23 +1,17 @@
-from pathlib import Path
+from tests.migration_source import extract_function, load_migration
 
 
-ROOT = Path(__file__).resolve().parents[3]
-MIGRATION = (
-    ROOT
-    / "supabase"
-    / "migrations"
-    / "20260729160000_coach_english_prompt_v2.sql"
+MIGRATION = load_migration(
+    "20260729160000_coach_english_prompt_v2.sql",
 )
 
 
 def _sql() -> str:
-    return MIGRATION.read_text(encoding="utf-8")
+    return MIGRATION
 
 
 def _function_sql(sql: str, qualified_name: str) -> str:
-    start = sql.index(f"create or replace function {qualified_name}(")
-    end = sql.index("\n$$;", start) + len("\n$$;")
-    return sql[start:end]
+    return extract_function(sql, qualified_name)
 
 
 def test_prompt_v2_is_additive_and_keeps_v1_rows_valid() -> None:

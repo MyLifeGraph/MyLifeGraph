@@ -1,18 +1,14 @@
-from pathlib import Path
+from tests.migration_source import extract_function, load_migration, normalize_sql
 
 
-ROOT = Path(__file__).resolve().parents[3]
-MIGRATION = (
-    ROOT
-    / "supabase"
-    / "migrations"
-    / "20260713224500_phase_10_role_authority_guard.sql"
-).read_text()
+MIGRATION = load_migration(
+    "20260713224500_phase_10_role_authority_guard.sql",
+)
 
 
 def test_admin_authority_uses_only_protected_canonical_profile() -> None:
-    normalized = " ".join(MIGRATION.lower().split())
-    function_body = MIGRATION.split("as $$", 1)[1].split("$$;", 1)[0].lower()
+    normalized = normalize_sql(MIGRATION)
+    function_body = extract_function(MIGRATION, "private.current_app_role").lower()
 
     assert "from public.profiles where id = auth.uid()" in normalized
     assert 'public."user"' not in function_body
@@ -21,7 +17,7 @@ def test_admin_authority_uses_only_protected_canonical_profile() -> None:
 
 
 def test_authenticated_owner_cannot_delete_canonical_profile() -> None:
-    normalized = " ".join(MIGRATION.lower().split())
+    normalized = normalize_sql(MIGRATION)
 
     assert (
         "revoke delete on table public.profiles from authenticated" in normalized

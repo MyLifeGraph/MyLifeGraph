@@ -1,16 +1,11 @@
-from pathlib import Path
+from tests.migration_source import load_migration
 
 
-MIGRATION = (
-    Path(__file__).resolve().parents[3]
-    / "supabase"
-    / "migrations"
-    / "20260726170000_recommendation_refresh_v2.sql"
-)
+MIGRATION = load_migration("20260726170000_recommendation_refresh_v2.sql")
 
 
 def _sql() -> str:
-    return MIGRATION.read_text(encoding="utf-8").lower()
+    return MIGRATION.lower()
 
 
 def test_refresh_retires_old_new_rows_and_inserts_the_complete_new_set() -> None:

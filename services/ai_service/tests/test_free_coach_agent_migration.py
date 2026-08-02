@@ -1,29 +1,20 @@
-from pathlib import Path
+from tests.migration_source import extract_function, load_migration
 
 
-ROOT = Path(__file__).resolve().parents[3]
-MIGRATION = (
-    ROOT
-    / "supabase"
-    / "migrations"
-    / "20260728160000_free_read_only_coach_agent_v1.sql"
+MIGRATION = load_migration(
+    "20260728160000_free_read_only_coach_agent_v1.sql",
 )
-LONGITUDINAL_MIGRATION = (
-    ROOT
-    / "supabase"
-    / "migrations"
-    / "20260728120000_coach_longitudinal_context_v1.sql"
+LONGITUDINAL_MIGRATION = load_migration(
+    "20260728120000_coach_longitudinal_context_v1.sql",
 )
 
 
 def _migration_sql() -> str:
-    return MIGRATION.read_text(encoding="utf-8")
+    return MIGRATION
 
 
 def _function_sql(sql: str, qualified_name: str) -> str:
-    start = sql.index(f"create or replace function {qualified_name}(")
-    end = sql.index("\n$$;", start) + len("\n$$;")
-    return sql[start:end]
+    return extract_function(sql, qualified_name)
 
 
 def test_v3_is_additive_and_keeps_legacy_contracts_readable() -> None:
@@ -296,7 +287,7 @@ def test_v3_claim_is_message_only_owner_first_and_fixed_to_twenty() -> None:
 def test_v3_claim_reuses_one_pending_and_budget_guards_without_extra_usage() -> None:
     claim = _function_sql(_migration_sql(), "public.claim_coach_request_v3")
     prior_claim = _function_sql(
-        LONGITUDINAL_MIGRATION.read_text(encoding="utf-8"),
+        LONGITUDINAL_MIGRATION,
         "public.claim_coach_request_v2",
     )
 
@@ -364,7 +355,7 @@ def test_history_delete_clears_agent_content_but_retains_usage() -> None:
     sql = _migration_sql()
     delete = _function_sql(sql, "public.delete_coach_history_v1")
     prior_delete = _function_sql(
-        LONGITUDINAL_MIGRATION.read_text(encoding="utf-8"),
+        LONGITUDINAL_MIGRATION,
         "public.delete_coach_history_v1",
     )
 

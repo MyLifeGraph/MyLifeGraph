@@ -1082,7 +1082,7 @@ npm run verify:db
 
 This default starts/reuses the local stack, inspects
 `supabase migration list --local`, and fails if repository files and database
-history differ. It then runs all 142 pgTAP assertions and never runs Flutter
+history differ. It then runs the complete pgTAP suite and never runs Flutter
 tests. It never applies SQL automatically. If the histories differ, review the
 pending SQL and affected local rows before opting in:
 
@@ -1093,6 +1093,14 @@ APPLY_MIGRATIONS=true npm run verify:db
 Pending migrations may change or delete local rows. Avoid describing this path
 as non-destructive merely because it does not reset the full database. The
 script verifies migration history again after the explicit application.
+
+Python `test_*_migration.py` files are historical source guards for exact
+rollout identity and share their loader/extractors in
+`services/ai_service/tests/migration_source.py`. They are not the authority for
+the current applied schema. Final RLS mode, policy/catalog presence, effective
+role privileges, constraints, installed triggers, and database behavior belong
+in `supabase/tests/*.sql`, which runs only after the complete local migration
+history is confirmed.
 
 For local Supabase reset and migration verification:
 

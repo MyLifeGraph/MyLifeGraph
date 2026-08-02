@@ -1,25 +1,18 @@
 import re
-from pathlib import Path
 
 from app.models.account import ACCOUNT_EXPORT_OMITTED_TABLES
+from tests.migration_source import extract_function, load_migration, normalize_sql
 
 
-ROOT = Path(__file__).resolve().parents[3]
-MIGRATION = (
-    ROOT
-    / "supabase/migrations/20260714100000_notification_lifecycle_v1.sql"
-).read_text(encoding="utf-8")
+MIGRATION = load_migration("20260714100000_notification_lifecycle_v1.sql")
 
 
 def _function_body() -> str:
-    start = MIGRATION.index(
-        "create or replace function public.apply_notification_action_v1(",
-    )
-    return MIGRATION[start : MIGRATION.index("\n$$;", start)]
+    return extract_function(MIGRATION, "public.apply_notification_action_v1")
 
 
 def test_notification_lifecycle_adds_consistent_read_and_dismiss_timestamps() -> None:
-    normalized = " ".join(MIGRATION.lower().split())
+    normalized = normalize_sql(MIGRATION)
 
     assert "add column if not exists read_at timestamptz" in normalized
     assert "add column if not exists dismissed_at timestamptz" in normalized
@@ -29,7 +22,7 @@ def test_notification_lifecycle_adds_consistent_read_and_dismiss_timestamps() ->
 
 
 def test_notification_retry_ledger_is_bounded_forced_rls_and_backend_only() -> None:
-    normalized = " ".join(MIGRATION.lower().split())
+    normalized = normalize_sql(MIGRATION)
 
     assert "create table public.notification_action_requests" in normalized
     assert "request_id uuid primary key" in normalized
@@ -52,7 +45,7 @@ def test_notification_retry_ledger_is_bounded_forced_rls_and_backend_only() -> N
 
 def test_notification_rpc_replays_exact_request_and_rejects_reinterpretation() -> None:
     body = _function_body()
-    normalized = " ".join(body.lower().split())
+    normalized = normalize_sql(body)
 
     owner_lock = body.index(
         "pg_advisory_xact_lock(hashtextextended(p_user_id::text, 0))",
@@ -95,7 +88,7 @@ def test_notification_commands_mutate_only_lifecycle_columns_and_never_delete() 
 
 
 def test_notification_rpc_is_service_role_only_with_safe_search_path() -> None:
-    normalized = " ".join(MIGRATION.lower().split())
+    normalized = normalize_sql(MIGRATION)
 
     assert "set search_path = pg_catalog, pg_temp" in normalized
     assert (
@@ -111,7 +104,7 @@ def test_notification_rpc_is_service_role_only_with_safe_search_path() -> None:
 
 
 def test_authenticated_direct_notification_mutation_remains_forbidden() -> None:
-    normalized = " ".join(MIGRATION.lower().split())
+    normalized = normalize_sql(MIGRATION)
 
     assert (
         "revoke insert, update, delete, truncate on table public.notifications "

@@ -1266,7 +1266,7 @@ RESET_DB=true npm run verify:db
 ```
 
 The script runs Supabase with telemetry disabled, redacts keys from output,
-requires matching migration history, and runs all 142 pgTAP assertions. It does
+requires matching migration history, and runs the complete pgTAP suite. It does
 not read Flutter client configuration or repeat Flutter tests.
 
 ## Verification
