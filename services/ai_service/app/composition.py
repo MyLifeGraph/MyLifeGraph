@@ -2,6 +2,7 @@ import asyncio
 from dataclasses import dataclass
 
 from app.clients.supabase import SupabaseRestClient
+from app.coach_turn_lifecycle import CoachTurnLifecycle, utc_now
 from app.core.config import Settings
 from app.providers.base import CoachProvider
 from app.providers.disabled import DisabledCoachProvider
@@ -189,6 +190,11 @@ class ApplicationComposition:
             weekly_review_reader=weekly_review_service,
             evidence_reader=coach_evidence_service,
         )
+        coach_lifecycle = CoachTurnLifecycle(
+            repository=coach_repository,
+            profile_reader=coach_context_repository,
+            now_provider=utc_now,
+        )
         coach_services = CoachServices(
             current=CoachAgentService(
                 settings=settings,
@@ -199,6 +205,7 @@ class ApplicationComposition:
                 ),
                 provider=coach_provider,
                 global_semaphore=coach_semaphore,
+                lifecycle=coach_lifecycle,
             ),
             legacy=CoachService(
                 settings=settings,
@@ -207,6 +214,7 @@ class ApplicationComposition:
                 context_service=coach_context_service,
                 provider=coach_provider,
                 global_semaphore=coach_semaphore,
+                lifecycle=coach_lifecycle,
             ),
         )
         scheduled_refresh_service = ScheduledRefreshService(

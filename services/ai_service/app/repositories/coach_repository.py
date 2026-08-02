@@ -1,11 +1,16 @@
 from dataclasses import dataclass
 from datetime import date, datetime
-from typing import Any, Literal, Protocol
+from typing import Any, Protocol, TypeVar
 from uuid import UUID
 
 import httpx
 
 from app.clients.supabase import SupabaseRestClient
+from app.coach_turn_lifecycle import (
+    CoachClaimResult,
+    CoachPersistenceConflict,
+    CoachPersistenceRateLimited,
+)
 from app.models.coach import (
     CoachAgentResponse,
     CoachErrorDetail,
@@ -13,29 +18,7 @@ from app.models.coach import (
 )
 
 
-CoachClaimState = Literal[
-    "pending",
-    "completed",
-    "failed",
-    "deleted",
-    "in_progress",
-]
-
-
-class CoachPersistenceConflict(RuntimeError):
-    pass
-
-
-class CoachPersistenceRateLimited(RuntimeError):
-    pass
-
-
-@dataclass(frozen=True)
-class CoachClaimResult:
-    state: CoachClaimState
-    remaining_requests: int
-    response: CoachResponse | CoachAgentResponse | None
-    error: CoachErrorDetail | None
+ResponseT = TypeVar("ResponseT", CoachResponse, CoachAgentResponse)
 
 
 @dataclass(frozen=True)
@@ -220,12 +203,13 @@ class SupabaseCoachRepository:
                 "p_completed_at": completed_at.isoformat(),
             },
         )
-        if set(result) != {"state", "response"} or result["state"] != "completed":
-            raise ValueError("Coach agent completion RPC returned an invalid envelope.")
-        persisted = CoachAgentResponse.model_validate(result["response"])
-        if persisted.request_id != request_id:
-            raise ValueError("Coach agent completion returned another request.")
-        return persisted
+        return _completed_response(
+            result,
+            request_id=request_id,
+            response_type=CoachAgentResponse,
+            envelope_error="Coach agent completion RPC returned an invalid envelope.",
+            request_error="Coach agent completion returned another request.",
+        )
 
     async def list_agent_history(
         self,
@@ -233,46 +217,13 @@ class SupabaseCoachRepository:
         user_id: str,
         limit: int,
     ) -> list[dict[str, Any]]:
-        requests = await self._client.select(
-            "coach_requests",
-            params={
-                "select": "request_id,response,created_at",
-                "user_id": f"eq.{user_id}",
-                "state": "eq.completed",
-                "order": "created_at.desc,request_id.asc",
-                "limit": str(limit),
-            },
+        return await self._list_history(
+            user_id=user_id,
+            limit=limit,
+            request_select="request_id,response,created_at",
+            message_select="request_id,content",
+            include_context=False,
         )
-        if not requests:
-            return []
-        request_ids = [str(row.get("request_id")) for row in requests]
-        messages = await self._client.select(
-            "coach_messages",
-            params={
-                "select": "request_id,content",
-                "user_id": f"eq.{user_id}",
-                "role": "eq.user",
-                "request_id": f"in.({','.join(request_ids)})",
-                "order": "created_at.asc,id.asc",
-                "limit": str(limit),
-            },
-        )
-        by_request = {str(row.get("request_id")): row for row in messages}
-        result: list[dict[str, Any]] = []
-        for row in reversed(requests):
-            request_id = str(row.get("request_id"))
-            message = by_request.get(request_id)
-            if message is None:
-                raise ValueError("Completed Coach request lacks its user message.")
-            result.append(
-                {
-                    "request_id": request_id,
-                    "message": message.get("content"),
-                    "response": row.get("response"),
-                    "created_at": row.get("created_at"),
-                },
-            )
-        return result
 
     async def claim_request(
         self,
@@ -317,48 +268,7 @@ class SupabaseCoachRepository:
         elif contract_version != "coach-request-v1" or context_parameters:
             raise ValueError("Coach claim contract is invalid.")
         result = await self._rpc(function, params=params)
-        if set(result) != {"state", "remaining_requests", "response", "error"}:
-            raise ValueError("Coach claim RPC returned an invalid envelope.")
-        state = result["state"]
-        if state not in {
-            "pending",
-            "completed",
-            "failed",
-            "deleted",
-            "in_progress",
-        }:
-            raise ValueError("Coach claim RPC returned an invalid state.")
-        remaining = result["remaining_requests"]
-        if (
-            isinstance(remaining, bool)
-            or not isinstance(remaining, int)
-            or remaining < 0
-        ):
-            raise ValueError("Coach claim RPC returned an invalid remaining count.")
-        response = (
-            CoachResponse.model_validate(result["response"])
-            if result["response"] is not None
-            else None
-        )
-        error = (
-            CoachErrorDetail.model_validate(result["error"])
-            if result["error"] is not None
-            else None
-        )
-        if (state == "completed") != (response is not None):
-            raise ValueError("Coach claim response does not match its state.")
-        if state in {"failed", "deleted"} and error is None:
-            raise ValueError("Terminal Coach claim lacks its error.")
-        if state in {"pending", "in_progress"} and (
-            response is not None or error is not None
-        ):
-            raise ValueError("Active Coach claim contains terminal data.")
-        return CoachClaimResult(
-            state=state,
-            remaining_requests=remaining,
-            response=response,
-            error=error,
-        )
+        return _claim_result(result, request_id=request_id)
 
     async def complete_request(
         self,
@@ -383,12 +293,13 @@ class SupabaseCoachRepository:
                 "p_completed_at": completed_at.isoformat(),
             },
         )
-        if set(result) != {"state", "response"} or result["state"] != "completed":
-            raise ValueError("Coach completion RPC returned an invalid envelope.")
-        persisted = CoachResponse.model_validate(result["response"])
-        if persisted.request_id != request_id:
-            raise ValueError("Coach completion RPC returned another request.")
-        return persisted
+        return _completed_response(
+            result,
+            request_id=request_id,
+            response_type=CoachResponse,
+            envelope_error="Coach completion RPC returned an invalid envelope.",
+            request_error="Coach completion RPC returned another request.",
+        )
 
     async def fail_request(
         self,
@@ -414,12 +325,29 @@ class SupabaseCoachRepository:
         return CoachErrorDetail.model_validate(result["error"])
 
     async def list_history(self, *, user_id: str, limit: int) -> list[dict[str, Any]]:
+        return await self._list_history(
+            user_id=user_id,
+            limit=limit,
+            request_select=(
+                "request_id,context_scope,context_parameters,response,created_at"
+            ),
+            message_select="request_id,content,created_at",
+            include_context=True,
+        )
+
+    async def _list_history(
+        self,
+        *,
+        user_id: str,
+        limit: int,
+        request_select: str,
+        message_select: str,
+        include_context: bool,
+    ) -> list[dict[str, Any]]:
         requests = await self._client.select(
             "coach_requests",
             params={
-                "select": (
-                    "request_id,context_scope,context_parameters,response,created_at"
-                ),
+                "select": request_select,
                 "user_id": f"eq.{user_id}",
                 "state": "eq.completed",
                 "order": "created_at.desc,request_id.asc",
@@ -432,7 +360,7 @@ class SupabaseCoachRepository:
         messages = await self._client.select(
             "coach_messages",
             params={
-                "select": "request_id,content,created_at",
+                "select": message_select,
                 "user_id": f"eq.{user_id}",
                 "role": "eq.user",
                 "request_id": f"in.({','.join(request_ids)})",
@@ -447,16 +375,22 @@ class SupabaseCoachRepository:
             message = by_request.get(request_id)
             if message is None:
                 raise ValueError("Completed Coach request lacks its user message.")
-            result.append(
-                {
+            history_row = {
+                "request_id": request_id,
+                "message": message.get("content"),
+                "response": row.get("response"),
+                "created_at": row.get("created_at"),
+            }
+            if include_context:
+                history_row = {
                     "request_id": request_id,
                     "message": message.get("content"),
                     "context_scope": row.get("context_scope"),
                     "context_parameters": row.get("context_parameters") or {},
                     "response": row.get("response"),
                     "created_at": row.get("created_at"),
-                },
-            )
+                }
+            result.append(history_row)
         return result
 
     async def list_memories(
@@ -500,9 +434,7 @@ class SupabaseCoachRepository:
             str(row.get("memory_id")): row.get("selected_at") for row in selections
         }
         by_id = {str(row.get("id")): row for row in memories}
-        required_ids = [
-            memory_id for memory_id in selected if memory_id not in by_id
-        ]
+        required_ids = [memory_id for memory_id in selected if memory_id not in by_id]
         include_id = str(include_memory_id) if include_memory_id is not None else None
         if (
             include_id is not None
@@ -619,6 +551,7 @@ class SupabaseCoachRepository:
             raise ValueError(f"Coach RPC {function} returned a non-object.")
         return result
 
+
 def _postgres_error(exc: httpx.HTTPStatusError) -> tuple[str | None, str]:
     try:
         body = exc.response.json()
@@ -678,3 +611,19 @@ def _claim_result(
         response=response,
         error=error,
     )
+
+
+def _completed_response(
+    result: dict[str, Any],
+    *,
+    request_id: UUID,
+    response_type: type[ResponseT],
+    envelope_error: str,
+    request_error: str,
+) -> ResponseT:
+    if set(result) != {"state", "response"} or result["state"] != "completed":
+        raise ValueError(envelope_error)
+    persisted = response_type.model_validate(result["response"])
+    if persisted.request_id != request_id:
+        raise ValueError(request_error)
+    return persisted

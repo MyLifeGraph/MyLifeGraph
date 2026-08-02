@@ -408,6 +408,13 @@ Application roles receive no new Coach write authority. Authenticated owners
 retain only the intended bounded reads. The FastAPI service role remains the
 only normal claim/complete/fail/delete mutation path.
 
+FastAPI composes one neutral internal Coach turn lifecycle for both the legacy
+fixed-mode service and the current free-agent service. It owns account
+eligibility, claim/replay state translation, atomic completion/failure
+confirmation, the shared 50-turn history bound, and history deletion conflict
+handling. Legacy context assembly and current V3 snapshot/tool orchestration
+remain separate, including their persisted response and tombstone semantics.
+
 Retrying the same V3 request id and exact message replays the stored terminal
 result. Reusing that id with another message conflicts. A completed, failed,
 deleted, or still-active request is never reinterpreted as a new question.

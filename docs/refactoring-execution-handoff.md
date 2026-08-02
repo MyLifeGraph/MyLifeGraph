@@ -244,7 +244,7 @@ chat must run this exact closeout sequence:
 
 ## Tranche 6: Share Coach Turn Lifecycle Primitives
 
-- State: `pending`
+- State: `completed`
 - Depends on: Tranche 5 completed.
 - Goal: Move shared Coach claim/error state and eligibility, replay, completion,
   failure, and history helpers into a neutral internal module used by both
@@ -266,7 +266,16 @@ chat must run this exact closeout sequence:
   `tests/test_coach_agent_repository.py`, Coach API/model tests, and lock-order
   migration source guards.
 - Commit subject: `refactor: share coach turn lifecycle primitives`
-- Result: _Not started._
+- Result: _Added one neutral Coach turn lifecycle for shared claim/error state,
+  eligibility, replay, completion/failure confirmation, bounded history, and
+  deletion conflicts; application composition shares it across the legacy and
+  current orchestrators while their provider/context paths and tombstone
+  contracts remain distinct. Repository claim/completion/history mapping now
+  shares one implementation. The pre-refactor 132-test baseline, the 152-test
+  focused Coach matrix including 20 cross-orchestrator lifecycle cases, Ruff,
+  `npm run verify:docs`, `npm run verify:fast` with the pinned Flutter binary,
+  and `git diff --check` passed. The full gate included Flutter analysis and the
+  complete Flutter/backend suites with the expected backend skips._
 
 ## Tranche 7: Centralize API Problem Translation
 

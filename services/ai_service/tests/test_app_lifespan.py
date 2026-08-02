@@ -183,3 +183,6 @@ def test_application_composition_reuses_the_common_service_graph() -> None:
     assert composition.recommendation_engine is (
         composition.scheduled_refresh_service._recommendation_engine
     )
+    assert composition.coach_services.current._lifecycle is (
+        composition.coach_services.legacy._lifecycle
+    )

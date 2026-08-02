@@ -1,10 +1,15 @@
 import asyncio
 import hashlib
 from collections.abc import Callable
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 from uuid import UUID
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from app.coach_turn_lifecycle import (
+    COACH_HISTORY_LIMIT,
+    CoachServiceError,
+    CoachTurnLifecycle,
+    utc_now,
+)
 from app.core.config import Settings
 from app.models.coach import (
     COACH_CAPABILITIES_CONTRACT_VERSION,
@@ -30,11 +35,7 @@ from app.models.coach import (
 )
 from app.providers.base import CoachProvider, CoachProviderError
 from app.repositories.coach_context_repository import CoachContextRepository
-from app.repositories.coach_repository import (
-    CoachPersistenceConflict,
-    CoachPersistenceRateLimited,
-    CoachRepository,
-)
+from app.repositories.coach_repository import CoachRepository
 from app.services.coach_context import CoachContextService
 from app.services.coach_prompt import build_coach_prompt
 from app.services.coach_safety import (
@@ -50,26 +51,7 @@ from app.services.coach_evidence_service import (
 )
 
 
-_HISTORY_LIMIT = 50
 _CLAIM_LEASE_BUFFER_SECONDS = 60
-
-
-class CoachServiceError(RuntimeError):
-    def __init__(
-        self,
-        code: str,
-        message: str,
-        *,
-        retryable: bool,
-        status_code: int,
-    ) -> None:
-        super().__init__(message)
-        self.detail = CoachErrorDetail(
-            code=code,
-            message=message,
-            retryable=retryable,
-        )
-        self.status_code = status_code
 
 
 class CoachService:
@@ -83,6 +65,7 @@ class CoachService:
         provider: CoachProvider,
         global_semaphore: asyncio.Semaphore,
         now_provider: Callable[[], datetime] | None = None,
+        lifecycle: CoachTurnLifecycle | None = None,
     ) -> None:
         self._settings = settings
         self._repository = repository
@@ -90,7 +73,11 @@ class CoachService:
         self._context_service = context_service
         self._provider = provider
         self._global_semaphore = global_semaphore
-        self._now_provider = now_provider or _utc_now
+        self._lifecycle = lifecycle or CoachTurnLifecycle(
+            repository=repository,
+            profile_reader=context_repository,
+            now_provider=now_provider or utc_now,
+        )
 
     async def capabilities(self, *, user_id: str) -> CoachCapabilitiesResponse:
         limit = self._daily_limit
@@ -101,14 +88,14 @@ class CoachService:
                 reason_code="persistence_unavailable",
                 remaining=0,
             )
-        self._require_authenticated_account(profile)
+        self._lifecycle.require_authenticated_account(profile)
 
         async with self._global_semaphore:
             capability = await self._provider.capability()
         remaining = limit
         if capability.state == "ready":
             try:
-                local_date = self._local_date(profile.timezone)
+                local_date = self._lifecycle.local_date(profile.timezone)
                 used = await self._repository.count_usage(
                     user_id=user_id,
                     local_date=local_date,
@@ -138,9 +125,9 @@ class CoachService:
     async def respond(self, *, user_id: str, request: CoachRequest) -> CoachResponse:
         identity = self._configured_identity()
         prompt_version, context_version = self._versions(request)
-        profile = await self._eligible_profile(user_id=user_id)
+        profile = await self._lifecycle.eligible_profile(user_id=user_id)
         try:
-            local_date = self._local_date(profile.timezone)
+            local_date = self._lifecycle.local_date(profile.timezone)
         except ValueError as exc:
             raise CoachServiceError(
                 "context_failure",
@@ -149,9 +136,9 @@ class CoachService:
                 status_code=503,
             ) from exc
 
-        now = self._now()
-        try:
-            claim = await self._repository.claim_request(
+        now = self._lifecycle.now()
+        replay = await self._lifecycle.claim(
+            self._repository.claim_request(
                 contract_version=request.contract_version,
                 user_id=user_id,
                 request_id=request.request_id,
@@ -176,35 +163,15 @@ class CoachService:
                     ),
                 ),
                 daily_limit=self._daily_limit,
-            )
-        except CoachPersistenceRateLimited as exc:
-            raise CoachServiceError(
-                "account_limit",
-                "The local Coach request limit has been reached for today.",
-                retryable=True,
-                status_code=429,
-            ) from exc
-        except CoachPersistenceConflict as exc:
-            raise CoachServiceError(
-                "request_conflict",
-                "The Coach request id conflicts with an earlier request.",
-                retryable=False,
-                status_code=409,
-            ) from exc
-
-        if claim.state == "completed":
-            assert claim.response is not None
-            return claim.response
-        if claim.state == "in_progress":
-            raise CoachServiceError(
-                "in_progress",
-                "Another Coach request is already in progress.",
-                retryable=True,
-                status_code=409,
-            )
-        if claim.state in {"failed", "deleted"}:
-            assert claim.error is not None
-            raise _stored_failure(claim.error, deleted=claim.state == "deleted")
+            ),
+            response_type=CoachResponse,
+            status_for_code=_status_for_code,
+            completed_mismatch_message=(
+                "The request id belongs to another Coach contract."
+            ),
+        )
+        if replay is not None:
+            return replay
 
         safety = pre_provider_safety(request.message)
         if safety.bypass_provider:
@@ -270,9 +237,7 @@ class CoachService:
         except CoachEvidenceAnalysisDisabled as exc:
             error = CoachErrorDetail(
                 code="context_failure",
-                message=(
-                    "Personal pattern analysis is disabled in Personal learning."
-                ),
+                message=("Personal pattern analysis is disabled in Personal learning."),
                 retryable=False,
             )
             await self._record_failure(
@@ -448,7 +413,7 @@ class CoachService:
         *,
         user_id: str,
     ) -> CoachContextOptionsResponse:
-        profile = await self._eligible_profile(user_id=user_id)
+        profile = await self._lifecycle.eligible_profile(user_id=user_id)
         try:
             return await self._context_service.context_options(
                 user_id=user_id,
@@ -463,10 +428,12 @@ class CoachService:
             ) from exc
 
     async def history(self, *, user_id: str) -> CoachHistoryResponse:
-        await self._eligible_profile(user_id=user_id)
-        rows = await self._repository.list_history(
+        rows = await self._lifecycle.history_rows(
             user_id=user_id,
-            limit=_HISTORY_LIMIT,
+            load=lambda: self._repository.list_history(
+                user_id=user_id,
+                limit=COACH_HISTORY_LIMIT,
+            ),
         )
         return CoachHistoryResponse(
             contract_version=COACH_HISTORY_CONTRACT_VERSION,
@@ -474,26 +441,10 @@ class CoachService:
         )
 
     async def delete_history(self, *, user_id: str) -> CoachHistoryDeleteResponse:
-        await self._eligible_profile(user_id=user_id)
-        try:
-            await self._repository.delete_history(
-                user_id=user_id,
-                deleted_at=self._now(),
-            )
-        except CoachPersistenceConflict as exc:
-            raise CoachServiceError(
-                "in_progress",
-                "Coach history cannot be deleted while a request is in progress.",
-                retryable=True,
-                status_code=409,
-            ) from exc
-        return CoachHistoryDeleteResponse(
-            contract_version=COACH_HISTORY_CONTRACT_VERSION,
-            deleted=True,
-        )
+        return await self._lifecycle.delete_history(user_id=user_id)
 
     async def memories(self, *, user_id: str) -> CoachMemorySelectionResponse:
-        await self._eligible_profile(user_id=user_id)
+        await self._lifecycle.eligible_profile(user_id=user_id)
         return await self._memory_selection_response(user_id=user_id)
 
     async def _memory_selection_response(
@@ -521,12 +472,12 @@ class CoachService:
         memory_id: UUID,
         selected: bool,
     ) -> CoachMemorySelectionResponse:
-        await self._eligible_profile(user_id=user_id)
+        await self._lifecycle.eligible_profile(user_id=user_id)
         result = await self._repository.set_memory_selection(
             user_id=user_id,
             memory_id=memory_id,
             selected=selected,
-            changed_at=self._now(),
+            changed_at=self._lifecycle.now(),
         )
         if result["state"] == "not_found":
             raise CoachServiceError(
@@ -556,8 +507,8 @@ class CoachService:
         prompt_bytes: int,
         context_bytes: int,
     ) -> CoachResponse:
-        try:
-            return await self._repository.complete_request(
+        return await self._lifecycle.complete(
+            self._repository.complete_request(
                 user_id=user_id,
                 request_id=request.request_id,
                 user_message=request.message,
@@ -571,24 +522,9 @@ class CoachService:
                     "context_bytes": context_bytes,
                     "reply_codepoints": len(response.reply),
                 },
-                completed_at=self._now(),
-            )
-        except CoachPersistenceConflict as exc:
-            raise CoachServiceError(
-                "request_conflict",
-                "The Coach response conflicts with persisted request state.",
-                retryable=False,
-                status_code=409,
-            ) from exc
-        except Exception as exc:
-            # The atomic completion may have committed before its response was
-            # lost. Keep the request pending/terminal truth for same-id replay.
-            raise CoachServiceError(
-                "in_progress",
-                "The Coach response could not be confirmed. Retry the same request id.",
-                retryable=True,
-                status_code=409,
-            ) from exc
+                completed_at=self._lifecycle.now(),
+            ),
+        )
 
     async def _record_failure(
         self,
@@ -600,29 +536,15 @@ class CoachService:
         prompt_bytes: int = 0,
         context_bytes: int = 0,
     ) -> None:
-        try:
-            await self._repository.fail_request(
-                user_id=user_id,
-                request_id=request_id,
-                error=error,
-                usage={
-                    "provider_called": provider_called,
-                    "prompt_bytes": prompt_bytes,
-                    "context_bytes": context_bytes,
-                    "reply_codepoints": 0,
-                },
-                failed_at=self._now(),
-            )
-        except Exception as exc:
-            # The atomic failure write may have committed before its response
-            # was lost. Force an exact same-id replay so the client cannot
-            # silently abandon the persisted or still-leased request identity.
-            raise CoachServiceError(
-                "in_progress",
-                "The Coach failure could not be confirmed. Retry the same request id.",
-                retryable=True,
-                status_code=409,
-            ) from exc
+        await self._lifecycle.record_failure(
+            user_id=user_id,
+            request_id=request_id,
+            error=error,
+            provider_called=provider_called,
+            prompt_bytes=prompt_bytes,
+            context_bytes=context_bytes,
+            require_confirmation=True,
+        )
 
     def _response(
         self,
@@ -654,7 +576,7 @@ class CoachService:
                 "model_source": identity[3],
                 "prompt_version": prompt_version,
                 "context_version": context_version,
-                "generated_at": self._now(),
+                "generated_at": self._lifecycle.now(),
                 "provider_called": provider_called,
             },
         )
@@ -677,30 +599,6 @@ class CoachService:
         if self._settings.coach_provider == "fake":
             return ("fake", "deterministic_test_only", None, "not_applicable")
         return ("disabled", "disabled", None, "not_applicable")
-
-    async def _eligible_profile(self, *, user_id: str):
-        try:
-            profile = await self._context_repository.get_profile(user_id=user_id)
-        except Exception as exc:
-            raise CoachServiceError(
-                "context_failure",
-                "Coach could not resolve the owner-scoped account profile.",
-                retryable=True,
-                status_code=503,
-            ) from exc
-        self._require_authenticated_account(profile)
-        return profile
-
-    @staticmethod
-    def _require_authenticated_account(profile) -> None:
-        if profile.is_eligible_authenticated_account:
-            return
-        raise CoachServiceError(
-            "authenticated_account_required",
-            "Coach requires a non-guest authenticated account.",
-            retryable=False,
-            status_code=403,
-        )
 
     def _unavailable_capabilities(
         self,
@@ -734,19 +632,6 @@ class CoachService:
     def _daily_limit(self) -> int:
         return self._settings.local_codex_max_requests_per_user_per_day
 
-    def _local_date(self, timezone_name: str):
-        try:
-            timezone = ZoneInfo(timezone_name)
-        except ZoneInfoNotFoundError as exc:
-            raise ValueError("Profile timezone is invalid.") from exc
-        return self._now().astimezone(timezone).date()
-
-    def _now(self) -> datetime:
-        value = self._now_provider()
-        if value.tzinfo is None:
-            raise ValueError("Coach time must be timezone-aware.")
-        return value.astimezone(UTC)
-
 
 def _memory_from_row(row) -> CoachMemory:
     metadata = row.get("metadata")
@@ -778,15 +663,6 @@ def _datetime(value) -> datetime:
     if parsed.tzinfo is None:
         raise ValueError("Coach timestamp lacks a timezone.")
     return parsed
-
-
-def _stored_failure(error: CoachErrorDetail, *, deleted: bool) -> CoachServiceError:
-    return CoachServiceError(
-        error.code,
-        error.message,
-        retryable=False if deleted else error.retryable,
-        status_code=410 if deleted else _status_for_code(error.code),
-    )
 
 
 def _capability_failure_code(reason: str) -> str:
@@ -839,7 +715,3 @@ def _status_for_code(code: str) -> int:
     if code == "timeout":
         return 504
     return 503
-
-
-def _utc_now() -> datetime:
-    return datetime.now(UTC)
