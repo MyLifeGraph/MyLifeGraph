@@ -30,13 +30,20 @@ Capture V5, Daily State V3, Exam-Week Outlook V1, or Coach V3 expectations.
 
 ## Current Verified Baseline
 
-The current working tree was reverified locally on 2026-08-04 with
-`verify:fast`: `869` Flutter tests passed with clean analysis,
-FastAPI reported `1353 passed, 2 skipped`, and documentation, visual, source,
-Ruff, and diff checks passed. This follow-up changes strict persisted-data and
-response parsing, tests, and their owning documentation; it changes no schema,
-route, presentation layout, or navigation flow, so the database, web-build, and
-browser gates were not repeated.
+The current implementation commit
+`e8014fbe4d913195b81e4be924df03a864b35e05` was reverified locally on
+2026-08-04 with `verify:affected --base-ref origin/new_backend_gh`, which
+classified the three committed branch changes as mixed and selected the
+complete `verify:full` gate. `verify:fast` passed `869` Flutter tests with clean
+analysis, FastAPI reported `1353 passed, 2 skipped`, and documentation, visual,
+source, Ruff, and diff checks passed. The matching-history database gate passed
+all `222` assertions across eleven pgTAP files without a reset or migration
+application, and the debug web build passed. The fresh profile-mode browser
+suite passed all eight independent journeys without retry in 6.1 minutes of
+test time. Those journeys registered nine exact Auth users, deleted eight, and
+confirmed the account-deletion subject already absent; the Personal Learning
+journey covered the ready Sleep Recommendation card and removed its exact test
+identity.
 
 The immediately preceding `fd1bcb24e272a6da429159ad8ee2d0e643963e89`
 checkout ran `verify:affected --base-ref HEAD`, which selected the complete
