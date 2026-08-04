@@ -548,12 +548,20 @@ def _sleep_outlook(
         ):
             continue
         evening = metadata["captures"].get("evening")
-        parsed_plan = _parse_sleep_plan(evening, row_date=row_date)
+        parsed_plan = _parse_sleep_plan(
+            evening,
+            row_date=row_date,
+            container_version=metadata["capture_version"],
+        )
         if parsed_plan is not None:
             plans.append(parsed_plan)
         if local_date - timedelta(days=6) <= row_date <= local_date:
             morning = metadata["captures"].get("morning")
-            parsed_night = _parse_sleep_night(morning, row_date=row_date)
+            parsed_night = _parse_sleep_night(
+                morning,
+                row_date=row_date,
+                container_version=metadata["capture_version"],
+            )
             if parsed_night is not None:
                 nights.append(parsed_night)
     plans.sort(
@@ -568,8 +576,13 @@ def _parse_sleep_plan(
     raw: object,
     *,
     row_date: date,
+    container_version: object,
 ) -> ExamWeekSleepPlan | None:
-    parsed = parse_daily_capture_sleep_plan(raw, row_date=row_date).value
+    parsed = parse_daily_capture_sleep_plan(
+        raw,
+        row_date=row_date,
+        container_version=container_version,
+    ).value
     if not isinstance(parsed, DailyCaptureV4SleepPlan):
         return None
     return ExamWeekSleepPlan(
@@ -585,8 +598,13 @@ def _parse_sleep_night(
     raw: object,
     *,
     row_date: date,
+    container_version: object,
 ) -> ExamWeekSleepNight | None:
-    parsed = parse_daily_capture_sleep_episode(raw, row_date=row_date).value
+    parsed = parse_daily_capture_sleep_episode(
+        raw,
+        row_date=row_date,
+        container_version=container_version,
+    ).value
     if not isinstance(parsed, DailyCaptureV4SleepEpisode):
         return None
     shortfall = max(

@@ -56,6 +56,8 @@ A V5 save may preserve an untouched V2–V4 opposite branch with:
 This is the only accepted mixed-version shape. Editing an older branch first
 upgrades that branch to V5 and requires its current sleep fields. Complete V4
 branches remain writable during rollout but cannot downgrade a V5 container.
+The shared precise-sleep parser receives both identities and rejects V5 inside a
+V4 container as well as V4 inside V5 without exact `compatibility: true`.
 V5 Morning rejects the retired `day_shape` field; a historical V4 value remains
 compatibility data and is neither displayed nor evaluated. Merging Evening
 never erases Morning or foreign top-level metadata, and merging Morning never
@@ -313,7 +315,7 @@ Automated coverage must prove:
 - V2/V3/V4 parsing, explicit mixed-branch preservation, V4-to-V5 edit and guest
   migration, guest round-trip, raw-field isolation, compatible projections,
   current V5 plus explicit V4-in-V5 shared-parser parity with Personal Patterns,
-  and exact retry identity;
+  rejection of reversed and unmarked V4/V5 pairs, and exact retry identity;
 - unchanged Daily State V2 classification for equivalent derived sleep facts
   and V4-compatible Today streak recognition;
 - exact mode boundaries, overdue behavior, assignment capacity, multiple plans,

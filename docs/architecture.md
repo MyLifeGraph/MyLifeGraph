@@ -1165,7 +1165,9 @@ terminal session to only a preceding valid V4/V5 sleep episode, collapses repeat
 sleep-episode use, and emits fixed-window observational comparisons with sample,
 coverage, maturity, limits, and deterministic fingerprint. Daily State,
 Exam-Week Outlook, Personal Patterns, and Sleep Recommendation share one strict
-Daily Capture V4/V5 sleep parser. Authenticated V5 writes use that same contract
+Daily Capture V4/V5 sleep parser. Each read passes the container version into
+that parser, so only matched V4/V4, matched V5/V5, or explicitly compatible
+V4-in-V5 sleep data is trusted. Authenticated V5 writes use that same contract
 module for complete
 branch validation, including exact rating ranges, stress label/context,
 minute-aligned sleep intervals and bounded optional fields before
@@ -1181,8 +1183,11 @@ Sleep Recommendation separately requires 30 eligible dates and a recurring
 candidate plus comparator of at least ten dates each. Its Morning, Focus, and
 two-chronological-half safeguards are deterministic; ready output is an outward
 15-minute-rounded interquartile window with explicit midnight offsets and a
-below-confirmed-target warning when applicable. It is observational only and
-has no apply control.
+below-confirmed-target warning when applicable. A positive source duration below
+15 minutes may therefore yield a zero lower display boundary without making the
+raw median zero. Flutter independently validates the status/reason, window,
+sample, evidence bounds, and raw-duration/target warning relationship. It is
+observational only and has no apply control.
 
 The optional Planner bridge has two gates: the complete account preference and
 `LEARNED_FOCUS_PLANNING_PILOT_ENABLED` in both FastAPI and Flutter. When current

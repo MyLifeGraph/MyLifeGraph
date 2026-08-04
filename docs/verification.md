@@ -31,12 +31,18 @@ Capture V5, Daily State V3, Exam-Week Outlook V1, or Coach V3 expectations.
 ## Current Verified Baseline
 
 The current working tree was reverified locally on 2026-08-04 with
-`verify:affected --base-ref HEAD`, which selected the complete `verify:full`
-gate. `verify:fast` reported `865` passing Flutter tests, clean Flutter
-analysis, `1328 passed, 2 skipped` for FastAPI, and passing documentation,
-visual, source, Ruff, and diff checks. The matching-history database gate passed
-all `222` assertions across eleven pgTAP files without a reset, and the debug
-web build passed. The first browser invocation was discarded because a
+`verify:fast`: `869` Flutter tests passed with clean analysis,
+FastAPI reported `1353 passed, 2 skipped`, and documentation, visual, source,
+Ruff, and diff checks passed. This follow-up changes strict persisted-data and
+response parsing, tests, and their owning documentation; it changes no schema,
+route, presentation layout, or navigation flow, so the database, web-build, and
+browser gates were not repeated.
+
+The immediately preceding `fd1bcb24e272a6da429159ad8ee2d0e643963e89`
+checkout ran `verify:affected --base-ref HEAD`, which selected the complete
+`verify:full` gate. Its matching-history database gate passed all `222`
+assertions across eleven pgTAP files without a reset, and the debug web build
+passed. The first browser invocation was discarded because a
 pre-existing Uvicorn process held port 8000 and prevented the checkout server
 from binding. After that exact local process was stopped, the fresh full
 profile-mode browser suite passed all eight independent journeys in 6.1 minutes
@@ -807,13 +813,17 @@ Current Flutter widget tests include:
 - Sleep Recommendation service/API tests cover the exact 29/30-day boundary,
   per-day aggregation, the exact closed-open Morning capture boundary, required
   observed Daily Log timestamps, invalid wake/capture/reflection ordering, V4
-  compatibility inside a V5 container, same-day versus following-day wake
-  grouping, midnight/DST clocks, invalid-timezone error mapping, typed unstable
-  outcomes, chronological-half confirmation, the below-target warning, and
-  consent-driven history non-reading. Flutter tests cover both exact wake-day
-  labels, loading/error/disabled/collecting/unstable/ready card states, narrow
-  320-pixel/200%-text layout, independent Personal Study Pattern failure
-  behavior, and zero guest endpoint calls.
+  compatibility inside a V5 container, rejection of reversed or unmarked V4/V5
+  identities, same-day versus following-day wake grouping, midnight/DST clocks,
+  invalid-timezone error mapping, typed unstable outcomes, chronological-half
+  confirmation, one/fourteen/fifteen-minute outward duration rounding, the
+  below-target warning, and consent-driven history non-reading. Flutter contract
+  tests reject missing or inconsistent warning evidence, invalid status/reason,
+  window, date, and evidence relationships and accept the zero lower rounded
+  boundary. Widget tests cover both exact wake-day labels,
+  loading/error/disabled/collecting/unstable/ready card states, narrow
+  320-pixel/200%-text layout, independent Personal Study Pattern failure behavior,
+  and zero guest endpoint calls.
   These checks validate `sleep-recommendation-v1` independently from the
   existing `personal-patterns-v1` contract.
 - Guest sees only locally functional Quick Actions; Supabase-only Habit

@@ -26,21 +26,37 @@ class SleepRecommendation {
     final status = _status(json['status']);
     final reason = _requiredString(json, 'reason');
     final generatedAt = _requiredAwareDateTime(json, 'generated_at');
-    final timezone = _requiredString(json, 'timezone');
+    final timezone = _requiredBoundedString(json, 'timezone', maximum: 80);
     final window = _requiredMap(json, 'window');
+    final startsAt = _requiredAwareDateTime(window, 'starts_at');
+    final endsAt = _requiredAwareDateTime(window, 'ends_at');
+    final localStartsOn = _requiredDate(window, 'local_starts_on');
+    final localEndsOn = _requiredDate(window, 'local_ends_on');
     if (window['rolling_days'] != 90 ||
-        _requiredAwareDateTime(window, 'starts_at')
-            .isAfter(_requiredAwareDateTime(window, 'ends_at'))) {
+        !startsAt.isBefore(endsAt) ||
+        endsAt.difference(startsAt) != const Duration(days: 90) ||
+        localStartsOn.isAfter(localEndsOn)) {
       throw const FormatException('Sleep recommendation window is invalid.');
     }
     final sample = _requiredMap(json, 'sample');
-    final validNights = _wholeNumber(sample, 'valid_nights', minimum: 0);
+    final validNights = _wholeNumber(
+      sample,
+      'valid_nights',
+      minimum: 0,
+      maximum: 91,
+    );
     final eligible = _wholeNumber(
       sample,
       'eligible_focus_days',
       minimum: 0,
+      maximum: 91,
     );
-    final rated = _wholeNumber(sample, 'rated_sessions', minimum: 0);
+    final rated = _wholeNumber(
+      sample,
+      'rated_sessions',
+      minimum: 0,
+      maximum: 10000,
+    );
     if (sample['required_eligible_days'] != 30 ||
         sample['progress'] != '${eligible.clamp(0, 30)}/30' ||
         eligible > validNights) {
@@ -55,7 +71,7 @@ class SleepRecommendation {
             _stringMap(recommendationJson, 'recommendation'),
           );
     if ((status == SleepRecommendationStatus.ready) != (ready != null) ||
-        (status == SleepRecommendationStatus.ready) != (reason == 'ready')) {
+        !_validStatusReason(status, reason)) {
       throw const FormatException(
         'Sleep recommendation state is inconsistent.',
       );
@@ -77,7 +93,7 @@ class SleepRecommendation {
       eligibleFocusDays: eligible,
       ratedSessions: rated,
       progress: '${sample['progress']}',
-      summary: _requiredString(json, 'summary'),
+      summary: _requiredBoundedString(json, 'summary', maximum: 320),
       limitations: limitations.cast<String>(),
       recommendation: ready,
     );
@@ -102,6 +118,8 @@ class SleepRecommendationReady {
     required this.wakeTime,
     required this.duration,
     required this.wakeDayOffset,
+    required this.rawMedianDurationMinutes,
+    required this.medianConfirmedSleepTargetMinutes,
     required this.warning,
     required this.candidateDays,
     required this.comparisonDays,
@@ -119,27 +137,88 @@ class SleepRecommendationReady {
     if (warning != null && warning != 'below_confirmed_sleep_target') {
       throw const FormatException('Sleep recommendation warning is invalid.');
     }
+    final rawMedianDurationMinutes = _wholeNumber(
+      json,
+      'raw_median_duration_minutes',
+      minimum: 1,
+      maximum: 960,
+    );
+    final medianConfirmedSleepTargetMinutes = _wholeNumber(
+      json,
+      'median_confirmed_sleep_target_minutes',
+      minimum: 300,
+      maximum: 720,
+    );
+    final expectedWarning =
+        rawMedianDurationMinutes < medianConfirmedSleepTargetMinutes
+            ? 'below_confirmed_sleep_target'
+            : null;
+    if (warning != expectedWarning) {
+      throw const FormatException(
+        'Sleep recommendation warning is inconsistent.',
+      );
+    }
     final evidence = _requiredMap(json, 'evidence');
     final fingerprint = _requiredString(json, 'evidence_fingerprint');
     if (!RegExp(r'^[0-9a-f]{64}$').hasMatch(fingerprint) ||
         evidence['consistent_in_both_halves'] != true) {
       throw const FormatException('Sleep recommendation evidence is invalid.');
     }
+    _boundedNumber(
+      evidence,
+      'morning_readiness_median_delta',
+      minimum: -9,
+      maximum: 9,
+    );
+    _boundedNumber(
+      evidence,
+      'sleep_quality_median_delta',
+      minimum: -9,
+      maximum: 9,
+    );
+    _boundedNumber(
+      evidence,
+      'morning_energy_median_delta',
+      minimum: -9,
+      maximum: 9,
+    );
+    _boundedNumber(
+      evidence,
+      'useful_progress_median_delta',
+      minimum: -4,
+      maximum: 4,
+    );
+    _boundedNumber(
+      evidence,
+      'focus_quality_median_delta',
+      minimum: -4,
+      maximum: 4,
+    );
+    _boundedNumber(
+      evidence,
+      'completion_rate_delta',
+      minimum: -1,
+      maximum: 1,
+    );
     return SleepRecommendationReady(
       bedtime: SleepClockWindow.fromJson(_requiredMap(json, 'bedtime')),
       wakeTime: SleepClockWindow.fromJson(_requiredMap(json, 'wake_time')),
       duration: SleepDurationWindow.fromJson(_requiredMap(json, 'duration')),
       wakeDayOffset: wakeDayOffset,
+      rawMedianDurationMinutes: rawMedianDurationMinutes,
+      medianConfirmedSleepTargetMinutes: medianConfirmedSleepTargetMinutes,
       warning: warning as String?,
       candidateDays: _wholeNumber(
         evidence,
         'candidate_days',
         minimum: 10,
+        maximum: 91,
       ),
       comparisonDays: _wholeNumber(
         evidence,
         'comparison_days',
         minimum: 10,
+        maximum: 91,
       ),
       evidenceFingerprint: fingerprint,
     );
@@ -149,6 +228,8 @@ class SleepRecommendationReady {
   final SleepClockWindow wakeTime;
   final SleepDurationWindow duration;
   final int wakeDayOffset;
+  final int rawMedianDurationMinutes;
+  final int medianConfirmedSleepTargetMinutes;
   final String? warning;
   final int candidateDays;
   final int comparisonDays;
@@ -207,15 +288,18 @@ class SleepDurationWindow {
     final minimum = _wholeNumber(
       json,
       'minimum_minutes',
-      minimum: 1,
+      minimum: 0,
       maximum: 960,
     );
     final maximum = _wholeNumber(
       json,
       'maximum_minutes',
-      minimum: minimum,
+      minimum: minimum == 0 ? 1 : minimum,
       maximum: 960,
     );
+    if (maximum - minimum > 60) {
+      throw const FormatException('Sleep duration window is too wide.');
+    }
     return SleepDurationWindow(
       minimumMinutes: minimum,
       maximumMinutes: maximum,
@@ -238,6 +322,21 @@ SleepRecommendationStatus _status(Object? value) => switch (value) {
       _ => throw const FormatException(
           'Sleep recommendation status is invalid.',
         ),
+    };
+
+bool _validStatusReason(SleepRecommendationStatus status, String reason) =>
+    switch (status) {
+      SleepRecommendationStatus.disabled => reason == 'analysis_disabled',
+      SleepRecommendationStatus.collecting =>
+        reason == 'insufficient_eligible_days',
+      SleepRecommendationStatus.unstable => const {
+          'no_recurring_pattern',
+          'insufficient_comparison_days',
+          'mixed_morning_outcomes',
+          'mixed_focus_outcomes',
+          'temporally_unstable_pattern',
+        }.contains(reason),
+      SleepRecommendationStatus.ready => reason == 'ready',
     };
 
 String _durationLabel(int minutes) {
@@ -266,12 +365,60 @@ String _requiredString(Map<String, dynamic> json, String field) {
   return value;
 }
 
+String _requiredBoundedString(
+  Map<String, dynamic> json,
+  String field, {
+  required int maximum,
+}) {
+  final value = _requiredString(json, field);
+  if (value.length > maximum) {
+    throw FormatException('$field must be a bounded string.');
+  }
+  return value;
+}
+
 DateTime _requiredAwareDateTime(Map<String, dynamic> json, String field) {
   final raw = json[field];
   final value = raw is String ? DateTime.tryParse(raw) : null;
   if (value == null ||
       !raw!.contains(RegExp(r'(?:Z|[+-][0-9]{2}:[0-9]{2})$'))) {
     throw FormatException('$field must be timezone-aware.');
+  }
+  return value;
+}
+
+DateTime _requiredDate(Map<String, dynamic> json, String field) {
+  final raw = json[field];
+  final match = raw is String
+      ? RegExp(r'^(\d{4})-(\d{2})-(\d{2})$').firstMatch(raw)
+      : null;
+  if (match == null) {
+    throw FormatException('$field must be a calendar date.');
+  }
+  final value = DateTime.utc(
+    int.parse(match.group(1)!),
+    int.parse(match.group(2)!),
+    int.parse(match.group(3)!),
+  );
+  final normalized = '${value.year.toString().padLeft(4, '0')}-'
+      '${value.month.toString().padLeft(2, '0')}-'
+      '${value.day.toString().padLeft(2, '0')}';
+  if (normalized != raw) {
+    throw FormatException('$field must be a valid calendar date.');
+  }
+  return value;
+}
+
+double _boundedNumber(
+  Map<String, dynamic> json,
+  String field, {
+  required double minimum,
+  required double maximum,
+}) {
+  final raw = json[field];
+  final value = raw is num ? raw.toDouble() : null;
+  if (value == null || !value.isFinite || value < minimum || value > maximum) {
+    throw FormatException('$field must be a bounded number.');
   }
   return value;
 }

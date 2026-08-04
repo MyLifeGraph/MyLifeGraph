@@ -11,6 +11,8 @@ from statistics import median
 from typing import Any
 from zoneinfo import ZoneInfo
 
+from pydantic import ValidationError
+
 from app.contracts.daily_capture_v4 import (
     DailyCaptureV4SleepEpisode,
     parse_daily_capture_sleep_episode,
@@ -338,6 +340,7 @@ def _episodes(
         parsed = parse_daily_capture_sleep_episode(
             metadata["captures"].get("morning"),
             row_date=row_date,
+            container_version=metadata["capture_version"],
         )
         episode = parsed.value
         if not isinstance(episode, DailyCaptureV4SleepEpisode):
@@ -607,10 +610,15 @@ def _duration_window(values: Iterable[int]) -> SleepDurationWindow:
     maximum = ceil(_percentile(items, 0.75) / 15) * 15
     if maximum - minimum > 60:
         raise SleepRecommendationDataError("Sleep duration window is too wide.")
-    return SleepDurationWindow(
-        minimum_minutes=minimum,
-        maximum_minutes=maximum,
-    )
+    try:
+        return SleepDurationWindow(
+            minimum_minutes=minimum,
+            maximum_minutes=maximum,
+        )
+    except ValidationError as exc:
+        raise SleepRecommendationDataError(
+            "Sleep duration window is invalid.",
+        ) from exc
 
 
 def _percentile(values: Iterable[int], quantile: float) -> float:

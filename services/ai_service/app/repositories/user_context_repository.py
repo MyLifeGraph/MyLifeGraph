@@ -146,6 +146,7 @@ def _daily_log_signal(row: dict[str, Any]) -> DailyLogSignal:
     parsed_sleep = parse_daily_capture_sleep_episode(
         captures.get("morning"),
         row_date=entry_date,
+        container_version=metadata.get("capture_version"),
     ).value
     return DailyLogSignal(
         id=str(row["id"]),

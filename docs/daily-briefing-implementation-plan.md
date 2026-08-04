@@ -154,7 +154,8 @@ Capture remains explicitly device-local.
 
 Phase 2 now interprets that context inside backend-owned snapshots. Its current
 `explainable-daily-state-v3` contract uses strict V2–V5 branch-compatible
-capture parsing with V4/V5 sleep-interval validation plus friction and Day Shape
+capture parsing with joint V4/V5 container/branch identity and sleep-interval
+validation plus friction and Day Shape
 sanitization, a
 fixed seven-day state lookback independent of the statistics window,
 cadence-aware Evening/Morning freshness, explicit
@@ -182,7 +183,7 @@ Phase 4's deterministic briefing service.
 | Auth and guest entry | Yes | Local demo is labeled; mock/demo auth skips remote profile/data bootstrap and reloads local Setup, while canonical guest check-ins migrate best-effort only into a real non-demo account |
 | Onboarding / Setup | Yes, Phase 0C complete | Progressive explicit input, typed prefill, atomic revision-safe save, differentiated retry/reload, and durable review are implemented |
 | Today | Yes, Today Overview V2 current | A read-only owner-scoped overview shows streak, transparent progress, Setup/Planner/Preparation/Calendar/Focus agenda facts, and selected Tasks/Habits. The persisted briefing remains a backend input but its ranked action card is no longer the visible Today authority. |
-| Canonical daily capture | Yes, Capture V5 current | Evening and Morning are separate typed flows over one ownership-merged daily entry. Authenticated writes use one backend-owned request ledger and branch-local compare-and-swap identity; a stale same-branch write conflicts without discarding the other branch. One framework-neutral V4/V5 contract validates current writes and supplies strict sleep parsing to Daily State, Exam-Week Outlook, Personal Patterns, and Sleep Recommendation. Evening stores an explicit sleep plan; Morning stores corrected estimated sleep instants, derived duration, sleep quality, and energy without Day Shape. Complete V4 writes remain rollout-compatible and cannot downgrade V5. |
+| Canonical daily capture | Yes, Capture V5 current | Evening and Morning are separate typed flows over one ownership-merged daily entry. Authenticated writes use one backend-owned request ledger and branch-local compare-and-swap identity; a stale same-branch write conflicts without discarding the other branch. One framework-neutral V4/V5 contract validates current writes and supplies strict container-plus-branch sleep parsing to Daily State, Exam-Week Outlook, Personal Patterns, and Sleep Recommendation. Evening stores an explicit sleep plan; Morning stores corrected estimated sleep instants, derived duration, sleep quality, and energy without Day Shape. Complete V4 writes remain rollout-compatible and cannot downgrade V5. |
 | Legacy large Daily Check-In | Retired | `/daily-check-in` redirects to the canonical lightweight flow; do not recreate a competing form |
 | Habit management/completion | Yes, authenticated only | Habit V1 cadence, progress, streaks, explicit completion/skip, and undo are implemented; manual lifecycle stays in Habit Management, Setup-owned lifecycle stays in Settings Setup, and daily execution is available from Today Habits |
 | Insights correlations | Yes | Default to one cautious observation; advanced correlations expose data sufficiency, source, and independent loading/error truth. Real accounts hide Skillset until a real producer exists; demo data is labelled as an example. |

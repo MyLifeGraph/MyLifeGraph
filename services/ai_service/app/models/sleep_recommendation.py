@@ -71,13 +71,15 @@ class SleepClockWindow(BaseModel):
 class SleepDurationWindow(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
 
-    minimum_minutes: int = Field(ge=1, le=960)
+    minimum_minutes: int = Field(ge=0, le=960)
     maximum_minutes: int = Field(ge=1, le=960)
 
     @model_validator(mode="after")
     def validate_range(self) -> "SleepDurationWindow":
         if self.maximum_minutes < self.minimum_minutes:
             raise ValueError("sleep duration window is reversed")
+        if self.maximum_minutes - self.minimum_minutes > 60:
+            raise ValueError("sleep duration window is too wide")
         return self
 
 

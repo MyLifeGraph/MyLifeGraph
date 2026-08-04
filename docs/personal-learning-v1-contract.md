@@ -108,8 +108,11 @@ preference.
 
 ### Sleep and energy evidence
 
-All consumers use the shared strict Daily Capture V4/V5 parser. A Focus session
-may use a valid Morning sleep episode only when the episode `entry_date` equals
+All consumers use the shared strict Daily Capture V4/V5 parser. It validates the
+container and branch versions together: V4-in-V4 and V5-in-V5 are valid matched
+shapes, V4-in-V5 requires `compatibility: true`, and the reverse or an unmarked
+mixed pair is rejected. A Focus session may use a valid Morning sleep episode
+only when the episode `entry_date` equals
 the session's profile-local start date and `woke_at` is no later than the
 session start. There is no prior-day or 36-hour fallback. A session after
 midnight therefore has no sleep values until that calendar day's valid Morning
@@ -253,6 +256,12 @@ also contains the full candidate/comparator
 evidence deltas, two-half confirmation, raw median duration, median confirmed
 target, and a deterministic evidence fingerprint.
 
+Source sleep intervals remain strictly positive. When a lower duration
+percentile is between one and fourteen minutes, outward rounding deliberately
+produces a `0`-minute lower window boundary and a positive upper boundary; the
+raw median remains at least one minute. This boundary representation must not
+raise an untyped route error.
+
 The raw supported duration is not clamped to the confirmed sleep target. When
 it is shorter, `warning=below_confirmed_sleep_target` makes that discrepancy
 visible without changing either value. Product language says “best-supported
@@ -264,7 +273,9 @@ Insights renders a separate `Sleep recommendation` card immediately below
 window yet` while explaining their distinct reason; disabled, loading, and
 route-error states are local to the card. Ready shows the three readable values
 `Sleep start`, `Wake time`, and `Duration`, plus the below-target warning when
-applicable. It has no apply or automation control.
+applicable. Flutter parses the raw median and confirmed target and rejects a V1
+response whose warning, status/reason, 90-day window, sample, or evidence bounds
+are inconsistent. It has no apply or automation control.
 
 ## Optional Planner use
 

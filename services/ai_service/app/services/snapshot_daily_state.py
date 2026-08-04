@@ -486,6 +486,7 @@ def _parse_v2_capture(
             sleep_plan = parse_daily_capture_sleep_plan(
                 raw,
                 row_date=row_date,
+                container_version=capture_version,
             )
             issues.extend(sleep_plan.issues)
             complete = complete and sleep_plan.value is not None
@@ -524,6 +525,7 @@ def _parse_v2_capture(
             sleep_episode = parse_daily_capture_sleep_episode(
                 raw,
                 row_date=row_date,
+                container_version=capture_version,
             )
             issues.extend(sleep_episode.issues)
             complete = complete and sleep_episode.value is not None

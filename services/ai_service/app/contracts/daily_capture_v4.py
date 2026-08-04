@@ -8,6 +8,9 @@ from typing import Literal
 
 DAILY_CAPTURE_CONTRACT_VERSION = "daily-capture-v5"
 DailyCaptureV4Branch = Literal["morning", "evening"]
+_PRECISE_CAPTURE_VERSIONS = frozenset(
+    {"daily-capture-v4", DAILY_CAPTURE_CONTRACT_VERSION},
+)
 
 _EVENING_REQUIRED_KEYS = frozenset(
     {
@@ -179,9 +182,17 @@ def validate_daily_capture_branch(
         issues.append(f"{branch}.unexpected_fields")
 
     parsed = (
-        parse_daily_capture_sleep_episode(raw, row_date=row_date)
+        parse_daily_capture_sleep_episode(
+            raw,
+            row_date=row_date,
+            container_version=version,
+        )
         if branch == "morning"
-        else _parse_sleep_plan(raw, row_date=row_date, version=version)
+        else parse_daily_capture_sleep_plan(
+            raw,
+            row_date=row_date,
+            container_version=version,
+        )
     )
     issues.extend(parsed.issues)
     integer_fields = (
@@ -233,15 +244,20 @@ def parse_daily_capture_sleep_plan(
     raw: object,
     *,
     row_date: date,
+    container_version: object,
 ) -> DailyCaptureV4ParseResult:
-    version = raw.get("branch_version") if isinstance(raw, dict) else None
-    if version not in {"daily-capture-v4", DAILY_CAPTURE_CONTRACT_VERSION}:
-        return DailyCaptureV4ParseResult(None, ("evening.invalid_branch_version",))
+    version, allow_compatibility, identity_issues = _precise_branch_identity(
+        raw,
+        kind="evening",
+        container_version=container_version,
+    )
+    if version is None:
+        return DailyCaptureV4ParseResult(None, identity_issues)
     return _parse_sleep_plan(
         raw,
         row_date=row_date,
         version=version,
-        allow_compatibility=version == "daily-capture-v4",
+        allow_compatibility=allow_compatibility,
     )
 
 
@@ -337,15 +353,20 @@ def parse_daily_capture_sleep_episode(
     raw: object,
     *,
     row_date: date,
+    container_version: object,
 ) -> DailyCaptureV4ParseResult:
-    version = raw.get("branch_version") if isinstance(raw, dict) else None
-    if version not in {"daily-capture-v4", DAILY_CAPTURE_CONTRACT_VERSION}:
-        return DailyCaptureV4ParseResult(None, ("morning.invalid_branch_version",))
+    version, allow_compatibility, identity_issues = _precise_branch_identity(
+        raw,
+        kind="morning",
+        container_version=container_version,
+    )
+    if version is None:
+        return DailyCaptureV4ParseResult(None, identity_issues)
     return _parse_sleep_episode(
         raw,
         row_date=row_date,
         version=version,
-        allow_compatibility=version == "daily-capture-v4",
+        allow_compatibility=allow_compatibility,
     )
 
 
@@ -455,6 +476,44 @@ def _parse_sleep_episode(
 class _CommonBranch:
     capture_id: str
     captured_at: datetime
+
+
+def _precise_branch_identity(
+    raw: object,
+    *,
+    kind: str,
+    container_version: object,
+) -> tuple[str | None, bool, tuple[str, ...]]:
+    if not isinstance(raw, dict):
+        return None, False, (f"{kind}.invalid_object",)
+    if (
+        not isinstance(container_version, str)
+        or container_version not in _PRECISE_CAPTURE_VERSIONS
+    ):
+        return None, False, (f"{kind}.invalid_container_version",)
+
+    branch_version = raw.get("branch_version")
+    if (
+        not isinstance(branch_version, str)
+        or branch_version not in _PRECISE_CAPTURE_VERSIONS
+    ):
+        return None, False, (f"{kind}.invalid_branch_version",)
+
+    compatibility = raw.get("compatibility")
+    if branch_version == container_version:
+        if compatibility is not None and compatibility is not False:
+            return None, False, (f"{kind}.invalid_compatibility",)
+        return branch_version, False, ()
+
+    if (
+        container_version == DAILY_CAPTURE_CONTRACT_VERSION
+        and branch_version == "daily-capture-v4"
+    ):
+        if compatibility is not True:
+            return None, False, (f"{kind}.missing_compatibility",)
+        return branch_version, True, ()
+
+    return None, False, (f"{kind}.invalid_branch_version",)
 
 
 def _common_branch(

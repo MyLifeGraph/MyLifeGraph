@@ -658,6 +658,7 @@ def _sleep_episodes(
         result = parse_daily_capture_sleep_episode(
             morning,
             row_date=row_date,
+            container_version=metadata["capture_version"],
         )
         if not isinstance(result.value, DailyCaptureV4SleepEpisode):
             continue

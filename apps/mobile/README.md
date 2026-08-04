@@ -305,7 +305,10 @@ Real-account Insights loads `personal-patterns-v1` and
 directly below Personal Study Pattern and owns loading, disabled, collecting,
 unstable, ready, and route-error states without replacing the existing card.
 Ready renders Sleep start, Wake time, and Duration plus a below-confirmed-target
-warning when returned. Wake time says `Same local day` for offset `0` and
+warning only when the parsed raw median is below the parsed confirmed target.
+The V1 parser rejects inconsistent status/reason, 90-day window, sample,
+evidence, or warning relationships and accepts a zero lower duration boundary
+created by outward rounding. Wake time says `Same local day` for offset `0` and
 `Following local day` for offset `1`; it has no apply action. Guest/local demo
 returns before
 resolving the sleep API data source, so it makes zero endpoint calls and receives

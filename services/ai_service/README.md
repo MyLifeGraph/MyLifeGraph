@@ -20,8 +20,9 @@ FastAPI service boundary for recommendation and future ML workflows.
 - `GET /v1/insights/personal-patterns` returns side-effect-free
   `personal-patterns-v1` evidence from a fixed profile-timezone 90-day window.
   It shares strict Daily Capture V4/V5 sleep parsing with Daily State and
-  Exam-Week Outlook, never calls a model, and loads no behavioral evidence when
-  analysis is disabled.
+  Exam-Week Outlook. The parser validates container and branch identity together
+  and accepts mixed V4-in-V5 only with explicit compatibility. It never calls a
+  model and loads no behavioral evidence when analysis is disabled.
 - `GET /v1/insights/sleep-recommendation` independently returns
   `sleep-recommendation-v1`. It recomputes a deterministic 90-day result with
   disabled, collecting, unstable, or ready status; a ready result requires at
@@ -29,6 +30,9 @@ FastAPI service boundary for recommendation and future ML workflows.
   a sleep window. Morning inclusion uses the exact closed-open `captured_at`
   boundary and a valid observed Daily Log timestamp. Same-day and following-day
   wakes remain separate candidate groups and return `wake_day_offset=0|1`.
+  Outward 15-minute duration rounding can represent a positive sub-15-minute
+  source interval with a zero lower window boundary; generated model failures
+  remain bounded data errors rather than untyped route failures.
   Disabled analysis returns before sleep or Focus history is loaded; invalid
   profile timezones map to the bounded `503` route problem.
 - `/v1/snapshots/generate` creates or refreshes deterministic `daily` or

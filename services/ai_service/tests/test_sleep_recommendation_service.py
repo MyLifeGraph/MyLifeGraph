@@ -9,6 +9,7 @@ from app.models.sleep_recommendation import SleepRecommendationWindow
 from app.services.sleep_recommendation_service import (
     SleepRecommendationDataError,
     SleepRecommendationService,
+    _duration_window,
     _episodes,
 )
 
@@ -206,6 +207,25 @@ def test_ready_aggregates_sessions_by_day_and_warns_below_confirmed_target() -> 
     assert "associated with" in result.summary
 
 
+@pytest.mark.parametrize(
+    ("minutes", "expected_minimum", "expected_maximum"),
+    (
+        (1, 0, 15),
+        (14, 0, 15),
+        (15, 15, 15),
+    ),
+)
+def test_duration_window_preserves_outward_rounding_at_lower_boundary(
+    minutes: int,
+    expected_minimum: int,
+    expected_maximum: int,
+) -> None:
+    result = _duration_window([minutes] * 10)
+
+    assert result.minimum_minutes == expected_minimum
+    assert result.maximum_minutes == expected_maximum
+
+
 def test_mixed_same_and_next_day_windows_do_not_pool() -> None:
     sessions, reflections, logs = _evidence(30)
     for index, row in enumerate(logs):
@@ -249,6 +269,32 @@ def test_v5_container_reads_untouched_v4_compatibility_morning() -> None:
 
     assert result.status == "ready"
     assert result.sample.eligible_focus_days == 30
+
+
+@pytest.mark.parametrize(
+    ("container_version", "branch_version"),
+    (
+        ("daily-capture-v4", "daily-capture-v5"),
+        ("daily-capture-v5", "daily-capture-v4"),
+    ),
+)
+def test_mismatched_container_branch_identity_is_not_sleep_evidence(
+    container_version: str,
+    branch_version: str,
+) -> None:
+    sessions, reflections, logs = _evidence(30)
+    metadata = logs[0]["metadata"]
+    metadata["capture_version"] = container_version
+    morning = metadata["captures"]["morning"]
+    morning["branch_version"] = branch_version
+    if branch_version == "daily-capture-v4":
+        morning["day_shape"] = "normal"
+
+    result, _, _ = _get((sessions, reflections, logs))
+
+    assert result.status == "collecting"
+    assert result.sample.valid_nights == 29
+    assert result.sample.eligible_focus_days == 29
 
 
 def test_sleep_episode_window_is_closed_open_on_morning_capture() -> None:
