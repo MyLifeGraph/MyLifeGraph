@@ -30,7 +30,21 @@ Capture V5, Daily State V3, Exam-Week Outlook V1, or Coach V3 expectations.
 
 ## Current Verified Baseline
 
-The current implementation commit
+The current working tree received a local demo-seed compatibility follow-up on
+2026-08-04. The focused precise-sleep contract suite reported `21 passed`, and
+the changed Python files passed Ruff check, Ruff format, compilation, and diff
+checks. A complete `npm run seed:demo` then recreated only the four named local
+demo accounts and verified the enriched Student fixture: 43 Daily Capture days,
+36 rated Focus days, a ready Sleep Recommendation, Calendar Import,
+Preparation Plans, notifications, and Coach history. The loopback-only
+`start:local:coach:fake` stack subsequently reached healthy FastAPI and Flutter
+Web endpoints with deterministic Coach replies. This follow-up only passes the
+persisted `capture_version` into the demo verifier's two shared sleep parsers
+and adds a source-level caller-binding regression; no reset or migration
+application was used, and the full pgTAP/web-build/browser gate was not
+repeated.
+
+The immediately preceding implementation commit
 `e8014fbe4d913195b81e4be924df03a864b35e05` was reverified locally on
 2026-08-04 with `verify:affected --base-ref origin/new_backend_gh`, which
 classified the three committed branch changes as mixed and selected the
@@ -45,7 +59,7 @@ confirmed the account-deletion subject already absent; the Personal Learning
 journey covered the ready Sleep Recommendation card and removed its exact test
 identity.
 
-The immediately preceding `fd1bcb24e272a6da429159ad8ee2d0e643963e89`
+The preceding `fd1bcb24e272a6da429159ad8ee2d0e643963e89`
 checkout ran `verify:affected --base-ref HEAD`, which selected the complete
 `verify:full` gate. Its matching-history database gate passed all `222`
 assertions across eleven pgTAP files without a reset, and the debug web build

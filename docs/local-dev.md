@@ -1213,10 +1213,12 @@ The script:
 - verifies the student coverage and realistic Capture bounds before reporting
   success: 43 profile-local V4 days, estimated sleep between 7 hours 15 minutes
   and 8 hours 30 minutes, sleep quality `6..9`, energy `5..8`, stress `3..8`,
-  and no abrupt synthetic daily jumps. It also requires 36 rated Focus days,
-  stable `09–13` evidence, and at least 90% reflection coverage. This
-  enrichment requires `services/ai_service/.venv`, or an equivalent
-  `PYTHON_BIN`.
+  and no abrupt synthetic daily jumps. The verification passes each persisted
+  `capture_version` into the shared precise-sleep parser, so container/branch
+  mismatches fail the demo seed instead of being interpreted as valid sleep
+  evidence. It also requires 36 rated Focus days, stable `09–13` evidence, and
+  at least 90% reflection coverage. This enrichment requires
+  `services/ai_service/.venv`, or an equivalent `PYTHON_BIN`.
 
 Demo logins:
 

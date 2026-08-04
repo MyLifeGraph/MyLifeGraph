@@ -1,4 +1,6 @@
+import ast
 from datetime import date
+from pathlib import Path
 
 import pytest
 
@@ -124,3 +126,37 @@ def test_precise_sleep_parser_enforces_container_branch_identity(
     else:
         assert result.value is None
         assert f"{kind}.{expected_issue}" in result.issues
+
+
+def test_every_precise_sleep_parser_caller_binds_the_container_version() -> None:
+    repository_root = Path(__file__).resolve().parents[3]
+    source_roots = (
+        repository_root / "scripts",
+        repository_root / "services" / "ai_service" / "app",
+    )
+    parser_names = {
+        "parse_daily_capture_sleep_episode",
+        "parse_daily_capture_sleep_plan",
+    }
+    missing_bindings: list[str] = []
+
+    for source_root in source_roots:
+        for path in source_root.rglob("*.py"):
+            tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.Call):
+                    continue
+                if (
+                    not isinstance(node.func, ast.Name)
+                    or node.func.id not in parser_names
+                ):
+                    continue
+                if not any(
+                    keyword.arg == "container_version" for keyword in node.keywords
+                ):
+                    relative_path = path.relative_to(repository_root)
+                    missing_bindings.append(
+                        f"{relative_path}:{node.lineno} {node.func.id}"
+                    )
+
+    assert missing_bindings == []

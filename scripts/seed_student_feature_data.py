@@ -714,6 +714,7 @@ async def _verify_student_capture_realism(
         morning_result = parse_daily_capture_sleep_episode(
             captures.get("morning"),
             row_date=entry_date,
+            container_version=metadata["capture_version"],
         )
         if not isinstance(morning_result.value, DailyCaptureV4SleepEpisode):
             raise RuntimeError(
@@ -746,6 +747,7 @@ async def _verify_student_capture_realism(
         evening_result = parse_daily_capture_sleep_plan(
             evening_raw,
             row_date=entry_date,
+            container_version=metadata["capture_version"],
         )
         if not isinstance(evening_result.value, DailyCaptureV4SleepPlan):
             raise RuntimeError(
