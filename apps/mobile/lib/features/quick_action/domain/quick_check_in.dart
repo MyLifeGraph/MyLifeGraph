@@ -78,23 +78,6 @@ enum MainFriction {
       );
 }
 
-enum DayShape {
-  normal('normal'),
-  constrained('constrained'),
-  flexible('flexible');
-
-  const DayShape(this.code);
-
-  final String code;
-
-  static DayShape fromCode(Object? value) => _enumFromCode(
-        values,
-        value,
-        (item) => item.code,
-        'day shape',
-      );
-}
-
 enum StressIntensityLabel {
   low('low'),
   medium('medium'),
@@ -190,6 +173,7 @@ String dailyCaptureClock(DateTime value) {
   return (estimatedSleepStartedAt: start, wokeAt: wake);
 }
 
+const dailyCaptureV5 = 'daily-capture-v5';
 const dailyCaptureV4 = 'daily-capture-v4';
 const dailyCaptureV3 = 'daily-capture-v3';
 const dailyCaptureV2 = 'daily-capture-v2';
@@ -212,7 +196,7 @@ class EveningShutdownDraft {
     this.specificBlocker = '',
     this.plannedSleepTime,
     this.sleepTargetMinutes,
-    this.branchVersion = dailyCaptureV3,
+    this.branchVersion = dailyCaptureV5,
     this.isCompatibilityBranch = false,
   })  : mainFriction = null,
         additionalFrictions = const <MainFriction>[];
@@ -235,14 +219,14 @@ class EveningShutdownDraft {
       mainFriction: null,
       tomorrowPriority: '',
       sleepTargetMinutes: defaultSleepTargetMinutes,
-      branchVersion: dailyCaptureV4,
+      branchVersion: dailyCaptureV5,
     );
   }
 
   factory EveningShutdownDraft.fromJson(
     Map<String, dynamic> json, {
     required String entryDate,
-    String containerVersion = dailyCaptureV3,
+    String containerVersion = dailyCaptureV5,
   }) {
     if (json['capture_kind'] != 'evening' || json['entry_date'] != entryDate) {
       throw const FormatException('Evening capture identity is invalid.');
@@ -320,7 +304,10 @@ class EveningShutdownDraft {
   final String branchVersion;
   final bool isCompatibilityBranch;
 
-  bool get isV4 => branchVersion == dailyCaptureV4;
+  bool get isV5 => branchVersion == dailyCaptureV5;
+
+  bool get hasPreciseSleepPlan =>
+      branchVersion == dailyCaptureV4 || branchVersion == dailyCaptureV5;
 
   bool get requiresStressContext => stress != null && stress! >= 5;
 
@@ -333,7 +320,8 @@ class EveningShutdownDraft {
       energy != null &&
       stress != null &&
       hasConsistentStressContext &&
-      (!isV4 || (plannedSleepTime != null && sleepTargetMinutes != null));
+      (!hasPreciseSleepPlan ||
+          (plannedSleepTime != null && sleepTargetMinutes != null));
 
   StressIntensityLabel get stressIntensityLabel =>
       stressIntensityLabelFor(stress!);
@@ -398,7 +386,7 @@ class EveningShutdownDraft {
       );
 
   EveningShutdownDraft forEditing() => copyWith(
-        branchVersion: dailyCaptureV4,
+        branchVersion: dailyCaptureV5,
         isCompatibilityBranch: false,
         sleepTargetMinutes: sleepTargetMinutes ?? defaultSleepTargetMinutes,
       );
@@ -443,7 +431,7 @@ class EveningShutdownDraft {
       specificBlocker,
       maxSpecificBlockerLength,
     );
-    if (isV4) {
+    if (hasPreciseSleepPlan) {
       _validateSleepClock(plannedSleepTime);
       _validateSleepTarget(sleepTargetMinutes);
     }
@@ -456,7 +444,7 @@ class EveningShutdownDraft {
     final value = normalized();
     return {
       'branch_version': value.branchVersion,
-      if (!value.isV4) 'compatibility': true,
+      if (!value.isV5) 'compatibility': true,
       'capture_kind': 'evening',
       'entry_date': value.entryDate,
       'capture_id': value.captureId,
@@ -475,7 +463,7 @@ class EveningShutdownDraft {
         'reflection_note': value.reflectionNote,
       if (value.specificBlocker.isNotEmpty)
         'specific_blocker': value.specificBlocker,
-      if (value.isV4) ...{
+      if (value.hasPreciseSleepPlan) ...{
         'planned_sleep_time': value.plannedSleepTime,
         'sleep_target_minutes': value.sleepTargetMinutes,
       },
@@ -491,15 +479,16 @@ class MorningCalibrationDraft {
     double? sleepHours,
     required this.sleepQuality,
     required this.energy,
-    required this.dayShape,
     this.estimatedSleepStartedAt,
     this.wokeAt,
     this.estimatedSleepMinutes,
     this.sleepTargetMinutes,
     this.sourceEveningCaptureId,
-    this.branchVersion = dailyCaptureV3,
+    this.branchVersion = dailyCaptureV5,
     this.isCompatibilityBranch = false,
-  }) : sleepHours = estimatedSleepMinutes == null
+    String? legacyDayShapeCode,
+  })  : _legacyDayShapeCode = legacyDayShapeCode,
+        sleepHours = estimatedSleepMinutes == null
             ? sleepHours
             : estimatedSleepMinutes / 60;
 
@@ -514,16 +503,15 @@ class MorningCalibrationDraft {
       capturedAt: capturedAt,
       sleepQuality: null,
       energy: null,
-      dayShape: null,
       sleepTargetMinutes: EveningShutdownDraft.defaultSleepTargetMinutes,
-      branchVersion: dailyCaptureV4,
+      branchVersion: dailyCaptureV5,
     );
   }
 
   factory MorningCalibrationDraft.fromJson(
     Map<String, dynamic> json, {
     required String entryDate,
-    String containerVersion = dailyCaptureV3,
+    String containerVersion = dailyCaptureV5,
   }) {
     if (json['capture_kind'] != 'morning' || json['entry_date'] != entryDate) {
       throw const FormatException('Morning capture identity is invalid.');
@@ -541,7 +529,17 @@ class MorningCalibrationDraft {
       'estimated_sleep_minutes',
     );
     final storedSleepHours = (json['sleep_hours'] as num?)?.toDouble();
-    if (branch.version == dailyCaptureV4 &&
+    final hasPreciseSleep =
+        branch.version == dailyCaptureV4 || branch.version == dailyCaptureV5;
+    if (branch.version == dailyCaptureV5 && json.containsKey('day_shape')) {
+      throw const FormatException(
+        'Daily Capture V5 does not accept day_shape.',
+      );
+    }
+    final legacyDayShapeCode = branch.version == dailyCaptureV5
+        ? null
+        : _parseLegacyDayShapeCode(json['day_shape']);
+    if (hasPreciseSleep &&
         estimatedSleepMinutes != null &&
         storedSleepHours != null &&
         (storedSleepHours - estimatedSleepMinutes / 60).abs() > 0.0001) {
@@ -556,13 +554,10 @@ class MorningCalibrationDraft {
       sleepHours: storedSleepHours,
       sleepQuality: sleepQuality as int?,
       energy: (json['current_energy'] as num?)?.toInt(),
-      dayShape: DayShape.fromCode(json['day_shape']),
-      estimatedSleepStartedAt: branch.version == dailyCaptureV4
+      estimatedSleepStartedAt: hasPreciseSleep
           ? _requiredAwareDateTime(json, 'estimated_sleep_started_at')
           : null,
-      wokeAt: branch.version == dailyCaptureV4
-          ? _requiredAwareDateTime(json, 'woke_at')
-          : null,
+      wokeAt: hasPreciseSleep ? _requiredAwareDateTime(json, 'woke_at') : null,
       estimatedSleepMinutes: estimatedSleepMinutes,
       sleepTargetMinutes: _optionalWholeNumber(
         json,
@@ -572,6 +567,7 @@ class MorningCalibrationDraft {
           _optionalString(json['source_evening_capture_id']),
       branchVersion: branch.version,
       isCompatibilityBranch: branch.isCompatibility,
+      legacyDayShapeCode: legacyDayShapeCode,
     );
     // V2 Morning captures written before sleep quality was introduced remain
     // readable. A new Morning save still requires an explicit value.
@@ -590,7 +586,6 @@ class MorningCalibrationDraft {
   final double? sleepHours;
   final int? sleepQuality;
   final int? energy;
-  final DayShape? dayShape;
   final DateTime? estimatedSleepStartedAt;
   final DateTime? wokeAt;
   final int? estimatedSleepMinutes;
@@ -598,22 +593,27 @@ class MorningCalibrationDraft {
   final String? sourceEveningCaptureId;
   final String branchVersion;
   final bool isCompatibilityBranch;
+  final String? _legacyDayShapeCode;
 
-  bool get isV4 => branchVersion == dailyCaptureV4;
+  bool get isV5 => branchVersion == dailyCaptureV5;
+
+  bool get hasPreciseSleepEpisode =>
+      branchVersion == dailyCaptureV4 || branchVersion == dailyCaptureV5;
 
   bool get isComplete =>
       sleepHours != null &&
       sleepQuality != null &&
       energy != null &&
-      dayShape != null &&
-      (!isV4 ||
+      (!hasPreciseSleepEpisode ||
           (estimatedSleepStartedAt != null &&
               wokeAt != null &&
               estimatedSleepMinutes != null &&
               sleepTargetMinutes != null));
 
   bool get _hasLegacyRequiredAnswers =>
-      sleepHours != null && energy != null && dayShape != null;
+      sleepHours != null &&
+      energy != null &&
+      (isV5 || _legacyDayShapeCode != null);
 
   MorningCalibrationDraft copyWith({
     String? captureId,
@@ -622,7 +622,6 @@ class MorningCalibrationDraft {
     Object? sleepHours = _unset,
     Object? sleepQuality = _unset,
     Object? energy = _unset,
-    Object? dayShape = _unset,
     Object? estimatedSleepStartedAt = _unset,
     Object? wokeAt = _unset,
     Object? estimatedSleepMinutes = _unset,
@@ -630,6 +629,7 @@ class MorningCalibrationDraft {
     Object? sourceEveningCaptureId = _unset,
     String? branchVersion,
     bool? isCompatibilityBranch,
+    Object? legacyDayShapeCode = _unset,
   }) {
     final nextEstimatedMinutes = identical(estimatedSleepMinutes, _unset)
         ? this.estimatedSleepMinutes
@@ -647,8 +647,6 @@ class MorningCalibrationDraft {
           ? this.sleepQuality
           : sleepQuality as int?,
       energy: identical(energy, _unset) ? this.energy : energy as int?,
-      dayShape:
-          identical(dayShape, _unset) ? this.dayShape : dayShape as DayShape?,
       estimatedSleepStartedAt: identical(estimatedSleepStartedAt, _unset)
           ? this.estimatedSleepStartedAt
           : estimatedSleepStartedAt as DateTime?,
@@ -663,6 +661,9 @@ class MorningCalibrationDraft {
       branchVersion: branchVersion ?? this.branchVersion,
       isCompatibilityBranch:
           isCompatibilityBranch ?? this.isCompatibilityBranch,
+      legacyDayShapeCode: identical(legacyDayShapeCode, _unset)
+          ? _legacyDayShapeCode
+          : legacyDayShapeCode as String?,
     );
   }
 
@@ -675,8 +676,9 @@ class MorningCalibrationDraft {
     EveningShutdownDraft? sleepPlan,
   }) =>
       copyWith(
-        branchVersion: dailyCaptureV4,
+        branchVersion: dailyCaptureV5,
         isCompatibilityBranch: false,
+        legacyDayShapeCode: null,
         sleepTargetMinutes: sleepTargetMinutes ??
             sleepPlan?.sleepTargetMinutes ??
             EveningShutdownDraft.defaultSleepTargetMinutes,
@@ -723,7 +725,7 @@ class MorningCalibrationDraft {
     if (sleepQuality != null) {
       _validateRating('sleep quality', sleepQuality!);
     }
-    if (isV4) {
+    if (hasPreciseSleepEpisode) {
       _validateSleepTarget(sleepTargetMinutes);
       final start = estimatedSleepStartedAt;
       final end = wokeAt;
@@ -776,7 +778,7 @@ class MorningCalibrationDraft {
     final value = normalized();
     return {
       'branch_version': value.branchVersion,
-      if (!value.isV4) 'compatibility': true,
+      if (!value.isV5) 'compatibility': true,
       'capture_kind': 'morning',
       'entry_date': value.entryDate,
       'capture_id': value.captureId,
@@ -784,8 +786,8 @@ class MorningCalibrationDraft {
       'sleep_hours': value.sleepHours,
       if (value.sleepQuality != null) 'sleep_quality': value.sleepQuality,
       'current_energy': value.energy,
-      'day_shape': value.dayShape!.code,
-      if (value.isV4) ...{
+      if (!value.isV5) 'day_shape': value._legacyDayShapeCode,
+      if (value.hasPreciseSleepEpisode) ...{
         'estimated_sleep_started_at':
             _awareIso8601String(value.estimatedSleepStartedAt!),
         'woke_at': _awareIso8601String(value.wokeAt!),
@@ -928,13 +930,15 @@ class DailyCaptureEntry {
     return entry;
   }
 
-  static const captureVersion = dailyCaptureV4;
-  static const priorCaptureVersion = dailyCaptureV3;
-  static const legacyCaptureVersion = dailyCaptureV2;
+  static const captureVersion = dailyCaptureV5;
+  static const priorCaptureVersion = dailyCaptureV4;
+  static const legacyCaptureVersion = dailyCaptureV3;
+  static const oldestCaptureVersion = dailyCaptureV2;
   static const supportedCaptureVersions = <String>{
     captureVersion,
     priorCaptureVersion,
     legacyCaptureVersion,
+    oldestCaptureVersion,
   };
 
   final String entryDate;
@@ -1006,6 +1010,22 @@ class DailyCaptureEntry {
     );
   }
 
+  DailyCaptureEntry forAuthenticatedMigration() {
+    final migratedEvening = evening?.branchVersion == dailyCaptureV4
+        ? evening!.forEditing()
+        : evening;
+    final migratedMorning = morning?.branchVersion == dailyCaptureV4
+        ? morning!.forEditing(sleepPlan: migratedEvening)
+        : morning;
+    return DailyCaptureEntry(
+      entryDate: entryDate,
+      evening: migratedEvening,
+      morning: migratedMorning,
+      legacy: legacy,
+      preservedMetadata: preservedMetadata,
+    );
+  }
+
   DailyCaptureEntry copyWith({
     EveningShutdownDraft? evening,
     MorningCalibrationDraft? morning,
@@ -1027,11 +1047,11 @@ class DailyCaptureEntry {
         'captures': {
           if (evening != null)
             'evening': evening!.toMetadataJson(
-              preservingCompatibility: !evening!.isV4,
+              preservingCompatibility: !evening!.isV5,
             ),
           if (morning != null)
             'morning': morning!.toMetadataJson(
-              preservingCompatibility: !morning!.isV4,
+              preservingCompatibility: !morning!.isV5,
             ),
         },
       };
@@ -1042,11 +1062,11 @@ class DailyCaptureEntry {
         'captures': {
           if (evening != null)
             'evening': evening!.toMetadataJson(
-              preservingCompatibility: !evening!.isV4,
+              preservingCompatibility: !evening!.isV5,
             ),
           if (morning != null)
             'morning': morning!.toMetadataJson(
-              preservingCompatibility: !morning!.isV4,
+              preservingCompatibility: !morning!.isV5,
             ),
         },
         if (legacy != null) 'legacy': legacy!.toGuestJson(),
@@ -1355,17 +1375,17 @@ void _validateEditableBranch({
   if (!DailyCaptureEntry.supportedCaptureVersions.contains(branchVersion)) {
     throw const FormatException('Unsupported capture branch version.');
   }
-  if (branchVersion == dailyCaptureV4) {
+  if (branchVersion == dailyCaptureV5) {
     if (isCompatibilityBranch) {
       throw const FormatException(
-        'A V4 capture cannot be a compatibility branch.',
+        'A V5 capture cannot be a compatibility branch.',
       );
     }
     return;
   }
   if (!preservingCompatibility) {
     throw const FormatException(
-      'An edited compatibility capture must be completed as V4.',
+      'An edited compatibility capture must be completed as V5.',
     );
   }
 }
@@ -1377,7 +1397,8 @@ _CaptureBranchIdentity _captureBranchIdentity(
   if (!DailyCaptureEntry.supportedCaptureVersions.contains(containerVersion)) {
     throw const FormatException('Unsupported capture container version.');
   }
-  if (containerVersion != dailyCaptureV4) {
+  if (containerVersion != dailyCaptureV4 &&
+      containerVersion != dailyCaptureV5) {
     return _CaptureBranchIdentity(
       version: containerVersion,
       isCompatibility: true,
@@ -1386,30 +1407,46 @@ _CaptureBranchIdentity _captureBranchIdentity(
 
   final version = _optionalString(json['branch_version']);
   if (version == null ||
-      !DailyCaptureEntry.supportedCaptureVersions.contains(version)) {
-    throw const FormatException('V4 capture branch version is invalid.');
+      !DailyCaptureEntry.supportedCaptureVersions.contains(version) ||
+      _captureVersionOrder(version) > _captureVersionOrder(containerVersion)) {
+    throw const FormatException('Capture branch version is invalid.');
   }
   final compatibility = json['compatibility'];
-  if (version == dailyCaptureV4) {
+  if (version == containerVersion) {
     if (compatibility != null && compatibility != false) {
       throw const FormatException(
-        'V4 capture branch cannot be compatibility data.',
+        'Current capture branch cannot be compatibility data.',
       );
     }
-    return const _CaptureBranchIdentity(
-      version: dailyCaptureV4,
+    return _CaptureBranchIdentity(
+      version: version,
       isCompatibility: false,
     );
   }
   if (compatibility != true) {
     throw const FormatException(
-      'An older branch inside V4 must be explicit compatibility data.',
+      'An older branch inside a current container must be explicit compatibility data.',
     );
   }
   return _CaptureBranchIdentity(
     version: version,
     isCompatibility: true,
   );
+}
+
+int _captureVersionOrder(String value) => switch (value) {
+      dailyCaptureV2 => 2,
+      dailyCaptureV3 => 3,
+      dailyCaptureV4 => 4,
+      dailyCaptureV5 => 5,
+      _ => 99,
+    };
+
+String _parseLegacyDayShapeCode(Object? value) {
+  if (value is String && _legacyDayShapeCodes.contains(value)) {
+    return value;
+  }
+  throw FormatException('Unknown historical day shape: $value');
 }
 
 String? _optionalString(Object? value) {
@@ -1428,6 +1465,7 @@ Map<String, dynamic> _stringMap(Object? value, String field) {
 }
 
 const Object _unset = Object();
+const _legacyDayShapeCodes = {'normal', 'constrained', 'flexible'};
 
 class _CaptureBranchIdentity {
   const _CaptureBranchIdentity({

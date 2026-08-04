@@ -183,9 +183,10 @@ It is separate explanatory evidence and prevents punitive proposal wording.
 - Focus uses the persisted local `metadata.entry_date`, with the existing UTC
   `started_at` fallback only for legacy or invalid metadata.
 - A recovery day is counted only from a valid persisted daily snapshot whose
-  strict `explainable-daily-state-v1` or current
-  `explainable-daily-state-v2` target date matches that local day and whose mode
-  is `recover`. V1 is read only for compatible historical rows.
+  strict historical `explainable-daily-state-v1`/V2 or current
+  `explainable-daily-state-v3` target date matches that local day and whose mode
+  is `recover`. V1/V2 are read only for compatible historical rows; Weekly
+  Review does not reintroduce retired Day Shape context or risks.
 - Missing daily snapshots remain missing evidence; averages do not fabricate a
   recovery day.
 - Decision feedback is historical preference evidence. `feedback_type=done`

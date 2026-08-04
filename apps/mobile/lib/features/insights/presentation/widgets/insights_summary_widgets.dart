@@ -48,6 +48,7 @@ class _SparseInsightsHome extends StatelessWidget {
     required this.observation,
     required this.skillset,
     required this.personalPatterns,
+    required this.sleepRecommendation,
     required this.showPersonalPatterns,
     required this.onRefresh,
   });
@@ -57,6 +58,7 @@ class _SparseInsightsHome extends StatelessWidget {
   final CoachingObservation observation;
   final AsyncValue<SkillsetProfile>? skillset;
   final AsyncValue<PersonalPatterns?> personalPatterns;
+  final AsyncValue<SleepRecommendation?> sleepRecommendation;
   final bool showPersonalPatterns;
   final VoidCallback onRefresh;
 
@@ -79,12 +81,17 @@ class _SparseInsightsHome extends StatelessWidget {
               children: [
                 _InsightsHeader(isMobile: isMobile, onRefresh: onRefresh),
                 SizedBox(height: isMobile ? AppSpacing.lg : AppSpacing.xl),
-                if (showPersonalPatterns)
+                if (showPersonalPatterns) ...[
                   _PersonalStudyPatternCard(
                     patterns: personalPatterns,
                     onRetry: onRefresh,
-                  )
-                else
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  _SleepRecommendationCard(
+                    value: sleepRecommendation,
+                    onRetry: onRefresh,
+                  ),
+                ] else
                   _CoachingObservationCard(observation: observation),
                 const SizedBox(height: AppSpacing.md),
                 _InsightsPanel(
@@ -439,6 +446,216 @@ class _PersonalStudyPatternContent extends StatelessWidget {
               ),
           ],
         ),
+      ],
+    );
+  }
+}
+
+class _SleepRecommendationCard extends StatelessWidget {
+  const _SleepRecommendationCard({
+    required this.value,
+    required this.onRetry,
+  });
+
+  final AsyncValue<SleepRecommendation?> value;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return _InsightsPanel(
+      panelKey: const Key('sleep-recommendation-panel'),
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      child: Semantics(
+        container: true,
+        label: 'Sleep recommendation',
+        child: value.when(
+          loading: () => const Row(
+            key: Key('sleep-recommendation-loading'),
+            children: [
+              SizedBox.square(
+                dimension: 22,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+              SizedBox(width: AppSpacing.md),
+              Expanded(child: Text('Loading sleep recommendation…')),
+            ],
+          ),
+          error: (error, __) => Column(
+            key: const Key('sleep-recommendation-error'),
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'SLEEP RECOMMENDATION',
+                style: Theme.of(context).textTheme.labelLarge,
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              Text(
+                'Sleep evidence is temporarily unavailable.',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              const Text(
+                'Your existing personal study pattern is still available. '
+                'No fallback sleep window was created.',
+              ),
+              const SizedBox(height: AppSpacing.md),
+              OutlinedButton.icon(
+                onPressed: onRetry,
+                icon: const Icon(AppIcons.refresh),
+                label: const Text('Retry sleep recommendation'),
+              ),
+            ],
+          ),
+          data: (recommendation) => recommendation == null
+              ? const SizedBox.shrink()
+              : _SleepRecommendationContent(value: recommendation),
+        ),
+      ),
+    );
+  }
+}
+
+class _SleepRecommendationContent extends StatelessWidget {
+  const _SleepRecommendationContent({required this.value});
+
+  final SleepRecommendation value;
+
+  @override
+  Widget build(BuildContext context) {
+    final (status, tone) = switch (value.status) {
+      SleepRecommendationStatus.disabled => (
+          'Disabled',
+          AppStatusTone.neutral,
+        ),
+      SleepRecommendationStatus.collecting => (
+          'Collecting ${value.progress}',
+          AppStatusTone.info,
+        ),
+      SleepRecommendationStatus.unstable => (
+          'Unstable',
+          AppStatusTone.attention,
+        ),
+      SleepRecommendationStatus.ready => (
+          'Ready',
+          AppStatusTone.success,
+        ),
+    };
+    final ready = value.recommendation;
+    return Column(
+      key: Key('sleep-recommendation-${value.status.name}'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'SLEEP RECOMMENDATION',
+          style: Theme.of(context).textTheme.labelLarge,
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final title = Text(
+              ready == null
+                  ? 'No stable window yet'
+                  : 'Best-supported sleep window',
+              key: const Key('sleep-recommendation-title'),
+              style: Theme.of(context).textTheme.titleLarge,
+            );
+            if (constraints.maxWidth < 520) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  title,
+                  const SizedBox(height: AppSpacing.sm),
+                  AppStatusPill(label: status, tone: tone),
+                ],
+              );
+            }
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(child: title),
+                const SizedBox(width: AppSpacing.sm),
+                AppStatusPill(label: status, tone: tone),
+              ],
+            );
+          },
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        Text(value.summary),
+        const SizedBox(height: AppSpacing.md),
+        if (ready == null)
+          Text(
+            '${value.eligibleFocusDays} eligible Focus days · '
+            '${value.validNights} valid nights · 90-day window',
+            style: Theme.of(context).textTheme.bodySmall,
+          )
+        else ...[
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final metricWidth = constraints.maxWidth < 600
+                  ? constraints.maxWidth
+                  : (constraints.maxWidth - AppSpacing.lg * 2) / 3;
+              return Wrap(
+                spacing: AppSpacing.lg,
+                runSpacing: AppSpacing.md,
+                children: [
+                  SizedBox(
+                    width: metricWidth,
+                    child: AppMetric(
+                      value: ready.bedtime.label,
+                      label: 'Sleep start',
+                    ),
+                  ),
+                  SizedBox(
+                    width: metricWidth,
+                    child: AppMetric(
+                      value: ready.wakeTime.label,
+                      label: 'Wake time',
+                      supportingText: ready.wakeDayOffset == 0
+                          ? 'Same local day'
+                          : 'Following local day',
+                    ),
+                  ),
+                  SizedBox(
+                    width: metricWidth,
+                    child: AppMetric(
+                      value: ready.duration.label,
+                      label: 'Duration',
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+          if (ready.warning == 'below_confirmed_sleep_target') ...[
+            const SizedBox(height: AppSpacing.md),
+            const AppSurface(
+              key: Key('sleep-recommendation-warning'),
+              variant: AppSurfaceVariant.warning,
+              padding: EdgeInsets.all(AppSpacing.md),
+              child: Text(
+                'This observed duration is below your median confirmed sleep '
+                'target. Your target has not been changed.',
+              ),
+            ),
+          ],
+          const SizedBox(height: AppSpacing.md),
+          Text(
+            '${ready.candidateDays} matching days compared with '
+            '${ready.comparisonDays} other eligible days · ${value.timezone}',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ],
+        if (value.limitations.isNotEmpty) ...[
+          const SizedBox(height: AppSpacing.sm),
+          for (final limitation in value.limitations)
+            Padding(
+              padding: const EdgeInsets.only(top: AppSpacing.xs),
+              child: Text(
+                '• $limitation',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ),
+        ],
       ],
     );
   }

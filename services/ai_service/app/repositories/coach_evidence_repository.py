@@ -234,9 +234,7 @@ class SupabaseCoachEvidenceRepository:
             ),
         )
         task_partial = completed_tasks.partial or cancelled_tasks.partial
-        task_count = (
-            completed_tasks.available_count + cancelled_tasks.available_count
-        )
+        task_count = completed_tasks.available_count + cancelled_tasks.available_count
         return CoachEvidenceRows(
             daily_logs=daily,
             focus_sessions=focus,
@@ -295,9 +293,7 @@ class SupabaseCoachEvidenceRepository:
             sessions = await self._client.select(
                 "focus_sessions",
                 params={
-                    "select": (
-                        "id,status,started_at,planned_minutes,actual_minutes"
-                    ),
+                    "select": ("id,status,started_at,planned_minutes,actual_minutes"),
                     "user_id": f"eq.{user_id}",
                     "status": "in.(completed,abandoned)",
                     "order": "started_at.desc,id.asc",
@@ -471,6 +467,9 @@ def _safe_daily_log(row: dict[str, Any]) -> dict[str, Any]:
     metadata = row.get("metadata")
     captures = metadata.get("captures") if isinstance(metadata, dict) else None
     morning = captures.get("morning") if isinstance(captures, dict) else None
+    capture_version = (
+        metadata.get("capture_version") if isinstance(metadata, dict) else None
+    )
     entry_date = row.get("entry_date")
     return {
         "entry_date": entry_date,
@@ -483,6 +482,7 @@ def _safe_daily_log(row: dict[str, Any]) -> dict[str, Any]:
         "sleep_quality": _safe_morning_sleep_quality(
             morning,
             entry_date=entry_date,
+            container_version=capture_version,
         ),
     }
 
@@ -491,14 +491,34 @@ def _safe_morning_sleep_quality(
     value: Any,
     *,
     entry_date: Any,
+    container_version: Any,
 ) -> int | None:
+    if container_version == "daily-capture-v4":
+        valid_branch = (
+            isinstance(value, dict)
+            and value.get("branch_version") == "daily-capture-v4"
+            and value.get("compatibility") in {None, False}
+        )
+    elif container_version == "daily-capture-v5":
+        valid_branch = isinstance(value, dict) and (
+            (
+                value.get("branch_version") == "daily-capture-v5"
+                and value.get("compatibility") in {None, False}
+                and "day_shape" not in value
+            )
+            or (
+                value.get("branch_version") == "daily-capture-v4"
+                and value.get("compatibility") is True
+            )
+        )
+    else:
+        valid_branch = False
     if (
         not isinstance(value, dict)
         or not isinstance(entry_date, str)
-        or value.get("branch_version") != "daily-capture-v4"
+        or not valid_branch
         or value.get("capture_kind") != "morning"
         or value.get("entry_date") != entry_date
-        or value.get("compatibility") not in {None, False}
     ):
         return None
     return _safe_integer(value.get("sleep_quality"), 1, 10)

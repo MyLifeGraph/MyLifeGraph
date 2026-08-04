@@ -33,7 +33,7 @@ class GuestQuickCheckInDataSource implements QuickCheckInStore {
   Future<EveningShutdownDraft?> loadLatestEvening() async {
     final values = await readAll();
     for (final value in values.reversed) {
-      if (value.evening?.isV4 == true) {
+      if (value.evening?.hasPreciseSleepPlan == true) {
         return value.evening;
       }
     }

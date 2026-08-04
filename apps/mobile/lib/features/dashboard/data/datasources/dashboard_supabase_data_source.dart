@@ -155,7 +155,6 @@ class DashboardSnapshotMapper {
       stressSource: _optionalString(evening?['stress_source']),
       stressControllability:
           _optionalString(evening?['stress_controllability']),
-      dayShape: _optionalString(morning?['day_shape']),
     );
   }
 

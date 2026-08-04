@@ -57,7 +57,7 @@ class QuickCheckInSupabaseDataSource implements QuickCheckInStore {
       try {
         final evening =
             rowMapper.map(Map<String, dynamic>.from(raw as Map)).evening;
-        if (evening?.isV4 == true) {
+        if (evening?.hasPreciseSleepPlan == true) {
           return evening;
         }
       } on FormatException {
@@ -108,11 +108,12 @@ class QuickCheckInSupabaseDataSource implements QuickCheckInStore {
         'Daily Capture account identity changed.',
       );
     }
-    if (entry.evening != null) {
-      await saveEvening(entry.evening!);
+    final migrationEntry = entry.forAuthenticatedMigration();
+    if (migrationEntry.evening != null) {
+      await saveEvening(migrationEntry.evening!);
     }
-    if (entry.morning != null) {
-      await saveMorning(entry.morning!);
+    if (migrationEntry.morning != null) {
+      await saveMorning(migrationEntry.morning!);
     }
   }
 
@@ -396,7 +397,6 @@ class QuickCheckInPayloadBuilder {
           'stress_controllability': evening.stressControllability!.code,
       },
       if (morning != null) ...{
-        'day_shape': morning.dayShape!.code,
         if (morning.sleepQuality != null) 'sleep_quality': morning.sleepQuality,
       },
     };

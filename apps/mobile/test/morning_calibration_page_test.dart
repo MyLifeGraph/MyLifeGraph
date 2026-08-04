@@ -22,7 +22,6 @@ void main() {
 
     await _performSemanticTap(tester, 'morning sleep quality 3 of 10');
     await _performSemanticTap(tester, 'morning energy 4 of 10');
-    await _performSemanticTap(tester, 'day shape constrained');
     await tester.pump();
     await tester.tap(find.text('Save morning check-in'));
     await tester.pumpAndSettle();
@@ -36,7 +35,7 @@ void main() {
     expect(draft.sourceEveningCaptureId, 'latest-evening-plan');
     expect(draft.sleepQuality, 3);
     expect(draft.energy, 4);
-    expect(draft.dayShape, DayShape.constrained);
+    expect(draft.toMetadataJson(), isNot(contains('day_shape')));
     semantics.dispose();
   });
 
@@ -47,7 +46,6 @@ void main() {
 
     await _performSemanticTap(tester, 'morning sleep quality 3 of 10');
     await _performSemanticTap(tester, 'morning energy 4 of 10');
-    await _performSemanticTap(tester, 'day shape constrained');
     await tester.pump();
     await tester.ensureVisible(find.text('Save morning check-in'));
     await tester.tap(find.text('Save morning check-in'));
@@ -92,7 +90,7 @@ void main() {
     expect(written.sleepHours, saved.sleepHours);
     expect(written.sleepQuality, saved.sleepQuality);
     expect(written.energy, saved.energy);
-    expect(written.dayShape, saved.dayShape);
+    expect(written.toMetadataJson(), isNot(contains('day_shape')));
     expect(written.captureId, saved.captureId);
     expect(written.capturedAt, isNot(saved.capturedAt));
   });
@@ -110,7 +108,6 @@ void main() {
     expect(tester.takeException(), isNull);
     await _performSemanticTap(tester, 'morning sleep quality 7 of 10');
     await _performSemanticTap(tester, 'morning energy 7 of 10');
-    await _performSemanticTap(tester, 'day shape flexible');
     final save = find.text('Save morning check-in');
     await tester.ensureVisible(save);
     await tester.pumpAndSettle();
@@ -129,7 +126,7 @@ void main() {
       sleepHours: 8,
       sleepQuality: null,
       energy: 7,
-      dayShape: DayShape.normal,
+      legacyDayShapeCode: 'normal',
       branchVersion: dailyCaptureV3,
       isCompatibilityBranch: true,
     );
@@ -160,7 +157,6 @@ Future<void> _performSemanticTap(
   await tester.ensureVisible(find.bySemanticsLabel(label));
   await tester.pumpAndSettle();
   final node = tester.getSemantics(find.bySemanticsLabel(label));
-  final isChoice = label.startsWith('day shape ');
   expect(
     node,
     matchesSemantics(
@@ -169,10 +165,10 @@ Future<void> _performSemanticTap(
       hasSelectedState: true,
       isSelected: false,
       hasTapAction: true,
-      hasFocusAction: isChoice,
-      isFocusable: isChoice,
-      hasEnabledState: isChoice,
-      isEnabled: isChoice,
+      hasFocusAction: false,
+      isFocusable: false,
+      hasEnabledState: false,
+      isEnabled: false,
     ),
   );
   await tester.tap(find.bySemanticsLabel(label).hitTestable());
@@ -302,7 +298,6 @@ MorningCalibrationDraft _savedMorning(
     capturedAt: now,
     sleepQuality: 8,
     energy: 7,
-    dayShape: DayShape.flexible,
     estimatedSleepStartedAt: wokeAt.subtract(
       Duration(minutes: estimatedMinutes),
     ),

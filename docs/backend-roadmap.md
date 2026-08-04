@@ -74,14 +74,17 @@ Already implemented:
     required planned local sleep clock and bounded duration target. Morning
     stores aware estimated start/wake instants, their derived duration, the
     target used, an independent required `1..10` `sleep_quality` estimate,
-    current energy, and day shape. Older V2/V3 objects remain readable with
-    friction ignored and explicit branch compatibility.
+    and current energy without Day Shape. Older V2–V4 objects remain readable
+    with friction/Day Shape ignored and explicit branch compatibility.
   - `daily_logs.metadata.captures` owns the two structured states. Numeric
     projections retain existing consumers: Morning energy takes precedence,
     Evening owns mood/stress, and Morning owns sleep.
   - Supabase rebuilds a dynamic maximum of four deterministically identified
-    current-state events linked to the daily row. Guest V4 storage keeps the
-    same merge semantics and retains V1/V2/V3 read/auth-migration compatibility.
+    current-state events linked to the daily row. Guest V5 storage keeps the
+    same merge semantics and retains V1–V4 read/auth-migration compatibility.
+    Complete V4 guest branches are normalized to strict V5 before an account
+    write; incomplete older sleep fields are never guessed, and local data is
+    cleared only after every branch save succeeds.
     Raw sleep clocks stay in Daily Log metadata; downstream facts receive the
     derived duration.
   - Successful real captures request the daily snapshot for their explicit
@@ -138,8 +141,9 @@ Already implemented:
   - Compact summaries with risk flags, next-focus hints, input counts, and
     evidence references.
   - Additive `summary.daily_state` and `signals.daily_state` under
-    `explainable-daily-state-v2`, with a strict V2/V3/V4 branch-compatible
-    capture parser, V4 sleep-interval validation, friction sanitization, legacy
+    `explainable-daily-state-v3`, with a strict V2–V5 branch-compatible
+    capture parser, V4/V5 sleep-interval validation, friction and Day Shape
+    sanitization, legacy
     fallback only when no structured marker exists, and a fixed seven-day state
     lookback separate from the statistics window.
   - Explicit Evening/Morning freshness plus `missing`, `partial`, `current`, and
@@ -148,9 +152,11 @@ Already implemented:
   - Recovery-first `push`, `steady`, `recover`, and `plan` classification with
     bounded risks, reasons, field-level evidence, deterministic provenance, no
     learned-baseline claim, and no persisted capture free text.
+    V3 removes `constrained_capacity` and the Day-Shape gate for `push` while
+    retaining readable V1/V2 snapshots.
   - Additive action summaries count explicit completed/skipped habit logs and
     active/completed/abandoned focus sessions with minutes and evidence. They do
-    not change `explainable-daily-state-v2` mode, quality, risks, or reasons.
+    not change `explainable-daily-state-v3` mode, quality, risks, or reasons.
     Backend reads paginate complete action-fact windows in stably ordered
     1,000-row pages rather than accepting a PostgREST-capped first page as the
     full count.
@@ -949,20 +955,20 @@ production provider or autonomous agent platform by default.
   four-event maximum.
 - Implemented a dynamic maximum of four deterministic mood/energy/stress/sleep
   events with capture-kind metadata and linkage to the single daily row.
-- Implemented guest V4 JSON with legacy V1/V2/V3 read, friction sanitization, and
+- Implemented guest V5 JSON with legacy V1–V4 read, friction sanitization, and
   best-effort authenticated migration compatibility; guest/mock paths remain
   off Supabase and FastAPI.
 - Implemented capture-date snapshot refresh plus backend metadata-date filtering
   over a timezone-tolerant UTC read window.
 - Implemented direct nullable Dashboard mapping for capture presence, focus
-  band, stress source/controllability, and day shape. It does not infer Daily
+  band, and stress source/controllability. Historical Day Shape is ignored. It does not infer Daily
   Mode, ranking, causation, or a learned baseline.
 
 ### Completed Slice 2: Explainable Daily State
 
-- Implemented `summary.daily_state` and `signals.daily_state` under
-  `explainable-daily-state-v2` without schema changes.
-- Implemented a strict V2/V3/V4 capture parser that validates capture identity,
+- Implemented `summary.daily_state` and `signals.daily_state` under current
+  `explainable-daily-state-v3` without schema changes.
+- Implemented a strict V2–V5 capture parser that validates capture identity,
   enums, numbers, timestamps, and numeric projections while ignoring retired
   friction keys. Legacy numeric rows are read only when no structured marker
   exists; malformed structured data never regains trust through projected
@@ -976,8 +982,8 @@ production provider or autonomous agent platform by default.
   provenance without capture free text or learned-baseline claims.
 - Implemented recovery-first `push`, `steady`, `recover`, and `plan`
   classification. Missing, partial, and stale inputs remain conservative, and
-  stress, sleep, energy, day shape, workload, and Tasks remain inputs. `push`
-  requires an active Task; no friction risk/reason/evidence is emitted.
+  stress, sleep, energy, workload, and Tasks remain inputs. `push` requires an
+  active Task; no friction or Day Shape risk/reason/evidence is emitted.
   Very low current sleep quality may select recovery despite sufficient
   duration; moderately low quality prevents push.
 - Preserved `snapshot-aggregator-v1`, same-period atomic upsert, recommendation

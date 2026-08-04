@@ -30,7 +30,7 @@ from app.repositories.personal_patterns_repository import (
 )
 from app.contracts.daily_capture_v4 import (
     DailyCaptureV4SleepEpisode,
-    parse_daily_capture_v4_sleep_episode,
+    parse_daily_capture_sleep_episode,
 )
 from app.services.learning_service import (
     LearningContractError,
@@ -161,16 +161,12 @@ class _Comparison:
     @property
     def focus_delta(self) -> float:
         return (
-            self.preferred.median_focus_quality
-            - self.comparison.median_focus_quality
+            self.preferred.median_focus_quality - self.comparison.median_focus_quality
         )
 
     @property
     def completion_delta(self) -> float:
-        return (
-            self.preferred.completion_rate
-            - self.comparison.completion_rate
-        )
+        return self.preferred.completion_rate - self.comparison.completion_rate
 
 
 class PersonalPatternsService:
@@ -245,14 +241,16 @@ class PersonalPatternsService:
             return response
 
         try:
-            session_rows, reflection_rows, daily_log_rows = (
-                await self._repository.load_evidence(
-                    user_id=user_id,
-                    starts_at=starts_at,
-                    ends_at=generated_at,
-                    local_starts_on=window.local_starts_on,
-                    local_ends_on=window.local_ends_on,
-                )
+            (
+                session_rows,
+                reflection_rows,
+                daily_log_rows,
+            ) = await self._repository.load_evidence(
+                user_id=user_id,
+                starts_at=starts_at,
+                ends_at=generated_at,
+                local_starts_on=window.local_starts_on,
+                local_ends_on=window.local_ends_on,
             )
         except PersonalPatternsPersistenceError as exc:
             _log_failure(stage="evidence_read")
@@ -362,9 +360,7 @@ def _disabled_response(
         generated_at=generated_at,
         timezone=timezone,
         window=window,
-        summary=(
-            "Personal pattern analysis is turned off in Personal learning."
-        ),
+        summary=("Personal pattern analysis is turned off in Personal learning."),
         sample=PersonalPatternsSample(
             terminal_sessions=0,
             rated_sessions=0,
@@ -484,10 +480,7 @@ def _response(
         ),
         "Night sessions are visible evidence but can never become a Planner preference.",
         "Sleep evidence never changes your sleep target, capacity, or plans.",
-        (
-            "Evidence includes only facts observed by "
-            f"{generated_at.isoformat()}."
-        ),
+        (f"Evidence includes only facts observed by {generated_at.isoformat()}."),
         _obstacle_summary(observations),
     ]
     summary = _summary(status=status, rated_count=rated_count, patterns=patterns)
@@ -656,12 +649,13 @@ def _sleep_episodes(
             row_date is None
             or (updated_at is not None and updated_at > generated_at)
             or not isinstance(metadata, dict)
-            or metadata.get("capture_version") != "daily-capture-v4"
+            or metadata.get("capture_version")
+            not in {"daily-capture-v4", "daily-capture-v5"}
             or not isinstance(metadata.get("captures"), dict)
         ):
             continue
         morning = metadata["captures"].get("morning")
-        result = parse_daily_capture_v4_sleep_episode(
+        result = parse_daily_capture_sleep_episode(
             morning,
             row_date=row_date,
         )
@@ -711,21 +705,13 @@ def _observations(
 def _time_comparisons(
     observations: list[_Observation],
 ) -> list[_Comparison]:
-    daytime = [
-        value for value in observations if value.session.time_window != "night"
-    ]
+    daytime = [value for value in observations if value.session.time_window != "night"]
     comparisons: list[_Comparison] = []
     for key, label in _TIME_WINDOWS:
         preferred = [
-            _rated(value)
-            for value in daytime
-            if value.session.time_window == key
+            _rated(value) for value in daytime if value.session.time_window == key
         ]
-        other = [
-            _rated(value)
-            for value in daytime
-            if value.session.time_window != key
-        ]
+        other = [_rated(value) for value in daytime if value.session.time_window != key]
         if not preferred or not other:
             continue
         comparisons.append(
@@ -767,8 +753,7 @@ def _best_planner_comparison(
             and value.completion_delta >= -0.1
         )
         distinct_days = (
-            len(value.preferred_dates) >= 10
-            and len(value.comparison_dates) >= 10
+            len(value.preferred_dates) >= 10 and len(value.comparison_dates) >= 10
         )
         consistent = distinct_days and _same_direction_in_halves(value)
         return int(thresholds), int(thresholds and distinct_days), int(consistent)
@@ -892,9 +877,7 @@ def _sleep_pattern(
         values_by_bucket[bucket].append(
             _RatedValue(
                 focus_quality=_median(value.focus_quality for value in linked),
-                useful_progress=_median(
-                    value.useful_progress for value in linked
-                ),
+                useful_progress=_median(value.useful_progress for value in linked),
                 completion=_rate(value.completion for value in linked),
                 local_date=episode.entry_date,
             ),
@@ -1064,9 +1047,7 @@ def _planner_preference(
     rated_dates = sorted({value.local_date for value in observations})
     common = {
         "eligible": False,
-        "window": (
-            comparison.preferred_key if comparison is not None else None
-        ),
+        "window": (comparison.preferred_key if comparison is not None else None),
         "window_label": (
             comparison.preferred_label if comparison is not None else None
         ),
@@ -1095,10 +1076,7 @@ def _planner_preference(
             reason="coverage_too_low",
             **common,
         )
-    if (
-        len(comparison.preferred_dates) < 10
-        or len(comparison.comparison_dates) < 10
-    ):
+    if len(comparison.preferred_dates) < 10 or len(comparison.comparison_dates) < 10:
         return LearnedFocusPlannerPreference(
             reason="insufficient_distinct_days",
             **common,
@@ -1166,9 +1144,7 @@ def _correlation_points(
                 planned_focus_minutes=value.session.planned_minutes,
                 actual_focus_minutes=value.session.actual_minutes,
                 completed=1 if value.session.status == "completed" else 0,
-                sleep_hours=(
-                    sleep.estimated_sleep_minutes / 60 if sleep else None
-                ),
+                sleep_hours=(sleep.estimated_sleep_minutes / 60 if sleep else None),
                 sleep_target_deviation_minutes=(
                     sleep.target_deviation_minutes if sleep else None
                 ),
@@ -1190,15 +1166,9 @@ def _obstacle_summary(observations: list[_Observation]) -> str:
         for obstacle in observation.reflection.obstacles:
             counts[obstacle] += 1
     if not counts:
-        return (
-            "No controlled obstacles were reported in the rated Focus "
-            "sessions."
-        )
+        return "No controlled obstacles were reported in the rated Focus sessions."
     ordered = sorted(counts.items(), key=lambda value: (-value[1], value[0]))
-    labels = [
-        f"{key.replace('_', ' ')} ({count})"
-        for key, count in ordered[:3]
-    ]
+    labels = [f"{key.replace('_', ' ')} ({count})" for key, count in ordered[:3]]
     return "Reported obstacles are descriptive only: " + ", ".join(labels) + "."
 
 
@@ -1274,9 +1244,7 @@ def _metrics(values: list[_RatedValue]) -> _Metrics:
     return _Metrics(
         count=len(values),
         median_focus_quality=_median(value.focus_quality for value in values),
-        median_useful_progress=_median(
-            value.useful_progress for value in values
-        ),
+        median_useful_progress=_median(value.useful_progress for value in values),
         completion_rate=_rate(value.completion for value in values),
     )
 
@@ -1304,13 +1272,10 @@ def _summary(
             "personal evidence."
         )
     if status == "stable":
-        return (
-            f"A stable baseline now covers {rated_count} rated sessions. "
-            + (
-                patterns[0].summary
-                if patterns
-                else "No comparison currently meets the pattern display rules."
-            )
+        return f"A stable baseline now covers {rated_count} rated sessions. " + (
+            patterns[0].summary
+            if patterns
+            else "No comparison currently meets the pattern display rules."
         )
     if status == "emerging":
         return (

@@ -110,18 +110,28 @@ reviews, signals, recommendations, feedback history, and the full week remain
 lazy. The persisted deterministic briefing still exists for backend consumers,
 but it is no longer presented as a decision made for the user. Capture itself
 does not generate recommendations or create/change a plan. Morning Calibration
-therefore describes only what that save does. Under `daily-capture-v4`, Evening
+therefore describes only what that save does. Under `daily-capture-v5`, Evening
 requires one planned local sleep time and a `300..720` minute target on a
 15-minute grid. Morning records editable aware estimated sleep-start/wake
 instants, derives and labels the `Estimated sleep duration`, retains the target
 used for that night, and separately requires a `1..10` estimated sleep-quality
-rating. Evening pressure-source descriptions are available from a separate
+rating plus current energy. It does not ask for Day Shape, and V5 rejects a
+`day_shape` field. Evening pressure-source descriptions are available from a separate
 accessible info control; the control never changes the selected source.
 `Possible priority tomorrow` is no longer an editable Capture input and new
 saves omit it, while a value already present on a legacy branch survives an
 otherwise valid edit. V2/V3 branches remain readable and may stay explicit
-compatibility branches until edited; editing a branch requires its V4 fields.
+compatibility branches until edited; V4 remains readable and writable during
+the rolling upgrade. Editing emits V5, older opposite branches remain explicit
+compatibility data, and an existing V5 container is never downgraded. A
+best-effort authenticated migration converts complete V4 guest branches to
+strict V5 and clears local guest data only after every branch write succeeds;
+incomplete older sleep data is never guessed.
 Guest/mock Today and capture stay local and make no authenticated request.
+Quick actions does not repeat the saved capture details. After a successful
+current-day read, each saved Evening or Morning branch marks its existing
+action with `Completed today`; that action remains available to edit the saved
+answers. Loading or failed reads do not infer a completion state.
 After durable writes, feature callers send a typed domain impact to the
 app-level projection coordinator instead of importing foreign Riverpod
 providers. That composition boundary owns Daily Snapshot refresh and dependent
@@ -290,6 +300,16 @@ stays signed in and receives an explicit sign-out/sign-in instruction.
 Insights shows the Skill profile only in explicitly local/demo mode and labels
 it as example data. Real accounts neither load nor render `skillset_profiles`
 because no trusted producer currently exists.
+Real-account Insights loads `personal-patterns-v1` and
+`sleep-recommendation-v1` independently. The Sleep Recommendation card is
+directly below Personal Study Pattern and owns loading, disabled, collecting,
+unstable, ready, and route-error states without replacing the existing card.
+Ready renders Sleep start, Wake time, and Duration plus a below-confirmed-target
+warning when returned. Wake time says `Same local day` for offset `0` and
+`Following local day` for offset `1`; it has no apply action. Guest/local demo
+returns before
+resolving the sleep API data source, so it makes zero endpoint calls and receives
+no synthetic sleep history.
 Correlation exploration offers only bounded 7/14/30/90-day windows and pages
 every contributing Supabase source with a hard explicit row ceiling; it neither
 labels a silently truncated result as all-time nor allocates unbounded history.

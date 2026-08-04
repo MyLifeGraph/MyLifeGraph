@@ -4,7 +4,7 @@ Status: implemented repository boundary as of 2026-07-26.
 
 This contract adds two related, deterministic capabilities:
 
-1. `daily-capture-v4` records a student's planned sleep rhythm and their
+1. current `daily-capture-v5` records a student's planned sleep rhythm and their
    estimated sleep interval; and
 2. `exam-week-outlook-v1` compares confirmed preparation demand with regular
    and hypothetically sleep-protected availability.
@@ -12,7 +12,7 @@ This contract adds two related, deterministic capabilities:
 The result is a read-only Planner warning. It is not a sleep diagnosis, an
 effort estimate, an automatic schedule change, or a notification.
 
-## Daily Capture V4
+## Daily Capture V5
 
 Evening check-in adds one required sleep-planning step:
 
@@ -21,7 +21,7 @@ Evening check-in adds one required sleep-planning step:
 - the first visible target is 480 minutes. It becomes the student's saved
   rhythm only after a successful Evening save.
 
-After the first save, the newest valid Evening V4 branch supplies the visible
+After the first save, the newest valid Evening V4/V5 branch supplies the visible
 default for later Evening and Morning forms. It is a transparent latest-value
 rule, not a separate profile, learned preference, or Study Setup revision.
 
@@ -30,7 +30,9 @@ Morning check-in requires:
 - aware `estimated_sleep_started_at` and `woke_at` instants;
 - their exact derived whole-minute `estimated_sleep_minutes`;
 - compatible `sleep_hours = estimated_sleep_minutes / 60`;
-- the `sleep_target_minutes` used for that night; and
+- the `sleep_target_minutes` used for that night;
+- independent whole-number `sleep_quality` and `current_energy` values from 1
+  through 10; and
 - optional `source_evening_capture_id` when an Evening plan supplied the
   starting value.
 
@@ -43,18 +45,21 @@ minutes.
 
 ### Branch Compatibility
 
-The daily container version is `daily-capture-v4`. Each structured branch also
+The current daily container version is `daily-capture-v5`. Each structured branch also
 has a `branch_version`.
 
-A V4 save may preserve an untouched V2 or V3 opposite branch with:
+A V5 save may preserve an untouched V2–V4 opposite branch with:
 
 - its original `branch_version`; and
 - `compatibility: true`.
 
 This is the only accepted mixed-version shape. Editing an older branch first
-upgrades that branch to V4 and requires its new sleep fields. Merging Evening
+upgrades that branch to V5 and requires its current sleep fields. Complete V4
+branches remain writable during rollout but cannot downgrade a V5 container.
+V5 Morning rejects the retired `day_shape` field; a historical V4 value remains
+compatibility data and is neither displayed nor evaluated. Merging Evening
 never erases Morning or foreign top-level metadata, and merging Morning never
-erases Evening. Existing V1 guest migration and readable V2/V3 rows remain
+erases Evening. Existing V1 guest migration and readable V2–V4 rows remain
 supported.
 
 ### Projection And Privacy Boundary
@@ -65,21 +70,25 @@ Raw planned/estimated clocks remain only in
 value use the derived duration.
 
 Raw clocks, the sleep target, and the source Evening id are not copied into
-Behavioral Event metadata, Daily State, recommendation context, notification
-content, or Coach context. Those paths continue to receive only the compatible
-numeric duration or an already-derived bounded fact. Account Export includes
+Behavioral Event metadata, Daily State, general recommendation context,
+notification content, or Coach context. Those paths continue to receive only
+the compatible numeric duration or an already-derived bounded fact. The
+separate consented read-only `sleep-recommendation-v1` analysis reads the valid
+Morning episode directly to learn clock ranges but does not copy it elsewhere.
+Account Export includes
 the raw fields because it already exports the owner's complete `daily_logs`
 rows.
 
-`explainable-daily-state-v2` remains the snapshot response contract. Its parser
-accepts V2, V3, V4, and explicit mixed compatibility branches. It validates V4
+`explainable-daily-state-v3` is the current snapshot response contract. Its parser
+accepts V2 through V5 and explicit mixed compatibility branches. It validates V4/V5
 interval arithmetic before trusting the derived duration. Equivalent sleep
 duration/quality inputs produce the same classification as their compatible
-older representation. Today streak recognition likewise treats a valid V4
+older representation. Today streak recognition likewise treats a valid V4/V5
 Morning or Evening branch as an explicit saved capture.
 
-Daily State, this outlook, and `personal-patterns-v1` call the same strict V4
-sleep parser. Personal Patterns may describe an observational sleep range, but
+Daily State, this outlook, `personal-patterns-v1`, and
+`sleep-recommendation-v1` call the same strict V4/V5 sleep parser. Personal
+Patterns or Sleep Recommendation may describe an observational sleep range, but
 it cannot change this outlook's sleep target, protected interval, capacity, or
 mode. Optional learned Focus timing affects only a newly requested
 Planner/Deadline preview; this read-only simulation does not reorder or move
@@ -101,8 +110,8 @@ The response includes:
 
 - one captured aware `generated_at`, profile `timezone`, and `local_date`;
 - `mode`, `risk_level`, and `capacity_status`;
-- the newest valid Evening V4 sleep plan, without raw sleep instants;
-- at most the three newest valid Morning V4 sleep nights from the last seven
+- the newest valid Evening V4/V5 sleep plan, without raw sleep instants;
+- at most the three newest valid Morning V4/V5 sleep nights from the last seven
   profile-local dates, as derived minutes/target/shortfall only;
 - affected active exams and assignments with remaining/scheduled/missed/
   simulated minute facts;
@@ -258,9 +267,10 @@ outlook.
 
 ## Persistence And Non-Claims
 
-This slice adds no table, column, RPC, migration, background job, or export
-projection. It stores Capture V4 only in existing `daily_logs` metadata and
-derives the outlook per GET.
+The Outlook itself adds no table, column, RPC, migration, background job, or
+export projection. Current Capture V5 and readable V4 sleep inputs remain only
+in existing `daily_logs` metadata, and the outlook is derived per GET. The later
+V5 migration replaces the Capture merge RPC only; it adds no Outlook storage.
 
 The derivation is implemented as a pure builder over an aware captured instant,
 the bounded planning context, typed Deadline details, and bounded Capture rows.
@@ -300,9 +310,10 @@ Automated coverage must prove:
 - required Evening plan values, first-visible 480-minute target, latest-value
   prefill, target grid, interval ordering, 16-hour bound, and 02:00–10:00 plus
   23:00–07:00 derivation;
-- V2/V3/V4 parsing, explicit mixed-branch preservation, edit-time V4 upgrade,
-  guest round-trip, raw-field isolation, compatible projections, shared-parser
-  parity with Personal Patterns, and exact retry identity;
+- V2/V3/V4 parsing, explicit mixed-branch preservation, V4-to-V5 edit and guest
+  migration, guest round-trip, raw-field isolation, compatible projections,
+  current V5 plus explicit V4-in-V5 shared-parser parity with Personal Patterns,
+  and exact retry identity;
 - unchanged Daily State V2 classification for equivalent derived sleep facts
   and V4-compatible Today streak recognition;
 - exact mode boundaries, overdue behavior, assignment capacity, multiple plans,

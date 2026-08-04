@@ -19,8 +19,8 @@ from app.repositories.deadline_plan_repository import DeadlinePlanningContext
 from app.contracts.daily_capture_v4 import (
     DailyCaptureV4SleepEpisode,
     DailyCaptureV4SleepPlan,
-    parse_daily_capture_v4_sleep_episode,
-    parse_daily_capture_v4_sleep_plan,
+    parse_daily_capture_sleep_episode,
+    parse_daily_capture_sleep_plan,
 )
 from app.services.local_time import LocalTimeResolutionError, resolve_local_datetime
 from app.services.planning_availability import (
@@ -542,17 +542,18 @@ def _sleep_outlook(
             row_date is None
             or row_date > local_date
             or not isinstance(metadata, dict)
-            or metadata.get("capture_version") != "daily-capture-v4"
+            or metadata.get("capture_version")
+            not in {"daily-capture-v4", "daily-capture-v5"}
             or not isinstance(metadata.get("captures"), dict)
         ):
             continue
         evening = metadata["captures"].get("evening")
-        parsed_plan = _parse_v4_sleep_plan(evening, row_date=row_date)
+        parsed_plan = _parse_sleep_plan(evening, row_date=row_date)
         if parsed_plan is not None:
             plans.append(parsed_plan)
         if local_date - timedelta(days=6) <= row_date <= local_date:
             morning = metadata["captures"].get("morning")
-            parsed_night = _parse_v4_sleep_night(morning, row_date=row_date)
+            parsed_night = _parse_sleep_night(morning, row_date=row_date)
             if parsed_night is not None:
                 nights.append(parsed_night)
     plans.sort(
@@ -563,12 +564,12 @@ def _sleep_outlook(
     return (plans[0] if plans else None, nights[:3])
 
 
-def _parse_v4_sleep_plan(
+def _parse_sleep_plan(
     raw: object,
     *,
     row_date: date,
 ) -> ExamWeekSleepPlan | None:
-    parsed = parse_daily_capture_v4_sleep_plan(raw, row_date=row_date).value
+    parsed = parse_daily_capture_sleep_plan(raw, row_date=row_date).value
     if not isinstance(parsed, DailyCaptureV4SleepPlan):
         return None
     return ExamWeekSleepPlan(
@@ -580,12 +581,12 @@ def _parse_v4_sleep_plan(
     )
 
 
-def _parse_v4_sleep_night(
+def _parse_sleep_night(
     raw: object,
     *,
     row_date: date,
 ) -> ExamWeekSleepNight | None:
-    parsed = parse_daily_capture_v4_sleep_episode(raw, row_date=row_date).value
+    parsed = parse_daily_capture_sleep_episode(raw, row_date=row_date).value
     if not isinstance(parsed, DailyCaptureV4SleepEpisode):
         return None
     shortfall = max(

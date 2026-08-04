@@ -33,7 +33,9 @@ English-only Coach prompt provenance in
 provenance plus V2 lifecycle RPCs in
 `20260802083219_focus_schedule_sources_v2.sql`. The current boundary is the
 contract-neutral privileged-function cleanup in
-`20260802111518_privileged_function_lint_cleanup.sql`.
+`20260802111518_privileged_function_lint_cleanup.sql`, followed by the additive
+Daily Capture V5 merge-RPC replacement in
+`20260804102409_daily_capture_v5_remove_day_shape.sql`.
 
 ## Runtime Activation
 
@@ -127,7 +129,7 @@ The app table constants live in
 
 Canonical authenticated Capture uses `apply_daily_capture_branch_v1` to merge
 one `daily_logs` row per user/date with source `quick_check_in`.
-`metadata.capture_version=daily-capture-v4` contains separate owned
+`metadata.capture_version=daily-capture-v5` contains separate owned
 `captures.evening` and `captures.morning` objects. Saving one kind compares and
 replaces only that object, preserving the other capture and unrelated metadata.
 Numeric
@@ -137,15 +139,19 @@ no primary/additional friction fields. It requires one planned local sleep
 clock and one bounded target. Morning stores aware estimated start/wake
 instants, their exact derived minutes/compatible hours, the target used,
 optional source Evening id, and an independent whole-number `1..10`
-`sleep_quality` estimate. V2/V3 objects remain readable and may remain explicit
-compatibility branches until edited. No direct compatibility or sleep-profile
-column is added.
+`sleep_quality` estimate. V5 Morning has no `day_shape` field and the RPC rejects
+it as unexpected. V2–V4 objects remain readable and may remain explicit
+compatibility branches until edited. The RPC accepts complete strict V4 branches
+during rolling deployment, never downgrades a V5 container, and marks an
+untouched older opposite branch as compatibility data. No direct compatibility
+or sleep-profile column and no new table are added.
 New writes omit the retired `gentle_tomorrow` field, while legacy capture
 objects containing it remain readable. Capture does not ask for a focus band
 and does not fabricate `focus_minutes`.
 
-After each write Flutter removes the existing `quick_check_in` events linked to
-that `daily_log_id` and upserts the explicit current signals with deterministic
+In the same write transaction, the RPC removes the existing `quick_check_in`
+events linked to that `daily_log_id` and upserts the explicit current signals
+with deterministic
 ids derived from the daily row and event kind. The resulting set is dynamic and
 contains at most mood, energy, stress, and sleep; an Evening-only or
 Morning-only day therefore does not create unanswered events. Event metadata
@@ -153,14 +159,19 @@ mirrors the relevant capture kind, id, local entry date, capture time, and
 bounded context. Sleep quality is mirrored on the existing Morning-origin
 energy and sleep events instead of creating a fifth event. Raw planned/
 estimated clocks, target, and source Evening id are not mirrored; only the
-derived Sleep value leaves Daily Log metadata. Repeated same-day
+derived Sleep value leaves Daily Log metadata, and event metadata never carries
+`day_shape`. Repeated same-day
 saves converge without append-only signal
-history. Existing columns, grants, and RLS policies are sufficient, so Capture
-V4 and the derived read-only Exam-Week Outlook add no schema migration.
+history. Existing columns, grants, RLS policies, retry ledger, advisory-lock
+order, and conflict semantics are unchanged by the V5 function replacement.
 
-Guest capture stores the same ownership model as V4 JSON in
-`shared_preferences`, still reads and sanitizes V1/V2/V3 guest JSON, and keeps the
-existing best-effort check-in migration into a real non-demo account. Guest Setup remains
+Guest capture stores the same ownership model as V5 JSON in
+`shared_preferences`, still reads and sanitizes V1–V4 guest JSON, and keeps the
+existing best-effort check-in migration into a real non-demo account. Complete
+V4 branches are normalized to strict V5 before that authenticated write;
+incomplete V2/V3 sleep fields are not guessed, and local data remains until all
+branch writes succeed. This changes no table, RPC, grant, or RLS boundary.
+Guest Setup remains
 separate and is still not migrated automatically. Real capture saves request a
 best-effort daily snapshot for their explicit local `target_date`. FastAPI loads
 daily/event metadata, widens the UTC event query by one calendar day on both
@@ -174,7 +185,8 @@ Phase 0C revision tables, profile guard, or atomic Setup RPC.
 
 Phase 2 also requires no migration. FastAPI extends existing daily and weekly
 snapshot JSON additively under `summary.daily_state` and
-`signals.daily_state`, with contract version `explainable-daily-state-v2`.
+`signals.daily_state`, with current contract version
+`explainable-daily-state-v3`.
 `summary.daily_state` contains target date, `push|steady|recover|plan` mode,
 `missing|partial|current|stale` quality, per-kind freshness, bounded structured
 context, current risk/reason codes, readable explanations, load guidance, and
@@ -184,8 +196,8 @@ codes. Capture free text is excluded.
 
 Daily State always uses a fixed seven-day lookback even when the caller requests
 a different statistics window. Evening is current from the target date or
-previous date; Morning is current only from the target date. Strict V2/V3/V4
-capture parsing validates V4 branch compatibility and sleep intervals, ignores
+previous date; Morning is current only from the target date. Strict V2–V5
+capture parsing validates branch compatibility and sleep intervals, ignores
 friction, and does not fall back to projected columns after a malformed
 structured marker. Legacy numeric rows are accepted conservatively only when no
 structured capture marker exists. Missing, partial, or stale evidence cannot
@@ -193,6 +205,9 @@ produce `push`; current `push` also requires an active Task, and recovery rules
 precede planning/productivity rules. Very low current sleep quality may select
 `recover` even with sufficient duration; moderately low quality prevents
 `push`.
+V3 removes Day Shape from current context, removes `constrained_capacity`, and
+does not gate `push` on a historical Day Shape. Stored V1/V2 states remain
+readable by current consumers.
 
 The persisted source marker remains `snapshot-aggregator-v1`. Metadata adds
 `daily_state_contract_version` and `state_lookback_days`; existing
@@ -239,7 +254,7 @@ that same date. Focus finish/abandon uses exact terminal readback.
 The snapshot aggregator now reads explicit `habit_logs` and `focus_sessions`
 and adds bounded action summaries, counts, minutes, and evidence. These facts do
 not change `summary.daily_state`, `signals.daily_state`, the
-`explainable-daily-state-v2` classifier, or `snapshot-aggregator-v1`. Successful
+`explainable-daily-state-v3` classifier, or `snapshot-aggregator-v1`. Successful
 real task, habit, and focus writes request snapshot refresh best-effort; they do
 not generate recommendations or call an LLM. Focus start persists
 `metadata.entry_date`; all focus transitions refresh the persisted start day.
@@ -267,6 +282,12 @@ use implies analysis. Service-role-only owner-locked RPCs bind request ids to
 the full preference payload or confirmed `CLEAR` command and return exact
 replays. `learning_request_identities` contains no ratings and remains hidden
 from authenticated users and Account Export.
+
+`sleep-recommendation-v1` adds no schema or persistence. Its independent
+read-only FastAPI route reuses bounded `daily_logs`, terminal `focus_sessions`,
+and `focus_session_reflections` reads under the existing analysis preference.
+Disabled analysis returns before those history reads; a ready result is
+recomputed and fingerprinted rather than stored.
 
 `20260726150000_learned_focus_planning_v1.sql` adds only immutable proposal
 provenance columns: `setup|learned_personal_pattern`, the fixed local window,
@@ -1059,7 +1080,7 @@ lock, replay, deletion, or application-authority contract.
 For local Supabase-backed testing, the reset should complete through:
 
 ```text
-20260802111518_privileged_function_lint_cleanup.sql
+20260804102409_daily_capture_v5_remove_day_shape.sql
 ```
 
 Then configure `.env` with:
@@ -1115,7 +1136,7 @@ RESET_DB=true npm run verify:db
 ```
 
 The reset form should apply all migrations through
-`20260802111518_privileged_function_lint_cleanup.sql`; expected legacy-table
+`20260804102409_daily_capture_v5_remove_day_shape.sql`; expected legacy-table
 skip notices may be emitted for missing CamelCase tables. Use reset when proving
 the full migration/backfill/constraint chain from a fresh local database, not
 merely because a reviewed migration is pending.
@@ -1241,7 +1262,11 @@ legacy compatibility only and should be dropped in a later dedicated migration
 after data migration and app verification are complete.
 
 The latest migration is
-`20260802111518_privileged_function_lint_cleanup.sql`. It removes the final
+`20260804102409_daily_capture_v5_remove_day_shape.sql`. It replaces only
+`apply_daily_capture_branch_v1` so current V5 writes omit Day Shape while
+complete V4 rollout writes, branch-local replay/conflict identity, projections,
+RLS, grants, and foreign events remain compatible. The preceding
+`20260802111518_privileged_function_lint_cleanup.sql` removes the final
 privileged-function schema-lint diagnostics without changing Account Delete,
 Coach replay, role authority, or application grants. The preceding Focus
 migration adds scheduled-Focus provenance and service-role-only V2 lifecycle/
@@ -1355,8 +1380,8 @@ the one-active-focus index required by the runtime contract. Locked habit
 eligibility, immutable focus history, and restricted target FKs protect the
 contract against stale/concurrent client state. The earlier Phase
 0C service-role-only atomic Setup RPC signature, revision contract, and
-monotonic profile guard remain compatible. Current Capture V4 changes only
-typed metadata and client/backend mapping; Daily State V2 consumes sanitized
+monotonic profile guard remain compatible. Current Capture V5 changes only
+typed metadata and the existing merge RPC; Daily State V3 consumes sanitized
 data inside existing snapshot JSON; Phase 3 adds action facts without changing
 Daily State classification; and
 Phase 4 persists deterministic briefing decisions without changing either

@@ -354,6 +354,7 @@ def _daily_state(
     source_contract = state.get("contract_version")
     if source_contract not in {
         "explainable-daily-state-v1",
+        "explainable-daily-state-v2",
         DAILY_STATE_CONTRACT_VERSION,
     }:
         raise ValueError("Daily snapshot uses an unsupported daily state contract.")
@@ -370,7 +371,7 @@ def _daily_state(
         sanitized["context"] = {
             key: value
             for key, value in context.items()
-            if key not in {"main_friction", "additional_frictions"}
+            if key not in {"main_friction", "additional_frictions", "day_shape"}
         }
     sanitized["risk_flags"] = _without_retired_daily_codes(
         state.get("risk_flags"),
@@ -418,7 +419,11 @@ def _without_retired_daily_codes(
 
 
 def _retired_daily_code(code: str, *, source_contract: Any) -> bool:
-    if "friction" in code or code == "plan_unclear_priorities":
+    if (
+        "friction" in code
+        or code == "plan_unclear_priorities"
+        or code == "constrained_capacity"
+    ):
         return True
     return source_contract == "explainable-daily-state-v1" and code in {
         "overload",

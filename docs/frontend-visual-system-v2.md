@@ -90,6 +90,8 @@ icon, and text—not only an avatar. It never replaces the visible category
 label. Preparation status pills use Attention for Preview/Source changed,
 Success for Active/Completed, Danger for Cancelled, and Information for the
 Exam/Assignment type.
+Status pills retain their full visible label at large text and may grow
+vertically instead of clipping, shrinking, or overflowing it.
 
 Normal content surfaces have no outline. An outline is reserved for inputs,
 keyboard focus, selected state, a conflict/warning/danger state, or a genuine

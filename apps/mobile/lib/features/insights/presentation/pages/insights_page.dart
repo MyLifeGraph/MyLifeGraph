@@ -11,9 +11,11 @@ import '../../../../core/capabilities/app_surface_capabilities.dart';
 import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/theme/app_visual_tokens.dart';
 import '../../../../core/widgets/app_page.dart';
+import '../../../../core/widgets/app_surface.dart';
 import '../../domain/entities/correlation.dart';
 import '../../domain/entities/insight.dart';
 import '../../domain/entities/personal_patterns.dart';
+import '../../domain/entities/sleep_recommendation.dart';
 import '../../domain/services/correlation_analyzer.dart';
 import '../../domain/services/coaching_observation.dart';
 import '../../../optimization/domain/entities/skillset_profile.dart';
@@ -34,12 +36,14 @@ class InsightsPage extends ConsumerWidget {
     final capabilities = ref.watch(appSurfaceCapabilitiesProvider);
     final showExampleSkillset = capabilities.isLocalDemo;
     final personalPatterns = ref.watch(personalPatternsProvider);
+    final sleepRecommendation = ref.watch(sleepRecommendationProvider);
     final skillset =
         showExampleSkillset ? ref.watch(skillsetProfileProvider) : null;
     void retry() {
       ref.invalidate(insightsProvider);
       ref.invalidate(correlationReportProvider);
       ref.invalidate(personalPatternsProvider);
+      ref.invalidate(sleepRecommendationProvider);
     }
 
     if ((insights.hasError && !insights.hasValue) ||
@@ -75,6 +79,7 @@ class InsightsPage extends ConsumerWidget {
       report: report.requireValue,
       skillset: skillset,
       personalPatterns: personalPatterns,
+      sleepRecommendation: sleepRecommendation,
       showPersonalPatterns: !showExampleSkillset,
     );
   }
@@ -86,6 +91,7 @@ class _InsightsHome extends ConsumerStatefulWidget {
     required this.report,
     required this.skillset,
     required this.personalPatterns,
+    required this.sleepRecommendation,
     required this.showPersonalPatterns,
   });
 
@@ -93,6 +99,7 @@ class _InsightsHome extends ConsumerStatefulWidget {
   final CorrelationReport report;
   final AsyncValue<SkillsetProfile>? skillset;
   final AsyncValue<PersonalPatterns?> personalPatterns;
+  final AsyncValue<SleepRecommendation?> sleepRecommendation;
   final bool showPersonalPatterns;
 
   @override
@@ -127,11 +134,13 @@ class _InsightsHomeState extends ConsumerState<_InsightsHome> {
         observation: observation,
         skillset: widget.skillset,
         personalPatterns: widget.personalPatterns,
+        sleepRecommendation: widget.sleepRecommendation,
         showPersonalPatterns: widget.showPersonalPatterns,
         onRefresh: () {
           ref.invalidate(correlationReportProvider);
           ref.invalidate(insightsProvider);
           ref.invalidate(personalPatternsProvider);
+          ref.invalidate(sleepRecommendationProvider);
           if (widget.skillset != null) {
             ref.invalidate(skillsetProfileProvider);
           }
@@ -165,18 +174,26 @@ class _InsightsHomeState extends ConsumerState<_InsightsHome> {
                     ref.invalidate(correlationReportProvider);
                     ref.invalidate(insightsProvider);
                     ref.invalidate(personalPatternsProvider);
+                    ref.invalidate(sleepRecommendationProvider);
                     if (widget.skillset != null) {
                       ref.invalidate(skillsetProfileProvider);
                     }
                   },
                 ),
                 SizedBox(height: isMobile ? AppSpacing.lg : AppSpacing.xl),
-                if (widget.showPersonalPatterns)
+                if (widget.showPersonalPatterns) ...[
                   _PersonalStudyPatternCard(
                     patterns: widget.personalPatterns,
                     onRetry: () => ref.invalidate(personalPatternsProvider),
-                  )
-                else
+                  ),
+                  SizedBox(
+                    height: isMobile ? AppSpacing.md : AppSpacing.lg,
+                  ),
+                  _SleepRecommendationCard(
+                    value: widget.sleepRecommendation,
+                    onRetry: () => ref.invalidate(sleepRecommendationProvider),
+                  ),
+                ] else
                   _CoachingObservationCard(observation: observation),
                 SizedBox(height: isMobile ? AppSpacing.md : AppSpacing.lg),
                 if (widget.skillset != null) ...[

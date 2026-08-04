@@ -199,17 +199,17 @@
       ]
     },
     {
-      "coverage": "explicit",
+      "coverage": "shared_named",
       "key": "dailyCapture",
-      "version": "daily-capture-v4",
+      "version": "daily-capture-v5",
       "sources": [
         {
           "path": "apps/mobile/lib/features/quick_action/domain/quick_check_in.dart",
-          "symbol": "dailyCaptureV4"
+          "symbol": "dailyCaptureV5"
         },
         {
-          "path": "services/ai_service/app/services/snapshot_daily_state.py",
-          "locator": "{\"daily-capture-v2\", \"daily-capture-v3\", \"{version}\"}"
+          "path": "services/ai_service/app/contracts/daily_capture_v4.py",
+          "symbol": "DAILY_CAPTURE_CONTRACT_VERSION"
         }
       ],
       "owners": [
@@ -220,6 +220,7 @@
         "docs/daily-briefing-implementation-plan.md",
         "docs/exam-week-outlook-v1-contract.md",
         "docs/local-dev.md",
+        "docs/personal-learning-v1-contract.md",
         "docs/setup-personalization-retirement-contract.md",
         "docs/stabilization-consistency-contract.md",
         "docs/supabase-current-state.md",
@@ -229,7 +230,7 @@
     {
       "coverage": "explicit",
       "key": "dailyState",
-      "version": "explainable-daily-state-v2",
+      "version": "explainable-daily-state-v3",
       "sources": [
         {
           "path": "services/ai_service/app/services/snapshot_daily_state.py",
@@ -464,6 +465,30 @@
       ]
     },
     {
+      "coverage": "explicit",
+      "key": "personalPatterns",
+      "version": "personal-patterns-v1",
+      "sources": [
+        {
+          "path": "apps/mobile/lib/features/insights/domain/entities/personal_patterns.dart",
+          "locator": "json['contract_version'] != '{version}'"
+        },
+        {
+          "path": "services/ai_service/app/models/personal_patterns.py",
+          "symbol": "PERSONAL_PATTERNS_CONTRACT_VERSION"
+        }
+      ],
+      "owners": [
+        "apps/mobile/README.md",
+        "docs/architecture.md",
+        "docs/current-product-guide.md",
+        "docs/personal-learning-v1-contract.md",
+        "docs/ui-language-and-copy-contract.md",
+        "docs/verification.md",
+        "services/ai_service/README.md"
+      ]
+    },
+    {
       "coverage": "shared_named",
       "key": "preparationWorkload",
       "version": "preparation-workload-v1",
@@ -504,6 +529,31 @@
         "docs/deadline-planner-v1-contract.md",
         "docs/supabase-current-state.md",
         "docs/verification.md"
+      ]
+    },
+    {
+      "coverage": "shared_named",
+      "key": "sleepRecommendation",
+      "version": "sleep-recommendation-v1",
+      "sources": [
+        {
+          "path": "apps/mobile/lib/features/insights/domain/entities/sleep_recommendation.dart",
+          "symbol": "sleepRecommendationContractVersion"
+        },
+        {
+          "path": "services/ai_service/app/models/sleep_recommendation.py",
+          "symbol": "SLEEP_RECOMMENDATION_CONTRACT_VERSION"
+        }
+      ],
+      "owners": [
+        "apps/mobile/README.md",
+        "docs/architecture.md",
+        "docs/current-product-guide.md",
+        "docs/personal-learning-v1-contract.md",
+        "docs/stabilization-consistency-contract.md",
+        "docs/ui-language-and-copy-contract.md",
+        "docs/verification.md",
+        "services/ai_service/README.md"
       ]
     },
     {

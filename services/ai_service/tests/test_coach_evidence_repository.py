@@ -21,10 +21,7 @@ class PagingClient:
     async def select(self, table, *, params, max_response_bytes=None):
         self.calls.append((table, params, max_response_bytes))
         values = dict(params)
-        return [
-            {"id": f"row-{index}"}
-            for index in range(int(values["limit"]))
-        ]
+        return [{"id": f"row-{index}"} for index in range(int(values["limit"]))]
 
     async def count_exact(self, table, *, params):
         self.count_calls.append((table, params))
@@ -52,10 +49,9 @@ def test_bounded_reader_limits_examined_raw_rows_before_sanitizing() -> None:
     assert result.partial is True
     assert result.available_count == 17
     assert sum(int(dict(params)["limit"]) for _, params, _ in client.calls) == 3
-    assert {
-        max_response_bytes
-        for _, _, max_response_bytes in client.calls
-    } == {4 * 1024 * 1024}
+    assert {max_response_bytes for _, _, max_response_bytes in client.calls} == {
+        4 * 1024 * 1024
+    }
     assert client.count_calls == [
         (
             "daily_logs",
@@ -67,7 +63,18 @@ def test_bounded_reader_limits_examined_raw_rows_before_sanitizing() -> None:
     ]
 
 
-def test_daily_sanitizer_drops_free_text_capture_ids_and_raw_clocks() -> None:
+@pytest.mark.parametrize(
+    ("container_version", "branch_version"),
+    (
+        ("daily-capture-v4", "daily-capture-v4"),
+        ("daily-capture-v5", "daily-capture-v5"),
+        ("daily-capture-v5", "daily-capture-v4"),
+    ),
+)
+def test_daily_sanitizer_drops_free_text_capture_ids_and_raw_clocks(
+    container_version: str,
+    branch_version: str,
+) -> None:
     result = _safe_daily_log(
         {
             "id": "daily",
@@ -79,9 +86,15 @@ def test_daily_sanitizer_drops_free_text_capture_ids_and_raw_clocks() -> None:
             "energy_level": 6,
             "stress_level": 4,
             "metadata": {
+                "capture_version": container_version,
                 "captures": {
                     "morning": {
-                        "branch_version": "daily-capture-v4",
+                        "branch_version": branch_version,
+                        **(
+                            {"compatibility": True}
+                            if branch_version != container_version
+                            else {}
+                        ),
                         "capture_kind": "morning",
                         "entry_date": "2026-07-28",
                         "capture_id": "secret-id",
@@ -91,6 +104,11 @@ def test_daily_sanitizer_drops_free_text_capture_ids_and_raw_clocks() -> None:
                         "sleep_quality": 8,
                         "current_energy": 6,
                         "reflection": "SECRET",
+                        **(
+                            {"day_shape": "normal"}
+                            if branch_version == "daily-capture-v4"
+                            else {}
+                        ),
                     },
                     "evening": {
                         "planned_sleep_time": "23:00",
@@ -112,6 +130,59 @@ def test_daily_sanitizer_drops_free_text_capture_ids_and_raw_clocks() -> None:
     assert "id" not in result
     assert "morning" not in result
     assert "evening" not in result
+
+
+@pytest.mark.parametrize(
+    "metadata",
+    (
+        {
+            "capture_version": "daily-capture-v5",
+            "captures": {
+                "morning": {
+                    "branch_version": "daily-capture-v4",
+                    "capture_kind": "morning",
+                    "entry_date": "2026-07-28",
+                    "sleep_quality": 8,
+                },
+            },
+        },
+        {
+            "capture_version": "daily-capture-v5",
+            "captures": {
+                "morning": {
+                    "branch_version": "daily-capture-v5",
+                    "compatibility": True,
+                    "capture_kind": "morning",
+                    "entry_date": "2026-07-28",
+                    "sleep_quality": 8,
+                },
+            },
+        },
+        {
+            "capture_version": "daily-capture-v5",
+            "captures": {
+                "morning": {
+                    "branch_version": "daily-capture-v5",
+                    "capture_kind": "morning",
+                    "entry_date": "2026-07-28",
+                    "sleep_quality": 8,
+                    "day_shape": "normal",
+                },
+            },
+        },
+    ),
+)
+def test_daily_sanitizer_rejects_mixed_sleep_branch_identity(
+    metadata: dict,
+) -> None:
+    result = _safe_daily_log(
+        {
+            "entry_date": "2026-07-28",
+            "metadata": metadata,
+        },
+    )
+
+    assert result["sleep_quality"] is None
 
 
 class EmptyClient:
@@ -174,10 +245,7 @@ def test_evidence_queries_are_owner_scoped_and_exclude_forbidden_tables() -> Non
         "deadline_plan_blocks",
         "coach_messages",
     }.isdisjoint(tables)
-    assert all(
-        ("user_id", "eq.owner") in list(params)
-        for _, params, _ in client.calls
-    )
+    assert all(("user_id", "eq.owner") in list(params) for _, params, _ in client.calls)
 
 
 class LateReflectionClient:
@@ -199,9 +267,7 @@ class LateReflectionClient:
             assert values["focus_session_id"].startswith("in.(")
             return [
                 {
-                    "focus_session_id": (
-                        "11111111-1111-4111-8111-111111111111"
-                    ),
+                    "focus_session_id": ("11111111-1111-4111-8111-111111111111"),
                     "contract_version": "focus-reflection-v1",
                     "focus_quality": 4,
                     "useful_progress": 5,

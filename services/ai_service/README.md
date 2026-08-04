@@ -19,14 +19,25 @@ FastAPI service boundary for recommendation and future ML workflows.
   Supabase forced RLS.
 - `GET /v1/insights/personal-patterns` returns side-effect-free
   `personal-patterns-v1` evidence from a fixed profile-timezone 90-day window.
-  It shares strict Daily Capture V4 sleep parsing with Daily State and
+  It shares strict Daily Capture V4/V5 sleep parsing with Daily State and
   Exam-Week Outlook, never calls a model, and loads no behavioral evidence when
   analysis is disabled.
+- `GET /v1/insights/sleep-recommendation` independently returns
+  `sleep-recommendation-v1`. It recomputes a deterministic 90-day result with
+  disabled, collecting, unstable, or ready status; a ready result requires at
+  least 30 eligible Morning-plus-rated-Focus days and never persists or applies
+  a sleep window. Morning inclusion uses the exact closed-open `captured_at`
+  boundary and a valid observed Daily Log timestamp. Same-day and following-day
+  wakes remain separate candidate groups and return `wake_day_offset=0|1`.
+  Disabled analysis returns before sleep or Focus history is loaded; invalid
+  profile timezones map to the bounded `503` route problem.
 - `/v1/snapshots/generate` creates or refreshes deterministic `daily` or
   `weekly` user-state snapshots from recent user-owned signals. Their additive
-  `summary.daily_state` uses the `explainable-daily-state-v2` contract for
+  `summary.daily_state` uses the `explainable-daily-state-v3` contract for
   capture freshness, data quality, bounded risks/reasons, evidence, provenance,
-  and recovery-first Daily Mode classification.
+  and recovery-first Daily Mode classification. V3 removes Day Shape context,
+  `constrained_capacity`, and the former Day-Shape gate for `push`; V1/V2 stays
+  readable.
 - Phase 3 snapshot inputs include explicit `habit_logs` outcomes and
   `focus_sessions`. Bounded habit/focus summaries, counts, minutes, and evidence
   use deterministic, stably ordered 1,000-row pagination through the complete
@@ -85,9 +96,9 @@ FastAPI service boundary for recommendation and future ML workflows.
   Those mappings preserve the existing status, detail, header, and unexpected-
   error behavior; request-shape and security failures remain at their owning
   route or dependency. Concrete repository errors terminate at their owning
-  service. Pure Daily Capture V4 parsing/new-write validation lives in
+  service. Pure Daily Capture V4/V5 parsing and current-write validation lives in
   `app/contracts/daily_capture_v4.py`, avoiding repository-to-service
-  dependencies and keeping saved V4 branches readable by the same strict
+  dependencies and keeping saved compatibility branches readable by the same strict
   contract.
 - Planner and Deadline service modules own I/O orchestration; deterministic
   overview, projection, availability, block, and serialization helpers live in
@@ -165,7 +176,10 @@ FastAPI service boundary for recommendation and future ML workflows.
 - `PUT /v1/daily-capture/{entry_date}/{branch}` is the sole authenticated
   Capture writer. `daily-capture-write-v1` combines request replay with
   branch-local compare-and-swap and transactionally refreshes the Daily Log and
-  `quick_check_in` event projection.
+  `quick_check_in` event projection. Current strict branches are
+  `daily-capture-v5`; complete V4 branches remain accepted for rolling clients.
+  V5 Morning rejects `day_shape`, and neither a V4 rollout write nor an older
+  opposite branch can downgrade an existing V5 container.
 - `/v1/account/profile` and `/v1/account/preparation-budget` use strict V2
   request ids and independent expected revisions. `/v1/account/export` returns
   `account-export-v2`, and `/v1/account` remains the confirmed permanent
@@ -294,8 +308,8 @@ Evening capture on the target date or previous date as current and a Morning
 capture only on the target date as current. Complete current Evening plus
 Morning yields `current`; one usable current branch or current legacy numeric
 input yields `partial`; older usable input yields `stale`; and no trusted input
-yields `missing`. V2/V3/V4 capture rows are parsed strictly with friction
-ignored; V4 additionally validates branch compatibility and its sleep-plan/
+yields `missing`. V2–V5 capture rows are parsed strictly with friction and Day
+Shape ignored; V4/V5 additionally validate branch compatibility and sleep-plan/
 estimated-interval projections. A malformed structured marker or branch never
 falls back to projected numbers. Legacy numeric fallback is used only when no
 structured capture marker exists.
@@ -305,7 +319,7 @@ sufficient duration, and moderately low quality prevents `push`. Older V2
 Morning branches without the additive field remain compatible.
 
 The source marker remains `snapshot-aggregator-v1`. Snapshot metadata adds
-`daily_state_contract_version=explainable-daily-state-v2` and
+`daily_state_contract_version=explainable-daily-state-v3` and
 `state_lookback_days=7`. The result stays additive under `summary.daily_state`
 and `signals.daily_state`; no schema migration is required. Top-level
 `summary.risk_flags` aliases the current Daily State codes,
@@ -346,6 +360,7 @@ GET    /v1/learning/preferences
 PATCH  /v1/learning/preferences
 POST   /v1/learning/focus-reflections/clear
 GET    /v1/insights/personal-patterns
+GET    /v1/insights/sleep-recommendation
 ```
 
 Set `LEARNED_FOCUS_PLANNING_PILOT_ENABLED=true` in FastAPI and the matching

@@ -900,7 +900,7 @@ function buildDailyLogs(userId, scenario, now, metadata) {
       ).toISOString();
       const previousEntryDate = dateOnly(addDays(date, -1));
       const eveningCapture = {
-        branch_version: 'daily-capture-v4',
+        branch_version: 'daily-capture-v5',
         capture_kind: 'evening',
         entry_date: entryDate,
         capture_id: deterministicUuid(
@@ -937,7 +937,7 @@ function buildDailyLogs(userId, scenario, now, metadata) {
           : {}),
       };
       const morningCapture = {
-        branch_version: 'daily-capture-v4',
+        branch_version: 'daily-capture-v5',
         capture_kind: 'morning',
         entry_date: entryDate,
         capture_id: deterministicUuid(
@@ -958,7 +958,6 @@ function buildDailyLogs(userId, scenario, now, metadata) {
         sleep_hours: structuredSleep,
         sleep_quality: clampInt(Math.round(structuredSleep), 1, 10),
         current_energy: energy,
-        day_shape: stress >= 7 ? 'constrained' : 'normal',
       };
       return {
         id,
@@ -979,7 +978,7 @@ function buildDailyLogs(userId, scenario, now, metadata) {
         source: 'quick_check_in',
         metadata: {
           ...metadata,
-          capture_version: 'daily-capture-v4',
+          capture_version: 'daily-capture-v5',
           captures: {
             evening: eveningCapture,
             morning: morningCapture,
@@ -1019,8 +1018,17 @@ function buildDailyLogs(userId, scenario, now, metadata) {
 function buildStudentDailyLogs(userId, scenario, now, metadata) {
   const timezone = scenario.timezone;
   const today = localDateOnly(now, timezone);
-  const sleepMinutesByDay = [465, 480, 450, 495, 475, 505, 490];
   const weekdayStress = [5, 5, 6, 5, 4, 3, 3];
+  const ratedDates = [];
+  for (let offset = -42; offset <= -1; offset += 1) {
+    const localDate = addDateOnlyDays(today, offset);
+    if (isoWeekday(new Date(`${localDate}T12:00:00.000Z`)) !== 7) {
+      ratedDates.push(localDate);
+    }
+  }
+  const supportedSleepDates = new Set(
+    ratedDates.slice(-36).filter((_, index) => index % 2 === 0),
+  );
 
   return Array.from({ length: 43 }, (_, index) => {
     const offset = index - 42;
@@ -1035,33 +1043,21 @@ function buildStudentDailyLogs(userId, scenario, now, metadata) {
       3,
       8,
     );
-    const sleepMinutes = clampInt(
-      sleepMinutesByDay[index % sleepMinutesByDay.length] -
-        (stress >= 7 ? 15 : 0),
-      435,
-      510,
-    );
+    const supportedSleep = supportedSleepDates.has(entryDate);
+    const sleepMinutes = supportedSleep
+      ? [475, 480, 485][index % 3]
+      : [445, 450, 455][index % 3];
     const sleepHours = sleepMinutes / 60;
-    const sleepQuality = clampInt(
-      6 + (sleepMinutes - 450) / 30 - (stress >= 7 ? 1 : 0),
-      6,
-      9,
-    );
-    const energy = clampInt(
-      6 + (sleepMinutes - 450) / 45 - (stress >= 7 ? 1 : 0),
-      5,
-      8,
-    );
+    const sleepQuality = supportedSleep ? 8 : 6;
+    const energy = supportedSleep ? 8 : 6;
     const mood = clampInt(
       7 + (isWeekend ? 1 : 0) - (stress >= 7 ? 1 : 0),
       6,
       8,
     );
-    const wakeClock = isWeekend
-      ? index % 2 === 0
-        ? '08:00'
-        : '08:20'
-      : ['07:00', '07:10', '07:20'][index % 3];
+    const wakeClock = supportedSleep
+      ? ['07:00', '07:05', '07:10'][index % 3]
+      : ['08:20', '08:25', '08:30'][index % 3];
     const wokeAt = zonedDateTime(entryDate, wakeClock, timezone);
     const morningCapturedAt = addMinutes(wokeAt, 10);
     const estimatedSleepStartedAt = addMinutes(wokeAt, -sleepMinutes);
@@ -1073,7 +1069,7 @@ function buildStudentDailyLogs(userId, scenario, now, metadata) {
     );
     const previousEntryDate = addDateOnlyDays(entryDate, -1);
     const morningCapture = {
-      branch_version: 'daily-capture-v4',
+      branch_version: 'daily-capture-v5',
       capture_kind: 'morning',
       entry_date: entryDate,
       capture_id: morningCaptureId,
@@ -1081,19 +1077,18 @@ function buildStudentDailyLogs(userId, scenario, now, metadata) {
       estimated_sleep_started_at: estimatedSleepStartedAt.toISOString(),
       woke_at: wokeAt.toISOString(),
       estimated_sleep_minutes: sleepMinutes,
-      sleep_target_minutes: 480,
+      sleep_target_minutes: 510,
       source_evening_capture_id: deterministicUuid(
         `demo-seed:evening-capture:${userId}:${previousEntryDate}`,
       ),
       sleep_hours: sleepHours,
       sleep_quality: sleepQuality,
       current_energy: energy,
-      day_shape: stress >= 7 ? 'constrained' : isWeekend ? 'flexible' : 'normal',
     };
     const includeEvening = offset < 0;
     const eveningCapture = includeEvening
       ? {
-          branch_version: 'daily-capture-v4',
+          branch_version: 'daily-capture-v5',
           capture_kind: 'evening',
           entry_date: entryDate,
           capture_id: deterministicUuid(
@@ -1112,7 +1107,7 @@ function buildStudentDailyLogs(userId, scenario, now, metadata) {
               }
             : {}),
           planned_sleep_time: plannedSleepTime,
-          sleep_target_minutes: 480,
+          sleep_target_minutes: 510,
           tomorrow_priority:
             scenario.priorities[index % scenario.priorities.length][0],
           ...(offset === -1
@@ -1144,7 +1139,7 @@ function buildStudentDailyLogs(userId, scenario, now, metadata) {
       source: 'quick_check_in',
       metadata: {
         ...metadata,
-        capture_version: 'daily-capture-v4',
+        capture_version: 'daily-capture-v5',
         captures: {
           morning: morningCapture,
           ...(eveningCapture ? { evening: eveningCapture } : {}),
@@ -1160,7 +1155,11 @@ function buildBehavioralEvents(userId, scenario, dailyLogs, metadata) {
   return dailyLogs.flatMap((log, index) => {
     const date = new Date(`${log.entry_date}T12:00:00.000Z`);
     const captures = log.metadata?.captures;
-    if (log.metadata?.capture_version === 'daily-capture-v4' && captures) {
+    if (
+      ['daily-capture-v4', 'daily-capture-v5'].includes(
+        log.metadata?.capture_version,
+      ) && captures
+    ) {
       const evening = captures.evening;
       const morning = captures.morning;
       const signals = [];
@@ -1189,14 +1188,13 @@ function buildBehavioralEvents(userId, scenario, dailyLogs, metadata) {
         source: 'quick_check_in',
         metadata: {
           ...metadata,
-          capture_version: 'daily-capture-v4',
+          capture_version: log.metadata.capture_version,
           capture_kind: captureKind,
           entry_date: log.entry_date,
           capture_id: capture.capture_id,
           captured_at: capture.captured_at,
           ...(captureKind === 'morning'
             ? {
-                day_shape: morning.day_shape,
                 sleep_quality: morning.sleep_quality,
               }
             : {

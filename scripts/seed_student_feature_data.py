@@ -78,8 +78,8 @@ from app.services.deadline_plan_service import DeadlinePlanService  # noqa: E402
 from app.contracts.daily_capture_v4 import (  # noqa: E402
     DailyCaptureV4SleepEpisode,
     DailyCaptureV4SleepPlan,
-    parse_daily_capture_v4_sleep_episode,
-    parse_daily_capture_v4_sleep_plan,
+    parse_daily_capture_sleep_episode,
+    parse_daily_capture_sleep_plan,
 )
 from app.services.learning_service import LearningService  # noqa: E402
 from app.services.notification_service import (  # noqa: E402
@@ -87,6 +87,9 @@ from app.services.notification_service import (  # noqa: E402
     NotificationService,
 )
 from app.services.personal_patterns_service import PersonalPatternsService  # noqa: E402
+from app.services.sleep_recommendation_service import (  # noqa: E402
+    SleepRecommendationService,
+)
 from app.services.snapshot_aggregator import SnapshotAggregator  # noqa: E402
 from app.services.weekly_review_service import WeeklyReviewService  # noqa: E402
 
@@ -261,9 +264,7 @@ async def _seed_calendar(
         connection_id=connection.connection.id,
         request=CalendarFileImportRequest.model_validate(
             {
-                "request_id": str(
-                    _stable_uuid(f"demo-seed:calendar-import:{user_id}")
-                ),
+                "request_id": str(_stable_uuid(f"demo-seed:calendar-import:{user_id}")),
                 "calendar_text": _calendar_fixture(
                     today=today,
                     timezone=timezone,
@@ -347,9 +348,7 @@ async def _seed_deadline_plans(
     )
     if len(profile_rows) != 1:
         raise RuntimeError("Student preparation-budget revision is unavailable.")
-    preparation_budget_revision = profile_rows[0].get(
-        "preparation_budget_revision"
-    )
+    preparation_budget_revision = profile_rows[0].get("preparation_budget_revision")
     if (
         not isinstance(preparation_budget_revision, int)
         or isinstance(preparation_budget_revision, bool)
@@ -361,9 +360,7 @@ async def _seed_deadline_plans(
         now=lambda: now,
     ).update_preparation_budget(
         user_id=user_id,
-        request_id=_stable_uuid(
-            f"demo-seed:account-preparation-budget:{user_id}"
-        ),
+        request_id=_stable_uuid(f"demo-seed:account-preparation-budget:{user_id}"),
         expected_revision=preparation_budget_revision,
         minutes=STUDENT_DAILY_BUDGET,
     )
@@ -444,9 +441,7 @@ async def _seed_deadline_plans(
         "focus_sessions",
         rows=[
             {
-                "id": str(
-                    _stable_uuid(f"demo-seed:deadline-focus:{user_id}:calculus")
-                ),
+                "id": str(_stable_uuid(f"demo-seed:deadline-focus:{user_id}:calculus")),
                 "user_id": user_id,
                 "started_at": focus_start.isoformat(),
                 "ended_at": focus_end.isoformat(),
@@ -711,12 +706,12 @@ async def _verify_student_capture_realism(
         metadata = row.get("metadata")
         if (
             not isinstance(metadata, dict)
-            or metadata.get("capture_version") != "daily-capture-v4"
+            or metadata.get("capture_version") != "daily-capture-v5"
             or not isinstance(metadata.get("captures"), dict)
         ):
-            raise RuntimeError("Student capture history must use Daily Capture V4.")
+            raise RuntimeError("Student capture history must use Daily Capture V5.")
         captures = metadata["captures"]
-        morning_result = parse_daily_capture_v4_sleep_episode(
+        morning_result = parse_daily_capture_sleep_episode(
             captures.get("morning"),
             row_date=entry_date,
         )
@@ -726,6 +721,11 @@ async def _verify_student_capture_realism(
                 f"{entry_date.isoformat()} {morning_result.issues}"
             )
         morning = morning_result.value
+        if (
+            isinstance(captures.get("morning"), dict)
+            and "day_shape" in captures["morning"]
+        ):
+            raise RuntimeError("Student Daily Capture V5 must not contain day_shape.")
         if not (
             435 <= morning.estimated_sleep_minutes <= 510
             and 6 <= morning.sleep_quality <= 9
@@ -743,7 +743,7 @@ async def _verify_student_capture_realism(
                     "Today's Student fixture should leave Evening open for testing."
                 )
             continue
-        evening_result = parse_daily_capture_v4_sleep_plan(
+        evening_result = parse_daily_capture_sleep_plan(
             evening_raw,
             row_date=entry_date,
         )
@@ -809,6 +809,34 @@ async def _verify_personal_learning(
     return response
 
 
+async def _verify_sleep_recommendation(
+    *,
+    client: SupabaseRestClient,
+    user_id: str,
+    now: datetime,
+) -> object:
+    service = SleepRecommendationService(
+        learning=LearningService(
+            repository=SupabaseLearningRepository(client),
+        ),
+        repository=SupabasePersonalPatternsRepository(client),
+        now=lambda: now,
+    )
+    response = await service.get_recommendation(user_id=user_id)
+    if (
+        response.status != "ready"
+        or response.sample.eligible_focus_days < 30
+        or response.recommendation is None
+        or response.recommendation.warning != "below_confirmed_sleep_target"
+    ):
+        raise RuntimeError(
+            "Student sleep recommendation is not reproducibly ready: "
+            f"status={response.status}, reason={response.reason}, "
+            f"eligible_days={response.sample.eligible_focus_days}."
+        )
+    return response
+
+
 async def _verify(
     *,
     client: SupabaseRestClient,
@@ -828,6 +856,11 @@ async def _verify(
         today=today,
     )
     patterns = await _verify_personal_learning(
+        client=client,
+        user_id=user_id,
+        now=now,
+    )
+    sleep_recommendation = await _verify_sleep_recommendation(
         client=client,
         user_id=user_id,
         now=now,
@@ -897,9 +930,7 @@ async def _verify(
             table=table,
             user_id=user_id,
             select_column=(
-                "focus_session_id"
-                if table == "focus_session_reflections"
-                else "id"
+                "focus_session_id" if table == "focus_session_reflections" else "id"
             ),
         )
         for table in minimums
@@ -930,6 +961,12 @@ async def _verify(
         f"{patterns.sample.rated_local_days} local days, "
         f"{patterns.sample.rating_coverage:.0%} coverage, "
         f"preferred window {patterns.planner_preference.window}."
+    )
+    print(
+        "Sleep Recommendation: "
+        f"{sleep_recommendation.status}, "
+        f"{sleep_recommendation.sample.eligible_focus_days} eligible days, "
+        "below-target warning verified."
     )
     return counts
 

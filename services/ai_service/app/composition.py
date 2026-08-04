@@ -66,6 +66,7 @@ from app.services.notification_service import (
     NotificationService,
 )
 from app.services.personal_patterns_service import PersonalPatternsService
+from app.services.sleep_recommendation_service import SleepRecommendationService
 from app.services.planner_service import PlannerService
 from app.services.recommendation_engine import RecommendationEngine
 from app.services.scheduled_refresh import ScheduledRefreshService
@@ -98,6 +99,7 @@ class ApplicationComposition:
     learning_service: LearningService
     notification_service: NotificationService
     personal_patterns_service: PersonalPatternsService
+    sleep_recommendation_service: SleepRecommendationService
     planner_service: PlannerService
     recommendation_engine: RecommendationEngine
     scheduled_refresh_service: ScheduledRefreshService
@@ -130,9 +132,16 @@ class ApplicationComposition:
             repository=SupabaseWeeklyReviewRepository(supabase_client),
             snapshot_aggregator=snapshot_aggregator,
         )
+        personal_patterns_repository = SupabasePersonalPatternsRepository(
+            supabase_client,
+        )
         personal_patterns_service = PersonalPatternsService(
             learning=learning_service,
-            repository=SupabasePersonalPatternsRepository(supabase_client),
+            repository=personal_patterns_repository,
+        )
+        sleep_recommendation_service = SleepRecommendationService(
+            learning=learning_service,
+            repository=personal_patterns_repository,
         )
         learned_timing = LearnedTimingResolver(
             learning=learning_service,
@@ -248,6 +257,7 @@ class ApplicationComposition:
             learning_service=learning_service,
             notification_service=notification_service,
             personal_patterns_service=personal_patterns_service,
+            sleep_recommendation_service=sleep_recommendation_service,
             planner_service=planner_service,
             recommendation_engine=recommendation_engine,
             scheduled_refresh_service=scheduled_refresh_service,

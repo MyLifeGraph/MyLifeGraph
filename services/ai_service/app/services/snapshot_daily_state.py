@@ -6,15 +6,20 @@ from math import isfinite
 from typing import Any, Literal
 
 from app.contracts.daily_capture_v4 import (
-    parse_daily_capture_v4_sleep_episode,
-    parse_daily_capture_v4_sleep_plan,
+    parse_daily_capture_sleep_episode,
+    parse_daily_capture_sleep_plan,
 )
 
 
-DAILY_STATE_CONTRACT_VERSION = "explainable-daily-state-v2"
+DAILY_STATE_CONTRACT_VERSION = "explainable-daily-state-v3"
 DAILY_STATE_LOOKBACK_DAYS = 7
 _DAILY_CAPTURE_VERSIONS = frozenset(
-    {"daily-capture-v2", "daily-capture-v3", "daily-capture-v4"},
+    {
+        "daily-capture-v2",
+        "daily-capture-v3",
+        "daily-capture-v4",
+        "daily-capture-v5",
+    },
 )
 
 DataQuality = Literal["missing", "partial", "current", "stale"]
@@ -51,6 +56,7 @@ class _Capture:
         "explicit_capture_v2",
         "explicit_capture_v3",
         "explicit_capture_v4",
+        "explicit_capture_v5",
         "legacy_daily_log",
     ]
     values: dict[str, Any]
@@ -397,11 +403,11 @@ def _parse_v2_capture(
     if not isinstance(raw, dict):
         return None, [f"{kind}.invalid_object"]
     branch_version = capture_version
-    if capture_version == "daily-capture-v4":
+    if capture_version in {"daily-capture-v4", "daily-capture-v5"}:
         branch_version = raw.get("branch_version")
         if branch_version not in _DAILY_CAPTURE_VERSIONS:
             return None, [f"{kind}.invalid_branch_version"]
-        if branch_version == "daily-capture-v4":
+        if branch_version == capture_version:
             compatibility = raw.get("compatibility")
             if compatibility is not None and compatibility is not False:
                 return None, [f"{kind}.invalid_compatibility"]
@@ -476,25 +482,32 @@ def _parse_v2_capture(
             stress is not None
             and (stress < 5 or (source is not None and controllability is not None))
         )
-        if branch_version == "daily-capture-v4":
-            sleep_plan = parse_daily_capture_v4_sleep_plan(
+        if branch_version in {"daily-capture-v4", "daily-capture-v5"}:
+            sleep_plan = parse_daily_capture_sleep_plan(
                 raw,
                 row_date=row_date,
             )
             issues.extend(sleep_plan.issues)
             complete = complete and sleep_plan.value is not None
     else:
-        is_v4 = branch_version == "daily-capture-v4"
+        has_precise_sleep = branch_version in {
+            "daily-capture-v4",
+            "daily-capture-v5",
+        }
         sleep_hours = _sleep_hours(
             raw.get("sleep_hours"),
-            half_hours=not is_v4,
-            maximum=16 if is_v4 else 12,
+            half_hours=not has_precise_sleep,
+            maximum=16 if has_precise_sleep else 12,
         )
         required = {
             "sleep_hours": sleep_hours,
             "current_energy": _rating(raw.get("current_energy"), minimum=1),
-            "day_shape": _enum_value(raw.get("day_shape"), _DAY_SHAPES),
         }
+        if branch_version != "daily-capture-v5":
+            required["day_shape"] = _enum_value(
+                raw.get("day_shape"),
+                _DAY_SHAPES,
+            )
         for field, value in required.items():
             if value is None:
                 _append_issue(issues, f"morning.invalid_{field}")
@@ -507,8 +520,8 @@ def _parse_v2_capture(
             else:
                 values["sleep_quality"] = sleep_quality
         complete = all(value is not None for value in required.values())
-        if is_v4:
-            sleep_episode = parse_daily_capture_v4_sleep_episode(
+        if has_precise_sleep:
+            sleep_episode = parse_daily_capture_sleep_episode(
                 raw,
                 row_date=row_date,
             )
@@ -522,12 +535,16 @@ def _parse_v2_capture(
             entry_date=row_date,
             captured_at=captured_at,
             source_format=(
-                "explicit_capture_v4"
-                if branch_version == "daily-capture-v4"
+                "explicit_capture_v5"
+                if branch_version == "daily-capture-v5"
                 else (
-                    "explicit_capture_v3"
-                    if branch_version == "daily-capture-v3"
-                    else "explicit_capture_v2"
+                    "explicit_capture_v4"
+                    if branch_version == "daily-capture-v4"
+                    else (
+                        "explicit_capture_v3"
+                        if branch_version == "daily-capture-v3"
+                        else "explicit_capture_v2"
+                    )
                 )
             ),
             values=values,
@@ -645,9 +662,6 @@ def _build_context(captures: list[_Capture]) -> dict[str, Any]:
     evening = _latest_capture(
         [capture for capture in captures if capture.kind == "evening"],
     )
-    morning = _latest_capture(
-        [capture for capture in captures if capture.kind == "morning"],
-    )
     return {
         "mood": mood.value if mood is not None else None,
         "current_energy": energy.value if energy is not None else None,
@@ -662,7 +676,6 @@ def _build_context(captures: list[_Capture]) -> dict[str, Any]:
             "controllability": stress_controllability,
         },
         "focus_band": evening.values.get("focus_band") if evening is not None else None,
-        "day_shape": morning.values.get("day_shape") if morning is not None else None,
     }
 
 
@@ -681,10 +694,8 @@ def _build_risks(
     energy = _as_float(current_context.get("current_energy"))
     sleep = _as_float(current_context.get("sleep_hours"))
     sleep_quality = _as_float(current_context.get("sleep_quality"))
-    day_shape = current_context.get("day_shape")
 
     current_evening = _current_capture(latest, freshness, "evening")
-    current_morning = _current_capture(latest, freshness, "morning")
     current_values = [
         capture
         for capture in latest.values()
@@ -774,11 +785,6 @@ def _build_risks(
                 else None
             ),
         )
-    if day_shape == "constrained":
-        add(
-            "constrained_capacity",
-            current_morning.ref("day_shape") if current_morning else None,
-        )
     workload_overload = (
         intensity is not None and intensity >= 8 and source == "workload"
     )
@@ -856,7 +862,6 @@ def _classify_mode(
     energy = _as_float(current_context.get("current_energy"))
     sleep = _as_float(current_context.get("sleep_hours"))
     sleep_quality = _as_float(current_context.get("sleep_quality"))
-    day_shape = current_context.get("day_shape")
     risk_map = {risk.code: risk for risk in risks}
     current_evening = _current_capture(latest, freshness, "evening")
     current_morning = _current_capture(latest, freshness, "morning")
@@ -1098,7 +1103,6 @@ def _classify_mode(
         and (sleep_quality is None or sleep_quality >= 7)
         and intensity is not None
         and intensity <= 4
-        and day_shape in {"normal", "flexible"}
         and not overdue_tasks
         and active_tasks
     ):
@@ -1108,8 +1112,8 @@ def _classify_mode(
             (
                 _Reason(
                     "push_good_current_capacity",
-                    "Current energy, sleep duration and quality, stress, and "
-                    "day shape support protected focus.",
+                    "Current energy, sleep duration and quality, and stress "
+                    "support protected focus.",
                     tuple(
                         ref
                         for ref in (
@@ -1127,11 +1131,6 @@ def _classify_mode(
                                 current_morning.ref("sleep_quality")
                                 if current_morning is not None
                                 and sleep_quality is not None
-                                else None
-                            ),
-                            (
-                                current_morning.ref("day_shape")
-                                if current_morning is not None
                                 else None
                             ),
                             (
@@ -1180,11 +1179,6 @@ def _classify_mode(
                 current_morning.ref("sleep_quality")
                 if current_morning is not None
                 and sleep_quality is not None
-                else None
-            ),
-            (
-                current_morning.ref("day_shape")
-                if current_morning is not None
                 else None
             ),
             (

@@ -53,7 +53,6 @@ class DashboardGuestSnapshotAdapter {
               focusBand: draft.evening?.focusBand?.code,
               stressSource: draft.evening?.stressSource?.code,
               stressControllability: draft.evening?.stressControllability?.code,
-              dayShape: draft.morning?.dayShape?.code,
             ),
       checkInStreakDays: streak,
       todayPlan: const [],

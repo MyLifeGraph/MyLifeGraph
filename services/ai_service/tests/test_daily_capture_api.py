@@ -79,6 +79,12 @@ def _morning_capture() -> dict[str, object]:
     }
 
 
+def _v5_morning_capture() -> dict[str, object]:
+    capture = {**_morning_capture(), "branch_version": "daily-capture-v5"}
+    del capture["day_shape"]
+    return capture
+
+
 async def _request(
     repository: Repository,
     *,
@@ -146,6 +152,54 @@ def test_daily_capture_put_rejects_incomplete_branch_before_persistence() -> Non
     response = asyncio.run(
         _request(
             repository,
+            body={
+                "contract_version": "daily-capture-write-v1",
+                "request_id": REQUEST_ID,
+                "expected_capture": None,
+                "capture": capture,
+            },
+        ),
+    )
+
+    assert response.status_code == 422
+    assert repository.calls == []
+
+
+@pytest.mark.parametrize(
+    "capture",
+    [_morning_capture(), _v5_morning_capture()],
+    ids=("v4-rollout", "v5-current"),
+)
+def test_daily_capture_put_accepts_complete_v4_and_v5_morning_branches(
+    capture: dict[str, object],
+) -> None:
+    repository = Repository()
+
+    response = asyncio.run(
+        _request(
+            repository,
+            branch="morning",
+            body={
+                "contract_version": "daily-capture-write-v1",
+                "request_id": REQUEST_ID,
+                "expected_capture": None,
+                "capture": capture,
+            },
+        ),
+    )
+
+    assert response.status_code == 200
+    assert repository.calls[0]["capture"] == capture
+
+
+def test_daily_capture_v5_rejects_retired_day_shape_as_unexpected() -> None:
+    repository = Repository()
+    capture = {**_v5_morning_capture(), "day_shape": "normal"}
+
+    response = asyncio.run(
+        _request(
+            repository,
+            branch="morning",
             body={
                 "contract_version": "daily-capture-write-v1",
                 "request_id": REQUEST_ID,

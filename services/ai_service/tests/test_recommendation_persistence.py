@@ -1,6 +1,8 @@
 import asyncio
 from datetime import date, datetime, timedelta, timezone
 
+import pytest
+
 from app.models.recommendation_candidates import (
     DeterministicScores,
     RecommendationCandidate,
@@ -35,18 +37,22 @@ class FakeSupabaseClient:
     async def select(self, table: str, *, params: dict[str, str]):
         self.select_calls.append((table, params))
         if table == "daily_logs":
-            return self.daily_rows if self.daily_rows is not None else [
-                {
-                    "id": "log-1",
-                    "entry_date": TODAY.isoformat(),
-                    "sleep_hours": 5.5,
-                    "steps": 2000,
-                    "activity_level": 1,
-                    "focus_minutes": 25,
-                    "energy_level": 3,
-                    "stress_level": 8,
-                },
-            ]
+            return (
+                self.daily_rows
+                if self.daily_rows is not None
+                else [
+                    {
+                        "id": "log-1",
+                        "entry_date": TODAY.isoformat(),
+                        "sleep_hours": 5.5,
+                        "steps": 2000,
+                        "activity_level": 1,
+                        "focus_minutes": 25,
+                        "energy_level": 3,
+                        "stress_level": 8,
+                    },
+                ]
+            )
         if table == "behavioral_events":
             return [
                 {
@@ -177,9 +183,7 @@ class FakeRecommendationRepository:
     ):
         self.replace_calls.append((user_id, refreshed_at, list(recommendations)))
         self.persisted.extend(recommendations)
-        accepted = [
-            item for item in self.items if item.id in self.accepted_item_ids
-        ]
+        accepted = [item for item in self.items if item.id in self.accepted_item_ids]
         inserted = [
             item_from_verified(
                 recommendation,
@@ -210,8 +214,7 @@ def item_from_verified(recommendation, item_id: str, generated_at: datetime):
             rule_id=candidate.rule_id,
             fingerprint=recommendation.fingerprint,
             evidence_refs=[
-                evidence_ref.as_metadata()
-                for evidence_ref in candidate.evidence_refs
+                evidence_ref.as_metadata() for evidence_ref in candidate.evidence_refs
             ],
             period_key=candidate.period_key,
             source_engine_version=candidate.source_engine_version,
@@ -315,12 +318,22 @@ def test_user_context_repository_scopes_every_read_to_explicit_user_id() -> None
         "tasks",
     }
     assert all(
-        params["user_id"] == "eq.user-test-123"
-        for _, params in client.select_calls
+        params["user_id"] == "eq.user-test-123" for _, params in client.select_calls
     )
 
 
-def test_recommendation_context_uses_valid_v4_sleep_and_profile_timezone() -> None:
+@pytest.mark.parametrize(
+    ("container_version", "branch_version"),
+    (
+        ("daily-capture-v4", "daily-capture-v4"),
+        ("daily-capture-v5", "daily-capture-v5"),
+        ("daily-capture-v5", "daily-capture-v4"),
+    ),
+)
+def test_recommendation_context_uses_shared_sleep_and_profile_timezone(
+    container_version: str,
+    branch_version: str,
+) -> None:
     client = FakeSupabaseClient(
         daily_rows=[
             {
@@ -333,23 +346,31 @@ def test_recommendation_context_uses_valid_v4_sleep_and_profile_timezone() -> No
                 "energy_level": None,
                 "stress_level": None,
                 "metadata": {
-                    "capture_version": "daily-capture-v4",
+                    "capture_version": container_version,
                     "captures": {
                         "morning": {
-                            "branch_version": "daily-capture-v4",
+                            "branch_version": branch_version,
+                            **(
+                                {"compatibility": True}
+                                if branch_version != container_version
+                                else {}
+                            ),
                             "capture_kind": "morning",
                             "entry_date": "2026-03-30",
                             "capture_id": "morning-1",
                             "captured_at": "2026-03-30T06:45:00+02:00",
-                            "estimated_sleep_started_at":
-                                "2026-03-29T23:00:00+02:00",
+                            "estimated_sleep_started_at": "2026-03-29T23:00:00+02:00",
                             "woke_at": "2026-03-30T06:30:00+02:00",
                             "estimated_sleep_minutes": 450,
                             "sleep_target_minutes": 510,
                             "sleep_hours": 7.5,
                             "sleep_quality": 4,
                             "current_energy": 5,
-                            "day_shape": "normal",
+                            **(
+                                {"day_shape": "normal"}
+                                if branch_version == "daily-capture-v4"
+                                else {}
+                            ),
                             "source_evening_capture_id": "evening-1",
                         },
                     },
@@ -378,9 +399,7 @@ def test_recommendation_context_uses_valid_v4_sleep_and_profile_timezone() -> No
     assert sleep.sleep_quality == 4
     assert sleep.sleep_target_deviation_minutes == -60
     focus_query = next(
-        params
-        for table, params in client.select_calls
-        if table == "focus_sessions"
+        params for table, params in client.select_calls if table == "focus_sessions"
     )
     assert focus_query["started_at"] == "gte.2026-03-28T23:00:00+00:00"
 
@@ -599,9 +618,7 @@ def test_generate_dedupes_against_accepted_fingerprint_beyond_display_limit() ->
 
     assert repository.persisted == []
     assert repository.fingerprint_user_ids == ["user-test-123"]
-    assert [item.id for item in response.items] == [
-        "duplicate-outside-display-limit"
-    ]
+    assert [item.id for item in response.items] == ["duplicate-outside-display-limit"]
 
 
 def test_empty_verified_refresh_retires_previous_new_feed() -> None:

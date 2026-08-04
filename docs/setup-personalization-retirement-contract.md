@@ -31,9 +31,11 @@ compatibility. Goals have no active product surface or ranking role. Setup-owned
 Goal rows are archived; manual and foreign-managed rows are retained unchanged.
 
 Evening Capture requires mood, energy, and stress. Stress source and
-controllability remain required when stress is elevated. Reflection, possible
-priority, and specific blocker remain optional. Primary and additional friction
-choices are retired.
+controllability remain required when stress is elevated. Reflection and specific
+blocker remain optional; possible priority is retained only when already present
+on a compatibility branch. Primary and additional friction choices are retired.
+Morning Capture no longer asks for the unrelated per-day
+`normal|constrained|flexible` Day Shape.
 
 ## Contracts and compatibility
 
@@ -56,14 +58,21 @@ onboarding snapshot contains that energy value plus routine/Habit/commitment
 counters and has no personalization signals. Setup completion does not generate
 Recommendations.
 
+`weekday_shape` is the one-time Setup answer labelled `Typical weekday`. It is
+not the retired Morning `day_shape`, and this Daily Capture change does not
+rename, remove, or reinterpret it.
+
 The retirement slice first introduced friction-free `daily-capture-v3`; current
-new saves use additive `daily-capture-v4`. V2/V3 rows remain readable, friction
+new saves use additive `daily-capture-v5`. V2–V4 rows remain readable, friction
 keys are ignored, and an untouched older opposite branch may remain explicitly
-marked compatible until it is edited. New
-Daily State projections use `explainable-daily-state-v2`; V1 snapshots remain
-readable after sanitization. V2 has no friction context, risk, reason, or
-evidence. Stress, sleep, energy, day shape, workload, and active Tasks continue
-to drive classification. `push` requires at least one active Task.
+marked compatible until it is edited. Complete V4 writes remain accepted during
+rollout, but a V5 Morning write rejects `day_shape` and a V5 container is never
+downgraded. New Daily State projections use
+`explainable-daily-state-v3`; V1/V2 snapshots remain readable after
+sanitization. V3 has no friction or Day Shape context, risk, reason, or evidence;
+`constrained_capacity` and the former Day-Shape gate for `push` are removed.
+Stress, sleep, energy, workload, and active Tasks continue to drive
+classification. `push` requires at least one active Task.
 
 Current free questions use `free-coach-agent-prompt-v2` with a per-turn
 `personal-snapshot-v1`; paired V1 prompt history and exact replay stay valid.

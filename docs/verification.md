@@ -26,33 +26,47 @@ tooling, and what remains future work.
 The current Setup/Goal/friction verification boundary is
 `docs/setup-personalization-retirement-contract.md`. Historical results later in
 this file remain records of their checkout; they do not redefine current
-Capture V4, Daily State V2, Exam-Week Outlook V1, or Coach V3 expectations.
+Capture V5, Daily State V3, Exam-Week Outlook V1, or Coach V3 expectations.
 
 ## Current Verified Baseline
 
-The current database-verification working tree was reverified locally on
+The current working tree was reverified locally on 2026-08-04 with
+`verify:affected --base-ref HEAD`, which selected the complete `verify:full`
+gate. `verify:fast` reported `865` passing Flutter tests, clean Flutter
+analysis, `1328 passed, 2 skipped` for FastAPI, and passing documentation,
+visual, source, Ruff, and diff checks. The matching-history database gate passed
+all `222` assertions across eleven pgTAP files without a reset, and the debug
+web build passed. The first browser invocation was discarded because a
+pre-existing Uvicorn process held port 8000 and prevented the checkout server
+from binding. After that exact local process was stopped, the fresh full
+profile-mode browser suite passed all eight independent journeys in 6.1 minutes
+of test time. Those journeys registered nine exact Auth users, deleted eight,
+confirmed the account-deletion subject already absent, and covered the ready
+Sleep Recommendation card plus a persisted `daily-capture-v5` capture without
+`day_shape`.
+
+The preceding database-verification working tree was reverified locally on
 2026-08-02. A fresh local reset applied the complete repository migration chain
 documented in `docs/supabase-current-state.md`; the matching-history database
 gate then passed all `213` assertions across eleven pgTAP files.
-`verify:fast` reported `847` passing Flutter tests, clean Flutter analysis,
+`verify:fast` reported `851` passing Flutter tests, clean Flutter analysis,
 `1293 passed, 2 skipped` for FastAPI, and passing documentation, visual, source,
-Ruff, and diff
-checks. The debug web build, Android unit/lint gate, and debug APK passed. The
-focused `planner-confirm` profile-mode browser journey passed in 1:56 of test
-time and removed its exact Auth user. It first proved two concurrent manual V2
-starts produce exactly one success and one `409 active_focus_session`, then
-used a real confirmed Preparation block to confirm the planned-source snapshot,
-different actual start, server-side finish with non-zero actual minutes, exact
-chosen-block credit, exact-session reflection, and persisted reflection reload.
-The pgTAP suite separately proves that a genuinely past `missed` Preparation
-block can start at a free current instant, excludes only its own source block,
-and credits the chosen block without changing total plan progression.
-`supabase db lint --local --schema public,private --level warning
---fail-on warning` returned an empty result with no schema error or warning.
-The local security and performance advisors also returned no issue. The cleanup
-pgTAP file separately proves the closed canonical role wrapper, unchanged
-Account/Auth cascade, service-only grants, and durable interrupted Coach replay
-plus its single usage-ledger fact.
+Ruff, and diff checks. The debug web build, Android unit/lint gate, and debug APK
+passed. The focused `planner-confirm` profile-mode browser journey passed in
+1:56 of test time and removed its exact Auth user. It first proved two
+concurrent manual V2 starts produce exactly one success and one
+`409 active_focus_session`, then used a real confirmed Preparation block to
+confirm the planned-source snapshot, different actual start, server-side finish
+with non-zero actual minutes, exact chosen-block credit, exact-session
+reflection, and persisted reflection reload. The pgTAP suite separately proves
+that a genuinely past `missed` Preparation block can start at a free current
+instant, excludes only its own source block, and credits the chosen block
+without changing total plan progression. `supabase db lint --local --schema
+public,private --level warning --fail-on warning` returned an empty result with
+no schema error or warning. The local security and performance advisors also
+returned no issue. The cleanup pgTAP file separately proves the closed
+canonical role wrapper, unchanged Account/Auth cascade, service-only grants,
+and durable interrupted Coach replay plus its single usage-ledger fact.
 
 The preceding Observatory visual-material working tree was reverified locally on
 2026-08-01 through implementation and cleanup. `verify:fast` reported `814`
@@ -752,26 +766,29 @@ Current Flutter widget tests include:
   Reminder Preference, and More Context are absent. Repository/browser coverage
   proves a Setup edit leaves consent, categories, quiet hours, and daily cap
   unchanged.
-- Capture-domain tests cover every bounded stress source, controllability,
-  and day-shape value; rating, sleep clock/target/interval, date, and text
+- Capture-domain tests cover every bounded stress source and controllability;
+  rating, sleep clock/target/interval, date, and text
   boundaries; exact 02:00–10:00 and 23:00–07:00 derivation;
   omission of blank Evening optionals; and explicit inclusion of supplied
   reflection, priority, and blocker. Compatibility tests read V2/V3 friction
   and old `gentle_tomorrow` metadata, ignore/sanitize them, preserve an
-  untouched older opposite branch explicitly, and require V4 fields when that
-  branch is edited.
+  untouched older opposite branch explicitly, accept a complete V4 rollout
+  write, require V5 fields when a branch is edited, reject `day_shape` on V5,
+  prove a V5 container is never downgraded, convert complete V4 guest branches
+  to strict V5 for account migration, and refuse to guess incomplete V2/V3
+  sleep fields.
 - Same-day merge tests cover Evening-then-Morning and Morning-then-Evening,
   replacing one branch without erasing the other, Morning-over-Evening energy
   precedence, removal of deliberately cleared optionals, preservation of
   foreign top-level metadata, and legacy V1 calendar-date compatibility.
 - Capture payload tests assert one merged `daily_logs` row with
-  `capture_version=daily-capture-v4`, nested `captures.evening|morning`, direct
+  `capture_version=daily-capture-v5`, nested `captures.evening|morning`, direct
   nullable compatibility values, and only explicitly available current
   `behavioral_events`. Raw estimated/planned clocks stay only in Daily Log
   metadata while `sleep_hours` and the Sleep event use the derived duration.
   Event identities remain stable across exact retry and
-  event metadata mirrors capture kind/date plus the relevant stress, priority,
-  and day-shape context without friction.
+  event metadata mirrors capture kind/date plus relevant stress and retained
+  priority context without friction or Day Shape.
 - Guest-store tests cover typed Evening/Morning JSON, both-order same-day merge,
   exact retry deduplication, V1 guest rows with an explicit local date, and
   recovery from corrupted local JSON.
@@ -780,9 +797,25 @@ Current Flutter widget tests include:
   optionals still blank, absence of every friction control and the retired
   gentler control, preservation of Reflection/Priority/Specific Blocker, and
   suppression of a duplicate in-flight write.
+- Quick actions widget tests cover no saved branch, each single saved branch,
+  both saved branches, accessible completed-edit actions, status-free
+  loading/error states, and 320-pixel layout at 200% text.
 - The guest app smoke completes distinctive required-only Evening Shutdown and
   Morning Calibration, persists one local merged day, reads Morning energy over
-  Evening energy, and shows the exact saved summary on return.
+  Evening energy, and shows `Completed today` on both matching Quick actions
+  without a duplicate saved-signal summary on return.
+- Sleep Recommendation service/API tests cover the exact 29/30-day boundary,
+  per-day aggregation, the exact closed-open Morning capture boundary, required
+  observed Daily Log timestamps, invalid wake/capture/reflection ordering, V4
+  compatibility inside a V5 container, same-day versus following-day wake
+  grouping, midnight/DST clocks, invalid-timezone error mapping, typed unstable
+  outcomes, chronological-half confirmation, the below-target warning, and
+  consent-driven history non-reading. Flutter tests cover both exact wake-day
+  labels, loading/error/disabled/collecting/unstable/ready card states, narrow
+  320-pixel/200%-text layout, independent Personal Study Pattern failure
+  behavior, and zero guest endpoint calls.
+  These checks validate `sleep-recommendation-v1` independently from the
+  existing `personal-patterns-v1` contract.
 - Guest sees only locally functional Quick Actions; Supabase-only Habit
   Completion and Habit Management are hidden and their direct routes redirect.
 - The Intake API data source gets `GET /v1/intake/setup` and posts
@@ -1179,8 +1212,8 @@ boundary. Its eight independent journeys prove:
   history;
 - Settings-driven account export, byte-identical browser download, confirmed
   deletion, sign-out, and user-visible completion; and
-- enabled Personal Learning preferences followed by the exact empty 90-day
-  evidence state in Insights.
+- enabled Personal Learning preferences followed by a seeded 90-day Personal
+  Pattern and ready Sleep Recommendation in Insights.
 
 The former all-in-one browser source also mixed UI wiring with lower-level
 contract assertions. Those assertions were retained at their narrowest useful
@@ -1189,14 +1222,14 @@ test boundary before the monolith was removed:
 | Concern previously mixed into browser E2E | Current authoritative evidence |
 | --- | --- |
 | Setup validation, retry identity, revisions, ownership, and atomic apply | `test_intake_api.py`, `test_intake_service.py`, `test_intake_repository.py`, `setup_controller_test.dart`, plus the `@setup-onboarding` UI journey |
-| Daily Capture validation, branch merge, retry reconciliation, `explainable-daily-state-v2`, and Today mapping | `test_daily_capture_api.py`, `quick_check_in_data_source_test.dart`, capture page/widget tests, plus `@auth-capture-today` |
+| Daily Capture V5 validation/V4 rollout compatibility, branch merge, retry reconciliation, `explainable-daily-state-v3`, and Today mapping | `test_daily_capture_api.py`, `test_snapshot_daily_state.py`, `quick_check_in_data_source_test.dart`, capture page/widget tests, `stabilization_write_authority_test.sql`, plus `@auth-capture-today` |
 | Task, Habit, and Focus lifecycle constraints | `test_executable_actions.py`, executable-action Flutter tests, and migration contract tests |
 | Briefing, recommendation, and weekly-review determinism/replay | `test_briefing_service.py`, `test_weekly_review_service.py`, their API/repository tests, and corresponding Flutter widget/controller tests |
 | Calendar parsing, reconciliation, consent, identity, and isolation | `test_calendar_ical_parser.py`, Calendar API/service/repository/migration tests, and Calendar Flutter page/repository tests |
 | Notification lifecycle, delivery policy, conflicts, and Inbox behavior | Notification API/service/repository/migration tests, `notifications_page_test.dart`/`notification_delivery_test.dart`, plus `@notification-lifecycle` for the visible stored-Inbox lifecycle |
 | Deadline and central Planner calculations, writes, conflicts, and rendering | Deadline/Planner model, service, repository, API, migration, and Flutter page tests, plus `@planner-confirm` and the read-only `@exam-week-outlook` integration |
 | Coach safety, budget, evidence, persistence, and read-only authority | Coach API/service/repository/evidence/migration tests, Coach Flutter tests, plus `@coach` |
-| Personal Learning evidence, preferences, clearing, learned timing, and RLS | Personal-pattern/learning API/service/repository/migration tests, `personal_learning_v1_test.sql`, Flutter Learning tests, plus `@personal-learning` |
+| Personal Learning evidence, independent Sleep Recommendation, preferences, clearing, learned timing, and RLS | Personal-pattern/learning/sleep-recommendation API/service/repository tests, `personal_learning_v1_test.sql`, Flutter Learning/Insights tests, plus `@personal-learning` |
 | Account export/deletion contracts and authority | Account API/service/repository/migration tests and Settings widget/repository tests, plus `@account-controls` |
 | Global owner isolation, role authority, direct-DML denial, and protected-route authentication | `test_auth.py`, owner-derived API tests, privilege/RLS migration tests, and `supabase/tests/profile_authority_test.sql`; `@notification-lifecycle` additionally proves the owner boundary for its visible row actions |
 

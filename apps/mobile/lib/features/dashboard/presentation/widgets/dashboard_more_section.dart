@@ -511,12 +511,6 @@ class _LatestCheckInCard extends StatelessWidget {
           _readableCaptureCode(checkIn.focusBand!),
           AppIcons.timerOutlined,
         ),
-      if (checkIn.dayShape != null)
-        _SignalMetric(
-          'Day shape',
-          _readableCaptureCode(checkIn.dayShape!),
-          AppIcons.calendarTodayOutlined,
-        ),
       if (checkIn.steps != null)
         _SignalMetric(
           'Steps',

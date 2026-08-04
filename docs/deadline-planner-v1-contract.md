@@ -534,14 +534,14 @@ warning only, each exam uses at least one clear buffer day. The saved revision
 and its blocks remain unchanged.
 
 The read reuses deterministic Availability twice: normally, then with the
-newest valid Evening V4 planned sleep interval added as hypothetical busy time.
+newest valid Evening V4/V5 planned sleep interval added as hypothetical busy time.
 It includes all confirmed competing blocks in the simulation range, even when
 their plans' deadlines are outside the card's horizon. Pending revisions remain
 staged and are checked only for a visible sleep overlap. Opening the GET or its
 Planner card never creates a proposal, and an explicit replan still follows the
 existing preview/confirmation flow.
 
-The complete Capture V4, fit, warning, risk, DST, Planner placement, ownership,
+The complete Capture V4/V5, fit, warning, risk, DST, Planner placement, ownership,
 and non-claim rules are in `docs/exam-week-outlook-v1-contract.md`.
 
 ## Explicit Non-Claims

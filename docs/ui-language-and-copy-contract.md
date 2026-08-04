@@ -44,6 +44,18 @@ derived from the student's corrected estimated start/wake instants and
 measurement. Copy must state that neither is objective measurement, quality is
 judged independently of duration, and neither value may be inferred from the
 other.
+Morning check-in has no Day Shape/Tagesform question, label, saved summary, or
+Dashboard detail. The Quick Actions subtitle is exactly
+`Add sleep timing, sleep quality, and current energy`. The one-time Setup field
+`Typical weekday` remains separate and unchanged.
+
+## Quick Actions Copy
+
+After a successful current-day capture read, the existing `Evening check-in`
+and `Morning check-in` actions use the exact status `Completed today` for their
+respective saved branch. A completed action remains an entry for editing that
+branch. Quick actions does not repeat a detailed saved-signal summary, and it
+must not infer completion while the current-day read is loading or unavailable.
 
 ## Today Copy
 
@@ -121,6 +133,25 @@ medical advice, or predicted academic performance. Sleep descriptions never
 change or recommend a sleep target. Planner preview provenance uses the compact
 line `Learned timing applied · N rated sessions`; unavailable analysis states
 `Personal pattern unavailable · Setup timing used`.
+The underlying existing response version is `personal-patterns-v1`.
+
+The independent Insights card is titled `Sleep recommendation`. Non-ready
+states use `No stable window yet` with `Disabled`, `Collecting N/30`, or
+`Unstable`; ready uses `Best-supported sleep window` and `Ready`. Its three
+metric labels are exactly `Sleep start`, `Wake time`, and `Duration`, with
+`Same local day` on wake time when `wake_day_offset=0` and
+`Following local day` when `wake_day_offset=1`. Result copy may say
+`associated with` and
+must not say optimal, ideal, caused, or medically recommended. The
+below-target warning is exactly `This observed duration is below your median
+confirmed sleep target. Your target has not been changed.` There is no apply,
+adopt, or automation button.
+
+The card-local failure title is `Sleep evidence is temporarily unavailable.`
+and explains that the existing personal study pattern remains available and no
+fallback window was created. Its control says `Retry sleep recommendation`.
+Guest/demo mode does not show the card or invent a result.
+The card validates `sleep-recommendation-v1` before rendering any state.
 
 Advanced Insights uses `Previous-night sleep`,
 `Previous-night sleep quality`, `Sleep shortfall`, `Morning energy`,

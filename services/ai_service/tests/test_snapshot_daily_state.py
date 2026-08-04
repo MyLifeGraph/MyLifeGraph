@@ -133,11 +133,11 @@ def capture_row(
         "energy_level": (
             morning.get("current_energy")
             if morning is not None
-            else evening.get("energy") if evening is not None else None
+            else evening.get("energy")
+            if evening is not None
+            else None
         ),
-        "sleep_hours": (
-            morning.get("sleep_hours") if morning is not None else None
-        ),
+        "sleep_hours": (morning.get("sleep_hours") if morning is not None else None),
         "focus_minutes": None,
         "metadata": metadata,
         "updated_at": f"{entry_date.isoformat()}T21:00:00+00:00",
@@ -259,23 +259,52 @@ def v4_current_rows() -> list[dict]:
     return rows
 
 
-def test_v4_sleep_duration_preserves_daily_state_v2_classification() -> None:
+def v5_current_rows() -> list[dict]:
+    rows = json.loads(json.dumps(v4_current_rows()))
+    for row in rows:
+        metadata = row["metadata"]
+        metadata["capture_version"] = "daily-capture-v5"
+        for capture in metadata["captures"].values():
+            capture["branch_version"] = "daily-capture-v5"
+            capture.pop("day_shape", None)
+    return rows
+
+
+def test_v4_sleep_duration_preserves_daily_state_v3_classification() -> None:
     legacy = build_state(daily_logs=current_rows(), tasks=[active_task()])
     v4 = build_state(daily_logs=v4_current_rows(), tasks=[active_task()])
 
     assert v4.summary == legacy.summary
     assert v4.mode == legacy.mode == "push"
     assert v4.risk_codes == legacy.risk_codes
-    assert v4.signals["contract_version"] == "explainable-daily-state-v2"
+    assert v4.signals["contract_version"] == "explainable-daily-state-v3"
     assert all(
-        item["kind"] == "explicit_capture_v4"
-        for item in v4.signals["provenance"]
+        item["kind"] == "explicit_capture_v4" for item in v4.signals["provenance"]
     )
     serialized = json.dumps(v4.summary)
     assert "estimated_sleep_started_at" not in serialized
     assert "woke_at" not in serialized
     assert "sleep_target_minutes" not in serialized
     assert valid_explicit_capture_kinds(v4_current_rows()[1]) == frozenset(
+        {"morning"},
+    )
+
+
+def test_v5_morning_has_no_day_shape_context_or_push_gate() -> None:
+    v5 = build_state(daily_logs=v5_current_rows(), tasks=[active_task()])
+    historical_constrained = build_state(
+        daily_logs=current_rows(morning_overrides={"day_shape": "constrained"}),
+        tasks=[active_task()],
+    )
+
+    assert v5.mode == historical_constrained.mode == "push"
+    assert "day_shape" not in v5.summary["context"]
+    assert "day_shape" not in historical_constrained.summary["context"]
+    assert "constrained_capacity" not in historical_constrained.risk_codes
+    assert all(
+        item["kind"] == "explicit_capture_v5" for item in v5.signals["provenance"]
+    )
+    assert valid_explicit_capture_kinds(v5_current_rows()[1]) == frozenset(
         {"morning"},
     )
 
@@ -293,12 +322,10 @@ def test_v4_rejects_mismatched_derived_duration_and_naive_raw_time() -> None:
     assert result.summary["data_quality"] == "partial"
     assert result.summary["freshness"]["morning"]["state"] == "current"
     assert valid_explicit_capture_kinds(rows[1]) == frozenset()
-    assert "morning.invalid_estimated_sleep_started_at" in result.signals[
-        "quality_issues"
-    ]
-    assert "morning.invalid_estimated_sleep_minutes" in result.signals[
-        "quality_issues"
-    ]
+    assert (
+        "morning.invalid_estimated_sleep_started_at" in result.signals["quality_issues"]
+    )
+    assert "morning.invalid_estimated_sleep_minutes" in result.signals["quality_issues"]
 
 
 def test_v4_container_preserves_an_explicit_v3_compatibility_branch() -> None:
@@ -350,9 +377,9 @@ def test_parser_accepts_every_stress_controllability(code: str) -> None:
     )
 
     assert result.summary["context"]["stress"]["controllability"] == code
-    assert "evening.invalid_stress_controllability" not in result.signals[
-        "quality_issues"
-    ]
+    assert (
+        "evening.invalid_stress_controllability" not in result.signals["quality_issues"]
+    )
 
 
 @pytest.mark.parametrize("code", FOCUS_BANDS)
@@ -417,7 +444,8 @@ def test_parser_accepts_every_day_shape(code: str) -> None:
         daily_logs=current_rows(morning_overrides={"day_shape": code}),
     )
 
-    assert result.summary["context"]["day_shape"] == code
+    assert "day_shape" not in result.summary["context"]
+    assert "constrained_capacity" not in result.risk_codes
     assert "morning.invalid_day_shape" not in result.signals["quality_issues"]
 
 
@@ -437,9 +465,9 @@ def test_parser_validates_stress_intensity_labels(
 
     assert result.summary["context"]["stress"]["intensity"] == intensity
     assert result.summary["context"]["stress"]["intensity_label"] == label
-    assert "evening.invalid_stress_intensity_label" not in result.signals[
-        "quality_issues"
-    ]
+    assert (
+        "evening.invalid_stress_intensity_label" not in result.signals["quality_issues"]
+    )
 
 
 @pytest.mark.parametrize(
@@ -495,7 +523,7 @@ def test_unknown_morning_enum_is_untrusted() -> None:
         ),
     )
 
-    assert result.summary["context"]["day_shape"] is None
+    assert "day_shape" not in result.summary["context"]
     assert result.summary["data_quality"] == "partial"
     assert "morning.invalid_day_shape" in result.signals["quality_issues"]
 
@@ -647,7 +675,6 @@ def test_malformed_v2_metadata_does_not_fall_back_to_projected_numbers(
             "controllability": None,
         },
         "focus_band": None,
-        "day_shape": None,
     }
     assert issue in result.signals["quality_issues"]
     assert result.mode == "steady"
@@ -733,9 +760,7 @@ def test_medium_stress_still_requires_source_and_controllability() -> None:
     )
 
     assert result.summary["data_quality"] == "partial"
-    assert "evening.missing_stress_context" in result.signals[
-        "quality_issues"
-    ]
+    assert "evening.missing_stress_context" in result.signals["quality_issues"]
 
 
 def test_mismatched_stress_label_is_not_trusted_and_downgrades_quality() -> None:
@@ -751,9 +776,7 @@ def test_mismatched_stress_label_is_not_trusted_and_downgrades_quality() -> None
     assert result.summary["context"]["stress"]["intensity"] == 9
     assert result.summary["context"]["stress"]["intensity_label"] is None
     assert result.summary["data_quality"] == "partial"
-    assert "evening.invalid_stress_intensity_label" in result.signals[
-        "quality_issues"
-    ]
+    assert "evening.invalid_stress_intensity_label" in result.signals["quality_issues"]
 
 
 def test_missing_state_is_explicit_and_conservative() -> None:
@@ -799,7 +822,7 @@ def test_current_legacy_numeric_state_is_partial_without_invented_taxonomy() -> 
         "controllability": None,
     }
     assert result.summary["context"]["focus_band"] is None
-    assert result.summary["context"]["day_shape"] is None
+    assert "day_shape" not in result.summary["context"]
 
 
 def test_current_morning_only_is_partial() -> None:
@@ -1252,9 +1275,10 @@ def test_recovery_risks_and_reason_link_to_exact_capture_fields() -> None:
             "field": "metadata.captures.evening.stress_intensity",
         },
     ]
-    assert result.signals["reason_evidence"][
-        "recover_private_emotional_stress"
-    ] == expected_reason_refs
+    assert (
+        result.signals["reason_evidence"]["recover_private_emotional_stress"]
+        == expected_reason_refs
+    )
     assert result.summary["reasons"][0]["evidence_refs"] == expected_reason_refs
 
 
@@ -1548,9 +1572,7 @@ def test_captures_without_version_are_malformed_not_legacy_fallback() -> None:
 
     assert result.summary["data_quality"] == "missing"
     assert result.summary["provenance"]["basis"] == "none"
-    assert "daily_log.missing_capture_version" in result.signals[
-        "quality_issues"
-    ]
+    assert "daily_log.missing_capture_version" in result.signals["quality_issues"]
 
 
 @pytest.mark.parametrize(

@@ -104,6 +104,190 @@ select is(
   'capture recomputation preserves unrelated behavioral events'
 );
 
+select is(
+  public.apply_daily_capture_branch_v1(
+    'd1000000-0000-4000-8000-000000000001',
+    '2026-07-30',
+    'evening',
+    'd1000000-0000-4000-8000-000000000104',
+    repeat('4', 64),
+    null,
+    '{
+      "branch_version":"daily-capture-v4",
+      "capture_kind":"evening",
+      "entry_date":"2026-07-30",
+      "capture_id":"evening-v4-rollout",
+      "captured_at":"2026-07-30T20:30:00Z",
+      "mood":7,
+      "energy":6,
+      "stress_intensity":3,
+      "stress_intensity_label":"low",
+      "planned_sleep_time":"23:00",
+      "sleep_target_minutes":480
+    }'::jsonb,
+    '2026-07-30T20:31:00Z'
+  ) ->> 'capture_id',
+  'evening-v4-rollout',
+  'a complete V4 branch remains writable during the V5 rollout'
+);
+
+select is(
+  public.apply_daily_capture_branch_v1(
+    'd1000000-0000-4000-8000-000000000001',
+    '2026-07-30',
+    'morning',
+    'd1000000-0000-4000-8000-000000000105',
+    repeat('5', 64),
+    null,
+    '{
+      "branch_version":"daily-capture-v5",
+      "capture_kind":"morning",
+      "entry_date":"2026-07-30",
+      "capture_id":"morning-v5",
+      "captured_at":"2026-07-30T06:30:00Z",
+      "sleep_hours":7.5,
+      "sleep_quality":8,
+      "current_energy":7,
+      "estimated_sleep_started_at":"2026-07-29T23:00:00Z",
+      "woke_at":"2026-07-30T06:30:00Z",
+      "estimated_sleep_minutes":450,
+      "sleep_target_minutes":480
+    }'::jsonb,
+    '2026-07-30T20:32:00Z'
+  ) ->> 'capture_id',
+  'morning-v5',
+  'a V5 Morning branch upgrades the container without day_shape'
+);
+
+select ok(
+  (
+    public.apply_daily_capture_branch_v1(
+      'd1000000-0000-4000-8000-000000000001',
+      '2026-07-30',
+      'morning',
+      'd1000000-0000-4000-8000-000000000105',
+      repeat('5', 64),
+      null,
+      '{
+        "branch_version":"daily-capture-v5",
+        "capture_kind":"morning",
+        "entry_date":"2026-07-30",
+        "capture_id":"morning-v5",
+        "captured_at":"2026-07-30T06:30:00Z"
+      }'::jsonb,
+      '2026-07-30T20:32:00Z'
+    ) ->> 'replayed'
+  )::boolean,
+  'an exact V5 request replay returns the durable result'
+);
+
+select is(
+  public.apply_daily_capture_branch_v1(
+    'd1000000-0000-4000-8000-000000000001',
+    '2026-07-30',
+    'evening',
+    'd1000000-0000-4000-8000-000000000107',
+    repeat('7', 64),
+    '{
+      "capture_id":"evening-v4-rollout",
+      "captured_at":"2026-07-30T20:30:00Z"
+    }'::jsonb,
+    '{
+      "branch_version":"daily-capture-v4",
+      "capture_kind":"evening",
+      "entry_date":"2026-07-30",
+      "capture_id":"evening-v4-after-v5",
+      "captured_at":"2026-07-30T20:33:00Z",
+      "mood":8,
+      "energy":7,
+      "stress_intensity":2,
+      "stress_intensity_label":"low",
+      "planned_sleep_time":"22:45",
+      "sleep_target_minutes":495
+    }'::jsonb,
+    '2026-07-30T20:34:00Z'
+  ) ->> 'capture_id',
+  'evening-v4-after-v5',
+  'a rollout V4 edit remains writable after the container reached V5'
+);
+
+select is(
+  (
+    select metadata ->> 'capture_version'
+    from public.daily_logs
+    where user_id = 'd1000000-0000-4000-8000-000000000001'
+      and entry_date = '2026-07-30'
+  ),
+  'daily-capture-v5',
+  'the merged container advances to and remains V5'
+);
+
+select ok(
+  (
+    select
+      metadata #>> '{captures,evening,branch_version}' = 'daily-capture-v4'
+      and (metadata #>> '{captures,evening,compatibility}')::boolean
+      and metadata #>> '{captures,evening,capture_id}' = 'evening-v4-after-v5'
+      and metadata #>> '{captures,morning,branch_version}' = 'daily-capture-v5'
+      and not (metadata #> '{captures,morning}' ? 'day_shape')
+    from public.daily_logs
+    where user_id = 'd1000000-0000-4000-8000-000000000001'
+      and entry_date = '2026-07-30'
+  ),
+  'the untouched V4 branch is explicit compatibility data beside V5 Morning'
+);
+
+select is(
+  (
+    select sleep_hours
+    from public.daily_logs
+    where user_id = 'd1000000-0000-4000-8000-000000000001'
+      and entry_date = '2026-07-30'
+  ),
+  7.5::numeric,
+  'the V5 Morning branch owns the existing sleep projection'
+);
+
+select ok(
+  not exists (
+    select 1
+    from public.behavioral_events
+    where user_id = 'd1000000-0000-4000-8000-000000000001'
+      and daily_log_id = (
+        select id from public.daily_logs
+        where user_id = 'd1000000-0000-4000-8000-000000000001'
+          and entry_date = '2026-07-30'
+      )
+      and metadata ? 'day_shape'
+  ),
+  'V5 event projections do not copy retired day_shape context'
+);
+
+select throws_ok(
+  $$
+    select public.apply_daily_capture_branch_v1(
+      'd1000000-0000-4000-8000-000000000001',
+      '2026-07-31',
+      'morning',
+      'd1000000-0000-4000-8000-000000000106',
+      repeat('6', 64),
+      null,
+      '{
+        "branch_version":"daily-capture-v5",
+        "capture_kind":"morning",
+        "entry_date":"2026-07-31",
+        "capture_id":"invalid-v5-morning",
+        "captured_at":"2026-07-31T06:30:00Z",
+        "day_shape":"normal"
+      }',
+      '2026-07-31T06:31:00Z'
+    )
+  $$,
+  '22023',
+  null,
+  'the SQL authority rejects day_shape on V5 Morning writes'
+);
+
 select ok(
   (
     public.apply_daily_capture_branch_v1(

@@ -346,6 +346,38 @@ def test_two_of_three_short_nights_raise_risk_exactly_one_level() -> None:
     ]
 
 
+@pytest.mark.parametrize(
+    ("container_version", "branch_version"),
+    (
+        ("daily-capture-v5", "daily-capture-v5"),
+        ("daily-capture-v5", "daily-capture-v4"),
+    ),
+)
+def test_current_and_compatible_sleep_captures_feed_outlook(
+    container_version: str,
+    branch_version: str,
+) -> None:
+    service, _ = _service(
+        [_detail(plan_id=EXAM_ID, kind="exam", days=7, remaining=60)],
+        sleep_rows=[
+            _sleep_row(
+                NOW.date(),
+                estimated_minutes=420,
+                container_version=container_version,
+                branch_version=branch_version,
+            ),
+        ],
+    )
+
+    result = asyncio.run(service.get_exam_week_outlook(user_id="owner"))
+
+    assert result.current_sleep_plan is not None
+    assert result.current_sleep_plan.sleep_target_minutes == 480
+    assert [night.estimated_sleep_minutes for night in result.recent_sleep_nights] == [
+        420,
+    ]
+
+
 def test_future_capture_rows_do_not_supply_sleep_plan_or_nights() -> None:
     service, _ = _service(
         [_detail(plan_id=EXAM_ID, kind="exam", days=7, remaining=60)],
@@ -462,6 +494,8 @@ def _sleep_row(
     *,
     estimated_minutes: int,
     planned_sleep_time: str = "23:00",
+    container_version: str = "daily-capture-v4",
+    branch_version: str = "daily-capture-v4",
 ) -> dict:
     started_at = datetime.combine(
         local_date - timedelta(days=1),
@@ -473,10 +507,15 @@ def _sleep_row(
         "id": f"sleep-{local_date.isoformat()}",
         "entry_date": local_date.isoformat(),
         "metadata": {
-            "capture_version": "daily-capture-v4",
+            "capture_version": container_version,
             "captures": {
                 "evening": {
-                    "branch_version": "daily-capture-v4",
+                    "branch_version": branch_version,
+                    **(
+                        {"compatibility": True}
+                        if branch_version != container_version
+                        else {}
+                    ),
                     "capture_kind": "evening",
                     "entry_date": local_date.isoformat(),
                     "capture_id": f"evening-{local_date.isoformat()}",
@@ -493,7 +532,12 @@ def _sleep_row(
                     "sleep_target_minutes": 480,
                 },
                 "morning": {
-                    "branch_version": "daily-capture-v4",
+                    "branch_version": branch_version,
+                    **(
+                        {"compatibility": True}
+                        if branch_version != container_version
+                        else {}
+                    ),
                     "capture_kind": "morning",
                     "entry_date": local_date.isoformat(),
                     "capture_id": f"morning-{local_date.isoformat()}",
@@ -506,7 +550,11 @@ def _sleep_row(
                     "sleep_hours": estimated_minutes / 60,
                     "sleep_quality": 7,
                     "current_energy": 7,
-                    "day_shape": "normal",
+                    **(
+                        {"day_shape": "normal"}
+                        if branch_version == "daily-capture-v4"
+                        else {}
+                    ),
                 },
             },
         },

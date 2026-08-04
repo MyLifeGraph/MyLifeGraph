@@ -8,7 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   group('Phase 1 capture domain', () {
-    test('accepts every bounded stress, focus, and day-shape code', () {
+    test('accepts every bounded current stress and focus code', () {
       for (final value in StressSource.values) {
         expect(StressSource.fromCode(value.code), value);
       }
@@ -18,11 +18,24 @@ void main() {
       for (final value in FocusBand.values) {
         expect(FocusBand.fromCode(value.code), value);
       }
-      for (final value in DayShape.values) {
-        expect(DayShape.fromCode(value.code), value);
-      }
       expect(() => StressSource.fromCode('other'), throwsFormatException);
-      expect(() => DayShape.fromCode('other'), throwsFormatException);
+    });
+
+    test('rejects an unknown Day Shape only while parsing V4 history', () {
+      final legacy = {
+        ..._morning().toMetadataJson(),
+        'branch_version': dailyCaptureV4,
+        'day_shape': 'other',
+      };
+
+      expect(
+        () => MorningCalibrationDraft.fromJson(
+          legacy,
+          entryDate: _entryDate,
+          containerVersion: dailyCaptureV4,
+        ),
+        throwsFormatException,
+      );
     });
 
     test('evening metadata omits blank text and all friction fields', () {
@@ -112,7 +125,7 @@ void main() {
 
       for (final entry in [morningThenEvening, eveningThenMorning]) {
         expect(entry.evening?.stressSource, StressSource.privateEmotional);
-        expect(entry.morning?.dayShape, DayShape.constrained);
+        expect(entry.morning?.toMetadataJson(), isNot(contains('day_shape')));
         expect(entry.mood, 2);
         expect(entry.stress, 8);
         expect(entry.sleepHours, 5.5);
@@ -169,7 +182,7 @@ void main() {
       }
     });
 
-    test('V4 merge preserves an untouched V3 branch explicitly', () {
+    test('V5 merge preserves an untouched V3 branch explicitly', () {
       final legacyMorning = MorningCalibrationDraft(
         captureId: 'legacy-morning',
         entryDate: _entryDate,
@@ -177,7 +190,7 @@ void main() {
         sleepHours: 7.5,
         sleepQuality: 6,
         energy: 6,
-        dayShape: DayShape.normal,
+        legacyDayShapeCode: 'normal',
         branchVersion: dailyCaptureV3,
         isCompatibilityBranch: true,
       );
@@ -188,12 +201,78 @@ void main() {
 
       final metadata = entry.toCaptureMetadata();
       final morning = (metadata['captures'] as Map)['morning'] as Map;
-      expect(metadata['capture_version'], dailyCaptureV4);
+      expect(metadata['capture_version'], dailyCaptureV5);
       expect(morning['branch_version'], dailyCaptureV3);
       expect(morning['compatibility'], isTrue);
       expect(morning, isNot(contains('estimated_sleep_started_at')));
       expect(
         () => entry.mergeMorning(legacyMorning),
+        throwsFormatException,
+      );
+    });
+
+    test('account migration upgrades complete V4 branches to strict V5', () {
+      final v4Morning = {
+        ..._morning().toMetadataJson(),
+        'branch_version': dailyCaptureV4,
+        'day_shape': 'normal',
+      };
+      final entry = DailyCaptureEntry.fromGuestJson({
+        'entryDate': _entryDate,
+        'captureVersion': dailyCaptureV4,
+        'captures': {
+          'evening': {
+            ..._evening().toMetadataJson(),
+            'branch_version': dailyCaptureV4,
+          },
+          'morning': v4Morning,
+        },
+      });
+
+      final migrated = entry.forAuthenticatedMigration();
+      final metadata = migrated.toCaptureMetadata();
+      final captures = metadata['captures'] as Map;
+      final evening = captures['evening'] as Map;
+      final morning = captures['morning'] as Map;
+
+      expect(metadata['capture_version'], dailyCaptureV5);
+      expect(evening['branch_version'], dailyCaptureV5);
+      expect(morning['branch_version'], dailyCaptureV5);
+      expect(evening, isNot(contains('compatibility')));
+      expect(morning, isNot(contains('compatibility')));
+      expect(morning, isNot(contains('day_shape')));
+      expect(evening['capture_id'], 'evening-distinctive');
+      expect(morning['capture_id'], 'morning-distinctive');
+      expect(morning['estimated_sleep_minutes'], 330);
+      expect(morning['sleep_target_minutes'], 480);
+      expect(morning['source_evening_capture_id'], 'evening-distinctive');
+    });
+
+    test('account migration does not invent missing V3 sleep fields', () {
+      final legacyEvening = EveningShutdownDraft(
+        captureId: 'legacy-evening',
+        entryDate: _entryDate,
+        capturedAt: DateTime.parse('2026-07-10T19:45:00+02:00'),
+        mood: 6,
+        energy: 6,
+        stress: 3,
+        stressSource: null,
+        stressControllability: null,
+        focusBand: null,
+        tomorrowPriority: '',
+        branchVersion: dailyCaptureV3,
+        isCompatibilityBranch: true,
+      );
+      final migrated = DailyCaptureEntry(
+        entryDate: _entryDate,
+        evening: legacyEvening,
+      ).forAuthenticatedMigration();
+
+      expect(migrated.evening?.branchVersion, dailyCaptureV3);
+      expect(
+        () => migrated.evening!.toMetadataJson(
+          preservingCompatibility: false,
+        ),
         throwsFormatException,
       );
     });
@@ -287,7 +366,7 @@ void main() {
       expect(row['source'], 'quick_check_in');
       expect(row['steps'], isNull);
       final metadata = row['metadata'] as Map<String, dynamic>;
-      expect(metadata['capture_version'], 'daily-capture-v4');
+      expect(metadata['capture_version'], 'daily-capture-v5');
       expect(metadata['foreign_producer'], {'kept': true});
       final captures = metadata['captures'] as Map;
       expect(captures.keys, containsAll(['evening', 'morning']));
@@ -340,7 +419,7 @@ void main() {
       );
       expect(energy['value'], 4);
       expect(energy['metadata'], containsPair('capture_kind', 'morning'));
-      expect(energy['metadata'], containsPair('day_shape', 'constrained'));
+      expect(energy['metadata'], isNot(contains('day_shape')));
       expect(energy['metadata'], containsPair('sleep_quality', 3));
       final sleep = mergedEvents.singleWhere(
         (event) => event['event_type'] == 'sleep',
@@ -431,7 +510,10 @@ void main() {
       expect(values, hasLength(1));
       expect(values.single.energy, 4);
       expect(values.single.evening?.tomorrowPriority, 'Protect a calm start');
-      expect(values.single.morning?.dayShape, DayShape.constrained);
+      expect(
+        values.single.morning?.toMetadataJson(),
+        isNot(contains('day_shape')),
+      );
       expect(values.single.morning?.sleepQuality, 3);
 
       final prefs = await SharedPreferences.getInstance();
@@ -447,7 +529,7 @@ void main() {
       expect(evening.containsKey('gentle_tomorrow'), isFalse);
       expect(evening.containsKey('main_friction'), isFalse);
       expect(evening.containsKey('additional_frictions'), isFalse);
-      expect((raw.single as Map)['captureVersion'], 'daily-capture-v4');
+      expect((raw.single as Map)['captureVersion'], 'daily-capture-v5');
       expect(morning['sleep_quality'], 3);
     });
 
@@ -479,7 +561,7 @@ void main() {
       expect(value?.stress, 5);
     });
 
-    test('reads V2 guest capture as an explicit V4 compatibility branch',
+    test('reads V2 guest capture as an explicit V5 compatibility branch',
         () async {
       final legacyEvening = {
         ..._evening().toMetadataJson(),
@@ -504,7 +586,7 @@ void main() {
 
       expect(values.single.evening?.mainFriction, isNull);
       expect(values.single.evening?.additionalFrictions, isEmpty);
-      expect(rewritten, contains('daily-capture-v4'));
+      expect(rewritten, contains('daily-capture-v5'));
       expect(rewritten, contains('"compatibility":true'));
       expect(rewritten, isNot(contains('main_friction')));
       expect(rewritten, isNot(contains('additional_frictions')));
@@ -544,7 +626,7 @@ EveningShutdownDraft _evening({
     tomorrowPriority: 'Protect a calm start',
     plannedSleepTime: '23:00',
     sleepTargetMinutes: 480,
-    branchVersion: dailyCaptureV4,
+    branchVersion: dailyCaptureV5,
   );
 }
 
@@ -555,13 +637,12 @@ MorningCalibrationDraft _morning() {
     capturedAt: DateTime.parse('2026-07-10T07:15:00+02:00'),
     sleepQuality: 3,
     energy: 4,
-    dayShape: DayShape.constrained,
     estimatedSleepStartedAt: DateTime.parse('2026-07-09T23:30:00+02:00'),
     wokeAt: DateTime.parse('2026-07-10T05:00:00+02:00'),
     estimatedSleepMinutes: 330,
     sleepTargetMinutes: 480,
     sourceEveningCaptureId: 'evening-distinctive',
-    branchVersion: dailyCaptureV4,
+    branchVersion: dailyCaptureV5,
   );
 }
 

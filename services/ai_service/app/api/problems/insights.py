@@ -7,6 +7,11 @@ from app.services.personal_patterns_service import (
     PersonalPatternsNotFoundError,
     PersonalPatternsUnavailableError,
 )
+from app.services.sleep_recommendation_service import (
+    SleepRecommendationDataError,
+    SleepRecommendationNotFoundError,
+    SleepRecommendationUnavailableError,
+)
 
 type PersonalPatternsError = (
     PersonalPatternsNotFoundError
@@ -31,5 +36,35 @@ def personal_patterns_problem(error: PersonalPatternsError) -> HTTPException:
         return HTTPException(
             status.HTTP_503_SERVICE_UNAVAILABLE,
             "Personal patterns could not be loaded.",
+        )
+    assert_never(error)
+
+
+type SleepRecommendationError = (
+    SleepRecommendationNotFoundError
+    | SleepRecommendationUnavailableError
+    | SleepRecommendationDataError
+)
+
+SLEEP_RECOMMENDATION_ERRORS = (
+    SleepRecommendationNotFoundError,
+    SleepRecommendationUnavailableError,
+    SleepRecommendationDataError,
+)
+
+
+def sleep_recommendation_problem(error: SleepRecommendationError) -> HTTPException:
+    if isinstance(error, SleepRecommendationNotFoundError):
+        return HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            "Sleep recommendation profile is unavailable.",
+        )
+    if isinstance(
+        error,
+        (SleepRecommendationUnavailableError, SleepRecommendationDataError),
+    ):
+        return HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            "Sleep recommendation could not be loaded.",
         )
     assert_never(error)

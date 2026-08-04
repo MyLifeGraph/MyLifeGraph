@@ -33,13 +33,19 @@ way to explore the product today is the Flutter app in mock-data guest mode.
   without an LLM.
 - Real-account Insights starts with deterministic `personal-patterns-v1`
   evidence from terminal Focus sessions, editable reflections, and valid
-  preceding Daily Capture V4 sleep episodes in the profile timezone. Its
+  preceding Daily Capture V4/V5 sleep episodes in the profile timezone. Its
   fixed 90-day window exposes sample, coverage, maturity, limitations, and at
   most three non-causal patterns; disabled analysis reads no behavioral
   evidence. Advanced correlation remains exploratory and consumes the same
   backend points instead of reconstructing unsupported Planner or Habit
   history. Local demo keeps its labelled mock time series. No Insights path
   calls an LLM.
+  A separate `sleep-recommendation-v1` card recomputes a robust 90-day sleep
+  window only after 30 eligible Morning-plus-rated-Focus days. It has independent
+  disabled/collecting/unstable/ready/error states, never invents guest data, and
+  cannot apply a result or make Personal Study Pattern unavailable. The exact
+  Morning capture boundary is closed-open, and ready results distinguish wake
+  on the same local day from wake on the following local day.
 - Real authenticated accounts now have revision-checked, retry-safe timezone
   and preparation-budget editing, a strict bounded `account-export-v2` JSON
   portability export, password reset/confirmation-email
@@ -113,7 +119,7 @@ way to explore the product today is the Flutter app in mock-data guest mode.
   `/planner/replan?plan_id=<uuid>` route: it starts with the selected plan's
   saved-value review, creates a deliberate staged preview, and changes current
   reservations only after explicit confirmation.
-  Daily Capture V4 adds an explicit Evening sleep plan and Morning estimated
+  Daily Capture V5 keeps the explicit Evening sleep plan and Morning estimated
   start/wake interval while keeping raw clocks inside `daily_logs.metadata`.
   Planner reads the side-effect-free `exam-week-outlook-v1` projection: an
   active exam activates a 14-day watch or seven-day Exam week, assignments
@@ -426,15 +432,21 @@ Supabase is the intended auth and persistence backend. The current app supports:
   later forms prefill the newest valid Evening plan. Morning remains separate
   and records an editable estimated sleep-start/wake interval, its derived
   duration, the target used for that night, an independent required 1–10
-  estimate of sleep quality, current energy, and day shape.
+  estimate of sleep quality, and current energy. The per-day Day Shape input is
+  retired; new V5 writes reject it, and historical values are not displayed or
+  evaluated.
 - Both captures merge under `daily_logs.metadata.captures` for the same user and
   date. Morning energy owns the compatible `energy_level` projection when
   present; Evening owns mood and stress, and Morning owns sleep. Linked
   `behavioral_events` are a dynamic, deterministically identified set of at
   most mood, energy, stress, and sleep events. Guest storage uses
-  `daily-capture-v4`, reads V2/V3 as explicit compatibility branches, and
+  `daily-capture-v5`, reads V2–V4 as explicit compatibility branches, and
   upgrades a branch only when it is edited while retaining V1 migration
-  compatibility. Raw planned/estimated clocks stay only in Daily Log metadata;
+  compatibility. Best-effort account migration converts complete V4 guest
+  branches to strict V5 before writing and retains local data if any branch
+  fails; it does not invent missing V2/V3 sleep fields. Complete V4 writes
+  remain accepted during rollout and cannot
+  downgrade a V5 container. Raw planned/estimated clocks stay only in Daily Log metadata;
   the compatible column, Sleep event, Daily State, recommendations, and Coach
   receive the derived duration. Sleep quality stays in the Morning capture
   metadata and is mirrored onto its existing Morning-origin events, so it does
@@ -488,13 +500,14 @@ Supabase is the intended auth and persistence backend. The current app supports:
   generates or applies a proposal by itself. Guest/mock sessions remain
   unavailable.
 - The additive `summary.daily_state` contract is
-  `explainable-daily-state-v2`. It reads strict V2/V3/V4 captures with explicit
-  V4 branch compatibility, sanitizes historical V1 state, and uses a fixed
+  `explainable-daily-state-v3`. It reads strict V2–V5 captures with explicit
+  branch compatibility, sanitizes historical V1/V2 state, and uses a fixed
   seven-day state lookback separate from the requested statistics window,
   explicit
   `missing`/`partial`/`current`/`stale` quality, and recovery-first
   `push`/`steady`/`recover`/`plan` classification. It has no Goal or friction
-  context/evidence, and `push` requires an active Task. It carries bounded
+  or Day Shape context/evidence, no `constrained_capacity` risk, and `push`
+  requires an active Task without a Day-Shape gate. It carries bounded
   evidence and provenance but excludes tomorrow-priority, reflection, and
   blocker text.
   A very low current sleep-quality estimate can select recovery even after a
@@ -601,8 +614,9 @@ collections; separately seeded runtime Tasks, Habits, and commitments remain
 `demo_seed` data; no active Goal rows are seeded. The student
 scenario is additionally enriched through the real backend services with
 current Today/Weekly Review output, all three Habit cadences, 43 profile-local
-Daily Capture V4 days, 36 rated Focus days and a stable Personal Learning
-pattern, Calendar Import, Preparation Plans including an active seven-day exam
+  Daily Capture V5 days, 36 rated Focus days, a stable Personal Learning
+  pattern, and a ready learned Sleep Recommendation, Calendar Import,
+  Preparation Plans including an active seven-day exam
 outlook, notification consent, and validated Coach history. Its sleep, stress,
 energy, and mood ranges are deliberately bounded and the current Evening
 capture remains open for manual testing. All demo accounts use the local-only
@@ -752,7 +766,7 @@ RLS. Phase 10 adds free-question V3 streaming, cancellation, backend-derived
 snapshot-source coverage/trace/provenance, snapshot limits,
 replay/budget/history deletion, read-only-tool security, prompt-injection
 authority boundaries, and the absence of fixed mode UI. Deadline Planner,
-preparation capacity/detail, Capture V4, and
+preparation capacity/detail, Capture V5, and
 Exam-Week Outlook coverage additionally checks strict capacity arithmetic,
 sleep-plan correction, Planner-only status, explicit replan navigation, and no
 automatic mutation.
@@ -798,11 +812,11 @@ has the nvm bin directory on `PATH`.
   availability, staged Task/Habit reservations, commitments, and Today V2.
 - `docs/study-setup-v1-contract.md` - Optional focus/recovery rhythm, transient
   start ritual, semester planning, recovery reservations, and Setup authority.
-- `docs/exam-week-outlook-v1-contract.md` - Daily Capture V4 sleep estimates
+- `docs/exam-week-outlook-v1-contract.md` - Daily Capture V5 sleep estimates
   and the read-only Planner exam/watch/overdue capacity outlook.
 - `docs/personal-learning-v1-contract.md` - Focus reflections, revisioned
-  learning controls, deterministic personal patterns, optional learned timing,
-  and the Recommendation cleanup boundary.
+  learning controls, deterministic personal patterns and sleep recommendation,
+  optional learned timing, and the Recommendation cleanup boundary.
 - `docs/phase-3-executable-actions-contract.md` - Implemented executable task,
   habit, focus, and action-target contract.
 - `docs/phase-8-weekly-review-contract.md` - Bounded ISO-week facts,

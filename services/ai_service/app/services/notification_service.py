@@ -411,6 +411,7 @@ def _valid_daily_state(
         not in {
             "explainable-daily-state-v1",
             "explainable-daily-state-v2",
+            "explainable-daily-state-v3",
         }
         or daily_state.get("target_date") != delivery_date.isoformat()
         or daily_state.get("mode") not in {"push", "steady", "recover", "plan"}

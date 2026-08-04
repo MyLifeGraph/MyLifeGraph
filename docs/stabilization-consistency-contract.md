@@ -2,7 +2,9 @@
 
 This contract records the post-product-review stabilization boundary introduced
 by migrations `20260729120000_stabilization_write_authority.sql` and
-`20260729130000_observed_projection_persistence.sql`. It replaces unsafe
+`20260729130000_observed_projection_persistence.sql`, with the additive Daily
+Capture V5 RPC replacement in
+`20260804102409_daily_capture_v5_remove_day_shape.sql`. It replaces unsafe
 Capture and account-setting writes, makes timezone-dependent planning
 fail-closed, and defines how the app behaves after a durable mutation when a
 read projection cannot be refreshed. It adds no Coach capability and no
@@ -18,7 +20,12 @@ branch = morning | evening
 ```
 
 The strict `daily-capture-write-v1` request contains `contract_version`, a UUID
-`request_id`, `expected_capture`, and one complete `daily-capture-v4` branch.
+`request_id`, `expected_capture`, and one complete current `daily-capture-v5`
+branch. During the rolling upgrade, FastAPI and the merge RPC continue to accept
+a complete strict `daily-capture-v4` branch; partial or mixed-version writes are
+not accepted. V5 Morning requires estimated sleep start/wake, derived duration,
+confirmed target, sleep quality, and current energy, and rejects `day_shape` as
+an unexpected field.
 `expected_capture` is either `null` for a branch that was absent at the last
 successful read, or the exact `{capture_id, captured_at}` identity last read.
 The response repeats the canonical branch identity, `updated_at`, and
@@ -31,12 +38,27 @@ order. A different concurrent write to the same branch returns `PT409`; an
 exact request replay returns its saved result without writing again. A reused
 request id with a different fingerprint conflicts.
 
+The container is monotone: once either the stored container or the submitted
+branch is V5, `metadata.capture_version` remains `daily-capture-v5`. An
+untouched V2–V4 opposite branch stays intact as explicit compatibility data;
+editing it emits a strict V5 branch. A rollout V4 write inside an existing V5
+container cannot downgrade the container and is retained with
+`compatibility: true`. The migration replaces only the existing RPC and adds no
+table, direct grant, or new write authority.
+
 The same transaction rebuilds the canonical scalar `daily_logs` projection and
 only the `behavioral_events` rows whose source is `quick_check_in`. Other
 behavioral events are never deleted by Capture. Application roles retain owner
 reads but have no direct `daily_logs` or `behavioral_events` DML. Guest Capture
 remains local. Guest migration writes each available branch separately and
-removes local data only after all available branches have been proven saved.
+removes local data only after all available branches have been proven saved. A
+complete V4 guest branch is converted to strict V5 before the authenticated
+write, retaining capture identity and exact sleep evidence while dropping
+compatibility and retired `day_shape` markers. Incomplete V2/V3 data is not
+filled with guessed sleep instants or targets; a failed migration retains the
+local guest payload for a later retry.
+New event metadata carries the V5 capture version and never includes
+`day_shape`; historical Daily Log JSON is not destructively rewritten.
 
 Flutter does not save an authenticated branch when the current day could not be
 read, because it then lacks a safe expected identity. A Morning save whose
@@ -176,6 +198,19 @@ cutoff; reflections require `created_at < generated_at` and
 `updated_at <= generated_at`. Cutoff-equal or later-modified facts are excluded
 and the limitation text describes the actual observation boundary.
 
+Sleep Recommendation uses the same captured-instant and closed-open 90-day
+rules on its independent read route. A Morning fact is included only when
+`generated_at - 90 days <= captured_at < generated_at`, its Daily Log has a
+valid aware `updated_at <= generated_at`, and `woke_at < generated_at`; the
+estimated sleep start may be earlier than the lower boundary. It recomputes
+without persistence, reads strict V4/V5 Morning compatibility branches, and
+requires each rated Focus session to start after wake and Morning capture.
+Same-day and following-local-day wake offsets remain separate candidate groups.
+With Personal Pattern analysis disabled it returns before any sleep or Focus
+history read. Invalid profile timezones fail through the bounded card-local
+error path, and that error does not replace Personal Patterns.
+Its exact response version is `sleep-recommendation-v1`.
+
 Weekly Review and its Snapshot reads use lexicographic keyset pagination with
 the established sort fields plus `id` as the tie-breaker. Each generation
 captures one `source_observed_at` before its first read and excludes later
@@ -251,13 +286,17 @@ exact-retry, stale/reload, conflict-detail, and safe-copy behavior.
 
 The stabilization is covered by:
 
-- pgTAP for branch CAS/replay/transactional events, Setup DML bypasses,
+- pgTAP for V5/V4 branch merge, monotone containers, CAS/replay/transactional
+  events, Setup DML bypasses,
   revisioned settings, timezone guards, Calendar race handling, and ledger
   privileges;
-- FastAPI tests for the strict Capture route, account and Calendar V2
+- FastAPI tests for the strict V5 Capture route and V4 rollout compatibility,
+  learned Sleep Recommendation maturity/ordering/stability, account and Calendar V2
   contracts, keyset/observation ordering, final freshness, Personal Pattern
   cutoffs, and Berlin gap/fold/cross-midnight resolution;
-- Flutter tests for creation replay, Capture/Setup errors, projection locks,
+- Flutter tests for V5 serialization, legacy branch upgrade, removed Day Shape
+  input/display, every independent Sleep Recommendation card state, creation
+  replay, Capture/Setup errors, projection locks,
   Planner/Today durable-success reload failure, the three Study Setup states,
   Notification replay/reload, profile/device cross-midnight and DST date
   resolution, shared embedded/standalone Habit targets, managed-plan refresh

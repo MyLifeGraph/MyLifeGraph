@@ -305,20 +305,20 @@ The snapshot endpoint also accepts `"scope":"weekly"` and an optional
 uses the backend service-role key only inside FastAPI.
 
 Daily and weekly responses add `summary.daily_state` and
-`signals.daily_state` under `explainable-daily-state-v2`. `window_days` remains
+`signals.daily_state` under `explainable-daily-state-v3`. `window_days` remains
 the statistics window; the Daily State parser always loads a separate fixed
 seven-day lookback. Evening is current on the target date or previous date,
 while Morning is current only on the target date. The resulting quality is
 `missing`, `partial`, `current`, or `stale`, and recovery safeguards precede
 `plan`, `push`, and the conservative `steady` fallback.
 
-V2/V3/V4 capture metadata is trusted only after strict identity, branch-
+V2–V5 capture metadata is trusted only after strict identity, branch-
 compatibility, enum, numeric, timestamp, sleep-interval, and projection checks;
-friction keys are ignored. A malformed structured row never falls back to its
+friction and Day Shape keys are ignored. A malformed structured row never falls back to its
 projected numeric columns. Numeric legacy fallback is available only when the
 row has no structured capture marker. The source remains
 `snapshot-aggregator-v1`; metadata records
-`daily_state_contract_version=explainable-daily-state-v2` and
+`daily_state_contract_version=explainable-daily-state-v3` and
 `state_lookback_days=7`. Top-level `summary.risk_flags` aliases the current
 Daily State codes, while the older statistics-window flags remain separately in
 `summary.window_risk_flags`. `recommended_next_focus` is derived recovery-first
@@ -364,19 +364,25 @@ GET   /v1/learning/preferences
 PATCH /v1/learning/preferences
 POST  /v1/learning/focus-reflections/clear
 GET   /v1/insights/personal-patterns
+GET   /v1/insights/sleep-recommendation
 ```
 
 Individual reflection rows use authenticated owner RLS directly from Flutter
 only after a Focus session is terminal. Settings updates and bulk clearing go
-through FastAPI's retry-safe owner-locked commands. The Insights GET uses a
-profile-timezone 90-day window and writes nothing. With analysis disabled, it
-does not load Focus or Capture evidence. See
+through FastAPI's retry-safe owner-locked commands. Both Insights GET routes use
+profile-timezone 90-day windows and write nothing. Sleep Recommendation has an
+independent response/error boundary and requires 30 eligible Morning-plus-rated-
+Focus days before it can be ready. With analysis disabled, neither route loads
+Focus or Capture evidence. See
 `docs/personal-learning-v1-contract.md`.
 
 Read a current pattern without changing history:
 
 ```bash
 curl http://localhost:8000/v1/insights/personal-patterns \
+  -H 'Authorization: Bearer <supabase_access_token>'
+
+curl http://localhost:8000/v1/insights/sleep-recommendation \
   -H 'Authorization: Bearer <supabase_access_token>'
 ```
 
@@ -510,7 +516,7 @@ curl http://localhost:8000/v1/deadline-plans/exam-week-outlook \
 ```
 
 It returns `exam-week-outlook-v1` from bearer-owned plans, Availability, and
-valid Capture V4 sleep facts. Repeating or opening this GET must leave plan,
+valid Capture V4/V5 sleep facts. Repeating or opening this GET must leave plan,
 revision, block, task, Daily Log, and Notification rows unchanged.
 
 Create a manual staged proposal with one stable client plan id and request id:
@@ -575,7 +581,8 @@ capture calls the daily snapshot endpoint best-effort with the capture's
 explicit local `target_date`. `/daily-check-in` redirects to the canonical
 Evening Shutdown at `/quick-mood-check-in`; the separate short
 `/morning-calibration` route captures sleep duration, an independent required
-1–10 estimated sleep quality, current energy, and day shape. Evening first
+1–10 estimated sleep quality, and current energy. The retired Day Shape input is
+not displayed or written. Evening first
 requires an intended local sleep start and a `300..720` minute target on the
 15-minute grid. Morning then records editable aware estimated start/wake
 instants and displays their derived `Estimated sleep duration`. If
@@ -585,7 +592,7 @@ recommendations or create or change a plan. Guest/mock capture remains local.
 
 Evening and Morning writes merge into one `(user_id, entry_date)` `daily_logs`
 row. Phase 1 stores its bounded structured state under
-`metadata.capture_version=daily-capture-v4` and
+`metadata.capture_version=daily-capture-v5` and
 `metadata.captures.evening|morning`. Direct numeric columns remain compatible:
 Morning energy takes precedence when present, while mood and stress come from
 Evening and sleep comes from Morning. The writer reconciles the linked current
@@ -598,9 +605,11 @@ or Notification content. Blank Evening reflection and blocker answers stay
 absent and do not create other product records. The active form no longer
 shows or newly writes tomorrow priority; an existing saved value survives an
 otherwise valid edit. Evening has no primary/additional friction selection and
-no longer writes the retired `gentle_tomorrow` field. Legacy V2 captures remain readable, but
-friction keys are ignored. V2/V3 opposite branches may remain explicit
-compatibility branches until that branch is edited.
+no longer writes the retired `gentle_tomorrow` field. Legacy V2–V4 captures remain
+readable, but friction and Day Shape keys are ignored. Older opposite branches
+may remain explicit compatibility branches until that branch is edited.
+Complete V4 writes remain accepted during rollout, but a V5 container is never
+downgraded and V5 Morning rejects `day_shape`.
 
 Backend-only Supabase configuration for the AI service:
 
@@ -927,7 +936,8 @@ curl -X PUT \
 
 The file must contain the complete strict `daily-capture-write-v1` request,
 including one stable UUID request id, the last-read branch identity or `null`,
-and a complete `daily-capture-v4` branch. A `409` is a same-branch CAS or
+and a complete current `daily-capture-v5` branch. A complete V4 branch is also
+accepted during the rolling client upgrade. A `409` is a same-branch CAS or
 request-fingerprint conflict and requires a read/review. Reusing the same
 request id with a changed body is intentionally unsupported.
 

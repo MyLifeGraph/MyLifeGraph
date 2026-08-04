@@ -26,7 +26,7 @@ test('@auth-capture-today signs in, persists Evening, and renders Today', async 
         request_id: crypto.randomUUID(),
         expected_capture: null,
         capture: {
-          branch_version: 'daily-capture-v4',
+          branch_version: 'daily-capture-v5',
           capture_kind: 'evening',
           entry_date: localDate,
           capture_id: captureId,
@@ -70,6 +70,7 @@ test('@auth-capture-today signs in, persists Evening, and renders Today', async 
   );
   expect(persisted.status).toBe(200);
   expect(JSON.stringify(persisted.json)).toContain(captureId);
+  expect(JSON.stringify(persisted.json)).not.toContain('day_shape');
 
   await e2e.signInUi();
   await expectFlutterText(page, 'Today at a glance');

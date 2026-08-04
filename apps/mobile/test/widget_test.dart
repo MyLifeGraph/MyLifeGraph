@@ -331,9 +331,6 @@ void main() {
       find.bySemanticsLabel('morning energy 4 of 10'),
     );
     await tester.tap(find.bySemanticsLabel('morning energy 4 of 10'));
-    final constrainedDay = find.bySemanticsLabel('day shape constrained');
-    await tester.ensureVisible(constrainedDay);
-    await tester.tap(constrainedDay);
     await tester.pump();
     await tester.ensureVisible(find.text('Save morning check-in'));
     await tester.tap(find.text('Save morning check-in'));
@@ -356,7 +353,7 @@ void main() {
     expect(evening.containsKey('tomorrow_priority'), isFalse);
     expect(evening['planned_sleep_time'], '23:00');
     expect(evening['sleep_target_minutes'], 480);
-    expect(evening['branch_version'], dailyCaptureV4);
+    expect(evening['branch_version'], dailyCaptureV5);
     expect(evening.containsKey('main_friction'), isFalse);
     expect(evening.containsKey('additional_frictions'), isFalse);
     expect(evening.containsKey('reflection_note'), isFalse);
@@ -365,22 +362,23 @@ void main() {
     expect(morning['sleep_hours'], 5.5);
     expect(morning['sleep_quality'], 3);
     expect(morning['current_energy'], 4);
-    expect(morning['day_shape'], 'constrained');
+    expect(morning, isNot(contains('day_shape')));
     expect(morning['estimated_sleep_minutes'], 330);
     expect(morning['sleep_target_minutes'], 480);
     expect(morning['source_evening_capture_id'], evening['capture_id']);
-    expect(morning['branch_version'], dailyCaptureV4);
+    expect(morning['branch_version'], dailyCaptureV5);
 
     await tester.tap(find.byIcon(AppIcons.add).last);
     await tester.pumpAndSettle();
-    expect(find.text('Today\'s saved captures'), findsOneWidget);
+    expect(find.text('Today\'s saved captures'), findsNothing);
     expect(
       find.text(
         'Mood 2 | Energy 4 | Sleep 5.5 h | Sleep quality 3/10 | Stress 8',
       ),
-      findsOneWidget,
+      findsNothing,
     );
-    expect(find.text('Local'), findsOneWidget);
+    expect(find.text('Local'), findsNothing);
+    expect(find.text('Completed today'), findsNWidgets(2));
   });
 
   testWidgets('guest only sees quick actions that work locally',

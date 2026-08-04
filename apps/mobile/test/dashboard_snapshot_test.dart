@@ -92,7 +92,7 @@ void main() {
         snapshot.latestCheckIn?.stressControllability,
         'hardly_controllable',
       );
-      expect(snapshot.latestCheckIn?.dayShape, 'constrained');
+      expect(snapshot.latestCheckIn?.hasMorningCapture, isTrue);
       expect(snapshot.todayPlan, hasLength(2));
       final completedTask = snapshot.todayPlan.firstWhere(
         (task) => task.id == 'task-1',
@@ -179,7 +179,6 @@ void main() {
             sleepHours: 5.5,
             sleepQuality: 3,
             energy: 4,
-            dayShape: DayShape.constrained,
           ),
         ),
       ),
@@ -194,7 +193,7 @@ void main() {
     expect(snapshot.latestCheckIn?.sleepQuality, 3);
     expect(snapshot.latestCheckIn?.stress, 8);
     expect(snapshot.latestCheckIn?.focusBand, '30_to_60_minutes');
-    expect(snapshot.latestCheckIn?.dayShape, 'constrained');
+    expect(snapshot.latestCheckIn?.hasMorningCapture, isTrue);
     expect(snapshot.todayPlan, isEmpty);
   });
 

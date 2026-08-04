@@ -190,33 +190,6 @@ class _MorningCalibrationPageState
               () => _draft = _draft.copyWith(energy: value),
             ),
           ),
-          const SizedBox(height: AppSpacing.xl),
-          Text(
-            'Day shape',
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Text(
-            'Choose how constrained or flexible today already looks.',
-            style: Theme.of(context).textTheme.bodyMedium,
-          ),
-          const SizedBox(height: AppSpacing.md),
-          CaptureChoiceControl<DayShape>(
-            value: _draft.dayShape,
-            choices: DayShape.values
-                .map(
-                  (value) => CaptureChoice(
-                    value: value,
-                    label: _dayShapeLabel(value),
-                    semanticLabel: 'day shape ${value.code}',
-                    description: _dayShapeDescription(value),
-                  ),
-                )
-                .toList(),
-            onChanged: (value) => setState(
-              () => _draft = _draft.copyWith(dayShape: value),
-            ),
-          ),
           Text(
             'This check-in records how today starts. It does not create or change a plan.',
             style: Theme.of(context).textTheme.bodySmall,
@@ -392,15 +365,3 @@ class _MorningCalibrationPageState
     );
   }
 }
-
-String _dayShapeLabel(DayShape value) => switch (value) {
-      DayShape.normal => 'Normal',
-      DayShape.constrained => 'Constrained',
-      DayShape.flexible => 'Flexible',
-    };
-
-String _dayShapeDescription(DayShape value) => switch (value) {
-      DayShape.normal => 'A typical amount of structure and room',
-      DayShape.constrained => 'Fixed commitments or limited capacity',
-      DayShape.flexible => 'More control over timing than usual',
-    };

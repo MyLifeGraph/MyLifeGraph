@@ -56,6 +56,7 @@ class BriefingProvenance(BaseModel):
     daily_state_contract_version: Literal[
         "explainable-daily-state-v1",
         "explainable-daily-state-v2",
+        "explainable-daily-state-v3",
     ]
     executable_action_contract_version: Literal["executable-action-v1"]
     source_snapshot_id: str

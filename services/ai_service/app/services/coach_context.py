@@ -454,6 +454,7 @@ def _safe_snapshot(
     if source_contract not in {
         "explainable-daily-state-v1",
         "explainable-daily-state-v2",
+        "explainable-daily-state-v3",
     }:
         return None, "stale", "missing"
     target = daily_state.get("target_date")
@@ -474,7 +475,7 @@ def _safe_snapshot(
     if mode not in {"push", "steady", "recover", "plan"}:
         return None, "stale", "missing"
     safe_state = {
-        "contract_version": "explainable-daily-state-v2",
+        "contract_version": "explainable-daily-state-v3",
         "target_date": target,
         "mode": mode,
         "data_quality": quality,
@@ -586,10 +587,6 @@ def _safe_daily_context(value: Any) -> dict[str, Any]:
                 "over_2_hours",
             },
         ),
-        "day_shape": _enum_or_none(
-            value.get("day_shape"),
-            {"normal", "constrained", "flexible"},
-        ),
     }
 
 
@@ -627,7 +624,10 @@ def _safe_daily_codes(
 
 
 def _retired_daily_code(code: str, *, source_contract: Any) -> bool:
-    if "friction" in code or code in {"plan_unclear_priorities"}:
+    if "friction" in code or code in {
+        "plan_unclear_priorities",
+        "constrained_capacity",
+    }:
         return True
     return (
         source_contract == "explainable-daily-state-v1"

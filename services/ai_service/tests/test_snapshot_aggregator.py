@@ -363,7 +363,7 @@ def test_generate_daily_snapshot_builds_compact_summary_and_persists_by_principa
         "history_claim": "current_state_only",
     }
     assert row["metadata"]["daily_state_contract_version"] == (
-        "explainable-daily-state-v2"
+        "explainable-daily-state-v3"
     )
     assert row["metadata"]["state_lookback_days"] == 7
     assert row["signals"]["input_counts"]["daily_logs"] == 2

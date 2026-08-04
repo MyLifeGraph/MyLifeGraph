@@ -4,7 +4,7 @@ from collections.abc import Callable
 from datetime import UTC, date, datetime
 from typing import Any
 
-from app.contracts.daily_capture_v4 import validate_daily_capture_v4_branch
+from app.contracts.daily_capture_v4 import validate_daily_capture_branch
 from app.models.daily_capture import (
     DailyCaptureBranch,
     DailyCaptureWriteRequest,
@@ -100,7 +100,7 @@ def _validate_capture(
     entry_date: date,
     branch: DailyCaptureBranch,
 ) -> None:
-    issues = validate_daily_capture_v4_branch(
+    issues = validate_daily_capture_branch(
         capture,
         row_date=entry_date,
         branch=branch,

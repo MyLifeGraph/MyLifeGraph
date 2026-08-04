@@ -79,6 +79,11 @@ settings and exact current sources, then proposes at most two candidates:
    source-fingerprint and snapshot check; an older or stale same-period review
    is not presented as current.
 
+Daily State validation accepts historical V1/V2 and current
+`explainable-daily-state-v3`. Notification generation uses only the validated
+date and mode; it does not read or restore retired Day Shape context or
+`constrained_capacity`.
+
 A current daily briefing alone creates no notification. On an ordinary steady
 day without a current Monday review, generation returns `no_candidate`.
 

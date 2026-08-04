@@ -3,7 +3,8 @@
 Status: historical phase plan with a current product-disposition summary,
 updated through Planner V1, Today Overview V2, Study Setup V1, and the Setup
 personalization retirement, Daily Capture V4, and Exam-Week Outlook V1 on
-2026-07-26, plus the shared Flutter profile-local date boundary on 2026-07-31.
+2026-07-26, the shared Flutter profile-local date boundary on 2026-07-31, and
+Daily Capture V5/Daily State V3 on 2026-08-04.
 Detailed phase sections preserve their original implementation reasoning;
 current surface authority lives in the linked contracts.
 
@@ -11,7 +12,7 @@ current surface authority lives in the linked contracts.
 historical sections below mention Goals as an active product object, Setup
 focus/friction/style/Reminder/context questions, Capture V2/V3 as the current
 output, or Daily State V1 output. `docs/exam-week-outlook-v1-contract.md` is
-authoritative for current Capture V4 sleep fields and the Planner outlook.
+authoritative for current Capture V5 sleep fields and the Planner outlook.
 
 This document turns the product idea of a daily decision cockpit into an
 implementation plan. It is intentionally evaluation-oriented: each phase states
@@ -140,8 +141,8 @@ Phase 1 now supplies the missing daily context. A typed Evening Shutdown and a
 separate short Morning Calibration merge by ownership into one local-date
 `DailyCaptureEntry`, persist structured state under
 `daily_logs.metadata.captures`, retain numeric compatibility, and rebuild at
-most four deterministic current-state events. Guest V4 storage preserves the
-same contract while reading and sanitizing legacy V1/V2/V3 entries;
+most four deterministic current-state events. Guest V5 storage preserves the
+same contract while reading and sanitizing legacy V1–V4 entries;
 authenticated capture refreshes the explicit local snapshot date, and Dashboard
 mapping remains direct and nullable. Phase 1 deliberately does not assign Daily
 Mode, rank actions, persist a briefing, generate recommendations on save, or call
@@ -152,8 +153,9 @@ and the session profile's IANA timezone through the shared
 Capture remains explicitly device-local.
 
 Phase 2 now interprets that context inside backend-owned snapshots. Its current
-`explainable-daily-state-v2` contract uses strict V2/V3/V4 branch-compatible
-capture parsing with V4 sleep-interval validation and friction sanitization, a
+`explainable-daily-state-v3` contract uses strict V2–V5 branch-compatible
+capture parsing with V4/V5 sleep-interval validation plus friction and Day Shape
+sanitization, a
 fixed seven-day state lookback independent of the statistics window,
 cadence-aware Evening/Morning freshness, explicit
 `missing`/`partial`/`current`/`stale` quality, and recovery-first
@@ -180,7 +182,7 @@ Phase 4's deterministic briefing service.
 | Auth and guest entry | Yes | Local demo is labeled; mock/demo auth skips remote profile/data bootstrap and reloads local Setup, while canonical guest check-ins migrate best-effort only into a real non-demo account |
 | Onboarding / Setup | Yes, Phase 0C complete | Progressive explicit input, typed prefill, atomic revision-safe save, differentiated retry/reload, and durable review are implemented |
 | Today | Yes, Today Overview V2 current | A read-only owner-scoped overview shows streak, transparent progress, Setup/Planner/Preparation/Calendar/Focus agenda facts, and selected Tasks/Habits. The persisted briefing remains a backend input but its ranked action card is no longer the visible Today authority. |
-| Canonical daily capture | Yes, Capture V4 current | Evening and Morning are separate typed flows over one ownership-merged daily entry. Authenticated writes use one backend-owned request ledger and branch-local compare-and-swap identity; a stale same-branch write conflicts without discarding the other branch. One framework-neutral V4 contract validates new writes and supplies strict sleep parsing to Daily State, Exam-Week Outlook, and Personal Patterns, preventing a saved branch that those readers would reject. Evening stores an explicit sleep plan; Morning stores corrected estimated sleep instants and derived duration. Phase 2 interprets freshness/stress/sleep duration only inside backend snapshots. |
+| Canonical daily capture | Yes, Capture V5 current | Evening and Morning are separate typed flows over one ownership-merged daily entry. Authenticated writes use one backend-owned request ledger and branch-local compare-and-swap identity; a stale same-branch write conflicts without discarding the other branch. One framework-neutral V4/V5 contract validates current writes and supplies strict sleep parsing to Daily State, Exam-Week Outlook, Personal Patterns, and Sleep Recommendation. Evening stores an explicit sleep plan; Morning stores corrected estimated sleep instants, derived duration, sleep quality, and energy without Day Shape. Complete V4 writes remain rollout-compatible and cannot downgrade V5. |
 | Legacy large Daily Check-In | Retired | `/daily-check-in` redirects to the canonical lightweight flow; do not recreate a competing form |
 | Habit management/completion | Yes, authenticated only | Habit V1 cadence, progress, streaks, explicit completion/skip, and undo are implemented; manual lifecycle stays in Habit Management, Setup-owned lifecycle stays in Settings Setup, and daily execution is available from Today Habits |
 | Insights correlations | Yes | Default to one cautious observation; advanced correlations expose data sufficiency, source, and independent loading/error truth. Real accounts hide Skillset until a real producer exists; demo data is labelled as an example. |
@@ -247,8 +249,8 @@ Settings.
 
 What the user does:
 
-1. Gives current energy, sleep duration, estimated sleep quality, and day shape
-   in 10 to 20 seconds.
+1. Gives current energy, sleep duration, and estimated sleep quality in 10 to 20
+   seconds.
 2. Reviews today's mode, estimated capacity, primary action, reason, and at most
    two support actions.
 3. Starts the primary action, replaces it, or marks it as inappropriate.
@@ -309,7 +311,7 @@ What the app does:
 What the user does:
 
 - Confirms or corrects the provisional plan with sleep duration and quality,
-  current energy, and day shape.
+  and current energy.
 
 What the app does:
 
@@ -421,7 +423,7 @@ Current Phase 1 output:
 ### Morning Calibration
 
 Current goal: record corrected estimated sleep instants and their derived
-duration plus independently estimated quality, current energy, and day shape
+duration plus independently estimated quality and current energy
 without repeating the Evening form. Adjusting a
 provisional plan begins only after explainable state and briefing generation
 exist.
@@ -442,7 +444,10 @@ Required fields:
 - Sleep target used for this night.
 - Estimated sleep quality, independently selected from `1..10`.
 - Current energy.
-- Day shape: normal, constrained, or flexible.
+
+The earlier per-day Day Shape selection is retired. Current V5 writes reject
+`day_shape`; historical V2–V4 capture data remains readable but is not shown or
+used in classification.
 
 Current Phase 2 output for authenticated real accounts:
 
@@ -892,7 +897,7 @@ The implemented short Morning Calibration surface supports:
 - Required aware estimated sleep-start/wake instants, exact whole-minute
   derived duration no longer than 16 hours, the target used for that night, an
   independent whole-number `1..10` estimated sleep-quality rating, current
-  energy, and day shape.
+  energy, and no Day Shape field.
 - Prefill and same-kind replacement without erasing saved Evening context.
 - Honest current-state copy stating that capture does not generate
   recommendations or create or change a plan. Authenticated real saves may
@@ -996,10 +1001,10 @@ Implemented metadata shape, abbreviated:
 
 ```json
 {
-  "capture_version": "daily-capture-v4",
+  "capture_version": "daily-capture-v5",
   "captures": {
     "evening": {
-      "branch_version": "daily-capture-v4",
+      "branch_version": "daily-capture-v5",
       "capture_kind": "evening",
       "entry_date": "2026-07-10",
       "stress_intensity": 9,
@@ -1010,7 +1015,7 @@ Implemented metadata shape, abbreviated:
       "sleep_target_minutes": 480
     },
     "morning": {
-      "branch_version": "daily-capture-v4",
+      "branch_version": "daily-capture-v5",
       "capture_kind": "morning",
       "entry_date": "2026-07-10",
       "estimated_sleep_started_at": "2026-07-09T22:00:00Z",
@@ -1020,8 +1025,7 @@ Implemented metadata shape, abbreviated:
       "source_evening_capture_id": "previous-evening-capture-id",
       "sleep_hours": 5.5,
       "sleep_quality": 3,
-      "current_energy": 3,
-      "day_shape": "constrained"
+      "current_energy": 3
     }
   }
 }
@@ -1047,7 +1051,7 @@ abbreviated persisted shape is:
 {
   "summary": {
     "daily_state": {
-      "contract_version": "explainable-daily-state-v2",
+      "contract_version": "explainable-daily-state-v3",
       "target_date": "2026-07-11",
       "mode": "recover",
       "data_quality": "current",
@@ -1068,7 +1072,7 @@ abbreviated persisted shape is:
   },
   "signals": {
     "daily_state": {
-      "contract_version": "explainable-daily-state-v2",
+      "contract_version": "explainable-daily-state-v3",
       "risk_evidence": {
         "private_emotional_stress": [{
           "table": "daily_logs",
@@ -1088,7 +1092,7 @@ abbreviated persisted shape is:
   },
   "metadata": {
     "source": "snapshot-aggregator-v1",
-    "daily_state_contract_version": "explainable-daily-state-v2",
+    "daily_state_contract_version": "explainable-daily-state-v3",
     "state_lookback_days": 7,
     "window_days": 7
   }
@@ -1260,12 +1264,14 @@ Goal:
 Implemented:
 
 - Added `summary.daily_state` and `signals.daily_state` under
-  `explainable-daily-state-v2` without changing schema or capture ownership.
-- Added strict V2/V3/V4 capture parsing for identity, types, enums, bounded
-  numbers, timestamps, interval arithmetic, and numeric projections. The V4
+  `explainable-daily-state-v3` without changing schema or capture ownership.
+- Added strict V2–V5 capture parsing for identity, types, enums, bounded
+  numbers, timestamps, interval arithmetic, and numeric projections. The V4/V5
   sleep branch now uses the same parser module as Exam-Week Outlook and
   Personal Patterns, so those consumers cannot silently disagree on validity.
-  Friction fields are ignored.
+  Friction and Day Shape fields are ignored. V3 removes
+  `constrained_capacity` and the Day-Shape gate for `push` while current
+  consumers retain readable V1/V2 snapshots.
   Legacy numeric fallback is accepted only when no structured marker exists;
   malformed structured capture does not regain trust through columns.
 - Added a fixed seven-day state lookback independent of the requested

@@ -269,6 +269,16 @@ through the account-export boundary:
 - Insights, Recommendations, skillset projections, goals, and memories; and
 - earlier Coach user/assistant messages.
 
+Current normalized Daily State context accepts historical V1/V2 and current
+`explainable-daily-state-v3`, but exposes the V3 shape: no Day Shape field,
+`constrained_capacity` risk, or retired Day-Shape reason/evidence. Historical
+Daily Capture JSON can still appear only as explicitly untrusted owner data in
+the full personal snapshot; it is not promoted into Coach instructions.
+The bounded typed Daily Log evidence projection admits `sleep_quality` only
+from a valid current V4 branch, a current V5 branch, or an explicit V4
+compatibility branch inside V5. It drops mixed-version identities, raw clocks,
+capture ids, and Capture free text.
+
 The snapshot excludes `coach_requests`, `coach_usage_events`,
 `coach_memory_selections`, authentication records, service keys, provider
 internals, request-identity ledgers, operational retry state, and all other

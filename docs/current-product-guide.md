@@ -103,7 +103,7 @@ vollständig; `Settings` wird nicht als redundanter Ersatz eingeblendet.
 | Sichtbarer Bereich | Aufgabe | Was dort aktuell zu sehen oder zu tun ist |
 | --- | --- | --- |
 | **Today** | Den gespeicherten Tag überblicken und Tagesaktionen ausführen | Check-in-Streak, transparenter Fortschritt, vertikale Setup/Task/Habit/Fixed commitment/Preparation/Calendar/Focus-Agenda, heutige Tasks und Habits sowie eingeklappte unterstützende Details |
-| **Insights** | Entwicklungen untersuchen | Für echte Accounts die Backend-Karte `Personal study pattern` mit Stichprobe, Abdeckung und erklärbarer Evidenz; zusätzlich 7/14/30/90-Tage-Korrelationen, Trends, Matrix und gespeicherte Insight-Notizen. Nur Demo zeigt die lokale Beispielbeobachtung. |
+| **Insights** | Entwicklungen untersuchen | Für echte Accounts die unabhängigen Backend-Karten `Personal study pattern` und `Sleep recommendation` mit Stichprobe und erklärbarer Evidenz; zusätzlich 7/14/30/90-Tage-Korrelationen, Trends, Matrix und gespeicherte Insight-Notizen. Nur Demo zeigt die lokale Beispielbeobachtung und keine erfundene Schlafempfehlung. |
 | **Quick actions** | Tagesdaten erfassen oder eine Aktivität ausführen | Evening check-in, Morning check-in, Habit completion und Focus |
 | **Planner** | Aufgaben, Routinen und feste Zeiten bewusst planen | Task, Habit, Exam, Assignment und Fixed commitment anlegen; Vorschauen bestätigen; sieben Tage, Konflikte, Unscheduled und laufende Preparation verwalten |
 | **Coach** | Eine freie Frage zu den eigenen Daten stellen | Development Preview mit frischem persönlichen Snapshot, Read-only-Analyse, sichtbarer Evidence/Provenance und validierter englischer Textantwort |
@@ -190,6 +190,19 @@ in fester Reihenfolge: Focus-Zeit, Schlaf und Sessionlänge beziehungsweise
 Abstand. Fehlende Reflexionen zählen nicht als Null; die Karte behauptet weder
 Ursache noch medizinisches oder akademisches Optimum.
 
+Direkt darunter steht die unabhängige Karte `Sleep recommendation`. Vor 30
+geeigneten lokalen Tagen zeigt sie den Fortschritt `N/30`; ohne belastbaren
+Vergleich zeigt sie ehrlich `No stable window yet`. Ein geeigneter Tag verbindet
+einen gültigen Morning-Check-in ausschließlich mit danach begonnenen,
+beendeten und bewerteten Focus-Sessions. Bei `Ready` werden Schlafbeginn,
+Aufstehen und Dauer als robuste Zeitfenster gezeigt; `Same local day` und
+`Following local day` machen den lokalen Aufsteh-Tag explizit. Die Formulierung
+bleibt
+`best-supported sleep window` und `associated with`; ein Ergebnis wird weder
+übernommen noch automatisch in Schlafziel, Evening-Plan oder Planner geschrieben.
+Ein kürzeres beobachtetes Fenster als das bestätigte Schlafziel trägt eine
+sichtbare Warnung. Fehler dieser Karte verändern `Personal study pattern` nicht.
+
 Nur der klar beschriftete lokale Demo-Modus behält eine vorsichtige lokal
 berechnete Beispielbeobachtung. Diese Demo-Ausgabe verändert keine Daten oder
 Pläne.
@@ -211,7 +224,7 @@ erscheinen nur, wenn echte Werte vorhanden sind:
 
 | Metrik | Datenquelle |
 | --- | --- |
-| Previous-night sleep, quality, shortfall | nur eine gültige V4-Schlafepisode mit exakt demselben lokalen Aufwach-/Focus-Tag und `woke_at` vor der Session |
+| Previous-night sleep, quality, shortfall | nur eine gültige V4/V5-Schlafepisode mit exakt demselben lokalen Aufwach-/Focus-Tag und `woke_at` vor der Session |
 | Morning energy | nur wenn Morning vor Sessionstart erfasst wurde |
 | Rated focus time and completion | Tagessumme beziehungsweise Quote ausschließlich bewerteter terminaler `focus_sessions` |
 | Planned focus time | Tagessumme der an bewerteten Sessions gespeicherten geplanten Dauer |
@@ -250,20 +263,20 @@ Dashboards:
 | --- | --- | --- | --- |
 | **Auth und Account** | E-Mail/Passwort, Recovery und optional konfiguriertes Google OAuth über Supabase Auth | Auth-Identität und Profil | `profiles`; kein LLM |
 | **Setup** | nur Typical weekday und Best energy window sind erforderlich; Name, Routinen, Commitments und Study Setup sind optional; Focus setup speichert Rhythmus und Start-Ritual, Semester planning genau ein aktuelles/nächstes Semester; atomar, revisioniert und retry-sicher | explizite Tagesstruktur/Energiefenster sowie optionale Routine-, Commitment-, Focus-/Pausen-, Ritual- und Semesterangaben; keine Focus Areas, Goals, Frictions, Coaching-Style-, Reminder- oder Context-Frage | `intake_responses`, `study_setup_profiles`, `habits`, `schedule_items`, die Best-Energy-`memory_entries` und Onboarding-Snapshot; Setup-owned Goals werden archiviert, `notification_preferences` bleibt vollständig unverändert; kein LLM |
-| **Morning check-in** | korrigierbarer geschätzter Schlafbeginn und Aufwachzeit mit automatisch berechneter „Estimated sleep duration“, separat geschätzter Schlafqualität (1–10), aktueller Energie und Tagesform | explizite Selbstauskunft; Qualität wird nicht aus der Dauer abgeleitet, Rohzeiten gelten nicht als objektive Messung | Teil des lokalen Tages in `daily_logs`; Rohzeiten bleiben nur dort, Dauer/Qualität werden kompatibel projiziert, kein fünftes Event und kein LLM |
-| **Evening check-in** | drei kurze Schritte für Mood, Energie, Stress, geplante Schlafzeit mit Dauerziel sowie optionale Reflection und Specific Blocker; keine Possible Priority oder Friction-Auswahl | explizite Auswahl/Text; bei Stress 5–10 zusätzlich Quelle mit separater Info-Hilfe und Kontrollierbarkeit; zuerst sichtbar sind acht Stunden, persönlich wird der Wert erst beim Speichern | `daily-capture-v4` im selben `daily_logs`-Tag plus abgeleitete `behavioral_events`; neue Captures lassen die Priority weg, ein historischer Wert bleibt beim sonstigen Edit erhalten; V2/V3 bleiben lesbar; freie Texte/Rohzeiten gelangen nicht in Daily State, können aber im ausdrücklich ausgelösten persönlichen Coach-Snapshot als nicht vertrauenswürdige Daten enthalten sein |
-| **Daily State / Snapshot** | `explainable-daily-state-v2` betrachtet einen festen Sieben-Tage-Kontext und klassifiziert Zustand, Risiken und Gründe ohne Friction; sehr schlechte Schlafqualität kann trotz ausreichender Dauer Recovery auslösen, mäßig schlechte Qualität verhindert Push, und Push benötigt einen aktiven Task | validierte Stress-, Schlaf-, Energie- und Day-Shape-Signale plus Workload/Tasks; Habits, Outcomes, Focus, Schedule und Memories ergänzen die übrige Snapshot-Zusammenfassung; keine Goals | `user_state_snapshots`; kein LLM und kein gelernter persönlicher Basiswert |
+| **Morning check-in** | korrigierbarer geschätzter Schlafbeginn und Aufwachzeit mit automatisch berechneter „Estimated sleep duration“, separat geschätzter Schlafqualität (1–10) und aktueller Energie; keine Tagesform-Auswahl | explizite Selbstauskunft; Qualität wird nicht aus der Dauer abgeleitet, Rohzeiten gelten nicht als objektive Messung | `daily-capture-v5` im lokalen Tag; Rohzeiten bleiben nur in `daily_logs`, Dauer/Qualität werden kompatibel projiziert, kein fünftes Event und kein LLM; historische V2–V4-Werte bleiben lesbar, Day Shape wird nicht mehr gezeigt oder genutzt |
+| **Evening check-in** | drei kurze Schritte für Mood, Energie, Stress, geplante Schlafzeit mit Dauerziel sowie optionale Reflection und Specific Blocker; keine Possible Priority oder Friction-Auswahl | explizite Auswahl/Text; bei Stress 5–10 zusätzlich Quelle mit separater Info-Hilfe und Kontrollierbarkeit; zuerst sichtbar sind acht Stunden, persönlich wird der Wert erst beim Speichern | `daily-capture-v5` im selben `daily_logs`-Tag plus abgeleitete `behavioral_events`; während des Rollouts bleiben vollständige V4-Schreibvorgänge zulässig, ein V5-Container wird nie herabgestuft; V2–V4 bleiben lesbar; freie Texte/Rohzeiten gelangen nicht in Daily State, können aber im ausdrücklich ausgelösten persönlichen Coach-Snapshot als nicht vertrauenswürdige Daten enthalten sein |
+| **Daily State / Snapshot** | `explainable-daily-state-v3` betrachtet einen festen Sieben-Tage-Kontext und klassifiziert Zustand, Risiken und Gründe ohne Friction oder Day Shape; sehr schlechte Schlafqualität kann trotz ausreichender Dauer Recovery auslösen, mäßig schlechte Qualität verhindert Push, und Push benötigt einen aktiven Task | validierte Stress-, Schlaf- und Energie-Signale plus Workload/Tasks; Habits, Outcomes, Focus, Schedule und Memories ergänzen die übrige Snapshot-Zusammenfassung; keine Goals | `user_state_snapshots`; kein LLM und kein gelernter persönlicher Basiswert; V1/V2 bleiben lesbar, aber `constrained_capacity` und der Day-Shape-Push-Gate sind entfernt |
 | **Recommendations** | einzelne regelbasierte Kandidaten werden explizit oder geplant erzeugt/aktualisiert; Setup erzeugt keine Recommendation | Snapshot, echte Check-ins, offene Tasks, Habits und verfügbare Feedback-Signale; keine Goals oder retired Onboarding-Personalisierung | `recommendations`; LLM-Wording ist im aktuellen Produktpfad deaktiviert |
 | **Daily Briefing** | wählt aus zulässigen Kandidaten eine primäre und bis zu zwei unterstützende Aktionen | aktueller Snapshot, Recommendations, Actions, Dringlichkeit, Recovery-Schutz und passendes Feedback | `daily_briefings`; regelbasiert, nicht AI-geschrieben |
 | **Tasks** | endliche Aktionen mit Status und optionaler Deadline/Schätzung | direkte Nutzereingabe oder ein vom bestätigten Preparation Plan verwalteter Task | `tasks`; kein LLM |
 | **Habits** | wiederkehrende Routinen mit daily-, weekday- oder weekly-target-Cadence | Definition plus explizites completed/skipped/undo pro lokalem Datum | `habits`, `habit_logs`; kein LLM |
 | **Focus** | echter Timer, optional mit genau einem Task oder Habit verknüpft; gespeicherte Ritualpunkte werden vor Start lokal bestätigt/übersprungen, nach Abschluss kann ein lokaler Recovery-Countdown laufen | geplante Blockdauer oder Study Default, einmalig änderbare Dauer und gemessene verstrichene Zeit; Ritual-Häkchen werden nicht gespeichert | `focus_sessions` inklusive verwendeter Recovery-Minuten; kein eigener Pausendatensatz und kein LLM |
-| **Planner** | deterministische Vorschau aus expliziter Dauer/Deadline/Session beziehungsweise Habit-Dauer/Cadence; normale Tasks können explizit den Study Rhythm verwenden, Habits nicht; freie Zeit berücksichtigt bestätigte Belegung einschließlich Recovery; eine aktive Klausur aktiviert zusätzlich den read-only 14-/7-Tage-Outlook mit hypothetisch geschütztem Schlaf | Task/Habit-Eingaben, primär Setup/manual commitments, Study-Revision, Planner/Preparation reservations, optional consented aktueller Import sowie neueste gültige Evening-/Morning-V4-Schlaffakten | Planner preferences/plans/revisions/blocks/slots/commitments; erst Confirm erstellt/ändert Ziel und Reservierungen; Outlook speichert nichts und erzeugt weder Today-Eintrag noch Notification; kein LLM, Calendar-Write oder Auto-Replan |
+| **Planner** | deterministische Vorschau aus expliziter Dauer/Deadline/Session beziehungsweise Habit-Dauer/Cadence; normale Tasks können explizit den Study Rhythm verwenden, Habits nicht; freie Zeit berücksichtigt bestätigte Belegung einschließlich Recovery; eine aktive Klausur aktiviert zusätzlich den read-only 14-/7-Tage-Outlook mit hypothetisch geschütztem Schlaf | Task/Habit-Eingaben, primär Setup/manual commitments, Study-Revision, Planner/Preparation reservations, optional consented aktueller Import sowie neueste gültige Evening-/Morning-V4/V5-Schlaffakten | Planner preferences/plans/revisions/blocks/slots/commitments; erst Confirm erstellt/ändert Ziel und Reservierungen; Outlook speichert nichts und erzeugt weder Today-Eintrag noch Notification; kein LLM, Calendar-Write oder Auto-Replan |
 | **Decision feedback** | Reaktion auf eine konkrete Briefing-Aktion | Aktion, Kontext und Feedback-Typ | append-only `decision_feedback`; beeinflusst begrenzt spätere Rankings, führt die Aktion aber nicht aus |
 | **Weekly review** | deterministische Fakten für die letzte abgeschlossene lokale ISO-Woche | Tasks, Habit-Möglichkeiten/Outcomes, Focus, Daily State und Feedback | `weekly_reviews`; kein LLM; Änderungen nur nach Bestätigung |
 | **Calendar import** | ein bewusst gewähltes UTF-8-`.ics`-File wird begrenzt und read-only importiert | explizite Einwilligung und die gewählte Datei | `calendar_connections`, `calendar_imports`, `calendar_events`; nie in `schedule_items` kopiert; im Coach nur als nicht vertrauenswürdige Snapshot-Daten, niemals als Anweisung |
 | **Preparation plans** | Nutzer schätzt Gesamtaufwand und Vorleistung; kompakte Open-/History-Accordions zeigen genau einen fokussierten Plan, Regeln teilen Restzeit in überprüfbare Datumsblöcke und verwenden einen konfigurierten Study Rhythm verbindlich | Deadline, eigene Schätzung, Study-Revision beziehungsweise sonst bevorzugte Blockgröße, Tageslimit, Puffer, Setup-Commitments und optional aktuelle importierte Busy Times | `deadline_plans`, Revisionen, Focus-/Recovery-Blocks und nach Bestätigung ein verwalteter `task`; fokussiertes Replanning bleibt bis zur Bestätigung staged; Recovery ist Belegung, aber keine Lern-/Budgetminute; kein LLM |
-| **Insights** | `personal-patterns-v1` liefert für echte Accounts die persönliche Musterkarte und profilzeitbasierte Korrelationspunkte; nur Demo berechnet lokal eine vorsichtige Beispielbeobachtung | terminale Focus Sessions mit vorhandenen Reflexionen sowie ausschließlich vor der Session gültige Schlaf-/Morning-Fakten; gespeicherte `ai_insights` bleiben getrennte Notizen | read-only; kein LLM, keine Kausalaussage und keine automatische Produktänderung; Planner-Nutzung nur nach separater Freigabe für neue Previews |
+| **Insights** | `personal-patterns-v1` liefert die persönliche Musterkarte und Korrelationen; `sleep-recommendation-v1` liefert unabhängig Fortschritt, Unstable-Grund oder drei robuste Ready-Fenster; nur Demo berechnet lokal eine vorsichtige Beispielbeobachtung und ruft die Schlafroute nicht auf | terminale Focus Sessions mit vorhandenen Reflexionen sowie ausschließlich vor der Session gültige Schlaf-/Morning-Fakten; für Schlafempfehlung mindestens 30 geeignete Tage; gespeicherte `ai_insights` bleiben getrennte Notizen | read-only; kein LLM, keine Kausalaussage, kein Apply und keine automatische Produktänderung; Planner-Nutzung nur nach separater Freigabe für neue Focus-Previews |
 | **Inbox lifecycle** | fällige gespeicherte Hinweise lesen, unread/read setzen oder dismissen | owner-scoped `notifications` | Lifecycle-Zeitstempel plus Retry-Ledger; kein LLM |
 | **In-app reminders** | nach separater Einwilligung werden höchstens zwei Kandidaten mit fixer Copy regelbasiert erzeugt und bei offener App höchstens einmal als Banner gezeigt | aktueller Recovery-/Briefing-Zustand oder aktuelles Weekly Review, Kategorien, Quiet Hours und Tageslimit | `notification_preferences`, `notifications` und Delivery-Provenance; kein Push, kein Background und kein LLM |
 | **Coach** | freie Frage, bei Bedarf Read-only-Inspektion/SQL/isoliertes Python, Safety-Prüfung und validierte englische Textantwort | frischer owner-only SQLite-Snapshot über den verfügbaren relevanten Produktzeitraum, inklusive Detailtexten und Datenkatalog | `coach_requests`, `coach_messages`, Usage sowie backend-erzeugte Evidence/Trace/Fast-Provenance; klar deutsche Provider-Ausgabe wird vor Assistant-Persistenz verworfen; kein Plot und keine Produktmutation; nur dieser Pfad kann lokal ein LLM verwenden |
@@ -770,7 +783,7 @@ Passwort: DemoPass123!
 ```
 
 Er läuft mit `USE_MOCK_DATA=false` gegen die lokale Supabase- und FastAPI-
-Umgebung. Der Seed deckt unter anderem 43 profilzeitbasierte Daily-Capture-V4-
+Umgebung. Der Seed deckt unter anderem 43 profilzeitbasierte Daily-Capture-V5-
 Tage, drei Habit-Cadences, mehrere Task-Status, 36 bewertete Focus-Tage, eine
 fortsetzbare aktive Focus Session, Briefing-Historie, Decision Feedback, Weekly
 Review, Calendar Import, drei Preparation Plans, In-app consent, Inbox-Zustände,
@@ -817,7 +830,9 @@ dabei lediglich lesbar.
    preparation` ansehen.
 7. In `Insights` `Personal study pattern` öffnen. Erwartet werden `Stable`, 36
    Bewertungen auf 36 lokalen Tagen, ungefähr 97% Abdeckung und das beobachtete
-   Fenster `09:00–13:00`. Unter `Quick actions → Focus` eine historische
+   Fenster `09:00–13:00`. Direkt darunter zeigt `Sleep recommendation` den
+   Status `Ready` sowie Sleep start, Wake time, Duration und die Warnung zum
+   kürzeren Rohfenster gegenüber dem bestätigten Ziel. Unter `Quick actions → Focus` eine historische
    Bewertung bearbeiten sowie die aktive Session beenden und neu bewerten.
 8. Für Planner-Nutzung die App mit dem obigen Pilot-Flag starten, unter
    `Settings → Personal learning` den standardmäßig ausgeschalteten Schalter

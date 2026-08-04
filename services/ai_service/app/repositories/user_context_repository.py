@@ -10,7 +10,7 @@ from app.models.user_context import (
     SignalSummary,
     TaskSignal,
 )
-from app.contracts.daily_capture_v4 import parse_daily_capture_v4_sleep_episode
+from app.contracts.daily_capture_v4 import parse_daily_capture_sleep_episode
 
 
 class UserContextRepository(Protocol):
@@ -139,11 +139,11 @@ def _daily_log_signal(row: dict[str, Any]) -> DailyLogSignal:
     metadata = metadata if isinstance(metadata, dict) else {}
     captures = (
         metadata.get("captures")
-        if metadata.get("capture_version") == "daily-capture-v4"
+        if metadata.get("capture_version") in {"daily-capture-v4", "daily-capture-v5"}
         and isinstance(metadata.get("captures"), dict)
         else {}
     )
-    parsed_sleep = parse_daily_capture_v4_sleep_episode(
+    parsed_sleep = parse_daily_capture_sleep_episode(
         captures.get("morning"),
         row_date=entry_date,
     ).value
@@ -159,9 +159,7 @@ def _daily_log_signal(row: dict[str, Any]) -> DailyLogSignal:
             parsed_sleep.sleep_quality if parsed_sleep is not None else None
         ),
         sleep_target_deviation_minutes=(
-            parsed_sleep.target_deviation_minutes
-            if parsed_sleep is not None
-            else None
+            parsed_sleep.target_deviation_minutes if parsed_sleep is not None else None
         ),
         energy=_optional_float(row.get("energy_level")),
         stress=_optional_float(row.get("stress_level")),

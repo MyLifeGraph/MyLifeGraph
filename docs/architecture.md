@@ -245,14 +245,14 @@ is not configured.
 `/daily-check-in` route redirects to it. `/morning-calibration` is a separate,
 short Morning Calibration instead of another full daily form.
 
-The current `daily-capture-v4` contract is:
+The current `daily-capture-v5` contract is:
 
 - Typed `EveningShutdownDraft` and `MorningCalibrationDraft` values have stable
   capture ids through retry. `DailyCaptureEntry` is the one same-day aggregate.
 - Evening is a three-page flow. Mood, energy, stress intensity, one local
   planned sleep start, and one `300..720` minute target on a 15-minute grid are
   required. The first visible target is 480 minutes; later forms prefill the
-  newest valid Evening V4 plan.
+  newest valid Evening V4/V5 plan.
   Stress source and controllability appear and become required together only
   at stress `5..10`; each source description is behind a separate accessible
   info control that does not change selection. Reflection and a specific
@@ -260,28 +260,33 @@ The current `daily-capture-v4` contract is:
   from the form and new writes, while a value on an existing branch is
   preserved. Primary and additional friction choices are retired. V2/V3
   captures remain readable, but their friction keys are ignored.
-  A V4 merge preserves an untouched older opposite branch with its explicit
+  A V5 merge preserves an untouched older opposite branch with its explicit
   branch version and `compatibility: true`; editing that branch upgrades it and
-  requires its V4 fields. New captures do not write the retired
+  requires its V5 fields. Complete V4 writes remain accepted during rollout but
+  cannot downgrade a V5 container. New captures do not write the retired
   `gentle_tomorrow` field, while old capture objects containing it remain
   readable. The form no longer asks the user to estimate a focus band:
   completed `focus_sessions` are the source of measured focus time.
 - Morning requires aware estimated sleep-start/wake instants, their exact
   derived whole-minute duration and compatible sleep hours, the target used for
   that night, an independent whole-number `1..10` `sleep_quality` estimate,
-  current energy, and `normal`, `constrained`, or `flexible` day shape. The
-  interval is ordered, minute-aligned, and at most 16 hours. It is labelled as
+  current energy. V5 rejects the retired `day_shape` field. The interval is
+  ordered, minute-aligned, and at most 16 hours. It is labelled as
   an estimated duration, does not repeat Evening questions, and explicitly
   states that it does not generate recommendations or create or change a plan.
-  Older V2 Morning objects without `sleep_quality` remain readable; editing
+  Older V2–V4 Morning objects, including historical Day Shape, remain readable;
+  Day Shape is neither displayed nor evaluated, and editing
   that Morning capture requires an explicit value before it can be saved.
 - Same-day merge replaces only the submitted `metadata.captures.evening` or
   `.morning` object, preserving the other capture and unrelated metadata.
   Numeric compatibility projects mood and stress from Evening, sleep from
   Morning, and energy from Morning when present or Evening otherwise.
-- Guest saves use a versioned V4 daily JSON object and remain readable on
+- Guest saves use a versioned V5 daily JSON object and remain readable on
   return. Legacy V1/V2/V3 guest JSON remains readable and is upgraded only
-  through the same branch-compatible merge.
+  through the same branch-compatible merge. During best-effort account
+  migration, complete V4 branches are normalized to strict V5 before writing;
+  incomplete V2/V3 branches are not completed with guessed sleep data, and
+  local guest data is removed only after every branch save succeeds.
 - Authenticated saves call
   `PUT /v1/daily-capture/{entry_date}/{morning|evening}` with the last-read
   identity of the branch being changed. Morning and Evening merge
@@ -325,8 +330,8 @@ durable-mutation reload rules are defined together in
 time, nullable latest check-in, true check-in streak, task rows, and schedule
 entries. The Supabase mapper preserves stored mood, energy, sleep duration,
 sleep quality, stress, focus, steps, activity, and screen-time values exactly
-and reads only persisted Evening/Morning flags, focus band, stress context, and
-day shape from metadata.
+and reads only persisted Evening/Morning flags, focus band, and stress context
+from metadata. Historical `day_shape` values are ignored.
 The guest mapper uses the same merged daily object. The UI shows only fields
 that exist and labels the latest row by its real date; missing values do not
 become zero, a mode, or a derived readiness score.
@@ -454,6 +459,21 @@ Morning-energy points over the bounded 7/14/30/90-day views. Missing metrics
 stay absent. This exploration uses no LLM and has no Planner authority; only the
 separately gated Planner-ready preference in the backend response may influence
 a deliberate new preview.
+The exact existing response version remains `personal-patterns-v1`.
+
+The separate `GET /v1/insights/sleep-recommendation` route computes
+`sleep-recommendation-v1` from the same bounded repository but has its own
+service, response model, provider, and UI load/error state. It joins valid
+profile-local Morning episodes with only later terminal and rated Focus
+sessions, aggregates multiple sessions to one daily observation, and compares
+recurring sleep windows only after 30 eligible days. Morning facts use the exact
+closed-open `captured_at` 90-day boundary with a valid observed `updated_at`;
+sleep start may predate the lower edge. Candidate grouping keeps same-day and
+following-local-day wakes separate and returns `wake_day_offset=0|1`. It is
+recomputed on read and never persists or applies a result. When analysis
+consent is off, history loading is skipped; guest/demo mode does not call the
+route. Invalid profile timezones use the bounded route error. Its card appears
+below Personal Study Pattern and cannot make that existing surface fail.
 
 ## Phase 3 Executable Actions
 
@@ -813,8 +833,8 @@ Current responsibilities:
   briefings cannot return unknown commands, mismatched target kinds, nested
   metadata, or unsafe routes. `GET /v1/briefings/today` reads that decision and
   deliberate `POST /v1/briefings/generate` ranks or refreshes it.
-- Add `summary.daily_state` and `signals.daily_state` under the
-  `explainable-daily-state-v2` contract. The parser trusts V2/V3/V4 capture
+- Add `summary.daily_state` and `signals.daily_state` under the current
+  `explainable-daily-state-v3` contract. The parser trusts V2/V3/V4/V5 capture
   metadata only after strict identity, branch-compatibility, type, enum, numeric,
   timestamp, sleep-interval, and projection checks, ignores all friction keys,
   and sanitizes readable V1 state. Legacy numeric fallback applies only when no
@@ -830,6 +850,8 @@ Current responsibilities:
   current sleep quality may select recovery despite sufficient duration;
   moderately low quality prevents `push`. Capture free text is excluded from
   summary, signals, and snapshot metadata.
+  Historical Daily State V1/V2 remains readable, but V3 omits Day Shape,
+  `constrained_capacity`, and the former Day-Shape gate for `push`.
 - Load capture metadata with daily rows and events. Event queries use a broadened
   UTC read window, then prefer the explicit local `metadata.entry_date` during
   in-memory filtering and fall back to `occurred_at` for legacy events.
@@ -868,8 +890,8 @@ locator.
 
 FastAPI routes and their feature-owned problem translators depend only on
 service-level errors and models; repository exception types do not cross into
-`app/api`. Daily Capture V4 parsing and
-new-write validation share the framework-neutral
+`app/api`. Daily Capture V4/V5 compatibility parsing and current-write
+validation share the framework-neutral
 `app/contracts/daily_capture_v4.py` boundary, so repositories and deterministic
 read builders do not import a service module. Planner and Deadline orchestration
 likewise remain in `planner_service.py` and `deadline_plan_service.py`, while
@@ -1134,16 +1156,19 @@ Focus history and the last Evening page expose the same reflection record;
 guest/demo paths stay zero-call.
 
 FastAPI owns revisioned learning settings and the side-effect-free
-`GET /v1/insights/personal-patterns` aggregator. When analysis is disabled, it
+`GET /v1/insights/personal-patterns` and
+`GET /v1/insights/sleep-recommendation` aggregators. When analysis is disabled,
+each
 returns before loading Focus or Capture evidence. Otherwise it parses a fixed
 rolling 90-day window exclusively in the profile timezone, joins each rated
-terminal session to only a preceding valid V4 sleep episode, collapses repeated
+terminal session to only a preceding valid V4/V5 sleep episode, collapses repeated
 sleep-episode use, and emits fixed-window observational comparisons with sample,
 coverage, maturity, limits, and deterministic fingerprint. Daily State,
-Exam-Week Outlook, and Personal Patterns share one strict Daily Capture V4
-sleep parser. Authenticated V4 writes use that same contract module for complete
+Exam-Week Outlook, Personal Patterns, and Sleep Recommendation share one strict
+Daily Capture V4/V5 sleep parser. Authenticated V5 writes use that same contract
+module for complete
 branch validation, including exact rating ranges, stress label/context,
-minute-aligned sleep intervals, day shape, and bounded optional fields before
+minute-aligned sleep intervals and bounded optional fields before
 repository I/O.
 
 Real-account Insights replaces the generic observation with this backend
@@ -1151,6 +1176,13 @@ contract. Advanced correlation uses the response's profile-local points and no
 longer reconstructs planned-work or Habit history from current rows. Local demo
 keeps bounded labelled mock exploration. Neither surface grants Planner
 authority.
+
+Sleep Recommendation separately requires 30 eligible dates and a recurring
+candidate plus comparator of at least ten dates each. Its Morning, Focus, and
+two-chronological-half safeguards are deterministic; ready output is an outward
+15-minute-rounded interquartile window with explicit midnight offsets and a
+below-confirmed-target warning when applicable. It is observational only and
+has no apply control.
 
 The optional Planner bridge has two gates: the complete account preference and
 `LEARNED_FOCUS_PLANNING_PILOT_ENABLED` in both FastAPI and Flutter. When current

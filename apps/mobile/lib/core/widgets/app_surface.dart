@@ -348,12 +348,14 @@ class AppStatusPill extends StatelessWidget {
               Icon(icon, size: 14, color: foreground),
               const SizedBox(width: 5),
             ],
-            Text(
-              label,
-              style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    color: foreground,
-                    fontWeight: FontWeight.w600,
-                  ),
+            Flexible(
+              child: Text(
+                label,
+                style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                      color: foreground,
+                      fontWeight: FontWeight.w600,
+                    ),
+              ),
             ),
           ],
         ),

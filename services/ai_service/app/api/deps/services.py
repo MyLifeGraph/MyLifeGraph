@@ -17,6 +17,7 @@ from app.services.intake_service import IntakeService
 from app.services.learning_service import LearningService
 from app.services.notification_service import NotificationService
 from app.services.personal_patterns_service import PersonalPatternsService
+from app.services.sleep_recommendation_service import SleepRecommendationService
 from app.services.planner_service import PlannerService
 from app.services.recommendation_engine import RecommendationEngine
 from app.services.scheduled_refresh import ScheduledRefreshService
@@ -132,6 +133,16 @@ async def get_personal_patterns_service(
         request,
         select=lambda composition: composition.personal_patterns_service,
         unavailable_detail="Personal pattern analysis is not configured.",
+    )
+
+
+async def get_sleep_recommendation_service(
+    request: Request,
+) -> SleepRecommendationService:
+    return _service(
+        request,
+        select=lambda composition: composition.sleep_recommendation_service,
+        unavailable_detail="Sleep recommendation analysis is not configured.",
     )
 
 

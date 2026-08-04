@@ -213,7 +213,6 @@ class DashboardCheckIn {
     this.focusBand,
     this.stressSource,
     this.stressControllability,
-    this.dayShape,
   });
 
   final DateTime entryDate;
@@ -231,7 +230,6 @@ class DashboardCheckIn {
   final String? focusBand;
   final String? stressSource;
   final String? stressControllability;
-  final String? dayShape;
 
   bool get hasAnySignal =>
       mood != null ||
@@ -243,8 +241,7 @@ class DashboardCheckIn {
       steps != null ||
       activityLevel != null ||
       screenTimeHours != null ||
-      focusBand != null ||
-      dayShape != null;
+      focusBand != null;
 }
 
 class PlanItem {

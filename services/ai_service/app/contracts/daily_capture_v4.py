@@ -6,6 +6,7 @@ from math import isfinite
 from typing import Literal
 
 
+DAILY_CAPTURE_CONTRACT_VERSION = "daily-capture-v5"
 DailyCaptureV4Branch = Literal["morning", "evening"]
 
 _EVENING_REQUIRED_KEYS = frozenset(
@@ -51,6 +52,7 @@ _MORNING_REQUIRED_KEYS = frozenset(
     },
 )
 _MORNING_OPTIONAL_KEYS = frozenset({"source_evening_capture_id"})
+_MORNING_V5_REQUIRED_KEYS = _MORNING_REQUIRED_KEYS - {"day_shape"}
 
 
 @dataclass(frozen=True)
@@ -73,7 +75,7 @@ class DailyCaptureV4SleepEpisode:
     sleep_target_minutes: int
     sleep_quality: int
     current_energy: int
-    day_shape: Literal["normal", "constrained", "flexible"]
+    day_shape: Literal["normal", "constrained", "flexible"] | None
     source_evening_capture_id: str | None
 
     @property
@@ -97,12 +99,8 @@ def validate_daily_capture_v4_branch(
 
     if not isinstance(raw, dict):
         return (f"{branch}.invalid_object",)
-    required = (
-        _MORNING_REQUIRED_KEYS if branch == "morning" else _EVENING_REQUIRED_KEYS
-    )
-    optional = (
-        _MORNING_OPTIONAL_KEYS if branch == "morning" else _EVENING_OPTIONAL_KEYS
-    )
+    required = _MORNING_REQUIRED_KEYS if branch == "morning" else _EVENING_REQUIRED_KEYS
+    optional = _MORNING_OPTIONAL_KEYS if branch == "morning" else _EVENING_OPTIONAL_KEYS
     issues: list[str] = []
     if required - set(raw):
         issues.append(f"{branch}.missing_fields")
@@ -141,9 +139,80 @@ def validate_daily_capture_v4_branch(
             ("reflection_note", 1_000),
             ("specific_blocker", 280),
         ):
-            if field in raw and _optional_bounded_text(raw[field], maximum=maximum) is None:
+            if (
+                field in raw
+                and _optional_bounded_text(raw[field], maximum=maximum) is None
+            ):
                 issues.append(f"evening.invalid_{field}")
 
+    return tuple(_dedupe(issues))
+
+
+def validate_daily_capture_branch(
+    raw: object,
+    *,
+    row_date: date,
+    branch: DailyCaptureV4Branch,
+) -> tuple[str, ...]:
+    """Validate a complete V4 rollout branch or a current strict V5 branch."""
+
+    if not isinstance(raw, dict):
+        return (f"{branch}.invalid_object",)
+    version = raw.get("branch_version")
+    if version == "daily-capture-v4":
+        return validate_daily_capture_v4_branch(
+            raw,
+            row_date=row_date,
+            branch=branch,
+        )
+    if version != DAILY_CAPTURE_CONTRACT_VERSION:
+        return (f"{branch}.invalid_branch_version",)
+
+    required = (
+        _MORNING_V5_REQUIRED_KEYS if branch == "morning" else _EVENING_REQUIRED_KEYS
+    )
+    optional = _MORNING_OPTIONAL_KEYS if branch == "morning" else _EVENING_OPTIONAL_KEYS
+    issues: list[str] = []
+    if required - set(raw):
+        issues.append(f"{branch}.missing_fields")
+    if set(raw) - required - optional:
+        issues.append(f"{branch}.unexpected_fields")
+
+    parsed = (
+        parse_daily_capture_sleep_episode(raw, row_date=row_date)
+        if branch == "morning"
+        else _parse_sleep_plan(raw, row_date=row_date, version=version)
+    )
+    issues.extend(parsed.issues)
+    integer_fields = (
+        (
+            "sleep_quality",
+            "current_energy",
+            "estimated_sleep_minutes",
+            "sleep_target_minutes",
+        )
+        if branch == "morning"
+        else ("mood", "energy", "stress_intensity", "sleep_target_minutes")
+    )
+    for field in integer_fields:
+        if field in raw and type(raw[field]) is not int:
+            issues.append(f"{branch}.invalid_{field}")
+    if type(raw.get("captured_at")) is not str:
+        issues.append(f"{branch}.invalid_captured_at")
+    if branch == "evening":
+        focus_band = raw.get("focus_band")
+        if focus_band is not None and focus_band not in _FOCUS_BANDS:
+            issues.append("evening.invalid_focus_band")
+        for field, maximum in (
+            ("tomorrow_priority", 160),
+            ("reflection_note", 1_000),
+            ("specific_blocker", 280),
+        ):
+            if (
+                field in raw
+                and _optional_bounded_text(raw[field], maximum=maximum) is None
+            ):
+                issues.append(f"evening.invalid_{field}")
     return tuple(_dedupe(issues))
 
 
@@ -152,8 +221,45 @@ def parse_daily_capture_v4_sleep_plan(
     *,
     row_date: date,
 ) -> DailyCaptureV4ParseResult:
+    return _parse_sleep_plan(
+        raw,
+        row_date=row_date,
+        version="daily-capture-v4",
+        allow_compatibility=False,
+    )
+
+
+def parse_daily_capture_sleep_plan(
+    raw: object,
+    *,
+    row_date: date,
+) -> DailyCaptureV4ParseResult:
+    version = raw.get("branch_version") if isinstance(raw, dict) else None
+    if version not in {"daily-capture-v4", DAILY_CAPTURE_CONTRACT_VERSION}:
+        return DailyCaptureV4ParseResult(None, ("evening.invalid_branch_version",))
+    return _parse_sleep_plan(
+        raw,
+        row_date=row_date,
+        version=version,
+        allow_compatibility=version == "daily-capture-v4",
+    )
+
+
+def _parse_sleep_plan(
+    raw: object,
+    *,
+    row_date: date,
+    version: str,
+    allow_compatibility: bool = False,
+) -> DailyCaptureV4ParseResult:
     kind = "evening"
-    common, issues = _common_v4_branch(raw, kind=kind, row_date=row_date)
+    common, issues = _common_branch(
+        raw,
+        kind=kind,
+        row_date=row_date,
+        version=version,
+        allow_compatibility=allow_compatibility,
+    )
     if common is None:
         return DailyCaptureV4ParseResult(None, tuple(issues))
     assert isinstance(raw, dict)
@@ -173,19 +279,20 @@ def parse_daily_capture_v4_sleep_plan(
         issues.append("evening.invalid_stress_intensity")
     source = raw.get("stress_source")
     controllability = raw.get("stress_controllability")
-    if stress is not None and stress >= 5 and (
-        source not in _STRESS_SOURCES
-        or controllability not in _STRESS_CONTROLLABILITY
+    if (
+        stress is not None
+        and stress >= 5
+        and (
+            source not in _STRESS_SOURCES
+            or controllability not in _STRESS_CONTROLLABILITY
+        )
     ):
         issues.append("evening.missing_stress_context")
     if (source is None) != (controllability is None):
         issues.append("evening.incomplete_stress_context")
     if source is not None and source not in _STRESS_SOURCES:
         issues.append("evening.invalid_stress_source")
-    if (
-        controllability is not None
-        and controllability not in _STRESS_CONTROLLABILITY
-    ):
+    if controllability is not None and controllability not in _STRESS_CONTROLLABILITY:
         issues.append("evening.invalid_stress_controllability")
     expected_label = _stress_label(stress) if stress is not None else None
     if raw.get("stress_intensity_label") != expected_label:
@@ -218,8 +325,44 @@ def parse_daily_capture_v4_sleep_episode(
     *,
     row_date: date,
 ) -> DailyCaptureV4ParseResult:
-    kind = "morning"
-    common, issues = _common_v4_branch(raw, kind=kind, row_date=row_date)
+    return _parse_sleep_episode(
+        raw,
+        row_date=row_date,
+        version="daily-capture-v4",
+        allow_compatibility=False,
+    )
+
+
+def parse_daily_capture_sleep_episode(
+    raw: object,
+    *,
+    row_date: date,
+) -> DailyCaptureV4ParseResult:
+    version = raw.get("branch_version") if isinstance(raw, dict) else None
+    if version not in {"daily-capture-v4", DAILY_CAPTURE_CONTRACT_VERSION}:
+        return DailyCaptureV4ParseResult(None, ("morning.invalid_branch_version",))
+    return _parse_sleep_episode(
+        raw,
+        row_date=row_date,
+        version=version,
+        allow_compatibility=version == "daily-capture-v4",
+    )
+
+
+def _parse_sleep_episode(
+    raw: object,
+    *,
+    row_date: date,
+    version: str,
+    allow_compatibility: bool,
+) -> DailyCaptureV4ParseResult:
+    common, issues = _common_branch(
+        raw,
+        kind="morning",
+        row_date=row_date,
+        version=version,
+        allow_compatibility=allow_compatibility,
+    )
     if common is None:
         return DailyCaptureV4ParseResult(None, tuple(issues))
     assert isinstance(raw, dict)
@@ -271,8 +414,10 @@ def parse_daily_capture_v4_sleep_episode(
         issues.append("morning.invalid_sleep_quality")
     if current_energy is None:
         issues.append("morning.invalid_current_energy")
-    if day_shape not in _DAY_SHAPES:
+    if version == "daily-capture-v4" and day_shape not in _DAY_SHAPES:
         issues.append("morning.invalid_day_shape")
+    if version == DAILY_CAPTURE_CONTRACT_VERSION and "day_shape" in raw:
+        issues.append("morning.unexpected_fields")
     if (
         source_evening_capture_id is not None
         and _bounded_string(source_evening_capture_id, maximum=160) is None
@@ -287,7 +432,7 @@ def parse_daily_capture_v4_sleep_episode(
     assert target is not None
     assert sleep_quality is not None
     assert current_energy is not None
-    assert isinstance(day_shape, str)
+    assert day_shape is None or isinstance(day_shape, str)
     return DailyCaptureV4ParseResult(
         DailyCaptureV4SleepEpisode(
             capture_id=common.capture_id,
@@ -312,19 +457,25 @@ class _CommonBranch:
     captured_at: datetime
 
 
-def _common_v4_branch(
+def _common_branch(
     raw: object,
     *,
     kind: str,
     row_date: date,
+    version: str,
+    allow_compatibility: bool = False,
 ) -> tuple[_CommonBranch | None, list[str]]:
     if not isinstance(raw, dict):
         return None, [f"{kind}.invalid_object"]
     issues: list[str] = []
-    if raw.get("branch_version") != "daily-capture-v4":
+    if raw.get("branch_version") != version:
         issues.append(f"{kind}.invalid_branch_version")
     compatibility = raw.get("compatibility")
-    if compatibility is not None and compatibility is not False:
+    if (
+        compatibility is not None
+        and compatibility is not False
+        and not (allow_compatibility and compatibility is True)
+    ):
         issues.append(f"{kind}.invalid_compatibility")
     if raw.get("capture_kind") != kind:
         issues.append(f"{kind}.invalid_capture_kind")

@@ -1,7 +1,7 @@
 # Today Overview V1 Contract
 
 Status: implemented through the additive Today Overview V2 Planner projection
-and Daily Capture V4 compatibility as of 2026-07-30. The V1 endpoint remains
+and Daily Capture V5/V4 compatibility as of 2026-08-04. The V1 endpoint remains
 available and unchanged.
 
 Today Overview V1 replaces the briefing-first presentation on the `Today`

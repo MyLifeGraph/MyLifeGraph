@@ -15,6 +15,8 @@ sleep target or capacity, move a confirmed block, or make a provider write.
 - `focus-reflection-v1` is the stored per-session reflection contract.
 - `learning-preferences-v1` is the revisioned preference contract.
 - `personal-patterns-v1` is the read-only evidence contract.
+- `sleep-recommendation-v1` is the independent read-only learned sleep-window
+  contract.
 
 ## Focus reflections
 
@@ -106,14 +108,16 @@ preference.
 
 ### Sleep and energy evidence
 
-All consumers use the shared strict Daily Capture V4 parser. A Focus session may
-use a valid V4 Morning sleep episode only when the episode `entry_date` equals
+All consumers use the shared strict Daily Capture V4/V5 parser. A Focus session
+may use a valid Morning sleep episode only when the episode `entry_date` equals
 the session's profile-local start date and `woke_at` is no later than the
 session start. There is no prior-day or 36-hour fallback. A session after
 midnight therefore has no sleep values until that calendar day's valid Morning
 capture exists. The episode contains estimated duration, explicit target
 deviation, sleep quality, and Morning energy only when that capture was recorded
-before the session.
+before the session. V4 remains readable with its historical `day_shape`; V5
+neither accepts nor emits that field, and pattern analysis does not use it.
+Current new capture branches use the named `daily-capture-v5` contract.
 
 For a sleep comparison, multiple sessions linked to the same episode collapse
 to one daily observation so a single day cannot be multiplied. An Evening
@@ -173,6 +177,94 @@ The correlation matrix keeps its row labels fixed while only the data grid
 scrolls horizontally. Row and column labels wrap without ellipsis, and their
 cells expand with text scaling so the complete metric names remain readable on
 desktop and at the supported 320-pixel/200%-text boundary.
+
+## Learned sleep recommendation
+
+`GET /v1/insights/sleep-recommendation` is side-effect free and independent of
+`GET /v1/insights/personal-patterns`. It captures one `generated_at` instant,
+uses the profile IANA timezone, and recomputes a deterministic rolling 90-day
+result on every read. It does not persist an analysis, call a model, change the
+confirmed sleep target, alter Planner capacity, or update the Evening sleep
+plan. A failure on this route cannot replace or suppress the Personal Study
+Pattern response.
+
+The response reports `disabled`, `collecting`, `unstable`, or `ready`, the typed
+reason, calculation instant, timezone, UTC and local window boundaries, and a
+sample containing valid nights, eligible Focus days, rated sessions, the
+required 30 days, and progress `N/30`. Reasons are
+`analysis_disabled`, `insufficient_eligible_days`, `no_recurring_pattern`,
+`insufficient_comparison_days`, `mixed_morning_outcomes`,
+`mixed_focus_outcomes`, `temporally_unstable_pattern`, or `ready`.
+
+`personal_pattern_analysis_enabled` is the sole analysis-consent gate. When it
+is off, the service returns `disabled` before loading Daily Capture or Focus
+history; only preferences and the profile timezone are resolved so the response
+can describe its boundary honestly. Guest/local-demo mode does not call this
+endpoint and receives no synthetic recommendation.
+
+### Eligible day and daily aggregation
+
+One eligible profile-local date requires all of the following:
+
+- one valid V4 or V5 Morning episode whose `captured_at` is in the exact
+  closed-open interval `[generated_at - 90 days, generated_at)` and whose Daily
+  Log has a valid aware `updated_at <= generated_at`; the estimated sleep start
+  may precede the lower boundary;
+- at least one terminal Focus session whose start is at or after both `woke_at`
+  and the Morning `captured_at` instant; and
+- one valid `focus-reflection-v1` for that session, created no earlier than the
+  terminal session end and within the captured observation boundary.
+
+Multiple rated sessions on one date count as one eligible day. Morning
+readiness is the mean of sleep quality and current energy. Useful progress and
+Focus quality are the within-day medians, and completion is the within-day
+completed-session ratio. The cross-day comparison then uses medians of these
+daily values, preventing a busy date from multiplying its influence.
+
+### Candidate, comparison, and stability rules
+
+A recurring candidate contains at least ten dates and has a total circular
+sleep-start span, circular wake-time span, and duration span of at most 45
+minutes each. Candidate dates must also share the same local wake-day offset:
+`0` for wake on the sleep-start date or `1` for wake on the following local
+date. Same-day and following-day episodes are never pooled. Dates outside the
+candidate form the comparison and must also number at least ten. A candidate is
+supported only when all of these median differences hold:
+
+- Morning readiness is at least `+0.5`;
+- sleep quality and Morning energy are each no worse than `-0.5`;
+- useful Focus progress is at least `+0.5`;
+- Focus quality is no worse than `-0.5`; and
+- completion rate is no worse than `-0.10`.
+
+The same directional support must repeat in both chronological halves of all
+eligible dates, with at least five candidate and five comparison dates in each
+half. If multiple candidates pass, deterministic precedence is Morning
+readiness improvement, useful progress, Focus quality, completion rate,
+candidate size, then stable sleep-start, wake-time, and duration ordering.
+
+A ready response exposes sleep-start, wake-time, and duration windows. Each is
+the candidate's 25th through 75th percentile, rounded outward to 15-minute
+boundaries, and may be no wider than 60 minutes. Clock intervals explicitly
+carry next-day offsets so midnight crossings and DST-resolved source instants
+are not guessed. `recommendation.wake_day_offset` is exactly `0` or `1` and
+describes the local date relation of the selected source episodes. The response
+also contains the full candidate/comparator
+evidence deltas, two-half confirmation, raw median duration, median confirmed
+target, and a deterministic evidence fingerprint.
+
+The raw supported duration is not clamped to the confirmed sleep target. When
+it is shorter, `warning=below_confirmed_sleep_target` makes that discrepancy
+visible without changing either value. Product language says “best-supported
+sleep window” and “associated with”; it never claims a medical optimum,
+diagnosis, causality, or automatic plan change.
+
+Insights renders a separate `Sleep recommendation` card immediately below
+`Personal study pattern`. Collecting and unstable states both say `No stable
+window yet` while explaining their distinct reason; disabled, loading, and
+route-error states are local to the card. Ready shows the three readable values
+`Sleep start`, `Wake time`, and `Duration`, plus the below-target warning when
+applicable. It has no apply or automation control.
 
 ## Optional Planner use
 

@@ -3,8 +3,9 @@
 Status: current whole-product review entry point for the checkout containing
 this document, updated through Today Overview V2, Planner V1, Study Setup V1,
 Personal Learning V1, the Coach-enabled shell navigation, Setup
-personalization retirement, Daily Capture V4, Exam-Week Outlook V1, and the
-stabilized application-composition boundaries on 2026-07-31.
+personalization retirement, Daily Capture V5, Daily State V3, learned Sleep
+Recommendation, Exam-Week Outlook V1, and the stabilized application-composition
+boundaries on 2026-08-04.
 
 ## Objective
 
@@ -25,8 +26,9 @@ The current checkout combines these implemented loops:
    rhythm, a transient start checklist, and current/next semester facts.
 2. Evening Shutdown persists an explicit personal sleep plan; Morning
    Calibration persists corrected estimated sleep instants and their derived
-   duration under Daily Capture V4. Deterministic Daily State classifies
-   freshness and capacity without an LLM or raw sleep-clock propagation.
+   duration, quality, and energy under Daily Capture V5 without Day Shape.
+   Deterministic Daily State V3 classifies freshness and capacity without an LLM,
+   raw sleep-clock propagation, or Day-Shape gate.
 3. Today Overview V2 is a read-only projection with a strict both-capture
    streak, transparent progress, Setup/Planner/Preparation/Calendar/Focus
    timeline facts, selected Tasks/Habits, and isolated partial failures.
@@ -41,9 +43,11 @@ The current checkout combines these implemented loops:
 6. Deadline Planner uses the student's estimate and prior credit to stage dated
    preparation blocks. Confirmation alone activates the plan and managed Task.
    Study rhythm adds recovery reservations without counting recovery as study.
-7. Insights, Weekly Review, Inbox lifecycle, foreground-only notification
-   delivery, optional `.ics` import, account controls, and the bounded
-   development Coach retain their separate contracts and authority limits.
+7. Insights independently exposes Personal Study Pattern and the 30-day-mature
+   observational Sleep Recommendation; Weekly Review, Inbox lifecycle,
+   foreground-only notification delivery, optional `.ics` import, account
+   controls, and the bounded development Coach retain their separate contracts
+   and authority limits.
 8. With the development Coach gate enabled, Coach is the fifth shell
    destination. Settings remains available from Today; a disabled gate does not
    restore a redundant Settings shell item.

@@ -736,6 +736,7 @@ def _daily_modes(
             not in {
                 "explainable-daily-state-v1",
                 "explainable-daily-state-v2",
+                "explainable-daily-state-v3",
             }
             or state.get("target_date") != period_date.isoformat()
             or state.get("mode") not in {"push", "steady", "recover", "plan"}

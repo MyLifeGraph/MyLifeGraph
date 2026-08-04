@@ -8,6 +8,7 @@ import 'package:my_life_graph/core/theme/app_theme.dart';
 import 'package:my_life_graph/features/insights/domain/entities/correlation.dart';
 import 'package:my_life_graph/features/insights/domain/entities/insight.dart';
 import 'package:my_life_graph/features/insights/domain/entities/personal_patterns.dart';
+import 'package:my_life_graph/features/insights/domain/entities/sleep_recommendation.dart';
 import 'package:my_life_graph/features/insights/presentation/pages/insights_page.dart';
 import 'package:my_life_graph/features/insights/presentation/providers/insights_providers.dart';
 import 'package:my_life_graph/features/optimization/domain/entities/skillset_profile.dart';
@@ -67,6 +68,315 @@ void main() {
     expect(points.single.values['sleep_target_deviation_minutes'], 15);
     expect(points.single.values, isNot(contains('planned_minutes')));
     expect(points.single.values, isNot(contains('habit_completion_rate')));
+  });
+
+  test('local demo sleep provider stops before its API dependency', () async {
+    var apiDependencyReads = 0;
+    final container = ProviderContainer(
+      overrides: [
+        _demoSurfaceOverride(),
+        sleepRecommendationApiDataSourceProvider.overrideWith((ref) {
+          apiDependencyReads += 1;
+          throw StateError('The API dependency must remain untouched.');
+        }),
+      ],
+    );
+    addTearDown(container.dispose);
+
+    final value = await container.read(sleepRecommendationProvider.future);
+
+    expect(value, isNull);
+    expect(apiDependencyReads, 0);
+  });
+
+  for (final status in [
+    SleepRecommendationStatus.disabled,
+    SleepRecommendationStatus.collecting,
+    SleepRecommendationStatus.unstable,
+    SleepRecommendationStatus.ready,
+  ]) {
+    testWidgets('sleep recommendation renders ${status.name} at 320px and 200%',
+        (tester) async {
+      tester.view
+        ..physicalSize = const Size(320, 900)
+        ..devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            _realSurfaceOverride(),
+            insightsProvider.overrideWith((ref) async => const []),
+            correlationReportProvider.overrideWith(
+              (ref) async => const CorrelationReport(
+                windowDays: 14,
+                metrics: [],
+                points: [],
+                results: [],
+              ),
+            ),
+            personalPatternsProvider.overrideWith(
+              (ref) async => _personalPatterns(),
+            ),
+            sleepRecommendationProvider.overrideWith(
+              (ref) async => _sleepRecommendation(status),
+            ),
+          ],
+          child: MaterialApp(
+            theme: AppTheme.dark,
+            builder: (context, child) => MediaQuery(
+              data: MediaQuery.of(context).copyWith(
+                textScaler: const TextScaler.linear(2),
+              ),
+              child: child!,
+            ),
+            home: const Scaffold(body: InsightsPage()),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.byKey(Key('sleep-recommendation-${status.name}')),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+
+      expect(
+        find.byKey(Key('sleep-recommendation-${status.name}')),
+        findsOneWidget,
+      );
+      if (status == SleepRecommendationStatus.ready) {
+        expect(find.text('Best-supported sleep window'), findsOneWidget);
+        expect(find.text('Sleep start'), findsOneWidget);
+        expect(find.text('Wake time'), findsOneWidget);
+        expect(find.text('Following local day'), findsOneWidget);
+        expect(find.text('Duration'), findsOneWidget);
+        expect(
+          find.byKey(const Key('sleep-recommendation-warning')),
+          findsOneWidget,
+        );
+      } else {
+        expect(find.text('No stable window yet'), findsOneWidget);
+      }
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  testWidgets('same-day sleep recommendation labels the wake day explicitly',
+      (tester) async {
+    tester.view
+      ..physicalSize = const Size(320, 900)
+      ..devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          _realSurfaceOverride(),
+          insightsProvider.overrideWith((ref) async => const []),
+          correlationReportProvider.overrideWith(
+            (ref) async => const CorrelationReport(
+              windowDays: 14,
+              metrics: [],
+              points: [],
+              results: [],
+            ),
+          ),
+          personalPatternsProvider.overrideWith(
+            (ref) async => _personalPatterns(),
+          ),
+          sleepRecommendationProvider.overrideWith(
+            (ref) async => _sleepRecommendation(
+              SleepRecommendationStatus.ready,
+              wakeDayOffset: 0,
+            ),
+          ),
+        ],
+        child: MaterialApp(
+          theme: AppTheme.dark,
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(context).copyWith(
+              textScaler: const TextScaler.linear(2),
+            ),
+            child: child!,
+          ),
+          home: const Scaffold(body: InsightsPage()),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('sleep-recommendation-ready')),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+
+    expect(find.text('Same local day'), findsOneWidget);
+    expect(find.text('Following local day'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('sleep recommendation loading is readable at 320px and 200%',
+      (tester) async {
+    tester.view
+      ..physicalSize = const Size(320, 900)
+      ..devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final pending = Completer<SleepRecommendation?>();
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          _realSurfaceOverride(),
+          insightsProvider.overrideWith((ref) async => const []),
+          correlationReportProvider.overrideWith(
+            (ref) async => const CorrelationReport(
+              windowDays: 14,
+              metrics: [],
+              points: [],
+              results: [],
+            ),
+          ),
+          personalPatternsProvider.overrideWith(
+            (ref) async => _personalPatterns(),
+          ),
+          sleepRecommendationProvider.overrideWith((ref) => pending.future),
+        ],
+        child: MaterialApp(
+          theme: AppTheme.light,
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(context).copyWith(
+              textScaler: const TextScaler.linear(2),
+            ),
+            child: child!,
+          ),
+          home: const Scaffold(body: InsightsPage()),
+        ),
+      ),
+    );
+    await tester.pump();
+    await tester.pump();
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('sleep-recommendation-loading')),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+
+    expect(find.text('Loading sleep recommendation…'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    pending.complete();
+    await tester.pumpAndSettle();
+  });
+
+  for (final theme in {
+    'light': AppTheme.light,
+    'dark': AppTheme.dark,
+    'space': AppTheme.space,
+  }.entries) {
+    testWidgets('ready sleep recommendation renders on desktop ${theme.key}',
+        (tester) async {
+      tester.view
+        ..physicalSize = const Size(1280, 900)
+        ..devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            _realSurfaceOverride(),
+            insightsProvider.overrideWith((ref) async => const []),
+            correlationReportProvider.overrideWith(
+              (ref) async => const CorrelationReport(
+                windowDays: 14,
+                metrics: [],
+                points: [],
+                results: [],
+              ),
+            ),
+            personalPatternsProvider.overrideWith(
+              (ref) async => _personalPatterns(),
+            ),
+            sleepRecommendationProvider.overrideWith(
+              (ref) async => _sleepRecommendation(
+                SleepRecommendationStatus.ready,
+              ),
+            ),
+          ],
+          child: MaterialApp(
+            theme: theme.value,
+            home: const Scaffold(body: InsightsPage()),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(
+        find.byKey(const Key('sleep-recommendation-ready')),
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+
+      expect(find.text('Best-supported sleep window'), findsOneWidget);
+      expect(find.text('Sleep start'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  testWidgets('sleep recommendation failure stays inside its own card',
+      (tester) async {
+    tester.view
+      ..physicalSize = const Size(320, 900)
+      ..devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          _realSurfaceOverride(),
+          insightsProvider.overrideWith((ref) async => const []),
+          correlationReportProvider.overrideWith(
+            (ref) async => const CorrelationReport(
+              windowDays: 14,
+              metrics: [],
+              points: [],
+              results: [],
+            ),
+          ),
+          personalPatternsProvider.overrideWith(
+            (ref) async => _personalPatterns(),
+          ),
+          sleepRecommendationProvider.overrideWith(
+            (ref) async => throw StateError('sleep unavailable'),
+          ),
+        ],
+        child: MaterialApp(
+          theme: AppTheme.space,
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(context).copyWith(
+              textScaler: const TextScaler.linear(2),
+            ),
+            child: child!,
+          ),
+          home: const Scaffold(body: InsightsPage()),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.byKey(const Key('sleep-recommendation-error')),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+
+    expect(
+      find.text('Sleep evidence is temporarily unavailable.'),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const Key('personal-study-pattern-panel')),
+      findsOneWidget,
+    );
+    expect(find.text('Could not load account insights.'), findsNothing);
   });
 
   testWidgets('keeps an account insight failure distinct from empty evidence',
@@ -984,6 +1294,93 @@ SkillsetProfile _skillsetProfile() => SkillsetProfile(
       ],
       updatedAt: DateTime.utc(2026, 7, 13, 10),
     );
+
+SleepRecommendation _sleepRecommendation(
+  SleepRecommendationStatus status, {
+  int wakeDayOffset = 1,
+}) {
+  final statusCode = status.name;
+  final ready = status == SleepRecommendationStatus.ready;
+  final reason = switch (status) {
+    SleepRecommendationStatus.disabled => 'analysis_disabled',
+    SleepRecommendationStatus.collecting => 'insufficient_eligible_days',
+    SleepRecommendationStatus.unstable => 'mixed_focus_outcomes',
+    SleepRecommendationStatus.ready => 'ready',
+  };
+  return SleepRecommendation.fromJson({
+    'contract_version': sleepRecommendationContractVersion,
+    'status': statusCode,
+    'reason': reason,
+    'generated_at': '2026-07-30T12:00:00Z',
+    'timezone': 'Europe/Berlin',
+    'window': {
+      'rolling_days': 90,
+      'starts_at': '2026-05-01T12:00:00Z',
+      'ends_at': '2026-07-30T12:00:00Z',
+      'local_starts_on': '2026-05-01',
+      'local_ends_on': '2026-07-30',
+    },
+    'sample': {
+      'valid_nights': status == SleepRecommendationStatus.disabled ? 0 : 30,
+      'eligible_focus_days': status == SleepRecommendationStatus.disabled
+          ? 0
+          : status == SleepRecommendationStatus.collecting
+              ? 22
+              : 30,
+      'rated_sessions': status == SleepRecommendationStatus.disabled ? 0 : 34,
+      'required_eligible_days': 30,
+      'progress': status == SleepRecommendationStatus.disabled
+          ? '0/30'
+          : status == SleepRecommendationStatus.collecting
+              ? '22/30'
+              : '30/30',
+    },
+    'recommendation': ready
+        ? {
+            'bedtime': {
+              'start_local_time': '22:45',
+              'end_local_time': '23:15',
+              'end_day_offset': 0,
+              'width_minutes': 30,
+            },
+            'wake_time': {
+              'start_local_time': '06:45',
+              'end_local_time': '07:15',
+              'end_day_offset': 0,
+              'width_minutes': 30,
+            },
+            'duration': {
+              'minimum_minutes': 465,
+              'maximum_minutes': 495,
+            },
+            'wake_day_offset': wakeDayOffset,
+            'raw_median_duration_minutes': 480,
+            'median_confirmed_sleep_target_minutes': 510,
+            'warning': 'below_confirmed_sleep_target',
+            'evidence': {
+              'candidate_days': 15,
+              'comparison_days': 15,
+              'morning_readiness_median_delta': 1.0,
+              'sleep_quality_median_delta': 1.0,
+              'morning_energy_median_delta': 1.0,
+              'useful_progress_median_delta': 1.0,
+              'focus_quality_median_delta': 0.0,
+              'completion_rate_delta': 0.0,
+              'consistent_in_both_halves': true,
+            },
+            'evidence_fingerprint': _fingerprint,
+          }
+        : null,
+    'summary': ready
+        ? 'This best-supported sleep window is associated with stronger mornings.'
+        : status == SleepRecommendationStatus.disabled
+            ? 'Sleep recommendation analysis is turned off.'
+            : 'No stable window yet. Keep collecting comparable days.',
+    'limitations': ready
+        ? ['This is an observed association, not a causal claim.']
+        : ['No recommendation is shown without stable evidence.'],
+  });
+}
 
 PersonalPatterns _personalPatterns() => PersonalPatterns.fromJson({
       'contract_version': 'personal-patterns-v1',
