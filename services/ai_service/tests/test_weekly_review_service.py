@@ -100,10 +100,10 @@ def weekly_context() -> WeeklyReviewContext:
                 "id": "task-done",
                 "title": "Finished task",
                 "status": "done",
-                "deadline": None,
-                "completed_at": "2026-07-08T12:00:00+00:00",
-                "cancelled_at": None,
-                "metadata": {"goal_id": "goal-1"},
+            "deadline": None,
+            "completed_at": "2026-07-08T12:00:00+00:00",
+            "cancelled_at": None,
+            "metadata": {},
                 "created_at": "2026-07-01T08:00:00+00:00",
                 "updated_at": "2026-07-08T12:00:00+00:00",
             },
@@ -117,16 +117,6 @@ def weekly_context() -> WeeklyReviewContext:
                 "metadata": {},
                 "created_at": "2026-07-02T08:00:00+00:00",
                 "updated_at": "2026-07-02T08:00:00+00:00",
-            },
-        ],
-        goals=[
-            {
-                "id": "goal-1",
-                "title": "Goal",
-                "status": "active",
-                "metadata": {},
-                "created_at": "2026-06-01T08:00:00+00:00",
-                "updated_at": "2026-06-01T08:00:00+00:00",
             },
         ],
         habits=[weekly_habit()],
@@ -208,7 +198,7 @@ def daily_snapshot(day: int, *, mode: str = "steady") -> dict[str, Any]:
     }
 
 
-def test_generate_persists_exact_weekly_review_and_shrink_proposal() -> None:
+def test_generate_persists_exact_observational_weekly_review() -> None:
     repository = FakeRepository()
     weekly_service, aggregator = service(repository)
 
@@ -228,36 +218,11 @@ def test_generate_persists_exact_weekly_review_and_shrink_proposal() -> None:
         "carried": 1,
         "overdue_carried": 1,
         "cancelled": 0,
-        "goal_linked_completed": 0,
     }
     assert response.review.facts.habits.scheduled_opportunities == 4
     assert response.review.facts.habits.completed == 2
     assert response.review.facts.feedback.too_much == 1
-    assert len(response.review.proposals) == 1
-    proposal = response.review.proposals[0]
-    assert proposal.operation == "shrink"
-    assert proposal.application_mode == "direct_habit"
-    assert proposal.change.before.cadence.weekly_target == 4
-    assert proposal.change.after is not None
-    assert proposal.change.after.cadence.weekly_target == 3
-    assert proposal.change.model_dump(mode="json") == {
-        "before": {
-            "lifecycle": "active",
-            "cadence": {
-                "kind": "weekly_target",
-                "weekly_target": 4,
-                "scheduled_weekdays": [],
-            },
-        },
-        "after": {
-            "lifecycle": "active",
-            "cadence": {
-                "kind": "weekly_target",
-                "weekly_target": 3,
-                "scheduled_weekdays": [],
-            },
-        },
-    }
+    assert response.review.proposals == []
     assert len(aggregator.calls) == 1
     assert aggregator.calls[0].scope == "weekly"
     assert aggregator.calls[0].target_date == date(2026, 7, 12)
@@ -265,7 +230,7 @@ def test_generate_persists_exact_weekly_review_and_shrink_proposal() -> None:
     assert repository.persist_rows[0]["source_fingerprint"] == (
         response.review.provenance.source_fingerprint
     )
-    assert repository.persist_rows[0]["proposals"][0]["change"]["after"] is not None
+    assert repository.persist_rows[0]["proposals"] == []
 
 
 def test_current_generate_is_write_free_and_source_change_marks_stale() -> None:
@@ -298,6 +263,64 @@ def test_current_generate_is_write_free_and_source_change_marks_stale() -> None:
     assert stale.stale_reasons == ["source_facts_changed"]
 
 
+def test_force_regeneration_replaces_historical_proposals_with_empty_list() -> None:
+    repository = FakeRepository()
+    weekly_service, _ = service(repository)
+    request = WeeklyReviewGenerateRequest(period_key=PERIOD, force=False)
+    generated = asyncio.run(
+        weekly_service.generate(user_id="user-1", request=request),
+    )
+    assert generated.review is not None
+
+    historical_row = deepcopy(repository.persist_rows[0])
+    historical_row["proposals"] = [
+        {
+            "id": "weekly-review:2026-W28:habit:habit-1:shrink",
+            "operation": "shrink",
+            "target_kind": "habit",
+            "target_id": "habit-1",
+            "target_title": "Walk",
+            "ownership": "manual",
+            "application_mode": "direct_habit",
+            "expected_updated_at": "2026-07-01T08:00:00+00:00",
+            "reason_code": "legacy_habit_adjustment",
+            "reason": "Historical proposal retained for transport compatibility.",
+            "evidence_refs": [],
+            "change": {
+                "before": {
+                    "lifecycle": "active",
+                    "cadence": {
+                        "kind": "weekly_target",
+                        "weekly_target": 4,
+                        "scheduled_weekdays": [],
+                    },
+                },
+                "after": {
+                    "lifecycle": "active",
+                    "cadence": {
+                        "kind": "weekly_target",
+                        "weekly_target": 3,
+                        "scheduled_weekdays": [],
+                    },
+                },
+            },
+        },
+    ]
+    repository.review = _weekly_review({"id": "review-1", **historical_row})
+    assert len(repository.review.proposals) == 1
+
+    refreshed = asyncio.run(
+        weekly_service.generate(
+            user_id="user-1",
+            request=WeeklyReviewGenerateRequest(period_key=PERIOD, force=True),
+        ),
+    )
+
+    assert refreshed.review is not None
+    assert refreshed.review.proposals == []
+    assert repository.persist_rows[-1]["proposals"] == []
+
+
 def test_deleting_all_source_facts_keeps_the_existing_review_visible_as_stale() -> None:
     repository = FakeRepository()
     weekly_service, aggregator = service(repository)
@@ -307,7 +330,7 @@ def test_deleting_all_source_facts_keeps_the_existing_review_visible_as_stale() 
     )
     assert generated.review is not None
 
-    repository.context = WeeklyReviewContext([], [], [], [], [], [], [])
+    repository.context = WeeklyReviewContext([], [], [], [], [], [])
 
     stale = asyncio.run(
         weekly_service.get_period(user_id="user-1", period_key=PERIOD),
@@ -397,7 +420,7 @@ def test_daily_opportunities_keep_outcomes_recovery_miss_and_unknown_distinct() 
     assert response.review.proposals == []
 
 
-def test_changed_definition_is_excluded_from_opportunities_and_proposals() -> None:
+def test_changed_definition_is_excluded_from_opportunities() -> None:
     context = weekly_context()
     context.habits[0]["updated_at"] = "2026-07-08T08:00:00+00:00"
     repository = FakeRepository(context=context)
@@ -417,10 +440,9 @@ def test_changed_definition_is_excluded_from_opportunities_and_proposals() -> No
     assert response.review.proposals == []
 
 
-def test_does_not_fit_is_staged_replace_and_setup_habit_never_direct() -> None:
+def test_not_helpful_feedback_never_generates_a_proposal() -> None:
     context = weekly_context()
-    context.habits[0]["metadata"]["managed_by"] = "setup"
-    context.feedback[0]["feedback_type"] = "does_not_fit"
+    context.feedback[0]["feedback_type"] = "not_helpful"
     repository = FakeRepository(context=context)
     weekly_service, _ = service(repository)
 
@@ -432,14 +454,11 @@ def test_does_not_fit_is_staged_replace_and_setup_habit_never_direct() -> None:
     )
 
     assert response.review is not None
-    proposal = response.review.proposals[0]
-    assert proposal.operation == "replace"
-    assert proposal.ownership == "setup"
-    assert proposal.application_mode == "staged_only"
-    assert proposal.change.after is None
+    assert response.review.facts.feedback.not_helpful == 1
+    assert response.review.proposals == []
 
 
-def test_pause_uses_explicit_skips_and_never_plain_misses() -> None:
+def test_explicit_skips_never_generate_a_proposal() -> None:
     context = weekly_context()
     context.habits[0].update(
         {
@@ -469,10 +488,8 @@ def test_pause_uses_explicit_skips_and_never_plain_misses() -> None:
     )
 
     assert response.review is not None
-    assert response.review.proposals[0].operation == "pause"
-    assert response.review.proposals[0].application_mode == "direct_habit"
-    assert response.review.proposals[0].change.after is not None
-    assert response.review.proposals[0].change.after.lifecycle == "paused"
+    assert response.review.facts.habits.skipped == 2
+    assert response.review.proposals == []
 
     context.habit_logs.clear()
     no_skip_repository = FakeRepository(context=context)
@@ -484,7 +501,7 @@ def test_pause_uses_explicit_skips_and_never_plain_misses() -> None:
         ),
     )
     assert no_skip.review is not None
-    assert all(item.operation != "pause" for item in no_skip.review.proposals)
+    assert no_skip.review.proposals == []
 
 
 def test_habit_feedback_requires_exact_kind_and_action_prefix() -> None:
@@ -502,10 +519,10 @@ def test_habit_feedback_requires_exact_kind_and_action_prefix() -> None:
 
     assert response.review is not None
     assert response.review.facts.feedback.too_much == 1
-    assert all(item.operation != "shrink" for item in response.review.proposals)
+    assert response.review.proposals == []
 
 
-def test_shrink_requires_all_seven_valid_daily_state_days() -> None:
+def test_high_habit_fulfilment_never_generates_a_proposal() -> None:
     context = weekly_context()
     context.habit_logs[:] = [
         habit_log("done-1", "2026-07-06", "completed"),
@@ -528,7 +545,7 @@ def test_shrink_requires_all_seven_valid_daily_state_days() -> None:
     assert response.review.facts.habits.unknown == 0
     assert response.review.facts.recovery.observed_days == 0
     assert response.review.facts.feedback.too_much == 1
-    assert all(item.operation != "shrink" for item in response.review.proposals)
+    assert response.review.proposals == []
 
 
 def test_recovery_day_skips_do_not_trigger_pause() -> None:
@@ -573,11 +590,11 @@ def test_recovery_day_skips_do_not_trigger_pause() -> None:
         "explicit_habit_outcomes_overlap_recovery_days"
         in response.review.provenance.limitations
     )
-    assert all(item.operation != "pause" for item in response.review.proposals)
+    assert response.review.proposals == []
 
 
 def test_not_ready_is_returned_without_writes_for_incomplete_profile_or_no_evidence() -> None:
-    repository = FakeRepository(context=WeeklyReviewContext([], [], [], [], [], [], []))
+    repository = FakeRepository(context=WeeklyReviewContext([], [], [], [], [], []))
     weekly_service, aggregator = service(repository)
 
     no_evidence = asyncio.run(weekly_service.get_latest(user_id="user-1"))

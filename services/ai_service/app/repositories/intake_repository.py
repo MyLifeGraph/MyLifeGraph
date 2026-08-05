@@ -21,7 +21,6 @@ class SetupOwnershipConflict(RuntimeError):
 
 @dataclass(frozen=True)
 class SetupMaterialization:
-    goals: list[dict[str, Any]]
     habits: list[dict[str, Any]]
     schedule_items: list[dict[str, Any]]
     memory_entries: list[dict[str, Any]]
@@ -179,7 +178,6 @@ class SupabaseIntakeRepository:
                     "p_revision": revision,
                     "p_completed_at": apply.completed_at,
                     "p_notification_preferences": apply.notification_preferences,
-                    "p_goals": apply.materialization.goals,
                     "p_habits": apply.materialization.habits,
                     "p_schedule_items": apply.materialization.schedule_items,
                     "p_memory_entries": apply.materialization.memory_entries,

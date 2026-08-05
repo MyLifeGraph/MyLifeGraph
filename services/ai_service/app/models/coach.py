@@ -20,8 +20,8 @@ COACH_REQUEST_V3_CONTRACT_VERSION = "coach-request-v3"
 COACH_RESPONSE_V2_CONTRACT_VERSION = "coach-response-v2"
 COACH_CAPABILITIES_V2_CONTRACT_VERSION = "coach-capabilities-v2"
 COACH_HISTORY_V2_CONTRACT_VERSION = "coach-history-v2"
-COACH_AGENT_PROMPT_VERSION = "free-coach-agent-prompt-v2"
-COACH_AGENT_CONTEXT_VERSION = "personal-snapshot-v1"
+COACH_AGENT_PROMPT_VERSION = "free-coach-agent-prompt-v3"
+COACH_AGENT_CONTEXT_VERSION = "personal-snapshot-v2"
 
 COACH_MESSAGE_CODEPOINTS = 2_000
 COACH_CONTEXT_BYTES = 32_768
@@ -47,7 +47,6 @@ CoachContextSource = Literal[
     "profile",
     "daily_snapshot",
     "daily_briefing",
-    "goals",
     "tasks",
     "habits",
     "focus_sessions",
@@ -366,7 +365,6 @@ class CoachMemory(BaseModel):
     type: Literal[
         "pattern",
         "preference",
-        "goal",
         "habit",
         "recurring_problem",
         "recommendation",
@@ -590,8 +588,9 @@ class CoachAgentProvenance(BaseModel):
     prompt_version: Literal[
         "free-coach-agent-prompt-v1",
         "free-coach-agent-prompt-v2",
+        "free-coach-agent-prompt-v3",
     ]
-    context_version: Literal["personal-snapshot-v1"]
+    context_version: Literal["personal-snapshot-v1", "personal-snapshot-v2"]
     generated_at: datetime = Field(strict=False)
     provider_called: bool
     service_tier: Literal["fast", "not_applicable"]
@@ -604,6 +603,19 @@ class CoachAgentProvenance(BaseModel):
     def validate_provenance(self) -> Self:
         if self.generated_at.tzinfo is None:
             raise ValueError("generated_at must be timezone-aware")
+        current_pair = (
+            self.prompt_version == COACH_AGENT_PROMPT_VERSION
+            and self.context_version == COACH_AGENT_CONTEXT_VERSION
+        )
+        historical_pair = (
+            self.prompt_version in {
+                "free-coach-agent-prompt-v1",
+                "free-coach-agent-prompt-v2",
+            }
+            and self.context_version == "personal-snapshot-v1"
+        )
+        if not (current_pair or historical_pair):
+            raise ValueError("Coach prompt and snapshot versions must match")
         if self.source == "model" and not self.provider_called:
             raise ValueError("model responses must call a provider")
         if self.provider_called and self.provider == "disabled":

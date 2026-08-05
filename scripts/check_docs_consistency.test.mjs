@@ -437,6 +437,31 @@ test('known superseded current-state wording fails outside historical docs', () 
   assert.match(errors[0], /Current Capture is V4/);
 });
 
+test('current docs cannot restore active Weekly Review adjustment claims', () => {
+  const errors = findStaleClaimErrors(
+    new Map([
+      [
+        'docs/current.md',
+        [
+          'Weekly Review can propose up to two changes.',
+          'Weekly Review kann höchstens zwei Änderungen vorschlagen.',
+          'confirmed eligible manual Habit V1 changes reuse the old command.',
+        ].join('\n'),
+      ],
+      [
+        'docs/historical.md',
+        '# Report\n\nStatus: historical checkout evidence.\n\nWeekly Review can propose two changes.',
+      ],
+    ]),
+  );
+  assert.equal(errors.length, 3);
+  assert.ok(
+    errors.every((error) =>
+      /observational|cannot apply or confirm/.test(error),
+    ),
+  );
+});
+
 test('current docs cannot restore reset authority to verification or E2E', () => {
   const errors = findStaleClaimErrors(
     new Map([

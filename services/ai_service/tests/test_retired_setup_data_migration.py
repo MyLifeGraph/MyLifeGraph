@@ -97,7 +97,9 @@ def test_affected_derivations_are_deleted_without_hidden_generation() -> None:
     assert "insert into public.recommendations" not in NORMALIZED
 
 
-def test_goals_and_memories_remain_in_account_export() -> None:
-    assert {"goals", "memory_entries"} <= set(ACCOUNT_EXPORT_TABLE_NAMES)
+def test_goals_are_removed_and_memories_remain_in_account_export() -> None:
+    assert "goals" not in ACCOUNT_EXPORT_TABLE_NAMES
+    assert "memory_entries" in ACCOUNT_EXPORT_TABLE_NAMES
     exported = {table.name for table in ACCOUNT_EXPORT_TABLES}
-    assert {"goals", "memory_entries"} <= exported
+    assert "goals" not in exported
+    assert "memory_entries" in exported

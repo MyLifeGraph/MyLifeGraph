@@ -154,13 +154,29 @@ def test_snapshot_is_complete_owner_sanitized_immutable_and_catalogued() -> None
                 "created_at": "2026-07-20T09:00:00+00:00",
             },
         ],
+        "weekly_reviews": [
+            {
+                "id": "weekly-1",
+                "user_id": "owner-1",
+                "period_key": "2026-W29",
+                "narrative": "Observed weekly facts.",
+                "facts": {"tasks": {"completed": 2}},
+                "proposals": [
+                    {
+                        "id": "legacy-adjustment",
+                        "reason": "SECRET_LEGACY_ADJUSTMENT",
+                    },
+                ],
+                "generated_at": "2026-07-20T09:00:00+00:00",
+            },
+        ],
     }
 
     prepared = asyncio.run(
         CoachSnapshotService(repository=repository).create(user_id="owner-1"),
     )
     try:
-        assert prepared.row_count == 4
+        assert prepared.row_count == 5
         assert prepared.source_bytes > 0
         assert stat.S_IMODE(prepared.working_directory.stat().st_mode) == 0o700
         assert stat.S_IMODE(prepared.path.stat().st_mode) == 0o444
@@ -212,6 +228,12 @@ def test_snapshot_is_complete_owner_sanitized_immutable_and_catalogued() -> None
                 sensitive not in daily["row_json"]
                 for sensitive in sensitive_values
             )
+            weekly = dict(
+                connection.execute("SELECT * FROM weekly_reviews").fetchone(),
+            )
+            assert "proposals" not in weekly
+            assert "proposals" not in weekly["row_json"]
+            assert "SECRET_LEGACY_ADJUSTMENT" not in weekly["row_json"]
             assert tuple(
                 connection.execute(
                     "SELECT record_count, period_start, period_end "
@@ -239,7 +261,8 @@ def test_snapshot_is_complete_owner_sanitized_immutable_and_catalogued() -> None
 def test_snapshot_uses_an_explicit_positive_source_policy() -> None:
     names = tuple(table.name for table in COACH_SNAPSHOT_TABLES)
 
-    assert len(names) == len(set(names)) == 37
+    assert len(names) == len(set(names)) == 36
+    assert "goals" not in names
     assert names[0:3] == (
         "profiles",
         "notification_preferences",

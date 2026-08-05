@@ -3,7 +3,8 @@ import 'dart:typed_data';
 
 import '../../../core/contracts/strict_contract.dart';
 
-const accountExportV1TableNames = <String>[
+const accountExportContractVersion = 'account-export-v3';
+const accountExportTableNames = <String>[
   'profiles',
   'notification_preferences',
   'learning_preferences',
@@ -18,7 +19,6 @@ const accountExportV1TableNames = <String>[
   'ai_insights',
   'recommendations',
   'skillset_profiles',
-  'goals',
   'habits',
   'habit_logs',
   'focus_sessions',
@@ -276,7 +276,9 @@ class AccountExportEnvelope {
       requiredKeys: topLevelKeys,
       onFailure: invalidTopLevel,
     );
-    if (json['contract_version'] != 'account-export-v2') invalidTopLevel();
+    if (json['contract_version'] != accountExportContractVersion) {
+      invalidTopLevel();
+    }
     final exportedAt = json['exported_at'];
     if (exportedAt is! String ||
         !isStrictAwareDateTime(exportedAt, exactSecondsFormat: false)) {
@@ -330,9 +332,9 @@ class AccountExportEnvelope {
         recordCounts.keys.toSet().difference(data.keys.toSet()).isNotEmpty ||
         data.keys
             .toSet()
-            .difference(accountExportV1TableNames.toSet())
+            .difference(accountExportTableNames.toSet())
             .isNotEmpty ||
-        accountExportV1TableNames
+        accountExportTableNames
             .toSet()
             .difference(data.keys.toSet())
             .isNotEmpty ||
@@ -468,7 +470,7 @@ class AccountExportEnvelope {
   final int maxJsonBytes;
   final Uint8List _sourceBytes;
 
-  String get contractVersion => 'account-export-v2';
+  String get contractVersion => accountExportContractVersion;
 
   Uint8List get fileBytes => Uint8List.fromList(_sourceBytes);
 }

@@ -440,13 +440,22 @@ invent a personalized briefing, task, habit, or schedule.
 Authenticated real accounts can open `/weekly-review` from Dashboard or a
 strict `review_plan` action. Flutter reads the latest completed profile-local
 ISO week without generation, preserves `not_ready`, missing, current, stale,
-and error truth, and generates or refreshes only after an explicit control.
-Only a manual Habit V1 shrink/pause/archive proposal can call an existing typed
-Habit V1 command after exact before/after confirmation. Setup-owned changes
-return to Settings Setup; staged replacement, task, or schedule proposals do
-not mutate a record. The compatible `goal_linked_completed` fact is always
-zero, and no Goal is loaded or proposed. Guest/mock sessions never call the
+and error truth, and generates or refreshes only after an explicit control next
+to the facts. Weekly Review V2 is observational: new and refreshed rows always
+store `proposals=[]`, historical proposal arrays are parsed but never rendered
+or executed, and no Goal counter exists. Guest/mock sessions never call the
 weekly-review API.
+
+Goal retirement is a one-time database repair, not a read-path side effect.
+The immutable first removal migration drops the obsolete table and advances the
+runtime contracts; additive migration
+`20260804192406_harden_goal_removal_dependencies.sql` then takes the connected
+history tables in alphabetical `SHARE ROW EXCLUSIVE` order with a five-second
+timeout, builds temporary dependency sets, sanitizes only authoritative JSON,
+deletes invalid derived rows, and tombstones only structurally implicated or
+V1 full-snapshot Coach turns. Clean Weekly Reviews are never updated by the
+follow-up, and append-only usage/audit rows remain. All helpers disappear before
+commit; no generic JSON constraint or runtime mutation authority is introduced.
 
 Insights has separate source boundaries. Stored `ai_insights` notes remain an
 owner-scoped Supabase read, and guest/demo exploration uses labelled local
@@ -633,10 +642,10 @@ Setup is one typed contract across first completion, re-entry, and review:
 
 - Typical weekday and best energy window are the only required answers; display
   name is optional. Routines, fixed commitments, and Study Setup are progressive
-  optional detail. Focus areas, Goals, friction points, coaching style, Reminder
+  optional detail. Focus areas, friction points, coaching style, Reminder
   preference, and free-form context are retired. A compatibility normalizer
-  accepts old `intake-v1` payloads but strips those keys before validation,
-  comparison, and persistence. Weekly commitments may use optional inclusive
+  strips supported retired keys before validation, comparison, and persistence;
+  `responses.goals` is rejected rather than accepted. Weekly commitments may use optional inclusive
   semester dates and can be duplicated for another weekday. The legacy
   calendar-intent field remains a payload-compatibility value but is no longer
   presented in onboarding.
@@ -665,14 +674,12 @@ Setup is one typed contract across first completion, re-entry, and review:
   database RPC. A transaction-scoped per-user advisory lock serializes workers;
   Setup-owned Habit/schedule/study/energy-memory reconciliation, the canonical
   onboarding snapshot, applied intake state, and profile projection either
-  commit together or roll back together. The compatibility RPC parameters for
-  Goals and notification preferences are ignored; Setup never changes or
-  touches the user's Reminder settings.
+  commit together or roll back together. The RPC has no Goal parameter; Setup
+  never changes or touches the user's Reminder settings.
 - Activated habits, schedule items, and the best-energy memory receive
   deterministic UUIDv5 record ids plus server-authored setup ownership metadata.
-  Reconciliation converges to the submitted applied revision, archives only
-  Setup-owned Goals, and never archives or removes manual/other-source Goals or
-  memories. The only legacy schedule exception deletes the exact unmarked
+  Reconciliation converges to the submitted applied revision without creating
+  or mutating Goals. The only legacy schedule exception deletes the exact unmarked
   onboarding placeholder `Math`, `Room 204`, Monday `08:15`-`09:45`; other
   manual and unmarked onboarding rows remain preserved.
 - A named routine stays only in the intake response as a candidate. It becomes
@@ -722,8 +729,7 @@ surface. The canonical application schema is now snake_case and centered on:
   current product workflows.
 - `memory_entries`, `ai_insights`, `recommendations`, and
   `skillset_profiles` for AI-generated context and output.
-- `goals` as a retained compatibility/export table with no active product
-  evaluation; `habits`, `habit_logs`, and `focus_sessions` for executable
+- `habits`, `habit_logs`, and `focus_sessions` for executable
   habit-outcome and focus workflows.
 - `intake_responses` and `user_state_snapshots` for revisioned typed Setup
   history and compact backend-owned user state.
@@ -802,7 +808,7 @@ Current responsibilities:
   database boundary revalidates explicit consent, timezone/local date, quiet
   hours, category, daily cap, and dedupe under the owner lock.
 - Serve read-only latest/explicit weekly-review GETs plus deliberate
-  `POST /v1/weekly-reviews/generate` under `weekly-review-v1`.
+  `POST /v1/weekly-reviews/generate` under `weekly-review-v2`.
 - Serve authenticated calendar connection/read endpoints plus deliberate file
   import, disconnect, and imported-data deletion under `calendar-import-v2`.
   The service parses bounded caller-selected UTF-8 `.ics` text; it does not
@@ -831,7 +837,7 @@ Current responsibilities:
 - Claim revisioned structured intake responses, then call the service-role-only
   `apply_intake_v1_setup_revision` RPC. Its per-user advisory transaction lock
   atomically reconciles cadence-confirmed habits, schedule items, Study Setup,
-  and the best-energy memory; archives Setup-owned Goals; upserts the compact
+  and the best-energy memory; upserts the compact
   `setup:intake-v1` onboarding snapshot; marks the intake applied; and advances
   the profile projection only from its canonical stored response. It does not
   change notification preferences.
@@ -1060,7 +1066,8 @@ FastAPI exports relevant retained data through the owner-filtered Account
 Export paging boundary. The snapshot covers Setup, Daily Capture, Tasks,
 Habits/outcomes, Focus/reflections, Planner, Preparation, Calendar, Weekly
 Reviews, Insights, Recommendations, Memories, and earlier Coach messages,
-including retained detail text. It excludes authentication, email/role/provider
+including retained detail text. It omits Goals and removes historical Weekly
+Review proposals before Coach use. It excludes authentication, email/role/provider
 identity, credentials, provider internals, anti-replay/usage/selection ledgers,
 operational state, and other owners. It contains an explanatory catalog,
 relationships, record counts, periods, and helper views. It fails instead of
@@ -1086,8 +1093,8 @@ text and calendar values are untrusted data, never instructions.
 The HTTP boundary is message-only `coach-request-v3`,
 `coach-response-v2`, `coach-capabilities-v2`, `coach-history-v2`, and a
 `started|activity|completed|failed` SSE stream. The current agent pair is
-`free-coach-agent-prompt-v2` with `personal-snapshot-v1`; stored V1 prompt
-responses and exact replay remain valid. V2 makes English the non-overridable
+`free-coach-agent-prompt-v3` with `personal-snapshot-v2`; stored V1/V2 prompt
+responses and exact replay remain valid. V3 makes English the non-overridable
 output language for reply and uncertainty. FastAPI rejects clearly German
 provider output as retryable `invalid_output` before persistence. Activity is
 allowlisted lifecycle copy rather than hidden reasoning; a real client
@@ -1132,7 +1139,7 @@ The exact boundary is `docs/v1-account-controls-contract.md`. Real authenticated
 accounts use bearer-derived FastAPI routes for revision-checked, retry-safe
 IANA timezone and daily preparation-budget changes,
 an optional bounded account-wide daily preparation rule, a strict bounded
-`account-export-v2` JSON portability export, and permanent deletion.
+`account-export-v3` JSON portability export, and permanent deletion.
 Password reset and confirmation resend remain Supabase Auth operations with a
 dedicated recovery-event route in Flutter. Guest/mock sessions make no account
 API calls.
@@ -1142,10 +1149,10 @@ current Study Setup and Personal Learning projections, applies field
 allowlists to backend-owned Calendar/Coach ledgers, names the anti-replay ledger
 it omits, includes Deadline Planner plan/revision/block rows while omitting its
 request ledger, and fails rather than truncating at a V1 bound. The exact
-41-table set includes `learning_preferences`, `focus_session_reflections`, and
+40-table set includes `learning_preferences`, `focus_session_reflections`, and
 `focus_session_schedule_sources`, while the learning request ledger is
 explicitly omitted. FastAPI's typed owner-data catalog is the single code owner
-for all 48 repo-owned public tables: each entry separately declares Account
+for all 47 repo-owned public tables: each entry separately declares Account
 Export and Coach Snapshot participation, the bounded read shape when applicable,
 and the human-readable snapshot description. A focused migration-history
 completeness test fails when a newly created repo table has no deliberate
@@ -1341,10 +1348,11 @@ accepted and historical rows even when the new set is empty.
   observation and keeps full correlation analytics as advanced exploration.
 - Phase 8 persists a deterministic weekly review only after explicit
   generation. `review_plan` is a real synced navigation handler, not an enabled
-  no-op. Direct apply remains limited to manual Habit V1 shrink/pause/archive.
-  Setup ownership stays in Setup, while replacement/task/schedule changes
-  remain staged. Goals are inactive and the retained V1 goal-linked fact is
-  always zero. There is no task-transition or habit-definition history claim.
+  no-op. The V2 review is facts-only; it produces no adaptation, and Flutter
+  exposes no proposal controls. Historical proposal arrays remain readable in
+  transport but are excluded from Coach context and cleared on refresh. There
+  is no Goal counter, task-transition history, or habit-definition history
+  claim.
 - Phase 9 accepts one explicitly consented, user-selected `.ics` source for a
   real account. Connection alone imports nothing; a bounded deliberate import
   reconciles stable event identities and exposes imported/read-only provenance.

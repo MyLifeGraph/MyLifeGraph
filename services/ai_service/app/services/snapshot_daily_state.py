@@ -149,7 +149,6 @@ def build_snapshot_daily_state(
     *,
     daily_logs: list[dict[str, Any]],
     tasks: list[dict[str, Any]],
-    goals: list[dict[str, Any]] | None = None,
     target_date: date,
     generated_at: datetime,
 ) -> DailyStateResult:

@@ -11,8 +11,6 @@ class SnapshotInputRows:
     daily_logs: list[dict[str, Any]]
     behavioral_events: list[dict[str, Any]]
     tasks: list[dict[str, Any]]
-    # Transport-only compatibility; current repositories never load Goal rows.
-    goals: list[dict[str, Any]]
     habits: list[dict[str, Any]]
     habit_logs: list[dict[str, Any]]
     focus_sessions: list[dict[str, Any]]
@@ -174,7 +172,6 @@ class SupabaseSnapshotRepository:
             daily_logs=daily_logs,
             behavioral_events=behavioral_events,
             tasks=tasks,
-            goals=[],
             habits=habits,
             habit_logs=habit_logs,
             focus_sessions=focus_sessions,

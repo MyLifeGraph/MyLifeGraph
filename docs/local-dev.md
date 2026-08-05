@@ -437,7 +437,7 @@ curl http://localhost:8000/v1/weekly-reviews/2026-W28 \
   -H 'Authorization: Bearer <supabase_access_token>'
 ```
 
-Replace `2026-W28` with the `period_key` returned by `latest`; V1 accepts only
+Replace `2026-W28` with the `period_key` returned by `latest`; V2 accepts only
 the latest completed profile-local ISO week.
 
 Deliberately generate or refresh that completed week with:
@@ -452,11 +452,9 @@ curl -X POST http://localhost:8000/v1/weekly-reviews/generate \
 The generate request uses that same latest completed `period_key`.
 
 The response preserves `not_ready`, missing, current, or stale truth. Generation
-persists one backend-owned derived review and never applies its proposals. In
-Flutter, only an eligible manual Habit V1 shrink/pause/archive proposal can be
-confirmed through the existing exact timestamp/readback command. Setup-owned
-changes return to Setup; replace/defer and task/schedule proposals remain
-staged. Goals are not loaded, and `goal_linked_completed` remains zero.
+persists one backend-owned facts-only review with `proposals=[]`. Historical
+proposal arrays remain transport-readable but Flutter and Coach hide them, and
+no Weekly Review action can apply them. The V2 facts have no Goal counter.
 Guest/mock does not call this API or fabricate a local review.
 
 Phase 9 calendar import is also authenticated and optional. Read the current
@@ -990,6 +988,24 @@ scripts/verify_supabase_local.sh
 This explicit opt-in may change or delete local rows. It must not be described
 as non-destructive merely because it avoids `db reset`.
 
+After normal migration history matches, `verify:db` also runs the Goal-removal
+migration harness in a separately labelled, RAM-only Postgres container with no
+normal Supabase volume. Inside that process the exact database name is
+`mylifegraph_goal_removal_migration_test`. The harness initializes a fresh
+schema only through `20260804102409` with `migration up --db-url`, loads filled
+fixtures, applies the original and follow-up Goal migrations separately, proves
+the five-second writer-lock timeout and full rollback in two sessions, retries
+successfully, and runs its dedicated pgTAP file. Its trap removes only the
+ownership-labelled disposable container. It compares the normal local migration
+history before and after every isolated stage.
+
+The harness deliberately does not use `db reset --db-url` or create another
+database in the normal cluster: Supabase CLI `2.107.0` can classify a loopback
+reset URL as the ordinary local stack and recreate the wrong database. Normal
+verification has no reset authority. The complete backup, guarded reset,
+physical-isolation, recovery, and rollback contract is
+`docs/local-database-safety.md`.
+
 Read `docs/supabase-current-state.md` first. The Phase 3 runtime requires the
 local schema to include:
 
@@ -1008,6 +1024,14 @@ These migrations create forced-RLS backend-owned `weekly_reviews` persistence
 and require its deterministic provenance keys to match the source fingerprint.
 Authenticated users can read only their own review rows; only service role can
 write them.
+
+Goal retirement additionally requires the immutable original migration and its
+additive dependency/locking repair:
+
+```text
+20260804150153_remove_goals_and_make_weekly_review_observational.sql
+20260804192406_harden_goal_removal_dependencies.sql
+```
 
 Calendar import additionally requires the Phase 9 migration listed in
 `docs/supabase-current-state.md`. It creates dedicated backend-owned
@@ -1124,11 +1148,10 @@ fabricating an intentional skip. Existing table RLS/grants remain.
 The earlier `20260710180000_atomic_intake_v1_setup_apply.sql` migration installs
 the service-role-only
 `apply_intake_v1_setup_revision` RPC. It serializes apply per user with a
-transaction advisory lock. The current compatibility migration keeps the
-signature but ignores Goal and notification-preference arguments, archives
-Setup-owned Goals, and atomically reconciles only Habits, schedule/Study rows,
-the best-energy memory, the canonical onboarding snapshot, applied intake
-state, and profile projection. During schedule reconciliation it
+transaction advisory lock. The current removal migration replaces that
+signature with a Goal-free one and atomically reconciles only Habits,
+schedule/Study rows, the best-energy memory, the canonical onboarding snapshot,
+applied intake state, and profile projection. During schedule reconciliation it
 removes only the exact unmarked legacy onboarding placeholder `Math`,
 `Room 204`, Monday `08:15`-`09:45`; other manual or unmarked onboarding rows are
 preserved.
@@ -1167,8 +1190,8 @@ For local Supabase-backed app testing:
    Setup-owned habit complete/skip/undo, focus start/finish/abandon with an owned
    target, Today Overview streak/progress arithmetic, all four agenda source
    categories, Today versus all Tasks, Today Habits, lazy `More`,
-   bounded Weekly Review with one cancelled and one confirmed manual Habit V1
-   proposal, Inbox (`/alerts`), real Deep Work, and Controlled Coach capability,
+   bounded facts-only Weekly Review with deliberate refresh and no adjustment
+   controls, Inbox (`/alerts`), real Deep Work, and Controlled Coach capability,
    free-question stream, safe activity/cancel, evidence/trace/provenance,
    readable history, no fixed-mode controls, and confirmed history deletion
    with a fake provider.
@@ -1252,7 +1275,7 @@ scripts/start_frontend.sh
 Open `http://127.0.0.1:7357`, sign in with one of the demo accounts, and compare
 Dashboard, Inbox, Insights, and Habits across scenarios. The student account is
 the broad manual product fixture: Today, all three Habit cadences, resumable
-Deep Work, a realistic phone-habit pause proposal, stable Personal Learning,
+Deep Work, a facts-only Weekly Review, stable Personal Learning,
 Calendar Import, active and staged Preparation Plans, capacity, notification
 consent, and Coach history are pre-populated. Today's Morning exists while
 Evening remains deliberately open, so that capture can be completed manually.

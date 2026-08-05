@@ -232,7 +232,9 @@ def test_export_is_owner_scoped_versioned_complete_and_sanitizes_ledgers() -> No
     prepared = asyncio.run(service.export_account(user_id="owner-1"))
     result = prepared.envelope
 
-    assert result.contract_version == "account-export-v2"
+    assert result.contract_version == "account-export-v3"
+    assert "goals" not in result.data
+    assert len(result.data) == 40
     assert result.exported_at == NOW
     assert list(result.data) == [table.name for table in ACCOUNT_EXPORT_TABLES]
     assert result.record_counts["profiles"] == 1
@@ -363,7 +365,7 @@ def test_export_maps_a_stream_bounded_source_page_to_413_outcome() -> None:
     assert repository.export_calls[0][5] <= ACCOUNT_EXPORT_MAX_JSON_BYTES
 
 
-def test_export_models_reject_non_v2_tables_policy_and_limits() -> None:
+def test_export_models_reject_non_v3_tables_policy_and_limits() -> None:
     data = {name: [] for name in ACCOUNT_EXPORT_TABLE_NAMES}
     counts = {name: 0 for name in ACCOUNT_EXPORT_TABLE_NAMES}
     policy = AccountExportLedgerPolicy(
@@ -376,21 +378,21 @@ def test_export_models_reject_non_v2_tables_policy_and_limits() -> None:
         max_json_bytes=ACCOUNT_EXPORT_MAX_JSON_BYTES,
     )
 
-    with pytest.raises(ValidationError, match="exact V2 export table set"):
+    with pytest.raises(ValidationError, match="exact V3 export table set"):
         AccountExportResponse(
-            contract_version="account-export-v2",
+            contract_version="account-export-v3",
             exported_at=NOW,
             data={"profiles": []},
             record_counts={"profiles": 0},
             ledger_policy=policy,
             limits=limits,
         )
-    with pytest.raises(ValidationError, match="V2 ledger policy"):
+    with pytest.raises(ValidationError, match="V3 ledger policy"):
         AccountExportLedgerPolicy(
             sanitized_tables=["coach_requests"],
             omitted_tables=dict(ACCOUNT_EXPORT_OMITTED_TABLES),
         )
-    with pytest.raises(ValidationError, match="account-export-v2"):
+    with pytest.raises(ValidationError, match="account-export-v3"):
         AccountExportLimits(
             max_rows_per_table=1,
             max_total_rows=2,
@@ -398,7 +400,7 @@ def test_export_models_reject_non_v2_tables_policy_and_limits() -> None:
         )
 
     valid = AccountExportResponse(
-        contract_version="account-export-v2",
+        contract_version="account-export-v3",
         exported_at=NOW,
         data=data,
         record_counts=counts,

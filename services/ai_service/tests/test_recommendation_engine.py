@@ -78,9 +78,10 @@ def onboarding_snapshot(**overrides) -> UserStateSnapshotSignal:
         "scope": "onboarding",
         "period_key": "onboarding:2026-06-22",
         "summary": {
-            "primary_focus_areas": ["focus", "planning"],
-            "goals": ["Protect focus time"],
-            "friction_points": ["Too many context switches"],
+            "best_energy_window": "morning",
+            "existing_habit_count": 0,
+            "active_habit_count": 0,
+            "fixed_commitment_count": 0,
         },
         "signals": {},
         "generated_at": datetime(2026, 6, 22, tzinfo=timezone.utc),

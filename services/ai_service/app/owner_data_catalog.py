@@ -196,7 +196,6 @@ OWNER_DATA_CATALOG = (
         "Stored skillset projections.",
         watermark_column="generated_at",
     ),
-    _shared("goals", "Current or archived owner goals retained for compatibility."),
     _shared("habits", "Habit definitions, cadence, and lifecycle state."),
     _shared("habit_logs", "Explicit habit outcomes."),
     _shared(
@@ -243,7 +242,7 @@ OWNER_DATA_CATALOG = (
     ),
     _shared(
         "weekly_reviews",
-        "Persisted deterministic weekly facts and proposals.",
+        "Persisted deterministic weekly facts; legacy proposals stay export-only.",
     ),
     _shared(
         "calendar_connections",

@@ -805,7 +805,8 @@ def test_v3_normal_german_question_still_returns_english_provider_output() -> No
 
     assert result.reply == provider.output.reply
     assert result.uncertainty.reason == provider.output.uncertainty.reason
-    assert result.provenance.prompt_version == "free-coach-agent-prompt-v2"
+    assert result.provenance.prompt_version == "free-coach-agent-prompt-v3"
+    assert result.provenance.context_version == "personal-snapshot-v2"
     assert repository.completion_calls
     assert repository.failure_calls == []
 

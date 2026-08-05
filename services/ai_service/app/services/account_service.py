@@ -237,7 +237,7 @@ class AccountService:
             )
         except AccountPersistenceSourceTooLarge as exc:
             raise AccountExportTooLargeError(
-                "Account export exceeds the V2 JSON size bound.",
+                "Account export exceeds the V3 JSON size bound.",
             ) from exc
         except AccountPersistenceError as exc:
             raise AccountUnavailableError(
@@ -257,15 +257,15 @@ class AccountService:
             ) from exc
         except OwnerDataSourceRowsExceededError as exc:
             raise AccountExportTooLargeError(
-                f"Account export table {exc.source_name} exceeds the V2 row bound.",
+                f"Account export table {exc.source_name} exceeds the V3 row bound.",
             ) from exc
         except OwnerDataTotalRowsExceededError as exc:
             raise AccountExportTooLargeError(
-                "Account export exceeds the V2 total row bound.",
+                "Account export exceeds the V3 total row bound.",
             ) from exc
         except OwnerDataSerializedBytesExceededError as exc:
             raise AccountExportTooLargeError(
-                "Account export exceeds the V2 JSON size bound.",
+                "Account export exceeds the V3 JSON size bound.",
             ) from exc
 
         data = collection.rows_by_source
@@ -285,7 +285,7 @@ class AccountService:
             or len(content) > ACCOUNT_EXPORT_MAX_JSON_BYTES
         ):
             raise AccountExportTooLargeError(
-                "Account export exceeds the V2 JSON size bound.",
+                "Account export exceeds the V3 JSON size bound.",
             )
         return PreparedAccountExport(envelope=envelope, content=content)
 

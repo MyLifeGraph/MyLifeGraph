@@ -180,8 +180,8 @@ no outlook request.
 
 First-run Setup requires only Typical weekday and Best energy window, with an
 optional display name, routines, fixed commitments, and Study Setup. Focus
-areas, Goals, friction, coaching style, Reminder preference, and free-form
-context are retired Setup inputs. Weekly commitments can carry
+areas, friction, coaching style, Reminder preference, and free-form context are
+retired Setup inputs; Goals are absent from the current model and schema. Weekly commitments can carry
 optional inclusive semester dates and can be duplicated for another weekday;
 without dates they repeat until archived. Calendar import is not asked during
 onboarding and remains an optional Settings integration. `/onboarding?edit=1`
@@ -287,7 +287,7 @@ Guest/demo local persistence continues on the current device while offline.
 
 The synced-account JSON export is bounded and is not a backup, restore format,
 or transaction-wide snapshot. Its strict client allowlist matches the complete
-41-table backend contract, including scheduled Focus provenance. Web downloads
+40-table backend contract, including scheduled Focus provenance. Web downloads
 and desktop saves use a chosen destination. Android uses the platform share
 sheet; the app removes its own
 dedicated temporary source best-effort, while the plugin or operating system

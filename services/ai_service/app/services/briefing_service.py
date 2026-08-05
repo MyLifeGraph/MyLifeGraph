@@ -389,7 +389,6 @@ def _daily_state(
                 ref
                 for ref in reason.get("evidence_refs", [])
                 if isinstance(ref, dict)
-                and ref.get("table") != "goals"
                 and "friction" not in str(ref.get("field") or "")
             ],
         }

@@ -12,7 +12,6 @@ from tests.api_test_dependencies import override_dependency
 
 
 REQUEST_ID = "00000000-0000-4000-8000-000000000001"
-GOAL_KEY = "10000000-0000-4000-8000-000000000001"
 ROUTINE_KEY = "20000000-0000-4000-8000-000000000001"
 COMMITMENT_KEY = "30000000-0000-4000-8000-000000000001"
 
@@ -104,13 +103,6 @@ def valid_payload() -> dict:
         "responses": {
             "display_name": "Ada",
             "primary_focus_areas": ["focus", "energy"],
-            "goals": [
-                {
-                    "key": GOAL_KEY,
-                    "title": "Protect focus time",
-                    "status": "active",
-                },
-            ],
             "friction_points": [],
             "weekday_shape": "Mornings are school, afternoons are flexible.",
             "best_energy_window": "morning",
@@ -243,6 +235,24 @@ def test_complete_intake_rejects_request_user_id() -> None:
     )
 
     assert response.status_code == 422
+
+
+def test_complete_intake_rejects_retired_goals_field() -> None:
+    payload = valid_payload()
+    payload["responses"]["goals"] = []
+
+    response = asyncio.run(
+        request(
+            "POST",
+            "/v1/intake/complete",
+            headers=auth_headers(),
+            json=payload,
+        ),
+    )
+
+    assert response.status_code == 422
+    service = response.extensions["service"]
+    assert service.calls == []
 
 
 def test_complete_intake_rejects_unconfirmed_cadence() -> None:

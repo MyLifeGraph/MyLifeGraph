@@ -256,7 +256,6 @@ def _filter_window(
             if _is_event_in_window(row, start_date, target_date)
         ],
         tasks=inputs.tasks,
-        goals=[],
         habits=inputs.habits,
         habit_logs=[
             row
@@ -300,7 +299,6 @@ def _filter_observed_inputs(
             row for row in inputs.behavioral_events if visible(row)
         ],
         tasks=[row for row in inputs.tasks if visible(row)],
-        goals=[],
         habits=[row for row in inputs.habits if visible(row)],
         habit_logs=[row for row in inputs.habit_logs if visible(row)],
         focus_sessions=[row for row in inputs.focus_sessions if visible(row)],

@@ -281,8 +281,8 @@ or invalid metadata value produces an explicit unsupported result. It never
 maps to a generic route or enabled no-op.
 
 The bounded planning surface and its mutation limits are defined in
-`docs/phase-8-weekly-review-contract.md`. Goal/task/schedule/replacement changes
-are not made executable merely because weekly review navigation exists.
+`docs/phase-8-weekly-review-contract.md`. Task/schedule/replacement changes are
+not made executable merely because Weekly Review navigation exists.
 Deadline Planner V1 likewise adds no new `executable-action-v1` command or
 metadata key: `/preparation-plans` is a deliberate product surface governed by
 `docs/deadline-planner-v1-contract.md`, not an implicit Dashboard mutation.

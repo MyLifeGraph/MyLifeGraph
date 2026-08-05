@@ -5,12 +5,13 @@ const coachResponseContractVersion = 'coach-response-v2';
 const _legacyCoachResponseContractVersion = 'coach-response-v1';
 const coachCapabilitiesContractVersion = 'coach-capabilities-v2';
 const coachHistoryContractVersion = 'coach-history-v2';
-const coachAgentPromptVersion = 'free-coach-agent-prompt-v2';
+const coachAgentPromptVersion = 'free-coach-agent-prompt-v3';
 const _acceptedCoachAgentPromptVersions = {
   'free-coach-agent-prompt-v1',
+  'free-coach-agent-prompt-v2',
   coachAgentPromptVersion,
 };
-const coachAgentContextVersion = 'personal-snapshot-v1';
+const coachAgentContextVersion = 'personal-snapshot-v2';
 const coachMessageCodepoints = 2000;
 const coachReplyCodepoints = 4000;
 
@@ -516,7 +517,10 @@ class CoachProvenance {
     );
     if (!const {'model', 'deterministic_safety'}.contains(result.source) ||
         !_acceptedCoachAgentPromptVersions.contains(result.promptVersion) ||
-        result.contextVersion != coachAgentContextVersion ||
+        !_validAgentContractPair(
+          result.promptVersion,
+          result.contextVersion,
+        ) ||
         result.snapshotRowCount < 0 ||
         result.snapshotRowCount > 50000 ||
         result.snapshotBytes < 0 ||
@@ -933,6 +937,15 @@ class CoachContractException implements Exception {
   const CoachContractException(this.message);
   final String message;
 }
+
+bool _validAgentContractPair(String promptVersion, String contextVersion) =>
+    promptVersion == coachAgentPromptVersion
+        ? contextVersion == coachAgentContextVersion
+        : const {
+              'free-coach-agent-prompt-v1',
+              'free-coach-agent-prompt-v2',
+            }.contains(promptVersion) &&
+            contextVersion == 'personal-snapshot-v1';
 
 Map<String, dynamic> _map(Object? value, String name) {
   return requireStrictMap(

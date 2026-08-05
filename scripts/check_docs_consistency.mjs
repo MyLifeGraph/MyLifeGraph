@@ -227,13 +227,33 @@ const STALE_CURRENT_CLAIMS = [
   },
   {
     pattern:
+      /\bWeekly Review can (?:propose|suggest) (?:up to )?(?:one|two|\d+) (?:changes?|adjustments?)\b/gi,
+    message: 'Current Weekly Review is observational and proposes no changes.',
+  },
+  {
+    pattern:
+      /\bWeekly Review kann[^.\n]{0,120}(?:Änderungen?|Anpassungen?)\s+vorschlagen\b/gi,
+    message: 'Current Weekly Review is observational and proposes no changes.',
+  },
+  {
+    pattern:
+      /\bconfirmed eligible manual Habit V1 changes reuse\b/gi,
+    message: 'Weekly Review cannot apply or confirm Habit changes.',
+  },
+  {
+    pattern:
+      /\breuses existing Habit V1 mutations after explicit confirmation\b/gi,
+    message: 'Weekly Review cannot apply or confirm Habit changes.',
+  },
+  {
+    pattern:
       /^RESET_DB=true[^\n]*(?:npm run verify:db|e2e:web|scripts\/e2e_web\.sh)[^\n]*$/gim,
     message:
       'Verification and E2E cannot delegate reset authority; document the dedicated guarded reset wrapper.',
   },
   {
     pattern: /\bcoach-context-v1 data\b/gi,
-    message: 'Current Coach agent context uses personal-snapshot-v1.',
+    message: 'Current Coach agent context uses personal-snapshot-v2.',
   },
   {
     pattern: /\breconciles notification preferences\b/gi,

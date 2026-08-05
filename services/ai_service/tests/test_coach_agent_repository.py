@@ -19,7 +19,7 @@ class Client:
 
     async def rpc(self, function, *, params):
         self.rpc_calls.append((function, params))
-        if function == "claim_coach_request_v4":
+        if function == "claim_coach_request_v5":
             return {
                 "state": "pending",
                 "remaining_requests": 19,
@@ -92,8 +92,8 @@ def _response() -> CoachAgentResponse:
             "model_requested": "gpt-5.5",
             "model_reported": "gpt-5.5",
             "model_source": "explicit",
-            "prompt_version": "free-coach-agent-prompt-v2",
-            "context_version": "personal-snapshot-v1",
+            "prompt_version": "free-coach-agent-prompt-v3",
+            "context_version": "personal-snapshot-v2",
             "generated_at": NOW,
             "provider_called": True,
             "service_tier": "fast",
@@ -105,7 +105,7 @@ def _response() -> CoachAgentResponse:
     )
 
 
-def test_v4_claim_binds_only_request_identity_message_and_backend_provenance() -> None:
+def test_v5_claim_binds_only_request_identity_message_and_backend_provenance() -> None:
     client = Client()
     repository = SupabaseCoachRepository(client)
 
@@ -127,7 +127,7 @@ def test_v4_claim_binds_only_request_identity_message_and_backend_provenance() -
 
     assert result.state == "pending"
     function, params = client.rpc_calls[0]
-    assert function == "claim_coach_request_v4"
+    assert function == "claim_coach_request_v5"
     assert set(params) == {
         "p_user_id",
         "p_request_id",

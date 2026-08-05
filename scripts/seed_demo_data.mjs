@@ -90,7 +90,7 @@ const scenarios = [
     ],
     notifications: [
       ['Focus window approaching', 'Your best study window starts in 20 minutes.', 'reminder', 'high', 0, '/deep-work', 'unread'],
-      ['Weekly review ready', 'Review the completed week before changing a habit.', 'coaching', 'medium', -1, '/weekly-review', 'read'],
+      ['Weekly review ready', 'Review the saved facts from the completed week.', 'coaching', 'medium', -1, '/weekly-review', 'read'],
       ['Earlier planning note', 'This dismissed row remains available to account export.', 'coaching', 'low', -3, '/insights', 'dismissed'],
     ],
     memories: [
@@ -606,24 +606,6 @@ async function seedScenario(userId, scenario) {
     'habit_logs',
     buildHabitLogs(userId, scenario, habitRows, now),
   );
-  if (scenario.key === 'worker') {
-    await restRequest(
-      `habits?id=eq.${habitRows[2].id}`,
-      {
-        method: 'PATCH',
-        body: JSON.stringify({
-          active: false,
-          metadata: {
-            ...habitRows[2].metadata,
-            lifecycle: 'paused',
-          },
-          updated_at: now.toISOString(),
-        }),
-        headers: { Prefer: 'return=minimal' },
-      },
-      'pause demo habit after inserting its history',
-    );
-  }
   if (scenario.key === 'student') {
     const focusEvidence = buildStudentFocusEvidence(
       userId,
@@ -1330,7 +1312,7 @@ function buildStudentFocusEvidence(userId, taskRows, habitRows, now) {
         status === 'abandoned'
           ? 'Stopped when interruptions made the block unproductive.'
           : preferredWindow
-            ? 'Made steady progress on one defined study goal.'
+            ? 'Made steady progress on one defined study priority.'
             : 'Completed a useful but more effortful study block.',
       status,
       task_id: index % 3 === 0 ? openTasks[index % openTasks.length].id : null,

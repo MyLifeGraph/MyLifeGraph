@@ -196,11 +196,12 @@ class CoachContextService:
             "timezone": _bounded_text(raw.profile.timezone, 100),
         }
         briefing_item = briefing.model_dump(mode="json") if briefing.briefing else None
-        weekly_item = (
-            weekly.model_dump(mode="json")
-            if weekly.review is not None and weekly.freshness == "current"
-            else None
-        )
+        weekly_item = None
+        if weekly.review is not None and weekly.freshness == "current":
+            weekly_item = weekly.model_dump(mode="json")
+            review_item = weekly_item.get("review")
+            if isinstance(review_item, dict):
+                review_item.pop("proposals", None)
 
         sources = [
             _Source("profile", 1, [profile], "current", singleton=True),

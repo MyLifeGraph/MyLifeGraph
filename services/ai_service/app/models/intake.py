@@ -276,9 +276,10 @@ class IntakeResponses(BaseModel):
     def normalize_compatible_payload(cls, value: Any) -> Any:
         if isinstance(value, dict):
             value = dict(value)
+            if "goals" in value:
+                raise ValueError("responses.goals is no longer supported")
             for retired_key in (
                 "primary_focus_areas",
-                "goals",
                 "friction_points",
                 "coaching_style",
                 "reminder_preference",

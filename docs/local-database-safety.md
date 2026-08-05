@@ -250,7 +250,9 @@ by `20260804192406_harden_goal_removal_dependencies.sql`:
 4. `supabase migration up --db-url` applies the chain through the version
    immediately before the original Goal migration.
 5. Filled before-fixtures are inserted, the original Goal migration is applied,
-   and between-migration V2 fixtures are inserted.
+   and a between-migration `free-coach-agent-prompt-v3` /
+   `personal-snapshot-v2` fixture is inserted to prove that current Goal-free
+   Coach history survives the dependency-hardening follow-up.
 6. A second PostgreSQL session holds a real writer lock on `public.tasks`.
 7. The first follow-up attempt must hit its five-second `lock_timeout`.
    Assertions require no follow-up history row, no partial fixture change, and

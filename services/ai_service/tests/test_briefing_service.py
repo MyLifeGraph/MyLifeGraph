@@ -201,7 +201,6 @@ def context(
     *,
     snapshot_row: dict | None = None,
     tasks: list[dict] | None = None,
-    goals: list[dict] | None = None,
     habits: list[dict] | None = None,
     habit_logs: list[dict] | None = None,
     recommendations: list[dict] | None = None,
@@ -209,7 +208,6 @@ def context(
     return BriefingContext(
         snapshot=snapshot_row or snapshot(),
         tasks=tasks or [],
-        goals=goals or [],
         habits=habits or [],
         habit_logs=habit_logs or [],
         recommendations=recommendations or [],
@@ -842,7 +840,6 @@ def test_repeated_recent_feedback_changes_ranking_with_bounded_provenance() -> N
                     "metadata": {},
                 },
             ],
-            goals=[],
             habits=[],
             habit_logs=[],
             recommendations=[],

@@ -19,7 +19,6 @@ export const ONBOARDING_EMPTY_TABLES = Object.freeze([
   'ai_insights',
   'recommendations',
   'skillset_profiles',
-  'goals',
   'habits',
   'habit_logs',
   'focus_sessions',

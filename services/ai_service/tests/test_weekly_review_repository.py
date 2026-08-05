@@ -203,7 +203,6 @@ def valid_review_row() -> dict[str, Any]:
                 "carried": 1,
                 "overdue_carried": 0,
                 "cancelled": 0,
-                "goal_linked_completed": 0,
             },
             "habits": {
                 "active": 1,
@@ -274,7 +273,7 @@ def valid_review_row() -> dict[str, Any]:
         ],
         "provenance": {
             "engine": "deterministic",
-            "contract_version": "weekly-review-v1",
+            "contract_version": "weekly-review-v2",
             "source_snapshot_id": "snapshot-1",
             "source_snapshot_generated_at": "2026-07-13T07:00:00+00:00",
             "evidence_window": {

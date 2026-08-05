@@ -68,7 +68,7 @@ def test_context_uses_freshness_contracts_and_filters_hidden_metadata() -> None:
         review={"id": "weekly"},
         freshness="stale",
         payload={
-            "contract_version": "weekly-review-v1",
+            "contract_version": "weekly-review-v2",
             "freshness": "stale",
             "review": {"narrative": "SECRET_STALE_WEEKLY"},
         },
@@ -137,9 +137,17 @@ def test_current_weekly_review_is_included() -> None:
         review={"id": "weekly"},
         freshness="current",
         payload={
-            "contract_version": "weekly-review-v1",
+            "contract_version": "weekly-review-v2",
             "freshness": "current",
-            "review": {"narrative": "Current deterministic review."},
+            "review": {
+                "narrative": "Current deterministic review.",
+                "proposals": [
+                    {
+                        "id": "legacy-proposal",
+                        "reason": "SECRET_LEGACY_ADJUSTMENT",
+                    },
+                ],
+            },
         },
     )
     package = asyncio.run(
@@ -151,13 +159,15 @@ def test_current_weekly_review_is_included() -> None:
     )
     weekly_source = json.loads(package.serialized)["sources"]["weekly_review"]
     assert weekly_source["freshness"] == "current"
+    assert "proposals" not in weekly_source["review"]
+    assert "SECRET_LEGACY_ADJUSTMENT" not in package.serialized
 
 
 def test_oversized_unicode_rows_are_omitted_as_whole_items_deterministically() -> None:
     memories = [
         {
             "id": f"memory-{index}",
-            "type": "goal",
+            "type": "preference",
             "title": f"Memory {index}",
             "content": "🌱" * 1_200,
             "selected_at": f"2026-07-13T0{index}:00:00Z",
@@ -352,7 +362,6 @@ def _raw_context() -> CoachRawContext:
                 },
             },
         },
-        goals=BoundedRows(available_count=0, rows=[]),
         tasks=BoundedRows(
             available_count=1,
             rows=[{"id": "task", "title": "Write outline", "status": "todo"}],
@@ -379,8 +388,8 @@ def _raw_context() -> CoachRawContext:
             rows=[
                 {
                     "id": "memory",
-                    "type": "goal",
-                    "title": "Selected goal",
+                    "type": "preference",
+                    "title": "Selected preference",
                     "content": "Protect morning focus.",
                     "metadata": {"secret": "SECRET_MEMORY_METADATA"},
                     "selected_at": "2026-07-13T05:00:00Z",

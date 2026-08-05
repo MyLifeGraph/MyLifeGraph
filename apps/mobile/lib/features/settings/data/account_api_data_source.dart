@@ -204,12 +204,12 @@ class AccountApiDataSource {
       );
     } on ApiResponseTooLargeException {
       throw const AccountExportTooLargeException(
-        'Account export exceeds the V2 bounds.',
+        'Account export exceeds the V3 bounds.',
       );
     } on AppException catch (error) {
       if (apiFailureFrom(error)?.statusCode == 413) {
         throw const AccountExportTooLargeException(
-          'Account export exceeds the V2 bounds.',
+          'Account export exceeds the V3 bounds.',
         );
       }
       rethrow;

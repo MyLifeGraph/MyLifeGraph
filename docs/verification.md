@@ -23,14 +23,85 @@ This document is the shared runbook for automated checks. It describes what can
 be verified by agents without manual app exploration, what requires local
 tooling, and what remains future work.
 
-The current Setup/Goal/friction verification boundary is
+The current Setup-personalization/friction retirement verification boundary is
 `docs/setup-personalization-retirement-contract.md`. Historical results later in
 this file remain records of their checkout; they do not redefine current
 Capture V5, Daily State V3, Exam-Week Outlook V1, or Coach V3 expectations.
 
 ## Current Verified Baseline
 
-The current working tree received a local demo-seed compatibility follow-up on
+The current local-database safety patch plus hardened Goal-removal and
+observational Weekly Review working tree was fully reverified locally on
+2026-08-05. Normal verification, stack start, and E2E reject reset delegation;
+the dedicated reset wrapper passed its target-bound preview only, and its
+destructive execution mode was not run. `npm run db:backup:local` created
+`.tools/supabase-backups/mylifegraph-local-20260805T065833Z-2486678.dump`,
+verified its SHA-256, and restored the complete custom archive in a physically
+separate RAM-only Postgres container. The restored database matched the source's
+four Auth users, four profiles, and latest migration `20260804192406`. No
+owned disposable container remained. After backup, preview, the full database
+gate, and browser cleanup, the normal local database still had four Auth users,
+four profiles, and the same migration; Maya's exact seeded identity still had
+one Auth row, one matching profile, and 43 Daily Log rows. The physically
+isolated Goal transition harness passed `27` assertions including the
+two-session lock-timeout, rollback, and retry path; the matching-history
+final-state gate passed `207` assertions across eleven pgTAP files. The docs
+source suite passed all `15` regressions and the final consistency inventory
+covered 51 Markdown files and 70 FastAPI routes. `verify:fast` passed `859`
+Flutter tests with clean analysis and reported `1370 passed, 2 skipped` for
+FastAPI; the web build passed. The final `verify:full` run on free loopback
+ports `7359` and `8002` repeated the Fast, database, and web gates and passed
+all eight independent profile-mode browser journeys without retry in 6.1
+minutes of test time. `git diff --check` passed; the staged diff was empty and
+the complete unstaged/untracked inventory was reviewed. This evidence describes
+only the local checkout, ignored local backup, and local Supabase instance. No
+reset execution, new migration application, remote migration, restore,
+deployment, push, or remote-state claim occurred.
+
+The preceding hardened Goal-removal and observational Weekly Review working
+tree was fully reverified locally on 2026-08-04. During development of the isolated
+transition harness, Supabase CLI `2.107.0` treated a loopback `--db-url` as its
+normal local target and recreated the normal local database through migration
+`20260804102409`; its local rows were lost. The harness was consequently made
+reset-free: it now creates an exact marked temporary database, bootstraps the
+minimum Supabase substrate, applies version-bounded migrations with
+`migration up --db-url`, and drops only that exact database in its trap. After
+the incident and before applying the repository migrations, counts-only checks
+reported `0` structural Goal rows, `0` dangling Weekly Reviews, and `0` V1
+full-snapshot Coach turns. `APPLY_MIGRATIONS=true npm run verify:db` then
+applied both Goal migrations without another reset. The isolated transition
+harness passed `27` assertions, including the two-session lock-timeout,
+rollback, and retry path; the matching-history final-state database gate passed
+all `207` assertions across eleven pgTAP files. The focused migration source
+suite reported `13 passed`, and all `13` documentation-consistency regressions
+passed. `verify:fast` passed `859` Flutter tests with clean analysis and
+reported `1370 passed, 2 skipped` for FastAPI; the source, visual, Ruff, and web
+build checks passed. The first complete browser invocation was discarded
+because pre-existing processes occupied ports `7357` and `8000`. The final
+complete `verify:full` run on free loopback ports `7359` and `8002` repeated the
+Fast, database, and web gates and passed all eight independent profile-mode
+browser journeys without retry in 6.1 minutes of test time. This evidence
+describes only the local checkout and local Supabase instance; no remote
+migration or deployment was performed or inferred.
+
+The preceding original Goal-removal and observational Weekly Review working
+tree was fully reverified locally on 2026-08-04. Before its destructive
+migration was applied, a counts-only inspection found zero Goal rows and zero
+Goal-dependent derived, notification, feedback, memory, or Coach-history rows
+requiring deletion; one surviving Weekly Review required the V2 upgrade and
+carried one historical non-empty proposal array. The reviewed migration was
+then applied without a reset. The post-apply check found the Goals table absent,
+the surviving review at V2, and its historical proposal array preserved.
+`verify:fast` passed `859` Flutter tests with clean analysis and reported `1364
+passed, 2 skipped` for FastAPI; the documentation, visual, source, Ruff, and
+diff checks also passed. The matching-history database gate passed all `207`
+assertions across eleven pgTAP files, and the debug web build passed. A final
+complete `verify:full` run on alternate loopback ports passed all eight
+independent profile-mode browser journeys without retry in 6.0 minutes of test
+time. This preceding evidence describes only that local checkout and local
+Supabase instance.
+
+The preceding local demo-seed compatibility working tree was verified on
 2026-08-04. The focused precise-sleep contract suite reported `21 passed`, and
 the changed Python files passed Ruff check, Ruff format, compilation, and diff
 checks. A complete `npm run seed:demo` then recreated only the four named local
@@ -44,7 +115,7 @@ and adds a source-level caller-binding regression; no reset or migration
 application was used, and the full pgTAP/web-build/browser gate was not
 repeated.
 
-The immediately preceding implementation commit
+The implementation commit immediately before that,
 `e8014fbe4d913195b81e4be924df03a864b35e05` was reverified locally on
 2026-08-04 with `verify:affected --base-ref origin/new_backend_gh`, which
 classified the three committed branch changes as mixed and selected the
@@ -236,7 +307,7 @@ Use the lowest level that covers the change.
 | Fast | `FLUTTER_BIN=/path/to/flutter npm run verify:fast` | Docs/visual and source checks, clean Flutter analysis and complete Flutter tests, complete pytest, compile, and diff checks. | No |
 | Affected | `npm run verify:affected -- --base-ref <ref>` | Conservatively selects gates from all committed, working-tree, and untracked paths; core/Auth/routing/config/schema/mixed/unknown changes escalate to full. | Depends on selected gate |
 | Web build | `FLUTTER_BIN=/path/to/flutter npm run verify:web` | Builds the Flutter debug web bundle. | No |
-| Local Supabase preflight | `npm run verify:db` | Starts local Supabase, requires matching migration history, and runs the complete pgTAP suite without Flutter. | No |
+| Local Supabase preflight | `npm run verify:db` | Starts local Supabase, requires matching migration history, runs the physically isolated transition harness, and runs the complete pgTAP suite without Flutter. | No |
 | Local Supabase migration apply | `APPLY_MIGRATIONS=true npm run verify:db` | Explicitly applies reviewed pending SQL, verifies history, then runs pgTAP. | May change or delete local rows |
 | Local Supabase backup | `npm run db:backup:local` | Creates a full custom dump and publishes it only after a successful restore in a separate RAM-only Postgres container. | No source mutation; writes sensitive ignored backup artifacts |
 | Local Supabase reset preview | `npm run db:reset:local` | Validates and displays the exact local target plus a content-bound confirmation token. | No |
@@ -276,8 +347,8 @@ an open demo-account session. `onboarding@example.test` stays incomplete in
 neutral Personal Learning defaults, plus its absence from every activity,
 Setup, planning, Coach, and retry-ledger table. Each populated scenario's
 Intake row is a valid applied revision with a stable request id and
-intentionally empty optional Setup-owned collections. The seed creates no
-active Goal row. Separately seeded habits and schedule rows retain `demo_seed`
+intentionally empty optional Setup-owned collections. The seed creates no Goal
+data. Separately seeded habits and schedule rows retain `demo_seed`
 ownership and are not presented as Setup materialization.
 
 The student scenario then uses the production backend service classes to
@@ -293,8 +364,7 @@ persist and validate:
   open, and missed opportunities plus completed, abandoned, and active Focus;
 - 36 reflections across 36 distinct local Focus days, at least 90% coverage,
   and a stable Planner-ready `09–13` Personal Learning preference;
-- one current Weekly Review with a directly reviewable pause proposal for the
-  repeatedly skipped phone-away Habit;
+- one current facts-only Weekly Review with an empty proposal array;
 - one consented current `.ics` import with timed, all-day, busy, free, and
   unsupported-recurrence coverage;
 - two active Preparation Plans, one pending preview, account-wide capacity,
@@ -444,11 +514,10 @@ Phase 1 capture-date boundary. The snapshot repository reads `metadata` from
 `daily_logs` and `behavioral_events`, widens the UTC event query safely, prefers
 the explicit event `metadata.entry_date` for local-day filtering, excludes the
 following local day, and retains a UTC fallback for legacy events without that
-metadata. Current Intake tests additionally require retired legacy keys to be
-accepted then stripped before comparison/storage, notification preferences to
-remain unchanged, Setup-owned Goals to be archived without touching
-manual/foreign Goals, only the intended Setup memories to be removed, and no
-post-Setup Recommendation generation. Daily State V2 tests cover every active
+metadata. Current Intake tests additionally require supported retired legacy
+keys to be accepted then stripped before comparison/storage,
+`responses.goals` to be rejected, notification preferences to remain unchanged,
+and no post-Setup Recommendation generation. Daily State V2 tests cover every active
 capture taxonomy code; strict V2/V3/V4 branch identity, enum, numeric,
 timestamp, sleep-interval, and projection validation with friction ignored;
 unknown future metadata;
@@ -554,16 +623,15 @@ recommendation/profile-date failure stages, continuation after one user's
 failure, and optional deterministic recommendation refresh with LLM wording
 disabled. The default scheduled path does not generate recommendations or call
 an LLM.
-Phase 8 tests cover strict `weekly-review-v1` request/response parsing,
+Phase 8 tests cover strict `weekly-review-v2` request/response parsing,
 principal-derived ownership, profile-local completed ISO weeks across year/DST
 boundaries, read-only latest/period GET, idempotent same-row generation, and
 canonical source-fingerprint staleness. Fact tests keep completed/carried tasks,
 stable versus changed habit definitions, completed/skipped/missed/recovery-open/
 unknown opportunities, focus, recovery days, and feedback distinct. Repository
-tests require stable full pagination and exact user/date scoping. Proposal tests
-cap deterministic output at two, require matching `too_much` evidence before
-the initial weekly-target shrink rule, preserve Setup ownership, and never apply
-a user-owned mutation during generation.
+tests require stable full pagination and exact user/date scoping. Generation
+tests prove that `too_much`, `not_helpful`, skips, and high completion still
+produce `proposals=[]`; forced refresh clears a historical proposal array.
 Phase 9 tests cover strict `calendar-import-v2` and
 `calendar-import-consent-v1` parsing, bearer-derived ownership, connection
 without import, create/import request replay and conflict, bounded `.ics`
@@ -667,10 +735,11 @@ instances, router source constructs no Supabase repository, and API tests
 override asynchronous typed dependency callables rather than named
 `app.state` service or verifier fields.
 
-Owner-data policy coverage must compare the typed catalog with all 48
+Owner-data policy coverage must compare the typed catalog with all 47
 repo-owned public tables created by migration history, reject duplicate or
-missing entries, and independently prove the exact 41-table Account Export,
-five sanitized export sources, seven named anti-replay omissions, and 37-table
+missing entries, and independently prove the exact 40-table
+`account-export-v3` Account Export,
+five sanitized export sources, seven named anti-replay omissions, and 36-table
 Coach Snapshot. Account Export, repository, API, deletion/privilege migration,
 Coach Snapshot, and Coach agent tests must continue to prove owner filtering,
 field sanitization, bounded failure, cleanup, ledger exclusion, and account
@@ -695,7 +764,7 @@ Personal Learning V1 focused coverage must prove:
 - SQL rating/obstacle bounds, one reflection per terminal session, composite
   owner linkage, active/cross-owner rejection, forced RLS, conflict updates,
   preference dependency, exact update replay, retry-safe confirmed clear,
-  41-table export inclusion, ledger omission, and account cascade;
+  40-table export inclusion, ledger omission, and account cascade;
 - backend disabled-before-evidence short-circuit, profile timezone and DST,
   strict shared V4 sleep parsing, exact local wake/Focus-date matching,
   sleep-before-session ordering, rejected prior-day 36-hour fallback,
@@ -936,10 +1005,8 @@ Current Flutter widget tests include:
   navigation tests rather than a dormant briefing dispatcher.
 - Weekly Review tests cover strict nested parsing, `not_ready`/missing/current/
   stale/error/local-demo states, latest GET versus deliberate generate/refresh,
-  separate weekly facts, the two-proposal cap, stale disabled controls, exact
-  before/after confirmation, cancel with zero writes, Setup deep-link without a
-  generic write, manual Habit V1 expected-timestamp application, and guest/mock
-  API isolation.
+  separate weekly facts, historical proposal parsing without rendering or
+  execution controls, facts-adjacent update, and guest/mock API isolation.
 - Calendar import tests cover strict nested consent/connection/import/event
   parsing, authenticated bearer requests, local-demo zero-call selection,
   unchecked consent, connection-without-import, retained exact retry identity,
@@ -984,7 +1051,9 @@ The script:
 3. Starts the local Supabase stack.
 4. Redacts Supabase keys and database credentials from CLI output.
 5. Requires repository and local migration history to match.
-6. Runs the complete pgTAP suite.
+6. Runs the isolated two-migration Goal-removal/locking harness described
+   below.
+7. Runs the complete final-state pgTAP suite against the normal local database.
 
 With the default `RESET_DB=false` and `APPLY_MIGRATIONS=false`, the script runs
 `supabase migration list --local` and requires every repository/DB history row
@@ -1005,6 +1074,33 @@ Migration verification has two deliberately separate layers:
 Neither layer substitutes for the other: historical source identity supports
 safe rolling upgrades, while the applied database is authoritative for current
 behavior and authority.
+
+The Goal-removal follow-up adds a third, migration-transition layer through
+`scripts/lib/goal_removal_migration_harness.sh`. It starts an
+ownership-labelled, physically separate Postgres container with a read-only
+root, bounded RAM-only data directories, no normal Supabase volume, and a
+random loopback-only port. Inside that container it creates only the exact
+database `mylifegraph_goal_removal_migration_test`, bootstraps the minimal local
+Supabase-owned Auth/extension substrate, and uses `migration up --db-url` to
+reach the state immediately before
+`20260804150153_remove_goals_and_make_weekly_review_observational.sql`. Filled
+fixtures are loaded before the original migration; a current V2 Coach fixture
+is loaded between the original and follow-up migrations. A second PostgreSQL
+session then holds a real Task writer lock. The first follow-up attempt must hit
+its five-second `lock_timeout`, record no migration history, change no fixture,
+and leave no helper; after lock release the same migration must pass, followed
+by the dedicated pgTAP assertions. An exit trap force-removes only the
+ownership-labelled disposable container, including on failure, and normal
+migration history is compared around every isolated stage.
+
+This harness intentionally does not invoke `db reset --db-url` or create a
+temporary database inside the normal cluster. With Supabase CLI `2.107.0`, a
+loopback reset URL can be classified as the normal local stack and recreate the
+wrong database. A separate Postgres process/storage boundary plus
+version-bounded `migration up --db-url` provides the empty-chain transition
+without granting reset authority over the normal local database. Exact
+container restrictions, TLS compatibility, gateway scoping, cleanup, and
+rollback rules are owned by `docs/local-database-safety.md`.
 
 After reviewing the pending SQL and affected local rows, apply intentionally:
 
@@ -1367,8 +1463,8 @@ and process cleanup. The split reporter additionally emits one
 
 ## Phase 10 Provider Verification
 
-The current pair under verification is `free-coach-agent-prompt-v2` with
-`personal-snapshot-v1`; stored V1 prompt responses and exact replay remain
+The current pair under verification is `free-coach-agent-prompt-v3` with
+`personal-snapshot-v2`; stored V1/V2 prompt responses and exact replay remain
 valid. Phase 10 keeps two strictly separate paths:
 
 1. The default deterministic path uses a fake provider/process runner in

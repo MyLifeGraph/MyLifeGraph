@@ -4,6 +4,30 @@
   "contracts": [
     {
       "coverage": "shared_named",
+      "key": "accountExport",
+      "version": "account-export-v3",
+      "sources": [
+        {
+          "path": "apps/mobile/lib/features/settings/domain/account_settings.dart",
+          "symbol": "accountExportContractVersion"
+        },
+        {
+          "path": "services/ai_service/app/models/account.py",
+          "symbol": "ACCOUNT_EXPORT_CONTRACT_VERSION"
+        }
+      ],
+      "owners": [
+        "README.md",
+        "docs/architecture.md",
+        "docs/notification-lifecycle-v1-contract.md",
+        "docs/stabilization-consistency-contract.md",
+        "docs/v1-account-controls-contract.md",
+        "docs/verification.md",
+        "services/ai_service/README.md"
+      ]
+    },
+    {
+      "coverage": "shared_named",
       "key": "calendarImport",
       "version": "calendar-import-v2",
       "sources": [
@@ -74,7 +98,7 @@
     {
       "coverage": "shared_named",
       "key": "coachContext",
-      "version": "personal-snapshot-v1",
+      "version": "personal-snapshot-v2",
       "sources": [
         {
           "path": "apps/mobile/lib/features/coach/domain/coach.dart",
@@ -126,7 +150,7 @@
     {
       "coverage": "shared_named",
       "key": "coachPrompt",
-      "version": "free-coach-agent-prompt-v2",
+      "version": "free-coach-agent-prompt-v3",
       "sources": [
         {
           "path": "apps/mobile/lib/features/coach/domain/coach.dart",
@@ -582,7 +606,7 @@
     {
       "coverage": "shared_named",
       "key": "weeklyReview",
-      "version": "weekly-review-v1",
+      "version": "weekly-review-v2",
       "sources": [
         {
           "path": "apps/mobile/lib/features/weekly_review/domain/weekly_review.dart",

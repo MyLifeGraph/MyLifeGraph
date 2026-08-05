@@ -4,7 +4,7 @@ from typing import Literal, Self
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
-WEEKLY_REVIEW_CONTRACT_VERSION = "weekly-review-v1"
+WEEKLY_REVIEW_CONTRACT_VERSION = "weekly-review-v2"
 
 WeeklyReviewFreshness = Literal["not_ready", "missing", "current", "stale"]
 WeeklyReviewDataQuality = Literal["insufficient", "partial", "sufficient"]
@@ -62,7 +62,7 @@ class WeeklyReviewProvenance(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
 
     engine: Literal["deterministic"]
-    contract_version: Literal["weekly-review-v1"]
+    contract_version: Literal["weekly-review-v2"]
     source_snapshot_id: str = Field(min_length=1, max_length=200)
     source_snapshot_generated_at: datetime
     evidence_window: WeeklyReviewEvidenceWindow
@@ -85,7 +85,6 @@ class WeeklyTaskFacts(BaseModel):
     carried: int = Field(ge=0)
     overdue_carried: int = Field(ge=0)
     cancelled: int = Field(ge=0)
-    goal_linked_completed: int = Field(ge=0)
 
 
 class WeeklyHabitFacts(BaseModel):
@@ -309,7 +308,7 @@ class WeeklyReview(BaseModel):
 class WeeklyReviewReadResponse(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
-    contract_version: Literal["weekly-review-v1"]
+    contract_version: Literal["weekly-review-v2"]
     period_key: str = Field(pattern=r"^\d{4}-W\d{2}$")
     starts_on: date
     ends_on: date

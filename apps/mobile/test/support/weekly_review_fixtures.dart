@@ -12,7 +12,7 @@ Map<String, dynamic> weeklyReviewResponseJson({
       ? weeklyHabitState(weeklyTarget: 2)
       : after;
   return {
-    'contract_version': 'weekly-review-v1',
+    'contract_version': 'weekly-review-v2',
     'period_key': '2026-W28',
     'starts_on': '2026-07-06',
     'ends_on': '2026-07-12',
@@ -33,7 +33,6 @@ Map<String, dynamic> weeklyReviewResponseJson({
                 'carried': 2,
                 'overdue_carried': 1,
                 'cancelled': 1,
-                'goal_linked_completed': 2,
               },
               'habits': {
                 'active': 2,
@@ -98,7 +97,7 @@ Map<String, dynamic> weeklyReviewResponseJson({
             ],
             'provenance': {
               'engine': 'deterministic',
-              'contract_version': 'weekly-review-v1',
+              'contract_version': 'weekly-review-v2',
               'source_snapshot_id': '33333333-3333-4333-8333-333333333333',
               'source_snapshot_generated_at': '2026-07-12T17:00:00Z',
               'evidence_window': {

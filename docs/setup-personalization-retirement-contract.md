@@ -1,6 +1,7 @@
 # Setup Personalization Retirement Contract
 
-Status: implemented on 2026-07-25.
+Status: current; the original retirement landed on 2026-07-25 and Goals were
+fully removed on 2026-08-04.
 
 This contract supersedes older Setup, Daily Capture, Daily State, Coach, and
 Weekly Review descriptions that refer to Setup Goals, focus areas, friction
@@ -14,7 +15,7 @@ Setup asks for:
 - the required typical weekday and best energy window;
 - optional routines, fixed commitments, and Study Setup.
 
-Setup does not show or persist focus areas, Goals, friction points, coaching
+Setup does not show or persist focus areas, friction points, coaching
 style, Reminder preference, or a free-form context note. Reminder consent,
 categories, quiet hours, and daily limit remain independently editable in
 Settings. Applying or editing Setup must leave the complete
@@ -26,9 +27,12 @@ fails closed before Setup, performs no profile insert/upsert, and offers
 sign-out before another sign-in attempt. Guest Setup remains local and does not
 use this remote profile boundary.
 
-The Goals table remains in the canonical schema and Account Export for
-compatibility. Goals have no active product surface or ranking role. Setup-owned
-Goal rows are archived; manual and foreign-managed rows are retained unchanged.
+Goals have no current schema, export entry, Setup field, product surface,
+ranking role, Snapshot source, or Coach context. The removal migration deletes
+the prior rows and structurally dependent derived data; recovery requires a
+pre-existing database backup. Local backup verification, recovery sequencing,
+and the distinction between reverting the operational safety patch and
+reintroducing Goals are explicit in `docs/local-database-safety.md`.
 
 Evening Capture requires mood, energy, and stress. Stress source and
 controllability remain required when stress is elevated. Reflection and specific
@@ -40,20 +44,18 @@ Morning Capture no longer asks for the unrelated per-day
 ## Contracts and compatibility
 
 `intake-v1` keeps its HTTP, request-id, base-revision, replay, and conflict
-identity. A compatibility normalizer removes these keys before validation,
-comparison, or persistence:
+identity. `responses.goals` is rejected. A compatibility normalizer removes the
+other retired keys before validation, comparison, or persistence:
 
 - `primary_focus_areas`
-- `goals`
 - `friction_points`
 - `coaching_style`
 - `reminder_preference`
 - `context_note`
 
 Required Intake answers are `weekday_shape` and `best_energy_window`. The Setup
-Apply RPC retains its existing arguments, but ignores
-`p_notification_preferences` and `p_goals`. It reconciles only routines/Habits,
-fixed commitments, Study Setup, and the `Best energy window` memory. The
+Apply RPC has no Goal parameter. It reconciles only routines/Habits, fixed
+commitments, Study Setup, and the `Best energy window` memory. The
 onboarding snapshot contains that energy value plus routine/Habit/commitment
 counters and has no personalization signals. Setup completion does not generate
 Recommendations.
@@ -74,42 +76,70 @@ sanitization. V3 has no friction or Day Shape context, risk, reason, or evidence
 Stress, sleep, energy, workload, and active Tasks continue to drive
 classification. `push` requires at least one active Task.
 
-Current free questions use `free-coach-agent-prompt-v2` with a per-turn
-`personal-snapshot-v1`; paired V1 prompt history and exact replay stay valid.
-The snapshot may include retained sanitized Intake,
-Goal, Memory, and Daily Capture rows as untrusted data, but the cleanup means it
-cannot resurrect removed onboarding preference, coaching-style, friction, or
-Setup-Goal JSON. Compatible V2 fixed-mode requests retain
+Current free questions use `free-coach-agent-prompt-v3` with a per-turn
+`personal-snapshot-v2`; paired V1/V2 prompt history and exact replay stay valid.
+The snapshot may include retained sanitized Intake, Memory, and Daily Capture
+rows as untrusted data, but it cannot include Goals or resurrect removed
+onboarding preference, coaching-style, or friction JSON. Weekly Review proposal
+arrays are also removed before Coach use. Compatible V2 fixed-mode requests retain
 `controlled-coach-prompt-v3`/`coach-context-v3`; V1 Today retains paired
 `controlled-coach-prompt-v2`/`coach-context-v2`. Persisted V1/V2 responses and
 history remain readable and replay-compatible.
 
-Briefings and Weekly Reviews do not load Goals. The V1 Weekly Review field
-`facts.tasks.goal_linked_completed` remains present and is always `0`.
+Briefings and Weekly Reviews have no Goal source. `weekly-review-v2` removes the
+former Task Goal counter and always generates an empty proposal array.
 Recommendations use runtime Tasks, check-ins, and other current signals rather
 than onboarding personalization.
 
 ## Stored-data cleanup
 
 Migration
-`20260725120000_retire_setup_goals_and_friction.sql`:
+`20260804150153_remove_goals_and_make_weekly_review_observational.sql`:
 
-- removes retired Intake and onboarding JSON fields;
-- archives only Setup-owned Goals;
-- deletes only Setup-derived Goal, coaching-style, and context-note memories;
-- retains the best-energy memory and all manual/other memories;
-- removes friction keys from Daily Logs and Behavioral Events;
-- invalidates reproducible Snapshots, Briefings, Weekly Reviews, and
-  Recommendations whose structured evidence uses retired data;
-- advances new Coach claims to the paired V2 provenance while preserving V1
-  rows;
+- removes structured Goal keys while preserving unrelated JSON;
+- deletes all Goal rows, Goal memories, and structurally Goal-dependent derived
+  rows without heuristically matching ordinary prose;
+- tombstones structurally Goal-dependent Coach turns while retaining append-only
+  usage and audit rows;
+- removes the Goals table explicitly without `CASCADE`;
+- replaces the backend-only Setup RPC with a Goal-free signature;
+- migrates surviving Weekly Reviews in place to V2, preserving historical
+  proposal arrays but requiring `[]` for every new or refreshed row;
+- advances new Coach claims to prompt V3/snapshot V2 while preserving valid
+  historical provenance pairs;
 - performs no hidden regeneration.
+
+The already-applied migration above is immutable. Additive migration
+`20260804192406_harden_goal_removal_dependencies.sql` closes the remaining
+cleanup graph without changing a public payload or version:
+
+- it takes every read/changed application-table lock in alphabetical order as
+  `SHARE ROW EXCLUSIVE`, with `lock_timeout='5s'`, before inspecting rows;
+- its temporary V2 detector recognizes exact Goal keys, typed singular and
+  plural source/table/type references, and exact Goal path segments such as
+  `metadata.goal_id`, while never searching ordinary prose;
+- it sanitizes Intake, Task, and onboarding snapshots in place and asserts that
+  their authoritative JSON contains no recognized Goal structure;
+- it computes complete temporary dependency sets before deletion, including
+  foreign keys, recommendation ids, snapshot provenance, feedback evidence,
+  and generated-notification source identities;
+- it removes reviews whose source snapshot or referenced feedback is missing or
+  retired, while leaving every clean review—including historical proposals,
+  identity, period, fingerprint, and timestamps—unchanged;
+- it tombstones direct structured Coach dependencies and every V1 turn whose
+  evidence says `source=personal_snapshot`, deletes only their messages, clears
+  response/evidence/trace/context, and retains append-only usage/audit facts;
+- it asserts the final graph and removes every migration-only helper. It adds no
+  permanent generic JSON constraint.
 
 The cleanup routine is idempotent. Guest Setup and Capture stores apply the same
 sanitization on first read and write the canonical value back locally.
 
 The cleanup permanently removes historical JSON answers. A code rollback does
-not restore them without a database backup.
+not restore them without a database backup. Removing or editing the applied
+migration files is forbidden and would not recover rows; reintroducing the
+feature requires a new forward migration and an explicit product-contract
+change.
 
 ## Stabilized Setup errors
 

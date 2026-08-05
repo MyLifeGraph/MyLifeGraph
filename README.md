@@ -47,7 +47,7 @@ way to explore the product today is the Flutter app in mock-data guest mode.
   Morning capture boundary is closed-open, and ready results distinguish wake
   on the same local day from wake on the following local day.
 - Real authenticated accounts now have revision-checked, retry-safe timezone
-  and preparation-budget editing, a strict bounded `account-export-v2` JSON
+  and preparation-budget editing, a strict bounded `account-export-v3` JSON
   portability export, password reset/confirmation-email
   recovery, and confirmed permanent account deletion. The deletion is one
   service-role-only database transaction and requires session-bound Supabase
@@ -84,12 +84,12 @@ way to explore the product today is the Flutter app in mock-data guest mode.
   generated, stale briefings are refreshed against their exact source snapshot,
   and current snapshot/briefing pairs remain write-free. Each user failure is
   isolated and reports its stage. Phase 8 adds one backend-owned
-  `weekly-review-v1` identity per completed profile-local ISO week. Read paths
+  `weekly-review-v2` identity per completed profile-local ISO week. Read paths
   remain side-effect free, deliberate generation persists only derived facts
-  and at most two proposals, and exact source fingerprints expose staleness.
-  Confirmed manual Habit V1 shrink/pause/archive changes reuse Phase 3; Setup
-  changes deep-link to Setup, while replacement/task/schedule changes remain
-  staged. Phase 9 adds one optional authenticated `ical_file` connection
+  with an empty proposal array, and exact source fingerprints expose staleness.
+  Historical proposal arrays remain transport-readable but are hidden from
+  Flutter and Coach and are cleared by a deliberate refresh. Phase 9 adds one
+  optional authenticated `ical_file` connection
   with explicit read/store consent, deliberate bounded `.ics` import, stable
   connection/import/event identities, and visibly read-only imported events.
   Connect never imports; repeated files reconcile instead of duplicating rows;
@@ -155,8 +155,8 @@ way to explore the product today is the Flutter app in mock-data guest mode.
   consent; it still adds no provider/system delivery channel.
   Phase 10 now exposes one free-question, read-only personal-data Coach instead
   of fixed Today, Patterns, Focus, or Review modes. Each V3 turn creates a fresh
-  `personal-snapshot-v1` owner-only SQLite database and runs
-  `free-coach-agent-prompt-v2`, then gives the development-only local Codex agent
+  `personal-snapshot-v2` owner-only SQLite database and runs
+  `free-coach-agent-prompt-v3`, then gives the development-only local Codex agent
   exactly three required stdio-MCP tools: catalog inspection, read-only SQL,
   and isolated Python. SQL and Python are bounded; Python runs as non-root in a
   no-network, read-only Docker sandbox with only the snapshot mounted. The
@@ -378,10 +378,11 @@ into the repo or `.env`. See
 `docs/local-dev.md` for the active settings and routes.
 
 Setup personalization was deliberately reduced on 2026-07-25. Focus areas,
-Goals, friction answers, coaching style, Reminder preference, and free-form
+friction answers, coaching style, Reminder preference, and free-form
 context are no longer active Setup inputs. Daily Capture now uses V4; Daily State
-and Coach use their V2 contracts, while old stored shapes remain safely
-readable. See
+uses V3, while old stored shapes remain safely readable. Goals have now been
+removed from the current schema, Setup, export, snapshots, and Coach context.
+See
 `docs/setup-personalization-retirement-contract.md` for the compatibility and
 cleanup boundary.
 
@@ -534,10 +535,9 @@ Supabase is the intended auth and persistence backend. The current app supports:
   Dashboard loads continue to read briefings with GET only.
 - `GET /v1/weekly-reviews/latest` and the explicit-period GET are read-only.
   `POST /v1/weekly-reviews/generate` deliberately persists one deterministic
-  completed-ISO-week review. Stale proposal controls stay disabled until a
-  deliberate refresh. Direct application is limited to confirmed manual Habit
-  V1 shrink/pause/archive commands with an exact target timestamp; other
-  proposal kinds remain staged or return to Settings Setup.
+  completed-ISO-week review. The surface reports facts, freshness, and data
+  quality only. New or refreshed reviews always have `proposals=[]`; historical
+  proposal payloads remain readable but are neither rendered nor executable.
 - `/v1/calendar-integrations` exposes the optional `calendar-import-v2`
   boundary. Connection requires explicit `calendar-import-consent-v1`, file
   import is a deliberate retry-safe POST, event pages are read-only, and
@@ -612,7 +612,7 @@ user-entered or generated product data. The student, worker, and recovery
 accounts remain repeatable populated scenarios. Their typed Setup rows include
 valid applied revisions with intentionally empty Setup-owned optional
 collections; separately seeded runtime Tasks, Habits, and commitments remain
-`demo_seed` data; no active Goal rows are seeded. The student
+`demo_seed` data; no Goal data is seeded. The student
 scenario is additionally enriched through the real backend services with
 current Today/Weekly Review output, all three Habit cadences, 43 profile-local
   Daily Capture V5 days, 36 rated Focus days, a stable Personal Learning
@@ -772,8 +772,9 @@ database assertions including terminal-focus `updated_at` mutation. Do not
 describe them as passed in a later checkout until that checkout's command
 succeeds.
 The Phase 8 source path additionally covers missing/read-only review truth,
-deliberate generation, exact persisted weekly facts/proposals, confirmed manual
-habit adaptation, stale refresh, Setup non-mutation, and review-table RLS. Phase
+deliberate generation, exact persisted weekly facts, empty regenerated
+proposals, historical-proposal invisibility, stale refresh, and review-table
+RLS. Phase
 9 adds explicit consent, bounded `.ics` reconciliation, paginated imported-only
 events, disconnect/delete separation, schedule preservation, and integration
 RLS. Phase 10 adds free-question V3 streaming, cancellation, backend-derived
@@ -835,7 +836,8 @@ has the nvm bin directory on `PATH`.
 - `docs/phase-3-executable-actions-contract.md` - Implemented executable task,
   habit, focus, and action-target contract.
 - `docs/phase-8-weekly-review-contract.md` - Bounded ISO-week facts,
-  proposals, freshness, ownership, and confirmed habit adaptation.
+  freshness, ownership, and historical proposal compatibility without
+  adaptation authority.
 - `docs/phase-9-calendar-import-contract.md` - Explicit `.ics` consent,
   bounded retry-safe import, read-only provenance, and disconnect/delete rules.
 - `docs/deadline-planner-v1-contract.md` - Explicit exam/assignment estimates,

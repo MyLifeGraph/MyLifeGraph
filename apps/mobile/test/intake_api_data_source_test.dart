@@ -45,12 +45,6 @@ void main() {
       responses: const IntakeResponseDraft(
         displayName: 'Alex',
         primaryFocusAreas: ['energy', 'focus'],
-        goals: [
-          IntakeGoalDraft(
-            key: '41c31425-baa6-4d58-8ac3-01f41ecb50d6',
-            title: 'Protect focus time',
-          ),
-        ],
         frictionPoints: ['Late starts'],
         weekdayShape: 'school_or_work',
         bestEnergyWindow: 'morning',
@@ -125,7 +119,6 @@ void main() {
     expect(result.exists, isTrue);
     expect(result.status, 'applied');
     expect(result.revision, 3);
-    expect(result.responses?.goals, isEmpty);
     expect(result.responses?.frictionPoints, isEmpty);
     expect(result.responses?.reminderPreference, isNull);
     expect(result.responses?.contextNote, isNull);
@@ -146,13 +139,6 @@ Map<String, dynamic> _appliedResponse(String requestId) {
     'responses': {
       'display_name': 'Alex',
       'primary_focus_areas': ['energy', 'focus'],
-      'goals': [
-        {
-          'key': '41c31425-baa6-4d58-8ac3-01f41ecb50d6',
-          'title': 'Protect focus time',
-          'status': 'active',
-        },
-      ],
       'friction_points': ['Late starts'],
       'weekday_shape': 'school_or_work',
       'best_energy_window': 'morning',

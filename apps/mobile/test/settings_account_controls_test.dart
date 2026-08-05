@@ -176,7 +176,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(
       find.text(
-        'This account exceeds the V2 export limits. Retrying unchanged will not help; reduce deletable history or request a larger export workflow.',
+        'This account exceeds the V3 export limits. Retrying unchanged will not help; reduce deletable history or request a larger export workflow.',
       ),
       findsOneWidget,
     );
@@ -919,15 +919,15 @@ class _FakeAccountSettingsRepository implements AccountSettingsRepository {
     exportError = null;
     if (error != null) throw error;
     final data = <String, dynamic>{
-      for (final table in accountExportV1TableNames)
+      for (final table in accountExportTableNames)
         table: <Map<String, dynamic>>[],
     };
     return AccountExportEnvelope.fromJson({
-      'contract_version': 'account-export-v2',
+      'contract_version': 'account-export-v3',
       'exported_at': '2026-07-13T12:00:00Z',
       'data': data,
       'record_counts': <String, int>{
-        for (final table in accountExportV1TableNames) table: 0,
+        for (final table in accountExportTableNames) table: 0,
       },
       'ledger_policy': {
         'sanitized_tables': accountExportV1SanitizedTables,
@@ -962,7 +962,7 @@ class _FakeExportSaver implements AccountExportSaver {
   }) async {
     calls += 1;
     expect(suggestedName, startsWith('mylifegraph-export-'));
-    expect(export.contractVersion, 'account-export-v2');
+    expect(export.contractVersion, 'account-export-v3');
     return AccountExportSaveResult.saved;
   }
 }

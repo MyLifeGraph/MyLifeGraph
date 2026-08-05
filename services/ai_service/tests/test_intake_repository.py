@@ -81,15 +81,16 @@ def atomic_apply() -> AtomicSetupApply:
             "quiet_hours_end": None,
         },
         materialization=SetupMaterialization(
-            goals=[
+            habits=[
                 {
                     "id": "20000000-0000-4000-8000-000000000001",
-                    "title": "Goal",
-                    "status": "active",
+                    "title": "Study routine",
+                    "frequency": "weekly",
+                    "target": 3,
+                    "active": True,
                     "metadata": metadata,
                 },
             ],
-            habits=[],
             schedule_items=[],
             memory_entries=[],
         ),
@@ -127,8 +128,7 @@ def test_atomic_apply_uses_one_rpc_for_the_complete_projection() -> None:
         "p_revision": 2,
         "p_completed_at": apply.completed_at,
         "p_notification_preferences": apply.notification_preferences,
-        "p_goals": apply.materialization.goals,
-        "p_habits": [],
+        "p_habits": apply.materialization.habits,
         "p_schedule_items": [],
         "p_memory_entries": [],
         "p_snapshot": apply.snapshot,
@@ -199,7 +199,7 @@ def test_latest_and_latest_applied_reads_are_version_and_user_scoped() -> None:
         ("40001", "revision is no longer current", IntakeApplyConflict),
         (
             "23505",
-            "Setup goal id collides with a non-Setup row",
+            "Setup habit id collides with a non-Setup row",
             SetupOwnershipConflict,
         ),
     ],

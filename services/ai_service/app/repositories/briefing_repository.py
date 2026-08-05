@@ -15,8 +15,6 @@ from app.models.briefings import (
 class BriefingContext:
     snapshot: dict[str, Any]
     tasks: list[dict[str, Any]]
-    # Kept only so older in-process callers can construct the envelope.
-    goals: list[dict[str, Any]]
     habits: list[dict[str, Any]]
     habit_logs: list[dict[str, Any]]
     recommendations: list[dict[str, Any]]
@@ -194,7 +192,6 @@ class SupabaseBriefingRepository:
         return BriefingContext(
             snapshot=snapshot,
             tasks=tasks,
-            goals=[],
             habits=habits,
             habit_logs=habit_logs,
             recommendations=recommendations,

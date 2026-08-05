@@ -214,9 +214,6 @@ def sample_inputs() -> SnapshotInputRows:
                 "metadata": {},
             },
         ],
-        goals=[
-            {"id": "goal-1", "title": "Protect focus", "status": "active"},
-        ],
         habits=[
             {"id": "habit-1", "title": "Walk", "frequency": "daily", "active": True},
         ],
@@ -275,7 +272,7 @@ def sample_inputs() -> SnapshotInputRows:
             },
         ],
         memory_entries=[
-            {"id": "memory-1", "type": "goal", "title": "Goal"},
+            {"id": "memory-1", "type": "preference", "title": "Preference"},
         ],
     )
 

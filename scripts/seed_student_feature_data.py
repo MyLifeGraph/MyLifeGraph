@@ -872,10 +872,9 @@ async def _verify(
         raise RuntimeError("Student Today briefing is not current.")
     weekly = await weekly_service.get_latest(user_id=user_id)
     proposals = weekly.review.proposals if weekly.review else []
-    operations = {proposal.operation for proposal in proposals}
-    if weekly.freshness != "current" or "pause" not in operations:
+    if weekly.freshness != "current" or proposals:
         raise RuntimeError(
-            "Student Weekly Review lacks the realistic phone-habit pause proposal."
+            "Student Weekly Review is not current and purely observational."
         )
     connection = await calendar_service.get_connection(user_id=user_id)
     if connection.connection is None or connection.connection.status != "connected":

@@ -1,6 +1,6 @@
 import '../../../core/contracts/strict_contract.dart';
 
-const weeklyReviewContractVersion = 'weekly-review-v1';
+const weeklyReviewContractVersion = 'weekly-review-v2';
 
 enum WeeklyReviewOrigin { authenticatedBackend, localDemo }
 
@@ -397,7 +397,6 @@ class WeeklyTaskFacts {
     required this.carried,
     required this.overdueCarried,
     required this.cancelled,
-    required this.goalLinkedCompleted,
   });
 
   factory WeeklyTaskFacts.fromJson(Map<String, dynamic> json) {
@@ -408,7 +407,6 @@ class WeeklyTaskFacts {
         'carried',
         'overdue_carried',
         'cancelled',
-        'goal_linked_completed',
       },
       'weekly task facts',
     );
@@ -420,10 +418,6 @@ class WeeklyTaskFacts {
         'tasks.overdue_carried',
       ),
       cancelled: _nonNegativeInt(json['cancelled'], 'tasks.cancelled'),
-      goalLinkedCompleted: _nonNegativeInt(
-        json['goal_linked_completed'],
-        'tasks.goal_linked_completed',
-      ),
     );
   }
 
@@ -431,7 +425,6 @@ class WeeklyTaskFacts {
   final int carried;
   final int overdueCarried;
   final int cancelled;
-  final int goalLinkedCompleted;
 }
 
 class WeeklyHabitFacts {

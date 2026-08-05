@@ -30,21 +30,21 @@ insert into auth.users (
 select ok(
   has_function_privilege(
     'service_role',
-    'public.claim_coach_request_v3('
+    'public.claim_coach_request_v5('
       'uuid,uuid,text,date,text,text,text,text,'
       'timestamp with time zone,timestamp with time zone,integer)',
     'EXECUTE'
   )
   and not has_function_privilege(
     'authenticated',
-    'public.claim_coach_request_v3('
+    'public.claim_coach_request_v5('
       'uuid,uuid,text,date,text,text,text,text,'
       'timestamp with time zone,timestamp with time zone,integer)',
     'EXECUTE'
   )
   and not has_function_privilege(
     'anon',
-    'public.claim_coach_request_v3('
+    'public.claim_coach_request_v5('
       'uuid,uuid,text,date,text,text,text,text,'
       'timestamp with time zone,timestamp with time zone,integer)',
     'EXECUTE'

@@ -1,38 +1,25 @@
 # Phase 8 Weekly Review Contract
 
-Status: implementation contract for the bounded deterministic Phase 8 weekly
-review. This contract builds on the Phase 3 Habit V1 command and recovery
-semantics. It is not an autonomous planning contract.
-
-The Goal-retirement rules in
-`docs/setup-personalization-retirement-contract.md` are now part of this
-contract: Weekly Review never loads, attributes, ranks, or proposes a Goal.
+Status: current implementation contract for the bounded, deterministic, and
+strictly observational Weekly Review. It is not an autonomous planning or Habit
+adaptation contract.
 
 ## Scope
 
-Phase 8 turns one explicit, completed profile-local ISO week into a short,
-persisted review. It summarizes only durable facts, produces at most two
-deterministic proposals, and leaves every user-owned goal, habit, task, and
-schedule row unchanged until the user explicitly confirms an already supported
-command. Retained Goal rows are outside the fact load entirely.
+Weekly Review turns one explicit, completed profile-local ISO week into a short
+persisted account of durable facts. It never loads Goals, produces a new
+proposal, applies an action, or changes a user-owned Task, Habit, schedule,
+calendar, or plan.
 
-The initial directly applicable proposal surface is deliberately narrow:
+The current contract is `weekly-review-v2`. The persisted and transported
+`proposals` array remains solely so historical V1 rows can still be read and
+exported without rewriting their meaning. Every newly generated or refreshed
+review must store `proposals=[]`. Flutter never renders or executes historical
+proposal entries, and Coach context construction removes them before a turn is
+claimed.
 
-- `shrink`, `pause`, or `archive` one manually managed Habit V1 definition;
-- apply through the existing owner-scoped Flutter Habit V1 data source;
-- require the proposal's exact target `updated_at` before the change;
-- use the existing exact requested-field/timestamp readback if the committed
-  Supabase response is lost.
-
-`keep` is an explanatory non-interactive note and makes no change. `replace`
-and `defer` remain non-interactive staged suggestions on this surface.
-Setup-owned habits deep-link to Settings Setup with explicit no-auto-apply copy
-and without a generic write. Task, schedule, and replacement mutations remain
-unavailable until each has a typed, atomic or otherwise recoverable command.
-Goals have no active surface or proposal path.
-
-Phase 8 does not add an LLM, Coach, calendar integration, notification,
-background worker, deployed weekly schedule, or autonomous plan rewrite.
+Weekly Review does not add an LLM, notification, background worker, deployed
+weekly schedule, or autonomous plan rewrite.
 
 ## Period Identity
 
@@ -44,16 +31,16 @@ timezone:
 - `week_end`: exactly six calendar days later;
 - `timezone`: the IANA timezone used to resolve timestamp-backed facts.
 
-Timestamp-backed task, feedback, and focus inputs use the profile-local Monday
+Timestamp-backed Task, feedback, and Focus inputs use the profile-local Monday
 start and following-Monday exclusive boundary converted to UTC. Date-backed
-habit outcomes and daily snapshots use the exact seven local calendar dates.
-The service must handle ISO-year and daylight-saving boundaries without using
-server-local `date.today()`.
+Habit outcomes and daily snapshots use the exact seven local calendar dates.
+The service handles ISO-year and daylight-saving boundaries without using the
+server-local date.
 
 The endpoint rejects a malformed period, a non-ISO-week identity, or a week
-that is not the latest completed week in the profile timezone. V1 deliberately
-does not expose arbitrary review-history generation. A request never accepts
-`user_id`; FastAPI derives the owner from the verified bearer principal.
+that is not the latest completed week in the profile timezone. It does not
+expose arbitrary review-history generation. A request never accepts `user_id`;
+FastAPI derives the owner from the verified bearer principal.
 
 ## HTTP Boundary
 
@@ -64,11 +51,10 @@ POST /v1/weekly-reviews/generate
 Authorization: Bearer <supabase_access_token>
 ```
 
-Both `GET` routes are read-only. `latest` resolves the newest completed ISO week
-in the profile timezone and is the Flutter entry point; the period route accepts
-that same explicit V1 identity for stable rereads. They report `not_ready`,
-`missing`, `current`, or `stale` and never
-persists a review or changes a user-owned record.
+Both `GET` routes are read-only. `latest` resolves the newest completed ISO
+week in the profile timezone and is the Flutter entry point. The explicit
+period route accepts that same identity for stable rereads. They report
+`not_ready`, `missing`, `current`, or `stale` and never persist a review.
 
 `POST` accepts exactly:
 
@@ -81,13 +67,12 @@ persists a review or changes a user-owned record.
 
 `force=false` returns an already-current review unchanged. Missing or stale
 output is generated on the same `(user_id, period_key)` identity. `force=true`
-deliberately recomputes that same identity. Generation persists derived review
-output only; it never applies a proposal or changes a user-owned record.
+recomputes that identity. Generation persists derived review output only.
 
 Both routes return the same strict envelope:
 
 ```text
-contract_version: weekly-review-v1
+contract_version: weekly-review-v2
 period_key
 starts_on
 ends_on
@@ -98,11 +83,12 @@ stale_reasons: bounded machine-stable codes
 review: WeeklyReview | null
 ```
 
-`WeeklyReview` contains the stable id, `data_quality`, one
-bounded narrative, structured facts, no more than two proposals, bounded
-evidence, deterministic provenance, and generation/update timestamps.
+`WeeklyReview` contains the stable id, `data_quality`, one bounded narrative,
+structured facts, the compatibility `proposals` array, bounded evidence,
+deterministic provenance, and generation/update timestamps. A current V2 row
+always has an empty proposal array.
 
-## Persistence
+## Persistence And Compatibility
 
 `weekly_reviews` is backend-owned derived output:
 
@@ -114,20 +100,38 @@ evidence, deterministic provenance, and generation/update timestamps.
 
 Database checks require an exact ISO period/week match, a Monday-to-Sunday
 window, a non-empty bounded timezone and narrative, known data quality, bounded
-JSON objects/arrays, at most two proposals, at most 40 evidence references, and
-a lowercase 64-character hexadecimal source fingerprint.
+JSON objects/arrays, at most two legacy proposal entries, at most 40 evidence
+references, and a lowercase 64-character hexadecimal source fingerprint.
+
+The Goal-removal migration updates surviving rows in place to V2 while
+preserving their id, period, fingerprint, timestamps, and historical proposal
+array. It removes `facts.tasks.goal_linked_completed` and updates provenance.
+The backend persistence RPC rejects the retired counter and any non-empty
+proposal array for a new or refreshed review. A deliberate refresh of a
+historical row therefore replaces its proposal array with `[]`.
+
+Additive migration
+`20260804192406_harden_goal_removal_dependencies.sql` does not update any
+surviving Weekly Review. Before deletion it closes temporary dependency sets
+across source snapshots, recommendation/briefing foreign identities, and
+`decision_feedback` evidence. A review is retired when its source snapshot or
+a referenced feedback row is missing or belongs to the Goal-derived deletion
+set. A clean row retains its exact id, period, fingerprint, observation and
+persistence timestamps, and historical proposal transport. Final assertions
+reject dangling snapshot/feedback references. The migration takes the complete
+cleanup table-lock set in alphabetical `SHARE ROW EXCLUSIVE` order with a
+five-second timeout, so a concurrent writer causes a full rollback.
 
 ## Fact Semantics
 
 The review uses one canonical, stably ordered, fully paginated fact load. A
 repository must never treat a server-capped first page as the complete week.
-The canonical source fingerprint covers only the fields used by the review and
-is stored both in the table column and provenance.
+The canonical source fingerprint covers only fields used by the review and is
+stored both in the table column and provenance.
 
 The strict fact object contains exactly these nonnegative counters:
 
-- `tasks`: `completed`, `carried`, `overdue_carried`, `cancelled`,
-  `goal_linked_completed`. The retained V1 compatibility field is always `0`;
+- `tasks`: `completed`, `carried`, `overdue_carried`, `cancelled`;
 - `habits`: `active`, `paused`, `archived`, `stable_definitions`,
   `changed_definitions`, `scheduled_opportunities`, `completed`, `skipped`,
   `missed`, `recovery_open`, `unknown`;
@@ -139,14 +143,13 @@ The strict fact object contains exactly these nonnegative counters:
 
 ### Tasks
 
-- A completed task is a currently terminal `done` row whose authoritative
+- A completed Task is a currently terminal `done` row whose authoritative
   `completed_at` falls inside the profile-local week.
-- A carried task means only that the current durable row was open at the end of
-  the reviewed week. It is not a claim that the user postponed or ignored it.
-- A task completion that was later restored is absent from current durable
+- A carried Task is a current durable row that was open at the end of the
+  reviewed week. It is not a claim that the student postponed or ignored it.
+- A completion later restored to an open state is absent from current durable
   terminal evidence and cannot be reconstructed.
-- Goal metadata is ignored. There is no Phase 8 task-transition or Goal-history
-  reconstruction.
+- Retired Goal metadata is ignored and is not reconstructed as a fact.
 
 ### Habit Opportunities
 
@@ -160,184 +163,110 @@ Habit facts keep these states separate:
   Daily State evidence is missing;
 - overlap with a valid persisted recovery day.
 
-A definition changed during or after the week is reported separately through
+A definition changed during or after the week is reported through
 `changed_definitions`. Because the former cadence/lifecycle is unavailable, the
 review does not invent a numeric opportunity count for that definition.
 
 Daily and selected-weekday cadence partitions stable elapsed scheduled dates.
 For `weekly_target`, completions and explicit skip dates remain separate from
-the remaining target units; the service must not invent an exact scheduled day
-for a flexible weekly slot.
-
-The current habit row cannot reconstruct an earlier cadence or pause/archive
-instant. A definition changed during or after the reviewed period is marked
-unknown for affected opportunity math and is not eligible for an automatic
-adaptation proposal. Legacy `started_on` fallback is resolved consistently in
+the remaining target units; the service does not invent an exact day for a
+flexible weekly slot. Legacy `started_on` fallback is resolved consistently in
 the profile timezone.
 
 Recovery overlap never fabricates a completion or erases an intentional skip.
-It is separate explanatory evidence and prevents punitive proposal wording.
+It remains explanatory evidence only.
 
 ### Focus, Recovery, And Feedback
 
-- Focus uses the persisted local `metadata.entry_date`, with the existing UTC
+- Focus uses persisted local `metadata.entry_date`, with the established UTC
   `started_at` fallback only for legacy or invalid metadata.
 - A recovery day is counted only from a valid persisted daily snapshot whose
-  strict historical `explainable-daily-state-v1`/V2 or current
+  historical `explainable-daily-state-v1`/V2 or current
   `explainable-daily-state-v3` target date matches that local day and whose mode
-  is `recover`. V1/V2 are read only for compatible historical rows; Weekly
-  Review does not reintroduce retired Day Shape context or risks.
+  is `recover`.
 - Missing daily snapshots remain missing evidence; averages do not fabricate a
   recovery day.
 - Decision feedback is historical preference evidence. `feedback_type=done`
-  never substitutes for a task, habit, or focus outcome.
+  never substitutes for a Task, Habit, or Focus outcome.
 
-`data_quality` is `insufficient`, `partial`, or `sufficient`; it is distinct
-from review freshness. Missing coverage and every known limitation remain
-visible in structured facts and provenance.
+`data_quality` is `insufficient`, `partial`, or `sufficient`; it is independent
+of proposals and distinct from freshness. Missing coverage and every known
+limitation remain visible in facts and provenance.
 
-## Proposal Contract
-
-Every proposal has a stable deterministic id, an operation, user-visible title
-and reason, target identity, application mode, exact expected target timestamp,
-bounded evidence, and an explicit before/after change:
-
-```json
-{
-  "before": {
-    "lifecycle": "active",
-    "cadence": {
-      "kind": "weekly_target",
-      "weekly_target": 4,
-      "scheduled_weekdays": []
-    }
-  },
-  "after": {
-    "lifecycle": "active",
-    "cadence": {
-      "kind": "weekly_target",
-      "weekly_target": 3,
-      "scheduled_weekdays": []
-    }
-  }
-}
-```
-
-Nullable cadence fields remain present in the strict JSON contract. `after` may
-be null only for a staged-only `replace` or `defer` proposal. `keep` has equal
-before and after state.
-
-Direct manual-habit application requires all of the following:
-
-- `application_mode=direct_habit`;
-- an active, manually managed owned Habit V1 target;
-- unchanged `expected_updated_at`;
-- a complete valid before/after Habit V1 shape;
-- explicit user confirmation in a before/after dialog.
-
-Cancel performs no write. On confirmation, Flutter reuses the Phase 3 typed
-habit edit/lifecycle command; the review API does not mutate the habit. A stale
-target is a conflict, not permission to overwrite. An ambiguous committed
-response succeeds only after the existing exact owner-scoped requested-field
-and mutation-timestamp readback.
-After a durable direct Habit change, Flutter refreshes Daily State for the
-current authenticated profile date from the shared date source. It does not
-derive that refresh target independently from the device timezone. The
-app-level Habit-definition impact also invalidates Today, Daily Briefing, and
-Planner reads; Weekly Review itself imports none of those foreign providers.
-
-Setup-owned targets use `application_mode=settings_setup`. Staged proposals use
-`application_mode=staged_only`. Neither path may call the generic manual Habit
-V1 updater. Flutter renders staged-only and `keep` rows without an action
-control; their authority label states that Weekly Review cannot execute them.
-
-Weekly Review is an in-page destination. The shared top Back action pops its
-actual pushed origin and falls back to Today for a direct deep link. Proposal
-review dialogs retain their own Cancel action, and navigation alone never
-generates or applies a review.
-
-One initial deterministic shrink rule may propose reducing a stable manual
-weekly target by one when the week has full valid daily-state coverage, exactly
-bounded durable outcomes, and matching recent `too_much` feedback for the real
-habit action. Misses alone must not be interpreted as consent to reduce a
-cadence.
+The narrative describes only observed counts, recovery coverage, and known
+limitations. Feedback such as `too_much` or `not_helpful`, skipped Habits, and
+high or low completion may change reported facts but never produces adaptation
+language or an action recommendation.
 
 ## Freshness
 
 Generation captures one `source_observed_at` before its first source read.
-Source repositories use lexicographic keyset pagination with their established
-sort fields and `id` as the tie-breaker, and exclude rows created or changed
-after that boundary. Generation stores a SHA-256 fingerprint of those canonical
-source facts. `GET` recomputes that fingerprint without writing:
-
-The shared repository page collector owns advancement and short-page
-termination for these reads. It preserves the 1,000-row page size, compound
-PostgREST cursor filter, row order, and cursor-validation failures; Weekly
-Review does not switch to offsets or expose a public cursor.
+Repositories use lexicographic keyset pagination with their established sort
+fields and `id` as the tie-breaker, excluding rows created or changed after
+that boundary. Generation stores a SHA-256 fingerprint of the canonical source
+facts. `GET` recomputes that fingerprint without writing:
 
 - equal fingerprint: `current`;
-- changed source facts or target definition: `stale` with bounded reason codes;
+- changed source facts: `stale` with bounded reason codes;
 - no persisted row: `missing`.
 
-Habit application, outcome correction, feedback deletion, task state change,
-or valid daily-state replacement can therefore make a review stale. Stale facts
-remain visible but proposal controls are disabled until a deliberate refresh.
+Habit outcomes, feedback deletion, Task state changes, Focus completion, or a
+valid Daily State replacement can make a review stale. Stale facts remain
+visible. Flutter places the deliberate update action with the facts; there are
+no proposal controls.
 
 `persist_weekly_review_v2` takes the owner and review-row locks, requires the
 referenced weekly Snapshot still to be current, rejects a candidate observed
 before the stored review, and binds exact Snapshot identity and provenance.
 After persistence, FastAPI reloads Snapshot, Review, and source context.
-`current` is returned only if they still match; a concurrent later fact makes
-the result honestly `stale`. This does not claim a historical database
-snapshot across separate reads.
+`current` is returned only when they still match; a concurrent later fact makes
+the result honestly `stale`.
 
 ## Executable Action Boundary
 
-Phase 8 gives `review_plan` a real bounded surface. The strict
-`executable-action-v1` shape is unchanged: a planning/review target may navigate
-an authenticated real-data user to `/weekly-review`. The dispatcher calls a
-typed injected handler and propagates failures. Guest/mock and unavailable
-synced sessions remain explicitly unavailable. Dispatching `review_plan` opens
-the review; it never generates, confirms, or applies a proposal by itself.
+The strict `executable-action-v1` shape is unchanged: a `review_plan` target may
+navigate an authenticated real-data user to `/weekly-review`. The dispatcher
+calls a typed injected handler and propagates failures. Guest/mock and
+unavailable synced sessions remain explicitly unavailable. Dispatching the
+action only opens the review and never generates, confirms, or applies
+anything.
+
+Weekly Review is an in-page destination. The shared Back action pops its actual
+pushed origin and falls back to Today for a direct deep link. Navigation alone
+never refreshes a review.
 
 ## Verification Contract
 
 Focused backend, Flutter, migration, and browser coverage must prove:
 
 - profile-local ISO-week and DST boundaries;
-- strict model parsing and owner-derived identity;
+- strict V2 model parsing and owner-derived identity;
 - read-only GET and idempotent same-row POST;
-- exact completed, carried, completed/skipped/missed/unknown, focus, recovery,
-  and feedback facts;
+- exact completed, carried, completed/skipped/missed/unknown, Focus, recovery,
+  and feedback facts without the retired Goal counter;
 - fully paginated stable source reads;
-- deterministic proposal cap, ordering, and evidence;
-- source change to stale transition;
-- confirmation cancel with zero writes;
-- exact manual Habit V1 application and response-loss reconciliation;
-- Setup deep-link with zero direct target writes;
-- guest/mock isolation;
-- authenticated owner-only review reads and rejection of direct review writes.
+- no generated proposals for `too_much`, `not_helpful`, skips, or high Habit
+  completion;
+- historical proposal parsing, invisibility in Flutter and Coach, and
+  replacement by `[]` on deliberate refresh;
+- migration preservation of clean historical rows plus deletion of reviews
+  with missing/retired snapshots or feedback, including notification cascade;
+- source-change-to-stale transition and fact refresh;
+- missing, stale, retry, error, and guest states;
+- authenticated owner-only reads and rejection of direct writes;
+- absent Goals schema, policy, grants, Setup parameter, and active data paths.
 
 Documentation or source assertions do not establish an E2E pass. Run the
-current-checkout browser command before claiming the Phase 8 journey passed.
+current-checkout browser command before claiming the journey passed.
 
 Flutter Weekly Review models reuse framework-neutral strict primitives for
 exact keys, objects, strings, integers, local dates, and aware timestamps.
-ISO-week identity, freshness, evidence/proposal relationships, application
-authority, feature errors, and the V1 envelope remain unchanged.
+Historical proposal models remain transport readers only and grant no mutation
+authority.
 
-The Weekly Review route now reuses the application-lifespan-owned Supabase HTTP
-pool. This does not change ISO-week identity, freshness, observed-at ordering,
-source fingerprinting, proposal limits, confirmation authority, or RLS.
-
-Its explicit-period read and generation routes now delegate the same typed
-period failure to a feature-owned HTTP problem translator. The existing `422`
-detail, latest-read behavior, authentication, and unexpected-error boundary are
-unchanged.
-
-## Visual presentation
+## Visual Presentation
 
 Weekly Review uses the shared
-[Frontend Visual System V2](frontend-visual-system-v2.md). Its status surfaces
-and icons do not change facts, freshness, proposals, retry behavior, or the
-explicit confirmation boundary.
+[Frontend Visual System V2](frontend-visual-system-v2.md). Facts, freshness,
+empty/error/guest states, and the update action remain usable with large text.
+No adjustment card, confirmation dialog, or proposal action is displayed.

@@ -320,7 +320,7 @@ def test_profile_context_carries_server_verified_account_eligibility() -> None:
 def _memory(index: int) -> dict:
     return {
         "id": f"00000000-0000-4000-8000-{index:012d}",
-        "type": "goal",
+        "type": "habit",
         "title": f"Memory {index}",
         "content": f"Content {index}",
         "metadata": {},

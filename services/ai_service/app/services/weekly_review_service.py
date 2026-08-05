@@ -22,7 +22,6 @@ from app.models.weekly_reviews import (
     WeeklyReviewGenerateRequest,
     WeeklyReviewHabitCadence,
     WeeklyReviewHabitState,
-    WeeklyReviewProposal,
     WeeklyReviewProvenance,
     WeeklyReviewReadResponse,
     WeeklyTaskFacts,
@@ -49,20 +48,8 @@ class _ReviewPeriod:
 
 @dataclass(frozen=True)
 class _HabitReview:
-    row: dict[str, Any]
     state: WeeklyReviewHabitState
-    ownership: str
-    stable: bool
-    scheduled: int
-    completed: int
-    skipped: int
-    known_non_recovery_skips: int
     recovery_day_outcomes: int
-    missed: int
-    recovery_open: int
-    unknown: int
-    feedback: Counter[str]
-    evidence_refs: tuple[WeeklyReviewEvidenceRef, ...]
 
 
 @dataclass(frozen=True)
@@ -70,15 +57,8 @@ class _ReviewBuild:
     data_quality: str
     narrative: str
     facts: WeeklyReviewFacts
-    proposals: list[WeeklyReviewProposal]
     evidence_refs: list[WeeklyReviewEvidenceRef]
     limitations: list[str]
-
-
-@dataclass(frozen=True)
-class _ProposalCandidate:
-    priority: int
-    proposal: WeeklyReviewProposal
 
 
 class WeeklyReviewPeriodError(ValueError):
@@ -192,17 +172,14 @@ class WeeklyReviewService:
                 "data_quality": built.data_quality,
                 "narrative": built.narrative,
                 "facts": built.facts.model_dump(mode="json"),
-                "proposals": [
-                    proposal.model_dump(mode="json")
-                    for proposal in built.proposals
-                ],
+                "proposals": [],
                 "evidence_refs": [
                     evidence.model_dump(mode="json")
                     for evidence in built.evidence_refs
                 ],
                 "provenance": WeeklyReviewProvenance(
                     engine="deterministic",
-                    contract_version="weekly-review-v1",
+                    contract_version="weekly-review-v2",
                     source_snapshot_id=snapshot.snapshot_id,
                     source_snapshot_generated_at=snapshot.generated_at,
                     evidence_window=WeeklyReviewEvidenceWindow(
@@ -372,7 +349,6 @@ def _context_observed_before(
 
     return WeeklyReviewContext(
         tasks=[row for row in context.tasks if visible(row)],
-        goals=[],
         habits=[row for row in context.habits if visible(row)],
         habit_logs=[row for row in context.habit_logs if visible(row)],
         focus_sessions=[
@@ -407,7 +383,6 @@ def _build_review(
         period=period,
         habits=context.habits,
         logs=context.habit_logs,
-        feedback=context.feedback,
         daily_modes=daily_modes,
     )
     focus_facts, focus_evidence = _focus_facts(
@@ -427,11 +402,6 @@ def _build_review(
         recovery=recovery_facts,
         feedback=feedback_facts,
     )
-    proposals = _proposals(
-        period=period,
-        habit_reviews=habit_reviews,
-        observed_daily_state_days=len(daily_modes),
-    )
     evidence = _dedupe_evidence(
         [
             *task_evidence,
@@ -439,7 +409,6 @@ def _build_review(
             *focus_evidence,
             *daily_evidence,
             *feedback_evidence,
-            *(ref for proposal in proposals for ref in proposal.evidence_refs),
         ],
         limit=40,
     )
@@ -454,17 +423,16 @@ def _build_review(
         limitations.append("weekly_target_recovery_allocation_is_conservative")
     data_quality = (
         "insufficient"
-        if not proposals and len(daily_modes) < 3 and not context.habit_logs
+        if len(daily_modes) < 3 and not context.habit_logs
         else "sufficient"
         if len(daily_modes) == 7 and habit_facts.changed_definitions == 0
         else "partial"
     )
-    narrative = _narrative(facts=facts, proposal_count=len(proposals))
+    narrative = _narrative(facts=facts)
     return _ReviewBuild(
         data_quality=data_quality,
         narrative=narrative,
         facts=facts,
-        proposals=proposals,
         evidence_refs=evidence,
         limitations=limitations[:10],
     )
@@ -505,7 +473,6 @@ def _task_facts(
             carried=carried,
             overdue_carried=overdue,
             cancelled=cancelled,
-            goal_linked_completed=0,
         ),
         evidence,
     )
@@ -516,7 +483,6 @@ def _habit_facts(
     period: _ReviewPeriod,
     habits: list[dict[str, Any]],
     logs: list[dict[str, Any]],
-    feedback: list[dict[str, Any]],
     daily_modes: dict[date, str],
 ) -> tuple[WeeklyHabitFacts, list[_HabitReview], list[WeeklyReviewEvidenceRef]]:
     logs_by_habit: dict[str, list[dict[str, Any]]] = {}
@@ -554,27 +520,15 @@ def _habit_facts(
             changed_count += 1
         habit_id = _row_id(row)
         habit_logs = logs_by_habit.get(habit_id, [])
-        habit_feedback = _habit_feedback(habit_id=habit_id, rows=feedback)
         review_evidence = [_evidence("habits", habit_id, "updated_at")]
         review_evidence.extend(
             _evidence("habit_logs", _row_id(item), "status")
             for item in habit_logs[:6]
             if item.get("status") in {"completed", "skipped"}
         )
-        review_evidence.extend(
-            _evidence("decision_feedback", _row_id(item), "feedback_type")
-            for item in feedback
-            if _feedback_matches_habit(item, habit_id)
-        )
         habit_scheduled = habit_missed = habit_recovery = habit_unknown = 0
         habit_completed = sum(item.get("status") == "completed" for item in habit_logs)
         habit_skipped = sum(item.get("status") == "skipped" for item in habit_logs)
-        known_non_recovery_skips = sum(
-            item.get("status") == "skipped"
-            and (entry_date := _strict_date(item.get("entry_date"))) is not None
-            and daily_modes.get(entry_date) in {"push", "steady", "plan"}
-            for item in habit_logs
-        )
         recovery_day_outcomes = sum(
             item.get("status") in {"completed", "skipped"}
             and (entry_date := _strict_date(item.get("entry_date"))) is not None
@@ -623,23 +577,11 @@ def _habit_facts(
         recovery_open += habit_recovery
         unknown += habit_unknown
         review = _HabitReview(
-            row=row,
             state=state,
-            ownership=_habit_ownership(row),
-            stable=stable,
-            scheduled=habit_scheduled,
-            completed=habit_completed,
-            skipped=habit_skipped,
-            known_non_recovery_skips=known_non_recovery_skips,
             recovery_day_outcomes=recovery_day_outcomes,
-            missed=habit_missed,
-            recovery_open=habit_recovery,
-            unknown=habit_unknown,
-            feedback=habit_feedback,
-            evidence_refs=tuple(_dedupe_evidence(review_evidence, limit=8)),
         )
         reviews.append(review)
-        evidence.extend(review.evidence_refs)
+        evidence.extend(_dedupe_evidence(review_evidence, limit=8))
     return (
         WeeklyHabitFacts(
             active=active,
@@ -751,186 +693,6 @@ def _daily_modes(
     return modes, evidence
 
 
-def _proposals(
-    *,
-    period: _ReviewPeriod,
-    habit_reviews: list[_HabitReview],
-    observed_daily_state_days: int,
-) -> list[WeeklyReviewProposal]:
-    candidates: list[_ProposalCandidate] = []
-    for review in habit_reviews:
-        if not review.stable:
-            continue
-        title = _bounded_title(review.row.get("title"))
-        updated_at = _aware_datetime(review.row.get("updated_at"))
-        if title is None or updated_at is None:
-            continue
-        mode = "direct_habit" if review.ownership == "manual" else "settings_setup"
-        if review.feedback["does_not_fit"]:
-            candidates.append(
-                _proposal_candidate(
-                    period=period,
-                    review=review,
-                    title=title,
-                    updated_at=updated_at,
-                    operation="replace",
-                    application_mode="staged_only",
-                    after=None,
-                    priority=100,
-                    reason_code="habit_does_not_fit",
-                    reason=(
-                        "You marked this habit as not fitting; review a replacement "
-                        "without changing it automatically."
-                    ),
-                ),
-            )
-            continue
-        if (
-            review.state.lifecycle == "active"
-            and review.completed == 0
-            and review.recovery_open == 0
-            and review.recovery_day_outcomes == 0
-            and (
-                review.known_non_recovery_skips >= 2
-                or review.feedback["not_helpful"] > 0
-            )
-        ):
-            candidates.append(
-                _proposal_candidate(
-                    period=period,
-                    review=review,
-                    title=title,
-                    updated_at=updated_at,
-                    operation="pause",
-                    application_mode=mode,
-                    after=WeeklyReviewHabitState(
-                        lifecycle="paused",
-                        cadence=review.state.cadence,
-                    ),
-                    priority=90,
-                    reason_code="habit_explicitly_skipped_or_not_helpful",
-                    reason="Explicit skips or feedback suggest pausing this habit for review.",
-                ),
-            )
-            continue
-        cadence = review.state.cadence
-        if (
-            review.state.lifecycle == "active"
-            and cadence.kind == "weekly_target"
-            and cadence.weekly_target is not None
-            and cadence.weekly_target >= 2
-            and observed_daily_state_days == 7
-            and review.unknown == 0
-            and review.feedback["too_much"] > 0
-        ):
-            candidates.append(
-                _proposal_candidate(
-                    period=period,
-                    review=review,
-                    title=title,
-                    updated_at=updated_at,
-                    operation="shrink",
-                    application_mode=mode,
-                    after=WeeklyReviewHabitState(
-                        lifecycle="active",
-                        cadence=WeeklyReviewHabitCadence(
-                            kind="weekly_target",
-                            weekly_target=cadence.weekly_target - 1,
-                            scheduled_weekdays=[],
-                        ),
-                    ),
-                    priority=80 + min(review.feedback["too_much"], 5),
-                    reason_code="habit_weekly_target_too_large",
-                    reason=(
-                        "A slightly smaller weekly target better matches the explicit "
-                        "outcomes and feedback."
-                    ),
-                ),
-            )
-            continue
-        negative = (
-            review.feedback["not_helpful"]
-            + review.feedback["too_much"]
-            + review.feedback["does_not_fit"]
-        )
-        if (
-            review.state.lifecycle == "active"
-            and review.scheduled >= 3
-            and review.unknown == 0
-            and negative == 0
-            and review.completed / review.scheduled >= 0.8
-        ):
-            candidates.append(
-                _proposal_candidate(
-                    period=period,
-                    review=review,
-                    title=title,
-                    updated_at=updated_at,
-                    operation="keep",
-                    application_mode="none",
-                    after=review.state,
-                    priority=20,
-                    reason_code="habit_consistently_completed",
-                    reason=(
-                        "The scheduled opportunities were completed consistently; "
-                        "keeping this habit is reasonable."
-                    ),
-                ),
-            )
-
-    result: list[WeeklyReviewProposal] = []
-    direct_selected = False
-    for candidate in sorted(
-        candidates,
-        key=lambda item: (-item.priority, item.proposal.target_id, item.proposal.id),
-    ):
-        is_direct = candidate.proposal.application_mode == "direct_habit"
-        if is_direct and direct_selected:
-            continue
-        result.append(candidate.proposal)
-        direct_selected = direct_selected or is_direct
-        if len(result) == 2:
-            break
-    return result
-
-
-def _proposal_candidate(
-    *,
-    period: _ReviewPeriod,
-    review: _HabitReview,
-    title: str,
-    updated_at: datetime,
-    operation: str,
-    application_mode: str,
-    after: WeeklyReviewHabitState | None,
-    priority: int,
-    reason_code: str,
-    reason: str,
-) -> _ProposalCandidate:
-    habit_id = _row_id(review.row)
-    proposal = WeeklyReviewProposal.model_validate(
-        {
-            "id": f"weekly-review:{period.period_key}:habit:{habit_id}:{operation}",
-            "operation": operation,
-            "target_kind": "habit",
-            "target_id": habit_id,
-            "target_title": title,
-            "ownership": review.ownership,
-            "application_mode": application_mode,
-            "expected_updated_at": updated_at,
-            "reason_code": reason_code,
-            "reason": reason,
-            "evidence_refs": list(review.evidence_refs),
-            "change": {
-                "before": review.state,
-                "after": after,
-            },
-        },
-        strict=True,
-    )
-    return _ProposalCandidate(priority=priority, proposal=proposal)
-
-
 def _habit_opportunities(
     *,
     period: _ReviewPeriod,
@@ -1002,34 +764,6 @@ def _habit_state(row: dict[str, Any]) -> WeeklyReviewHabitState | None:
     except ValueError:
         return None
     return WeeklyReviewHabitState(lifecycle=lifecycle, cadence=cadence)
-
-
-def _habit_ownership(row: dict[str, Any]) -> str:
-    metadata = row.get("metadata")
-    return (
-        "setup"
-        if isinstance(metadata, dict) and metadata.get("managed_by") == "setup"
-        else "manual"
-    )
-
-
-def _habit_feedback(*, habit_id: str, rows: list[dict[str, Any]]) -> Counter[str]:
-    return Counter(
-        str(row["feedback_type"])
-        for row in rows
-        if _feedback_matches_habit(row, habit_id)
-        and row.get("feedback_type")
-        in {"done", "later", "not_helpful", "too_much", "does_not_fit"}
-    )
-
-
-def _feedback_matches_habit(row: dict[str, Any], habit_id: str) -> bool:
-    action_id = row.get("action_id")
-    return (
-        row.get("action_kind") == "habit"
-        and isinstance(action_id, str)
-        and action_id.startswith(f"log_habit:{habit_id}:")
-    )
 
 
 def _source_fingerprint(
@@ -1195,14 +929,12 @@ def _stale_reasons(
     return reasons[:8]
 
 
-def _narrative(*, facts: WeeklyReviewFacts, proposal_count: int) -> str:
+def _narrative(*, facts: WeeklyReviewFacts) -> str:
     return (
         f"This week records {facts.tasks.completed} completed and "
         f"{facts.tasks.carried} still-open tasks, {facts.habits.completed} completed "
         f"and {facts.habits.skipped} intentionally skipped habit outcomes, and "
-        f"{facts.recovery.recovery_days} observed recovery days. "
-        f"{proposal_count} bounded adaptation proposal"
-        f"{' is' if proposal_count == 1 else 's are'} available."
+        f"{facts.recovery.recovery_days} observed recovery days."
     )
 
 
@@ -1307,13 +1039,6 @@ def _strict_date(value: Any) -> date | None:
 def _row_id(row: dict[str, Any]) -> str:
     value = row.get("id")
     return str(value) if value is not None else "missing"
-
-
-def _bounded_title(value: Any) -> str | None:
-    if not isinstance(value, str):
-        return None
-    title = value.strip()
-    return title if 1 <= len(title) <= 160 else None
 
 
 def _evidence(table: str, row_id: str, field: str) -> WeeklyReviewEvidenceRef:

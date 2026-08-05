@@ -4,6 +4,21 @@
 begin;
 select no_plan();
 
+select hasnt_table(
+  'public',
+  'goals',
+  'the retired Goals table is absent from the final schema'
+);
+
+select is_empty(
+  $$
+    select policyname
+    from pg_policies
+    where schemaname = 'public' and tablename = 'goals'
+  $$,
+  'the retired Goals table leaves no policy behind'
+);
+
 select is_empty(
   $$
     select c.relname
@@ -112,7 +127,6 @@ select set_eq(
         'behavioral_events',
         'daily_logs',
         'focus_sessions',
-        'goals',
         'habit_logs',
         'habits',
         'lifestyle_entries',
@@ -126,7 +140,6 @@ select set_eq(
     'behavioral_events_own_or_admin_all',
     'daily_logs_own_or_admin_all',
     'focus_sessions_own_or_admin_all',
-    'goals_own_or_admin_all',
     'habit_logs_own_or_admin_all',
     'habits_own_or_admin_all',
     'lifestyle_entries_own_or_admin_all',
@@ -147,7 +160,6 @@ select is_empty(
         'behavioral_events_own_or_admin_all',
         'daily_logs_own_or_admin_all',
         'focus_sessions_own_or_admin_all',
-        'goals_own_or_admin_all',
         'habit_logs_own_or_admin_all',
         'habits_own_or_admin_all',
         'lifestyle_entries_own_or_admin_all',

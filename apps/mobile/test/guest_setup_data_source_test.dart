@@ -176,7 +176,7 @@ void main() {
     );
   });
 
-  test('legacy fallback goal and friction are not promoted on prefill',
+  test('legacy goal and friction fields are removed from local prefill',
       () async {
     SharedPreferences.setMockInitialValues({
       GuestSetupDataSource.legacyIntakeKey: jsonEncode({
@@ -197,13 +197,13 @@ void main() {
 
     final state = await const GuestSetupDataSource().read();
 
-    expect(state.responses?.goals, isEmpty);
     expect(state.responses?.frictionPoints, isEmpty);
     final preferences = await SharedPreferences.getInstance();
     final rewritten = preferences.getString(
       GuestSetupDataSource.legacyIntakeKey,
     )!;
     expect(rewritten, isNot(contains('primary_focus_areas')));
+    expect(rewritten, isNot(contains('goals')));
     expect(rewritten, isNot(contains('friction_points')));
     expect(rewritten, isNot(contains('coaching_style')));
     expect(rewritten, isNot(contains('reminder_preference')));

@@ -126,7 +126,8 @@ its prior projection on failure. Planner similarly owns its updated/reloaded
 overview in its controller. Guest Daily Capture uses the same local
 invalidation mapping but skips the authenticated Daily Snapshot refresh.
 
-`account-export-v2` preserves the established owner-data set and the 10,000
+`account-export-v3` preserves the established owner-data set, minus the removed
+Goals table, and the 10,000
 rows-per-table, 50,000 total-row, and 8 MiB bounds. It explicitly omits
 `daily_capture_request_identities` and
 `account_setting_request_identities`, along with the previously omitted

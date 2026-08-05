@@ -19,7 +19,6 @@ from app.services.intake_service import IntakeRevisionConflict, IntakeService
 USER_ID = "principal-user-123"
 REQUEST_1 = "00000000-0000-4000-8000-000000000001"
 REQUEST_2 = "00000000-0000-4000-8000-000000000002"
-GOAL_KEY = "10000000-0000-4000-8000-000000000001"
 ROUTINE_KEY = "20000000-0000-4000-8000-000000000001"
 COMMITMENT_KEY = "30000000-0000-4000-8000-000000000001"
 NOW = datetime(2026, 7, 10, 10, 0, tzinfo=UTC)
@@ -29,7 +28,6 @@ class FakeIntakeRepository:
     def __init__(self) -> None:
         self.intakes: list[dict] = []
         self.preferences: dict[str, dict] = {}
-        self.goals: dict[str, dict] = {}
         self.habits: dict[str, dict] = {}
         self.schedule: dict[str, dict] = {}
         self.memories: dict[str, dict] = {}
@@ -155,12 +153,6 @@ class FakeIntakeRepository:
                     self.fail_atomic_once_after_preferences = False
                     raise RuntimeError("simulated atomic backend failure")
                 _reconcile_archived(
-                    self.goals,
-                    apply.materialization.goals,
-                    revision=revision,
-                    archived_values={"status": "archived"},
-                )
-                _reconcile_archived(
                     self.habits,
                     apply.materialization.habits,
                     revision=revision,
@@ -223,7 +215,6 @@ class FakeIntakeRepository:
         materialization: SetupMaterialization,
     ) -> None:
         for store, desired in (
-            (self.goals, materialization.goals),
             (self.habits, materialization.habits),
             (self.schedule, materialization.schedule_items),
             (self.memories, materialization.memory_entries),
@@ -240,7 +231,6 @@ class FakeIntakeRepository:
             {
                 "intakes": self.intakes,
                 "preferences": self.preferences,
-                "goals": self.goals,
                 "habits": self.habits,
                 "schedule": self.schedule,
                 "memories": self.memories,
@@ -253,7 +243,6 @@ class FakeIntakeRepository:
     def _restore_transaction_state(self, state: dict) -> None:
         self.intakes = state["intakes"]
         self.preferences = state["preferences"]
-        self.goals = state["goals"]
         self.habits = state["habits"]
         self.schedule = state["schedule"]
         self.memories = state["memories"]
@@ -346,7 +335,6 @@ def payload(
     *,
     request_id: str = REQUEST_1,
     base_revision: int = 0,
-    goals: list[dict] | None = None,
     routines: list[dict] | None = None,
     commitments: list[dict] | None = None,
     friction_points: list[str] | None = None,
@@ -362,7 +350,6 @@ def payload(
     responses = {
         "display_name": display_name,
         "primary_focus_areas": ["focus", "planning"],
-        "goals": goals or [],
         "friction_points": friction_points or [],
         "weekday_shape": weekday_shape,
         "best_energy_window": "morning",
@@ -386,10 +373,6 @@ def payload(
 
 def request(**overrides) -> IntakeCompleteRequest:
     return IntakeCompleteRequest.model_validate(payload(**overrides))
-
-
-def goal(title: str = "Protect focus time", status: str = "active") -> dict:
-    return {"key": GOAL_KEY, "title": title, "status": status}
 
 
 def candidate_routine() -> dict:
@@ -442,7 +425,6 @@ def test_zero_optional_answers_create_no_optional_commitments() -> None:
     assert "goals" not in response.responses.model_dump(mode="json")
     assert "friction_points" not in response.responses.model_dump(mode="json")
     assert response.responses.calendar_connection_intent is None
-    assert repository.goals == {}
     assert repository.habits == {}
     assert repository.schedule == {}
     assert {row["title"] for row in repository.memories.values()} == {
@@ -552,7 +534,6 @@ def test_same_request_twice_returns_same_ids_without_duplicates() -> None:
     repository = FakeIntakeRepository()
     service = IntakeService(repository, now_provider=lambda: NOW)
     intake_request = request(
-        goals=[goal()],
         routines=[active_routine()],
         commitments=[commitment()],
     )
@@ -564,7 +545,6 @@ def test_same_request_twice_returns_same_ids_without_duplicates() -> None:
     assert first.snapshot_id == second.snapshot_id
     assert first.revision == second.revision == 1
     assert len(repository.intakes) == 1
-    assert repository.goals == {}
     assert len(repository.habits) == 1
     assert len(repository.schedule) == 1
     assert len(repository.snapshots) == 1
@@ -578,7 +558,6 @@ def test_parallel_same_request_workers_converge_through_atomic_apply() -> None:
         repository.release_apply = asyncio.Event()
         service = IntakeService(repository, now_provider=lambda: NOW)
         intake_request = request(
-            goals=[goal()],
             routines=[active_routine()],
             commitments=[commitment()],
         )
@@ -605,7 +584,6 @@ def test_parallel_same_request_workers_converge_through_atomic_apply() -> None:
     assert first.revision == second.revision == 1
     assert len(repository.atomic_apply_calls) == 2
     assert len(repository.intakes) == 1
-    assert repository.goals == {}
     assert len(repository.habits) == 1
     assert len(repository.schedule) == 1
     assert len(repository.snapshots) == 1
@@ -644,20 +622,16 @@ def test_later_revision_cannot_claim_while_atomic_apply_is_in_flight() -> None:
     assert conflict.current_revision == 0
     assert conflict.pending_request_id == REQUEST_1
     assert len(repository.intakes) == 1
-    assert repository.goals == {}
 
 
 def test_reusing_request_id_with_only_retired_changes_replays_canonical_payload() -> None:
     repository = FakeIntakeRepository()
     service = IntakeService(repository, now_provider=lambda: NOW)
-    first = run(
-        service.complete_intake(user_id=USER_ID, request=request(goals=[goal()])),
-    )
+    first = run(service.complete_intake(user_id=USER_ID, request=request()))
     replay = run(
         service.complete_intake(
             user_id=USER_ID,
             request=request(
-                goals=[goal("Changed under the same request id")],
                 friction_points=["time"],
                 context_note="Retired change",
                 reminders_enabled=False,
@@ -666,8 +640,21 @@ def test_reusing_request_id_with_only_retired_changes_replays_canonical_payload(
     )
 
     assert replay.intake_response_id == first.intake_response_id
-    assert repository.goals == {}
     assert len(repository.intakes) == 1
+
+
+def test_goals_are_rejected_in_active_intake_payloads() -> None:
+    body = payload()
+    body["responses"]["goals"] = [
+        {
+            "key": "10000000-0000-4000-8000-000000000001",
+            "title": "Retired field",
+            "status": "active",
+        },
+    ]
+
+    with pytest.raises(ValueError, match="responses.goals is no longer supported"):
+        IntakeCompleteRequest.model_validate(body)
 
 
 def test_reusing_request_id_with_changed_active_payload_is_rejected() -> None:
@@ -773,10 +760,7 @@ def test_replaying_latest_applied_revision_repairs_missing_profile_marker() -> N
 def test_stale_duplicate_worker_cannot_reapply_after_newer_revision() -> None:
     repository = FakeIntakeRepository()
     service = IntakeService(repository, now_provider=lambda: NOW)
-    revision_1_request = request(
-        goals=[goal("Revision 1 goal")],
-        display_name="Revision 1",
-    )
+    revision_1_request = request(display_name="Revision 1")
     first = run(
         service.complete_intake(user_id=USER_ID, request=revision_1_request),
     )
@@ -786,14 +770,12 @@ def test_stale_duplicate_worker_cannot_reapply_after_newer_revision() -> None:
             request=request(
                 request_id=REQUEST_2,
                 base_revision=1,
-                goals=[goal("Revision 2 goal")],
                 display_name="Revision 2",
             ),
         ),
     )
     state_before_stale_worker = {
         "preferences": deepcopy(repository.preferences),
-        "goals": deepcopy(repository.goals),
         "habits": deepcopy(repository.habits),
         "schedule": deepcopy(repository.schedule),
         "memories": deepcopy(repository.memories),
@@ -812,7 +794,6 @@ def test_stale_duplicate_worker_cannot_reapply_after_newer_revision() -> None:
     assert replay.revision == first.revision == 1
     assert replay.intake_response_id == first.intake_response_id
     assert repository.preferences == state_before_stale_worker["preferences"]
-    assert repository.goals == state_before_stale_worker["goals"]
     assert repository.habits == state_before_stale_worker["habits"]
     assert repository.schedule == state_before_stale_worker["schedule"]
     assert repository.memories == state_before_stale_worker["memories"]
@@ -825,16 +806,7 @@ def test_stale_duplicate_worker_cannot_reapply_after_newer_revision() -> None:
 
 def test_omission_archives_or_deletes_only_setup_owned_rows() -> None:
     repository = FakeIntakeRepository()
-    setup_goal_id = "retired-setup-goal"
-    repository.goals[setup_goal_id] = {
-        "id": setup_goal_id,
-        "user_id": USER_ID,
-        "title": "Retired Setup goal",
-        "status": "active",
-        "metadata": {"managed_by": "setup", "source": "intake-v1"},
-    }
     for row_id, title in (
-        ("retired-goal-memory", "Goal: Retired Setup goal"),
         ("retired-style-memory", "Preferred coaching style"),
         ("retired-context-memory", "Intake context note"),
     ):
@@ -849,7 +821,6 @@ def test_omission_archives_or_deletes_only_setup_owned_rows() -> None:
         service.complete_intake(
             user_id=USER_ID,
             request=request(
-                goals=[goal()],
                 routines=[active_routine()],
                 commitments=[commitment()],
                 context_note="Prefer short prompts.",
@@ -857,13 +828,6 @@ def test_omission_archives_or_deletes_only_setup_owned_rows() -> None:
         ),
     )
     setup_habit_id = next(iter(repository.habits))
-    repository.goals["manual-goal"] = {
-        "id": "manual-goal",
-        "user_id": USER_ID,
-        "title": "Manual",
-        "status": "active",
-        "metadata": {"source": "manual"},
-    }
     repository.habits["manual-habit"] = {
         "id": "manual-habit",
         "user_id": USER_ID,
@@ -891,9 +855,7 @@ def test_omission_archives_or_deletes_only_setup_owned_rows() -> None:
         ),
     )
 
-    assert repository.goals[setup_goal_id]["status"] == "archived"
     assert repository.habits[setup_habit_id]["active"] is False
-    assert repository.goals["manual-goal"]["status"] == "active"
     assert repository.habits["manual-habit"]["active"] is True
     assert list(repository.schedule) == ["manual-schedule"]
     assert "manual-memory" in repository.memories
@@ -1030,14 +992,12 @@ def test_pending_revision_is_readable_and_same_request_resumes() -> None:
     assert pending.request_id == UUID(REQUEST_1)
     assert pending.revision == 1
     assert repository.preferences == {}
-    assert repository.goals == {}
     assert repository.snapshots == {}
     assert repository.profile_updates == []
 
     applied = run(service.complete_intake(user_id=USER_ID, request=intake_request))
     assert applied.status == "applied"
     assert len(repository.intakes) == 1
-    assert repository.goals == {}
     assert len(repository.habits) == 1
     assert repository.profile_updates[-1][0] == USER_ID
 

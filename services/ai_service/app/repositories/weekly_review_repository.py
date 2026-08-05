@@ -22,8 +22,6 @@ class WeeklyReviewProfile:
 @dataclass(frozen=True)
 class WeeklyReviewContext:
     tasks: list[dict[str, Any]]
-    # Kept only as a dormant envelope field; no Goal rows are loaded or used.
-    goals: list[dict[str, Any]]
     habits: list[dict[str, Any]]
     habit_logs: list[dict[str, Any]]
     focus_sessions: list[dict[str, Any]]
@@ -252,7 +250,6 @@ class SupabaseWeeklyReviewRepository:
         )
         return WeeklyReviewContext(
             tasks=tasks,
-            goals=[],
             habits=habits,
             habit_logs=habit_logs,
             focus_sessions=focus_sessions,

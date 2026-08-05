@@ -491,7 +491,6 @@ def _build_materialization(
         responses=responses,
     )
     return SetupMaterialization(
-        goals=[],
         habits=habit_rows,
         schedule_items=schedule_rows,
         memory_entries=memory_rows,

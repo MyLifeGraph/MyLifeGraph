@@ -186,12 +186,10 @@ def build_state(
     *,
     daily_logs: list[dict] | None = None,
     tasks: list[dict] | None = None,
-    goals: list[dict] | None = None,
 ):
     return build_snapshot_daily_state(
         daily_logs=daily_logs or [],
         tasks=tasks or [],
-        goals=goals or [],
         target_date=TARGET_DATE,
         generated_at=GENERATED_AT,
     )
@@ -1381,15 +1379,14 @@ def test_evidence_is_deduplicated_and_only_links_to_known_input_rows() -> None:
             assert all(ref["id"] in known_ids for ref in refs)
 
 
-def test_inputs_are_not_mutated_and_goals_cannot_enable_push() -> None:
+def test_inputs_are_not_mutated_and_capture_alone_does_not_enable_push() -> None:
     logs = current_rows()
     tasks: list[dict] = []
-    goals = [{"id": "goal-1", "status": "active"}]
-    original = deepcopy((logs, tasks, goals))
+    original = deepcopy((logs, tasks))
 
-    result = build_state(daily_logs=logs, tasks=tasks, goals=goals)
+    result = build_state(daily_logs=logs, tasks=tasks)
 
-    assert (logs, tasks, goals) == original
+    assert (logs, tasks) == original
     assert result.mode == "steady"
 
 

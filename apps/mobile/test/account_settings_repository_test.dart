@@ -21,9 +21,10 @@ void main() {
   );
 
   test('export contract includes Focus provenance and Planner content', () {
-    expect(accountExportV1TableNames, hasLength(41));
+    expect(accountExportTableNames, hasLength(40));
+    expect(accountExportTableNames, isNot(contains('goals')));
     expect(
-      accountExportV1TableNames,
+      accountExportTableNames,
       containsAllInOrder(const [
         'focus_sessions',
         'focus_session_schedule_sources',
@@ -31,7 +32,7 @@ void main() {
       ]),
     );
     expect(
-      accountExportV1TableNames,
+      accountExportTableNames,
       containsAllInOrder(const [
         'planner_preferences',
         'planner_action_plans',
@@ -46,7 +47,7 @@ void main() {
       'backend_only_anti_replay_ledger',
     );
     expect(
-      accountExportV1TableNames,
+      accountExportTableNames,
       isNot(contains('planner_request_identities')),
     );
   });
@@ -82,7 +83,7 @@ void main() {
 
     expect(write.timezone, 'Europe/London');
     expect(write.revision, 5);
-    expect(export.contractVersion, 'account-export-v2');
+    expect(export.contractVersion, 'account-export-v3');
     expect(export.recordCounts['profiles'], 1);
     expect(client.patchCalls, ['/v1/account/profile']);
     expect(client.getCalls, ['/v1/account/export']);
@@ -632,12 +633,12 @@ Map<String, dynamic> _validExportJson({
   List<Map<String, dynamic>> profileRows = const [],
 }) {
   final data = <String, dynamic>{
-    for (final table in accountExportV1TableNames)
+    for (final table in accountExportTableNames)
       table: <Map<String, dynamic>>[],
   };
   data['profiles'] = profileRows;
   return {
-    'contract_version': 'account-export-v2',
+    'contract_version': 'account-export-v3',
     'exported_at': '2026-07-13T12:00:00Z',
     'data': data,
     'record_counts': <String, int>{

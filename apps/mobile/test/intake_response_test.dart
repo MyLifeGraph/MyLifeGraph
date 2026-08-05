@@ -7,7 +7,6 @@ void main() {
       const draft = IntakeResponseDraft(
         displayName: null,
         primaryFocusAreas: ['focus'],
-        goals: [],
         frictionPoints: [],
         weekdayShape: 'flexible',
         bestEnergyWindow: 'variable',

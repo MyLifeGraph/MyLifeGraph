@@ -64,16 +64,25 @@ void main() {
     expect(response.provenance.snapshotRowCount, 120);
   });
 
-  test('rolling history accepts both free Coach prompt versions', () {
+  test('rolling history accepts historical and current Coach pairs', () {
     final current = CoachResponse.fromJson(coachResponseJson());
-    final prior = coachResponseJson();
-    (prior['provenance'] as Map<String, dynamic>)['prompt_version'] =
-        'free-coach-agent-prompt-v1';
+    final priorV1 = coachResponseJson();
+    final priorV1Provenance = priorV1['provenance'] as Map<String, dynamic>;
+    priorV1Provenance['prompt_version'] = 'free-coach-agent-prompt-v1';
+    priorV1Provenance['context_version'] = 'personal-snapshot-v1';
+    final priorV2 = coachResponseJson();
+    final priorV2Provenance = priorV2['provenance'] as Map<String, dynamic>;
+    priorV2Provenance['prompt_version'] = 'free-coach-agent-prompt-v2';
+    priorV2Provenance['context_version'] = 'personal-snapshot-v1';
 
     expect(current.provenance.promptVersion, coachAgentPromptVersion);
     expect(
-      CoachResponse.fromJson(prior).provenance.promptVersion,
+      CoachResponse.fromJson(priorV1).provenance.promptVersion,
       'free-coach-agent-prompt-v1',
+    );
+    expect(
+      CoachResponse.fromJson(priorV2).provenance.promptVersion,
+      'free-coach-agent-prompt-v2',
     );
   });
 

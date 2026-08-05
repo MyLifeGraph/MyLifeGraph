@@ -86,10 +86,10 @@ FastAPI service boundary for recommendation and future ML workflows.
   newer applied Setup projection. The service passes the claimed canonical row
   into the service-role-only `apply_intake_v1_setup_revision` RPC. A per-user
   advisory transaction lock serializes workers, while Setup-owned
-  Habit/schedule/Study/energy-memory reconciliation, Goal archival, the compact
+  Habit/schedule/Study/energy-memory reconciliation, the compact
   onboarding snapshot, applied intake state, and profile projection commit
-  atomically. Retained Goal and notification-preference RPC parameters are
-  ignored, and Setup completion generates no Recommendation. Recommendation
+  atomically. The current RPC has no Goal parameter, leaves notification
+  preferences unchanged, and Setup completion generates no Recommendation. Recommendation
   endpoints load recent user-scoped app data from canonical snake_case tables,
   verify deterministic recommendations, and persist accepted results to
   `recommendations`. Snapshot generation reuses `user_state_snapshots`, keeps
@@ -131,8 +131,9 @@ FastAPI service boundary for recommendation and future ML workflows.
   each profile-local date; current pairs are write-free, while missing or stale
   state converges on the existing daily identities with isolated per-user stage
   results.
-- Phase 8 exposes read-only completed-week review GETs and deliberate
-  deterministic review generation under `weekly-review-v1`.
+- Phase 8 exposes read-only completed-week review GETs and deliberate,
+  facts-only deterministic review generation under `weekly-review-v2`. New or
+  refreshed reviews always store an empty proposal array.
 - Phase 9 exposes the strict `calendar-import-v2` projection for one optional
   `.ics` connection. Consent, file import, stable paginated event reads,
   disconnect, and local imported-data deletion are authenticated and owner
@@ -186,7 +187,7 @@ FastAPI service boundary for recommendation and future ML workflows.
   opposite branch can downgrade an existing V5 container.
 - `/v1/account/profile` and `/v1/account/preparation-budget` use strict V2
   request ids and independent expected revisions. `/v1/account/export` returns
-  `account-export-v2`, and `/v1/account` remains the confirmed permanent
+  `account-export-v3`, and `/v1/account` remains the confirmed permanent
   deletion boundary. The client never supplies an owner id.
   See `../../docs/v1-account-controls-contract.md`.
 - `POST /v1/notifications/{notification_id}/actions` exposes strict,
@@ -568,8 +569,9 @@ accepts V3 only and emits `started`, allowlisted `activity`, and one
 `completed|failed` SSE event. Client disconnect cancels the turn.
 
 Each non-safety V3 turn creates a fresh owner-only
-`personal-snapshot-v1` SQLite database from the relevant Account Export table
-set under `free-coach-agent-prompt-v2`. The prompt's non-overridable output
+`personal-snapshot-v2` SQLite database from the relevant Account Export table
+set under `free-coach-agent-prompt-v3`. Goals and Weekly Review proposals are
+excluded from that snapshot. The prompt's non-overridable output
 rule requires English for both the reply and uncertainty explanation regardless
 of the question or stored-data language. Clearly German provider output is
 rejected as retryable `invalid_output` before an assistant message is stored.
@@ -691,10 +693,11 @@ only legacy cleanup exception removes the exact unmarked onboarding placeholder
 `Math` / `Room 204` / Monday `08:15`-`09:45`; all other unmarked or manual
 schedule rows remain outside Setup ownership.
 
-`20260725120000_retire_setup_goals_and_friction.sql` keeps that public
-signature, ignores its Goal/notification arguments, and performs the idempotent
-stored-data cleanup. It also admits paired Coach V2 provenance while retaining
-paired V1 history validation.
+`20260804150153_remove_goals_and_make_weekly_review_observational.sql` replaces
+that backend-only Setup RPC with a Goal-free signature, removes the Goals table
+without `CASCADE`, cleans structurally Goal-dependent data, upgrades surviving
+reviews to V2, and admits the current Coach prompt/snapshot pair while retaining
+valid historical pairs.
 
 Personal Learning persistence requires
 `20260726120000_personal_learning_v1.sql`, followed by
@@ -716,7 +719,7 @@ includes the two owner-content projections and omits the backend retry ledger
 explicitly.
 
 The typed `app/owner_data_catalog.py` module is the single backend inventory for
-all repo-owned public tables. It derives the exact 41-table Account Export and
+all repo-owned public tables. It derives the exact 40-table Account Export and
 37-table personal Coach Snapshot from separate per-table policies, including
 owner/cursor/watermark read shapes, sanitized export allowlists, omissions, and
 snapshot descriptions. A focused test compares that inventory with every
@@ -797,8 +800,8 @@ shared Supabase transport across operations, exact once-only shutdown, and the
 unconfigured fail-closed boundary. Intake tests cover authenticated read/save,
 blank optional materialization, candidate cadence validation, request replay,
 stale revision conflicts, convergent retry/edit identities, lifecycle removal,
-legacy-key stripping, unchanged Reminder preferences, Setup-only Goal/memory
-cleanup, no post-Setup Recommendation generation, and preservation of
+legacy-key stripping, `responses.goals` rejection, unchanged Reminder
+preferences, no post-Setup Recommendation generation, and preservation of
 non-Setup-owned rows. Daily State tests cover strict V2/V3/V4 parsing, explicit
 mixed-branch compatibility, V4 sleep-interval validation, friction sanitization,
 and the V2 output contract. Phase 3 tests cover strict executable

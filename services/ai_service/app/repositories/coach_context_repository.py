@@ -31,7 +31,6 @@ class CoachRawContext:
     # Dormant compatibility fields; the V2 context builder never reads them.
     onboarding_snapshot: dict[str, Any] | None
     daily_snapshot: dict[str, Any] | None
-    goals: BoundedRows
     tasks: BoundedRows
     habits: BoundedRows
     focus_sessions: BoundedRows
@@ -166,7 +165,6 @@ class SupabaseCoachContextRepository:
             profile=profile,
             onboarding_snapshot=None,
             daily_snapshot=snapshot,
-            goals=BoundedRows(available_count=0, rows=[]),
             tasks=tasks,
             habits=habits,
             focus_sessions=focus,
@@ -230,7 +228,7 @@ class SupabaseCoachContextRepository:
             params={
                 "select": "id,type,title,content,metadata,updated_at",
                 "user_id": f"eq.{user_id}",
-                "type": "not.in.(preference,goal)",
+                "type": "neq.preference",
                 "id": f"in.({','.join(ids)})",
                 "limit": str(self._MEMORY_CAP),
             },

@@ -11,21 +11,6 @@ const _allowedEnergyWindows = {
 };
 const _allowedCalendarIntents = {'not_now', 'later', 'interested'};
 
-enum IntakeGoalStatus {
-  active,
-  paused,
-  archived;
-
-  static IntakeGoalStatus fromJson(Object? value) {
-    return switch (value) {
-      'active' => IntakeGoalStatus.active,
-      'paused' => IntakeGoalStatus.paused,
-      'archived' => IntakeGoalStatus.archived,
-      _ => throw FormatException('Unsupported goal status: $value'),
-    };
-  }
-}
-
 enum IntakeRoutineStatus {
   candidate,
   active,
@@ -467,44 +452,6 @@ class StudySetupDraft {
   }
 }
 
-class IntakeGoalDraft {
-  const IntakeGoalDraft({
-    required this.key,
-    required this.title,
-    this.status = IntakeGoalStatus.active,
-  });
-
-  factory IntakeGoalDraft.fromJson(Map<String, dynamic> json) {
-    return IntakeGoalDraft(
-      key: _requiredString(json, 'key'),
-      title: _requiredString(json, 'title'),
-      status: IntakeGoalStatus.fromJson(json['status']),
-    );
-  }
-
-  final String key;
-  final String title;
-  final IntakeGoalStatus status;
-
-  Map<String, dynamic> toJson() => {
-        'key': key,
-        'title': title.trim(),
-        'status': status.name,
-      };
-
-  IntakeGoalDraft copyWith({
-    String? key,
-    String? title,
-    IntakeGoalStatus? status,
-  }) {
-    return IntakeGoalDraft(
-      key: key ?? this.key,
-      title: title ?? this.title,
-      status: status ?? this.status,
-    );
-  }
-}
-
 class IntakeRoutineDraft {
   const IntakeRoutineDraft({
     required this.key,
@@ -701,7 +648,6 @@ class IntakeResponseDraft {
   const IntakeResponseDraft({
     required this.displayName,
     List<String> primaryFocusAreas = const [],
-    List<IntakeGoalDraft> goals = const [],
     List<String> frictionPoints = const [],
     required this.weekdayShape,
     required this.bestEnergyWindow,
@@ -713,7 +659,6 @@ class IntakeResponseDraft {
     required this.calendarConnectionIntent,
     this.studySetup,
   })  : primaryFocusAreas = const [],
-        goals = const [],
         frictionPoints = const [],
         coachingStyle = null,
         reminderPreference = null,
@@ -721,7 +666,6 @@ class IntakeResponseDraft {
 
   const IntakeResponseDraft.empty({this.displayName})
       : primaryFocusAreas = const [],
-        goals = const [],
         frictionPoints = const [],
         weekdayShape = null,
         bestEnergyWindow = null,
@@ -760,7 +704,6 @@ class IntakeResponseDraft {
 
   final String? displayName;
   final List<String> primaryFocusAreas;
-  final List<IntakeGoalDraft> goals;
   final List<String> frictionPoints;
   final String? weekdayShape;
   final String? bestEnergyWindow;
@@ -1027,7 +970,6 @@ class IntakeResponseDraft {
   IntakeResponseDraft copyWith({
     Object? displayName = _unset,
     List<String>? primaryFocusAreas,
-    List<IntakeGoalDraft>? goals,
     List<String>? frictionPoints,
     Object? weekdayShape = _unset,
     Object? bestEnergyWindow = _unset,

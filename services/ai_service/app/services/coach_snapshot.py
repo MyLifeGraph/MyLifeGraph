@@ -45,7 +45,7 @@ from app.services.owner_data_reader import (
 )
 
 
-COACH_SNAPSHOT_CONTRACT_VERSION = "personal-snapshot-v1"
+COACH_SNAPSHOT_CONTRACT_VERSION = "personal-snapshot-v2"
 _PROFILE_PROHIBITED_FIELDS = {"email", "role", "auth_provider"}
 _IDENTIFIER = re.compile(r"^[a-z][a-z0-9_]*$")
 _FIELD_NAME_BOUNDARIES = re.compile(
@@ -283,7 +283,11 @@ def _sanitize_row(
     row: dict[str, Any],
     table: AccountExportTable,
 ) -> dict[str, Any]:
-    prohibited = _PROFILE_PROHIBITED_FIELDS if table.name == "profiles" else set()
+    prohibited = (
+        set(_PROFILE_PROHIBITED_FIELDS) if table.name == "profiles" else set()
+    )
+    if table.name == "weekly_reviews":
+        prohibited.add("proposals")
     return {
         key: _sanitize_nested_value(value, depth=1)
         for key, value in row.items()

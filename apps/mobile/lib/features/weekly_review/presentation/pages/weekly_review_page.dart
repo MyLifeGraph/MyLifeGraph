@@ -4,14 +4,12 @@ import 'package:my_life_graph/core/constants/app_radii.dart';
 
 import 'package:my_life_graph/core/theme/app_icons.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_page.dart';
-import '../../application/weekly_review_proposal_applier.dart';
 import '../../domain/weekly_review.dart';
 import 'package:my_life_graph/composition/weekly_review_providers.dart';
 
@@ -25,17 +23,13 @@ class WeeklyReviewPage extends ConsumerStatefulWidget {
 class _WeeklyReviewPageState extends ConsumerState<WeeklyReviewPage> {
   bool _isGenerating = false;
   String? _generationError;
-  final Set<String> _applyingProposalIds = {};
-  final Set<String> _appliedProposalIds = {};
-  final Set<String> _noChangeProposalIds = {};
-  String? _proposalError;
 
   @override
   Widget build(BuildContext context) {
     final value = ref.watch(latestWeeklyReviewProvider);
     return AppPage(
       title: 'Weekly review',
-      subtitle: 'What happened last week and what you may want to adjust',
+      subtitle: 'What happened last week, based on saved activity',
       backFallback: AppRoutes.dashboard,
       actions: [
         IconButton(
@@ -95,12 +89,7 @@ class _WeeklyReviewPageState extends ConsumerState<WeeklyReviewPage> {
           feed: feed,
           isGenerating: _isGenerating,
           generationError: _generationError,
-          applyingProposalIds: _applyingProposalIds,
-          appliedProposalIds: _appliedProposalIds,
-          noChangeProposalIds: _noChangeProposalIds,
-          proposalError: _proposalError,
           onRefresh: () => _generate(feed, force: true),
-          onProposal: (proposal) => _handleProposal(feed, proposal),
         ),
     };
   }
@@ -120,13 +109,6 @@ class _WeeklyReviewPageState extends ConsumerState<WeeklyReviewPage> {
             force: force,
           );
       ref.invalidate(latestWeeklyReviewProvider);
-      if (mounted) {
-        setState(() {
-          _appliedProposalIds.clear();
-          _noChangeProposalIds.clear();
-          _proposalError = null;
-        });
-      }
     } catch (_) {
       if (mounted) {
         setState(() {
@@ -137,80 +119,6 @@ class _WeeklyReviewPageState extends ConsumerState<WeeklyReviewPage> {
     } finally {
       if (mounted) setState(() => _isGenerating = false);
     }
-  }
-
-  Future<void> _handleProposal(
-    WeeklyReviewFeed feed,
-    WeeklyReviewProposal proposal,
-  ) async {
-    if (feed.freshness == WeeklyReviewFreshness.stale ||
-        _applyingProposalIds.contains(proposal.id)) {
-      return;
-    }
-    if (proposal.applicationMode == WeeklyReviewApplicationMode.directHabit) {
-      final confirmed = await showDialog<bool>(
-        context: context,
-        builder: (context) => _ApplyProposalDialog(proposal: proposal),
-      );
-      if (confirmed != true || !mounted) return;
-    }
-
-    setState(() {
-      _applyingProposalIds.add(proposal.id);
-      _proposalError = null;
-    });
-    try {
-      final review = feed.review!;
-      final result = await ref.read(weeklyReviewProposalApplierProvider).apply(
-            proposal,
-            expectedReviewId: review.id,
-            expectedSourceFingerprint: review.provenance.sourceFingerprint,
-          );
-      if (!mounted) return;
-      switch (result.status) {
-        case WeeklyReviewApplyStatus.applied:
-          setState(() => _appliedProposalIds.add(proposal.id));
-          ref.invalidate(latestWeeklyReviewProvider);
-          _showMessage(
-            result.snapshotRefreshFailed
-                ? 'Habit saved; daily snapshot refresh failed.'
-                : 'Habit change saved.',
-          );
-        case WeeklyReviewApplyStatus.kept:
-          setState(() => _noChangeProposalIds.add(proposal.id));
-          _showMessage('Current habit kept. No change was made.');
-        case WeeklyReviewApplyStatus.requiresSetup:
-          context.push('${AppRoutes.onboarding}?edit=1');
-        case WeeklyReviewApplyStatus.stagedOnly:
-          if (proposal.operation == WeeklyReviewOperation.replace) {
-            context.push(AppRoutes.habitManagement);
-          } else {
-            setState(() => _noChangeProposalIds.add(proposal.id));
-            _showMessage('Change deferred. No habit was changed.');
-          }
-      }
-    } catch (error) {
-      if (mounted) {
-        if (error is WeeklyReviewProposalApplyException) {
-          ref.invalidate(latestWeeklyReviewProvider);
-        }
-        setState(() {
-          _proposalError = error is WeeklyReviewProposalApplyException
-              ? error.message
-              : 'Habit change could not be confirmed. Refresh and retry.';
-        });
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _applyingProposalIds.remove(proposal.id));
-      }
-    }
-  }
-
-  void _showMessage(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
-    );
   }
 }
 
@@ -334,23 +242,13 @@ class _CurrentReview extends StatelessWidget {
     required this.feed,
     required this.isGenerating,
     required this.generationError,
-    required this.applyingProposalIds,
-    required this.appliedProposalIds,
-    required this.noChangeProposalIds,
-    required this.proposalError,
     required this.onRefresh,
-    required this.onProposal,
   });
 
   final WeeklyReviewFeed feed;
   final bool isGenerating;
   final String? generationError;
-  final Set<String> applyingProposalIds;
-  final Set<String> appliedProposalIds;
-  final Set<String> noChangeProposalIds;
-  final String? proposalError;
   final VoidCallback onRefresh;
-  final ValueChanged<WeeklyReviewProposal> onProposal;
 
   @override
   Widget build(BuildContext context) {
@@ -398,7 +296,7 @@ class _CurrentReview extends StatelessWidget {
                     borderRadius: BorderRadius.circular(AppRadii.md),
                   ),
                   child: Text(
-                    'Your saved activity changed after this review. Update it before accepting a suggestion.',
+                    'Your saved activity changed after this review. Update it to see the current weekly facts.',
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           color: Theme.of(context).colorScheme.onErrorContainer,
                         ),
@@ -409,69 +307,11 @@ class _CurrentReview extends StatelessWidget {
           ),
         ),
         const SizedBox(height: AppSpacing.md),
-        _WeeklyFactsCard(facts: review.facts),
-        const SizedBox(height: AppSpacing.md),
-        AppCard(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Proposed adjustments',
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-              const SizedBox(height: AppSpacing.xs),
-              const Text(
-                'You may see up to two suggestions. A manual habit changes only after you confirm it. Setup suggestions and previews never apply automatically.',
-              ),
-              const SizedBox(height: AppSpacing.md),
-              if (review.proposals.isEmpty)
-                const Text('No change is suggested for this week.')
-              else
-                ...review.proposals.map(
-                  (proposal) => Padding(
-                    padding: const EdgeInsets.only(bottom: AppSpacing.md),
-                    child: _ProposalCard(
-                      proposal: proposal,
-                      stale: stale,
-                      isApplying: applyingProposalIds.contains(proposal.id),
-                      isApplied: appliedProposalIds.contains(proposal.id),
-                      isNoChange: noChangeProposalIds.contains(proposal.id),
-                      onPressed: () => onProposal(proposal),
-                    ),
-                  ),
-                ),
-              if (proposalError != null) ...[
-                Text(
-                  proposalError!,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: Theme.of(context).colorScheme.error,
-                      ),
-                ),
-                const SizedBox(height: AppSpacing.sm),
-              ],
-              if (generationError != null) ...[
-                Text(
-                  generationError!,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: Theme.of(context).colorScheme.error,
-                      ),
-                ),
-                const SizedBox(height: AppSpacing.sm),
-              ],
-              OutlinedButton.icon(
-                onPressed: isGenerating ? null : onRefresh,
-                icon: isGenerating
-                    ? const SizedBox.square(
-                        dimension: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(AppIcons.refresh),
-                label: Text(
-                  isGenerating ? 'Updating…' : 'Update weekly review',
-                ),
-              ),
-            ],
-          ),
+        _WeeklyFactsCard(
+          facts: review.facts,
+          isGenerating: isGenerating,
+          generationError: generationError,
+          onRefresh: onRefresh,
         ),
       ],
     );
@@ -479,9 +319,17 @@ class _CurrentReview extends StatelessWidget {
 }
 
 class _WeeklyFactsCard extends StatelessWidget {
-  const _WeeklyFactsCard({required this.facts});
+  const _WeeklyFactsCard({
+    required this.facts,
+    required this.isGenerating,
+    required this.generationError,
+    required this.onRefresh,
+  });
 
   final WeeklyReviewFacts facts;
+  final bool isGenerating;
+  final String? generationError;
+  final VoidCallback onRefresh;
 
   @override
   Widget build(BuildContext context) {
@@ -534,6 +382,28 @@ class _WeeklyFactsCard extends StatelessWidget {
             '${facts.focus.actualMinutes} actual minutes · '
             '${facts.feedback.total} recommendation feedback events',
           ),
+          if (generationError != null) ...[
+            const SizedBox(height: AppSpacing.md),
+            Text(
+              generationError!,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Theme.of(context).colorScheme.error,
+                  ),
+            ),
+          ],
+          const SizedBox(height: AppSpacing.md),
+          OutlinedButton.icon(
+            onPressed: isGenerating ? null : onRefresh,
+            icon: isGenerating
+                ? const SizedBox.square(
+                    dimension: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(AppIcons.refresh),
+            label: Text(
+              isGenerating ? 'Updating…' : 'Update weekly review',
+            ),
+          ),
         ],
       ),
     );
@@ -567,139 +437,6 @@ class _FactTile extends StatelessWidget {
   }
 }
 
-class _ProposalCard extends StatelessWidget {
-  const _ProposalCard({
-    required this.proposal,
-    required this.stale,
-    required this.isApplying,
-    required this.isApplied,
-    required this.isNoChange,
-    required this.onPressed,
-  });
-
-  final WeeklyReviewProposal proposal;
-  final bool stale;
-  final bool isApplying;
-  final bool isApplied;
-  final bool isNoChange;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    final hasReviewAction = proposal.applicationMode ==
-            WeeklyReviewApplicationMode.directHabit ||
-        proposal.applicationMode == WeeklyReviewApplicationMode.settingsSetup;
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(AppSpacing.md),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(AppRadii.md),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            proposal.targetTitle,
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
-          const SizedBox(height: AppSpacing.xs),
-          Text(
-            '${_operationLabel(proposal.operation)} · '
-            '${_ownershipLabel(proposal.ownership)}',
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Text(proposal.reason),
-          const SizedBox(height: AppSpacing.sm),
-          Text(
-            '${_stateLabel(proposal.change.before)} → '
-            '${proposal.change.after == null ? 'Preview only — review it yourself' : _stateLabel(proposal.change.after!)}',
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Container(
-            key: ValueKey('weekly-proposal-authority-${proposal.id}'),
-            width: double.infinity,
-            padding: const EdgeInsets.all(AppSpacing.sm),
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surface,
-              borderRadius: BorderRadius.circular(AppRadii.sm),
-            ),
-            child: Text(
-              _proposalAuthorityLabel(proposal.applicationMode),
-              style: Theme.of(context).textTheme.labelMedium,
-            ),
-          ),
-          if (hasReviewAction) ...[
-            const SizedBox(height: AppSpacing.md),
-            if (proposal.applicationMode ==
-                WeeklyReviewApplicationMode.directHabit)
-              FilledButton.icon(
-                onPressed: stale || isApplying || isApplied || isNoChange
-                    ? null
-                    : onPressed,
-                icon: isApplying
-                    ? const SizedBox.square(
-                        dimension: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : Icon(_proposalIcon(proposal.applicationMode)),
-                label: Text(isApplied ? 'Change applied' : 'Apply change'),
-              )
-            else
-              OutlinedButton.icon(
-                onPressed: stale || isApplying ? null : onPressed,
-                icon: Icon(_proposalIcon(proposal.applicationMode)),
-                label: const Text('Open Setup (no auto-apply)'),
-              ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-class _ApplyProposalDialog extends StatelessWidget {
-  const _ApplyProposalDialog({required this.proposal});
-
-  final WeeklyReviewProposal proposal;
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('Apply this habit change?'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(proposal.targetTitle),
-          const SizedBox(height: AppSpacing.sm),
-          Text(_stateLabel(proposal.change.before)),
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: AppSpacing.xs),
-            child: Icon(AppIcons.arrowDownward, size: 18),
-          ),
-          Text(_stateLabel(proposal.change.after!)),
-          const SizedBox(height: AppSpacing.md),
-          const Text(
-            'Only this manual habit will change. Its outcome history is preserved.',
-          ),
-        ],
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(false),
-          child: const Text('Keep current'),
-        ),
-        FilledButton(
-          onPressed: () => Navigator.of(context).pop(true),
-          child: const Text('Apply change'),
-        ),
-      ],
-    );
-  }
-}
-
 class _ReviewPill extends StatelessWidget {
   const _ReviewPill({required this.label});
 
@@ -729,56 +466,4 @@ String _qualityLabel(WeeklyReviewDataQuality quality) => switch (quality) {
       WeeklyReviewDataQuality.insufficient => 'Insufficient',
       WeeklyReviewDataQuality.partial => 'Partial',
       WeeklyReviewDataQuality.sufficient => 'Sufficient',
-    };
-
-String _operationLabel(WeeklyReviewOperation operation) => switch (operation) {
-      WeeklyReviewOperation.keep => 'Keep',
-      WeeklyReviewOperation.shrink => 'Shrink',
-      WeeklyReviewOperation.pause => 'Pause',
-      WeeklyReviewOperation.replace => 'Replace',
-      WeeklyReviewOperation.archive => 'Archive',
-      WeeklyReviewOperation.defer => 'Defer',
-    };
-
-String _ownershipLabel(WeeklyReviewOwnership ownership) => switch (ownership) {
-      WeeklyReviewOwnership.manual => 'Manual habit',
-      WeeklyReviewOwnership.setup => 'Setup-managed habit',
-    };
-
-String _proposalAuthorityLabel(WeeklyReviewApplicationMode mode) =>
-    switch (mode) {
-      WeeklyReviewApplicationMode.directHabit =>
-        'Can change this manual habit only after you confirm',
-      WeeklyReviewApplicationMode.settingsSetup =>
-        'Opens Setup only — nothing changes automatically',
-      WeeklyReviewApplicationMode.stagedOnly =>
-        'Preview only — make any change yourself',
-      WeeklyReviewApplicationMode.none =>
-        'Information only — nothing will change',
-    };
-
-IconData _proposalIcon(WeeklyReviewApplicationMode mode) => switch (mode) {
-      WeeklyReviewApplicationMode.directHabit => AppIcons.check,
-      WeeklyReviewApplicationMode.settingsSetup => AppIcons.tuneOutlined,
-      WeeklyReviewApplicationMode.stagedOnly => AppIcons.openInNew,
-      WeeklyReviewApplicationMode.none => AppIcons.removeCircleOutline,
-    };
-
-String _stateLabel(WeeklyReviewHabitState state) =>
-    '${_lifecycleLabel(state.lifecycle)} · ${_cadenceLabel(state.cadence)}';
-
-String _lifecycleLabel(WeeklyReviewHabitLifecycle lifecycle) =>
-    switch (lifecycle) {
-      WeeklyReviewHabitLifecycle.active => 'Active',
-      WeeklyReviewHabitLifecycle.paused => 'Paused',
-      WeeklyReviewHabitLifecycle.archived => 'Archived',
-    };
-
-String _cadenceLabel(WeeklyReviewHabitCadence cadence) =>
-    switch (cadence.kind) {
-      WeeklyReviewCadenceKind.daily => 'Daily',
-      WeeklyReviewCadenceKind.weekdays =>
-        'Weekdays ${cadence.scheduledWeekdays.join(', ')}',
-      WeeklyReviewCadenceKind.weeklyTarget =>
-        '${cadence.weeklyTarget} times per week',
     };

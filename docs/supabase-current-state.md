@@ -10,9 +10,10 @@ Flutter/FastAPI contract versions and explicit exceptions, including exact code
 selectors and documentation owners, is `docs/current-contracts.json`; feature
 contracts remain authoritative for complete wire formats.
 
-The current Setup/Goal/friction cleanup and compatibility boundary is recorded
-in `docs/setup-personalization-retirement-contract.md` and migration
-`20260725120000_retire_setup_goals_and_friction.sql`.
+The current Setup/Goal/friction removal and compatibility boundary is recorded
+in `docs/setup-personalization-retirement-contract.md` and migrations
+`20260804150153_remove_goals_and_make_weekly_review_observational.sql` and
+`20260804192406_harden_goal_removal_dependencies.sql`.
 The later deterministic learning boundary is recorded in
 `docs/personal-learning-v1-contract.md` and migrations
 `20260726120000_personal_learning_v1.sql`,
@@ -35,7 +36,11 @@ provenance plus V2 lifecycle RPCs in
 contract-neutral privileged-function cleanup in
 `20260802111518_privileged_function_lint_cleanup.sql`, followed by the additive
 Daily Capture V5 merge-RPC replacement in
-`20260804102409_daily_capture_v5_remove_day_shape.sql`.
+`20260804102409_daily_capture_v5_remove_day_shape.sql`, followed by the
+Goal-removal and observational Weekly Review migration
+`20260804150153_remove_goals_and_make_weekly_review_observational.sql`, then the
+additive dependency/locking repair
+`20260804192406_harden_goal_removal_dependencies.sql`.
 
 ## Runtime Activation
 
@@ -96,18 +101,17 @@ The app table constants live in
 | `focus_session_reflections` | At most one editable `focus-reflection-v1` rating per owned terminal Focus session, with two bounded scores and up to two controlled obstacles. Forced owner RLS; account deletion cascades it. |
 | `learning_preferences` | One revisioned `learning-preferences-v1` projection per owner for prompt, analysis, and separately gated learned-Planning choices. Learned planning cannot remain enabled while analysis is disabled. |
 | `learning_request_identities` | Backend-only global retry/result ledger for exact preference updates and confirmed reflection-history clearing; omitted from Account Export. |
-| `goals` | Retained compatibility and Account Export storage. Setup-owned rows are archived; manual/foreign-managed rows are preserved, and no active product service evaluates them. |
 | `habits` | Habit V1 daily, selected-ISO-weekday, or weekly-target cadence plus active/paused/archived manual lifecycle; Setup owns definition/lifecycle for its rows while active rows share execution. |
 | `habit_logs` | One explicit `completed` or `skipped` outcome per habit/local date, with checked 1/0 compatibility value; open and missed opportunities are derived and progress/streaks are cadence-aware. |
 | `skillset_profiles` | Generated coaching/skill profile snapshots. |
 | `recommendations` | Generated recommendations and user statuses from explicit/scheduled runtime refresh; Intake V1 completion does not generate them. A deliberate refresh atomically retires the prior current `new` set while preserving historical rows. |
 | `notification_preferences` | Reminder/category/quiet-hour configuration plus separate fail-closed in-app delivery consent/version/timestamps and a bounded daily cap. Reminder fields alone grant no delivery. |
-| `intake_responses` | Typed Setup history with request identity, optimistic revision, pending/applied state, and structured routine/commitment/Study lifecycle items. Retired personalization keys are stripped. |
+| `intake_responses` | Typed Setup history with request identity, optimistic revision, pending/applied state, and structured routine/commitment/Study lifecycle items. Supported retired personalization keys are stripped; `responses.goals` is rejected. |
 | `study_setup_profiles` | Optional `study-setup-v1` projection from the current applied Intake revision: focus/recovery rhythm, ordered preparation-item definitions, current/next semester, and Setup revision. Forced owner-read RLS; only the backend writes. |
 | `user_state_snapshots` | Compact backend-owned onboarding/daily/weekly state with `source_observed_at`; a V2 persistence RPC lets only a later-observed run replace the period projection. |
 | `daily_briefings` | One backend-owned deterministic `daily-briefing-v1` decision per user/profile-local date with strict executable actions, source-snapshot provenance, bounded evidence, and stale detection. |
 | `decision_feedback` | Retry-safe append-only feedback for an exact owned briefing action; authenticated owners can read/delete history and FastAPI owns validated writes. |
-| `weekly_reviews` | One backend-owned bounded `weekly-review-v1` output per user/completed ISO week with source fingerprint, `source_observed_at`, at most two proposals, owner/admin reads, and owner-locked V2 persistence. |
+| `weekly_reviews` | One backend-owned bounded `weekly-review-v2` output per user/completed ISO week with source fingerprint, `source_observed_at`, an empty proposal array for every new or refreshed row, owner/admin reads, and owner-locked V2 persistence. Historical proposals remain transport-readable. |
 | `calendar_connections` | One optional consented `ical_file` source per owner with stable connect/disconnect/delete identity and no provider credential. |
 | `calendar_imports` | Immutable retry-safe `.ics` import identity, bounded window/counts, profile timezone revision, and `not_imported|current|profile_timezone_changed|disconnected|deleted` planning status. |
 | `calendar_events` | Current whitelisted imported event copy with stable single/recurrence identity and explicit imported/read-only provenance. |
@@ -342,10 +346,11 @@ preserves unmarked onboarding schedule rows except for the exact historical
 placeholder `Math`, `Room 204`, Monday `08:15`-`09:45` with empty metadata,
 which is removed when omitted.
 
-The 2026-07-25 compatibility migration keeps the Setup Apply RPC signature but
-ignores `p_notification_preferences` and `p_goals`. It leaves
-`notification_preferences` byte-for-byte unchanged, archives Setup-owned Goals,
-retains manual/foreign Goals, and reconciles only the active Setup projections.
+The 2026-08-04 removal migration replaces the Setup Apply RPC with its current
+12-parameter, Goal-free signature. It leaves `notification_preferences`
+byte-for-byte unchanged and reconciles only active Setup projections while
+preserving the existing advisory-lock, replay, revision, ownership, Study Setup,
+and profile-projection guarantees.
 
 ## Phase 7 Scheduled Daily Preparation
 
@@ -383,7 +388,7 @@ deployed cron wiring configured. Notification Delivery V1 adds only the local
 runner and foreground Flutter path; it adds no push/system, background-mobile,
 email, browser, Android, snooze, or production scheduling claim.
 
-## Phase 8 Bounded Weekly Review
+## Phase 8 Bounded Observational Weekly Review
 
 Phase 8 adds `weekly_reviews` rather than overloading generic weekly snapshots,
 recommendations, or daily briefings. Each row owns one `(user_id, period_key)`
@@ -394,18 +399,16 @@ lowercase SHA-256 source fingerprint used for stale detection.
 Authenticated users may select only their own rows; authenticated insert,
 update, and delete are not granted. FastAPI uses service-role writes after
 bearer-token verification and explicit owner-scoped source queries. RLS is
-enabled and forced. Deliberate generation persists derived review output only;
-proposal confirmation continues through existing authenticated Habit V1
-commands and never grants the client review-table writes.
+enabled and forced. Deliberate generation persists derived review output only.
+Every new or refreshed V2 row has `proposals=[]`; retained historical proposal
+arrays grant no mutation authority and never reach Flutter or Coach.
 
 The existing weekly snapshot is supporting evidence, not a complete historical
 ledger. Current task rows cannot recreate undone transitions, and current habit
 rows cannot recreate prior cadence/lifecycle definitions. Phase 8 keeps those
-limitations explicit, marks affected opportunity math unknown, and does not
-infer an adaptation from misses alone. Direct application remains limited to
-confirmed manual Habit V1 shrink/pause/archive. Setup-owned changes stay in
-Setup; replacement/task/schedule changes remain staged. Weekly Review does not
-load Goals, and the retained V1 `goal_linked_completed` field is always zero.
+limitations explicit and marks affected opportunity math unknown. It never
+infers or applies an adaptation. V2 removes the retired Goal-linked Task
+counter.
 
 ## Phase 9 Bounded Calendar File Import
 
@@ -623,8 +626,8 @@ terminalizes an expired lease.
 
 Memory selection uses a composite `(memory_id, user_id)` ownership foreign key,
 an owner-level advisory lock, and a maximum of eight rows. It excludes every
-`type='preference'` or `type='goal'` memory. Retired Intake context/style/Goal
-memories are removed by the cleanup migration. Selection never changes the
+`type='preference'` memory; the former Goal discriminator is no longer valid and
+those memories were removed by the cleanup migration. Selection never changes the
 underlying memory row or its Setup metadata.
 
 RLS is forced on the new tables plus hardened `coach_messages` and
@@ -696,12 +699,11 @@ nullable `evidence`, `agent_trace`, `tool_call_count`, and `service_tier`
 columns to `coach_requests`; V1/V2 rows keep those fields null.
 
 `coach-request-v3` has no user-selected scope or parameter object. Its
-service-role-only `claim_coach_request_v3` reuses the established owner-before-
+service-role-only `claim_coach_request_v5` reuses the established owner-before-
 request locks, one-pending-owner rule, lease, terminal replay, and profile-local
 daily budget. Replay binds derived owner, request UUID, and exact message
 fingerprint only. A new claim stores
-`free-coach-agent-prompt-v1`/`personal-snapshot-v1`; the later V4 claim wrapper
-stores `free-coach-agent-prompt-v2` for a newly claimed request. The legacy physical scope
+`free-coach-agent-prompt-v3`/`personal-snapshot-v2`. The legacy physical scope
 columns stay neutral `today`/`{}` for schema compatibility and are not a
 current product mode.
 
@@ -715,7 +717,9 @@ The service-role-only `complete_coach_request_v2` requires one exact
   limitations;
 - exact equality between response and separately supplied evidence/trace/tool
   count;
-- paired `free-coach-agent-prompt-v1|v2` and `personal-snapshot-v1` provenance;
+- paired historical `free-coach-agent-prompt-v1|v2` with
+  `personal-snapshot-v1`, or current `free-coach-agent-prompt-v3` with
+  `personal-snapshot-v2`, provenance;
 - snapshot rows no greater than 50,000 and bytes no greater than 8 MiB; and
 - `local_codex_oauth` truth fixed to `gpt-5.5`, explicit Fast configured, and
   no non-Codex Fast claim.
@@ -868,7 +872,7 @@ cannot overwrite fields from a newer applied Setup revision. This migration does
 not change RLS policies or grants.
 
 `20260710180000_atomic_intake_v1_setup_apply.sql` creates the security-definer
-`apply_intake_v1_setup_revision` RPC with its final 13-parameter signature. It
+`apply_intake_v1_setup_revision` RPC with its original 13-parameter signature. It
 revokes execute from `public`, `anon`, and `authenticated`, granting it only to
 `service_role`. The function obtains a transaction-scoped advisory lock derived
 from `user_id` and locks and validates the claimed canonical `intake-v1` row.
@@ -1081,7 +1085,7 @@ When destruction of the exact normal local database is explicitly authorized,
 the guarded reset must complete through:
 
 ```text
-20260804102409_daily_capture_v5_remove_day_shape.sql
+20260804192406_harden_goal_removal_dependencies.sql
 ```
 
 Then configure `.env` with:
@@ -1110,9 +1114,10 @@ npm run verify:db
 
 This default starts/reuses the local stack, inspects
 `supabase migration list --local`, and fails if repository files and database
-history differ. It then runs the complete pgTAP suite and never runs Flutter
-tests. It never applies SQL automatically. If the histories differ, review the
-pending SQL and affected local rows before opting in:
+history differ. It then runs the physically separate Goal-removal transition
+harness and complete pgTAP suite, and never runs Flutter tests. It never applies
+SQL automatically. If the histories differ, review the pending SQL and affected
+local rows before opting in:
 
 ```bash
 APPLY_MIGRATIONS=true npm run verify:db
@@ -1168,8 +1173,8 @@ Supabase-backed path:
   the revisioned Setup save.
 - Start Focus through a Study-aware block, exercise the transient checklist,
   complete it, and verify the local recovery countdown without a recovery row.
-- Review/archive or remove one Setup-owned Habit/commitment, confirm a legacy
-  Setup-owned Goal is archived, and preserve manual Goal/memory rows.
+- Review/archive or remove one Setup-owned Habit/commitment and preserve manual
+  memories. Confirm Goal input is rejected and no Goals table exists.
 - Save Evening Shutdown through either current route, then save Morning
   Calibration and confirm that the same daily row retains both V3 captures
   without friction keys.
@@ -1186,9 +1191,9 @@ Supabase-backed path:
   deliberately adjust Today, then delete the history row and confirm the next
   adjustment reports zero feedback influence.
 - Open Weekly Review, confirm latest GET is read-only, deliberately generate one
-  completed ISO week, and inspect one exact `weekly_reviews` identity. Cancel a
-  proposal without writes; confirm an eligible manual Habit V1 change; verify
-  Setup ownership is untouched and the old review becomes stale until refresh.
+  completed ISO week, and inspect one exact `weekly_reviews` identity with
+  `proposals=[]`. Confirm facts and refresh remain usable, historical proposals
+  are invisible, and a source change makes the old review stale until refresh.
 - Open Calendar integration, create the consented file source, deliberately
   import a bounded `.ics` file, page through events, disconnect while retaining
   the visibly imported/read-only copy, then delete that local copy and confirm
@@ -1276,6 +1281,23 @@ legacy compatibility only and should be dropped in a later dedicated migration
 after data migration and app verification are complete.
 
 The latest migration is
+`20260804192406_harden_goal_removal_dependencies.sql`. It leaves all public
+contracts and versions unchanged, acquires `SHARE ROW EXCLUSIVE` locks for the
+complete cleanup graph in alphabetical order with a five-second lock timeout,
+then closes structured Goal dependencies across recommendations, snapshots,
+briefings, feedback, reviews, memories, insights, events, notifications, and
+Coach history. It sanitizes authoritative Intake, Task, and onboarding JSON,
+removes dangling reviews, conservatively tombstones V1 full-snapshot Coach
+turns, retains append-only usage/audit rows, asserts the final graph, and drops
+all migration-only helpers. It never searches ordinary prose and adds no
+generic JSON constraint.
+
+The preceding
+`20260804150153_remove_goals_and_make_weekly_review_observational.sql` replaces
+the Setup RPC with a Goal-free signature, upgrades surviving Weekly Reviews in
+place to V2, advances new Coach claims to prompt V3/snapshot V2, and drops
+`public.goals` explicitly without `CASCADE`. It remains immutable after local
+application. The preceding migration is
 `20260804102409_daily_capture_v5_remove_day_shape.sql`. It replaces only
 `apply_daily_capture_branch_v1` so current V5 writes omit Day Shape while
 complete V4 rollout writes, branch-local replay/conflict identity, projections,
@@ -1402,6 +1424,6 @@ Phase 4 persists deterministic briefing decisions without changing either
 contract; Phase 6 adds feedback as separate evidence and never rewrites those
 persisted reasons. Phase 7 adds no schema object; it prepares the existing
 snapshot and briefing identities by profile-local date. Phase 8 persists only
-derived weekly review output and reuses existing Habit V1 mutations after
-explicit confirmation. Phase 10 adds conversational explanation without making
-any Coach suggestion executable or changing the deterministic briefing loop.
+observational weekly facts and has no proposal, confirmation, or mutation path.
+Phase 10 adds conversational explanation without making any Coach suggestion
+executable or changing the deterministic briefing loop.

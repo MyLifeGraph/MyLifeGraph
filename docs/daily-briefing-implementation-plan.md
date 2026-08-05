@@ -92,8 +92,8 @@ The repository already contains most of the foundation needed for this slice:
 
 - Structured onboarding through Intake V1.
 - Canonical Supabase tables for logs, events, tasks, habits, schedule items,
-  recommendations, and user state snapshots. `goals` remains compatibility/
-  export storage only.
+  recommendations, and user state snapshots. Goals are absent from the current
+  schema and export.
 - Deterministic `daily` and `weekly` snapshot generation in FastAPI.
 - Deterministic recommendation generation and persistence.
 - Best-effort snapshot refresh after key Supabase-backed writes.
@@ -327,17 +327,14 @@ This becomes useful only after the daily loop produces enough real outcomes.
 
 What the user does:
 
-- Reviews completed goal actions, carried tasks, habit opportunities, recovery
-  days, and feedback on recommendations.
-- Chooses which goal remains primary and which habit should stay, shrink, pause,
-  or be replaced.
+- Reviews completed and carried Tasks, Habit opportunities, recovery days, and
+  feedback on recommendations.
 
 What the app does:
 
 - Summarizes behavior without moralizing missed days.
 - Separates scheduled opportunities, intentional skips, and uncompleted actions.
-- Proposes at most one or two changes for the next week.
-- Requires confirmation before changing habits, tasks, or schedule items.
+- Reports data quality and freshness without proposing or applying changes.
 
 ### Recovery, Disruption, And Return After A Gap
 
@@ -361,7 +358,7 @@ learned baseline before one exists.
 | Start | Setup and current calibration | Conservative Daily Mode from runtime signals and one explicit next action when available | Personal baseline, trend, correlation, optimized score |
 | First week | Several check-ins and action outcomes | Recency-based adjustments, scheduled habit progress, simple workload and recovery flags | Stable long-term pattern or causal insight |
 | Two-plus weeks | Repeated comparable signals | Emerging patterns with visible sample size and low/medium confidence | Medical conclusion or certainty from correlation |
-| One-plus month | Daily and weekly outcomes plus feedback | Personal baselines, weekly adaptation, stronger ranking, habit change proposals | Unreviewed autonomous schedule changes |
+| One-plus month | Daily and weekly outcomes plus feedback | Personal baselines, observational weekly trends, stronger ranking | Unreviewed autonomous schedule changes |
 | Integration stage | Calendar or wearable data with consent | Lower-friction capture, better capacity estimates, conflict-aware proposals | Hidden provider writes or opaque data use |
 | Coach stage | Retained personal data in an ephemeral owner-only snapshot | Explain, compare, test assumptions, answer follow-ups, and state missing information through bounded read-only tools | Acting as a doctor/therapist, inventing causality, exposing hidden reasoning, or mutating product data |
 
@@ -542,7 +539,7 @@ The daily briefing should assign one of four modes:
 
 | Mode | When | Product behavior |
 | --- | --- | --- |
-| push | Good energy, manageable stress, clear high-value action | Protect focus and advance an important goal |
+| push | Good energy, manageable stress, clear high-value action | Protect focus and advance an important Task |
 | steady | Normal capacity, no major risk flag | Keep a realistic plan and one meaningful next step |
 | recover | Low energy, poor sleep, high private/emotional or physical stress | Reduce load and preserve minimum commitments |
 | plan | Overdue tasks, avoidable pressure, unclear priorities, too much open work | Sort, choose, and reduce ambiguity before execution |
@@ -602,10 +599,10 @@ multi-completion tracking.
   today.
 - Habit management remains available for setup, but daily completion happens in
   the same Today flow as tasks and recommendations.
-- A habit can become the primary action only when it is goal-relevant,
+- A habit can become the primary action only when it is context-relevant,
   time-appropriate, and compatible with Daily Mode.
-- The weekly review proposes keeping, shrinking, pausing, or replacing a habit
-  based on adherence and feedback; changes require confirmation.
+- The Weekly Review reports Habit outcomes and limitations without proposing or
+  applying a definition change.
 - Start with one to three important habits. Do not encourage users to activate a
   large routine inventory during onboarding.
 
@@ -1193,9 +1190,9 @@ Work:
   records, and named routines remain candidates until cadence is confirmed.
 - Keep Setup-created cadence-confirmed habits and fixed commitments reviewable,
   editable, pausable/archivable, and removable before Daily Mode uses them;
-  atomic reconciliation must continue to preserve manual rows. Archive
-  Setup-owned Goals without touching manual/foreign Goal rows. Keep Setup-owned
-  habit editing in Settings Setup while allowing active completion.
+  atomic reconciliation must continue to preserve manual rows. Reject Goal
+  input. Keep Setup-owned habit editing in Settings Setup while allowing active
+  completion.
 - Define mock/guest behavior separately from real-backend empty/error behavior.
 
 Evaluation:
@@ -1386,7 +1383,7 @@ Implemented:
 - Added repository, strict models, and authenticated `GET /v1/briefings/today` plus
   deliberate `POST /v1/briefings/generate` routes.
 - Refreshes or validates daily state before generation.
-- Ranks one primary action and at most two support actions by goal relevance,
+- Ranks one primary action and at most two support actions by relevance,
   urgency, energy fit, time fit, recovery risk, current outcome state, and
   evidence recency. Decision feedback is not yet available and remains a later
   phase input.
@@ -1514,7 +1511,7 @@ Evaluation:
   local window, exact deep links, disabled/demo state, quiet hours, and
   sensitive-copy restrictions?
 
-### Phase 8: Weekly Review And Habit Adaptation (Implemented)
+### Phase 8: Observational Weekly Review (Implemented)
 
 Goal:
 
@@ -1522,7 +1519,7 @@ Goal:
 
 Implemented:
 
-- One strict `weekly-review-v1` review is pinned to an explicit completed
+- One strict `weekly-review-v2` review is pinned to an explicit completed
   profile-local ISO week. Latest/period GET remains read-only; deliberate POST
   upserts one backend-owned derived identity.
 - Exact facts distinguish current durable completed and carried tasks,
@@ -1530,12 +1527,10 @@ Implemented:
   recovery days, and feedback. Known task-history and changed-cadence gaps remain
   limitations instead of reconstructed events.
 - A canonical source fingerprint exposes stale evidence. Generation persists
-  only the review and at most two deterministic proposals; it never changes a
-  user-owned record or calls an LLM.
-- Manual Habit V1 shrink/pause/archive is available only after exact before/after
-  confirmation and the existing owner-scoped timestamp/readback command.
-  Setup-owned changes open Settings Setup. Keep is non-mutating; replacement,
-  defer, and goal/task/schedule changes remain staged.
+  only the facts-only review with `proposals=[]`; it never changes a user-owned
+  record or calls an LLM.
+- Historical proposal arrays remain parseable for transport compatibility, but
+  Flutter and Coach hide them and no Weekly Review command can apply them.
 - `review_plan` opens the real authenticated weekly-review surface without
   generating or applying by itself. Guest/mock remains local and review-free.
 
@@ -1650,7 +1645,7 @@ Implemented:
   from retained relevant Setup, Capture, action, planning, calendar, review,
   insight, recommendation, memory, and Coach data. It includes catalog,
   relationship, count, period, and helper-view metadata under
-  `free-coach-agent-prompt-v2`/`personal-snapshot-v1`, while excluding auth,
+  `free-coach-agent-prompt-v3`/`personal-snapshot-v2`, while excluding auth,
   secrets, cross-user, anti-replay, provider, and operational rows.
 - Reuses Account Export's 10,000-per-table, 50,000-total, and 8 MiB limits and
   reports overflow instead of truncating.
@@ -1791,10 +1786,10 @@ failures. Notification Delivery V1 extends only the local runner with explicit
 current-day deterministic generation and a foreground Flutter receipt/banner;
 it does not make Dashboard reads generate or prove deployed cron/push delivery.
 
-Phase 8 is implemented with bounded persisted ISO-week facts, at most two
-deterministic proposals, explicit freshness, Setup ownership, and confirmed
-manual Habit V1 adaptation only. It does not reconstruct missing task or habit
-definition history and does not make staged compound changes executable.
+Phase 8 is implemented with bounded persisted ISO-week facts and explicit
+freshness. New or refreshed rows carry `proposals=[]`; historical arrays remain
+transport-readable but invisible and non-executable. It does not reconstruct
+missing Task or Habit-definition history.
 
 The first bounded Phase 9 integration is implemented as an explicit `.ics`
 file import. It remains independent of the standalone product loop, preserves

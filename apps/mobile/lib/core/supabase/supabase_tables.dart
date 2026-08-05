@@ -12,7 +12,6 @@ class SupabaseTables {
   static const learningPreferences = 'learning_preferences';
   static const memoryEntries = 'memory_entries';
   static const behavioralEvents = 'behavioral_events';
-  static const goals = 'goals';
   static const habits = 'habits';
   static const habitLogs = 'habit_logs';
   static const skillsetProfiles = 'skillset_profiles';

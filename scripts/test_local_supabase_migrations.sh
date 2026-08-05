@@ -173,7 +173,7 @@ local_supabase_capture_reset_facts() {
   LOCAL_SUPABASE_RESET_AUTH_USERS='4'
   LOCAL_SUPABASE_RESET_PROFILES='4'
   LOCAL_SUPABASE_RESET_DATABASE_BYTES='123456'
-  LOCAL_SUPABASE_RESET_LATEST_MIGRATION='20260804102409'
+  LOCAL_SUPABASE_RESET_LATEST_MIGRATION='20260804192406'
   LOCAL_SUPABASE_RESET_WAL_LSN='0/ABCDEF'
   if [[ "$(wc -l <"$EVENTS_FILE")" -gt 0 ]] &&
     grep -Fq 'verified backup' "$EVENTS_FILE"; then
@@ -246,7 +246,19 @@ for integrated_script in \
 done
 
 assert_contains "$ROOT_DIR/scripts/verify_supabase_local.sh" \
+  'source "$ROOT_DIR/scripts/lib/goal_removal_migration_harness.sh"'
+assert_contains "$ROOT_DIR/scripts/verify_supabase_local.sh" \
+  'run_goal_removal_migration_harness "$ROOT_DIR"'
+assert_contains "$ROOT_DIR/scripts/verify_supabase_local.sh" \
   'source "$ROOT_DIR/scripts/lib/local_supabase_database_safety.sh"'
+assert_contains "$ROOT_DIR/scripts/lib/goal_removal_migration_harness.sh" \
+  'isolated_postgres_start'
+assert_not_contains "$ROOT_DIR/scripts/lib/goal_removal_migration_harness.sh" \
+  'db reset --db-url'
+assert_not_contains "$ROOT_DIR/scripts/lib/goal_removal_migration_harness.sh" \
+  'create database'
+assert_not_contains "$ROOT_DIR/scripts/lib/goal_removal_migration_harness.sh" \
+  'drop database'
 assert_contains "$ROOT_DIR/scripts/reset_local_supabase.sh" \
   'local_supabase_execute_guarded_reset'
 assert_contains "$ROOT_DIR/scripts/backup_local_supabase.sh" \

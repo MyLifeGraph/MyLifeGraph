@@ -103,12 +103,12 @@ owner-scoped `profiles` row. It grants no new direct profile mutation authority.
 ## Account Export
 
 `GET /v1/account/export` is side-effect free and returns the strict
-`account-export-v2` JSON envelope. It includes the same bounded owner product
-rows as V1: `profiles`, `notification_preferences`,
+`account-export-v3` JSON envelope. It removes Goals from the former bounded
+owner product set and includes: `profiles`, `notification_preferences`,
 `learning_preferences`, `daily_logs`,
 `behavioral_events`, `lifestyle_entries`, `tasks`, `schedule_items`,
 `notifications`, `coach_messages`, `memory_entries`, `ai_insights`,
-`recommendations`, `skillset_profiles`, `goals`, `habits`, `habit_logs`,
+`recommendations`, `skillset_profiles`, `habits`, `habit_logs`,
 `focus_sessions`, `focus_session_schedule_sources`,
 `focus_session_reflections`, `intake_responses`,
 `study_setup_profiles`,
@@ -141,8 +141,8 @@ The table list, owner key, bounded cursor/watermark read shape, sanitized-export
 decision, omission decision, and separate Coach Snapshot participation are
 derived from the typed FastAPI owner-data catalog. Every repo-owned public
 table, including an operational ledger that participates in neither output,
-must have exactly one catalog entry. The export response contract remains the
-exact 41-table V2 shape above; this consolidation does not broaden export or
+must have exactly one catalog entry. The export response contract uses the
+exact 40-table V3 shape above; removing Goals does not broaden export or
 snapshot disclosure. Flutter's strict export allowlist uses the same catalog
 order, including `focus_session_schedule_sources`, before it accepts the record
 counts or saves the original response bytes.
@@ -152,7 +152,7 @@ verified-bearer FastAPI path's `service_role` client the missing `SELECT` grant
 on `lifestyle_entries`; Flutter and anonymous callers gain no new table
 authority.
 
-The V2 bounds remain 10,000 rows per table, 50,000 rows overall, and 8 MiB of
+The V3 bounds remain 10,000 rows per table, 50,000 rows overall, and 8 MiB of
 JSON.
 Exceeding a bound is an explicit `413`, never a silently truncated export.
 Supabase pages are stream-bounded before JSON materialization, and cumulative
