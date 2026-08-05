@@ -170,8 +170,6 @@ jobs:
           github-token: ${{ github.token }}
 
       - name: Apply the fresh migration chain and run all pgTAP assertions
-        env:
-          RESET_DB: 'true'
         run: npm run verify:db
 
   full-e2e:
@@ -215,7 +213,6 @@ jobs:
 
       - name: Run the full serial browser regression on a fresh database
         env:
-          RESET_DB: 'true'
           AI_SERVICE_PYTHON: python
         run: npm run e2e:web:full
 

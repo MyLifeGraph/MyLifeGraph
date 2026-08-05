@@ -179,6 +179,22 @@ export const DOCS_IMPACT_RULES = [
     requiredAll: ['docs/verification.md'],
   },
   {
+    name: 'Local database safety',
+    triggers: [
+      /^scripts\/(?:backup_local_supabase|reset_local_supabase)\.sh$/,
+      /^scripts\/lib\/(?:goal_removal_migration_harness|local_supabase_database_safety|local_supabase_migrations)\.sh$/,
+      /^scripts\/test_local_supabase_migrations\.sh$/,
+      /^supabase\/migration_tests\/local_database_safety\/.*$/,
+    ],
+    requiredAll: [
+      'docs/architecture.md',
+      'docs/local-database-safety.md',
+      'docs/local-dev.md',
+      'docs/supabase-current-state.md',
+      'docs/verification.md',
+    ],
+  },
+  {
     name: 'Local workflow',
     triggers: [
       /^scripts\/(?:start_frontend|start_local_stack|seed_demo_data|seed_student_feature_data)\.(?:sh|mjs|py)$/,
@@ -208,6 +224,12 @@ const STALE_CURRENT_CLAIMS = [
   {
     pattern: /\bprogressive optional goals\b/gi,
     message: 'Goals are retired from active Setup.',
+  },
+  {
+    pattern:
+      /^RESET_DB=true[^\n]*(?:npm run verify:db|e2e:web|scripts\/e2e_web\.sh)[^\n]*$/gim,
+    message:
+      'Verification and E2E cannot delegate reset authority; document the dedicated guarded reset wrapper.',
   },
   {
     pattern: /\bcoach-context-v1 data\b/gi,

@@ -28,6 +28,8 @@ Read the additional owner before touching its area:
   decision loops: `docs/daily-briefing-implementation-plan.md`.
 - Supabase schema, Auth, RLS, grants, RPCs, data sources, or migrations:
   `docs/supabase-current-state.md`.
+- Local Supabase backup, reset, restore, destructive confirmation, or
+  disposable migration-test isolation: `docs/local-database-safety.md`.
 - Executable Tasks, Habits, Focus, or briefing action consumption:
   `docs/phase-3-executable-actions-contract.md`.
 - Weekly Review facts, freshness, proposals, or confirmed Habit adaptation:
@@ -176,9 +178,23 @@ pending SQL and affected local rows, `APPLY_MIGRATIONS=true` is the explicit
 opt-in for applying repository migrations. A pending migration may change or
 delete local data.
 
-Never run `supabase db reset` or set `RESET_DB=true` unless the user explicitly
-requests a reset or is actively working with you on that local reset workflow.
-A reset is destructive local test setup, not an ordinary verification step.
+Normal verification, local-stack, and E2E scripts have no reset authority and
+must reject `RESET_DB=true`. Never run a raw `supabase db reset`, use reset with
+`--db-url`/`--linked`, or create a destructive test target inside the normal
+local Postgres cluster. If the user explicitly requests a local reset, follow
+the two-phase `npm run db:reset:local` workflow in
+`docs/local-database-safety.md`: preview the exact target, obtain the fresh
+content-bound confirmation token, create and restore-verify the automatic full
+backup, recheck target drift, and only then allow the wrapper's exact
+`supabase db reset --local` invocation. A reset is a separate destructive
+operation, never ordinary verification setup.
+
+Use `npm run db:backup:local` for a full local archive. A backup counts as
+verified only after its restore succeeds in the physically separate RAM-only
+Postgres container. Do not restore an archive into the normal local database
+without a new explicit user-approved recovery operation. Remove any external
+persistent command approval for broad `supabase db reset`; repository guards
+cannot revoke approvals stored by the caller environment.
 
 Before using a Supabase CLI command, inspect its installed help rather than
 guessing flags. Do not install replacement Node, Flutter, Docker, or Supabase

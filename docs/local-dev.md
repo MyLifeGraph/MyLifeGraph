@@ -34,7 +34,7 @@ source nvm before running commands or pass a narrow override such as:
 
 ```bash
 PATH=/path/to/nvm/versions/node/vXX/bin:$PATH \
-RESET_DB=true FLUTTER_BIN=/path/to/flutter bash scripts/e2e_web.sh
+FLUTTER_BIN=/path/to/flutter bash scripts/e2e_web.sh
 ```
 
 Do not install tool binaries into `.tools/`; `.tools/` is only for ignored local
@@ -1134,23 +1134,27 @@ removes only the exact unmarked legacy onboarding placeholder `Math`,
 preserved.
 
 The canonical app schema is snake_case. Legacy CamelCase tables are only used as
-optional migration sources when they already exist. A fresh reset is required
-when verifying the complete migration chain and its backfills/constraints from
-an empty local database; use the guarded repository script:
+optional migration sources when they already exist. If a completely fresh
+normal local database is explicitly required for manual chain verification,
+perform the guarded reset as a separate operation. First preview the exact
+target without changing data:
 
 ```bash
-RESET_DB=true \
-FLUTTER_BIN=/path/to/flutter \
-scripts/verify_supabase_local.sh
+npm run db:reset:local
 ```
+
+Then run only the content-bound execution command printed by that preview. It
+first creates and restore-verifies a full backup and rechecks target drift. Once
+that separate reset completes, run `npm run verify:db` without `RESET_DB=true`.
+Ordinary verification and E2E reject the reset flag.
 
 For local Supabase-backed app testing:
 
 1. Run `supabase start`.
 2. Confirm that `migration list --local` matches. If it does not, review the
-   SQL and local data before using `APPLY_MIGRATIONS=true`, or use the
-   `RESET_DB=true` verification flow only when a fresh local database is
-   deliberately intended.
+   SQL and local data before using `APPLY_MIGRATIONS=true`. A deliberately fresh
+   database uses the separate guarded reset workflow above, never verification
+   or E2E reset authority.
 3. Run `supabase status` and copy the local anon key into `.env`.
 4. Set `USE_MOCK_DATA=false`, `SUPABASE_URL=http://127.0.0.1:54321`, and
    `SUPABASE_ANON_KEY=<local anon key>`.
@@ -1271,15 +1275,22 @@ Automated local preflight without resetting the database:
 npm run verify:db
 ```
 
-Automated local reset and test run:
+The verification script runs Supabase with telemetry disabled, redacts keys
+and database credentials from output, requires matching migration history, and
+runs the isolated transition harness plus complete pgTAP suite. It does not
+read Flutter client configuration or repeat Flutter tests.
+
+Full local backup with a physical restore rehearsal:
 
 ```bash
-RESET_DB=true npm run verify:db
+npm run db:backup:local
 ```
 
-The script runs Supabase with telemetry disabled, redacts keys from output,
-requires matching migration history, and runs the complete pgTAP suite. It does
-not read Flutter client configuration or repeat Flutter tests.
+`npm run db:reset:local` is a non-destructive reset preview. A reset executes
+only when its fresh target/content token is passed back with `RESET_DB=true` to
+that same dedicated wrapper; it automatically creates another verified backup
+first. See `docs/local-database-safety.md` for the exact two-phase command and
+recovery procedure.
 
 ## Verification
 
@@ -1336,15 +1347,24 @@ APPLY_MIGRATIONS=true npm run verify:db
 
 That operation may change or delete local rows.
 
-Local Supabase reset workflow, only when a fresh local database is explicitly
-intended:
+Create a restore-verified local archive before broad data work:
 
 ```bash
-RESET_DB=true npm run verify:db
+npm run db:backup:local
 ```
 
-`RESET_DB=true` destroys and recreates the local database. The script requires
-the Supabase CLI and Docker to be available to the same shell that runs it.
+Preview an explicitly intended local reset without changing data:
+
+```bash
+npm run db:reset:local
+```
+
+The preview prints the only acceptable follow-up command. Its fresh token is
+bound to the exact local container, counts, database size, migration, and WAL
+position. The executing wrapper restore-verifies a full backup, refuses target
+drift, and invokes only `supabase db reset --local`. It requires Supabase CLI
+and Docker in the same shell. Detailed safety, recovery, and coherent source
+rollback steps live in `docs/local-database-safety.md`.
 
 For details on what each script verifies and what is still not automated, read
 `docs/verification.md`.
@@ -1370,11 +1390,11 @@ remain disabled until the specs have proven state independence.
 
 This is the normal non-reset path. It requires repository and local database
 migration history to match and never applies pending SQL automatically. It
-writes only run-unique test data to the local stack and skips the
-`supabase db reset` step unless `RESET_DB=true` is explicitly supplied. Every
-split spec owns its account and exact `finally` cleanup. After reviewing pending
-SQL and local rows, `APPLY_MIGRATIONS=true` is the separate opt-in; it may
-change or delete those rows.
+writes only run-unique test data to the local stack. `RESET_DB=true` is rejected
+before a database command runs; E2E has no reset branch. Every split spec owns
+its account and exact `finally` cleanup. After reviewing pending SQL and local
+rows, `APPLY_MIGRATIONS=true` is the separate opt-in; it may change or delete
+those rows.
 
 For a narrow Coach diagnosis, choose a fresh unique run id:
 
@@ -1395,11 +1415,9 @@ Exact current results live in
 [Current Verified Baseline](verification.md#current-verified-baseline).
 Documented browser assertions are not a pass claim for a later checkout.
 
-Browser E2E with a fresh local database:
-
-```bash
-RESET_DB=true FLUTTER_BIN=/path/to/flutter npm run e2e:web:full
-```
+If browser E2E genuinely needs a fresh normal local database, complete the
+separate guarded reset workflow first, then run the ordinary E2E command without
+`RESET_DB=true`. Do not combine destructive setup with the browser runner.
 
 The E2E script starts local Supabase, the FastAPI service with its deterministic
 fake Coach provider, and Flutter Web on `http://127.0.0.1:7357`. The smoke
@@ -1480,8 +1498,9 @@ the listed screens. Keep manual testing for flows not listed in
 - If E2E preflight or database assertions say migration history or required
   fields differ, inspect `supabase migration list --local`, the pending SQL,
   and affected local rows. Re-run with `APPLY_MIGRATIONS=true` only when those
-  changes are intended, or use the fresh local DB flow with `RESET_DB=true`
-  only when destroying the local database is intended.
+  changes are intended. If destroying the normal local database is explicitly
+  intended, stop E2E and use the separate preview/token/verified-backup reset
+  workflow in `docs/local-database-safety.md`.
 - If the Phase 3 migration refuses a legacy habit log with missing status and
   `value <= 0`, inspect that local row and decide its real outcome before
   retrying. The migration deliberately will not reinterpret it as a skip;

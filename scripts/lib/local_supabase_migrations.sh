@@ -24,7 +24,7 @@ local_supabase_validate_boolean() {
 local_supabase_validate_migration_flags() {
   local reset_db="$1"
   local apply_migrations="$2"
-  local allow_reset="${3:-true}"
+  local allow_reset="${3:-false}"
 
   local_supabase_validate_boolean RESET_DB "$reset_db" || return $?
   local_supabase_validate_boolean APPLY_MIGRATIONS "$apply_migrations" || return $?
@@ -39,7 +39,14 @@ local_supabase_validate_migration_flags() {
   if [[ "$reset_db" == "true" && "$allow_reset" != "true" ]]; then
     printf '%s\n' \
       'Local Supabase migration error: this command never resets the database.' \
-      'Use RESET_DB=true only with scripts/verify_supabase_local.sh or scripts/e2e_web.sh when destroying the local database is explicitly intended.' >&2
+      'Use npm run db:reset:local for a target-bound preview, verified backup, and explicit reset confirmation.' >&2
+    return 2
+  fi
+
+  if [[ "$reset_db" == "true" && "$allow_reset" == "true" ]]; then
+    printf '%s\n' \
+      'Local Supabase migration error: generic migration preparation has no reset authority.' \
+      'Use npm run db:reset:local; direct reset delegation is intentionally unsupported.' >&2
     return 2
   fi
 }
@@ -118,13 +125,8 @@ local_supabase_assert_migration_history_current() {
       'Local Supabase migration error: repository migration files and local database history differ.' \
       'No migration was applied automatically.' \
       'Review the pending SQL and local data first. Re-run the same command with APPLY_MIGRATIONS=true only when those local changes are intended.' >&2
-    if [[ "$allow_reset" == "true" ]]; then
-      printf '%s\n' \
-        'Use RESET_DB=true only when deliberately destroying and recreating the local database.' >&2
-    else
-      printf '%s\n' \
-        'This command never resets the database. Use RESET_DB=true only with scripts/verify_supabase_local.sh or scripts/e2e_web.sh when destruction is explicitly intended.' >&2
-    fi
+    printf '%s\n' \
+      'This command never resets the database. If a fresh local database is truly required, use npm run db:reset:local and review its target-bound preview.' >&2
   else
     printf '%s\n' \
       'Local Supabase migration error: the migration history output could not be verified safely.' \
@@ -136,16 +138,12 @@ local_supabase_assert_migration_history_current() {
 local_supabase_prepare_migration_state() {
   local reset_db="$1"
   local apply_migrations="$2"
-  local allow_reset="${3:-true}"
+  local allow_reset="${3:-false}"
 
   local_supabase_validate_migration_flags \
     "$reset_db" "$apply_migrations" "$allow_reset" || return $?
 
-  if [[ "$reset_db" == "true" ]]; then
-    printf '%s\n' \
-      'WARNING: RESET_DB=true destroys and recreates the local Supabase database.' >&2
-    supabase_cli db reset || return $?
-  elif [[ "$apply_migrations" == "true" ]]; then
+  if [[ "$apply_migrations" == "true" ]]; then
     printf '%s\n' \
       'WARNING: APPLY_MIGRATIONS=true runs pending SQL against the local database.' \
       'Pending migrations may change or delete local rows. Continue only when that local data change is intended.' >&2

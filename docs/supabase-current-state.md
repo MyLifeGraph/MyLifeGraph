@@ -1077,7 +1077,8 @@ lock, replay, deletion, or application-authority contract.
 
 ## Local Verification Workflow
 
-For local Supabase-backed testing, the reset should complete through:
+When destruction of the exact normal local database is explicitly authorized,
+the guarded reset must complete through:
 
 ```text
 20260804102409_daily_capture_v5_remove_day_shape.sql
@@ -1129,17 +1130,30 @@ role privileges, constraints, installed triggers, and database behavior belong
 in `supabase/tests/*.sql`, which runs only after the complete local migration
 history is confirmed.
 
-For local Supabase reset and migration verification:
+Normal verification, stack start, and E2E reject `RESET_DB=true`. Create a full
+custom-format backup and prove its restore in a separate RAM-only Postgres
+container with:
 
 ```bash
-RESET_DB=true npm run verify:db
+npm run db:backup:local
 ```
 
-The reset form should apply all migrations through
-`20260804102409_daily_capture_v5_remove_day_shape.sql`; expected legacy-table
-skip notices may be emitted for missing CamelCase tables. Use reset when proving
-the full migration/backfill/constraint chain from a fresh local database, not
-merely because a reviewed migration is pending.
+If a fresh normal local database is explicitly intended, first run the
+non-destructive target preview:
+
+```bash
+npm run db:reset:local
+```
+
+Only the exact follow-up command printed by that preview can execute the reset.
+It requires the current content-bound confirmation token, automatically creates
+and restore-verifies another full backup, refuses target drift, and invokes only
+`supabase db reset --local`. The fresh chain must apply through
+`20260804192406_harden_goal_removal_dependencies.sql`; expected legacy-table
+skip notices may be emitted for missing CamelCase tables. Use reset only when
+destruction is intended, not merely because a reviewed migration is pending.
+The full safety, recovery, physical-isolation, external-approval, and source
+rollback contract is `docs/local-database-safety.md`.
 
 Then either run the browser E2E smoke in `scripts/e2e_web.sh` or start the
 frontend with `scripts/start_frontend.sh` and manually verify the

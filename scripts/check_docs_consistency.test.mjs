@@ -403,6 +403,26 @@ test('a migration updates migration owners without churning AGENTS.md', () => {
   assert.doesNotMatch(errors[0], /AGENTS\.md/);
 });
 
+test('local database safety changes require the complete operational owner set', () => {
+  const source = 'scripts/lib/local_supabase_database_safety.sh';
+  const owners = [
+    'docs/architecture.md',
+    'docs/local-database-safety.md',
+    'docs/local-dev.md',
+    'docs/supabase-current-state.md',
+    'docs/verification.md',
+  ];
+
+  assert.deepEqual(findDocsImpactErrors([source, ...owners]), []);
+
+  const errors = findDocsImpactErrors([
+    source,
+    ...owners.filter((path) => path !== 'docs/local-database-safety.md'),
+  ]);
+  assert.equal(errors.length, 1);
+  assert.match(errors[0], /docs\/local-database-safety\.md/);
+});
+
 test('known superseded current-state wording fails outside historical docs', () => {
   const errors = findStaleClaimErrors(
     new Map([
@@ -415,4 +435,23 @@ test('known superseded current-state wording fails outside historical docs', () 
   );
   assert.equal(errors.length, 1);
   assert.match(errors[0], /Current Capture is V4/);
+});
+
+test('current docs cannot restore reset authority to verification or E2E', () => {
+  const errors = findStaleClaimErrors(
+    new Map([
+      [
+        'docs/current.md',
+        [
+          'RESET_DB=true npm run verify:db',
+          'RESET_DB=true FLUTTER_BIN=/opt/flutter npm run e2e:web:full',
+        ].join('\n'),
+      ],
+    ]),
+  );
+
+  assert.equal(errors.length, 2);
+  assert.ok(
+    errors.every((error) => /cannot delegate reset authority/.test(error)),
+  );
 });

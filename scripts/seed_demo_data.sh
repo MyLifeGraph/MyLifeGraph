@@ -35,6 +35,7 @@ supabase_cli() {
 
 sanitize_supabase_output() {
   sed -E \
+    -e 's#postgres(ql)?://[^[:space:]│]+#postgresql://<redacted>#g' \
     -e 's/(Publishable[[:space:]]*│[[:space:]]*)[^│]+/\1<redacted> /g' \
     -e 's/(Secret[[:space:]]*│[[:space:]]*)[^│]+/\1<redacted> /g' \
     -e 's/(Access Key[[:space:]]*│[[:space:]]*)[^│]+/\1<redacted> /g' \

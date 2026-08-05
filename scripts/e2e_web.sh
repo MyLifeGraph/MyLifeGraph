@@ -47,7 +47,7 @@ cd "$ROOT_DIR"
 mkdir -p "$SUPABASE_HOME"
 
 local_supabase_validate_migration_flags \
-  "$RESET_DB" "$APPLY_MIGRATIONS" true || exit $?
+  "$RESET_DB" "$APPLY_MIGRATIONS" false || exit $?
 local_supabase_validate_boolean AI_SERVICE_START "$AI_SERVICE_START" || exit $?
 local_supabase_validate_boolean HEADED "$HEADED" || exit $?
 local_supabase_validate_boolean \
@@ -125,6 +125,7 @@ supabase_cli() {
 
 sanitize_supabase_output() {
   sed -E \
+    -e 's#postgres(ql)?://[^[:space:]│]+#postgresql://<redacted>#g' \
     -e 's/(Publishable[[:space:]]*│[[:space:]]*)[^│]+/\1<redacted> /g' \
     -e 's/(Secret[[:space:]]*│[[:space:]]*)[^│]+/\1<redacted> /g' \
     -e 's/(Access Key[[:space:]]*│[[:space:]]*)[^│]+/\1<redacted> /g' \
@@ -159,7 +160,7 @@ fi
 printf '%s\n' "$start_output" | sanitize_supabase_output
 
 local_supabase_prepare_migration_state \
-  "$RESET_DB" "$APPLY_MIGRATIONS" true
+  "$RESET_DB" "$APPLY_MIGRATIONS" false
 emit_timing "supabase" "$supabase_started_at"
 
 status_output="$(supabase_cli status -o env)"

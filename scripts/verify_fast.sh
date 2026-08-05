@@ -22,6 +22,9 @@ run_source_checks() {
   cd "$ROOT_DIR"
   bash -n scripts/start_frontend.sh
   bash -n scripts/lib/local_supabase_migrations.sh
+  bash -n scripts/lib/local_supabase_database_safety.sh
+  bash -n scripts/backup_local_supabase.sh
+  bash -n scripts/reset_local_supabase.sh
   bash -n scripts/test_local_supabase_migrations.sh
   bash -n scripts/start_local_stack.sh
   bash -n scripts/test_start_local_stack.sh

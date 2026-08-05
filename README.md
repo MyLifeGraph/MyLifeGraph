@@ -588,7 +588,8 @@ live in `docs/supabase-current-state.md`. The scoped, machine-checked
 cross-runtime version registry lives in `docs/current-contracts.json`; owning
 feature contracts remain authoritative for complete wire formats and
 compatibility behavior. Exact current verification evidence lives only in
-`docs/verification.md`.
+`docs/verification.md`. Local backup, reset, recovery, and physically isolated
+migration-test rules live in `docs/local-database-safety.md`.
 
 Repository source proves neither an applied remote migration nor live project
 configuration. Remote projects still need direct inspection before relying on
@@ -685,14 +686,27 @@ APPLY_MIGRATIONS=true npm run verify:db
 
 That opt-in may change or delete local rows.
 
-Local Supabase reset and migration verification:
+Create a full local backup and prove that it restores in a separate RAM-only
+Postgres container:
 
 ```bash
-RESET_DB=true npm run verify:db
+npm run db:backup:local
 ```
 
-`RESET_DB=true` destroys and recreates the local Supabase database only. It must
-not be used against a remote database.
+The normal verification, local-stack, and E2E commands reject
+`RESET_DB=true`. If a local reset is explicitly intended, first run the
+non-destructive target preview:
+
+```bash
+npm run db:reset:local
+```
+
+Only the dedicated command printed by that preview can execute a reset. It
+requires a fresh content-bound confirmation token, creates and restore-verifies
+another complete backup, rechecks that the database did not change during the
+backup, and then invokes only `supabase db reset --local`. See
+`docs/local-database-safety.md`; never use raw reset, `--db-url`, or `--linked`
+reset automation.
 
 Browser E2E:
 
@@ -776,11 +790,9 @@ Exact current results and dated run history live only in
 the remainder of `docs/verification.md`. Run the command before claiming that a
 later checkout passes this source coverage.
 
-With a fresh local database:
-
-```bash
-RESET_DB=true FLUTTER_BIN=/path/to/flutter npm run e2e:web:full
-```
+Browser E2E never resets the normal local database. If a fresh database is
+explicitly required, complete the separately guarded reset workflow first,
+then invoke E2E without `RESET_DB=true`.
 
 Use real Ubuntu-installed `node`, `npm`, `supabase`, and Docker for E2E. If
 those tools are installed through `nvm`, make sure the shell running the command
@@ -792,6 +804,9 @@ has the nvm bin directory on `PATH`.
   navigation, features, data, learning behavior, dashboards, core concepts,
   Coach limits, and present information-architecture friction.
 - `docs/local-dev.md` - Full local setup and troubleshooting.
+- `docs/local-database-safety.md` - Local backup, guarded reset, recovery,
+  physical migration-test isolation, special safety rules, and coherent
+  rollback instructions.
 - `docs/presentation-demo-2026-07-30.md` - Two-origin presentation setup,
   live-Coach preflight, timed script, and presentation-day checklist.
 - `docs/architecture.md` - Current architecture and data-flow overview.

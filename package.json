@@ -17,6 +17,8 @@
     "verify:visual": "node --test scripts/check_frontend_visual_contract.test.mjs && node scripts/check_frontend_visual_contract.mjs",
     "verify:local-stack": "bash scripts/test_local_supabase_migrations.sh && bash scripts/test_start_local_stack.sh",
     "verify:supabase": "npm run verify:db",
+    "db:backup:local": "bash scripts/backup_local_supabase.sh",
+    "db:reset:local": "bash scripts/reset_local_supabase.sh",
     "e2e:web": "npm run e2e:web:full",
     "e2e:web:smoke": "E2E_SUITE=smoke bash scripts/e2e_web.sh",
     "e2e:web:full": "E2E_SUITE=full bash scripts/e2e_web.sh",

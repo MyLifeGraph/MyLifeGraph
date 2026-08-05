@@ -762,7 +762,21 @@ Legacy CamelCase tables such as `"User"`, `"DailyLog"`, and `"Task"` may still
 exist in older remote projects. The canonical migration copies data from those
 tables when present, but new Flutter code should target the snake_case tables.
 
-See `docs/supabase-current-state.md` for the exact current schema caveat.
+Local database operations have a separate safety boundary. Normal verification,
+stack start, and E2E may inspect migration history or apply explicitly reviewed
+pending migrations, but they cannot delegate reset authority. Full backups are
+published only after a restore succeeds in a physically separate, RAM-only
+Postgres container. An exceptional normal-local reset requires exact
+project/container/database validation, a content-bound preview token, an
+automatic restore-verified backup, a second unchanged-target check, and the
+dedicated wrapper's `db reset --local` call. Transition fixtures and concurrent
+lock tests likewise run in a separate Postgres process with no normal Supabase
+volume; another database in the normal cluster is not an isolation boundary.
+These repository controls grant no remote authority.
+
+See `docs/supabase-current-state.md` for the exact current schema caveat and
+`docs/local-database-safety.md` for backup, reset, recovery, physical isolation,
+external approval, and coherent rollback rules.
 
 ## FastAPI AI Service
 
