@@ -66,8 +66,33 @@ The primary Today surface uses these exact concepts:
 - `Today at a glance` for the vertical agenda;
 - `Setup commitment`, `Preparation`, `Calendar`, and `Focus` for agenda source
   categories;
-- `Today's tasks`, `Show all tasks`, `Today's habits`, and `More` for the
-execution/support boundary.
+- `Today's tasks`, `Show all tasks`, and `Today's habits` for execution;
+- `Beat yesterday` for the compact latest-saved-check-in inset; and
+- `Review your week` for the direct Weekly Review navigation entry; and
+- `Recommendations`, `Decision feedback history`, and `Full week` for three
+  independent supporting accordions.
+
+`Beat yesterday` names the existing compact inset but does not claim a delta or
+improvement. It labels only available Mood, Energy, Sleep duration, Sleep
+quality, and Stress values and includes the saved date. Full-week status
+semantics are `Completion status not applicable`, `Not completed`, `Completed`,
+and `Completed and fully rated`. The status box is not described as a control.
+When both Full-week sources loaded successfully and a day is empty, use `No
+Setup or Preparation items.` When one source failed, use `No items from the
+available source.` for empty days and retain the source-specific inline failure
+notice. If all expected core sources failed, use `Full week unavailable` and
+`No partial week was invented.` instead of rendering empty days.
+
+The Today source/update line and ordinary explanations for streak, progress,
+agenda, Task/Habit sections, `Show all tasks` plus its `Tasks` subsection, and
+the three supporting accordions start hidden. Their adjacent circled
+information controls use the exact semantics and tooltip labels
+`Show information about <heading>` and `Hide information about <heading>`.
+Opening information reveals the existing English copy; it does not replace or
+delay an error, loading, unavailable, result, action, count, or empty-state
+message and does not open the surrounding Task/supporting accordion. The
+direct `Review your week` entry always shows its existing summary and has no
+information control or collapsed wrapper.
 
 `today-overview-v2` may additionally label agenda rows `Task`, `Habit`, and
 `Fixed commitment`. A scheduled Task or Habit still appears once in progress;
@@ -178,11 +203,11 @@ says `Early evidence`.
   for a staged change that has not been applied.
 - Daily briefings visibly say `Rule-based · not AI-written`. Stored Insight
   rows are called notes unless their individual source proves a narrower AI
-  claim. The compact Today projection calls confirmed preparation reservations
+  claim. Planner calls its compact confirmed preparation reservations
   `7-day preparation load`; it does not combine them with current Task
-  estimates or imply an immutable historical workload.
-- Today and Planner name confirmed reservations `7-day preparation load`. The
-  Preparation Plans page does not repeat a `Your next 7 days` card; it groups
+  estimates or imply an immutable historical workload. Today does not repeat
+  this workload card.
+- The Preparation Plans page does not repeat a `Your next 7 days` card; it groups
   compact `Open plans` and `History` accordions instead. Recurring
   `schedule_items` are labelled `weekly setup commitments`; imported calendar
   busy time is not shown in that workload. The optional

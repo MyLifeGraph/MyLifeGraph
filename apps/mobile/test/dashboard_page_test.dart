@@ -8,23 +8,29 @@ import 'package:my_life_graph/composition/profile_local_date_providers.dart';
 import 'package:my_life_graph/features/briefings/domain/decision_feedback.dart';
 import 'package:my_life_graph/composition/briefing_providers.dart';
 import 'package:my_life_graph/features/dashboard/domain/entities/dashboard_snapshot.dart';
+import 'package:my_life_graph/features/dashboard/domain/entities/dashboard_full_week.dart';
 import 'package:my_life_graph/features/dashboard/domain/repositories/dashboard_repository.dart';
 import 'package:my_life_graph/features/dashboard/presentation/pages/dashboard_page.dart';
 import 'package:my_life_graph/composition/dashboard_providers.dart';
-import 'package:my_life_graph/features/deadline_plans/domain/deadline_plan.dart';
-import 'package:my_life_graph/composition/deadline_plan_providers.dart';
 import 'package:my_life_graph/features/optimization/domain/entities/recommendation.dart';
 import 'package:my_life_graph/features/optimization/domain/entities/recommendation_feed.dart';
 import 'package:my_life_graph/composition/optimization_providers.dart';
 import 'package:my_life_graph/features/quick_action/domain/habit_v1.dart';
 import 'package:my_life_graph/features/tasks/domain/executable_task.dart';
 
-import 'support/deadline_plan_fixtures.dart';
-
 void main() {
   testWidgets('Today uses streak, progress, agenda, tasks, and habits order',
       (tester) async {
-    await _pumpDashboard(tester, snapshot: _todaySnapshot());
+    await _pumpDashboard(
+      tester,
+      snapshot: _todaySnapshot(),
+      capabilities: const AppSurfaceCapabilities(
+        isLocalDemo: false,
+        canUseSyncedHabits: true,
+        canUseSyncedExecution: true,
+        canUseWeeklyReview: true,
+      ),
+    );
 
     expect(find.text("Today's decision"), findsNothing);
     expect(find.text('Check-in streak'), findsOneWidget);
@@ -38,18 +44,145 @@ void main() {
     expect(find.text('Focus'), findsOneWidget);
     expect(find.text("Today's tasks"), findsOneWidget);
     expect(find.text("Today's habits"), findsOneWidget);
-    expect(find.text('More'), findsOneWidget);
-    expect(find.text('Recommendations'), findsNothing);
+    expect(find.text('More'), findsNothing);
+    expect(find.text('Review your week'), findsOneWidget);
+    expect(find.text('Recommendations'), findsOneWidget);
+    expect(find.text('Decision feedback history'), findsOneWidget);
+    expect(find.text('Full week'), findsOneWidget);
+    expect(find.text('7-day preparation load'), findsNothing);
+    expect(find.text('Beat yesterday'), findsOneWidget);
 
     final streakY = tester.getTopLeft(find.text('Check-in streak')).dy;
     final progressY = tester.getTopLeft(find.text("Today's progress")).dy;
     final agendaY = tester.getTopLeft(find.text('Today at a glance')).dy;
     final tasksY = tester.getTopLeft(find.text("Today's tasks")).dy;
     final habitsY = tester.getTopLeft(find.text("Today's habits")).dy;
+    final weeklyReviewY = tester.getTopLeft(find.text('Review your week')).dy;
+    final recommendationsY = tester.getTopLeft(find.text('Recommendations')).dy;
     expect(streakY, lessThan(progressY));
     expect(progressY, lessThan(agendaY));
     expect(agendaY, lessThan(tasksY));
     expect(tasksY, lessThan(habitsY));
+    expect(habitsY, lessThan(weeklyReviewY));
+    expect(weeklyReviewY, lessThan(recommendationsY));
+  });
+
+  testWidgets(
+      'accordion descriptions start hidden and each disclosure opens and closes independently',
+      (tester) async {
+    await _pumpDashboard(
+      tester,
+      snapshot: _todaySnapshot(),
+      capabilities: const AppSurfaceCapabilities(
+        isLocalDemo: false,
+        canUseSyncedHabits: true,
+        canUseSyncedExecution: true,
+        canUseWeeklyReview: true,
+      ),
+    );
+
+    const disclosures = <String, String>{
+      'Today': 'Your account data · updated 10:00',
+      'Check-in streak':
+          'A day counts when both check-ins are saved. You can enter both at any time today; an unfinished current day does not end the prior streak.',
+      'Today\'s progress':
+          'Includes both check-ins, today\'s tasks and habits, and confirmed preparation blocks. Skipped habits do not count as completed.',
+      'Today at a glance': 'Your timed day in one compact agenda.',
+      'Today\'s tasks': 'Due, overdue, in-progress, and completed-today tasks.',
+      'Show all tasks': 'Future, undated, completed, and cancelled tasks',
+      'Today\'s habits': 'Scheduled habits and still-open weekly targets.',
+      'Recommendations': 'Rule-based suggestions from your available signals.',
+      'Decision feedback history':
+          'Inspect or delete previously saved feedback.',
+      'Full week':
+          'This profile-local Monday–Sunday with Setup and Preparation.',
+    };
+
+    for (final description in disclosures.values) {
+      expect(find.text(description), findsNothing);
+    }
+    expect(
+      find.text(
+        'Completed, skipped, missed, carried, and recovery facts stay distinct.',
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('today-info-control-Weekly review')),
+      findsNothing,
+    );
+
+    for (final entry in disclosures.entries) {
+      await _tapInfo(tester, entry.key);
+      expect(find.text(entry.value), findsOneWidget, reason: entry.key);
+      await _tapInfo(tester, entry.key);
+      expect(find.text(entry.value), findsNothing, reason: entry.key);
+    }
+
+    expect(find.text('Future task'), findsNothing);
+    await _tapExpansion(tester, const ValueKey('today-all-tasks'));
+    const allTasksDescription =
+        'Finite actions with durable estimates and deadlines.';
+    expect(find.text(allTasksDescription), findsNothing);
+    await _tapInfo(tester, 'Tasks');
+    expect(find.text(allTasksDescription), findsOneWidget);
+    await _tapInfo(tester, 'Tasks');
+    expect(find.text(allTasksDescription), findsNothing);
+
+    await _tapInfo(tester, 'Check-in streak');
+    await _tapInfo(tester, 'Today\'s progress');
+    expect(find.text(disclosures['Check-in streak']!), findsOneWidget);
+    expect(find.text(disclosures['Today\'s progress']!), findsOneWidget);
+    await _tapInfo(tester, 'Check-in streak');
+    expect(find.text(disclosures['Check-in streak']!), findsNothing);
+    expect(find.text(disclosures['Today\'s progress']!), findsOneWidget);
+  });
+
+  testWidgets(
+      'supporting info clicks neither open accordions nor start lazy reads',
+      (tester) async {
+    var recommendationLoads = 0;
+    var feedbackLoads = 0;
+    var fullWeekLoads = 0;
+    await _pumpDashboard(
+      tester,
+      snapshot: _todaySnapshot(),
+      capabilities: const AppSurfaceCapabilities(
+        isLocalDemo: false,
+        canUseSyncedHabits: true,
+        canUseSyncedExecution: true,
+        canUseWeeklyReview: true,
+      ),
+      onRecommendationsLoad: () => recommendationLoads += 1,
+      onFeedbackLoad: () => feedbackLoads += 1,
+      onFullWeekLoad: () => fullWeekLoads += 1,
+    );
+
+    for (final topic in const [
+      'Recommendations',
+      'Decision feedback history',
+      'Full week',
+    ]) {
+      await _tapInfo(tester, topic);
+    }
+
+    expect(find.text('Review your week'), findsOneWidget);
+    expect(find.text('Example suggestions'), findsNothing);
+    expect(find.text('No recent feedback.'), findsNothing);
+    expect(recommendationLoads, 0);
+    expect(feedbackLoads, 0);
+    expect(fullWeekLoads, 0);
+
+    await _tapExpansion(tester, const ValueKey('dashboard-recommendations'));
+    await _tapExpansion(
+      tester,
+      const ValueKey('dashboard-feedback-history'),
+    );
+    await _tapExpansion(tester, const ValueKey('dashboard-full-week'));
+
+    expect(recommendationLoads, 1);
+    expect(feedbackLoads, 1);
+    expect(fullWeekLoads, 1);
   });
 
   testWidgets('progress failure is honest while the usable agenda remains',
@@ -57,6 +190,10 @@ void main() {
     final snapshot = _todaySnapshot(
       progress: null,
       sourceStates: _sourceStates(
+        checkIns: const TodaySourceState(
+          status: TodaySourceStatus.unavailable,
+          message: 'Check-ins could not be loaded.',
+        ),
         tasks: const TodaySourceState(
           status: TodaySourceStatus.unavailable,
           message: 'Tasks could not be loaded.',
@@ -69,39 +206,47 @@ void main() {
     await _pumpDashboard(tester, snapshot: snapshot);
 
     expect(find.text('Progress unavailable'), findsOneWidget);
+    expect(find.text('Streak unavailable'), findsOneWidget);
+    expect(find.text('Check-ins could not be loaded.'), findsOneWidget);
     expect(find.text('Tasks unavailable'), findsOneWidget);
     expect(find.text('Lecture'), findsOneWidget);
     expect(find.text('Imported seminar'), findsOneWidget);
+    expect(find.text('Edit Morning check-in'), findsOneWidget);
+    expect(find.text('Edit Evening check-in'), findsOneWidget);
     expect(find.text('4/7 completed'), findsNothing);
+    expect(
+      find.text(
+        'Includes both check-ins, today\'s tasks and habits, and confirmed preparation blocks. Skipped habits do not count as completed.',
+      ),
+      findsNothing,
+    );
   });
 
-  testWidgets('More is lazy and preserves secondary account surfaces',
+  testWidgets('supporting sections are independently lazy and stay open',
       (tester) async {
     await _pumpDashboard(
       tester,
       snapshot: _todaySnapshot(),
-      supporting: DashboardSnapshot(
-        origin: DashboardOrigin.account,
-        loadedAt: DateTime(2026, 7, 21, 10),
-        latestCheckIn: DashboardCheckIn(
-          entryDate: DateTime(2026, 7, 21),
-          mood: 7,
-          energy: 8,
-          sleepHours: 7.5,
-          sleepQuality: 6,
-          hasMorningCapture: true,
-          hasEveningCapture: true,
-        ),
-        checkInStreakDays: 0,
-        todayPlan: const [],
-        scheduleDays: [
-          ScheduleDay(
-            label: 'Tue',
-            dateLabel: 'Jul 21',
-            date: DateTime(2026, 7, 21),
-            events: const [
-              ScheduleEvent(title: 'Full-week lecture', time: '10:00-11:00'),
-            ],
+      latestCheckIn: DashboardCheckIn(
+        entryDate: DateTime(2026, 7, 21),
+        mood: 7,
+        energy: 8,
+        sleepHours: 7.5,
+        sleepQuality: 6,
+        stress: 3,
+        hasMorningCapture: true,
+        hasEveningCapture: true,
+      ),
+      fullWeek: const DashboardFullWeekProjector().project(
+        displayedLocalDate: DateTime(2026, 7, 21),
+        commitments: const [
+          DashboardSetupCommitmentFact(
+            id: 'setup-1',
+            title: 'Full-week lecture',
+            weekday: DateTime.tuesday,
+            startsAt: '10:00',
+            endsAt: '11:00',
+            sortMinutes: 600,
           ),
         ],
       ),
@@ -116,9 +261,6 @@ void main() {
             confidence: .7,
           ),
         ]),
-      ),
-      workload: Future.value(
-        PreparationWorkload.fromJson(preparationWorkloadEnvelope()),
       ),
       capabilities: const AppSurfaceCapabilities(
         isLocalDemo: false,
@@ -145,26 +287,26 @@ void main() {
     );
 
     expect(find.text('Rule-based example'), findsNothing);
-    expect(find.text('Review your week'), findsNothing);
-
-    await _tapExpansion(tester, const ValueKey('dashboard-more'));
-
-    expect(find.text('7-day preparation load'), findsOneWidget);
     expect(find.text('Review your week'), findsOneWidget);
-    expect(find.text('Latest check-in'), findsOneWidget);
-    expect(find.text('Previous-night sleep'), findsOneWidget);
-    expect(find.text('Previous-night sleep quality'), findsOneWidget);
-    expect(find.text('6/10'), findsOneWidget);
+    expect(find.text('Full-week lecture'), findsNothing);
+    expect(find.text('No recent feedback.'), findsNothing);
+    expect(find.text('Beat yesterday'), findsOneWidget);
+    expect(find.textContaining('Sleep duration'), findsOneWidget);
+    expect(find.text('7-day preparation load'), findsNothing);
+
+    await _tapExpansion(tester, const ValueKey('dashboard-recommendations'));
+    await _tapExpansion(tester, const ValueKey('dashboard-feedback-history'));
+    await _tapExpansion(tester, const ValueKey('dashboard-full-week'));
+
+    expect(find.text('Review your week'), findsOneWidget);
     expect(find.text('Recommendations'), findsOneWidget);
     expect(find.text('Rule-based example'), findsOneWidget);
     expect(find.text('Decision feedback history'), findsOneWidget);
     expect(find.text('Full week'), findsOneWidget);
     expect(find.text('Full-week lecture'), findsOneWidget);
-    expect(find.text('Secondary guidance behind today’s action'), findsNothing);
   });
 
-  testWidgets('feedback history entry stays hidden when history is empty',
-      (tester) async {
+  testWidgets('feedback accordion owns its empty state', (tester) async {
     await _pumpDashboard(
       tester,
       snapshot: _todaySnapshot(),
@@ -175,9 +317,13 @@ void main() {
       ),
     );
 
-    await _tapExpansion(tester, const ValueKey('dashboard-more'));
+    await _tapExpansion(
+      tester,
+      const ValueKey('dashboard-feedback-history'),
+    );
 
-    expect(find.text('Decision feedback history'), findsNothing);
+    expect(find.text('Decision feedback history'), findsOneWidget);
+    expect(find.text('No recent feedback.'), findsOneWidget);
   });
 
   testWidgets('Show all tasks reveals future and planner-managed tasks',
@@ -258,6 +404,9 @@ void main() {
       size: const Size(320, 760),
       textScaler: const TextScaler.linear(2),
     );
+
+    await _tapInfo(tester, 'Today\'s tasks');
+    await _tapInfo(tester, 'Show all tasks');
 
     await tester.drag(find.byType(CustomScrollView), const Offset(0, -900));
     await tester.pumpAndSettle();
@@ -356,13 +505,21 @@ Future<void> _tapExpansion(WidgetTester tester, ValueKey<String> key) async {
   await tester.pumpAndSettle();
 }
 
+Future<void> _tapInfo(WidgetTester tester, String topic) async {
+  final control = find.byKey(ValueKey('today-info-control-$topic'));
+  await tester.ensureVisible(control);
+  await tester.pumpAndSettle();
+  await tester.tap(control);
+  await tester.pumpAndSettle();
+}
+
 Future<void> _pumpDashboard(
   WidgetTester tester, {
   DashboardSnapshot? snapshot,
   Future<DashboardSnapshot>? snapshotFuture,
-  DashboardSnapshot? supporting,
+  DashboardCheckIn? latestCheckIn,
+  DashboardFullWeekProjection? fullWeek,
   Future<RecommendationFeed>? recommendations,
-  Future<PreparationWorkload>? workload,
   Size size = const Size(900, 1500),
   TextScaler textScaler = TextScaler.noScaling,
   List<DecisionFeedback> feedback = const [],
@@ -370,6 +527,9 @@ Future<void> _pumpDashboard(
   TodayHabitCommandPort? habitCommands,
   _RecordingProjectionRefresh? projectionRefresh,
   DashboardRepository? dashboardRepository,
+  VoidCallback? onRecommendationsLoad,
+  VoidCallback? onFeedbackLoad,
+  VoidCallback? onFullWeekLoad,
   AppSurfaceCapabilities capabilities = const AppSurfaceCapabilities(
     isLocalDemo: false,
     canUseSyncedHabits: true,
@@ -383,6 +543,7 @@ Future<void> _pumpDashboard(
     tester.view.resetDevicePixelRatio();
   });
   final value = snapshotFuture ?? Future.value(snapshot ?? _todaySnapshot());
+  final displayedDate = snapshot?.localDate ?? DateTime(2026, 7, 21);
   final commandRepository = dashboardRepository ??
       _StaticDashboardRepository(snapshot ?? _todaySnapshot());
   await tester.pumpWidget(
@@ -393,21 +554,30 @@ Future<void> _pumpDashboard(
           const SessionProfileLocalDateSource(session: null),
         ),
         dashboardSnapshotProvider.overrideWith((ref) => value),
-        dashboardSupportingSnapshotProvider.overrideWith(
-          (ref) => Future.value(
-            supporting ??
-                DashboardSnapshot.empty(
-                  origin: DashboardOrigin.account,
-                  loadedAt: DateTime(2026, 7, 21, 10),
-                ),
-          ),
+        dashboardLatestCheckInProvider(displayedDate).overrideWith(
+          (ref) => Future.value(latestCheckIn),
+        ),
+        dashboardFullWeekProvider(displayedDate).overrideWith(
+          (ref) {
+            onFullWeekLoad?.call();
+            return Future.value(
+              fullWeek ?? DashboardFullWeekProjection.empty(displayedDate),
+            );
+          },
         ),
         recommendationFeedProvider.overrideWith(
-          (ref) =>
-              recommendations ??
-              Future.value(RecommendationFeed.demo(const [])),
+          (ref) {
+            onRecommendationsLoad?.call();
+            return recommendations ??
+                Future.value(RecommendationFeed.demo(const []));
+          },
         ),
-        decisionFeedbackProvider.overrideWith((ref) => Future.value(feedback)),
+        decisionFeedbackProvider.overrideWith(
+          (ref) {
+            onFeedbackLoad?.call();
+            return Future.value(feedback);
+          },
+        ),
         todayCommandControllerProvider.overrideWith(
           (ref) => TodayCommandController(
             taskCommands: taskCommands,
@@ -418,8 +588,6 @@ Future<void> _pumpDashboard(
             onTodayReloaded: () {},
           ),
         ),
-        if (workload != null)
-          preparationWorkloadProvider.overrideWith((ref) => workload),
       ],
       child: MaterialApp(
         builder: (context, child) => MediaQuery(
@@ -575,13 +743,16 @@ DashboardSnapshot _todaySnapshot({
 }
 
 TodaySourceStates _sourceStates({
+  TodaySourceState checkIns = const TodaySourceState(
+    status: TodaySourceStatus.current,
+  ),
   TodaySourceState tasks = const TodaySourceState(
     status: TodaySourceStatus.current,
   ),
 }) {
   const current = TodaySourceState(status: TodaySourceStatus.current);
   return TodaySourceStates(
-    checkIns: current,
+    checkIns: checkIns,
     tasks: tasks,
     habits: current,
     setupCommitments: current,

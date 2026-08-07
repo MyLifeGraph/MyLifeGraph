@@ -93,6 +93,19 @@ Exam/Assignment type.
 Status pills retain their full visible label at large text and may grow
 vertically instead of clipping, shrinking, or overflowing it.
 
+Planner `Next seven days` and Today `Full week` share the feature-neutral
+day-card and appointment-row layout. Today's trailing status box is a
+non-interactive fact, not a checkbox control: not-applicable Setup and open
+Preparation remain empty, official completion uses `onSurfaceVariant`, and
+fully rated Preparation uses the existing Preparation information/category
+color. No state uses a route-local hardcoded color. The adjacent semantic label
+distinguishes not applicable, not completed, completed, and completed plus
+fully rated in Dark, Light, and Space themes. The box is exposed only as a
+static labelled fact and never carries a button, action, or enabled/disabled
+state. The row content contributes one combined title/detail/category label:
+actionable Preparation rows expose one button/tap action, while static Setup
+rows expose neither an action nor a control state.
+
 Normal content surfaces have no outline. An outline is reserved for inputs,
 keyboard focus, selected state, a conflict/warning/danger state, or a genuine
 interactive boundary. Shadows are quiet, low-spread depth cues on raised
@@ -207,11 +220,27 @@ ribbons, orbits, constellations, input-driven parallax, mouse/scroll tracking,
 device sensors, or other camera paths are permitted. No other theme gains
 looping decorative motion.
 
-Controls use at least a 44×44 logical touch target. Keyboard focus uses a
+Controls use at least a 44×44 logical touch target except for the explicitly
+bounded Today information-disclosure control below. Keyboard focus uses a
 two-pixel strong-focus outline, including buttons, icon buttons, fields,
 switches, checkboxes, segmented controls, and interactive surfaces. Hover,
 pressed, disabled, selected, and loading states remain visually distinct
 without changing product truth.
+
+Today explanatory copy uses one feature-local information disclosure. Its
+small circled `AppIcons.infoOutline` control sits directly beside the owning
+heading. The visible icon remains 20×20 inside an exact 24×24 click, hover,
+focus, and semantics rectangle, with two logical pixels of tolerance on every
+side. Non-interactive vertical padding retains the previous heading alignment;
+in an accordion that padding belongs to the surrounding header action. This is
+the sole exception to the global 44×44 action-target rule. The control uses the
+existing theme primary color. Opening and closing combine vertical size and
+opacity at `AppMotionTokens.stateFor`; Reduced Motion resolves that duration to
+zero.
+Several disclosures may remain open independently. The information control in
+an accordion header remains separate from the accordion chevron and content
+action, and title/control/action groups wrap rather than overflow at 320
+logical pixels and 200-percent text.
 
 Evening pressure-source help is a separate accessible info control: hover opens
 the tooltip on web, tap opens it on touch, and neither path changes the
@@ -311,7 +340,8 @@ The objective gate is:
 - text contrast at least 4.5:1;
 - non-text and focus contrast at least 3:1;
 - two-pixel keyboard focus ring;
-- minimum 44×44 targets;
+- minimum 44×44 targets, except for the exact 24×24 Today information-
+  disclosure rectangle around its 20×20 icon;
 - no overflow or hidden action at 320 logical pixels and 2.0 text scale;
 - representative checks at 390×844 and 1280×960;
 - dark, light, and Space theme coverage;
@@ -319,8 +349,10 @@ The objective gate is:
 - visible labels and semantics remain equivalent.
 
 The reference slice is Shell, Auth/Recovery, first Setup, Today, Planner, and a
-Planner form dialog. Today additionally covers local guest empty state and a
-rich authenticated fixture. The full review matrix includes:
+Planner form dialog. Today additionally covers local guest empty state, a rich
+authenticated fixture, the compact check-in inset, independently expanded
+supporting sections, and every Full-week status level. The full review matrix
+includes:
 
 | Loop | Routes and states |
 | --- | --- |

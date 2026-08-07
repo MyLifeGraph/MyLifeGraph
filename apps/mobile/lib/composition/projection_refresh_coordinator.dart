@@ -4,6 +4,8 @@ typedef ProjectionInvalidator = void Function(ProductProjection projection);
 enum ProductProjection {
   latestDailyCapture,
   today,
+  todayLatestCheckIn,
+  todayFullWeek,
   recommendations,
   planner,
   preparationWorkload,
@@ -34,6 +36,7 @@ class ProjectionRefreshCoordinator {
         projections: const [
           ProductProjection.latestDailyCapture,
           ProductProjection.today,
+          ProductProjection.todayLatestCheckIn,
           ProductProjection.examWeekOutlook,
         ],
       );
@@ -79,6 +82,7 @@ class ProjectionRefreshCoordinator {
         targetDate: targetDate,
         projections: const [
           ProductProjection.today,
+          ProductProjection.todayFullWeek,
           ProductProjection.preparationWorkload,
           ProductProjection.examWeekOutlook,
         ],
@@ -88,6 +92,7 @@ class ProjectionRefreshCoordinator {
         targetDate: targetDate,
         projections: const [
           ProductProjection.today,
+          ProductProjection.todayFullWeek,
           ProductProjection.planner,
           ProductProjection.preparationWorkload,
           ProductProjection.examWeekOutlook,
@@ -108,6 +113,7 @@ class ProjectionRefreshCoordinator {
           ProductProjection.today,
           ProductProjection.recommendations,
           ProductProjection.planner,
+          ProductProjection.todayFullWeek,
           ProductProjection.preparationWorkload,
           ProductProjection.examWeekOutlook,
         ],
@@ -117,6 +123,8 @@ class ProjectionRefreshCoordinator {
         projections: const [
           ProductProjection.latestDailyCapture,
           ProductProjection.today,
+          ProductProjection.todayLatestCheckIn,
+          ProductProjection.todayFullWeek,
           ProductProjection.recommendations,
           ProductProjection.planner,
           ProductProjection.preparationWorkload,
@@ -135,10 +143,13 @@ class ProjectionRefreshCoordinator {
   }) =>
       _refresh(targetDate: targetDate);
 
+  Future<void> focusReflectionChanged() => _refresh(
+        projections: const [ProductProjection.todayFullWeek],
+      );
+
   Future<void> recommendationsChanged() => _refresh(
         projections: const [
           ProductProjection.recommendations,
-          ProductProjection.today,
         ],
       );
 

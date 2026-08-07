@@ -28,6 +28,7 @@ void main() {
     expect(invalidated, [
       ProductProjection.latestDailyCapture,
       ProductProjection.today,
+      ProductProjection.todayLatestCheckIn,
       ProductProjection.examWeekOutlook,
     ]);
   });
@@ -43,6 +44,7 @@ void main() {
     expect(invalidated, [
       ProductProjection.latestDailyCapture,
       ProductProjection.today,
+      ProductProjection.todayLatestCheckIn,
       ProductProjection.examWeekOutlook,
     ]);
   });
@@ -85,6 +87,7 @@ void main() {
     expect(snapshotDates, ['2026-07-31']);
     expect(invalidated, [
       ProductProjection.today,
+      ProductProjection.todayFullWeek,
       ProductProjection.preparationWorkload,
       ProductProjection.examWeekOutlook,
     ]);
@@ -97,6 +100,7 @@ void main() {
     expect(snapshotDates, ['2026-07-31']);
     expect(invalidated, [
       ProductProjection.today,
+      ProductProjection.todayFullWeek,
       ProductProjection.planner,
       ProductProjection.preparationWorkload,
       ProductProjection.examWeekOutlook,
@@ -124,6 +128,7 @@ void main() {
       ProductProjection.today,
       ProductProjection.recommendations,
       ProductProjection.planner,
+      ProductProjection.todayFullWeek,
       ProductProjection.preparationWorkload,
       ProductProjection.examWeekOutlook,
     ]);
@@ -138,10 +143,7 @@ void main() {
 
     await coordinator.recommendationsChanged();
     expect(snapshotDates, ['2026-07-31']);
-    expect(invalidated, [
-      ProductProjection.recommendations,
-      ProductProjection.today,
-    ]);
+    expect(invalidated, [ProductProjection.recommendations]);
   });
 
   test('settings-only impact invalidates no unrelated projection', () async {
@@ -149,6 +151,13 @@ void main() {
 
     expect(snapshotDates, isEmpty);
     expect(invalidated, [ProductProjection.preparationWorkload]);
+  });
+
+  test('reflection changes invalidate only Full week rating status', () async {
+    await coordinator.focusReflectionChanged();
+
+    expect(snapshotDates, isEmpty);
+    expect(invalidated, [ProductProjection.todayFullWeek]);
   });
 
   test('projection invalidation still happens when snapshot refresh fails',
@@ -175,6 +184,8 @@ void main() {
     expect(invalidated, [
       ProductProjection.latestDailyCapture,
       ProductProjection.today,
+      ProductProjection.todayLatestCheckIn,
+      ProductProjection.todayFullWeek,
       ProductProjection.recommendations,
       ProductProjection.planner,
       ProductProjection.preparationWorkload,

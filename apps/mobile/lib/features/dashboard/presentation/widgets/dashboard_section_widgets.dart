@@ -3,7 +3,142 @@ import 'package:flutter/material.dart';
 import '../../../../core/constants/app_radii.dart';
 import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/theme/app_icons.dart';
+import '../../../../core/theme/app_motion_tokens.dart';
 import '../../../../core/widgets/app_card.dart';
+
+typedef TodayInfoHeaderBuilder = Widget Function(
+  BuildContext context,
+  Widget infoButton,
+);
+
+const _todayInfoControlSize = 24.0;
+const _todayInfoIconSize = 20.0;
+const _todayInfoVerticalLayoutPadding = 10.0;
+
+/// Feature-local, non-persisted disclosure for explanatory Today copy.
+///
+/// The description is absent from both the widget and semantics trees while
+/// closed. Its control remains independent from any surrounding accordion.
+class TodayInfoDisclosure extends StatefulWidget {
+  const TodayInfoDisclosure({
+    super.key,
+    required this.topic,
+    required this.description,
+    required this.headerBuilder,
+    this.descriptionStyle,
+  });
+
+  final String topic;
+  final String description;
+  final TodayInfoHeaderBuilder headerBuilder;
+  final TextStyle? descriptionStyle;
+
+  @override
+  State<TodayInfoDisclosure> createState() => _TodayInfoDisclosureState();
+}
+
+class _TodayInfoDisclosureState extends State<TodayInfoDisclosure> {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final motion = context.motionTokens;
+    final duration = motion.stateFor(context);
+    final actionLabel =
+        '${_expanded ? 'Hide' : 'Show'} information about ${widget.topic}';
+    final inheritedIconButtonStyle = IconButtonTheme.of(context).style;
+    final compactInfoButtonStyle =
+        (inheritedIconButtonStyle ?? const ButtonStyle()).copyWith(
+      minimumSize: const WidgetStatePropertyAll(
+        Size.square(_todayInfoControlSize),
+      ),
+      fixedSize: const WidgetStatePropertyAll(
+        Size.square(_todayInfoControlSize),
+      ),
+      maximumSize: const WidgetStatePropertyAll(
+        Size.square(_todayInfoControlSize),
+      ),
+      iconSize: const WidgetStatePropertyAll(_todayInfoIconSize),
+      padding: const WidgetStatePropertyAll(EdgeInsets.zero),
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+    );
+    final infoButton = Padding(
+      key: ValueKey('today-info-layout-${widget.topic}'),
+      padding: const EdgeInsets.symmetric(
+        vertical: _todayInfoVerticalLayoutPadding,
+      ),
+      child: SizedBox.square(
+        key: ValueKey('today-info-control-${widget.topic}'),
+        dimension: _todayInfoControlSize,
+        child: IconButtonTheme(
+          data: IconButtonThemeData(style: compactInfoButtonStyle),
+          child: Semantics(
+            button: true,
+            expanded: _expanded,
+            label: actionLabel,
+            onTap: _toggle,
+            child: ExcludeSemantics(
+              child: IconButton(
+                tooltip: actionLabel,
+                color: Theme.of(context).colorScheme.primary,
+                onPressed: _toggle,
+                icon: const Icon(
+                  AppIcons.infoOutline,
+                  size: _todayInfoIconSize,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        widget.headerBuilder(context, infoButton),
+        ExcludeSemantics(
+          excluding: !_expanded,
+          child: AnimatedSwitcher(
+            duration: duration,
+            reverseDuration: duration,
+            switchInCurve: motion.curve,
+            switchOutCurve: motion.curve,
+            transitionBuilder: (child, animation) {
+              final curved = CurvedAnimation(
+                parent: animation,
+                curve: motion.curve,
+                reverseCurve: motion.curve,
+              );
+              return SizeTransition(
+                sizeFactor: curved,
+                alignment: AlignmentDirectional.topStart,
+                child: FadeTransition(opacity: curved, child: child),
+              );
+            },
+            child: _expanded
+                ? Padding(
+                    key: ValueKey('today-info-description-${widget.topic}'),
+                    padding: const EdgeInsets.only(top: AppSpacing.xs),
+                    child: Text(
+                      widget.description,
+                      style: widget.descriptionStyle ??
+                          Theme.of(context).textTheme.bodyMedium,
+                    ),
+                  )
+                : SizedBox(
+                    key: ValueKey(
+                      'today-info-description-closed-${widget.topic}',
+                    ),
+                  ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _toggle() => setState(() => _expanded = !_expanded);
+}
 
 /// Presentation primitives shared only by the independently owned Dashboard
 /// sections.
@@ -21,13 +156,24 @@ class DashboardSectionTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final copy = Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(title, style: Theme.of(context).textTheme.titleLarge),
-        const SizedBox(height: AppSpacing.xs),
-        Text(subtitle, style: Theme.of(context).textTheme.bodyMedium),
-      ],
+    final copy = TodayInfoDisclosure(
+      topic: title,
+      description: subtitle,
+      headerBuilder: (context, infoButton) => Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Flexible(
+            child: Padding(
+              padding: const EdgeInsets.only(top: AppSpacing.sm),
+              child: Text(
+                title,
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+            ),
+          ),
+          infoButton,
+        ],
+      ),
     );
     if (trailing == null) return copy;
     return LayoutBuilder(
@@ -209,8 +355,22 @@ class DashboardInlineExpansionCard extends StatelessWidget {
             button: true,
             expanded: expanded,
             child: ListTile(
-              title: Text(title),
-              subtitle: Text(subtitle),
+              title: TodayInfoDisclosure(
+                topic: title,
+                description: subtitle,
+                headerBuilder: (context, infoButton) => Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Flexible(
+                      child: Padding(
+                        padding: const EdgeInsets.only(top: AppSpacing.sm),
+                        child: Text(title),
+                      ),
+                    ),
+                    infoButton,
+                  ],
+                ),
+              ),
               trailing:
                   Icon(expanded ? AppIcons.expandLess : AppIcons.expandMore),
               onTap: onToggle,

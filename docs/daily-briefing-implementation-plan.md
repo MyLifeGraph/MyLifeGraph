@@ -1436,8 +1436,12 @@ or `/v1/briefings/*` call path; backend persistence, scheduled preparation,
 notification generation, Coach context, and historical feedback remain
 implemented. `GET /v1/today/overview` retains the compatible V1 read; Planner
 adds `GET /v1/today/overview-v2` with Setup, Planner, Preparation, Calendar,
-Focus, Task, Habit, and fixed-commitment facts. Supporting workload, review,
-saved signals, recommendations, feedback history, and full week remain lazy.
+Focus, Task, Habit, and fixed-commitment facts. The visible streak card adds a
+narrow latest-check-in read. Weekly Review is a direct capability-gated
+navigation entry. Recommendations, feedback history, and the current calendar
+week are independent supporting accordions that load only when their own
+accordion is opened. Preparation workload remains in Planner and is no longer
+duplicated on Today.
 Read `docs/today-overview-v1-contract.md`, `docs/planner-v1-contract.md`, and
 `docs/study-setup-v1-contract.md` before changing this surface.
 

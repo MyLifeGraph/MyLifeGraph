@@ -48,6 +48,20 @@ Focus history. Obstacles are offered only for an abandoned session or when
 either rating is low. Active sessions, expired-but-unfinished timers, and
 unstarted Planner blocks cannot be rated.
 
+Today `Full week` consumes reflections only as a narrow status fact for an
+exact Preparation block. `fullyRated` requires at least one
+`focus_session_schedule_sources` association whose source kind and block id
+match that block, every associated Focus session to be terminal, and every one
+of those sessions to have a valid `focus-reflection-v1` row with both ratings.
+Obstacles remain optional. A missing, invalid, or deleted reflection downgrades
+only the visual status from fully rated to the block's official completed
+state; it never changes the terminal session or Preparation completion. Saving,
+editing, deleting, or clearing reflections invalidates that lazy Today
+projection after the durable reflection operation. If a clear result is
+outcome-unknown, the first attempt does not invalidate anything; a successful
+`Retry unchanged` of that exact clear request performs the same invalidation as
+an initially confirmed success.
+
 ## Learning preferences
 
 Every authenticated account resolves the following full state:

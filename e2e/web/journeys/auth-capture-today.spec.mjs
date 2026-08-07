@@ -74,5 +74,29 @@ test('@auth-capture-today signs in, persists Evening, and renders Today', async 
 
   await e2e.signInUi();
   await expectFlutterText(page, 'Today at a glance');
+  const agendaInformation = 'Your timed day in one compact agenda.';
+  await expect(
+    page.getByText(agendaInformation, { exact: true }),
+  ).toHaveCount(0);
+  const showAgendaInformation = page.getByRole('button', {
+    name: 'Show information about Today at a glance',
+    exact: true,
+  });
+  const closedInformationBounds = await showAgendaInformation.boundingBox();
+  expect(closedInformationBounds).not.toBeNull();
+  expect(closedInformationBounds.width).toBe(24);
+  expect(closedInformationBounds.height).toBe(24);
+  await showAgendaInformation.click();
+  await expectFlutterText(page, agendaInformation);
+  const hideAgendaInformation = page.getByRole('button', {
+    name: 'Hide information about Today at a glance',
+    exact: true,
+  });
+  await expect(hideAgendaInformation).toBeVisible();
+  const openInformationBounds = await hideAgendaInformation.boundingBox();
+  expect(openInformationBounds).not.toBeNull();
+  expect(openInformationBounds.width).toBe(24);
+  expect(openInformationBounds.height).toBe(24);
+  await expectFlutterText(page, 'Beat yesterday');
   await expectFlutterText(page, 'Edit Evening check-in');
 });

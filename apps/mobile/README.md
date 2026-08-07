@@ -105,12 +105,32 @@ State best-effort. Today reads the strict read-only
 `today-overview-v2` projection: both-capture streak, dynamic progress, the
 Setup/Preparation/Calendar/Focus plus Planner Task/Habit/fixed-commitment
 agenda, Tasks, and Habits. The V1 route remains available for older clients.
-Supporting workload,
-reviews, signals, recommendations, feedback history, and the full week remain
-lazy. The persisted deterministic briefing still exists for backend consumers,
+The latest saved check-in is loaded separately into the compact
+`Beat yesterday` streak inset. `Review your week` is a direct
+capability-gated navigation entry. Recommendations, decision-feedback history,
+and the current profile-local Monday-through-Sunday week are independent,
+initially closed supporting accordions and load only while their own accordion
+is open. Preparation workload remains in Planner and is no longer repeated on
+Today. The persisted
+deterministic briefing still exists for backend consumers,
 but it is no longer presented as a decision made for the user. Capture itself
 does not generate recommendations or create/change a plan. Morning Calibration
-therefore describes only what that save does. Under `daily-capture-v5`, Evening
+therefore describes only what that save does.
+
+Today keeps its source/update line and ordinary heading explanations initially
+hidden behind independent circled information buttons. The same disclosure is
+used for streak, progress, agenda, Today/all Tasks, Habits, and each of the
+three supporting accordions. The direct `Review your week` entry instead keeps
+its summary visible and has no information toggle. Opening information never
+opens the surrounding accordion or starts its lazy provider; errors,
+loading/results, actions, counts, and empty states remain immediately visible.
+The local state resets with a new Today route, uses
+an exact 24×24 click, hover, focus, and semantics area around the unchanged
+20×20 icon with dynamic Show/Hide labels, and changes immediately under Reduced
+Motion. Non-interactive vertical padding preserves heading alignment; all other
+app actions retain the global minimum 44×44 target.
+
+Under `daily-capture-v5`, Evening
 requires one planned local sleep time and a `300..720` minute target on a
 15-minute grid. Morning records editable aware estimated sleep-start/wake
 instants, derives and labels the `Estimated sleep duration`, retains the target
@@ -148,7 +168,8 @@ finishes the captured app-level Snapshot/foreign-projection refresh. It skips
 only disposed controller state and its Today-owned reload, so the date-bound
 auto-disposed provider is not retained.
 Its home layout composes separate typed presentation sections for
-streak/progress/agenda, Tasks, Habits, and lazy supporting content. Task
+streak/progress/agenda, Tasks, Habits, a direct Weekly Review entry, and three
+independent supporting accordions. Task
 creation/editing remains in Planner; an unreachable duplicate Today editor and
 its inert edit/cancel/postpone wiring are not retained.
 
@@ -280,6 +301,28 @@ plans are grouped as `Open plans` and compact `History`; only the selected or
 newly previewed accordion is expanded. In-page navigation pushes route history,
 while shell destinations replace it. The shared top back control pops real
 history and uses route-specific fallbacks for direct deep links.
+
+Planner's rolling `Next seven days` and Today's calendar-week `Full week` use
+the same feature-neutral day-card and appointment-row primitive. Today adds a
+non-interactive completion-status box: Setup is not applicable, open
+Preparation is unchecked, official completion is a neutral check, and an exact
+completed block whose associated Focus sessions are all terminal and all have
+valid reflections uses the Preparation category color. Static status boxes and
+Setup rows have no disabled-control semantics; an actionable Preparation row
+has one exact combined label and tap action. A single failed Full-week source
+keeps only the other source's facts and uses a partial-source empty label, while
+a failure of every expected core source shows the accordion error rather than
+an invented empty week. Exact Focus associations use sorted 100-block reads and
+one global 500-row budget; the Deadline read and in-week transformation share
+the Preparation error boundary, so a 241st block preserves usable Setup facts
+and starts no rating read.
+
+Deadline confirm/complete/cancel success, including exact retry, emits one
+controller-owned projection impact; proposal previews emit none, and only a
+returned managed Task adds the profile date for Daily Snapshot refresh. Focus
+reflection save/delete callbacks likewise invalidate Full week after the
+durable write even if their sheet or page was dismissed. In both cases a
+refresh failure stays best effort and does not rewrite the mutation outcome.
 
 The global offline banner reports only that no network transport is available;
 it does not prove Supabase or FastAPI reachability. Synced writes are not queued.

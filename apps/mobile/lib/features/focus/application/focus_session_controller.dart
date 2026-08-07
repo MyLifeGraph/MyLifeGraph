@@ -10,6 +10,7 @@ import 'focus_recovery_store.dart';
 typedef FocusClock = DateTime Function();
 typedef FocusRequestIdFactory = String Function();
 typedef FocusProjectionRefresh = Future<void> Function(String targetDate);
+typedef FocusReflectionProjectionRefresh = Future<void> Function();
 typedef FocusTerminalHandoff = Future<void> Function(
   FocusSession session,
   bool protectionConfirmed,
@@ -324,6 +325,7 @@ class FocusSessionController extends StateNotifier<FocusSessionState> {
     required FocusProtectionReconciler protection,
     required FocusRecoveryStore recoveryStore,
     required FocusProjectionRefresh refreshProjection,
+    FocusReflectionProjectionRefresh? refreshReflectionProjection,
     required FocusRequestIdFactory requestIdFactory,
     required bool useMockData,
     FocusClock? clock,
@@ -333,6 +335,8 @@ class FocusSessionController extends StateNotifier<FocusSessionState> {
         _protection = protection,
         _recoveryStore = recoveryStore,
         _refreshProjection = refreshProjection,
+        _refreshReflectionProjection =
+            refreshReflectionProjection ?? _ignoreReflectionRefresh,
         _requestIdFactory = requestIdFactory,
         _useMockData = useMockData,
         _clock = clock ?? DateTime.now,
@@ -349,6 +353,7 @@ class FocusSessionController extends StateNotifier<FocusSessionState> {
   final FocusProtectionReconciler _protection;
   final FocusRecoveryStore _recoveryStore;
   final FocusProjectionRefresh _refreshProjection;
+  final FocusReflectionProjectionRefresh _refreshReflectionProjection;
   final FocusRequestIdFactory _requestIdFactory;
   final bool _useMockData;
   final FocusClock _clock;
@@ -714,6 +719,7 @@ class FocusSessionController extends StateNotifier<FocusSessionState> {
         reflectionDataAvailable: true,
       );
     }
+    await _refreshReflectionProjectionSafely();
     return saved;
   }
 
@@ -730,6 +736,16 @@ class FocusSessionController extends StateNotifier<FocusSessionState> {
       state = state.copyWith(
         reflections: {...state.reflections}..remove(session.id),
       );
+    }
+    await _refreshReflectionProjectionSafely();
+  }
+
+  Future<void> _refreshReflectionProjectionSafely() async {
+    try {
+      await _refreshReflectionProjection();
+    } catch (_) {
+      // A durable reflection stays successful when a dependent read cannot
+      // be invalidated immediately.
     }
   }
 
@@ -929,6 +945,8 @@ class FocusSessionController extends StateNotifier<FocusSessionState> {
     super.dispose();
   }
 }
+
+Future<void> _ignoreReflectionRefresh() async {}
 
 class _StudySettingsResult {
   const _StudySettingsResult(this.status, this.settings);

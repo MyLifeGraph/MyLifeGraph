@@ -7,6 +7,7 @@ import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/theme/app_category_visuals.dart';
 import '../../../../core/theme/app_icons.dart';
 import '../../../../core/widgets/app_card.dart';
+import '../../../../core/widgets/app_schedule_day_card.dart';
 import '../../../deadline_plans/domain/exam_week_outlook.dart';
 import '../../domain/planner.dart';
 
@@ -674,25 +675,11 @@ class PlannerSevenDaySection extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.sm),
           for (final day in days) ...[
-            AppCard(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    DateFormat('EEEE, MMM d').format(day.localDate),
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                  const SizedBox(height: AppSpacing.sm),
-                  if (day.items.isEmpty)
-                    const Text('No planned or fixed items.')
-                  else
-                    for (final item in day.items)
-                      _PlannerDayItemTile(
-                        item: item,
-                        onTap: () => onItemTap(item),
-                      ),
-                ],
-              ),
+            AppScheduleDayCard(
+              localDate: day.localDate,
+              items: day.items.map(_plannerDayItemView).toList(growable: false),
+              emptyLabel: 'No planned or fixed items.',
+              onItemTap: (view) => onItemTap(view.payload! as PlannerDayItem),
             ),
             if (day != days.last) const SizedBox(height: AppSpacing.sm),
           ],
@@ -700,56 +687,31 @@ class PlannerSevenDaySection extends StatelessWidget {
       );
 }
 
-class _PlannerDayItemTile extends StatelessWidget {
-  const _PlannerDayItemTile({required this.item, required this.onTap});
-
-  final PlannerDayItem item;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final visual = _visual(item.kind);
-    final appearance = visual.category.visual(context);
-    final time = item.allDay
-        ? 'All day'
-        : item.recoveryMinutes > 0
-            ? '${DateFormat.Hm().format(item.startsAt!.toLocal())}–'
-                '${DateFormat.Hm().format(item.endsAt!.toLocal())} focus + '
-                '${item.recoveryMinutes} min recovery · reserved until '
-                '${DateFormat.Hm().format(item.reservedEndsAt!.toLocal())}'
-            : '${DateFormat.Hm().format(item.startsAt!.toLocal())}–'
-                '${DateFormat.Hm().format(item.endsAt!.toLocal())}';
-    final actionable = {
+AppScheduleDayItem _plannerDayItemView(PlannerDayItem item) {
+  final visual = _visual(item.kind);
+  final time = item.allDay
+      ? 'All day'
+      : item.recoveryMinutes > 0
+          ? '${DateFormat.Hm().format(item.startsAt!.toLocal())}–'
+              '${DateFormat.Hm().format(item.endsAt!.toLocal())} focus + '
+              '${item.recoveryMinutes} min recovery · reserved until '
+              '${DateFormat.Hm().format(item.reservedEndsAt!.toLocal())}'
+          : '${DateFormat.Hm().format(item.startsAt!.toLocal())}–'
+              '${DateFormat.Hm().format(item.endsAt!.toLocal())}';
+  return AppScheduleDayItem(
+    id: item.id,
+    title: item.title,
+    detail: time,
+    category: visual.category,
+    icon: visual.icon,
+    actionable: const {
       'manual_commitment',
       'task_block',
       'habit_slot',
       'preparation',
-    }.contains(item.kind);
-    return Container(
-      key: ValueKey('planner-day-item-${item.id}'),
-      margin: const EdgeInsets.only(bottom: AppSpacing.xs),
-      child: Material(
-        color: appearance.background,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppRadii.sm),
-          side: BorderSide(
-            color: appearance.foreground.withValues(alpha: 0.34),
-          ),
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: ListTile(
-          contentPadding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-          iconColor: appearance.foreground,
-          textColor: appearance.foreground,
-          leading: Icon(visual.icon, size: 22),
-          title: Text(item.title),
-          subtitle: Text('$time · ${appearance.label}'),
-          trailing: actionable ? const Icon(AppIcons.chevronRight) : null,
-          onTap: actionable ? onTap : null,
-        ),
-      ),
-    );
-  }
+    }.contains(item.kind),
+    payload: item,
+  );
 }
 
 class PlannerPreparationSection extends StatelessWidget {

@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 
 import '../../../../composition/projection_refresh_providers.dart';
 import '../../../../composition/today_command_providers.dart';
+import '../../../../composition/briefing_providers.dart';
 import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/capabilities/app_surface_capabilities.dart';
 import '../../../../core/navigation/app_routes.dart';
@@ -12,14 +13,15 @@ import '../../../../core/theme/app_icons.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_page.dart';
 import 'package:my_life_graph/composition/profile_local_date_providers.dart';
-import 'package:my_life_graph/composition/deadline_plan_providers.dart';
 import 'package:my_life_graph/composition/optimization_providers.dart';
+import '../../../briefings/domain/decision_feedback.dart';
 import '../../../quick_action/domain/habit_v1.dart';
 import 'package:my_life_graph/composition/widgets/app_header_actions.dart';
 import '../../../tasks/domain/executable_task.dart';
 import '../../domain/entities/dashboard_snapshot.dart';
 import 'package:my_life_graph/composition/dashboard_providers.dart';
-import '../widgets/dashboard_more_section.dart';
+import '../widgets/dashboard_supporting_sections.dart';
+import '../widgets/dashboard_section_widgets.dart';
 import '../widgets/today_action_sections.dart';
 import '../widgets/today_overview_sections.dart';
 
@@ -34,7 +36,9 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
   bool _showCompletedTasks = false;
   bool _showCancelledTasks = false;
   bool _showAllTasks = false;
-  bool _showMore = false;
+  bool _showRecommendations = false;
+  bool _showFeedback = false;
+  bool _showFullWeek = false;
   bool _isRefreshingRecommendations = false;
   String? _recommendationRefreshError;
 
@@ -43,13 +47,6 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
     final snapshot = ref.watch(dashboardSnapshotProvider);
     final commands = ref.watch(todayCommandControllerProvider);
     final capabilities = ref.watch(appSurfaceCapabilitiesProvider);
-    final recommendations =
-        _showMore ? ref.watch(recommendationFeedProvider) : null;
-    final workload = _showMore && capabilities.canUseDeadlinePlanner
-        ? ref.watch(preparationWorkloadProvider)
-        : null;
-    final supporting =
-        _showMore ? ref.watch(dashboardSupportingSnapshotProvider) : null;
     final visibleSnapshot = commands.displayedSnapshot ?? snapshot.valueOrNull;
 
     if (visibleSnapshot == null) {
@@ -77,6 +74,21 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
         commands.projectionStatus == TodayProjectionStatus.current &&
             !snapshot.isRefreshing;
     final data = visibleSnapshot;
+    final localDate = data.localDate;
+    final latestCheckIn = localDate == null
+        ? AsyncValue<DashboardCheckIn?>.error(
+            const DashboardUnavailableException(
+              'Profile-local Today date is unavailable.',
+            ),
+            StackTrace.current,
+          )
+        : ref.watch(dashboardLatestCheckInProvider(localDate));
+    final recommendations =
+        _showRecommendations ? ref.watch(recommendationFeedProvider) : null;
+    final feedback = _showFeedback ? ref.watch(decisionFeedbackProvider) : null;
+    final fullWeek = _showFullWeek && localDate != null
+        ? ref.watch(dashboardFullWeekProvider(localDate))
+        : null;
     return _DashboardHome(
       snapshot: data,
       commands: commands,
@@ -104,6 +116,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
           ).toString(),
         ),
       ),
+      latestCheckIn: latestCheckIn,
       taskVisibility: TodayTaskVisibility(
         showAll: _showAllTasks,
         showCompleted: _showCompletedTasks,
@@ -137,40 +150,50 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
           data.localDate,
         ),
       ),
-      moreState: DashboardMoreState(
-        accountData: data.origin == DashboardOrigin.account,
-        supporting: supporting,
-        recommendations: recommendations,
-        workload: workload,
-        canUseWeeklyReview: capabilities.canUseWeeklyReview,
-        isRefreshingRecommendations: _isRefreshingRecommendations,
-        recommendationRefreshError: _recommendationRefreshError,
-      ),
-      moreActions: DashboardMoreActions(
-        onRetryWorkload: () => ref.invalidate(preparationWorkloadProvider),
-        onLoadWorkloadDetail: (localDate) => ref
-            .read(deadlinePlanRepositoryProvider)
-            .getWorkloadDetail(localDate),
-        onOpenWeeklyReview: () => context.push(AppRoutes.weeklyReview),
-        onRetryRecommendations: () {
-          setState(() => _recommendationRefreshError = null);
-          ref.invalidate(recommendationFeedProvider);
-        },
-        onRefreshRecommendations: _refreshRecommendations,
-        onShowFeedbackHistory: _showFeedbackHistory,
-        onAddMorning: () => context.push(AppRoutes.morningCalibration),
-        onAddEvening: () => context.push(AppRoutes.dailyCheckIn),
-        onOpenPreparationPlan: (planId) => context.push(
-          Uri(
-            path: AppRoutes.preparationPlans,
-            queryParameters: {'plan_id': planId},
-          ).toString(),
+      supportingSections: DashboardSupportingSections(
+        recommendationsExpanded: _showRecommendations,
+        feedbackExpanded: _showFeedback,
+        fullWeekExpanded: _showFullWeek,
+        state: DashboardSupportingState(
+          accountData: data.origin == DashboardOrigin.account,
+          canUseWeeklyReview: capabilities.canUseWeeklyReview,
+          recommendations: recommendations,
+          feedback: feedback,
+          fullWeek: fullWeek,
+          isRefreshingRecommendations: _isRefreshingRecommendations,
+          recommendationRefreshError: _recommendationRefreshError,
+        ),
+        actions: DashboardSupportingActions(
+          onToggleRecommendations: () {
+            setState(() => _showRecommendations = !_showRecommendations);
+          },
+          onToggleFeedback: () {
+            setState(() => _showFeedback = !_showFeedback);
+          },
+          onToggleFullWeek: () {
+            setState(() => _showFullWeek = !_showFullWeek);
+          },
+          onOpenWeeklyReview: () => context.push(AppRoutes.weeklyReview),
+          onRetryRecommendations: () {
+            setState(() => _recommendationRefreshError = null);
+            ref.invalidate(recommendationFeedProvider);
+          },
+          onRefreshRecommendations: _refreshRecommendations,
+          onRetryFeedback: () => ref.invalidate(decisionFeedbackProvider),
+          onDeleteFeedback: _deleteFeedback,
+          onRetryFullWeek: () {
+            if (localDate != null) {
+              ref.invalidate(dashboardFullWeekProvider(localDate));
+            }
+          },
+          onOpenPreparationPlan: (planId) => context.push(
+            Uri(
+              path: AppRoutes.preparationPlans,
+              queryParameters: {'plan_id': planId},
+            ).toString(),
+          ),
         ),
       ),
-      showMore: _showMore,
-      onToggleMore: () {
-        setState(() => _showMore = !_showMore);
-      },
     );
   }
 
@@ -221,12 +244,9 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
     }
   }
 
-  Future<void> _showFeedbackHistory() async {
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      builder: (_) => const DashboardFeedbackHistorySheet(),
-    );
+  Future<void> _deleteFeedback(DecisionFeedback item) async {
+    await ref.read(feedbackRepositoryProvider).delete(item.id);
+    ref.invalidate(decisionFeedbackProvider);
   }
 
   Future<void> _setHabitOutcome(
@@ -419,13 +439,11 @@ class _DashboardHome extends StatelessWidget {
     required this.projectionStale,
     required this.onReloadToday,
     required this.overviewActions,
+    required this.latestCheckIn,
     required this.taskVisibility,
     required this.taskActions,
     required this.habitActions,
-    required this.moreState,
-    required this.moreActions,
-    required this.showMore,
-    required this.onToggleMore,
+    required this.supportingSections,
   });
 
   final DashboardSnapshot snapshot;
@@ -434,13 +452,11 @@ class _DashboardHome extends StatelessWidget {
   final bool projectionStale;
   final VoidCallback onReloadToday;
   final TodayOverviewActions overviewActions;
+  final AsyncValue<DashboardCheckIn?> latestCheckIn;
   final TodayTaskVisibility taskVisibility;
   final TodayTaskActions taskActions;
   final TodayHabitActions habitActions;
-  final DashboardMoreState moreState;
-  final DashboardMoreActions moreActions;
-  final bool showMore;
-  final VoidCallback onToggleMore;
+  final Widget supportingSections;
 
   @override
   Widget build(BuildContext context) {
@@ -508,6 +524,7 @@ class _DashboardHome extends StatelessWidget {
                             snapshot: snapshot,
                             canExecute: canExecute,
                             actions: overviewActions,
+                            latestCheckIn: latestCheckIn,
                           ),
                           const SizedBox(height: AppSpacing.xl),
                           TodayTaskSections(
@@ -525,12 +542,7 @@ class _DashboardHome extends StatelessWidget {
                             actions: habitActions,
                           ),
                           const SizedBox(height: AppSpacing.xl),
-                          DashboardMoreSection(
-                            expanded: showMore,
-                            onToggle: onToggleMore,
-                            state: moreState,
-                            actions: moreActions,
-                          ),
+                          supportingSections,
                         ],
                       ),
                     ),
@@ -564,11 +576,26 @@ class _DashboardHeader extends StatelessWidget {
       children: [
         Text(date, style: Theme.of(context).textTheme.bodyMedium),
         const SizedBox(height: AppSpacing.xs),
-        Text('Today', style: Theme.of(context).textTheme.headlineLarge),
-        const SizedBox(height: AppSpacing.sm),
-        Text(
-          '$sourceLabel · updated ${DateFormat.Hm().format(snapshot.loadedAt)}',
-          style: Theme.of(context).textTheme.labelMedium,
+        TodayInfoDisclosure(
+          topic: 'Today',
+          description:
+              '$sourceLabel · updated ${DateFormat.Hm().format(snapshot.loadedAt)}',
+          descriptionStyle: Theme.of(context).textTheme.labelMedium,
+          headerBuilder: (context, infoButton) => Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Flexible(
+                child: Padding(
+                  padding: const EdgeInsets.only(top: AppSpacing.xs),
+                  child: Text(
+                    'Today',
+                    style: Theme.of(context).textTheme.headlineLarge,
+                  ),
+                ),
+              ),
+              infoButton,
+            ],
+          ),
         ),
       ],
     );

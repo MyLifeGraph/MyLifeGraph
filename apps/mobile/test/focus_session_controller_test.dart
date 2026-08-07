@@ -174,7 +174,11 @@ void main() {
       status: FocusSessionStatus.completed,
     );
     final source = _FocusPortFake(recent: [terminal]);
-    final controller = _controller(source: source);
+    var reflectionRefreshes = 0;
+    final controller = _controller(
+      source: source,
+      refreshReflectionProjection: () async => reflectionRefreshes += 1,
+    );
     addTearDown(controller.dispose);
     await controller.load();
     final draft = FocusReflectionDraft(
@@ -188,12 +192,14 @@ void main() {
       draft: draft,
     );
     expect(controller.state.reflections[terminal.id], same(saved));
+    expect(reflectionRefreshes, 1);
 
     await controller.deleteReflection(
       session: terminal,
       reflection: saved,
     );
     expect(controller.state.reflections, isEmpty);
+    expect(reflectionRefreshes, 2);
   });
 }
 
@@ -205,6 +211,7 @@ FocusSessionController _controller({
   FocusRecoveryStore? store,
   List<String>? events,
   DateTime Function()? now,
+  FocusReflectionProjectionRefresh? refreshReflectionProjection,
   FocusSessionLaunch launch = const FocusSessionLaunch(),
 }) {
   final eventLog = events ?? <String>[];
@@ -218,6 +225,7 @@ FocusSessionController _controller({
     ),
     recoveryStore: store ?? MemoryFocusRecoveryStore(),
     refreshProjection: (_) async => eventLog.add('refresh'),
+    refreshReflectionProjection: refreshReflectionProjection,
     requestIdFactory: () => _requestId,
     useMockData: false,
     clock: now ?? () => DateTime.utc(2026, 8, 2, 10),

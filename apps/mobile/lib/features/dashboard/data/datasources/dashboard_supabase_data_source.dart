@@ -13,6 +13,34 @@ class DashboardSupabaseDataSource {
   final SupabaseClient _client;
   final Future<String> Function()? _resolveUserId;
 
+  Future<DashboardCheckIn?> getLatestCheckIn({
+    required DateTime throughLocalDate,
+  }) async {
+    final resolver = _resolveUserId;
+    final userId = resolver == null
+        ? await AppUserResolver(_client).resolveUserId()
+        : await resolver();
+    final rows = await _client
+        .from(SupabaseTables.dailyLogs)
+        .select(
+          'entry_date,mood_score,energy_level,sleep_hours,stress_level,'
+          'focus_minutes,steps,activity_level,screen_time_hours,metadata',
+        )
+        .eq('user_id', userId)
+        .lte('entry_date', _dateKey(throughLocalDate))
+        .order('entry_date', ascending: false)
+        .limit(1);
+    final typedRows = List<Map<String, dynamic>>.from(rows as List);
+    if (typedRows.isEmpty) return null;
+    final checkIn = const DashboardCheckInMapper().fromRow(typedRows.single);
+    if (checkIn == null) {
+      throw const DashboardUnavailableException(
+        'Latest saved check-in details are invalid.',
+      );
+    }
+    return checkIn;
+  }
+
   Future<DashboardSnapshot> getSnapshot({DateTime? throughLocalDate}) async {
     final resolver = _resolveUserId;
     final userId = resolver == null
@@ -116,7 +144,7 @@ class DashboardSnapshotMapper {
       loadedAt: loadedAt,
       latestCheckIn: allowedDailyLogs.isEmpty
           ? null
-          : _checkInFromRow(allowedDailyLogs.first),
+          : const DashboardCheckInMapper().fromRow(allowedDailyLogs.first),
       checkInStreakDays: _streakDays(
         allowedDailyLogs,
         throughLocalDate ?? loadedAt,
@@ -125,49 +153,11 @@ class DashboardSnapshotMapper {
           .where((row) => _isVisibleTaskStatus('${row['status']}'))
           .map(_taskToPlanItem)
           .toList(),
-      scheduleDays: _scheduleDays(scheduleRows, loadedAt),
+      scheduleDays: _scheduleDays(
+        scheduleRows,
+        throughLocalDate ?? loadedAt,
+      ),
     );
-  }
-
-  DashboardCheckIn? _checkInFromRow(Map<String, dynamic> row) {
-    final entryDate = DateTime.tryParse('${row['entry_date'] ?? ''}');
-    if (entryDate == null) {
-      return null;
-    }
-    final metadata = _stringMap(row['metadata']);
-    final captures = _stringMap(metadata?['captures']);
-    final evening = _stringMap(captures?['evening']);
-    final morning = _stringMap(captures?['morning']);
-    return DashboardCheckIn(
-      entryDate: entryDate,
-      mood: (row['mood_score'] as num?)?.toInt(),
-      energy: (row['energy_level'] as num?)?.toInt(),
-      sleepHours: (row['sleep_hours'] as num?)?.toDouble(),
-      sleepQuality: (morning?['sleep_quality'] as num?)?.toInt(),
-      stress: (row['stress_level'] as num?)?.toInt(),
-      focusMinutes: (row['focus_minutes'] as num?)?.toInt(),
-      steps: (row['steps'] as num?)?.toInt(),
-      activityLevel: (row['activity_level'] as num?)?.toInt(),
-      screenTimeHours: (row['screen_time_hours'] as num?)?.toDouble(),
-      hasEveningCapture: evening != null,
-      hasMorningCapture: morning != null,
-      focusBand: _optionalString(evening?['focus_band']),
-      stressSource: _optionalString(evening?['stress_source']),
-      stressControllability:
-          _optionalString(evening?['stress_controllability']),
-    );
-  }
-
-  Map<String, dynamic>? _stringMap(Object? value) {
-    if (value is! Map) {
-      return null;
-    }
-    return Map<String, dynamic>.from(value);
-  }
-
-  String? _optionalString(Object? value) {
-    final text = value?.toString().trim();
-    return text == null || text.isEmpty ? null : text;
   }
 
   int _streakDays(List<Map<String, dynamic>> rows, DateTime loadedAt) {
@@ -216,9 +206,11 @@ class DashboardSnapshotMapper {
 
   List<ScheduleDay> _scheduleDays(
     List<Map<String, dynamic>> rows,
-    DateTime loadedAt,
+    DateTime displayedLocalDate,
   ) {
-    final monday = loadedAt.subtract(Duration(days: loadedAt.weekday - 1));
+    final monday = displayedLocalDate.subtract(
+      Duration(days: displayedLocalDate.weekday - 1),
+    );
 
     return List.generate(7, (index) {
       final date = monday.add(Duration(days: index));
@@ -296,3 +288,50 @@ class DashboardSnapshotMapper {
     return labels[(month - 1).clamp(0, labels.length - 1)];
   }
 }
+
+class DashboardCheckInMapper {
+  const DashboardCheckInMapper();
+
+  DashboardCheckIn? fromRow(Map<String, dynamic> row) {
+    final rawEntryDate = row['entry_date'];
+    final entryDate =
+        rawEntryDate is String ? DateTime.tryParse(rawEntryDate) : null;
+    if (entryDate == null || _dateKey(entryDate) != rawEntryDate) return null;
+    final metadata = _stringMap(row['metadata']);
+    final captures = _stringMap(metadata?['captures']);
+    final evening = _stringMap(captures?['evening']);
+    final morning = _stringMap(captures?['morning']);
+    return DashboardCheckIn(
+      entryDate: entryDate,
+      mood: (row['mood_score'] as num?)?.toInt(),
+      energy: (row['energy_level'] as num?)?.toInt(),
+      sleepHours: (row['sleep_hours'] as num?)?.toDouble(),
+      sleepQuality: (morning?['sleep_quality'] as num?)?.toInt(),
+      stress: (row['stress_level'] as num?)?.toInt(),
+      focusMinutes: (row['focus_minutes'] as num?)?.toInt(),
+      steps: (row['steps'] as num?)?.toInt(),
+      activityLevel: (row['activity_level'] as num?)?.toInt(),
+      screenTimeHours: (row['screen_time_hours'] as num?)?.toDouble(),
+      hasEveningCapture: evening != null,
+      hasMorningCapture: morning != null,
+      focusBand: _optionalString(evening?['focus_band']),
+      stressSource: _optionalString(evening?['stress_source']),
+      stressControllability:
+          _optionalString(evening?['stress_controllability']),
+    );
+  }
+
+  Map<String, dynamic>? _stringMap(Object? value) {
+    if (value is! Map) return null;
+    return Map<String, dynamic>.from(value);
+  }
+}
+
+String? _optionalString(Object? value) {
+  final text = value?.toString().trim();
+  return text == null || text.isEmpty ? null : text;
+}
+
+String _dateKey(DateTime value) => '${value.year.toString().padLeft(4, '0')}-'
+    '${value.month.toString().padLeft(2, '0')}-'
+    '${value.day.toString().padLeft(2, '0')}';

@@ -1111,6 +1111,9 @@ void main() {
               canUseDeadlinePlanner: true,
             ),
           ),
+          profileLocalDateSourceProvider.overrideWithValue(
+            const SessionProfileLocalDateSource(session: null),
+          ),
           deadlinePlanRepositoryProvider.overrideWithValue(repository),
         ],
         child: MaterialApp.router(routerConfig: router),

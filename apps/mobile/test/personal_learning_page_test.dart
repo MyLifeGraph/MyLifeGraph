@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:my_life_graph/composition/projection_refresh_providers.dart';
 import 'package:my_life_graph/core/config/app_config.dart';
 import 'package:my_life_graph/features/learning/domain/learning_preferences.dart';
 import 'package:my_life_graph/features/learning/domain/learning_repository.dart';
@@ -84,7 +85,13 @@ void main() {
   testWidgets('clear uses confirmation and preserves finished sessions copy',
       (tester) async {
     final repository = _LearningRepository();
-    await _pumpPage(tester, repository: repository, pilotEnabled: true);
+    final invalidations = <ProductProjection>[];
+    await _pumpPage(
+      tester,
+      repository: repository,
+      pilotEnabled: true,
+      invalidations: invalidations,
+    );
 
     await tester.drag(
       find.byType(CustomScrollView),
@@ -111,6 +118,46 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('3 reflections cleared.'), findsOneWidget);
+    expect(invalidations, [ProductProjection.todayFullWeek]);
+  });
+
+  testWidgets('exact clear retry invalidates Full week after confirmed success',
+      (tester) async {
+    final repository = _LearningRepository(unknownClearAttempts: 1);
+    final invalidations = <ProductProjection>[];
+    await _pumpPage(
+      tester,
+      repository: repository,
+      pilotEnabled: true,
+      invalidations: invalidations,
+    );
+
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, -600));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('clear-focus-reflection-history')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey('confirm-clear-focus-reflections')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Retry unchanged'), findsOneWidget);
+    expect(invalidations, isEmpty);
+    expect(repository.clearRequests, hasLength(1));
+
+    await tester.tap(find.text('Retry unchanged'));
+    await tester.pumpAndSettle();
+
+    expect(repository.clearRequests, hasLength(2));
+    expect(
+      repository.clearRequests[1].requestId,
+      repository.clearRequests[0].requestId,
+    );
+    expect(invalidations, [ProductProjection.todayFullWeek]);
+    expect(find.text('3 reflections cleared.'), findsOneWidget);
+    expect(find.text('Focus reflection history cleared.'), findsOneWidget);
   });
 
   testWidgets('page fits 320 pixels at 200 percent text', (tester) async {
@@ -139,6 +186,7 @@ Future<void> _pumpPage(
   required _LearningRepository repository,
   required bool pilotEnabled,
   double textScale = 1,
+  List<ProductProjection>? invalidations,
 }) async {
   await tester.pumpWidget(
     ProviderScope(
@@ -154,6 +202,13 @@ Future<void> _pumpPage(
           ),
         ),
         learningRepositoryProvider.overrideWithValue(repository),
+        if (invalidations != null)
+          projectionRefreshCoordinatorProvider.overrideWithValue(
+            ProjectionRefreshCoordinator(
+              refreshDailySnapshot: (_) async {},
+              invalidateProjection: invalidations.add,
+            ),
+          ),
       ],
       child: MaterialApp(
         builder: (context, child) => MediaQuery(
@@ -170,8 +225,10 @@ Future<void> _pumpPage(
 }
 
 class _LearningRepository implements LearningRepository {
-  _LearningRepository({LearningPreferences? preferences})
-      : _preferences = preferences ??
+  _LearningRepository({
+    LearningPreferences? preferences,
+    this.unknownClearAttempts = 0,
+  }) : _preferences = preferences ??
             const LearningPreferences(
               revision: 0,
               focusReflectionPromptEnabled: true,
@@ -181,6 +238,7 @@ class _LearningRepository implements LearningRepository {
             );
 
   LearningPreferences _preferences;
+  final int unknownClearAttempts;
   final List<LearningPreferencesUpdate> updates = [];
   final List<FocusReflectionHistoryClearRequest> clearRequests = [];
 
@@ -207,6 +265,11 @@ class _LearningRepository implements LearningRepository {
     FocusReflectionHistoryClearRequest request,
   ) async {
     clearRequests.add(request);
+    if (clearRequests.length <= unknownClearAttempts) {
+      throw const LearningOutcomeUnknownException(
+        'Focus reflection clear outcome is unknown.',
+      );
+    }
     return FocusReflectionHistoryClearResult(
       revision: request.expectedRevision,
       deletedCount: 3,

@@ -12,6 +12,8 @@ import '../features/deadline_plans/domain/deadline_calendar_prefill.dart';
 import '../features/deadline_plans/domain/deadline_plan.dart';
 import '../features/deadline_plans/domain/deadline_plan_repository.dart';
 import '../features/deadline_plans/domain/exam_week_outlook.dart';
+import 'profile_local_date_providers.dart';
+import 'projection_refresh_providers.dart';
 
 final deadlinePlanApiDataSourceProvider = Provider<DeadlinePlanApiDataSource>(
   (ref) => DeadlinePlanApiDataSource(ref.watch(apiClientProvider)),
@@ -78,7 +80,13 @@ final deadlineCalendarPrefillProvider = FutureProvider.autoDispose
 
 final deadlinePlanControllerProvider = StateNotifierProvider.autoDispose<
     DeadlinePlanController, DeadlinePlanState>((ref) {
+  final projectionRefresh = ref.watch(projectionRefreshCoordinatorProvider);
+  final profileLocalDate = ref.watch(profileLocalDateSourceProvider);
   return DeadlinePlanController(
     repository: ref.watch(deadlinePlanRepositoryProvider),
+    projectionRefresh: ({required managedTaskChanged}) =>
+        projectionRefresh.deadlinePlanChanged(
+      targetDate: managedTaskChanged ? profileLocalDate.todayKey() : null,
+    ),
   );
 });

@@ -75,9 +75,12 @@ way to explore the product today is the Flutter app in mock-data guest mode.
   target in progress. Counted-source failures make progress explicitly unavailable while
   independent sections remain usable; guest/demo computes only local facts and
   makes no authenticated call. Existing execution commands remain authoritative,
-  while workload, Weekly review, saved
-  signals, recommendations, feedback history, and the full week load lazily
-  under `More`. Phase 6 adds retry-safe owner-scoped feedback, bounded 28-day
+  while the latest saved check-in appears as the compact `Beat yesterday`
+  inset in the streak card. `Review your week` is a direct capability-gated
+  navigation entry; recommendations, feedback history, and the current
+  profile-local full week remain independent lazy accordions;
+  Preparation workload remains in Planner instead of Today. Phase 6 adds
+  retry-safe owner-scoped feedback, bounded 28-day
   context-matched ranking effects with explicit provenance, deletable history,
   and one cautious default Insight before advanced correlation exploration.
   Phase 7 adds bounded scheduled daily preparation: missing prerequisites are
@@ -110,10 +113,13 @@ way to explore the product today is the Flutter app in mock-data guest mode.
   remains in the preparation plan instead of generic Task controls. Settings
   may add an explicit account-wide daily preparation budget; new proposals
   deduct confirmed blocks from other plans, and confirmation rechecks the rule
-  under the owner lock. Today and Planner show a strict seven-day view of
-  confirmed preparation plus separately labelled weekly Setup commitments. The
-  Preparation page keeps the same budget data available to planning but
-  presents only compact `Open plans` and `History` accordions. This remains a
+  under the owner lock. Planner shows the rolling seven-day confirmed
+  preparation workload plus separately labelled weekly Setup commitments.
+  Today instead shows the containing Monday-to-Sunday calendar week from its
+  Setup and active-revision Preparation facts; it does not reuse the workload
+  or workload-detail reads. The Preparation page keeps the same budget data
+  available to planning but presents only compact `Open plans` and `History`
+  accordions. This remains a
   transparent deterministic rule, not an AI effort estimate or a complete
   calendar/free-time model. Replanning an active plan uses the focused
   `/planner/replan?plan_id=<uuid>` route: it starts with the selected plan's

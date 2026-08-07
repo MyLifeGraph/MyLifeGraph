@@ -283,13 +283,17 @@ before the deadline. A value of zero may use the deadline day up to the exact
 aware `deadline_at`. Flutter labels these as clear days and normalizes a saved
 past `planning_start_on` to the current profile-local date when opening a new
 replan; the backend independently clamps effective planning to its
-profile-local current date. A durable plan mutation refreshes Today with that
-same Flutter profile-date source rather than the device calendar. One app-level
-typed Deadline Plan impact owns invalidation of Today, Daily Briefing, Planner,
-Preparation Workload, and Exam Outlook reads. It also refreshes the Daily
-Snapshot when a managed Task changed; a draft-only cancellation has no such
-Task/date impact. The Deadline feature does not enumerate those foreign
-providers.
+profile-local current date. The feature-local controller emits one app-level
+typed Deadline Plan impact after every proven confirm, complete, or cancel
+result, including a successful exact retry/replay; proposal previews emit none.
+That single callback owns invalidation of Today, Today Full week, Daily
+Briefing, Planner, Preparation Workload, and Exam Outlook reads. It refreshes
+the Daily Snapshot with the same Flutter profile-date source rather than the
+device calendar only when the returned plan has a managed Task. A draft-only
+cancellation still invalidates those read projections but has no Task/date
+impact. Refresh failure is best effort after the durable lifecycle result and
+cannot turn it into a failed mutation or another exact retry. Deadline widgets
+do not duplicate the callback or enumerate foreign providers.
 
 DST gaps or ambiguous local wall times are rejected or avoided rather than
 guessed. The planner has no LLM/provider call or model-provenance field; its
@@ -461,13 +465,17 @@ title, time, and source fingerprint through owner-scoped Calendar RLS before
 prefilling them; the wizard still requires the user's explicit classification
 and estimate.
 
-Settings exposes the optional account-wide daily budget with explicit rule-based
-copy and no AI claim. Today and Planner show the authenticated seven-day
-workload, including honest loading, unavailable, over-budget, and no-budget
-states; guest/mock makes zero workload calls. A date with confirmed plans can
-be expanded deliberately. Its independently loaded detail keeps loading,
-failure, and changed-since-summary states visible, lists the contributing plans,
-and states the exact minimum date overage when present.
+Settings exposes the optional account-wide daily budget with explicit
+rule-based copy and no AI claim. Planner shows the authenticated rolling
+seven-day workload, including honest loading, unavailable, over-budget, and
+no-budget states; guest/mock makes zero workload calls. A date with confirmed
+plans can be expanded deliberately. Its independently loaded detail keeps
+loading, failure, and changed-since-summary states visible, lists the
+contributing plans, and states the exact minimum date overage when present.
+Today does not call the workload or detail route. Its separate `Full week`
+accordion projects the containing Monday-to-Sunday calendar week from
+owner-scoped Setup commitments and active-revision Preparation blocks under the
+Today contract.
 
 `/preparation-plans` itself is grouped into `Open plans` and compact `History`;
 it does not repeat the seven-day workload card. Every plan is an accordion and
@@ -588,6 +596,9 @@ Focused backend, Flutter, migration, and browser coverage must prove:
   plan/task terminal projection;
 - exact replay, request conflict, stale revision, response-loss retry, and
   concurrent-confirm convergence;
+- exactly-once central projection impact for successful confirm, complete,
+  active/draft cancel, and exact lifecycle retry, no impact for a proposal
+  preview, and durable success retained when refresh fails;
 - exact Study-sized blocks, one final short remainder, honest unallocated
   gaps, full recovery conflicts, unchanged active-minute/budget arithmetic,
   stale confirmation after a Study edit, and no mutation of an active revision;

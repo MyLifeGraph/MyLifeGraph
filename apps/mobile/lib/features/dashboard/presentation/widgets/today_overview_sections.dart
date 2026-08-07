@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
@@ -35,11 +36,13 @@ class TodayOverviewSections extends StatelessWidget {
     required this.snapshot,
     required this.canExecute,
     required this.actions,
+    this.latestCheckIn,
   });
 
   final DashboardSnapshot snapshot;
   final bool canExecute;
   final TodayOverviewActions actions;
+  final AsyncValue<DashboardCheckIn?>? latestCheckIn;
 
   @override
   Widget build(BuildContext context) {
@@ -48,6 +51,7 @@ class TodayOverviewSections extends StatelessWidget {
       children: [
         _CheckInStreakCard(
           snapshot: snapshot,
+          latestCheckIn: latestCheckIn,
           onAddMorning: actions.onAddMorning,
           onAddEvening: actions.onAddEvening,
         ),
@@ -68,11 +72,13 @@ class TodayOverviewSections extends StatelessWidget {
 class _CheckInStreakCard extends StatelessWidget {
   const _CheckInStreakCard({
     required this.snapshot,
+    required this.latestCheckIn,
     required this.onAddMorning,
     required this.onAddEvening,
   });
 
   final DashboardSnapshot snapshot;
+  final AsyncValue<DashboardCheckIn?>? latestCheckIn;
   final VoidCallback onAddMorning;
   final VoidCallback onAddEvening;
 
@@ -85,42 +91,66 @@ class _CheckInStreakCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(
-                AppIcons.localFireDepartmentOutlined,
-                color: Theme.of(context).colorScheme.primary,
-                size: 30,
-              ),
-              const SizedBox(width: AppSpacing.md),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Check-in streak',
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
-                    const SizedBox(height: AppSpacing.xs),
-                    Text(
-                      unavailable
-                          ? 'Streak unavailable'
-                          : '${checkIns?.completedDaysStreak ?? 0} consecutive ${checkIns?.completedDaysStreak == 1 ? 'day' : 'days'}',
-                      style: Theme.of(context).textTheme.headlineSmall,
-                    ),
-                  ],
+          TodayInfoDisclosure(
+            topic: 'Check-in streak',
+            description:
+                'A day counts when both check-ins are saved. You can enter both at any time today; an unfinished current day does not end the prior streak.',
+            headerBuilder: (context, infoButton) => Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(top: AppSpacing.sm),
+                  child: Icon(
+                    AppIcons.localFireDepartmentOutlined,
+                    color: Theme.of(context).colorScheme.primary,
+                    size: 30,
+                  ),
                 ),
-              ),
-            ],
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Flexible(
+                            child: Padding(
+                              padding: const EdgeInsets.only(
+                                top: AppSpacing.sm,
+                              ),
+                              child: Text(
+                                'Check-in streak',
+                                style: Theme.of(context).textTheme.titleLarge,
+                              ),
+                            ),
+                          ),
+                          infoButton,
+                        ],
+                      ),
+                      Text(
+                        unavailable
+                            ? 'Streak unavailable'
+                            : '${checkIns?.completedDaysStreak ?? 0} consecutive ${checkIns?.completedDaysStreak == 1 ? 'day' : 'days'}',
+                        style: Theme.of(context).textTheme.headlineSmall,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
-          const SizedBox(height: AppSpacing.sm),
-          Text(
-            unavailable
-                ? snapshot.sourceStates?.checkIns.message ??
-                    'Check-ins could not be loaded.'
-                : 'A day counts when both check-ins are saved. You can enter both at any time today; an unfinished current day does not end the prior streak.',
-            style: Theme.of(context).textTheme.bodyMedium,
+          if (unavailable) ...[
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              snapshot.sourceStates?.checkIns.message ??
+                  'Check-ins could not be loaded.',
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+          ],
+          const SizedBox(height: AppSpacing.md),
+          _BeatYesterdayInset(
+            value: latestCheckIn ?? AsyncData(snapshot.latestCheckIn),
           ),
           const SizedBox(height: AppSpacing.md),
           Wrap(
@@ -146,6 +176,128 @@ class _CheckInStreakCard extends StatelessWidget {
     );
   }
 }
+
+class _BeatYesterdayInset extends StatelessWidget {
+  const _BeatYesterdayInset({required this.value});
+
+  final AsyncValue<DashboardCheckIn?> value;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Container(
+      key: const ValueKey('beat-yesterday'),
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: colors.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(AppRadii.md),
+        border: Border.all(color: colors.outlineVariant),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Beat yesterday',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          value.when(
+            loading: () => const Row(
+              children: [
+                SizedBox.square(
+                  dimension: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+                SizedBox(width: AppSpacing.sm),
+                Expanded(child: Text('Loading your latest saved check-in…')),
+              ],
+            ),
+            error: (_, __) => const Text(
+              'Latest saved check-in details are unavailable. Your streak and check-in actions still work.',
+            ),
+            data: (checkIn) {
+              if (checkIn == null) {
+                return const Text('No saved check-in values yet.');
+              }
+              final metrics = _beatYesterdayMetrics(checkIn);
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Latest saved · ${DateFormat.yMMMd().format(checkIn.entryDate)}',
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  if (metrics.isEmpty)
+                    const Text('No core values were saved in this check-in.')
+                  else
+                    Wrap(
+                      spacing: AppSpacing.sm,
+                      runSpacing: AppSpacing.sm,
+                      children: [
+                        for (final metric in metrics)
+                          _BeatYesterdayMetric(metric: metric),
+                      ],
+                    ),
+                ],
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BeatYesterdayMetric extends StatelessWidget {
+  const _BeatYesterdayMetric({required this.metric});
+
+  final ({String label, String value}) metric;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      label: '${metric.label}: ${metric.value}',
+      child: ExcludeSemantics(
+        child: Container(
+          padding: const EdgeInsets.symmetric(
+            horizontal: AppSpacing.sm,
+            vertical: AppSpacing.xs,
+          ),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surfaceContainerLow,
+            borderRadius: BorderRadius.circular(AppRadii.sm),
+          ),
+          child: Text('${metric.label}  ${metric.value}'),
+        ),
+      ),
+    );
+  }
+}
+
+List<({String label, String value})> _beatYesterdayMetrics(
+  DashboardCheckIn checkIn,
+) {
+  return [
+    if (checkIn.mood != null) (label: 'Mood', value: '${checkIn.mood}/10'),
+    if (checkIn.energy != null)
+      (label: 'Energy', value: '${checkIn.energy}/10'),
+    if (checkIn.sleepHours != null)
+      (
+        label: 'Sleep duration',
+        value: '${_compactDecimal(checkIn.sleepHours!)} h',
+      ),
+    if (checkIn.sleepQuality != null)
+      (label: 'Sleep quality', value: '${checkIn.sleepQuality}/10'),
+    if (checkIn.stress != null)
+      (label: 'Stress', value: '${checkIn.stress}/10'),
+  ];
+}
+
+String _compactDecimal(double value) => value == value.roundToDouble()
+    ? value.toStringAsFixed(0)
+    : value.toStringAsFixed(1);
 
 class _CheckInButton extends StatelessWidget {
   const _CheckInButton({
@@ -193,9 +345,25 @@ class _TodayProgressCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Today\'s progress',
-            style: Theme.of(context).textTheme.titleLarge,
+          TodayInfoDisclosure(
+            topic: 'Today\'s progress',
+            description:
+                'Includes both check-ins, today\'s tasks and habits, and confirmed preparation blocks. Skipped habits do not count as completed.',
+            headerBuilder: (context, infoButton) => Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Flexible(
+                  child: Padding(
+                    padding: const EdgeInsets.only(top: AppSpacing.sm),
+                    child: Text(
+                      'Today\'s progress',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                  ),
+                ),
+                infoButton,
+              ],
+            ),
           ),
           const SizedBox(height: AppSpacing.sm),
           if (progress == null) ...[
@@ -230,10 +398,6 @@ class _TodayProgressCard extends StatelessWidget {
             Text(
               '${progress.completed}/${progress.total} completed',
               style: Theme.of(context).textTheme.titleMedium,
-            ),
-            const SizedBox(height: AppSpacing.xs),
-            const Text(
-              'Includes both check-ins, today\'s tasks and habits, and confirmed preparation blocks. Skipped habits do not count as completed.',
             ),
           ],
         ],

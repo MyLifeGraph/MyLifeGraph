@@ -15,6 +15,10 @@ enum DeadlinePlanOperation {
 
 enum DeadlinePlanMutationKind { proposal, confirm, complete, cancel }
 
+typedef DeadlinePlanProjectionRefresh = Future<void> Function({
+  required bool managedTaskChanged,
+});
+
 enum DeadlinePlanConflictKind {
   revision,
   activeFocus,
@@ -130,13 +134,17 @@ class DeadlinePlanState {
 }
 
 class DeadlinePlanController extends StateNotifier<DeadlinePlanState> {
-  DeadlinePlanController({required DeadlinePlanRepository repository})
-      : _repository = repository,
+  DeadlinePlanController({
+    required DeadlinePlanRepository repository,
+    required DeadlinePlanProjectionRefresh projectionRefresh,
+  })  : _repository = repository,
+        _projectionRefresh = projectionRefresh,
         super(DeadlinePlanState.loading()) {
     Future<void>.microtask(load);
   }
 
   final DeadlinePlanRepository _repository;
+  final DeadlinePlanProjectionRefresh _projectionRefresh;
 
   Future<void> load() async {
     if (state.isBusy) return;
@@ -287,7 +295,16 @@ class DeadlinePlanController extends StateNotifier<DeadlinePlanState> {
             'Proposal cannot use the lifecycle mutation path.',
           ),
       };
-      _recordSuccess(await plan);
+      final savedPlan = await plan;
+      _recordSuccess(savedPlan);
+      try {
+        await _projectionRefresh(
+          managedTaskChanged: savedPlan.taskId != null,
+        );
+      } catch (_) {
+        // The lifecycle write is already durable; projection refresh is best
+        // effort and must not turn the successful mutation into a retry.
+      }
       return true;
     } catch (error) {
       _recordFailure(error, pending);

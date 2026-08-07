@@ -1189,9 +1189,12 @@ For local Supabase-backed app testing:
    create/edit/postpone/undo/complete/restore/cancel/restore, manual and
    Setup-owned habit complete/skip/undo, focus start/finish/abandon with an owned
    target, Today Overview streak/progress arithmetic, all four agenda source
-   categories, Today versus all Tasks, Today Habits, lazy `More`,
-   bounded facts-only Weekly Review with deliberate refresh and no adjustment
-   controls, Inbox (`/alerts`), real Deep Work, and Controlled Coach capability,
+   categories, Today versus all Tasks, Today Habits, the `Beat yesterday`
+   check-in inset, direct Weekly Review navigation plus independently
+   expandable Recommendations, feedback history, and Full week sections,
+   bounded facts-only Weekly Review
+   with deliberate refresh and no adjustment controls, Inbox (`/alerts`), real
+   Deep Work, and Controlled Coach capability,
    free-question stream, safe activity/cancel, evidence/trace/provenance,
    readable history, no fixed-mode controls, and confirmed history deletion
    with a fake provider.

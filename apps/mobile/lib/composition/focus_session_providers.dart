@@ -55,6 +55,7 @@ final focusSessionControllerProvider = StateNotifierProvider.autoDispose
       recoveryStore: ref.watch(focusRecoveryStoreProvider),
       refreshProjection: (targetDate) =>
           projectionRefresh.focusChanged(targetDate: targetDate),
+      refreshReflectionProjection: projectionRefresh.focusReflectionChanged,
       requestIdFactory: newClientUuid,
       useMockData: ref.watch(appConfigProvider).useMockData,
     );

@@ -22,6 +22,10 @@ final projectionRefreshCoordinatorProvider =
           ref.invalidate(latestQuickCheckInProvider);
         case ProductProjection.today:
           ref.invalidate(dashboardSnapshotProvider);
+        case ProductProjection.todayLatestCheckIn:
+          ref.invalidate(dashboardLatestCheckInProvider);
+        case ProductProjection.todayFullWeek:
+          ref.invalidate(dashboardFullWeekProvider);
         case ProductProjection.recommendations:
           ref.invalidate(recommendationFeedProvider);
         case ProductProjection.planner:

@@ -54,6 +54,15 @@ belong to Settings. Exam and Assignment creation continues through the strict
 Deadline Planner V1 flow. Guest/demo renders an explicit unavailable state and
 makes no Planner request or fabricated synchronized projection.
 
+Planner's range remains seven consecutive profile-local dates starting with
+its overview date. Its day cards and appointment rows use the same
+feature-neutral presentation primitive as Today `Full week`; sharing that
+primitive does not share read authority or date semantics. Today `Full week`
+instead shows the containing Monday-through-Sunday calendar week, limits its
+items to applicable Setup commitments and active-revision Preparation blocks,
+and adds its own non-interactive completion/rating-status box. Planner behavior
+and navigation are unchanged by that extraction.
+
 Today and Planner use the same category semantics for both Add-new actions and
 complete agenda rows: Task/Setup are brand-primary, Habit/Preparation are
 information-secondary, Calendar is attention-tertiary, Focus is violet, and a

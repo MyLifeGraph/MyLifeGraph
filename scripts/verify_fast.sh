@@ -30,6 +30,7 @@ run_source_checks() {
   bash -n scripts/start_local_stack.sh
   bash -n scripts/test_start_local_stack.sh
   bash -n scripts/e2e_web.sh
+  bash -n scripts/test_e2e_web_process_ownership.sh
   bash -n scripts/verify.sh
   bash -n scripts/verify_fast.sh
   bash -n scripts/verify_supabase_local.sh
@@ -40,6 +41,7 @@ run_source_checks() {
   bash -n scripts/seed_demo_data.sh
   bash scripts/test_local_supabase_migrations.sh
   bash scripts/test_start_local_stack.sh
+  bash scripts/test_e2e_web_process_ownership.sh
 
   node --check scripts/check_docs_consistency.mjs
   node --check scripts/check_docs_consistency.test.mjs

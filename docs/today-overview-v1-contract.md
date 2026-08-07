@@ -1,8 +1,8 @@
 # Today Overview V1 Contract
 
-Status: implemented through the additive Today Overview V2 Planner projection
-and Daily Capture V5/V4 compatibility as of 2026-08-04. The V1 endpoint remains
-available and unchanged.
+Status: implemented through the additive Today Overview V2 Planner projection,
+the simplified supporting dashboard, and Daily Capture V5/V4 compatibility as
+of 2026-08-05. The V1 endpoint remains available and unchanged.
 
 Today Overview V1 replaces the briefing-first presentation on the `Today`
 surface. It does not remove `daily-briefing-v1`: persisted briefings remain a
@@ -162,11 +162,59 @@ The primary Today order is:
 4. `Today at a glance` vertical agenda;
 5. `Today's tasks`, followed by collapsed `Show all tasks`;
 6. `Today's habits`;
-7. collapsed `More`.
+7. a direct `Review your week` navigation entry, followed by independently
+   collapsed `Recommendations`, `Decision feedback history`, and `Full week`
+   sections. The Weekly Review entry is omitted when its existing capability
+   is unavailable.
 
-`More` lazily loads Preparation workload, Weekly review, saved check-in signals,
-rule-based recommendations, decision-feedback history, and the full week. A
-normal collapsed Today load does not request those supporting projections.
+The streak card includes a compact `Beat yesterday` inset. It independently
+loads the latest saved check-in at or before the displayed profile-local Today
+date and shows that row's date plus only values actually present among Mood,
+Energy, Sleep duration, Sleep quality, and Stress. It calculates no delta,
+improvement, score, or judgment. Loading, no-data, and error copy stays inside
+the inset, so the streak and Morning/Evening actions remain usable.
+
+Recommendations, decision-feedback history, and Full week watch their narrow
+projections only while their own accordion is open. `Review your week` keeps
+its existing navigation and capability boundary but is no longer wrapped in a
+second accordion. Multiple remaining accordions may remain open simultaneously.
+Today no longer contains a `More` grouping, saved-signal
+summary, or `7-day preparation load`; the existing workload projection and
+Preparation behavior remain available in Planner. Feedback history exposes
+loading, error/retry, empty, list, per-row delete-in-progress, and delete error
+states inside its own accordion.
+
+Explanatory copy is initially hidden behind an independent circled information
+control beside each affected heading. This applies to the Today source/updated
+line, the normal streak explanation, the progress-inclusion explanation,
+`Today at a glance`, `Today's tasks`, `Show all tasks`, its expanded `Tasks`
+subsection, `Today's habits`, and the three supporting accordion descriptions.
+The direct `Review your week` entry keeps its summary visible and has no
+information control. Each disclosure has local, non-persisted state; several
+may remain open at the same time, and a newly created Today route starts them
+closed. Error, loading, result, unavailable, action, counter, progress, and
+empty-state content remains visible according to its owning state and is never
+gated by an information control.
+
+An information click inside `Show all tasks` or a supporting accordion does not
+toggle that accordion. In particular it does not begin Recommendations,
+feedback, or Full-week loading; those projections are still watched only after
+their content accordion opens. Each information control is a keyboard-operable
+button with an exact 24×24 logical click, hover, focus, and semantics rectangle
+around its unchanged 20×20 icon, `expanded` semantics, and the exact dynamic
+label `Show information about <heading>` or
+`Hide information about <heading>`. Closed descriptions are absent from the
+accessibility tree. Open descriptions follow their heading and reveal through
+the shared state-duration vertical size/opacity transition; Reduced Motion
+makes the state change immediate. Non-interactive vertical layout padding keeps
+the previous heading alignment. Inside an accordion, a direct click in the
+central 24×24 rectangle changes only the description; the surrounding header,
+including the layout padding immediately outside that rectangle, retains the
+accordion action. This is the only Today-specific exception to the global
+minimum 44×44 action target. Heading, information control, Planner action, and
+accordion chevron wrap without hiding an action at 320 logical pixels and
+200-percent text.
+
 The same header controls remain available during the initial Today loading and
 load-error states. The local unread Coach control does not generate, reload, or
 acknowledge a Coach turn; it only presents the current in-memory notice.
@@ -175,6 +223,83 @@ Guest/demo builds the same conceptual overview from local capture storage. It
 performs no authenticated Today, Supabase, briefing, recommendation, or
 preparation request and does not fabricate tasks, blocks, streak days, or a
 personalized decision.
+
+## Latest Check-In And Full-Week Projections
+
+The authenticated latest-check-in read resolves the bearer owner's profile id,
+filters `daily_logs.user_id` to that owner, applies
+`entry_date <= displayed_local_date`, orders newest first, and requests at most
+one row. The compact mapper accepts only the existing Dashboard projections;
+malformed or unavailable data is not replaced with demo content. Guest/demo
+selects from local capture storage and makes zero Supabase calls.
+
+`Full week` always projects exactly the calendar week containing the displayed
+profile-local date: Monday through Sunday, including empty days. It combines
+active Setup-managed recurring `schedule_items` that apply on the occurrence
+date, including their inclusive optional `valid_from`/`valid_until` bounds,
+with active-revision Preparation blocks from the existing `deadline-plan-v1`
+feed. Items sort by local start time, then title and stable id. This differs
+from Planner's rolling next seven dates, but both surfaces adapt to the shared
+feature-neutral day-card and appointment-row widget.
+
+Each Today appointment row has a non-interactive status box:
+
+- Setup commitment: `notApplicable`, empty and neutral because Setup owns no
+  completion fact;
+- non-completed Preparation: `open`, empty and neutral;
+- officially `completed` Preparation block: `completed`, with a neutral gray
+  check; and
+- officially completed Preparation with at least one Focus session linked by
+  that exact `deadline_plan_block` source id, every linked session terminal,
+  and every linked session carrying one valid `focus-reflection-v1` row with
+  both ratings: `fullyRated`, with a Preparation-category check.
+
+Optional reflection obstacles are irrelevant to `fullyRated`. Reads of
+`focus_session_schedule_sources`, `focus_sessions`, and
+`focus_session_reflections` are owner-filtered, exact-block-filtered, batched,
+and bounded. At most 240 sorted block ids are split into batches of 100; every
+association batch repeats the owner, `source_kind = deadline_plan_block`, and
+exact block-id predicates. A single 500-association budget spans all batches,
+using the remaining budget plus one as the sentinel on each read. Session and
+reflection reads retain their own 100-id batches, and duplicate or inconsistent
+session identities remain invalid across batch boundaries. If those rating
+facts cannot be loaded, a known official completion remains `completed` and
+gray while a local notice says only that
+rating status is unavailable. The Setup and Preparation reads begin
+concurrently and each owns its failure immediately. If every expected core
+source fails, the whole accordion is unavailable and the UI says that no
+partial week was invented. If exactly one core source fails, the usable sibling
+facts remain visible with a source-specific notice; an empty day says `No items
+from the available source.` instead of claiming that both sources are empty.
+Only a successful empty read from every expected core source uses `No Setup or
+Preparation items.` Rating failure remains independently isolated.
+
+The Deadline feed read and its in-week Preparation transformation are one
+immediately error-owned source operation. Encountering a 241st in-week block
+fails only Preparation with `DashboardFullWeekDataException`; already loaded
+Setup facts remain visible with the Preparation-specific partial-source notice,
+and no rating-association read starts. The projector repeats the 200 Setup and
+240 Preparation limits as defense in depth.
+
+Semantics distinguish `Completion status not applicable`, `Not completed`,
+`Completed`, and `Completed and fully rated`; the status box exposes only that
+static label, with no action or enabled/disabled control state. Each adjacent
+appointment row exposes one exact combined title/detail/category label. A
+Preparation row is a button with one tap action, while a non-actionable Setup
+row is a static fact with neither button nor enabled-state semantics.
+
+The application-level projection coordinator invalidates `Beat yesterday`
+after a durable Daily Capture change. Setup, Deadline Planner, Focus lifecycle,
+and Focus-reflection changes invalidate Full week; this includes a successful
+exact replay of an outcome-unknown reflection-history clear. A
+profile-timezone change invalidates both date-bound projections. These
+invalidations refresh reads only and never replay the originating mutation.
+Evening Capture captures the coordinator before opening a Focus-reflection
+sheet and invokes it from each successful save/delete callback. The invalidation
+therefore still occurs exactly once if the sheet or page is dismissed while the
+write is in flight; dismissal controls only whether success Snackbar copy is
+shown. A failed best-effort invalidation does not turn the durable reflection
+write into an error.
 
 ## Additive Today Overview V2
 
@@ -239,7 +364,9 @@ editor and its inert edit/cancel/postpone callback path are not retained.
 
 The Today surface order is composed from independently testable presentation
 sections with typed state/action inputs: streak/progress/agenda, Tasks, Habits,
-and the lazy `More` content. The page does not forward every leaf callback or
+a direct Weekly Review entry, and three independent supporting accordions. The
+latest-check-in inset and each lazy supporting projection fail independently.
+The page does not forward every leaf callback or
 optimistic collection through one large home-widget constructor. This boundary
 changes merge locality and test scope only; it does not add a second read model,
 command bus, or different student-visible order.

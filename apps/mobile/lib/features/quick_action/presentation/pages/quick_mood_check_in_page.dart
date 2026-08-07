@@ -500,7 +500,17 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
   Future<void> _openFocusReflection(FocusSession session) async {
     final source = ref.read(eveningFocusReflectionSourceProvider);
     if (source == null || !mounted) return;
+    final projectionRefresh = ref.read(projectionRefreshCoordinatorProvider);
     final existing = _todayFocusReflections[session.id];
+    Future<void> refreshFullWeek() async {
+      try {
+        await projectionRefresh.focusReflectionChanged();
+      } catch (_) {
+        // The reflection write is already durable; projection refresh is best
+        // effort even when the sheet or page has since been dismissed.
+      }
+    }
+
     final outcome = await showFocusReflectionSheet(
       context: context,
       session: session,
@@ -511,6 +521,7 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
           draft: draft,
           existing: existing,
         );
+        await refreshFullWeek();
         if (mounted) {
           setState(() {
             _todayFocusReflections = {
@@ -523,6 +534,7 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
       },
       onDelete: (reflection) async {
         await source.deleteReflection(reflection);
+        await refreshFullWeek();
         if (mounted) {
           setState(() {
             _todayFocusReflections = {..._todayFocusReflections}

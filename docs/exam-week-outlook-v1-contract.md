@@ -256,6 +256,14 @@ explicitly chooses to create a preview, and the preview still requires explicit
 confirmation. Confirmation returns to Planner and reloads the outlook; leaving
 an unconfirmed preview preserves it as staged.
 
+Every proven Deadline confirm, complete, or cancel result, including a
+successful exact retry, emits one controller-owned Deadline projection impact
+that invalidates the Outlook read. Proposal previews emit none. A draft-only
+cancellation carries no Daily Snapshot date, while a returned managed Task uses
+the current profile-local date; a failed best-effort refresh never downgrades
+the durable lifecycle result. The Planner or Deadline widgets do not duplicate
+this invalidation.
+
 The destination route continues to own that navigation and every provider or
 mutation call after its internal presentation widgets are split into
 feature-private parts. The split does not move the Outlook card out of Planner
@@ -327,7 +335,10 @@ Automated coverage must prove:
 - strict bearer ownership, cross-owner isolation, a write-free GET, and guest/
   demo zero-call;
 - Planner loading/error/watch/exam-week/overdue/unknown states, placement,
-  navigation without proposal, narrow layout, and 200% text; and
+  navigation without proposal, narrow layout, and 200% text;
+- one Outlook invalidation after each successful Deadline lifecycle result and
+  exact retry, none after proposal preview, no Snapshot date for draft cancel,
+  and durable success when refresh fails; and
 - a real browser journey with V4 Evening/Morning capture, an active exam,
   competing assignment, Planner-only status, explicit replan navigation, and
   unchanged active revisions before confirmation.

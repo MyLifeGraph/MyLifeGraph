@@ -9,7 +9,10 @@ import 'package:go_router/go_router.dart';
 import 'package:my_life_graph/core/config/app_config.dart';
 import 'package:my_life_graph/core/network/api_client.dart';
 import 'package:my_life_graph/features/auth/application/profile_local_date_source.dart';
+import 'package:my_life_graph/composition/projection_refresh_providers.dart';
 import 'package:my_life_graph/composition/profile_local_date_providers.dart';
+import 'package:my_life_graph/features/focus/data/focus_session_supabase_data_source.dart';
+import 'package:my_life_graph/features/focus/domain/focus_session.dart';
 import 'package:my_life_graph/features/quick_action/domain/quick_check_in.dart';
 import 'package:my_life_graph/features/quick_action/presentation/pages/quick_mood_check_in_page.dart';
 import 'package:my_life_graph/composition/quick_check_in_providers.dart';
@@ -17,6 +20,7 @@ import 'package:my_life_graph/features/quick_action/presentation/widgets/daily_c
 import 'package:my_life_graph/features/snapshots/application/snapshot_refresh_service.dart';
 import 'package:my_life_graph/features/snapshots/data/snapshot_api_data_source.dart';
 import 'package:my_life_graph/features/snapshots/presentation/providers/snapshot_providers.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 void main() {
   testWidgets('first Evening value shows eight hours but still requires a time',
@@ -316,12 +320,120 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Dashboard destination'), findsOneWidget);
   });
+
+  testWidgets(
+      'dismissed reflection sheet still invalidates Full week after save',
+      (tester) async {
+    final source = _PendingFocusReflectionSource();
+    final projection = _RecordingProjectionRefresh();
+    await _pumpEveningPage(
+      tester,
+      _RecordingCaptureStore(),
+      focusSource: source,
+      projectionRefresh: projection.coordinator,
+      currentInstant: _reflectionNow,
+    );
+    await _openReflectionSheet(tester);
+
+    await tester.tap(find.bySemanticsLabel('Focus quality 4 of 5'));
+    await tester.tap(find.bySemanticsLabel('Useful progress 5 of 5'));
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('save-focus-reflection')));
+    await tester.pump();
+    expect(source.saveCalls, 1);
+
+    final sheetContext =
+        tester.element(find.byKey(const ValueKey('focus-reflection-sheet')));
+    Navigator.of(sheetContext).pop();
+    await tester.pumpAndSettle();
+    source.completeSave();
+    await tester.pump();
+    await tester.pump();
+
+    expect(projection.fullWeekInvalidations, 1);
+    expect(find.text('Focus reflection saved.'), findsNothing);
+  });
+
+  testWidgets(
+      'dismissed reflection sheet still invalidates Full week after delete',
+      (tester) async {
+    final source = _PendingFocusReflectionSource(withExisting: true);
+    final projection = _RecordingProjectionRefresh();
+    await _pumpEveningPage(
+      tester,
+      _RecordingCaptureStore(),
+      focusSource: source,
+      projectionRefresh: projection.coordinator,
+      currentInstant: _reflectionNow,
+    );
+    await _openReflectionSheet(tester);
+
+    await tester.tap(find.byKey(const ValueKey('delete-focus-reflection')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Delete reflection'));
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(source.deleteCalls, 1);
+
+    final sheetContext =
+        tester.element(find.byKey(const ValueKey('focus-reflection-sheet')));
+    Navigator.of(sheetContext).pop();
+    await tester.pumpAndSettle();
+    source.completeDelete();
+    await tester.pump();
+    await tester.pump();
+
+    expect(projection.fullWeekInvalidations, 1);
+    expect(find.text('Focus reflection deleted.'), findsNothing);
+  });
+
+  testWidgets('reflection refresh failure does not turn save into an error',
+      (tester) async {
+    final source = _PendingFocusReflectionSource(immediateSave: true);
+    final projection = _RecordingProjectionRefresh(throwOnFullWeek: true);
+    await _pumpEveningPage(
+      tester,
+      _RecordingCaptureStore(),
+      focusSource: source,
+      projectionRefresh: projection.coordinator,
+      currentInstant: _reflectionNow,
+    );
+    await _openReflectionSheet(tester);
+
+    await tester.tap(find.bySemanticsLabel('Focus quality 4 of 5'));
+    await tester.tap(find.bySemanticsLabel('Useful progress 5 of 5'));
+    await tester.pump();
+    await tester.tap(find.byKey(const ValueKey('save-focus-reflection')));
+    await tester.pumpAndSettle();
+
+    expect(source.saveCalls, 1);
+    expect(projection.fullWeekInvalidations, 1);
+    expect(find.text('Focus reflection saved.'), findsOneWidget);
+    expect(find.byKey(const ValueKey('focus-reflection-error')), findsNothing);
+  });
+}
+
+final _reflectionNow = DateTime(2026, 8, 5, 18);
+
+Future<void> _openReflectionSheet(WidgetTester tester) async {
+  await _completeEveningDraft(tester, includeOptionals: false);
+  await _tapVisible(
+    tester,
+    find.byKey(const ValueKey('evening-focus-reflections')),
+  );
+  await tester.pumpAndSettle();
+  expect(
+    find.byKey(const ValueKey('focus-reflection-sheet')),
+    findsOneWidget,
+  );
 }
 
 Future<void> _pumpEveningPage(
   WidgetTester tester,
   QuickCheckInStore store, {
   SnapshotRefreshService? snapshotRefresh,
+  FocusSessionSupabaseDataSource? focusSource,
+  ProjectionRefreshCoordinator? projectionRefresh,
+  DateTime? currentInstant,
 }) async {
   final router = GoRouter(
     initialLocation: '/quick-mood-check-in',
@@ -352,9 +464,21 @@ Future<void> _pumpEveningPage(
     ProviderScope(
       overrides: [
         profileLocalDateSourceProvider.overrideWithValue(
-          const SessionProfileLocalDateSource(session: null),
+          SessionProfileLocalDateSource(
+            session: null,
+            currentInstant:
+                currentInstant == null ? DateTime.now : () => currentInstant,
+          ),
         ),
+        if (currentInstant != null)
+          currentInstantProvider.overrideWithValue(() => currentInstant),
         quickCheckInStoreProvider.overrideWithValue(store),
+        if (focusSource != null)
+          eveningFocusReflectionSourceProvider.overrideWithValue(focusSource),
+        if (projectionRefresh != null)
+          projectionRefreshCoordinatorProvider.overrideWithValue(
+            projectionRefresh,
+          ),
         if (snapshotRefresh != null)
           snapshotRefreshServiceProvider.overrideWithValue(snapshotRefresh),
       ],
@@ -514,4 +638,92 @@ class _RecordingSnapshotRefreshService extends SnapshotRefreshService {
   Future<void> refreshDailyAfterUserSignal({String? targetDate}) async {
     targetDates.add(targetDate);
   }
+}
+
+class _PendingFocusReflectionSource extends FocusSessionSupabaseDataSource {
+  _PendingFocusReflectionSource({
+    this.withExisting = false,
+    this.immediateSave = false,
+  }) : super(
+          SupabaseClient(
+            'http://localhost:54321',
+            'test-anon-key',
+            authOptions: const AuthClientOptions(autoRefreshToken: false),
+          ),
+        );
+
+  final bool withExisting;
+  final bool immediateSave;
+  final Completer<FocusReflection> _saveCompleter = Completer();
+  final Completer<void> _deleteCompleter = Completer();
+  int saveCalls = 0;
+  int deleteCalls = 0;
+
+  FocusSession get session => FocusSession(
+        id: '11111111-1111-4111-8111-111111111111',
+        status: FocusSessionStatus.completed,
+        startedAt: DateTime.utc(2026, 8, 5, 15),
+        endedAt: DateTime.utc(2026, 8, 5, 15, 25),
+        plannedMinutes: 25,
+        actualMinutes: 25,
+        label: 'Algorithms review',
+        entryDate: '2026-08-05',
+        updatedAt: DateTime.utc(2026, 8, 5, 15, 25),
+      );
+
+  FocusReflection get reflection => FocusReflection(
+        focusSessionId: session.id,
+        focusQuality: 4,
+        usefulProgress: 5,
+        obstacles: const [],
+        createdAt: DateTime.utc(2026, 8, 5, 15, 30),
+        updatedAt: DateTime.utc(2026, 8, 5, 15, 30),
+      );
+
+  @override
+  Future<List<FocusSession>> fetchRecentSessions({int limit = 10}) async =>
+      [session];
+
+  @override
+  Future<Map<String, FocusReflection>> fetchReflectionsForSessions(
+    Iterable<FocusSession> sessions,
+  ) async =>
+      withExisting ? {session.id: reflection} : const {};
+
+  @override
+  Future<FocusReflection> saveReflection({
+    required FocusSession session,
+    required FocusReflectionDraft draft,
+    FocusReflection? existing,
+  }) {
+    saveCalls += 1;
+    return immediateSave ? Future.value(reflection) : _saveCompleter.future;
+  }
+
+  @override
+  Future<void> deleteReflection(FocusReflection reflection) {
+    deleteCalls += 1;
+    return _deleteCompleter.future;
+  }
+
+  void completeSave() => _saveCompleter.complete(reflection);
+
+  void completeDelete() => _deleteCompleter.complete();
+}
+
+class _RecordingProjectionRefresh {
+  _RecordingProjectionRefresh({this.throwOnFullWeek = false});
+
+  final bool throwOnFullWeek;
+  int fullWeekInvalidations = 0;
+  late final ProjectionRefreshCoordinator coordinator =
+      ProjectionRefreshCoordinator(
+    refreshDailySnapshot: (_) async {},
+    invalidateProjection: (projection) {
+      if (projection == ProductProjection.todayFullWeek) {
+        fullWeekInvalidations += 1;
+        if (throwOnFullWeek) throw StateError('refresh unavailable');
+      }
+    },
+  );
 }

@@ -8,6 +8,7 @@ import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_page.dart';
+import '../../../../composition/projection_refresh_providers.dart';
 import '../providers/learning_providers.dart';
 
 class PersonalLearningPage extends ConsumerStatefulWidget {
@@ -184,7 +185,7 @@ class _PersonalLearningPageState extends ConsumerState<PersonalLearningPage> {
                   onPressed: state.isSaving || state.isClearing
                       ? null
                       : state.requiresExactRetry
-                          ? controller.retryExact
+                          ? _retryExact
                           : controller.load,
                   icon: Icon(
                     state.requiresExactRetry
@@ -263,10 +264,26 @@ class _PersonalLearningPageState extends ConsumerState<PersonalLearningPage> {
     final cleared = await ref
         .read(learningSettingsProvider.notifier)
         .clearFocusReflections();
-    if (mounted && cleared) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Focus reflection history cleared.')),
-      );
-    }
+    if (!mounted || !cleared) return;
+    await _afterFocusReflectionsCleared();
+  }
+
+  Future<void> _retryExact() async {
+    final retryingClear =
+        ref.read(learningSettingsProvider).exactClearRetry != null;
+    final retried =
+        await ref.read(learningSettingsProvider.notifier).retryExact();
+    if (!mounted || !retried || !retryingClear) return;
+    await _afterFocusReflectionsCleared();
+  }
+
+  Future<void> _afterFocusReflectionsCleared() async {
+    await ref
+        .read(projectionRefreshCoordinatorProvider)
+        .focusReflectionChanged();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Focus reflection history cleared.')),
+    );
   }
 }

@@ -38,9 +38,7 @@ final todayCommandControllerProvider = StateNotifierProvider.autoDispose<
           .todayTaskChanged(targetDate: localDateKey(targetDate)),
       refreshAfterHabit: (targetDate) => projectionRefreshCoordinator
           .todayHabitOutcomeChanged(targetDate: habitDateKey(targetDate)),
-      onTodayReloaded: () {
-        ref.invalidate(dashboardSupportingSnapshotProvider);
-      },
+      onTodayReloaded: () {},
     );
   },
 );

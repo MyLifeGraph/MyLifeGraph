@@ -8,6 +8,7 @@ FLUTTER_BIN="${FLUTTER_BIN:-flutter}"
 FLUTTER_WEB_MODE="${FLUTTER_WEB_MODE:-profile}"
 STATIC_SERVER_PYTHON="${STATIC_SERVER_PYTHON:-python3}"
 NODE_BIN="${NODE_BIN:-node}"
+SS_BIN="${SS_BIN:-ss}"
 HOST="${HOST:-127.0.0.1}"
 PORT="${PORT:-7357}"
 APP_URL="${APP_URL:-http://$HOST:$PORT}"
@@ -41,6 +42,66 @@ emit_timing() {
   finished_at="$(timer_now_ms)"
   printf '[e2e:timing] {"phase":"%s","duration_ms":%d}\n' \
     "$phase" "$((finished_at - started_at))"
+}
+
+assert_port_free_for_start() {
+  local label="$1"
+  local port="$2"
+  local listeners
+
+  if ! command -v "$SS_BIN" >/dev/null 2>&1; then
+    echo "Port inspection is unavailable as '$SS_BIN'; refusing to start $label." >&2
+    exit 127
+  fi
+  if ! listeners="$("$SS_BIN" -H -ltn "sport = :$port" 2>&1)"; then
+    echo "Port inspection failed for $label on port $port; refusing to start it." >&2
+    exit 1
+  fi
+  if [[ -n "${listeners//[[:space:]]/}" ]]; then
+    echo "Port $port is already occupied; refusing to reuse an unknown process for $label." >&2
+    exit 1
+  fi
+}
+
+wait_for_owned_http() {
+  local label="$1"
+  local url="$2"
+  local pid="$3"
+  local log_file="$4"
+  local attempts="$5"
+  local attempt
+
+  for ((attempt = 1; attempt <= attempts; attempt++)); do
+    if ! kill -0 "$pid" >/dev/null 2>&1; then
+      echo "$label exited before it became ready at $url. Recent log:" >&2
+      tail -n 80 "$log_file" >&2 || true
+      return 1
+    fi
+    if curl -fsS "$url" >/dev/null 2>&1; then
+      if ! kill -0 "$pid" >/dev/null 2>&1; then
+        echo "$label exited while another process answered at $url. Recent log:" >&2
+        tail -n 80 "$log_file" >&2 || true
+        return 1
+      fi
+      sleep 0.25
+      if ! kill -0 "$pid" >/dev/null 2>&1; then
+        echo "$label exited during readiness stabilization at $url. Recent log:" >&2
+        tail -n 80 "$log_file" >&2 || true
+        return 1
+      fi
+      return 0
+    fi
+    if ! kill -0 "$pid" >/dev/null 2>&1; then
+      echo "$label exited before it became ready at $url. Recent log:" >&2
+      tail -n 80 "$log_file" >&2 || true
+      return 1
+    fi
+    sleep 1
+  done
+
+  echo "$label did not become ready at $url. Recent log:" >&2
+  tail -n 80 "$log_file" >&2 || true
+  return 1
 }
 
 cd "$ROOT_DIR"
@@ -197,6 +258,7 @@ if [[ "$AI_SERVICE_START" == "true" ]]; then
 
   echo "Starting AI service from this checkout at $AI_SERVICE_BASE_URL"
   cd "$ROOT_DIR/services/ai_service"
+  assert_port_free_for_start "AI service" "$AI_SERVICE_PORT"
   APP_ENV=development \
   API_PREFIX=/v1 \
   USE_MOCK_DATA=false \
@@ -214,31 +276,14 @@ if [[ "$AI_SERVICE_START" == "true" ]]; then
   AI_SERVICE_PID="$!"
   cd "$ROOT_DIR"
 
-  ai_service_ready=false
-  for _ in {1..60}; do
-    if curl -fsS "$AI_SERVICE_BASE_URL/v1/health" >/dev/null 2>&1; then
-      if ! kill -0 "$AI_SERVICE_PID" >/dev/null 2>&1; then
-        echo "AI service exited while another process answered at $AI_SERVICE_BASE_URL. Recent log:" >&2
-        tail -n 80 "$AI_SERVICE_LOG" >&2 || true
-        echo "Choose a free AI_SERVICE_PORT; the E2E runner will not reuse an unknown process." >&2
-        exit 1
-      fi
-      ai_service_ready=true
-      break
-    fi
-    if ! kill -0 "$AI_SERVICE_PID" >/dev/null 2>&1; then
-      echo "AI service exited early. Recent log:" >&2
-      tail -n 80 "$AI_SERVICE_LOG" >&2 || true
-      echo "If another service is already using $AI_SERVICE_BASE_URL, stop it or set AI_SERVICE_PORT to a free port." >&2
-      echo "Set AI_SERVICE_START=false only to intentionally reuse a compatible already-running service." >&2
-      exit 1
-    fi
-    sleep 1
-  done
-
-  if [[ "$ai_service_ready" != "true" ]]; then
-    echo "AI service did not become ready at $AI_SERVICE_BASE_URL. Recent log:" >&2
-    tail -n 80 "$AI_SERVICE_LOG" >&2 || true
+  if ! wait_for_owned_http \
+    "AI service" \
+    "$AI_SERVICE_BASE_URL/v1/health" \
+    "$AI_SERVICE_PID" \
+    "$AI_SERVICE_LOG" \
+    60; then
+    echo "Choose a free AI_SERVICE_PORT; the E2E runner will not reuse an unknown process." >&2
+    echo "Set AI_SERVICE_START=false only to intentionally reuse a compatible already-running service." >&2
     exit 1
   fi
 else
@@ -263,6 +308,7 @@ flutter_define_args=(
   --dart-define=E2E_ENABLE_SEMANTICS=true
 )
 if [[ "$FLUTTER_WEB_MODE" == "debug" ]]; then
+  assert_port_free_for_start "Flutter Web" "$PORT"
   "$FLUTTER_BIN" run -d web-server \
     --debug \
     --web-hostname "$HOST" \
@@ -275,6 +321,7 @@ else
     "--$FLUTTER_WEB_MODE" \
     "${flutter_define_args[@]}" \
     >"$FLUTTER_LOG" 2>&1
+  assert_port_free_for_start "Flutter Web" "$PORT"
   "$STATIC_SERVER_PYTHON" -m http.server "$PORT" \
     --bind "$HOST" \
     --directory "$ROOT_DIR/apps/mobile/build/web" \
@@ -284,23 +331,12 @@ fi
 
 cd "$ROOT_DIR"
 echo "Waiting for Flutter Web at $APP_URL"
-flutter_ready=false
-for _ in {1..120}; do
-  if curl -fsS "$APP_URL/" >/dev/null 2>&1; then
-    flutter_ready=true
-    break
-  fi
-  if ! kill -0 "$FLUTTER_PID" >/dev/null 2>&1; then
-    echo "Flutter Web server exited early. Recent log:" >&2
-    tail -n 80 "$FLUTTER_LOG" >&2 || true
-    exit 1
-  fi
-  sleep 1
-done
-
-if [[ "$flutter_ready" != "true" ]]; then
-  echo "Flutter Web did not become ready at $APP_URL. Recent log:" >&2
-  tail -n 80 "$FLUTTER_LOG" >&2 || true
+if ! wait_for_owned_http \
+  "Flutter Web server" \
+  "$APP_URL/" \
+  "$FLUTTER_PID" \
+  "$FLUTTER_LOG" \
+  120; then
   exit 1
 fi
 emit_timing "flutter" "$flutter_started_at"

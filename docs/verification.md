@@ -30,7 +30,31 @@ Capture V5, Daily State V3, Exam-Week Outlook V1, or Coach V3 expectations.
 
 ## Current Verified Baseline
 
-The current local-database safety patch plus hardened Goal-removal and
+The seven pre-commit finding fixes, the surrounding Today Full-week working
+tree, and the direct capability-gated Weekly Review entry were fully reverified
+locally on 2026-08-05. The Affected dry run
+classified the checkout as `config+core+docs+flutter+unknown` and selected
+`verify:full`; the final
+`bash scripts/verify_affected.sh --base-ref HEAD` invocation completed that
+entire gate. Its source checks included the fail-closed E2E process-ownership
+regressions. Documentation verification passed all 15 regressions and the
+51-Markdown/70-route consistency inventory; Flutter analysis was clean and all
+910 Flutter tests passed; FastAPI reported `1370 passed, 2 skipped`. Local
+Supabase migration history matched the repository without applying SQL. The
+physically isolated Goal transition harness passed 27 assertions, and the
+complete local database gate passed 207 assertions across eleven pgTAP files.
+The web build passed. Profile-mode E2E run `weekly-review-direct-20260805a` started
+checkout-owned FastAPI and Flutter processes on free loopback ports `8002` and
+`7359`, passed all eight independent journeys without retry in 6.1 minutes,
+and cleaned up every registered test identity: eight were deleted by cleanup
+and the account-controls identity was already absent after its tested permanent
+deletion. The runner then cleaned up both owned application processes.
+`git diff --check` passed; the staged diff was empty and the complete
+unstaged/untracked inventory was reviewed. No reset, `APPLY_MIGRATIONS`, schema
+or contract-version change, dependency upgrade, remote mutation, deployment,
+push, installed-device check, or push/background-delivery claim occurred.
+
+The preceding local-database safety patch plus hardened Goal-removal and
 observational Weekly Review working tree was fully reverified locally on
 2026-08-05. Normal verification, stack start, and E2E reject reset delegation;
 the dedicated reset wrapper passed its target-bound preview only, and its
@@ -585,14 +609,46 @@ longer than one page, current-day grace, malformed/legacy capture exclusion,
 task and habit selection, four-source timeline ordering, exact progress
 arithmetic, and isolated source failures. Flutter tests repeat exact response
 and nested-key validation, reject inconsistent progress, prove authenticated
-GET versus local guest zero-call behavior, and cover section order, lazy `More`,
-all-task expansion, source-error truth, and 320-pixel/2.0-text-scale rendering.
+GET versus local guest zero-call behavior, and cover section order, the absent
+`More` and Today workload surfaces, the five-value `Beat yesterday` inset,
+the direct capability-gated Weekly Review entry, independently and
+simultaneously open remaining supporting accordions, all-task expansion,
+source-error truth, and 320-pixel/2.0-text-scale rendering. The feature-local
+information-disclosure coverage checks every affected collapsible description
+as initially absent, while the Weekly Review summary remains visible without
+an information control; it also checks individual and simultaneous open/close
+state, keyboard activation through Enter and Space, dynamic expanded Show/Hide
+semantics,
+exact 24×24 click/hover/focus/semantics rectangles around 20×20 icons,
+non-interactive alignment padding, immediately adjacent miss behavior, hidden
+accessibility content, state-token animation, immediate Reduced Motion, and
+Dark/Light/Space narrow large-text layout. Separate provider-call assertions
+prove that information clicks do not open `Show all tasks` or any supporting
+accordion and do not start Recommendations, feedback, or Full-week lazy reads;
+ordinary accordion toggles retain that authority.
+Full-week projector/source tests cover the containing profile-local
+Monday-through-Sunday week, all seven including empty days, inclusive Setup
+validity, stable ordering, owner/date/block bounds, exact scheduled-Focus
+associations, multiple terminal sessions, missing/invalid reflections, partial
+rating failure, sorted 100/100/40 association batches, one global 500-row
+association sentinel, rejected cross-batch duplicate sessions, Setup-only
+partial truth at the 241st transformed Preparation block without a rating read,
+and guest zero-call behavior. Deadline controller tests cover one impact for
+initial lifecycle success and exact retry, no preview impact, draft cancellation
+without a Snapshot date, and refresh-failure isolation. Quick-Mood widget tests
+hold Reflection save/delete writes open, dismiss the sheet before success, and
+prove one Full-week invalidation with no late Snackbar; refresh failure remains
+isolated. Shared day-card widget tests cover
+all four status semantics, non-interactive status boxes, retained row
+navigation, category versus neutral completion colors in Dark/Light/Space, and
+large-text narrow layout; Planner widget coverage remains the regression gate
+for its rolling seven-day behavior.
 Feature-local controller tests separately cover every Today Task command port,
 Habit outcome targeting, in-flight deduplication, unconfirmed write failures,
 durable-write/failed-reload optimism, reload-only recovery, and invalid
 non-account projections. A source guard keeps concrete Task/Habit data sources
 out of Dashboard presentation. Focused section-widget tests exercise the typed
-streak/progress/agenda, Task, Habit, and lazy supporting-content boundaries
+streak/progress/agenda, Task, Habit, and independent supporting-content boundaries
 independently of the page. A source assertion keeps those sections composed
 outside `dashboard_page.dart`, bounds the home constructor surface, and rejects
 the removed unreachable Task editor and page-local recommendation section.
@@ -1355,7 +1411,9 @@ boundary. Its eight independent journeys prove:
 - incomplete-account sign-in, required Setup submission, persisted Intake
   projection, and navigation to Today;
 - authenticated Evening persistence followed by the exact saved check-in state
-  in Today;
+  in Today, including an initially absent agenda explanation that becomes
+  visible only through its accessible information button whose closed and open
+  Semantics DOM rectangles are exactly 24×24;
 - Planner proposal/confirmation followed by the exact plan title in Flutter;
 - V4 Evening/Morning sleep facts plus confirmed Exam and competing Assignment
   state followed by a Planner-only Exam-Week card and non-mutating replan entry;
@@ -1420,6 +1478,7 @@ AI_SERVICE_PORT=8001
 AI_SERVICE_BASE_URL=http://127.0.0.1:8001
 AI_SERVICE_PYTHON=/path/to/python
 AI_SERVICE_START=false
+SS_BIN=/path/to/ss
 FLUTTER_WEB_MODE=profile
 STATIC_SERVER_PYTHON=python3
 SCHEDULED_REFRESH_TOKEN=local-e2e-override
@@ -1431,10 +1490,21 @@ E2E_JOURNEY=coach
 
 By default, `scripts/e2e_web.sh` starts FastAPI from the current checkout and
 does not reuse an arbitrary service that is already listening on the same port.
-If the port is occupied, stop that service or set `AI_SERVICE_PORT` to a free
-port. Use `AI_SERVICE_START=false` only when you intentionally want to reuse a
-compatible FastAPI process that is already running with the same local Supabase
-project settings and scheduled-refresh token.
+Immediately before starting FastAPI and immediately before starting the Flutter
+web server it runs fail-closed `ss -H -ltn "sport = :<port>"` checks. A missing,
+non-executable, failed, or non-empty check aborts instead of selecting another
+port. `SS_BIN` exists for hermetic runner tests and defaults to `ss`.
+`AI_SERVICE_START=false` skips only the FastAPI ownership check and startup; it
+is the sole explicit reuse path, and Flutter still requires a free port. Use it
+only when intentionally reusing a compatible FastAPI process with the same
+local Supabase settings and scheduled-refresh token.
+
+Owned-process readiness checks the child PID before and after the successful
+HTTP response and again after a short stability interval. A delayed bind failure
+therefore cannot become ready merely because another process answers the URL.
+`scripts/test_e2e_web_process_ownership.sh`, run by `verify:fast`, covers both
+occupied ports, a failed `ss` invocation, delayed child death with a foreign
+HTTP answer, and the explicit FastAPI reuse exception.
 
 Flutter Web logs for the E2E run are written to:
 

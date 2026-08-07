@@ -137,7 +137,10 @@ für den Nutzer getroffen zu haben. Die sichtbare Reihenfolge ist:
    - ein Tag zählt nur mit gültigem Morning und Evening Check-in;
    - beide dürfen jederzeit und in beliebiger Reihenfolge gespeichert werden;
    - ein noch unvollständiger heutiger Tag beendet die bis gestern vollständige
-     Serie nicht.
+     Serie nicht;
+   - `Beat yesterday` zeigt kompakt das Datum und nur vorhandene Mood-, Energy-,
+     Sleep-duration-, Sleep-quality- und Stress-Werte des letzten gespeicherten
+     Check-ins, ohne Delta oder Bewertung.
 2. **Today's progress**
    - dynamisches `x/y completed` statt einer festen Schrittzahl;
    - zählt die zwei Check-ins, heutige Tasks, heutige Habits und bestätigte
@@ -161,11 +164,24 @@ für den Nutzer getroffen zu haben. Die sichtbare Reihenfolge ist:
 5. **Today's habits**
    - tägliche, am Wochentag geplante und noch offene Weekly-Target Habits;
    - explizit `Complete`, `Skip` oder `Undo outcome` über Habit V1.
-6. **More**, zunächst geschlossen und lazy geladen
-   - Preparation workload und Weekly review;
-   - gespeicherte Check-in-Signale;
-   - regelbasierte Recommendations und Feedback-Historie;
-   - vollständige Woche.
+6. **Weekly Review direkt, drei Akkordeons zunächst geschlossen**
+   - `Review your week` öffnet mit seiner bestehenden Berechtigungsgrenze
+     direkt den Weekly Review;
+   - `Recommendations` und `Decision feedback history` laden erst beim Öffnen;
+   - `Full week` zeigt Montag bis Sonntag der aktuellen profil-lokalen
+     Kalenderwoche mit Setup- und Preparation-Terminen, einschließlich leerer
+     Tage;
+   - die drei Akkordeons können gleichzeitig geöffnet bleiben.
+
+`7-day preparation load` ist weiterhin im Planner verfügbar, wird auf Today
+aber nicht mehr zusätzlich angezeigt. In `Full week` bleibt der Status bei
+Setup-Terminen nicht anwendbar. Preparation zeigt einen neutralen Haken für den
+offiziell abgeschlossenen Block und die Kategorie-Farbe nur dann, wenn alle
+exakt zugeordneten terminalen Focus Sessions gültig bewertet sind. Fällt nur
+eine der beiden Terminquellen aus, bleiben ausschließlich die verfügbaren
+Fakten mit einem klaren Teilfehler sichtbar; leere Tage behaupten dann nicht,
+beide Quellen seien leer. Fallen alle erwarteten Kernquellen aus, zeigt das
+Akkordeon einen Fehler statt einer erfundenen leeren Woche.
 
 `Today` zeigt nur wirklich gespeicherte Werte. Fehlende Schlaf-, Stimmungs-,
 Energie-, Stress-, Bewegungs-, Screen-Time- oder Focus-Daten werden weder als
@@ -468,7 +484,7 @@ diese und weitere zulässige Actions:
 Die Recommendation sagt also „das könnte relevant sein“, das Briefing speichert
 „dies wurde unter den damaligen Regeln am höchsten gerankt“. Today selbst
 behauptet daraus keine Entscheidung für den Nutzer; Recommendations sind dort
-nur unterstützend unter `More` sichtbar.
+nur unterstützend im eigenen, zunächst geschlossenen Akkordeon sichtbar.
 
 ### Decision Feedback
 
@@ -699,7 +715,7 @@ Risikofall kann Snapshot und Provider komplett umgehen.
 | Interne Tagesrangfolge | `user_state_snapshots`, `recommendations`, `daily_briefings`, `decision_feedback` | Reminder, Historie, regelbasierte Rangfolge und bei expliziter Frage der temporäre Coach-Snapshot |
 | Wochenreview | `weekly_reviews` | Weekly Review, Reminder und bei expliziter Frage Coach-Snapshot |
 | Kalenderimport | `calendar_connections`, `calendar_imports`, `calendar_events`, technische Request-Identitäten | Calendar, optional Preparation Planner und read-only Coach-Snapshot; nie als Instruktion |
-| Vorbereitung | `deadline_plans`, `deadline_plan_revisions`, `deadline_plan_blocks`, technische Request-Identitäten | Preparation Plans, Today workload/week, Focus-Fortschritt |
+| Vorbereitung | `deadline_plans`, `deadline_plan_revisions`, `deadline_plan_blocks`, technische Request-Identitäten | Preparation Plans, Planner workload, Today Full week, Focus-Fortschritt |
 | Zentrale Planung | `planner_preferences`, Action Plans/Revisionen, Task Blocks, Habit Slots, Planner Commitments und technische Request-Identitäten | Planner, Today V2 und gemeinsame Availability |
 | Hinweise | `notifications`, `notification_preferences`, Action-Request-Ledger | Inbox und foreground banners |
 | Coach | `coach_requests`, `coach_usage_events`, `coach_messages`; `coach_memory_selections` nur Legacy-Kompatibilität | Availability, V3 Evidence/Trace/Fast-Provenance, gemischte History und Budget |
@@ -717,10 +733,11 @@ FastAPI und service-role-only RPCs.
 Planner ordnet die frühere Verteilung der Planung neu. Einige Trennlinien sind
 absichtlich weiterhin sichtbar:
 
-1. **`Today` bündelt weiterhin viele Rollen.** Der primäre Bereich ist jetzt
-   klarer als Streak, Fortschritt, Agenda, Tasks und Habits geordnet; unter
-   `More` bleiben aber Preparation-Auslastung, Weekly Review, Recommendations,
-   Feedback-Historie und die volle Woche gebündelt.
+1. **`Today` bündelt weiterhin viele Rollen.** Der primäre Bereich ist als
+   Streak mit kompaktem Check-in, Fortschritt, Agenda, Tasks und Habits
+   geordnet; Weekly Review ist ein direkter Eintrag, während Recommendations,
+   Feedback-Historie und Full week getrennte Akkordeons bleiben.
+   Preparation-Auslastung bleibt im Planner.
 2. **Definition und Zeitplanung sind nicht immer dieselbe Autorität.** Planner
    verwaltet manuelle Tasks, Habits, Preparation und Commitments. Setup-owned
    Habit-/Commitment-Definitionen bleiben unter `Settings → Setup`;
@@ -730,7 +747,7 @@ absichtlich weiterhin sichtbar:
    Alltag alle schnell „Kalender“, haben aber völlig andere Rechte und
    Bedeutungen.
 4. **Mehrere Ratschlagsquellen existieren weiter.** Recommendations liegen
-   bewusst unter `More`, das Daily Briefing ist ein interner regelbasierter
+   bewusst im eigenen Today-Akkordeon, das Daily Briefing ist ein interner regelbasierter
    Backend-Fakt für Reminder/Coach/Feedback, und Vorschläge im Coach-Text
    bleiben unverbindliche, nicht ausführbare sprachliche Reflexionen.
 5. **Setup ist gleichzeitig Onboarding und spätere Verwaltung.** Nutzer erwarten
@@ -807,8 +824,11 @@ dabei lediglich lesbar.
    `x/y`-Arithmetik, alle vier Agenda-Kategorien sowie Today/All Tasks und Today
    Habits prüfen. Danach den bewusst offenen heutigen Evening-Check-in
    ausfüllen und kontrollieren, dass Morning erhalten bleibt.
-2. `More` öffnen und Preparation Workload, Weekly Review, gespeicherte Signale,
-   Recommendations, vorhandene Feedback-History und Full Week prüfen.
+2. In der Streak-Karte `Beat yesterday` mit Datum und ausschließlich vorhandenen
+   fünf Kernwerten prüfen. Danach `Review your week` direkt öffnen sowie
+   Recommendations, Decision feedback history und Full week unabhängig und
+   gleichzeitig aufklappen; in Full week alle sieben Tage und die vier
+   Status-Semantiken prüfen.
 3. Unter `Quick actions` die aktive Focus Session fortsetzen oder beenden und
    Habit outcomes ausführen; bei konfiguriertem Study Setup auch Checkliste und
    lokalen Recovery-Countdown prüfen.

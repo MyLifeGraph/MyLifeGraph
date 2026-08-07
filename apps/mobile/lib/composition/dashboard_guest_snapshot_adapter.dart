@@ -8,13 +8,19 @@ class DashboardGuestSnapshotAdapter {
 
   final QuickCheckInStore? _quickCheckInStore;
 
-  Future<DashboardSnapshot> getSnapshot() async {
-    final now = DateTime.now();
+  Future<DashboardSnapshot> getSnapshot({DateTime? throughLocalDate}) async {
+    final now = throughLocalDate ?? DateTime.now();
     final draft = await _quickCheckInStore?.loadToday(now);
     final entries = _quickCheckInStore is GuestQuickCheckInDataSource
         ? await _quickCheckInStore.readAll()
         : <DailyCaptureEntry>[if (draft != null) draft];
     final today = DateTime(now.year, now.month, now.day);
+    final latestEntries = entries.where((entry) {
+      final date = DateTime.tryParse(entry.entryDate);
+      return date != null && !date.isAfter(today);
+    }).toList(growable: false)
+      ..sort((left, right) => left.entryDate.compareTo(right.entryDate));
+    final latest = latestEntries.lastOrNull;
     final byDate = {
       for (final entry in entries) entry.entryDate: entry,
     };
@@ -39,20 +45,21 @@ class DashboardGuestSnapshotAdapter {
     return DashboardSnapshot(
       origin: DashboardOrigin.localDemo,
       loadedAt: now,
-      latestCheckIn: draft == null
+      latestCheckIn: latest == null
           ? null
           : DashboardCheckIn(
-              entryDate: DateTime.parse(draft.entryDate),
-              mood: draft.mood,
-              energy: draft.energy,
-              sleepHours: draft.sleepHours,
-              sleepQuality: draft.sleepQuality,
-              stress: draft.stress,
-              hasEveningCapture: draft.evening != null,
-              hasMorningCapture: draft.morning != null,
-              focusBand: draft.evening?.focusBand?.code,
-              stressSource: draft.evening?.stressSource?.code,
-              stressControllability: draft.evening?.stressControllability?.code,
+              entryDate: DateTime.parse(latest.entryDate),
+              mood: latest.mood,
+              energy: latest.energy,
+              sleepHours: latest.sleepHours,
+              sleepQuality: latest.sleepQuality,
+              stress: latest.stress,
+              hasEveningCapture: latest.evening != null,
+              hasMorningCapture: latest.morning != null,
+              focusBand: latest.evening?.focusBand?.code,
+              stressSource: latest.evening?.stressSource?.code,
+              stressControllability:
+                  latest.evening?.stressControllability?.code,
             ),
       checkInStreakDays: streak,
       todayPlan: const [],

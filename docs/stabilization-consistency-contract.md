@@ -110,14 +110,15 @@ a broadcast event bus.
 
 | Durable impact | Invalidated read projections |
 | --- | --- |
-| Daily Capture | latest Capture, Today, Daily Briefing, Exam Outlook |
+| Daily Capture | latest Capture, Today, Today latest check-in, Daily Briefing, Exam Outlook |
 | Habit outcome | Today, Daily Briefing |
 | Habit definition/lifecycle | Today, Daily Briefing, Planner |
-| Focus lifecycle | Today, Daily Briefing, Preparation Workload, Exam Outlook |
-| Deadline Plan | Today, Daily Briefing, Planner, Preparation Workload, Exam Outlook |
+| Focus lifecycle | Today, Today Full week, Daily Briefing, Preparation Workload, Exam Outlook |
+| Focus reflection | Today Full week |
+| Deadline Plan | Today, Today Full week, Daily Briefing, Planner, Preparation Workload, Exam Outlook |
 | Planner | Today, Daily Briefing, Preparation Workload, Exam Outlook |
-| Setup | Today, Daily Briefing, Recommendations, Planner, Preparation Workload, Exam Outlook |
-| Timezone | every date-bound Capture, Today, Briefing, Recommendation, Planner, Workload, and Outlook read |
+| Setup | Today, Today Full week, Daily Briefing, Recommendations, Planner, Preparation Workload, Exam Outlook |
+| Timezone | every date-bound Capture, Today including latest check-in and Full week, Briefing, Recommendation, Planner, Workload, and Outlook read |
 | Preparation budget | Preparation Workload |
 
 Today-originated Task/Habit writes deliberately exclude Today from coordinator
@@ -125,6 +126,15 @@ invalidation because Today performs exactly one owned reload and must retain
 its prior projection on failure. Planner similarly owns its updated/reloaded
 overview in its controller. Guest Daily Capture uses the same local
 invalidation mapping but skips the authenticated Daily Snapshot refresh.
+
+Deadline lifecycle writes are a controller-owned specialization of this rule:
+every proven confirm, complete, or cancel result, including exact retry, emits
+one Deadline impact; previews emit none. Composition adds a profile date only
+for a returned managed Task, and a refresh error cannot downgrade durable
+success. Evening Capture captures the coordinator before opening its embedded
+Focus-reflection sheet and invokes the Focus-reflection impact inside successful
+save/delete callbacks, so dismissal affects only Snackbar presentation and not
+Full-week invalidation.
 
 `account-export-v3` preserves the established owner-data set, minus the removed
 Goals table, and the 10,000
@@ -301,7 +311,8 @@ The stabilization is covered by:
   Planner/Today durable-success reload failure, the three Study Setup states,
   Notification replay/reload, profile/device cross-midnight and DST date
   resolution, shared embedded/standalone Habit targets, managed-plan refresh
-  dates, transport-neutral API failure mapping, the Dio feature-layer source
+  dates and exact lifecycle-retry impact, dismissed-sheet Reflection
+  invalidation, transport-neutral API failure mapping, the Dio feature-layer source
   guard, and narrow large-text layouts.
 
 An external Coach/LLM smoke is outside this stabilization boundary.

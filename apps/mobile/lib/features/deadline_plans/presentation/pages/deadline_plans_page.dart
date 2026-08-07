@@ -7,7 +7,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
-import '../../../../composition/projection_refresh_providers.dart';
 import '../../../../core/capabilities/app_surface_capabilities.dart';
 import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/navigation/app_routes.dart';
@@ -750,8 +749,6 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
     final saved =
         await ref.read(deadlinePlanControllerProvider.notifier).confirm(plan);
     if (mounted && saved) {
-      await _afterManagedTaskMutation();
-      if (!mounted) return;
       setState(() => _operationPlanId = null);
       if (widget.focusedReplan) {
         context.go(AppRoutes.planner);
@@ -773,8 +770,6 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
     final saved =
         await ref.read(deadlinePlanControllerProvider.notifier).complete(plan);
     if (mounted && saved) {
-      await _afterManagedTaskMutation();
-      if (!mounted) return;
       setState(() {
         _operationPlanId = null;
         _expandedPlanId = null;
@@ -799,14 +794,6 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
     final saved =
         await ref.read(deadlinePlanControllerProvider.notifier).cancel(plan);
     if (mounted && saved) {
-      if (plan.taskId != null) {
-        await _afterManagedTaskMutation();
-      } else {
-        await ref
-            .read(projectionRefreshCoordinatorProvider)
-            .deadlinePlanChanged();
-      }
-      if (!mounted) return;
       setState(() {
         _operationPlanId = null;
         _expandedPlanId = null;
@@ -857,16 +844,6 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
       },
     );
     context.push(query.toString());
-  }
-
-  Future<void> _afterManagedTaskMutation() async {
-    try {
-      await ref.read(projectionRefreshCoordinatorProvider).deadlinePlanChanged(
-            targetDate: ref.read(profileLocalDateSourceProvider).todayKey(),
-          );
-    } catch (_) {
-      // The plan mutation is already durable; snapshot refresh is best effort.
-    }
   }
 
   void _keepPlanVisible(String planId) {

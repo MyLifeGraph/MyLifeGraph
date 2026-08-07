@@ -134,6 +134,15 @@ event bus. The screen that owns Today or Planner still owns its controlled
 reload and stale-after-mutation state; guest Capture invalidates local reads
 without calling the backend.
 
+`DeadlinePlanController` owns the single Deadline impact callback for every
+proven confirm/complete/cancel result, including exact retry; previews emit no
+impact. Composition adds a profile date only when the returned plan has a
+managed Task, and widgets do not repeat the refresh. Evening Capture similarly
+captures the coordinator before opening a Focus-reflection sheet and invokes it
+inside successful save/delete callbacks, so route disposal cannot suppress the
+Full-week invalidation. Both paths treat refresh as best effort after durable
+success.
+
 Today Task/Habit writes are owned by the feature-local
 `TodayCommandController` in `features/dashboard/application`. It depends only
 on narrow Task/Habit command ports, the Dashboard repository contract, and the
@@ -154,13 +163,18 @@ are skipped.
 
 Dashboard presentation is split by product responsibility rather than by an
 arbitrary line limit. `TodayOverviewSections` owns capture streak, progress,
-and agenda; `TodayTaskSections` and `TodayHabitSection` own their typed display
-state and action callbacks; `DashboardMoreSection` owns the lazy workload,
-Weekly Review, saved-signal, recommendation, feedback-history, and full-week
-surface. `_DashboardHome` composes those section APIs instead of forwarding
+agenda, and the independently loaded latest-check-in inset;
+`TodayTaskSections` and `TodayHabitSection` own their typed display state and
+action callbacks; `DashboardSupportingSections` owns the direct
+capability-gated Weekly Review navigation entry plus three independent
+accordions for Recommendations, decision-feedback history, and the current
+profile-local full week. Those three narrow providers are watched only while
+their own accordion is open.
+`_DashboardHome` composes those section APIs instead of forwarding
 each leaf callback and optimistic collection independently. Shared visual
-primitives remain Dashboard-local and contain no feature command or data
-access.
+primitives contain no feature command or data access. The feature-neutral
+`AppScheduleDayCard` is shared by Planner's rolling seven-day agenda and
+Today's calendar-week projection.
 
 The Coach controller is app-scoped and bound to the currently eligible profile,
 not to the lifetime of the Coach route. Its draft, retry request identity, and
@@ -368,10 +382,15 @@ loads its exact reflection. V2 Focus lifecycle writes use FastAPI service-only
 RPCs and retain an optional immutable planned-source row. The authenticated
 `GET /v1/focus/capabilities` read permits mixed-version fallback only for
 manual V1 lifecycle writes after a definitive missing-route response; scheduled
-or already persisted V2 sessions never downgrade. All daily and
-learning projections continue to consume actual Focus timestamps. Workload, Weekly
-review, saved signals, recommendations, decision-feedback history, and the full
-week load lazily under `More`. The exact rules live in
+or already persisted V2 sessions never downgrade. All daily and learning
+projections continue to consume actual Focus timestamps. The latest saved
+check-in is independently owner/date bounded and displayed in the streak card.
+Weekly Review is a direct capability-gated navigation entry. Recommendations,
+decision-feedback history, and the current Monday-through-Sunday week are
+separate, initially collapsed supporting sections that load their projection
+only when opened. Preparation
+workload is not duplicated on Today and remains available in Planner. The exact
+rules live in
 `docs/today-overview-v1-contract.md`.
 
 ## Planner V1
@@ -593,12 +612,20 @@ active revision. Existing active blocks are never silently moved when the
 setting changes.
 
 The side-effect-free `preparation-workload-v1` read projects seven consecutive
-profile-local dates for Today and Planner. It reports active confirmed
-preparation reservations and merged weekly `schedule_items` duration as separate
-facts. It deliberately excludes proposed blocks, imported busy rows, live
-provider state, task estimates, and Focus history, so the UI labels the latter
-as weekly Setup commitments and does not present the projection as total free
-time. Both this projection and block allocation remain deterministic/no-LLM.
+profile-local dates for Planner. It reports active confirmed preparation
+reservations and merged weekly `schedule_items` duration as separate facts. It
+deliberately excludes proposed blocks, imported busy rows, live provider state,
+task estimates, and Focus history, so Planner labels the latter as weekly Setup
+commitments and does not present the projection as total free time. Today's
+separate lazy `Full week` projection reads the containing Monday-to-Sunday
+calendar week from owner-scoped Setup facts and active Deadline Plan revisions;
+it does not call either workload endpoint. Its exact Focus associations use
+sorted 100-block batches with repeated owner/source/block predicates and one
+global 500-row sentinel budget. Setup and the combined Deadline-read/in-week
+transform own errors independently; a 241st Preparation block yields a
+Setup-only partial projection and skips rating reads rather than discarding
+usable Setup facts. Both projections and block allocation remain
+deterministic/no-LLM.
 
 `GET /v1/deadline-plans/exam-week-outlook` adds a separate read-only
 `exam-week-outlook-v1` projection. An active exam with remaining work activates
@@ -615,8 +642,8 @@ student expands one date from that summary. It accepts only a date in the
 current profile-local seven-day window and aggregates active blocks by their
 owner-scoped plan id. The response exposes only plan title, date-reserved
 minutes, and block count, with exact sum/budget invariants; it does not return
-block times or calendar content. Today and Planner use the same detail
-boundary. Review navigation opens the existing plan, while replanning pushes
+block times or calendar content. Planner alone uses this detail boundary.
+Review navigation opens the existing plan, while replanning pushes
 `/planner/replan?plan_id=<uuid>` and isolates that selected plan's existing
 preview/confirmation workflow. Neither GET route has mutation or LLM authority.
 

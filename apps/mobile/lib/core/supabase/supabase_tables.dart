@@ -8,6 +8,7 @@ class SupabaseTables {
   static const scheduleItems = 'schedule_items';
   static const aiInsights = 'ai_insights';
   static const focusSessions = 'focus_sessions';
+  static const focusSessionScheduleSources = 'focus_session_schedule_sources';
   static const focusSessionReflections = 'focus_session_reflections';
   static const learningPreferences = 'learning_preferences';
   static const memoryEntries = 'memory_entries';
