@@ -379,7 +379,7 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
               _kind == DeadlinePlanKind.exam ? 'Exam' : 'Assignment',
             ),
             subtitle: const Text(
-              'Already selected from Planner Add new.',
+              'Already selected for this preparation plan.',
             ),
           )
         else

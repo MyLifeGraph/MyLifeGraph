@@ -383,7 +383,7 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
                       state.requiresExactRetry ||
                       sourcePrefill?.isLoading == true
                   ? null
-                  : () => _openEditor(),
+                  : _choosePreparationKind,
               icon: const Icon(AppIcons.eventAvailableOutlined),
               label: const Text('Plan preparation'),
             ),
@@ -560,7 +560,10 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
       if (widget.initialKind == DeadlinePlanKind.assignment) {
         _openAssignmentSeriesEditor();
       } else {
-        _openEditor();
+        _openEditor(
+          presetKind: widget.initialKind,
+          lockPresetKind: true,
+        );
       }
     });
   }
@@ -698,10 +701,72 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
     });
   }
 
+  Future<void> _choosePreparationKind() async {
+    final state = ref.read(deadlinePlanControllerProvider);
+    if (state.isBusy ||
+        state.requiresExactRetry ||
+        _editorOpen ||
+        _seriesEditorOpen) {
+      return;
+    }
+    final kind = await showDialog<DeadlinePlanKind>(
+      context: context,
+      useRootNavigator: true,
+      builder: (dialogContext) => AlertDialog(
+        key: const ValueKey('preparation-kind-dialog'),
+        scrollable: true,
+        title: const Text('What are you preparing for?'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              key: const ValueKey('preparation-kind-exam'),
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(AppIcons.schoolOutlined),
+              title: const Text('Exam'),
+              subtitle: const Text('One preparation plan with one deadline.'),
+              trailing: const Icon(AppIcons.arrowForward),
+              onTap: () => Navigator.of(dialogContext).pop(
+                DeadlinePlanKind.exam,
+              ),
+            ),
+            ListTile(
+              key: const ValueKey('preparation-kind-assignment'),
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(AppIcons.assignmentOutlined),
+              title: const Text('Assignment'),
+              subtitle: const Text(
+                'A finite weekly series with a plan for every assignment.',
+              ),
+              trailing: const Icon(AppIcons.arrowForward),
+              onTap: () => Navigator.of(dialogContext).pop(
+                DeadlinePlanKind.assignment,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Cancel'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || kind == null) return;
+    if (kind == DeadlinePlanKind.assignment) {
+      await _openAssignmentSeriesEditor();
+      return;
+    }
+    await _openEditor(presetKind: kind, lockPresetKind: true);
+  }
+
   Future<void> _openEditor({
     DeadlinePlan? plan,
     DeadlinePlanProposalDraft? retainedDraft,
     DeadlineCalendarPrefill? sourcePrefill,
+    DeadlinePlanKind? presetKind,
+    bool lockPresetKind = false,
     bool forceManualSource = false,
     _DeadlineReplanContext replanContext = _DeadlineReplanContext.general,
   }) async {
@@ -757,8 +822,9 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
           accountDailyPreparationBudgetMinutes:
               preparationWorkload.valueOrNull?.dailyPreparationBudgetMinutes,
           retainedDraft: retainedDraft,
-          initialKind: widget.initialKind,
-          lockKind: widget.initialKind != null &&
+          initialKind: presetKind,
+          lockKind: lockPresetKind &&
+              presetKind != null &&
               sourcePlan == null &&
               loadedPrefill == null,
           initialTitle:

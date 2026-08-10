@@ -85,6 +85,56 @@ void main() {
     expect(find.byType(SegmentedButton<DeadlinePlanKind>), findsNothing);
   });
 
+  testWidgets(
+      'general preparation action offers Exam and weekly Assignment after a direct entry',
+      (tester) async {
+    await _pumpPage(
+      tester,
+      repository: _FakeDeadlinePlanRepository(),
+      page: DeadlinePlansPage(
+        initialKind: DeadlinePlanKind.assignment,
+        currentTime: now,
+      ),
+    );
+
+    expect(find.text('Which assignment series?'), findsOneWidget);
+    await _tap(tester, find.text('Cancel'));
+    await _tap(tester, find.text('Plan preparation'));
+
+    expect(
+      find.byKey(const ValueKey('preparation-kind-dialog')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('preparation-kind-exam')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('preparation-kind-assignment')),
+      findsOneWidget,
+    );
+
+    await _tap(
+      tester,
+      find.byKey(const ValueKey('preparation-kind-exam')),
+    );
+    expect(find.byKey(const ValueKey('deadline-locked-kind')), findsOneWidget);
+    expect(find.text('One preparation plan with one deadline.'), findsNothing);
+    expect(find.text('Exam'), findsOneWidget);
+
+    await _tap(tester, find.text('Cancel'));
+    await _tap(tester, find.text('Plan preparation'));
+    await _tap(
+      tester,
+      find.byKey(const ValueKey('preparation-kind-assignment')),
+    );
+    expect(find.text('Which assignment series?'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('assignment-series-locked-kind')),
+      findsOneWidget,
+    );
+  });
+
   testWidgets('wizard requires an explicit estimate without prior-work choice',
       (tester) async {
     final repository = _FakeDeadlinePlanRepository();
@@ -1237,6 +1287,15 @@ void main() {
     await tester.pumpAndSettle();
     await tester.pump();
 
+    expect(tester.takeException(), isNull);
+    expect(
+      find.byKey(const ValueKey('preparation-kind-dialog')),
+      findsOneWidget,
+    );
+    await _tap(
+      tester,
+      find.byKey(const ValueKey('preparation-kind-exam')),
+    );
     expect(tester.takeException(), isNull);
     expect(find.text('Step 1 of 3'), findsOneWidget);
   });

@@ -56,6 +56,11 @@ editor with Exam already fixed. Selecting `Assignment` opens the additive
 `assignment-series-v1` editor with Assignment already fixed, 12 weekly
 occurrences by default, and a bounded `2..20` count. Neither direct entry asks
 the student to classify the item again or exposes prior-work controls.
+On the destination page, the general `Plan preparation` action remains a real
+choice: it offers both Exam and Assignment once, then dispatches to the same
+single-plan or finite-series editor. A `kind` query used by a direct Planner
+entry is consumed for that opening only and cannot narrow the later general
+action.
 Guest/demo renders an explicit unavailable state and makes no Planner request
 or fabricated synchronized projection.
 

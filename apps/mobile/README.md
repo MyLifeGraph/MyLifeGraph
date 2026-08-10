@@ -286,7 +286,9 @@ destination rather than restoring Settings; Settings-owned routes such as
 - `/habits` (compatible manual Habit V1 route with Planner selected)
 - `/preparation-plans` (compatible Preparation route with Planner selected;
   `?kind=exam` opens a kind-locked single Exam flow and `?kind=assignment`
-  opens a kind-locked finite weekly Assignment Series flow)
+  opens a kind-locked finite weekly Assignment Series flow; the page's general
+  `Plan preparation` action always offers both kinds and dispatches to those
+  same flows, even after a route-level kind was consumed)
 - `/planner/replan?plan_id=<uuid>` (focused saved-value review, staged preview,
   and explicit confirmation for exactly one Preparation plan)
 - `/weekly-review` (authenticated, completed-week review)

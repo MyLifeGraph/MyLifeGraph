@@ -141,7 +141,7 @@ class _AssignmentSeriesEditorSheetState
           contentPadding: EdgeInsets.zero,
           leading: Icon(AppIcons.checkCircleOutline),
           title: Text('Assignment'),
-          subtitle: Text('Already selected from Planner Add new.'),
+          subtitle: Text('Already selected for this preparation plan.'),
         ),
         TextField(
           key: const ValueKey('assignment-series-title'),

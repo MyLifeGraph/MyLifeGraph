@@ -511,12 +511,16 @@ backend anti-replay ledgers and export no request fingerprint.
 
 The authenticated synced surface is `/preparation-plans`, titled
 `Preparation plans`. Planner's direct `Exam` and `Assignment` Add-new controls
-open a kind-locked editor; an eligible imported event exposes the generic
-`Plan preparation` action. Calendar navigation may carry only the selected
-opaque event id. The destination reads its current title, time, and source
-fingerprint through owner-scoped Calendar RLS before prefilling them; only this
-generic source entry still requires the user's explicit classification. Every
-path requires the student's estimate.
+open a kind-locked editor. The surface's general `Plan preparation` action asks
+once between `Exam` and `Assignment`, then opens the kind-locked single Exam
+editor or finite weekly Assignment Series editor respectively. A route-level
+`kind` is a one-shot direct-entry command and must not constrain a later use of
+that general action on the same page. An eligible imported event also exposes
+`Plan preparation`; Calendar navigation may carry only the selected opaque
+event id. The destination reads its current title, time, and source fingerprint
+through owner-scoped Calendar RLS before prefilling them; only this event-source
+entry keeps classification inside its prefilled plan editor. Every path
+requires the student's estimate.
 
 The Assignment editor defaults to 12 weekly occurrences, shows the derived
 last deadline, and allows 2 through 20 occurrences for a new series. Its one

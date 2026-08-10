@@ -116,11 +116,14 @@ and must not display invented personalized blocks.
 Direct `Add new` preparation actions preserve the chosen kind. Under
 `assignment-series-v1`, Exam shows Exam as already selected; Assignment opens
 `Add weekly assignments`, shows
-`Assignment` with `Already selected from Planner Add new.`, defaults to 12, and
-labels the finite input `Number of weekly assignments (2–20)`. The summary must
-make the last weekly deadline visible. The shared estimate label is
-`Preparation estimate for each assignment`; copy states that each occurrence
-gets its own editable Preparation Plan.
+`Assignment` with `Already selected for this preparation plan.`, defaults to
+12, and labels the finite input `Number of weekly assignments (2–20)`. The
+general Preparation Plans action asks `What are you preparing for?` and offers
+`Exam` as one plan with one deadline and `Assignment` as a finite weekly series;
+the selected editor does not ask for the kind again. The summary must make the
+last weekly deadline visible. The shared estimate label is `Preparation
+estimate for each assignment`; copy states that each occurrence gets its own
+editable Preparation Plan.
 
 Series lifecycle controls use `Create series preview`, `Confirm whole series`,
 `Edit one`, `Edit all future`, and `Cancel future`. Copy must state before

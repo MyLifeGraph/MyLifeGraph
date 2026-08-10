@@ -567,8 +567,11 @@ normal writes, or call an LLM. The full contract is in
 exam and assignment preparation. `/preparation-plans` asks the user for their
 own `30..30000` minute total estimate plus bounded session/per-plan-daily
 preferences. Direct Planner Exam and Assignment actions pass a fixed kind and
-never repeat the classification. New plans submit zero prior credit and expose
-no prior-work controls; legacy non-zero credit remains a silent progress input.
+never repeat the classification. The surface's general action asks once and
+dispatches Exam to the single-plan editor or Assignment to the finite weekly
+series editor; a direct-entry query kind is not ambient page state after that
+opening. New plans submit zero prior credit and expose no prior-work controls;
+legacy non-zero credit remains a silent progress input.
 The surface shows
 the deterministic ordered energy windows and latest-manual-import boundary.
 `POST /v1/deadline-plans/proposals` persists an immutable

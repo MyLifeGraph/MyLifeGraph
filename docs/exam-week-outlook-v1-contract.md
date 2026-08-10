@@ -255,6 +255,13 @@ placed after `Add new` and before `Needs attention`:
 - missing sleep plan links to Evening check-in; and
 - each exam offers `Review plan` and `Replan remaining time`.
 
+The separate Preparation Plans surface may start a kind-locked Exam from either
+Planner's direct `Exam` action or its general `Plan preparation` chooser. That
+chooser also routes `Assignment` to the finite weekly series editor, and a
+previously consumed route kind cannot hide Exam from a later general choice.
+This presentation routing does not broaden the Outlook read: only confirmed
+independent Deadline Plan occurrences participate in its calculation.
+
 `Review plan` opens existing saved Preparation details.
 `Replan remaining time` pushes
 `/planner/replan?plan_id=<uuid>`, which renders only that selected plan over the
