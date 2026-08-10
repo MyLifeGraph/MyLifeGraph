@@ -116,6 +116,24 @@ _RELATIONSHIPS = (
     ("focus_sessions", "task_id", "tasks", "id"),
     ("focus_sessions", "habit_id", "habits", "id"),
     ("habit_logs", "habit_id", "habits", "id"),
+    (
+        "assignment_series_revisions",
+        "series_id",
+        "assignment_series",
+        "id",
+    ),
+    (
+        "assignment_series_revision_items",
+        "series_id",
+        "assignment_series",
+        "id",
+    ),
+    (
+        "assignment_series_revision_items",
+        "plan_id",
+        "deadline_plans",
+        "id",
+    ),
     ("deadline_plan_revisions", "plan_id", "deadline_plans", "id"),
     ("deadline_plan_blocks", "plan_id", "deadline_plans", "id"),
     ("planner_action_plan_revisions", "plan_id", "planner_action_plans", "id"),
@@ -283,9 +301,7 @@ def _sanitize_row(
     row: dict[str, Any],
     table: AccountExportTable,
 ) -> dict[str, Any]:
-    prohibited = (
-        set(_PROFILE_PROHIBITED_FIELDS) if table.name == "profiles" else set()
-    )
+    prohibited = set(_PROFILE_PROHIBITED_FIELDS) if table.name == "profiles" else set()
     if table.name == "weekly_reviews":
         prohibited.add("proposals")
     return {

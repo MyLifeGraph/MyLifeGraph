@@ -103,7 +103,7 @@ owner-scoped `profiles` row. It grants no new direct profile mutation authority.
 ## Account Export
 
 `GET /v1/account/export` is side-effect free and returns the strict
-`account-export-v3` JSON envelope. It removes Goals from the former bounded
+`account-export-v4` JSON envelope. It removes Goals from the former bounded
 owner product set and includes: `profiles`, `notification_preferences`,
 `learning_preferences`, `daily_logs`,
 `behavioral_events`, `lifestyle_entries`, `tasks`, `schedule_items`,
@@ -116,7 +116,9 @@ owner product set and includes: `profiles`, `notification_preferences`,
 `weekly_reviews`, `calendar_connections`,
 `calendar_imports`, `calendar_events`, `coach_requests`, `coach_usage_events`,
 `coach_memory_selections`, `deadline_plans`, `deadline_plan_revisions`, and
-`deadline_plan_blocks`, `planner_preferences`, `planner_action_plans`,
+`deadline_plan_blocks`, `assignment_series`,
+`assignment_series_revisions`, `assignment_series_revision_items`,
+`planner_preferences`, `planner_action_plans`,
 `planner_action_plan_revisions`, `planner_task_blocks`, `planner_habit_slots`,
 and `planner_commitments`. It returns exact per-table record counts, an export
 timestamp, bounds, and an explicit ledger policy. Calendar
@@ -128,10 +130,12 @@ identity and fingerprint remain excluded. The global `calendar_request_identitie
 `notification_action_requests`, `deadline_plan_request_identities`, and
 `planner_request_identities`, `learning_request_identities`,
 `daily_capture_request_identities`, and
-`account_setting_request_identities` anti-replay ledgers are deliberately
+`account_setting_request_identities`, and
+`assignment_series_request_identities` anti-replay ledgers are deliberately
 omitted and named in that policy. Deadline
-plan, revision, and block rows remain bounded owner product data; their opaque
-request fingerprints are not part of the export. Study Setup exports the
+plan, revision, block, and Assignment Series content rows remain bounded owner
+product data; their opaque request fingerprints are not part of the export.
+Study Setup exports the
 current owner projection only; transient preparation-checklist decisions and
 local recovery countdown state do not exist in the export. Personal Learning
 exports the current complete preference projection and raw owner reflection
@@ -142,8 +146,9 @@ decision, omission decision, and separate Coach Snapshot participation are
 derived from the typed FastAPI owner-data catalog. Every repo-owned public
 table, including an operational ledger that participates in neither output,
 must have exactly one catalog entry. The export response contract uses the
-exact 40-table V3 shape above; removing Goals does not broaden export or
-snapshot disclosure. Flutter's strict export allowlist uses the same catalog
+exact 43-table V4 shape above; the new disclosure is limited to the three
+owner-content Assignment Series projections and does not include its request
+ledger. Flutter's strict export allowlist uses the same catalog
 order, including `focus_session_schedule_sources`, before it accepts the record
 counts or saves the original response bytes.
 
@@ -152,7 +157,7 @@ verified-bearer FastAPI path's `service_role` client the missing `SELECT` grant
 on `lifestyle_entries`; Flutter and anonymous callers gain no new table
 authority.
 
-The V3 bounds remain 10,000 rows per table, 50,000 rows overall, and 8 MiB of
+The V4 bounds remain 10,000 rows per table, 50,000 rows overall, and 8 MiB of
 JSON.
 Exceeding a bound is an explicit `413`, never a silently truncated export.
 Supabase pages are stream-bounded before JSON materialization, and cumulative

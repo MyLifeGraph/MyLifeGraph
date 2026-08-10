@@ -1,4 +1,5 @@
 from collections.abc import Callable
+from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
 from uuid import NAMESPACE_URL, UUID, uuid5
@@ -23,6 +24,7 @@ from app.models.deadline_plans import (
 )
 from app.models.planning_timing import PlanningTimingProvenance
 from app.repositories.deadline_plan_repository import (
+    DeadlinePlanningContext,
     DeadlinePlanProjection,
     DeadlinePlanPersistenceConflict,
     DeadlinePlanPersistenceNotFound,
@@ -70,6 +72,12 @@ from app.services.planner_errors import (
 )
 
 
+@dataclass(frozen=True, slots=True)
+class PreparedDeadlineProposal:
+    request_fingerprint: str
+    write: DeadlineProposalWrite
+
+
 class DeadlinePlanService:
     def __init__(
         self,
@@ -81,6 +89,30 @@ class DeadlinePlanService:
         self._repository = repository
         self._learned_timing = learned_timing
         self._now = now or (lambda: datetime.now(UTC))
+
+    async def resolve_timing_preference(
+        self,
+        *,
+        user_id: str,
+    ) -> PlanningTimingProvenance:
+        return (
+            await self._learned_timing.resolve(user_id=user_id)
+            if self._learned_timing is not None
+            else PlanningTimingProvenance(source="setup")
+        )
+
+    async def require_confirmation_allowed(
+        self,
+        *,
+        user_id: str,
+        plan_id: UUID,
+        expected_revision: int,
+    ) -> None:
+        await self._require_learned_confirmation_allowed(
+            user_id=user_id,
+            plan_id=plan_id,
+            expected_revision=expected_revision,
+        )
 
     async def list_plans(self, *, user_id: str) -> DeadlinePlansResponse:
         projection = await self._repository.load_projection(
@@ -346,6 +378,49 @@ class DeadlinePlanService:
                     "request_id is already bound to another deadline operation.",
                 )
             return await self.get_plan(user_id=user_id, plan_id=request.plan_id)
+        prepared = await self.prepare_proposal(
+            user_id=user_id,
+            request=request,
+            generated_at=generated_at,
+        )
+        try:
+            await self._repository.persist_proposal(
+                user_id=user_id,
+                request_id=request.request_id,
+                request_fingerprint=prepared.request_fingerprint,
+                plan_id=request.plan_id,
+                base_revision=request.base_revision,
+                write=prepared.write,
+                now=generated_at,
+            )
+        except DeadlinePlanPersistenceConflict as exc:
+            raise DeadlinePlanConflictError(str(exc)) from exc
+        except DeadlinePlanPersistenceNotFound as exc:
+            raise DeadlinePlanNotFoundError(str(exc)) from exc
+        return await self.get_plan(user_id=user_id, plan_id=request.plan_id)
+
+    async def prepare_proposal(
+        self,
+        *,
+        user_id: str,
+        request: DeadlinePlanProposalRequest,
+        generated_at: datetime | None = None,
+        planning_context: DeadlinePlanningContext | None = None,
+        excluded_plan_ids: frozenset[UUID] = frozenset(),
+        timing_preference: PlanningTimingProvenance | None = None,
+    ) -> PreparedDeadlineProposal:
+        """Build a validated proposal without mutating persistence.
+
+        Assignment Series uses this seam to prepare every weekly occurrence
+        against one owner-scoped context before one atomic database write.
+        """
+        generated_at = _aware_utc(generated_at or self._now())
+        planning_input = {
+            key: value
+            for key, value in request.model_dump(mode="json").items()
+            if key != "request_id"
+        }
+        request_fingerprint = _fingerprint(planning_input)
         if request.deadline_at.astimezone(UTC) <= generated_at:
             raise DeadlinePlanValidationError("deadline_at must be in the future")
         if (request.deadline_at.date() - request.planning_start_on).days > 368:
@@ -378,18 +453,29 @@ class DeadlinePlanService:
             )
 
         # Read profile-owned context only after the cheap optimistic precheck.
-        try:
-            profile_probe = await self._repository.load_planning_context(
-                user_id=user_id,
-                plan_id=request.plan_id,
-                starts_on=request.planning_start_on,
-                range_starts_at=generated_at,
-                range_ends_at=request.deadline_at.astimezone(UTC),
-                source_calendar_event_id=request.source_calendar_event_id,
-                include_calendar_availability=request.use_calendar_availability,
+        if planning_context is None:
+            try:
+                profile_probe = await self._repository.load_planning_context(
+                    user_id=user_id,
+                    plan_id=request.plan_id,
+                    starts_on=request.planning_start_on,
+                    range_starts_at=generated_at,
+                    range_ends_at=request.deadline_at.astimezone(UTC),
+                    source_calendar_event_id=request.source_calendar_event_id,
+                    include_calendar_availability=request.use_calendar_availability,
+                )
+            except DeadlinePlanPersistenceNotFound as exc:
+                raise DeadlinePlanNotFoundError(str(exc)) from exc
+        else:
+            excluded = {str(value) for value in excluded_plan_ids}
+            profile_probe = replace(
+                planning_context,
+                confirmed_blocks=[
+                    row
+                    for row in planning_context.confirmed_blocks
+                    if str(row.get("plan_id")) not in excluded
+                ],
             )
-        except DeadlinePlanPersistenceNotFound as exc:
-            raise DeadlinePlanNotFoundError(str(exc)) from exc
         if len(profile_probe.schedule_items) > 1_000:
             raise DeadlinePlanConflictError(
                 "Schedule context exceeds the V1 planning bound.",
@@ -434,10 +520,8 @@ class DeadlinePlanService:
             planning_input["preferred_session_minutes"] = focus_minutes
 
         effective_start = max(request.planning_start_on, local_now.date())
-        timing_preference = (
-            await self._learned_timing.resolve(user_id=user_id)
-            if self._learned_timing is not None
-            else PlanningTimingProvenance(source="setup")
+        timing_preference = timing_preference or (
+            await self.resolve_timing_preference(user_id=user_id)
         )
         remaining = max(
             0,
@@ -544,21 +628,10 @@ class DeadlinePlanService:
             ),
             blocks=blocks,
         )
-        try:
-            await self._repository.persist_proposal(
-                user_id=user_id,
-                request_id=request.request_id,
-                request_fingerprint=request_fingerprint,
-                plan_id=request.plan_id,
-                base_revision=request.base_revision,
-                write=write,
-                now=generated_at,
-            )
-        except DeadlinePlanPersistenceConflict as exc:
-            raise DeadlinePlanConflictError(str(exc)) from exc
-        except DeadlinePlanPersistenceNotFound as exc:
-            raise DeadlinePlanNotFoundError(str(exc)) from exc
-        return await self.get_plan(user_id=user_id, plan_id=request.plan_id)
+        return PreparedDeadlineProposal(
+            request_fingerprint=request_fingerprint,
+            write=write,
+        )
 
     async def confirm(
         self,
@@ -797,10 +870,7 @@ class DeadlinePlanService:
         )
         accounted = min(estimate, prior + tracked)
         if (
-            sum(
-                max(0, _int(row.get("actual_minutes")))
-                for row in focus_facts
-            )
+            sum(max(0, _int(row.get("actual_minutes"))) for row in focus_facts)
             != tracked
         ):
             raise ValueError("Deadline focus facts do not match the tracked total.")
@@ -867,8 +937,7 @@ class DeadlinePlanService:
                 [
                     {
                         "id": "legacy-total",
-                        "started_at": row.get("activated_at")
-                        or row.get("created_at"),
+                        "started_at": row.get("activated_at") or row.get("created_at"),
                         "actual_minutes": tracked_focus_minutes,
                         "deadline_plan_block_id": None,
                     },
@@ -1035,8 +1104,7 @@ def _deadline_block_credits(
         key=lambda block: (_int(block["sequence"]), str(block["id"])),
     )
     capacities = {
-        str(block["id"]): _int(block["planned_minutes"])
-        for block in ordered_blocks
+        str(block["id"]): _int(block["planned_minutes"]) for block in ordered_blocks
     }
     credits = {block_id: 0 for block_id in capacities}
     proposal_credit_left = max(0, tracked_focus_minutes_at_proposal)

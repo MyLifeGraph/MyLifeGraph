@@ -268,10 +268,6 @@ class _DeadlinePlanCardState extends State<_DeadlinePlanCard> {
                 value: _duration(estimate),
               ),
               _ProgressValue(
-                label: 'Entered prior credit',
-                value: _duration(prior),
-              ),
-              _ProgressValue(
                 label: 'Tracked focus',
                 value: _duration(tracked),
               ),

@@ -291,7 +291,10 @@ users.
 Snapshot participation is a separate field in the shared typed owner-data
 catalog; it is not inferred from Account Export inclusion. This keeps the three
 Coach operational tables exportable under their existing contract while
-excluding them from the 37-table personal snapshot. Snapshot serialization
+excluding them from the 39-table personal snapshot. The snapshot includes the
+finite Assignment Series identity/revision/membership projections so the Coach
+can describe confirmed coursework cadence without gaining mutation authority.
+Snapshot serialization
 uses a neutral lossless-JSON helper and does not import Account Service
 implementation details.
 

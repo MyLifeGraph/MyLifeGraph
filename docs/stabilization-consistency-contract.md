@@ -136,12 +136,13 @@ Focus-reflection sheet and invokes the Focus-reflection impact inside successful
 save/delete callbacks, so dismissal affects only Snackbar presentation and not
 Full-week invalidation.
 
-`account-export-v3` preserves the established owner-data set, minus the removed
-Goals table, and the 10,000
+`account-export-v4` preserves the established owner-data set, minus the removed
+Goals table, and adds the three owner-content finite Assignment Series
+projections. It retains the 10,000
 rows-per-table, 50,000 total-row, and 8 MiB bounds. It explicitly omits
 `daily_capture_request_identities` and
-`account_setting_request_identities`, along with the previously omitted
-backend anti-replay ledgers.
+`account_setting_request_identities`, `assignment_series_request_identities`,
+and the previously omitted backend anti-replay ledgers.
 
 ## Timezone-Bound Planning And Calendar Imports
 

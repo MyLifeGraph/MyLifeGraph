@@ -121,6 +121,7 @@ def test_account_export_truthfully_names_the_omitted_notification_ledger() -> No
         "calendar_request_identities": "backend_only_anti_replay_ledger",
         "notification_action_requests": "backend_only_anti_replay_ledger",
         "deadline_plan_request_identities": "backend_only_anti_replay_ledger",
+        "assignment_series_request_identities": "backend_only_anti_replay_ledger",
         "planner_request_identities": "backend_only_anti_replay_ledger",
         "learning_request_identities": "backend_only_anti_replay_ledger",
     }

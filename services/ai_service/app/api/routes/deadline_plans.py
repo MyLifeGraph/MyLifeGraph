@@ -4,7 +4,10 @@ from uuid import UUID
 from fastapi import APIRouter, Depends
 
 from app.api.deps.auth import Principal, get_current_principal
-from app.api.deps.services import get_deadline_plan_service
+from app.api.deps.services import (
+    get_assignment_series_service,
+    get_deadline_plan_service,
+)
 from app.api.problems.deadline_plans import (
     DEADLINE_PLAN_DETAIL_ERRORS,
     DEADLINE_PLAN_GET_ERRORS,
@@ -21,6 +24,13 @@ from app.models.deadline_plans import (
     PreparationWorkloadDetailResponse,
     PreparationWorkloadResponse,
 )
+from app.models.assignment_series import (
+    AssignmentSeriesListResponse,
+    AssignmentSeriesMutationRequest,
+    AssignmentSeriesProposalRequest,
+    AssignmentSeriesResponse,
+)
+from app.services.assignment_series_service import AssignmentSeriesService
 from app.services.deadline_plan_service import (
     DeadlinePlanService,
 )
@@ -86,6 +96,98 @@ async def get_preparation_workload_detail(
             local_date=local_date,
         )
     except DEADLINE_PLAN_DETAIL_ERRORS as exc:
+        raise deadline_plan_problem(exc) from exc
+
+
+@router.get(
+    "/assignment-series",
+    response_model=AssignmentSeriesListResponse,
+    response_model_exclude_none=True,
+)
+async def list_assignment_series(
+    principal: Principal = Depends(get_current_principal),
+    service: AssignmentSeriesService = Depends(get_assignment_series_service),
+) -> AssignmentSeriesListResponse:
+    try:
+        return await service.list_series(user_id=principal.user_id)
+    except DEADLINE_PLAN_READ_ERRORS as exc:
+        raise deadline_plan_problem(exc) from exc
+
+
+@router.get(
+    "/assignment-series/{series_id}",
+    response_model=AssignmentSeriesResponse,
+    response_model_exclude_none=True,
+)
+async def get_assignment_series(
+    series_id: UUID,
+    principal: Principal = Depends(get_current_principal),
+    service: AssignmentSeriesService = Depends(get_assignment_series_service),
+) -> AssignmentSeriesResponse:
+    try:
+        return await service.get_series(
+            user_id=principal.user_id,
+            series_id=series_id,
+        )
+    except DEADLINE_PLAN_GET_ERRORS as exc:
+        raise deadline_plan_problem(exc) from exc
+
+
+@router.post(
+    "/assignment-series/proposals",
+    response_model=AssignmentSeriesResponse,
+    response_model_exclude_none=True,
+)
+async def propose_assignment_series(
+    request: AssignmentSeriesProposalRequest,
+    principal: Principal = Depends(get_current_principal),
+    service: AssignmentSeriesService = Depends(get_assignment_series_service),
+) -> AssignmentSeriesResponse:
+    try:
+        return await service.propose(user_id=principal.user_id, request=request)
+    except DEADLINE_PLAN_DETAIL_ERRORS as exc:
+        raise deadline_plan_problem(exc) from exc
+
+
+@router.post(
+    "/assignment-series/{series_id}/confirm",
+    response_model=AssignmentSeriesResponse,
+    response_model_exclude_none=True,
+)
+async def confirm_assignment_series(
+    series_id: UUID,
+    request: AssignmentSeriesMutationRequest,
+    principal: Principal = Depends(get_current_principal),
+    service: AssignmentSeriesService = Depends(get_assignment_series_service),
+) -> AssignmentSeriesResponse:
+    try:
+        return await service.confirm(
+            user_id=principal.user_id,
+            series_id=series_id,
+            request=request,
+        )
+    except DEADLINE_PLAN_MUTATION_ERRORS as exc:
+        raise deadline_plan_problem(exc) from exc
+
+
+@router.post(
+    "/assignment-series/{series_id}/cancel-future",
+    response_model=AssignmentSeriesResponse,
+    response_model_exclude_none=True,
+)
+async def cancel_assignment_series_future(
+    series_id: UUID,
+    request: AssignmentSeriesMutationRequest,
+    principal: Principal = Depends(get_current_principal),
+    service: AssignmentSeriesService = Depends(get_assignment_series_service),
+) -> AssignmentSeriesResponse:
+    try:
+        return await service.cancel_future(
+            user_id=principal.user_id,
+            series_id=series_id,
+            request=request,
+        )
+    except DEADLINE_PLAN_MUTATION_ERRORS as exc:
         raise deadline_plan_problem(exc) from exc
 
 

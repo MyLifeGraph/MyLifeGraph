@@ -30,6 +30,36 @@ Capture V5, Daily State V3, Exam-Week Outlook V1, or Coach V3 expectations.
 
 ## Current Verified Baseline
 
+The finite Assignment Series and live-Coach working tree was fully reverified
+locally on 2026-08-10. `verify:fast` passed all 15 documentation regressions,
+the 51-Markdown/75-route consistency inventory, source/process/visual guards,
+clean Flutter analysis, all 916 Flutter tests, Python/Ruff/compile checks, and
+`1383 passed, 2 skipped` FastAPI tests. The local migration history matched the
+repository. The physically isolated Goal transition harness passed 27
+assertions, and the complete database gate passed 218 assertions across 12
+pgTAP files, including the new series RLS, grant, replay, atomic confirmation,
+future-edit, and cancellation checks. During implementation the reviewed
+`20260810092841_finite_assignment_series_v1.sql` migration was applied through
+the explicit `APPLY_MIGRATIONS=true` workflow; no database reset occurred.
+The final `verify:full` run repeated Fast and database verification, built
+Flutter Web, and passed all eight independent profile-mode browser journeys on
+free loopback ports `7359` and `8002` without retry in 6.0 minutes. Every
+registered E2E identity was removed (the account-deletion identity was already
+absent as expected), and both checkout-owned test processes were cleaned up.
+
+The checkout-owned loopback stack then served Flutter on `7357`, FastAPI on
+`8000`, and the development-only `local_codex_oauth` provider with `gpt-5.5`.
+A browser smoke signed in as the seeded Maya student, reached a ready Coach
+surface, opened direct Assignment and Exam flows with fixed kinds, observed the
+default 12 finite occurrences, and found no prior-work controls. No Maya data
+was submitted to the external model. A separate disposable synthetic account
+completed a real rendered Coach turn, and another disposable-account smoke
+proposed independent Assignment plans, confirmed the series atomically, and
+cancelled its future scope atomically with zero prior credit. Both disposable
+accounts were removed. These checks establish only this local machine and
+loopback checkout; they do not claim remote deployment or production provider
+availability.
+
 The seven pre-commit finding fixes, the surrounding Today Full-week working
 tree, and the direct capability-gated Weekly Review entry were fully reverified
 locally on 2026-08-05. The Affected dry run
@@ -701,7 +731,9 @@ deletion, schedule preservation, global cross-owner/operation request identity,
 reliable `PT409` conflicts, forced-RLS owner reads, and rejection of
 authenticated direct or cross-owner writes.
 Deadline Planner V1 focused coverage must keep `deadline-plan-v1` strict across
-Pydantic and Flutter, require the user's explicit estimate/prior credit, and
+Pydantic and Flutter, require the user's explicit estimate, prove that new UI
+proposals use zero prior credit while legacy non-zero values remain readable,
+and
 prove deterministic timezone-aware blocks, honest unscheduled minutes, staged-
 versus-active revisions, the 366-day horizon, separate latest/current revision
 semantics, task-free draft cancellation, and exact retry/conflict behavior,
@@ -709,6 +741,15 @@ including replay returning a newer current detail projection without repeating
 the original mutation. Focused persistence tests must prove that the composite
 Deadline write serializes the exact RPC proposal/block shape and that missing
 or invalid interval fields fail before repository I/O.
+`assignment-series-v1` coverage must prove strict Pydantic/Flutter transport,
+bearer-derived ownership, direct Add-new kind locking, default 12, new `2..20`
+and future-edit `1..20` bounds, profile-local weekly wall-clock cadence across
+DST, and absence of prior-work controls/copy. Service and database tests must
+prove independent plan/managed-Task identities, complete typed proposal
+preparation before one repository call, one atomic whole-series confirmation,
+no individual plan persistence outside that transaction, exact retry/conflict,
+future-wide replacement of deviations while retaining past/completed plans,
+and atomic future cancellation with no partial lifecycle state.
 `preparation-workload-v1` coverage must require exactly
 seven consecutive profile-local dates, strict arithmetic and provenance, active
 confirmed-reservation totals, distinct active-plan counts, merged recurring
@@ -791,11 +832,11 @@ instances, router source constructs no Supabase repository, and API tests
 override asynchronous typed dependency callables rather than named
 `app.state` service or verifier fields.
 
-Owner-data policy coverage must compare the typed catalog with all 47
+Owner-data policy coverage must compare the typed catalog with all 51
 repo-owned public tables created by migration history, reject duplicate or
-missing entries, and independently prove the exact 40-table
-`account-export-v3` Account Export,
-five sanitized export sources, seven named anti-replay omissions, and 36-table
+missing entries, and independently prove the exact 43-table
+`account-export-v4` Account Export,
+five sanitized export sources, eight named anti-replay omissions, and 39-table
 Coach Snapshot. Account Export, repository, API, deletion/privilege migration,
 Coach Snapshot, and Coach agent tests must continue to prove owner filtering,
 field sanitization, bounded failure, cleanup, ledger exclusion, and account
@@ -820,7 +861,7 @@ Personal Learning V1 focused coverage must prove:
 - SQL rating/obstacle bounds, one reflection per terminal session, composite
   owner linkage, active/cross-owner rejection, forced RLS, conflict updates,
   preference dependency, exact update replay, retry-safe confirmed clear,
-  40-table export inclusion, ledger omission, and account cascade;
+  43-table export inclusion, ledger omission, and account cascade;
 - backend disabled-before-evidence short-circuit, profile timezone and DST,
   strict shared V4 sleep parsing, exact local wake/Focus-date matching,
   sleep-before-session ordering, rejected prior-day 36-hour fallback,

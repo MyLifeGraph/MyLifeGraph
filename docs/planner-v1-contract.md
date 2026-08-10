@@ -51,8 +51,20 @@ The seven-day agenda distinguishes Setup commitments, manual fixed
 commitments, Task blocks, Habit slots, Preparation blocks, and current imported
 Calendar events with icon, text, and color. Setup-owned definitions still
 belong to Settings. Exam and Assignment creation continues through the strict
-Deadline Planner V1 flow. Guest/demo renders an explicit unavailable state and
-makes no Planner request or fabricated synchronized projection.
+Deadline Planner boundary. Selecting `Exam` opens the existing single-plan
+editor with Exam already fixed. Selecting `Assignment` opens the additive
+`assignment-series-v1` editor with Assignment already fixed, 12 weekly
+occurrences by default, and a bounded `2..20` count. Neither direct entry asks
+the student to classify the item again or exposes prior-work controls.
+Guest/demo renders an explicit unavailable state and makes no Planner request
+or fabricated synchronized projection.
+
+An Assignment Series is finite, not an unbounded recurrence. Its common
+template produces one independent Preparation Plan per weekly occurrence, and
+one explicit confirmation activates the whole series atomically. An occurrence
+can later be edited alone; editing all future occurrences replaces future
+deviations while retaining past/completed ones. Cancelling the future scope is
+also atomic. One-off work without preparation belongs in Tasks.
 
 Planner's range remains seven consecutive profile-local dates starting with
 its overview date. Its day cards and appointment rows use the same
@@ -99,6 +111,15 @@ Authenticated routes are:
 - `POST /v1/planner/commitments`
 - `PATCH /v1/planner/commitments/{commitment_id}`
 - `POST /v1/planner/commitments/{commitment_id}/archive`
+
+The Planner surface additionally consumes the bearer-owned finite-series
+routes under its existing Preparation boundary:
+
+- `GET /v1/deadline-plans/assignment-series`
+- `GET /v1/deadline-plans/assignment-series/{series_id}`
+- `POST /v1/deadline-plans/assignment-series/proposals`
+- `POST /v1/deadline-plans/assignment-series/{series_id}/confirm`
+- `POST /v1/deadline-plans/assignment-series/{series_id}/cancel-future`
 
 Every route derives owner identity only from the bearer principal. All GETs are
 side-effect free. A read may derive current conflict attention but never stores

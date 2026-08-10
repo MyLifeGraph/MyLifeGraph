@@ -40,7 +40,9 @@ Daily Capture V5 merge-RPC replacement in
 Goal-removal and observational Weekly Review migration
 `20260804150153_remove_goals_and_make_weekly_review_observational.sql`, then the
 additive dependency/locking repair
-`20260804192406_harden_goal_removal_dependencies.sql`.
+`20260804192406_harden_goal_removal_dependencies.sql`, followed by the additive
+finite weekly Assignment Series boundary in
+`20260810092841_finite_assignment_series_v1.sql`.
 
 ## Runtime Activation
 
@@ -120,6 +122,10 @@ The app table constants live in
 | `deadline_plan_revisions` | Immutable proposed, active, or superseded preparation inputs/results, including proposal-time focus credit, exact remaining/planned/unscheduled totals, source provenance, optional Study Setup revision/recovery truth, additive learned/setup timing evidence, and lifecycle timestamps. |
 | `deadline_plan_blocks` | Bounded immutable dated app-owned preparation reservations for one revision, with focus end and full recovery-reserved end kept separate; they remain separate from `schedule_items` and imported calendar events. |
 | `deadline_plan_request_identities` | Backend-only global request UUID/owner/plan/operation/payload identity for exact replay and conflict detection; never exposed through Account Export. |
+| `assignment_series` | Owner-scoped `assignment-series-v1` lifecycle and shared title for a finite weekly Assignment sequence. |
+| `assignment_series_revisions` | Immutable proposed/active/superseded common templates, local-time cadence inputs, finite remaining count, and aggregate planned/unscheduled totals. |
+| `assignment_series_revision_items` | Revision membership and retain/upsert/cancel action for each independently owned Deadline Plan occurrence. |
+| `assignment_series_request_identities` | Backend-only global request UUID/owner/series/operation/payload/result ledger for exact replay; omitted from Account Export and Coach Snapshot. |
 | `planner_preferences` | Owner choice for using the current imported-calendar busy projection in deterministic Planner and Preparation availability. |
 | `planner_action_plans` | Owner-scoped staged/active Task or Habit plan identity and lifecycle. |
 | `planner_action_plan_revisions` | Immutable Planner proposal/activation history, including optional Task Study Setup revision/recovery truth and additive learned/setup timing evidence. |
@@ -339,10 +345,11 @@ evidence and mark `timing_fell_back_to_setup=true` after allocation uses an
 ordinary Setup window. It changes no grant, active block, or confirmation
 authority.
 
-Account Export now contains exactly 41 owner-content tables, including
+Account Export now contains exactly 43 owner-content tables, including
 `learning_preferences`, `focus_session_reflections`, and
-`focus_session_schedule_sources`, and names the learning retry ledger under its
-omission policy. Canonical profile deletion cascades the product projections.
+`focus_session_schedule_sources` plus the three finite Assignment Series
+content tables, and names all eight retry ledgers under its omission policy.
+Canonical profile deletion cascades the product projections.
 See `docs/personal-learning-v1-contract.md`.
 
 Phase 0B did not require a migration. Flutter now treats missing or failing real
@@ -478,10 +485,11 @@ is still connected and current.
 
 Deadline Planner V1 persists explicit preparation work separately from imported
 calendar rows and ordinary schedule items. The user supplies the exam or
-assignment type, deadline, total active-preparation estimate, prior credit, and
-session constraints within a 366-day horizon. A deliberate proposal stores one immutable revision and
-its deterministic blocks; it does not replace an active revision until an exact
-confirm command succeeds.
+assignment type, deadline, total active-preparation estimate, and session
+constraints within a 366-day horizon. New Flutter proposals use zero prior
+credit; the canonical columns remain for silent legacy compatibility. A
+deliberate proposal stores one immutable revision and its deterministic blocks;
+it does not replace an active revision until an exact confirm command succeeds.
 
 `deadline_plans` owns the plan lifecycle and immutable original estimate/prior
 credit plus separate current/latest revision counters. `deadline_plan_revisions` freezes every proposal's inputs, source and
@@ -490,6 +498,27 @@ planned and unscheduled minutes, and activation/supersession provenance.
 `deadline_plan_blocks` owns at most 120 bounded dated blocks per revision.
 `deadline_plan_request_identities` is the minimal global anti-replay ledger for
 proposal, confirm, complete, and cancel operations.
+
+`20260810092841_finite_assignment_series_v1.sql` adds four forced-RLS tables.
+`assignment_series` owns the finite lifecycle and revision counters;
+`assignment_series_revisions` freezes a common future template;
+`assignment_series_revision_items` binds each position/action/deadline to its
+independent `deadline_plans` identity and revision; and
+`assignment_series_request_identities` is the service-role-only replay ledger.
+New series contain `2..20` weekly occurrences, while future edits may retain a
+single remaining occurrence. Weekly deadlines preserve profile-local weekday
+and wall-clock time through offset changes.
+
+The migration adds service-role-only `propose_assignment_series_v1`,
+`confirm_assignment_series_v1`, and `cancel_assignment_series_future_v1` RPCs.
+They take the established owner advisory lock before request and row locks.
+Proposal atomically stages the complete affected occurrence set and delegates
+each independent plan payload through the existing Deadline Plan invariants.
+Confirmation activates every staged occurrence and creates its managed Task in
+one transaction. Future-wide revisions retain past/completed occurrences and
+replace future ones; cancel-future atomically terminates only future incomplete
+plans. Authenticated users have owner reads for the three content tables and no
+direct DML; `anon` and authenticated users have no ledger or RPC execution.
 
 All four tables use forced RLS. Authenticated owners receive only the intended
 plan/revision/block read projection and no direct mutation authority. The
@@ -1098,13 +1127,20 @@ discarded Coach V3 expiry-failure response. It restates the existing minimal
 grants, hardens fixed search paths, and changes no Account or Coach result,
 lock, replay, deletion, or application-authority contract.
 
+`20260810092841_finite_assignment_series_v1.sql` adds the four-table
+`assignment-series-v1` projection, strict finite weekly bounds, composite owner
+references, forced owner-read RLS, and service-role-only proposal,
+whole-series confirmation, and future-cancellation RPCs. It reuses the existing
+Deadline Plan lifecycle inside one owner-locked transaction and gives
+application roles no direct mutation authority.
+
 ## Local Verification Workflow
 
 When destruction of the exact normal local database is explicitly authorized,
 the guarded reset must complete through:
 
 ```text
-20260804192406_harden_goal_removal_dependencies.sql
+20260810092841_finite_assignment_series_v1.sql
 ```
 
 Then configure `.env` with:
@@ -1300,15 +1336,12 @@ legacy compatibility only and should be dropped in a later dedicated migration
 after data migration and app verification are complete.
 
 The latest migration is
-`20260804192406_harden_goal_removal_dependencies.sql`. It leaves all public
-contracts and versions unchanged, acquires `SHARE ROW EXCLUSIVE` locks for the
-complete cleanup graph in alphabetical order with a five-second lock timeout,
-then closes structured Goal dependencies across recommendations, snapshots,
-briefings, feedback, reviews, memories, insights, events, notifications, and
-Coach history. It sanitizes authoritative Intake, Task, and onboarding JSON,
-removes dangling reviews, conservatively tombstones V1 full-snapshot Coach
-turns, retains append-only usage/audit rows, asserts the final graph, and drops
-all migration-only helpers. It never searches ordinary prose and adds no
+`20260810092841_finite_assignment_series_v1.sql`. It adds the finite weekly
+Assignment Series tables, owner constraints, RLS/grants, request replay ledger,
+and atomic service-role proposal/confirm/cancel-future functions described
+above. It does not rewrite historical Deadline Plans, infer recurrences, or add
+application-role mutation authority. The preceding hardened Goal-removal
+migration still owns its cleanup and locking boundary and adds no
 generic JSON constraint.
 
 The preceding

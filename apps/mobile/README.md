@@ -181,6 +181,16 @@ card can open existing review/replan navigation but never creates a preview,
 changes a plan, adds a Today item, or generates a Notification. Guest/demo makes
 no outlook request.
 
+Planner `Add new` preserves the selected Preparation kind. `Exam` opens the
+single-plan editor; `Assignment` opens `assignment-series-v1` with 12 weekly
+occurrences by default and a 2-through-20 bound. The series preview shares one
+template but every occurrence remains an independent Preparation Plan. The
+student confirms the series once, may later edit one occurrence or all future
+ones, and may cancel only the future scope. Past/completed occurrences survive
+future-wide changes. Exam and Assignment editors expose no prior-work control
+or prior-credit summary; newly created plans submit zero while legacy values
+remain transport-compatible.
+
 ## Auth Modes
 
 - Guest mode works without Supabase and stores session plus typed, revisioned
@@ -275,7 +285,8 @@ destination rather than restoring Settings; Settings-owned routes such as
   guest/demo remains a zero-call locked surface)
 - `/habits` (compatible manual Habit V1 route with Planner selected)
 - `/preparation-plans` (compatible Preparation route with Planner selected;
-  `?kind=exam|assignment` opens that create flow)
+  `?kind=exam` opens a kind-locked single Exam flow and `?kind=assignment`
+  opens a kind-locked finite weekly Assignment Series flow)
 - `/planner/replan?plan_id=<uuid>` (focused saved-value review, staged preview,
   and explicit confirmation for exactly one Preparation plan)
 - `/weekly-review` (authenticated, completed-week review)
@@ -329,8 +340,9 @@ it does not prove Supabase or FastAPI reachability. Synced writes are not queued
 Guest/demo local persistence continues on the current device while offline.
 
 The synced-account JSON export is bounded and is not a backup, restore format,
-or transaction-wide snapshot. Its strict client allowlist matches the complete
-40-table backend contract, including scheduled Focus provenance. Web downloads
+or transaction-wide snapshot. Its strict `account-export-v4` client allowlist
+matches the complete 43-table backend contract, including scheduled Focus and
+finite Assignment Series provenance. Web downloads
 and desktop saves use a chosen destination. Android uses the platform share
 sheet; the app removes its own
 dedicated temporary source best-effort, while the plugin or operating system

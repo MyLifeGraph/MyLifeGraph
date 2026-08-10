@@ -17,6 +17,8 @@ import '../../../../core/widgets/app_page.dart';
 import '../../../../core/widgets/app_surface.dart';
 import 'package:my_life_graph/composition/profile_local_date_providers.dart';
 import '../../application/deadline_plan_controller.dart';
+import '../../application/assignment_series_controller.dart';
+import '../../domain/assignment_series.dart';
 import '../../domain/deadline_calendar_prefill.dart';
 import '../../domain/deadline_plan.dart';
 import 'package:my_life_graph/composition/deadline_plan_providers.dart';
@@ -24,6 +26,7 @@ import 'package:my_life_graph/composition/deadline_plan_providers.dart';
 part '../widgets/deadline_plan_card.dart';
 part '../widgets/deadline_plan_editor_sheet.dart';
 part '../widgets/deadline_plan_support_widgets.dart';
+part '../widgets/assignment_series_widgets.dart';
 
 class DeadlinePlansPage extends ConsumerStatefulWidget {
   const DeadlinePlansPage({
@@ -56,6 +59,7 @@ class DeadlinePlansPage extends ConsumerStatefulWidget {
 class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
   bool _sourceEditorOpened = false;
   bool _editorOpen = false;
+  bool _seriesEditorOpen = false;
   bool _targetPlanRequested = false;
   bool _targetPlanLoading = false;
   bool _initialReplanOpened = false;
@@ -63,7 +67,9 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
   bool _expansionInitialized = false;
   Object? _targetPlanError;
   DeadlinePlanProposalDraft? _retainedDraft;
+  AssignmentSeriesProposalDraft? _retainedSeriesDraft;
   String? _expandedPlanId;
+  String? _expandedSeriesId;
   String? _operationPlanId;
   final Map<String, GlobalKey> _planKeys = {};
 
@@ -110,8 +116,11 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
       );
     }
     final state = ref.watch(deadlinePlanControllerProvider);
+    final seriesState = ref.watch(assignmentSeriesControllerProvider);
     ref.watch(preparationWorkloadProvider);
     final controller = ref.read(deadlinePlanControllerProvider.notifier);
+    final seriesController =
+        ref.read(assignmentSeriesControllerProvider.notifier);
     final sourcePrefill = widget.sourceCalendarEventId == null
         ? null
         : ref.watch(
@@ -121,7 +130,7 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
     _loadTargetPlanAfterBuild(state);
     _initializeExpansionAfterBuild(state);
     _openInitialReplanAfterBuild(state);
-    _openInitialKindEditorAfterBuild(state);
+    _openInitialKindEditorAfterBuild(state, seriesState);
 
     return AppPage(
       title: widget.focusedReplan ? 'Replan preparation' : 'Preparation plans',
@@ -137,17 +146,26 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
               : () {
                   ref.invalidate(preparationWorkloadProvider);
                   controller.load();
+                  seriesController.load();
                 },
           icon: const Icon(AppIcons.refresh),
         ),
       ],
-      children: _children(state, controller, sourcePrefill),
+      children: _children(
+        state,
+        controller,
+        seriesState,
+        seriesController,
+        sourcePrefill,
+      ),
     );
   }
 
   List<Widget> _children(
     DeadlinePlanState state,
     DeadlinePlanController controller,
+    AssignmentSeriesState seriesState,
+    AssignmentSeriesController seriesController,
     AsyncValue<DeadlineCalendarPrefill>? sourcePrefill,
   ) {
     if (state.isLoading) {
@@ -175,7 +193,17 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
       ];
     }
 
-    final visiblePlans = [...state.plans]..sort((left, right) {
+    final seriesPlanIds =
+        seriesState.series.expand((series) => series.occurrencePlanIds).toSet();
+    final visiblePlans = state.plans
+        .where(
+          (plan) =>
+              widget.focusedReplan ||
+              plan.id == widget.initialPlanId ||
+              !seriesPlanIds.contains(plan.id),
+        )
+        .toList()
+      ..sort((left, right) {
         final selectedId = widget.initialPlanId;
         if (selectedId != null && left.id != right.id) {
           if (left.id == selectedId) return -1;
@@ -226,6 +254,37 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
             setState(() => _operationPlanId = null);
           },
         ),
+      );
+    }
+
+    Widget seriesCard(AssignmentSeries series) {
+      final hasInlineError =
+          seriesState.operationError != null && _expandedSeriesId == series.id;
+      return _AssignmentSeriesCard(
+        key: ValueKey('assignment-series-${series.id}'),
+        series: series,
+        plans: {
+          for (final plan in state.plans)
+            if (series.occurrencePlanIds.contains(plan.id)) plan.id: plan,
+        },
+        expanded: _expandedSeriesId == series.id,
+        isBusy: state.isBusy || seriesState.isBusy,
+        exactRetryLocked:
+            state.requiresExactRetry || seriesState.requiresExactRetry,
+        operationError: hasInlineError ? seriesState.operationError : null,
+        onToggle: () => setState(
+          () => _expandedSeriesId =
+              _expandedSeriesId == series.id ? null : series.id,
+        ),
+        onEditSeries: () => _openAssignmentSeriesEditor(series: series),
+        onEditOccurrence: (plan) => _openEditor(plan: plan),
+        onConfirm: () => _confirmAssignmentSeries(series),
+        onCancelFuture: () => _cancelAssignmentSeriesFuture(series),
+        onRetry: seriesController.retryExact,
+        onReload: () async {
+          await Future.wait([controller.load(), seriesController.load()]);
+        },
+        onDismissError: seriesController.clearOperationError,
       );
     }
 
@@ -331,14 +390,43 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
           ],
         ),
       ),
-      if (visiblePlans.isEmpty)
+      if (seriesState.isLoading)
+        const AppCard(
+          child: Row(
+            children: [
+              SizedBox.square(
+                dimension: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+              SizedBox(width: AppSpacing.md),
+              Expanded(child: Text('Loading weekly assignment series…')),
+            ],
+          ),
+        )
+      else if (seriesState.loadError != null)
+        _MessageCard(
+          icon: AppIcons.cloudOffOutlined,
+          title: 'Weekly assignment series unavailable',
+          message:
+              'Series state could not be read. Individual preparation plans remain visible and were not replaced with demo data.',
+          actionLabel: 'Retry series',
+          onAction: seriesController.load,
+        )
+      else if (seriesState.series.isNotEmpty) ...[
+        Text(
+          'Weekly assignment series',
+          style: Theme.of(context).textTheme.titleLarge,
+        ),
+        for (final series in seriesState.series) seriesCard(series),
+      ],
+      if (visiblePlans.isEmpty && seriesState.series.isEmpty)
         const _MessageCard(
           icon: AppIcons.calendarViewWeekOutlined,
           title: 'No preparation plan yet',
           message:
               'Create a staged preview first. Nothing is reserved until you confirm it.',
         )
-      else ...[
+      else if (visiblePlans.isNotEmpty) ...[
         Text('Open plans', style: Theme.of(context).textTheme.titleLarge),
         if (openPlans.isEmpty)
           const Text('No open preparation plans.')
@@ -349,6 +437,20 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
           for (final plan in historyPlans) planCard(plan),
         ],
       ],
+      if (_retainedSeriesDraft != null &&
+          seriesState.operationError == null &&
+          !seriesState.isBusy)
+        _CalendarPrefillCard(
+          icon: AppIcons.editNoteOutlined,
+          title: 'Entered series values kept',
+          message: 'Review the weekly assignment values before trying again.',
+          primaryLabel: 'Review series values',
+          onPrimary: () => _openAssignmentSeriesEditor(
+            retainedDraft: _retainedSeriesDraft,
+          ),
+          secondaryLabel: 'Discard entered values',
+          onSecondary: () => setState(() => _retainedSeriesDraft = null),
+        ),
       if (_retainedDraft != null &&
           state.operationError == null &&
           !state.isBusy)
@@ -434,7 +536,10 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
     });
   }
 
-  void _openInitialKindEditorAfterBuild(DeadlinePlanState state) {
+  void _openInitialKindEditorAfterBuild(
+    DeadlinePlanState state,
+    AssignmentSeriesState seriesState,
+  ) {
     if (widget.initialKind == null ||
         _initialKindEditorOpened ||
         widget.initialPlanId != null ||
@@ -442,12 +547,21 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
         state.isLoading ||
         state.loadError != null ||
         state.isBusy ||
-        state.requiresExactRetry) {
+        state.requiresExactRetry ||
+        widget.initialKind == DeadlinePlanKind.assignment &&
+            (seriesState.isLoading ||
+                seriesState.isBusy ||
+                seriesState.requiresExactRetry)) {
       return;
     }
     _initialKindEditorOpened = true;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) _openEditor();
+      if (!mounted) return;
+      if (widget.initialKind == DeadlinePlanKind.assignment) {
+        _openAssignmentSeriesEditor();
+      } else {
+        _openEditor();
+      }
     });
   }
 
@@ -644,6 +758,9 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
               preparationWorkload.valueOrNull?.dailyPreparationBudgetMinutes,
           retainedDraft: retainedDraft,
           initialKind: widget.initialKind,
+          lockKind: widget.initialKind != null &&
+              sourcePlan == null &&
+              loadedPrefill == null,
           initialTitle:
               existing?.title ?? loadedPrefill?.title ?? widget.initialTitle,
           initialDeadlineAt: existing?.deadlineAt ??
@@ -698,6 +815,139 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
         _expandedPlanId = changedPlanId ?? draft!.planId;
       });
       _showMessage('Preparation preview created. Review and confirm it.');
+    }
+  }
+
+  Future<void> _openAssignmentSeriesEditor({
+    AssignmentSeries? series,
+    AssignmentSeriesProposalDraft? retainedDraft,
+  }) async {
+    final seriesState = ref.read(assignmentSeriesControllerProvider);
+    final planState = ref.read(deadlinePlanControllerProvider);
+    if (seriesState.isBusy ||
+        seriesState.requiresExactRetry ||
+        planState.isBusy ||
+        planState.requiresExactRetry ||
+        _seriesEditorOpen) {
+      return;
+    }
+    _seriesEditorOpen = true;
+    final workload = ref.read(preparationWorkloadProvider);
+    AssignmentSeriesProposalDraft? draft;
+    try {
+      draft = await showModalBottomSheet<AssignmentSeriesProposalDraft>(
+        context: context,
+        isScrollControlled: true,
+        useRootNavigator: true,
+        useSafeArea: true,
+        builder: (_) => _AssignmentSeriesEditorSheet(
+          seriesId: series?.id ?? retainedDraft?.seriesId ?? newClientUuid(),
+          baseRevision:
+              series?.latestRevision ?? retainedDraft?.baseRevision ?? 0,
+          existing: series?.displayedRevision,
+          retainedDraft: retainedDraft,
+          accountDailyPreparationBudgetKnown: workload.hasValue,
+          accountDailyPreparationBudgetMinutes:
+              workload.valueOrNull?.dailyPreparationBudgetMinutes,
+          currentTime: widget.currentTime,
+          onOpenPlanner: () => context.go(AppRoutes.planner),
+        ),
+      );
+    } finally {
+      _seriesEditorOpen = false;
+    }
+    if (!mounted || draft == null) return;
+    setState(() {
+      _retainedSeriesDraft = draft;
+      _expandedSeriesId = series?.id ?? draft!.seriesId;
+    });
+    final saved = await ref
+        .read(assignmentSeriesControllerProvider.notifier)
+        .propose(draft);
+    if (!mounted) return;
+    if (saved) {
+      setState(() => _retainedSeriesDraft = null);
+      await ref.read(deadlinePlanControllerProvider.notifier).load();
+      ref.invalidate(preparationWorkloadProvider);
+      if (mounted) {
+        _showMessage(
+          'Weekly assignment preview created. Review the series and confirm it once.',
+        );
+      }
+    }
+  }
+
+  Future<void> _confirmAssignmentSeries(AssignmentSeries series) async {
+    final revision = series.pendingRevision;
+    if (revision == null) return;
+    final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (_) => AlertDialog(
+            title: const Text('Reserve this assignment series?'),
+            content: Text(
+              '${revision.remainingOccurrences} weekly assignments will each keep an independent preparation plan. '
+              '${_duration(revision.plannedMinutes)} of preparation is staged across the series. '
+              'This is one atomic confirmation: either every future occurrence is updated, or none is.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('Keep as preview'),
+              ),
+              FilledButton(
+                key: const ValueKey('assignment-series-confirm'),
+                onPressed: () => Navigator.of(context).pop(true),
+                child: const Text('Confirm whole series'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+    if (!mounted || !confirmed) return;
+    setState(() => _expandedSeriesId = series.id);
+    final saved = await ref
+        .read(assignmentSeriesControllerProvider.notifier)
+        .confirm(series);
+    if (mounted && saved) {
+      await ref.read(deadlinePlanControllerProvider.notifier).load();
+      ref.invalidate(preparationWorkloadProvider);
+      if (mounted) _showMessage('Whole assignment series reserved.');
+    }
+  }
+
+  Future<void> _cancelAssignmentSeriesFuture(AssignmentSeries series) async {
+    final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (_) => AlertDialog(
+            title: const Text('Cancel future assignments?'),
+            content: const Text(
+              'All open future occurrences in this series will be cancelled together. Past and completed assignments keep their history.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('Keep series'),
+              ),
+              FilledButton(
+                key: const ValueKey('assignment-series-cancel-future-confirm'),
+                onPressed: () => Navigator.of(context).pop(true),
+                child: const Text('Cancel future assignments'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+    if (!mounted || !confirmed) return;
+    setState(() => _expandedSeriesId = series.id);
+    final saved = await ref
+        .read(assignmentSeriesControllerProvider.notifier)
+        .cancelFuture(series);
+    if (mounted && saved) {
+      await ref.read(deadlinePlanControllerProvider.notifier).load();
+      ref.invalidate(preparationWorkloadProvider);
+      if (mounted) {
+        _showMessage('Future assignments cancelled; earlier history was kept.');
+      }
     }
   }
 

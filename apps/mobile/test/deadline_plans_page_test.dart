@@ -12,6 +12,8 @@ import 'package:my_life_graph/core/widgets/app_surface.dart';
 import 'package:my_life_graph/features/auth/application/profile_local_date_source.dart';
 import 'package:my_life_graph/composition/profile_local_date_providers.dart';
 import 'package:my_life_graph/features/deadline_plans/data/deadline_calendar_prefill_data_source.dart';
+import 'package:my_life_graph/features/deadline_plans/domain/assignment_series.dart';
+import 'package:my_life_graph/features/deadline_plans/domain/assignment_series_repository.dart';
 import 'package:my_life_graph/features/deadline_plans/domain/deadline_calendar_prefill.dart';
 import 'package:my_life_graph/features/deadline_plans/domain/deadline_plan.dart';
 import 'package:my_life_graph/features/deadline_plans/domain/deadline_plan_repository.dart';
@@ -25,7 +27,7 @@ import 'support/deadline_plan_fixtures.dart';
 void main() {
   final now = DateTime(2026, 7, 18, 10);
 
-  testWidgets('Planner deep link opens the selected preparation create flow',
+  testWidgets('Planner Assignment opens a finite series without type choice',
       (tester) async {
     await _pumpPage(
       tester,
@@ -36,14 +38,54 @@ void main() {
       ),
     );
 
-    expect(find.text('What are you preparing for?'), findsOneWidget);
-    final selector = tester.widget<SegmentedButton<DeadlinePlanKind>>(
-      find.byType(SegmentedButton<DeadlinePlanKind>),
+    expect(find.text('Which assignment series?'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('assignment-series-locked-kind')),
+      findsOneWidget,
     );
-    expect(selector.selected, {DeadlinePlanKind.assignment});
+    expect(find.byType(SegmentedButton<DeadlinePlanKind>), findsNothing);
+
+    await tester.enterText(
+      find.byKey(const ValueKey('assignment-series-title')),
+      'Weekly algorithms sheet',
+    );
+    await _tap(
+      tester,
+      find.byKey(const ValueKey('assignment-series-next-deadline')),
+    );
+    await _tap(tester, find.text('OK'));
+    await _tap(tester, find.text('OK'));
+    await _tap(tester, find.text('Continue'));
+
+    final count = tester.widget<TextField>(
+      find.byKey(const ValueKey('assignment-series-count')),
+    );
+    expect(count.controller!.text, '12');
+    expect(
+      find.text('12 is the default for a typical semester.'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('prior work'), findsNothing);
+    expect(find.textContaining('prior-work'), findsNothing);
   });
 
-  testWidgets('wizard requires an explicit estimate and started answer',
+  testWidgets('Planner Exam keeps the selected kind without type choice',
+      (tester) async {
+    await _pumpPage(
+      tester,
+      repository: _FakeDeadlinePlanRepository(),
+      page: DeadlinePlansPage(
+        initialKind: DeadlinePlanKind.exam,
+        currentTime: now,
+      ),
+    );
+
+    expect(find.text('What are you preparing for?'), findsOneWidget);
+    expect(find.byKey(const ValueKey('deadline-locked-kind')), findsOneWidget);
+    expect(find.byType(SegmentedButton<DeadlinePlanKind>), findsNothing);
+  });
+
+  testWidgets('wizard requires an explicit estimate without prior-work choice',
       (tester) async {
     final repository = _FakeDeadlinePlanRepository();
     await _pumpPage(
@@ -69,10 +111,8 @@ void main() {
     await _tap(tester, find.byKey(const ValueKey('deadline-estimate-5h')));
     expect(find.textContaining('cannot estimate this for you'), findsOneWidget);
     await _tap(tester, find.text('Continue'));
-    expect(find.text('Step 2 of 3'), findsOneWidget);
-    await _tap(tester, find.text('No additional prior work'));
-    await _tap(tester, find.text('Continue'));
     expect(find.text('Step 3 of 3'), findsOneWidget);
+    expect(find.textContaining('prior work'), findsNothing);
     expect(
       find.text('Maximum preparation minutes per day for this plan'),
       findsOneWidget,
@@ -104,7 +144,6 @@ void main() {
     await _tap(tester, find.text('Exam'));
     await _tap(tester, find.text('Continue'));
     await _tap(tester, find.byKey(const ValueKey('deadline-estimate-5h')));
-    await _tap(tester, find.text('No additional prior work'));
     await _tap(tester, find.text('Continue'));
 
     expect(
@@ -203,7 +242,7 @@ void main() {
     await _tap(tester, find.text('Continue'));
     expect(
       find.textContaining('before this plan was first activated'),
-      findsOneWidget,
+      findsNothing,
     );
     expect(find.textContaining('25 min linked Focus'), findsOneWidget);
     await _tap(tester, find.text('Continue'));
@@ -328,7 +367,7 @@ void main() {
       find.textContaining('Rule-based windows: prefers 08:00–13:00'),
       findsOneWidget,
     );
-    expect(find.text('Entered prior credit'), findsOneWidget);
+    expect(find.text('Entered prior credit'), findsNothing);
     expect(
       find.textContaining('Linked Focus completed after this plan'),
       findsOneWidget,
@@ -1031,6 +1070,9 @@ void main() {
             const SessionProfileLocalDateSource(session: null),
           ),
           deadlinePlanRepositoryProvider.overrideWithValue(repository),
+          assignmentSeriesRepositoryProvider.overrideWithValue(
+            _FakeAssignmentSeriesRepository(),
+          ),
         ],
         child: MaterialApp.router(routerConfig: router),
       ),
@@ -1115,6 +1157,9 @@ void main() {
             const SessionProfileLocalDateSource(session: null),
           ),
           deadlinePlanRepositoryProvider.overrideWithValue(repository),
+          assignmentSeriesRepositoryProvider.overrideWithValue(
+            _FakeAssignmentSeriesRepository(),
+          ),
         ],
         child: MaterialApp.router(routerConfig: router),
       ),
@@ -1225,7 +1270,6 @@ Future<void> _completeNewWizard(WidgetTester tester) async {
   await _tap(tester, find.text('Exam'));
   await _tap(tester, find.text('Continue'));
   await _tap(tester, find.byKey(const ValueKey('deadline-estimate-5h')));
-  await _tap(tester, find.text('No additional prior work'));
   await _tap(tester, find.text('Continue'));
   expect(find.text('0 clear days'), findsWidgets);
   await _tap(tester, find.text('Create preview'));
@@ -1308,6 +1352,9 @@ Future<void> _pumpPage(
         appSurfaceCapabilitiesProvider.overrideWithValue(capabilities),
         profileLocalDateSourceProvider.overrideWithValue(profileDateSource),
         deadlinePlanRepositoryProvider.overrideWithValue(repository),
+        assignmentSeriesRepositoryProvider.overrideWithValue(
+          _FakeAssignmentSeriesRepository(),
+        ),
         if (snapshotRefresh != null)
           snapshotRefreshServiceProvider.overrideWithValue(snapshotRefresh),
         if (prefillDataSource != null)
@@ -1330,6 +1377,35 @@ Future<void> _pumpPage(
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
   }
+}
+
+class _FakeAssignmentSeriesRepository implements AssignmentSeriesRepository {
+  @override
+  Future<AssignmentSeriesFeed> getSeries() async =>
+      const AssignmentSeriesFeed([]);
+
+  @override
+  Future<AssignmentSeries> propose({
+    required String requestId,
+    required AssignmentSeriesProposalDraft draft,
+  }) =>
+      throw UnimplementedError();
+
+  @override
+  Future<AssignmentSeries> confirm({
+    required String seriesId,
+    required String requestId,
+    required int expectedRevision,
+  }) =>
+      throw UnimplementedError();
+
+  @override
+  Future<AssignmentSeries> cancelFuture({
+    required String seriesId,
+    required String requestId,
+    required int expectedRevision,
+  }) =>
+      throw UnimplementedError();
 }
 
 class _RecordingSnapshotRefresh implements SnapshotRefreshService {

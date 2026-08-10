@@ -523,8 +523,27 @@ Create a manual staged proposal with one stable client plan id and request id:
 curl -X POST http://localhost:8000/v1/deadline-plans/proposals \
   -H 'Authorization: Bearer <supabase_access_token>' \
   -H 'Content-Type: application/json' \
-  -d '{"request_id":"11111111-1111-4111-8111-111111111111","plan_id":"22222222-2222-4222-8222-222222222222","base_revision":0,"kind":"exam","title":"Statistics exam","deadline_at":"2026-08-20T09:00:00+02:00","estimated_total_minutes":480,"credited_prior_minutes":60,"preferred_session_minutes":50,"max_daily_minutes":100,"planning_start_on":"2026-07-20","buffer_days":2,"source_kind":"manual","use_calendar_availability":false}'
+  -d '{"request_id":"11111111-1111-4111-8111-111111111111","plan_id":"22222222-2222-4222-8222-222222222222","base_revision":0,"kind":"exam","title":"Statistics exam","deadline_at":"2026-08-20T09:00:00+02:00","estimated_total_minutes":480,"credited_prior_minutes":0,"preferred_session_minutes":50,"max_daily_minutes":100,"planning_start_on":"2026-07-20","buffer_days":2,"source_kind":"manual","use_calendar_availability":false}'
 ```
+
+The current Flutter Exam and Assignment entries always send zero prior credit;
+the field remains on the V1 wire only so existing plan revisions stay readable.
+
+Finite weekly Assignments use the additive strict routes:
+
+```text
+GET  /v1/deadline-plans/assignment-series
+GET  /v1/deadline-plans/assignment-series/{series_id}
+POST /v1/deadline-plans/assignment-series/proposals
+POST /v1/deadline-plans/assignment-series/{series_id}/confirm
+POST /v1/deadline-plans/assignment-series/{series_id}/cancel-future
+```
+
+A new `assignment-series-v1` proposal uses one shared per-occurrence estimate,
+an aware next deadline, and `remaining_occurrences` in `2..20`; Flutter
+defaults it to 12. Confirmation is one whole-series transaction. Editing the
+future scope uses the current `latest_revision` and `1..20`, retaining
+past/completed plans while replacing future deviations.
 
 The proposal persists immutable staged blocks and leaves the active revision
 unchanged. Inspect it with
@@ -1031,6 +1050,12 @@ additive dependency/locking repair:
 ```text
 20260804150153_remove_goals_and_make_weekly_review_observational.sql
 20260804192406_harden_goal_removal_dependencies.sql
+```
+
+Finite Assignment Series additionally requires:
+
+```text
+20260810092841_finite_assignment_series_v1.sql
 ```
 
 Calendar import additionally requires the Phase 9 migration listed in

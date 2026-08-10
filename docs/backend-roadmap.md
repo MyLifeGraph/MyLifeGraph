@@ -261,8 +261,10 @@ Already implemented:
 - Deadline Planner V1:
   - Authenticated read-only GET plus explicit proposal, confirm, complete, and
     cancel routes under `deadline-plan-v1`.
-  - The user supplies exam/assignment type, deadline, `30..30000` active-
-    preparation minutes, prior credit, and bounded session/daily preferences.
+  - Direct Planner Exam/Assignment entry keeps the selected type fixed. The
+    user supplies deadline, `30..30000` active-preparation minutes, and bounded
+    session/daily preferences; new UI proposals use zero prior credit and do
+    not expose the legacy field.
   - Each proposal persists at most 120 deterministic dated blocks in an
     immutable pending revision. It cannot replace the active revision before
     exact confirmation; first confirm creates the stable managed Phase 3 task.
@@ -277,6 +279,19 @@ Already implemented:
     plan choice that requires one connected, non-deleted current import. There
     is no inference, provider write, notification, LLM,
     background sync, scheduled generation, or Dashboard-load generation.
+- Assignment Series V1:
+  - `assignment-series-v1` adds bearer-owned list/detail/proposal/confirm and
+    cancel-future routes under the Deadline Planner boundary.
+  - A new Assignment defaults to 12 finite weekly occurrences and accepts
+    `2..20`; a future-scope edit accepts `1..20`. Weekly instants preserve the
+    profile-local weekday and wall-clock deadline through DST.
+  - One common template stages independent Preparation Plans. Confirmation is
+    one owner-locked transaction; each occurrence keeps independent blocks,
+    progress, managed Task, and single-occurrence replanning.
+  - Editing all future occurrences retains past/completed plans and overwrites
+    future deviations. Future cancellation is atomic. Series projections use
+    forced owner-read RLS, while writes and the request ledger remain
+    service-role-only. No recurrence is unbounded and no LLM is involved.
 - Exam-Week Outlook V1:
   - `GET /v1/deadline-plans/exam-week-outlook` is bearer-owned and strictly
     read-only; no table or migration was added.

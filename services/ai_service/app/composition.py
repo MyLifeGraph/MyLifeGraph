@@ -9,6 +9,9 @@ from app.providers.disabled import DisabledCoachProvider
 from app.providers.fake import FakeCoachProvider
 from app.providers.local_codex import LocalCodexCoachProvider
 from app.repositories.account_repository import SupabaseAccountRepository
+from app.repositories.assignment_series_repository import (
+    SupabaseAssignmentSeriesRepository,
+)
 from app.repositories.briefing_repository import SupabaseBriefingRepository
 from app.repositories.calendar_integration_repository import (
     SupabaseCalendarIntegrationRepository,
@@ -47,6 +50,7 @@ from app.repositories.weekly_review_repository import (
     SupabaseWeeklyReviewRepository,
 )
 from app.services.account_service import AccountService
+from app.services.assignment_series_service import AssignmentSeriesService
 from app.services.briefing_service import BriefingService
 from app.services.calendar_integration_service import CalendarIntegrationService
 from app.services.coach_agent_service import CoachAgentService
@@ -88,6 +92,7 @@ class ApplicationComposition:
 
     supabase_client: SupabaseRestClient
     account_service: AccountService
+    assignment_series_service: AssignmentSeriesService
     briefing_service: BriefingService
     calendar_integration_service: CalendarIntegrationService
     coach_services: CoachServices
@@ -151,9 +156,15 @@ class ApplicationComposition:
                 and settings.app_env != "production"
             ),
         )
+        deadline_plan_repository = SupabaseDeadlinePlanRepository(supabase_client)
         deadline_plan_service = DeadlinePlanService(
-            repository=SupabaseDeadlinePlanRepository(supabase_client),
+            repository=deadline_plan_repository,
             learned_timing=learned_timing,
+        )
+        assignment_series_service = AssignmentSeriesService(
+            repository=SupabaseAssignmentSeriesRepository(supabase_client),
+            deadline_repository=deadline_plan_repository,
+            deadline_plans=deadline_plan_service,
         )
         planner_repository = SupabasePlannerRepository(supabase_client)
         today_repository = SupabaseTodayOverviewRepository(supabase_client)
@@ -236,6 +247,7 @@ class ApplicationComposition:
         return cls(
             supabase_client=supabase_client,
             account_service=AccountService(repository=account_repository),
+            assignment_series_service=assignment_series_service,
             briefing_service=briefing_service,
             calendar_integration_service=CalendarIntegrationService(
                 repository=SupabaseCalendarIntegrationRepository(supabase_client),

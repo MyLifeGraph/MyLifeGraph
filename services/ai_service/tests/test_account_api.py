@@ -128,7 +128,7 @@ class Service:
         data["profiles"] = [{"id": USER_ID, "timezone": "Europe/Berlin"}]
         record_counts = {name: len(rows) for name, rows in data.items()}
         envelope = AccountExportResponse(
-            contract_version="account-export-v3",
+            contract_version="account-export-v4",
             exported_at=NOW,
             data=data,
             record_counts=record_counts,
@@ -359,18 +359,18 @@ def test_export_returns_download_ready_versioned_json_and_maps_limits() -> None:
     assert response.headers["content-disposition"] == (
         'attachment; filename="mylifegraph-account-export.json"'
     )
-    assert response.json()["contract_version"] == "account-export-v3"
+    assert response.json()["contract_version"] == "account-export-v4"
     assert "goals" not in response.json()["data"]
     assert response.json()["data"]["profiles"][0]["id"] == USER_ID
     assert service.calls == [("export", USER_ID)]
 
     limited_service = Service()
-    limited_service.export_error = AccountExportTooLargeError("V3 bound reached")
+    limited_service.export_error = AccountExportTooLargeError("V4 bound reached")
     limited, _ = asyncio.run(
         _request("GET", "/v1/account/export", service=limited_service),
     )
     assert limited.status_code == 413
-    assert limited.json() == {"detail": "V3 bound reached"}
+    assert limited.json() == {"detail": "V4 bound reached"}
 
     failed_service = Service()
     failed_service.export_error = AccountUnavailableError("private upstream detail")

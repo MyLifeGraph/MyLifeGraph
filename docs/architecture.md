@@ -565,8 +565,11 @@ normal writes, or call an LLM. The full contract is in
 
 `deadline-plan-v1` is a separate authenticated FastAPI workflow for explicit
 exam and assignment preparation. `/preparation-plans` asks the user for their
-own `30..30000` minute total estimate and prior credit that will not otherwise
-be credited, plus bounded session/per-plan-daily preferences. The surface shows
+own `30..30000` minute total estimate plus bounded session/per-plan-daily
+preferences. Direct Planner Exam and Assignment actions pass a fixed kind and
+never repeat the classification. New plans submit zero prior credit and expose
+no prior-work controls; legacy non-zero credit remains a silent progress input.
+The surface shows
 the deterministic ordered energy windows and latest-manual-import boundary.
 `POST /v1/deadline-plans/proposals` persists an immutable
 proposed revision with at most 120 deterministic dated blocks; it cannot replace
@@ -579,6 +582,18 @@ The Deadline service passes one validated `DeadlineProposalWrite` to its
 repository rather than parallel proposal/block dictionaries. The read-only
 Exam-Week calculation lives in a pure builder with no repository or service
 access; the service retains only bounded input loading and error mapping.
+
+`assignment-series-v1` is an additive orchestration layer over that same
+Deadline planning calculation. A strict bearer-owned FastAPI service generates
+`2..20` weekly occurrences from one profile-local wall-clock deadline and a
+shared template, constructs a validated independent Deadline proposal for each,
+and crosses one repository boundary. Service-role-only Postgres RPCs atomically
+persist and confirm the series revision together with all occurrence plan
+revisions. Each occurrence retains its own plan and managed Task identity.
+Future-wide edits retain past/completed plans and replace future deviations;
+future cancellation has the same owner-lock and all-or-nothing boundary. The
+series tables are owner-readable forced-RLS projections, while their request
+ledger and every write remain backend-only.
 
 The managed task is not generically editable. Task mutation/editor paths detect
 its planner source and route back to `/preparation-plans`; only planner confirm,
@@ -1166,7 +1181,7 @@ The exact boundary is `docs/v1-account-controls-contract.md`. Real authenticated
 accounts use bearer-derived FastAPI routes for revision-checked, retry-safe
 IANA timezone and daily preparation-budget changes,
 an optional bounded account-wide daily preparation rule, a strict bounded
-`account-export-v3` JSON portability export, and permanent deletion.
+`account-export-v4` JSON portability export, and permanent deletion.
 Password reset and confirmation resend remain Supabase Auth operations with a
 dedicated recovery-event route in Flutter. Guest/mock sessions make no account
 API calls.
@@ -1174,12 +1189,13 @@ API calls.
 Export reads only owner-filtered canonical product tables, including the
 current Study Setup and Personal Learning projections, applies field
 allowlists to backend-owned Calendar/Coach ledgers, names the anti-replay ledger
-it omits, includes Deadline Planner plan/revision/block rows while omitting its
-request ledger, and fails rather than truncating at a V1 bound. The exact
-40-table set includes `learning_preferences`, `focus_session_reflections`, and
-`focus_session_schedule_sources`, while the learning request ledger is
+it omits, includes Deadline Planner and finite Assignment Series content rows
+while omitting both request ledgers, and fails rather than truncating at a V1
+bound. The exact 43-table set includes `learning_preferences`,
+`focus_session_reflections`, `focus_session_schedule_sources`, and the three
+Assignment Series content projections, while all eight anti-replay ledgers are
 explicitly omitted. FastAPI's typed owner-data catalog is the single code owner
-for all 47 repo-owned public tables: each entry separately declares Account
+for all 51 repo-owned public tables: each entry separately declares Account
 Export and Coach Snapshot participation, the bounded read shape when applicable,
 and the human-readable snapshot description. A focused migration-history
 completeness test fails when a newly created repo table has no deliberate

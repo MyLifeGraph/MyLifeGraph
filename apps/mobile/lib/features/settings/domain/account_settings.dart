@@ -3,7 +3,7 @@ import 'dart:typed_data';
 
 import '../../../core/contracts/strict_contract.dart';
 
-const accountExportContractVersion = 'account-export-v3';
+const accountExportContractVersion = 'account-export-v4';
 const accountExportTableNames = <String>[
   'profiles',
   'notification_preferences',
@@ -36,6 +36,9 @@ const accountExportTableNames = <String>[
   'coach_requests',
   'coach_usage_events',
   'coach_memory_selections',
+  'assignment_series',
+  'assignment_series_revisions',
+  'assignment_series_revision_items',
   'deadline_plans',
   'deadline_plan_revisions',
   'deadline_plan_blocks',
@@ -59,6 +62,7 @@ const accountExportV1OmittedTables = <String, String>{
   'calendar_request_identities': 'backend_only_anti_replay_ledger',
   'notification_action_requests': 'backend_only_anti_replay_ledger',
   'deadline_plan_request_identities': 'backend_only_anti_replay_ledger',
+  'assignment_series_request_identities': 'backend_only_anti_replay_ledger',
   'planner_request_identities': 'backend_only_anti_replay_ledger',
   'learning_request_identities': 'backend_only_anti_replay_ledger',
 };

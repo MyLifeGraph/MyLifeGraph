@@ -451,7 +451,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     } on AccountExportTooLargeException {
       if (mounted) {
         _showMessage(
-          'This account exceeds the V3 export limits. Retrying unchanged will not help; reduce deletable history or request a larger export workflow.',
+          'This account exceeds the V4 export limits. Retrying unchanged will not help; reduce deletable history or request a larger export workflow.',
         );
       }
     } catch (_) {

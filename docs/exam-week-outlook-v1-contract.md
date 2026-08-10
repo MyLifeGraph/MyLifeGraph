@@ -1,6 +1,7 @@
 # Exam-Week Outlook V1 Contract
 
-Status: implemented repository boundary as of 2026-07-26.
+Status: implemented repository boundary, including finite Assignment Series
+compatibility, as of 2026-08-10.
 
 This contract adds two related, deterministic capabilities:
 
@@ -139,6 +140,12 @@ Only an active exam with remaining preparation activates the surface:
 Active assignments never activate the mode. While a mode is active, assignments
 with remaining work and deadlines through the same 14-day horizon participate
 in the capacity calculation and appear as separately labelled consumers.
+An `assignment-series-v1` occurrence is an independent `deadline-plan-v1`
+Assignment for this read. Only confirmed active occurrence plans participate;
+the series projection and its pending future-wide preview are not additional
+demand and require no extra Outlook read. Confirming, editing, or cancelling a
+series invalidates/reloads the existing Deadline projection through the normal
+Planner mutation impact, without giving this GET write authority.
 
 ## Deterministic Capacity Simulation
 

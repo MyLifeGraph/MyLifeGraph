@@ -1,21 +1,30 @@
 # Deadline Planner V1 Contract
 
-Deadline Planner V1 turns one explicit exam or assignment deadline plus the
+Deadline Planner V1 turns one explicit exam or assignment occurrence plus the
 user's own preparation estimate into a reviewable set of dated focus blocks.
-It is deterministic, authenticated, retry-safe, and no-LLM. It does not infer
-that a calendar event is a deadline and never writes to a source calendar.
+The additive `assignment-series-v1` boundary creates a finite weekly sequence
+of those independently manageable Assignment plans from one shared template.
+Both paths are deterministic, authenticated, retry-safe, and no-LLM. They do
+not infer that a calendar event is a deadline and never write to a source
+calendar.
 
 ## Product Boundary
 
-The user deliberately starts the flow from either:
+The user deliberately starts the flow from one of these entries:
 
-- `Plan exam or assignment`, where they enter a manual title and deadline; or
+- Planner `Add new` -> `Exam`, which opens a manual one-off Exam flow with the
+  kind already fixed;
+- Planner `Add new` -> `Assignment`, which opens a finite weekly Assignment
+  Series flow with the kind already fixed; or
 - `Plan preparation` on one explicitly selected imported calendar event.
 
-The flow always asks the user to choose `exam` or `assignment` and to enter:
+The generic imported-event entry still asks the user to choose `exam` or
+`assignment`, because that action has not already supplied a kind. A direct
+Exam or Assignment entry must not ask for the same classification again.
 
-- `estimated_total_minutes`, from 30 through 30,000; and
-- `credited_prior_minutes`, from zero to strictly less than that estimate.
+Every new Preparation flow asks the user to enter:
+
+- `estimated_total_minutes`, from 30 through 30,000.
 
 Active preparation means deliberate working or study time, not elapsed days,
 classes, breaks, or calendar occupancy. The backend never invents either value
@@ -25,10 +34,12 @@ user explicitly selects or enters it. The UI states that it cannot estimate
 effort for the user and offers topics multiplied by sessions per topic and
 minutes per session only as a transparent estimation aid.
 
-`credited_prior_minutes` is work the plan will not credit automatically. This
-includes preparation completed before the plan's first activation and Focus
-linked to another task. The user must not re-enter qualifying linked Focus that
-the plan already shows, because that would double-count it.
+The current Flutter surface exposes neither `No additional prior work`,
+`Add prior work`, nor an entered-prior-credit summary. Every newly created
+Exam and every Assignment Series occurrence submits
+`credited_prior_minutes = 0`. Existing plans with a historical non-zero value
+remain readable and retain that value silently in progress arithmetic; editing
+them does not erase the durable credit merely because the control is hidden.
 
 Progress reports `accounted_minutes` as the estimate-bounded sum of prior
 credit and qualifying completed focus time, plus exact `remaining_minutes` and
@@ -36,6 +47,45 @@ a non-mutating `completion_suggested` flag. The original estimate and original
 prior credit remain durable even after a later explicit revision changes the
 current estimate. Actual time may exceed either estimate; it is not clamped or
 rewritten to make the estimate appear accurate.
+
+## Finite Assignment Series
+
+`assignment-series-v1` represents recurring coursework that happens weekly but
+has a known end. A new series contains `2..20` occurrences and defaults to 12 in
+Flutter. Editing the remaining future scope accepts `1..20` occurrences. The
+student supplies the next aware deadline; later deadlines keep the same
+profile-local weekday and wall-clock time at seven-day intervals, including
+across DST changes.
+
+One series proposal carries a shared title, per-occurrence preparation
+estimate, session length, daily cap, buffer, and optional imported-busy-time
+choice. It creates one independent `deadline-plan-v1` Assignment plan and one
+independent managed Task identity per occurrence. Each occurrence therefore
+has its own Preparation blocks, progress, lifecycle, and focused single-plan
+replanning path. A one-off item that needs no preparation plan belongs in
+Tasks, not in an artificial one-occurrence Assignment Series.
+
+The series lifecycle is revisioned and atomic:
+
+1. A proposal stages the complete affected occurrence set and all of its
+   independent Deadline Plan revisions without activating any of them.
+2. One explicit series confirmation activates the whole staged set in one
+   owner-locked database transaction. Partial confirmation is forbidden.
+3. `Edit this occurrence` uses its normal independent Preparation Plan flow.
+4. `Edit all future` creates a new shared series revision. It retains past and
+   completed occurrences, while deliberately replacing every still-future
+   occurrence with the new shared template, including any earlier individual
+   deviation in that future scope.
+5. `Cancel future assignments` atomically cancels only the future, incomplete
+   occurrence plans and the series projection. Past or completed occurrences
+   and their progress remain durable.
+
+The series has exact `draft`, `active`, or `cancelled` status and immutable
+`proposed`, `active`, or `superseded` revisions. Request identity, base/latest
+revision, full payload fingerprint, occurrence positions, plan identities, and
+deadlines are database-enforced. The series request ledger is service-role
+only. Authenticated owners may read the series, revisions, and occurrence
+membership but cannot mutate those tables directly.
 
 ## Proposal, Revision, And Confirmation
 
@@ -164,8 +214,8 @@ updates derived progress but never completes the managed task, a block, or the
 deadline plan implicitly. The user remains the authority for plan completion.
 Existing Phase 3 terminal-focus immutability and target ownership checks remain
 unchanged. Focus completed before first activation or against another task is
-not discoverable as qualifying plan progress and must be entered deliberately
-as prior credit if the user wants it included.
+not qualifying plan progress. The current UI does not offer a manual
+prior-credit adjustment for that time.
 
 For newly completed scheduled Focus, credit remains total-preserving but is
 block-aware. Minutes already captured by
@@ -452,18 +502,29 @@ only through the reviewed backend workflow and service-role-only RPCs.
 
 Account deletion cascades plan data. Account Export includes
 `deadline_plans`, `deadline_plan_revisions`, and `deadline_plan_blocks` with
-bounded owner-scoped rows. The opaque request ledger is named as an omitted
-backend anti-replay ledger and exports no request fingerprint.
+bounded owner-scoped rows. It also includes `assignment_series`,
+`assignment_series_revisions`, and `assignment_series_revision_items`. The
+opaque Deadline Plan and Assignment Series request ledgers are named as omitted
+backend anti-replay ledgers and export no request fingerprint.
 
 ## Flutter Surface
 
 The authenticated synced surface is `/preparation-plans`, titled
-`Preparation plans`. Quick Action exposes `Plan exam or assignment`; an
-eligible imported event exposes `Plan preparation`. Calendar navigation may
-carry only the selected opaque event id. The destination reads its current
-title, time, and source fingerprint through owner-scoped Calendar RLS before
-prefilling them; the wizard still requires the user's explicit classification
-and estimate.
+`Preparation plans`. Planner's direct `Exam` and `Assignment` Add-new controls
+open a kind-locked editor; an eligible imported event exposes the generic
+`Plan preparation` action. Calendar navigation may carry only the selected
+opaque event id. The destination reads its current title, time, and source
+fingerprint through owner-scoped Calendar RLS before prefilling them; only this
+generic source entry still requires the user's explicit classification. Every
+path requires the student's estimate.
+
+The Assignment editor defaults to 12 weekly occurrences, shows the derived
+last deadline, and allows 2 through 20 occurrences for a new series. Its one
+preview and one confirmation cover the complete series. Series cards expose
+editing of one occurrence, editing all future occurrences, and cancellation of
+the future scope according to lifecycle. The Exam editor remains the
+established single-plan flow. Neither editor renders prior-work input or
+prior-credit summary copy.
 
 Settings exposes the optional account-wide daily budget with explicit
 rule-based copy and no AI claim. Planner shows the authenticated rolling
@@ -496,7 +557,7 @@ responsive layout.
 `Review plan` opens the owner-scoped plan surface. `Replan remaining time` uses
 `/planner/replan?plan_id=<uuid>` and renders only the selected plan. For an
 active plan without a pending revision, it first opens a compact review of the
-active revision's saved estimate, credit, current tracked Focus, remaining
+active revision's saved estimate, current tracked Focus, remaining
 effort, deadline, split preferences, normalized planning start,
 imported-busy-time choice, and current account budget. Opening this review sends
 no proposal and moves no block. `Create preview with these values` deliberately
@@ -509,7 +570,7 @@ imported source or a passed deadline disables the compact submit and requires
 full review. Draft plans, plans that already have a pending revision, and values
 retained after an ambiguous or conflicting response continue directly in the
 full editor. The UI never chooses which plan to sacrifice. The resulting
-preview shows total estimate, prior spent, currently qualifying focus time,
+preview shows total estimate, currently qualifying focus time,
 remaining minutes, dated staged blocks, optional busy-time provenance, and any
 unallocated deficit before confirmation. It names the fixed planning windows,
 the per-plan daily cap, the optional account budget, and the manually imported
@@ -573,9 +634,18 @@ Focused backend, Flutter, migration, and browser coverage must prove:
 
 - Flutter parsing may reuse framework-neutral exact-key, object/list, scalar,
   UUID, date/time, timestamp, and bound primitives while Deadline revision,
-  block, progress, workload, and source relationships remain feature-owned;
+  Assignment Series, block, progress, workload, and source relationships remain
+  feature-owned;
 
-- explicit estimate/prior-spent input and absence of inferred defaults;
+- explicit estimate input, fixed direct-entry kind, zero prior credit for every
+  new plan, silent legacy-credit compatibility, and absence of an inferred
+  effort default;
+- new-series default 12, strict `2..20` creation and `1..20` future-edit
+  bounds, weekly profile-local wall-clock cadence across DST, independent plan
+  and managed-Task identities, and one complete atomic confirmation;
+- individual occurrence editing, future-wide template replacement that retains
+  past/completed occurrences while replacing future deviations, and atomic
+  future cancellation without partial series state;
 - strict request/response parsing and bearer-derived ownership;
 - deterministic block identity, ordering, totals, timezone/DST behavior,
   conflict avoidance, proposal-time focus accounting, the 366-day horizon,

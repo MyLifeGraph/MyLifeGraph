@@ -12,6 +12,7 @@ class _DeadlinePlanEditorSheet extends StatefulWidget {
     required this.accountDailyPreparationBudgetMinutes,
     required this.retainedDraft,
     required this.initialKind,
+    required this.lockKind,
     required this.initialTitle,
     required this.initialDeadlineAt,
     required this.initialDeadlineOn,
@@ -34,6 +35,7 @@ class _DeadlinePlanEditorSheet extends StatefulWidget {
   final int? accountDailyPreparationBudgetMinutes;
   final DeadlinePlanProposalDraft? retainedDraft;
   final DeadlinePlanKind? initialKind;
+  final bool lockKind;
   final String? initialTitle;
   final DateTime? initialDeadlineAt;
   final String? initialDeadlineOn;
@@ -56,13 +58,11 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
   late final TextEditingController _titleController;
   late final TextEditingController _totalHoursController;
   late final TextEditingController _totalMinutesController;
-  late final TextEditingController _priorHoursController;
-  late final TextEditingController _priorMinutesController;
   late final TextEditingController _dailyCapController;
+  late final int _creditedPriorMinutes;
   DeadlinePlanKind? _kind;
   DateTime? _deadline;
   DateTime? _deadlineDateHint;
-  bool? _alreadyStarted;
   int _step = 0;
   int _sessionMinutes = 50;
   int _bufferDays = 1;
@@ -87,14 +87,8 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
     _totalMinutesController = TextEditingController(
       text: total == null ? '' : '${total % 60}',
     );
-    final prior =
-        retained?.creditedPriorMinutes ?? existing?.creditedPriorMinutes;
-    _priorHoursController = TextEditingController(
-      text: prior == null || prior == 0 ? '' : '${prior ~/ 60}',
-    );
-    _priorMinutesController = TextEditingController(
-      text: prior == null || prior == 0 ? '' : '${prior % 60}',
-    );
+    _creditedPriorMinutes =
+        retained?.creditedPriorMinutes ?? existing?.creditedPriorMinutes ?? 0;
     _dailyCapController = TextEditingController(
       text: '${retained?.maxDailyMinutes ?? existing?.maxDailyMinutes ?? 120}',
     );
@@ -105,7 +99,6 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
     _deadlineDateHint = _deadline == null
         ? DateTime.tryParse(widget.initialDeadlineOn ?? '')
         : null;
-    _alreadyStarted = prior == null ? null : prior > 0;
     _sessionMinutes = retained?.preferredSessionMinutes ??
         existing?.preferredSessionMinutes ??
         50;
@@ -147,8 +140,6 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
     _titleController.dispose();
     _totalHoursController.dispose();
     _totalMinutesController.dispose();
-    _priorHoursController.dispose();
-    _priorMinutesController.dispose();
     _dailyCapController.dispose();
     super.dispose();
   }
@@ -236,10 +227,6 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
             runSpacing: AppSpacing.sm,
             children: [
               _ProgressValue(label: 'Estimate', value: _duration(total)),
-              _ProgressValue(
-                label: 'Entered prior credit',
-                value: _duration(prior),
-              ),
               _ProgressValue(
                 label: 'Tracked focus',
                 value: _duration(tracked),
@@ -383,21 +370,34 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
           'You enter the finish time in this device\'s timezone. The preview places blocks in the profile timezone saved in Settings.',
         ),
         const SizedBox(height: AppSpacing.md),
-        SegmentedButton<DeadlinePlanKind>(
-          direction: _choiceDirection(context),
-          emptySelectionAllowed: true,
-          segments: const [
-            ButtonSegment(value: DeadlinePlanKind.exam, label: Text('Exam')),
-            ButtonSegment(
-              value: DeadlinePlanKind.assignment,
-              label: Text('Assignment'),
+        if (widget.lockKind && _kind != null)
+          ListTile(
+            key: const ValueKey('deadline-locked-kind'),
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(AppIcons.checkCircleOutline),
+            title: Text(
+              _kind == DeadlinePlanKind.exam ? 'Exam' : 'Assignment',
             ),
-          ],
-          selected: _kind == null ? const {} : {_kind!},
-          onSelectionChanged: (values) {
-            setState(() => _kind = values.isEmpty ? null : values.single);
-          },
-        ),
+            subtitle: const Text(
+              'Already selected from Planner Add new.',
+            ),
+          )
+        else
+          SegmentedButton<DeadlinePlanKind>(
+            direction: _choiceDirection(context),
+            emptySelectionAllowed: true,
+            segments: const [
+              ButtonSegment(value: DeadlinePlanKind.exam, label: Text('Exam')),
+              ButtonSegment(
+                value: DeadlinePlanKind.assignment,
+                label: Text('Assignment'),
+              ),
+            ],
+            selected: _kind == null ? const {} : {_kind!},
+            onSelectionChanged: (values) {
+              setState(() => _kind = values.isEmpty ? null : values.single);
+            },
+          ),
         const SizedBox(height: AppSpacing.md),
         TextField(
           key: const ValueKey('deadline-plan-title'),
@@ -503,46 +503,10 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
           'MyLifeGraph cannot estimate this for you. One transparent approach is topics × sessions per topic × minutes per session; these chips are only optional shortcuts.',
           style: Theme.of(context).textTheme.bodySmall,
         ),
-        const SizedBox(height: AppSpacing.lg),
-        const Text(
-          'Do you have preparation this plan will not credit automatically?',
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        SegmentedButton<bool>(
-          direction: _choiceDirection(context),
-          emptySelectionAllowed: true,
-          segments: const [
-            ButtonSegment(
-              value: false,
-              label: Text('No additional prior work'),
-            ),
-            ButtonSegment(value: true, label: Text('Yes, add prior work')),
-          ],
-          selected: _alreadyStarted == null ? const {} : {_alreadyStarted!},
-          onSelectionChanged: (values) {
-            setState(
-              () => _alreadyStarted = values.isEmpty ? null : values.single,
-            );
-          },
-        ),
-        if (_alreadyStarted == true) ...[
-          const SizedBox(height: AppSpacing.md),
-          _DurationFields(
-            prefix: 'deadline-prior',
-            hours: _priorHoursController,
-            minutes: _priorMinutesController,
-            label: 'Prior preparation to credit',
-          ),
-          const SizedBox(height: AppSpacing.xs),
-          Text(
-            'Enter earlier preparation, including Focus completed before this plan was first activated or Focus linked to another task. Do not re-enter the linked Focus shown below; after activation it is credited automatically.',
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-        ],
-        if (_totalMinutes != null && _creditedPriorMinutes != null) ...[
+        if (_totalMinutes != null) ...[
           const SizedBox(height: AppSpacing.md),
           Text(
-            '${_duration(_totalMinutes!)} total · ${_duration(_creditedPriorMinutes!)} entered prior credit · ${_duration(widget.trackedFocusMinutes)} linked Focus · ${_duration((_totalMinutes! - _creditedPriorMinutes! - widget.trackedFocusMinutes).clamp(0, _totalMinutes!).toInt())} to schedule',
+            '${_duration(_totalMinutes!)} total · ${_duration(widget.trackedFocusMinutes)} linked Focus · ${_duration((_totalMinutes! - _creditedPriorMinutes - widget.trackedFocusMinutes).clamp(0, _totalMinutes!).toInt())} to schedule',
             key: const ValueKey('deadline-estimate-summary'),
           ),
         ],
@@ -672,18 +636,13 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
     }
     if (_step == 1) {
       final total = _totalMinutes;
-      final prior = _creditedPriorMinutes;
       if (total == null || total < 30 || total > 30000) {
         _showValidation('Enter 30 minutes to 500 hours of total preparation.');
         return;
       }
-      if (_alreadyStarted == null) {
-        _showValidation('Choose whether you have already started.');
-        return;
-      }
-      if (prior == null || prior < 0 || prior >= total) {
+      if (_creditedPriorMinutes >= total) {
         _showValidation(
-          'Already invested time must be below the total estimate.',
+          'The estimate must remain above already accounted preparation.',
         );
         return;
       }
@@ -763,10 +722,8 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
 
   void _submit() {
     final total = _totalMinutes;
-    final prior = _creditedPriorMinutes;
     final dailyCap = int.tryParse(_dailyCapController.text.trim());
     if (total == null ||
-        prior == null ||
         dailyCap == null ||
         _kind == null ||
         _deadline == null) {
@@ -807,7 +764,7 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
           title: _titleController.text,
           deadlineAt: _deadline!,
           estimatedTotalMinutes: total,
-          creditedPriorMinutes: prior,
+          creditedPriorMinutes: _creditedPriorMinutes,
           preferredSessionMinutes: _sessionMinutes,
           maxDailyMinutes: dailyCap,
           planningStartOn: localDateKey(_planningStart),
@@ -833,15 +790,6 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
         _totalHoursController.text,
         _totalMinutesController.text,
       );
-
-  int? get _creditedPriorMinutes {
-    if (_alreadyStarted == false) return 0;
-    if (_alreadyStarted != true) return null;
-    return _durationInput(
-      _priorHoursController.text,
-      _priorMinutesController.text,
-    );
-  }
 
   void _showValidation(String message) {
     ScaffoldMessenger.of(context).showSnackBar(

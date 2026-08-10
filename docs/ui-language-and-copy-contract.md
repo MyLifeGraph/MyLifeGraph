@@ -113,6 +113,26 @@ copy, and not live sync. Fixed commitments are authoritative only after the
 user confirms them. Guest/demo copy states that synced Planner is unavailable
 and must not display invented personalized blocks.
 
+Direct `Add new` preparation actions preserve the chosen kind. Under
+`assignment-series-v1`, Exam shows Exam as already selected; Assignment opens
+`Add weekly assignments`, shows
+`Assignment` with `Already selected from Planner Add new.`, defaults to 12, and
+labels the finite input `Number of weekly assignments (2–20)`. The summary must
+make the last weekly deadline visible. The shared estimate label is
+`Preparation estimate for each assignment`; copy states that each occurrence
+gets its own editable Preparation Plan.
+
+Series lifecycle controls use `Create series preview`, `Confirm whole series`,
+`Edit one`, `Edit all future`, and `Cancel future`. Copy must state before
+proposal that nothing is reserved until the whole series is confirmed once,
+and before a future-wide edit that it deliberately overwrites future
+deviations while preserving older completed work. A partial-failure message
+must say that no partial confirmation was kept.
+
+Exam and Assignment surfaces do not show `No additional prior work`,
+`Add prior work`, `Entered prior credit`, or another prior-work summary. They
+show total estimate, linked/tracked Focus, and remaining preparation only.
+
 When active, the read-only exam card appears after `Add new` and before
 `Needs attention`. Use `Exam watch · next 14 days`, `Exam week`, or
 `Exam plan overdue`; label assignments `Assignments counted in capacity`.

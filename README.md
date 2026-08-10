@@ -47,7 +47,7 @@ way to explore the product today is the Flutter app in mock-data guest mode.
   Morning capture boundary is closed-open, and ready results distinguish wake
   on the same local day from wake on the following local day.
 - Real authenticated accounts now have revision-checked, retry-safe timezone
-  and preparation-budget editing, a strict bounded `account-export-v3` JSON
+  and preparation-budget editing, a strict bounded `account-export-v4` JSON
   portability export, password reset/confirmation-email
   recovery, and confirmed permanent account deletion. The deletion is one
   service-role-only database transaction and requires session-bound Supabase
@@ -100,9 +100,16 @@ way to explore the product today is the Flutter app in mock-data guest mode.
   only imported local data. No provider credential, URL fetch, provider write,
   background sync, LLM processing, or `schedule_items` mutation is introduced.
   Deadline Planner V1 adds a separate explicit planning loop for exams and
-  assignments: the user supplies total active preparation time and prior
-  credit, reviews deterministic dated blocks, and confirms one immutable
-  revision before it becomes active. First confirmation creates one stable
+  assignment occurrences: the user supplies total active preparation time,
+  reviews deterministic dated blocks, and confirms one immutable revision
+  before it becomes active. Direct Planner Exam/Assignment entries keep the
+  chosen kind fixed and expose no prior-work controls; new plans use zero prior
+  credit while historical credit remains compatible. The additive
+  `assignment-series-v1` path turns Assignment into a finite weekly series with
+  12 occurrences by default and a `2..20` creation bound. One common template
+  creates independent Preparation Plans and one atomic confirmation; one
+  occurrence can be edited alone, while editing or cancelling all future
+  occurrences retains past/completed work. First confirmation creates one stable
   managed task; completed post-activation focus linked to that task contributes
   measured progress without completing the task or plan. A manual deadline or
   one deliberately selected imported event may be used, and imported busy time
@@ -555,6 +562,9 @@ Supabase is the intended auth and persistence backend. The current app supports:
   stable request identities and separate latest/current optimistic revisions.
   The user's explicit estimate owns the budget, staged blocks do not replace an
   active revision, and first confirmation creates the stable managed task.
+  The nested `/v1/deadline-plans/assignment-series` routes expose the strict
+  `assignment-series-v1` list/detail/proposal/confirm/cancel-future lifecycle;
+  one series confirmation owns all affected occurrence plans atomically.
   Generic task mutations are rejected; plan completion/cancellation atomically
   projects matching task terminal state. Both require an active revision.
   Calendar-event selection and current-import availability use are explicit and

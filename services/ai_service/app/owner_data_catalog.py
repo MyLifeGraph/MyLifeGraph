@@ -299,6 +299,27 @@ OWNER_DATA_CATALOG = (
         watermark_column="selected_at",
     ),
     _shared(
+        "assignment_series",
+        "Finite weekly Assignment Series lifecycle and shared title.",
+        "id,user_id,contract_version,origin,status,title,current_revision,"
+        "latest_revision,first_activated_at,cancelled_at,created_at,updated_at",
+    ),
+    _shared(
+        "assignment_series_revisions",
+        "Immutable shared templates for finite Assignment Series revisions.",
+        "id,user_id,series_id,revision,base_revision,state,title,"
+        "next_deadline_at,remaining_occurrences,estimated_total_minutes,"
+        "preferred_session_minutes,max_daily_minutes,buffer_days,"
+        "use_calendar_availability,timezone,planned_minutes,"
+        "unscheduled_minutes,created_at,activated_at,superseded_at",
+    ),
+    _shared(
+        "assignment_series_revision_items",
+        "Series occurrence membership linked to independent preparation plans.",
+        "id,user_id,series_id,series_revision,position,action,plan_id,"
+        "plan_revision,deadline_at,created_at",
+    ),
+    _shared(
         "deadline_plans",
         "Exam and assignment preparation plans.",
         "id,user_id,contract_version,origin,status,kind,title,managed_task_id,"
@@ -372,6 +393,10 @@ OWNER_DATA_CATALOG = (
     _anti_replay_ledger(
         "deadline_plan_request_identities",
         "Deadline Planner retry identity ledger.",
+    ),
+    _anti_replay_ledger(
+        "assignment_series_request_identities",
+        "Assignment Series retry identity ledger.",
     ),
     _anti_replay_ledger(
         "planner_request_identities",

@@ -166,6 +166,11 @@ FastAPI service boundary for recommendation and future ML workflows.
   asynchronous service facades. Planner and Deadline proposals cross their
   repository boundaries as validated composite write models rather than
   parallel raw dictionaries; the existing RPC JSON remains unchanged.
+  The nested `assignment-series-v1` routes add finite weekly Assignment
+  list/detail/proposal/confirm/cancel-future behavior. A shared template stages
+  independent Deadline Plans, then one owner-locked RPC confirms the complete
+  series; future-wide edits retain past/completed occurrences and replace the
+  future scope.
 - Phase 10 exposes authenticated free-question capability, streaming and
   non-streaming response, and mixed legacy/current history/delete contracts.
   Each V3 turn creates a fresh owner-only SQLite snapshot and gives the local
@@ -187,7 +192,7 @@ FastAPI service boundary for recommendation and future ML workflows.
   opposite branch can downgrade an existing V5 container.
 - `/v1/account/profile` and `/v1/account/preparation-budget` use strict V2
   request ids and independent expected revisions. `/v1/account/export` returns
-  `account-export-v3`, and `/v1/account` remains the confirmed permanent
+  `account-export-v4`, and `/v1/account` remains the confirmed permanent
   deletion boundary. The client never supplies an owner id.
   See `../../docs/v1-account-controls-contract.md`.
 - `POST /v1/notifications/{notification_id}/actions` exposes strict,
@@ -396,7 +401,12 @@ GET    /v1/deadline-plans/exam-week-outlook
 GET    /v1/deadline-plans/workload
 GET    /v1/deadline-plans/workload/{local_date}
 GET    /v1/deadline-plans/{plan_id}
+GET    /v1/deadline-plans/assignment-series
+GET    /v1/deadline-plans/assignment-series/{series_id}
 POST   /v1/deadline-plans/proposals
+POST   /v1/deadline-plans/assignment-series/proposals
+POST   /v1/deadline-plans/assignment-series/{series_id}/confirm
+POST   /v1/deadline-plans/assignment-series/{series_id}/cancel-future
 POST   /v1/deadline-plans/{plan_id}/confirm
 POST   /v1/deadline-plans/{plan_id}/complete
 POST   /v1/deadline-plans/{plan_id}/cancel
@@ -719,8 +729,8 @@ includes the two owner-content projections and omits the backend retry ledger
 explicitly.
 
 The typed `app/owner_data_catalog.py` module is the single backend inventory for
-all repo-owned public tables. It derives the exact 40-table Account Export and
-37-table personal Coach Snapshot from separate per-table policies, including
+all repo-owned public tables. It derives the exact 43-table Account Export and
+39-table personal Coach Snapshot from separate per-table policies, including
 owner/cursor/watermark read shapes, sanitized export allowlists, omissions, and
 snapshot descriptions. A focused test compares that inventory with every
 public table created by the migration history, so a new table cannot silently

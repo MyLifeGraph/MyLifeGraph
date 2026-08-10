@@ -261,7 +261,7 @@ def test_snapshot_is_complete_owner_sanitized_immutable_and_catalogued() -> None
 def test_snapshot_uses_an_explicit_positive_source_policy() -> None:
     names = tuple(table.name for table in COACH_SNAPSHOT_TABLES)
 
-    assert len(names) == len(set(names)) == 36
+    assert len(names) == len(set(names)) == 39
     assert "goals" not in names
     assert names[0:3] == (
         "profiles",

@@ -7,6 +7,7 @@ from app.api.deps.composition import get_application_composition
 from app.clients.supabase import SupabaseConfigurationError
 from app.composition import ApplicationComposition
 from app.services.account_service import AccountService
+from app.services.assignment_series_service import AssignmentSeriesService
 from app.services.briefing_service import BriefingService
 from app.services.calendar_integration_service import CalendarIntegrationService
 from app.services.daily_capture_service import DailyCaptureService
@@ -49,6 +50,16 @@ async def get_account_service(request: Request) -> AccountService:
         request,
         select=lambda composition: composition.account_service,
         unavailable_detail="Account persistence is not configured.",
+    )
+
+
+async def get_assignment_series_service(
+    request: Request,
+) -> AssignmentSeriesService:
+    return _service(
+        request,
+        select=lambda composition: composition.assignment_series_service,
+        unavailable_detail="Assignment series persistence is not configured.",
     )
 
 

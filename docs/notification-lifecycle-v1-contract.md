@@ -132,7 +132,7 @@ notification.
 ## Account Export And Deletion
 
 The visible `notifications` rows, including lifecycle timestamps, remain part
-of the bounded `account-export-v3` payload. The backend-only
+of the bounded `account-export-v4` payload. The backend-only
 `notification_action_requests` anti-replay ledger is explicitly named as
 omitted, just like the Calendar request-identity ledger. Its omission does not
 change the exported table count.

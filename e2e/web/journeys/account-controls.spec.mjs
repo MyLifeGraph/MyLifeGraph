@@ -37,7 +37,7 @@ test('@account-controls exports and permanently deletes through Settings', async
   );
   const exportBytes = await exportResponse.body();
   const exported = JSON.parse(exportBytes.toString('utf8'));
-  expect(exported.contract_version).toBe('account-export-v3');
+  expect(exported.contract_version).toBe('account-export-v4');
   expect(exported.data?.profiles?.[0]?.id).toBe(
     e2e.identity.user.id,
   );
