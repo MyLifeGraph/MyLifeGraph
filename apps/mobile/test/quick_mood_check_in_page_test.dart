@@ -38,12 +38,102 @@ void main() {
     expect(find.text('8 h'), findsWidgets);
     expect(
       find.textContaining('becomes your current sleep plan'),
+      findsNothing,
+    );
+    expect(
+      find.bySemanticsLabel(
+        'Show information about Sleep duration target',
+      ),
       findsOneWidget,
     );
     final next = tester.widget<FilledButton>(
       find.widgetWithText(FilledButton, 'Next'),
     );
     expect(next.onPressed, isNull);
+  });
+
+  testWidgets('both Evening sleep explanations start closed and open alone',
+      (tester) async {
+    const plannedHelp =
+        'This is your intention for tonight, not an automatic restriction.';
+    const targetHelp =
+        'Eight hours is shown first. It becomes your current sleep plan only when you save.';
+    await _pumpEveningPage(tester, _RecordingCaptureStore());
+
+    await tester.tap(find.bySemanticsLabel('evening mood 7 of 10'));
+    await tester.tap(find.bySemanticsLabel('evening energy 7 of 10'));
+    await tester.tap(find.bySemanticsLabel('evening stress 3 of 10'));
+    await tester.pump();
+    await _tapVisible(tester, find.text('Next'));
+
+    expect(find.text(plannedHelp), findsNothing);
+    expect(find.text(targetHelp), findsNothing);
+    expect(
+      find.bySemanticsLabel('Show information about Planned sleep time'),
+      findsOneWidget,
+    );
+    expect(
+      find.bySemanticsLabel('Show information about Sleep duration target'),
+      findsOneWidget,
+    );
+
+    await tester.tap(
+      find.byKey(
+        const ValueKey('capture-info-control-Planned sleep time'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text(plannedHelp), findsOneWidget);
+    expect(find.text(targetHelp), findsNothing);
+
+    await tester.tap(
+      find.byKey(
+        const ValueKey('capture-info-control-Sleep duration target'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text(plannedHelp), findsOneWidget);
+    expect(find.text(targetHelp), findsOneWidget);
+  });
+
+  testWidgets(
+      'Evening sleep step stays usable at 320 pixels, 200% text, and reduced motion',
+      (tester) async {
+    await _pumpEveningPage(
+      tester,
+      _RecordingCaptureStore(),
+      viewSize: const Size(320, 700),
+      textScale: 2,
+      disableAnimations: true,
+    );
+
+    await _tapVisible(tester, find.bySemanticsLabel('evening mood 7 of 10'));
+    await _tapVisible(tester, find.bySemanticsLabel('evening energy 7 of 10'));
+    await _tapVisible(tester, find.bySemanticsLabel('evening stress 3 of 10'));
+    await _tapVisible(tester, find.text('Next'));
+    await _tapVisible(
+      tester,
+      find.byKey(
+        const ValueKey('capture-info-control-Planned sleep time'),
+      ),
+    );
+    await _tapVisible(
+      tester,
+      find.byKey(
+        const ValueKey('capture-info-control-Sleep duration target'),
+      ),
+    );
+
+    expect(
+      find.text(
+        'This is your intention for tonight, not an automatic restriction.',
+      ),
+      findsOneWidget,
+    );
+    await tester.ensureVisible(find.text('Next'));
+    await tester.pump();
+    expect(find.text('Next').hitTestable(), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('latest Evening sleep plan prefills the next save',
@@ -434,6 +524,9 @@ Future<void> _pumpEveningPage(
   FocusSessionSupabaseDataSource? focusSource,
   ProjectionRefreshCoordinator? projectionRefresh,
   DateTime? currentInstant,
+  Size viewSize = const Size(1200, 1200),
+  double textScale = 1,
+  bool disableAnimations = false,
 }) async {
   final router = GoRouter(
     initialLocation: '/quick-mood-check-in',
@@ -453,7 +546,7 @@ Future<void> _pumpEveningPage(
     ],
   );
   addTearDown(router.dispose);
-  tester.view.physicalSize = const Size(1200, 1200);
+  tester.view.physicalSize = viewSize;
   tester.view.devicePixelRatio = 1;
   addTearDown(() {
     tester.view.resetPhysicalSize();
@@ -482,7 +575,16 @@ Future<void> _pumpEveningPage(
         if (snapshotRefresh != null)
           snapshotRefreshServiceProvider.overrideWithValue(snapshotRefresh),
       ],
-      child: MaterialApp.router(routerConfig: router),
+      child: MaterialApp.router(
+        routerConfig: router,
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(context).copyWith(
+            textScaler: TextScaler.linear(textScale),
+            disableAnimations: disableAnimations,
+          ),
+          child: child!,
+        ),
+      ),
     ),
   );
   await tester.pumpAndSettle();

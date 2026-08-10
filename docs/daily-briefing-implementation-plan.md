@@ -421,10 +421,12 @@ Current Phase 1 output:
 ### Morning Calibration
 
 Current goal: record corrected estimated sleep instants and their derived
-duration plus independently estimated quality and current energy
-without repeating the Evening form. Adjusting a
-provisional plan begins only after explainable state and briefing generation
-exist.
+duration plus independently estimated quality and current energy in two short
+pages without repeating the Evening form. The first page owns the interval and
+target; the second owns quality and energy. The complete draft stays local
+through `Next` and `Back`, and persistence occurs only from the final save.
+Adjusting a provisional plan begins only after explainable state and briefing
+generation exist.
 
 Reasoning:
 
@@ -442,6 +444,15 @@ Required fields:
 - Sleep target used for this night.
 - Estimated sleep quality, independently selected from `1..10`.
 - Current energy.
+
+The Sleep page shows 50-percent progress and enables `Next` only for a complete
+valid interval and target. The Check-in page shows 100 percent; a failed save
+stays there with the exact draft and retry identity. The duration,
+target-source, and quality explanations are initially closed independent inline
+information areas. Evening uses the same disclosure behavior for its planned
+sleep intent and first-visible target explanation, while its headings,
+optional-context copy, and stress-source help remain visible or separately
+controlled.
 
 The earlier per-day Day Shape selection is retired. Current V5 writes reject
 `day_shape`; historical V2–V4 capture data remains readable but is not shown or
@@ -871,6 +882,10 @@ The implemented Evening Shutdown quick action supports:
 - A required `HH:mm` planned sleep start and `300..720` minute target on a
   15-minute grid. Eight hours is visible first but becomes personal only on
   save; the newest valid Evening V4 value prefills later forms.
+- The intent and first-visible-target explanations start closed behind
+  independent inline information controls. Step headings, optional context,
+  and the separate stress-source help remain visible or independently
+  operable.
 - On the last page, an optional `Today's Focus sessions` row reports terminal
   sessions as rated or still open and reuses the terminal-only Focus reflection
   sheet for `Rate`/`Edit`. It is supplementary context, not another navigation
@@ -892,10 +907,18 @@ Reasoning:
 
 The implemented short Morning Calibration surface supports:
 
-- Required aware estimated sleep-start/wake instants, exact whole-minute
-  derived duration no longer than 16 hours, the target used for that night, an
-  independent whole-number `1..10` estimated sleep-quality rating, current
-  energy, and no Day Shape field.
+- A 50-/100-percent two-page draft. Sleep requires aware estimated
+  sleep-start/wake instants, exact whole-minute derived duration no longer than
+  16 hours, and the target used for that night; Check-in requires an independent
+  whole-number `1..10` estimated sleep-quality rating and current energy. There
+  is no Day Shape field.
+- `Next` validates only the complete Sleep page, `Back` retains every answer,
+  and only `Save morning check-in` on the second page persists. Save failure
+  retains the complete second-page draft for unchanged retry.
+- Initially closed, independently expandable measurement/source explanations
+  for estimated duration, target, and quality. The same reusable Capture
+  control hides the two Evening sleep-plan explanations without changing its
+  existing step headings or context help.
 - Prefill and same-kind replacement without erasing saved Evening context.
 - Honest current-state copy stating that capture does not generate
   recommendations or create or change a plan. Authenticated real saves may
@@ -1218,6 +1241,10 @@ Implemented:
 
 - Separate typed Evening Shutdown and Morning Calibration flows with retained
   drafts, prefill, recoverable save errors, and stable retry identity.
+- Morning is split into Sleep and Check-in pages with 50-/100-percent progress,
+  local `Next`/`Back`, and one final persistence action. Three Morning and two
+  Evening sleep explanations are initially closed behind independent accessible
+  information controls.
 - Morning requires sleep duration and an independent `1..10` estimated sleep
   quality. Older V2 Morning branches without the additive field remain
   readable and require a value only when that Morning capture is resaved.

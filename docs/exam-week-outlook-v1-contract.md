@@ -22,6 +22,10 @@ Evening check-in adds one required sleep-planning step:
 - the first visible target is 480 minutes. It becomes the student's saved
   rhythm only after a successful Evening save.
 
+The visible intent and first-value explanations on this Evening step start
+closed behind independent inline information controls. The step heading and
+the separate optional-context and stress-source help remain unchanged.
+
 After the first save, the newest valid Evening V4/V5 branch supplies the visible
 default for later Evening and Morning forms. It is a transparent latest-value
 rule, not a separate profile, learned preference, or Study Setup revision.
@@ -37,12 +41,24 @@ Morning check-in requires:
 - optional `source_evening_capture_id` when an Evening plan supplied the
   starting value.
 
-The Morning UI labels the result `Estimated sleep duration` and says that the
-times are self-estimates rather than objective measurement. The student may
-correct both clocks and the target before saving. The interval must be ordered,
-positive, minute-aligned, and no longer than 16 hours. Cross-midnight examples
-such as 23:00–07:00 and same-date examples such as 02:00–10:00 both derive 480
-minutes.
+The Morning UI is one local draft across two pages. `MORNING · SLEEP` / `How did
+you sleep?` shows 50-percent progress and owns both clocks, the derived
+`Estimated sleep duration`, and the target. Only a complete valid interval and
+target enable `Next`. `MORNING · CHECK-IN` / `How are you starting today?`
+shows 100 percent and owns quality and energy. `Back` retains every answer, and
+only `Save morning check-in` on the second page writes the branch; a failure
+keeps that page, draft, capture identity, and payload available for retry.
+
+The result area shows only `—` while no valid duration exists. The duration,
+target-source, and quality explanations start closed independently behind
+20-pixel information icons in 44×44 targets. Their semantics switch between
+`Show information about <heading>` and `Hide information about <heading>`, and
+their inline motion becomes immediate under Reduced Motion. The duration copy
+says that the times are self-estimates rather than objective measurement. The
+student may correct both clocks and the target before saving. The interval must
+be ordered, positive, minute-aligned, and no longer than 16 hours.
+Cross-midnight examples such as 23:00–07:00 and same-date examples such as
+02:00–10:00 both derive 480 minutes.
 
 ### Branch Compatibility
 
@@ -333,7 +349,10 @@ Automated coverage must prove:
 
 - required Evening plan values, first-visible 480-minute target, latest-value
   prefill, target grid, interval ordering, 16-hour bound, and 02:00–10:00 plus
-  23:00–07:00 derivation;
+  23:00–07:00 derivation; the two-page Morning gate, retained Back/error draft,
+  final-only save and exact retry; all five initially closed independent
+  Capture explanations with keyboard/semantics coverage; and 320-pixel,
+  200-percent-text, and Reduced-Motion behavior;
 - V2/V3/V4 parsing, explicit mixed-branch preservation, V4-to-V5 edit and guest
   migration, guest round-trip, raw-field isolation, compatible projections,
   current V5 plus explicit V4-in-V5 shared-parser parity with Personal Patterns,

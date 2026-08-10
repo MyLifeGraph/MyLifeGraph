@@ -30,6 +30,21 @@ Capture V5, Daily State V3, Exam-Week Outlook V1, or Coach V3 expectations.
 
 ## Current Verified Baseline
 
+The two-step Morning Check-in and five Capture information disclosures were
+reverified locally on 2026-08-10 without a schema or contract-version change.
+The focused Capture/widget/app integration command passed 33 tests. The final
+`verify:fast` run passed all 15 documentation regressions, the
+51-Markdown/75-route consistency inventory, source/process/visual guards,
+clean Flutter analysis, all 923 Flutter tests, Python/Ruff/compile checks, and
+`1383 passed, 2 skipped` FastAPI tests. A fresh debug Flutter Web build then
+signed in as the seeded Maya student and exercised both Morning pages, initially
+closed independent help, dynamic Show/Hide semantics, valid Next gating, and
+exact clocks/target/quality/energy retention through Back. The smoke confirmed
+the retired interval instruction was absent and deliberately did not invoke the
+final save. Its temporary browser, script, and loopback frontend session were
+removed. No reset, migration application, remote mutation, deployment, push,
+installed-device check, or push/background-delivery claim occurred.
+
 The finite Assignment Series and live-Coach working tree was fully reverified
 locally on 2026-08-10. `verify:fast` passed all 15 documentation regressions,
 the 51-Markdown/75-route consistency inventory, source/process/visual guards,
@@ -989,15 +1004,28 @@ Current Flutter widget tests include:
 - Evening widget tests cover required explicit selections, exact typed draft
   retention after failure, stable retry identity, prefilled re-entry with blank
   optionals still blank, absence of every friction control and the retired
-  gentler control, preservation of Reflection/Priority/Specific Blocker, and
-  suppression of a duplicate in-flight write.
+  gentler control, preservation of Reflection/Priority/Specific Blocker,
+  suppression of a duplicate in-flight write, both initially closed sleep-plan
+  explanations, independent expansion, and 320-pixel/200-percent-text Reduced
+  Motion layout.
+- Morning widget tests cover the 50/100-percent two-step flow, invalid and
+  incomplete sleep/target gating, final-only save, exact Back retention, saved
+  and older compatible prefill, second-step write failure and exact retry,
+  absence of the retired interval instruction, all three initially closed and
+  independent explanations, and 320-pixel/200-percent-text Reduced Motion
+  layout.
+- Shared Capture information-control tests prove a 44×44 target and 20-pixel
+  icon, closed-tree absence, dynamic Show/Hide semantics and expanded state,
+  independent instances, Enter/Space keyboard operation, and immediate Reduced
+  Motion transitions.
 - Quick actions widget tests cover no saved branch, each single saved branch,
   both saved branches, accessible completed-edit actions, status-free
   loading/error states, and 320-pixel layout at 200% text.
 - The guest app smoke completes distinctive required-only Evening Shutdown and
-  Morning Calibration, persists one local merged day, reads Morning energy over
-  Evening energy, and shows `Completed today` on both matching Quick actions
-  without a duplicate saved-signal summary on return.
+  both pages of Morning Calibration, persists only from the final Morning
+  action into one local merged day, reads Morning energy over Evening energy,
+  and shows `Completed today` on both matching Quick actions without a duplicate
+  saved-signal summary on return.
 - Sleep Recommendation service/API tests cover the exact 29/30-day boundary,
   per-day aggregation, the exact closed-open Morning capture boundary, required
   observed Daily Log timestamps, invalid wake/capture/reflection ordering, V4

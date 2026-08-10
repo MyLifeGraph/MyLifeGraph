@@ -443,11 +443,16 @@ Supabase is the intended auth and persistence backend. The current app supports:
   longer asks users to estimate focus that completed Focus sessions can
   measure. Evening requires an intended local sleep start plus a `300..720`
   minute target in 15-minute steps; the first visible value is eight hours and
-  later forms prefill the newest valid Evening plan. Morning remains separate
-  and records an editable estimated sleep-start/wake interval, its derived
-  duration, the target used for that night, an independent required 1–10
-  estimate of sleep quality, and current energy. The per-day Day Shape input is
-  retired; new V5 writes reject it, and historical values are not displayed or
+  later forms prefill the newest valid Evening plan. Its intent and first-value
+  explanations start collapsed behind independent information controls.
+  Morning remains separate and is a two-page flow: Sleep records an editable
+  estimated sleep-start/wake interval, its derived duration, and the target
+  used for that night; Check-in then records an independent required 1–10
+  estimate of sleep quality and current energy. `Next` requires complete valid
+  sleep details, `Back` retains the local draft, and the branch is written only
+  by the final `Save morning check-in`. Its three measurement/source
+  explanations also start collapsed. The per-day Day Shape input is retired;
+  new V5 writes reject it, and historical values are not displayed or
   evaluated.
 - Both captures merge under `daily_logs.metadata.captures` for the same user and
   date. Morning energy owns the compatible `energy_level` projection when

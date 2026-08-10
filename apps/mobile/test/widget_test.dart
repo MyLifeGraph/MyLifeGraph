@@ -279,8 +279,11 @@ void main() {
       await tester.tap(choice);
       await tester.pump();
     }
-    await tester.ensureVisible(find.text('Next'));
-    await tester.tap(find.text('Next'));
+    final eveningNext = tester.widget<FilledButton>(
+      find.widgetWithText(FilledButton, 'Next'),
+    );
+    expect(eveningNext.onPressed, isNotNull);
+    eveningNext.onPressed!.call();
     await tester.pumpAndSettle();
     final plannedSleep =
         find.bySemanticsLabel('planned sleep time preset 23:00');
@@ -321,6 +324,12 @@ void main() {
       await tester.tap(choice);
       await tester.pump();
     }
+    final morningNext = tester.widget<FilledButton>(
+      find.widgetWithText(FilledButton, 'Next'),
+    );
+    expect(morningNext.onPressed, isNotNull);
+    morningNext.onPressed!.call();
+    await tester.pumpAndSettle();
     await tester.ensureVisible(
       find.bySemanticsLabel('morning sleep quality 3 of 10'),
     );

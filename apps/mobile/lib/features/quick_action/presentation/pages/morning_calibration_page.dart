@@ -23,6 +23,7 @@ class MorningCalibrationPage extends ConsumerStatefulWidget {
 class _MorningCalibrationPageState
     extends ConsumerState<MorningCalibrationPage> {
   late MorningCalibrationDraft _draft;
+  var _stepIndex = 0;
   var _isLoading = true;
   var _loadedSavedCapture = false;
   var _safeCaptureLoaded = false;
@@ -31,6 +32,22 @@ class _MorningCalibrationPageState
   var _isSaving = false;
   String? _loadError;
   String? _saveError;
+
+  static const _steps = <_MorningStep>[
+    _MorningStep(
+      eyebrow: 'MORNING · SLEEP',
+      title: 'How did you sleep?',
+      subtitle: 'Estimate when sleep started and when you woke.',
+      kind: _MorningStepKind.sleep,
+    ),
+    _MorningStep(
+      eyebrow: 'MORNING · CHECK-IN',
+      title: 'How are you starting today?',
+      subtitle:
+          'Add sleep quality and current energy. Evening context stays untouched.',
+      kind: _MorningStepKind.checkIn,
+    ),
+  ];
 
   @override
   void initState() {
@@ -45,17 +62,15 @@ class _MorningCalibrationPageState
 
   @override
   Widget build(BuildContext context) {
+    final step = _steps[_stepIndex];
     return CaptureFlowScaffold(
-      eyebrow: 'MORNING · CHECK-IN',
-      title: 'How are you starting today?',
-      subtitle:
-          'Estimate when sleep started and when you woke. Evening context stays untouched.',
-      progress: 1,
-      canGoBack: false,
-      canContinue: _safeCaptureLoaded &&
-          (!_eveningPlanUnavailable || _continueWithoutEveningPlan) &&
-          _draft.isComplete,
-      isLastStep: true,
+      eyebrow: step.eyebrow,
+      title: step.title,
+      subtitle: step.subtitle,
+      progress: (_stepIndex + 1) / _steps.length,
+      canGoBack: _stepIndex > 0,
+      canContinue: _canUseCurrentStep,
+      isLastStep: _stepIndex == _steps.length - 1,
       isLoading: _isLoading,
       isSaving: _isSaving,
       saveLabel: 'Save morning check-in',
@@ -77,126 +92,176 @@ class _MorningCalibrationPageState
           : null,
       onClose: () =>
           context.canPop() ? context.pop() : context.go(AppRoutes.quickAction),
-      onBack: () {},
-      onNext: _save,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            'Estimated sleep duration',
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Text(
-            'These are your own estimates, not objectively measured sleep.',
-            style: Theme.of(context).textTheme.bodyMedium,
-          ),
-          const SizedBox(height: AppSpacing.md),
-          Wrap(
-            spacing: AppSpacing.md,
-            runSpacing: AppSpacing.md,
-            children: [
-              SizedBox(
-                width: 260,
-                child: CaptureClockControl(
-                  label: 'Estimated sleep start',
-                  semanticLabel: 'estimated sleep start',
-                  value: _draft.estimatedSleepStartedAt == null
-                      ? null
-                      : dailyCaptureClock(
-                          _draft.estimatedSleepStartedAt!,
-                        ),
-                  quickValues: const ['22:00', '23:00', '00:00'],
-                  onChanged: _setEstimatedSleepStart,
-                ),
-              ),
-              SizedBox(
-                width: 260,
-                child: CaptureClockControl(
-                  label: 'Wake time',
-                  semanticLabel: 'estimated wake time',
-                  value: _draft.wokeAt == null
-                      ? null
-                      : dailyCaptureClock(_draft.wokeAt!),
-                  fallback: TimeOfDay.fromDateTime(DateTime.now()),
-                  quickValues: const ['05:30', '07:00', '08:00'],
-                  onChanged: _setWakeTime,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.md),
-          Container(
-            padding: const EdgeInsets.all(AppSpacing.lg),
-            decoration: BoxDecoration(
-              color: Theme.of(context).colorScheme.surfaceContainerHighest,
-              borderRadius: BorderRadius.circular(AppRadii.xl),
-            ),
-            child: Text(
-              _draft.estimatedSleepMinutes == null
-                  ? 'Choose an ordered interval of no more than 16 hours.'
-                  : formatCaptureMinutes(_draft.estimatedSleepMinutes!),
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.headlineMedium,
-            ),
-          ),
-          const SizedBox(height: AppSpacing.xl),
-          Text(
-            'Sleep target used for this night',
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Text(
-            _draft.sourceEveningCaptureId == null
-                ? 'No saved Evening sleep plan was available. Confirm the target you used.'
-                : 'Loaded from the latest saved Evening plan. You can correct it for this night.',
-            style: Theme.of(context).textTheme.bodyMedium,
-          ),
-          const SizedBox(height: AppSpacing.md),
-          CaptureSleepTargetControl(
-            value: _draft.sleepTargetMinutes,
-            onChanged: (value) => setState(
-              () => _draft = _draft.copyWith(sleepTargetMinutes: value),
-            ),
-          ),
-          const SizedBox(height: AppSpacing.xl),
-          Text(
-            'Estimated sleep quality',
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Text(
-            'How restorative did your sleep feel, independently of how long you slept?',
-            style: Theme.of(context).textTheme.bodyMedium,
-          ),
-          const SizedBox(height: AppSpacing.md),
-          CaptureRatingControl(
-            value: _draft.sleepQuality,
-            semanticPrefix: 'morning sleep quality',
-            onChanged: (value) => setState(
-              () => _draft = _draft.copyWith(sleepQuality: value),
-            ),
-          ),
-          const SizedBox(height: AppSpacing.xl),
-          Text(
-            'Current energy',
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
-          const SizedBox(height: AppSpacing.md),
-          CaptureRatingControl(
-            value: _draft.energy,
-            semanticPrefix: 'morning energy',
-            onChanged: (value) => setState(
-              () => _draft = _draft.copyWith(energy: value),
-            ),
-          ),
-          Text(
-            'This check-in records how today starts. It does not create or change a plan.',
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-        ],
-      ),
+      onBack: _previousStep,
+      onNext: _nextStep,
+      child: _buildStep(step.kind),
     );
+  }
+
+  Widget _buildStep(_MorningStepKind kind) {
+    return switch (kind) {
+      _MorningStepKind.sleep => _buildSleepStep(),
+      _MorningStepKind.checkIn => _buildCheckInStep(),
+    };
+  }
+
+  Widget _buildSleepStep() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const CaptureInfoDisclosure(
+          heading: 'Estimated sleep duration',
+          description:
+              'These are your own estimates, not objectively measured sleep.',
+        ),
+        const SizedBox(height: AppSpacing.md),
+        Wrap(
+          spacing: AppSpacing.md,
+          runSpacing: AppSpacing.md,
+          children: [
+            SizedBox(
+              width: 260,
+              child: CaptureClockControl(
+                label: 'Estimated sleep start',
+                semanticLabel: 'estimated sleep start',
+                value: _draft.estimatedSleepStartedAt == null
+                    ? null
+                    : dailyCaptureClock(
+                        _draft.estimatedSleepStartedAt!,
+                      ),
+                quickValues: const ['22:00', '23:00', '00:00'],
+                onChanged: _setEstimatedSleepStart,
+              ),
+            ),
+            SizedBox(
+              width: 260,
+              child: CaptureClockControl(
+                label: 'Wake time',
+                semanticLabel: 'estimated wake time',
+                value: _draft.wokeAt == null
+                    ? null
+                    : dailyCaptureClock(_draft.wokeAt!),
+                fallback: TimeOfDay.fromDateTime(DateTime.now()),
+                quickValues: const ['05:30', '07:00', '08:00'],
+                onChanged: _setWakeTime,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.md),
+        Container(
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          decoration: BoxDecoration(
+            color: Theme.of(context).colorScheme.surfaceContainerHighest,
+            borderRadius: BorderRadius.circular(AppRadii.xl),
+          ),
+          child: Text(
+            _draft.estimatedSleepMinutes == null
+                ? '—'
+                : formatCaptureMinutes(_draft.estimatedSleepMinutes!),
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.headlineMedium,
+          ),
+        ),
+        const SizedBox(height: AppSpacing.xl),
+        CaptureInfoDisclosure(
+          heading: 'Sleep target used for this night',
+          description: _draft.sourceEveningCaptureId == null
+              ? 'No saved Evening sleep plan was available. Confirm the target you used.'
+              : 'Loaded from the latest saved Evening plan. You can correct it for this night.',
+        ),
+        const SizedBox(height: AppSpacing.md),
+        CaptureSleepTargetControl(
+          value: _draft.sleepTargetMinutes,
+          onChanged: (value) => setState(
+            () => _draft = _draft.copyWith(sleepTargetMinutes: value),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCheckInStep() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const CaptureInfoDisclosure(
+          heading: 'Estimated sleep quality',
+          description:
+              'How restorative did your sleep feel, independently of how long you slept?',
+        ),
+        const SizedBox(height: AppSpacing.md),
+        CaptureRatingControl(
+          value: _draft.sleepQuality,
+          semanticPrefix: 'morning sleep quality',
+          onChanged: (value) => setState(
+            () => _draft = _draft.copyWith(sleepQuality: value),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.xl),
+        Text(
+          'Current energy',
+          style: Theme.of(context).textTheme.titleLarge,
+        ),
+        const SizedBox(height: AppSpacing.md),
+        CaptureRatingControl(
+          value: _draft.energy,
+          semanticPrefix: 'morning energy',
+          onChanged: (value) => setState(
+            () => _draft = _draft.copyWith(energy: value),
+          ),
+        ),
+        Text(
+          'This check-in records how today starts. It does not create or change a plan.',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+      ],
+    );
+  }
+
+  bool get _canUseCurrentStep =>
+      !_isLoading &&
+      _safeCaptureLoaded &&
+      (!_eveningPlanUnavailable || _continueWithoutEveningPlan) &&
+      _canContinue;
+
+  bool get _canContinue => switch (_steps[_stepIndex].kind) {
+        _MorningStepKind.sleep => _hasValidSleepDetails,
+        _MorningStepKind.checkIn => _draft.isComplete,
+      };
+
+  bool get _hasValidSleepDetails {
+    final start = _draft.estimatedSleepStartedAt;
+    final wake = _draft.wokeAt;
+    final minutes = _draft.estimatedSleepMinutes;
+    final target = _draft.sleepTargetMinutes;
+    if (start == null || wake == null || minutes == null || target == null) {
+      return false;
+    }
+    final duration = wake.difference(start);
+    return duration.inSeconds == minutes * 60 &&
+        minutes > 0 &&
+        minutes <= 16 * 60 &&
+        target >= 300 &&
+        target <= 720 &&
+        target % 15 == 0;
+  }
+
+  void _previousStep() {
+    if (_stepIndex > 0) {
+      setState(() => _stepIndex--);
+    }
+  }
+
+  Future<void> _nextStep() async {
+    if (!_canUseCurrentStep) {
+      return;
+    }
+    if (_stepIndex < _steps.length - 1) {
+      setState(() => _stepIndex++);
+      return;
+    }
+    await _save();
   }
 
   void _setEstimatedSleepStart(String value) {
@@ -251,6 +316,7 @@ class _MorningCalibrationPageState
 
   Future<void> _save() async {
     if (_isSaving ||
+        _stepIndex != _steps.length - 1 ||
         !_safeCaptureLoaded ||
         _eveningPlanUnavailable && !_continueWithoutEveningPlan ||
         !_draft.isComplete) {
@@ -364,4 +430,23 @@ class _MorningCalibrationPageState
       SnackBar(content: Text(message), behavior: SnackBarBehavior.floating),
     );
   }
+}
+
+enum _MorningStepKind {
+  sleep,
+  checkIn,
+}
+
+class _MorningStep {
+  const _MorningStep({
+    required this.eyebrow,
+    required this.title,
+    required this.subtitle,
+    required this.kind,
+  });
+
+  final String eyebrow;
+  final String title;
+  final String subtitle;
+  final _MorningStepKind kind;
 }

@@ -64,7 +64,12 @@ Flutter does not save an authenticated branch when the current day could not be
 read, because it then lacks a safe expected identity. A Morning save whose
 previous Evening plan could not be loaded requires either a successful retry or
 the explicit continue-without-plan choice. Drafts remain present after read or
-write failure.
+write failure. Morning presents that one non-persisted draft across a sleep step
+and a quality/energy step: `Next` and `Back` perform no write, and only the final
+`Save morning check-in` submits the complete branch. A failed final write stays
+on the second step and retains the capture id, request identity, expected
+capture, and payload for exact retry. This presentation split adds no authority,
+partial-write path, projection, or wire-format change.
 
 ## Revisioned Account Settings
 

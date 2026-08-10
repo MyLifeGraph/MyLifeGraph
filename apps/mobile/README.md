@@ -101,10 +101,14 @@ id and the last loaded branch identity, so Morning and Evening merge while a
 same-branch stale write conflicts. A failed current-day read blocks Save and
 keeps the draft; Morning also requires retry or explicit continuation when the
 prior Evening plan is unavailable. Successful writes refresh the backend Daily
-State best-effort. Today reads the strict read-only
-`today-overview-v2` projection: both-capture streak, dynamic progress, the
-Setup/Preparation/Calendar/Focus plus Planner Task/Habit/fixed-commitment
-agenda, Tasks, and Habits. The V1 route remains available for older clients.
+State best-effort. Morning keeps one local draft across a 50-percent Sleep page
+and a 100-percent Check-in page; valid sleep details gate `Next`, `Back` retains
+both pages, and only the final control calls the existing save boundary. A save
+failure stays on the second page with the complete draft. Today reads the
+strict read-only `today-overview-v2` projection: both-capture streak, dynamic
+progress, the Setup/Preparation/Calendar/Focus plus Planner
+Task/Habit/fixed-commitment agenda, Tasks, and Habits. The V1 route remains
+available for older clients.
 The latest saved check-in is loaded separately into the compact
 `Beat yesterday` streak inset. `Review your week` is a direct
 capability-gated navigation entry. Recommendations, decision-feedback history,
@@ -132,10 +136,15 @@ app actions retain the global minimum 44×44 target.
 
 Under `daily-capture-v5`, Evening
 requires one planned local sleep time and a `300..720` minute target on a
-15-minute grid. Morning records editable aware estimated sleep-start/wake
-instants, derives and labels the `Estimated sleep duration`, retains the target
-used for that night, and separately requires a `1..10` estimated sleep-quality
-rating plus current energy. It does not ask for Day Shape, and V5 rejects a
+15-minute grid. Its intent and first-value explanations start closed behind
+independent information controls. Morning first records editable aware
+estimated sleep-start/wake instants, derives and labels the `Estimated sleep
+duration`, and retains the target used for that night. Its second page requires
+a separate `1..10` estimated sleep-quality rating plus current energy. The
+duration, target-source, and quality explanations start closed independently;
+their 20-pixel information icons use normal 44×44 action targets, dynamic
+`Show/Hide information about <heading>` semantics, and Reduced-Motion-aware
+inline disclosure. It does not ask for Day Shape, and V5 rejects a
 `day_shape` field. Evening pressure-source descriptions are available from a separate
 accessible info control; the control never changes the selected source.
 `Possible priority tomorrow` is no longer an editable Capture input and new

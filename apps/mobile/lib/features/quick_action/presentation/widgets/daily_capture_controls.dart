@@ -3,8 +3,138 @@ import 'package:flutter/material.dart';
 import 'package:my_life_graph/core/constants/app_radii.dart';
 
 import 'package:my_life_graph/core/theme/app_icons.dart';
+import 'package:my_life_graph/core/theme/app_motion_tokens.dart';
 
 import '../../../../core/constants/app_spacing.dart';
+
+const _captureInfoControlSize = 44.0;
+const _captureInfoIconSize = 20.0;
+
+/// Non-persisted disclosure for explanatory Daily Capture copy.
+///
+/// Each instance owns its open state. The description is absent from both the
+/// widget and semantics trees while closed, and the control follows the
+/// product-wide 44 logical-pixel action-target rule.
+class CaptureInfoDisclosure extends StatefulWidget {
+  const CaptureInfoDisclosure({
+    required this.heading,
+    required this.description,
+    this.headingStyle,
+    this.descriptionStyle,
+    super.key,
+  });
+
+  final String heading;
+  final String description;
+  final TextStyle? headingStyle;
+  final TextStyle? descriptionStyle;
+
+  @override
+  State<CaptureInfoDisclosure> createState() => _CaptureInfoDisclosureState();
+}
+
+class _CaptureInfoDisclosureState extends State<CaptureInfoDisclosure> {
+  bool _expanded = false;
+
+  @override
+  void didUpdateWidget(CaptureInfoDisclosure oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.heading != widget.heading) {
+      _expanded = false;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final motion = context.motionTokens;
+    final duration = motion.stateFor(context);
+    final actionLabel =
+        '${_expanded ? 'Hide' : 'Show'} information about ${widget.heading}';
+    final infoButton = SizedBox.square(
+      key: ValueKey('capture-info-control-${widget.heading}'),
+      dimension: _captureInfoControlSize,
+      child: Semantics(
+        button: true,
+        expanded: _expanded,
+        label: actionLabel,
+        onTap: _toggle,
+        child: ExcludeSemantics(
+          child: IconButton(
+            tooltip: actionLabel,
+            color: Theme.of(context).colorScheme.primary,
+            onPressed: _toggle,
+            icon: const Icon(
+              AppIcons.infoOutline,
+              size: _captureInfoIconSize,
+            ),
+          ),
+        ),
+      ),
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.only(top: AppSpacing.sm),
+                child: Text(
+                  widget.heading,
+                  style: widget.headingStyle ??
+                      Theme.of(context).textTheme.titleLarge,
+                ),
+              ),
+            ),
+            infoButton,
+          ],
+        ),
+        ExcludeSemantics(
+          excluding: !_expanded,
+          child: AnimatedSwitcher(
+            duration: duration,
+            reverseDuration: duration,
+            switchInCurve: motion.curve,
+            switchOutCurve: motion.curve,
+            transitionBuilder: (child, animation) {
+              final curved = CurvedAnimation(
+                parent: animation,
+                curve: motion.curve,
+                reverseCurve: motion.curve,
+              );
+              return SizeTransition(
+                sizeFactor: curved,
+                alignment: AlignmentDirectional.topStart,
+                child: FadeTransition(opacity: curved, child: child),
+              );
+            },
+            child: _expanded
+                ? Padding(
+                    key: ValueKey(
+                      'capture-info-description-${widget.heading}',
+                    ),
+                    padding: const EdgeInsets.only(top: AppSpacing.xs),
+                    child: Text(
+                      widget.description,
+                      style: widget.descriptionStyle ??
+                          Theme.of(context).textTheme.bodyMedium,
+                    ),
+                  )
+                : SizedBox(
+                    key: ValueKey(
+                      'capture-info-description-closed-${widget.heading}',
+                    ),
+                  ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _toggle() => setState(() => _expanded = !_expanded);
+}
 
 class CaptureChoice<T> {
   const CaptureChoice({

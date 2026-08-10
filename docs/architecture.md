@@ -284,10 +284,17 @@ The current `daily-capture-v5` contract is:
 - Morning requires aware estimated sleep-start/wake instants, their exact
   derived whole-minute duration and compatible sleep hours, the target used for
   that night, an independent whole-number `1..10` `sleep_quality` estimate,
-  current energy. V5 rejects the retired `day_shape` field. The interval is
-  ordered, minute-aligned, and at most 16 hours. It is labelled as
+  current energy. The Flutter form keeps these in one local draft across two
+  pages: Sleep at 50 percent, then Check-in at 100 percent. Sleep validity alone
+  gates `Next`; `Back` preserves both pages, and only the final save invokes the
+  existing branch write. A failed save remains on Check-in with the complete
+  draft and retry identity. V5 rejects the retired `day_shape` field. The
+  interval is ordered, minute-aligned, and at most 16 hours. It is labelled as
   an estimated duration, does not repeat Evening questions, and explicitly
   states that it does not generate recommendations or create or change a plan.
+  Three Morning explanations and the two Evening sleep-plan explanations use
+  independent initially closed inline information controls; existing Evening
+  context and stress-source help remain separate.
   Older V2–V4 Morning objects, including historical Day Shape, remain readable;
   Day Shape is neither displayed nor evaluated, and editing
   that Morning capture requires an explicit value before it can be saved.

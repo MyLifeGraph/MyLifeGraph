@@ -242,6 +242,17 @@ an accordion header remains separate from the accordion chevron and content
 action, and title/control/action groups wrap rather than overflow at 320
 logical pixels and 200-percent text.
 
+Daily Capture reuses the same inline heading/disclosure behavior for the three
+Morning explanations and two Evening sleep-plan explanations, but it is not
+covered by Today's compact exception. Each Capture information action therefore
+uses the global 44×44 target with a 20×20 `AppIcons.infoOutline` icon. Instances
+open independently, remove their description from the widget and semantics
+trees while closed, and expose `Show information about <heading>` or
+`Hide information about <heading>` with the matching expanded state. Their
+size-and-opacity transition uses `AppMotionTokens.stateFor`; Reduced Motion
+resolves it to an immediate state change. The headings and actions remain
+usable without horizontal overflow at 320 logical pixels and 200-percent text.
+
 Evening pressure-source help is a separate accessible info control: hover opens
 the tooltip on web, tap opens it on touch, and neither path changes the
 selection. The three influence choices remain equal-width/equal-height in one

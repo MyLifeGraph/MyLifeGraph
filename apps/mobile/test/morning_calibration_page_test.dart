@@ -6,19 +6,50 @@ import 'package:my_life_graph/features/auth/application/profile_local_date_sourc
 import 'package:my_life_graph/composition/profile_local_date_providers.dart';
 import 'package:my_life_graph/features/quick_action/domain/quick_check_in.dart';
 import 'package:my_life_graph/features/quick_action/presentation/pages/morning_calibration_page.dart';
+import 'package:my_life_graph/features/quick_action/presentation/widgets/daily_capture_controls.dart';
 import 'package:my_life_graph/composition/quick_check_in_providers.dart';
 
 void main() {
-  testWidgets('morning calibration derives duration from the Evening proposal',
+  testWidgets(
+      'morning sleep step derives duration before the final check-in save',
       (tester) async {
     final semantics = tester.ensureSemantics();
     final store = _MorningStore();
     await _pumpPage(tester, store);
 
-    final saveButton = tester.widget<FilledButton>(
-      find.widgetWithText(FilledButton, 'Save morning check-in'),
+    expect(find.text('MORNING · SLEEP'), findsOneWidget);
+    expect(find.text('How did you sleep?'), findsOneWidget);
+    expect(find.text('Estimated sleep quality'), findsNothing);
+    expect(find.text('Current energy'), findsNothing);
+    expect(find.text('Save morning check-in'), findsNothing);
+    expect(
+      tester
+          .widget<LinearProgressIndicator>(
+            find.byType(LinearProgressIndicator),
+          )
+          .value,
+      .5,
     );
-    expect(saveButton.onPressed, isNull);
+    expect(
+      tester
+          .widget<FilledButton>(find.widgetWithText(FilledButton, 'Next'))
+          .onPressed,
+      isNotNull,
+    );
+
+    await _tapVisible(tester, find.text('Next'));
+    expect(find.text('MORNING · CHECK-IN'), findsOneWidget);
+    expect(find.text('How are you starting today?'), findsOneWidget);
+    expect(find.text('Estimated sleep duration'), findsNothing);
+    expect(find.text('Save morning check-in'), findsOneWidget);
+    expect(
+      tester
+          .widget<LinearProgressIndicator>(
+            find.byType(LinearProgressIndicator),
+          )
+          .value,
+      1,
+    );
 
     await _performSemanticTap(tester, 'morning sleep quality 3 of 10');
     await _performSemanticTap(tester, 'morning energy 4 of 10');
@@ -44,6 +75,7 @@ void main() {
     final store = _MorningStore(failOnce: true);
     await _pumpPage(tester, store);
 
+    await _tapVisible(tester, find.text('Next'));
     await _performSemanticTap(tester, 'morning sleep quality 3 of 10');
     await _performSemanticTap(tester, 'morning energy 4 of 10');
     await tester.pump();
@@ -57,6 +89,9 @@ void main() {
       ),
       findsWidgets,
     );
+    expect(find.text('How are you starting today?'), findsOneWidget);
+    expect(find.text('3 / 10'), findsOneWidget);
+    expect(find.text('4 / 10'), findsOneWidget);
     await tester.ensureVisible(find.text('Save morning check-in'));
     await tester.tap(find.text('Save morning check-in'));
     await tester.pumpAndSettle();
@@ -83,6 +118,7 @@ void main() {
       ),
       findsOneWidget,
     );
+    await _tapVisible(tester, find.text('Next'));
     await tester.ensureVisible(find.text('Save morning check-in'));
     await tester.tap(find.text('Save morning check-in'));
     await tester.pumpAndSettle();
@@ -103,9 +139,18 @@ void main() {
       store,
       viewSize: const Size(320, 700),
       textScale: 2,
+      disableAnimations: true,
     );
 
     expect(tester.takeException(), isNull);
+    await _tapVisible(
+      tester,
+      find.byKey(
+        const ValueKey('capture-info-control-Estimated sleep duration'),
+      ),
+    );
+    expect(tester.takeException(), isNull);
+    await _tapVisible(tester, find.text('Next'));
     await _performSemanticTap(tester, 'morning sleep quality 7 of 10');
     await _performSemanticTap(tester, 'morning energy 7 of 10');
     final save = find.text('Save morning check-in');
@@ -135,6 +180,8 @@ void main() {
     );
     await _pumpPage(tester, store);
 
+    expect(find.text('Estimated sleep quality'), findsNothing);
+    await _tapVisible(tester, find.text('Next'));
     expect(find.text('Estimated sleep quality'), findsOneWidget);
     final saveButton = tester.widget<FilledButton>(
       find.widgetWithText(FilledButton, 'Save morning check-in'),
@@ -147,6 +194,166 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(store.attempts.single.sleepQuality, 6);
+  });
+
+  testWidgets(
+      'sleep details gate Next and Back retains the complete two-step draft',
+      (tester) async {
+    final store = _NoSleepPlanMorningStore();
+    await _pumpPage(tester, store);
+
+    expect(find.text('—'), findsOneWidget);
+    expect(
+      find.text('Choose an ordered interval of no more than 16 hours.'),
+      findsNothing,
+    );
+    expect(
+      tester
+          .widget<FilledButton>(find.widgetWithText(FilledButton, 'Next'))
+          .onPressed,
+      isNull,
+    );
+
+    tester
+        .widget<CaptureClockControl>(find.byType(CaptureClockControl).at(0))
+        .onChanged('00:00');
+    await tester.pump();
+    tester
+        .widget<CaptureClockControl>(find.byType(CaptureClockControl).at(1))
+        .onChanged('23:00');
+    await tester.pump();
+    expect(find.text('—'), findsOneWidget);
+    expect(
+      tester
+          .widget<FilledButton>(find.widgetWithText(FilledButton, 'Next'))
+          .onPressed,
+      isNull,
+    );
+
+    tester
+        .widget<CaptureSleepTargetControl>(
+          find.byType(CaptureSleepTargetControl),
+        )
+        .onChanged(301);
+    tester
+        .widget<CaptureClockControl>(find.byType(CaptureClockControl).at(1))
+        .onChanged('08:00');
+    await tester.pump();
+    expect(find.text('8 h'), findsWidgets);
+    expect(
+      tester
+          .widget<FilledButton>(find.widgetWithText(FilledButton, 'Next'))
+          .onPressed,
+      isNull,
+    );
+
+    tester
+        .widget<CaptureSleepTargetControl>(
+          find.byType(CaptureSleepTargetControl),
+        )
+        .onChanged(420);
+    await tester.pump();
+    expect(
+      tester
+          .widget<FilledButton>(find.widgetWithText(FilledButton, 'Next'))
+          .onPressed,
+      isNotNull,
+    );
+
+    await _tapVisible(tester, find.text('Next'));
+    await _performSemanticTap(tester, 'morning sleep quality 6 of 10');
+    await _performSemanticTap(tester, 'morning energy 7 of 10');
+    expect(store.attempts, isEmpty);
+
+    await _tapVisible(
+      tester,
+      find.widgetWithText(OutlinedButton, 'Back'),
+    );
+    final clocks = tester.widgetList<CaptureClockControl>(
+      find.byType(CaptureClockControl),
+    );
+    expect(clocks.first.value, '00:00');
+    expect(clocks.last.value, '08:00');
+    expect(
+      tester
+          .widget<CaptureSleepTargetControl>(
+            find.byType(CaptureSleepTargetControl),
+          )
+          .value,
+      420,
+    );
+
+    await _tapVisible(tester, find.text('Next'));
+    final ratings = tester.widgetList<CaptureRatingControl>(
+      find.byType(CaptureRatingControl),
+    );
+    expect(ratings.first.value, 6);
+    expect(ratings.last.value, 7);
+    await _tapVisible(tester, find.text('Save morning check-in'));
+    await tester.pumpAndSettle();
+    expect(store.attempts, hasLength(1));
+  });
+
+  testWidgets('all three Morning explanations start closed and open alone',
+      (tester) async {
+    const durationHelp =
+        'These are your own estimates, not objectively measured sleep.';
+    const targetHelp =
+        'Loaded from the latest saved Evening plan. You can correct it for this night.';
+    const qualityHelp =
+        'How restorative did your sleep feel, independently of how long you slept?';
+    await _pumpPage(tester, _MorningStore());
+
+    expect(find.text(durationHelp), findsNothing);
+    expect(find.text(targetHelp), findsNothing);
+    expect(
+      find.bySemanticsLabel(
+        'Show information about Estimated sleep duration',
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.bySemanticsLabel(
+        'Show information about Sleep target used for this night',
+      ),
+      findsOneWidget,
+    );
+
+    await tester.tap(
+      find.byKey(
+        const ValueKey('capture-info-control-Estimated sleep duration'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text(durationHelp), findsOneWidget);
+    expect(find.text(targetHelp), findsNothing);
+
+    await tester.tap(
+      find.byKey(
+        const ValueKey(
+          'capture-info-control-Sleep target used for this night',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text(durationHelp), findsOneWidget);
+    expect(find.text(targetHelp), findsOneWidget);
+
+    await _tapVisible(tester, find.text('Next'));
+    expect(find.text(qualityHelp), findsNothing);
+    expect(
+      find.bySemanticsLabel(
+        'Show information about Estimated sleep quality',
+      ),
+      findsOneWidget,
+    );
+    await tester.tap(
+      find.byKey(
+        const ValueKey('capture-info-control-Estimated sleep quality'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text(qualityHelp), findsOneWidget);
   });
 }
 
@@ -175,11 +382,19 @@ Future<void> _performSemanticTap(
   await tester.pump();
 }
 
+Future<void> _tapVisible(WidgetTester tester, Finder finder) async {
+  await tester.ensureVisible(finder);
+  await tester.pumpAndSettle();
+  await tester.tap(finder);
+  await tester.pumpAndSettle();
+}
+
 Future<void> _pumpPage(
   WidgetTester tester,
   QuickCheckInStore store, {
   Size viewSize = const Size(1200, 1500),
   double textScale = 1,
+  bool disableAnimations = false,
 }) async {
   final router = GoRouter(
     initialLocation: '/morning-calibration',
@@ -218,6 +433,7 @@ Future<void> _pumpPage(
         builder: (context, child) => MediaQuery(
           data: MediaQuery.of(context).copyWith(
             textScaler: TextScaler.linear(textScale),
+            disableAnimations: disableAnimations,
           ),
           child: child!,
         ),
@@ -258,6 +474,11 @@ class _MorningStore implements QuickCheckInStore {
       throw StateError('planned failure');
     }
   }
+}
+
+class _NoSleepPlanMorningStore extends _MorningStore {
+  @override
+  Future<EveningShutdownDraft?> loadLatestEvening() async => null;
 }
 
 EveningShutdownDraft _latestSleepPlan() {

@@ -159,14 +159,10 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(
-          'Planned sleep time',
-          style: Theme.of(context).textTheme.titleLarge,
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        Text(
-          'This is your intention for tonight, not an automatic restriction.',
-          style: Theme.of(context).textTheme.bodyMedium,
+        const CaptureInfoDisclosure(
+          heading: 'Planned sleep time',
+          description:
+              'This is your intention for tonight, not an automatic restriction.',
         ),
         const SizedBox(height: AppSpacing.md),
         CaptureClockControl(
@@ -179,14 +175,10 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
           ),
         ),
         const SizedBox(height: AppSpacing.xl),
-        Text(
-          'Sleep duration target',
-          style: Theme.of(context).textTheme.titleLarge,
-        ),
-        const SizedBox(height: AppSpacing.sm),
-        Text(
-          'Eight hours is shown first. It becomes your current sleep plan only when you save.',
-          style: Theme.of(context).textTheme.bodyMedium,
+        const CaptureInfoDisclosure(
+          heading: 'Sleep duration target',
+          description:
+              'Eight hours is shown first. It becomes your current sleep plan only when you save.',
         ),
         const SizedBox(height: AppSpacing.md),
         CaptureSleepTargetControl(

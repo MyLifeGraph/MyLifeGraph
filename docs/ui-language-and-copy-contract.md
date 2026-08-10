@@ -44,6 +44,29 @@ derived from the student's corrected estimated start/wake instants and
 measurement. Copy must state that neither is objective measurement, quality is
 judged independently of duration, and neither value may be inferred from the
 other.
+Morning check-in presents one local draft in two steps. The first step uses
+`MORNING · SLEEP`, `How did you sleep?`, 50-percent progress, and `Next`; the
+second uses `MORNING · CHECK-IN`, `How are you starting today?`, 100-percent
+progress, `Back`, and the final `Save morning check-in`. The first step does
+not show quality, energy, or the save action. `Next` remains unavailable until
+both estimated clocks and the sleep target form a complete valid branch. No
+duration result is represented by `—`; the former ordered-interval instruction
+is not shown. `Back` preserves every answer, and a failed save leaves the full
+draft on the second step for an exact retry.
+
+Three Morning explanations start hidden behind independent information
+controls headed `Estimated sleep duration`, `Sleep target used for this night`,
+and `Estimated sleep quality`. The target explanation remains dynamic: it says
+whether the latest Evening plan supplied the starting value or no saved plan
+was available. On Evening's sleep-plan step, the intent explanation headed
+`Planned sleep time` and the first-value explanation headed
+`Sleep duration target` also start hidden. The latter states that eight hours
+is shown first and becomes the current plan only on save. Evening step headings,
+optional-context copy, and the separate stress-source information control stay
+visible or independently operable as before. All five new controls use the
+exact semantics and tooltip labels `Show information about <heading>` and
+`Hide information about <heading>`.
+
 Morning check-in has no Day Shape/Tagesform question, label, saved summary, or
 Dashboard detail. The Quick Actions subtitle is exactly
 `Add sleep timing, sleep quality, and current energy`. The one-time Setup field
