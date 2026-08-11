@@ -30,6 +30,30 @@ Capture V5, Daily State V3, Exam-Week Outlook V1, or Coach V3 expectations.
 
 ## Current Verified Baseline
 
+The frontend information/copy consistency pass was reverified locally on
+2026-08-11 without a schema or contract-version change. The final
+`verify:fast` run passed the documentation, source/process/visual, Flutter
+analysis, all 928 Flutter tests, and Python checks, including `1383 passed, 2
+skipped` FastAPI tests. The focused shared-disclosure and Calendar command
+passed 13 tests. The official profile-mode browser smoke passed all four
+independent Setup, Auth/Capture/Today, Planner-confirmation, and fake-Coach
+journeys and removed every temporary Auth identity.
+
+A separate stable local-build smoke signed in as the seeded Maya student and
+exercised Today, both Morning pages, Evening through the sleep-plan page,
+Settings grouping, Calendar import, Reminder settings, Personal learning,
+Weekly Review, and Today at 320 logical pixels. It opened the relevant
+independent information disclosures without saving either draft, verified the
+24×24 Today exception and standard 44×44 actions, checked dynamic Show/Hide and
+expanded semantics, found no retired Morning interval instruction, and emitted
+no browser page or console error. Reviewing its Settings, open-Calendar,
+Weekly-Review, and 320-pixel Today screenshots found no presentation overflow.
+That rendered smoke exposed and then reverified one shared fix: standard
+information actions now introduce a distinct web semantics node instead of
+merging the heading and visible card copy into the button. The browser sign-in
+helper now follows the current `Sign in` label. No reset, migration application,
+remote mutation, deployment, push, or final Capture save occurred.
+
 The two-step Morning Check-in and five Capture information disclosures were
 reverified locally on 2026-08-10 without a schema or contract-version change.
 The focused Capture/widget/app integration command passed 33 tests. The final

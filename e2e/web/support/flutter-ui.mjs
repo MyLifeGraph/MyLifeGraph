@@ -87,8 +87,10 @@ export async function signInThroughFlutter({
   await enableFlutterSemantics(page);
   await fillFlutterField(page, 'Email', email, 0);
   await fillFlutterField(page, 'Password', password, 1);
-  const login = page.getByRole('button', { name: 'Login', exact: true }).last();
-  await login.click({ timeout: 7500 });
+  const signIn = page
+    .getByRole('button', { name: 'Sign in', exact: true })
+    .last();
+  await signIn.click({ timeout: 7500 });
   await page.waitForURL(`**/#${expectedPath}**`, { timeout: 45000 });
 }
 

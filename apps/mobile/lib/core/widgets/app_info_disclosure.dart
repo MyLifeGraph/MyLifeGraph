@@ -205,6 +205,7 @@ class _AppInfoDisclosureState extends State<AppInfoDisclosure> {
 
   Widget _button(BuildContext context, String actionLabel) {
     return Semantics(
+      container: true,
       button: true,
       expanded: _expanded,
       label: actionLabel,

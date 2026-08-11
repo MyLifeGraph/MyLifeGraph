@@ -39,6 +39,20 @@ void main() {
     expect(find.bySemanticsLabel(firstDescription), findsNothing);
     expect(tester.getSize(firstTarget), const Size.square(44));
     expect(tester.getSize(firstIcon), const Size.square(20));
+    final firstSemanticsWidget = tester.widget<Semantics>(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is Semantics &&
+            widget.properties.label ==
+                'Show information about First Capture section',
+      ),
+    );
+    expect(
+      firstSemanticsWidget.container,
+      isTrue,
+      reason:
+          'The information action must remain a separate web semantics node.',
+    );
     expect(
       tester.getSemantics(
         find.bySemanticsLabel(
