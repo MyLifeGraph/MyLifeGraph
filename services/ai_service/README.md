@@ -841,8 +841,10 @@ derivation, replay/budget/cancel/delete, and current no-fixed-mode UI without
 requiring Codex, OAuth, a subscription, or network access. Scripted provider
 responses prove strict envelopes and execution-path handling, not autonomous
 model tool choice, false-premise judgment, or answer quality. See
-`../../docs/verification.md` for historical deterministic evidence and the
-diagnostic-only focused rerun command.
+[the current verification runbook](../../docs/verification.md) for the
+diagnostic-only focused rerun command and
+[Verification History](../../docs/verification-history.md) for superseded
+deterministic evidence.
 The separate live multi-tool smoke is skipped by default and runs only after
 explicit local-provider setup, image preparation, and login:
 

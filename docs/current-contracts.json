@@ -17,7 +17,6 @@
         }
       ],
       "owners": [
-        "README.md",
         "docs/architecture.md",
         "docs/notification-lifecycle-v1-contract.md",
         "docs/stabilization-consistency-contract.md",
@@ -41,7 +40,6 @@
         }
       ],
       "owners": [
-        "README.md",
         "apps/mobile/README.md",
         "docs/architecture.md",
         "docs/backend-roadmap.md",
@@ -69,7 +67,6 @@
         }
       ],
       "owners": [
-        "README.md",
         "docs/architecture.md",
         "docs/backend-roadmap.md",
         "docs/local-dev.md",
@@ -94,7 +91,6 @@
         }
       ],
       "owners": [
-        "README.md",
         "docs/backend-roadmap.md",
         "docs/daily-briefing-implementation-plan.md",
         "docs/local-dev.md",
@@ -142,7 +138,6 @@
         }
       ],
       "owners": [
-        "README.md",
         "docs/architecture.md",
         "docs/backend-roadmap.md",
         "docs/current-product-guide.md",
@@ -190,7 +185,6 @@
         }
       ],
       "owners": [
-        "README.md",
         "docs/architecture.md",
         "docs/backend-roadmap.md",
         "docs/daily-briefing-implementation-plan.md",
@@ -265,7 +259,6 @@
         }
       ],
       "owners": [
-        "README.md",
         "apps/mobile/README.md",
         "docs/architecture.md",
         "docs/current-product-guide.md",
@@ -290,7 +283,6 @@
         }
       ],
       "owners": [
-        "README.md",
         "docs/architecture.md",
         "docs/backend-roadmap.md",
         "docs/current-product-guide.md",
@@ -319,7 +311,6 @@
         }
       ],
       "owners": [
-        "README.md",
         "docs/architecture.md",
         "docs/backend-roadmap.md",
         "docs/deadline-planner-v1-contract.md",
@@ -362,7 +353,6 @@
         }
       ],
       "owners": [
-        "README.md",
         "apps/mobile/README.md",
         "docs/architecture.md",
         "docs/deadline-planner-v1-contract.md",
@@ -388,7 +378,6 @@
         }
       ],
       "owners": [
-        "README.md",
         "apps/mobile/README.md",
         "docs/architecture.md",
         "docs/backend-roadmap.md",
@@ -490,7 +479,6 @@
         }
       ],
       "owners": [
-        "README.md",
         "docs/architecture.md",
         "docs/local-dev.md",
         "docs/notification-lifecycle-v1-contract.md",
@@ -575,7 +563,6 @@
         }
       ],
       "owners": [
-        "README.md",
         "docs/architecture.md",
         "docs/backend-roadmap.md",
         "docs/deadline-planner-v1-contract.md",
@@ -646,7 +633,6 @@
         }
       ],
       "owners": [
-        "README.md",
         "docs/architecture.md",
         "docs/backend-roadmap.md",
         "docs/daily-briefing-implementation-plan.md",

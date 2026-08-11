@@ -1282,10 +1282,11 @@ provider and adds free-question streaming, snapshot/trace/evidence persistence,
 replay, cancellation, safety, limits, history deletion, RLS, no-fixed-mode UI,
 and guest-zero-call assertions. Exact current results and dated run
 history live in
-[Current Verified Baseline](verification.md#current-verified-baseline) and the
-historical sections of `docs/verification.md`. They establish neither remote
-migration/RLS state nor production readiness. Later changes must establish a
-new full pass. Do not run destructive reset commands against a remote database.
+[Current Verified Baseline](verification.md#current-verified-baseline) and
+[Verification History](verification-history.md), respectively. They establish
+neither remote migration/RLS state nor production readiness. Later changes
+must establish a new full pass. Do not run destructive reset commands against
+a remote database.
 
 For manual local product exploration, `npm run seed:demo` creates four
 repeatable local-only Auth users. `onboarding@example.test` is recreated with an

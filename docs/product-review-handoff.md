@@ -130,7 +130,7 @@ files without discarding user work. Run focused tests first, then the standard
 non-destructive source gate:
 
 ```bash
-FLUTTER_BIN=/home/gregor/tools/flutter/bin/flutter scripts/verify.sh
+FLUTTER_BIN="${FLUTTER_BIN:-flutter}" scripts/verify.sh
 ```
 
 Follow `docs/verification.md` for local migration/advisor checks and browser
@@ -146,13 +146,14 @@ checkout. Exact current results live only in
 local deterministic evidence is not remote, installed-device, live-provider,
 clinical, longitudinal, deployed, or participant evidence. Record a new commit,
 exact commands, counts, and environment in `docs/verification.md` before calling
-any later checkout fully verified.
+any later checkout fully verified. Superseded checkout evidence belongs in
+[Verification History](verification-history.md).
 
 ## Prompt For A New Review Chat
 
 ```text
-Work in /home/gregor/projects/ai-personal-coach. Read AGENTS.md completely and
-every document it requires for the files you may touch, then read
+Start in the repository root. Read AGENTS.md completely and every document it
+requires for the files you may touch, then read
 docs/product-review-handoff.md completely. Inspect the branch, latest commit,
 full diff, and untracked files without discarding anything.
 

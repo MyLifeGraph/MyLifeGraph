@@ -36,7 +36,7 @@ Start the real local stack with Coach visible but no provider connected:
 
 ```bash
 LOCAL_STACK_COACH_PROVIDER=disabled \
-FLUTTER_BIN=/home/gregor/tools/flutter/bin/flutter \
+FLUTTER_BIN="${FLUTTER_BIN:-flutter}" \
 scripts/start_local_stack.sh
 ```
 

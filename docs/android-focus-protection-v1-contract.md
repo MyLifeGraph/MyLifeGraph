@@ -192,7 +192,8 @@ Use Android 11+ Wireless Debugging directly from WSL:
 .tools/android-sdk/platform-tools/adb reverse tcp:54321 tcp:54321
 .tools/android-sdk/platform-tools/adb reverse tcp:8000 tcp:8000
 cd apps/mobile
-/home/gregor/tools/flutter/bin/flutter run -d <device-id>
+FLUTTER_BIN="${FLUTTER_BIN:-flutter}"
+"$FLUTTER_BIN" run -d <device-id>
 ```
 
 Acceptance covers master-off zero effects, selected/unselected/essential apps,

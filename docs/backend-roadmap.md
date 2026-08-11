@@ -1234,9 +1234,9 @@ The exact behavior, schema, routes, copy, and verification boundary live in
   workflows by writing onboarding completion.
 - Exact current and dated Coach verification evidence lives in
   [Current Verified Baseline](verification.md#current-verified-baseline) and
-  the historical sections of `docs/verification.md`. Live-provider results are
-  machine/account-specific; remote/production state and another developer's
-  account remain unverified.
+  [Verification History](verification-history.md), respectively. Live-provider
+  results are machine/account-specific; remote/production state and another
+  developer's account remain unverified.
 
 The detailed implementation order and acceptance criteria live in
 `docs/phase-10-controlled-coach-plan.md`.

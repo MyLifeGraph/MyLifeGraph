@@ -1370,9 +1370,12 @@ FLUTTER_BIN=/path/to/flutter npm run verify:fast
 
 This includes the complete Flutter and FastAPI suites. `npm run verify` and
 `scripts/verify.sh` remain compatible aliases. Use `npm run verify:web` for a
-debug web build, `npm run verify:affected -- --base-ref <ref>` for conservative
-path selection, and `npm run verify:full` for fast, database, web, and full
-browser gates.
+debug web build,
+`npm run verify:affected -- --base-ref <task-base-ref>` with the commit captured
+before the task for conservative path selection, and `npm run verify:full` for
+fast, database, web, and full browser gates. The affected selector fails closed
+without that base; `HEAD` alone covers only current working-tree changes and
+misses task changes already committed after work began.
 
 Run the fast documentation-only gate with:
 

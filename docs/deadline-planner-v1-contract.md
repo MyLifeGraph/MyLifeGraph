@@ -718,11 +718,11 @@ coverage alone is not a claim that the current checkout, local Supabase stack,
 browser journey, remote project, or installed device has passed it.
 
 Exact current results and dated implementation history live in
-[Current Verified Baseline](verification.md#current-verified-baseline) and the
-historical sections of `docs/verification.md`. Those local deterministic
-records do not establish remote migration state, provider-calendar behavior,
-installed-device behavior, notification delivery, participant evidence, or
-long-term outcomes.
+[Current Verified Baseline](verification.md#current-verified-baseline) and
+[Verification History](verification-history.md), respectively. Those local
+deterministic records do not establish remote migration state,
+provider-calendar behavior, installed-device behavior, notification delivery,
+participant evidence, or long-term outcomes.
 
 Deadline route service failures now use one typed feature-owned HTTP problem
 translator while each operation retains its exact catch set. Existing not-
