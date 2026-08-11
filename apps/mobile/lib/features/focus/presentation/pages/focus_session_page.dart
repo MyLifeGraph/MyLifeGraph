@@ -104,7 +104,7 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage>
     final state = ref.watch(focusSessionControllerProvider(_launch));
     return AppPage(
       title: 'Focus session',
-      subtitle: 'A real timed execution block linked to an optional action',
+      subtitle: 'A timed Focus session linked to an optional action',
       backFallback: AppRoutes.quickAction,
       actions: [
         IconButton(
@@ -534,8 +534,8 @@ class _FocusLoadErrorCard extends StatelessWidget {
           Text(message, style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: AppSpacing.sm),
           const Text(
-            'No empty focus state was assumed. Check your connection and '
-            'try again.',
+            'Your saved Focus state was not changed. Check your connection '
+            'and try again.',
           ),
           const SizedBox(height: AppSpacing.md),
           OutlinedButton.icon(
@@ -1112,7 +1112,7 @@ String _focusStartBlockingText(String? reason) {
     'recurring_commitment' =>
       'A recurring commitment overlaps this focus and recovery time.',
     'calendar_availability_unavailable' =>
-      'Calendar busy time is enabled, but its current projection is unavailable.',
+      'Calendar busy time is enabled, but the latest availability could not be loaded.',
     'calendar_busy' =>
       'Imported calendar busy time overlaps this focus and recovery time.',
     'availability_unavailable' =>

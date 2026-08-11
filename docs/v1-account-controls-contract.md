@@ -203,6 +203,12 @@ recovery, and OAuth return through
 allowlist that exact callback. Native iOS callback handling is outside the
 current repository boundary.
 
+The student-facing account entry names its modes `Sign in` and `Create account`.
+Recovery is presented on a shared raised surface, keeps validation and completion
+feedback visible, and maps missing configuration or OAuth failures to
+provider-neutral guidance. It never renders Supabase, transport, status-code,
+or raw contract detail even though Supabase remains the technical token owner.
+
 ## Permanent Deletion
 
 `DELETE /v1/account` accepts only the exact body:

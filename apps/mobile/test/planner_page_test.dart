@@ -453,7 +453,7 @@ void main() {
       findsOneWidget,
     );
     expect(
-      find.textContaining('No status was inferred'),
+      find.textContaining('Try loading the outlook again'),
       findsOneWidget,
     );
   });

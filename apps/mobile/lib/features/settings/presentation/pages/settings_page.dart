@@ -51,15 +51,17 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
 
     return AppPage(
       title: 'Settings',
-      subtitle: 'Account and appearance',
+      subtitle: 'Profile, planning, connections, and account',
       actions: const [AppHeaderActions(settingsSelected: true)],
       children: [
+        const AppSectionHeader(
+          title: 'Profile',
+          description: 'Your identity, timezone, and account type.',
+        ),
         AppCard(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Profile', style: Theme.of(context).textTheme.titleMedium),
-              const SizedBox(height: AppSpacing.md),
               _ProfileValue(label: 'Name', value: profile?.name),
               _ProfileValue(label: 'Email', value: profile?.email),
               _ProfileValue(label: 'Timezone', value: profileTimezone),
@@ -103,6 +105,10 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
               ],
             ],
           ),
+        ),
+        const AppSectionHeader(
+          title: 'Planning and learning',
+          description: 'Routines, Focus support, and preparation preferences.',
         ),
         AppCard(
           padding: EdgeInsets.zero,
@@ -175,6 +181,11 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
                 : null,
           ),
         ),
+        const AppSectionHeader(
+          title: 'Tools and connections',
+          description:
+              'Inbox, reminders, calendar import, and optional tools.',
+        ),
         AppCard(
           padding: EdgeInsets.zero,
           child: ListTile(
@@ -228,6 +239,10 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             trailing: const Icon(AppIcons.chevronRight),
             onTap: () => context.push(AppRoutes.calendarIntegration),
           ),
+        ),
+        const AppSectionHeader(
+          title: 'Account and appearance',
+          description: 'Export, deletion, device theme, and sign-out.',
         ),
         AppCard(
           padding: EdgeInsets.zero,
@@ -451,7 +466,7 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
     } on AccountExportTooLargeException {
       if (mounted) {
         _showMessage(
-          'This account exceeds the V4 export limits. Retrying unchanged will not help; reduce deletable history or request a larger export workflow.',
+          'The current export cannot include this much data. Nothing was exported; remove data only if you already intended to, then try again.',
         );
       }
     } catch (_) {
@@ -512,14 +527,14 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
       return;
     }
     authNotice.state = const AuthNotice(
-      'Account and canonical synced data deleted.',
+      'Account and saved synced data deleted.',
     );
     try {
       await authController.finalizeDeletedAccount();
     } catch (_) {
       if (mounted) {
         _showMessage(
-          'The account was deleted and the local session was closed. Remote sign-out cleanup could not be confirmed.',
+          'The account was deleted and this device was signed out. Sign-out on another active device could not be confirmed.',
         );
       }
     } finally {

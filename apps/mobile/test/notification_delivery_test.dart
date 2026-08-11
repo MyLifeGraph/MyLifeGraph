@@ -347,6 +347,16 @@ void main() {
       find.byKey(const ValueKey('notification-category-recovery')),
       findsOneWidget,
     );
+    expect(find.textContaining('phone-system'), findsNothing);
+    await tester.tap(
+      find.byKey(
+        const ValueKey(
+          'notification-info-control-Delivery details',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.textContaining('phone-system'), findsOneWidget);
 
     await tester.tap(
       find.byKey(const ValueKey('notification-delivery-consent')),
@@ -375,6 +385,47 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(repository.updates.single.inAppDeliveryEnabled, isTrue);
+  });
+
+  testWidgets('reminder settings fit 320 pixels at 200 percent text',
+      (tester) async {
+    tester.view.physicalSize = const Size(320, 760);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final repository = _DeliveryRepository(
+      settings: NotificationSettings.fromJson(_settingsJson(enabled: false)),
+    );
+    final controller = NotificationSettingsController(repository: repository);
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          notificationSettingsProvider.overrideWith((ref) => controller),
+        ],
+        child: MaterialApp(
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(context).copyWith(
+              textScaler: const TextScaler.linear(2),
+            ),
+            child: child!,
+          ),
+          home: const Scaffold(body: NotificationSettingsPage()),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Allow in-app banners'), findsOneWidget);
+    final deliveryDetails = find.byKey(
+      const ValueKey('notification-info-control-Delivery details'),
+    );
+    await tester.ensureVisible(deliveryDetails);
+    await tester.pumpAndSettle();
+    await tester.tap(deliveryDetails);
+    await tester.pumpAndSettle();
+    expect(find.textContaining('phone-system'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('shell shows one acknowledged deterministic in-app banner',
@@ -429,7 +480,7 @@ void main() {
         of: find.byKey(
           const ValueKey('in-app-notification-$_notificationId'),
         ),
-        matching: find.text('Fixed text · not AI-written'),
+        matching: find.text('Rule-based reminder'),
       ),
       findsOneWidget,
     );

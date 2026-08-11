@@ -68,11 +68,17 @@ do not read providers or perform writes.
 Cross-feature Riverpod factories, shared shell actions, and UI adapters that
 combine two feature-owned contracts live in `composition`. This includes Auth,
 profile-date, Capture, Dashboard, Deadline, Recommendation, Briefing, Weekly
-Review, Notification, projection-refresh, and Today-command wiring. The guest Dashboard
+Review, Notification, Habit-action, projection-refresh, and Today-command wiring. The guest Dashboard
 snapshot adapter combines the Quick Action store with the Dashboard projection
 there, while `DashboardRepositoryImpl` depends only on a snapshot-loader
 function. Auth likewise receives a guest-capture migration callback instead of
 importing Quick Action data sources.
+
+Reusable optional-help behavior lives in `core/widgets/AppInfoDisclosure`.
+Today and Daily Capture keep thin feature adapters only where existing header
+composition or stable keys require them; other features consume the core
+primitive directly. This shares motion, semantics, and target sizing without
+creating cross-feature presentation imports.
 
 An executable source guard rejects every new import from one feature into
 another feature's `data` or `presentation` directory. Its one current exact

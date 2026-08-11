@@ -98,18 +98,18 @@ void main() {
       tester.element(find.byType(AuthPage)),
     );
     container.read(authNoticeProvider.notifier).state = const AuthNotice(
-      'Account and canonical synced data deleted.',
+      'Account and saved synced data deleted.',
     );
     await tester.pump();
     expect(
-      find.text('Account and canonical synced data deleted.'),
+      find.text('Account and saved synced data deleted.'),
       findsOneWidget,
     );
     await tester.ensureVisible(find.text('Dismiss'));
     await tester.tap(find.text('Dismiss'));
     await tester.pump();
     expect(
-      find.text('Account and canonical synced data deleted.'),
+      find.text('Account and saved synced data deleted.'),
       findsNothing,
     );
     container.read(authNoticeProvider.notifier).state = const AuthNotice(
@@ -138,8 +138,8 @@ void main() {
       findsOneWidget,
     );
 
-    await tester.ensureVisible(find.text('Register'));
-    await tester.tap(find.text('Register'));
+    await tester.ensureVisible(find.text('Create account'));
+    await tester.tap(find.text('Create account').first);
     await tester.pump();
     await tester.ensureVisible(find.text('Resend confirmation email'));
     await tester.tap(find.text('Resend confirmation email'));
@@ -180,7 +180,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Register'));
+    await tester.tap(find.text('Create account').first);
     await tester.pump();
     await tester.enterText(
       find.widgetWithText(TextField, 'Email'),
@@ -190,8 +190,9 @@ void main() {
       find.widgetWithText(TextField, 'Password'),
       'password',
     );
-    await tester.ensureVisible(find.text('Create account'));
-    await tester.tap(find.text('Create account'));
+    final createAccount = find.widgetWithText(FilledButton, 'Create account');
+    await tester.ensureVisible(createAccount);
+    await tester.tap(createAccount);
     await tester.pumpAndSettle();
 
     expect(
@@ -227,7 +228,7 @@ void main() {
       find.widgetWithText(TextField, 'Password'),
       'password',
     );
-    final loginButton = find.widgetWithText(FilledButton, 'Login');
+    final loginButton = find.widgetWithText(FilledButton, 'Sign in');
     await tester.ensureVisible(loginButton);
     await tester.tap(loginButton);
     await tester.pumpAndSettle();
@@ -270,18 +271,18 @@ void main() {
       find.widgetWithText(TextField, 'Password'),
       'password',
     );
-    final loginButton = find.widgetWithText(FilledButton, 'Login');
+    final loginButton = find.widgetWithText(FilledButton, 'Sign in');
     await tester.ensureVisible(loginButton);
     await tester.tap(loginButton);
     await tester.pumpAndSettle();
 
     const unavailable =
-        'Synced sign-in is not configured. Configure Supabase or continue as guest.';
+        'Synced sign-in is unavailable right now. Continue as guest or try again later.';
     expect(find.text(unavailable), findsOneWidget);
     expect(tester.takeException(), isNull);
 
-    await tester.ensureVisible(find.text('Register'));
-    await tester.tap(find.text('Register'));
+    await tester.ensureVisible(find.text('Create account'));
+    await tester.tap(find.text('Create account').first);
     await tester.pump();
     final createButton = find.widgetWithText(FilledButton, 'Create account');
     await tester.ensureVisible(createButton);

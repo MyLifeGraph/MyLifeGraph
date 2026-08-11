@@ -653,7 +653,7 @@ class _DashboardLoadError extends StatelessWidget {
                 ),
                 const SizedBox(height: AppSpacing.sm),
                 Text(
-                  'Your account data could not be loaded. No demo values were substituted.',
+                  'Your account data could not be loaded. Check your connection and try again.',
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.bodyMedium,
                 ),

@@ -305,6 +305,11 @@ read-only. It is absent from Today, Inbox, notification generation, and guest/
 demo surfaces. Guest/demo does not call the endpoint and does not fabricate an
 outlook.
 
+The read failure says that capacity and sleep context could not be loaded and
+offers another load; it does not narrate placeholder or inference internals.
+Read-only help refers to the student's `current saved plan`, not an `active
+revision`, while the persisted revision authority remains unchanged.
+
 ## Persistence And Non-Claims
 
 The Outlook itself adds no table, column, RPC, migration, background job, or

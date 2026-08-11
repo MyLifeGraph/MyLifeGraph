@@ -257,7 +257,7 @@ class PlannerExamWeekOutlookSection extends StatelessWidget {
               ),
               const SizedBox(height: AppSpacing.sm),
               const Text(
-                'Capacity and sleep context could not be read. No status was inferred or substituted.',
+                'Capacity and sleep context could not be read. Try loading the outlook again.',
               ),
               const SizedBox(height: AppSpacing.md),
               OutlinedButton.icon(
@@ -452,7 +452,7 @@ class _ExamWeekOutlookCard extends StatelessWidget {
           ],
           const SizedBox(height: AppSpacing.sm),
           Text(
-            'Read-only outlook. Opening this card neither creates a preview nor changes an active revision.',
+            'Read-only outlook. Opening this card neither creates a preview nor changes your current saved plan.',
             style: Theme.of(context).textTheme.bodySmall,
           ),
         ],
@@ -895,7 +895,7 @@ class PlannerLoadError extends StatelessWidget {
         child: Column(
           children: [
             const Text(
-              'Planner could not be loaded. No demo plan was substituted.',
+              'Planner could not be loaded. Check your connection and try again.',
             ),
             const SizedBox(height: AppSpacing.sm),
             OutlinedButton.icon(

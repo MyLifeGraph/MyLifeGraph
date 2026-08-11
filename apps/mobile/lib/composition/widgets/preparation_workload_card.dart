@@ -113,7 +113,7 @@ class _PreparationWorkloadCardState extends State<PreparationWorkloadCard> {
             ),
             const SizedBox(height: AppSpacing.xs),
             const Text(
-              'Confirmed reservations could not be read. No empty or estimated workload was substituted.',
+              'Confirmed reservations could not be read. Check your connection and try again.',
             ),
             const SizedBox(height: AppSpacing.sm),
             OutlinedButton(
@@ -507,7 +507,7 @@ class _WorkloadDayDetail extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              'Plan breakdown unavailable. The confirmed daily total above was not replaced.',
+              'Plan breakdown unavailable. The confirmed daily total above is still current.',
             ),
             const SizedBox(height: AppSpacing.xs),
             OutlinedButton(onPressed: onRetry, child: const Text('Retry')),

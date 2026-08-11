@@ -122,8 +122,8 @@ does not generate recommendations or create/change a plan. Morning Calibration
 therefore describes only what that save does.
 
 Today keeps its source/update line and ordinary heading explanations initially
-hidden behind independent circled information buttons. The same disclosure is
-used for streak, progress, agenda, Today/all Tasks, Habits, and each of the
+hidden behind independent circled information buttons. The shared core
+disclosure is used for streak, progress, agenda, Today/all Tasks, Habits, and each of the
 three supporting accordions. The direct `Review your week` entry instead keeps
 its summary visible and has no information toggle. Opening information never
 opens the surrounding accordion or starts its lazy provider; errors,
@@ -133,6 +133,14 @@ an exact 24×24 click, hover, focus, and semantics area around the unchanged
 20×20 icon with dynamic Show/Hide labels, and changes immediately under Reduced
 Motion. Non-interactive vertical padding preserves heading alignment; all other
 app actions retain the global minimum 44×44 target.
+
+Daily Capture adapts that same core behavior for its five sleep explanations
+with standard 44×44 controls. Calendar import, Reminder settings, Personal
+learning, Weekly review, and Preparation plans use the standard form only for
+optional methodology or limits. Consent, replacement/destructive consequences,
+source and stale state, failures, retained drafts, and continuation actions
+remain visible. All instances are independent, closed initially, keyboard
+operable, and Reduced-Motion aware.
 
 Under `daily-capture-v5`, Evening
 requires one planned local sleep time and a `300..720` minute target on a
@@ -479,3 +487,10 @@ Student-facing presentation follows
 [`docs/frontend-visual-system-v2.md`](../../docs/frontend-visual-system-v2.md).
 This changes typography, icons, surfaces, motion, and platform branding only;
 the mobile product flows and data authority described here remain unchanged.
+
+Settings visibly groups its existing rows under Profile, Planning and learning,
+Tools and connections, and Account and appearance. Student-facing auth uses
+`Sign in` and `Create account`; routine failures are provider-neutral,
+outcome-first, and never render raw transport or contract exceptions. Shared
+status pills and surfaces own semantic state, while category accents remain
+non-semantic.

@@ -1730,24 +1730,10 @@ class _InsightsPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    return Container(
+    return AppSurface(
       key: panelKey,
+      variant: AppSurfaceVariant.raised,
       padding: padding,
-      decoration: BoxDecoration(
-        color: colors.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(AppRadii.xl),
-        border: Border.all(color: colors.outlineVariant, width: 2),
-        boxShadow: [
-          BoxShadow(
-            color:
-                Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
-            blurRadius: 28,
-            spreadRadius: -18,
-            offset: const Offset(0, 20),
-          ),
-        ],
-      ),
       child: child,
     );
   }

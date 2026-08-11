@@ -269,4 +269,10 @@ authority.
 Weekly Review uses the shared
 [Frontend Visual System V2](frontend-visual-system-v2.md). Facts, freshness,
 empty/error/guest states, and the update action remain usable with large text.
-No adjustment card, confirmation dialog, or proposal action is displayed.
+No adjustment card, confirmation dialog, or proposal action is displayed. The
+review narrative and labelled data quality stay visible; optional methodology
+starts closed under `How this review is created`. Current/stale status uses the
+shared status pill, stale guidance uses the shared state panel, and fact groups
+use shared surfaces. The header stacks without overflow at 320 logical pixels
+and 200-percent text. The disclosure never hides stale state or the deliberate
+update action.

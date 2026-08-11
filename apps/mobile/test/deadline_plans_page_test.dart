@@ -415,6 +415,18 @@ void main() {
     await _expandPlan(tester);
     expect(
       find.textContaining('Rule-based windows: prefers 08:00–13:00'),
+      findsNothing,
+    );
+    await tester.tap(
+      find.byKey(
+        const ValueKey(
+          'deadline-plan-info-control-How times are placed',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.textContaining('Rule-based windows: prefers 08:00–13:00'),
       findsOneWidget,
     );
     expect(find.text('Entered prior credit'), findsNothing);
@@ -482,8 +494,17 @@ void main() {
     await _tapPlanAction(tester, 'Adjust estimate or plan');
     expect(find.text('Replan remaining preparation'), findsOneWidget);
     expect(find.textContaining('Plan from Jul 22, 2026'), findsOneWidget);
+    expect(find.textContaining('fixed planning rules'), findsNothing);
+    await tester.tap(
+      find.byKey(
+        const ValueKey(
+          'deadline-plan-info-control-How the preview is calculated',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
     expect(
-      find.textContaining('calculation is rule-based'),
+      find.textContaining('fixed planning rules'),
       findsOneWidget,
     );
     expect(repository.proposalDrafts, isEmpty);

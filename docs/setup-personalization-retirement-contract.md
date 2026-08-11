@@ -156,3 +156,9 @@ The FastAPI Intake route now delegates its existing structured revision
 conflict to a typed feature-owned HTTP problem translator. The `409` detail
 object, strict request validation, replay semantics, and bearer-derived owner
 boundary are unchanged.
+
+The adjacent account entry uses `Sign in` and `Create account`, and its
+configuration or OAuth failures stay provider-neutral. Recovery uses the same
+student language and shared surfaces. These authentication-copy changes occur
+before Setup and do not restore retired personalization inputs or grant a
+client-side profile-repair path.

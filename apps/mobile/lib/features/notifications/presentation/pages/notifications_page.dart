@@ -10,6 +10,7 @@ import 'package:intl/intl.dart';
 import '../../../../core/capabilities/app_surface_capabilities.dart';
 import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/theme/app_visual_tokens.dart';
+import '../../../../core/widgets/app_surface.dart';
 import '../../application/notifications_controller.dart';
 import '../../domain/entities/app_notification.dart';
 import '../../domain/entities/notification_action_target.dart';
@@ -527,7 +528,7 @@ class _NotificationCard extends StatelessWidget {
       'warning' => AppIcons.warningAmberOutlined,
       'summary' => AppIcons.summarizeOutlined,
       'reminder' => AppIcons.notificationsNone,
-      _ => AppIcons.infoOutline,
+      _ => AppIcons.notificationsNone,
     };
   }
 
@@ -592,7 +593,7 @@ class _NotificationCardContent extends StatelessWidget {
               label: notification.isRead ? 'Read' : 'Unread',
             ),
             if (notification.isDeterministicallyGenerated)
-              const _NotificationBadge(label: 'Fixed text · not AI-written'),
+              const _NotificationBadge(label: 'Rule-based reminder'),
           ],
         ),
         const SizedBox(height: AppSpacing.md),
@@ -867,15 +868,9 @@ class _NotificationsPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return AppSurface(
+      variant: AppSurfaceVariant.subtle,
       padding: padding,
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerLow,
-        borderRadius: BorderRadius.circular(AppRadii.sm),
-        border: Border.all(
-          color: Theme.of(context).colorScheme.outlineVariant,
-        ),
-      ),
       child: child,
     );
   }

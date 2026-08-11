@@ -255,7 +255,7 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
           const SizedBox(height: AppSpacing.xs),
           Text(
             !widget.accountDailyPreparationBudgetKnown
-                ? 'The account-wide budget could not be read here. The backend will still apply any saved total budget.'
+                ? 'Your account-wide budget is temporarily unavailable here. Any saved total budget still limits confirmed plans.'
                 : widget.accountDailyPreparationBudgetMinutes == null
                     ? 'No account-wide daily preparation budget is set.'
                     : 'Current account-wide budget: ${_duration(widget.accountDailyPreparationBudgetMinutes!)} per day.',
@@ -274,7 +274,14 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
           ],
           const SizedBox(height: AppSpacing.lg),
           const Text(
-            'Creating a preview stores a staged replacement. Your current reservations stay active until you confirm it. Nothing changes automatically, and the calculation is rule-based rather than AI-generated.',
+            'Creating a preview stores a staged replacement. Your current reservations stay active until you confirm it. Nothing changes automatically.',
+          ),
+          const AppInfoSectionDisclosure(
+            heading: 'How the preview is calculated',
+            description:
+                'MyLifeGraph uses fixed planning rules and your saved availability.',
+            compactHeading: true,
+            keyPrefix: 'deadline-plan-info',
           ),
           const SizedBox(height: AppSpacing.md),
           _buildExistingSummaryActions(context, canCreatePreview),
@@ -552,7 +559,7 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
         const SizedBox(height: AppSpacing.xs),
         Text(
           !widget.accountDailyPreparationBudgetKnown
-              ? 'The account-wide budget could not be read here. The backend will still apply any saved total budget.'
+              ? 'Your account-wide budget is temporarily unavailable here. Any saved total budget still limits confirmed plans.'
               : widget.accountDailyPreparationBudgetMinutes == null
                   ? 'No account-wide budget is set. Only this plan cap applies; you can add a total daily limit in Settings.'
                   : 'Account-wide budget: ${_duration(widget.accountDailyPreparationBudgetMinutes!)} per day. Confirmed blocks from other plans are deducted before this plan is placed.',
@@ -601,7 +608,7 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
           leading: const Icon(AppIcons.eventBusyOutlined),
           title: const Text('Imported busy times follow Planner'),
           subtitle: const Text(
-            'The one read-only Planner calendar setting applies here too. Change it in Planner before creating this preview. Re-import after changes; there is no background sync, and no event text is sent to AI.',
+            'Uses Planner\'s read-only imported busy-time setting. Change it in Planner before creating this preview, and re-import after calendar changes; there is no background sync.',
           ),
           trailing: const Icon(AppIcons.openInNewOutlined),
           onTap: () {

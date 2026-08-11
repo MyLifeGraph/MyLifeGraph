@@ -70,6 +70,42 @@ void main() {
     expect(createButton().onPressed, isNotNull);
   });
 
+  testWidgets('optional import details start closed and stay independent',
+      (tester) async {
+    final repository = _FakeCalendarRepository(
+      _connectedFeed(includeImport: false),
+    );
+    await _pumpPage(tester, repository: repository);
+
+    expect(
+      find.textContaining('There is no live calendar connection'),
+      findsNothing,
+    );
+    expect(find.textContaining('no larger than 512 KiB'), findsNothing);
+
+    await tester.tap(
+      find.byKey(
+        const ValueKey('calendar-info-control-Read-only import'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.textContaining('There is no live calendar connection'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('no larger than 512 KiB'), findsNothing);
+
+    await tester.tap(
+      find.byKey(const ValueKey('calendar-info-control-Import a file')),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.textContaining('There is no live calendar connection'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('no larger than 512 KiB'), findsOneWidget);
+  });
+
   testWidgets('source label keeps focus while request identity rotates',
       (tester) async {
     final repository = _FakeCalendarRepository(_emptyFeed());
@@ -162,7 +198,7 @@ void main() {
 
     await tester.tap(find.text('Choose .ics file'));
     await tester.pumpAndSettle();
-    expect(find.text('work.ics · 5 bytes'), findsOneWidget);
+    expect(find.text('work.ics · 5 B'), findsOneWidget);
     await tester.tap(find.text('Import selected file'));
     await tester.pumpAndSettle();
     expect(find.text('Retry unchanged'), findsOneWidget);

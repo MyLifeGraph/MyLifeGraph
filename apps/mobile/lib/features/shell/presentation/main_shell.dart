@@ -198,7 +198,7 @@ class _InAppNotificationBannerContent extends StatelessWidget {
                   const SizedBox(width: 4),
                   Expanded(
                     child: Text(
-                      'Fixed text · not AI-written',
+                      'Rule-based reminder',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: snackTextStyle?.copyWith(

@@ -43,7 +43,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('workload failure never substitutes empty or estimated data',
+  testWidgets('workload failure keeps the confirmed-load error visible',
       (tester) async {
     await tester.pumpWidget(
       MaterialApp(
@@ -59,7 +59,7 @@ void main() {
 
     expect(find.text('Preparation load unavailable'), findsOneWidget);
     expect(
-      find.textContaining('No empty or estimated workload was substituted'),
+      find.textContaining('Check your connection and try again'),
       findsOneWidget,
     );
   });

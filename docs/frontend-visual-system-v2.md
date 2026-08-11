@@ -177,7 +177,21 @@ Shared primitives are:
 - `AppMetric`;
 - `AppEmptyState`;
 - `AppStatePanel`;
-- `AppIconBadge`.
+- `AppIconBadge`;
+- `AppInfoDisclosure` and its section-heading adapter.
+
+Settings uses visible `AppSectionHeader` groups for Profile, Planning and
+learning, Tools and connections, and Account and appearance. These headings
+organize the existing controls without adding another card style or changing
+their authority. Feature panels, auth/recovery regions, Inbox groups, Weekly
+facts, and Insights regions use the appropriate shared surface variant instead
+of route-local borders, radii, and shadows.
+
+Category color and status color are separate vocabularies. Recommendation
+categories use brand/data colors; they do not borrow success, attention, or
+danger merely to distinguish one category from another. Freshness, stale,
+unavailable, and destructive meaning uses `AppStatusPill`, `AppStatePanel`, or
+another labelled semantic primitive.
 
 ## Icons
 
@@ -227,31 +241,35 @@ switches, checkboxes, segmented controls, and interactive surfaces. Hover,
 pressed, disabled, selected, and loading states remain visually distinct
 without changing product truth.
 
-Today explanatory copy uses one feature-local information disclosure. Its
-small circled `AppIcons.infoOutline` control sits directly beside the owning
-heading. The visible icon remains 20×20 inside an exact 24×24 click, hover,
-focus, and semantics rectangle, with two logical pixels of tolerance on every
-side. Non-interactive vertical padding retains the previous heading alignment;
-in an accordion that padding belongs to the surrounding header action. This is
-the sole exception to the global 44×44 action-target rule. The control uses the
-existing theme primary color. Opening and closing combine vertical size and
-opacity at `AppMotionTokens.stateFor`; Reduced Motion resolves that duration to
-zero.
-Several disclosures may remain open independently. The information control in
-an accordion header remains separate from the accordion chevron and content
-action, and title/control/action groups wrap rather than overflow at 320
-logical pixels and 200-percent text.
+`AppInfoDisclosure` is the shared core behavior for optional explanatory copy.
+It owns independent, route-local open state; removes a closed description from
+semantics; exposes `Show information about <heading>` or
+`Hide information about <heading>` with the matching expanded state; and uses
+size plus opacity through `AppMotionTokens.stateFor`. Reduced Motion therefore
+changes it immediately. Feature adapters may preserve stable test keys and
+header composition, but must not reimplement toggle state, semantics, sizing,
+or motion.
 
-Daily Capture reuses the same inline heading/disclosure behavior for the three
-Morning explanations and two Evening sleep-plan explanations, but it is not
-covered by Today's compact exception. Each Capture information action therefore
-uses the global 44×44 target with a 20×20 `AppIcons.infoOutline` icon. Instances
-open independently, remove their description from the widget and semantics
-trees while closed, and expose `Show information about <heading>` or
-`Hide information about <heading>` with the matching expanded state. Their
-size-and-opacity transition uses `AppMotionTokens.stateFor`; Reduced Motion
-resolves it to an immediate state change. The headings and actions remain
-usable without horizontal overflow at 320 logical pixels and 200-percent text.
+Only optional explanation or methodology belongs behind this control. Consent,
+the consequence of a mutation, current/stale/error state, unavailable source
+truth, required provenance, and the action needed to continue remain visible.
+Several disclosures may stay open independently.
+
+The standard layout uses the global 44×44 target around a 20×20
+`AppIcons.infoOutline` icon. Daily Capture, Calendar import, Reminder settings,
+Personal learning, Weekly review, and Preparation-plan explanations use this
+layout. Section headings use theme typography, including the compact
+`titleMedium` role where the disclosure sits inside an existing card; they do
+not introduce raw font sizes.
+
+Today alone uses the compact layout. Its visible 20×20 icon sits in an exact
+24×24 click, hover, focus, and semantics rectangle inside a 44-pixel-tall
+alignment slot. Non-interactive vertical padding retains the previous heading
+alignment; in an accordion that padding belongs to the surrounding header
+action. This is the sole exception to the global 44×44 action-target rule. The
+information control in an accordion header remains separate from the accordion
+chevron and content action, and title/control/action groups wrap rather than
+overflow at 320 logical pixels and 200-percent text.
 
 Evening pressure-source help is a separate accessible info control: hover opens
 the tooltip on web, tap opens it on touch, and neither path changes the

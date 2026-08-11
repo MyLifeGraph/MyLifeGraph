@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_life_graph/core/config/app_config.dart';
 import 'package:my_life_graph/core/theme/app_icons.dart';
+import 'package:my_life_graph/composition/habit_action_providers.dart';
 import 'package:my_life_graph/features/auth/application/profile_local_date_source.dart';
 import 'package:my_life_graph/features/auth/domain/app_session.dart';
 import 'package:my_life_graph/composition/profile_local_date_providers.dart';
@@ -35,7 +36,7 @@ void main() {
 
     expect(find.text('Could not load today\'s habits.'), findsOneWidget);
     expect(
-      find.textContaining('No empty habit state was assumed'),
+      find.textContaining('Your saved habits were not changed'),
       findsOneWidget,
     );
     expect(find.text('No active habit is scheduled for today.'), findsNothing);
@@ -70,7 +71,7 @@ void main() {
 
     expect(find.text('Could not load habits.'), findsOneWidget);
     expect(
-      find.textContaining('No empty habit list was assumed'),
+      find.textContaining('Your saved habits were not changed'),
       findsOneWidget,
     );
     expect(find.text('No manual habits yet.'), findsNothing);
@@ -253,6 +254,56 @@ void main() {
     expect(find.text('Different destination'), findsOneWidget);
     expect(snapshotRefresh.habitTargetDates, hasLength(1));
     expect(source.loads, 1);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('habit routes stay usable at 320 px and 200 percent text',
+      (tester) async {
+    tester.view.physicalSize = const Size(320, 760);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+
+    Widget app({required Widget home, required Override sourceOverride}) {
+      return ProviderScope(
+        key: UniqueKey(),
+        overrides: [
+          appConfigProvider.overrideWithValue(_realConfig),
+          profileLocalDateSourceProvider.overrideWithValue(_deviceDateSource),
+          sourceOverride,
+        ],
+        child: MaterialApp(
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(context).copyWith(
+              textScaler: const TextScaler.linear(2),
+            ),
+            child: child!,
+          ),
+          home: Scaffold(body: home),
+        ),
+      );
+    }
+
+    await tester.pumpWidget(
+      app(
+        home: const HabitCompletionPage(),
+        sourceOverride: habitCompletionPageDataSourceProvider
+            .overrideWithValue(_ConcurrentCompletionSource()),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Today\'s habits'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+
+    await tester.pumpWidget(
+      app(
+        home: const HabitManagementPage(),
+        sourceOverride: habitManagementPageDataSourceProvider
+            .overrideWithValue(_PendingLifecycleSource()),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Habit management'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }

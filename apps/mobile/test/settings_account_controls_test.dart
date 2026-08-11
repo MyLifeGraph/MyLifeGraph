@@ -176,7 +176,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(
       find.text(
-        'This account exceeds the V4 export limits. Retrying unchanged will not help; reduce deletable history or request a larger export workflow.',
+        'The current export cannot include this much data. Nothing was exported; remove data only if you already intended to, then try again.',
       ),
       findsOneWidget,
     );
@@ -212,7 +212,7 @@ void main() {
     expect(authRepository.deletedAccountSignOutCalls, 1);
     expect(
       container.read(authNoticeProvider)?.message,
-      'Account and canonical synced data deleted.',
+      'Account and saved synced data deleted.',
     );
     expect(container.read(authNoticeProvider)?.isError, isFalse);
   });
@@ -723,7 +723,7 @@ void main() {
     expect(container.read(authControllerProvider).valueOrNull, isNull);
     expect(
       container.read(authNoticeProvider)?.message,
-      'Account and canonical synced data deleted.',
+      'Account and saved synced data deleted.',
     );
     expect(container.read(authNoticeProvider)?.isError, isFalse);
     expect(tester.takeException(), isNull);

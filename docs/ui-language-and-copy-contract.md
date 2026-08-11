@@ -34,6 +34,8 @@ Use these names in student-facing UI and presentation material:
 | Patterns and correlations | Insights |
 | Development conversation surface | Coach |
 | Durable preferences and account controls | Settings |
+| Existing-account authentication | Sign in |
+| New-account authentication | Create account |
 
 Versioned API and database names may remain technical. Do not leak those names
 into a primary title, button, field label, or first-line error.
@@ -49,10 +51,10 @@ Morning check-in presents one local draft in two steps. The first step uses
 second uses `MORNING · CHECK-IN`, `How are you starting today?`, 100-percent
 progress, `Back`, and the final `Save morning check-in`. The first step does
 not show quality, energy, or the save action. `Next` remains unavailable until
-both estimated clocks and the sleep target form a complete valid branch. No
-duration result is represented by `—`; the former ordered-interval instruction
-is not shown. `Back` preserves every answer, and a failed save leaves the full
-draft on the second step for an exact retry.
+both estimated clocks and the sleep target form a complete valid branch. When
+no duration can be calculated, the result area shows only `—`; the former
+ordered-interval instruction is not shown. `Back` preserves every answer, and a
+failed save leaves the full draft on the second step for an exact retry.
 
 Three Morning explanations start hidden behind independent information
 controls headed `Estimated sleep duration`, `Sleep target used for this night`,
@@ -244,12 +246,20 @@ says `Early evidence`.
   wrong credentials or attempt a client-side profile repair.
 - Use `Retry unchanged` only when the exact submitted payload is locked for an
   idempotent retry. Pair it with a plainly named reload action.
-- Say `rule-based` for deterministic personalized calculations, `fixed text`
+- Say `rule-based` for deterministic personalized calculations, `fixed template`
   for deterministic reminders, `example` for local demo data, and `preview`
   for a staged change that has not been applied.
-- Daily briefings visibly say `Rule-based · not AI-written`. Stored Insight
-  rows are called notes unless their individual source proves a narrower AI
-  claim. Planner calls its compact confirmed preparation reservations
+- Do not repeat prototype-oriented self-defence such as `not AI-written`, `No
+  demo values substituted`, or `No empty state assumed`. Where the distinction
+  matters, use the positive provenance `Rule-based`, `Fixed template`, or
+  `Example`; errors state the affected outcome, whether the student's saved
+  data or draft remains, and the next safe action.
+- Vendor names, runtime topology, source ownership, contract versions, and raw
+  exception detail do not belong in primary student copy. Authentication uses
+  `Sign in` and `Create account`; synced-feature failures say what is
+  unavailable without asking the student to configure Supabase or a backend.
+- Stored Insight rows are called notes unless their individual source proves a
+  narrower AI claim. Planner calls its compact confirmed preparation reservations
   `7-day preparation load`; it does not combine them with current Task
   estimates or imply an immutable historical workload. Today does not repeat
   this workload card.
@@ -266,14 +276,19 @@ says `Early evidence`.
   remaining time` opens only the selected plan in the focused staged flow. For an active plan with
   no pending preview, its compact review uses `Replan remaining preparation`,
   `Create preview with these values`, and `Change values`. It states that the
-  current reservations remain active until confirmation and that the
-  calculation is rule-based rather than AI-generated. A stale source or passed
+  current reservations remain active until confirmation and names the
+  calculation's fixed planning rules. A stale source or passed
   finish-by time must explain why the compact action is unavailable. The detail
   must also say that nothing changes automatically.
 - State whether a change is automatic, requires confirmation, or cannot change
   data. Do not imply that a preview or recommendation already changed a plan.
 - Keep provider names, model names, contract versions, source manifests, and
   diagnostics secondary or expandable.
+- Hide only optional explanation behind an information control. Consent,
+  destructive or replacement consequences, current/stale/error state, required
+  source truth, and the action needed to continue remain visible. Information
+  controls start closed, operate independently, and use `Show/Hide information
+  about <heading>` semantics.
 - Coach answers are English-only in the current free-agent contract, including
   uncertainty text, even when the question or stored evidence is not English.
   A rejected provider-language response uses ordinary retry copy and is never
@@ -290,6 +305,10 @@ says `Early evidence`.
   or deployed delivery.
 - Reminder configuration belongs to Settings, is not delivery consent, and is
   never changed by Setup.
+- Deterministic generated Inbox items and banners use the compact provenance
+  `Rule-based reminder`. Reminder Settings may explain fixed templates and the
+  exclusion of private check-in details behind optional information; it does
+  not repeat an AI disclaimer on each item.
 - Coach is a development preview. Release builds and `APP_ENV=production` hide
   it regardless of Flutter defines. When enabled, `Coach` is the right shell
   destination; `Settings` remains the last top-right action on Today, Insights,

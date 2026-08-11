@@ -17,8 +17,8 @@ void main() {
     await _pumpTestApp(tester);
 
     expect(find.text('Build your day-aware coach'), findsOneWidget);
-    expect(find.text('Login'), findsWidgets);
-    expect(find.text('Register'), findsOneWidget);
+    expect(find.text('Sign in'), findsWidgets);
+    expect(find.text('Create account'), findsOneWidget);
     expect(find.text('Continue as guest'), findsOneWidget);
     expect(find.text('Sign in with Google'), findsOneWidget);
   });
@@ -467,6 +467,10 @@ void main() {
     expect(find.text('Guest Coach User'), findsOneWidget);
     expect(find.text('guest@personal-coach.local'), findsOneWidget);
     expect(find.text('Setup and commitments'), findsOneWidget);
+    await _scrollSliverUntilVisible(
+      tester,
+      find.text('In-app reminders'),
+    );
     expect(find.text('In-app reminders'), findsOneWidget);
     expect(
       find.text('In-app banners are available only for a synced account.'),

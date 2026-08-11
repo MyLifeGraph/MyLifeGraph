@@ -86,6 +86,11 @@ information-secondary, Calendar is attention-tertiary, Focus is violet, and a
 fixed commitment is danger. Exam and Assignment share Preparation color while
 retaining different icons and labels.
 
+Planner load failures use short outcome-first retry copy and never describe an
+invented demo replacement. Exam-Week read-only copy says `current saved plan`
+instead of exposing the internal `active revision` term. These wording changes
+do not alter overview freshness, revision selection, or mutation authority.
+
 The primary availability path is the weekly schedule entered in Setup. Each
 recurring Setup commitment may carry inclusive optional `valid_from` and
 `valid_until` dates for a semester or other bounded period; rows created before

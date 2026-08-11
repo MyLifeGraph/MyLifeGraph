@@ -26,7 +26,7 @@ void main() {
 
     expect(find.text('Suggested next step'), findsOneWidget);
     expect(find.text('Schedule a 25-minute block'), findsOneWidget);
-    expect(find.byIcon(AppIcons.infoOutline), findsOneWidget);
+    expect(find.byIcon(AppIcons.lightbulbOutline), findsOneWidget);
     expect(find.byIcon(AppIcons.arrowForward), findsNothing);
     expect(find.byType(InkWell), findsNothing);
     expect(find.byType(FilledButton), findsNothing);

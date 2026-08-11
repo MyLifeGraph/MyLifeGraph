@@ -82,6 +82,26 @@ void main() {
     );
   });
 
+  testWidgets('pattern methodology starts closed and expands on demand',
+      (tester) async {
+    await _pumpPage(
+      tester,
+      repository: _LearningRepository(),
+      pilotEnabled: true,
+    );
+
+    expect(find.textContaining('up to 90 days'), findsNothing);
+    await tester.tap(
+      find.byKey(
+        const ValueKey(
+          'learning-info-control-How pattern analysis works',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.textContaining('up to 90 days'), findsOneWidget);
+  });
+
   testWidgets('clear uses confirmation and preserves finished sessions copy',
       (tester) async {
     final repository = _LearningRepository();

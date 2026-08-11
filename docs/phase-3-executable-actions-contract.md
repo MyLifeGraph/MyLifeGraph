@@ -300,6 +300,10 @@ metadata key: `/preparation-plans` is a deliberate product surface governed by
   committed-versus-unconfirmed results, and stale/reload-only state; the
   Dashboard widget does not construct or invoke either concrete Supabase data
   source.
+- Standalone Today Habits and Habit management resolve their concrete data
+  sources through app composition providers. Their presentation pages do not
+  import or construct the Supabase source, map read/write failures to retained-
+  data guidance, and remain usable at 320 logical pixels with 200-percent text.
 - Habit outcome/undo captures one local target date before its write, uses that
   date for exact response-loss reconciliation, and refreshes that same date.
 - Focus start persists its local `metadata.entry_date`. Start, finish, and

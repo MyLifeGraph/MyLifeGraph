@@ -1,25 +1,21 @@
 import 'package:flutter/material.dart';
 
-import '../../../../core/constants/app_radii.dart';
 import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/theme/app_icons.dart';
-import '../../../../core/theme/app_motion_tokens.dart';
 import '../../../../core/widgets/app_card.dart';
+import '../../../../core/widgets/app_info_disclosure.dart';
+import '../../../../core/widgets/app_surface.dart';
 
 typedef TodayInfoHeaderBuilder = Widget Function(
   BuildContext context,
   Widget infoButton,
 );
 
-const _todayInfoControlSize = 24.0;
-const _todayInfoIconSize = 20.0;
-const _todayInfoVerticalLayoutPadding = 10.0;
-
-/// Feature-local, non-persisted disclosure for explanatory Today copy.
+/// Thin Today adapter over the shared, non-persisted information disclosure.
 ///
 /// The description is absent from both the widget and semantics trees while
 /// closed. Its control remains independent from any surrounding accordion.
-class TodayInfoDisclosure extends StatefulWidget {
+class TodayInfoDisclosure extends StatelessWidget {
   const TodayInfoDisclosure({
     super.key,
     required this.topic,
@@ -34,110 +30,16 @@ class TodayInfoDisclosure extends StatefulWidget {
   final TextStyle? descriptionStyle;
 
   @override
-  State<TodayInfoDisclosure> createState() => _TodayInfoDisclosureState();
-}
-
-class _TodayInfoDisclosureState extends State<TodayInfoDisclosure> {
-  bool _expanded = false;
-
-  @override
   Widget build(BuildContext context) {
-    final motion = context.motionTokens;
-    final duration = motion.stateFor(context);
-    final actionLabel =
-        '${_expanded ? 'Hide' : 'Show'} information about ${widget.topic}';
-    final inheritedIconButtonStyle = IconButtonTheme.of(context).style;
-    final compactInfoButtonStyle =
-        (inheritedIconButtonStyle ?? const ButtonStyle()).copyWith(
-      minimumSize: const WidgetStatePropertyAll(
-        Size.square(_todayInfoControlSize),
-      ),
-      fixedSize: const WidgetStatePropertyAll(
-        Size.square(_todayInfoControlSize),
-      ),
-      maximumSize: const WidgetStatePropertyAll(
-        Size.square(_todayInfoControlSize),
-      ),
-      iconSize: const WidgetStatePropertyAll(_todayInfoIconSize),
-      padding: const WidgetStatePropertyAll(EdgeInsets.zero),
-      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-    );
-    final infoButton = Padding(
-      key: ValueKey('today-info-layout-${widget.topic}'),
-      padding: const EdgeInsets.symmetric(
-        vertical: _todayInfoVerticalLayoutPadding,
-      ),
-      child: SizedBox.square(
-        key: ValueKey('today-info-control-${widget.topic}'),
-        dimension: _todayInfoControlSize,
-        child: IconButtonTheme(
-          data: IconButtonThemeData(style: compactInfoButtonStyle),
-          child: Semantics(
-            button: true,
-            expanded: _expanded,
-            label: actionLabel,
-            onTap: _toggle,
-            child: ExcludeSemantics(
-              child: IconButton(
-                tooltip: actionLabel,
-                color: Theme.of(context).colorScheme.primary,
-                onPressed: _toggle,
-                icon: const Icon(
-                  AppIcons.infoOutline,
-                  size: _todayInfoIconSize,
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        widget.headerBuilder(context, infoButton),
-        ExcludeSemantics(
-          excluding: !_expanded,
-          child: AnimatedSwitcher(
-            duration: duration,
-            reverseDuration: duration,
-            switchInCurve: motion.curve,
-            switchOutCurve: motion.curve,
-            transitionBuilder: (child, animation) {
-              final curved = CurvedAnimation(
-                parent: animation,
-                curve: motion.curve,
-                reverseCurve: motion.curve,
-              );
-              return SizeTransition(
-                sizeFactor: curved,
-                alignment: AlignmentDirectional.topStart,
-                child: FadeTransition(opacity: curved, child: child),
-              );
-            },
-            child: _expanded
-                ? Padding(
-                    key: ValueKey('today-info-description-${widget.topic}'),
-                    padding: const EdgeInsets.only(top: AppSpacing.xs),
-                    child: Text(
-                      widget.description,
-                      style: widget.descriptionStyle ??
-                          Theme.of(context).textTheme.bodyMedium,
-                    ),
-                  )
-                : SizedBox(
-                    key: ValueKey(
-                      'today-info-description-closed-${widget.topic}',
-                    ),
-                  ),
-          ),
-        ),
-      ],
+    return AppInfoDisclosure(
+      topic: topic,
+      description: description,
+      descriptionStyle: descriptionStyle,
+      layout: AppInfoDisclosureLayout.compact,
+      keyPrefix: 'today-info',
+      headerBuilder: headerBuilder,
     );
   }
-
-  void _toggle() => setState(() => _expanded = !_expanded);
 }
 
 /// Presentation primitives shared only by the independently owned Dashboard
@@ -208,33 +110,19 @@ class DashboardStatusPill extends StatelessWidget {
     super.key,
     required this.icon,
     required this.label,
+    this.tone = AppStatusTone.neutral,
   });
 
   final IconData icon;
   final String label;
+  final AppStatusTone tone;
 
   @override
-  Widget build(BuildContext context) {
-    final colors = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.sm,
-        vertical: AppSpacing.xs,
-      ),
-      decoration: BoxDecoration(
-        color: colors.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(AppRadii.sm),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 16),
-          const SizedBox(width: AppSpacing.xs),
-          Text(label, style: Theme.of(context).textTheme.labelMedium),
-        ],
-      ),
-    );
-  }
+  Widget build(BuildContext context) => AppStatusPill(
+        label: label,
+        icon: icon,
+        tone: tone,
+      );
 }
 
 class DashboardInlineMessage extends StatelessWidget {

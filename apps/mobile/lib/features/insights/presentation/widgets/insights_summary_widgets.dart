@@ -23,8 +23,7 @@ class _InsightsLoadError extends StatelessWidget {
               ),
               const SizedBox(height: AppSpacing.sm),
               const Text(
-                'No demo patterns were substituted. Check your connection '
-                'and try again.',
+                'Check your connection and try loading Insights again.',
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: AppSpacing.md),
@@ -151,10 +150,9 @@ class _InsightsHeader extends StatelessWidget {
         const SizedBox(height: AppSpacing.lg),
         Text(
           'Insights',
-          style: Theme.of(context).textTheme.headlineLarge?.copyWith(
-                fontSize: isMobile ? 38 : 46,
-                height: 1,
-              ),
+          style: isMobile
+              ? Theme.of(context).textTheme.headlineMedium
+              : Theme.of(context).textTheme.headlineLarge,
         ),
         const SizedBox(height: AppSpacing.lg),
         Text(
@@ -272,8 +270,8 @@ class _PersonalStudyPatternCard extends StatelessWidget {
                   ),
                   const SizedBox(height: AppSpacing.sm),
                   const Text(
-                    'No local estimate was substituted. Your Focus history '
-                    'was not changed.',
+                    'Your Focus history is unchanged. Try loading the pattern '
+                    'again.',
                   ),
                   const SizedBox(height: AppSpacing.md),
                   OutlinedButton.icon(
@@ -759,8 +757,8 @@ class _SkillsetProfileCard extends StatelessWidget {
             ),
             const SizedBox(height: AppSpacing.xs),
             Text(
-              'This optional demo card could not be loaded. Your real activity '
-              'was not scored or replaced.',
+              'This optional example could not be loaded. Your saved activity '
+              'is unchanged.',
             ),
             const SizedBox(height: AppSpacing.md),
             OutlinedButton.icon(

@@ -59,6 +59,13 @@ Disabling delivery does not delete stored Inbox rows. Re-enabling records a new
 consent time. Changing categories while already disabled does not rewrite the
 time at which consent was disabled.
 
+The foreground-only limitation and consent consequence remain visible beside
+the switch. Optional channel limits and copy methodology start closed under the
+independent standard information control `Delivery details`; that description
+states that fixed templates exclude private check-in details. Hiding the
+description never hides consent state, categories, quiet hours, daily cap,
+save/retry state, or the fact that banners require the app to be open.
+
 ## Deterministic Generation
 
 The protected daily-refresh endpoint accepts `include_notifications=true` only
@@ -121,9 +128,12 @@ receipt and replayed receipts; replayed receipts are never displayed. If the
 first HTTP result is lost, the retry returns a replay and the client conserves
 at-most-once presentation rather than inventing delivery.
 
-The banner and Inbox expose deterministic/no-LLM truth. `action_url` still goes
-through the internal allowlist; newly generated rows use Today for recovery or
-Weekly Review for the exact completed week.
+The banner and Inbox expose the positive provenance `Rule-based reminder`.
+Persisted and validated `llm_used=false` remains the underlying generation
+truth, but the student UI does not repeat a prototype-style AI disclaimer on
+each item. `action_url` still goes through the internal allowlist; newly
+generated rows use Today for recovery or Weekly Review for the exact completed
+week.
 An actionable foreground banner uses a compact destination-specific label such
 as `Open Today`; both that action and the banner body open the same allowlisted
 route. The matching Inbox card uses the same destination label. Opening either
@@ -169,3 +179,5 @@ Inbox and notification controls use the shared
 [Frontend Visual System V2](frontend-visual-system-v2.md). The migration changes
 only presentation; consent, deterministic generation, quiet hours, caps,
 foreground delivery, retry identity, and mutation authority remain unchanged.
+Inbox grouping uses a shared subtle surface and Settings help uses the standard
+44×44 information disclosure.

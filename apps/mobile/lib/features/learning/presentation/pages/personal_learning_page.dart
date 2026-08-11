@@ -7,6 +7,7 @@ import '../../../../core/config/app_config.dart';
 import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/widgets/app_card.dart';
+import '../../../../core/widgets/app_info_disclosure.dart';
 import '../../../../core/widgets/app_page.dart';
 import '../../../../composition/projection_refresh_providers.dart';
 import '../providers/learning_providers.dart';
@@ -107,8 +108,15 @@ class _PersonalLearningPageState extends ConsumerState<PersonalLearningPage> {
                     : null,
                 title: const Text('Analyze my study patterns'),
                 subtitle: const Text(
-                  'Uses up to 90 days of your Focus reflections and valid sleep captures. No AI model is called.',
+                  'Finds transparent patterns in your saved study activity.',
                 ),
+              ),
+              const AppInfoSectionDisclosure(
+                heading: 'How pattern analysis works',
+                description:
+                    'It compares up to 90 days of Focus reflections and valid sleep captures using fixed calculations you can inspect.',
+                compactHeading: true,
+                keyPrefix: 'learning-info',
               ),
               const Divider(),
               SwitchListTile(

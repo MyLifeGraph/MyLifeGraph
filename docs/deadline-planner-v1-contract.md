@@ -542,6 +542,15 @@ accordion projects the containing Monday-to-Sunday calendar week from
 owner-scoped Setup commitments and active-revision Preparation blocks under the
 Today contract.
 
+Optional placement methodology is initially closed behind `How times are
+placed` on an expanded plan. The compact saved-value replan review similarly
+keeps `How the preview is calculated` closed. Both use the standard 44×44
+information control. Current reservations, staged-preview status, source
+changes, passed deadlines, automatic-change non-claims, confirmation
+requirements, and retry actions remain visible outside the disclosures.
+Student-facing load failures name the unavailable view and next action without
+displaying backend, owner-scope, or contract diagnostics.
+
 `/preparation-plans` itself is grouped into `Open plans` and compact `History`;
 it does not repeat the seven-day workload card. Every plan is an accordion and
 at most one selected or newly previewed plan is open. Collapsed rows expose only

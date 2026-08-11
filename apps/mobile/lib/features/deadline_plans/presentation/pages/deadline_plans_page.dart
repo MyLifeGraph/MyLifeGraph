@@ -13,6 +13,7 @@ import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/utils/client_uuid.dart';
 import '../../../../core/utils/local_date.dart';
 import '../../../../core/widgets/app_card.dart';
+import '../../../../core/widgets/app_info_disclosure.dart';
 import '../../../../core/widgets/app_page.dart';
 import '../../../../core/widgets/app_surface.dart';
 import 'package:my_life_graph/composition/profile_local_date_providers.dart';
@@ -186,7 +187,7 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
           icon: AppIcons.cloudOffOutlined,
           title: 'Preparation plans unavailable',
           message:
-              'Synced plan state could not be read. It was not replaced with an empty or demo plan.',
+              'Your saved plans could not be read. Check your connection and try again.',
           actionLabel: 'Retry',
           onAction: controller.load,
         ),
@@ -336,7 +337,7 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
       } else if (targetPlan?.isTerminal == true) {
         leading.add(
           _MessageCard(
-            icon: AppIcons.infoOutline,
+            icon: AppIcons.cancelOutlined,
             title: 'This plan can no longer be replanned',
             message:
                 'Completed and cancelled preparation plans keep their history, but cannot create another preview.',
@@ -408,7 +409,7 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
           icon: AppIcons.cloudOffOutlined,
           title: 'Weekly assignment series unavailable',
           message:
-              'Series state could not be read. Individual preparation plans remain visible and were not replaced with demo data.',
+              'Weekly series could not be read. Individual preparation plans remain visible.',
           actionLabel: 'Retry series',
           onAction: seriesController.load,
         )
@@ -617,7 +618,7 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
         icon: AppIcons.cloudOffOutlined,
         title: 'Imported event unavailable',
         message:
-            'The owner-scoped imported event could not be loaded. No event details were taken from the URL or replaced with demo data.',
+            'The imported event could not be loaded from your account. Its details were not taken from the link.',
         primaryLabel: 'Retry event',
         onPrimary: () => ref.invalidate(
           deadlineCalendarPrefillProvider(eventId),
@@ -670,7 +671,7 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
           icon: AppIcons.eventAvailableOutlined,
           title: 'Imported event ready for review',
           message:
-              'The event was loaded directly from your owner-scoped calendar data. Its title and time are not carried in the URL.',
+              'The event was loaded from your saved calendar import. The link contains only its identity.',
           primaryLabel: 'Review event',
           onPrimary: () => _openEditor(sourcePrefill: prefill),
           secondaryLabel: 'Reload event',

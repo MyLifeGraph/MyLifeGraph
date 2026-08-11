@@ -256,7 +256,7 @@ class _CapabilityCard extends StatelessWidget {
           Row(
             children: [
               Icon(
-                ready ? AppIcons.checkCircleOutline : AppIcons.infoOutline,
+                ready ? AppIcons.checkCircleOutline : AppIcons.cloudOffOutlined,
               ),
               const SizedBox(width: AppSpacing.sm),
               Expanded(

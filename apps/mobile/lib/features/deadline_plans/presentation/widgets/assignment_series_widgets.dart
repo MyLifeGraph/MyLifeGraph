@@ -167,7 +167,7 @@ class _AssignmentSeriesEditorSheetState
         ),
         const SizedBox(height: AppSpacing.xs),
         const Text(
-          'The backend keeps this local wall-clock time every seven days, including across daylight-saving changes.',
+          'MyLifeGraph keeps this local clock time every seven days, including across daylight-saving changes.',
         ),
       ],
     );
@@ -274,7 +274,7 @@ class _AssignmentSeriesEditorSheetState
         const SizedBox(height: AppSpacing.xs),
         Text(
           !widget.accountDailyPreparationBudgetKnown
-              ? 'The account-wide budget could not be read here. The backend still applies a saved budget.'
+              ? 'Your account-wide budget is temporarily unavailable here. Any saved total budget still limits confirmed plans.'
               : widget.accountDailyPreparationBudgetMinutes == null
                   ? 'No account-wide daily preparation budget is set.'
                   : 'Account-wide budget: ${_duration(widget.accountDailyPreparationBudgetMinutes!)} per day across all preparation plans.',

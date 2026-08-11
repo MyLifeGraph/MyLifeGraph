@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/widgets/app_card.dart';
+import '../../../../core/widgets/app_info_disclosure.dart';
 import '../../../../core/widgets/app_page.dart';
 import '../../domain/entities/notification_delivery.dart';
 import '../../../../composition/notifications_providers.dart';
@@ -81,9 +82,11 @@ class _NotificationSettingsPageState
                 ),
               ),
               const SizedBox(height: AppSpacing.sm),
-              Text(
-                'MyLifeGraph cannot send browser, phone-system, email, push, or background notifications. Reminder text is fixed and not AI-written.',
-                style: Theme.of(context).textTheme.bodySmall,
+              const AppInfoSectionDisclosure(
+                heading: 'Delivery details',
+                description:
+                    'MyLifeGraph cannot send browser, phone-system, email, push, or background notifications. Reminder text follows fixed templates and never includes private check-in details.',
+                keyPrefix: 'notification-info',
               ),
               if (settings.consentedAt != null) ...[
                 const SizedBox(height: AppSpacing.sm),

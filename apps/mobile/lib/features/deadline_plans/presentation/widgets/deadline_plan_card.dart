@@ -232,13 +232,15 @@ class _DeadlinePlanCardState extends State<_DeadlinePlanCard> {
           Text(
             'Finish by ${DateFormat.yMMMd().add_Hm().format(revision.deadlineAt.toLocal())} · device time',
           ),
-          Text(
-            'Preparation blocks use your profile timezone: ${revision.timezone}',
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-          Text(
-            _planningWindowDescription(revision.bestEnergyWindow),
-            style: Theme.of(context).textTheme.bodySmall,
+          AppInfoSectionDisclosure(
+            heading: 'How times are placed',
+            description:
+                '${_planningWindowDescription(revision.bestEnergyWindow)} Preparation blocks use your profile timezone: ${revision.timezone}.',
+            headingStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+            descriptionStyle: Theme.of(context).textTheme.bodySmall,
+            keyPrefix: 'deadline-plan-info',
           ),
           if (pending && revision.timingPreference.usedLearnedPattern)
             Text(

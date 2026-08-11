@@ -42,13 +42,15 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('Local guest'), findsOneWidget);
-    expect(find.text('Setup and commitments'), findsOneWidget);
+    expect(find.text('Profile'), findsOneWidget);
+    expect(find.text('Planning and learning'), findsOneWidget);
     await _revealText(tester, 'Daily preparation budget', pageScrollable);
     expect(
       find.byKey(const ValueKey('daily-preparation-budget-setting')),
       findsOneWidget,
     );
     await _revealText(tester, 'In-app reminders', pageScrollable);
+    expect(find.text('Tools and connections'), findsOneWidget);
     expect(find.text('In-app reminders'), findsOneWidget);
     await _revealText(tester, 'Personal learning', pageScrollable);
     expect(find.text('Personal learning'), findsOneWidget);
@@ -68,6 +70,7 @@ void main() {
     );
 
     await _revealText(tester, 'Export data', pageScrollable);
+    expect(find.text('Account and appearance'), findsOneWidget);
     expect(find.text('Export data'), findsOneWidget);
     await _revealText(tester, 'Delete account', pageScrollable);
     expect(find.text('Delete account'), findsOneWidget);
@@ -76,7 +79,7 @@ void main() {
         'Available only for a synced account.',
         skipOffstage: false,
       ),
-      findsNWidgets(3),
+      findsOneWidget,
     );
     expect(find.text('Alert rules'), findsNothing);
     expect(find.text('Coach behavior'), findsNothing);

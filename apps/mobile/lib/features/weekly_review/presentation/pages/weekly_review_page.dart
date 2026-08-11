@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
 
-import 'package:my_life_graph/core/constants/app_radii.dart';
-
 import 'package:my_life_graph/core/theme/app_icons.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -9,7 +7,9 @@ import 'package:intl/intl.dart';
 import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/widgets/app_card.dart';
+import '../../../../core/widgets/app_info_disclosure.dart';
 import '../../../../core/widgets/app_page.dart';
+import '../../../../core/widgets/app_surface.dart';
 import '../../domain/weekly_review.dart';
 import 'package:my_life_graph/composition/weekly_review_providers.dart';
 
@@ -69,7 +69,7 @@ class _WeeklyReviewPageState extends ConsumerState<WeeklyReviewPage> {
             ),
             const SizedBox(height: AppSpacing.sm),
             const Text(
-              'Weekly reviews require a synced account. Demo data is not presented as your personal review.',
+              'Weekly reviews are available after you sign in with a synced account.',
             ),
           ],
         ),
@@ -139,7 +139,7 @@ class _ReviewReadError extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.sm),
           const Text(
-            'Nothing was replaced. Check your connection and try loading the review again.',
+            'The review could not be loaded. Check your connection and try again.',
           ),
           const SizedBox(height: AppSpacing.md),
           OutlinedButton.icon(
@@ -260,47 +260,68 @@ class _CurrentReview extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Column(
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final summary = Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Last week in context',
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                      const SizedBox(height: AppSpacing.xs),
+                      Text(_periodLabel(feed)),
+                    ],
+                  );
+                  final status = AppStatusPill(
+                    label: stale ? 'Needs update' : 'Up to date',
+                    tone:
+                        stale ? AppStatusTone.attention : AppStatusTone.success,
+                  );
+                  if (constraints.maxWidth < 480 ||
+                      MediaQuery.textScalerOf(context).scale(16) >= 28) {
+                    return Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          'Last week in context',
-                          style: Theme.of(context).textTheme.titleLarge,
-                        ),
-                        const SizedBox(height: AppSpacing.xs),
-                        Text(_periodLabel(feed)),
+                        summary,
+                        const SizedBox(height: AppSpacing.sm),
+                        status,
                       ],
-                    ),
-                  ),
-                  _ReviewPill(label: stale ? 'Needs update' : 'Up to date'),
-                ],
+                    );
+                  }
+                  return Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(child: summary),
+                      const SizedBox(width: AppSpacing.sm),
+                      status,
+                    ],
+                  );
+                },
               ),
               const SizedBox(height: AppSpacing.md),
               Text(review.narrative),
               const SizedBox(height: AppSpacing.sm),
               Text(
-                '${_qualityLabel(review.dataQuality)} data · rule-based · not AI-written',
+                '${_qualityLabel(review.dataQuality)} data quality',
                 style: Theme.of(context).textTheme.labelMedium,
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              const AppInfoSectionDisclosure(
+                heading: 'How this review is created',
+                description:
+                    'The review summarizes saved activity with fixed rules. It never changes tasks, habits, or calendar items.',
+                compactHeading: true,
+                keyPrefix: 'weekly-review-info',
               ),
               if (stale) ...[
                 const SizedBox(height: AppSpacing.md),
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(AppSpacing.md),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.errorContainer,
-                    borderRadius: BorderRadius.circular(AppRadii.md),
-                  ),
-                  child: Text(
-                    'Your saved activity changed after this review. Update it to see the current weekly facts.',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: Theme.of(context).colorScheme.onErrorContainer,
-                        ),
-                  ),
+                const AppStatePanel(
+                  title: 'Review needs an update',
+                  message:
+                      'Your saved activity changed after this review. Update it to see the current weekly facts.',
+                  tone: AppStatusTone.attention,
+                  icon: AppIcons.updateOutlined,
                 ),
               ],
             ],
@@ -338,7 +359,7 @@ class _WeeklyFactsCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Explicit weekly facts',
+            'Weekly facts',
             style: Theme.of(context).textTheme.titleLarge,
           ),
           const SizedBox(height: AppSpacing.md),
@@ -418,42 +439,20 @@ class _FactTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return ConstrainedBox(
       constraints: const BoxConstraints(minWidth: 128),
-      padding: const EdgeInsets.all(AppSpacing.sm),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(AppRadii.md),
+      child: AppSurface(
+        variant: AppSurfaceVariant.subtle,
+        padding: const EdgeInsets.all(AppSpacing.sm),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(label, style: Theme.of(context).textTheme.labelMedium),
+            const SizedBox(height: AppSpacing.xs),
+            Text(value, style: Theme.of(context).textTheme.titleSmall),
+          ],
+        ),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(label, style: Theme.of(context).textTheme.labelMedium),
-          const SizedBox(height: AppSpacing.xs),
-          Text(value, style: Theme.of(context).textTheme.titleSmall),
-        ],
-      ),
-    );
-  }
-}
-
-class _ReviewPill extends StatelessWidget {
-  const _ReviewPill({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.sm,
-        vertical: AppSpacing.xs,
-      ),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.secondaryContainer,
-        borderRadius: BorderRadius.circular(AppRadii.pill),
-      ),
-      child: Text(label, style: Theme.of(context).textTheme.labelMedium),
     );
   }
 }

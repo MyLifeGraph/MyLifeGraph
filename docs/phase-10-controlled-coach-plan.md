@@ -510,6 +510,11 @@ Header controls have 44 by 44 logical-pixel targets, keyboard focus, unique
 tooltips/semantics, and wrapping layout that remains usable at 320 logical
 pixels with 200-percent text.
 
+The capability card uses the shared check status when ready and a labelled
+cloud-off icon when unavailable; a generic information icon is not used as an
+error state. Ordinary unavailable/failure copy is outcome-first and does not
+expose provider configuration, transport dumps, or raw contract exceptions.
+
 Inside Coach, the current surface contains:
 
 - capability/status and remaining-question truth;

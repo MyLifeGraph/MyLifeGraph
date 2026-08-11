@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:my_life_graph/core/capabilities/app_surface_capabilities.dart';
 import 'package:my_life_graph/core/theme/app_theme.dart';
+import 'package:my_life_graph/core/widgets/app_surface.dart';
 import 'package:my_life_graph/features/insights/domain/entities/correlation.dart';
 import 'package:my_life_graph/features/insights/domain/entities/insight.dart';
 import 'package:my_life_graph/features/insights/domain/entities/personal_patterns.dart';
@@ -416,7 +417,7 @@ void main() {
 
     expect(find.text('Could not load account insights.'), findsOneWidget);
     expect(
-      find.textContaining('No demo patterns were substituted'),
+      find.textContaining('try loading Insights again'),
       findsOneWidget,
     );
     expect(find.text('ONE OBSERVATION'), findsNothing);
@@ -477,7 +478,7 @@ void main() {
       findsOneWidget,
     );
     expect(
-      find.textContaining('optional demo card could not be loaded'),
+      find.textContaining('optional example could not be loaded'),
       findsOneWidget,
     );
 
@@ -529,7 +530,7 @@ void main() {
     expect(find.text('Example skill profile unavailable.'), findsOneWidget);
     expect(
       find.text(
-        'This optional demo card could not be loaded. Your real activity was not scored or replaced.',
+        'This optional example could not be loaded. Your saved activity is unchanged.',
       ),
       findsOneWidget,
     );
@@ -685,7 +686,7 @@ void main() {
     );
     expect(find.text('Could not load account insights.'), findsNothing);
     expect(
-      find.textContaining('No local estimate was substituted'),
+      find.textContaining('Your Focus history is unchanged'),
       findsOneWidget,
     );
   });
@@ -703,10 +704,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    final panel = tester.widget<Container>(
+    final panel = tester.widget<AppSurface>(
       find.byKey(const Key('insights-observation-panel')),
     );
-    final decoration = panel.decoration! as BoxDecoration;
     final headerDescription = tester.widget<Text>(
       find.byKey(const Key('insights-header-description')),
     );
@@ -714,11 +714,7 @@ void main() {
       find.widgetWithText(FilledButton, 'Refresh correlations'),
     );
 
-    expect(decoration.color, AppTheme.light.colorScheme.surfaceContainerLow);
-    expect(
-      (decoration.border! as Border).top.color,
-      AppTheme.light.colorScheme.outlineVariant,
-    );
+    expect(panel.variant, AppSurfaceVariant.raised);
     expect(
       headerDescription.style?.color,
       AppTheme.light.colorScheme.onSurfaceVariant,

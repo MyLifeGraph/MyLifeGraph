@@ -394,6 +394,14 @@ disconnect/delete consequences. Every event carries an `Imported · read-only`
 label, source label, local date/time, timezone, and import freshness. No event
 edit, provider delete, or provider-write control exists.
 
+Optional method and file-limit copy starts closed behind independent standard
+information controls headed `Read-only import` and `Import a file`. Explicit
+consent, the selected source, replacement/disconnect/delete consequences,
+current or stale state, and retry actions remain visible. Imported timestamps
+are formatted in the device locale and labelled local time; selected file size
+uses human-readable bytes or KiB. Student-facing errors identify the failed
+operation without rendering raw access, transport, or contract exceptions.
+
 Calendar import is a Settings-owned subpage. Its shared top back control pops
 the actual in-app history and falls back to Settings for a direct deep link;
 this navigation behavior performs no import, disconnect, or delete operation.
@@ -474,4 +482,6 @@ and query-shape validation remains route-local.
 Calendar surfaces use the shared
 [Frontend Visual System V2](frontend-visual-system-v2.md). This presentation
 migration does not change consent, import identity, disconnect, deletion, or
-provider-write authority in this contract.
+provider-write authority in this contract. Optional explanations use the
+standard 44×44 disclosure; connection/import state uses shared labelled status
+pills rather than route-local chips.

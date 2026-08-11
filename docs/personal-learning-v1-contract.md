@@ -90,6 +90,10 @@ ledger is not user history and is omitted from Account Export.
 
 Settings exposes one `Personal learning` entry for these controls and the
 confirmed clear action. It does not create another primary navigation item.
+The switch summaries remain visible. Optional calculation methodology starts
+closed behind the independent standard information control `How pattern
+analysis works`; the analysis dependency, Planner pilot availability, sleep
+non-effects, save/retry state, and confirmed clear consequence remain visible.
 
 ## Personal patterns
 

@@ -5,27 +5,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../composition/projection_refresh_providers.dart';
+import '../../../../composition/habit_action_providers.dart';
 import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/config/app_config.dart';
 import '../../../../core/navigation/app_routes.dart';
-import '../../../../core/supabase/supabase_providers.dart';
 import '../../../../core/utils/client_uuid.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_page.dart';
 import 'package:my_life_graph/composition/profile_local_date_providers.dart';
-import '../../data/habit_completion_supabase_data_source.dart';
 import '../../domain/habit_v1.dart';
-
-final habitManagementPageDataSourceProvider =
-    Provider<HabitCompletionSupabaseDataSource?>((ref) {
-  final client = ref.watch(supabaseClientProvider);
-  return client == null
-      ? null
-      : HabitCompletionSupabaseDataSource(
-          client,
-          todayProvider: ref.watch(profileLocalDateSourceProvider).today,
-        );
-});
 
 class HabitManagementPage extends ConsumerStatefulWidget {
   const HabitManagementPage({super.key});
@@ -113,7 +101,7 @@ class _HabitManagementPageState extends ConsumerState<HabitManagementPage> {
                 const Text('Add one important recurring behavior.'),
                 const SizedBox(height: AppSpacing.md),
                 FilledButton.icon(
-                  onPressed: _canUseSupabase && !_isSaving
+                  onPressed: _canUseSyncedHabits && !_isSaving
                       ? () => _openEditor()
                       : null,
                   icon: const Icon(AppIcons.add),
@@ -155,7 +143,7 @@ class _HabitManagementPageState extends ConsumerState<HabitManagementPage> {
   List<HabitV1> _byLifecycle(HabitLifecycle lifecycle) =>
       _habits.where((habit) => habit.lifecycle == lifecycle).toList();
 
-  bool get _canUseSupabase {
+  bool get _canUseSyncedHabits {
     final config = ref.read(appConfigProvider);
     final source = ref.read(habitManagementPageDataSourceProvider);
     return !config.useMockData && source != null;
@@ -179,7 +167,7 @@ class _HabitManagementPageState extends ConsumerState<HabitManagementPage> {
     if (source == null) {
       if (mounted && generation == _loadGeneration) {
         setState(() {
-          _loadError = 'Synced habit management is not configured.';
+          _loadError = 'Synced habit management is unavailable.';
           _isLoading = false;
         });
       }
@@ -235,7 +223,7 @@ class _HabitManagementPageState extends ConsumerState<HabitManagementPage> {
     final config = ref.read(appConfigProvider);
     final dataSource = ref.read(habitManagementPageDataSourceProvider);
     if (config.useMockData || dataSource == null) {
-      _showMessage('Supabase is not configured.');
+      _showMessage('Synced habits are unavailable. Nothing was changed.');
       return;
     }
 
@@ -266,13 +254,10 @@ class _HabitManagementPageState extends ConsumerState<HabitManagementPage> {
       if (mounted) {
         _showMessage(habit == null ? 'Habit added.' : 'Habit updated.');
       }
-    } catch (error) {
+    } catch (_) {
       if (mounted) {
-        final message = error is HabitCommandException
-            ? error.message
-            : habit == null
-                ? 'Could not add habit.'
-                : 'Could not update habit.';
+        final message =
+            habit == null ? 'Could not add habit.' : 'Could not update habit.';
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('$message Your draft is retained.'),
@@ -329,7 +314,7 @@ class _HabitManagementPageState extends ConsumerState<HabitManagementPage> {
     }
     final dataSource = ref.read(habitManagementPageDataSourceProvider);
     if (dataSource == null) {
-      _showMessage('Supabase is not configured.');
+      _showMessage('Synced habits are unavailable. Nothing was changed.');
       return;
     }
     final projectionRefresh = ref.read(projectionRefreshCoordinatorProvider);
@@ -399,7 +384,7 @@ class _HabitManagementLoadErrorCard extends StatelessWidget {
           Text(message, style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: AppSpacing.sm),
           const Text(
-            'No empty habit list was assumed. Check your connection and '
+            'Your saved habits were not changed. Check your connection and '
             'try again.',
           ),
           const SizedBox(height: AppSpacing.md),

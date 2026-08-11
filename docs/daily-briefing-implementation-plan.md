@@ -1863,3 +1863,11 @@ Daily Capture and Today presentation use the shared
 [Frontend Visual System V2](frontend-visual-system-v2.md). The visual migration
 does not alter capture fields, briefing generation, ranking, copy truth, or the
 read/write boundary described in this plan.
+
+Their feature adapters delegate optional explanatory text to the shared core
+information disclosure. Today retains its documented compact exception;
+Morning and Evening retain 44×44 controls and their five independent closed
+sleep explanations. Save failures use provider-neutral copy, keep the complete
+draft, and do not expose storage or transport configuration. Consent,
+validation, step progress, and the final save authority remain visible and
+unchanged.

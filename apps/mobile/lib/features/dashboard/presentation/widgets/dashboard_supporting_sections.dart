@@ -8,6 +8,7 @@ import '../../../../core/theme/app_icons.dart';
 import '../../../../core/theme/app_visual_tokens.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_schedule_day_card.dart';
+import '../../../../core/widgets/app_surface.dart';
 import '../../../briefings/domain/decision_feedback.dart';
 import '../../../optimization/domain/entities/recommendation_feed.dart';
 import '../../domain/entities/dashboard_full_week.dart';
@@ -213,7 +214,7 @@ class _RecommendationsContent extends StatelessWidget {
           ),
           error: (_, __) => DashboardSectionErrorCard(
             title: 'Recommendations unavailable',
-            message: 'Your account data was not replaced with demo content.',
+            message: 'Your recommendations could not be loaded right now.',
             onRetry: onRetry,
           ),
           data: (feed) => _RecommendationFeedView(feed: feed),
@@ -248,12 +249,16 @@ class _RecommendationFeedView extends StatelessWidget {
             DashboardStatusPill(
               icon: isDemo ? AppIcons.scienceOutlined : AppIcons.ruleOutlined,
               label: isDemo ? 'Example suggestions' : 'Rule-based suggestions',
+              tone: AppStatusTone.info,
             ),
             DashboardStatusPill(
               icon: feed.freshness.needsRefresh
                   ? AppIcons.history
                   : AppIcons.checkCircleOutline,
               label: freshness,
+              tone: feed.freshness.needsRefresh
+                  ? AppStatusTone.attention
+                  : AppStatusTone.success,
             ),
             if (feed.generatedAt != null)
               DashboardStatusPill(
@@ -393,7 +398,7 @@ class _FullWeekContent extends StatelessWidget {
       ),
       error: (_, __) => DashboardSectionErrorCard(
         title: 'Full week unavailable',
-        message: 'No partial week was invented.',
+        message: 'The complete week could not be loaded. Try again.',
         onRetry: onRetry,
       ),
       data: (projection) {
@@ -414,7 +419,7 @@ class _FullWeekContent extends StatelessWidget {
             ],
             if (projection.ratingLoadError case final ratingError?) ...[
               DashboardInlineMessage(
-                icon: AppIcons.infoOutline,
+                icon: AppIcons.warningAmberOutlined,
                 message: ratingError,
                 color: context.visualTokens.attention,
               ),

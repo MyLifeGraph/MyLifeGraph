@@ -65,14 +65,14 @@ class _UnavailableQuickCheckInStore implements QuickCheckInStore {
   @override
   Future<void> saveEvening(EveningShutdownDraft draft) {
     throw const QuickCheckInUnavailableException(
-      'Supabase is not configured for this account.',
+      'Synced check-in saving is unavailable.',
     );
   }
 
   @override
   Future<void> saveMorning(MorningCalibrationDraft draft) {
     throw const QuickCheckInUnavailableException(
-      'Supabase is not configured for this account.',
+      'Synced check-in saving is unavailable.',
     );
   }
 }

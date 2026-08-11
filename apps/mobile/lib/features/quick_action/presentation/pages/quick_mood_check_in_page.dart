@@ -353,7 +353,7 @@ class _QuickMoodCheckInPageState extends ConsumerState<QuickMoodCheckInPage> {
         return;
       }
       final message = error is QuickCheckInUnavailableException
-          ? error.message
+          ? 'Synced check-in saving is unavailable. Your answers are still here; try again when your account connection is available.'
           : 'Could not save. Your answers are still here. Try again.';
       setState(() => _saveError = message);
       _showMessage(message);

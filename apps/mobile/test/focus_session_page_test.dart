@@ -34,7 +34,7 @@ void main() {
 
     expect(find.text('Could not load focus sessions.'), findsOneWidget);
     expect(
-      find.textContaining('No empty focus state was assumed'),
+      find.textContaining('Your saved Focus state was not changed'),
       findsOneWidget,
     );
     expect(find.text('Start a focus block'), findsNothing);

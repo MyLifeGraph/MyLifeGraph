@@ -7,26 +7,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../composition/projection_refresh_providers.dart';
+import '../../../../composition/habit_action_providers.dart';
 import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/config/app_config.dart';
 import '../../../../core/navigation/app_routes.dart';
-import '../../../../core/supabase/supabase_providers.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_page.dart';
 import 'package:my_life_graph/composition/profile_local_date_providers.dart';
-import '../../data/habit_completion_supabase_data_source.dart';
 import '../../domain/habit_v1.dart';
-
-final habitCompletionPageDataSourceProvider =
-    Provider<HabitCompletionSupabaseDataSource?>((ref) {
-  final client = ref.watch(supabaseClientProvider);
-  return client == null
-      ? null
-      : HabitCompletionSupabaseDataSource(
-          client,
-          todayProvider: ref.watch(profileLocalDateSourceProvider).today,
-        );
-});
 
 class HabitCompletionPage extends ConsumerStatefulWidget {
   const HabitCompletionPage({super.key});
@@ -53,7 +41,7 @@ class _HabitCompletionPageState extends ConsumerState<HabitCompletionPage> {
   Widget build(BuildContext context) {
     final today = ref.watch(profileLocalDateSourceProvider).today();
     return AppPage(
-      title: 'Today habits',
+      title: 'Today\'s habits',
       subtitle: 'Complete, intentionally skip, or undo today\'s opportunities',
       backFallback: AppRoutes.quickAction,
       actions: [
@@ -132,7 +120,7 @@ class _HabitCompletionPageState extends ConsumerState<HabitCompletionPage> {
     if (source == null) {
       if (mounted && generation == _loadGeneration) {
         setState(() {
-          _loadError = 'Synced habits are not configured.';
+          _loadError = 'Synced habits are unavailable.';
           _isLoading = false;
         });
       }
@@ -167,7 +155,7 @@ class _HabitCompletionPageState extends ConsumerState<HabitCompletionPage> {
     final config = ref.read(appConfigProvider);
     final source = ref.read(habitCompletionPageDataSourceProvider);
     if (config.useMockData || source == null) {
-      _showMessage('Supabase is not configured.');
+      _showMessage('Synced habits are unavailable. Nothing was changed.');
       return;
     }
     if (_savingHabitIds.contains(habit.id)) {
@@ -210,7 +198,7 @@ class _HabitCompletionPageState extends ConsumerState<HabitCompletionPage> {
     final config = ref.read(appConfigProvider);
     final source = ref.read(habitCompletionPageDataSourceProvider);
     if (config.useMockData || source == null) {
-      _showMessage('Supabase is not configured.');
+      _showMessage('Synced habits are unavailable. Nothing was changed.');
       return;
     }
     if (_savingHabitIds.contains(habit.id)) {
@@ -268,7 +256,7 @@ class _HabitLoadErrorCard extends StatelessWidget {
           Text(message, style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: AppSpacing.sm),
           const Text(
-            'No empty habit state was assumed. Check your connection and '
+            'Your saved habits were not changed. Check your connection and '
             'try again.',
           ),
           const SizedBox(height: AppSpacing.md),

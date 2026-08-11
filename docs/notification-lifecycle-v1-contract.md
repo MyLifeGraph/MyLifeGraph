@@ -45,6 +45,13 @@ An allowlisted Open action pushes in-app history, while a direct `/alerts`
 deep link uses Settings as its Back fallback. Neither Back nor Open implicitly
 marks a row read or dismissed.
 
+Rows with deterministic generation provenance use the visible label
+`Rule-based reminder`. This concise positive provenance replaces repeated
+prototype-oriented AI disclaimers and does not weaken strict `llm_used=false`
+validation in the delivery contract. Inbox groups use the shared subtle
+surface; failure, pending, exact-retry, reload, unread, and dismissed authority
+remain visible outside decorative or optional help.
+
 ## Lifecycle Endpoint
 
 `POST /v1/notifications/{notification_id}/actions` accepts exactly:

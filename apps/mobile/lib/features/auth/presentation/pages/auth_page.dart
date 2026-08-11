@@ -43,7 +43,7 @@ class _AuthPageState extends ConsumerState<AuthPage> {
         authState.error is MissingProfileInvariantException;
     final authErrorMessage = switch (authState.error) {
       AuthConfigurationException() =>
-        'Synced sign-in is not configured. Configure Supabase or continue as guest.',
+        'Synced sign-in is unavailable right now. Continue as guest or try again later.',
       MissingProfileInvariantException() =>
         'Your sign-in succeeded, but this synced account could not be opened. No account data was changed. Sign out, then try again. If it continues, the account needs repair.',
       _ =>
@@ -313,7 +313,7 @@ class _AuthPageState extends ConsumerState<AuthPage> {
     } catch (_) {
       if (mounted) {
         _showMessage(
-          'Google sign-in could not start. Check Supabase OAuth settings.',
+          'Google sign-in could not start. Check your connection and try again, or use email sign-in.',
         );
       }
     } finally {
@@ -506,8 +506,8 @@ class _ModeTabs extends StatelessWidget {
   Widget build(BuildContext context) {
     return SegmentedButton<bool>(
       segments: const [
-        ButtonSegment(value: false, label: Text('Login')),
-        ButtonSegment(value: true, label: Text('Register')),
+        ButtonSegment(value: false, label: Text('Sign in')),
+        ButtonSegment(value: true, label: Text('Create account')),
       ],
       selected: {registrationMode},
       onSelectionChanged: (selection) => onChanged(selection.first),
@@ -563,7 +563,7 @@ class _AuthForm extends StatelessWidget {
             icon: Icon(
               registrationMode ? AppIcons.personAddAlt : AppIcons.login,
             ),
-            label: Text(registrationMode ? 'Create account' : 'Login'),
+            label: Text(registrationMode ? 'Create account' : 'Sign in'),
           ),
         ),
       ],

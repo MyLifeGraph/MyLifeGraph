@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/navigation/app_routes.dart';
+import '../../../../core/widgets/app_surface.dart';
 import 'package:my_life_graph/composition/auth_providers.dart';
 
 class PasswordRecoveryPage extends ConsumerStatefulWidget {
@@ -40,92 +41,91 @@ class _PasswordRecoveryPageState extends ConsumerState<PasswordRecoveryPage> {
               padding: const EdgeInsets.all(AppSpacing.lg),
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 520),
-                child: Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(AppSpacing.xl),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          AppIcons.lockResetOutlined,
-                          color: Theme.of(context).colorScheme.primary,
-                          size: 40,
+                child: AppSurface(
+                  variant: AppSurfaceVariant.raised,
+                  padding: const EdgeInsets.all(AppSpacing.xl),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        AppIcons.lockResetOutlined,
+                        color: Theme.of(context).colorScheme.primary,
+                        size: 40,
+                      ),
+                      const SizedBox(height: AppSpacing.lg),
+                      Text(
+                        'Choose a new password',
+                        style: Theme.of(context).textTheme.headlineSmall,
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                      Text(
+                        'This page opens from a valid password-reset link. Choose a new password to secure your account.',
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                      const SizedBox(height: AppSpacing.lg),
+                      TextField(
+                        controller: _passwordController,
+                        obscureText: true,
+                        enabled: !_submitting,
+                        textInputAction: TextInputAction.next,
+                        autofillHints: const [AutofillHints.newPassword],
+                        decoration: const InputDecoration(
+                          labelText: 'New password',
+                          helperText: 'Use at least 8 characters.',
                         ),
-                        const SizedBox(height: AppSpacing.lg),
-                        Text(
-                          'Choose a new password',
-                          style: Theme.of(context).textTheme.headlineSmall,
+                      ),
+                      const SizedBox(height: AppSpacing.md),
+                      TextField(
+                        controller: _confirmationController,
+                        obscureText: true,
+                        enabled: !_submitting,
+                        autofillHints: const [AutofillHints.newPassword],
+                        onSubmitted: (_) => _submitting ? null : _submit(),
+                        decoration: const InputDecoration(
+                          labelText: 'Confirm new password',
                         ),
-                        const SizedBox(height: AppSpacing.sm),
-                        Text(
-                          'This page is available only after opening a valid password-reset link. The new password is sent directly to Supabase Auth.',
-                          style: Theme.of(context).textTheme.bodyMedium,
-                        ),
-                        const SizedBox(height: AppSpacing.lg),
-                        TextField(
-                          controller: _passwordController,
-                          obscureText: true,
-                          enabled: !_submitting,
-                          textInputAction: TextInputAction.next,
-                          autofillHints: const [AutofillHints.newPassword],
-                          decoration: const InputDecoration(
-                            labelText: 'New password',
-                            helperText: 'Use at least 8 characters.',
-                          ),
-                        ),
+                      ),
+                      if (_error != null) ...[
                         const SizedBox(height: AppSpacing.md),
-                        TextField(
-                          controller: _confirmationController,
-                          obscureText: true,
-                          enabled: !_submitting,
-                          autofillHints: const [AutofillHints.newPassword],
-                          onSubmitted: (_) => _submitting ? null : _submit(),
-                          decoration: const InputDecoration(
-                            labelText: 'Confirm new password',
-                          ),
-                        ),
-                        if (_error != null) ...[
-                          const SizedBox(height: AppSpacing.md),
-                          Semantics(
-                            liveRegion: true,
-                            child: Text(
-                              _error!,
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodyMedium
-                                  ?.copyWith(
-                                    color: Theme.of(context).colorScheme.error,
-                                  ),
-                            ),
-                          ),
-                        ],
-                        const SizedBox(height: AppSpacing.lg),
-                        SizedBox(
-                          width: double.infinity,
-                          child: FilledButton.icon(
-                            onPressed: _submitting ? null : _submit,
-                            icon: _submitting
-                                ? const SizedBox.square(
-                                    dimension: 18,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                    ),
-                                  )
-                                : const Icon(AppIcons.checkOutlined),
-                            label: const Text('Update password'),
-                          ),
-                        ),
-                        const SizedBox(height: AppSpacing.sm),
-                        SizedBox(
-                          width: double.infinity,
-                          child: TextButton(
-                            onPressed: _submitting ? null : _cancel,
-                            child: const Text('Cancel and return to login'),
+                        Semantics(
+                          liveRegion: true,
+                          child: Text(
+                            _error!,
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodyMedium
+                                ?.copyWith(
+                                  color: Theme.of(context).colorScheme.error,
+                                ),
                           ),
                         ),
                       ],
-                    ),
+                      const SizedBox(height: AppSpacing.lg),
+                      SizedBox(
+                        width: double.infinity,
+                        child: FilledButton.icon(
+                          onPressed: _submitting ? null : _submit,
+                          icon: _submitting
+                              ? const SizedBox.square(
+                                  dimension: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Icon(AppIcons.checkOutlined),
+                          label: const Text('Update password'),
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                      SizedBox(
+                        width: double.infinity,
+                        child: TextButton(
+                          onPressed: _submitting ? null : _cancel,
+                          child: const Text('Cancel and return to sign in'),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),

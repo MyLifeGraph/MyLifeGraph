@@ -5,11 +5,14 @@ import 'package:my_life_graph/core/constants/app_radii.dart';
 import 'package:my_life_graph/core/theme/app_icons.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 
 import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/navigation/app_routes.dart';
 import '../../../../core/widgets/app_card.dart';
+import '../../../../core/widgets/app_info_disclosure.dart';
 import '../../../../core/widgets/app_page.dart';
+import '../../../../core/widgets/app_surface.dart';
 import '../../application/calendar_ics_file_picker.dart';
 import '../../application/calendar_integration_controller.dart';
 import '../../data/calendar_integration_repository_impl.dart';
@@ -62,7 +65,7 @@ class CalendarIntegrationPage extends ConsumerWidget {
           icon: AppIcons.cloudOffOutlined,
           title: 'Calendar import unavailable',
           message:
-              'The calendar status could not be read. It was not replaced with a disconnected or demo state.',
+              'The calendar status could not be read. Check your connection and try again.',
           actionLabel: 'Retry calendar status',
           onAction: controller.load,
         ),
@@ -120,13 +123,15 @@ class _ReadOnlyPromiseCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            'Read-only import',
-            style: Theme.of(context).textTheme.titleLarge,
+          const AppInfoSectionDisclosure(
+            heading: 'Read-only import',
+            description:
+                'There is no live calendar connection. MyLifeGraph saves only essential event details from the file you select.',
+            keyPrefix: 'calendar-info',
           ),
           const SizedBox(height: AppSpacing.sm),
           const Text(
-            'You choose one UTF-8 .ics file. MyLifeGraph stores only essential event details, never changes the source calendar, and never sends imported content to AI.',
+            'You choose the file. MyLifeGraph never changes the source calendar.',
           ),
         ],
       ),
@@ -224,12 +229,17 @@ class _ConnectionStatusCard extends StatelessWidget {
         children: [
           LayoutBuilder(
             builder: (context, constraints) {
-              final status = _StatusPill(
+              final status = AppStatusPill(
                 label: connected
                     ? 'Connected'
                     : lastImport == null
                         ? 'Disconnected'
                         : 'Disconnected · may be out of date',
+                tone: connected
+                    ? AppStatusTone.success
+                    : lastImport == null
+                        ? AppStatusTone.neutral
+                        : AppStatusTone.attention,
               );
               final label = Text(
                 connection.sourceLabel,
@@ -260,7 +270,7 @@ class _ConnectionStatusCard extends StatelessWidget {
           const SizedBox(height: AppSpacing.sm),
           Text(
             connected
-                ? 'This file source accepts deliberate imports. It has no live provider access.'
+                ? 'This source accepts only files you deliberately choose; it cannot read the source calendar directly.'
                 : lastImport == null
                     ? 'Further imports are disabled. No file was imported; clear this empty source before creating another.'
                     : 'Further imports are off. The saved read-only copy may become out of date and remains until you delete it.',
@@ -268,8 +278,8 @@ class _ConnectionStatusCard extends StatelessWidget {
           if (lastImport != null) ...[
             const SizedBox(height: AppSpacing.md),
             Text(
-              'Last import: ${lastImport.importedAt.toUtc().toIso8601String()} · '
-              '${lastImport.window.startsOn} to before ${lastImport.window.endsBefore} · '
+              'Last import: ${_formatImportedAt(lastImport.importedAt)} · '
+              'Window: ${lastImport.window.startsOn} to before ${lastImport.window.endsBefore} · '
               '${lastImport.window.timezone}',
               style: Theme.of(context).textTheme.bodyMedium,
             ),
@@ -316,10 +326,14 @@ class _ImportFileCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Import a file', style: Theme.of(context).textTheme.titleLarge),
+          const AppInfoSectionDisclosure(
+            heading: 'Import a file',
+            description: 'Choose one UTF-8 .ics file no larger than 512 KiB.',
+            keyPrefix: 'calendar-info',
+          ),
           const SizedBox(height: AppSpacing.sm),
           const Text(
-            'Maximum 512 KiB. A complete valid import replaces the current saved copy in one step.',
+            'A complete valid import replaces the current saved copy in one step.',
           ),
           const SizedBox(height: AppSpacing.md),
           OutlinedButton.icon(
@@ -346,7 +360,9 @@ class _ImportFileCard extends StatelessWidget {
                   const Icon(AppIcons.descriptionOutlined),
                   const SizedBox(width: AppSpacing.sm),
                   Expanded(
-                    child: Text('${file.name} · ${file.byteLength} bytes'),
+                    child: Text(
+                      '${file.name} · ${_fileSizeLabel(file.byteLength)}',
+                    ),
                   ),
                   IconButton(
                     tooltip: 'Clear selected file',
@@ -460,7 +476,10 @@ class _ImportedEventTile extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const _StatusPill(label: 'Imported · read-only'),
+          const AppStatusPill(
+            label: 'Imported · read-only',
+            tone: AppStatusTone.info,
+          ),
           const SizedBox(height: AppSpacing.xs),
           Text(event.title, style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: AppSpacing.xs),
@@ -694,27 +713,22 @@ class _MessageCard extends StatelessWidget {
   }
 }
 
-class _StatusPill extends StatelessWidget {
-  const _StatusPill({required this.label});
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(AppRadii.pill),
-      ),
-      child: Text(label, style: Theme.of(context).textTheme.labelMedium),
-    );
-  }
-}
-
 String _errorMessage(Object error) => switch (error) {
       CalendarFileSelectionException(:final message) => message,
-      CalendarIntegrationAccessException(:final message) => message,
-      CalendarIntegrationContractException(:final message) => message,
+      CalendarIntegrationAccessException() =>
+        'Your calendar session is no longer available. Load the latest calendar state and try again.',
+      CalendarIntegrationContractException() =>
+        'Calendar data could not be read safely. Load the latest calendar state before trying again.',
       _ =>
         'The operation could not be completed. Check the file or connection and try again.',
     };
+
+String _formatImportedAt(DateTime value) =>
+    '${DateFormat.yMMMd().add_Hm().format(value.toLocal())} local time';
+
+String _fileSizeLabel(int bytes) {
+  if (bytes < 1024) return '$bytes B';
+  final kibibytes = bytes / 1024;
+  final decimals = kibibytes >= 10 ? 0 : 1;
+  return '${kibibytes.toStringAsFixed(decimals)} KiB';
+}

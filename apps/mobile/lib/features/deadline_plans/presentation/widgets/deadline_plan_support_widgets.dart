@@ -389,7 +389,9 @@ String _planningWindowDescription(String energyWindow) =>
     };
 
 String _errorMessage(Object error) => switch (error) {
-      DeadlinePlanAccessException(:final message) => message,
-      DeadlinePlanContractException(:final message) => message,
+      DeadlinePlanAccessException() =>
+        'Your preparation-plan session is no longer available. Load the latest plan and try again.',
+      DeadlinePlanContractException() =>
+        'The preparation plan could not be read safely. Load the latest plan before trying again.',
       _ => 'The preparation plan operation could not be completed.',
     };

@@ -20,7 +20,7 @@ void main() {
 
       expect(find.text('Weekly review'), findsOneWidget);
       expect(find.text('Last week in context'), findsOneWidget);
-      expect(find.text('Explicit weekly facts'), findsOneWidget);
+      expect(find.text('Weekly facts'), findsOneWidget);
       expect(find.text('Completed'), findsOneWidget);
       expect(find.text('Skipped'), findsOneWidget);
       expect(find.text('Missed'), findsOneWidget);
@@ -31,6 +31,16 @@ void main() {
       expect(find.text('Walk after lunch'), findsNothing);
       expect(find.textContaining('smaller target'), findsNothing);
       expect(find.textContaining('Apply'), findsNothing);
+      expect(find.textContaining('summarizes saved activity'), findsNothing);
+      await tester.tap(
+        find.byKey(
+          const ValueKey(
+            'weekly-review-info-control-How this review is created',
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.textContaining('summarizes saved activity'), findsOneWidget);
       expect(repository.generateCalls, isEmpty);
     },
   );
@@ -83,7 +93,7 @@ void main() {
       repository: _FakeWeeklyReviewRepository(_feed(), readFails: true),
     );
     expect(find.text('Weekly review unavailable'), findsOneWidget);
-    expect(find.textContaining('Nothing was replaced'), findsOneWidget);
+    expect(find.textContaining('could not be loaded'), findsOneWidget);
   });
 
   testWidgets('guest mode never presents demo facts as a personal review',
@@ -94,17 +104,40 @@ void main() {
     );
 
     expect(find.text('Weekly review unavailable'), findsOneWidget);
-    expect(find.textContaining('require a synced account'), findsOneWidget);
-    expect(find.text('Explicit weekly facts'), findsNothing);
+    expect(find.textContaining('available after you sign in'), findsOneWidget);
+    expect(find.text('Weekly facts'), findsNothing);
     expect(find.textContaining('Apply'), findsNothing);
+  });
+
+  testWidgets(
+      'current review remains usable at 320 pixels and 200 percent text',
+      (tester) async {
+    await _pumpPage(
+      tester,
+      repository: _FakeWeeklyReviewRepository(_feed()),
+      size: const Size(320, 760),
+      textScaler: const TextScaler.linear(2),
+    );
+
+    expect(find.text('Last week in context'), findsOneWidget);
+    expect(find.text('Up to date'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('Weekly facts'),
+      240,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('Weekly facts'), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 }
 
 Future<void> _pumpPage(
   WidgetTester tester, {
   required _FakeWeeklyReviewRepository repository,
+  Size size = const Size(1200, 1400),
+  TextScaler textScaler = TextScaler.noScaling,
 }) async {
-  tester.view.physicalSize = const Size(1200, 1400);
+  tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
   addTearDown(() {
     tester.view.resetPhysicalSize();
@@ -125,7 +158,13 @@ Future<void> _pumpPage(
       overrides: [
         weeklyReviewRepositoryProvider.overrideWithValue(repository),
       ],
-      child: MaterialApp.router(routerConfig: router),
+      child: MaterialApp.router(
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(context).copyWith(textScaler: textScaler),
+          child: child!,
+        ),
+        routerConfig: router,
+      ),
     ),
   );
   await tester.pumpAndSettle();
