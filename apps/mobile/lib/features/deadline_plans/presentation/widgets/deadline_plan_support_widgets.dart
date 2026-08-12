@@ -374,6 +374,13 @@ String _blockLabel(DeadlinePlanBlockState state) => switch (state) {
       DeadlinePlanBlockState.missed => 'missed',
     };
 
+String _deadlineAllocationDescription(DeadlinePlanKind kind) => switch (kind) {
+      DeadlinePlanKind.exam =>
+        'A new or replanned Exam preview spreads its first sessions across suitable days.',
+      DeadlinePlanKind.assignment =>
+        'A new or replanned Assignment preview fills the earliest suitable day before moving on.',
+    };
+
 String _planningWindowDescription(String energyWindow) =>
     switch (energyWindow) {
       'early_morning' =>

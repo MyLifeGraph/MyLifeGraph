@@ -167,6 +167,11 @@ FastAPI service boundary for recommendation and future ML workflows.
   asynchronous service facades. Planner and Deadline proposals cross their
   repository boundaries as validated composite write models rather than
   parallel raw dictionaries; the existing RPC JSON remains unchanged.
+  The service derives an internal allocation policy from immutable kind: Exams
+  retain `spread_first`, while Assignments use `earliest_clustered`. The policy
+  is covered by the planning fingerprint but not the request fingerprint or
+  public/RPC payload. Both policies retain account/per-plan caps, busy-time,
+  Study Focus/Recovery, remainder, block-bound, and DST authority.
   An existing plan's root kind is immutable: a proposal with a different kind
   returns `409` with `Deadline plan kind cannot be changed.` before planning
   context is loaded. The final service-role proposal RPC independently enforces
@@ -836,7 +841,11 @@ timezone/all-day/recurrence/cancellation handling, stable event pagination,
 disconnect/delete separation, schedule preservation, and RLS ownership.
 Deadline Planner/Planner coverage includes proposal/confirmation/lifecycle,
 workload, preparation-budget, shared Availability, and strict read-only
-Exam-Week Outlook tests. Personal Learning tests cover terminal reflection
+Exam-Week Outlook tests. Allocation coverage separately proves unchanged Exam
+spreading; Assignment earliest-date clustering; account, daily, busy,
+Focus/Recovery, remainder, and DST limits; series occurrence windows; Flutter
+120/360 defaults and saved/manual retention; and planning/request fingerprint
+separation. Personal Learning tests cover terminal reflection
 guards, preference replay/dependency, disabled short-circuit, profile
 timezone/DST, sleep assignment/deduplication, every maturity gate,
 half-consistency, night exclusion, deterministic fingerprints, learned

@@ -22,6 +22,7 @@ from app.repositories.deadline_plan_repository import (
     DeadlinePlanningContext,
 )
 from app.services.planning_availability import (
+    AllocationPolicy,
     BusySources,
     PlannedInterval,
     allocate_task_intervals,
@@ -33,6 +34,18 @@ from app.services.planner_errors import (
     DeadlinePlanConflictError,
     DeadlinePlanValidationError,
 )
+
+
+DEADLINE_EXAM_ALLOCATION_POLICY: AllocationPolicy = "spread_first"
+DEADLINE_ASSIGNMENT_ALLOCATION_POLICY: AllocationPolicy = "earliest_clustered"
+
+
+def _deadline_allocation_policy(kind: str) -> AllocationPolicy:
+    if kind == "exam":
+        return DEADLINE_EXAM_ALLOCATION_POLICY
+    if kind == "assignment":
+        return DEADLINE_ASSIGNMENT_ALLOCATION_POLICY
+    raise ValueError("Deadline plan kind is invalid.")
 
 
 def _timing_preference_from_row(
@@ -118,6 +131,7 @@ def _plan_blocks(
         recovery_minutes=study_rhythm[2] if study_rhythm is not None else 0,
         exact_session_blocks=study_rhythm is not None,
         learned_focus_window=learned_focus_window,
+        allocation_policy=_deadline_allocation_policy(request.kind),
     )
     return intervals
 

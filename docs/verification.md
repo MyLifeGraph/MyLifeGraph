@@ -175,6 +175,23 @@ compilation, non-mutating Ruff, the complete FastAPI pytest suite, and
 `git diff --check`. Its independent source, Flutter, and backend groups may run
 concurrently.
 
+For a focused Deadline allocation diagnostic before the selected gate, run:
+
+```bash
+cd services/ai_service
+./.venv/bin/python -m pytest -q \
+  tests/test_planning_availability.py \
+  tests/test_deadline_plan_service.py \
+  tests/test_assignment_series_service.py
+cd ../../apps/mobile
+"${FLUTTER_BIN:-flutter}" test test/deadline_plans_page_test.dart
+```
+
+These files cover kind-specific placement, budget/busy/recovery/remainder/DST
+constraints, series windows, internal fingerprinting, and Flutter default/value
+retention. A focused pass is diagnostic and does not replace Fast, Web, or the
+task-base affected gate.
+
 Database integration is deliberately separate. A deterministic fake Coach
 provider/process seam is mandatory for standard verification; Fast must not
 depend on Codex installation, OAuth, model access, subscription status, or an

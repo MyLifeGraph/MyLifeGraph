@@ -5,6 +5,8 @@ const deadlinePlanContractVersion = 'deadline-plan-v1';
 const preparationWorkloadContractVersion = 'preparation-workload-v1';
 const preparationWorkloadDetailContractVersion =
     'preparation-workload-detail-v1';
+const defaultExamDailyPreparationMinutes = 120;
+const defaultAssignmentDailyPreparationMinutes = 360;
 
 enum DeadlinePlanKind {
   exam('exam'),
@@ -19,6 +21,11 @@ enum DeadlinePlanKind {
         _ => null,
       };
 }
+
+int defaultDeadlinePlanDailyPreparationMinutes(DeadlinePlanKind? kind) =>
+    kind == DeadlinePlanKind.assignment
+        ? defaultAssignmentDailyPreparationMinutes
+        : defaultExamDailyPreparationMinutes;
 
 enum DeadlinePlanSourceKind {
   manual('manual'),

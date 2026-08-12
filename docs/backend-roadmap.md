@@ -268,6 +268,12 @@ Already implemented:
   - Once a plan exists, its root kind remains fixed through edit, occurrence,
     focused replan, and deep-link entry. FastAPI rejects a different proposal
     kind with the stable early `409` conflict before loading planning context.
+  - New Exams default to a 120-minute daily cap and retain spread-first
+    placement. New one-off Assignments and Assignment Series default to 360
+    minutes and fill the earliest suitable day before advancing. Existing,
+    retained, and manually edited caps are preserved. The server derives the
+    internal allocation policy from immutable kind and includes it only in the
+    planning fingerprint; public V1/RPC shapes remain unchanged.
   - Each proposal persists at most 120 deterministic dated blocks in an
     immutable pending revision. It cannot replace the active revision before
     exact confirmation; first confirm creates the stable managed Phase 3 task.
@@ -287,7 +293,8 @@ Already implemented:
     cancel-future routes under the Deadline Planner boundary.
   - A new Assignment defaults to 12 finite weekly occurrences and accepts
     `2..20`; a future-scope edit accepts `1..20`. Weekly instants preserve the
-    profile-local weekday and wall-clock deadline through DST.
+    profile-local weekday and wall-clock deadline through DST. Each occurrence
+    may start no earlier than the local day after its predecessor's deadline.
   - One common template stages independent Preparation Plans. Confirmation is
     one owner-locked transaction; each occurrence keeps independent blocks,
     progress, managed Task, and single-occurrence replanning.

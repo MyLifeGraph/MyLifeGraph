@@ -35,6 +35,153 @@ def test_task_allocation_splits_on_five_minutes_and_reports_exact_remainder() ->
     assert blocks[0].starts_at.date() != blocks[1].starts_at.date()
 
 
+def test_earliest_clustered_allocation_exhausts_today_before_advancing() -> None:
+    zone = ZoneInfo("UTC")
+    common = {
+        "starts_on": date(2026, 7, 20),
+        "ends_on": date(2026, 7, 22),
+        "total_minutes": 180,
+        "preferred_session_minutes": 60,
+        "max_daily_minutes": 180,
+        "zone": zone,
+        "local_now": datetime(2026, 7, 19, 12, tzinfo=UTC),
+        "energy_window": "morning",
+        "busy_sources": BusySources(),
+        "duration_increment_minutes": 5,
+    }
+
+    spread = allocate_task_intervals(**common)
+    clustered = allocate_task_intervals(
+        **common,
+        allocation_policy="earliest_clustered",
+    )
+
+    assert [block.starts_at.date() for block in spread] == [
+        date(2026, 7, 20),
+        date(2026, 7, 21),
+        date(2026, 7, 22),
+    ]
+    assert {block.starts_at.date() for block in clustered} == {
+        date(2026, 7, 20),
+    }
+    assert sum(block.minutes for block in clustered) == 180
+
+
+def test_earliest_clustered_allocation_stops_at_the_block_bound() -> None:
+    blocks = allocate_task_intervals(
+        starts_on=date(2026, 7, 20),
+        ends_on=date(2026, 7, 22),
+        total_minutes=60,
+        preferred_session_minutes=5,
+        max_daily_minutes=360,
+        zone=ZoneInfo("UTC"),
+        local_now=datetime(2026, 7, 19, 12, tzinfo=UTC),
+        energy_window="morning",
+        busy_sources=BusySources(),
+        max_blocks=3,
+        duration_increment_minutes=5,
+        allocation_policy="earliest_clustered",
+    )
+
+    assert len(blocks) == 3
+    assert [block.minutes for block in blocks] == [5, 5, 5]
+    assert {block.starts_at.date() for block in blocks} == {date(2026, 7, 20)}
+
+
+def test_clustered_allocation_obeys_busy_time_and_account_capacity() -> None:
+    zone = ZoneInfo("UTC")
+    blocks = allocate_task_intervals(
+        starts_on=date(2026, 7, 20),
+        ends_on=date(2026, 7, 22),
+        total_minutes=360,
+        preferred_session_minutes=60,
+        max_daily_minutes=360,
+        zone=zone,
+        local_now=datetime(2026, 7, 19, 12, tzinfo=UTC),
+        energy_window="morning",
+        busy_sources=BusySources(
+            timed_intervals=[
+                {
+                    "starts_at": "2026-07-20T09:00:00+00:00",
+                    "ends_at": "2026-07-20T21:00:00+00:00",
+                },
+            ],
+        ),
+        daily_reserved_minutes={date(2026, 7, 20): 60},
+        account_daily_budget_minutes=180,
+        duration_increment_minutes=5,
+        allocation_policy="earliest_clustered",
+    )
+
+    minutes_by_day = {
+        day: sum(block.minutes for block in blocks if block.starts_at.date() == day)
+        for day in {block.starts_at.date() for block in blocks}
+    }
+    assert minutes_by_day == {
+        date(2026, 7, 20): 60,
+        date(2026, 7, 21): 180,
+        date(2026, 7, 22): 120,
+    }
+    assert all(
+        not (
+            datetime(2026, 7, 20, 9, tzinfo=UTC)
+            < (block.reserved_ends_at or block.ends_at)
+            and block.starts_at < datetime(2026, 7, 20, 21, tzinfo=UTC)
+        )
+        for block in blocks
+    )
+
+
+def test_clustered_study_recovery_uses_time_without_charging_active_cap() -> None:
+    blocks = allocate_task_intervals(
+        starts_on=date(2026, 7, 20),
+        ends_on=date(2026, 7, 22),
+        total_minutes=100,
+        preferred_session_minutes=45,
+        max_daily_minutes=360,
+        zone=ZoneInfo("UTC"),
+        local_now=datetime(2026, 7, 19, 12, tzinfo=UTC),
+        energy_window="morning",
+        busy_sources=BusySources(),
+        duration_increment_minutes=1,
+        recovery_minutes=10,
+        exact_session_blocks=True,
+        allocation_policy="earliest_clustered",
+    )
+
+    assert [block.minutes for block in blocks] == [45, 45, 10]
+    assert {block.starts_at.date() for block in blocks} == {date(2026, 7, 20)}
+    assert all(block.recovery_minutes == 10 for block in blocks)
+    assert sum(block.minutes for block in blocks) == 100
+    assert blocks[1].starts_at == blocks[0].reserved_ends_at
+    assert blocks[2].starts_at == blocks[1].reserved_ends_at
+
+
+def test_clustered_assignment_is_dst_safe_on_the_earliest_day() -> None:
+    zone = ZoneInfo("Europe/Berlin")
+    blocks = allocate_task_intervals(
+        starts_on=date(2026, 3, 29),
+        ends_on=date(2026, 3, 30),
+        total_minutes=180,
+        preferred_session_minutes=60,
+        max_daily_minutes=360,
+        zone=zone,
+        local_now=datetime(2026, 3, 28, 12, tzinfo=zone),
+        energy_window="morning",
+        busy_sources=BusySources(),
+        duration_increment_minutes=5,
+        allocation_policy="earliest_clustered",
+    )
+
+    assert {block.starts_at.date() for block in blocks} == {date(2026, 3, 29)}
+    assert all(block.starts_at.utcoffset() == timedelta(hours=2) for block in blocks)
+    assert all(
+        block.ends_at.astimezone(UTC) - block.starts_at.astimezone(UTC)
+        == timedelta(minutes=block.minutes)
+        for block in blocks
+    )
+
+
 def test_ceiling_helpers_advance_subminute_values_only() -> None:
     fixed_offset = timezone(timedelta(hours=5, minutes=30))
 

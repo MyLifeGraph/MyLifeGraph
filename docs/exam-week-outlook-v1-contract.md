@@ -202,6 +202,14 @@ This does not alter the saved revision. Assignments retain their saved buffer.
 Additional gaps are allocated sequentially by earliest deadline, then exam
 before assignment at the same deadline, then canonical plan id.
 
+The shared Availability function retains `spread_first` as its default, so this
+read-only capacity simulation does not silently adopt a proposal-only policy.
+Confirmed Assignment blocks created with Deadline Planner's internal
+`earliest_clustered` policy still participate as authoritative busy time and
+daily preparation minutes after explicit confirmation. This preserves the V1
+Outlook calculation while allowing new Assignment proposals to cluster without
+changing this response or adding a policy field.
+
 Capacity is simulated twice:
 
 1. with normal Availability; and
@@ -368,7 +376,9 @@ Automated coverage must prove:
   and V4-compatible Today streak recognition;
 - exact mode boundaries, overdue behavior, assignment capacity, multiple plans,
   one-day exam warning buffer, missed/future blocks, deterministic ordering,
-  account/per-plan limits, Study recovery, and all confirmed competitors;
+  account/per-plan limits, Study recovery, all confirmed competitors, and the
+  unchanged spread-first default for this simulation when proposal allocation
+  adds an explicit kind-specific option;
 - both fit simulations, missing sleep plan, DST gap/fold behavior, two-of-three
   repeated shortfall, exclusion of future Evening/Morning rows, incomplete
   calendar availability, and pending-preview overlap without mutation;

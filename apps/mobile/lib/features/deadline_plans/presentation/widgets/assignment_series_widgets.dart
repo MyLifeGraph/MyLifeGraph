@@ -69,7 +69,8 @@ class _AssignmentSeriesEditorSheetState
       text: total == null ? '' : '${total % 60}',
     );
     _dailyCapController = TextEditingController(
-      text: '${retained?.maxDailyMinutes ?? existing?.maxDailyMinutes ?? 120}',
+      text:
+          '${retained?.maxDailyMinutes ?? existing?.maxDailyMinutes ?? defaultAssignmentDailyPreparationMinutes}',
     );
     _nextDeadline = retained?.nextDeadlineAt ??
         (futureOccurrences.isEmpty

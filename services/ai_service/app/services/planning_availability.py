@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
-from typing import Any
+from typing import Any, Literal
 from zoneinfo import ZoneInfo
 
 from app.services.local_time import (
@@ -45,6 +45,8 @@ LEARNED_FOCUS_WINDOWS: dict[str, tuple[time, time]] = {
     "13-18": (time(13), time(18)),
     "18-23": (time(18), time(23)),
 }
+
+AllocationPolicy = Literal["spread_first", "earliest_clustered"]
 
 
 @dataclass(frozen=True)
@@ -103,12 +105,13 @@ def allocate_task_intervals(
     recovery_minutes: int = 0,
     exact_session_blocks: bool = False,
     learned_focus_window: str | None = None,
+    allocation_policy: AllocationPolicy = "spread_first",
 ) -> list[PlannedInterval]:
     """Allocate five-minute task blocks without mutating any source record.
 
-    The first pass is spread across the available runway. Later passes reuse
-    all viable days. This preserves Deadline Planner's established behavior
-    while making the same calculation available to Task planning.
+    ``spread_first`` places the first session across the available runway, then
+    reuses viable days. ``earliest_clustered`` exhausts each earlier date before
+    advancing. The default preserves the established Exam and Task behavior.
     """
 
     if total_minutes < 5 or starts_on > ends_on:
@@ -120,6 +123,8 @@ def allocate_task_intervals(
         and learned_focus_window not in LEARNED_FOCUS_WINDOWS
     ):
         raise ValueError("Learned Focus window is invalid.")
+    if allocation_policy not in {"spread_first", "earliest_clustered"}:
+        raise ValueError("Planning allocation policy is invalid.")
     if preferred_session_minutes < 5 or preferred_session_minutes > 240:
         raise ValueError("Preferred session duration is invalid.")
     if max_daily_minutes < 5 or max_daily_minutes > 480:
@@ -184,77 +189,87 @@ def allocate_task_intervals(
 
     blocks: list[PlannedInterval] = []
     remaining = total_minutes
-    first_round = True
-    while remaining >= 5 and len(blocks) < max_blocks:
-        placed = False
-        for day in first_round_days if first_round else viable_days:
-            if remaining < 5 or len(blocks) >= max_blocks:
-                break
-            if daily_left[day] < 5:
-                continue
-            for gap in free_by_day[day]:
-                block_start = gap[0]
-                if exact_session_blocks and remaining < target and blocks:
-                    # A Study remainder is the final chronological learning
-                    # block. Do not backfill it into an earlier small gap after
-                    # full blocks have already been placed later in the runway.
-                    latest_reserved_end = max(
-                        block.reserved_ends_at or block.ends_at
-                        for block in blocks
-                    )
-                    if block_start < latest_reserved_end:
-                        block_start = latest_reserved_end
-                available = interval_minutes(block_start, gap[1])
-                if exact_session_blocks:
-                    duration = target if remaining >= target else remaining
-                    duration -= duration % duration_increment_minutes
-                    if (
-                        duration < 5
-                        or daily_left[day] < duration
-                        or available < duration + recovery_minutes
-                    ):
-                        continue
-                else:
-                    duration = min(target, remaining, daily_left[day], available)
-                    duration -= duration % duration_increment_minutes
-                if duration < 5:
-                    continue
-                block_end = (
-                    block_start.astimezone(UTC) + timedelta(minutes=duration)
-                ).astimezone(zone)
-                reserved_end = (
-                    block_end.astimezone(UTC)
-                    + timedelta(minutes=recovery_minutes)
-                ).astimezone(zone)
+
+    def place_next(day: date) -> bool:
+        nonlocal remaining
+        if remaining < 5 or len(blocks) >= max_blocks or daily_left[day] < 5:
+            return False
+        for gap in free_by_day[day]:
+            block_start = gap[0]
+            if exact_session_blocks and remaining < target and blocks:
+                # A Study remainder is the final chronological learning block.
+                # Do not backfill it before full blocks already placed later.
+                latest_reserved_end = max(
+                    block.reserved_ends_at or block.ends_at for block in blocks
+                )
+                if block_start < latest_reserved_end:
+                    block_start = latest_reserved_end
+            available = interval_minutes(block_start, gap[1])
+            if exact_session_blocks:
+                duration = target if remaining >= target else remaining
+                duration -= duration % duration_increment_minutes
                 if (
-                    not is_unambiguous_local(block_end, zone)
-                    or not is_unambiguous_local(reserved_end, zone)
-                    or reserved_end > gap[1]
+                    duration < 5
+                    or daily_left[day] < duration
+                    or available < duration + recovery_minutes
                 ):
                     continue
-                blocks.append(
-                    PlannedInterval(
-                        starts_at=block_start,
-                        ends_at=block_end,
-                        minutes=duration,
-                        recovery_minutes=recovery_minutes,
-                        reserved_ends_at=reserved_end,
-                    ),
-                )
-                gap[0] = (
-                    reserved_end
-                    if recovery_minutes > 0
-                    else (
-                        block_end.astimezone(UTC) + timedelta(minutes=5)
-                    ).astimezone(zone)
-                )
-                remaining -= duration
-                daily_left[day] -= duration
-                placed = True
+            else:
+                duration = min(target, remaining, daily_left[day], available)
+                duration -= duration % duration_increment_minutes
+            if duration < 5:
+                continue
+            block_end = (
+                block_start.astimezone(UTC) + timedelta(minutes=duration)
+            ).astimezone(zone)
+            reserved_end = (
+                block_end.astimezone(UTC) + timedelta(minutes=recovery_minutes)
+            ).astimezone(zone)
+            if (
+                not is_unambiguous_local(block_end, zone)
+                or not is_unambiguous_local(reserved_end, zone)
+                or reserved_end > gap[1]
+            ):
+                continue
+            blocks.append(
+                PlannedInterval(
+                    starts_at=block_start,
+                    ends_at=block_end,
+                    minutes=duration,
+                    recovery_minutes=recovery_minutes,
+                    reserved_ends_at=reserved_end,
+                ),
+            )
+            gap[0] = (
+                reserved_end
+                if recovery_minutes > 0
+                else (
+                    block_end.astimezone(UTC) + timedelta(minutes=5)
+                ).astimezone(zone)
+            )
+            remaining -= duration
+            daily_left[day] -= duration
+            return True
+        return False
+
+    if allocation_policy == "earliest_clustered":
+        for day in viable_days:
+            while place_next(day):
+                pass
+            if remaining < 5 or len(blocks) >= max_blocks:
                 break
-        first_round = False
-        if not placed:
-            break
+    else:
+        first_round = True
+        while remaining >= 5 and len(blocks) < max_blocks:
+            placed = False
+            for day in first_round_days if first_round else viable_days:
+                if remaining < 5 or len(blocks) >= max_blocks:
+                    break
+                if place_next(day):
+                    placed = True
+            first_round = False
+            if not placed:
+                break
 
     blocks.sort(key=lambda value: (value.starts_at, value.ends_at))
     return blocks

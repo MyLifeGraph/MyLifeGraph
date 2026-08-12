@@ -51,6 +51,7 @@ from app.services.deadline_plan_builder import (
     _calendar_event_is_current,
     _context_fingerprint_input,
     _date,
+    _deadline_allocation_policy,
     _datetime,
     _deadline_study_rhythm,
     _fingerprint as _fingerprint,
@@ -571,6 +572,7 @@ class DeadlinePlanService:
                 "tracked_focus_minutes_at_proposal": tracked_focus_minutes,
                 "context": context_fingerprint_input,
                 "timing_preference": timing_preference.model_dump(mode="json"),
+                "allocation_policy": _deadline_allocation_policy(request.kind),
             },
         )
         blocks = tuple(

@@ -209,7 +209,15 @@ or prior-credit summary; newly created plans submit zero while legacy values
 remain transport-compatible. Once a plan exists, its root Exam or Assignment
 kind is shown read-only and remains fixed through occurrence edit, replan, and
 deep-link entry. Only a new generic Calendar-source proposal keeps the kind
-selector.
+selector. A truly new Exam starts with 120 daily preparation minutes; a truly
+new one-off Assignment or Assignment Series starts with 360. Generic Calendar
+kind selection updates that value only while it is untouched. Existing
+revisions, retained failed drafts, and manually entered daily caps are never
+silently replaced. Expanded plan methodology explains that Exams spread their
+first sessions while Assignments fill the earliest suitable date first only
+for a new or explicitly replanned preview. It does not characterize the saved
+blocks of an older active revision, which stay unchanged until a preview is
+confirmed.
 
 ## Auth Modes
 

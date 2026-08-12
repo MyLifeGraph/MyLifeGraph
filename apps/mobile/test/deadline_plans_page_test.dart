@@ -30,9 +30,15 @@ void main() {
 
   testWidgets('Planner Assignment opens a finite series without type choice',
       (tester) async {
+    final seriesRepository = _FakeAssignmentSeriesRepository(
+      proposalResult: AssignmentSeriesResponse.fromJson(
+        assignmentSeriesEnvelope(),
+      ).series,
+    );
     await _pumpPage(
       tester,
       repository: _FakeDeadlinePlanRepository(),
+      assignmentSeriesRepository: seriesRepository,
       page: DeadlinePlansPage(
         initialKind: DeadlinePlanKind.assignment,
         currentTime: now,
@@ -68,6 +74,18 @@ void main() {
     );
     expect(find.textContaining('prior work'), findsNothing);
     expect(find.textContaining('prior-work'), findsNothing);
+
+    await _tap(
+      tester,
+      find.byKey(const ValueKey('assignment-series-estimate-1h')),
+    );
+    await _tap(tester, find.text('Continue'));
+    final dailyCap = tester.widget<TextField>(
+      find.byKey(const ValueKey('assignment-series-daily-cap')),
+    );
+    expect(dailyCap.controller!.text, '360');
+    await _tap(tester, find.text('Create series preview'));
+    expect(seriesRepository.proposalDrafts.single.maxDailyMinutes, 360);
   });
 
   testWidgets('Planner Exam keeps the selected kind without type choice',
@@ -84,6 +102,164 @@ void main() {
     expect(find.text('What are you preparing for?'), findsOneWidget);
     expect(find.byKey(const ValueKey('deadline-locked-kind')), findsOneWidget);
     expect(find.byType(SegmentedButton<DeadlinePlanKind>), findsNothing);
+  });
+
+  testWidgets('new Exam keeps the 120 minute daily default', (tester) async {
+    final repository = _FakeDeadlinePlanRepository();
+    await _pumpPage(
+      tester,
+      repository: repository,
+      page: DeadlinePlansPage(
+        initialKind: DeadlinePlanKind.exam,
+        initialTitle: 'Algorithms exam',
+        initialDeadlineAt: DateTime(2026, 7, 25, 17),
+        currentTime: now,
+      ),
+    );
+
+    await _tap(tester, find.text('Continue'));
+    await _tap(tester, find.byKey(const ValueKey('deadline-estimate-2h')));
+    await _tap(tester, find.text('Continue'));
+
+    final dailyCap = tester.widget<TextField>(
+      find.byKey(const ValueKey('deadline-daily-cap')),
+    );
+    expect(dailyCap.controller!.text, '120');
+    await _tap(tester, find.text('Create preview'));
+    expect(repository.proposalDrafts.single.maxDailyMinutes, 120);
+    expect(repository.proposalDrafts.single.kind, DeadlinePlanKind.exam);
+  });
+
+  testWidgets('new calendar Assignment submits the 360 minute daily default',
+      (tester) async {
+    final repository = _FakeDeadlinePlanRepository();
+    final prefill = _FakeCalendarPrefillDataSource(
+      result: DeadlineCalendarPrefill.current(
+        eventId: deadlineCalendarEventId,
+        title: 'Imported coursework',
+        sourceFingerprint: deadlineFingerprint,
+        kind: DeadlineCalendarEventKind.timed,
+        startsAt: DateTime.parse('2026-07-25T15:00:00Z'),
+        startsOn: null,
+      ),
+    );
+    await _pumpPage(
+      tester,
+      repository: repository,
+      prefillDataSource: prefill,
+      page: DeadlinePlansPage(
+        sourceCalendarEventId: deadlineCalendarEventId,
+        currentTime: now,
+      ),
+    );
+
+    await _tap(tester, find.text('Assignment'));
+    await _tap(tester, find.text('Continue'));
+    await _tap(tester, find.byKey(const ValueKey('deadline-estimate-2h')));
+    await _tap(tester, find.text('Continue'));
+    final dailyCap = tester.widget<TextField>(
+      find.byKey(const ValueKey('deadline-daily-cap')),
+    );
+    expect(dailyCap.controller!.text, '360');
+    await _tap(tester, find.text('Create preview'));
+    expect(repository.proposalDrafts.single.maxDailyMinutes, 360);
+    expect(repository.proposalDrafts.single.kind, DeadlinePlanKind.assignment);
+  });
+
+  testWidgets('manual daily cap survives kind changes and is submitted',
+      (tester) async {
+    final repository = _FakeDeadlinePlanRepository();
+    final prefill = _FakeCalendarPrefillDataSource(
+      result: DeadlineCalendarPrefill.current(
+        eventId: deadlineCalendarEventId,
+        title: 'Imported coursework',
+        sourceFingerprint: deadlineFingerprint,
+        kind: DeadlineCalendarEventKind.timed,
+        startsAt: DateTime.parse('2026-07-25T15:00:00Z'),
+        startsOn: null,
+      ),
+    );
+    await _pumpPage(
+      tester,
+      repository: repository,
+      prefillDataSource: prefill,
+      page: DeadlinePlansPage(
+        sourceCalendarEventId: deadlineCalendarEventId,
+        currentTime: now,
+      ),
+    );
+
+    await _tap(tester, find.text('Assignment'));
+    await _tap(tester, find.text('Continue'));
+    await _tap(tester, find.byKey(const ValueKey('deadline-estimate-2h')));
+    await _tap(tester, find.text('Continue'));
+
+    await tester.enterText(
+      find.byKey(const ValueKey('deadline-daily-cap')),
+      '275',
+    );
+    await _tap(tester, find.text('Back'));
+    await _tap(tester, find.text('Back'));
+    await _tap(tester, find.text('Exam'));
+    await _tap(tester, find.text('Assignment'));
+    await _tap(tester, find.text('Continue'));
+    await _tap(tester, find.text('Continue'));
+    final dailyCap = tester.widget<TextField>(
+      find.byKey(const ValueKey('deadline-daily-cap')),
+    );
+    expect(dailyCap.controller!.text, '275');
+    await _tap(tester, find.text('Create preview'));
+    expect(repository.proposalDrafts.single.maxDailyMinutes, 275);
+    expect(repository.proposalDrafts.single.kind, DeadlinePlanKind.assignment);
+  });
+
+  testWidgets('existing and retained Assignment Series keep their custom cap',
+      (tester) async {
+    final series = AssignmentSeriesResponse.fromJson(
+      assignmentSeriesEnvelope(status: 'active'),
+    ).series;
+    final seriesRepository = _FakeAssignmentSeriesRepository(
+      series: [series],
+      proposalErrors: [
+        AppException(
+          'Invalid request',
+          cause: const ApiFailure(
+            kind: ApiFailureKind.response,
+            statusCode: 400,
+          ),
+        ),
+      ],
+    );
+    await _pumpPage(
+      tester,
+      repository: _FakeDeadlinePlanRepository(),
+      assignmentSeriesRepository: seriesRepository,
+      page: DeadlinePlansPage(currentTime: now),
+    );
+
+    await _tap(tester, find.text(series.title));
+    await _tap(tester, find.text('Edit all future'));
+    await _tap(tester, find.text('Continue'));
+    await _tap(tester, find.text('Continue'));
+    var dailyCap = tester.widget<TextField>(
+      find.byKey(const ValueKey('assignment-series-daily-cap')),
+    );
+    expect(dailyCap.controller!.text, '60');
+
+    await tester.enterText(
+      find.byKey(const ValueKey('assignment-series-daily-cap')),
+      '275',
+    );
+    await _tap(tester, find.text('Create series preview'));
+    expect(seriesRepository.proposalDrafts.single.maxDailyMinutes, 275);
+    await _tap(tester, find.text('Dismiss'));
+    await _tap(tester, find.text('Review series values'));
+    await _tap(tester, find.text('Continue'));
+    await _tap(tester, find.text('Continue'));
+    dailyCap = tester.widget<TextField>(
+      find.byKey(const ValueKey('assignment-series-daily-cap')),
+    );
+    expect(dailyCap.controller!.text, '275');
   });
 
   testWidgets('Assignment Series Edit one keeps the occurrence kind locked',
@@ -463,7 +639,7 @@ void main() {
     await tester.tap(
       find.byKey(
         const ValueKey(
-          'deadline-plan-info-control-How times are placed',
+          'deadline-plan-info-control-How new previews place time',
         ),
       ),
     );
@@ -472,10 +648,54 @@ void main() {
       find.textContaining('Rule-based windows: prefers 08:00–13:00'),
       findsOneWidget,
     );
+    expect(
+      find.textContaining('A new or replanned Exam preview spreads'),
+      findsOneWidget,
+    );
     expect(find.text('Entered prior credit'), findsNothing);
     expect(
       find.textContaining('Linked Focus completed after this plan'),
       findsOneWidget,
+    );
+  });
+
+  testWidgets('active Assignment describes only the next preview allocation',
+      (tester) async {
+    final repository = _FakeDeadlinePlanRepository(
+      feeds: [
+        DeadlinePlanFeed(
+          plans: [
+            _planWithKind(
+              DeadlinePlanKind.assignment,
+              maxDailyMinutes: 275,
+            ),
+          ],
+        ),
+      ],
+    );
+    await _pumpPage(
+      tester,
+      repository: repository,
+      page: DeadlinePlansPage(currentTime: now),
+    );
+
+    await _expandPlan(tester);
+    await tester.tap(
+      find.byKey(
+        const ValueKey(
+          'deadline-plan-info-control-How new previews place time',
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.textContaining('A new or replanned Assignment preview fills'),
+      findsOneWidget,
+    );
+    expect(
+      find.textContaining('Assignment preparation fills'),
+      findsNothing,
     );
   });
 
@@ -876,6 +1096,10 @@ void main() {
     expect(find.byType(SegmentedButton<DeadlinePlanKind>), findsNothing);
     await _tap(tester, find.text('Continue'));
     await _tap(tester, find.text('Continue'));
+    final dailyCap = tester.widget<TextField>(
+      find.byKey(const ValueKey('deadline-daily-cap')),
+    );
+    expect(dailyCap.controller!.text, '120');
     await _tap(tester, find.text('Create preview'));
 
     expect(repository.proposalDrafts, hasLength(2));
@@ -1074,10 +1298,11 @@ void main() {
 
   for (final kind in DeadlinePlanKind.values) {
     final label = kind == DeadlinePlanKind.exam ? 'Exam' : 'Assignment';
+    final expectedDailyCap = kind == DeadlinePlanKind.exam ? 120 : 275;
     testWidgets(
         'existing $label stays root-kind locked in edit and deep-link replan',
         (tester) async {
-      final plan = _planWithKind(kind);
+      final plan = _planWithKind(kind, maxDailyMinutes: expectedDailyCap);
       final repository = _FakeDeadlinePlanRepository(
         feeds: [
           DeadlinePlanFeed(plans: [plan]),
@@ -1101,6 +1326,10 @@ void main() {
 
       await _tap(tester, find.text('Continue'));
       await _tap(tester, find.text('Continue'));
+      final dailyCap = tester.widget<TextField>(
+        find.byKey(const ValueKey('deadline-daily-cap')),
+      );
+      expect(dailyCap.controller!.text, '$expectedDailyCap');
       await _tap(tester, find.text('Create preview'));
       expect(repository.proposalDrafts.single.kind, kind);
 
@@ -1581,9 +1810,16 @@ Future<void> _pumpPage(
 }
 
 class _FakeAssignmentSeriesRepository implements AssignmentSeriesRepository {
-  _FakeAssignmentSeriesRepository({this.series = const []});
+  _FakeAssignmentSeriesRepository({
+    this.series = const [],
+    this.proposalResult,
+    List<Object>? proposalErrors,
+  }) : proposalErrors = [...?proposalErrors];
 
   final List<AssignmentSeries> series;
+  final AssignmentSeries? proposalResult;
+  final List<Object> proposalErrors;
+  final List<AssignmentSeriesProposalDraft> proposalDrafts = [];
 
   @override
   Future<AssignmentSeriesFeed> getSeries() async =>
@@ -1593,8 +1829,13 @@ class _FakeAssignmentSeriesRepository implements AssignmentSeriesRepository {
   Future<AssignmentSeries> propose({
     required String requestId,
     required AssignmentSeriesProposalDraft draft,
-  }) =>
-      throw UnimplementedError();
+  }) async {
+    proposalDrafts.add(draft);
+    if (proposalErrors.isNotEmpty) throw proposalErrors.removeAt(0);
+    if (proposalResult case final result?) return result;
+    if (series.isNotEmpty) return series.first;
+    throw StateError('Missing assignment series proposal result');
+  }
 
   @override
   Future<AssignmentSeries> confirm({
@@ -1627,12 +1868,19 @@ DeadlinePlan _plan({String status = 'active', bool pending = false}) =>
       deadlinePlanEnvelope(status: status, pending: pending),
     ).plan;
 
-DeadlinePlan _planWithKind(DeadlinePlanKind kind) {
+DeadlinePlan _planWithKind(
+  DeadlinePlanKind kind, {
+  int maxDailyMinutes = 120,
+}) {
   final json = deadlinePlanEnvelope();
   (json['plan'] as Map<String, dynamic>)['kind'] = kind.code;
   for (final key in ['active_revision', 'pending_revision']) {
     final revision = json[key];
-    if (revision is Map<String, dynamic>) revision['kind'] = kind.code;
+    if (revision is Map<String, dynamic>) {
+      revision
+        ..['kind'] = kind.code
+        ..['max_daily_minutes'] = maxDailyMinutes;
+    }
   }
   return DeadlinePlanResponse.fromJson(json).plan;
 }

@@ -157,6 +157,17 @@ and before a future-wide edit that it deliberately overwrites future
 deviations while preserving older completed work. A partial-failure message
 must say that no partial confirmation was kept.
 
+Daily-cap defaults are presented as editable starting values, never inferred
+effort. A new Exam starts at 120 minutes per day and a new Assignment or weekly
+Assignment Series starts at 360; saved, retained, or manually entered values
+stay visible unchanged. Optional `How new previews place time` methodology
+says `A new or replanned Exam preview spreads its first sessions across
+suitable days.` or `A new or replanned Assignment preview fills the earliest
+suitable day before moving on.` It describes only the next preview and must not
+claim that an older active revision was allocated by the current policy. It
+must not imply automatic replanning, guaranteed free time, or background
+calendar freshness.
+
 Exam and Assignment surfaces do not show `No additional prior work`,
 `Add prior work`, `Entered prior credit`, or another prior-work summary. They
 show total estimate, linked/tracked Focus, and remaining preparation only.

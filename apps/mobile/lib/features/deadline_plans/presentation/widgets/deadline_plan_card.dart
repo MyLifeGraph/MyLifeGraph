@@ -233,9 +233,9 @@ class _DeadlinePlanCardState extends State<_DeadlinePlanCard> {
             'Finish by ${DateFormat.yMMMd().add_Hm().format(revision.deadlineAt.toLocal())} · device time',
           ),
           AppInfoSectionDisclosure(
-            heading: 'How times are placed',
+            heading: 'How new previews place time',
             description:
-                '${_planningWindowDescription(revision.bestEnergyWindow)} Preparation blocks use your profile timezone: ${revision.timezone}.',
+                '${_deadlineAllocationDescription(revision.kind)} ${_planningWindowDescription(revision.bestEnergyWindow)} Preparation blocks use your profile timezone: ${revision.timezone}.',
             headingStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   fontWeight: FontWeight.w600,
                 ),

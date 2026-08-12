@@ -70,6 +70,7 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
   late DeadlinePlanSourceKind _sourceKind;
   late bool _showExistingSummary;
   bool _useCalendarAvailability = false;
+  bool _dailyCapWasManuallyEdited = false;
 
   @override
   void initState() {
@@ -89,12 +90,14 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
     );
     _creditedPriorMinutes =
         retained?.creditedPriorMinutes ?? existing?.creditedPriorMinutes ?? 0;
-    _dailyCapController = TextEditingController(
-      text: '${retained?.maxDailyMinutes ?? existing?.maxDailyMinutes ?? 120}',
-    );
     _kind = widget.lockKind
         ? widget.initialKind
         : retained?.kind ?? existing?.kind ?? widget.initialKind;
+    _dailyCapController = TextEditingController(
+      text:
+          '${retained?.maxDailyMinutes ?? existing?.maxDailyMinutes ?? defaultDeadlinePlanDailyPreparationMinutes(_kind)}',
+    );
+    _dailyCapWasManuallyEdited = retained != null || existing != null;
     _deadline = retained?.deadlineAt ??
         existing?.deadlineAt ??
         widget.initialDeadlineAt;
@@ -404,7 +407,13 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
             ],
             selected: _kind == null ? const {} : {_kind!},
             onSelectionChanged: (values) {
-              setState(() => _kind = values.isEmpty ? null : values.single);
+              setState(() {
+                _kind = values.isEmpty ? null : values.single;
+                if (!_dailyCapWasManuallyEdited && _kind != null) {
+                  _dailyCapController.text =
+                      '${defaultDeadlinePlanDailyPreparationMinutes(_kind)}';
+                }
+              });
             },
           ),
         const SizedBox(height: AppSpacing.md),
@@ -554,6 +563,7 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
           key: const ValueKey('deadline-daily-cap'),
           controller: _dailyCapController,
           keyboardType: TextInputType.number,
+          onChanged: (_) => _dailyCapWasManuallyEdited = true,
           decoration: const InputDecoration(
             labelText: 'Maximum preparation minutes per day for this plan',
           ),

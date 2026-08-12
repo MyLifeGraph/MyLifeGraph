@@ -6,6 +6,7 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
+from app.services import deadline_plan_service as deadline_plan_service_module
 from app.models.deadline_plans import DeadlinePlanProposalRequest
 from app.repositories.deadline_plan_repository import (
     DeadlinePlanProjection,
@@ -103,10 +104,11 @@ def _context(
     confirmed_blocks=None,
     daily_preparation_budget_minutes=None,
     study_setup=None,
+    best_energy_window="variable",
 ) -> DeadlinePlanningContext:
     return DeadlinePlanningContext(
         timezone="UTC",
-        best_energy_window="variable",
+        best_energy_window=best_energy_window,
         schedule_items=schedule_items or [],
         confirmed_blocks=confirmed_blocks or [],
         timed_calendar_events=[],
@@ -143,29 +145,61 @@ def test_planner_spreads_first_sessions_and_treats_buffer_as_hard() -> None:
     assert all(day < date(2026, 7, 29) for day in block_days)
 
 
-def test_deadline_preview_prefers_learned_window_then_setup_fallback() -> None:
+def test_assignment_clusters_the_earliest_day_up_to_its_saved_cap() -> None:
     request = _request(
-        deadline_at=datetime(2026, 7, 20, 23, tzinfo=UTC),
-        planning_start_on=date(2026, 7, 20),
-        buffer_days=0,
-        estimated_total_minutes=50,
+        kind="assignment",
+        estimated_total_minutes=371,
+        preferred_session_minutes=60,
+        max_daily_minutes=360,
     )
-    learned = _plan_blocks(
+    blocks = _plan_blocks(
         request=request,
         context=_context(),
         zone=ZoneInfo("UTC"),
         local_now=NOW,
         local_deadline=request.deadline_at,
         effective_start=request.planning_start_on,
-        remaining_minutes=50,
+        remaining_minutes=371,
+    )
+
+    minutes_by_day = {
+        day: sum(block.minutes for block in blocks if block.starts_at.date() == day)
+        for day in {block.starts_at.date() for block in blocks}
+    }
+    assert minutes_by_day == {
+        date(2026, 7, 20): 360,
+        date(2026, 7, 21): 11,
+    }
+
+
+def test_clustered_assignment_prefers_learned_window_then_setup_fallback() -> None:
+    request = _request(
+        kind="assignment",
+        deadline_at=datetime(2026, 7, 20, 23, tzinfo=UTC),
+        planning_start_on=date(2026, 7, 20),
+        buffer_days=0,
+        estimated_total_minutes=100,
+        max_daily_minutes=360,
+    )
+    learned = _plan_blocks(
+        request=request,
+        context=_context(best_energy_window="morning"),
+        zone=ZoneInfo("UTC"),
+        local_now=NOW,
+        local_deadline=request.deadline_at,
+        effective_start=request.planning_start_on,
+        remaining_minutes=100,
         learned_focus_window="18-23",
     )
 
-    assert learned[0].starts_at.hour == 18
+    assert [block.minutes for block in learned] == [50, 50]
+    assert {block.starts_at.date() for block in learned} == {date(2026, 7, 20)}
+    assert all(block.starts_at.hour >= 18 for block in learned)
 
     blocked = _plan_blocks(
         request=request,
         context=_context(
+            best_energy_window="morning",
             schedule_items=[
                 {
                     "id": "evening-class",
@@ -180,18 +214,21 @@ def test_deadline_preview_prefers_learned_window_then_setup_fallback() -> None:
         local_now=NOW,
         local_deadline=request.deadline_at,
         effective_start=request.planning_start_on,
-        remaining_minutes=50,
+        remaining_minutes=100,
         learned_focus_window="18-23",
     )
 
-    assert sum(block.minutes for block in blocked) == 50
+    assert [block.minutes for block in blocked] == [50, 50]
+    assert {block.starts_at.date() for block in blocked} == {date(2026, 7, 20)}
     assert blocked[0].starts_at.hour < 18
 
 
 def test_deadline_plan_always_uses_configured_study_rhythm_and_recovery() -> None:
     request = _request(
+        kind="assignment",
         estimated_total_minutes=100,
         preferred_session_minutes=45,
+        max_daily_minutes=360,
     )
     blocks = _plan_blocks(
         request=request,
@@ -210,6 +247,7 @@ def test_deadline_plan_always_uses_configured_study_rhythm_and_recovery() -> Non
     )
 
     assert [block.minutes for block in blocks] == [45, 45, 10]
+    assert {block.starts_at.date() for block in blocks} == {date(2026, 7, 20)}
     assert all(block.recovery_minutes == 10 for block in blocks)
     assert all(
         block.reserved_ends_at == block.ends_at + timedelta(minutes=10)
@@ -592,6 +630,51 @@ class ReplayRepository:
     async def load_planning_context(self, **kwargs):
         self.context_loaded = True
         raise AssertionError("exact replay must not reload planning context")
+
+
+class ProposalRepository:
+    async def get_plan(self, *, user_id, plan_id):
+        assert user_id == "owner"
+        assert plan_id == PLAN_ID
+        return None
+
+    async def load_planning_context(self, **kwargs):
+        assert kwargs["user_id"] == "owner"
+        return _context()
+
+
+def test_internal_allocation_policy_changes_only_the_planning_fingerprint(
+    monkeypatch,
+) -> None:
+    captured: list[object] = []
+
+    def capture(value: object) -> str:
+        captured.append(value)
+        return str(len(captured)) * 64
+
+    monkeypatch.setattr(deadline_plan_service_module, "_fingerprint", capture)
+    service = DeadlinePlanService(repository=ProposalRepository(), now=lambda: NOW)
+    prepared = asyncio.run(
+        service.prepare_proposal(
+            user_id="owner",
+            request=_request(
+                kind="assignment",
+                preferred_session_minutes=60,
+                max_daily_minutes=360,
+            ),
+        ),
+    )
+
+    assert len(captured) == 2
+    request_fingerprint_input = captured[0]
+    planning_fingerprint_input = captured[1]
+    assert isinstance(request_fingerprint_input, dict)
+    assert "request_id" not in request_fingerprint_input
+    assert "allocation_policy" not in request_fingerprint_input
+    assert isinstance(planning_fingerprint_input, dict)
+    assert planning_fingerprint_input["allocation_policy"] == "earliest_clustered"
+    assert prepared.request_fingerprint == "1" * 64
+    assert prepared.write.proposal.planning_fingerprint == "2" * 64
 
 
 def test_exact_proposal_replay_short_circuits_stale_base_and_time() -> None:

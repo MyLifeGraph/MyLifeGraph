@@ -200,12 +200,40 @@ def test_new_series_prepares_weekly_independent_plans_in_one_write() -> None:
     ]
 
 
+def test_new_series_uses_assignment_clustering_and_360_minute_cap() -> None:
+    service, series, _ = _service()
+
+    asyncio.run(
+        service.propose(
+            user_id="owner",
+            request=_request(
+                estimated_total_minutes=300,
+                preferred_session_minutes=50,
+                max_daily_minutes=360,
+            ),
+        ),
+    )
+
+    items = series.persisted[0]["items"]
+    expected_starts = ["2026-08-10", "2026-08-18", "2026-08-25"]
+    for item, expected_start in zip(items, expected_starts, strict=True):
+        proposal = item["proposal"]
+        assert proposal["kind"] == "assignment"
+        assert proposal["max_daily_minutes"] == 360
+        assert proposal["planning_start_on"] == expected_start
+        assert {block["local_date"] for block in item["blocks"]} == {
+            expected_start,
+        }
+        assert sum(block["planned_minutes"] for block in item["blocks"]) == 300
+
+
 def test_weekly_wall_clock_time_survives_daylight_saving_change() -> None:
     now = datetime(2026, 10, 1, 8, tzinfo=UTC)
     service, series, _ = _service(now=now)
     request = _request(
         next_deadline_at="2026-10-24T10:00:00+02:00",
         remaining_occurrences=2,
+        max_daily_minutes=360,
     )
 
     asyncio.run(service.propose(user_id="owner", request=request))
@@ -220,6 +248,15 @@ def test_weekly_wall_clock_time_survives_daylight_saving_change() -> None:
         ("2026-10-31", 10),
     ]
     assert [value.utcoffset().total_seconds() for value in deadlines] == [7200, 3600]
+    assert [
+        item["proposal"]["planning_start_on"] for item in series.persisted[0]["items"]
+    ] == [
+        "2026-10-01",
+        "2026-10-25",
+    ]
+    assert {
+        block["local_date"] for block in series.persisted[0]["items"][1]["blocks"]
+    } == {"2026-10-25"}
 
 
 def test_whole_series_edit_retains_completed_and_overwrites_future_revision() -> None:
@@ -287,12 +324,14 @@ def test_whole_series_edit_retains_completed_and_overwrites_future_revision() ->
     series.deadline_plans = {
         completed_id: {
             "id": str(completed_id),
+            "kind": "assignment",
             "status": "completed",
             "current_revision": 1,
             "latest_revision": 1,
         },
         future_id: {
             "id": str(future_id),
+            "kind": "assignment",
             "status": "active",
             "current_revision": 2,
             "latest_revision": 3,

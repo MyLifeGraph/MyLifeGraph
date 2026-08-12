@@ -595,6 +595,13 @@ opening. New plans submit zero prior credit and expose no prior-work controls;
 legacy non-zero credit remains a silent progress input.
 The surface shows
 the deterministic ordered energy windows and latest-manual-import boundary.
+New Exam proposals default to a 120-minute daily cap and preserve the existing
+spread-first allocation. New Assignment and Assignment Series proposals
+default to 360 minutes and exhaust each earliest suitable profile-local date
+before advancing. The backend derives that internal allocation policy from the
+immutable plan kind and covers it in the planning fingerprint; request
+identity, public V1 JSON, and repository/RPC write shapes remain unchanged.
+Existing, retained, or manually edited daily caps remain authoritative.
 `POST /v1/deadline-plans/proposals` persists an immutable
 proposed revision with at most 120 deterministic dated blocks; it cannot replace
 the active revision until the user confirms it. The first confirmation creates
@@ -638,7 +645,9 @@ proposal uses it. Normal blocks have the exact focus duration, only the final
 remainder may be shorter, and each block reserves the complete recovery period
 without counting it as preparation or progress. The proposal freezes the Study
 revision and confirmation rejects changed settings; existing active revisions
-are never rewritten.
+are never rewritten. Assignment clustering changes only the order in which
+dates are consumed: recovery continues to occupy availability without consuming
+the per-plan or account-wide active-minute caps.
 
 An optional nullable account-wide preparation budget lives on `profiles` and is
 set only through a bearer-derived FastAPI account route plus service-role-only

@@ -293,6 +293,29 @@ on the current local date still consume capacity even when their time interval
 has already ended. Blocks from every plan remain non-overlapping independently
 of either minute cap.
 
+Allocation for each newly generated or explicitly replanned preview is
+kind-specific while the public `deadline-plan-v1` request and response stay
+unchanged. Exams use `spread_first`: their first preferred sessions are
+distributed over the available runway before viable dates are reused.
+Assignments use `earliest_clustered`: the earliest suitable local date is
+filled before the planner advances to the next date. Older active revisions
+retain their confirmed blocks, including legacy Assignment revisions that may
+have been generated with spread-first placement, until the user confirms a new
+preview. New Exam editors start
+with a 120-minute per-plan daily cap; new one-off Assignment and Assignment
+Series editors start with 360 minutes. Selecting a kind may update only an
+untouched new-plan default. A manually edited cap and every value loaded from
+an existing revision or retained failed draft remain unchanged.
+
+The Assignment allocator still obeys the revision's stored daily cap, the
+account-wide remaining preparation budget, all busy intervals, the 120-block
+bound, and the exact remaining effort. Study focus and recovery keep their
+established authority: only active Focus minutes consume either daily cap,
+while the complete Focus-plus-recovery interval must fit and remains reserved.
+The kind-derived allocation policy is part of the internal planning-fingerprint
+input, but not the request fingerprint, persisted RPC payload shape, or public
+V1 wire contract.
+
 The revision's planning fingerprint also covers the current
 `study_setup_revision` and recovery duration. Confirmation rechecks both under
 the shared owner lock and uses full recovery ends in every competing-reservation
@@ -694,6 +717,9 @@ Focused backend, Flutter, migration, and browser coverage must prove:
 - deterministic block identity, ordering, totals, timezone/DST behavior,
   conflict avoidance, proposal-time focus accounting, the 366-day horizon,
   bounds, and honest unallocated minutes;
+- unchanged Exam spread-first placement, earliest-date Assignment clustering,
+  120/360 untouched new-plan defaults, retained manual/existing/retry caps, and
+  allocation-policy inclusion in only the internal planning fingerprint;
 - nullable account-budget validation, exact idempotent save/removal, ambiguous-
   response reconciliation, direct-write denial, shared owner locking, other-
   plan capacity deduction including earlier same-day reservations, and a
