@@ -206,6 +206,15 @@ Migration verification has separate complementary layers:
 - `supabase/tests/*.sql` proves the final applied schema, RLS, grants, triggers,
   constraints, and database behavior.
 
+The Deadline Plan kind-authority coverage pairs a source guard for wrapper
+signature, lock/replay ordering, inner/base-function authority, and Assignment
+Series delegation with final-state pgTAP for denied direct service-role base
+execution, draft and active mismatches, unchanged roots/request ledgers, valid
+same-kind writes, and exact replay. The
+scheduled-Focus pgTAP also starts and finishes both missed and upcoming
+Deadline blocks at supplied server time while proving immutable planned origin,
+terminal replay, and exactly-once remaining-minute credit.
+
 A history mismatch fails before pgTAP. After reviewing the pending SQL and
 affected local rows, apply it intentionally only with:
 

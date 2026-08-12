@@ -177,11 +177,32 @@ class FocusSessionState {
   final FocusProtectionStatus? protectionStatus;
   final bool isChangingProtection;
 
+  bool get hasValidStartDuration =>
+      plannedMinutes >= 5 &&
+      plannedMinutes <= 240 &&
+      (scheduledContext == null ||
+          plannedMinutes <= scheduledContext!.remainingMinutes);
+
+  bool get hasValidStartTarget {
+    final selected = selectedTargetValue;
+    final selectedExists =
+        selected == null || targets.any((target) => target.value == selected);
+    final scheduled = scheduledContext;
+    if (scheduled != null) {
+      return selected == scheduled.target.value && selectedExists;
+    }
+    return selectedExists;
+  }
+
   bool get canStart =>
+      active == null &&
       (studySetupStatus != StudySetupLoadStatus.unavailable ||
           continueWithoutStudySetup ||
           scheduledContext != null) &&
-      (scheduledContext?.canStart ?? true);
+      (scheduledContext?.canStart ?? true) &&
+      hasValidStartDuration &&
+      hasValidStartTarget &&
+      startConflictMessage == null;
 
   FocusTargetOption? targetFor(FocusSession session) => targets
       .where(
@@ -449,11 +470,12 @@ class FocusSessionController extends StateNotifier<FocusSessionState> {
       }
       if (!isCurrent()) return const FocusLoadResult();
       var selected = state.selectedTargetValue;
-      if (!_initialTargetApplied) {
+      if (scheduledContext != null) {
+        selected = scheduledContext.target.value;
         _initialTargetApplied = true;
-        if (scheduledContext != null) {
-          selected = scheduledContext.target.value;
-        } else if (selected == null &&
+      } else if (!_initialTargetApplied) {
+        _initialTargetApplied = true;
+        if (selected == null &&
             _launch.initialTargetKind != null &&
             _launch.initialTargetId != null) {
           final requested =
@@ -468,11 +490,24 @@ class FocusSessionController extends StateNotifier<FocusSessionState> {
         selected = null;
       }
       var plannedMinutes = state.plannedMinutes;
-      if (!_initialDurationApplied) {
-        _initialDurationApplied = true;
-        if (scheduledContext != null) {
+      if (scheduledContext != null) {
+        final previous = state.scheduledContext;
+        final contextChanged = previous == null ||
+            previous.sourceKind != scheduledContext.sourceKind ||
+            previous.blockId != scheduledContext.blockId ||
+            previous.target.value != scheduledContext.target.value;
+        if (!_initialDurationApplied || contextChanged) {
           plannedMinutes = scheduledContext.remainingMinutes;
-        } else if (_launch.initialPlannedMinutes == null && active == null) {
+        } else if (!_validPlannedMinutes(
+          plannedMinutes,
+          scheduledContext: scheduledContext,
+        )) {
+          plannedMinutes = scheduledContext.remainingMinutes;
+        }
+        _initialDurationApplied = true;
+      } else if (!_initialDurationApplied) {
+        _initialDurationApplied = true;
+        if (_launch.initialPlannedMinutes == null && active == null) {
           final terminal = recent.where((session) => !session.isActive);
           if (studyResult.settings != null) {
             plannedMinutes = studyResult.settings!.focusMinutes;
@@ -480,6 +515,8 @@ class FocusSessionController extends StateNotifier<FocusSessionState> {
             plannedMinutes = terminal.first.plannedMinutes;
           }
         }
+      } else if (!_validPlannedMinutes(plannedMinutes)) {
+        plannedMinutes = studyResult.settings?.focusMinutes ?? 25;
       }
       final requestedRecovery = _launch.initialRecoveryMinutes;
       final recoveryMinutes = scheduledContext?.recoveryMinutes ??
@@ -537,12 +574,17 @@ class FocusSessionController extends StateNotifier<FocusSessionState> {
     if (!mounted || state.isSaving) return;
     final result = await _fetchStudySettings();
     if (!mounted) return;
+    final scheduled = state.scheduledContext;
     state = state.copyWith(
       studySetupStatus: result.status,
       studySettings: result.settings,
       continueWithoutStudySetup: false,
-      plannedMinutes: result.settings?.focusMinutes,
-      recoveryMinutes: result.settings?.recoveryMinutes,
+      plannedMinutes: scheduled == null
+          ? result.settings?.focusMinutes
+          : state.plannedMinutes,
+      recoveryMinutes: scheduled == null
+          ? result.settings?.recoveryMinutes
+          : scheduled.recoveryMinutes,
     );
   }
 
@@ -566,7 +608,13 @@ class FocusSessionController extends StateNotifier<FocusSessionState> {
   }
 
   void setPlannedMinutes(int value) {
-    if (!mounted) return;
+    if (!mounted ||
+        !_validPlannedMinutes(
+          value,
+          scheduledContext: state.scheduledContext,
+        )) {
+      return;
+    }
     state = state.copyWith(
       plannedMinutes: value,
       startConflictMessage: null,
@@ -575,6 +623,16 @@ class FocusSessionController extends StateNotifier<FocusSessionState> {
 
   void selectTarget(String? value) {
     if (!mounted) return;
+    final scheduled = state.scheduledContext;
+    if (scheduled != null) {
+      if (value != scheduled.target.value ||
+          !state.targets.any((target) => target.value == value)) {
+        return;
+      }
+    } else if (value != null &&
+        !state.targets.any((target) => target.value == value)) {
+      return;
+    }
     state = state.copyWith(selectedTargetValue: value);
   }
 
@@ -947,6 +1005,15 @@ class FocusSessionController extends StateNotifier<FocusSessionState> {
 }
 
 Future<void> _ignoreReflectionRefresh() async {}
+
+bool _validPlannedMinutes(
+  int value, {
+  FocusStartContext? scheduledContext,
+}) {
+  return value >= 5 &&
+      value <= 240 &&
+      (scheduledContext == null || value <= scheduledContext.remainingMinutes);
+}
 
 class _StudySettingsResult {
   const _StudySettingsResult(this.status, this.settings);

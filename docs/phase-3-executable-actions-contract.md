@@ -214,6 +214,16 @@ server failures remain honest errors. Scheduled starts never use that fallback,
 and a stored `focus-session-v2` row always requires the backend for terminal
 server-time truth.
 
+Each scheduled-context load is authoritative for both target and remaining
+duration. Flutter replaces a stale selected target, clamps an invalid prior
+duration back to the current remainder, rejects invalid setter values, and
+requires both values to remain valid before start. Canonical completed
+(`source_fully_credited`) and sub-five-minute
+(`source_remaining_too_short`) contexts render as blocked inline states without
+an empty duration control or a `starts now` claim. Start still records the
+actual server instant for either a past or future source interval while the
+immutable source row retains the planned origin.
+
 `request_id` is also the Focus session id. Exact content replay returns the
 same `focus-session-v2` row; different content returns
 `409 focus_request_conflict`. Reflection, local-day assignment, Today,
@@ -344,6 +354,11 @@ Study Focus coverage additionally proves duration priority, configured and
 empty checklists, partial/all/remaining skip, absence of ritual history, manual
 duration override, strict recovery metadata, completed-only countdown,
 restoration, expiry, and explicit skip.
+
+Scheduled Focus coverage additionally proves refreshed duration/target
+authority, invalid-setter rejection, completed and sub-five-minute UI safety,
+past/future actual-time starts, immutable origin, and exactly-once source credit
+under terminal replay.
 
 The browser E2E source asserts exact database rows for task
 create/edit/postpone/undo, complete/restore, and cancel/restore; manual and

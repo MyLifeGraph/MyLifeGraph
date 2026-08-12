@@ -201,6 +201,133 @@ void main() {
     expect(controller.state.reflections, isEmpty);
     expect(reflectionRefreshes, 2);
   });
+
+  test('scheduled reload revalidates duration and authoritative target',
+      () async {
+    final targetA = _target('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1', 'Task A');
+    final targetB = _target('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb2', 'Task B');
+    final source = _FocusPortFake(
+      targets: [targetA, targetB],
+      scheduledContexts: [
+        _scheduledContext(target: targetA, remainingMinutes: 20),
+        _scheduledContext(target: targetB, remainingMinutes: 10),
+      ],
+    );
+    final controller = _controller(
+      source: source,
+      launch: const FocusSessionLaunch(
+        initialSourceKind: FocusScheduleSourceKind.deadlinePlanBlock,
+        initialSourceBlockId: 'cccccccc-cccc-4ccc-8ccc-ccccccccccc3',
+      ),
+    );
+    addTearDown(controller.dispose);
+
+    await controller.load();
+    expect(controller.state.plannedMinutes, 20);
+    expect(controller.state.selectedTargetValue, targetA.value);
+    expect(controller.state.canStart, isTrue);
+
+    await controller.load();
+    expect(controller.state.plannedMinutes, 10);
+    expect(controller.state.selectedTargetValue, targetB.value);
+    expect(controller.state.canStart, isTrue);
+
+    controller.setPlannedMinutes(11);
+    controller.setPlannedMinutes(4);
+    controller.selectTarget(targetA.value);
+    controller.selectTarget(null);
+    expect(controller.state.plannedMinutes, 10);
+    expect(controller.state.selectedTargetValue, targetB.value);
+    expect(
+      controller.state.copyWith(plannedMinutes: 11).canStart,
+      isFalse,
+    );
+    expect(
+      controller.state.copyWith(selectedTargetValue: targetA.value).canStart,
+      isFalse,
+    );
+  });
+
+  for (final remainingMinutes in [4, 0]) {
+    test('same scheduled block reload clamps 20 to $remainingMinutes',
+        () async {
+      final target = _target(
+        'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1',
+        'Scheduled task',
+      );
+      final source = _FocusPortFake(
+        targets: [target],
+        scheduledContexts: [
+          _scheduledContext(target: target, remainingMinutes: 20),
+          _scheduledContext(
+            target: target,
+            remainingMinutes: remainingMinutes,
+            sourceState: remainingMinutes == 0 ? 'completed' : 'partial',
+            canStart: false,
+            blockingReason: remainingMinutes == 0
+                ? 'source_fully_credited'
+                : 'source_remaining_too_short',
+          ),
+        ],
+      );
+      final controller = _controller(
+        source: source,
+        launch: const FocusSessionLaunch(
+          initialSourceKind: FocusScheduleSourceKind.deadlinePlanBlock,
+          initialSourceBlockId: 'cccccccc-cccc-4ccc-8ccc-ccccccccccc3',
+        ),
+      );
+      addTearDown(controller.dispose);
+
+      await controller.load();
+      expect(controller.state.plannedMinutes, 20);
+      expect(controller.state.canStart, isTrue);
+
+      await controller.load();
+      expect(controller.state.plannedMinutes, remainingMinutes);
+      expect(controller.state.selectedTargetValue, target.value);
+      expect(controller.state.hasValidStartDuration, isFalse);
+      expect(controller.state.canStart, isFalse);
+    });
+  }
+
+  test('terminal reload binds a scheduled context hidden by an active session',
+      () async {
+    final target = _target(
+      'dddddddd-dddd-4ddd-8ddd-ddddddddddd4',
+      'Scheduled task',
+    );
+    final source = _FocusPortFake(
+      active: _activeSession(),
+      targets: [target],
+      scheduledContexts: [
+        _scheduledContext(target: target, remainingMinutes: 10),
+      ],
+    );
+    final controller = _controller(
+      source: source,
+      launch: const FocusSessionLaunch(
+        initialSourceKind: FocusScheduleSourceKind.deadlinePlanBlock,
+        initialSourceBlockId: 'cccccccc-cccc-4ccc-8ccc-ccccccccccc3',
+      ),
+    );
+    addTearDown(controller.dispose);
+
+    await controller.load();
+    expect(controller.state.active, isNotNull);
+    expect(controller.state.scheduledContext, isNull);
+
+    final result = await controller.finish(
+      onCommitted: (_, __) async {},
+    );
+
+    expect(result.committed, isTrue);
+    expect(controller.state.active, isNull);
+    expect(controller.state.scheduledContext, isNotNull);
+    expect(controller.state.plannedMinutes, 10);
+    expect(controller.state.selectedTargetValue, target.value);
+    expect(controller.state.canStart, isTrue);
+  });
 }
 
 const _requestId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
@@ -263,6 +390,32 @@ FocusSession _terminalSession({
   );
 }
 
+FocusTargetOption _target(String id, String title) => FocusTargetOption(
+      kind: FocusTargetKind.task,
+      id: id,
+      title: title,
+    );
+
+FocusStartContext _scheduledContext({
+  required FocusTargetOption target,
+  required int remainingMinutes,
+  String sourceState = 'upcoming',
+  bool canStart = true,
+  String? blockingReason,
+}) =>
+    FocusStartContext(
+      sourceKind: FocusScheduleSourceKind.deadlinePlanBlock,
+      blockId: 'cccccccc-cccc-4ccc-8ccc-ccccccccccc3',
+      target: target,
+      originalStartsAt: DateTime.utc(2026, 8, 3, 10),
+      originalEndsAt: DateTime.utc(2026, 8, 3, 10, 30),
+      recoveryMinutes: 5,
+      remainingMinutes: remainingMinutes,
+      sourceState: sourceState,
+      canStart: canStart,
+      blockingReason: blockingReason,
+    );
+
 class _FocusPortFake implements FocusSessionLifecyclePort {
   _FocusPortFake({
     this.active,
@@ -270,6 +423,8 @@ class _FocusPortFake implements FocusSessionLifecyclePort {
     this.events,
     this.failActiveReads = 0,
     this.loseNextStartResponse = false,
+    this.targets = const [],
+    this.scheduledContexts = const [],
   });
 
   FocusSession? active;
@@ -277,6 +432,9 @@ class _FocusPortFake implements FocusSessionLifecyclePort {
   List<String>? events;
   int failActiveReads;
   bool loseNextStartResponse;
+  final List<FocusTargetOption> targets;
+  final List<FocusStartContext> scheduledContexts;
+  int _scheduledContextIndex = 0;
   FocusSession? terminal;
   final reflections = <String, FocusReflection>{};
 
@@ -306,8 +464,13 @@ class _FocusPortFake implements FocusSessionLifecyclePort {
   Future<FocusStartContext> fetchScheduledStartContext({
     required FocusScheduleSourceKind sourceKind,
     required String blockId,
-  }) {
-    throw UnimplementedError();
+  }) async {
+    if (scheduledContexts.isEmpty) throw UnimplementedError();
+    final index = _scheduledContextIndex < scheduledContexts.length
+        ? _scheduledContextIndex
+        : scheduledContexts.length - 1;
+    _scheduledContextIndex += 1;
+    return scheduledContexts[index];
   }
 
   @override
@@ -321,7 +484,7 @@ class _FocusPortFake implements FocusSessionLifecyclePort {
   Future<bool> fetchFocusReflectionPromptEnabled() async => true;
 
   @override
-  Future<List<FocusTargetOption>> fetchAvailableTargets() async => const [];
+  Future<List<FocusTargetOption>> fetchAvailableTargets() async => targets;
 
   @override
   Future<StudyFocusSettings?> fetchStudyFocusSettings() async => null;

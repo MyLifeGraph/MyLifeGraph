@@ -438,6 +438,10 @@ class DeadlinePlanService:
                 )
             tracked_focus_minutes = 0
         else:
+            if existing.get("kind") != request.kind:
+                raise DeadlinePlanConflictError(
+                    "Deadline plan kind cannot be changed.",
+                )
             if existing.get("status") not in {"draft", "active"}:
                 raise DeadlinePlanConflictError(
                     "A terminal deadline plan cannot be replanned.",

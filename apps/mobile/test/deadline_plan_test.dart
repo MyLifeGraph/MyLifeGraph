@@ -351,4 +351,22 @@ void main() {
       throwsA(isA<DeadlinePlanContractException>()),
     );
   });
+
+  test('rejects active or pending revision kind that differs from root plan',
+      () {
+    final activeMismatch = deadlinePlanEnvelope();
+    (activeMismatch['active_revision'] as Map<String, dynamic>)['kind'] =
+        'assignment';
+
+    final pendingMismatch = deadlinePlanEnvelope(pending: true);
+    (pendingMismatch['pending_revision'] as Map<String, dynamic>)['kind'] =
+        'assignment';
+
+    for (final invalid in [activeMismatch, pendingMismatch]) {
+      expect(
+        () => DeadlinePlanResponse.fromJson(invalid),
+        throwsA(isA<DeadlinePlanContractException>()),
+      );
+    }
+  });
 }

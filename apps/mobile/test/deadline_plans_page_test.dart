@@ -23,6 +23,7 @@ import 'package:my_life_graph/features/snapshots/application/snapshot_refresh_se
 import 'package:my_life_graph/features/snapshots/presentation/providers/snapshot_providers.dart';
 
 import 'support/deadline_plan_fixtures.dart';
+import 'support/assignment_series_fixtures.dart';
 
 void main() {
   final now = DateTime(2026, 7, 18, 10);
@@ -82,6 +83,48 @@ void main() {
 
     expect(find.text('What are you preparing for?'), findsOneWidget);
     expect(find.byKey(const ValueKey('deadline-locked-kind')), findsOneWidget);
+    expect(find.byType(SegmentedButton<DeadlinePlanKind>), findsNothing);
+  });
+
+  testWidgets('Assignment Series Edit one keeps the occurrence kind locked',
+      (tester) async {
+    final series = AssignmentSeriesResponse.fromJson(
+      assignmentSeriesEnvelope(status: 'active'),
+    ).series;
+    final occurrencePlan = _planWithIdentity(
+      id: '40000000-0000-4000-8000-000000000001',
+      title: 'Weekly algorithms sheet · 1',
+      kind: DeadlinePlanKind.assignment,
+    );
+    await _pumpPage(
+      tester,
+      repository: _FakeDeadlinePlanRepository(
+        feeds: [
+          DeadlinePlanFeed(plans: [occurrencePlan]),
+        ],
+      ),
+      assignmentSeriesRepository: _FakeAssignmentSeriesRepository(
+        series: [series],
+      ),
+      page: DeadlinePlansPage(currentTime: now),
+    );
+
+    await _tap(
+      tester,
+      find.descendant(
+        of: find.byKey(ValueKey('assignment-series-${series.id}')),
+        matching: find.text(series.title),
+      ),
+    );
+    await _tap(tester, find.text('Edit one'));
+    await _tap(tester, find.text('Change values'));
+
+    final locked = find.byKey(const ValueKey('deadline-locked-kind'));
+    expect(locked, findsOneWidget);
+    expect(
+      find.descendant(of: locked, matching: find.text('Assignment')),
+      findsOneWidget,
+    );
     expect(find.byType(SegmentedButton<DeadlinePlanKind>), findsNothing);
   });
 
@@ -824,12 +867,20 @@ void main() {
     expect(reviewValues, findsOneWidget);
     await tester.tap(reviewValues);
     await tester.pumpAndSettle();
+    final locked = find.byKey(const ValueKey('deadline-locked-kind'));
+    expect(locked, findsOneWidget);
+    expect(
+      find.descendant(of: locked, matching: find.text('Exam')),
+      findsOneWidget,
+    );
+    expect(find.byType(SegmentedButton<DeadlinePlanKind>), findsNothing);
     await _tap(tester, find.text('Continue'));
     await _tap(tester, find.text('Continue'));
     await _tap(tester, find.text('Create preview'));
 
     expect(repository.proposalDrafts, hasLength(2));
     expect(repository.proposalDrafts.last.baseRevision, 2);
+    expect(repository.proposalDrafts.last.kind, DeadlinePlanKind.exam);
     expect(repository.proposalRequestIds.toSet(), hasLength(2));
   });
 
@@ -863,6 +914,11 @@ void main() {
     expect(find.textContaining("this device's timezone"), findsOneWidget);
     expect(
       find.byKey(const ValueKey('deadline-keep-calendar-source')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('deadline-locked-kind')), findsNothing);
+    expect(
+      find.byType(SegmentedButton<DeadlinePlanKind>),
       findsOneWidget,
     );
   });
@@ -1015,6 +1071,62 @@ void main() {
     expect(find.byKey(const ValueKey('deadline-plan-title')), findsOneWidget);
     expect(repository.proposalDrafts, isEmpty);
   });
+
+  for (final kind in DeadlinePlanKind.values) {
+    final label = kind == DeadlinePlanKind.exam ? 'Exam' : 'Assignment';
+    testWidgets(
+        'existing $label stays root-kind locked in edit and deep-link replan',
+        (tester) async {
+      final plan = _planWithKind(kind);
+      final repository = _FakeDeadlinePlanRepository(
+        feeds: [
+          DeadlinePlanFeed(plans: [plan]),
+        ],
+      );
+      await _pumpPage(
+        tester,
+        repository: repository,
+        page: DeadlinePlansPage(currentTime: now),
+      );
+
+      await _tapPlanAction(tester, 'Adjust estimate or plan');
+      await _tap(tester, find.text('Change values'));
+      var locked = find.byKey(const ValueKey('deadline-locked-kind'));
+      expect(locked, findsOneWidget);
+      expect(
+        find.descendant(of: locked, matching: find.text(label)),
+        findsOneWidget,
+      );
+      expect(find.byType(SegmentedButton<DeadlinePlanKind>), findsNothing);
+
+      await _tap(tester, find.text('Continue'));
+      await _tap(tester, find.text('Continue'));
+      await _tap(tester, find.text('Create preview'));
+      expect(repository.proposalDrafts.single.kind, kind);
+
+      await _pumpPage(
+        tester,
+        repository: _FakeDeadlinePlanRepository(
+          feeds: [
+            DeadlinePlanFeed(plans: [plan]),
+          ],
+        ),
+        page: DeadlinePlansPage(
+          initialPlanId: deadlinePlanId,
+          openInitialReplan: true,
+          currentTime: now,
+        ),
+      );
+      await _tap(tester, find.text('Change values'));
+      locked = find.byKey(const ValueKey('deadline-locked-kind'));
+      expect(locked, findsOneWidget);
+      expect(
+        find.descendant(of: locked, matching: find.text(label)),
+        findsOneWidget,
+      );
+      expect(find.byType(SegmentedButton<DeadlinePlanKind>), findsNothing);
+    });
+  }
 
   testWidgets('focused replan isolates one plan and keeps preview staged',
       (tester) async {
@@ -1340,6 +1452,14 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(find.text('Replan remaining preparation'), findsOneWidget);
     expect(repository.proposalDrafts, isEmpty);
+
+    await _tap(tester, find.text('Change values'));
+    expect(tester.takeException(), isNull);
+    expect(
+      find.byKey(const ValueKey('deadline-locked-kind')),
+      findsOneWidget,
+    );
+    expect(find.byType(SegmentedButton<DeadlinePlanKind>), findsNothing);
   });
 }
 
@@ -1419,6 +1539,7 @@ Future<void> _pumpPage(
   ProfileLocalDateSource profileDateSource =
       const SessionProfileLocalDateSource(session: null),
   SnapshotRefreshService? snapshotRefresh,
+  AssignmentSeriesRepository? assignmentSeriesRepository,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
@@ -1433,7 +1554,7 @@ Future<void> _pumpPage(
         profileLocalDateSourceProvider.overrideWithValue(profileDateSource),
         deadlinePlanRepositoryProvider.overrideWithValue(repository),
         assignmentSeriesRepositoryProvider.overrideWithValue(
-          _FakeAssignmentSeriesRepository(),
+          assignmentSeriesRepository ?? _FakeAssignmentSeriesRepository(),
         ),
         if (snapshotRefresh != null)
           snapshotRefreshServiceProvider.overrideWithValue(snapshotRefresh),
@@ -1460,9 +1581,13 @@ Future<void> _pumpPage(
 }
 
 class _FakeAssignmentSeriesRepository implements AssignmentSeriesRepository {
+  _FakeAssignmentSeriesRepository({this.series = const []});
+
+  final List<AssignmentSeries> series;
+
   @override
   Future<AssignmentSeriesFeed> getSeries() async =>
-      const AssignmentSeriesFeed([]);
+      AssignmentSeriesFeed(series);
 
   @override
   Future<AssignmentSeries> propose({
@@ -1502,21 +1627,36 @@ DeadlinePlan _plan({String status = 'active', bool pending = false}) =>
       deadlinePlanEnvelope(status: status, pending: pending),
     ).plan;
 
+DeadlinePlan _planWithKind(DeadlinePlanKind kind) {
+  final json = deadlinePlanEnvelope();
+  (json['plan'] as Map<String, dynamic>)['kind'] = kind.code;
+  for (final key in ['active_revision', 'pending_revision']) {
+    final revision = json[key];
+    if (revision is Map<String, dynamic>) revision['kind'] = kind.code;
+  }
+  return DeadlinePlanResponse.fromJson(json).plan;
+}
+
 DeadlinePlan _planWithIdentity({
   required String id,
   required String title,
   String status = 'active',
+  DeadlinePlanKind kind = DeadlinePlanKind.exam,
 }) {
   final json = deadlinePlanEnvelope(status: status, activeTitle: title);
   final record = json['plan'] as Map<String, dynamic>;
-  record['id'] = id;
+  record
+    ..['id'] = id
+    ..['kind'] = kind.code;
   if (record.containsKey('managed_task_id')) {
     record['managed_task_id'] = id;
   }
   for (final key in ['active_revision', 'pending_revision']) {
     final revision = json[key];
     if (revision is Map<String, dynamic>) {
-      revision['plan_id'] = id;
+      revision
+        ..['plan_id'] = id
+        ..['kind'] = kind.code;
     }
   }
   return DeadlinePlanResponse.fromJson(json).plan;

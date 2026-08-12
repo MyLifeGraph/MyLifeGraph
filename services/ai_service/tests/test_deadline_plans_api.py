@@ -35,9 +35,15 @@ class Verifier:
 
 
 class Service:
-    def __init__(self, *, conflict: bool = False) -> None:
+    def __init__(
+        self,
+        *,
+        conflict: bool = False,
+        conflict_detail: str = "stale revision",
+    ) -> None:
         self.calls = []
         self.conflict = conflict
+        self.conflict_detail = conflict_detail
 
     async def list_plans(self, *, user_id):
         self.calls.append(("list", user_id))
@@ -125,7 +131,7 @@ class Service:
     async def propose(self, *, user_id, request):
         self.calls.append(("proposal", user_id, request))
         if self.conflict:
-            raise DeadlinePlanConflictError("stale revision")
+            raise DeadlinePlanConflictError(self.conflict_detail)
         return _response_envelope()
 
     async def confirm(self, **kwargs):
@@ -194,9 +200,17 @@ def _proposal() -> dict[str, object]:
     }
 
 
-async def _request(method, path, *, json=None, authenticated=True, conflict=False):
+async def _request(
+    method,
+    path,
+    *,
+    json=None,
+    authenticated=True,
+    conflict=False,
+    conflict_detail="stale revision",
+):
     app = create_app()
-    service = Service(conflict=conflict)
+    service = Service(conflict=conflict, conflict_detail=conflict_detail)
     override_dependency(app, get_token_verifier, Verifier())
     override_dependency(app, get_deadline_plan_service, service)
     headers = {"Authorization": "Bearer deadline-token"} if authenticated else {}
@@ -291,6 +305,20 @@ def test_proposal_route_is_strict_and_maps_conflict() -> None:
         ),
     )
     assert conflict.status_code == 409
+
+    kind_conflict, _ = asyncio.run(
+        _request(
+            "POST",
+            "/v1/deadline-plans/proposals",
+            json={**_proposal(), "kind": "assignment"},
+            conflict=True,
+            conflict_detail="Deadline plan kind cannot be changed.",
+        ),
+    )
+    assert kind_conflict.status_code == 409
+    assert kind_conflict.json() == {
+        "detail": "Deadline plan kind cannot be changed.",
+    }
 
 
 def test_mutation_shape_and_authentication_are_enforced() -> None:

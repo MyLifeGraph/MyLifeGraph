@@ -55,7 +55,8 @@ FastAPI service boundary for recommendation and future ML workflows.
   `POST /v1/focus/sessions/{session_id}/abandon`. Manual starts remain
   compatible; scheduled starts bind one immutable Planner/Deadline block
   origin, use actual backend timestamps, check the complete Focus-plus-recovery
-  interval, and never fall back to an unproven direct start. The capability
+  interval, expose canonical fully-credited and sub-five-minute blockers, and
+  never fall back to an unproven direct start. The capability
   read lets a mixed-version client retain legacy manual V1 behavior only when
   the backend explicitly lacks V2; auth, network, and server failures never
   trigger that downgrade. See
@@ -166,6 +167,15 @@ FastAPI service boundary for recommendation and future ML workflows.
   asynchronous service facades. Planner and Deadline proposals cross their
   repository boundaries as validated composite write models rather than
   parallel raw dictionaries; the existing RPC JSON remains unchanged.
+  An existing plan's root kind is immutable: a proposal with a different kind
+  returns `409` with `Deadline plan kind cannot be changed.` before planning
+  context is loaded. The final service-role proposal RPC independently enforces
+  the same rule for owner-scoped draft and active roots while retaining exact
+  replay/collision precedence and the public signature used by Assignment
+  Series. The service role cannot call the strict unguarded
+  `propose_deadline_plan_v1` body directly; it has execute authority only on the
+  guarded timing wrapper, whose postgres-owned implementation may invoke the
+  base body internally.
   The nested `assignment-series-v1` routes add finite weekly Assignment
   list/detail/proposal/confirm/cancel-future behavior. A shared template stages
   independent Deadline Plans, then one owner-locked RPC confirms the complete

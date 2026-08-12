@@ -692,6 +692,33 @@ void main() {
         throwsA(isA<FocusCommandException>()),
       );
     });
+
+    test('start context requires canonical short and completed blockers', () {
+      final completed = _startContextV2()
+        ..['remaining_minutes'] = 0
+        ..['source_state'] = 'completed'
+        ..['can_start'] = false
+        ..['blocking_reason'] = 'source_fully_credited';
+      final short = _startContextV2()
+        ..['remaining_minutes'] = 4
+        ..['source_state'] = 'partial'
+        ..['can_start'] = false
+        ..['blocking_reason'] = 'source_remaining_too_short';
+
+      expect(FocusStartContext.fromJson(completed).remainingMinutes, 0);
+      expect(FocusStartContext.fromJson(short).remainingMinutes, 4);
+
+      final invalidCompleted = Map<String, dynamic>.from(completed)
+        ..['blocking_reason'] = 'source_remaining_too_short';
+      final invalidShort = Map<String, dynamic>.from(short)
+        ..['blocking_reason'] = 'fixed_commitment';
+      for (final invalid in [invalidCompleted, invalidShort]) {
+        expect(
+          () => FocusStartContext.fromJson(invalid),
+          throwsA(isA<FocusCommandException>()),
+        );
+      }
+    });
   });
 
   group('measuredFocusMinutes', () {

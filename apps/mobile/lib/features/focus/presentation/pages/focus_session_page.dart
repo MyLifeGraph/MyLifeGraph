@@ -202,8 +202,13 @@ class _FocusSessionPageState extends ConsumerState<FocusSessionPage>
   Future<void> _chooseCustomDuration() async {
     final state = ref.read(focusSessionControllerProvider(_launch));
     final maximum = state.scheduledContext?.remainingMinutes ?? 240;
+    if (maximum < 5) return;
+    final initialMinutes =
+        state.plannedMinutes >= 5 && state.plannedMinutes <= maximum
+            ? state.plannedMinutes
+            : (maximum < 25 ? maximum : 25);
     final textController = TextEditingController(
-      text: '${state.plannedMinutes}',
+      text: '$initialMinutes',
     );
     final selected = await showDialog<int>(
       context: context,
@@ -591,6 +596,15 @@ class _StartFocusCard extends StatelessWidget {
       if (suggestion != null) suggestion!.durationMinutes,
     }.where((minutes) => minutes >= 5 && minutes <= maximum).toList()
       ..sort();
+    final hasSelectedDuration = durations.contains(plannedMinutes);
+    final selectedTargetExists = selectedTargetValue == null ||
+        targets.any((target) => target.value == selectedTargetValue);
+    final visibleSelectedTarget =
+        selectedTargetExists ? selectedTargetValue : null;
+    final canStartNow = startEnabled &&
+        inlineError == null &&
+        hasSelectedDuration &&
+        selectedTargetExists;
     return AppCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -615,11 +629,12 @@ class _StartFocusCard extends StatelessWidget {
               style: Theme.of(context).textTheme.bodyMedium,
             ),
             const SizedBox(height: AppSpacing.xs),
-            const Text(
-              'This session starts now. Its actual timestamps are used for progress and reflection.',
-            ),
+            if (canStartNow)
+              const Text(
+                'This session starts now. Its actual timestamps are used for progress and reflection.',
+              ),
           ],
-          if (recoveryMinutes > 0) ...[
+          if (recoveryMinutes > 0 && hasSelectedDuration) ...[
             const SizedBox(height: AppSpacing.sm),
             Text(
               '$plannedMinutes min focus + $recoveryMinutes min recovery',
@@ -627,29 +642,35 @@ class _StartFocusCard extends StatelessWidget {
               style: Theme.of(context).textTheme.titleSmall,
             ),
           ],
-          const SizedBox(height: AppSpacing.lg),
-          SegmentedButton<int>(
-            direction: _focusChoiceDirection(context),
-            segments: [
-              for (final minutes in durations)
-                ButtonSegment(
-                  value: minutes,
-                  label: Text('$minutes min'),
-                ),
-            ],
-            selected: {plannedMinutes},
-            onSelectionChanged:
-                isSaving ? null : (values) => onDurationChanged(values.single),
-          ),
-          const SizedBox(height: AppSpacing.sm),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: TextButton.icon(
-              onPressed: isSaving ? null : onCustomDuration,
-              icon: const Icon(AppIcons.tune),
-              label: const Text('Custom duration'),
+          if (durations.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.lg),
+            SegmentedButton<int>(
+              direction: _focusChoiceDirection(context),
+              emptySelectionAllowed: !hasSelectedDuration,
+              segments: [
+                for (final minutes in durations)
+                  ButtonSegment(
+                    value: minutes,
+                    label: Text('$minutes min'),
+                  ),
+              ],
+              selected: hasSelectedDuration ? {plannedMinutes} : const <int>{},
+              onSelectionChanged: isSaving
+                  ? null
+                  : (values) {
+                      if (values.isNotEmpty) onDurationChanged(values.single);
+                    },
             ),
-          ),
+            const SizedBox(height: AppSpacing.sm),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: isSaving ? null : onCustomDuration,
+                icon: const Icon(AppIcons.tune),
+                label: const Text('Custom duration'),
+              ),
+            ),
+          ],
           if (suggestion != null && scheduledContext == null) ...[
             const SizedBox(height: AppSpacing.sm),
             Container(
@@ -676,8 +697,8 @@ class _StartFocusCard extends StatelessWidget {
           ],
           const SizedBox(height: AppSpacing.lg),
           DropdownButtonFormField<String?>(
-            key: ValueKey('focus-target-selector-$selectedTargetValue'),
-            initialValue: selectedTargetValue,
+            key: ValueKey('focus-target-selector-$visibleSelectedTarget'),
+            initialValue: visibleSelectedTarget,
             isExpanded: true,
             decoration: InputDecoration(
               labelText: scheduledContext == null
@@ -743,7 +764,7 @@ class _StartFocusCard extends StatelessWidget {
           Align(
             alignment: Alignment.centerRight,
             child: FilledButton.icon(
-              onPressed: isSaving || !startEnabled ? null : onStart,
+              onPressed: isSaving || !canStartNow ? null : onStart,
               icon: isSaving
                   ? const SizedBox.square(
                       dimension: 18,

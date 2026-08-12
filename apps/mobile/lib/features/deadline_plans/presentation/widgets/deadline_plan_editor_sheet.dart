@@ -92,7 +92,9 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
     _dailyCapController = TextEditingController(
       text: '${retained?.maxDailyMinutes ?? existing?.maxDailyMinutes ?? 120}',
     );
-    _kind = retained?.kind ?? existing?.kind ?? widget.initialKind;
+    _kind = widget.lockKind
+        ? widget.initialKind
+        : retained?.kind ?? existing?.kind ?? widget.initialKind;
     _deadline = retained?.deadlineAt ??
         existing?.deadlineAt ??
         widget.initialDeadlineAt;

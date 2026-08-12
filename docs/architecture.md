@@ -98,6 +98,14 @@ the Coach data boundary additionally converts transport evidence into its
 typed `CoachRemoteException`. Dio stream and cancellation types remain limited
 to `core/network` and the Coach data implementation that owns SSE transport.
 
+Deadline Plan root identity owns the immutable Exam/Assignment kind across
+Flutter edit/deep-link state and FastAPI proposal validation; revisions may not
+override it. Scheduled Focus similarly treats each backend start context as
+the authority for its source target and remaining duration. Flutter validates
+that transient selection before enabling Start, while Supabase remains the
+authority for actual timestamps, immutable source provenance, and derived
+credit.
+
 State management is Riverpod. Navigation is GoRouter. When the development
 Coach surface gate is enabled, the shell navigation maps to Today, Insights,
 central Quick actions, Planner, and Coach. Today, Insights, Quick actions,

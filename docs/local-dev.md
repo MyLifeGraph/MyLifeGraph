@@ -1058,6 +1058,16 @@ Finite Assignment Series additionally requires:
 20260810092841_finite_assignment_series_v1.sql
 ```
 
+The final persisted-kind guard additionally requires:
+
+```text
+20260812212833_deadline_plan_kind_guard.sql
+```
+
+It retains the public service-role Deadline Plan proposal signature while
+making a draft or active root's stored kind authoritative at the database RPC
+boundary.
+
 Calendar import additionally requires the Phase 9 migration listed in
 `docs/supabase-current-state.md`. It creates dedicated backend-owned
 `calendar_connections`, `calendar_imports`, and `calendar_events` plus four

@@ -133,6 +133,19 @@ class FocusStartContextResponse(BaseModel):
             raise ValueError("Focus startability is inconsistent")
         if (self.remaining_minutes == 0) != (self.source_state == "completed"):
             raise ValueError("Focus source completion is inconsistent")
+        if self.remaining_minutes == 0 and (
+            self.blocking_reason != "source_fully_credited"
+        ):
+            raise ValueError("Completed Focus source blocking reason is invalid")
+        if 0 < self.remaining_minutes < 5 and (
+            self.blocking_reason != "source_remaining_too_short"
+        ):
+            raise ValueError("Short Focus source blocking reason is invalid")
+        if self.remaining_minutes >= 5 and self.blocking_reason in {
+            "source_fully_credited",
+            "source_remaining_too_short",
+        }:
+            raise ValueError("Focus source blocking reason is invalid")
         return self
 
 

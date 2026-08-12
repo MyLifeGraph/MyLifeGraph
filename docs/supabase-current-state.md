@@ -42,7 +42,9 @@ Goal-removal and observational Weekly Review migration
 additive dependency/locking repair
 `20260804192406_harden_goal_removal_dependencies.sql`, followed by the additive
 finite weekly Assignment Series boundary in
-`20260810092841_finite_assignment_series_v1.sql`.
+`20260810092841_finite_assignment_series_v1.sql`, then the final Deadline Plan
+kind-authority guard in
+`20260812212833_deadline_plan_kind_guard.sql`.
 
 ## Runtime Activation
 
@@ -519,6 +521,21 @@ one transaction. Future-wide revisions retain past/completed occurrences and
 replace future ones; cancel-future atomically terminates only future incomplete
 plans. Authenticated users have owner reads for the three content tables and no
 direct DML; `anon` and authenticated users have no ledger or RPC execution.
+
+`20260812212833_deadline_plan_kind_guard.sql` preserves the public
+service-role-only `propose_deadline_plan_with_timing_v1` signature while moving
+its prior implementation behind an application-inaccessible inner function.
+For a new request against an owner-scoped draft or active root, the wrapper
+takes the existing owner/request lock order, locks the plan row, and rejects a
+proposal whose `kind` differs from the persisted root with SQLSTATE `PT409` and
+`Deadline plan kind cannot be changed.` Existing request identities continue
+through the prior exact replay/collision path before this new-request check, and
+Assignment Series continues to delegate through the guarded public RPC. The
+migration also revokes `EXECUTE` on the strict unguarded
+`propose_deadline_plan_v1` body from `PUBLIC`, `anon`, `authenticated`, and
+`service_role`. The postgres-owned `SECURITY DEFINER` chain may still invoke it
+internally; the guarded timing wrapper is the only application-callable
+Deadline proposal entry point.
 
 All four tables use forced RLS. Authenticated owners receive only the intended
 plan/revision/block read projection and no direct mutation authority. The
@@ -1134,13 +1151,20 @@ whole-series confirmation, and future-cancellation RPCs. It reuses the existing
 Deadline Plan lifecycle inside one owner-locked transaction and gives
 application roles no direct mutation authority.
 
+`20260812212833_deadline_plan_kind_guard.sql` wraps the final Deadline Plan
+proposal RPC with the persisted-root kind check described above. It adds no
+table, rewrites no row, preserves the public signature and service-role grant,
+and revokes application-role execution from both the renamed timing
+implementation and the unguarded strict V1 body. Those functions remain
+owner-internal dependencies of the guarded `SECURITY DEFINER` wrapper.
+
 ## Local Verification Workflow
 
 When destruction of the exact normal local database is explicitly authorized,
 the guarded reset must complete through:
 
 ```text
-20260810092841_finite_assignment_series_v1.sql
+20260812212833_deadline_plan_kind_guard.sql
 ```
 
 Then configure `.env` with:
@@ -1337,13 +1361,21 @@ legacy compatibility only and should be dropped in a later dedicated migration
 after data migration and app verification are complete.
 
 The latest migration is
-`20260810092841_finite_assignment_series_v1.sql`. It adds the finite weekly
+`20260812212833_deadline_plan_kind_guard.sql`. It preserves the public
+service-role-only Deadline Plan proposal signature and established
+owner/request lock and exact-replay precedence while rejecting a different kind
+for an existing owner-scoped draft or active root. Its renamed inner function
+and the strict unguarded `propose_deadline_plan_v1` body are not executable by
+application roles, including `service_role`; the postgres-owned wrapper may
+still call both internally. It adds no table, rewrites no row, and uses no
+cascading drop. The preceding
+`20260810092841_finite_assignment_series_v1.sql` adds the finite weekly
 Assignment Series tables, owner constraints, RLS/grants, request replay ledger,
 and atomic service-role proposal/confirm/cancel-future functions described
 above. It does not rewrite historical Deadline Plans, infer recurrences, or add
-application-role mutation authority. The preceding hardened Goal-removal
-migration still owns its cleanup and locking boundary and adds no
-generic JSON constraint.
+application-role mutation authority. The earlier hardened Goal-removal
+migration still owns its cleanup and locking boundary and adds no generic JSON
+constraint.
 
 The preceding
 `20260804150153_remove_goals_and_make_weekly_review_observational.sql` replaces

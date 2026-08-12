@@ -69,7 +69,9 @@ template produces one independent Preparation Plan per weekly occurrence, and
 one explicit confirmation activates the whole series atomically. An occurrence
 can later be edited alone; editing all future occurrences replaces future
 deviations while retaining past/completed ones. Cancelling the future scope is
-also atomic. One-off work without preparation belongs in Tasks.
+also atomic. Every existing occurrence retains its persisted Assignment kind
+through edit, focused replan, and deep-link entry; existing Exam plans retain
+Exam by the same rule. One-off work without preparation belongs in Tasks.
 
 Planner's range remains seven consecutive profile-local dates starting with
 its overview date. Its day cards and appointment rows use the same

@@ -797,6 +797,325 @@ void main() {
   });
 
   testWidgets(
+      'completed past scheduled source stays inline without invalid duration controls',
+      (tester) async {
+    final source = _ScheduledFocusSource(
+      context: _scheduledContext(
+        originalStartsAt: DateTime.utc(2026, 8, 1, 8),
+        originalEndsAt: DateTime.utc(2026, 8, 1, 8, 30),
+        remainingMinutes: 0,
+        sourceState: 'completed',
+        canStart: false,
+        blockingReason: 'source_fully_credited',
+      ),
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          appConfigProvider.overrideWithValue(_realConfig),
+          focusSessionPageDataSourceProvider.overrideWithValue(source),
+        ],
+        child: const MaterialApp(
+          home: Scaffold(
+            body: FocusSessionPage(
+              initialSourceKind: FocusScheduleSourceKind.plannerTaskBlock,
+              initialSourceBlockId: 'f5000000-0000-4000-8000-000000000001',
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('0 min remaining'), findsOneWidget);
+    expect(
+      find.text(
+        'This planned block has already received all of its focus credit.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.byType(SegmentedButton<int>), findsNothing);
+    expect(find.text('Custom duration'), findsNothing);
+    expect(find.textContaining('This session starts now.'), findsNothing);
+    _expectInlineConflictLiveRegion(tester);
+    expect(
+      tester
+          .widget<FilledButton>(
+            find.widgetWithText(FilledButton, 'Start focus session'),
+          )
+          .onPressed,
+      isNull,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+      'future scheduled source below five minutes stays inline without assertion',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(320, 568));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final plannedStart = DateTime.now().toUtc().add(const Duration(days: 2));
+    final source = _ScheduledFocusSource(
+      context: _scheduledContext(
+        originalStartsAt: plannedStart,
+        originalEndsAt: plannedStart.add(const Duration(minutes: 30)),
+        remainingMinutes: 4,
+        sourceState: 'partial',
+        canStart: false,
+        blockingReason: 'source_remaining_too_short',
+      ),
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          appConfigProvider.overrideWithValue(_realConfig),
+          focusSessionPageDataSourceProvider.overrideWithValue(source),
+        ],
+        child: MaterialApp(
+          builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(context).copyWith(
+              textScaler: const TextScaler.linear(2),
+            ),
+            child: child!,
+          ),
+          home: const Scaffold(
+            body: FocusSessionPage(
+              initialSourceKind: FocusScheduleSourceKind.plannerTaskBlock,
+              initialSourceBlockId: 'f5000000-0000-4000-8000-000000000001',
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('focus-scheduled-origin')),
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+
+    expect(find.textContaining('4 min remaining'), findsOneWidget);
+    expect(
+      find.text(
+        'Fewer than five planned minutes remain, so another session cannot be started.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.byType(SegmentedButton<int>), findsNothing);
+    expect(find.text('Custom duration'), findsNothing);
+    expect(find.textContaining('This session starts now.'), findsNothing);
+    _expectInlineConflictLiveRegion(tester);
+    expect(
+      tester
+          .widget<FilledButton>(
+            find.widgetWithText(FilledButton, 'Start focus session'),
+          )
+          .onPressed,
+      isNull,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+      'future fixed-commitment conflict keeps valid duration controls and announces inline',
+      (tester) async {
+    final plannedStart = DateTime.now().toUtc().add(const Duration(days: 2));
+    final source = _ScheduledFocusSource(
+      context: _scheduledContext(
+        originalStartsAt: plannedStart,
+        originalEndsAt: plannedStart.add(const Duration(minutes: 30)),
+        remainingMinutes: 20,
+        sourceState: 'upcoming',
+        canStart: false,
+        blockingReason: 'fixed_commitment',
+      ),
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          appConfigProvider.overrideWithValue(_realConfig),
+          focusSessionPageDataSourceProvider.overrideWithValue(source),
+        ],
+        child: const MaterialApp(
+          home: Scaffold(
+            body: FocusSessionPage(
+              initialSourceKind: FocusScheduleSourceKind.plannerTaskBlock,
+              initialSourceBlockId: 'f5000000-0000-4000-8000-000000000001',
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('20 min remaining'), findsOneWidget);
+    expect(
+      find.text('A fixed commitment overlaps this focus and recovery time.'),
+      findsOneWidget,
+    );
+    expect(
+      tester
+          .widget<SegmentedButton<int>>(find.byType(SegmentedButton<int>))
+          .selected,
+      {20},
+    );
+    expect(find.text('Custom duration'), findsOneWidget);
+    expect(find.textContaining('This session starts now.'), findsNothing);
+    _expectInlineConflictLiveRegion(tester);
+    expect(
+      tester
+          .widget<FilledButton>(
+            find.widgetWithText(FilledButton, 'Start focus session'),
+          )
+          .onPressed,
+      isNull,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  for (final remainingMinutes in [4, 0]) {
+    testWidgets(
+        'same scheduled source refresh clamps 20 to $remainingMinutes inline',
+        (tester) async {
+      final narrowLargeText = remainingMinutes == 4;
+      await tester.binding.setSurfaceSize(
+        narrowLargeText ? const Size(320, 568) : const Size(800, 1000),
+      );
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final source = _ScheduledFocusSource();
+
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            appConfigProvider.overrideWithValue(_realConfig),
+            focusSessionPageDataSourceProvider.overrideWithValue(source),
+          ],
+          child: MaterialApp(
+            builder: (context, child) => MediaQuery(
+              data: MediaQuery.of(context).copyWith(
+                textScaler: TextScaler.linear(narrowLargeText ? 2 : 1),
+              ),
+              child: child!,
+            ),
+            home: const Scaffold(
+              body: FocusSessionPage(
+                initialSourceKind: FocusScheduleSourceKind.plannerTaskBlock,
+                initialSourceBlockId: 'f5000000-0000-4000-8000-000000000001',
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      if (narrowLargeText) {
+        await tester.scrollUntilVisible(
+          find.byType(SegmentedButton<int>),
+          200,
+          scrollable: find.byType(Scrollable).first,
+        );
+      }
+      expect(
+        tester
+            .widget<SegmentedButton<int>>(find.byType(SegmentedButton<int>))
+            .selected,
+        {20},
+      );
+
+      source.context = _scheduledContext(
+        remainingMinutes: remainingMinutes,
+        sourceState: remainingMinutes == 0 ? 'completed' : 'partial',
+        canStart: false,
+        blockingReason: remainingMinutes == 0
+            ? 'source_fully_credited'
+            : 'source_remaining_too_short',
+      );
+      if (narrowLargeText) {
+        tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.paused,
+        );
+        tester.binding.handleAppLifecycleStateChanged(
+          AppLifecycleState.resumed,
+        );
+      } else {
+        await tester.tap(find.byTooltip('Refresh focus sessions'));
+      }
+      await tester.pumpAndSettle();
+
+      expect(
+        find.textContaining('$remainingMinutes min remaining'),
+        findsOneWidget,
+      );
+      expect(find.byType(SegmentedButton<int>), findsNothing);
+      expect(find.text('Custom duration'), findsNothing);
+      expect(find.textContaining('This session starts now.'), findsNothing);
+      _expectInlineConflictLiveRegion(tester);
+      expect(
+        tester
+            .widget<FilledButton>(
+              find.widgetWithText(FilledButton, 'Start focus session'),
+            )
+            .onPressed,
+        isNull,
+      );
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  testWidgets('future scheduled source starts now and retains its route block',
+      (tester) async {
+    await tester.binding.setSurfaceSize(const Size(800, 1000));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final plannedStart = DateTime.now().toUtc().add(const Duration(days: 2));
+    final source = _ScheduledFocusSource(
+      context: _scheduledContext(
+        originalStartsAt: plannedStart,
+        originalEndsAt: plannedStart.add(const Duration(minutes: 20)),
+        remainingMinutes: 20,
+        sourceState: 'upcoming',
+      ),
+    );
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          appConfigProvider.overrideWithValue(_realConfig),
+          focusSessionPageDataSourceProvider.overrideWithValue(source),
+          snapshotRefreshServiceProvider.overrideWithValue(
+            _CountingSnapshotRefresh(),
+          ),
+        ],
+        child: const MaterialApp(
+          home: Scaffold(
+            body: FocusSessionPage(
+              initialSourceKind: FocusScheduleSourceKind.plannerTaskBlock,
+              initialSourceBlockId: 'f5000000-0000-4000-8000-000000000001',
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('focus-scheduled-origin')),
+      findsOneWidget,
+    );
+    expect(find.textContaining('This session starts now.'), findsOneWidget);
+    await tester.tap(find.text('Start focus session'));
+    await tester.pumpAndSettle();
+
+    expect(source.scheduledStarts, 1);
+    expect(source.lastBlockId, 'f5000000-0000-4000-8000-000000000001');
+    expect(source.lastPlannedMinutes, 20);
+    expect(source.manualStarts, 0);
+    expect(find.text('Focus active'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
       'exact terminal session opens reflection even outside recent history and with prompts off',
       (tester) async {
     final source = _ExactTerminalFocusSource();
@@ -829,6 +1148,18 @@ void main() {
     );
     expect(find.text('How focused did the session feel?'), findsOneWidget);
   });
+}
+
+void _expectInlineConflictLiveRegion(WidgetTester tester) {
+  final conflict = find.byKey(const ValueKey('focus-start-inline-conflict'));
+  expect(conflict, findsOneWidget);
+  final semantics = tester.widgetList<Semantics>(
+    find.ancestor(of: conflict, matching: find.byType(Semantics)),
+  );
+  expect(
+    semantics.any((widget) => widget.properties.liveRegion == true),
+    isTrue,
+  );
 }
 
 const _realConfig = AppConfig(
@@ -1177,8 +1508,9 @@ class _RecoveryFocusSource extends FocusSessionSupabaseDataSource {
 }
 
 class _ScheduledFocusSource extends FocusSessionSupabaseDataSource {
-  _ScheduledFocusSource()
-      : super(
+  _ScheduledFocusSource({FocusStartContext? context})
+      : context = context ?? _scheduledContext(),
+        super(
           SupabaseClient(
             'http://localhost:54321',
             'test-anon-key',
@@ -1186,6 +1518,7 @@ class _ScheduledFocusSource extends FocusSessionSupabaseDataSource {
           ),
         );
 
+  FocusStartContext context;
   FocusSession? active;
   int scheduledStarts = 0;
   int manualStarts = 0;
@@ -1212,24 +1545,8 @@ class _ScheduledFocusSource extends FocusSessionSupabaseDataSource {
   Future<FocusStartContext> fetchScheduledStartContext({
     required FocusScheduleSourceKind sourceKind,
     required String blockId,
-  }) async {
-    return FocusStartContext(
-      sourceKind: sourceKind,
-      blockId: blockId,
-      target: const FocusTargetOption(
-        kind: FocusTargetKind.task,
-        id: 'f5000000-0000-4000-8000-000000000002',
-        title: 'Read the assigned chapter',
-      ),
-      originalStartsAt: DateTime.utc(2026, 8, 1, 8),
-      originalEndsAt: DateTime.utc(2026, 8, 1, 8, 30),
-      recoveryMinutes: 10,
-      remainingMinutes: 20,
-      sourceState: 'partial',
-      canStart: true,
-      blockingReason: null,
-    );
-  }
+  }) async =>
+      context;
 
   @override
   Future<FocusSession> startSession({
@@ -1264,6 +1581,33 @@ class _ScheduledFocusSource extends FocusSessionSupabaseDataSource {
     );
     return active!;
   }
+}
+
+FocusStartContext _scheduledContext({
+  DateTime? originalStartsAt,
+  DateTime? originalEndsAt,
+  int remainingMinutes = 20,
+  String sourceState = 'partial',
+  bool canStart = true,
+  String? blockingReason,
+  String targetId = 'f5000000-0000-4000-8000-000000000002',
+}) {
+  return FocusStartContext(
+    sourceKind: FocusScheduleSourceKind.plannerTaskBlock,
+    blockId: 'f5000000-0000-4000-8000-000000000001',
+    target: FocusTargetOption(
+      kind: FocusTargetKind.task,
+      id: targetId,
+      title: 'Read the assigned chapter',
+    ),
+    originalStartsAt: originalStartsAt ?? DateTime.utc(2026, 8, 1, 8),
+    originalEndsAt: originalEndsAt ?? DateTime.utc(2026, 8, 1, 8, 30),
+    recoveryMinutes: 10,
+    remainingMinutes: remainingMinutes,
+    sourceState: sourceState,
+    canStart: canStart,
+    blockingReason: blockingReason,
+  );
 }
 
 class _ExactTerminalFocusSource extends FocusSessionSupabaseDataSource {

@@ -283,8 +283,10 @@ independent Deadline Plan occurrences participate in its calculation.
 `/planner/replan?plan_id=<uuid>`, which renders only that selected plan over the
 existing saved-value review. It makes no proposal request until the student
 explicitly chooses to create a preview, and the preview still requires explicit
-confirmation. Confirmation returns to Planner and reloads the outlook; leaving
-an unconfirmed preview preserves it as staged.
+confirmation. The existing plan's persisted root kind remains read-only through
+that review, full editor, and deep-link entry; it cannot be changed from Exam to
+Assignment or vice versa. Confirmation returns to Planner and reloads the
+outlook; leaving an unconfirmed preview preserves it as staged.
 
 Every proven Deadline confirm, complete, or cancel result, including a
 successful exact retry, emits one controller-owned Deadline projection impact
@@ -373,7 +375,8 @@ Automated coverage must prove:
 - strict bearer ownership, cross-owner isolation, a write-free GET, and guest/
   demo zero-call;
 - Planner loading/error/watch/exam-week/overdue/unknown states, placement,
-  navigation without proposal, narrow layout, and 200% text;
+  navigation without proposal, immutable existing-plan kind, narrow layout,
+  and 200% text;
 - one Outlook invalidation after each successful Deadline lifecycle result and
   exact retry, none after proposal preview, no Snapshot date for draft cancel,
   and durable success when refresh fails; and

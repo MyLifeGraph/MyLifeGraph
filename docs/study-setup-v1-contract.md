@@ -147,6 +147,11 @@ recovery value. Without either, recovery is zero. A student may choose a custom
 5-through-240-minute duration for one manual Focus session without changing
 Study Setup.
 
+For a selected Planner or Preparation block, every refreshed authenticated
+start context revalidates that explicit duration and replaces the selected
+target with the source-owned target. A current remainder below five minutes is
+not replaced by a Study default; it is an explicit non-startable source state.
+
 Before start, every active preparation item is shown in order. Each can be
 marked `Ready` or `Not needed today`; the student may also choose
 `Skip remaining and start`. These transient choices are neither persisted nor

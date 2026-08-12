@@ -557,10 +557,12 @@ class DeadlinePlan {
         record.managedTaskId != null && record.managedTaskId != record.id ||
         activeRevision != null &&
             (activeRevision!.planId != record.id ||
+                activeRevision!.kind != record.kind ||
                 activeRevision!.revision != record.currentRevision ||
                 activeRevision!.state != DeadlinePlanRevisionState.active) ||
         pendingRevision != null &&
             (pendingRevision!.planId != record.id ||
+                pendingRevision!.kind != record.kind ||
                 pendingRevision!.revision != record.latestRevision ||
                 pendingRevision!.state != DeadlinePlanRevisionState.proposed) ||
         activeRevision != null &&

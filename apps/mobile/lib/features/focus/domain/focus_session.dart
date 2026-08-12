@@ -599,7 +599,14 @@ class FocusStartContext {
         canStart is! bool ||
         blockingReason != null && !reasons.contains(blockingReason) ||
         canStart != (blockingReason == null) ||
-        (remaining == 0) != (sourceState == 'completed')) {
+        (remaining == 0) != (sourceState == 'completed') ||
+        remaining == 0 && blockingReason != 'source_fully_credited' ||
+        remaining > 0 &&
+            remaining < 5 &&
+            blockingReason != 'source_remaining_too_short' ||
+        remaining >= 5 &&
+            (blockingReason == 'source_fully_credited' ||
+                blockingReason == 'source_remaining_too_short')) {
       throw const FocusCommandException(
         'Focus start context response is invalid.',
       );

@@ -528,6 +528,17 @@ select is(
 );
 select is(
   (
+    public.finish_focus_session_v2(
+      'f2000000-0000-4000-8000-000000000001',
+      'f2000000-0000-4000-8000-000000000063',
+      'completed', '2026-08-02T11:07:00Z'
+    ) ->> 'replayed'
+  )::boolean,
+  true,
+  'an exact terminal replay reuses the completed make-up session'
+);
+select is(
+  (
     public.get_focus_start_context_v2(
       'f2000000-0000-4000-8000-000000000001',
       'deadline_plan_block',
@@ -536,7 +547,7 @@ select is(
     ) ->> 'remaining_minutes'
   )::int,
   24,
-  'source-linked make-up minutes credit the selected Preparation block first'
+  'source-linked make-up minutes credit the selected Preparation block exactly once'
 );
 select is(
   public.get_deadline_plan_projection_v2(
@@ -545,6 +556,144 @@ select is(
   ) -> 'focus_facts' -> 0 ->> 'deadline_plan_block_id',
   'f2000000-0000-4000-8000-000000000062',
   'the internal Deadline projection exposes the exact source-linked Focus fact'
+);
+reset role;
+
+insert into public.tasks (id, user_id, title, status, source)
+values (
+  'f2000000-0000-4000-8000-000000000090',
+  'f2000000-0000-4000-8000-000000000001',
+  'Prepare future exam', 'todo', 'manual'
+);
+insert into public.deadline_plans (
+  id, user_id, status, kind, title, managed_task_id,
+  original_estimated_total_minutes, original_credited_prior_minutes,
+  current_revision, latest_revision, first_activated_at, created_at, updated_at
+) values (
+  'f2000000-0000-4000-8000-000000000090',
+  'f2000000-0000-4000-8000-000000000001',
+  'active', 'exam', 'Prepare future exam',
+  'f2000000-0000-4000-8000-000000000090',
+  30, 0, 1, 1, '2026-07-31T07:00:00Z',
+  '2026-07-31T07:00:00Z', '2026-07-31T07:00:00Z'
+);
+insert into public.deadline_plan_revisions (
+  id, user_id, plan_id, revision, base_revision, state, kind, title,
+  deadline_at, estimated_total_minutes, credited_prior_minutes,
+  preferred_session_minutes, max_daily_minutes, planning_start_on,
+  buffer_days, source_kind, use_calendar_availability, timezone,
+  best_energy_window, planning_fingerprint,
+  tracked_focus_minutes_at_proposal, remaining_minutes_at_proposal,
+  planned_minutes, unscheduled_minutes, created_at, activated_at
+) values (
+  'f2000000-0000-4000-8000-000000000091',
+  'f2000000-0000-4000-8000-000000000001',
+  'f2000000-0000-4000-8000-000000000090',
+  1, 0, 'active', 'exam', 'Prepare future exam',
+  '2026-08-10T12:00:00Z', 30, 0, 25, 120, '2026-08-01',
+  0, 'manual', false, 'UTC', 'morning', repeat('6', 64),
+  0, 30, 20, 10, '2026-07-31T07:00:00Z', '2026-07-31T07:00:00Z'
+);
+insert into public.deadline_plan_blocks (
+  id, user_id, plan_id, revision, sequence, reservation_state,
+  starts_at, ends_at, local_date, local_start_time, local_end_time,
+  planned_minutes, recovery_minutes, reserved_ends_at, created_at, updated_at
+) values (
+  'f2000000-0000-4000-8000-000000000092',
+  'f2000000-0000-4000-8000-000000000001',
+  'f2000000-0000-4000-8000-000000000090',
+  1, 1, 'active', '2026-08-05T07:00:00Z', '2026-08-05T07:20:00Z',
+  '2026-08-05', '07:00:00', '07:20:00', 20, 0,
+  '2026-08-05T07:20:00Z', '2026-07-31T07:00:00Z',
+  '2026-07-31T07:00:00Z'
+);
+
+set local role service_role;
+select is(
+  public.get_focus_start_context_v2(
+    'f2000000-0000-4000-8000-000000000001',
+    'deadline_plan_block',
+    'f2000000-0000-4000-8000-000000000092',
+    '2026-08-02T13:00:00Z'
+  ) ->> 'source_state',
+  'upcoming',
+  'a future active Preparation block remains startable as upcoming'
+);
+select is(
+  public.start_focus_session_v2(
+    'f2000000-0000-4000-8000-000000000001',
+    'f2000000-0000-4000-8000-000000000093', repeat('7', 64),
+    'deadline_plan_block',
+    'f2000000-0000-4000-8000-000000000092',
+    20, 0, null, null, null, '2026-08-02T13:00:00Z'
+  ) ->> 'started_at',
+  '2026-08-02T13:00:00+00:00',
+  'a future Preparation start persists the actual server instant'
+);
+select is(
+  (
+    public.start_focus_session_v2(
+      'f2000000-0000-4000-8000-000000000001',
+      'f2000000-0000-4000-8000-000000000093', repeat('7', 64),
+      'deadline_plan_block',
+      'f2000000-0000-4000-8000-000000000092',
+      20, 0, null, null, null, '2026-08-02T13:01:00Z'
+    ) ->> 'replayed'
+  )::boolean,
+  true,
+  'an exact future-source start replay reuses the same Focus session'
+);
+select is(
+  (
+    select row(
+      original_starts_at, original_ends_at, original_recovery_minutes
+    )::text
+    from public.focus_session_schedule_sources
+    where focus_session_id = 'f2000000-0000-4000-8000-000000000093'
+  ),
+  '("2026-08-05 07:00:00+00","2026-08-05 07:20:00+00",0)',
+  'the future source origin remains its immutable planned interval'
+);
+select is(
+  public.finish_focus_session_v2(
+    'f2000000-0000-4000-8000-000000000001',
+    'f2000000-0000-4000-8000-000000000093',
+    'completed', '2026-08-02T13:08:00Z'
+  ) ->> 'actual_minutes',
+  '8',
+  'future-source completion records actual elapsed minutes'
+);
+select is(
+  (
+    public.finish_focus_session_v2(
+      'f2000000-0000-4000-8000-000000000001',
+      'f2000000-0000-4000-8000-000000000093',
+      'completed', '2026-08-02T13:09:00Z'
+    ) ->> 'replayed'
+  )::boolean,
+  true,
+  'an exact future-source terminal replay is idempotent'
+);
+select is(
+  (
+    public.get_focus_start_context_v2(
+      'f2000000-0000-4000-8000-000000000001',
+      'deadline_plan_block',
+      'f2000000-0000-4000-8000-000000000092',
+      '2026-08-02T14:00:00Z'
+    ) ->> 'remaining_minutes'
+  )::int,
+  12,
+  'future-source actual minutes reduce the selected block exactly once'
+);
+select is(
+  (
+    select count(*)::int
+    from public.focus_session_schedule_sources
+    where deadline_plan_block_id = 'f2000000-0000-4000-8000-000000000092'
+  ),
+  1,
+  'start and finish replays leave one immutable future-source association'
 );
 reset role;
 

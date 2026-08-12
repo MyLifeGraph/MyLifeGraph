@@ -823,11 +823,9 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
           accountDailyPreparationBudgetMinutes:
               preparationWorkload.valueOrNull?.dailyPreparationBudgetMinutes,
           retainedDraft: retainedDraft,
-          initialKind: presetKind,
-          lockKind: lockPresetKind &&
-              presetKind != null &&
-              sourcePlan == null &&
-              loadedPrefill == null,
+          initialKind: sourcePlan?.kind ?? presetKind,
+          lockKind: sourcePlan != null ||
+              lockPresetKind && presetKind != null && loadedPrefill == null,
           initialTitle:
               existing?.title ?? loadedPrefill?.title ?? widget.initialTitle,
           initialDeadlineAt: existing?.deadlineAt ??

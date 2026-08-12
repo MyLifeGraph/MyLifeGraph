@@ -149,6 +149,12 @@ sequence, including a pending or superseded proposal, and is at least one after
 plan creation. Proposal `base_revision` must equal `latest_revision`; a new
 proposal can never be based only on the older active projection.
 
+The root plan kind is immutable after the plan identity exists. Every active
+or pending revision must match that root `exam` or `assignment` kind, including
+an independently edited Assignment Series occurrence. A proposal that supplies
+a different kind fails before planning-context reads with `409` and the stable
+detail `Deadline plan kind cannot be changed.`
+
 Each block belongs to exactly one immutable revision and has one profile-local
 date, aware start/end instants, and a `5..240` minute planned duration. One
 revision contains at most 120 blocks. Persisted revision and block state is
@@ -487,6 +493,19 @@ revision/block writes, first-confirm task creation, and plan projection changes
 atomically. Composite owner references and database checks prevent cross-owner
 plan, revision, block, task, or calendar linkage.
 
+The final `propose_deadline_plan_with_timing_v1` database boundary also locks an
+existing owner-scoped draft or active root and treats its persisted `kind` as
+immutable. A different proposal kind fails with SQLSTATE `PT409` and the stable
+message `Deadline plan kind cannot be changed.` before a new request identity
+or revision is written. Existing exact replays retain their established
+identity/collision precedence, and the Assignment Series proposal RPC delegates
+through this same guarded public function. The prior inner implementation is
+not executable by application roles. Neither is the strict unguarded
+`propose_deadline_plan_v1` body: `PUBLIC`, `anon`, `authenticated`, and
+`service_role` have no direct `EXECUTE`. Both remain callable only inside the
+postgres-owned `SECURITY DEFINER` chain, making the guarded timing wrapper the
+sole application proposal entry point.
+
 The optional account rule is stored on the owner profile. Only the verified
 FastAPI/service-role path may call the revision-checked
 `apply_account_preparation_budget_v2`; the old V1 setter and direct anonymous
@@ -521,6 +540,10 @@ event id. The destination reads its current title, time, and source fingerprint
 through owner-scoped Calendar RLS before prefilling them; only this event-source
 entry keeps classification inside its prefilled plan editor. Every path
 requires the student's estimate.
+
+Editing or replanning any existing plan, including focused and direct deep-link
+entry, shows the persisted root kind read-only and submits it unchanged. A new
+generic Calendar-source proposal still offers the explicit kind choice.
 
 The Assignment editor defaults to 12 weekly occurrences, shows the derived
 last deadline, and allows 2 through 20 occurrences for a new series. Its one
@@ -596,6 +619,11 @@ and still-uncredited minutes. A `missed` or `partial` block with at least five
 minutes remaining also exposes scheduled Focus start at the actual current
 time when the target and complete Focus-plus-recovery interval are still valid.
 This makeup path preserves the original block and performs no replanning.
+Every refreshed start context replaces the prior scheduled target and
+revalidates the selected duration against current remaining minutes. A fully
+credited block or one with fewer than five minutes left stays visible with its
+canonical explanation and a disabled start; it does not render an empty or
+out-of-range duration selection and does not claim that the session starts now.
 `Replan remaining time` remains available and opens the existing staged
 proposal flow from the current date. It does not mutate reservations in the
 background, and previously completed qualifying focus remains credited to the
@@ -660,6 +688,9 @@ Focused backend, Flutter, migration, and browser coverage must prove:
   past/completed occurrences while replacing future deviations, and atomic
   future cancellation without partial series state;
 - strict request/response parsing and bearer-derived ownership;
+- immutable root kind across edit, occurrence, replan, and deep-link paths,
+  exact early `409` rejection of a tampered kind, and revision/root parser
+  parity;
 - deterministic block identity, ordering, totals, timezone/DST behavior,
   conflict avoidance, proposal-time focus accounting, the 366-day horizon,
   bounds, and honest unallocated minutes;
@@ -686,6 +717,10 @@ Focused backend, Flutter, migration, and browser coverage must prove:
   gaps, full recovery conflicts, unchanged active-minute/budget arithmetic,
   stale confirmation after a Study edit, and no mutation of an active revision;
 - completed post-activation linked focus progress without implicit completion;
+- missed and upcoming scheduled Focus at the actual server instant with
+  immutable source origin, refreshed duration/target validation, safe
+  completed/sub-five-minute states, and exactly-once block credit on terminal
+  replay;
 - stable pagination past a 1,000-row PostgREST response cap for bounded Focus,
   recurring schedule, confirmed-block, and imported-busy projections;
 - manual and explicitly selected imported-event sources, stale source

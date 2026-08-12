@@ -1,5 +1,5 @@
 import asyncio
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 import pytest
@@ -17,34 +17,64 @@ NOW = datetime(2026, 8, 2, 10, tzinfo=UTC)
 
 
 class Repository:
-    def __init__(self, *, conflict: bool = False) -> None:
+    def __init__(
+        self,
+        *,
+        conflict: bool = False,
+        original_starts_at: datetime | None = None,
+        start_context: dict | None = None,
+    ) -> None:
         self.conflict = conflict
+        self.original_starts_at = original_starts_at or datetime(
+            2026,
+            8,
+            1,
+            8,
+            tzinfo=UTC,
+        )
+        self.start_context = start_context
         self.calls = []
 
     async def get_start_context(self, **kwargs):
         self.calls.append(("context", kwargs))
-        return _context()
+        return self.start_context or _context(self.original_starts_at)
 
     async def start(self, **kwargs):
         self.calls.append(("start", kwargs))
         if self.conflict:
             raise FocusPersistenceConflict("focus_request_conflict")
-        return _session(active=True)
+        return _session(
+            active=True,
+            original_starts_at=self.original_starts_at,
+        )
 
     async def finish(self, **kwargs):
         self.calls.append(("finish", kwargs))
-        return _session(active=False, status=kwargs["terminal_status"])
+        return _session(
+            active=False,
+            status=kwargs["terminal_status"],
+            original_starts_at=self.original_starts_at,
+        )
 
 
-def _context():
+def _context(original_starts_at: datetime | None = None):
+    original_starts_at = original_starts_at or datetime(
+        2026,
+        8,
+        1,
+        8,
+        tzinfo=UTC,
+    )
     return {
         "contract_version": "focus-start-context-v2",
         "origin": "authenticated_backend",
         "source_kind": "planner_task_block",
         "block_id": str(BLOCK_ID),
         "target": {"kind": "task", "id": str(TASK_ID), "title": "Read"},
-        "original_starts_at": "2026-08-01T08:00:00+00:00",
-        "original_ends_at": "2026-08-01T08:30:00+00:00",
+        "original_starts_at": original_starts_at.isoformat(),
+        "original_ends_at": (
+            original_starts_at + timedelta(minutes=30)
+        ).isoformat(),
         "recovery_minutes": 10,
         "remaining_minutes": 20,
         "source_state": "partial",
@@ -53,7 +83,19 @@ def _context():
     }
 
 
-def _session(*, active: bool, status: str = "active"):
+def _session(
+    *,
+    active: bool,
+    status: str = "active",
+    original_starts_at: datetime | None = None,
+):
+    original_starts_at = original_starts_at or datetime(
+        2026,
+        8,
+        1,
+        8,
+        tzinfo=UTC,
+    )
     return {
         "contract_version": "focus-session-v2",
         "origin": "authenticated_backend",
@@ -75,15 +117,27 @@ def _session(*, active: bool, status: str = "active"):
         "schedule_source": {
             "source_kind": "planner_task_block",
             "block_id": str(BLOCK_ID),
-            "original_starts_at": "2026-08-01T08:00:00+00:00",
-            "original_ends_at": "2026-08-01T08:30:00+00:00",
+            "original_starts_at": original_starts_at.isoformat(),
+            "original_ends_at": (
+                original_starts_at + timedelta(minutes=30)
+            ).isoformat(),
             "original_recovery_minutes": 10,
         },
     }
 
 
-def test_scheduled_start_binds_request_content_and_server_clock() -> None:
-    repository = Repository()
+@pytest.mark.parametrize(
+    "original_starts_at",
+    [
+        datetime(2026, 8, 1, 8, tzinfo=UTC),
+        datetime(2026, 8, 3, 8, tzinfo=UTC),
+    ],
+    ids=["past-source", "future-source"],
+)
+def test_scheduled_start_binds_request_content_and_server_clock(
+    original_starts_at: datetime,
+) -> None:
+    repository = Repository(original_starts_at=original_starts_at)
     service = FocusService(repository=repository, now=lambda: NOW)
     request = ScheduledFocusStartRequest.model_validate(
         {
@@ -98,6 +152,8 @@ def test_scheduled_start_binds_request_content_and_server_clock() -> None:
     response = asyncio.run(service.start(user_id=USER_ID, request=request))
 
     assert response.started_at == NOW
+    assert response.schedule_source is not None
+    assert response.schedule_source.original_starts_at == original_starts_at
     call = repository.calls[0][1]
     assert call["request_id"] == SESSION_ID
     assert call["source_block_id"] == BLOCK_ID
@@ -106,6 +162,66 @@ def test_scheduled_start_binds_request_content_and_server_clock() -> None:
     assert call["now"] == NOW
     assert len(call["request_fingerprint"]) == 64
     assert set(call["request_fingerprint"]) <= set("0123456789abcdef")
+
+
+@pytest.mark.parametrize(
+    ("remaining_minutes", "source_state", "blocking_reason"),
+    [
+        (0, "completed", "source_fully_credited"),
+        (4, "partial", "source_remaining_too_short"),
+    ],
+)
+def test_short_or_completed_start_context_is_explicitly_blocked(
+    remaining_minutes: int,
+    source_state: str,
+    blocking_reason: str,
+) -> None:
+    context = {
+        **_context(),
+        "remaining_minutes": remaining_minutes,
+        "source_state": source_state,
+        "can_start": False,
+        "blocking_reason": blocking_reason,
+    }
+    service = FocusService(
+        repository=Repository(start_context=context),
+        now=lambda: NOW,
+    )
+
+    response = asyncio.run(
+        service.get_start_context(
+            user_id=USER_ID,
+            source_kind="planner_task_block",
+            block_id=BLOCK_ID,
+        ),
+    )
+
+    assert response.can_start is False
+    assert response.remaining_minutes == remaining_minutes
+    assert response.blocking_reason == blocking_reason
+
+
+def test_short_start_context_rejects_an_inconsistent_blocking_reason() -> None:
+    context = {
+        **_context(),
+        "remaining_minutes": 4,
+        "source_state": "partial",
+        "can_start": False,
+        "blocking_reason": "fixed_commitment",
+    }
+    service = FocusService(
+        repository=Repository(start_context=context),
+        now=lambda: NOW,
+    )
+
+    with pytest.raises(ValueError, match="Short Focus source blocking reason"):
+        asyncio.run(
+            service.get_start_context(
+                user_id=USER_ID,
+                source_kind="planner_task_block",
+                block_id=BLOCK_ID,
+            ),
+        )
 
 
 def test_manual_and_scheduled_requests_have_distinct_exact_fingerprints() -> None:

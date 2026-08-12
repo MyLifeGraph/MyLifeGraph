@@ -206,7 +206,10 @@ student confirms the series once, may later edit one occurrence or all future
 ones, and may cancel only the future scope. Past/completed occurrences survive
 future-wide changes. Exam and Assignment editors expose no prior-work control
 or prior-credit summary; newly created plans submit zero while legacy values
-remain transport-compatible.
+remain transport-compatible. Once a plan exists, its root Exam or Assignment
+kind is shown read-only and remains fixed through occurrence edit, replan, and
+deep-link entry. Only a new generic Calendar-source proposal keeps the kind
+selector.
 
 ## Auth Modes
 
@@ -278,6 +281,12 @@ rows, and restricts deletion of linked targets. Refresh failure does not roll
 back the durable write. Normal Dashboard reads do not generate recommendations,
 and Phase 3 does not rank a briefing or call an LLM. See
 `../../docs/phase-3-executable-actions-contract.md`.
+
+Scheduled Focus reloads use the newest backend context for target, recovery,
+and remaining duration. Completed or sub-five-minute sources stay visible with
+an inline explanation, no invalid duration selector, no `starts now` claim, and
+a disabled Start action. Eligible past and future sources still start at the
+actual backend time while retaining their original planned interval.
 
 ## Main Routes
 

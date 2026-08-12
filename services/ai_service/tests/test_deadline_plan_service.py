@@ -14,6 +14,7 @@ from app.repositories.deadline_plan_repository import (
     PreparationWorkloadDetailContext,
 )
 from app.services.deadline_plan_service import (
+    DeadlinePlanConflictError,
     DeadlinePlanService,
     DeadlinePlanValidationError,
     _deadline_block_credits,
@@ -610,6 +611,22 @@ def test_exact_proposal_replay_short_circuits_stale_base_and_time() -> None:
 
     assert response.plan.latest_revision == 1
     assert response.pending_revision is not None
+    assert repository.context_loaded is False
+
+
+def test_existing_plan_kind_change_fails_before_planning_context_reads() -> None:
+    repository = ReplayRepository("unused")
+    service = DeadlinePlanService(repository=repository, now=lambda: NOW)
+    request = _request(base_revision=1, kind="assignment")
+
+    with pytest.raises(
+        DeadlinePlanConflictError,
+        match=r"^Deadline plan kind cannot be changed\.$",
+    ):
+        asyncio.run(
+            service.prepare_proposal(user_id="owner", request=request),
+        )
+
     assert repository.context_loaded is False
 
 

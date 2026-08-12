@@ -265,6 +265,9 @@ Already implemented:
     user supplies deadline, `30..30000` active-preparation minutes, and bounded
     session/daily preferences; new UI proposals use zero prior credit and do
     not expose the legacy field.
+  - Once a plan exists, its root kind remains fixed through edit, occurrence,
+    focused replan, and deep-link entry. FastAPI rejects a different proposal
+    kind with the stable early `409` conflict before loading planning context.
   - Each proposal persists at most 120 deterministic dated blocks in an
     immutable pending revision. It cannot replace the active revision before
     exact confirmation; first confirm creates the stable managed Phase 3 task.
@@ -1151,6 +1154,8 @@ lives in `docs/phase-9-calendar-import-contract.md`.
   complete, and cancel commands under `/v1/deadline-plans`.
 - Keeps the original user-entered estimate/prior credit on the plan and stores
   later inputs as immutable proposed/active/superseded revisions.
+- Keeps the root Exam/Assignment kind immutable across every later revision;
+  Flutter renders it read-only and FastAPI rejects tampering before allocation.
 - Derives at most 120 deterministic, timezone-aware blocks and honest
   unscheduled minutes inside a 366-day horizon. A pending proposal cannot
   replace the active revision; proposal edits use the latest revision while

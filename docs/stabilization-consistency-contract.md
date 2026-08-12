@@ -284,6 +284,12 @@ new session. The explicit `Continue without saved Study Setup` choice applies
 only to that start and uses the latest sensible Focus duration or 25 minutes,
 zero recovery, and no checklist. It does not write Settings.
 
+A scheduled Focus reload treats its backend start context as authoritative.
+The controller replaces the scheduled target, revalidates the duration against
+the new remainder, and clears no validation conflict through an invalid setter.
+Completed and sub-five-minute contexts remain readable, disabled inline states
+instead of constructing invalid selection controls.
+
 Capture errors use error presentation and retry controls rather than success
 styling. Setup maps HTTP, transport, and contract failures through one
 student-safe message boundary; internal URLs, status codes, Dio output, causes,
