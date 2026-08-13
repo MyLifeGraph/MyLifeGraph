@@ -380,6 +380,15 @@ remain readable and scrollable at a 320 px viewport and 200% text. Unknown and
 transport error require distinct words and semantics, not merely distinct
 colors.
 
+`multi-exam-plan-v1` uses real expandable review semantics, icon-plus-text
+status, wrapping before/after metrics, and full-width batch actions with at
+least 44×44 targets labelled exactly `Confirm all` and `Discard`; essential
+review text is never ellipsized. Target selection, history,
+saved-refresh-failed truth, and stale review remain usable at 320 px and 200%
+text. Keyboard focus, screenreader labels/live failure and saved-refresh status,
+Light/Dark/Space themes, and current-profile-timezone time labels follow the
+same objective gate; change state is never color-only.
+
 The objective gate is:
 
 - text contrast at least 4.5:1;

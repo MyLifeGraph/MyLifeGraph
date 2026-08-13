@@ -303,6 +303,17 @@ rhythm but does not read reflection ratings, personal-pattern confidence, or
 LLM advice, and it writes no learning evidence. Personal Learning therefore
 cannot turn unknown capacity green or silently alter the recommended start.
 
+Multi-Exam balancing is likewise deterministic. `multi-exam-plan-v1` does not
+rank colliders from reflection ratings, personal-pattern confidence, Coach
+text, or an LLM. Saved learned-timing authority may influence ordinary
+availability only through the already bounded planning marker captured in the
+context digest. Batch persistence separately records a learned-timing marker
+covering the backend pilot flag, the locked learning-preference
+revision/flags, and active Exam timing provenance. Changing the pilot,
+disabling either consent flag, or changing that provenance makes confirmation
+stale rather than rewriting it; the learning-preference writer participates in
+the same owner advisory lock as proposal and confirmation.
+
 Learned timing has two independent gates:
 
 1. the account preference `learned_focus_planning_enabled`; and
@@ -338,7 +349,9 @@ compact learned-considered/Setup-fallback line. Confirmation
 rechecks all existing invariants and requires the user preference and deployment
 gate still to be enabled when the preview claims learned timing. Recomputed
 evidence never rewrites the immutable preview or blocks it merely because the
-pattern changed. If pattern loading fails during proposal, planning continues
+raw observational pattern changed. The persisted pilot/permission and active
+Exam provenance marker is different: a change there always requires a fresh
+batch preview. If pattern loading fails during proposal, planning continues
 with Setup ordering and a visible fallback warning.
 
 ## Recommendation cleanup follow-up

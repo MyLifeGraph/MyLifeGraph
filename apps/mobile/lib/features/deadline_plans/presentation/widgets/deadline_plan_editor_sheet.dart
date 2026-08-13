@@ -26,6 +26,8 @@ class _DeadlinePlanEditorSheet extends StatefulWidget {
     required this.replanContext,
     required this.currentTime,
     required this.profileToday,
+    required this.profileTimezone,
+    required this.savedExamHealth,
     required this.onOpenPlanner,
     required this.onPreviewHealth,
   });
@@ -52,6 +54,8 @@ class _DeadlinePlanEditorSheet extends StatefulWidget {
   final _DeadlineReplanContext replanContext;
   final DateTime? currentTime;
   final DateTime profileToday;
+  final String profileTimezone;
+  final ExamPlanHealthItem? savedExamHealth;
   final VoidCallback onOpenPlanner;
   final Future<ExamPlanHealthPreview> Function(ExamPlanHealthPreviewDraft draft)
       onPreviewHealth;
@@ -82,6 +86,7 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
   ExamPlanHealthPreview? _healthPreview;
   Object? _healthPreviewError;
   int _healthPreviewGeneration = 0;
+  late bool _savedHealthStillMatches;
 
   @override
   void initState() {
@@ -119,8 +124,8 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
         existing?.preferredSessionMinutes ??
         50;
     _bufferDays = retained?.bufferDays ?? existing?.bufferDays ?? 1;
-    final now = _now;
-    final localDeadline = _deadline?.toLocal();
+    final now = _profileLocal(_now);
+    final localDeadline = _deadline == null ? null : _profileLocal(_deadline!);
     if (retained == null &&
         existing == null &&
         localDeadline != null &&
@@ -131,6 +136,7 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
     }
     _sourceKind = widget.sourceKind;
     _showExistingSummary = widget.startWithExistingSummary;
+    _savedHealthStillMatches = widget.savedExamHealth != null;
     final today = widget.profileToday;
     final savedPlanningStart = DateTime.tryParse(
       retained?.planningStartOn ?? existing?.planningStartOn ?? '',
@@ -150,6 +156,11 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
   }
 
   DateTime get _now => widget.currentTime ?? DateTime.now();
+
+  DateTime _profileLocal(DateTime instant) => profileDateTimeAt(
+        instant: instant,
+        timezoneName: widget.profileTimezone,
+      );
 
   @override
   void dispose() {
@@ -181,6 +192,17 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
                 : 'Adjust preparation plan',
             style: Theme.of(context).textTheme.titleLarge,
           ),
+          if (_kind == DeadlinePlanKind.exam &&
+              _savedHealthStillMatches &&
+              widget.savedExamHealth != null) ...[
+            const SizedBox(height: AppSpacing.md),
+            const Text(
+              'Current saved Exam values',
+              key: ValueKey('saved-exam-health-editor'),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            _SavedExamHealthSummary(exam: widget.savedExamHealth!),
+          ],
           const SizedBox(height: AppSpacing.xs),
           Text('Step ${_step + 1} of 3'),
           const SizedBox(height: AppSpacing.lg),
@@ -235,8 +257,15 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
           const SizedBox(height: AppSpacing.xs),
           Text(
             '${revision.kind == DeadlinePlanKind.exam ? 'Exam' : 'Assignment'} · '
-            'finish by ${DateFormat.yMMMd().add_Hm().format(revision.deadlineAt.toLocal())} · device time',
+            'finish by ${DateFormat.yMMMd().add_Hm().format(_profileLocal(revision.deadlineAt))} · ${widget.profileTimezone}',
           ),
+          if (revision.kind == DeadlinePlanKind.exam &&
+              widget.savedExamHealth != null) ...[
+            const SizedBox(height: AppSpacing.md),
+            const Text('Current saved Exam values'),
+            const SizedBox(height: AppSpacing.sm),
+            _SavedExamHealthSummary(exam: widget.savedExamHealth!),
+          ],
           const SizedBox(height: AppSpacing.md),
           Wrap(
             spacing: AppSpacing.lg,
@@ -258,7 +287,7 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
             revision.recoveryMinutes > 0
                 ? '${_duration(revision.preferredSessionMinutes)} focus + '
                     '${_duration(revision.recoveryMinutes)} recovery · '
-                    'reserved through ${DateFormat.Hm().format(revision.blocks.isEmpty ? revision.deadlineAt.toLocal() : revision.blocks.first.reservedEndsAt.toLocal())} for the first block'
+                    'reserved through ${DateFormat.Hm().format(_profileLocal(revision.blocks.isEmpty ? revision.deadlineAt : revision.blocks.first.reservedEndsAt))} ${widget.profileTimezone} for the first block'
                 : '${_duration(revision.preferredSessionMinutes)} preferred blocks · '
                     '${_duration(revision.maxDailyMinutes)} maximum per day · '
                     '${revision.bufferDays} ${revision.bufferDays == 1 ? 'clear day' : 'clear days'}',
@@ -389,8 +418,8 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
           'Choose this yourself. MyLifeGraph never infers an exam or assignment from a calendar title.',
         ),
         const SizedBox(height: AppSpacing.xs),
-        const Text(
-          'You enter the finish time in this device\'s timezone. The preview places blocks in the profile timezone saved in Settings.',
+        Text(
+          'Finish-by times use your profile timezone (${widget.profileTimezone}), including when this device is elsewhere.',
         ),
         const SizedBox(height: AppSpacing.md),
         if (widget.lockKind && _kind != null)
@@ -446,9 +475,9 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
             label: Text(
               _deadline == null
                   ? _deadlineDateHint == null
-                      ? 'Choose finish-by date and device time'
-                      : 'Choose finish-by device time for ${DateFormat.yMMMd().format(_deadlineDateHint!)}'
-                  : 'Finish by ${DateFormat.yMMMd().add_Hm().format(_deadline!.toLocal())} · device time',
+                      ? 'Choose finish-by date and profile time'
+                      : 'Choose finish-by profile time for ${DateFormat.yMMMd().format(_deadlineDateHint!)}'
+                  : 'Finish by ${DateFormat.yMMMd().add_Hm().format(_profileLocal(_deadline!))} · ${widget.profileTimezone}',
             ),
           ),
         ),
@@ -725,19 +754,20 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
   }
 
   Future<void> _pickDeadline() async {
-    final now = _now;
+    final now = _profileLocal(_now);
     final lastDate = now.add(const Duration(days: 366));
     final dateHint = _deadlineDateHint;
-    final requestedInitial = _deadline?.toLocal() ??
-        (dateHint == null
-            ? now.add(const Duration(days: 7))
-            : DateTime(
-                dateHint.year,
-                dateHint.month,
-                dateHint.day,
-                now.hour,
-                now.minute,
-              ));
+    final requestedInitial =
+        (_deadline == null ? null : _profileLocal(_deadline!)) ??
+            (dateHint == null
+                ? now.add(const Duration(days: 7))
+                : DateTime(
+                    dateHint.year,
+                    dateHint.month,
+                    dateHint.day,
+                    now.hour,
+                    now.minute,
+                  ));
     final initial = requestedInitial.isAfter(lastDate)
         ? lastDate
         : requestedInitial.isBefore(now)
@@ -757,25 +787,38 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
       helpText: 'Preparation finish-by time',
     );
     if (time == null || !mounted) return;
-    setState(() {
-      _clearHealthPreview();
-      _deadline =
-          DateTime(date.year, date.month, date.day, time.hour, time.minute);
-      _deadlineDateHint = null;
-      if (widget.existing == null &&
-          widget.retainedDraft == null &&
-          date.year == now.year &&
-          date.month == now.month &&
-          date.day == now.day) {
-        _bufferDays = 0;
-      }
-    });
+    try {
+      final selected = profileDateTimeFromComponents(
+        year: date.year,
+        month: date.month,
+        day: date.day,
+        hour: time.hour,
+        minute: time.minute,
+        timezoneName: widget.profileTimezone,
+      );
+      setState(() {
+        _clearHealthPreview();
+        _deadline = selected;
+        _deadlineDateHint = null;
+        if (widget.existing == null &&
+            widget.retainedDraft == null &&
+            date.year == now.year &&
+            date.month == now.month &&
+            date.day == now.day) {
+          _bufferDays = 0;
+        }
+      });
+    } on ProfileTimezoneException {
+      _showValidation(
+        'That profile-local time is missing or ambiguous because of a daylight-saving change. Choose another time.',
+      );
+    }
   }
 
   Future<void> _pickPlanningStart() async {
-    final now = _now;
+    final now = _profileLocal(_now);
     final today = widget.profileToday;
-    final deadlineDate = _deadline?.toLocal();
+    final deadlineDate = _deadline == null ? null : _profileLocal(_deadline!);
     final lastDate = deadlineDate == null
         ? now.add(const Duration(days: 365))
         : DateTime(deadlineDate.year, deadlineDate.month, deadlineDate.day);
@@ -823,10 +866,11 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
       _showValidation('Choose a finish-by time within the next 366 days.');
       return null;
     }
+    final localDeadline = _profileLocal(_deadline!);
     final deadlineDate = DateTime(
-      _deadline!.year,
-      _deadline!.month,
-      _deadline!.day,
+      localDeadline.year,
+      localDeadline.month,
+      localDeadline.day,
     );
     final startDate = DateTime(
       _planningStart.year,
@@ -906,6 +950,7 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
     _healthPreviewLoading = false;
     _healthPreview = null;
     _healthPreviewError = null;
+    _savedHealthStillMatches = false;
   }
 
   int? get _totalMinutes => _durationInput(

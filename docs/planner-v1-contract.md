@@ -401,6 +401,10 @@ Habit pause/archive release future reservations through database lifecycle
 guards. Undo or restore never resurrects released slots; the target returns to
 `Unscheduled` and requires a new proposal. Explicit Action Plan cancellation
 also releases reservations while retaining an already-created target.
+The direct Task/Habit lifecycle path first acquires the shared owner advisory
+lock in a `BEFORE` trigger; reservation release remains later in the same
+transaction. This prevents a release from racing a Planner/Deadline context
+digest check and atomic confirmation.
 
 An ordinary Task proposal includes an explicit `use_study_rhythm` boolean,
 defaulting to false. When true, a current Study focus rhythm is required and
@@ -485,6 +489,12 @@ when both Planner attention and Health attention are confirmed empty; Health
 loading and transport failure have their own rows. Selecting a Health row opens
 the corresponding Preparation plan and never replans it. The existing
 Exam-Week Outlook card remains a separate sleep-oriented projection.
+
+Planner does not run `multi-exam-plan-v1`. Its Preparation entry links to the
+normal Preparation page where the student explicitly chooses an Exam, and a
+pending batch child links to the batch review instead of exposing single-plan
+confirmation. Only a confirmed all-or-none batch invalidates Planner; proposal,
+stale failure, and discard create no active Planner reservation.
 
 Planner also owns presentation of the separate read-only
 `exam-week-outlook-v1` response. The card is placed after `Add new` and before

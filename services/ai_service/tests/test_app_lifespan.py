@@ -8,6 +8,7 @@ from app.api.deps.auth import SupabaseTokenVerifier, UnconfiguredTokenVerifier
 from app.api.deps.coach import get_coach_services
 from app.api.deps.services import (
     get_deadline_plan_service,
+    get_multi_exam_plan_service,
     get_planner_service,
     get_scheduled_refresh_service,
     get_today_overview_service,
@@ -55,6 +56,9 @@ def test_app_lifespan_owns_one_supabase_pool(monkeypatch) -> None:
             request = Request({"type": "http", "app": app})
             assert await get_deadline_plan_service(request) is (
                 composition.deadline_plan_service
+            )
+            assert await get_multi_exam_plan_service(request) is (
+                composition.multi_exam_plan_service
             )
             assert await get_planner_service(request) is composition.planner_service
             assert await get_today_overview_service(request) is (

@@ -760,7 +760,10 @@ class DeadlinePlanDetail(BaseModel):
             ):
                 raise ValueError("active deadline identity does not match revision")
             if self.pending_revision is None:
-                if self.plan.latest_revision != self.plan.current_revision:
+                # Cancelled/superseded batch children leave an append-only
+                # revision number above the active revision without exposing a
+                # pending preview. The next proposal advances from latest.
+                if self.plan.latest_revision < self.plan.current_revision:
                     raise ValueError("active deadline latest revision is inconsistent")
             elif (
                 self.plan.latest_revision != self.pending_revision.revision

@@ -379,7 +379,9 @@ destination rather than restoring Settings; Settings-owned routes such as
   `?kind=exam` opens a kind-locked single Exam flow and `?kind=assignment`
   opens a kind-locked finite weekly Assignment Series flow; the page's general
   `Plan preparation` action always offers both kinds and dispatches to those
-  same flows, even after a route-level kind was consumed)
+  same flows, even after a route-level kind was consumed;
+  `?balance_id=<uuid>` opens one owner-scoped Exam-balance review independently
+  of the bounded history feed)
 - `/planner/replan?plan_id=<uuid>` (focused saved-value review, staged preview,
   and explicit confirmation for exactly one Preparation plan)
 - `/weekly-review` (authenticated, completed-week review)
@@ -417,6 +419,44 @@ or empty Health data. Planner uses the shared wrapping status pill and does not
 show its combined calm state while Health is refreshing. Confirming or
 cancelling an Assignment Series, including an exact retry, invalidates Health
 and the other Deadline-owned projections only after proven success.
+
+Preparation also owns the separate strict `multi-exam-plan-v1` Flutter layer:
+domain union, repository/data source, controller/provider, and review widgets.
+`Balance exam plans` appears only on the normal Preparation page and requires an
+explicit active Exam selection; Health supplies the visible recommended/latest
+safe context, but the server revalidates the target and expected plan revision.
+The copy states that previewing moves nothing and sends no notification or
+calendar update. A no-change result stays explanatory, one changed plan adopts
+the already persisted Deadline V1 revision exactly once, and two or more
+changed plans open a batch review with only `Confirm all` or `Discard`.
+
+Batch detail is the authority for child links. Until it loads successfully, a
+possible child card fails closed against normal single-plan confirmation; a
+known child offers `Review exam balance`. Mutation state and its immutable
+request body survive navigation, same-principal Auth/profile/token refresh,
+transient Auth loading/error states, and provider rebuilds, and drive one exact
+retry after an ambiguous 5xx or transport failure. While that retry is pending,
+feed/detail loads and navigation to
+another batch are blocked. A `409` stale response keeps the readable review:
+confirmation remains disabled until a fresh authoritative list-plus-detail read
+succeeds, while `Discard` remains available for the stale proposed batch. A
+targeted detail read remains independent of bounded or failed history, remains
+visible when the legacy feed returns its item-limit error, and a late list or
+list-detail response cannot evict or retarget it. List-detail failures and
+targeted-detail failures remain separately source-bound: a list completion
+cannot clear another balance's targeted error, and only the exact failed target
+offers `Retry preview`. Deadline, Assignment Series, and Exam-balance
+commands share one mutation gate. Preview reconciliation refreshes only local
+Deadline/batch state; confirmed/cancelled lifecycle writes emit the broader
+projection impact. A durable result whose refresh fails is reported as saved
+with stale projections, never as an unknown write outcome. Display and editor
+conversion use only a valid current profile IANA timezone; missing/invalid
+timezone data disables `Confirm all` while preserving `Discard`, and DST gaps
+and folds fail closed instead of falling back to revision or device time.
+Status/action
+semantics, full-width `Confirm all`/`Discard` controls, and complete labels
+remain usable at 320 px and 200% text. Guest/mock returns before constructing
+authenticated transport and performs zero balance calls.
 
 Student-facing category treatment is shared between Today and Planner: Task
 and Setup use brand, Habit and Preparation use information, Calendar uses

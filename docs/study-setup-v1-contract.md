@@ -177,6 +177,14 @@ Health read never edits Setup and never persists a learned replacement rhythm.
 If occurrence-local recurring availability cannot be resolved safely across a
 DST transition, Health is `unknown` rather than optimistic.
 
+`multi-exam-plan-v1` binds the current Study revision plus Focus and Recovery
+minutes into its owner-locked context digest. Recovery occupies capacity but
+never becomes active work. A confirmed Setup change makes a saved batch stale;
+balancing never edits Setup or adopts a learned rhythm automatically. When an
+ordinary Deadline allocation carries learned timing, batch confirmation also
+checks its separately stored pilot/permission/provenance marker under the same
+owner lock; an opt-out cannot leave that simulated ordering confirmable.
+
 Deadline Planner always uses the current Study rhythm when a Focus rhythm is
 configured. An ordinary Planner Task has an explicit `use_study_rhythm`
 boolean, defaulting to false. When true, a current rhythm is required and the

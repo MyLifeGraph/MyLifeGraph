@@ -284,6 +284,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
               state.uri.queryParameters['kind'],
             ),
             initialPlanId: state.uri.queryParameters['plan_id'],
+            initialBalanceId: state.uri.queryParameters['balance_id'],
             openInitialReplan: state.uri.queryParameters['action'] == 'replan',
             sourceCalendarEventId:
                 state.uri.queryParameters['calendar_event_id'],

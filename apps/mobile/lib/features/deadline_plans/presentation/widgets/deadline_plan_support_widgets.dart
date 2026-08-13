@@ -205,6 +205,7 @@ class _MessageCard extends StatelessWidget {
     required this.message,
     this.actionLabel,
     this.onAction,
+    this.liveRegion = false,
   });
 
   final IconData icon;
@@ -212,23 +213,28 @@ class _MessageCard extends StatelessWidget {
   final String message;
   final String? actionLabel;
   final VoidCallback? onAction;
+  final bool liveRegion;
 
   @override
   Widget build(BuildContext context) {
-    return AppCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon),
-          const SizedBox(height: AppSpacing.sm),
-          Text(title, style: Theme.of(context).textTheme.titleLarge),
-          const SizedBox(height: AppSpacing.sm),
-          Text(message),
-          if (actionLabel != null && onAction != null) ...[
-            const SizedBox(height: AppSpacing.md),
-            OutlinedButton(onPressed: onAction, child: Text(actionLabel!)),
+    return Semantics(
+      liveRegion: liveRegion,
+      container: true,
+      child: AppCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(icon),
+            const SizedBox(height: AppSpacing.sm),
+            Text(title, style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: AppSpacing.sm),
+            Text(message),
+            if (actionLabel != null && onAction != null) ...[
+              const SizedBox(height: AppSpacing.md),
+              OutlinedButton(onPressed: onAction, child: Text(actionLabel!)),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }

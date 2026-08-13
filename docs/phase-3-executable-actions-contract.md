@@ -316,6 +316,16 @@ Task, Habit, fixed-commitment, and Setup schedule mutations invalidate Health
 because they consume shared availability. No Focus command writes a Health
 status, sends an alert, or automatically replans after a miss.
 
+`multi-exam-plan-v1` remains outside `executable-action-v1`. Focus completion
+facts and Task/Habit/fixed-commitment occupancy participate only as read inputs
+to its owner-locked digest and exact simulation. A batch confirmation activates
+existing Deadline-managed Task projections atomically through Deadline
+authority; it does not add a generic action command or start Focus.
+Direct authenticated Task and Habit lifecycle writes take that same owner
+advisory lock in an alphabetically first `BEFORE` trigger. Their existing
+future-reservation release remains an `AFTER` effect and therefore cannot run
+between a Multi-Exam digest check and its atomic commit.
+
 - A successful or exactly reconciled real task, habit, or focus write triggers
   daily snapshot refresh best-effort.
 - Flutter routes the downstream read-cache impact through one typed app

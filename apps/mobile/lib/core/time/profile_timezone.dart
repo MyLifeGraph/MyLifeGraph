@@ -31,6 +31,75 @@ DateTime profileDateAt({
   }
 }
 
+DateTime profileDateTimeAt({
+  required DateTime instant,
+  required String timezoneName,
+}) {
+  initializeProfileTimeZones();
+  final normalizedName = timezoneName.trim();
+  if (normalizedName.isEmpty) {
+    throw const ProfileTimezoneException('Profile timezone is missing.');
+  }
+  try {
+    final location = timezone.getLocation(normalizedName);
+    return timezone.TZDateTime.from(instant, location);
+  } on timezone.LocationNotFoundException {
+    throw ProfileTimezoneException(
+      'Profile timezone "$normalizedName" is invalid.',
+    );
+  }
+}
+
+DateTime profileDateTimeFromComponents({
+  required int year,
+  required int month,
+  required int day,
+  required int hour,
+  required int minute,
+  required String timezoneName,
+}) {
+  initializeProfileTimeZones();
+  final normalizedName = timezoneName.trim();
+  if (normalizedName.isEmpty) {
+    throw const ProfileTimezoneException('Profile timezone is missing.');
+  }
+  try {
+    final location = timezone.getLocation(normalizedName);
+    final wallMilliseconds =
+        DateTime.utc(year, month, day, hour, minute).millisecondsSinceEpoch;
+    final offsets = location.zones.map((zone) => zone.offset).toSet();
+    final candidates = <int, timezone.TZDateTime>{};
+    for (final offset in offsets) {
+      final candidate = timezone.TZDateTime.fromMillisecondsSinceEpoch(
+        location,
+        wallMilliseconds - offset,
+      );
+      if (candidate.year == year &&
+          candidate.month == month &&
+          candidate.day == day &&
+          candidate.hour == hour &&
+          candidate.minute == minute) {
+        candidates[candidate.millisecondsSinceEpoch] = candidate;
+      }
+    }
+    if (candidates.isEmpty) {
+      throw const ProfileTimezoneException(
+        'The selected profile-local time does not exist.',
+      );
+    }
+    if (candidates.length > 1) {
+      throw const ProfileTimezoneException(
+        'The selected profile-local time is ambiguous.',
+      );
+    }
+    return candidates.values.single;
+  } on timezone.LocationNotFoundException {
+    throw ProfileTimezoneException(
+      'Profile timezone "$normalizedName" is invalid.',
+    );
+  }
+}
+
 String profileLocalDateKey({
   required DateTime instant,
   required String timezoneName,

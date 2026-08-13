@@ -115,6 +115,22 @@ the exact editor fingerprint and are discarded after any relevant field
 changes. Invalidation failure after a durable Calendar success is best effort
 and never converts that success into an unsafe command replay.
 
+Exam balancing has its own persisted mutation reconciliation under
+`multi-exam-plan-v1`. Proposal binds the explicit expected plan revision and
+owner-locked source digest; batch confirmation compares a post-proposal digest.
+Transport/5xx ambiguity permits only an immutable exact retry, while `409`
+staleness requires reload or a fresh preview. Its controller shares the
+Preparation mutation gate with single plans and Assignment Series, and a saved
+result whose projection refresh fails remains truthfully saved-but-stale.
+Transient Auth loading/error states do not revoke a known principal or dispose
+that principal's controller; only a later authoritative Auth value with a
+different or absent principal may do so. Targeted batch detail and bounded-list
+detail reads share generation/merge authority, so an older list completion
+cannot erase or select over a newer explicit target. Their errors also remain
+source-bound: list-detail failure exposes only the list reload, while a targeted
+failure exposes a retry bound to that exact batch; either completion leaves an
+unrelated error intact.
+
 After a durable Flutter mutation, callers name one typed domain impact through
 the app-level `ProjectionRefreshCoordinator`; they do not import and enumerate
 foreign feature providers. The coordinator may refresh the affected profile

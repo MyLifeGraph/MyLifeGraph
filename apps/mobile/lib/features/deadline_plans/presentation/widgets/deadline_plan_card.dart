@@ -9,10 +9,15 @@ class _DeadlinePlanCard extends StatefulWidget {
     required this.exactRetryLocked,
     required this.confirmLabel,
     required this.operationError,
+    required this.examHealth,
+    required this.childBalanceId,
+    required this.childMetadataUnavailable,
+    required this.profileTimezone,
     required this.onToggle,
     required this.onAdjust,
     required this.onReplanMissed,
     required this.onConfirm,
+    required this.onReviewBalance,
     required this.onComplete,
     required this.onCancel,
     required this.onStartBlock,
@@ -27,10 +32,15 @@ class _DeadlinePlanCard extends StatefulWidget {
   final bool exactRetryLocked;
   final String confirmLabel;
   final Object? operationError;
+  final ExamPlanHealthItem? examHealth;
+  final String? childBalanceId;
+  final bool childMetadataUnavailable;
+  final String? profileTimezone;
   final VoidCallback onToggle;
   final VoidCallback onAdjust;
   final VoidCallback onReplanMissed;
   final VoidCallback onConfirm;
+  final VoidCallback? onReviewBalance;
   final VoidCallback onComplete;
   final VoidCallback onCancel;
   final ValueChanged<DeadlinePlanBlock> onStartBlock;
@@ -98,6 +108,7 @@ class _DeadlinePlanCardState extends State<_DeadlinePlanCard> {
       );
     }
     final pending = plan.pendingRevision != null;
+    final isBalanceChild = widget.childBalanceId != null;
     final active = plan.activeRevision;
     final sourceNeedsReview =
         revision.sourceStatus == DeadlinePlanSourceStatus.stale ||
@@ -179,6 +190,29 @@ class _DeadlinePlanCardState extends State<_DeadlinePlanCard> {
               ),
               style: Theme.of(context).textTheme.bodySmall,
             ),
+            if (revision.kind == DeadlinePlanKind.exam &&
+                widget.examHealth != null) ...[
+              const SizedBox(height: AppSpacing.xs),
+              Text(
+                '${_examHealthStatusLabel(widget.examHealth!.status)} · '
+                '${widget.examHealth!.recommendedStartOn == null ? 'recommended start unavailable' : 'recommended ${_healthDate(widget.examHealth!.recommendedStartOn!)}'} · '
+                '${widget.examHealth!.latestSafeStartOn == null ? 'latest safe start unknown' : 'latest safe ${_healthDate(widget.examHealth!.latestSafeStartOn!)}'}',
+                key: ValueKey('saved-exam-health-compact-${plan.id}'),
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
+            if (pending &&
+                (isBalanceChild || widget.childMetadataUnavailable)) ...[
+              const SizedBox(height: AppSpacing.xs),
+              Text(
+                isBalanceChild
+                    ? 'Shared Exam balance preview · review the complete batch'
+                    : 'Checking shared-preview ownership · single confirmation unavailable',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.secondary,
+                    ),
+              ),
+            ],
           ],
         ),
       );
@@ -230,12 +264,55 @@ class _DeadlinePlanCardState extends State<_DeadlinePlanCard> {
           ),
           const SizedBox(height: AppSpacing.xs),
           Text(
-            'Finish by ${DateFormat.yMMMd().add_Hm().format(revision.deadlineAt.toLocal())} · device time',
+            _profileDeadlineCopy(revision.deadlineAt, widget.profileTimezone),
           ),
+          if (revision.kind == DeadlinePlanKind.exam &&
+              widget.examHealth != null) ...[
+            const SizedBox(height: AppSpacing.sm),
+            _SavedExamHealthSummary(exam: widget.examHealth!),
+          ],
+          if (pending &&
+              (isBalanceChild || widget.childMetadataUnavailable)) ...[
+            const SizedBox(height: AppSpacing.sm),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(AppSpacing.md),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.secondaryContainer,
+                borderRadius: BorderRadius.circular(AppRadii.sm),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    isBalanceChild
+                        ? 'Part of an Exam balance preview'
+                        : 'Checking Exam balance ownership',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: AppSpacing.xs),
+                  Text(
+                    isBalanceChild
+                        ? 'This child revision cannot be confirmed alone. Review and confirm or discard the complete Exam balance.'
+                        : 'Single confirmation stays unavailable until shared-preview metadata loads safely.',
+                  ),
+                  if (widget.onReviewBalance != null) ...[
+                    const SizedBox(height: AppSpacing.sm),
+                    OutlinedButton.icon(
+                      key: ValueKey('deadline-review-balance-${plan.id}'),
+                      onPressed: widget.onReviewBalance,
+                      icon: const Icon(AppIcons.visibilityOutlined),
+                      label: const Text('Review Exam balance'),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
           AppInfoSectionDisclosure(
             heading: 'How new previews place time',
             description:
-                '${_deadlineAllocationDescription(revision.kind)} ${_planningWindowDescription(revision.bestEnergyWindow)} Preparation blocks use your profile timezone: ${revision.timezone}.',
+                '${_deadlineAllocationDescription(revision.kind)} ${_planningWindowDescription(revision.bestEnergyWindow)} ${widget.profileTimezone == null ? 'Your current profile timezone is unavailable, so local preparation times stay hidden.' : 'Preparation blocks use your profile timezone: ${widget.profileTimezone}.'}',
             headingStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   fontWeight: FontWeight.w600,
                 ),
@@ -385,6 +462,7 @@ class _DeadlinePlanCardState extends State<_DeadlinePlanCard> {
           ))
             _DeadlineBlockTile(
               block: block,
+              profileTimezone: widget.profileTimezone,
               canStart: plan.isActive &&
                   !pending &&
                   block.plannedMinutes - block.creditedTrackedMinutes >= 5 &&
@@ -431,6 +509,7 @@ class _DeadlinePlanCardState extends State<_DeadlinePlanCard> {
             ))
               _DeadlineBlockTile(
                 block: block,
+                profileTimezone: widget.profileTimezone,
                 canStart:
                     block.plannedMinutes - block.creditedTrackedMinutes >= 5 &&
                         (block.state == DeadlinePlanBlockState.upcoming ||
@@ -474,7 +553,12 @@ class _DeadlinePlanCardState extends State<_DeadlinePlanCard> {
             children: [
               if (pending)
                 FilledButton.icon(
-                  onPressed: canMutate && !sourceNeedsReview ? onConfirm : null,
+                  onPressed: canMutate &&
+                          !sourceNeedsReview &&
+                          !isBalanceChild &&
+                          !widget.childMetadataUnavailable
+                      ? onConfirm
+                      : null,
                   icon: const Icon(AppIcons.eventAvailableOutlined),
                   label: Text(widget.confirmLabel),
                 ),
@@ -509,29 +593,87 @@ class _DeadlinePlanCardState extends State<_DeadlinePlanCard> {
       showAll ? blocks : blocks.take(_collapsedBlockLimit);
 }
 
+String _profileDeadlineCopy(DateTime instant, String? timezone) {
+  if (timezone == null) {
+    return 'Finish time unavailable · current profile timezone unavailable';
+  }
+  try {
+    final local = profileDateTimeAt(
+      instant: instant,
+      timezoneName: timezone,
+    );
+    return 'Finish by ${DateFormat.yMMMd().add_Hm().format(local)} · $timezone';
+  } on ProfileTimezoneException {
+    return 'Finish time unavailable · profile timezone needs review';
+  }
+}
+
+class _SavedExamHealthSummary extends StatelessWidget {
+  const _SavedExamHealthSummary({required this.exam});
+
+  final ExamPlanHealthItem exam;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+        container: true,
+        label: 'Saved Exam Plan Health, ${_examHealthStatusLabel(exam.status)}',
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(AppSpacing.md),
+          decoration: BoxDecoration(
+            border: Border.all(color: Theme.of(context).colorScheme.outline),
+            borderRadius: BorderRadius.circular(AppRadii.sm),
+          ),
+          child: Wrap(
+            spacing: AppSpacing.lg,
+            runSpacing: AppSpacing.sm,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              AppStatusPill(
+                label: _examHealthStatusLabel(exam.status),
+                icon: _examHealthIcon(exam.status),
+                tone: _examHealthTone(exam.status),
+              ),
+              Text(
+                exam.recommendedStartOn == null
+                    ? 'Recommended start unavailable: ${exam.recommendedStartReason}'
+                    : 'Recommended start: ${_healthDate(exam.recommendedStartOn!)}',
+              ),
+              Text(
+                exam.latestSafeStartOn == null
+                    ? 'Latest safe start: Unknown'
+                    : 'Latest safe start: ${_healthDate(exam.latestSafeStartOn!)}',
+              ),
+            ],
+          ),
+        ),
+      );
+}
+
 class _DeadlineBlockTile extends StatelessWidget {
   const _DeadlineBlockTile({
     required this.block,
+    required this.profileTimezone,
     required this.canStart,
     required this.onStart,
   });
 
   final DeadlinePlanBlock block;
+  final String? profileTimezone;
   final bool canStart;
   final VoidCallback onStart;
 
   @override
   Widget build(BuildContext context) {
+    final localCopy = _deadlineBlockLocalCopy(block, profileTimezone);
     return ListTile(
       key: ValueKey('deadline-block-${block.id}'),
       contentPadding: EdgeInsets.zero,
       leading: CircleAvatar(child: Text('${block.sequence}')),
-      title: Text(
-        '${block.localDate} · ${block.localStartTime.substring(0, 5)}–${block.localEndTime.substring(0, 5)}',
-      ),
+      title: Text(localCopy.$1),
       subtitle: Text(
         '${_duration(block.plannedMinutes)} focus'
-        '${block.recoveryMinutes > 0 ? ' + ${_duration(block.recoveryMinutes)} recovery · reserved until ${DateFormat.Hm().format(block.reservedEndsAt.toLocal())}' : ''}'
+        '${block.recoveryMinutes > 0 ? ' + ${_duration(block.recoveryMinutes)} recovery · ${localCopy.$2}' : ''}'
         ' · ${_blockLabel(block.state)}'
         '${block.creditedTrackedMinutes > 0 ? ' · ${_duration(block.creditedTrackedMinutes)} tracked' : ''}',
       ),
@@ -542,6 +684,41 @@ class _DeadlineBlockTile extends StatelessWidget {
               icon: const Icon(AppIcons.playArrow),
             )
           : null,
+    );
+  }
+}
+
+(String, String) _deadlineBlockLocalCopy(
+  DeadlinePlanBlock block,
+  String? timezone,
+) {
+  if (timezone == null) {
+    return (
+      'Local time unavailable · current profile timezone unavailable',
+      'reserved-through time unavailable',
+    );
+  }
+  try {
+    final start = profileDateTimeAt(
+      instant: block.startsAt,
+      timezoneName: timezone,
+    );
+    final end = profileDateTimeAt(
+      instant: block.endsAt,
+      timezoneName: timezone,
+    );
+    final reservedEnd = profileDateTimeAt(
+      instant: block.reservedEndsAt,
+      timezoneName: timezone,
+    );
+    return (
+      '${DateFormat.yMMMd().format(start)} · ${DateFormat.Hm().format(start)}–${DateFormat.Hm().format(end)} · $timezone',
+      'reserved until ${DateFormat.Hm().format(reservedEnd)} $timezone',
+    );
+  } on ProfileTimezoneException {
+    return (
+      'Local time unavailable · current profile timezone invalid',
+      'reserved-through time unavailable',
     );
   }
 }

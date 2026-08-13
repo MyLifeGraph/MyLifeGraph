@@ -12,6 +12,7 @@ from app.services.briefing_service import BriefingService
 from app.services.calendar_integration_service import CalendarIntegrationService
 from app.services.daily_capture_service import DailyCaptureService
 from app.services.deadline_plan_service import DeadlinePlanService
+from app.services.multi_exam_plan_service import MultiExamPlanService
 from app.services.feedback_service import FeedbackService
 from app.services.focus_service import FocusService
 from app.services.intake_service import IntakeService
@@ -94,6 +95,14 @@ async def get_deadline_plan_service(request: Request) -> DeadlinePlanService:
         request,
         select=lambda composition: composition.deadline_plan_service,
         unavailable_detail="Deadline plan persistence is not configured.",
+    )
+
+
+async def get_multi_exam_plan_service(request: Request) -> MultiExamPlanService:
+    return _service(
+        request,
+        select=lambda composition: composition.multi_exam_plan_service,
+        unavailable_detail="Exam balance persistence is not configured.",
     )
 
 

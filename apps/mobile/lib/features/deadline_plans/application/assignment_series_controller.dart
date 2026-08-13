@@ -4,6 +4,7 @@ import '../../../core/utils/client_uuid.dart';
 import '../domain/assignment_series.dart';
 import '../domain/assignment_series_repository.dart';
 import 'deadline_plan_controller.dart';
+import 'preparation_mutation_gate.dart';
 
 enum AssignmentSeriesOperation { idle, proposing, confirming, cancelling }
 
@@ -118,14 +119,17 @@ class AssignmentSeriesController extends StateNotifier<AssignmentSeriesState> {
   AssignmentSeriesController({
     required AssignmentSeriesRepository repository,
     required AssignmentSeriesProjectionRefresh projectionRefresh,
+    PreparationMutationGate? mutationGate,
   })  : _projectionRefresh = projectionRefresh,
         _repository = repository,
+        _mutationGate = mutationGate ?? PreparationMutationGate(),
         super(AssignmentSeriesState.loading()) {
     Future<void>.microtask(load);
   }
 
   final AssignmentSeriesRepository _repository;
   final AssignmentSeriesProjectionRefresh _projectionRefresh;
+  final PreparationMutationGate _mutationGate;
 
   Future<void> load() async {
     if (state.isBusy) return;
@@ -191,6 +195,7 @@ class AssignmentSeriesController extends StateNotifier<AssignmentSeriesState> {
   }
 
   Future<bool> _apply(AssignmentSeriesPendingMutation pending) async {
+    if (!_mutationGate.tryAcquire(this)) return false;
     state = state.copyWith(
       operation: switch (pending.kind) {
         AssignmentSeriesMutationKind.proposal =>
@@ -239,6 +244,8 @@ class AssignmentSeriesController extends StateNotifier<AssignmentSeriesState> {
         reloadSuggested: deadlinePlanMutationSuggestsReload(error),
       );
       return false;
+    } finally {
+      _mutationGate.release(this);
     }
   }
 

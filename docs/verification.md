@@ -148,6 +148,24 @@ new/existing preview identity and base revision, Health independence from an
 overfull legacy feed, Assignment Series exact-retry invalidation, and previous-
 value Async loading/error states.
 
+Multi-Exam balancing is tracked as shared named `multi-exam-plan-v1`.
+Focused verification covers strict union/key/revision/change-axis parsing,
+explicit target/revision binding, retain-and-supplement and target-only stages,
+exact cardinality/tie ordering and search-limit failure, unchanged-plan
+canonicalization, single-plan one-time adoption, batch list/detail/confirm/
+cancel routing, immutable exact retry across same-principal refresh and
+transient Auth error recovery, terminal
+proposal replay conflict, stale/saved-refresh confirmation authority, all
+competing batch-child mutation guards, shared mutation gating, deep-link/detail
+recovery under failed/limited or late bounded feeds, selected-detail versus
+list-detail success/error race ordering with source-bound retry authority,
+fail-closed DST conversion, valid current-profile IANA confirmation authority,
+Guest/Mock zero calls, and populated
+narrow/large-text presentation. Backend API/service/repository tests cover
+owner-derived identity, one-snapshot authority, total planner-evaluation bounds,
+stable `55P03`/`40P01` conflict mapping, learned-timing permission/provenance
+CAS, all-or-none result handling, and request replay.
+
 `docs/current-contracts.json` is authoritative for exact sources and owners.
 This runbook retains the following compact current coverage because each listed
 boundary explicitly owns verification requirements:
@@ -165,6 +183,7 @@ boundary explicitly owns verification requirements:
 | Deadline Plan | `deadline-plan-v1` |
 | Exam-Week Outlook | `exam-week-outlook-v1` |
 | Executable action | `executable-action-v1` |
+| Multi-Exam Plan | `multi-exam-plan-v1` |
 | Personal Patterns | `personal-patterns-v1` |
 | Planner mutations | `planner-v1` |
 | Planner overview | `planner-overview-v2` |
@@ -249,6 +268,26 @@ service-role-only execution, the inclusive 366-day Exam horizon, exact Focus
 credit, confirmed consumer inclusion, and authenticated denial. This isolated
 gate is wired into the migration-aware fast/local verification scripts; a
 normal local apply still requires the repository's separate explicit opt-in.
+
+The pending Multi-Exam migration has its own
+`scripts/lib/multi_exam_plan_migration_harness.sh` full-chain proof. It uses the
+same labeled RAM-only isolation and history-before/after checks, then runs
+`supabase/tests/multi_exam_plan_v1_test.sql`. Each of its 103-assertion passes
+is run twice against the same isolated database to prove fixture cleanup and
+repeatability. The assertions cover the five
+private tables, forced RLS and least privilege, composite ownership and bounds,
+referencing indexes, service-role-only public RPCs, ungranted inner helpers,
+canonical context and learned-timing marker sources, the shared owner-lock
+triggers on legacy direct-write authorities, real concurrent Proposal/Task and
+Confirm/Habit owner-lock exclusion, explicit committed-fixture/helper cleanup,
+owner/request/row-lock order,
+append-only identity, all single-plan proposal/replan/confirm/complete/cancel
+batch-child guards, exact batch replay, cancel cleanup, preference/pilot stale
+confirmation, cancel-only-staged semantics, the disjoint
+retained/shifted/removed/added review math, and a transactional two-Exam
+proposal/stale-confirm/cancel/re-proposal/atomic-confirm lifecycle. The harness
+never applies the migration to the normal local database and does not claim
+remote state.
 
 Read `docs/supabase-current-state.md` and
 `docs/local-database-safety.md` before database work. Inspect installed CLI

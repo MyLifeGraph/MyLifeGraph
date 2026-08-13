@@ -7,6 +7,7 @@ from app.api.deps.auth import Principal, get_current_principal
 from app.api.deps.services import (
     get_assignment_series_service,
     get_deadline_plan_service,
+    get_multi_exam_plan_service,
 )
 from app.api.problems.deadline_plans import (
     DEADLINE_PLAN_DETAIL_ERRORS,
@@ -29,6 +30,13 @@ from app.models.exam_plan_health import (
     ExamPlanHealthPreviewResponse,
     ExamPlanHealthResponse,
 )
+from app.models.multi_exam_plans import (
+    MultiExamPlanBatchResponse,
+    MultiExamPlanListResponse,
+    MultiExamPlanMutationRequest,
+    MultiExamPlanProposalRequest,
+    MultiExamPlanProposalResponse,
+)
 from app.models.assignment_series import (
     AssignmentSeriesListResponse,
     AssignmentSeriesMutationRequest,
@@ -39,6 +47,7 @@ from app.services.assignment_series_service import AssignmentSeriesService
 from app.services.deadline_plan_service import (
     DeadlinePlanService,
 )
+from app.services.multi_exam_plan_service import MultiExamPlanService
 
 router = APIRouter(prefix="/deadline-plans", tags=["deadline-plans"])
 
@@ -101,6 +110,98 @@ async def preview_exam_plan_health(
             request=request,
         )
     except DEADLINE_PLAN_DETAIL_ERRORS as exc:
+        raise deadline_plan_problem(exc) from exc
+
+
+@router.get(
+    "/exam-balances",
+    response_model=MultiExamPlanListResponse,
+    response_model_exclude_none=False,
+)
+async def list_exam_balances(
+    principal: Principal = Depends(get_current_principal),
+    service: MultiExamPlanService = Depends(get_multi_exam_plan_service),
+) -> MultiExamPlanListResponse:
+    try:
+        return await service.list_balances(user_id=principal.user_id)
+    except DEADLINE_PLAN_READ_ERRORS as exc:
+        raise deadline_plan_problem(exc) from exc
+
+
+@router.get(
+    "/exam-balances/{balance_id}",
+    response_model=MultiExamPlanBatchResponse,
+    response_model_exclude_none=False,
+)
+async def get_exam_balance(
+    balance_id: UUID,
+    principal: Principal = Depends(get_current_principal),
+    service: MultiExamPlanService = Depends(get_multi_exam_plan_service),
+) -> MultiExamPlanBatchResponse:
+    try:
+        return await service.get_balance(
+            user_id=principal.user_id,
+            balance_id=balance_id,
+        )
+    except DEADLINE_PLAN_READ_ERRORS as exc:
+        raise deadline_plan_problem(exc) from exc
+
+
+@router.post(
+    "/exam-balances/proposals",
+    response_model=MultiExamPlanProposalResponse,
+    response_model_exclude_none=False,
+)
+async def propose_exam_balance(
+    request: MultiExamPlanProposalRequest,
+    principal: Principal = Depends(get_current_principal),
+    service: MultiExamPlanService = Depends(get_multi_exam_plan_service),
+) -> MultiExamPlanProposalResponse:
+    try:
+        return await service.propose(user_id=principal.user_id, request=request)
+    except DEADLINE_PLAN_DETAIL_ERRORS as exc:
+        raise deadline_plan_problem(exc) from exc
+
+
+@router.post(
+    "/exam-balances/{balance_id}/confirm",
+    response_model=MultiExamPlanBatchResponse,
+    response_model_exclude_none=False,
+)
+async def confirm_exam_balance(
+    balance_id: UUID,
+    request: MultiExamPlanMutationRequest,
+    principal: Principal = Depends(get_current_principal),
+    service: MultiExamPlanService = Depends(get_multi_exam_plan_service),
+) -> MultiExamPlanBatchResponse:
+    try:
+        return await service.confirm(
+            user_id=principal.user_id,
+            balance_id=balance_id,
+            request=request,
+        )
+    except DEADLINE_PLAN_MUTATION_ERRORS as exc:
+        raise deadline_plan_problem(exc) from exc
+
+
+@router.post(
+    "/exam-balances/{balance_id}/cancel",
+    response_model=MultiExamPlanBatchResponse,
+    response_model_exclude_none=False,
+)
+async def cancel_exam_balance(
+    balance_id: UUID,
+    request: MultiExamPlanMutationRequest,
+    principal: Principal = Depends(get_current_principal),
+    service: MultiExamPlanService = Depends(get_multi_exam_plan_service),
+) -> MultiExamPlanBatchResponse:
+    try:
+        return await service.cancel(
+            user_id=principal.user_id,
+            balance_id=balance_id,
+            request=request,
+        )
+    except DEADLINE_PLAN_MUTATION_ERRORS as exc:
         raise deadline_plan_problem(exc) from exc
 
 

@@ -270,7 +270,7 @@ Dashboards:
 | --- | --- | --- |
 | **Planner** | Add new, Needs attention, sieben lokale Tage, aktive Preparation, eingeklappte aktive Habits, Unscheduled Tasks, Pending previews und Historie (`planner-overview-v2`) | Vorschläge reservieren nichts; nur `Confirm plan` aktiviert Task-/Habit-Zeiten, feste Termine bleiben autoritativ und Konflikte verschieben nichts automatisch |
 | **Weekly review** | letzte abgeschlossene ISO-Woche, completed/carried/overdue Tasks, completed/skipped/missed/unknown Habit-Möglichkeiten, Focus-Sessions und Minuten, Recovery-Tage, Feedback-Anzahl, Datenqualität und Freshness | rein beobachtend; `Update weekly review` aktualisiert nur Fakten, historische Vorschläge bleiben unsichtbar und sind nicht ausführbar |
-| **Preparation plans** | kompakte Open-/History-Accordions; im gezielt geöffneten Plan Schätzung, Deadline, Revisionen, datierte Blöcke, bestätigte Reservierungen und gemessener Focus-Fortschritt; Assignment-Serien zeigen ihren endlichen wöchentlichen Umfang | Vorschlag bleibt Preview; erst Bestätigung aktiviert Blöcke und den verwalteten Task; eine Serienbestätigung aktiviert alle Vorkommen atomar; die 7-Tage-Auslastung bleibt in Today/Planner |
+| **Preparation plans** | kompakte Open-/History-Accordions; im gezielt geöffneten Plan Schätzung, Deadline, Revisionen, datierte Blöcke, bestätigte Reservierungen und gemessener Focus-Fortschritt; Assignment-Serien zeigen ihren endlichen wöchentlichen Umfang; Exam-Balancing zeigt ausschließlich tatsächlich geänderte Pläne in einer gemeinsamen Review | Vorschlag bleibt Preview; erst Bestätigung aktiviert Blöcke und den verwalteten Task; eine Serien- oder Multi-Exam-Bestätigung aktiviert ihren vollständigen Satz atomar; die 7-Tage-Auslastung bleibt in Today/Planner; keine automatische Verschiebung oder Benachrichtigung |
 | **Inbox** | Anzahl unread/read/actionable innerhalb der höchstens 30 geladenen Einträge sowie einzelne Hinweise | Lifecycle-Änderungen und sichere interne Navigation; kein Analyse-Dashboard |
 
 ## Featurekatalog: Funktion, Eingaben und Ergebnis
@@ -285,6 +285,16 @@ benannt. Die schlafbezogene `Exam week outlook` bleibt ein eigenes Produkt.
 Der Editor kann seine noch ungespeicherten Exam-Werte read-only prüfen. Weder
 Ansicht noch Preview verschieben Blöcke, senden Benachrichtigungen oder speichern
 einen Health-Status; Guest/Mock ruft den authentifizierten Endpoint nicht auf.
+
+`Balance exam plans` (`multi-exam-plan-v1`) verlangt die bewusste Auswahl eines
+aktiven Exams. Der Server versucht zuerst, gültige künftige Blöcke zu behalten
+und nur Restarbeit zu ergänzen, dann nur dieses Exam neu zu verteilen und erst
+danach den kleinsten nachweislich nötigen Satz kollidierender Exams gemeinsam
+zu simulieren. Ein tatsächlich geänderter Plan nutzt die normale Einzel-Review;
+ab zwei Plänen gibt es nur `Confirm all` oder `Discard`. Die Vorschau verschiebt
+nichts automatisch, schreibt keinen Provider-Kalender und erzeugt keine
+Notification. Bei zwischenzeitlich geänderten Focus-, Zeitzonen-, Study-,
+Budget-, Calendar-, Plan- oder Belegungsdaten muss neu geprüft werden.
 
 | Feature | Wie es funktioniert | Verwendete Daten | Geschriebene Daten / LLM |
 | --- | --- | --- | --- |

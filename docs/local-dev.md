@@ -994,6 +994,23 @@ the feature pgTAP contract, and verifies normal local migration history did not
 change. It does not replace `scripts/verify_supabase_local.sh`, does not apply
 to the normal database, and conveys no remote-state claim.
 
+The additive `multi-exam-plan-v1` migration has its own full-chain library
+check at `scripts/lib/multi_exam_plan_migration_harness.sh`. The repository
+`scripts/verify_supabase_local.sh` gate sources and invokes that check after
+validating the exact normal local target; the library file is not a standalone
+operator command.
+
+It runs the 103-assertion Multi-Exam pgTAP contract twice against one labeled
+RAM-only Postgres container, including independent sessions that prove direct
+Task and Habit writes cannot pass a concurrently held Proposal or Confirm owner
+lock. The second pass proves committed fixtures, helper objects, and optional
+test extension state were cleaned. The harness then cleans its container and
+proves the normal local migration history is byte-identical before and after.
+Passing it neither applies pending
+SQL to the normal database nor authorizes a reset, remote mutation, or deploy.
+Inspect installed Supabase CLI help before any surrounding CLI command; use the
+repository harness as written rather than reconstructing flags.
+
 Supabase is optional for mock mode. To work on local Supabase you need the real
 Supabase CLI and Docker available in the Ubuntu shell.
 

@@ -294,6 +294,11 @@ Coach operational tables exportable under their existing contract while
 excluding them from the 39-table personal snapshot. The snapshot includes the
 finite Assignment Series identity/revision/membership projections so the Coach
 can describe confirmed coursework cadence without gaining mutation authority.
+Private `multi-exam-plan-v1` batch metadata is derived retry/orchestration state
+and is absent from `personal-snapshot-v2`; confirmed child content remains
+visible through the existing Deadline plan/revision/block projection. Exposing
+balance history would require a new snapshot contract version rather than a V2
+shape change.
 Snapshot serialization
 uses a neutral lossless-JSON helper and does not import Account Service
 implementation details.

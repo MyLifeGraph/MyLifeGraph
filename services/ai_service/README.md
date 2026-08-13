@@ -451,6 +451,11 @@ GET    /v1/deadline-plans
 GET    /v1/deadline-plans/exam-week-outlook
 GET    /v1/deadline-plans/exam-plan-health
 POST   /v1/deadline-plans/exam-plan-health/preview
+GET    /v1/deadline-plans/exam-balances
+GET    /v1/deadline-plans/exam-balances/{balance_id}
+POST   /v1/deadline-plans/exam-balances/proposals
+POST   /v1/deadline-plans/exam-balances/{balance_id}/confirm
+POST   /v1/deadline-plans/exam-balances/{balance_id}/cancel
 GET    /v1/deadline-plans/workload
 GET    /v1/deadline-plans/workload/{local_date}
 GET    /v1/deadline-plans/{plan_id}
@@ -489,6 +494,33 @@ The snapshot includes ordered completed Focus facts with scheduled Deadline
 block provenance. Health subtracts exact per-block credit from future reserved
 minutes while retained blocks continue to consume busy time, daily caps, and
 the revision's finite block count.
+
+The shared named `multi-exam-plan-v1` endpoints require an explicit active Exam
+id and expected latest plan revision. Proposal takes one owner-locked 366-day
+source snapshot and performs deterministic retain-and-supplement, target-only
+redistribution, then exact minimal-cardinality collider search. It returns a
+strict `no_change | single_plan | multi_exam_batch` union. One changed plan is
+already persisted through the existing Deadline V1 proposal flow; two to eight
+changed plans are reviewed and confirmed/cancelled only as one batch. Batch
+confirm is atomic, and normal child proposal/replan, confirm, complete, and
+cancel mutations return `409` while that batch is pending. Exact request replay
+is stable while its proposal remains pending; replaying the original proposal
+after later confirm/cancel returns a defined `409` conflict instead of a
+malformed terminal projection. Confirmation checks the current owner-locked
+context plus learned-timing pilot/permission/provenance marker, while stale
+cancellation may still discard only staged proposals. Postgres `55P03` and
+retryable `40P01` failures map to the same stable HTTP conflict boundary.
+Direct Profile, Schedule, Focus, Learning Preference, Task, and Habit writers
+take the same owner lock before their row/lifecycle triggers; Task/Habit
+reservation release therefore cannot interleave with batch digest validation.
+List/detail/proposal/confirm/cancel derive the owner from the bearer principal.
+No route auto-confirms, sends a notification, or writes to an external
+calendar.
+
+Batch storage is private derived orchestration metadata exposed only through
+service-role RPC projections. Actual plan content remains in existing Deadline
+revisions/blocks. This boundary does not change the shapes or versions of
+`account-export-v4` or `personal-snapshot-v2`.
 
 Read today's persisted internal briefing without side effects:
 

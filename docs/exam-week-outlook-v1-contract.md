@@ -278,6 +278,12 @@ but their headings and helper copy must keep those purposes distinct; a Health
 transport failure is not an Outlook warning and Health `unknown` is not a
 sleep-risk inference.
 
+`multi-exam-plan-v1` may simulate and explicitly confirm a shared Exam
+redistribution, but it does not consume or rewrite sleep plans and does not use
+Outlook severity as an allocation input. A successful batch changes ordinary
+confirmed Deadline revisions; the next Outlook read then derives from that new
+state. Preview, stale failure, and discard leave Outlook unchanged.
+
 Authenticated real accounts read the outlook only from Planner. The card is
 placed after `Add new` and before `Needs attention`:
 

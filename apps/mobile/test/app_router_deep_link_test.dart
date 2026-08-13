@@ -109,6 +109,43 @@ void main() {
       AppRoutes.dashboard,
     );
   });
+
+  testWidgets('Exam balance deep link keeps its owner-scoped balance id',
+      (tester) async {
+    final repository = _DelayedAuthRepository(
+      Future.value(AppSession.guest(_guestProfile)),
+    );
+    const balanceId = '92000000-0000-4000-8000-000000000001';
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          appConfigProvider.overrideWithValue(_testConfig),
+          authRepositoryProvider.overrideWithValue(repository),
+        ],
+        child: const PersonalOptimizationApp(),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(PersonalOptimizationApp)),
+    );
+    final router = container.read(appRouterProvider);
+    router.go(
+      Uri(
+        path: AppRoutes.preparationPlans,
+        queryParameters: const {'balance_id': balanceId},
+      ).toString(),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      router.routeInformationProvider.value.uri.queryParameters['balance_id'],
+      balanceId,
+    );
+    expect(find.text('Synced preparation plans unavailable'), findsOneWidget);
+  });
 }
 
 const _testConfig = AppConfig(

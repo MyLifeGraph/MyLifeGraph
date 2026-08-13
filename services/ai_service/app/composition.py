@@ -23,6 +23,7 @@ from app.repositories.coach_evidence_repository import (
 from app.repositories.coach_repository import SupabaseCoachRepository
 from app.repositories.daily_capture_repository import SupabaseDailyCaptureRepository
 from app.repositories.deadline_plan_repository import SupabaseDeadlinePlanRepository
+from app.repositories.multi_exam_plan_repository import SupabaseMultiExamPlanRepository
 from app.repositories.feedback_repository import SupabaseFeedbackRepository
 from app.repositories.focus_repository import SupabaseFocusRepository
 from app.repositories.intake_repository import SupabaseIntakeRepository
@@ -60,6 +61,7 @@ from app.services.coach_service import CoachService
 from app.services.coach_snapshot import CoachSnapshotService
 from app.services.daily_capture_service import DailyCaptureService
 from app.services.deadline_plan_service import DeadlinePlanService
+from app.services.multi_exam_plan_service import MultiExamPlanService
 from app.services.feedback_service import FeedbackService
 from app.services.focus_service import FocusService
 from app.services.intake_service import IntakeService
@@ -98,6 +100,7 @@ class ApplicationComposition:
     coach_services: CoachServices
     daily_capture_service: DailyCaptureService
     deadline_plan_service: DeadlinePlanService
+    multi_exam_plan_service: MultiExamPlanService
     feedback_service: FeedbackService
     focus_service: FocusService
     intake_service: IntakeService
@@ -160,6 +163,10 @@ class ApplicationComposition:
         deadline_plan_service = DeadlinePlanService(
             repository=deadline_plan_repository,
             learned_timing=learned_timing,
+        )
+        multi_exam_plan_service = MultiExamPlanService(
+            repository=SupabaseMultiExamPlanRepository(supabase_client),
+            deadline_plans=deadline_plan_service,
         )
         assignment_series_service = AssignmentSeriesService(
             repository=SupabaseAssignmentSeriesRepository(supabase_client),
@@ -257,6 +264,7 @@ class ApplicationComposition:
                 repository=SupabaseDailyCaptureRepository(supabase_client),
             ),
             deadline_plan_service=deadline_plan_service,
+            multi_exam_plan_service=multi_exam_plan_service,
             feedback_service=FeedbackService(
                 repository=SupabaseFeedbackRepository(supabase_client),
             ),

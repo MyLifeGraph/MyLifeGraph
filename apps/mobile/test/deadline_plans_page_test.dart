@@ -9,8 +9,12 @@ import 'package:my_life_graph/core/errors/app_exception.dart';
 import 'package:my_life_graph/core/network/api_failure.dart';
 import 'package:my_life_graph/core/navigation/app_routes.dart';
 import 'package:my_life_graph/core/widgets/app_surface.dart';
+import 'package:my_life_graph/composition/auth_providers.dart';
 import 'package:my_life_graph/features/auth/application/profile_local_date_source.dart';
+import 'package:my_life_graph/features/auth/domain/app_session.dart';
 import 'package:my_life_graph/composition/profile_local_date_providers.dart';
+import 'package:my_life_graph/features/deadline_plans/application/multi_exam_plan_controller.dart';
+import 'package:my_life_graph/features/deadline_plans/application/preparation_mutation_gate.dart';
 import 'package:my_life_graph/features/deadline_plans/data/deadline_calendar_prefill_data_source.dart';
 import 'package:my_life_graph/features/deadline_plans/domain/assignment_series.dart';
 import 'package:my_life_graph/features/deadline_plans/domain/assignment_series_repository.dart';
@@ -19,6 +23,8 @@ import 'package:my_life_graph/features/deadline_plans/domain/deadline_plan.dart'
 import 'package:my_life_graph/features/deadline_plans/domain/deadline_plan_repository.dart';
 import 'package:my_life_graph/features/deadline_plans/domain/exam_plan_health.dart';
 import 'package:my_life_graph/features/deadline_plans/domain/exam_plan_health_repository.dart';
+import 'package:my_life_graph/features/deadline_plans/domain/multi_exam_plan.dart';
+import 'package:my_life_graph/features/deadline_plans/domain/multi_exam_plan_repository.dart';
 import 'package:my_life_graph/features/deadline_plans/presentation/pages/deadline_plans_page.dart';
 import 'package:my_life_graph/composition/deadline_plan_providers.dart';
 import 'package:my_life_graph/features/snapshots/application/snapshot_refresh_service.dart';
@@ -26,9 +32,429 @@ import 'package:my_life_graph/features/snapshots/presentation/providers/snapshot
 
 import 'support/deadline_plan_fixtures.dart';
 import 'support/assignment_series_fixtures.dart';
+import 'support/multi_exam_plan_fixtures.dart';
+
+const _berlinProfile = AppProfile(
+  id: '10000000-0000-4000-8000-000000000001',
+  email: 'student@example.test',
+  name: 'Student',
+  timezone: 'Europe/Berlin',
+  role: AppRole.user,
+  onboardingDone: true,
+  authProvider: 'email',
+);
 
 void main() {
   final now = DateTime(2026, 7, 18, 10);
+
+  testWidgets('Exam balance requires explicit target and promises no auto move',
+      (tester) async {
+    await _pumpPage(
+      tester,
+      repository: _FakeDeadlinePlanRepository(
+        feeds: [
+          DeadlinePlanFeed(plans: [_plan()]),
+        ],
+      ),
+      multiExamPlanRepository: _FakeMultiExamPlanRepository(),
+      healthLoader: () async => _healthProjection(),
+      page: DeadlinePlansPage(currentTime: now),
+    );
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('multi-exam-balance-cta')),
+      500,
+      scrollable: _pageScrollable(),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Balance exam plans'), findsOneWidget);
+    expect(
+      find.textContaining('Nothing moves until you review and confirm'),
+      findsOneWidget,
+    );
+    expect(
+      find.textContaining('no external calendar or notification'),
+      findsOneWidget,
+    );
+    final preview = tester.widget<FilledButton>(
+      find.byKey(const ValueKey('multi-exam-preview-button')),
+    );
+    expect(preview.onPressed, isNull);
+
+    await _tap(
+      tester,
+      find.byKey(const ValueKey('multi-exam-target-picker')),
+    );
+    await _tap(
+      tester,
+      find.textContaining('Algorithms exam · healthy capacity').last,
+    );
+    expect(
+      tester
+          .widget<FilledButton>(
+            find.byKey(const ValueKey('multi-exam-preview-button')),
+          )
+          .onPressed,
+      isNotNull,
+    );
+  });
+
+  testWidgets('balance deep link loads detail and child confirm fails closed',
+      (tester) async {
+    final childPlan = DeadlinePlanResponse.fromJson(
+      deadlinePlanEnvelope(pending: true),
+    ).plan;
+    final balance = MultiExamPlanBatchResponse.fromJson(
+      multiExamBatchEnvelope(),
+    ).balance;
+    final multiRepository = _FakeMultiExamPlanRepository(
+      feed: MultiExamPlanFeed(
+        balances: [MultiExamPlanBatchSummary.fromBatch(balance)],
+      ),
+      balance: balance,
+    );
+    await _pumpPage(
+      tester,
+      repository: _FakeDeadlinePlanRepository(
+        feeds: [
+          DeadlinePlanFeed(plans: [childPlan]),
+        ],
+      ),
+      multiExamPlanRepository: multiRepository,
+      healthLoader: () async => _healthProjection(),
+      page: DeadlinePlansPage(
+        initialBalanceId: multiExamBalanceId,
+        currentTime: now,
+      ),
+    );
+
+    expect(multiRepository.detailIds, contains(multiExamBalanceId));
+    expect(find.text('Part of an Exam balance preview'), findsOneWidget);
+    final singleConfirm = tester.widget<FilledButton>(
+      find.widgetWithText(FilledButton, 'Confirm reservations'),
+    );
+    expect(singleConfirm.onPressed, isNull);
+    expect(
+      find.byKey(ValueKey('deadline-review-balance-${childPlan.id}')),
+      findsOneWidget,
+    );
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('multi-exam-detail-$multiExamBalanceId')),
+      500,
+      scrollable: _pageScrollable(),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('Review Exam balance'), findsWidgets);
+    expect(find.text('Confirm all'), findsOneWidget);
+  });
+
+  testWidgets(
+      'targeted Exam balance remains visible when legacy plan feed exceeds cap',
+      (tester) async {
+    final balance = MultiExamPlanBatchResponse.fromJson(
+      multiExamBatchEnvelope(),
+    ).balance;
+    await _pumpPage(
+      tester,
+      repository: _FakeDeadlinePlanRepository(
+        feedError: const DeadlinePlanContractException(
+          'Deadline plan feed exceeds its V1 bound.',
+        ),
+      ),
+      multiExamPlanRepository: _FakeMultiExamPlanRepository(balance: balance),
+      page: DeadlinePlansPage(
+        initialBalanceId: balance.id,
+        currentTime: now,
+      ),
+    );
+
+    expect(find.text('Preparation plans unavailable'), findsOneWidget);
+    expect(
+      find.byKey(ValueKey('multi-exam-detail-${balance.id}')),
+      findsOneWidget,
+    );
+    expect(find.text('Review Exam balance'), findsOneWidget);
+  });
+
+  testWidgets(
+      'late list success preserves targeted error and its exact retry authority',
+      (tester) async {
+    final listed = MultiExamPlanBatchResponse.fromJson(
+      multiExamBatchEnvelope(),
+    ).balance;
+    const targetedId = '92000000-0000-4000-8000-000000000009';
+    final multiRepository = _RacingMultiExamPlanRepository(
+      feed: MultiExamPlanFeed(
+        balances: [MultiExamPlanBatchSummary.fromBatch(listed)],
+      ),
+    );
+    final multiController = MultiExamPlanController(
+      repository: multiRepository,
+      mutationGate: PreparationMutationGate(),
+      adoptSinglePlan: (_) {},
+      projectionRefresh: () async {},
+      autoLoad: false,
+    );
+
+    final listRead = multiController.load();
+    await tester.pump();
+    final targetedRead = multiController.loadBalance(targetedId);
+    multiRepository.completeError(
+      targetedId,
+      StateError('targeted balance unavailable'),
+    );
+    await targetedRead;
+    multiRepository.complete(listed.id, listed);
+    await listRead;
+
+    await _pumpPage(
+      tester,
+      repository: _FakeDeadlinePlanRepository(
+        feeds: [
+          DeadlinePlanFeed(plans: [_plan()]),
+        ],
+      ),
+      multiExamPlanController: multiController,
+      settle: false,
+      page: DeadlinePlansPage(currentTime: now),
+    );
+
+    expect(find.text('Requested Exam balance unavailable'), findsOneWidget);
+    expect(find.text('Exam balance details unavailable'), findsNothing);
+    expect(find.text('Retry preview'), findsOneWidget);
+    expect(
+      multiRepository.requestedDetailIds.where((id) => id == targetedId),
+      hasLength(1),
+    );
+
+    await tester.tap(find.text('Retry preview'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+    expect(
+      multiRepository.requestedDetailIds.where((id) => id == targetedId),
+      hasLength(2),
+    );
+  });
+
+  testWidgets('late list error does not retarget a successful selected balance',
+      (tester) async {
+    final listed = MultiExamPlanBatchResponse.fromJson(
+      multiExamBatchEnvelope(),
+    ).balance;
+    final targetedJson = multiExamBatchEnvelope();
+    final targetedBalance = targetedJson['balance'] as Map<String, dynamic>;
+    const targetedId = '92000000-0000-4000-8000-000000000009';
+    targetedBalance['id'] = targetedId;
+    for (final link in targetedBalance['child_links'] as List) {
+      (link as Map<String, dynamic>)['balance_id'] = targetedId;
+    }
+    final targeted = MultiExamPlanBatchResponse.fromJson(
+      targetedJson,
+    ).balance;
+    final multiRepository = _RacingMultiExamPlanRepository(
+      feed: MultiExamPlanFeed(
+        balances: [MultiExamPlanBatchSummary.fromBatch(listed)],
+      ),
+    );
+    final multiController = MultiExamPlanController(
+      repository: multiRepository,
+      mutationGate: PreparationMutationGate(),
+      adoptSinglePlan: (_) {},
+      projectionRefresh: () async {},
+      autoLoad: false,
+    );
+
+    final listRead = multiController.load();
+    await tester.pump();
+    final targetedRead = multiController.loadBalance(targetedId);
+    multiRepository.complete(targetedId, targeted);
+    await targetedRead;
+    multiRepository.completeError(
+      listed.id,
+      StateError('listed balance unavailable'),
+    );
+    await listRead;
+
+    await _pumpPage(
+      tester,
+      repository: _FakeDeadlinePlanRepository(
+        feeds: [
+          DeadlinePlanFeed(plans: [_plan()]),
+        ],
+      ),
+      multiExamPlanController: multiController,
+      settle: false,
+      page: DeadlinePlansPage(currentTime: now),
+    );
+
+    expect(find.text('Exam balance details unavailable'), findsOneWidget);
+    expect(find.text('Retry Exam balances'), findsOneWidget);
+    expect(find.text('Requested Exam balance unavailable'), findsNothing);
+    expect(find.text('Retry preview'), findsNothing);
+    expect(
+      find.byKey(ValueKey('multi-exam-detail-${targeted.id}')),
+      findsOneWidget,
+    );
+  });
+
+  for (final timezoneName in <String?>[null, 'Not/A_Timezone']) {
+    testWidgets(
+        'Exam balance confirm fails closed for ${timezoneName ?? 'missing'} profile timezone',
+        (tester) async {
+      final balance = MultiExamPlanBatchResponse.fromJson(
+        multiExamBatchEnvelope(),
+      ).balance;
+      final profileDateSource = timezoneName == null
+          ? const SessionProfileLocalDateSource(session: null)
+          : SessionProfileLocalDateSource(
+              session: AppSession.authenticated(
+                _berlinProfile.copyWith(timezone: timezoneName),
+              ),
+            );
+      await _pumpPage(
+        tester,
+        repository: _FakeDeadlinePlanRepository(
+          feeds: [
+            DeadlinePlanFeed(plans: [_plan()]),
+          ],
+        ),
+        multiExamPlanRepository: _FakeMultiExamPlanRepository(
+          feed: MultiExamPlanFeed(
+            balances: [MultiExamPlanBatchSummary.fromBatch(balance)],
+          ),
+          balance: balance,
+        ),
+        profileDateSource: profileDateSource,
+        page: DeadlinePlansPage(
+          initialBalanceId: balance.id,
+          currentTime: now,
+        ),
+      );
+      await tester.scrollUntilVisible(
+        find.byKey(const ValueKey('multi-exam-confirm-all')),
+        500,
+        scrollable: _pageScrollable(),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.textContaining('Current profile timezone unavailable'),
+        findsOneWidget,
+      );
+      expect(
+        tester
+            .widget<FilledButton>(
+              find.byKey(const ValueKey('multi-exam-confirm-all')),
+            )
+            .onPressed,
+        isNull,
+      );
+      expect(
+        tester
+            .widget<OutlinedButton>(
+              find.byKey(const ValueKey('multi-exam-discard')),
+            )
+            .onPressed,
+        isNotNull,
+      );
+    });
+  }
+
+  testWidgets(
+      'populated Exam balance review survives 320px and 200 percent text',
+      (tester) async {
+    final semantics = tester.ensureSemantics();
+    final balance = MultiExamPlanBatchResponse.fromJson(
+      multiExamBatchEnvelope(),
+    ).balance;
+    await _pumpPage(
+      tester,
+      size: const Size(320, 1200),
+      textScaler: const TextScaler.linear(2),
+      repository: _FakeDeadlinePlanRepository(
+        feeds: [
+          DeadlinePlanFeed(plans: [_plan()]),
+        ],
+      ),
+      multiExamPlanRepository: _FakeMultiExamPlanRepository(
+        feed: MultiExamPlanFeed(
+          balances: [MultiExamPlanBatchSummary.fromBatch(balance)],
+        ),
+        balance: balance,
+      ),
+      healthLoader: () async => _healthProjection(),
+      page: DeadlinePlansPage(
+        initialBalanceId: balance.id,
+        currentTime: now,
+      ),
+    );
+    await tester.scrollUntilVisible(
+      find.byKey(const ValueKey('multi-exam-confirm-all')),
+      500,
+      scrollable: _pageScrollable(),
+    );
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    final confirm = find.byKey(const ValueKey('multi-exam-confirm-all'));
+    final discard = find.byKey(const ValueKey('multi-exam-discard'));
+    expect(find.text('Confirm all'), findsOneWidget);
+    expect(find.text('Discard'), findsOneWidget);
+    expect(find.bySemanticsLabel('Confirm all'), findsOneWidget);
+    expect(find.bySemanticsLabel('Discard'), findsOneWidget);
+    expect(
+      tester.widget<FilledButton>(confirm).onPressed,
+      isNotNull,
+    );
+    expect(tester.getSize(confirm).width, tester.getSize(discard).width);
+    expect(tester.getSize(confirm).width, greaterThan(200));
+    semantics.dispose();
+  });
+
+  testWidgets(
+      'saved Exam Health is immediate in compact and full editor until values change',
+      (tester) async {
+    await _pumpPage(
+      tester,
+      repository: _FakeDeadlinePlanRepository(
+        feeds: [
+          DeadlinePlanFeed(plans: [_plan()]),
+        ],
+      ),
+      healthLoader: () async => _healthProjection(),
+      page: DeadlinePlansPage(currentTime: now),
+    );
+
+    await tester.scrollUntilVisible(
+      find.byKey(
+        const ValueKey(
+          'saved-exam-health-compact-11111111-1111-4111-8111-111111111111',
+        ),
+      ),
+      500,
+      scrollable: _pageScrollable(),
+    );
+    expect(find.textContaining('latest safe'), findsWidgets);
+
+    await _tapPlanAction(tester, 'Adjust estimate or plan');
+    expect(find.text('Current saved Exam values'), findsOneWidget);
+    expect(find.textContaining('Recommended start:'), findsWidgets);
+
+    await _tap(tester, find.text('Change values'));
+    expect(
+      find.byKey(const ValueKey('saved-exam-health-editor')),
+      findsOneWidget,
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey('deadline-plan-title')),
+      'Updated exam',
+    );
+    await tester.pump();
+    expect(
+      find.byKey(const ValueKey('saved-exam-health-editor')),
+      findsNothing,
+    );
+  });
 
   testWidgets('Planner Assignment opens a finite series without type choice',
       (tester) async {
@@ -650,7 +1076,7 @@ void main() {
       repository: repository,
       snapshotRefresh: snapshotRefresh,
       profileDateSource: SessionProfileLocalDateSource(
-        session: null,
+        session: const AppSession.authenticated(_berlinProfile),
         currentInstant: () => DateTime(2026, 7, 18, 10),
       ),
       page: DeadlinePlansPage(
@@ -1101,9 +1527,9 @@ void main() {
     );
 
     expect(find.text('History'), findsOneWidget);
-    expect(find.textContaining('2026-07-20 · 10:00'), findsNothing);
+    expect(find.textContaining('Jul 20, 2026 · 10:00'), findsNothing);
     await _expandPlan(tester);
-    expect(find.textContaining('2026-07-20 · 10:00'), findsOneWidget);
+    expect(find.textContaining('Jul 20, 2026 · 10:00'), findsOneWidget);
   });
 
   testWidgets('open plans and history keep exactly one accordion expanded',
@@ -1337,6 +1763,9 @@ void main() {
       tester,
       repository: _FakeDeadlinePlanRepository(),
       prefillDataSource: source,
+      profileDateSource: SessionProfileLocalDateSource(
+        session: AppSession.authenticated(_berlinProfile),
+      ),
       page: DeadlinePlansPage(
         sourceCalendarEventId: deadlineCalendarEventId,
         currentTime: now,
@@ -1348,7 +1777,10 @@ void main() {
       find.byKey(const ValueKey('deadline-plan-title')),
     );
     expect(title.controller!.text, 'Private algorithms exam');
-    expect(find.textContaining("this device's timezone"), findsOneWidget);
+    expect(
+      find.textContaining('your profile timezone (Europe/Berlin)'),
+      findsOneWidget,
+    );
     expect(
       find.byKey(const ValueKey('deadline-keep-calendar-source')),
       findsOneWidget,
@@ -1459,7 +1891,7 @@ void main() {
 
     expect(repository.getPlanCalls, 1);
     expect(find.text('Algorithms exam'), findsOneWidget);
-    expect(find.textContaining('2026-07-20 · 10:00'), findsOneWidget);
+    expect(find.textContaining('Jul 20, 2026 · 10:00'), findsOneWidget);
   });
 
   testWidgets('deep-linked plan is immediately visible before supporting load',
@@ -1683,6 +2115,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          authControllerProvider.overrideWith((_) => AuthController(null)),
           appSurfaceCapabilitiesProvider.overrideWithValue(
             const AppSurfaceCapabilities(
               isLocalDemo: false,
@@ -1692,9 +2125,14 @@ void main() {
             ),
           ),
           profileLocalDateSourceProvider.overrideWithValue(
-            const SessionProfileLocalDateSource(session: null),
+            const SessionProfileLocalDateSource(
+              session: AppSession.authenticated(_berlinProfile),
+            ),
           ),
           deadlinePlanRepositoryProvider.overrideWithValue(repository),
+          multiExamPlanRepositoryProvider.overrideWithValue(
+            _FakeMultiExamPlanRepository(),
+          ),
           assignmentSeriesRepositoryProvider.overrideWithValue(
             _FakeAssignmentSeriesRepository(),
           ),
@@ -1770,6 +2208,7 @@ void main() {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
+          authControllerProvider.overrideWith((_) => AuthController(null)),
           appSurfaceCapabilitiesProvider.overrideWithValue(
             const AppSurfaceCapabilities(
               isLocalDemo: false,
@@ -1779,9 +2218,14 @@ void main() {
             ),
           ),
           profileLocalDateSourceProvider.overrideWithValue(
-            const SessionProfileLocalDateSource(session: null),
+            const SessionProfileLocalDateSource(
+              session: AppSession.authenticated(_berlinProfile),
+            ),
           ),
           deadlinePlanRepositoryProvider.overrideWithValue(repository),
+          multiExamPlanRepositoryProvider.overrideWithValue(
+            _FakeMultiExamPlanRepository(),
+          ),
           assignmentSeriesRepositoryProvider.overrideWithValue(
             _FakeAssignmentSeriesRepository(),
           ),
@@ -1979,11 +2423,15 @@ Future<void> _pumpPage(
   TextScaler textScaler = TextScaler.noScaling,
   bool settle = true,
   ProfileLocalDateSource profileDateSource =
-      const SessionProfileLocalDateSource(session: null),
+      const SessionProfileLocalDateSource(
+    session: AppSession.authenticated(_berlinProfile),
+  ),
   SnapshotRefreshService? snapshotRefresh,
   AssignmentSeriesRepository? assignmentSeriesRepository,
   Future<ExamPlanHealth?> Function()? healthLoader,
   ExamPlanHealthRepository? examHealthRepository,
+  MultiExamPlanRepository? multiExamPlanRepository,
+  MultiExamPlanController? multiExamPlanController,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
@@ -1994,9 +2442,17 @@ Future<void> _pumpPage(
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
+        authControllerProvider.overrideWith((_) => AuthController(null)),
         appSurfaceCapabilitiesProvider.overrideWithValue(capabilities),
         profileLocalDateSourceProvider.overrideWithValue(profileDateSource),
         deadlinePlanRepositoryProvider.overrideWithValue(repository),
+        multiExamPlanRepositoryProvider.overrideWithValue(
+          multiExamPlanRepository ?? _FakeMultiExamPlanRepository(),
+        ),
+        if (multiExamPlanController != null)
+          multiExamPlanControllerProvider.overrideWith(
+            (_) => multiExamPlanController,
+          ),
         examPlanHealthProvider.overrideWith(
           (ref) => (healthLoader ?? () async => null)(),
         ),
@@ -2449,6 +2905,95 @@ PreparationWorkload _workload({int? budget = 120}) => PreparationWorkload(
           ),
       ],
     );
+
+class _FakeMultiExamPlanRepository implements MultiExamPlanRepository {
+  _FakeMultiExamPlanRepository({this.feed, this.balance});
+
+  final MultiExamPlanFeed? feed;
+  final MultiExamPlanBatch? balance;
+  final List<String> detailIds = [];
+
+  @override
+  Future<MultiExamPlanFeed> getBalances() async =>
+      feed ?? MultiExamPlanFeed(balances: const []);
+
+  @override
+  Future<MultiExamPlanBatch> getBalance(String balanceId) async {
+    detailIds.add(balanceId);
+    return balance ?? (throw StateError('Missing Exam balance'));
+  }
+
+  @override
+  Future<MultiExamPlanProposalResult> propose({
+    required String requestId,
+    required MultiExamPlanProposalDraft draft,
+  }) async =>
+      MultiExamPlanNoChange(targetPlanId: draft.targetPlanId);
+
+  @override
+  Future<MultiExamPlanBatch> confirm({
+    required String balanceId,
+    required String requestId,
+    required int expectedRevision,
+  }) async =>
+      balance ?? (throw StateError('Missing Exam balance'));
+
+  @override
+  Future<MultiExamPlanBatch> cancel({
+    required String balanceId,
+    required String requestId,
+    required int expectedRevision,
+  }) async =>
+      balance ?? (throw StateError('Missing Exam balance'));
+}
+
+class _RacingMultiExamPlanRepository implements MultiExamPlanRepository {
+  _RacingMultiExamPlanRepository({required this.feed});
+
+  final MultiExamPlanFeed feed;
+  final Map<String, Completer<MultiExamPlanBatch>> _details = {};
+  final List<String> requestedDetailIds = [];
+
+  void complete(String id, MultiExamPlanBatch balance) {
+    (_details[id] ??= Completer<MultiExamPlanBatch>()).complete(balance);
+  }
+
+  void completeError(String id, Object error) {
+    (_details[id] ??= Completer<MultiExamPlanBatch>()).completeError(error);
+  }
+
+  @override
+  Future<MultiExamPlanFeed> getBalances() async => feed;
+
+  @override
+  Future<MultiExamPlanBatch> getBalance(String balanceId) {
+    requestedDetailIds.add(balanceId);
+    return (_details[balanceId] ??= Completer<MultiExamPlanBatch>()).future;
+  }
+
+  @override
+  Future<MultiExamPlanProposalResult> propose({
+    required String requestId,
+    required MultiExamPlanProposalDraft draft,
+  }) =>
+      throw UnimplementedError();
+
+  @override
+  Future<MultiExamPlanBatch> confirm({
+    required String balanceId,
+    required String requestId,
+    required int expectedRevision,
+  }) =>
+      throw UnimplementedError();
+
+  @override
+  Future<MultiExamPlanBatch> cancel({
+    required String balanceId,
+    required String requestId,
+    required int expectedRevision,
+  }) =>
+      throw UnimplementedError();
+}
 
 class _FakeCalendarPrefillDataSource
     implements DeadlineCalendarPrefillDataSource {

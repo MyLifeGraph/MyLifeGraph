@@ -891,6 +891,25 @@ and DST-safe local occurrences. Health is a projection only: no scheduler job,
 background write, push, alarm, automatic replan, or LLM dependency is
 implemented.
 
+The slice also includes explicit `multi-exam-plan-v1` balancing. The user
+chooses one active Exam and reviews an exact deterministic simulation. The
+backend tries retain-plus-supplement, then target-only redistribution, then a
+proof-bounded minimal-cardinality search over additional active Exams while
+Assignments and every other confirmed consumer stay fixed. A one-plan change
+uses the existing Deadline proposal lifecycle; two to eight changes persist as
+one private batch with atomic confirm, retry-safe cancel, stale context CAS, and
+guards against every competing single-plan proposal/replan/confirm/complete/
+cancel mutation. The CAS includes locked learning permission, pilot flag, and
+active Exam timing provenance when learned timing participated. This is not an
+optimizer job, scheduler, notification source, automatic replan, Calendar
+writer, or LLM feature.
+
+Private batch rows are derived orchestration metadata. Existing Deadline
+revisions and blocks remain the user-content projection, so this slice leaves
+`account-export-v4` and `personal-snapshot-v2` byte-shape/version authority
+unchanged. A future decision to expose orchestration history must introduce new
+export/snapshot contracts instead of silently widening those versions.
+
 The current repository builds on completed Phase 0 product integrity,
 Phase 1 capture, Phase 2 explainable state, Phase 3 executable action targets,
 Phase 4's persisted deterministic briefing contract, the retired historical

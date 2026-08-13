@@ -221,6 +221,14 @@ target, trap-clean the container, and prove the normal local migration history
 is byte-identical before and after. Passing this harness is not authority to
 apply `exam-plan-health-v1` or any pending migration to the normal local stack.
 
+The Multi-Exam additive migration uses
+`scripts/lib/multi_exam_plan_migration_harness.sh` under the same physical
+isolation contract. It must validate the labeled RAM-only target, apply the
+complete repository chain there, run only
+`supabase/tests/multi_exam_plan_v1_test.sql`, trap-clean the target, and compare
+the normal local migration history byte-for-byte before and after. Passing it
+does not authorize applying `multi-exam-plan-v1` to the normal local stack.
+
 The shared isolation helper deliberately does not create a second database in
 `supabase_db_mylifegraph`. It starts a separate Docker container with:
 

@@ -91,7 +91,10 @@ def _plan_blocks(
     effective_start: date,
     remaining_minutes: int,
     learned_focus_window: str | None = None,
+    max_blocks: int = 120,
 ) -> list[PlannedInterval]:
+    if max_blocks == 0:
+        return []
     deadline_day = local_deadline.date()
     last_preferred_day = (
         deadline_day
@@ -99,6 +102,14 @@ def _plan_blocks(
         else deadline_day - timedelta(days=request.buffer_days + 1)
     )
     reserved_by_day = _confirmed_preparation_minutes_by_day(context)
+    plan_reserved_by_day: dict[date, int] = {}
+    for row in context.confirmed_blocks:
+        if str(row.get("plan_id")) != str(request.plan_id):
+            continue
+        local_day = _date(row.get("local_date"))
+        plan_reserved_by_day[local_day] = plan_reserved_by_day.get(local_day, 0) + _int(
+            row.get("planned_minutes"),
+        )
     study_rhythm = _deadline_study_rhythm(context.study_setup)
     intervals = allocate_task_intervals(
         starts_on=effective_start,
@@ -123,8 +134,9 @@ def _plan_blocks(
         ),
         deadline_at=local_deadline,
         daily_reserved_minutes=reserved_by_day,
+        plan_daily_reserved_minutes=plan_reserved_by_day,
         account_daily_budget_minutes=context.daily_preparation_budget_minutes,
-        max_blocks=120,
+        max_blocks=max_blocks,
         # Deadline Planner V1 permits an exact final minute remainder. Planner
         # Action V1 below opts into the stricter five-minute duration grid.
         duration_increment_minutes=1,

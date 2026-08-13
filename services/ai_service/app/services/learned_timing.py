@@ -27,6 +27,12 @@ class LearnedTimingResolver:
         self._patterns = patterns
         self._pilot_enabled = pilot_enabled
 
+    @property
+    def pilot_enabled(self) -> bool:
+        """Return the deployment authority used for proposal and confirm guards."""
+
+        return self._pilot_enabled
+
     async def resolve(self, *, user_id: str) -> PlanningTimingProvenance:
         if not self._pilot_enabled:
             return PlanningTimingProvenance(source="setup")

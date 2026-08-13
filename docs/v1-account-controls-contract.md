@@ -142,6 +142,11 @@ identity and fingerprint remain excluded. The global `calendar_request_identitie
 omitted and named in that policy. Deadline
 plan, revision, block, and Assignment Series content rows remain bounded owner
 product data; their opaque request fingerprints are not part of the export.
+Private `multi-exam-plan-v1` batch/revision/item/link/request rows are derived
+orchestration metadata rather than public owner-content tables and are omitted
+from `account-export-v4`. The actual affected Exam content is already present
+as Deadline plan/revision/block rows. Adding balance history would require a new
+export contract version; V4 is not widened with a second shape.
 Study Setup exports the
 current owner projection only; transient preparation-checklist decisions and
 local recovery countdown state do not exist in the export. Personal Learning

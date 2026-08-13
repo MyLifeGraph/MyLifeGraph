@@ -103,6 +103,13 @@ class DeadlinePlanService:
         self._learned_timing = learned_timing
         self._now = now or (lambda: datetime.now(UTC))
 
+    @property
+    def learned_timing_pilot_enabled(self) -> bool:
+        return bool(
+            self._learned_timing is not None
+            and self._learned_timing.pilot_enabled
+        )
+
     async def resolve_timing_preference(
         self,
         *,
@@ -473,6 +480,10 @@ class DeadlinePlanService:
         planning_context: DeadlinePlanningContext | None = None,
         excluded_plan_ids: frozenset[UUID] = frozenset(),
         timing_preference: PlanningTimingProvenance | None = None,
+        existing_plan_override: dict[str, Any] | None = None,
+        tracked_focus_minutes_override: int | None = None,
+        retained_blocks: tuple[DeadlineBlockWrite, ...] = (),
+        additional_confirmed_blocks: tuple[dict[str, Any], ...] = (),
     ) -> PreparedDeadlineProposal:
         """Build a validated proposal without mutating persistence.
 
@@ -492,10 +503,12 @@ class DeadlinePlanService:
             raise DeadlinePlanValidationError(
                 "deadline planning horizon cannot exceed 366 profile-local days",
             )
-        existing = await self._repository.get_plan(
-            user_id=user_id,
-            plan_id=request.plan_id,
-        )
+        existing = existing_plan_override
+        if existing is None:
+            existing = await self._repository.get_plan(
+                user_id=user_id,
+                plan_id=request.plan_id,
+            )
         if existing is None:
             if request.base_revision != 0:
                 raise DeadlinePlanConflictError(
@@ -515,10 +528,14 @@ class DeadlinePlanService:
                 raise DeadlinePlanConflictError(
                     "Deadline plan changed. Reload before replanning.",
                 )
-            tracked_focus_minutes = await self._tracked_focus_minutes(
-                user_id=user_id,
-                managed_task_id=existing.get("managed_task_id"),
-                first_activated_at=existing.get("first_activated_at"),
+            tracked_focus_minutes = (
+                tracked_focus_minutes_override
+                if tracked_focus_minutes_override is not None
+                else await self._tracked_focus_minutes(
+                    user_id=user_id,
+                    managed_task_id=existing.get("managed_task_id"),
+                    first_activated_at=existing.get("first_activated_at"),
+                )
             )
 
         # Read profile-owned context only after the cheap optimistic precheck.
@@ -543,6 +560,20 @@ class DeadlinePlanService:
                     row
                     for row in planning_context.confirmed_blocks
                     if str(row.get("plan_id")) not in excluded
+                ]
+                + [dict(row) for row in additional_confirmed_blocks]
+                + [
+                    {
+                        "id": str(block.id),
+                        "plan_id": str(request.plan_id),
+                        "local_date": block.local_date.isoformat(),
+                        "planned_minutes": block.planned_minutes,
+                        "starts_at": block.starts_at,
+                        "ends_at": block.ends_at,
+                        "reserved_ends_at": block.reserved_ends_at,
+                        "recovery_minutes": block.recovery_minutes,
+                    }
+                    for block in retained_blocks
                 ],
             )
         if len(profile_probe.schedule_items) > 1_000:
@@ -605,6 +636,11 @@ class DeadlinePlanService:
             local_deadline=local_deadline,
             generated_at=generated_at,
         )
+        retained_minutes = sum(block.planned_minutes for block in retained_blocks)
+        if retained_minutes > remaining:
+            raise DeadlinePlanConflictError(
+                "Retained Exam reservations exceed current remaining work.",
+            )
         planned_blocks = _plan_blocks(
             request=effective_request,
             context=profile_probe,
@@ -612,12 +648,13 @@ class DeadlinePlanService:
             local_now=local_now,
             local_deadline=local_deadline,
             effective_start=effective_start,
-            remaining_minutes=remaining,
+            remaining_minutes=remaining - retained_minutes,
             learned_focus_window=(
                 timing_preference.window
                 if timing_preference.source == "learned_personal_pattern"
                 else None
             ),
+            max_blocks=120 - len(retained_blocks),
         )
         if (
             timing_preference.source == "learned_personal_pattern"
@@ -637,14 +674,24 @@ class DeadlinePlanService:
                 "context": context_fingerprint_input,
                 "timing_preference": timing_preference.model_dump(mode="json"),
                 "allocation_policy": _deadline_allocation_policy(request.kind),
+                "retained_blocks": [
+                    {
+                        "starts_at": block.starts_at,
+                        "ends_at": block.ends_at,
+                        "reserved_ends_at": block.reserved_ends_at,
+                        "planned_minutes": block.planned_minutes,
+                        "recovery_minutes": block.recovery_minutes,
+                    }
+                    for block in retained_blocks
+                ],
             },
         )
-        blocks = tuple(
+        added_blocks = tuple(
             DeadlineBlockWrite(
                 id=uuid5(
                     NAMESPACE_URL,
                     f"{DEADLINE_PLAN_CONTRACT_VERSION}:{request.plan_id}:"
-                    f"{request.request_id}:{index}",
+                    f"{request.request_id}:{index + len(retained_blocks)}",
                 ),
                 sequence=index,
                 starts_at=interval.starts_at.astimezone(UTC),
@@ -663,7 +710,20 @@ class DeadlinePlanService:
                 start=1,
             )
         )
-        planned_minutes = sum(item.minutes for item in planned_blocks)
+        ordered_blocks = sorted(
+            (*retained_blocks, *added_blocks),
+            key=lambda block: (block.starts_at, str(block.id)),
+        )
+        blocks = tuple(
+            block.model_copy(update={"sequence": index})
+            for index, block in enumerate(
+                ordered_blocks,
+                start=1,
+            )
+        )
+        planned_minutes = retained_minutes + sum(
+            item.minutes for item in planned_blocks
+        )
         write = DeadlineProposalWrite(
             proposal=DeadlineProposalPayload(
                 plan_id=request.plan_id,

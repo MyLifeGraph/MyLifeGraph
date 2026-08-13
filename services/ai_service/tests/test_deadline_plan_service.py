@@ -172,6 +172,23 @@ def test_assignment_clusters_the_earliest_day_up_to_its_saved_cap() -> None:
     }
 
 
+def test_retained_120_block_plan_fails_capacity_without_allocator_exception() -> None:
+    request = _request()
+    assert (
+        _plan_blocks(
+            request=request,
+            context=_context(),
+            zone=ZoneInfo("UTC"),
+            local_now=NOW,
+            local_deadline=request.deadline_at,
+            effective_start=request.planning_start_on,
+            remaining_minutes=60,
+            max_blocks=0,
+        )
+        == []
+    )
+
+
 def test_clustered_assignment_prefers_learned_window_then_setup_fallback() -> None:
     request = _request(
         kind="assignment",
@@ -322,8 +339,7 @@ def test_planner_deducts_other_confirmed_plans_from_account_daily_budget() -> No
 
     assert sum(minutes for _, _, minutes in blocks) == 40
     assert all(
-        starts_at >= datetime(2026, 7, 20, 9, tzinfo=UTC)
-        for starts_at, _, _ in blocks
+        starts_at >= datetime(2026, 7, 20, 9, tzinfo=UTC) for starts_at, _, _ in blocks
     )
 
 
@@ -377,8 +393,7 @@ def test_workload_reports_exact_seven_days_and_marks_existing_overage() -> None:
 
     assert result.contract_version == "preparation-workload-v1"
     assert [day.local_date for day in result.days] == [
-        date(2026, 7, 20) + timedelta(days=offset)
-        for offset in range(7)
+        date(2026, 7, 20) + timedelta(days=offset) for offset in range(7)
     ]
     assert result.days[0].reserved_preparation_minutes == 140
     assert result.days[0].remaining_budget_minutes == 0

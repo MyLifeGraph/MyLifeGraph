@@ -435,6 +435,12 @@ produces successful Health `unknown`. Only confirmed import, disconnect, and
 delete commands invalidate Health; choosing/clearing a local file or a Health
 preview does not. The import command remains the sole Calendar writer.
 
+`multi-exam-plan-v1` uses the same current account-owned Planner Calendar
+preference/import/window/event authority across the full affected horizon. Its
+context digest makes a confirmed import, re-import, disconnect, delete, or
+applicable event change stale before batch confirmation. A balance preview or
+confirmation never writes imported rows or a provider calendar.
+
 Imported events remain context unless the user deliberately starts the separate
 `deadline-plan-v1` flow for one selected event. That flow pins the event id and
 source fingerprint, stages deterministic app-owned blocks, and requires explicit

@@ -135,6 +135,14 @@ replan automatically and must distinguish it from the sleep-focused
 `Nothing currently needs review.` and appears only after both Planner and
 Health attention are confirmed empty.
 
+Under `multi-exam-plan-v1`, the action label is `Balance exam plans`. The flow requires an explicit Exam
+selection and states that creating a preview moves nothing, sends no
+notification, and changes no external calendar. A multi-plan review uses
+`Confirm all` and `Discard`; a pending child says `Review exam balance` and
+never presents the normal `Confirm plan` action. `Plan changed since preview`
+is a stale conflict, while `Saved, but some views could not refresh` preserves a
+durable mutation outcome. Avoid copy that promises automatic optimization.
+
 Planner leads with `Add new`, followed by `Needs attention`, the next seven
 days, `Ongoing preparation`, optional `Pending previews`, collapsed `Habits`,
 `Unscheduled Tasks`, and collapsed history under `planner-overview-v2`. The
@@ -324,6 +332,10 @@ says `Early evidence`.
   calculation's fixed planning rules. A stale source or passed
   finish-by time must explain why the compact action is unavailable. The detail
   must also say that nothing changes automatically.
+- Exam-balance list-detail failures offer `Retry Exam balances`; a targeted
+  detail failure alone says `Requested Exam balance unavailable` and offers
+  `Retry preview` for that exact balance. An unrelated source completion never
+  clears or retargets the other's visible error.
 - State whether a change is automatic, requires confirmation, or cannot change
   data. Do not imply that a preview or recommendation already changed a plan.
 - Keep provider names, model names, contract versions, source manifests, and

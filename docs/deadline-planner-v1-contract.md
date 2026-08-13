@@ -750,6 +750,97 @@ Health actions and Planner/Today plan links use the owner-scoped targeted detail
 read when the bounded legacy plan feed cannot supply the requested plan; a feed
 failure therefore does not make an otherwise authorized Health review inert.
 
+## Atomic Multi-Exam Balancing
+
+`multi-exam-plan-v1` is an explicit, user-confirmed orchestration over existing
+`deadline-plan-v1` revisions. Preparation exposes `Balance exam plans` only on
+the normal page, requires the user to choose one active Exam, and submits that
+plan id together with its exact latest saved revision. The command is a preview:
+it does not move time, confirm a plan, notify the user, or write to an external
+calendar. Assignments and all other confirmed consumers remain fixed capacity
+inputs; every active Exam inside the complete 366-profile-local-day horizon is
+both a consumer and a possible redistribution candidate.
+
+The deterministic search runs in stages. It first keeps every still-valid,
+future, uncredited target block and supplements only uncovered work. If that
+does not fit, it redistributes the target Exam completely. Only then does it
+enumerate additional colliding Exam subsets in exact increasing cardinality.
+Every plan selected in a candidate subset is planned in deadline order, then by
+larger remaining work, then stable plan id. Among feasible subsets of the same
+minimal cardinality, less shifted Focus time wins, followed by later affected
+deadlines and stable ids. The implementation proves the result within at most
+eight actually changed plans and 100,000 planner evaluations. That evaluation
+budget includes the initial retain-and-supplement probe, the target-only
+redistribution probe, and every later collider subset; it is not merely a count
+of subset-enumeration nodes. Exhausting either documented bound fails closed
+with `balance_search_limit` instead of returning a heuristic choice. Plans
+whose projected schedule is unchanged are removed from the result after
+simulation.
+
+The review uses multiset block signatures consisting of start, Focus end,
+reserved recovery end, active minutes, and recovery minutes. Let `R` be exact
+retained uncredited minutes, `O` the old uncredited total, and `N` the proposed
+total. For unmatched totals `oldU = O - R` and `newU = N - R`, the disjoint
+change axes are `shifted = min(oldU, newU)`, `removed = oldU - shifted`, and
+`added = newU - shifted`. Therefore `O = R + shifted + removed` and
+`N = R + shifted + added`; duplicate signatures are matched as a multiset and
+partially credited old blocks contribute only their remaining minutes.
+
+`POST /v1/deadline-plans/exam-balances/proposals` returns the strict union
+`no_change | single_plan | multi_exam_batch`. A single actually changed plan is
+persisted through the existing Deadline V1 proposal flow and returned for
+one-time client adoption; the client must not issue a second proposal. Two to
+eight changed plans are stored as one batch and are read through the bounded
+list and owner-scoped detail endpoints. Only batch-level `confirm` and `cancel`
+commands are available. Confirmation activates all children in one transaction
+or none, while cancellation supersedes only the proposed child revisions and
+never mutates an active plan. A linked child cannot be changed through the
+normal single-plan proposal/replan or complete/cancel paths, and it cannot be
+confirmed through the single-plan endpoint. Those wrappers return a stable
+`409` while a batch is pending; their ungranted inner chains preserve
+Assignment Series and batch orchestration. Its Preparation card links to the
+batch review instead.
+
+Revision identity distinguishes `active_revision`, `base_revision`, and
+`proposed_revision`. The base is the latest saved revision and the proposal is
+exactly base plus one, so a cancelled batch may legitimately leave latest above
+active and a later preview can advance again. Proposal requests bind
+`expected_plan_revision`; confirm/cancel requests bind the batch revision.
+Owner, request, batch/revision, sorted plan, and dependent-row locks have one
+fixed order. Immutable request fingerprints plus an append-only request ledger
+make exact proposal/confirm/cancel retries replay-safe. Proposal takes an
+owner-locked context snapshot, verifies the client snapshot fingerprint, and
+stores a fresh post-proposal confirmation fingerprint. Confirm recomputes that
+fingerprint under the same owner lock and fails stale when Focus progress,
+timezone, Study rhythm, preparation budget, Planner Calendar preference/import,
+plan revision, reservation, Task/Habit/fixed commitment, or applicable
+Calendar-event facts changed. A separate learned-timing marker binds the
+backend pilot flag, the owner-locked learning preference revision/flags, and
+the active Exam timing provenance used by the simulation. A pilot change,
+opt-out, or marker change therefore makes confirmation stale; learned
+provenance cannot outlive its permission. Cancel remains possible when context
+is stale. A replay of the original proposal request after its single or batch
+preview was confirmed or cancelled returns the stable `409` problem `Original
+Exam balance proposal is no longer pending.` rather than attempting to parse a
+terminal row as a new proposal result. Legacy owner-writable Profile, Schedule,
+Focus, Learning Preference, Task, and Habit rows serialize through the same
+owner advisory lock before their existing row guards and writes. Task/Habit
+locks run before the reservation-release lifecycle triggers, so an allowed
+direct mutation cannot race between fingerprint validation and batch commit.
+Lock-not-available
+`55P03` and retryable deadlock `40P01` results map to the same stable conflict
+boundary rather than leaking as server errors.
+
+Batch rows live in `private` as derived orchestration metadata. Only bounded
+service-role RPC projections cross the FastAPI boundary; forced RLS, explicit
+least-privilege grants, composite owner foreign keys, and the single-plan child
+guard remain database authority. Actual user plan content continues to live in
+the existing Deadline revision and block tables already covered by
+`account-export-v4` and `personal-snapshot-v2`. The private batch bookkeeping is
+intentionally absent from those public shapes; this feature does not reuse a
+version with a second shape. Any future export/snapshot projection belongs to a
+new contract version.
+
 ## Read-Only Exam-Week Outlook
 
 `GET /v1/deadline-plans/exam-week-outlook` is an additive
@@ -865,6 +956,19 @@ Focused backend, Flutter, migration, and browser coverage must prove:
   reservations until confirmation, stale-source/passed-deadline guards,
   pending/retained-draft fallback to the full editor, and a deliberate
   `Change values` path;
+- total 100,000-evaluation Multi-Exam search bounding, minimal changed-set
+  selection, atomic batch confirm/cancel, all competing child-mutation guards,
+  terminal original-proposal replay conflict, owner-locked learned-timing
+  permission/provenance CAS, and stable lock/deadlock conflicts;
+- immutable Flutter retry identity across same-principal refresh and transient
+  Auth loading/error states, strict
+  request/response relationship checks, authoritative-confirm versus
+  stale-cancel behavior, targeted detail survival under failed/late history,
+  including a selected detail outside the bounded feed and a late list-detail
+  completion, source-bound list versus exact-target error/retry races,
+  preview-only versus lifecycle refresh, valid current-profile IANA
+  timezone as a confirmation prerequisite with DST gap/fold rejection, and
+  populated 320 px/200% review semantics;
 - account export inclusion for plan/revision/block rows, explicit ledger
   omission, and full-account cascade; and
 - usable retained drafts, review-before-confirmation, semantic controls, and

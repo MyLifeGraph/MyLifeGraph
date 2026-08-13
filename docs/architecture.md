@@ -645,6 +645,40 @@ The shared availability layer resolves a previous-local-day recurring anchor
 only to project an overnight overlap into the first candidate day; invalid DST
 occurrences fail closed and the anchor is never offered as capacity.
 
+Atomic Exam balancing adds the shared named `multi-exam-plan-v1` command/read
+boundary without changing `deadline-plan-v1`. Flutter sends an explicit active
+Exam id plus its expected latest revision. FastAPI loads one owner-locked,
+untruncated 366-day context, performs exact retain/supplement, target-only, then
+minimal-cardinality collider search, and persists only genuinely changed
+children. One child uses the existing single-plan proposal seam; two to eight
+children use one private batch whose confirm is all-or-none. Public single-plan
+proposal/replan, confirm, complete, and cancel mutations reject a linked child
+while its batch is pending. No preview confirms, moves, notifies, or writes to
+an external calendar.
+
+The database keeps the batch, revision, item, child-link, and append-only
+request-identity structures in `private`. They are derived orchestration
+metadata behind service-role-only, fixed-search-path RPCs rather than new public
+owner content. Proposal, confirm, and cancel acquire the common owner advisory
+lock before request and sorted row locks. A canonical context digest covers the
+current timezone/Study/budget/Calendar/Deadline/Focus/occupancy facts; proposal
+stores a post-proposal confirmation digest and confirm compares it under that
+same lock. A second digest binds the backend learned-timing pilot flag, locked
+learning preferences, and active Exam timing provenance. Exact request
+fingerprints replay a still-pending result; replaying an original proposal after
+its result became terminal yields a defined stable conflict. Stale confirm
+fails closed, and cancel may discard only staged children even when stale.
+The public mutation wrappers delegate only to ungranted inner chains after
+their child guard. Legacy direct Profile, Schedule, Focus, Learning Preference,
+Task, and Habit writers acquire the same owner lock from fixed-search-path,
+ungranted `BEFORE` triggers; the Task/Habit triggers run before their
+reservation-release `AFTER` triggers. RPC-owned context writers already use
+the same ordering.
+Existing Deadline revisions and blocks remain the exported/snapshotted user
+content. Consequently `account-export-v4` and `personal-snapshot-v2` retain
+their exact shapes; projecting private orchestration metadata would require new
+versions owned by later work.
+
 `deadline-plan-v1` is a separate authenticated FastAPI workflow for explicit
 exam and assignment preparation. `/preparation-plans` asks the user for their
 own `30..30000` minute total estimate plus bounded session/per-plan-daily

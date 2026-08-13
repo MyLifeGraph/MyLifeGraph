@@ -4,6 +4,7 @@ import '../../../core/network/api_failure.dart';
 import '../../../core/utils/client_uuid.dart';
 import '../domain/deadline_plan.dart';
 import '../domain/deadline_plan_repository.dart';
+import 'preparation_mutation_gate.dart';
 
 enum DeadlinePlanOperation {
   idle,
@@ -137,14 +138,17 @@ class DeadlinePlanController extends StateNotifier<DeadlinePlanState> {
   DeadlinePlanController({
     required DeadlinePlanRepository repository,
     required DeadlinePlanProjectionRefresh projectionRefresh,
+    PreparationMutationGate? mutationGate,
   })  : _repository = repository,
         _projectionRefresh = projectionRefresh,
+        _mutationGate = mutationGate ?? PreparationMutationGate(),
         super(DeadlinePlanState.loading()) {
     Future<void>.microtask(load);
   }
 
   final DeadlinePlanRepository _repository;
   final DeadlinePlanProjectionRefresh _projectionRefresh;
+  final PreparationMutationGate _mutationGate;
 
   Future<void> load() async {
     if (state.isBusy) return;
@@ -240,6 +244,7 @@ class DeadlinePlanController extends StateNotifier<DeadlinePlanState> {
   }
 
   Future<bool> _applyProposal(DeadlinePlanPendingMutation pending) async {
+    if (!_mutationGate.tryAcquire(this)) return false;
     state = state.copyWith(
       operation: DeadlinePlanOperation.proposing,
       operationError: null,
@@ -255,10 +260,13 @@ class DeadlinePlanController extends StateNotifier<DeadlinePlanState> {
     } catch (error) {
       _recordFailure(error, pending);
       return false;
+    } finally {
+      _mutationGate.release(this);
     }
   }
 
   Future<bool> _applyLifecycle(DeadlinePlanPendingMutation pending) async {
+    if (!_mutationGate.tryAcquire(this)) return false;
     state = state.copyWith(
       operation: switch (pending.kind) {
         DeadlinePlanMutationKind.confirm => DeadlinePlanOperation.confirming,
@@ -309,6 +317,8 @@ class DeadlinePlanController extends StateNotifier<DeadlinePlanState> {
     } catch (error) {
       _recordFailure(error, pending);
       return false;
+    } finally {
+      _mutationGate.release(this);
     }
   }
 

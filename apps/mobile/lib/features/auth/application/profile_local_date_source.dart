@@ -8,6 +8,8 @@ typedef ProfileDateResolver = DateTime Function({
 });
 
 abstract interface class ProfileLocalDateSource {
+  String? get timezoneName;
+
   DateTime dateAt(DateTime instant);
 
   String dateKeyAt(DateTime instant);
@@ -29,6 +31,14 @@ class SessionProfileLocalDateSource implements ProfileLocalDateSource {
   final AppSession? _session;
   final CurrentInstantProvider _currentInstant;
   final ProfileDateResolver _profileDateResolver;
+
+  @override
+  String? get timezoneName {
+    final session = _session;
+    return session == null || session.isGuestSession
+        ? null
+        : session.profile.timezone;
+  }
 
   @override
   DateTime dateAt(DateTime instant) {

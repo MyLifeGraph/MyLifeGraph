@@ -41,6 +41,47 @@ void main() {
       );
     });
 
+    test('builds profile-local instants and rejects DST gaps and folds', () {
+      final value = profileDateTimeFromComponents(
+        year: 2026,
+        month: 7,
+        day: 20,
+        hour: 9,
+        minute: 15,
+        timezoneName: 'Europe/Berlin',
+      );
+      expect(value.toUtc(), DateTime.utc(2026, 7, 20, 7, 15));
+
+      expect(
+        () => profileDateTimeFromComponents(
+          year: 2026,
+          month: 3,
+          day: 29,
+          hour: 2,
+          minute: 30,
+          timezoneName: 'Europe/Berlin',
+        ),
+        throwsA(isA<ProfileTimezoneException>()),
+      );
+      expect(
+        () => profileDateTimeFromComponents(
+          year: 2026,
+          month: 10,
+          day: 25,
+          hour: 2,
+          minute: 30,
+          timezoneName: 'Europe/Berlin',
+        ),
+        throwsA(
+          isA<ProfileTimezoneException>().having(
+            (error) => error.message,
+            'message',
+            contains('ambiguous'),
+          ),
+        ),
+      );
+    });
+
     test('authenticated invalid timezone fails instead of using device date',
         () {
       final source = SessionProfileLocalDateSource(
@@ -51,6 +92,24 @@ void main() {
       );
 
       expect(source.today, throwsA(isA<ProfileTimezoneException>()));
+    });
+
+    test('exposes only the authenticated profile timezone', () {
+      final authenticated = SessionProfileLocalDateSource(
+        session: AppSession.authenticated(
+          _profile(timezone: 'Europe/Berlin'),
+        ),
+      );
+      final guest = SessionProfileLocalDateSource(
+        session: AppSession.guest(_profile(timezone: 'device-local')),
+      );
+
+      expect(authenticated.timezoneName, 'Europe/Berlin');
+      expect(guest.timezoneName, isNull);
+      expect(
+        const SessionProfileLocalDateSource(session: null).timezoneName,
+        isNull,
+      );
     });
 
     test('guest explicitly keeps the device-local calendar behavior', () {

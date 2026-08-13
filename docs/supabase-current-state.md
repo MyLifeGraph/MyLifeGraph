@@ -501,6 +501,50 @@ verified in the dedicated RAM-only full-chain harness, not applied implicitly
 to the normal local database. Its public application envelope is the separate
 shared named `exam-plan-health-v1` contract.
 
+The shared named `multi-exam-plan-v1` contract is backed by migration
+`20260813081814_multi_exam_plan_v1.sql`, which adds the private, derived
+orchestration structures `multi_exam_plan_batches`,
+`multi_exam_plan_batch_revisions`, `multi_exam_plan_batch_items`,
+`multi_exam_plan_batch_links`, and the append-only
+`multi_exam_plan_request_identities` ledger. All five tables have enabled and
+forced RLS, composite owner foreign keys, bounded/check-constrained content,
+and explicit indexes for list, target/result/balance ledger lookups, child links,
+and every referencing foreign-key path. They grant no direct application
+access. Only the service role may call the bounded
+public snapshot/list/detail/propose/confirm/cancel RPCs; `PUBLIC`, `anon`, and
+`authenticated` execute are revoked, while unguarded helpers remain private and
+ungranted with fixed empty search paths.
+
+The legacy directly writable `profiles`, `schedule_items`, `focus_sessions`,
+`learning_preferences`, `tasks`, and `habits` tables are context authorities.
+Alphabetically first `BEFORE` triggers on those tables now acquire the same
+owner advisory lock and reject owner reassignment, closing the final race
+between an allowed direct write and proposal/confirmation fingerprint
+validation. The Task/Habit locks are therefore acquired before their existing
+reservation-release `AFTER` triggers. The trigger function is fixed-search-path
+`SECURITY DEFINER`, has no caller execute grant, and adds no application
+projection.
+
+The RPC lock order is owner advisory lock, request identity, batch/revision,
+sorted plan ids, then dependent revision/block rows. Proposal revalidates the
+canonical context digest under the owner lock, stages two to eight child
+Deadline proposals, and stores a new post-proposal confirmation digest plus a
+learned-timing marker for the backend pilot flag, learning permission, and
+active Exam timing provenance. Confirm compares both and activates all children
+atomically through the ungranted inner Deadline confirmation chain. Public
+single-plan proposal/replan, confirm, complete, and cancel wrappers return
+`PT409` for a linked batch child. Cancel supersedes only the staged child
+revisions and blocks. Batch metadata stays private and is not a second
+shape for `account-export-v4` or `personal-snapshot-v2`; the existing Deadline
+revision/block rows remain those contracts' user-plan content.
+
+This additive migration is verified only by
+`scripts/lib/multi_exam_plan_migration_harness.sh`, a physically isolated,
+labeled RAM-only full-chain target that runs
+`supabase/tests/multi_exam_plan_v1_test.sql` and proves normal local migration
+history is byte-identical before and after. It is not implicitly applied to the
+normal local database.
+
 Deadline Planner V1 persists explicit preparation work separately from imported
 calendar rows and ordinary schedule items. The user supplies the exam or
 assignment type, deadline, total active-preparation estimate, and session
@@ -1179,13 +1223,19 @@ service-role-only `get_exam_plan_health_snapshot_v1` function described in the
 Deadline Planner section. It adds no table, applies no Health result, and gives
 application roles no new privilege.
 
+`20260813081814_multi_exam_plan_v1.sql` adds the private forced-RLS Multi-Exam
+batch/revision/item/link/request structures, service-role-only public
+projections and lifecycle RPCs, context-CAS helpers, and the single-plan child
+confirmation guard described in the Deadline Planner section. It changes no
+public owner-data table or export/snapshot wire shape.
+
 ## Local Verification Workflow
 
 When destruction of the exact normal local database is explicitly authorized,
 the guarded reset must complete through:
 
 ```text
-20260813040200_exam_plan_health_v1.sql
+20260813081814_multi_exam_plan_v1.sql
 ```
 
 Then configure `.env` with:
@@ -1381,11 +1431,17 @@ The product should standardize on the snake_case schema. CamelCase tables are
 legacy compatibility only and should be dropped in a later dedicated migration
 after data migration and app verification are complete.
 
-The latest migration is
-`20260813040200_exam_plan_health_v1.sql`. It adds the stable, read-only,
-service-role-only `get_exam_plan_health_snapshot_v1` function described in the
-Deadline Planner section, without tables, persisted Health results, or new
-application-role privileges. The preceding
+The latest migration is `20260813081814_multi_exam_plan_v1.sql`. It adds the
+private, forced-RLS Exam-balance orchestration metadata and service-role-only
+snapshot/list/detail/propose/confirm/cancel RPC boundary described in the
+Deadline Planner section. It also wraps the current Deadline confirmation
+and proposal/replan/lifecycle entrypoints so a linked child cannot bypass or
+strand atomic batch confirmation. Learning-preference writes join the same
+owner lock, and batch confirmation rechecks the persisted learned-timing marker.
+The
+preceding `20260813040200_exam_plan_health_v1.sql` adds the stable, read-only,
+service-role-only `get_exam_plan_health_snapshot_v1` function without tables,
+persisted Health results, or new application-role privileges. The earlier
 `20260812212833_deadline_plan_kind_guard.sql` preserves the public
 service-role-only Deadline Plan proposal signature and established
 owner/request lock and exact-replay precedence while rejecting a different kind
