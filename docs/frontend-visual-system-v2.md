@@ -372,6 +372,14 @@ the conservative luminance bound for every possible backdrop pixel.
 
 ## Responsive And Accessibility Gates
 
+`exam-plan-health-v1` uses an icon plus text status pill for every state.
+Preparation's value grid uses wrapping layout; Planner and Today use wrapping
+titles/status and vertically growing subtitles rather than fixed-width trailing
+metrics. All Health states, the transport error, and the editor preview must
+remain readable and scrollable at a 320 px viewport and 200% text. Unknown and
+transport error require distinct words and semantics, not merely distinct
+colors.
+
 The objective gate is:
 
 - text contrast at least 4.5:1;

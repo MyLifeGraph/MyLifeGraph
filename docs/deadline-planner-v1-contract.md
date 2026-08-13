@@ -660,6 +660,96 @@ background, and previously completed qualifying focus remains credited to the
 plan as a whole. The active warning remains visible while a replacement
 revision is only an unconfirmed preview.
 
+## Capacity-Based Exam Plan Health
+
+`exam-plan-health-v1` is a separate, read-only capacity projection for every
+active Exam whose profile-local deadline is no more than 366 days away. It is
+served by `GET /v1/deadline-plans/exam-plan-health`; the Exam editor uses the
+read-only `POST /v1/deadline-plans/exam-plan-health/preview` with the exact
+unsaved editor values. The preview accepts only `kind: exam`, has no mutation
+request id or request ledger, creates no revision or reservation, and never
+replaces or invalidates the active GET projection.
+For a new unsaved Exam it omits both `plan_id` and `base_revision`. For an
+unconfirmed persisted Exam draft it also omits both and runs a new-plan
+simulation without borrowing another plan's Focus facts or reservations. Only
+an active Exam replan supplies both; the backend accepts them only when the
+owner-filtered snapshot contains that active Exam, its current active revision
+is intact, and `base_revision` equals the latest saved revision. An unknown,
+cross-kind, cross-owner, or stale identity fails with `422` before simulation.
+The preview deadline must be strictly future, within both the 366-day instant
+and profile-local bounds, and on or after `planning_start_on`; the local planning
+window itself may not exceed 366 days. Violations return stable `422` detail.
+
+One owner-filtered, service-role-only
+`get_exam_plan_health_snapshot_v1(uuid,timestamptz)` statement reads the
+profile, current Study rhythm, all active Exams in the horizon, exact completed
+Focus facts since activation including scheduled-block provenance, all active
+confirmed Deadline/Planner/Setup
+reservations, fixed commitments, and the applicable current Calendar import.
+There is no 50-plan page limit and no application-side multi-read assembly.
+The RPC is stable, persists no Health state, and is not executable by `anon` or
+`authenticated`.
+
+For each Exam the response gives remaining minutes and preferred-session
+count, valid future reserved minutes, uncovered minutes, additional feasible
+capacity, reserve minutes and full preferred sessions, latest safe start, and
+a recommended start or a concrete reason why none is possible. Confirmed
+Assignments and series occurrences remain capacity consumers. Exams share
+capacity in deadline order, then larger remaining workload, then stable plan
+id. Health models a possible replan with the current account-owned Planner
+Calendar preference; the revision's saved value remains historical authority
+for its already confirmed blocks. When the current preference is enabled, a
+missing/stale import or an import whose inclusive `window_starts_on` and
+exclusive `window_ends_before` do not cover the full planning interval returns
+successful `unknown`, never false green. Invalid or ambiguous occurrence-local
+DST availability is likewise `unknown`.
+Future reserved minutes are the exact uncredited remainder of each active
+block under the same block-aware credit rule as Deadline detail. Retained
+blocks still consume their busy interval, account/per-plan daily caps, and one
+of the revision's 120 block slots; only the remaining slots are available to
+the feasibility probe. A previous-local-day recurring occurrence is resolved
+only as an authority anchor when it overlaps the first candidate day. That
+anchor is never bookable, and an invalid gap/fold occurrence makes Health
+`unknown`.
+
+Status precedence and thresholds are exact:
+
+- overdue with remaining work is `red`, even when an authority is missing;
+- otherwise missing required authority is `unknown`;
+- negative reserve is `red`;
+- only uncovered work can be `yellow`, when reserve is below 20 percent,
+  below two complete preferred sessions, or latest safe start is at most seven
+  profile-local days away; exact 20 percent and exact two sessions are not
+  warnings, while exact seven days is;
+- complete authority with no preceding condition is `green`.
+
+A fully accounted Exam has no availability decision left: it remains green
+even when its saved deadline is past or optional Calendar/recurrence authority
+is unavailable. Its recommended start is profile-today and its latest-safe date
+is normalized to no earlier than profile-today, so the two dates never make a
+contradictory past-start claim.
+
+The recommended start for new Exam values is no later than the date that
+preserves both seven calendar days before latest safe start and at least 20
+percent additional placeable Focus capacity. The saved Exam buffer is already
+excluded from the feasible interval and therefore remains additional free
+time. Recovery occupies calendar capacity but is never counted as Focus.
+Elapsed or missed blocks cause a fresh calculation when the projection is
+read; they do not themselves create a notification or move a block.
+
+Preparation displays every status and all calculation values. Planner and
+Today display only yellow, red, or unknown items. Transport/contract failure is
+presented separately from an authoritative `unknown`. Focus, Deadline,
+Planner, Setup, timezone, preparation-budget, and confirmed Calendar
+import/disconnect/delete mutations invalidate the local projection; preview
+reads do not. Successful Assignment Series confirm/cancel results, including
+exact retries, use the same Deadline projection invalidation; proposals and
+failed lifecycle calls do not. Guest/mock capability guards make zero authenticated Health
+calls. No read sends a push, writes a warning, or confirms a replan.
+Health actions and Planner/Today plan links use the owner-scoped targeted detail
+read when the bounded legacy plan feed cannot supply the requested plan; a feed
+failure therefore does not make an otherwise authorized Health review inert.
+
 ## Read-Only Exam-Week Outlook
 
 `GET /v1/deadline-plans/exam-week-outlook` is an additive

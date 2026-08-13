@@ -22,6 +22,7 @@ import '../../application/assignment_series_controller.dart';
 import '../../domain/assignment_series.dart';
 import '../../domain/deadline_calendar_prefill.dart';
 import '../../domain/deadline_plan.dart';
+import '../../domain/exam_plan_health.dart';
 import 'package:my_life_graph/composition/deadline_plan_providers.dart';
 
 part '../widgets/deadline_plan_card.dart';
@@ -66,6 +67,8 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
   bool _initialReplanOpened = false;
   bool _initialKindEditorOpened = false;
   bool _expansionInitialized = false;
+  String? _targetPlanId;
+  DeadlinePlan? _targetPlanResult;
   Object? _targetPlanError;
   DeadlinePlanProposalDraft? _retainedDraft;
   AssignmentSeriesProposalDraft? _retainedSeriesDraft;
@@ -77,6 +80,7 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
   @override
   void initState() {
     super.initState();
+    _targetPlanId = widget.initialPlanId;
     _expandedPlanId = widget.initialPlanId;
   }
 
@@ -86,6 +90,8 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
     if (oldWidget.initialPlanId != widget.initialPlanId) {
       _targetPlanRequested = false;
       _targetPlanLoading = false;
+      _targetPlanId = widget.initialPlanId;
+      _targetPlanResult = null;
       _targetPlanError = null;
       _initialReplanOpened = false;
       _expandedPlanId = widget.initialPlanId;
@@ -118,6 +124,7 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
     }
     final state = ref.watch(deadlinePlanControllerProvider);
     final seriesState = ref.watch(assignmentSeriesControllerProvider);
+    final examPlanHealth = ref.watch(examPlanHealthProvider);
     ref.watch(preparationWorkloadProvider);
     final controller = ref.read(deadlinePlanControllerProvider.notifier);
     final seriesController =
@@ -146,6 +153,7 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
               ? null
               : () {
                   ref.invalidate(preparationWorkloadProvider);
+                  ref.invalidate(examPlanHealthProvider);
                   controller.load();
                   seriesController.load();
                 },
@@ -158,6 +166,7 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
         seriesState,
         seriesController,
         sourcePrefill,
+        examPlanHealth,
       ),
     );
   }
@@ -168,10 +177,17 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
     AssignmentSeriesState seriesState,
     AssignmentSeriesController seriesController,
     AsyncValue<DeadlineCalendarPrefill>? sourcePrefill,
+    AsyncValue<ExamPlanHealth?> examPlanHealth,
   ) {
+    final healthSection = _ExamPlanHealthSection(
+      value: examPlanHealth,
+      onRetry: () => ref.invalidate(examPlanHealthProvider),
+      onOpenPlan: _openHealthPlan,
+    );
     if (state.isLoading) {
-      return const [
-        AppCard(
+      return [
+        healthSection,
+        const AppCard(
           child: Center(
             child: Padding(
               padding: EdgeInsets.all(AppSpacing.lg),
@@ -181,31 +197,24 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
         ),
       ];
     }
-    if (state.loadError != null) {
-      return [
-        _MessageCard(
-          icon: AppIcons.cloudOffOutlined,
-          title: 'Preparation plans unavailable',
-          message:
-              'Your saved plans could not be read. Check your connection and try again.',
-          actionLabel: 'Retry',
-          onAction: controller.load,
-        ),
-      ];
-    }
-
     final seriesPlanIds =
         seriesState.series.expand((series) => series.occurrencePlanIds).toSet();
-    final visiblePlans = state.plans
+    final projectedPlans = [...state.plans];
+    final targeted = _targetPlanResult;
+    if (targeted != null &&
+        !projectedPlans.any((plan) => plan.id == targeted.id)) {
+      projectedPlans.add(targeted);
+    }
+    final visiblePlans = projectedPlans
         .where(
           (plan) =>
               widget.focusedReplan ||
-              plan.id == widget.initialPlanId ||
+              plan.id == _targetPlanId ||
               !seriesPlanIds.contains(plan.id),
         )
         .toList()
       ..sort((left, right) {
-        final selectedId = widget.initialPlanId;
+        final selectedId = _targetPlanId;
         if (selectedId != null && left.id != right.id) {
           if (left.id == selectedId) return -1;
           if (right.id == selectedId) return 1;
@@ -218,7 +227,7 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
         if (leftDeadline == null || rightDeadline == null) return 0;
         return leftDeadline.compareTo(rightDeadline);
       });
-    final targetPlan = _planById(visiblePlans, widget.initialPlanId);
+    final targetPlan = _planById(visiblePlans, _targetPlanId);
 
     Widget planCard(DeadlinePlan plan) {
       final key = _planKeys.putIfAbsent(plan.id, GlobalKey.new);
@@ -318,7 +327,23 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
           onAction: _retryTargetPlan,
         ),
       if (sourcePrefill != null) _sourcePrefillCard(sourcePrefill),
+      healthSection,
     ];
+
+    if (state.loadError != null) {
+      return [
+        ...leading,
+        _MessageCard(
+          icon: AppIcons.cloudOffOutlined,
+          title: 'Preparation plans unavailable',
+          message:
+              'Your saved plans could not be read. Check your connection and try again.',
+          actionLabel: 'Retry',
+          onAction: controller.load,
+        ),
+        if (targetPlan != null) planCard(targetPlan),
+      ];
+    }
 
     if (widget.focusedReplan) {
       if (targetPlan == null &&
@@ -481,11 +506,11 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
   }
 
   void _loadTargetPlanAfterBuild(DeadlinePlanState state) {
-    final planId = widget.initialPlanId;
+    final planId = _targetPlanId;
     if (planId == null ||
         _targetPlanRequested ||
         state.isLoading ||
-        state.loadError != null ||
+        _targetPlanResult?.id == planId ||
         state.plans.any((plan) => plan.id == planId)) {
       return;
     }
@@ -577,11 +602,15 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
     try {
       final plan =
           await ref.read(deadlinePlanRepositoryProvider).getPlan(planId);
-      if (!mounted) return;
+      if (!mounted || _targetPlanId != planId) return;
       ref.read(deadlinePlanControllerProvider.notifier).includeReadPlan(plan);
-      setState(() => _targetPlanLoading = false);
+      setState(() {
+        _targetPlanLoading = false;
+        _targetPlanResult = plan;
+        _expandedPlanId = plan.id;
+      });
     } catch (error) {
-      if (!mounted) return;
+      if (!mounted || _targetPlanId != planId) return;
       setState(() {
         _targetPlanLoading = false;
         _targetPlanError = error;
@@ -590,13 +619,29 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
   }
 
   void _retryTargetPlan() {
-    final planId = widget.initialPlanId;
+    final planId = _targetPlanId;
     if (planId == null || _targetPlanLoading) return;
     setState(() {
       _targetPlanRequested = true;
       _targetPlanError = null;
     });
     _loadTargetPlan(planId);
+  }
+
+  void _openHealthPlan(String planId) {
+    final state = ref.read(deadlinePlanControllerProvider);
+    final alreadyLoaded = state.plans.any((plan) => plan.id == planId) ||
+        _targetPlanResult?.id == planId;
+    setState(() {
+      if (_targetPlanId != planId) {
+        _targetPlanResult = null;
+      }
+      _targetPlanId = planId;
+      _expandedPlanId = planId;
+      _targetPlanRequested = true;
+      _targetPlanError = null;
+    });
+    if (!alreadyLoaded) _loadTargetPlan(planId);
   }
 
   Widget _sourcePrefillCard(AsyncValue<DeadlineCalendarPrefill> source) {
@@ -817,6 +862,9 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
           planId: sourcePlan?.id ?? retainedDraft?.planId ?? newClientUuid(),
           baseRevision:
               sourcePlan?.latestRevision ?? retainedDraft?.baseRevision ?? 0,
+          healthPlanId: sourcePlan?.isActive == true ? sourcePlan?.id : null,
+          healthBaseRevision:
+              sourcePlan?.isActive == true ? sourcePlan?.latestRevision : null,
           existing: existing,
           trackedFocusMinutes: sourcePlan?.progress.trackedFocusMinutes ?? 0,
           accountDailyPreparationBudgetKnown: preparationWorkload.hasValue,
@@ -863,6 +911,8 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
           currentTime: widget.currentTime,
           profileToday: profileToday,
           onOpenPlanner: () => context.go(AppRoutes.planner),
+          onPreviewHealth: (draft) =>
+              ref.read(examPlanHealthRepositoryProvider).preview(draft),
         ),
       );
     } finally {
@@ -975,7 +1025,6 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
         .confirm(series);
     if (mounted && saved) {
       await ref.read(deadlinePlanControllerProvider.notifier).load();
-      ref.invalidate(preparationWorkloadProvider);
       if (mounted) _showMessage('Whole assignment series reserved.');
     }
   }
@@ -1009,7 +1058,6 @@ class _DeadlinePlansPageState extends ConsumerState<DeadlinePlansPage> {
         .cancelFuture(series);
     if (mounted && saved) {
       await ref.read(deadlinePlanControllerProvider.notifier).load();
-      ref.invalidate(preparationWorkloadProvider);
       if (mounted) {
         _showMessage('Future assignments cancelled; earlier history was kept.');
       }

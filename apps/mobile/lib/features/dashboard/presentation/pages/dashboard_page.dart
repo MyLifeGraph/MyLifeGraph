@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../../../../composition/projection_refresh_providers.dart';
 import '../../../../composition/today_command_providers.dart';
 import '../../../../composition/briefing_providers.dart';
+import '../../../../composition/deadline_plan_providers.dart';
 import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/capabilities/app_surface_capabilities.dart';
 import '../../../../core/navigation/app_routes.dart';
@@ -18,6 +19,7 @@ import '../../../briefings/domain/decision_feedback.dart';
 import '../../../quick_action/domain/habit_v1.dart';
 import 'package:my_life_graph/composition/widgets/app_header_actions.dart';
 import '../../../tasks/domain/executable_task.dart';
+import '../../../deadline_plans/domain/exam_plan_health.dart';
 import '../../domain/entities/dashboard_snapshot.dart';
 import 'package:my_life_graph/composition/dashboard_providers.dart';
 import '../widgets/dashboard_supporting_sections.dart';
@@ -89,6 +91,10 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
     final fullWeek = _showFullWeek && localDate != null
         ? ref.watch(dashboardFullWeekProvider(localDate))
         : null;
+    final examPlanHealth = data.origin == DashboardOrigin.account &&
+            capabilities.canUseDeadlinePlanner
+        ? ref.watch(examPlanHealthProvider)
+        : const AsyncValue<ExamPlanHealth?>.data(null);
     return _DashboardHome(
       snapshot: data,
       commands: commands,
@@ -149,6 +155,11 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
           habit,
           data.localDate,
         ),
+      ),
+      examPlanHealth: examPlanHealth,
+      onRetryExamPlanHealth: () => ref.invalidate(examPlanHealthProvider),
+      onOpenExamPlan: (planId) => context.push(
+        '${AppRoutes.preparationPlans}?plan_id=$planId',
       ),
       supportingSections: DashboardSupportingSections(
         recommendationsExpanded: _showRecommendations,
@@ -443,6 +454,9 @@ class _DashboardHome extends StatelessWidget {
     required this.taskVisibility,
     required this.taskActions,
     required this.habitActions,
+    required this.examPlanHealth,
+    required this.onRetryExamPlanHealth,
+    required this.onOpenExamPlan,
     required this.supportingSections,
   });
 
@@ -456,6 +470,9 @@ class _DashboardHome extends StatelessWidget {
   final TodayTaskVisibility taskVisibility;
   final TodayTaskActions taskActions;
   final TodayHabitActions habitActions;
+  final AsyncValue<ExamPlanHealth?> examPlanHealth;
+  final VoidCallback onRetryExamPlanHealth;
+  final ValueChanged<String> onOpenExamPlan;
   final Widget supportingSections;
 
   @override
@@ -540,6 +557,11 @@ class _DashboardHome extends StatelessWidget {
                             commands: commands,
                             canExecute: canExecute,
                             actions: habitActions,
+                          ),
+                          TodayExamPlanHealthSection(
+                            value: examPlanHealth,
+                            onRetry: onRetryExamPlanHealth,
+                            onOpenPlan: onOpenExamPlan,
                           ),
                           const SizedBox(height: AppSpacing.xl),
                           supportingSections,

@@ -133,11 +133,7 @@ def allocate_task_intervals(
         raise ValueError("Planning block bound is invalid.")
     if duration_increment_minutes < 1 or 60 % duration_increment_minutes != 0:
         raise ValueError("Planning duration increment is invalid.")
-    if (
-        recovery_minutes < 0
-        or recovery_minutes > 60
-        or recovery_minutes % 5 != 0
-    ):
+    if recovery_minutes < 0 or recovery_minutes > 60 or recovery_minutes % 5 != 0:
         raise ValueError("Planning recovery duration is invalid.")
     if exact_session_blocks and recovery_minutes == 0:
         raise ValueError("Exact Study blocks require a recovery reservation.")
@@ -181,9 +177,7 @@ def allocate_task_intervals(
         first_round_days = viable_days[:first_count]
     else:
         first_round_days = [
-            viable_days[
-                round(index * (len(viable_days) - 1) / (first_count - 1))
-            ]
+            viable_days[round(index * (len(viable_days) - 1) / (first_count - 1))]
             for index in range(first_count)
         ]
 
@@ -243,9 +237,7 @@ def allocate_task_intervals(
             gap[0] = (
                 reserved_end
                 if recovery_minutes > 0
-                else (
-                    block_end.astimezone(UTC) + timedelta(minutes=5)
-                ).astimezone(zone)
+                else (block_end.astimezone(UTC) + timedelta(minutes=5)).astimezone(zone)
             )
             remaining -= duration
             daily_left[day] -= duration
@@ -370,10 +362,16 @@ def busy_intervals_by_day(
         weekday = exact_int(item.get("weekday"))
         starts = exact_time(item.get("starts_at"))
         ends = exact_time(item.get("ends_at"))
-        for day in days:
-            if (
-                day.isoweekday() != weekday
-                or not recurring_commitment_applies_on(item, day)
+        occurrence_days = list(days)
+        # Resolve the previous-local-day authority anchor only when its
+        # half-open interval can reach the first requested day.  A daytime
+        # gap/fold on that prior date cannot affect this planning window and
+        # therefore must not turn otherwise valid capacity into Unknown.
+        if days and ends <= starts and ends != time.min:
+            occurrence_days.insert(0, days[0] - timedelta(days=1))
+        for day in occurrence_days:
+            if day.isoweekday() != weekday or not recurring_commitment_applies_on(
+                item, day
             ):
                 continue
             source_id = str(
@@ -388,11 +386,12 @@ def busy_intervals_by_day(
                 zone=zone,
                 source_id=source_id,
             )
-            result[day].append((interval_start, interval_end))
-            if interval_end.date() != day and day + timedelta(days=1) in day_set:
-                result[day + timedelta(days=1)].append(
-                    (interval_start, interval_end),
-                )
+            cursor = interval_start.astimezone(zone).date()
+            through = interval_end.astimezone(zone).date()
+            while cursor <= through:
+                if cursor in day_set:
+                    result[cursor].append((interval_start, interval_end))
+                cursor += timedelta(days=1)
 
     for item in sources.timed_intervals:
         starts_at = exact_datetime(item.get("starts_at")).astimezone(zone)
@@ -616,9 +615,10 @@ def is_unambiguous_local(value: datetime, zone: ZoneInfo) -> bool:
     candidates = {
         candidate.astimezone(UTC)
         for fold in (0, 1)
-        if (
-            candidate := naive.replace(tzinfo=zone, fold=fold)
-        ).astimezone(UTC).astimezone(zone).replace(tzinfo=None)
+        if (candidate := naive.replace(tzinfo=zone, fold=fold))
+        .astimezone(UTC)
+        .astimezone(zone)
+        .replace(tzinfo=None)
         == naive
     }
     return len(candidates) == 1
@@ -626,8 +626,7 @@ def is_unambiguous_local(value: datetime, zone: ZoneInfo) -> bool:
 
 def interval_minutes(starts_at: datetime, ends_at: datetime) -> int:
     return int(
-        (ends_at.astimezone(UTC) - starts_at.astimezone(UTC)).total_seconds()
-        // 60
+        (ends_at.astimezone(UTC) - starts_at.astimezone(UTC)).total_seconds() // 60
     )
 
 
@@ -703,11 +702,7 @@ def recurring_commitment_validity(
 
     valid_from = _optional_exact_date(metadata.get("valid_from"))
     valid_until = _optional_exact_date(metadata.get("valid_until"))
-    if (
-        valid_from is not None
-        and valid_until is not None
-        and valid_until < valid_from
-    ):
+    if valid_from is not None and valid_until is not None and valid_until < valid_from:
         raise ValueError("Planning recurring validity range is invalid.")
     return valid_from, valid_until
 
@@ -732,10 +727,7 @@ def _recurring_candidate(
             starts_at=window_start,
             ends_at=window_end,
             zone=zone,
-            source_id=(
-                f"planner-recurring-slot:"
-                f"{occurrences[0].isoweekday()}"
-            ),
+            source_id=(f"planner-recurring-slot:{occurrences[0].isoweekday()}"),
         )
         while cursor < window_limit:
             wall_start = cursor.time().replace(tzinfo=None)
@@ -754,14 +746,10 @@ def _recurring_candidate(
                     local_date=occurrences[0],
                     local_time=wall_start,
                     zone=zone,
-                    source_id=(
-                        f"planner-recurring-slot:"
-                        f"{occurrences[0].isoweekday()}"
-                    ),
+                    source_id=(f"planner-recurring-slot:{occurrences[0].isoweekday()}"),
                 )
                 sample_end = (
-                    sample_start.astimezone(UTC)
-                    + timedelta(minutes=duration_minutes)
+                    sample_start.astimezone(UTC) + timedelta(minutes=duration_minutes)
                 ).astimezone(zone)
                 return wall_start, sample_end.time().replace(tzinfo=None)
             cursor += timedelta(minutes=5)
@@ -790,4 +778,6 @@ def _occurrence_is_free(
         return False
     if not safe_fixed_offset_interval(starts_at, ends_at, zone):
         return False
-    return all(ends_at <= busy_start or starts_at >= busy_end for busy_start, busy_end in busy)
+    return all(
+        ends_at <= busy_start or starts_at >= busy_end for busy_start, busy_end in busy
+    )

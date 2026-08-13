@@ -170,6 +170,13 @@ active-Focus-session and immutable terminal-history rules remain unchanged.
 
 ## Planner And Deadline Planning
 
+`exam-plan-health-v1` uses the current Setup Focus duration as the preferred
+session size and the current Recovery duration as occupied, non-Focus calendar
+time. A confirmed Setup change invalidates the local Health projection; the
+Health read never edits Setup and never persists a learned replacement rhythm.
+If occurrence-local recurring availability cannot be resolved safely across a
+DST transition, Health is `unknown` rather than optimistic.
+
 Deadline Planner always uses the current Study rhythm when a Focus rhythm is
 configured. An ordinary Planner Task has an explicit `use_study_rhythm`
 boolean, defaulting to false. When true, a current rhythm is required and the

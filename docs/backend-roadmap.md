@@ -882,6 +882,15 @@ Use these rules before adding any model provider:
 
 ## Current Implementation Checkpoint
 
+The current Deadline slice includes deterministic `exam-plan-health-v1` GET
+and read-only preview endpoints. A single service-role snapshot RPC removes the
+old list-page/torn-read risk and feeds the shared Availability allocator with a
+120-block plan bound, Study Focus/Recovery, account and plan caps, all confirmed
+consumers, exact Focus credit, current account-owned Planner Calendar authority,
+and DST-safe local occurrences. Health is a projection only: no scheduler job,
+background write, push, alarm, automatic replan, or LLM dependency is
+implemented.
+
 The current repository builds on completed Phase 0 product integrity,
 Phase 1 capture, Phase 2 explainable state, Phase 3 executable action targets,
 Phase 4's persisted deterministic briefing contract, the retired historical

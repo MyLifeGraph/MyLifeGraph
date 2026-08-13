@@ -5,6 +5,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$ROOT_DIR/scripts/lib/local_supabase_migrations.sh"
 source "$ROOT_DIR/scripts/lib/local_supabase_database_safety.sh"
 source "$ROOT_DIR/scripts/lib/goal_removal_migration_harness.sh"
+source "$ROOT_DIR/scripts/lib/exam_plan_health_migration_harness.sh"
 
 RESET_DB="${RESET_DB-false}"
 APPLY_MIGRATIONS="${APPLY_MIGRATIONS-false}"
@@ -47,6 +48,7 @@ local_supabase_prepare_migration_state \
   "$RESET_DB" "$APPLY_MIGRATIONS" false
 
 run_goal_removal_migration_harness "$ROOT_DIR"
+run_exam_plan_health_migration_harness "$ROOT_DIR"
 
 echo "Running the complete local pgTAP suite."
 supabase_cli test db

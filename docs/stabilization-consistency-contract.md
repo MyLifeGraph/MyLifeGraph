@@ -106,6 +106,15 @@ design.
 
 ## Flutter Projection Impact Coordination
 
+The coordinator treats `exam-plan-health-v1` as its own read projection.
+Durable Deadline, completed Focus, Planner action/Habit/fixed-commitment,
+Study Setup, profile-timezone, preparation-budget, and confirmed Calendar
+import/disconnect/delete changes invalidate it. The Health editor preview is a
+read and invalidates nothing. Late preview responses are generation-bound to
+the exact editor fingerprint and are discarded after any relevant field
+changes. Invalidation failure after a durable Calendar success is best effort
+and never converts that success into an unsafe command replay.
+
 After a durable Flutter mutation, callers name one typed domain impact through
 the app-level `ProjectionRefreshCoordinator`; they do not import and enumerate
 foreign feature providers. The coordinator may refresh the affected profile

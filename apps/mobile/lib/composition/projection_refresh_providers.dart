@@ -34,6 +34,8 @@ final projectionRefreshCoordinatorProvider =
           ref.invalidate(preparationWorkloadProvider);
         case ProductProjection.examWeekOutlook:
           ref.invalidate(examWeekOutlookProvider);
+        case ProductProjection.examPlanHealth:
+          ref.invalidate(examPlanHealthProvider);
       }
     },
   );

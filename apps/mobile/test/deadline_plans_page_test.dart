@@ -17,6 +17,8 @@ import 'package:my_life_graph/features/deadline_plans/domain/assignment_series_r
 import 'package:my_life_graph/features/deadline_plans/domain/deadline_calendar_prefill.dart';
 import 'package:my_life_graph/features/deadline_plans/domain/deadline_plan.dart';
 import 'package:my_life_graph/features/deadline_plans/domain/deadline_plan_repository.dart';
+import 'package:my_life_graph/features/deadline_plans/domain/exam_plan_health.dart';
+import 'package:my_life_graph/features/deadline_plans/domain/exam_plan_health_repository.dart';
 import 'package:my_life_graph/features/deadline_plans/presentation/pages/deadline_plans_page.dart';
 import 'package:my_life_graph/composition/deadline_plan_providers.dart';
 import 'package:my_life_graph/features/snapshots/application/snapshot_refresh_service.dart';
@@ -128,6 +130,217 @@ void main() {
     await _tap(tester, find.text('Create preview'));
     expect(repository.proposalDrafts.single.maxDailyMinutes, 120);
     expect(repository.proposalDrafts.single.kind, DeadlinePlanKind.exam);
+  });
+
+  testWidgets('Preparation renders all Health states and numbers',
+      (tester) async {
+    final health = _healthProjection();
+    await _pumpPage(
+      tester,
+      repository: _FakeDeadlinePlanRepository(),
+      healthLoader: () async => health,
+      page: DeadlinePlansPage(currentTime: now),
+      size: const Size(320, 2200),
+      textScaler: const TextScaler.linear(2),
+    );
+
+    expect(find.text('Healthy capacity'), findsOneWidget);
+    expect(find.text('Plan soon'), findsOneWidget);
+    expect(find.text('Capacity shortfall'), findsOneWidget);
+    expect(find.text('Availability unknown'), findsOneWidget);
+    expect(find.text('6'), findsWidgets);
+    expect(find.text('5 h'), findsWidgets);
+    expect(find.textContaining('Latest safe start:'), findsWidgets);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Preparation transport failure is not Unknown capacity',
+      (tester) async {
+    await _pumpPage(
+      tester,
+      repository: _FakeDeadlinePlanRepository(),
+      healthLoader: () => Future.error(StateError('offline')),
+      page: DeadlinePlansPage(currentTime: now),
+    );
+    expect(
+      find.textContaining('connection or response error, not an Unknown'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets(
+      'Preparation refresh error and retry loading replace prior warnings',
+      (tester) async {
+    var reads = 0;
+    final retry = Completer<ExamPlanHealth?>();
+    Future<ExamPlanHealth?> loadHealth() {
+      reads += 1;
+      if (reads == 1) return Future.value(_healthProjection());
+      if (reads == 2) return Future.error(StateError('offline'));
+      return retry.future;
+    }
+
+    await _pumpPage(
+      tester,
+      repository: _FakeDeadlinePlanRepository(),
+      healthLoader: loadHealth,
+      page: DeadlinePlansPage(currentTime: now),
+    );
+    expect(find.text('Plan soon'), findsOneWidget);
+
+    final container = ProviderScope.containerOf(
+      tester.element(find.byType(DeadlinePlansPage)),
+    );
+    container.invalidate(examPlanHealthProvider);
+    await tester.pumpAndSettle();
+    expect(find.text('Retry Exam Plan Health'), findsOneWidget);
+    expect(find.text('Plan soon'), findsNothing);
+
+    await tester.tap(find.text('Retry Exam Plan Health'));
+    await tester.pump();
+    expect(find.text('Checking current Exam capacity…'), findsOneWidget);
+    expect(find.text('Retry Exam Plan Health'), findsNothing);
+    expect(find.text('Plan soon'), findsNothing);
+
+    retry.complete(null);
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('Health stays visible when the legacy plan feed exceeds its cap',
+      (tester) async {
+    final repository = _FakeDeadlinePlanRepository(
+      targetedPlan: _plan(),
+      feedError: const DeadlinePlanContractException(
+        'Deadline plan feed exceeds its V1 bound.',
+      ),
+    );
+    await _pumpPage(
+      tester,
+      repository: repository,
+      healthLoader: () async => _healthProjection(),
+      page: DeadlinePlansPage(currentTime: now),
+    );
+
+    expect(find.text('Preparation plans unavailable'), findsOneWidget);
+    expect(find.text('Exam Plan Health'), findsOneWidget);
+    expect(find.text('Plan soon'), findsOneWidget);
+
+    await _tap(tester, find.text('Review preparation plan').first);
+    expect(repository.getPlanCalls, 1);
+    expect(find.text('Algorithms exam'), findsOneWidget);
+  });
+
+  testWidgets('feed-error deep link performs one independent targeted read',
+      (tester) async {
+    final repository = _FakeDeadlinePlanRepository(
+      targetedPlan: _plan(),
+      feedError: const DeadlinePlanContractException(
+        'Deadline plan feed exceeds its V1 bound.',
+      ),
+    );
+    await _pumpPage(
+      tester,
+      repository: repository,
+      page: const DeadlinePlansPage(initialPlanId: deadlinePlanId),
+    );
+
+    expect(repository.getPlanCalls, 1);
+    expect(find.text('Preparation plans unavailable'), findsOneWidget);
+    expect(find.text('Algorithms exam'), findsOneWidget);
+  });
+
+  testWidgets('edited Exam invalidates an in-flight Health preview',
+      (tester) async {
+    final previewCompleter = Completer<ExamPlanHealthPreview>();
+    final healthRepository = _FakeExamPlanHealthRepository(
+      previewResult: previewCompleter.future,
+    );
+    await _pumpPage(
+      tester,
+      repository: _FakeDeadlinePlanRepository(),
+      examHealthRepository: healthRepository,
+      page: DeadlinePlansPage(
+        initialKind: DeadlinePlanKind.exam,
+        initialTitle: 'Algorithms exam',
+        initialDeadlineAt: DateTime(2026, 7, 25, 17),
+        currentTime: now,
+      ),
+    );
+
+    await _tap(tester, find.text('Continue'));
+    await _tap(tester, find.byKey(const ValueKey('deadline-estimate-2h')));
+    await _tap(tester, find.text('Continue'));
+    final check = find.byKey(const ValueKey('exam-plan-health-preview'));
+    await tester.ensureVisible(check);
+    await tester.tap(check);
+    await tester.pump();
+    expect(healthRepository.previewDrafts, hasLength(1));
+    expect(healthRepository.previewDrafts.single.title, 'Algorithms exam');
+    expect(
+      healthRepository.previewDrafts.single.sourceKind,
+      DeadlinePlanSourceKind.manual,
+    );
+
+    await tester.enterText(
+      find.byKey(const ValueKey('deadline-daily-cap')),
+      '180',
+    );
+    previewCompleter.complete(_healthPreview());
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('exam-plan-health-preview-result')),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('exam-plan-health-preview')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('saved draft Health omits identity while active replan binds it',
+      (tester) async {
+    Future<ExamPlanHealthPreviewDraft> previewFor(DeadlinePlan plan) async {
+      final healthRepository = _FakeExamPlanHealthRepository(
+        previewResult: Future.value(_healthPreview()),
+      );
+      await _pumpPage(
+        tester,
+        repository: _FakeDeadlinePlanRepository(
+          feeds: [
+            DeadlinePlanFeed(plans: [plan]),
+          ],
+        ),
+        examHealthRepository: healthRepository,
+        page: DeadlinePlansPage(currentTime: now),
+      );
+      if (find.text('Adjust estimate or plan').evaluate().isEmpty) {
+        await _tap(tester, find.text('Algorithms exam'));
+      }
+      await _tap(tester, find.text('Adjust estimate or plan'));
+      if (find.text('Change values').evaluate().isNotEmpty) {
+        await _tap(tester, find.text('Change values'));
+      }
+      await _tap(tester, find.text('Continue'));
+      await _tap(tester, find.text('Continue'));
+      await _tap(
+        tester,
+        find.byKey(const ValueKey('exam-plan-health-preview')),
+      );
+      final preview = healthRepository.previewDrafts.single;
+      await _tap(tester, find.text('Back'));
+      await _tap(tester, find.text('Back'));
+      await _tap(tester, find.text('Cancel'));
+      return preview;
+    }
+
+    final draftPreview = await previewFor(_plan(status: 'draft'));
+    expect(draftPreview.planId, isNull);
+    expect(draftPreview.baseRevision, isNull);
+
+    final activePreview = await previewFor(_plan());
+    expect(activePreview.planId, deadlinePlanId);
+    expect(activePreview.baseRevision, 1);
   });
 
   testWidgets('new calendar Assignment submits the 360 minute daily default',
@@ -1769,6 +1982,8 @@ Future<void> _pumpPage(
       const SessionProfileLocalDateSource(session: null),
   SnapshotRefreshService? snapshotRefresh,
   AssignmentSeriesRepository? assignmentSeriesRepository,
+  Future<ExamPlanHealth?> Function()? healthLoader,
+  ExamPlanHealthRepository? examHealthRepository,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
@@ -1782,6 +1997,13 @@ Future<void> _pumpPage(
         appSurfaceCapabilitiesProvider.overrideWithValue(capabilities),
         profileLocalDateSourceProvider.overrideWithValue(profileDateSource),
         deadlinePlanRepositoryProvider.overrideWithValue(repository),
+        examPlanHealthProvider.overrideWith(
+          (ref) => (healthLoader ?? () async => null)(),
+        ),
+        if (examHealthRepository != null)
+          examPlanHealthRepositoryProvider.overrideWithValue(
+            examHealthRepository,
+          ),
         assignmentSeriesRepositoryProvider.overrideWithValue(
           assignmentSeriesRepository ?? _FakeAssignmentSeriesRepository(),
         ),
@@ -1806,6 +2028,122 @@ Future<void> _pumpPage(
   } else {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
+  }
+}
+
+ExamPlanHealth _healthProjection() => ExamPlanHealth(
+      generatedAt: DateTime.utc(2026, 7, 18, 8),
+      timezone: 'UTC',
+      localDate: '2026-07-18',
+      exams: [
+        _healthItem(
+          id: '11111111-1111-4111-8111-111111111111',
+          title: 'Healthy Exam',
+          deadline: DateTime.utc(2026, 7, 30, 18),
+          status: ExamPlanHealthStatus.green,
+          capacity: 600,
+          reasons: const [],
+        ),
+        _healthItem(
+          id: '22222222-2222-4222-8222-222222222222',
+          title: 'Plan soon Exam',
+          deadline: DateTime.utc(2026, 8, 1, 18),
+          status: ExamPlanHealthStatus.yellow,
+          capacity: 390,
+          reasons: const ['low_session_reserve'],
+        ),
+        _healthItem(
+          id: '33333333-3333-4333-8333-333333333333',
+          title: 'Shortfall Exam',
+          deadline: DateTime.utc(2026, 8, 2, 18),
+          status: ExamPlanHealthStatus.red,
+          capacity: 299,
+          reasons: const ['capacity_deficit'],
+        ),
+        ExamPlanHealthItem(
+          planId: '44444444-4444-4444-8444-444444444444',
+          title: 'Unknown Exam',
+          deadlineAt: DateTime.utc(2026, 8, 3, 18),
+          localDeadlineDate: '2026-08-03',
+          status: ExamPlanHealthStatus.unknown,
+          remainingMinutes: 300,
+          preferredSessionMinutes: 50,
+          sessionsNeeded: 6,
+          futureReservedMinutes: 0,
+          minutesToSchedule: 300,
+          availableReplanCapacityMinutes: null,
+          reserveMinutes: null,
+          reserveFullSessions: null,
+          latestSafeStartOn: null,
+          recommendedStartOn: null,
+          recommendedStartReason: 'Calendar import is unavailable.',
+          reasons: const ['calendar_import_unavailable'],
+          missingSources: const ['calendar_import'],
+        ),
+      ],
+    );
+
+ExamPlanHealthItem _healthItem({
+  required String id,
+  required String title,
+  required DateTime deadline,
+  required ExamPlanHealthStatus status,
+  required int capacity,
+  required List<String> reasons,
+}) =>
+    ExamPlanHealthItem(
+      planId: id,
+      title: title,
+      deadlineAt: deadline,
+      localDeadlineDate: deadline.toIso8601String().substring(0, 10),
+      status: status,
+      remainingMinutes: 300,
+      preferredSessionMinutes: 50,
+      sessionsNeeded: 6,
+      futureReservedMinutes: 0,
+      minutesToSchedule: 300,
+      availableReplanCapacityMinutes: capacity,
+      reserveMinutes: capacity - 300,
+      reserveFullSessions: (capacity - 300).clamp(0, 200000) ~/ 50,
+      latestSafeStartOn:
+          status == ExamPlanHealthStatus.red ? null : '2026-07-27',
+      recommendedStartOn:
+          status == ExamPlanHealthStatus.red ? null : '2026-07-19',
+      recommendedStartReason:
+          status == ExamPlanHealthStatus.red ? 'No safe start remains.' : null,
+      reasons: reasons,
+      missingSources: const [],
+    );
+
+ExamPlanHealthPreview _healthPreview() => ExamPlanHealthPreview(
+      generatedAt: DateTime.utc(2026, 7, 18, 8),
+      timezone: 'UTC',
+      localDate: '2026-07-18',
+      exam: _healthItem(
+        id: '11111111-1111-4111-8111-111111111111',
+        title: 'Algorithms exam',
+        deadline: DateTime.utc(2026, 7, 25, 15),
+        status: ExamPlanHealthStatus.yellow,
+        capacity: 390,
+        reasons: const ['low_session_reserve'],
+      ),
+    );
+
+class _FakeExamPlanHealthRepository implements ExamPlanHealthRepository {
+  _FakeExamPlanHealthRepository({required this.previewResult});
+
+  final Future<ExamPlanHealthPreview> previewResult;
+  final List<ExamPlanHealthPreviewDraft> previewDrafts = [];
+
+  @override
+  Future<ExamPlanHealth> getHealth() async => _healthProjection();
+
+  @override
+  Future<ExamPlanHealthPreview> preview(
+    ExamPlanHealthPreviewDraft draft,
+  ) {
+    previewDrafts.add(draft);
+    return previewResult;
   }
 }
 
@@ -2009,6 +2347,7 @@ class _FakeDeadlinePlanRepository implements DeadlinePlanRepository {
     this.completeError,
     this.targetedPlan,
     this.targetedError,
+    this.feedError,
   })  : feeds = feeds ?? [DeadlinePlanFeed(plans: const [])],
         proposalResults = [...?proposalResults],
         proposalErrors = [...?proposalErrors];
@@ -2020,6 +2359,7 @@ class _FakeDeadlinePlanRepository implements DeadlinePlanRepository {
   final Object? completeError;
   final DeadlinePlan? targetedPlan;
   final Object? targetedError;
+  final Object? feedError;
   final List<DeadlinePlanProposalDraft> proposalDrafts = [];
   final List<String> proposalRequestIds = [];
   int feedCalls = 0;
@@ -2038,6 +2378,7 @@ class _FakeDeadlinePlanRepository implements DeadlinePlanRepository {
 
   @override
   Future<DeadlinePlanFeed> getPlans() async {
+    if (feedError case final error?) throw error;
     final index = feedCalls.clamp(0, feeds.length - 1);
     feedCalls++;
     return feeds[index];

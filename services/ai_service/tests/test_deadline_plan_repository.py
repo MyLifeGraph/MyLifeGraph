@@ -34,9 +34,7 @@ class Client:
         if table == "planner_preferences":
             return [
                 {
-                    "use_calendar_busy_time": (
-                        self.planner_use_calendar_busy_time
-                    ),
+                    "use_calendar_busy_time": (self.planner_use_calendar_busy_time),
                 },
             ]
         if table in {
@@ -125,9 +123,7 @@ def test_planning_context_reads_only_current_minimal_calendar_projection() -> No
     assert context.calendar_availability_current is True
     assert str(context.availability_import_id) == IMPORT_ID
     block_call = next(
-        params
-        for table, params in client.calls
-        if table == "deadline_plan_blocks"
+        params for table, params in client.calls if table == "deadline_plan_blocks"
     )
     assert block_call["user_id"] == f"eq.{USER_ID}"
     assert block_call["plan_id"] == f"neq.{PLAN_ID}"
@@ -151,18 +147,14 @@ def test_workload_context_is_owner_scoped_to_profile_local_seven_days() -> None:
 
     assert context.timezone == "Europe/Berlin"
     assert context.daily_preparation_budget_minutes is None
-    profile_call = next(
-        params for table, params in client.calls if table == "profiles"
-    )
+    profile_call = next(params for table, params in client.calls if table == "profiles")
     assert profile_call == {
         "select": "timezone,daily_preparation_budget_minutes",
         "id": f"eq.{USER_ID}",
         "limit": "1",
     }
     block_call = next(
-        params
-        for table, params in client.calls
-        if table == "deadline_plan_blocks"
+        params for table, params in client.calls if table == "deadline_plan_blocks"
     )
     assert block_call["user_id"] == f"eq.{USER_ID}"
     assert block_call["reservation_state"] == "eq.active"
@@ -181,13 +173,14 @@ def test_exam_week_sleep_capture_read_is_owner_scoped_and_read_only() -> None:
     client = Client()
     repository = SupabaseDeadlinePlanRepository(client)
 
-    assert asyncio.run(
-        repository.list_sleep_capture_logs(user_id=USER_ID),
-    ) == []
-
-    call = next(
-        params for table, params in client.calls if table == "daily_logs"
+    assert (
+        asyncio.run(
+            repository.list_sleep_capture_logs(user_id=USER_ID),
+        )
+        == []
     )
+
+    call = next(params for table, params in client.calls if table == "daily_logs")
     assert call["user_id"] == f"eq.{USER_ID}"
     assert call["source"] == "eq.quick_check_in"
     assert call["select"] == "id,entry_date,metadata"
@@ -232,9 +225,7 @@ def test_workload_detail_context_is_owner_and_exact_date_scoped() -> None:
 
     assert context.daily_preparation_budget_minutes == 120
     block_call = next(
-        params
-        for table, params in client.calls
-        if table == "deadline_plan_blocks"
+        params for table, params in client.calls if table == "deadline_plan_blocks"
     )
     assert block_call["user_id"] == f"eq.{USER_ID}"
     assert block_call["local_date"] == "eq.2026-07-20"
@@ -501,5 +492,76 @@ def test_calendar_source_and_revision_share_one_atomic_snapshot_call() -> None:
         (
             "get_deadline_plan_projection_v2",
             {"p_user_id": USER_ID, "p_plan_id": str(PLAN_ID)},
+        ),
+    ]
+
+
+class ExamHealthSnapshotClient:
+    def __init__(self, count: int = 75) -> None:
+        self.calls = []
+        self.count = count
+
+    async def rpc(self, function, *, params):
+        self.calls.append((function, params))
+        assert function == "get_exam_plan_health_snapshot_v1"
+        generated_at = params["p_generated_at"]
+        exams = [
+            {
+                "id": str(UUID(int=index + 1)),
+                "deadline_at": "2026-09-01T12:00:00+00:00",
+            }
+            for index in range(self.count)
+        ]
+        return {
+            "contract_version": "exam-plan-health-snapshot-v1",
+            "generated_at": generated_at,
+            "local_today": "2026-08-13",
+            "horizon_ends_before": "2027-08-15",
+            "profile": {"timezone": "UTC"},
+            "best_energy_window": "variable",
+            "study_setup": None,
+            "planner_preference": {"use_calendar_busy_time": False},
+            "exams": exams,
+            "focus_totals": [
+                {
+                    "plan_id": row["id"],
+                    "actual_minutes": 0,
+                    "focus_count": 0,
+                }
+                for row in exams
+            ],
+            "focus_facts": [],
+            "deadline_blocks": [],
+            "schedule_items": [],
+            "planner_task_blocks": [],
+            "planner_habit_slots": [],
+            "planner_commitments": [],
+            "calendar_import": None,
+            "calendar_timed_events": [],
+            "calendar_all_day_events": [],
+        }
+
+
+def test_exam_health_snapshot_is_one_owner_filtered_untruncated_rpc() -> None:
+    client = ExamHealthSnapshotClient()
+    repository = SupabaseDeadlinePlanRepository(client)
+    generated_at = datetime(2026, 8, 13, 8, tzinfo=UTC)
+
+    snapshot = asyncio.run(
+        repository.load_exam_plan_health_snapshot(
+            user_id=USER_ID,
+            generated_at=generated_at,
+        ),
+    )
+
+    assert len(snapshot.exams) == 75
+    assert len(snapshot.focus_totals) == 75
+    assert client.calls == [
+        (
+            "get_exam_plan_health_snapshot_v1",
+            {
+                "p_user_id": USER_ID,
+                "p_generated_at": generated_at.isoformat(),
+            },
         ),
     ]

@@ -182,7 +182,7 @@ export const DOCS_IMPACT_RULES = [
     name: 'Local database safety',
     triggers: [
       /^scripts\/(?:backup_local_supabase|reset_local_supabase)\.sh$/,
-      /^scripts\/lib\/(?:goal_removal_migration_harness|local_supabase_database_safety|local_supabase_migrations)\.sh$/,
+      /^scripts\/lib\/(?:exam_plan_health_migration_harness|goal_removal_migration_harness|local_supabase_database_safety|local_supabase_migrations)\.sh$/,
       /^scripts\/test_local_supabase_migrations\.sh$/,
       /^supabase\/migration_tests\/local_database_safety\/.*$/,
     ],

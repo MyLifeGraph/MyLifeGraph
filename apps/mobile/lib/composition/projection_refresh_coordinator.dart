@@ -10,6 +10,7 @@ enum ProductProjection {
   planner,
   preparationWorkload,
   examWeekOutlook,
+  examPlanHealth,
 }
 
 /// Coordinates the explicit read projections affected by a durable mutation.
@@ -53,6 +54,7 @@ class ProjectionRefreshCoordinator {
         projections: const [
           ProductProjection.today,
           ProductProjection.planner,
+          ProductProjection.examPlanHealth,
         ],
       );
 
@@ -75,6 +77,7 @@ class ProjectionRefreshCoordinator {
           ProductProjection.planner,
           ProductProjection.preparationWorkload,
           ProductProjection.examWeekOutlook,
+          ProductProjection.examPlanHealth,
         ],
       );
 
@@ -85,6 +88,7 @@ class ProjectionRefreshCoordinator {
           ProductProjection.todayFullWeek,
           ProductProjection.preparationWorkload,
           ProductProjection.examWeekOutlook,
+          ProductProjection.examPlanHealth,
         ],
       );
 
@@ -96,6 +100,7 @@ class ProjectionRefreshCoordinator {
           ProductProjection.planner,
           ProductProjection.preparationWorkload,
           ProductProjection.examWeekOutlook,
+          ProductProjection.examPlanHealth,
         ],
       );
 
@@ -105,6 +110,7 @@ class ProjectionRefreshCoordinator {
           ProductProjection.today,
           ProductProjection.preparationWorkload,
           ProductProjection.examWeekOutlook,
+          ProductProjection.examPlanHealth,
         ],
       );
 
@@ -116,6 +122,7 @@ class ProjectionRefreshCoordinator {
           ProductProjection.todayFullWeek,
           ProductProjection.preparationWorkload,
           ProductProjection.examWeekOutlook,
+          ProductProjection.examPlanHealth,
         ],
       );
 
@@ -129,12 +136,25 @@ class ProjectionRefreshCoordinator {
           ProductProjection.planner,
           ProductProjection.preparationWorkload,
           ProductProjection.examWeekOutlook,
+          ProductProjection.examPlanHealth,
         ],
       );
 
   Future<void> preparationBudgetChanged() => _refresh(
         projections: const [
           ProductProjection.preparationWorkload,
+          ProductProjection.examPlanHealth,
+        ],
+      );
+
+  Future<void> calendarPlanningChanged() => _refresh(
+        projections: const [
+          ProductProjection.planner,
+          ProductProjection.preparationWorkload,
+          ProductProjection.examWeekOutlook,
+          ProductProjection.examPlanHealth,
+          ProductProjection.today,
+          ProductProjection.todayFullWeek,
         ],
       );
 

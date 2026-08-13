@@ -485,6 +485,22 @@ is still connected and current.
 
 ## Deadline Planner V1
 
+Migration `20260813040200_exam_plan_health_v1.sql` adds only the stable
+security-definer function
+`public.get_exam_plan_health_snapshot_v1(uuid,timestamptz)`. It returns one
+owner-filtered JSON snapshot containing active Exams through 366 profile-local
+days, exact completed Focus totals plus ordered scheduled-block provenance,
+active Deadline blocks (including the full current Exam revision needed for
+credit), Setup schedule,
+Planner Task/Habit/fixed-commitment consumers, and current Calendar import/event
+facts. It creates no Health table or persisted result. Execute is explicitly
+revoked from `PUBLIC`, `anon`, `authenticated`, and initially `service_role`,
+then granted only to `service_role`; its empty search path and explicit schema
+qualification are part of the boundary. The migration is additive and is
+verified in the dedicated RAM-only full-chain harness, not applied implicitly
+to the normal local database. Its public application envelope is the separate
+shared named `exam-plan-health-v1` contract.
+
 Deadline Planner V1 persists explicit preparation work separately from imported
 calendar rows and ordinary schedule items. The user supplies the exam or
 assignment type, deadline, total active-preparation estimate, and session
@@ -1158,13 +1174,18 @@ and revokes application-role execution from both the renamed timing
 implementation and the unguarded strict V1 body. Those functions remain
 owner-internal dependencies of the guarded `SECURITY DEFINER` wrapper.
 
+`20260813040200_exam_plan_health_v1.sql` adds the stable, read-only,
+service-role-only `get_exam_plan_health_snapshot_v1` function described in the
+Deadline Planner section. It adds no table, applies no Health result, and gives
+application roles no new privilege.
+
 ## Local Verification Workflow
 
 When destruction of the exact normal local database is explicitly authorized,
 the guarded reset must complete through:
 
 ```text
-20260812212833_deadline_plan_kind_guard.sql
+20260813040200_exam_plan_health_v1.sql
 ```
 
 Then configure `.env` with:
@@ -1361,7 +1382,11 @@ legacy compatibility only and should be dropped in a later dedicated migration
 after data migration and app verification are complete.
 
 The latest migration is
-`20260812212833_deadline_plan_kind_guard.sql`. It preserves the public
+`20260813040200_exam_plan_health_v1.sql`. It adds the stable, read-only,
+service-role-only `get_exam_plan_health_snapshot_v1` function described in the
+Deadline Planner section, without tables, persisted Health results, or new
+application-role privileges. The preceding
+`20260812212833_deadline_plan_kind_guard.sql` preserves the public
 service-role-only Deadline Plan proposal signature and established
 owner/request lock and exact-replay precedence while rejecting a different kind
 for an existing owner-scoped draft or active root. Its renamed inner function

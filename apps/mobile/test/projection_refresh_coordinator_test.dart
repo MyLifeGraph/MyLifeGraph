@@ -57,6 +57,7 @@ void main() {
     expect(invalidated, [
       ProductProjection.today,
       ProductProjection.planner,
+      ProductProjection.examPlanHealth,
     ]);
   });
 
@@ -69,6 +70,7 @@ void main() {
       ProductProjection.planner,
       ProductProjection.preparationWorkload,
       ProductProjection.examWeekOutlook,
+      ProductProjection.examPlanHealth,
     ]);
     expect(invalidated, isNot(contains(ProductProjection.today)));
   });
@@ -90,6 +92,7 @@ void main() {
       ProductProjection.todayFullWeek,
       ProductProjection.preparationWorkload,
       ProductProjection.examWeekOutlook,
+      ProductProjection.examPlanHealth,
     ]);
   });
 
@@ -104,6 +107,7 @@ void main() {
       ProductProjection.planner,
       ProductProjection.preparationWorkload,
       ProductProjection.examWeekOutlook,
+      ProductProjection.examPlanHealth,
     ]);
   });
 
@@ -115,6 +119,7 @@ void main() {
       ProductProjection.today,
       ProductProjection.preparationWorkload,
       ProductProjection.examWeekOutlook,
+      ProductProjection.examPlanHealth,
     ]);
     expect(invalidated, isNot(contains(ProductProjection.planner)));
   });
@@ -131,6 +136,7 @@ void main() {
       ProductProjection.todayFullWeek,
       ProductProjection.preparationWorkload,
       ProductProjection.examWeekOutlook,
+      ProductProjection.examPlanHealth,
     ]);
   });
 
@@ -150,7 +156,10 @@ void main() {
     await coordinator.preparationBudgetChanged();
 
     expect(snapshotDates, isEmpty);
-    expect(invalidated, [ProductProjection.preparationWorkload]);
+    expect(invalidated, [
+      ProductProjection.preparationWorkload,
+      ProductProjection.examPlanHealth,
+    ]);
   });
 
   test('reflection changes invalidate only Full week rating status', () async {
@@ -190,6 +199,22 @@ void main() {
       ProductProjection.planner,
       ProductProjection.preparationWorkload,
       ProductProjection.examWeekOutlook,
+      ProductProjection.examPlanHealth,
+    ]);
+  });
+
+  test('confirmed Calendar changes invalidate every Calendar-backed read',
+      () async {
+    await coordinator.calendarPlanningChanged();
+
+    expect(snapshotDates, isEmpty);
+    expect(invalidated, [
+      ProductProjection.planner,
+      ProductProjection.preparationWorkload,
+      ProductProjection.examWeekOutlook,
+      ProductProjection.examPlanHealth,
+      ProductProjection.today,
+      ProductProjection.todayFullWeek,
     ]);
   });
 }

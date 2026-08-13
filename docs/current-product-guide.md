@@ -275,6 +275,17 @@ Dashboards:
 
 ## Featurekatalog: Funktion, Eingaben und Ergebnis
 
+`Exam Plan Health` (`exam-plan-health-v1`) ist die regelbasierte
+Kapazitätsansicht für aktive Exams. Preparation zeigt Grün, Gelb, Rot und
+Unknown samt Restarbeit, reservierter Zukunftszeit, neu zu platzierenden
+Minuten, Reserve sowie empfohlenem und spätestem sicheren Start. Planner und
+Today zeigen nur Gelb, Rot oder Unknown. Unknown bedeutet fehlende
+autoritative Verfügbarkeit; ein Lade-/Transportfehler wird ausdrücklich anders
+benannt. Die schlafbezogene `Exam week outlook` bleibt ein eigenes Produkt.
+Der Editor kann seine noch ungespeicherten Exam-Werte read-only prüfen. Weder
+Ansicht noch Preview verschieben Blöcke, senden Benachrichtigungen oder speichern
+einen Health-Status; Guest/Mock ruft den authentifizierten Endpoint nicht auf.
+
 | Feature | Wie es funktioniert | Verwendete Daten | Geschriebene Daten / LLM |
 | --- | --- | --- | --- |
 | **Auth und Account** | E-Mail/Passwort, Recovery und optional konfiguriertes Google OAuth über Supabase Auth | Auth-Identität und Profil | `profiles`; kein LLM |

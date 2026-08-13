@@ -119,6 +119,7 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
 
     final state = ref.watch(plannerControllerProvider);
     final examWeekOutlook = ref.watch(examWeekOutlookProvider);
+    final examPlanHealth = ref.watch(examPlanHealthProvider);
     final controller = ref.read(plannerControllerProvider.notifier);
     final overview = state.overview;
     final availabilityIncomplete =
@@ -292,7 +293,12 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
     children.add(
       PlannerNeedsAttentionSection(
         items: overview.needsAttention,
+        examPlanHealth: examPlanHealth,
         onOpen: (item) => _openAttention(item, overview),
+        onOpenExamHealth: (planId) => context.push(
+          '${AppRoutes.preparationPlans}?plan_id=$planId',
+        ),
+        onRetryExamHealth: () => ref.invalidate(examPlanHealthProvider),
         enabled: state.canMutate,
       ),
     );
@@ -362,6 +368,7 @@ class _PlannerPageState extends ConsumerState<PlannerPage> {
 
   Future<void> _reloadPlannerFromHeader(PlannerState state) async {
     ref.invalidate(examWeekOutlookProvider);
+    ref.invalidate(examPlanHealthProvider);
     final controller = ref.read(plannerControllerProvider.notifier);
     if (state.reloadSuggested ||
         state.requiresExactRetry ||

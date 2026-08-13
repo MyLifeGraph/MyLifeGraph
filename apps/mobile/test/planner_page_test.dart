@@ -3137,6 +3137,7 @@ Future<PlannerController> _pumpPlanner(
         examWeekOutlookProvider.overrideWith(
           (ref) => (outlookLoader ?? () async => null)(),
         ),
+        examPlanHealthProvider.overrideWith((ref) async => null),
       ],
       child: MaterialApp(
         home: const Scaffold(body: PlannerPage()),

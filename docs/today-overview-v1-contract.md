@@ -303,6 +303,14 @@ write into an error.
 
 ## Additive Today Overview V2
 
+For an authenticated account with Deadline Planner capability, Today may read
+`exam-plan-health-v1` independently of `today-overview-v2`. It renders a
+separate Exam Plan Health section only when yellow, red, or unknown items
+exist; green results remain in Preparation. Loading and transport/contract
+failure are not rendered as authoritative `unknown`, and the copy distinguishes
+this capacity projection from the sleep-focused Exam Week Outlook. Guest/mock
+or local-demo Today never watches the authenticated Health repository.
+
 Planner V1 adds the parallel read-only endpoint
 `GET /v1/today/overview-v2` with contract `today-overview-v2`. The V1 endpoint
 and response remain available unchanged for existing clients. The current

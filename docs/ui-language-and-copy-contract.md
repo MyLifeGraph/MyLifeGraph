@@ -125,6 +125,16 @@ multiple blocks never imply multiple required actions.
 
 ## Planner Copy
 
+The `exam-plan-health-v1` capacity surface name is `Exam Plan Health`. Its status labels
+are `Healthy capacity`, `Plan soon`, `Capacity shortfall`, and
+`Availability unknown`; status is never communicated by color alone. Use
+`Exam Plan Health could not be loaded` for transport/contract failure and state
+that it is not an Unknown capacity result. Copy must say that Health does not
+replan automatically and must distinguish it from the sleep-focused
+`Exam week outlook`. Planner's empty copy remains exactly
+`Nothing currently needs review.` and appears only after both Planner and
+Health attention are confirmed empty.
+
 Planner leads with `Add new`, followed by `Needs attention`, the next seven
 days, `Ongoing preparation`, optional `Pending previews`, collapsed `Habits`,
 `Unscheduled Tasks`, and collapsed history under `planner-overview-v2`. The

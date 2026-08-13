@@ -449,6 +449,8 @@ Deadline Planner and its strictly read-only workload/outlook projections use:
 ```text
 GET    /v1/deadline-plans
 GET    /v1/deadline-plans/exam-week-outlook
+GET    /v1/deadline-plans/exam-plan-health
+POST   /v1/deadline-plans/exam-plan-health/preview
 GET    /v1/deadline-plans/workload
 GET    /v1/deadline-plans/workload/{local_date}
 GET    /v1/deadline-plans/{plan_id}
@@ -466,6 +468,27 @@ POST   /v1/deadline-plans/{plan_id}/cancel
 The outlook GET derives its owner only from the bearer principal and performs no
 write. Planner and Deadline Planner proposals remain staged until their separate
 confirmation command succeeds.
+
+The shared named `exam-plan-health-v1` GET and editor-preview POST are both
+side-effect-free capacity reads. The preview body contains only exact Exam
+editor values and no mutation request id. A new preview omits `plan_id` and
+`base_revision`; an unconfirmed persisted draft is simulated the same way and
+does not borrow another plan's Focus or reservations. Only an active Exam
+replan supplies both fields and is rejected with `422` unless they bind to the
+bearer owner's active Exam and latest saved revision. The deadline must be
+strictly future and no more than 366 elapsed and profile-local days away;
+`planning_start_on` may not follow the local deadline or make the planning
+window exceed 366 days.
+FastAPI derives the owner from the
+bearer and obtains one untruncated, point-in-time snapshot through the
+service-role-only `get_exam_plan_health_snapshot_v1` RPC. Missing required
+Calendar/recurrence authority returns an `unknown` item; it is not converted to
+a route failure or false green. Neither route writes Health state, creates a
+notification, reserves time, or replans.
+The snapshot includes ordered completed Focus facts with scheduled Deadline
+block provenance. Health subtracts exact per-block credit from future reserved
+minutes while retained blocks continue to consume busy time, daily caps, and
+the revision's finite block count.
 
 Read today's persisted internal briefing without side effects:
 

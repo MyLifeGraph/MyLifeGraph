@@ -31,6 +31,19 @@ DateTime profileDateAt({
   }
 }
 
+String profileLocalDateKey({
+  required DateTime instant,
+  required String timezoneName,
+}) {
+  final localDate = profileDateAt(
+    instant: instant,
+    timezoneName: timezoneName,
+  );
+  final month = localDate.month.toString().padLeft(2, '0');
+  final day = localDate.day.toString().padLeft(2, '0');
+  return '${localDate.year}-$month-$day';
+}
+
 class ProfileTimezoneException implements Exception {
   const ProfileTimezoneException(this.message);
 

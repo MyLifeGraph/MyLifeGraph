@@ -6,12 +6,14 @@ class _DurationFields extends StatelessWidget {
     required this.hours,
     required this.minutes,
     required this.label,
+    this.onChanged,
   });
 
   final String prefix;
   final TextEditingController hours;
   final TextEditingController minutes;
   final String label;
+  final VoidCallback? onChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -24,6 +26,7 @@ class _DurationFields extends StatelessWidget {
               key: ValueKey('$prefix-hours'),
               controller: hours,
               keyboardType: TextInputType.number,
+              onChanged: (_) => onChanged?.call(),
               decoration: const InputDecoration(labelText: 'Hours'),
             ),
           ),
@@ -33,6 +36,7 @@ class _DurationFields extends StatelessWidget {
               key: ValueKey('$prefix-minutes'),
               controller: minutes,
               keyboardType: TextInputType.number,
+              onChanged: (_) => onChanged?.call(),
               decoration: const InputDecoration(labelText: 'Minutes'),
             ),
           ),
@@ -296,6 +300,264 @@ class _StatusPill extends StatelessWidget {
         tone: tone,
       );
 }
+
+class _ExamPlanHealthSection extends StatelessWidget {
+  const _ExamPlanHealthSection({
+    required this.value,
+    required this.onRetry,
+    required this.onOpenPlan,
+  });
+
+  final AsyncValue<ExamPlanHealth?> value;
+  final VoidCallback onRetry;
+  final ValueChanged<String> onOpenPlan;
+
+  @override
+  Widget build(BuildContext context) => AppCard(
+        key: const ValueKey('preparation-exam-plan-health'),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Exam Plan Health',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            const Text(
+              'Capacity outlook for finishing preparation before each saved Exam buffer. This is separate from the sleep-focused Exam week outlook.',
+            ),
+            const SizedBox(height: AppSpacing.md),
+            value.when(
+              skipLoadingOnRefresh: false,
+              skipLoadingOnReload: false,
+              loading: () => const Row(
+                children: [
+                  SizedBox.square(
+                    dimension: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                  SizedBox(width: AppSpacing.sm),
+                  Expanded(child: Text('Checking current Exam capacity…')),
+                ],
+              ),
+              error: (_, __) => Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Exam Plan Health could not be loaded. This is a connection or response error, not an Unknown capacity result.',
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  OutlinedButton.icon(
+                    onPressed: onRetry,
+                    icon: const Icon(AppIcons.refresh),
+                    label: const Text('Retry Exam Plan Health'),
+                  ),
+                ],
+              ),
+              data: (health) {
+                if (health == null) return const SizedBox.shrink();
+                if (health.exams.isEmpty) {
+                  return const Text(
+                    'No active Exam plan needs a capacity calculation.',
+                  );
+                }
+                return Column(
+                  children: [
+                    for (final exam in health.exams) ...[
+                      _ExamPlanHealthItemView(
+                        exam: exam,
+                        onOpen: () => onOpenPlan(exam.planId),
+                      ),
+                      if (exam != health.exams.last)
+                        const Divider(height: AppSpacing.xl),
+                    ],
+                  ],
+                );
+              },
+            ),
+          ],
+        ),
+      );
+}
+
+class _ExamPlanHealthItemView extends StatelessWidget {
+  const _ExamPlanHealthItemView({required this.exam, required this.onOpen});
+
+  final ExamPlanHealthItem exam;
+  final VoidCallback onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final capacity = exam.availableReplanCapacityMinutes;
+    final reserve = exam.reserveMinutes;
+    return Semantics(
+      container: true,
+      label: '${exam.title}, ${_examHealthStatusLabel(exam.status)}',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Wrap(
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.sm,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              Text(exam.title, style: Theme.of(context).textTheme.titleMedium),
+              AppStatusPill(
+                label: _examHealthStatusLabel(exam.status),
+                icon: _examHealthIcon(exam.status),
+                tone: _examHealthTone(exam.status),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Wrap(
+            spacing: AppSpacing.lg,
+            runSpacing: AppSpacing.sm,
+            children: [
+              _ProgressValue(
+                label: 'Remaining',
+                value: _duration(exam.remainingMinutes),
+              ),
+              _ProgressValue(
+                label: 'Sessions needed',
+                value: '${exam.sessionsNeeded}',
+              ),
+              _ProgressValue(
+                label: 'Future reserved',
+                value: _duration(exam.futureReservedMinutes),
+              ),
+              _ProgressValue(
+                label: 'Still to place',
+                value: _duration(exam.minutesToSchedule),
+              ),
+              _ProgressValue(
+                label: 'Replan capacity',
+                value: capacity == null ? 'Unknown' : _duration(capacity),
+              ),
+              _ProgressValue(
+                label: 'Reserve',
+                value: reserve == null
+                    ? 'Unknown'
+                    : '${reserve < 0 ? '−' : ''}${_duration(reserve.abs())} · ${exam.reserveFullSessions} full sessions',
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            exam.latestSafeStartOn == null
+                ? 'Latest safe start: Unknown'
+                : 'Latest safe start: ${_healthDate(exam.latestSafeStartOn!)}',
+          ),
+          Text(
+            exam.recommendedStartOn == null
+                ? 'Recommended start unavailable: ${exam.recommendedStartReason}'
+                : 'Recommended start: ${_healthDate(exam.recommendedStartOn!)}',
+          ),
+          if (exam.reasons.isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.xs),
+            Text(exam.reasons.map(_examHealthReasonCopy).join(' · ')),
+          ],
+          const SizedBox(height: AppSpacing.sm),
+          TextButton.icon(
+            onPressed: onOpen,
+            icon: const Icon(AppIcons.openInNewOutlined),
+            label: const Text('Review preparation plan'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ExamPlanHealthPreviewView extends StatelessWidget {
+  const _ExamPlanHealthPreviewView({required this.exam});
+
+  final ExamPlanHealthItem exam;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+        container: true,
+        label:
+            'Exam Plan Health preview, ${_examHealthStatusLabel(exam.status)}',
+        child: Container(
+          key: const ValueKey('exam-plan-health-preview-result'),
+          width: double.infinity,
+          padding: const EdgeInsets.all(AppSpacing.md),
+          decoration: BoxDecoration(
+            border: Border.all(color: Theme.of(context).colorScheme.outline),
+            borderRadius: BorderRadius.circular(AppRadii.md),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              AppStatusPill(
+                label: _examHealthStatusLabel(exam.status),
+                icon: _examHealthIcon(exam.status),
+                tone: _examHealthTone(exam.status),
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              Text(
+                '${_duration(exam.remainingMinutes)} remaining · ${exam.sessionsNeeded} sessions · ${_duration(exam.minutesToSchedule)} still to place',
+              ),
+              Text(
+                exam.reserveMinutes == null
+                    ? 'Reserve: Unknown until availability is complete.'
+                    : 'Reserve: ${exam.reserveMinutes! < 0 ? '−' : ''}${_duration(exam.reserveMinutes!.abs())} · ${exam.reserveFullSessions} full sessions',
+              ),
+              Text(
+                exam.latestSafeStartOn == null
+                    ? 'Latest safe start: Unknown'
+                    : 'Latest safe start: ${_healthDate(exam.latestSafeStartOn!)}',
+              ),
+              Text(
+                exam.recommendedStartOn == null
+                    ? 'Recommended start unavailable: ${exam.recommendedStartReason}'
+                    : 'Recommended start: ${_healthDate(exam.recommendedStartOn!)}',
+              ),
+            ],
+          ),
+        ),
+      );
+}
+
+String _healthDate(String value) =>
+    DateFormat.yMMMd().format(DateTime.parse('${value}T00:00:00'));
+
+String _examHealthStatusLabel(ExamPlanHealthStatus status) => switch (status) {
+      ExamPlanHealthStatus.green => 'Healthy capacity',
+      ExamPlanHealthStatus.yellow => 'Plan soon',
+      ExamPlanHealthStatus.red => 'Capacity shortfall',
+      ExamPlanHealthStatus.unknown => 'Availability unknown',
+    };
+
+AppStatusTone _examHealthTone(ExamPlanHealthStatus status) => switch (status) {
+      ExamPlanHealthStatus.green => AppStatusTone.success,
+      ExamPlanHealthStatus.yellow => AppStatusTone.attention,
+      ExamPlanHealthStatus.red => AppStatusTone.danger,
+      ExamPlanHealthStatus.unknown => AppStatusTone.info,
+    };
+
+IconData _examHealthIcon(ExamPlanHealthStatus status) => switch (status) {
+      ExamPlanHealthStatus.green => AppIcons.checkCircleOutline,
+      ExamPlanHealthStatus.yellow => AppIcons.warningAmberOutlined,
+      ExamPlanHealthStatus.red => AppIcons.errorOutline,
+      ExamPlanHealthStatus.unknown => AppIcons.infoOutline,
+    };
+
+String _examHealthReasonCopy(String reason) => switch (reason) {
+      'overdue_remaining' => 'Exam is overdue with preparation remaining',
+      'capacity_deficit' => 'Current availability does not fit the work',
+      'low_percentage_reserve' => 'Less than 20% placeable reserve remains',
+      'low_session_reserve' => 'Fewer than two preferred sessions remain',
+      'latest_safe_start_near' => 'Latest safe start is within seven days',
+      'calendar_import_unavailable' => 'Current Calendar import is unavailable',
+      'calendar_window_incomplete' => 'Calendar import does not cover the plan',
+      'recurring_availability_invalid' =>
+        'A recurring local-time occurrence is invalid',
+      'higher_priority_capacity_unknown' =>
+        'A higher-priority Exam has unknown shared capacity',
+      _ => reason,
+    };
 
 int? _durationInput(String hoursText, String minutesText) {
   final cleanHours = hoursText.trim();

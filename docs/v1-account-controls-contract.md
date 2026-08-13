@@ -61,6 +61,13 @@ neither cache operation resends the committed account-setting mutation.
 
 ## Daily Preparation Budget
 
+The current budget is an authoritative daily cap for
+`exam-plan-health-v1`. A successful budget mutation invalidates the local
+Health projection; a timezone mutation also invalidates it because deadlines,
+Calendar coverage, latest-safe dates, and recommendations are profile-local.
+Neither account command persists Health output or triggers automatic
+rescheduling.
+
 `PATCH /v1/account/preparation-budget` accepts only
 `account-preparation-budget-update-v2`:
 

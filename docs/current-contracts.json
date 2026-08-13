@@ -339,6 +339,42 @@
       ]
     },
     {
+      "coverage": "shared_named",
+      "key": "examPlanHealth",
+      "version": "exam-plan-health-v1",
+      "sources": [
+        {
+          "path": "apps/mobile/lib/features/deadline_plans/domain/exam_plan_health.dart",
+          "symbol": "examPlanHealthContractVersion"
+        },
+        {
+          "path": "services/ai_service/app/models/exam_plan_health.py",
+          "symbol": "EXAM_PLAN_HEALTH_CONTRACT_VERSION"
+        }
+      ],
+      "owners": [
+        "apps/mobile/README.md",
+        "docs/architecture.md",
+        "docs/backend-roadmap.md",
+        "docs/current-product-guide.md",
+        "docs/deadline-planner-v1-contract.md",
+        "docs/exam-week-outlook-v1-contract.md",
+        "docs/frontend-visual-system-v2.md",
+        "docs/personal-learning-v1-contract.md",
+        "docs/phase-3-executable-actions-contract.md",
+        "docs/phase-9-calendar-import-contract.md",
+        "docs/planner-v1-contract.md",
+        "docs/stabilization-consistency-contract.md",
+        "docs/study-setup-v1-contract.md",
+        "docs/supabase-current-state.md",
+        "docs/today-overview-v1-contract.md",
+        "docs/ui-language-and-copy-contract.md",
+        "docs/v1-account-controls-contract.md",
+        "docs/verification.md",
+        "services/ai_service/README.md"
+      ]
+    },
+    {
       "coverage": "explicit",
       "key": "examWeekOutlook",
       "version": "exam-week-outlook-v1",

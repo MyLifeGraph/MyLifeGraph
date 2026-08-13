@@ -9,6 +9,7 @@ import '../../application/calendar_integration_controller.dart';
 import '../../data/calendar_integration_api_data_source.dart';
 import '../../data/calendar_integration_repository_impl.dart';
 import '../../domain/calendar_integration_repository.dart';
+import '../../../../composition/projection_refresh_providers.dart';
 
 final calendarIntegrationApiDataSourceProvider =
     Provider<CalendarIntegrationApiDataSource>(
@@ -42,5 +43,7 @@ final calendarIntegrationControllerProvider = StateNotifierProvider.autoDispose<
   return CalendarIntegrationController(
     repository: ref.watch(calendarIntegrationRepositoryProvider),
     filePicker: ref.watch(calendarIcsFilePickerProvider),
+    planningSourcesChanged:
+        ref.watch(projectionRefreshCoordinatorProvider).calendarPlanningChanged,
   );
 });

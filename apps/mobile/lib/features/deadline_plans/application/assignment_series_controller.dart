@@ -9,6 +9,8 @@ enum AssignmentSeriesOperation { idle, proposing, confirming, cancelling }
 
 enum AssignmentSeriesMutationKind { proposal, confirm, cancelFuture }
 
+typedef AssignmentSeriesProjectionRefresh = Future<void> Function();
+
 class AssignmentSeriesPendingMutation {
   const AssignmentSeriesPendingMutation._({
     required this.kind,
@@ -113,13 +115,17 @@ class AssignmentSeriesState {
 }
 
 class AssignmentSeriesController extends StateNotifier<AssignmentSeriesState> {
-  AssignmentSeriesController({required AssignmentSeriesRepository repository})
-      : _repository = repository,
+  AssignmentSeriesController({
+    required AssignmentSeriesRepository repository,
+    required AssignmentSeriesProjectionRefresh projectionRefresh,
+  })  : _projectionRefresh = projectionRefresh,
+        _repository = repository,
         super(AssignmentSeriesState.loading()) {
     Future<void>.microtask(load);
   }
 
   final AssignmentSeriesRepository _repository;
+  final AssignmentSeriesProjectionRefresh _projectionRefresh;
 
   Future<void> load() async {
     if (state.isBusy) return;
@@ -215,6 +221,14 @@ class AssignmentSeriesController extends StateNotifier<AssignmentSeriesState> {
           ),
       };
       _recordSuccess(await saved);
+      if (pending.kind != AssignmentSeriesMutationKind.proposal) {
+        try {
+          await _projectionRefresh();
+        } catch (_) {
+          // The series lifecycle write is durable. Refresh remains best effort
+          // and must not turn a proven success into an exact retry.
+        }
+      }
       return true;
     } catch (error) {
       final exact = deadlinePlanMutationRequiresExactRetry(error);

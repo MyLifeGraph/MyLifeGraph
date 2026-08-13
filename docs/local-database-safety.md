@@ -213,6 +213,14 @@ invocation.
 
 ## Physically Isolated Postgres Targets
 
+The Exam Plan Health additive migration uses
+`scripts/lib/exam_plan_health_migration_harness.sh` as a feature-specific
+full-chain proof. It must preserve the same RAM-only/container-label target
+checks as the general transition harness, run its pgTAP file only inside that
+target, trap-clean the container, and prove the normal local migration history
+is byte-identical before and after. Passing this harness is not authority to
+apply `exam-plan-health-v1` or any pending migration to the normal local stack.
+
 The shared isolation helper deliberately does not create a second database in
 `supabase_db_mylifegraph`. It starts a separate Docker container with:
 

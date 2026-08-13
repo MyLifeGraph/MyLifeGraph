@@ -8,7 +8,9 @@ import '../../../../core/theme/app_category_visuals.dart';
 import '../../../../core/theme/app_icons.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_schedule_day_card.dart';
+import '../../../../core/widgets/app_surface.dart';
 import '../../../deadline_plans/domain/exam_week_outlook.dart';
+import '../../../deadline_plans/domain/exam_plan_health.dart';
 import '../../domain/planner.dart';
 
 class PlannerLockedCard extends StatelessWidget {
@@ -604,63 +606,168 @@ class PlannerNeedsAttentionSection extends StatelessWidget {
   const PlannerNeedsAttentionSection({
     super.key,
     required this.items,
+    required this.examPlanHealth,
     required this.onOpen,
+    required this.onOpenExamHealth,
+    required this.onRetryExamHealth,
     this.enabled = true,
   });
 
   final List<PlannerAttention> items;
+  final AsyncValue<ExamPlanHealth?> examPlanHealth;
   final ValueChanged<PlannerAttention> onOpen;
+  final ValueChanged<String> onOpenExamHealth;
+  final VoidCallback onRetryExamHealth;
   final bool enabled;
 
   @override
-  Widget build(BuildContext context) => AppCard(
-        key: const ValueKey('planner-needs-attention'),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Needs attention',
-              style: Theme.of(context).textTheme.titleLarge,
+  Widget build(BuildContext context) {
+    final healthLoading = examPlanHealth.isLoading;
+    final healthError = !healthLoading && examPlanHealth.hasError;
+    final healthItems = healthLoading || healthError
+        ? const <ExamPlanHealthItem>[]
+        : examPlanHealth.valueOrNull?.needsAttention ??
+            const <ExamPlanHealthItem>[];
+    final showEmpty = items.isEmpty &&
+        healthItems.isEmpty &&
+        !healthLoading &&
+        examPlanHealth.hasValue &&
+        !healthError;
+    return AppCard(
+      key: const ValueKey('planner-needs-attention'),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Needs attention',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          if (showEmpty)
+            const Row(
+              children: [
+                Icon(AppIcons.checkCircleOutline),
+                SizedBox(width: AppSpacing.sm),
+                Expanded(child: Text('Nothing currently needs review.')),
+              ],
             ),
-            const SizedBox(height: AppSpacing.sm),
-            if (items.isEmpty)
-              const Row(
+          for (final item in items)
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: Icon(
+                item.kind == 'stale_preview'
+                    ? AppIcons.updateOutlined
+                    : item.kind == 'unscheduled'
+                        ? AppIcons.timerOffOutlined
+                        : AppIcons.warningAmberOutlined,
+                color: Theme.of(context).colorScheme.error,
+              ),
+              title: Text(item.title),
+              subtitle: Text(item.detail),
+              trailing: item.planId == null
+                  ? (item.target == 'study_setup'
+                      ? const Icon(AppIcons.chevronRight)
+                      : item.unplacedMinutes > 0
+                          ? Text('${item.unplacedMinutes} min')
+                          : null)
+                  : const Icon(AppIcons.chevronRight),
+              onTap: !enabled ||
+                      item.planId == null && item.target != 'study_setup'
+                  ? null
+                  : () => onOpen(item),
+            ),
+          if (healthLoading)
+            const ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: SizedBox.square(
+                dimension: 20,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+              title: Text('Checking Exam capacity…'),
+            )
+          else if (healthError)
+            ListTile(
+              key: const ValueKey('planner-exam-health-transport-error'),
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(AppIcons.syncProblemOutlined),
+              title: const Text('Exam Plan Health unavailable'),
+              subtitle: const Text(
+                'This is a connection or response error, not an Unknown capacity result.',
+              ),
+              trailing: IconButton(
+                tooltip: 'Retry Exam Plan Health',
+                onPressed: onRetryExamHealth,
+                icon: const Icon(AppIcons.refresh),
+              ),
+            ),
+          for (final exam in healthItems)
+            ListTile(
+              key: ValueKey('planner-exam-health-${exam.planId}'),
+              contentPadding: EdgeInsets.zero,
+              leading: Icon(
+                _plannerExamHealthIcon(exam.status),
+                color: _plannerExamHealthColor(context, exam.status),
+              ),
+              title: Wrap(
+                spacing: AppSpacing.sm,
+                runSpacing: AppSpacing.xs,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
-                  Icon(AppIcons.checkCircleOutline),
-                  SizedBox(width: AppSpacing.sm),
-                  Expanded(child: Text('Nothing currently needs review.')),
-                ],
-              )
-            else
-              for (final item in items)
-                ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: Icon(
-                    item.kind == 'stale_preview'
-                        ? AppIcons.updateOutlined
-                        : item.kind == 'unscheduled'
-                            ? AppIcons.timerOffOutlined
-                            : AppIcons.warningAmberOutlined,
-                    color: Theme.of(context).colorScheme.error,
+                  Text(exam.title),
+                  AppStatusPill(
+                    label: _plannerExamHealthLabel(exam.status),
+                    icon: _plannerExamHealthIcon(exam.status),
+                    tone: _plannerExamHealthTone(exam.status),
                   ),
-                  title: Text(item.title),
-                  subtitle: Text(item.detail),
-                  trailing: item.planId == null
-                      ? (item.target == 'study_setup'
-                          ? const Icon(AppIcons.chevronRight)
-                          : item.unplacedMinutes > 0
-                              ? Text('${item.unplacedMinutes} min')
-                              : null)
-                      : const Icon(AppIcons.chevronRight),
-                  onTap: !enabled ||
-                          item.planId == null && item.target != 'study_setup'
-                      ? null
-                      : () => onOpen(item),
-                ),
-          ],
-        ),
-      );
+                ],
+              ),
+              subtitle: Text(
+                '${_plannerExamHealthLabel(exam.status)} · '
+                '${exam.minutesToSchedule} min still to place · '
+                '${exam.reserveMinutes == null ? 'reserve unknown' : '${exam.reserveMinutes} min reserve'}',
+              ),
+              trailing: const Icon(AppIcons.chevronRight),
+              onTap: enabled ? () => onOpenExamHealth(exam.planId) : null,
+            ),
+        ],
+      ),
+    );
+  }
 }
+
+String _plannerExamHealthLabel(ExamPlanHealthStatus status) => switch (status) {
+      ExamPlanHealthStatus.green => 'Healthy capacity',
+      ExamPlanHealthStatus.yellow => 'Plan soon',
+      ExamPlanHealthStatus.red => 'Capacity shortfall',
+      ExamPlanHealthStatus.unknown => 'Availability unknown',
+    };
+
+AppStatusTone _plannerExamHealthTone(ExamPlanHealthStatus status) =>
+    switch (status) {
+      ExamPlanHealthStatus.green => AppStatusTone.success,
+      ExamPlanHealthStatus.yellow => AppStatusTone.attention,
+      ExamPlanHealthStatus.red => AppStatusTone.danger,
+      ExamPlanHealthStatus.unknown => AppStatusTone.info,
+    };
+
+IconData _plannerExamHealthIcon(ExamPlanHealthStatus status) =>
+    switch (status) {
+      ExamPlanHealthStatus.green => AppIcons.checkCircleOutline,
+      ExamPlanHealthStatus.yellow => AppIcons.warningAmberOutlined,
+      ExamPlanHealthStatus.red => AppIcons.errorOutline,
+      ExamPlanHealthStatus.unknown => AppIcons.infoOutline,
+    };
+
+Color _plannerExamHealthColor(
+  BuildContext context,
+  ExamPlanHealthStatus status,
+) =>
+    switch (status) {
+      ExamPlanHealthStatus.green => Theme.of(context).colorScheme.primary,
+      ExamPlanHealthStatus.yellow => Theme.of(context).colorScheme.tertiary,
+      ExamPlanHealthStatus.red => Theme.of(context).colorScheme.error,
+      ExamPlanHealthStatus.unknown => Theme.of(context).colorScheme.secondary,
+    };
 
 class PlannerSevenDaySection extends StatelessWidget {
   const PlannerSevenDaySection({

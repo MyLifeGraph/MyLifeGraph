@@ -982,6 +982,18 @@ allowlist entry described above.
 
 ## Supabase
 
+The additive `exam-plan-health-v1` snapshot migration has a dedicated
+physically isolated check:
+
+```bash
+scripts/lib/exam_plan_health_migration_harness.sh
+```
+
+It applies the full chain only to a labeled RAM-only Postgres container, runs
+the feature pgTAP contract, and verifies normal local migration history did not
+change. It does not replace `scripts/verify_supabase_local.sh`, does not apply
+to the normal database, and conveys no remote-state claim.
+
 Supabase is optional for mock mode. To work on local Supabase you need the real
 Supabase CLI and Docker available in the Ubuntu shell.
 

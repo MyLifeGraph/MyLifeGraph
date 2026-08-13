@@ -36,6 +36,44 @@ void main() {
     );
   });
 
+  test('only confirmed import disconnect and delete refresh planning',
+      () async {
+    final repository = _FakeCalendarRepository(_emptyFeed());
+    var refreshes = 0;
+    final controller = CalendarIntegrationController(
+      repository: repository,
+      filePicker: _FakeCalendarPicker(
+        SelectedCalendarIcsFile.fromBytes(
+          name: 'study.ics',
+          bytes: 'BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n'.codeUnits,
+        ),
+      ),
+      planningSourcesChanged: () async {
+        refreshes += 1;
+        if (refreshes == 1) throw StateError('refresh failed');
+      },
+    );
+    addTearDown(controller.dispose);
+    await Future<void>.delayed(Duration.zero);
+
+    controller.updateSourceLabel('Study');
+    controller.setConsentAccepted(true);
+    await controller.createConnection();
+    expect(refreshes, 0);
+
+    await controller.selectFile();
+    expect(refreshes, 0);
+    await controller.importSelectedFile();
+    expect(refreshes, 1);
+    expect(controller.state.operationError, isNull);
+
+    await controller.disconnect();
+    expect(refreshes, 2);
+    await controller.deleteImportedData();
+    expect(refreshes, 3);
+    expect(controller.state.operationError, isNull);
+  });
+
   testWidgets('local demo is honest and exposes no import controls',
       (tester) async {
     final repository = _FakeCalendarRepository(

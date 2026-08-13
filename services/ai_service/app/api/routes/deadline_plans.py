@@ -24,6 +24,11 @@ from app.models.deadline_plans import (
     PreparationWorkloadDetailResponse,
     PreparationWorkloadResponse,
 )
+from app.models.exam_plan_health import (
+    ExamPlanHealthPreviewRequest,
+    ExamPlanHealthPreviewResponse,
+    ExamPlanHealthResponse,
+)
 from app.models.assignment_series import (
     AssignmentSeriesListResponse,
     AssignmentSeriesMutationRequest,
@@ -62,6 +67,40 @@ async def get_exam_week_outlook(
     try:
         return await service.get_exam_week_outlook(user_id=principal.user_id)
     except DEADLINE_PLAN_READ_ERRORS as exc:
+        raise deadline_plan_problem(exc) from exc
+
+
+@router.get(
+    "/exam-plan-health",
+    response_model=ExamPlanHealthResponse,
+    response_model_exclude_none=False,
+)
+async def get_exam_plan_health(
+    principal: Principal = Depends(get_current_principal),
+    service: DeadlinePlanService = Depends(get_deadline_plan_service),
+) -> ExamPlanHealthResponse:
+    try:
+        return await service.get_exam_plan_health(user_id=principal.user_id)
+    except DEADLINE_PLAN_READ_ERRORS as exc:
+        raise deadline_plan_problem(exc) from exc
+
+
+@router.post(
+    "/exam-plan-health/preview",
+    response_model=ExamPlanHealthPreviewResponse,
+    response_model_exclude_none=False,
+)
+async def preview_exam_plan_health(
+    request: ExamPlanHealthPreviewRequest,
+    principal: Principal = Depends(get_current_principal),
+    service: DeadlinePlanService = Depends(get_deadline_plan_service),
+) -> ExamPlanHealthPreviewResponse:
+    try:
+        return await service.preview_exam_plan_health(
+            user_id=principal.user_id,
+            request=request,
+        )
+    except DEADLINE_PLAN_DETAIL_ERRORS as exc:
         raise deadline_plan_problem(exc) from exc
 
 

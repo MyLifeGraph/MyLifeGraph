@@ -297,6 +297,12 @@ are inconsistent. It has no apply or automation control.
 
 ## Optional Planner use
 
+Exam Plan Health is deliberately deterministic rather than learned.
+`exam-plan-health-v1` consumes current authoritative availability and Study
+rhythm but does not read reflection ratings, personal-pattern confidence, or
+LLM advice, and it writes no learning evidence. Personal Learning therefore
+cannot turn unknown capacity green or silently alter the recommended start.
+
 Learned timing has two independent gates:
 
 1. the account preference `learned_focus_planning_enabled`; and

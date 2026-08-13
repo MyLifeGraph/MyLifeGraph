@@ -309,6 +309,13 @@ metadata key: `/preparation-plans` is a deliberate product surface governed by
 
 ## Refresh And Failure Semantics
 
+Completed Focus actual minutes and active future reservations are distinct
+inputs to `exam-plan-health-v1`: actual minutes are credited exactly once from
+the completed session, while future block minutes only reduce uncovered work.
+Task, Habit, fixed-commitment, and Setup schedule mutations invalidate Health
+because they consume shared availability. No Focus command writes a Health
+status, sends an alert, or automatically replans after a miss.
+
 - A successful or exactly reconciled real task, habit, or focus write triggers
   daily snapshot refresh best-effort.
 - Flutter routes the downstream read-cache impact through one typed app

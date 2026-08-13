@@ -11,16 +11,25 @@ import '../features/deadline_plans/data/assignment_series_repository_impl.dart';
 import '../features/deadline_plans/data/deadline_calendar_prefill_data_source.dart';
 import '../features/deadline_plans/data/deadline_plan_api_data_source.dart';
 import '../features/deadline_plans/data/deadline_plan_repository_impl.dart';
+import '../features/deadline_plans/data/exam_plan_health_api_data_source.dart';
+import '../features/deadline_plans/data/exam_plan_health_repository_impl.dart';
 import '../features/deadline_plans/domain/deadline_calendar_prefill.dart';
 import '../features/deadline_plans/domain/assignment_series_repository.dart';
 import '../features/deadline_plans/domain/deadline_plan.dart';
 import '../features/deadline_plans/domain/deadline_plan_repository.dart';
 import '../features/deadline_plans/domain/exam_week_outlook.dart';
+import '../features/deadline_plans/domain/exam_plan_health.dart';
+import '../features/deadline_plans/domain/exam_plan_health_repository.dart';
 import 'profile_local_date_providers.dart';
 import 'projection_refresh_providers.dart';
 
 final deadlinePlanApiDataSourceProvider = Provider<DeadlinePlanApiDataSource>(
   (ref) => DeadlinePlanApiDataSource(ref.watch(apiClientProvider)),
+);
+
+final examPlanHealthApiDataSourceProvider =
+    Provider<ExamPlanHealthApiDataSource>(
+  (ref) => ExamPlanHealthApiDataSource(ref.watch(apiClientProvider)),
 );
 
 final assignmentSeriesApiDataSourceProvider =
@@ -39,6 +48,17 @@ final deadlinePlanRepositoryProvider = Provider<DeadlinePlanRepository>((ref) {
   return DeadlinePlanRepositoryImpl(
     config: ref.watch(appConfigProvider),
     apiDataSource: ref.watch(deadlinePlanApiDataSourceProvider),
+    accessTokenProvider: ref.watch(deadlinePlanAccessTokenProvider),
+    canUseSyncedPlanner: capabilities.canUseDeadlinePlanner,
+  );
+});
+
+final examPlanHealthRepositoryProvider =
+    Provider<ExamPlanHealthRepository>((ref) {
+  final capabilities = ref.watch(appSurfaceCapabilitiesProvider);
+  return ExamPlanHealthRepositoryImpl(
+    config: ref.watch(appConfigProvider),
+    apiDataSource: ref.watch(examPlanHealthApiDataSourceProvider),
     accessTokenProvider: ref.watch(deadlinePlanAccessTokenProvider),
     canUseSyncedPlanner: capabilities.canUseDeadlinePlanner,
   );
@@ -86,6 +106,13 @@ final examWeekOutlookProvider =
       .getExamWeekOutlook(accessToken: token);
 });
 
+final examPlanHealthProvider =
+    FutureProvider.autoDispose<ExamPlanHealth?>((ref) async {
+  final capabilities = ref.watch(appSurfaceCapabilitiesProvider);
+  if (!capabilities.canUseDeadlinePlanner) return null;
+  return ref.watch(examPlanHealthRepositoryProvider).getHealth();
+});
+
 final deadlineCalendarPrefillProvider = FutureProvider.autoDispose
     .family<DeadlineCalendarPrefill, String>((ref, eventId) async {
   final capabilities = ref.watch(appSurfaceCapabilitiesProvider);
@@ -113,7 +140,12 @@ final deadlinePlanControllerProvider = StateNotifierProvider.autoDispose<
 
 final assignmentSeriesControllerProvider = StateNotifierProvider.autoDispose<
     AssignmentSeriesController, AssignmentSeriesState>((ref) {
+  final projectionRefresh = ref.watch(projectionRefreshCoordinatorProvider);
+  final profileLocalDate = ref.watch(profileLocalDateSourceProvider);
   return AssignmentSeriesController(
     repository: ref.watch(assignmentSeriesRepositoryProvider),
+    projectionRefresh: () => projectionRefresh.deadlinePlanChanged(
+      targetDate: profileLocalDate.todayKey(),
+    ),
   );
 });

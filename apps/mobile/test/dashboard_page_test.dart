@@ -12,6 +12,7 @@ import 'package:my_life_graph/features/dashboard/domain/entities/dashboard_full_
 import 'package:my_life_graph/features/dashboard/domain/repositories/dashboard_repository.dart';
 import 'package:my_life_graph/features/dashboard/presentation/pages/dashboard_page.dart';
 import 'package:my_life_graph/composition/dashboard_providers.dart';
+import 'package:my_life_graph/composition/deadline_plan_providers.dart';
 import 'package:my_life_graph/features/optimization/domain/entities/recommendation.dart';
 import 'package:my_life_graph/features/optimization/domain/entities/recommendation_feed.dart';
 import 'package:my_life_graph/composition/optimization_providers.dart';
@@ -19,6 +20,26 @@ import 'package:my_life_graph/features/quick_action/domain/habit_v1.dart';
 import 'package:my_life_graph/features/tasks/domain/executable_task.dart';
 
 void main() {
+  testWidgets('guest Today makes zero Exam Plan Health reads', (tester) async {
+    var healthReads = 0;
+    await _pumpDashboard(
+      tester,
+      snapshot: DashboardSnapshot.empty(
+        origin: DashboardOrigin.localDemo,
+        loadedAt: DateTime(2026, 7, 21, 10),
+      ),
+      capabilities: const AppSurfaceCapabilities(
+        isLocalDemo: true,
+        canUseSyncedHabits: false,
+        canUseDeadlinePlanner: true,
+      ),
+      onHealthLoad: () => healthReads += 1,
+    );
+
+    expect(healthReads, 0);
+    expect(find.byKey(const ValueKey('today-exam-plan-health')), findsNothing);
+  });
+
   testWidgets('Today uses streak, progress, agenda, tasks, and habits order',
       (tester) async {
     await _pumpDashboard(
@@ -530,6 +551,7 @@ Future<void> _pumpDashboard(
   VoidCallback? onRecommendationsLoad,
   VoidCallback? onFeedbackLoad,
   VoidCallback? onFullWeekLoad,
+  VoidCallback? onHealthLoad,
   AppSurfaceCapabilities capabilities = const AppSurfaceCapabilities(
     isLocalDemo: false,
     canUseSyncedHabits: true,
@@ -554,6 +576,10 @@ Future<void> _pumpDashboard(
           const SessionProfileLocalDateSource(session: null),
         ),
         dashboardSnapshotProvider.overrideWith((ref) => value),
+        examPlanHealthProvider.overrideWith((ref) async {
+          onHealthLoad?.call();
+          return null;
+        }),
         dashboardLatestCheckInProvider(displayedDate).overrideWith(
           (ref) => Future.value(latestCheckIn),
         ),

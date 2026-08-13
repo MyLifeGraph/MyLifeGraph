@@ -64,7 +64,36 @@ class DeadlinePlanProjection:
     focus_facts: list[dict[str, Any]] = field(default_factory=list)
 
 
+@dataclass(frozen=True)
+class ExamPlanHealthSnapshot:
+    generated_at: datetime
+    local_today: date
+    horizon_ends_before: date
+    profile: dict[str, Any]
+    best_energy_window: str
+    study_setup: dict[str, Any] | None
+    planner_preference: dict[str, Any]
+    exams: list[dict[str, Any]]
+    focus_totals: list[dict[str, Any]]
+    focus_facts: list[dict[str, Any]]
+    deadline_blocks: list[dict[str, Any]]
+    schedule_items: list[dict[str, Any]]
+    planner_task_blocks: list[dict[str, Any]]
+    planner_habit_slots: list[dict[str, Any]]
+    planner_commitments: list[dict[str, Any]]
+    calendar_import: dict[str, Any] | None
+    calendar_timed_events: list[dict[str, Any]]
+    calendar_all_day_events: list[dict[str, Any]]
+
+
 class DeadlinePlanRepository(Protocol):
+    async def load_exam_plan_health_snapshot(
+        self,
+        *,
+        user_id: str,
+        generated_at: datetime,
+    ) -> ExamPlanHealthSnapshot: ...
+
     async def get_request_identity(
         self,
         *,
@@ -235,6 +264,21 @@ class SupabaseDeadlinePlanRepository:
             params=params,
         )
         return _parse_projection(result)
+
+    async def load_exam_plan_health_snapshot(
+        self,
+        *,
+        user_id: str,
+        generated_at: datetime,
+    ) -> ExamPlanHealthSnapshot:
+        result = await self._client.rpc(
+            "get_exam_plan_health_snapshot_v1",
+            params={
+                "p_user_id": user_id,
+                "p_generated_at": generated_at.isoformat(),
+            },
+        )
+        return _parse_exam_plan_health_snapshot(result)
 
     async def get_plan(
         self,
@@ -951,3 +995,121 @@ def _parse_projection(result: object) -> DeadlinePlanProjection:
         focus_facts=parsed["focus_facts"],
         calendar_events=events,
     )
+
+
+_EXAM_HEALTH_SNAPSHOT_ARRAYS = (
+    "exams",
+    "focus_totals",
+    "focus_facts",
+    "deadline_blocks",
+    "schedule_items",
+    "planner_task_blocks",
+    "planner_habit_slots",
+    "planner_commitments",
+    "calendar_timed_events",
+    "calendar_all_day_events",
+)
+_EXAM_HEALTH_SNAPSHOT_KEYS = {
+    "contract_version",
+    "generated_at",
+    "local_today",
+    "horizon_ends_before",
+    "profile",
+    "best_energy_window",
+    "study_setup",
+    "planner_preference",
+    "calendar_import",
+    *_EXAM_HEALTH_SNAPSHOT_ARRAYS,
+}
+
+
+def _parse_exam_plan_health_snapshot(result: object) -> ExamPlanHealthSnapshot:
+    if not isinstance(result, dict) or set(result) != _EXAM_HEALTH_SNAPSHOT_KEYS:
+        raise ValueError("Exam health snapshot RPC returned an invalid object.")
+    if result.get("contract_version") != "exam-plan-health-snapshot-v1":
+        raise ValueError("Exam health snapshot contract version is invalid.")
+    generated_at = _snapshot_datetime(result.get("generated_at"), "generated_at")
+    local_today = _snapshot_date(result.get("local_today"), "local_today")
+    horizon = _snapshot_date(
+        result.get("horizon_ends_before"),
+        "horizon_ends_before",
+    )
+    if (horizon - local_today).days != 367:
+        raise ValueError("Exam health snapshot horizon is inconsistent.")
+    profile = result.get("profile")
+    preference = result.get("planner_preference")
+    setup = result.get("study_setup")
+    calendar_import = result.get("calendar_import")
+    energy = result.get("best_energy_window")
+    if not isinstance(profile, dict) or not isinstance(preference, dict):
+        raise ValueError("Exam health snapshot authorities are invalid.")
+    if setup is not None and not isinstance(setup, dict):
+        raise ValueError("Exam health Study Setup snapshot is invalid.")
+    if calendar_import is not None and not isinstance(calendar_import, dict):
+        raise ValueError("Exam health Calendar snapshot is invalid.")
+    if energy not in {
+        "early_morning",
+        "morning",
+        "afternoon",
+        "evening",
+        "variable",
+    }:
+        raise ValueError("Exam health energy window is invalid.")
+    arrays: dict[str, list[dict[str, Any]]] = {}
+    for name in _EXAM_HEALTH_SNAPSHOT_ARRAYS:
+        rows = result.get(name)
+        if not isinstance(rows, list) or any(not isinstance(row, dict) for row in rows):
+            raise ValueError(f"Exam health snapshot {name} are invalid.")
+        arrays[name] = [dict(row) for row in rows]
+    plan_ids = [str(row.get("id")) for row in arrays["exams"]]
+    if any(value == "None" for value in plan_ids) or len(plan_ids) != len(
+        set(plan_ids),
+    ):
+        raise ValueError("Exam health snapshot contains duplicate exams.")
+    focus_ids = [str(row.get("plan_id")) for row in arrays["focus_totals"]]
+    if set(focus_ids) != set(plan_ids) or len(focus_ids) != len(set(focus_ids)):
+        raise ValueError("Exam health snapshot focus totals are inconsistent.")
+    fact_plan_ids = {str(row.get("plan_id")) for row in arrays["focus_facts"]}
+    if not fact_plan_ids.issubset(set(plan_ids)):
+        raise ValueError("Exam health snapshot Focus facts are inconsistent.")
+    return ExamPlanHealthSnapshot(
+        generated_at=generated_at,
+        local_today=local_today,
+        horizon_ends_before=horizon,
+        profile=dict(profile),
+        best_energy_window=energy,
+        study_setup=dict(setup) if setup is not None else None,
+        planner_preference=dict(preference),
+        exams=arrays["exams"],
+        focus_totals=arrays["focus_totals"],
+        focus_facts=arrays["focus_facts"],
+        deadline_blocks=arrays["deadline_blocks"],
+        schedule_items=arrays["schedule_items"],
+        planner_task_blocks=arrays["planner_task_blocks"],
+        planner_habit_slots=arrays["planner_habit_slots"],
+        planner_commitments=arrays["planner_commitments"],
+        calendar_import=dict(calendar_import) if calendar_import is not None else None,
+        calendar_timed_events=arrays["calendar_timed_events"],
+        calendar_all_day_events=arrays["calendar_all_day_events"],
+    )
+
+
+def _snapshot_datetime(value: object, field: str) -> datetime:
+    if not isinstance(value, str):
+        raise ValueError(f"Exam health snapshot {field} is invalid.")
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise ValueError(f"Exam health snapshot {field} is invalid.") from exc
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        raise ValueError(f"Exam health snapshot {field} must be aware.")
+    return parsed
+
+
+def _snapshot_date(value: object, field: str) -> date:
+    if not isinstance(value, str):
+        raise ValueError(f"Exam health snapshot {field} is invalid.")
+    try:
+        return date.fromisoformat(value)
+    except ValueError as exc:
+        raise ValueError(f"Exam health snapshot {field} is invalid.") from exc

@@ -398,6 +398,26 @@ destination rather than restoring Settings; Settings-owned routes such as
   and daily cap)
 - `/settings/integrations/calendar` (optional authenticated `.ics` import)
 
+Preparation owns the complete `exam-plan-health-v1` display: all active Exams,
+all four icon/text status pills, remaining/session/reserved/uncovered/capacity/
+reserve values, and recommended/latest-safe starts. The Exam editor's
+`Check Exam Plan Health` action posts the exact current values without saving;
+new editors and saved unconfirmed drafts omit persistence identity, while only
+an active-plan editor sends its plan and base revision for backend
+ownership/current-revision validation. Any editor change invalidates an
+in-flight result by generation. Preparation renders this projection
+independently of the legacy plan feed's loading/error state and uses the
+owner-scoped detail read when a Health action or Planner/Today deep link targets
+a plan outside that feed. Planner and Today reuse the guarded provider only for
+non-green attention. Today additionally requires an account-origin projection
+before watching it. Guest/mock returns before an authenticated repository call,
+and transport errors are rendered separately from `Availability unknown`.
+Refresh loading/error remains visible even when Riverpod retains older green
+or empty Health data. Planner uses the shared wrapping status pill and does not
+show its combined calm state while Health is refreshing. Confirming or
+cancelling an Assignment Series, including an exact retry, invalidates Health
+and the other Deadline-owned projections only after proven success.
+
 Student-facing category treatment is shared between Today and Planner: Task
 and Setup use brand, Habit and Preparation use information, Calendar uses
 attention, Focus uses violet, and fixed commitments use danger. Preparation

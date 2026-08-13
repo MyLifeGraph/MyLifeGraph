@@ -478,6 +478,14 @@ no Task, Today item, Calendar row, or Notification.
 
 ## Exam-Week Outlook
 
+Planner `Needs attention` also consumes `exam-plan-health-v1`, but only after
+the independent Health read succeeds. It includes yellow, red, and unknown
+Exams and excludes green Exams. `Nothing currently needs review.` is valid only
+when both Planner attention and Health attention are confirmed empty; Health
+loading and transport failure have their own rows. Selecting a Health row opens
+the corresponding Preparation plan and never replans it. The existing
+Exam-Week Outlook card remains a separate sleep-oriented projection.
+
 Planner also owns presentation of the separate read-only
 `exam-week-outlook-v1` response. The card is placed after `Add new` and before
 ordinary `Needs attention`; it is absent when `mode=inactive`. Only an active

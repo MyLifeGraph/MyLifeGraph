@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../core/constants/app_spacing.dart';
 import '../../../../core/theme/app_icons.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_info_disclosure.dart';
 import '../../../../core/widgets/app_surface.dart';
+import '../../../deadline_plans/domain/exam_plan_health.dart';
 
 typedef TodayInfoHeaderBuilder = Widget Function(
   BuildContext context,
@@ -41,6 +43,140 @@ class TodayInfoDisclosure extends StatelessWidget {
     );
   }
 }
+
+class TodayExamPlanHealthSection extends StatelessWidget {
+  const TodayExamPlanHealthSection({
+    super.key,
+    required this.value,
+    required this.onRetry,
+    required this.onOpenPlan,
+  });
+
+  final AsyncValue<ExamPlanHealth?> value;
+  final VoidCallback onRetry;
+  final ValueChanged<String> onOpenPlan;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!value.isLoading &&
+        !value.hasError &&
+        value.hasValue &&
+        (value.valueOrNull == null ||
+            value.valueOrNull!.needsAttention.isEmpty)) {
+      return const SizedBox.shrink();
+    }
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpacing.xl),
+      child: AppCard(
+        key: const ValueKey('today-exam-plan-health'),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const DashboardSectionTitle(
+              title: 'Exam Plan Health',
+              subtitle:
+                  'Capacity warnings for active Exams. This does not replace the sleep-focused Exam week outlook and never replans automatically.',
+            ),
+            const SizedBox(height: AppSpacing.md),
+            if (value.isLoading)
+              const Row(
+                children: [
+                  SizedBox.square(
+                    dimension: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                  SizedBox(width: AppSpacing.sm),
+                  Expanded(child: Text('Checking current Exam capacity…')),
+                ],
+              )
+            else if (value.hasError)
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Exam Plan Health could not be loaded. This transport error is not an Unknown capacity result.',
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  OutlinedButton.icon(
+                    onPressed: onRetry,
+                    icon: const Icon(AppIcons.refresh),
+                    label: const Text('Retry Exam Plan Health'),
+                  ),
+                ],
+              )
+            else
+              Column(
+                children: [
+                  for (final exam in value.valueOrNull?.needsAttention ??
+                      const <ExamPlanHealthItem>[]) ...[
+                    ListTile(
+                      key: ValueKey('today-exam-health-${exam.planId}'),
+                      contentPadding: EdgeInsets.zero,
+                      leading: Icon(
+                        _todayHealthIcon(exam.status),
+                        color: _todayHealthColor(context, exam.status),
+                      ),
+                      title: Wrap(
+                        spacing: AppSpacing.sm,
+                        runSpacing: AppSpacing.xs,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          Text(exam.title),
+                          AppStatusPill(
+                            label: _todayHealthLabel(exam.status),
+                            icon: _todayHealthIcon(exam.status),
+                            tone: _todayHealthTone(exam.status),
+                          ),
+                        ],
+                      ),
+                      subtitle: Text(
+                        '${exam.remainingMinutes} min remaining · '
+                        '${exam.minutesToSchedule} min still to place · '
+                        '${exam.reserveMinutes == null ? 'reserve unknown' : '${exam.reserveMinutes} min reserve'}',
+                      ),
+                      trailing: const Icon(AppIcons.chevronRight),
+                      onTap: () => onOpenPlan(exam.planId),
+                    ),
+                    if (exam != value.valueOrNull!.needsAttention.last)
+                      const Divider(height: AppSpacing.lg),
+                  ],
+                ],
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+String _todayHealthLabel(ExamPlanHealthStatus status) => switch (status) {
+      ExamPlanHealthStatus.green => 'Healthy capacity',
+      ExamPlanHealthStatus.yellow => 'Plan soon',
+      ExamPlanHealthStatus.red => 'Capacity shortfall',
+      ExamPlanHealthStatus.unknown => 'Availability unknown',
+    };
+
+IconData _todayHealthIcon(ExamPlanHealthStatus status) => switch (status) {
+      ExamPlanHealthStatus.green => AppIcons.checkCircleOutline,
+      ExamPlanHealthStatus.yellow => AppIcons.warningAmberOutlined,
+      ExamPlanHealthStatus.red => AppIcons.errorOutline,
+      ExamPlanHealthStatus.unknown => AppIcons.infoOutline,
+    };
+
+AppStatusTone _todayHealthTone(ExamPlanHealthStatus status) => switch (status) {
+      ExamPlanHealthStatus.green => AppStatusTone.success,
+      ExamPlanHealthStatus.yellow => AppStatusTone.attention,
+      ExamPlanHealthStatus.red => AppStatusTone.danger,
+      ExamPlanHealthStatus.unknown => AppStatusTone.info,
+    };
+
+Color _todayHealthColor(BuildContext context, ExamPlanHealthStatus status) =>
+    switch (status) {
+      ExamPlanHealthStatus.green => Theme.of(context).colorScheme.primary,
+      ExamPlanHealthStatus.yellow => Theme.of(context).colorScheme.tertiary,
+      ExamPlanHealthStatus.red => Theme.of(context).colorScheme.error,
+      ExamPlanHealthStatus.unknown => Theme.of(context).colorScheme.secondary,
+    };
 
 /// Presentation primitives shared only by the independently owned Dashboard
 /// sections.

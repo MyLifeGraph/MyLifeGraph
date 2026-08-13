@@ -144,14 +144,17 @@ class CalendarIntegrationController
   CalendarIntegrationController({
     required CalendarIntegrationRepository repository,
     required CalendarIcsFilePicker filePicker,
+    Future<void> Function()? planningSourcesChanged,
   })  : _repository = repository,
         _filePicker = filePicker,
+        _planningSourcesChanged = planningSourcesChanged ?? _noPlanningRefresh,
         super(CalendarIntegrationState.loading()) {
     Future<void>.microtask(load);
   }
 
   final CalendarIntegrationRepository _repository;
   final CalendarIcsFilePicker _filePicker;
+  final Future<void> Function() _planningSourcesChanged;
 
   Future<void> load() async {
     if (state.isBusy) return;
@@ -288,6 +291,7 @@ class CalendarIntegrationController
         eventError: null,
       );
       await _loadFirstEventPage(result.connection);
+      await _refreshPlanningBestEffort();
     } catch (error) {
       _recordOperationFailure(error, CalendarIntegrationRetryKind.import);
     }
@@ -358,6 +362,7 @@ class CalendarIntegrationController
         selectedFile: null,
         importRequestId: null,
       );
+      await _refreshPlanningBestEffort();
     } catch (error) {
       _recordOperationFailure(error, CalendarIntegrationRetryKind.disconnect);
     }
@@ -396,6 +401,7 @@ class CalendarIntegrationController
         nextCursor: null,
         eventError: null,
       );
+      await _refreshPlanningBestEffort();
     } catch (error) {
       _recordOperationFailure(error, CalendarIntegrationRetryKind.delete);
     }
@@ -445,6 +451,15 @@ class CalendarIntegrationController
       retryKind: requiresExactRetry ? retryKind : null,
     );
   }
+
+  Future<void> _refreshPlanningBestEffort() async {
+    try {
+      await _planningSourcesChanged();
+    } catch (_) {
+      // The Calendar command is already durable. Projection invalidation is a
+      // best-effort local refresh and must never turn that success into retry.
+    }
+  }
 }
 
 bool calendarOperationRequiresExactRetry(Object error) {
@@ -453,3 +468,5 @@ bool calendarOperationRequiresExactRetry(Object error) {
 }
 
 const Object _unset = Object();
+
+Future<void> _noPlanningRefresh() async {}

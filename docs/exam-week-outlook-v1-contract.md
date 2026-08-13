@@ -270,6 +270,14 @@ nor confirms it, and its active revision remains authoritative.
 
 ## Planner Surface
 
+Exam Plan Health is not this outlook. `exam-plan-health-v1` answers whether
+remaining Exam preparation fits authoritative shared capacity and exposes
+green/yellow/red/unknown reserve values. Exam Week Outlook continues to answer
+the sleep- and exam-week question owned here. Planner and Today may show both,
+but their headings and helper copy must keep those purposes distinct; a Health
+transport failure is not an Outlook warning and Health `unknown` is not a
+sleep-risk inference.
+
 Authenticated real accounts read the outlook only from Planner. The card is
 placed after `Add new` and before `Needs attention`:
 

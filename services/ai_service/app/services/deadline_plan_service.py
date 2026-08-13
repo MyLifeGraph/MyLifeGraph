@@ -22,6 +22,11 @@ from app.models.deadline_plans import (
     PreparationWorkloadDetailResponse,
     PreparationWorkloadResponse,
 )
+from app.models.exam_plan_health import (
+    ExamPlanHealthPreviewRequest,
+    ExamPlanHealthPreviewResponse,
+    ExamPlanHealthResponse,
+)
 from app.models.planning_timing import PlanningTimingProvenance
 from app.repositories.deadline_plan_repository import (
     DeadlinePlanningContext,
@@ -42,6 +47,10 @@ from app.services.learned_timing import LearnedTimingResolver
 from app.services.exam_week_outlook import (
     ExamWeekOutlookCapacityError,
     build_exam_week_outlook,
+)
+from app.services.exam_plan_health import (
+    build_exam_plan_health,
+    validate_exam_plan_health_preview_identity,
 )
 
 
@@ -70,6 +79,9 @@ from app.services.planner_errors import (
     DeadlinePlanConflictError,
     DeadlinePlanNotFoundError,
     DeadlinePlanValidationError,
+)
+from app.services.deadline_plan_credit import (
+    deadline_block_credits as _deadline_block_credits,
 )
 
 
@@ -182,6 +194,58 @@ class DeadlinePlanService:
             )
         except ExamWeekOutlookCapacityError as exc:
             raise DeadlinePlanConflictError(str(exc)) from exc
+
+    async def get_exam_plan_health(
+        self,
+        *,
+        user_id: str,
+    ) -> ExamPlanHealthResponse:
+        generated_at = _aware_utc(self._now())
+        try:
+            snapshot = await self._repository.load_exam_plan_health_snapshot(
+                user_id=user_id,
+                generated_at=generated_at,
+            )
+        except DeadlinePlanPersistenceNotFound as exc:
+            raise DeadlinePlanNotFoundError(str(exc)) from exc
+        try:
+            response = build_exam_plan_health(snapshot=snapshot)
+        except (TypeError, ValueError) as exc:
+            raise DeadlinePlanConflictError(
+                "Exam Plan Health source data is inconsistent.",
+            ) from exc
+        assert isinstance(response, ExamPlanHealthResponse)
+        return response
+
+    async def preview_exam_plan_health(
+        self,
+        *,
+        user_id: str,
+        request: ExamPlanHealthPreviewRequest,
+    ) -> ExamPlanHealthPreviewResponse:
+        generated_at = _aware_utc(self._now())
+        try:
+            snapshot = await self._repository.load_exam_plan_health_snapshot(
+                user_id=user_id,
+                generated_at=generated_at,
+            )
+        except DeadlinePlanPersistenceNotFound as exc:
+            raise DeadlinePlanNotFoundError(str(exc)) from exc
+        try:
+            validate_exam_plan_health_preview_identity(
+                snapshot=snapshot,
+                preview=request,
+            )
+        except (TypeError, ValueError) as exc:
+            raise DeadlinePlanValidationError(str(exc)) from exc
+        try:
+            response = build_exam_plan_health(snapshot=snapshot, preview=request)
+        except (TypeError, ValueError) as exc:
+            raise DeadlinePlanConflictError(
+                "Exam Plan Health preview inputs conflict with current planning data.",
+            ) from exc
+        assert isinstance(response, ExamPlanHealthPreviewResponse)
+        return response
 
     async def get_plan(
         self,
@@ -1097,50 +1161,3 @@ class DeadlinePlanService:
         if len(rows) > 10_000:
             raise ValueError("Deadline focus history exceeds its V1 bound.")
         return sum(max(0, _int(row.get("actual_minutes"))) for row in rows)
-
-
-def _deadline_block_credits(
-    blocks: list[dict[str, Any]],
-    focus_facts: list[dict[str, Any]],
-    *,
-    tracked_focus_minutes_at_proposal: int,
-) -> dict[str, int]:
-    ordered_blocks = sorted(
-        blocks,
-        key=lambda block: (_int(block["sequence"]), str(block["id"])),
-    )
-    capacities = {
-        str(block["id"]): _int(block["planned_minutes"]) for block in ordered_blocks
-    }
-    credits = {block_id: 0 for block_id in capacities}
-    proposal_credit_left = max(0, tracked_focus_minutes_at_proposal)
-    generic_credit = 0
-    ordered_facts = sorted(
-        focus_facts,
-        key=lambda fact: (_datetime(fact["started_at"]), str(fact["id"])),
-    )
-    for fact in ordered_facts:
-        minutes = max(0, _int(fact.get("actual_minutes")))
-        already_considered = min(minutes, proposal_credit_left)
-        proposal_credit_left -= already_considered
-        minutes -= already_considered
-        if minutes <= 0:
-            continue
-        source_block_id = fact.get("deadline_plan_block_id")
-        source_key = str(source_block_id) if source_block_id is not None else None
-        if source_key in capacities:
-            source_available = capacities[source_key] - credits[source_key]
-            source_credit = min(minutes, max(0, source_available))
-            credits[source_key] += source_credit
-            minutes -= source_credit
-        generic_credit += minutes
-
-    for block in ordered_blocks:
-        if generic_credit <= 0:
-            break
-        block_key = str(block["id"])
-        available = capacities[block_key] - credits[block_key]
-        applied = min(generic_credit, max(0, available))
-        credits[block_key] += applied
-        generic_credit -= applied
-    return credits

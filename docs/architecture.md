@@ -624,6 +624,27 @@ normal writes, or call an LLM. The full contract is in
 
 ## Deadline Planner V1
 
+Exam Plan Health adds the shared named `exam-plan-health-v1` read boundary.
+FastAPI derives the owner from the bearer principal and calls one stable
+service-role-only `get_exam_plan_health_snapshot_v1` RPC for an owner-filtered,
+untruncated point-in-time source snapshot. A pure service computes shared
+capacity and the GET/preview envelopes; no Health table, notification, request
+ledger, or read-side write exists. The preview POST is a query with unsaved
+Exam editor values, not a command. New previews omit persistence identity;
+unconfirmed persisted drafts use the same identity-free new-plan simulation,
+while active replans bind `plan_id` plus `base_revision` to the owner-filtered
+active Exam and its current/latest revision relationship before simulation.
+The snapshot carries ordered completed Focus facts with immutable block
+provenance so future reservation credit matches Deadline detail. Flutter owns a separate guarded repository
+and provider consumed by Preparation, Planner, and Today; Guest/mock returns
+before repository or transport construction. Calendar data participates only
+when the current account-owned Planner Calendar preference is enabled and its
+current import covers the complete interval; saved revision values continue to
+describe already confirmed blocks but do not override replan capacity.
+The shared availability layer resolves a previous-local-day recurring anchor
+only to project an overnight overlap into the first candidate day; invalid DST
+occurrences fail closed and the anchor is never offered as capacity.
+
 `deadline-plan-v1` is a separate authenticated FastAPI workflow for explicit
 exam and assignment preparation. `/preparation-plans` asks the user for their
 own `30..30000` minute total estimate plus bounded session/per-plan-daily

@@ -19,7 +19,15 @@ from app.models.deadline_plans import (
     PreparationWorkloadDetailResponse,
     PreparationWorkloadResponse,
 )
-from app.services.deadline_plan_service import DeadlinePlanConflictError
+from app.models.exam_plan_health import (
+    ExamPlanHealthItem,
+    ExamPlanHealthPreviewResponse,
+    ExamPlanHealthResponse,
+)
+from app.services.deadline_plan_service import (
+    DeadlinePlanConflictError,
+    DeadlinePlanValidationError,
+)
 from tests.api_test_dependencies import override_dependency
 
 
@@ -40,10 +48,12 @@ class Service:
         *,
         conflict: bool = False,
         conflict_detail: str = "stale revision",
+        preview_validation_detail: str | None = None,
     ) -> None:
         self.calls = []
         self.conflict = conflict
         self.conflict_detail = conflict_detail
+        self.preview_validation_detail = preview_validation_detail
 
     async def list_plans(self, *, user_id):
         self.calls.append(("list", user_id))
@@ -103,6 +113,49 @@ class Service:
                 unscheduled_regular_minutes=0,
                 simulated_sleep_protected_minutes=None,
                 unscheduled_sleep_protected_minutes=None,
+            ),
+        )
+
+    async def get_exam_plan_health(self, *, user_id):
+        self.calls.append(("exam-plan-health", user_id))
+        return ExamPlanHealthResponse(
+            contract_version="exam-plan-health-v1",
+            origin="authenticated_backend",
+            generated_at=NOW,
+            timezone="UTC",
+            local_date=NOW.date(),
+            exams=[],
+        )
+
+    async def preview_exam_plan_health(self, *, user_id, request):
+        self.calls.append(("exam-plan-health-preview", user_id, request))
+        if self.preview_validation_detail is not None:
+            raise DeadlinePlanValidationError(self.preview_validation_detail)
+        return ExamPlanHealthPreviewResponse(
+            contract_version="exam-plan-health-v1",
+            origin="authenticated_backend_preview",
+            generated_at=NOW,
+            timezone="UTC",
+            local_date=NOW.date(),
+            exam=ExamPlanHealthItem(
+                plan_id=request.plan_id or UUID("00000000-0000-4000-8000-000000000000"),
+                title=request.title,
+                deadline_at=request.deadline_at,
+                local_deadline_date=request.deadline_at.date(),
+                status="green",
+                remaining_minutes=400,
+                preferred_session_minutes=120,
+                sessions_needed=4,
+                future_reserved_minutes=0,
+                minutes_to_schedule=400,
+                available_replan_capacity_minutes=800,
+                reserve_minutes=400,
+                reserve_full_sessions=3,
+                latest_safe_start_on=NOW.date() + timedelta(days=10),
+                recommended_start_on=NOW.date() + timedelta(days=2),
+                recommended_start_reason=None,
+                reasons=[],
+                missing_sources=[],
             ),
         )
 
@@ -200,6 +253,23 @@ def _proposal() -> dict[str, object]:
     }
 
 
+def _health_preview() -> dict[str, object]:
+    return {
+        "contract_version": "exam-plan-health-v1",
+        "kind": "exam",
+        "title": "Physics",
+        "deadline_at": "2026-09-15T12:00:00+00:00",
+        "estimated_total_minutes": 420,
+        "credited_prior_minutes": 20,
+        "preferred_session_minutes": 120,
+        "max_daily_minutes": 120,
+        "planning_start_on": "2026-07-20",
+        "buffer_days": 2,
+        "source_kind": "manual",
+        "use_calendar_availability": False,
+    }
+
+
 async def _request(
     method,
     path,
@@ -208,9 +278,14 @@ async def _request(
     authenticated=True,
     conflict=False,
     conflict_detail="stale revision",
+    preview_validation_detail=None,
 ):
     app = create_app()
-    service = Service(conflict=conflict, conflict_detail=conflict_detail)
+    service = Service(
+        conflict=conflict,
+        conflict_detail=conflict_detail,
+        preview_validation_detail=preview_validation_detail,
+    )
     override_dependency(app, get_token_verifier, Verifier())
     override_dependency(app, get_deadline_plan_service, service)
     headers = {"Authorization": "Bearer deadline-token"} if authenticated else {}
@@ -252,6 +327,47 @@ def test_deadline_routes_derive_owner_and_keep_exact_envelopes() -> None:
     assert outlook.json()["current_sleep_plan"] is None
     assert outlook_service.calls == [("exam-week-outlook", USER_ID)]
 
+    health, health_service = asyncio.run(
+        _request("GET", "/v1/deadline-plans/exam-plan-health"),
+    )
+    assert health.status_code == 200
+    assert health.json() == {
+        "contract_version": "exam-plan-health-v1",
+        "origin": "authenticated_backend",
+        "generated_at": NOW.isoformat().replace("+00:00", "Z"),
+        "timezone": "UTC",
+        "local_date": NOW.date().isoformat(),
+        "exams": [],
+    }
+    assert health_service.calls == [("exam-plan-health", USER_ID)]
+
+    preview, preview_service = asyncio.run(
+        _request(
+            "POST",
+            "/v1/deadline-plans/exam-plan-health/preview",
+            json=_health_preview(),
+        ),
+    )
+    assert preview.status_code == 200
+    assert preview.json()["origin"] == "authenticated_backend_preview"
+    assert preview.json()["exam"]["title"] == "Physics"
+    assert preview_service.calls[0][0:2] == (
+        "exam-plan-health-preview",
+        USER_ID,
+    )
+
+    assignment_preview = _health_preview()
+    assignment_preview["kind"] = "assignment"
+    invalid_health, invalid_health_service = asyncio.run(
+        _request(
+            "POST",
+            "/v1/deadline-plans/exam-plan-health/preview",
+            json=assignment_preview,
+        ),
+    )
+    assert invalid_health.status_code == 422
+    assert invalid_health_service.calls == []
+
     workload_detail, detail_service = asyncio.run(
         _request("GET", "/v1/deadline-plans/workload/2026-07-20"),
     )
@@ -269,6 +385,21 @@ def test_deadline_routes_derive_owner_and_keep_exact_envelopes() -> None:
     )
     assert invalid_detail.status_code == 422
     assert invalid_detail_service.calls == []
+
+
+def test_exam_health_preview_validation_is_a_stable_422() -> None:
+    response, service = asyncio.run(
+        _request(
+            "POST",
+            "/v1/deadline-plans/exam-plan-health/preview",
+            json=_health_preview(),
+            preview_validation_detail="deadline_at must be within 366 days",
+        ),
+    )
+
+    assert response.status_code == 422
+    assert response.json() == {"detail": "deadline_at must be within 366 days"}
+    assert service.calls[0][0:2] == ("exam-plan-health-preview", USER_ID)
 
 
 def test_proposal_route_is_strict_and_maps_conflict() -> None:

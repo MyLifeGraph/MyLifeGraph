@@ -1,6 +1,8 @@
 from datetime import UTC, date, datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
+import pytest
+
 from app.services.planning_availability import (
     BusySources,
     allocate_task_intervals,
@@ -366,6 +368,68 @@ def test_all_busy_sources_are_authoritative_and_never_overlap() -> None:
 
     assert sum(block.minutes for block in blocks) == 120
     assert all(block.starts_at.date() == date(2026, 7, 22) for block in blocks)
+
+
+@pytest.mark.parametrize(
+    ("first_day", "invalid_start", "valid_later_day"),
+    [
+        (date(2026, 3, 30), "02:15:00", date(2026, 4, 5)),
+        (date(2026, 10, 26), "02:15:00", date(2026, 11, 1)),
+    ],
+)
+def test_nonoverlapping_previous_dst_anchor_is_not_resolved(
+    first_day: date,
+    invalid_start: str,
+    valid_later_day: date,
+) -> None:
+    days = [
+        first_day + timedelta(days=offset)
+        for offset in range((valid_later_day - first_day).days + 1)
+    ]
+
+    busy = busy_intervals_by_day(
+        days=days,
+        sources=BusySources(
+            recurring_commitments=[
+                {
+                    "id": "weekly-dst",
+                    "weekday": 7,
+                    "starts_at": invalid_start,
+                    "ends_at": "03:15:00",
+                },
+            ],
+        ),
+        zone=ZoneInfo("Europe/Berlin"),
+        local_now=datetime.combine(
+            first_day - timedelta(days=1),
+            datetime.min.time(),
+            tzinfo=ZoneInfo("Europe/Berlin"),
+        ),
+    )
+
+    assert busy[first_day] == []
+    assert len(busy[valid_later_day]) == 1
+
+
+def test_invalid_previous_dst_anchor_is_resolved_when_it_can_spill() -> None:
+    first_day = date(2026, 10, 26)
+
+    with pytest.raises(ValueError, match="weekly-dst"):
+        busy_intervals_by_day(
+            days=[first_day],
+            sources=BusySources(
+                recurring_commitments=[
+                    {
+                        "id": "weekly-dst",
+                        "weekday": 7,
+                        "starts_at": "02:15:00",
+                        "ends_at": "01:00:00",
+                    },
+                ],
+            ),
+            zone=ZoneInfo("Europe/Berlin"),
+            local_now=datetime(2026, 10, 26, tzinfo=ZoneInfo("Europe/Berlin")),
+        )
 
 
 def test_habit_slot_must_fit_every_occurrence_in_four_week_horizon() -> None:

@@ -422,6 +422,19 @@ manual commitments, tasks, habits, or focus state.
 
 ## Explicit Deadline Preparation Plans
 
+`exam-plan-health-v1` models replan capacity with the current account-owned
+Planner `use_calendar_busy_time` preference. A revision's saved
+`use_calendar_availability` value remains historical authority for its existing
+confirmed blocks; it does not override the current replan preference. When the
+current preference is on, Health requires the owner's current planning import
+and full coverage from the effective start through the saved-buffer finish day.
+Coverage uses inclusive
+`window_starts_on` and exclusive `window_ends_before`; missing, stale,
+timezone-revision-mismatched, disconnected, deleted, or short-horizon data
+produces successful Health `unknown`. Only confirmed import, disconnect, and
+delete commands invalidate Health; choosing/clearing a local file or a Health
+preview does not. The import command remains the sole Calendar writer.
+
 Imported events remain context unless the user deliberately starts the separate
 `deadline-plan-v1` flow for one selected event. That flow pins the event id and
 source fingerprint, stages deterministic app-owned blocks, and requires explicit

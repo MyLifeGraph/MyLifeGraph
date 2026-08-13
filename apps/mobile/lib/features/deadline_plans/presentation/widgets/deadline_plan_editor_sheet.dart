@@ -6,6 +6,8 @@ class _DeadlinePlanEditorSheet extends StatefulWidget {
   const _DeadlinePlanEditorSheet({
     required this.planId,
     required this.baseRevision,
+    required this.healthPlanId,
+    required this.healthBaseRevision,
     required this.existing,
     required this.trackedFocusMinutes,
     required this.accountDailyPreparationBudgetKnown,
@@ -25,10 +27,13 @@ class _DeadlinePlanEditorSheet extends StatefulWidget {
     required this.currentTime,
     required this.profileToday,
     required this.onOpenPlanner,
+    required this.onPreviewHealth,
   });
 
   final String planId;
   final int baseRevision;
+  final String? healthPlanId;
+  final int? healthBaseRevision;
   final DeadlinePlanRevision? existing;
   final int trackedFocusMinutes;
   final bool accountDailyPreparationBudgetKnown;
@@ -48,6 +53,8 @@ class _DeadlinePlanEditorSheet extends StatefulWidget {
   final DateTime? currentTime;
   final DateTime profileToday;
   final VoidCallback onOpenPlanner;
+  final Future<ExamPlanHealthPreview> Function(ExamPlanHealthPreviewDraft draft)
+      onPreviewHealth;
 
   @override
   State<_DeadlinePlanEditorSheet> createState() =>
@@ -71,6 +78,10 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
   late bool _showExistingSummary;
   bool _useCalendarAvailability = false;
   bool _dailyCapWasManuallyEdited = false;
+  bool _healthPreviewLoading = false;
+  ExamPlanHealthPreview? _healthPreview;
+  Object? _healthPreviewError;
+  int _healthPreviewGeneration = 0;
 
   @override
   void initState() {
@@ -408,6 +419,7 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
             selected: _kind == null ? const {} : {_kind!},
             onSelectionChanged: (values) {
               setState(() {
+                _clearHealthPreview();
                 _kind = values.isEmpty ? null : values.single;
                 if (!_dailyCapWasManuallyEdited && _kind != null) {
                   _dailyCapController.text =
@@ -421,6 +433,7 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
           key: const ValueKey('deadline-plan-title'),
           controller: _titleController,
           maxLength: 160,
+          onChanged: (_) => setState(_clearHealthPreview),
           decoration:
               const InputDecoration(labelText: 'Exam or assignment title'),
         ),
@@ -451,6 +464,7 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
             value: _sourceKind == DeadlinePlanSourceKind.calendarEvent,
             onChanged: (value) {
               setState(() {
+                _clearHealthPreview();
                 _sourceKind = value
                     ? DeadlinePlanSourceKind.calendarEvent
                     : DeadlinePlanSourceKind.manual;
@@ -497,6 +511,7 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
           hours: _totalHoursController,
           minutes: _totalMinutesController,
           label: 'Total active preparation',
+          onChanged: () => setState(_clearHealthPreview),
         ),
         const SizedBox(height: AppSpacing.sm),
         Wrap(
@@ -509,6 +524,7 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
                 label: Text('$hours h'),
                 onPressed: () {
                   setState(() {
+                    _clearHealthPreview();
                     _totalHoursController.text = '$hours';
                     _totalMinutesController.text = '0';
                   });
@@ -555,15 +571,20 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
             ButtonSegment(value: 90, label: Text('90 min')),
           ],
           selected: {_sessionMinutes},
-          onSelectionChanged: (values) =>
-              setState(() => _sessionMinutes = values.single),
+          onSelectionChanged: (values) => setState(() {
+            _clearHealthPreview();
+            _sessionMinutes = values.single;
+          }),
         ),
         const SizedBox(height: AppSpacing.md),
         TextField(
           key: const ValueKey('deadline-daily-cap'),
           controller: _dailyCapController,
           keyboardType: TextInputType.number,
-          onChanged: (_) => _dailyCapWasManuallyEdited = true,
+          onChanged: (_) => setState(() {
+            _clearHealthPreview();
+            _dailyCapWasManuallyEdited = true;
+          }),
           decoration: const InputDecoration(
             labelText: 'Maximum preparation minutes per day for this plan',
           ),
@@ -593,7 +614,12 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
             ),
           ),
           onChanged: (value) {
-            if (value != null) setState(() => _bufferDays = value);
+            if (value != null) {
+              setState(() {
+                _clearHealthPreview();
+                _bufferDays = value;
+              });
+            }
           },
         ),
         const SizedBox(height: AppSpacing.xs),
@@ -632,6 +658,35 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
         const Text(
           'Next, MyLifeGraph creates a staged preview. Nothing is reserved until you confirm it.',
         ),
+        if (_kind == DeadlinePlanKind.exam) ...[
+          const SizedBox(height: AppSpacing.md),
+          OutlinedButton.icon(
+            key: const ValueKey('exam-plan-health-preview'),
+            onPressed: _healthPreviewLoading ? null : _checkExamPlanHealth,
+            icon: _healthPreviewLoading
+                ? const SizedBox.square(
+                    dimension: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(AppIcons.autoGraphOutlined),
+            label: const Text('Check Exam Plan Health'),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          const Text(
+            'This read-only check compares the editor values with current shared capacity. It does not save, reserve, or replan anything.',
+          ),
+          if (_healthPreviewError != null) ...[
+            const SizedBox(height: AppSpacing.sm),
+            const Text(
+              'The capacity check could not be loaded. This transport error is separate from an Availability unknown result.',
+              key: ValueKey('exam-plan-health-preview-error'),
+            ),
+          ],
+          if (_healthPreview != null) ...[
+            const SizedBox(height: AppSpacing.sm),
+            _ExamPlanHealthPreviewView(exam: _healthPreview!.exam),
+          ],
+        ],
       ],
     );
   }
@@ -703,6 +758,7 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
     );
     if (time == null || !mounted) return;
     setState(() {
+      _clearHealthPreview();
       _deadline =
           DateTime(date.year, date.month, date.day, time.hour, time.minute);
       _deadlineDateHint = null;
@@ -736,10 +792,20 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
       lastDate: lastDate,
       helpText: 'Preparation planning start',
     );
-    if (selected != null && mounted) setState(() => _planningStart = selected);
+    if (selected != null && mounted) {
+      setState(() {
+        _clearHealthPreview();
+        _planningStart = selected;
+      });
+    }
   }
 
   void _submit() {
+    final draft = _proposalDraft();
+    if (draft != null) Navigator.of(context).pop(draft);
+  }
+
+  DeadlinePlanProposalDraft? _proposalDraft() {
     final total = _totalMinutes;
     final dailyCap = int.tryParse(_dailyCapController.text.trim());
     if (total == null ||
@@ -747,15 +813,15 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
         _kind == null ||
         _deadline == null) {
       _showValidation('Review all required plan values.');
-      return;
+      return null;
     }
     if (!_deadline!.isAfter(_now)) {
       _showValidation('The finish-by time must be in the future.');
-      return;
+      return null;
     }
     if (_deadline!.difference(_now).inDays > 366) {
       _showValidation('Choose a finish-by time within the next 366 days.');
-      return;
+      return null;
     }
     final deadlineDate = DateTime(
       _deadline!.year,
@@ -772,37 +838,74 @@ class _DeadlinePlanEditorSheetState extends State<_DeadlinePlanEditorSheet> {
       _showValidation(
         'Planning must start no later than the deadline date and span at most 366 days.',
       );
-      return;
+      return null;
     }
     try {
-      Navigator.of(context).pop(
-        DeadlinePlanProposalDraft(
-          planId: widget.planId,
-          baseRevision: widget.baseRevision,
-          kind: _kind!,
-          title: _titleController.text,
-          deadlineAt: _deadline!,
-          estimatedTotalMinutes: total,
-          creditedPriorMinutes: _creditedPriorMinutes,
-          preferredSessionMinutes: _sessionMinutes,
-          maxDailyMinutes: dailyCap,
-          planningStartOn: localDateKey(_planningStart),
-          bufferDays: _bufferDays,
-          sourceKind: _sourceKind,
-          sourceCalendarEventId:
-              _sourceKind == DeadlinePlanSourceKind.calendarEvent
-                  ? widget.sourceCalendarEventId
-                  : null,
-          sourceCalendarEventFingerprint:
-              _sourceKind == DeadlinePlanSourceKind.calendarEvent
-                  ? widget.sourceCalendarEventFingerprint
-                  : null,
-          useCalendarAvailability: _useCalendarAvailability,
-        ),
+      return DeadlinePlanProposalDraft(
+        planId: widget.planId,
+        baseRevision: widget.baseRevision,
+        kind: _kind!,
+        title: _titleController.text,
+        deadlineAt: _deadline!,
+        estimatedTotalMinutes: total,
+        creditedPriorMinutes: _creditedPriorMinutes,
+        preferredSessionMinutes: _sessionMinutes,
+        maxDailyMinutes: dailyCap,
+        planningStartOn: localDateKey(_planningStart),
+        bufferDays: _bufferDays,
+        sourceKind: _sourceKind,
+        sourceCalendarEventId:
+            _sourceKind == DeadlinePlanSourceKind.calendarEvent
+                ? widget.sourceCalendarEventId
+                : null,
+        sourceCalendarEventFingerprint:
+            _sourceKind == DeadlinePlanSourceKind.calendarEvent
+                ? widget.sourceCalendarEventFingerprint
+                : null,
+        useCalendarAvailability: _useCalendarAvailability,
       );
     } on DeadlinePlanAccessException catch (error) {
       _showValidation(error.message);
+      return null;
     }
+  }
+
+  Future<void> _checkExamPlanHealth() async {
+    final draft = _proposalDraft();
+    if (draft == null || draft.kind != DeadlinePlanKind.exam) return;
+    final generation = ++_healthPreviewGeneration;
+    setState(() {
+      _healthPreviewLoading = true;
+      _healthPreviewError = null;
+      _healthPreview = null;
+    });
+    try {
+      final result = await widget.onPreviewHealth(
+        ExamPlanHealthPreviewDraft.fromProposal(
+          draft,
+          activePlanId: widget.healthPlanId,
+          activeBaseRevision: widget.healthBaseRevision,
+        ),
+      );
+      if (!mounted || generation != _healthPreviewGeneration) return;
+      setState(() {
+        _healthPreviewLoading = false;
+        _healthPreview = result;
+      });
+    } catch (error) {
+      if (!mounted || generation != _healthPreviewGeneration) return;
+      setState(() {
+        _healthPreviewLoading = false;
+        _healthPreviewError = error;
+      });
+    }
+  }
+
+  void _clearHealthPreview() {
+    _healthPreviewGeneration += 1;
+    _healthPreviewLoading = false;
+    _healthPreview = null;
+    _healthPreviewError = null;
   }
 
   int? get _totalMinutes => _durationInput(

@@ -113,6 +113,7 @@ void main() {
         ProductProjection.planner,
         ProductProjection.preparationWorkload,
         ProductProjection.examWeekOutlook,
+        ProductProjection.examPlanHealth,
       ],
     );
   });

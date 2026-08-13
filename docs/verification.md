@@ -135,6 +135,19 @@ The hosted equivalent is the `docs-visual` job in
 
 ## Current Version Coverage
 
+Exam Plan Health is tracked as shared named `exam-plan-health-v1`. Focused
+verification covers strict FastAPI/Dart envelopes, exact threshold boundaries,
+shared Exam priority and consumers, Focus/reservation arithmetic,
+Calendar-window and DST Unknown behavior, owner-derived GET/preview routing,
+untruncated one-RPC parsing, Flutter Guest/Mock zero-call guards, editor preview
+generation races, Preparation values, Planner combined-empty semantics, Today
+non-green filtering, transport-vs-Unknown copy, and 320 px/200% layout.
+The focused boundary also covers block-linked versus proposal-time Focus
+credit, retained 120-block exhaustion, previous-day overnight and DST anchors,
+new/existing preview identity and base revision, Health independence from an
+overfull legacy feed, Assignment Series exact-retry invalidation, and previous-
+value Async loading/error states.
+
 `docs/current-contracts.json` is authoritative for exact sources and owners.
 This runbook retains the following compact current coverage because each listed
 boundary explicitly owns verification requirements:
@@ -225,6 +238,17 @@ depend on Codex installation, OAuth, model access, subscription status, or an
 external network call.
 
 ## Local Supabase Verification
+
+The pending Exam Plan Health migration has an additional dedicated
+`scripts/lib/exam_plan_health_migration_harness.sh` path. The harness proves
+that its target is the physically isolated RAM-only container, applies the full
+migration chain there, runs `supabase/tests/exam_plan_health_v1_test.sql`, and
+compares the normal local migration history before and after. It never applies
+the pending migration to the normal local database. The pgTAP contract checks
+service-role-only execution, the inclusive 366-day Exam horizon, exact Focus
+credit, confirmed consumer inclusion, and authenticated denial. This isolated
+gate is wired into the migration-aware fast/local verification scripts; a
+normal local apply still requires the repository's separate explicit opt-in.
 
 Read `docs/supabase-current-state.md` and
 `docs/local-database-safety.md` before database work. Inspect installed CLI
